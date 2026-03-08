@@ -9,12 +9,12 @@ The repo uses two GitHub Actions workflows to **build** and **upload** to GoDadd
 
 | Workflow | Branch | Builds | FTP folder | Domain |
 |----------|--------|--------|------------|--------|
-| **Deploy NeoSleepCare Site** | `main` | `apps/website` | `/public_html/neosleepcare-site-prod/` | neosleepcare.com |
+| **Deploy NeoSleepCare Site** | `PROD` | `apps/website` | `/public_html/neosleepcare-site-prod/` | neosleepcare.com |
 | **Deploy NeoSleepCare Site** | `uat` | `apps/website` | `/public_html/neosleepcare-site-uat/` | uat.neosleepcare.com |
-| **Deploy NeoSleepCare App** | `main` | `apps/rep-app` | `/public_html/neosleepcare-app-prod/` | app.neosleepcare.com |
+| **Deploy NeoSleepCare App** | `PROD` | `apps/rep-app` | `/public_html/neosleepcare-app-prod/` | app.neosleepcare.com |
 | **Deploy NeoSleepCare App** | `uat` | `apps/rep-app` | `/public_html/neosleepcare-app-uat/` | app-uat.neosleepcare.com |
 
-- Push to **main** → both workflows deploy to **production** folders.
+- Push to **PROD** → both workflows deploy to **production** folders.
 - Push to **uat** → both workflows deploy to **UAT** folders.
 - You can also run a workflow manually: **Actions** → choose workflow → **Run workflow**.
 
@@ -63,16 +63,16 @@ Exact names depend on your hosting (Subdomains / Addon Domains in cPanel). The f
 
 ---
 
-## 4. Create the `uat` branch (for UAT deploys)
+## 4. Branches: PROD and uat
 
-If you don’t have branch **uat** yet:
+Workflows run on push to **PROD** (production) and **uat** (UAT). If you need to create **uat**:
 
 ```bash
 git checkout -b uat
 git push -u origin uat
 ```
 
-Then: push to **main** → prod deploy; push to **uat** → UAT deploy.
+Then: push to **PROD** → prod deploy; push to **uat** → UAT deploy.
 
 ---
 
@@ -81,7 +81,7 @@ Then: push to **main** → prod deploy; push to **uat** → UAT deploy.
 - **Site:** `.github/workflows/deploy-website.yml` – name: **Deploy NeoSleepCare Site**. Build: `pnpm run build:website` → `apps/website/dist/`.
 - **App:** `.github/workflows/deploy-app.yml` – name: **Deploy NeoSleepCare App**. Build: `pnpm run build:rep-app` → `apps/rep-app/dist/`.
 
-Both use [SamKirkland/FTP-Deploy-Action](https://github.com/SamKirkland/FTP-Deploy-Action) with `protocol: ftp` and `dangerous-clean-slate: false`. They run on **push** to `main`/`uat` and can be started manually via **workflow_dispatch**.
+Both use [SamKirkland/FTP-Deploy-Action](https://github.com/SamKirkland/FTP-Deploy-Action) with `protocol: ftp` and `dangerous-clean-slate: false`. They run on **push** to `PROD`/`uat` and can be started manually via **workflow_dispatch**.
 
 ---
 

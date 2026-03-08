@@ -1,12 +1,12 @@
 # Deploy marketing website to GoDaddy FTP
-# - main → neosleepcare.com (public_html/neosleepcare-site-prod/)
+# - PROD → neosleepcare.com (public_html/neosleepcare-site-prod/)
 # - uat  → uat.neosleepcare.com (public_html/neosleepcare-site-uat/)
 
 name: Deploy NeoSleepCare Site
 
 on:
   push:
-    branches: [main, uat]
+    branches: [PROD, uat]
   workflow_dispatch:
 
 jobs:
@@ -32,7 +32,7 @@ jobs:
         run: pnpm run build:website
 
       - name: Deploy to PROD (neosleepcare.com)
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/PROD'
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
