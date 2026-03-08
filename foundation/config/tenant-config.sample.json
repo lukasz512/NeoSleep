@@ -1,0 +1,97 @@
+{
+  "version": 1,
+  "tenantId": "neosleepcare",
+  "branding": {
+    "logoUrl": "https://.../logo.svg",
+    "theme": {
+      "primary": "#0B3B6E",
+      "secondary": "#0AA37F",
+      "surface": "#FFFFFF",
+      "radius": 12
+    }
+  },
+  "i18n": {
+    "defaultLocale": "en",
+    "enabledLocales": [
+      "en",
+      "es-MX",
+      "de",
+      "tr",
+      "fr",
+      "no",
+      "pl"
+    ]
+  },
+  "features": {
+    "offlineMeetingMode": true,
+    "slideTracking": true,
+    "repCopilot": true
+  },
+  "pcf": {
+    "schemaVersion": 1,
+    "sections": [
+      {
+        "id": "outcome",
+        "titleKey": "pcf.outcome.title",
+        "fields": [
+          {
+            "id": "result",
+            "type": "select",
+            "labelKey": "pcf.outcome.result",
+            "required": true,
+            "options": [
+              {
+                "value": "interested",
+                "labelKey": "pcf.outcome.opt.interested"
+              },
+              {
+                "value": "followup",
+                "labelKey": "pcf.outcome.opt.followup"
+              },
+              {
+                "value": "not_interested",
+                "labelKey": "pcf.outcome.opt.not_interested"
+              }
+            ]
+          },
+          {
+            "id": "notes",
+            "type": "textarea",
+            "labelKey": "pcf.outcome.notes",
+            "required": false,
+            "maxLength": 2000
+          }
+        ]
+      }
+    ]
+  },
+  "email": {
+    "fromName": "Neo Sleep Care",
+    "fromEmail": "no-reply@neosleepcare.com",
+    "templates": {
+      "magicLink": {
+        "subjectKey": "email.magicLink.subject",
+        "mjmlPath": "emails/magic-link.mjml",
+        "variables": [
+          "firstName",
+          "magicLinkUrl",
+          "expiresInMinutes"
+        ]
+      }
+    }
+  },
+  "ai": {
+    "promptRegistry": {
+      "repCopilot": {
+        "version": 1,
+        "model": "openai/gpt-4.1-mini",
+        "promptPath": "ai/prompts/rep-copilot-v1.md"
+      },
+      "pcfDraft": {
+        "version": 1,
+        "model": "anthropic/claude-3.5-sonnet",
+        "promptPath": "ai/prompts/pcf-draft-v1.md"
+      }
+    }
+  }
+}

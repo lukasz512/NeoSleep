@@ -1,0 +1,18 @@
+/**
+ * NeoSleep brand colors.
+ * Source: brandbook (NeoSleep.pdf). Logos live in repo root brand/logos/.
+ * Primary = main brand color (from brandbook; may be set via tbl_app_config).
+ * Secondary = accent / logo color (green from logo).
+ */
+
+// Primary: main brand color (to be set from brandbook; default until then)
+$rep-brand-primary: #1976d2;
+$rep-brand-primary-hover: #1565c0;
+$rep-brand-primary-light: #42a5f5;
+
+// Secondary: accent / logo color (green from NeoSleep logo)
+$rep-brand-secondary: #2e7d32;
+$rep-brand-secondary-hover: #1b5e20;
+
+// Legacy alias
+$rep-brand-accent: #0288d1;
