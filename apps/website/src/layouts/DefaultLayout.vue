@@ -1,21 +1,66 @@
 <template>
   <div class="layout-default" :class="{ 'layout-default--dark': isDark }">
-    <header class="layout-default__header">
-      <RouterLink to="/" class="layout-default__brand">
-        <LogoIcon class="layout-default__logo-icon" />
-        <span class="layout-default__logo-text">{{ t("website.logo") }}</span>
-      </RouterLink>
-      <nav class="layout-default__nav" aria-label="Main navigation">
+    <header class="layout-default__header" :class="{ 'layout-default__header-open': mobileMenuOpen }">
+      <div class="layout-default__header-left">
+        <button
+          type="button"
+          class="layout-default__hamburger"
+          :aria-label="mobileMenuOpen ? t('website.nav.menuClose') : t('website.nav.menuOpen')"
+          :aria-expanded="mobileMenuOpen"
+          @click="mobileMenuOpen = !mobileMenuOpen"
+        >
+          <span class="layout-default__hamburger-bar" />
+          <span class="layout-default__hamburger-bar" />
+          <span class="layout-default__hamburger-bar" />
+        </button>
+        <RouterLink to="/" class="layout-default__brand">
+          <LogoIcon class="layout-default__logo-icon" />
+          <span class="layout-default__logo-text">{{ t("website.logo") }}</span>
+        </RouterLink>
+      </div>
+      <nav class="layout-default__nav layout-default__nav--desktop" aria-label="Main navigation">
         <LanguageSelect />
         <a href="/#solutions" class="layout-default__nav-link">{{ t("website.nav.solutions") }}</a>
         <a href="/#for-dentists" class="layout-default__nav-link">{{ t("website.nav.forDentists") }}</a>
         <a href="/#for-patients" class="layout-default__nav-link">{{ t("website.nav.forPatients") }}</a>
-        <RouterLink to="/about" class="layout-default__nav-link">{{ t("website.nav.about") }}</RouterLink>
-        <RouterLink to="/contact" class="layout-default__nav-link">{{ t("website.nav.contact") }}</RouterLink>
+        <RouterLink to="/about" class="layout-default__nav-link" @click="closeMobileMenu">{{ t("website.nav.about") }}</RouterLink>
+        <RouterLink to="/contact" class="layout-default__nav-link" @click="closeMobileMenu">{{ t("website.nav.contact") }}</RouterLink>
         <a href="/#cta" class="layout-default__cta">{{ t("website.header.cta") }}</a>
         <ThemeToggle />
       </nav>
+      <div class="layout-default__header-right">
+        <ThemeToggle class="layout-default__theme-mobile" />
+      </div>
     </header>
+    <Transition name="mobile-menu">
+      <div
+        v-show="mobileMenuOpen"
+        class="layout-default__mobile-overlay"
+        aria-hidden="true"
+        @click="closeMobileMenu"
+      />
+    </Transition>
+    <Transition name="mobile-menu-panel">
+      <aside
+        v-show="mobileMenuOpen"
+        class="layout-default__mobile-menu"
+        aria-label="Mobile navigation"
+        role="dialog"
+        aria-modal="true"
+      >
+        <div class="layout-default__mobile-menu-inner">
+          <div class="layout-default__mobile-menu-lang">
+            <LanguageSelect />
+          </div>
+          <a href="/#solutions" class="layout-default__mobile-link" @click="closeMobileMenu">{{ t("website.nav.solutions") }}</a>
+          <a href="/#for-dentists" class="layout-default__mobile-link" @click="closeMobileMenu">{{ t("website.nav.forDentists") }}</a>
+          <a href="/#for-patients" class="layout-default__mobile-link" @click="closeMobileMenu">{{ t("website.nav.forPatients") }}</a>
+          <RouterLink to="/about" class="layout-default__mobile-link" @click="closeMobileMenu">{{ t("website.nav.about") }}</RouterLink>
+          <RouterLink to="/contact" class="layout-default__mobile-link" @click="closeMobileMenu">{{ t("website.nav.contact") }}</RouterLink>
+          <a href="/#cta" class="layout-default__mobile-cta" @click="closeMobileMenu">{{ t("website.header.cta") }}</a>
+        </div>
+      </aside>
+    </Transition>
     <main class="layout-default__main">
       <RouterView />
     </main>
@@ -63,6 +108,7 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import LogoIcon from "../components/LogoIcon.vue";
 import ThemeToggle from "../components/ThemeToggle.vue";
@@ -71,6 +117,11 @@ import { useTheme } from "../composables/useTheme";
 
 const { t } = useI18n();
 const { isDark } = useTheme();
+const mobileMenuOpen = ref(false);
+
+function closeMobileMenu() {
+  mobileMenuOpen.value = false;
+}
 </script>
 
 <style lang="scss" scoped>
@@ -92,6 +143,65 @@ const { isDark } = useTheme();
   top: 0;
   z-index: 10;
   border-bottom: 1px solid var(--website-border);
+}
+
+.layout-default__header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.layout-default__hamburger {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: var(--website-radius);
+  background: transparent;
+  color: var(--website-text);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+
+  &:hover {
+    background: rgba(18, 143, 131, 0.08);
+    color: var(--website-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--website-primary);
+    outline-offset: 2px;
+  }
+}
+
+.layout-default__hamburger-bar {
+  display: block;
+  width: 22px;
+  height: 2px;
+  border-radius: 1px;
+  background: currentColor;
+  transition: transform 0.25s ease, opacity 0.25s ease;
+}
+
+.layout-default__header-open .layout-default__hamburger-bar:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+.layout-default__header-open .layout-default__hamburger-bar:nth-child(2) {
+  opacity: 0;
+}
+.layout-default__header-open .layout-default__hamburger-bar:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
+.layout-default__header-right {
+  display: none;
+}
+
+.layout-default__theme-mobile {
+  flex-shrink: 0;
 }
 
 .layout-default--dark .layout-default__header {
@@ -192,20 +302,109 @@ const { isDark } = useTheme();
 }
 
 @media (max-width: 900px) {
-  .layout-default__footer-inner {
-    grid-template-columns: 1fr 1fr;
+  .layout-default__nav--desktop {
+    display: none;
   }
+
+  .layout-default__hamburger {
+    display: flex;
+  }
+
+  .layout-default__header-right {
+    display: flex;
+    align-items: center;
+  }
+}
+
+.layout-default__mobile-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 11;
+  top: 0;
+}
+
+.layout-default__mobile-menu {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(300px, 85vw);
+  max-width: 300px;
+  background: var(--website-bg);
+  border-right: 1px solid var(--website-border);
+  z-index: 12;
+  box-shadow: var(--website-shadow-md);
+  overflow: auto;
+}
+
+.layout-default__mobile-menu-inner {
+  display: flex;
+  flex-direction: column;
+  padding: 1rem 0;
+  gap: 0.25rem;
+}
+
+.layout-default__mobile-menu-lang {
+  padding: 0 1rem 1rem;
+  border-bottom: 1px solid var(--website-border);
+  margin-bottom: 0.5rem;
+}
+
+.layout-default__mobile-link {
+  display: block;
+  padding: 0.75rem 1.25rem;
+  color: var(--website-text);
+  text-decoration: none;
+  font-size: 1rem;
+  transition: background 0.2s, color 0.2s;
+
+  &:hover {
+    background: rgba(18, 143, 131, 0.08);
+    color: var(--website-primary);
+  }
+}
+
+.layout-default__mobile-cta {
+  display: block;
+  margin: 1rem 1.25rem 0;
+  padding: 0.75rem 1.25rem;
+  text-align: center;
+  background: var(--website-primary);
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 9999px;
+  transition: background 0.2s;
+
+  &:hover {
+    background: var(--website-primary-hover);
+    color: #fff;
+  }
+}
+
+.mobile-menu-enter-active,
+.mobile-menu-leave-active {
+  transition: opacity 0.25s ease;
+}
+.mobile-menu-enter-from,
+.mobile-menu-leave-to {
+  opacity: 0;
+}
+
+.mobile-menu-panel-enter-active,
+.mobile-menu-panel-leave-active {
+  transition: transform 0.25s ease;
+}
+.mobile-menu-panel-enter-from,
+.mobile-menu-panel-leave-to {
+  transform: translateX(-100%);
 }
 
 @media (max-width: 600px) {
   .layout-default__footer-inner {
     grid-template-columns: 1fr;
     text-align: center;
-  }
-
-  .layout-default__nav {
-    flex-wrap: wrap;
-    justify-content: flex-end;
   }
 }
 

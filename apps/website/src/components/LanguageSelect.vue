@@ -33,6 +33,7 @@
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useWebsiteLocale } from "../composables/useWebsiteLocale";
+import type { WebsiteLocale } from "../composables/useWebsiteLocale";
 import { LANGUAGE_OPTIONS, type LocaleId } from "@i18n/language-options";
 
 const { t } = useI18n();
@@ -42,7 +43,7 @@ const wrapRef = ref<HTMLElement | null>(null);
 const open = ref(false);
 
 const options = computed(() =>
-  LANGUAGE_OPTIONS.filter((o) => supported.includes(o.id as "en" | "pl"))
+  LANGUAGE_OPTIONS.filter((o) => supported.includes(o.id as WebsiteLocale))
 );
 
 const currentOption = computed(() => options.value.find((o) => o.id === locale.value));
@@ -56,8 +57,8 @@ function toggle() {
 }
 
 function select(id: LocaleId) {
-  if (supported.includes(id as "en" | "pl")) {
-    setLocale(id as "en" | "pl");
+  if (supported.includes(id as WebsiteLocale)) {
+    setLocale(id as WebsiteLocale);
     open.value = false;
   }
 }

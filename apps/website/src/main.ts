@@ -18,11 +18,12 @@ function initTheme() {
 initTheme();
 
 const STORAGE_KEY = "neosleep-website-locale";
-const supportedLocales = ["en", "pl"] as const;
+const supportedLocales = ["en", "pl", "es"] as const;
 
-const [en, pl] = await Promise.all([
+const [en, pl, es] = await Promise.all([
   import("@i18n/en.json").then((m) => m.default),
   import("@i18n/pl.json").then((m) => m.default),
+  import("@i18n/es.json").then((m) => m.default),
 ]);
 
 function getInitialLocale(): string {
@@ -39,7 +40,7 @@ const i18n = createI18n({
   legacy: false,
   locale: getInitialLocale(),
   fallbackLocale: "en",
-  messages: { en, pl },
+  messages: { en, pl, es },
 });
 
 const app = createApp(App);

@@ -1,5 +1,5 @@
 <template>
-  <div class="theme-toggle">
+  <div class="theme-toggle" :data-mode="themeMode">
     <button
       ref="btnRef"
       type="button"
@@ -8,6 +8,12 @@
       :title="toggleLabel"
       @click="onClick"
     >
+      <span class="theme-toggle__icon theme-toggle__icon--auto" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2"/>
+          <path d="M8 21h8M12 17v4"/>
+        </svg>
+      </span>
       <span class="theme-toggle__icon theme-toggle__icon--sun" aria-hidden="true">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="4"/>
@@ -38,9 +44,10 @@
 import { ref, computed, nextTick } from "vue";
 import { useI18n } from "vue-i18n";
 import { useTheme } from "../composables/useTheme";
+import type { ThemeMode } from "../composables/useTheme";
 
 const { t } = useI18n();
-const { isDark, toggle } = useTheme();
+const { isDark, themeMode, setTheme } = useTheme();
 
 const btnRef = ref<HTMLElement | null>(null);
 const waveRef = ref<HTMLElement | null>(null);
@@ -48,8 +55,26 @@ const waveActive = ref(false);
 const waveExpand = ref(false);
 const waveTargetDark = ref(false);
 const waveOrigin = ref({ x: 0, y: 0 });
+const pendingMode = ref<ThemeMode | null>(null);
 
-const toggleLabel = computed(() => t("website.theme.toggleLabel"));
+const ORDER: ThemeMode[] = ["auto", "light", "dark"];
+function getNextMode(): ThemeMode {
+  const i = ORDER.indexOf(themeMode.value);
+  return ORDER[(i + 1) % ORDER.length];
+}
+function resolveDark(mode: ThemeMode): boolean {
+  if (mode === "auto" && typeof window !== "undefined") {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  }
+  return mode === "dark";
+}
+
+const toggleLabel = computed(() => {
+  const key = { auto: "website.theme.auto", light: "website.theme.light", dark: "website.theme.dark" }[
+    themeMode.value
+  ];
+  return t(key);
+});
 
 const waveClass = computed(() =>
   waveTargetDark.value ? "theme-toggle__wave--dark" : "theme-toggle__wave--light"
@@ -63,12 +88,15 @@ const waveStyle = computed(() => ({
 async function onClick() {
   const btn = btnRef.value;
   if (!btn) return;
+  const next = getNextMode();
+  const nextDark = resolveDark(next);
+  pendingMode.value = next;
   const rect = btn.getBoundingClientRect();
   waveOrigin.value = {
     x: rect.left + rect.width / 2,
     y: rect.top + rect.height / 2,
   };
-  waveTargetDark.value = !isDark.value;
+  waveTargetDark.value = nextDark;
   waveExpand.value = false;
   waveActive.value = true;
   await nextTick();
@@ -81,7 +109,10 @@ async function onClick() {
 
 function onWaveEnd(e: TransitionEvent) {
   if (e.target !== waveRef.value || e.propertyName !== "transform") return;
-  toggle();
+  if (pendingMode.value !== null) {
+    setTheme(pendingMode.value);
+    pendingMode.value = null;
+  }
   waveExpand.value = false;
   waveActive.value = false;
 }
@@ -133,14 +164,20 @@ function onWaveEnd(e: TransitionEvent) {
   }
 }
 
-/* Light theme: show sun */
-:root:not([data-theme="dark"]) .theme-toggle__icon--sun {
+/* Auto (system): show monitor icon */
+.theme-toggle[data-mode="auto"] .theme-toggle__icon--auto {
   opacity: 1;
   transform: scale(1);
 }
 
-/* Dark theme: show moon */
-[data-theme="dark"] .theme-toggle__icon--moon {
+/* Light: show sun */
+.theme-toggle[data-mode="light"] .theme-toggle__icon--sun {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* Dark: show moon */
+.theme-toggle[data-mode="dark"] .theme-toggle__icon--moon {
   opacity: 1;
   transform: scale(1);
 }
