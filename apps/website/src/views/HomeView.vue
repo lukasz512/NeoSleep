@@ -218,8 +218,12 @@ const { isDark } = useTheme();
 
 .view-home__hero-images {
   position: relative;
+  width: 100%;
   aspect-ratio: 4 / 3;
   max-height: 420px;
+  overflow: hidden;
+  border-radius: calc(var(--website-radius) * 2);
+  box-shadow: var(--website-shadow-md);
 }
 
 .view-home__hero-moon {
@@ -250,8 +254,8 @@ const { isDark } = useTheme();
   z-index: 1;
   display: block;
   object-fit: cover;
+  object-position: center;
   border-radius: calc(var(--website-radius) * 2);
-  box-shadow: var(--website-shadow-md);
   transition: filter 0.4s ease;
 }
 
@@ -260,10 +264,12 @@ const { isDark } = useTheme();
 }
 
 .view-home__hero-image--main {
-  width: 100%;
-  height: 100%;
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
+  min-width: 100%;
+  min-height: 100%;
 }
 
 @media (max-width: 768px) {

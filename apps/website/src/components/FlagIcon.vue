@@ -1,19 +1,19 @@
 <template>
   <span class="flag-icon" :class="`flag-icon--${locale}`" aria-hidden="true">
     <!-- UK (EN): simplified flat Union Jack -->
-    <svg v-if="locale === 'en'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 20" class="flag-icon__svg">
+    <svg v-if="locale === 'en'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 20" preserveAspectRatio="xMidYMid slice" class="flag-icon__svg">
       <rect width="30" height="20" fill="#012169"/>
       <path fill="#fff" d="M0 0l30 20M30 0L0 20" stroke="#fff" stroke-width="4"/>
       <path fill="#C8102E" d="M15 0v20M0 10h30" stroke="#C8102E" stroke-width="2"/>
       <path fill="#C8102E" d="M0 0l30 20M30 0L0 20" stroke="#C8102E" stroke-width="1.2"/>
     </svg>
     <!-- PL: white over red -->
-    <svg v-else-if="locale === 'pl'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 20" class="flag-icon__svg">
+    <svg v-else-if="locale === 'pl'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 20" preserveAspectRatio="xMidYMid slice" class="flag-icon__svg">
       <rect width="30" height="20" fill="#dc143c"/>
       <rect width="30" height="10" fill="#fff"/>
     </svg>
     <!-- ES: red-yellow-red -->
-    <svg v-else-if="locale === 'es'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 20" class="flag-icon__svg">
+    <svg v-else-if="locale === 'es'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 20" preserveAspectRatio="xMidYMid slice" class="flag-icon__svg">
       <rect width="30" height="20" fill="#c60b1e"/>
       <rect y="5" width="30" height="10" fill="#ffc400"/>
     </svg>
@@ -35,20 +35,27 @@ const fallbackEmoji = { en: "🇺🇸", pl: "🇵🇱", es: "🇪🇸" }[props.l
 <style lang="scss" scoped>
 .flag-icon {
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
+  justify-content: stretch;
   width: 24px;
   height: 24px;
   flex-shrink: 0;
   border-radius: 4px;
   overflow: hidden;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-sizing: border-box;
+  padding: 0;
+  line-height: 0;
 }
 
 .flag-icon__svg {
   display: block;
-  width: 24px;
-  height: 16px;
-  object-fit: cover;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  vertical-align: top;
 }
 
 .flag-icon__fallback {

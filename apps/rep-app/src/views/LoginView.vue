@@ -4,6 +4,15 @@
       <VCardTitle class="view-login__title">{{ t("rep.login.title") }}</VCardTitle>
       <VCardSubtitle class="view-login__subtitle">{{ t("rep.login.subtitle") }}</VCardSubtitle>
       <VCardText class="view-login__body">
+        <VAlert
+          v-if="loginErrorKey"
+          type="warning"
+          variant="tonal"
+          class="view-login__alert"
+          closable
+        >
+          {{ t(loginErrorKey) }}
+        </VAlert>
         <VBtn
           block
           color="primary"
@@ -91,6 +100,15 @@ const password = ref("");
 const bffUrl = getBffUrl();
 const googleLoginUrl = computed(() => `${bffUrl}/auth/google`);
 
+const loginErrorKey = computed(() => {
+  const err = route.query.error;
+  if (err === "auth_failed") return "rep.login.error.authFailed";
+  if (err === "server_config") return "rep.login.error.serverConfig";
+  if (err === "session_failed") return "rep.login.error.sessionFailed";
+  if (err === "token_exchange" || err === "no_token" || err === "userinfo") return "rep.login.error.serverConfig";
+  return null;
+});
+
 /** Temporarily default to admin for dev login. */
 const devUser = ref("admin");
 const devUserItems = computed(() => [
@@ -117,12 +135,17 @@ function goToApp() {
 
 /** After Google OAuth redirect: check BFF session and sync auth state. */
 onMounted(async () => {
-  if (route.query.from !== "google") return;
-  try {
-    const ok = await authStore.fetchSession();
-    if (ok) router.replace({ path: getRedirectPath(), query: {} });
-  } catch {
-    // leave user on login
+  if (route.query.from === "google") {
+    try {
+      const ok = await authStore.fetchSession();
+      if (ok) {
+        router.replace({ path: getRedirectPath(), query: {} });
+      } else {
+        router.replace({ path: "/login", query: { error: "session_failed" } });
+      }
+    } catch {
+      router.replace({ path: "/login", query: { error: "session_failed" } });
+    }
   }
 });
 </script>
@@ -153,6 +176,10 @@ onMounted(async () => {
 
 .view-login__body {
   padding-top: 8px;
+}
+
+.view-login__alert {
+  margin-bottom: 16px;
 }
 
 .view-login__google-btn {

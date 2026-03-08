@@ -55,7 +55,7 @@ Use the **exact same path** you see when you open that folder in your FTP client
 
 ---
 
-## 3. Add GitHub Secrets (7 in total)
+## 3. Add GitHub Secrets (9 in total)
 
 1. On GitHub: repo **NeoSleep** → **Settings** → **Secrets and variables** → **Actions**.
 2. **New repository secret** for each:
@@ -69,6 +69,9 @@ Use the **exact same path** you see when you open that folder in your FTP client
 | `FTP_PATH_WEBSITE_UAT` | Remote path for site UAT | `public_html/neosleepcare-site-uat` |
 | `FTP_PATH_APP_PROD` | Remote path for app PROD | `public_html/neosleepcare-app-prod` |
 | `FTP_PATH_APP_UAT` | Remote path for app UAT | `public_html/neosleepcare-app-uat` |
+
+| `VITE_BFF_URL_PROD` | BFF API URL for production (used at **build** time so app calls the right API) | `https://api.neosleepcare.com` |
+| `VITE_BFF_URL_UAT` | BFF API URL for UAT (used at **build** time) | `https://api-uat.neosleepcare.com` or your UAT API URL |
 
 Use the **exact path** you see in your FTP client when you open the target folder (see section 1). Try without leading `/` first; if deploy still goes to the wrong place, try with `/`.
 
@@ -113,6 +116,9 @@ Both use [SamKirkland/FTP-Deploy-Action](https://github.com/SamKirkland/FTP-Depl
 
 ## 7. Troubleshooting
 
+- **App loads but API calls fail / network errors:** The rep-app build must have the correct BFF URL. Add GitHub Secrets **`VITE_BFF_URL_PROD`** and **`VITE_BFF_URL_UAT`** (e.g. `https://api.neosleepcare.com` and your UAT API URL). Re-run the deploy workflow so the app is built with the right URL.
+- **404 when refreshing a subpage (e.g. /dashboard):** The server must serve `index.html` for SPA routes. The repo includes `apps/rep-app/public/.htaccess`; it is copied to `dist/` on build. Ensure GoDaddy is using Apache and that `mod_rewrite` is enabled for the app folder.
+- **Cannot log in with Google:** See **foundation/docs/LOGIN_AFTER_DEPLOY.md** for BFF env vars, Google OAuth redirect URI, and CORS/cookies.
 - **FTP login failed:** Check `FTP_SERVER`, `FTP_USERNAME`, `FTP_PASSWORD` (no typos).
 - **Folders empty on FTP / 403 on site:** The path in the secret is wrong. Follow **section 1** to find the correct path on GoDaddy and set `FTP_PATH_WEBSITE_PROD`, `FTP_PATH_WEBSITE_UAT`, `FTP_PATH_APP_PROD`, `FTP_PATH_APP_UAT` to that exact path (try without leading `/` first, then with `/`).
 - **404 / wrong site:** In GoDaddy/cPanel, set each (sub)domain’s **document root** to the same folder you use in the corresponding `FTP_PATH_*` secret.
