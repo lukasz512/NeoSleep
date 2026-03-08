@@ -1,0 +1,54 @@
+# Deploy marketing website to GoDaddy FTP
+# - main → neosleepcare.com (production)
+# - uat   → uat.neosleepcare.com (UAT)
+
+name: Deploy Website (FTP)
+
+on:
+  push:
+    branches: [main, uat]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Only run for website-relevant changes when on main/uat (optional: add path filter)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build website
+        run: pnpm run build:website
+
+      - name: Deploy to FTP (production)
+        if: github.ref == 'refs/heads/main'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./apps/website/dist/
+          server-dir: ${{ secrets.FTP_PATH_WEBSITE_PROD }}
+
+      - name: Deploy to FTP (UAT)
+        if: github.ref == 'refs/heads/uat'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./apps/website/dist/
+          server-dir: ${{ secrets.FTP_PATH_WEBSITE_UAT }}

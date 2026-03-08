@@ -35,6 +35,16 @@ BFF UAT: e.g. **uat.api.neosleep.com**.
 - **uat.neosleep.com** → UAT / staging target.
 - Add subdomains (rep, admin, portal, api, uat.rep, etc.) as required by your host.
 
+## Deploying to GoDaddy via FTP (GitHub Actions)
+
+**Automated build + FTP upload** for **neosleepcare.com**, **uat.neosleepcare.com**, **app.neosleepcare.com**, and **uat.app.neosleepcare.com**:
+
+- **Website** (`apps/website`): push to `main` → deploys to **neosleepcare.com**; push to `uat` → deploys to **uat.neosleepcare.com**.
+- **App** (`apps/rep-app`): push to `main` → deploys to **app.neosleepcare.com**; push to `uat` → deploys to **uat.app.neosleepcare.com**.
+
+Workflows: `.github/workflows/deploy-website.yml`, `.github/workflows/deploy-app.yml`.  
+**Setup:** Add FTP credentials and paths as GitHub Secrets, then configure GoDaddy FTP and domain folders. Full steps: **foundation/docs/FTP_DEPLOY_GODADDY.md**.
+
 ## Deploying the apps (recommended: Vercel for frontends)
 
 Monorepo has three deployable frontends under `apps/` (admin is Directus, not in apps/):

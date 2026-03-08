@@ -107,7 +107,7 @@ Recommended start: **Stage 1 – Secure Core** (SPEC-0002 Google OIDC, then BFF 
 
 For details on PostgreSQL, hosting, and validation strategy, see **foundation/docs/DATA_AND_API.md**. See also:
 - **foundation/docs/GITHUB_AND_SECRETS.md** – adding the repo to a private GitHub repo; keeping keys/secrets out of the repo; neosleep.com and uat.neosleep.com (GoDaddy).
-- **foundation/docs/DEPLOYMENT.md** – domains (neosleep.com, uat.neosleep.com on GoDaddy; rep/admin/portal subdomains), deploying all four apps (e.g. Vercel).
+- **foundation/docs/DEPLOYMENT.md** – domains (neosleep.com, uat.neosleep.com on GoDaddy; rep/admin/portal subdomains), deploying all four apps (e.g. Vercel). **FTP deploy:** see **foundation/docs/FTP_DEPLOY_GODADDY.md** (build + upload to neosleepcare.com, uat, app, uat.app).
 - **foundation/docs/LOCAL_DATABASE.md** – run Postgres locally first (Docker or native), then host when ready.
 - **foundation/docs/DATABASE_MIGRATIONS.md** – how to run migration scripts to create/update tables (001_initial.sql and later).
 - **foundation/docs/AUTOMATION_AND_COMPLIANCE.md** – Make/Notion, leads→HCP/HCO, compliance, users/roles.

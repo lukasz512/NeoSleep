@@ -1,0 +1,53 @@
+# Deploy rep-app to GoDaddy FTP
+# - main → app.neosleepcare.com (production)
+# - uat   → uat.app.neosleepcare.com (UAT)
+
+name: Deploy App (FTP)
+
+on:
+  push:
+    branches: [main, uat]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build rep-app
+        run: pnpm run build:rep-app
+
+      - name: Deploy to FTP (production – app.neosleepcare.com)
+        if: github.ref == 'refs/heads/main'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./apps/rep-app/dist/
+          server-dir: ${{ secrets.FTP_PATH_APP_PROD }}
+
+      - name: Deploy to FTP (UAT – uat.app.neosleepcare.com)
+        if: github.ref == 'refs/heads/uat'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./apps/rep-app/dist/
+          server-dir: ${{ secrets.FTP_PATH_APP_UAT }}
