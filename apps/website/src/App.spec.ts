@@ -31,11 +31,11 @@ describe("DefaultLayout", () => {
         stubs: { "router-view": true },
       },
     });
-    const header = wrapper.find(".layout-default__header");
+    const header = wrapper.find(".default-header");
     expect(header.exists()).toBe(true);
-    expect(wrapper.find(".layout-default__brand").exists()).toBe(true);
-    expect(wrapper.find(".layout-default__logo-img").exists()).toBe(true);
-    const nav = wrapper.find(".layout-default__nav");
+    expect(wrapper.find(".default-header__brand").exists()).toBe(true);
+    expect(wrapper.find(".default-header__logo").exists()).toBe(true);
+    const nav = wrapper.find(".default-header__nav");
     expect(nav.exists()).toBe(true);
     expect(wrapper.find(".layout-default__main").exists()).toBe(true);
   });
@@ -47,15 +47,15 @@ describe("DefaultLayout", () => {
         stubs: { "router-view": true },
       },
     });
-    const navLinks = wrapper.findAll(".layout-default__nav-link");
+    const navLinks = wrapper.findAll(".default-header__nav-link");
     expect(navLinks.length).toBeGreaterThanOrEqual(5);
-    const text = wrapper.find(".layout-default__nav").text();
+    const text = wrapper.find(".default-header__nav").text();
     expect(text).toContain("Solutions");
     expect(text).toContain("For Dentists");
     expect(text).toContain("For Patients");
     expect(text).toContain("About");
     expect(text).toContain("Contact");
-    expect(wrapper.find(".layout-default__cta").text()).toContain("Get Started");
+    expect(wrapper.find(".default-header__cta").text()).toContain("Get Started");
   });
 });
 
