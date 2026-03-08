@@ -147,15 +147,15 @@ function onWaveEnd(e: TransitionEvent) {
 
 .theme-toggle__wave {
   position: fixed;
-  width: 100vmax;
-  height: 100vmax;
-  margin-left: -50vmax;
-  margin-top: -50vmax;
+  width: 200vmax;
+  height: 200vmax;
+  margin-left: -100vmax;
+  margin-top: -100vmax;
   border-radius: 50%;
   pointer-events: none;
-  z-index: 9999;
+  z-index: 1;
   transform: scale(0);
-  transition: transform 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.85s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .theme-toggle__wave--light {

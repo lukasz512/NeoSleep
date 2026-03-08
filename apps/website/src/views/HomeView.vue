@@ -1,12 +1,6 @@
 <template>
   <div class="view-home" :class="{ 'view-home--dark': isDark }">
     <section class="view-home__hero">
-      <div class="view-home__hero-moon" aria-hidden="true">
-        <svg class="view-home__hero-moon-svg" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="60" cy="60" r="50" fill="rgba(255,255,255,0.12)" />
-          <circle cx="60" cy="60" r="42" fill="rgba(255,255,255,0.08)" />
-        </svg>
-      </div>
       <div class="view-home__hero-inner">
         <div class="view-home__hero-content">
           <h1 class="view-home__hero-title">
@@ -22,14 +16,27 @@
             <a href="#solutions" class="view-home__btn view-home__btn--secondary">{{ t("website.hero.ctaLearnMore") }}</a>
           </div>
         </div>
-        <div class="view-home__hero-image-wrap">
+        <div class="view-home__hero-images">
+          <div class="view-home__hero-moon" aria-hidden="true">
+            <svg class="view-home__hero-moon-svg" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="60" cy="60" r="50" fill="rgba(255,255,255,0.12)" />
+              <circle cx="60" cy="60" r="42" fill="rgba(255,255,255,0.08)" />
+            </svg>
+          </div>
           <img
             src="/images/hero.jpeg"
             alt=""
-            class="view-home__hero-image"
+            class="view-home__hero-image view-home__hero-image--main"
             width="600"
             height="400"
             fetchpriority="high"
+          />
+          <img
+            src="/images/hero.jpeg"
+            alt=""
+            class="view-home__hero-image view-home__hero-image--secondary"
+            width="400"
+            height="267"
           />
         </div>
       </div>
@@ -207,29 +214,6 @@ const { isDark } = useTheme();
   overflow: hidden;
 }
 
-.view-home__hero-moon {
-  position: absolute;
-  top: 2rem;
-  right: 10%;
-  width: 180px;
-  height: 180px;
-  opacity: 0;
-  transform: scale(0.6);
-  transition: opacity 0.6s ease, transform 0.6s ease;
-  pointer-events: none;
-}
-
-.view-home--dark .view-home__hero-moon {
-  opacity: 1;
-  transform: scale(1);
-}
-
-.view-home__hero-moon-svg {
-  width: 100%;
-  height: 100%;
-  filter: drop-shadow(0 0 24px rgba(255, 255, 255, 0.15));
-}
-
 .view-home__hero-inner {
   max-width: 1100px;
   margin: 0 auto;
@@ -237,6 +221,67 @@ const { isDark } = useTheme();
   grid-template-columns: 1fr 1fr;
   gap: 3rem;
   align-items: center;
+}
+
+.view-home__hero-images {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  max-height: 420px;
+}
+
+.view-home__hero-moon {
+  position: absolute;
+  right: -8%;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 200px;
+  height: 200px;
+  z-index: 0;
+  opacity: 0;
+  transition: opacity 0.6s ease, transform 0.6s ease;
+  pointer-events: none;
+}
+
+.view-home--dark .view-home__hero-moon {
+  opacity: 1;
+}
+
+.view-home__hero-moon-svg {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 0 32px rgba(255, 255, 255, 0.12));
+}
+
+.view-home__hero-image {
+  position: relative;
+  z-index: 1;
+  display: block;
+  object-fit: cover;
+  border-radius: calc(var(--website-radius) * 2);
+  box-shadow: var(--website-shadow-md);
+  transition: filter 0.4s ease;
+}
+
+.view-home--dark .view-home__hero-image {
+  filter: brightness(0.88) contrast(1.05) saturate(0.92);
+}
+
+.view-home__hero-image--main {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  inset: 0;
+}
+
+.view-home__hero-image--secondary {
+  position: absolute;
+  right: -8px;
+  bottom: -12px;
+  width: 42%;
+  height: auto;
+  max-height: 56%;
+  border: 3px solid var(--website-bg);
+  box-shadow: var(--website-shadow-md);
 }
 
 @media (max-width: 768px) {
@@ -247,6 +292,23 @@ const { isDark } = useTheme();
 
   .view-home__hero-ctas {
     justify-content: center;
+  }
+
+  .view-home__hero-images {
+    max-height: 320px;
+    order: -1;
+  }
+
+  .view-home__hero-moon {
+    right: -4%;
+    width: 140px;
+    height: 140px;
+  }
+
+  .view-home__hero-image--secondary {
+    width: 48%;
+    right: 4px;
+    bottom: -8px;
   }
 }
 
@@ -345,19 +407,6 @@ const { isDark } = useTheme();
 
 .view-home__btn-arrow {
   font-size: 1.1em;
-}
-
-.view-home__hero-image-wrap {
-  border-radius: calc(var(--website-radius) * 2);
-  overflow: hidden;
-  box-shadow: var(--website-shadow-md);
-}
-
-.view-home__hero-image {
-  width: 100%;
-  height: auto;
-  display: block;
-  object-fit: cover;
 }
 
 .view-home__stats {

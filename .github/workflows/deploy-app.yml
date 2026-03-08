@@ -1,6 +1,6 @@
 # Deploy rep-app to GoDaddy FTP
-# - PROD → app.neosleepcare.com (public_html/neosleepcare-app-prod/)
-# - uat  → app-uat.neosleepcare.com (public_html/neosleepcare-app-uat/)
+# - PROD → app.neosleepcare.com (path: secret FTP_PATH_APP_PROD)
+# - uat  → app-uat.neosleepcare.com (path: secret FTP_PATH_APP_UAT)
 
 name: Deploy NeoSleepCare App
 
@@ -40,7 +40,7 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftp
           local-dir: ./apps/rep-app/dist/
-          server-dir: /public_html/neosleepcare-app-prod/
+          server-dir: ${{ secrets.FTP_PATH_APP_PROD }}
           dangerous-clean-slate: false
 
       - name: Deploy to UAT (app-uat.neosleepcare.com)
@@ -52,5 +52,5 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftp
           local-dir: ./apps/rep-app/dist/
-          server-dir: /public_html/neosleepcare-app-uat/
+          server-dir: ${{ secrets.FTP_PATH_APP_UAT }}
           dangerous-clean-slate: false

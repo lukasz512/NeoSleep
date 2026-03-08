@@ -1,6 +1,6 @@
 # Deploy marketing website to GoDaddy FTP
-# - PROD → neosleepcare.com (public_html/neosleepcare-site-prod/)
-# - uat  → uat.neosleepcare.com (public_html/neosleepcare-site-uat/)
+# - PROD → neosleepcare.com (path: secret FTP_PATH_WEBSITE_PROD)
+# - uat  → uat.neosleepcare.com (path: secret FTP_PATH_WEBSITE_UAT)
 
 name: Deploy NeoSleepCare Site
 
@@ -40,7 +40,7 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftp
           local-dir: ./apps/website/dist/
-          server-dir: /public_html/neosleepcare-site-prod/
+          server-dir: ${{ secrets.FTP_PATH_WEBSITE_PROD }}
           dangerous-clean-slate: false
 
       - name: Deploy to UAT (uat.neosleepcare.com)
@@ -52,5 +52,5 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftp
           local-dir: ./apps/website/dist/
-          server-dir: /public_html/neosleepcare-site-uat/
+          server-dir: ${{ secrets.FTP_PATH_WEBSITE_UAT }}
           dangerous-clean-slate: false

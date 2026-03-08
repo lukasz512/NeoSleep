@@ -218,12 +218,16 @@ const activeLocale = computed(() => locale.value);
 
 .layout-default__main {
   flex: 1;
+  position: relative;
+  z-index: 2;
 }
 
 .layout-default__footer {
   background: var(--website-footer-bg);
   color: #fff;
   padding: 3rem 1.5rem 2rem;
+  position: relative;
+  z-index: 2;
 }
 
 .layout-default__footer-inner {

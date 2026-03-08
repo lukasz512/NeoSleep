@@ -7,22 +7,44 @@ The repo uses two GitHub Actions workflows to **build** and **upload** to GoDadd
 | **Site** (marketing) | **neosleepcare.com**, **uat.neosleepcare.com** | Deploy NeoSleepCare Site |
 | **App** (rep-app) | **app.neosleepcare.com**, **app-uat.neosleepcare.com** | Deploy NeoSleepCare App |
 
-| Workflow | Branch | Builds | FTP folder | Domain |
-|----------|--------|--------|------------|--------|
-| **Deploy NeoSleepCare Site** | `PROD` | `apps/website` | `/public_html/neosleepcare-site-prod/` | neosleepcare.com |
-| **Deploy NeoSleepCare Site** | `uat` | `apps/website` | `/public_html/neosleepcare-site-uat/` | uat.neosleepcare.com |
-| **Deploy NeoSleepCare App** | `PROD` | `apps/rep-app` | `/public_html/neosleepcare-app-prod/` | app.neosleepcare.com |
-| **Deploy NeoSleepCare App** | `uat` | `apps/rep-app` | `/public_html/neosleepcare-app-uat/` | app-uat.neosleepcare.com |
+| Workflow | Branch | Builds | FTP folder (secret) | Domain |
+|----------|--------|--------|---------------------|--------|
+| **Deploy NeoSleepCare Site** | `PROD` | `apps/website` | `FTP_PATH_WEBSITE_PROD` | neosleepcare.com |
+| **Deploy NeoSleepCare Site** | `uat` | `apps/website` | `FTP_PATH_WEBSITE_UAT` | uat.neosleepcare.com |
+| **Deploy NeoSleepCare App** | `PROD` | `apps/rep-app` | `FTP_PATH_APP_PROD` | app.neosleepcare.com |
+| **Deploy NeoSleepCare App** | `uat` | `apps/rep-app` | `FTP_PATH_APP_UAT` | app-uat.neosleepcare.com |
 
 - Push to **PROD** → both workflows deploy to **production** folders.
 - Push to **uat** → both workflows deploy to **UAT** folders.
 - You can also run a workflow manually: **Actions** → choose workflow → **Run workflow**.
 
-FTP paths are **fixed in the workflow files**; you only need **three** GitHub Secrets.
+Paths are set via **GitHub Secrets** so you can match the exact folder structure on GoDaddy FTP (see below).
 
 ---
 
-## 1. Get FTP details from GoDaddy
+## 1. How to find the correct FTP path (important)
+
+If deploy runs but **folders on GoDaddy stay empty**, the `server-dir` path is wrong. Do this:
+
+1. **Connect by FTP** (FileZilla, WinSCP, or cPanel → File Manager).
+2. After login, look at the **remote (server) side**:
+   - You often see a home folder with e.g. `public_html`, `www`, `domains`, or similar.
+   - GoDaddy/cPanel often: your home = something like `/home/username` and the web root is `public_html`.
+3. **Choose or create the target folder** (e.g. for the main site):
+   - Go into `public_html` (or the folder that is the web root for your domain).
+   - Create a subfolder if needed, e.g. `neosleepcare-site-prod`.
+   - The **full path** you need in the secret is the path from the **FTP login root** to that folder.
+4. **Try these path formats** in the GitHub secret (one of them will work):
+   - **Relative, no leading slash:** `public_html/neosleepcare-site-prod` or `public_html/neosleepcare-site-prod/`
+   - **With leading slash:** `/public_html/neosleepcare-site-prod` or `/public_html/neosleepcare-site-prod/`
+   - **If your FTP root is already inside public_html:** `neosleepcare-site-prod` or `neosleepcare-site-prod/`
+5. After setting the secret, run the workflow again and check the same folder on FTP – files should appear.
+
+Use the **exact same path** you see when you open that folder in your FTP client (or File Manager). Copy the path from the address bar if possible.
+
+---
+
+## 2. Get FTP details from GoDaddy
 
 1. Log in to **GoDaddy** → **Web Hosting** or **cPanel**.
 2. Open **FTP** / **FTP Accounts**.
@@ -33,22 +55,26 @@ FTP paths are **fixed in the workflow files**; you only need **three** GitHub Se
 
 ---
 
-## 2. Add GitHub Secrets (only 3)
+## 3. Add GitHub Secrets (7 in total)
 
 1. On GitHub: repo **NeoSleep** → **Settings** → **Secrets and variables** → **Actions**.
 2. **New repository secret** for each:
 
 | Secret | Description | Example |
 |--------|-------------|---------|
-| `FTP_SERVER` | FTP host from GoDaddy | `ftp.neosleepcare.com` |
+| `FTP_SERVER` | FTP host (or IP) from GoDaddy | `ftp.neosleepcare.com` or `97.74.144.xxx` |
 | `FTP_USERNAME` | FTP user | `your_ftp_user` |
 | `FTP_PASSWORD` | FTP password | (paste password) |
+| `FTP_PATH_WEBSITE_PROD` | Remote path for site PROD | `public_html/neosleepcare-site-prod` or `/public_html/neosleepcare-site-prod` |
+| `FTP_PATH_WEBSITE_UAT` | Remote path for site UAT | `public_html/neosleepcare-site-uat` |
+| `FTP_PATH_APP_PROD` | Remote path for app PROD | `public_html/neosleepcare-app-prod` |
+| `FTP_PATH_APP_UAT` | Remote path for app UAT | `public_html/neosleepcare-app-uat` |
 
-No path secrets: server directories are set in the workflow YAML (`/public_html/neosleepcare-site-prod/`, etc.).
+Use the **exact path** you see in your FTP client when you open the target folder (see section 1). Try without leading `/` first; if deploy still goes to the wrong place, try with `/`.
 
 ---
 
-## 3. GoDaddy: point subdomains to the right folders
+## 4. GoDaddy: point subdomains to the right folders
 
 In **GoDaddy** (or cPanel) set each (sub)domain’s **document root** to the folder the workflow uploads to:
 
@@ -59,7 +85,7 @@ In **GoDaddy** (or cPanel) set each (sub)domain’s **document root** to the fol
 | **app.neosleepcare.com** | `public_html/neosleepcare-app-prod` |
 | **app-uat.neosleepcare.com** | `public_html/neosleepcare-app-uat` |
 
-Exact names depend on your hosting (Subdomains / Addon Domains in cPanel). The folder name must match what’s in the workflow `server-dir`.
+Exact names depend on your hosting (Subdomains / Addon Domains in cPanel). The folder name must match what’s in the FTP_PATH_* secret.
 
 ---
 
@@ -76,7 +102,7 @@ Then: push to **PROD** → prod deploy; push to **uat** → UAT deploy.
 
 ---
 
-## 5. Workflow files
+## 6. Workflow files
 
 - **Site:** `.github/workflows/deploy-website.yml` – name: **Deploy NeoSleepCare Site**. Build: `pnpm run build:website` → `apps/website/dist/`.
 - **App:** `.github/workflows/deploy-app.yml` – name: **Deploy NeoSleepCare App**. Build: `pnpm run build:rep-app` → `apps/rep-app/dist/`.
@@ -85,8 +111,8 @@ Both use [SamKirkland/FTP-Deploy-Action](https://github.com/SamKirkland/FTP-Depl
 
 ---
 
-## 6. Troubleshooting
+## 7. Troubleshooting
 
 - **FTP login failed:** Check `FTP_SERVER`, `FTP_USERNAME`, `FTP_PASSWORD` (no typos).
-- **404 / wrong site:** In GoDaddy/cPanel, ensure each (sub)domain’s document root is the folder used in the workflow (`neosleepcare-site-prod`, `neosleepcare-site-uat`, `neosleepcare-app-prod`, `neosleepcare-app-uat`).
-- **Change paths:** Edit `server-dir` in `.github/workflows/deploy-website.yml` and `.github/workflows/deploy-app.yml`, then update the subdomain document roots in GoDaddy to match.
+- **Folders empty on FTP / 403 on site:** The path in the secret is wrong. Follow **section 1** to find the correct path on GoDaddy and set `FTP_PATH_WEBSITE_PROD`, `FTP_PATH_WEBSITE_UAT`, `FTP_PATH_APP_PROD`, `FTP_PATH_APP_UAT` to that exact path (try without leading `/` first, then with `/`).
+- **404 / wrong site:** In GoDaddy/cPanel, set each (sub)domain’s **document root** to the same folder you use in the corresponding `FTP_PATH_*` secret.
