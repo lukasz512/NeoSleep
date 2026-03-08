@@ -6,20 +6,7 @@
         <span class="layout-default__logo-text">{{ t("website.logo") }}</span>
       </RouterLink>
       <nav class="layout-default__nav" aria-label="Main navigation">
-        <div class="layout-default__lang">
-          <button
-            v-for="loc in supported"
-            :key="loc"
-            type="button"
-            class="layout-default__lang-btn"
-            :class="{ 'layout-default__lang-btn--active': activeLocale === loc }"
-            :aria-pressed="activeLocale === loc"
-            :aria-label="loc === 'en' ? 'English' : 'Polski'"
-            @click="setLocale(loc)"
-          >
-            {{ loc.toUpperCase() }}
-          </button>
-        </div>
+        <LanguageSelect />
         <a href="/#solutions" class="layout-default__nav-link">{{ t("website.nav.solutions") }}</a>
         <a href="/#for-dentists" class="layout-default__nav-link">{{ t("website.nav.forDentists") }}</a>
         <a href="/#for-patients" class="layout-default__nav-link">{{ t("website.nav.forPatients") }}</a>
@@ -79,14 +66,11 @@
 import { useI18n } from "vue-i18n";
 import LogoIcon from "../components/LogoIcon.vue";
 import ThemeToggle from "../components/ThemeToggle.vue";
-import { useWebsiteLocale } from "../composables/useWebsiteLocale";
+import LanguageSelect from "../components/LanguageSelect.vue";
 import { useTheme } from "../composables/useTheme";
-import { computed } from "vue";
 
 const { t } = useI18n();
-const { locale, supported, setLocale } = useWebsiteLocale();
 const { isDark } = useTheme();
-const activeLocale = computed(() => locale.value);
 </script>
 
 <style lang="scss" scoped>
@@ -144,37 +128,6 @@ const activeLocale = computed(() => locale.value);
   display: flex;
   align-items: center;
   gap: 1.5rem;
-}
-
-.layout-default__lang {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-}
-
-.layout-default__lang-btn {
-  min-width: 2rem;
-  min-height: 2rem;
-  padding: 0 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--website-text-secondary);
-  background: transparent;
-  border: 1px solid var(--website-border);
-  border-radius: var(--website-radius);
-  cursor: pointer;
-  transition: color 0.2s, background 0.2s, border-color 0.2s;
-
-  &:hover {
-    color: var(--website-text);
-    border-color: var(--website-text-secondary);
-  }
-
-  &--active {
-    color: var(--website-primary);
-    border-color: var(--website-primary);
-    background: rgba(18, 143, 131, 0.08);
-  }
 }
 
 .layout-default__nav-link {

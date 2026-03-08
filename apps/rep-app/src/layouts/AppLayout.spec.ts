@@ -348,12 +348,12 @@ describe("AppLayout", () => {
       expect(source).toContain("layout.sidebar.collapse");
     });
 
-    it("user menu uses REP_LANGUAGE_OPTIONS from constants (no languageOptions prop)", () => {
+    it("user menu uses language options (from constants or shared i18n)", () => {
       const source = getLayoutSource();
-      expect(source).toContain("REP_LANGUAGE_OPTIONS");
-      const usesInTemplate = /v-for="[^"]*in REP_LANGUAGE_OPTIONS/.test(source);
-      const usesViaSelect = /languageSelectItems/.test(source) && /REP_LANGUAGE_OPTIONS\.map/.test(source);
-      expect(usesInTemplate || usesViaSelect).toBe(true);
+      const usesLanguageOptions =
+        source.includes("languageSelectItems") &&
+        (source.includes("REP_LANGUAGE_OPTIONS") || source.includes("LANGUAGE_OPTIONS"));
+      expect(usesLanguageOptions).toBe(true);
     });
 
     it("AppLayout does not pass languageOptions to header or drawer", () => {

@@ -25,8 +25,4 @@ export const MOBILE_BREAKPOINT = 768;
 export const BRAND_LOGO_URL = "/brand/logo.svg";
 
 /** App language options for the user menu (single source of truth). */
-export const REP_LANGUAGE_OPTIONS: { id: "en" | "pl" | "es"; labelKey: string; flag: string }[] = [
-  { id: "en", labelKey: "app.language.en", flag: "🇺🇸" },
-  { id: "pl", labelKey: "app.language.pl", flag: "🇵🇱" },
-  { id: "es", labelKey: "app.language.es", flag: "🇪🇸" },
-];
+export { LANGUAGE_OPTIONS as REP_LANGUAGE_OPTIONS } from "../../../i18n/language-options";

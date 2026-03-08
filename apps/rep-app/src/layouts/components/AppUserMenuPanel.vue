@@ -79,7 +79,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
-import { REP_LANGUAGE_OPTIONS } from "../../constants";
+import { LANGUAGE_OPTIONS } from "@i18n/language-options";
 
 const props = defineProps<{
   theme: "light" | "dark";
@@ -105,7 +105,7 @@ const emit = defineEmits<{
 const { t } = useI18n();
 
 const languageSelectItems = computed(() =>
-  REP_LANGUAGE_OPTIONS.map((lang) => ({
+  LANGUAGE_OPTIONS.map((lang) => ({
     id: lang.id,
     title: `${lang.flag} ${t(lang.labelKey)}`,
   }))
