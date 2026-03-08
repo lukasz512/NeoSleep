@@ -12,7 +12,8 @@ export declare const MOBILE_BREAKPOINT = 768;
 export declare const BRAND_LOGO_URL = "/brand/logo.svg";
 /** App language options for the user menu (single source of truth). */
 export declare const REP_LANGUAGE_OPTIONS: {
-    id: "en" | "pl" | "es";
-    labelKey: string;
-    flag: string;
+  id: "en" | "pl" | "es";
+  labelKey: string;
+  nativeLabel: string;
+  flag: string;
 }[];

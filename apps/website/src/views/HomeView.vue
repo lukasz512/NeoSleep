@@ -31,13 +31,6 @@
             height="400"
             fetchpriority="high"
           />
-          <img
-            src="/images/hero.jpeg"
-            alt=""
-            class="view-home__hero-image view-home__hero-image--secondary"
-            width="400"
-            height="267"
-          />
         </div>
       </div>
     </section>
@@ -273,17 +266,6 @@ const { isDark } = useTheme();
   inset: 0;
 }
 
-.view-home__hero-image--secondary {
-  position: absolute;
-  right: -8px;
-  bottom: -12px;
-  width: 42%;
-  height: auto;
-  max-height: 56%;
-  border: 3px solid var(--website-bg);
-  box-shadow: var(--website-shadow-md);
-}
-
 @media (max-width: 768px) {
   .view-home__hero-inner {
     grid-template-columns: 1fr;
@@ -303,12 +285,6 @@ const { isDark } = useTheme();
     right: -4%;
     width: 140px;
     height: 140px;
-  }
-
-  .view-home__hero-image--secondary {
-    width: 48%;
-    right: 4px;
-    bottom: -8px;
   }
 }
 

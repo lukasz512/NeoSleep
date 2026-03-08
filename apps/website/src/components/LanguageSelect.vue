@@ -1,15 +1,17 @@
 <template>
   <div ref="wrapRef" class="lang-select">
+    <NavTooltip :text="tooltipLabel">
     <button
       type="button"
       class="lang-select__trigger"
-      :aria-label="currentLabel"
+      :aria-label="tooltipLabel"
       :aria-expanded="open"
       aria-haspopup="true"
       @click="toggle"
     >
-      <span class="lang-select__flag" aria-hidden="true">{{ currentOption?.flag }}</span>
+      <FlagIcon v-if="currentOption" :locale="currentOption.id" class="lang-select__flag" />
     </button>
+    </NavTooltip>
     <Transition name="lang-drop">
       <div v-show="open" class="lang-select__dropdown" role="menu">
         <button
@@ -21,8 +23,8 @@
           :class="{ 'lang-select__item--active': locale === opt.id }"
           @click="select(opt.id)"
         >
-          <span class="lang-select__item-flag" aria-hidden="true">{{ opt.flag }}</span>
-          <span class="lang-select__item-name">{{ t(opt.labelKey) }}</span>
+          <FlagIcon :locale="opt.id" class="lang-select__item-flag" />
+          <span class="lang-select__item-name">{{ opt.nativeLabel }}</span>
         </button>
       </div>
     </Transition>
@@ -35,6 +37,8 @@ import { useI18n } from "vue-i18n";
 import { useWebsiteLocale } from "../composables/useWebsiteLocale";
 import type { WebsiteLocale } from "../composables/useWebsiteLocale";
 import { LANGUAGE_OPTIONS, type LocaleId } from "@i18n/language-options";
+import NavTooltip from "./NavTooltip.vue";
+import FlagIcon from "./FlagIcon.vue";
 
 const { t } = useI18n();
 const { locale, supported, setLocale } = useWebsiteLocale();
@@ -51,6 +55,8 @@ const currentOption = computed(() => options.value.find((o) => o.id === locale.v
 const currentLabel = computed(() =>
   currentOption.value ? t(currentOption.value.labelKey) : "Language"
 );
+
+const tooltipLabel = computed(() => t("rep.settings.language"));
 
 function toggle() {
   open.value = !open.value;
@@ -84,21 +90,18 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  min-width: 40px;
-  min-height: 40px;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  min-height: 34px;
   padding: 0;
-  border: 1px solid var(--website-border);
+  border: none;
   border-radius: var(--website-radius);
   background: var(--website-bg);
   cursor: pointer;
-  font-size: 1.25rem;
-  line-height: 1;
-  transition: border-color 0.2s, background 0.2s;
+  transition: background 0.2s;
 
   &:hover {
-    border-color: var(--website-primary);
     background: rgba(18, 143, 131, 0.06);
   }
 
@@ -109,7 +112,14 @@ onUnmounted(() => {
 }
 
 .lang-select__flag {
-  display: block;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+}
+
+.lang-select__flag :deep(.flag-icon) {
+  width: 100%;
+  height: 100%;
 }
 
 .lang-select__dropdown {
@@ -150,7 +160,7 @@ onUnmounted(() => {
 }
 
 .lang-select__item-flag {
-  font-size: 1.125rem;
+  flex-shrink: 0;
 }
 
 .lang-drop-enter-active,

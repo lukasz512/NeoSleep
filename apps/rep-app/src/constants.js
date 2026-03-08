@@ -14,7 +14,7 @@ export const MOBILE_BREAKPOINT = 768;
 export const BRAND_LOGO_URL = "/brand/logo.svg";
 /** App language options for the user menu (single source of truth). */
 export const REP_LANGUAGE_OPTIONS = [
-    { id: "en", labelKey: "app.language.en", flag: "🇺🇸" },
-    { id: "pl", labelKey: "app.language.pl", flag: "🇵🇱" },
-    { id: "es", labelKey: "app.language.es", flag: "🇪🇸" },
+  { id: "en", labelKey: "app.language.en", nativeLabel: "English", flag: "🇬🇧" },
+  { id: "pl", labelKey: "app.language.pl", nativeLabel: "Polski", flag: "🇵🇱" },
+  { id: "es", labelKey: "app.language.es", nativeLabel: "Español", flag: "🇪🇸" },
 ];

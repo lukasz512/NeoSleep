@@ -19,14 +19,16 @@
         </RouterLink>
       </div>
       <nav class="layout-default__nav layout-default__nav--desktop" aria-label="Main navigation">
-        <LanguageSelect />
         <a href="/#solutions" class="layout-default__nav-link">{{ t("website.nav.solutions") }}</a>
         <a href="/#for-dentists" class="layout-default__nav-link">{{ t("website.nav.forDentists") }}</a>
         <a href="/#for-patients" class="layout-default__nav-link">{{ t("website.nav.forPatients") }}</a>
         <RouterLink to="/about" class="layout-default__nav-link" @click="closeMobileMenu">{{ t("website.nav.about") }}</RouterLink>
         <RouterLink to="/contact" class="layout-default__nav-link" @click="closeMobileMenu">{{ t("website.nav.contact") }}</RouterLink>
         <a href="/#cta" class="layout-default__cta">{{ t("website.header.cta") }}</a>
-        <ThemeToggle />
+        <div class="layout-default__nav-tools">
+          <LanguageSelect />
+          <ThemeToggle />
+        </div>
       </nav>
       <div class="layout-default__header-right">
         <ThemeToggle class="layout-default__theme-mobile" />
@@ -238,6 +240,12 @@ function closeMobileMenu() {
   display: flex;
   align-items: center;
   gap: 1.5rem;
+}
+
+.layout-default__nav-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .layout-default__nav-link {

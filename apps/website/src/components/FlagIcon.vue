@@ -29,7 +29,7 @@ const props = withDefaults(
   {}
 );
 
-const fallbackEmoji = { en: "🇬🇧", pl: "🇵🇱", es: "🇪🇸" }[props.locale] ?? "🏳";
+const fallbackEmoji = { en: "🇺🇸", pl: "🇵🇱", es: "🇪🇸" }[props.locale] ?? "🏳";
 </script>
 
 <style lang="scss" scoped>
@@ -42,8 +42,6 @@ const fallbackEmoji = { en: "🇬🇧", pl: "🇵🇱", es: "🇪🇸" }[props.l
   flex-shrink: 0;
   border-radius: 4px;
   overflow: hidden;
-  background: #fff;
-  border: 1px solid #9ca3af;
 }
 
 .flag-icon__svg {

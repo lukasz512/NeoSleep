@@ -1,17 +1,19 @@
 <template>
   <div class="theme-toggle" :data-mode="themeMode">
+    <NavTooltip :text="toggleLabel">
     <button
       ref="btnRef"
       type="button"
       class="theme-toggle__btn"
       :aria-label="toggleLabel"
-      :title="toggleLabel"
       @click="onClick"
     >
       <span class="theme-toggle__icon theme-toggle__icon--auto" aria-hidden="true">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="2" y="3" width="20" height="14" rx="2"/>
-          <path d="M8 21h8M12 17v4"/>
+          <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+          <path d="M3 3v5h5"/>
+          <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+          <path d="M21 21v-5h-5"/>
         </svg>
       </span>
       <span class="theme-toggle__icon theme-toggle__icon--sun" aria-hidden="true">
@@ -26,6 +28,7 @@
         </svg>
       </span>
     </button>
+    </NavTooltip>
     <Transition name="theme-wave">
       <div
         v-if="waveActive"
@@ -43,6 +46,7 @@
 <script setup lang="ts">
 import { ref, computed, nextTick } from "vue";
 import { useI18n } from "vue-i18n";
+import NavTooltip from "./NavTooltip.vue";
 import { useTheme } from "../composables/useTheme";
 import type { ThemeMode } from "../composables/useTheme";
 
@@ -69,12 +73,9 @@ function resolveDark(mode: ThemeMode): boolean {
   return mode === "dark";
 }
 
-const toggleLabel = computed(() => {
-  const key = { auto: "website.theme.auto", light: "website.theme.light", dark: "website.theme.dark" }[
-    themeMode.value
-  ];
-  return t(key);
-});
+const toggleLabel = computed(() =>
+  isDark.value ? t("rep.settings.theme.switchToLight") : t("rep.settings.theme.switchToDark")
+);
 
 const waveClass = computed(() =>
   waveTargetDark.value ? "theme-toggle__wave--dark" : "theme-toggle__wave--light"
@@ -128,7 +129,7 @@ function onWaveEnd(e: TransitionEvent) {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  border: 2px solid var(--website-border);
+  border: 1px solid var(--website-border);
   background: var(--website-bg);
   color: var(--website-text);
   cursor: pointer;
