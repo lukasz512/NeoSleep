@@ -12,19 +12,27 @@
         <p class="default-footer__tagline">{{ t("website.footer.tagline") }}</p>
       </div>
       <div
-        v-for="section in footerSections"
-        :key="section.headingKey"
+        v-for="section in footerSectionsWithItems"
+        :key="section.id"
         class="default-footer__col"
       >
         <h4 class="default-footer__heading">{{ t(section.headingKey) }}</h4>
-        <a
-          v-for="link in section.links"
-          :key="link.labelKey"
-          :href="link.href"
-          class="default-footer__link"
-        >
-          {{ t(link.labelKey) }}
-        </a>
+        <template v-for="item in section.items" :key="item.labelKey">
+          <RouterLink
+            v-if="item.to"
+            :to="item.to"
+            class="default-footer__link"
+          >
+            {{ t(item.labelKey) }}
+          </RouterLink>
+          <a
+            v-else
+            :href="item.href"
+            class="default-footer__link"
+          >
+            {{ t(item.labelKey) }}
+          </a>
+        </template>
       </div>
     </div>
     <div class="default-footer__copy">
@@ -34,58 +42,26 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import { useI18n } from "vue-i18n";
+import {
+  footerSections,
+  getFooterNavItemsBySection,
+  type WebsiteNavItem,
+} from "../config/websiteNavConfig";
 
 const { t } = useI18n();
 
-interface FooterLink {
-  href: string;
-  labelKey: string;
-}
-
-interface FooterSection {
-  headingKey: string;
-  links: FooterLink[];
-}
-
-const footerSections: FooterSection[] = [
-  {
-    headingKey: "website.footer.product",
-    links: [
-      { href: "/#solutions", labelKey: "website.footer.product.solutions" },
-      { href: "/#for-dentists", labelKey: "website.footer.product.forDentists" },
-      { href: "/#for-patients", labelKey: "website.footer.product.forPatients" },
-      { href: "/#cta", labelKey: "website.footer.product.pricing" },
-    ],
-  },
-  {
-    headingKey: "website.footer.company",
-    links: [
-      { href: "/about", labelKey: "website.footer.company.about" },
-      { href: "#", labelKey: "website.footer.company.careers" },
-      { href: "#", labelKey: "website.footer.company.press" },
-      { href: "/contact", labelKey: "website.footer.company.contact" },
-    ],
-  },
-  {
-    headingKey: "website.footer.resources",
-    links: [
-      { href: "#", labelKey: "website.footer.resources.blog" },
-      { href: "#", labelKey: "website.footer.resources.help" },
-      { href: "#", labelKey: "website.footer.resources.research" },
-      { href: "#", labelKey: "website.footer.resources.privacy" },
-    ],
-  },
-  {
-    headingKey: "website.footer.connect",
-    links: [
-      { href: "#", labelKey: "website.footer.connect.twitter" },
-      { href: "#", labelKey: "website.footer.connect.linkedin" },
-      { href: "#", labelKey: "website.footer.connect.facebook" },
-      { href: "#", labelKey: "website.footer.connect.instagram" },
-    ],
-  },
-];
+const footerSectionsWithItems = computed(() => {
+  const bySection = getFooterNavItemsBySection();
+  return footerSections
+    .map((sec) => ({
+      id: sec.id,
+      headingKey: sec.headingKey,
+      items: (bySection.get(sec.id) ?? []) as WebsiteNavItem[],
+    }))
+    .filter((sec) => sec.items.length > 0);
+});
 </script>
 
 <style lang="scss" scoped>

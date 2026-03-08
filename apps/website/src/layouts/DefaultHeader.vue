@@ -5,6 +5,7 @@
       :class="{
         'default-header--dark': isDark,
         'default-header--open': mobileMenuOpen,
+        'default-header--waves-hidden': !wavesVisible,
       }"
     >
       <div class="default-header__left">
@@ -30,12 +31,23 @@
         </RouterLink>
       </div>
       <nav class="default-header__nav default-header__nav--desktop" aria-label="Main navigation">
-        <a href="/#solutions" class="default-header__nav-link">{{ t("website.nav.solutions") }}</a>
-        <a href="/#for-dentists" class="default-header__nav-link">{{ t("website.nav.forDentists") }}</a>
-        <a href="/#for-patients" class="default-header__nav-link">{{ t("website.nav.forPatients") }}</a>
-        <RouterLink to="/about" class="default-header__nav-link" @click="closeMobileMenu">{{ t("website.nav.about") }}</RouterLink>
-        <RouterLink to="/contact" class="default-header__nav-link" @click="closeMobileMenu">{{ t("website.nav.contact") }}</RouterLink>
-        <a href="/#cta" class="default-header__cta">{{ t("website.header.cta") }}</a>
+        <template v-for="item in navItems" :key="item.labelKey">
+          <RouterLink
+            v-if="item.to"
+            :to="item.to"
+            :class="item.cta ? 'default-header__cta' : 'default-header__nav-link'"
+            @click="closeMobileMenu"
+          >
+            {{ t(item.labelKey) }}
+          </RouterLink>
+          <a
+            v-else
+            :href="item.href"
+            :class="item.cta ? 'default-header__cta' : 'default-header__nav-link'"
+          >
+            {{ t(item.labelKey) }}
+          </a>
+        </template>
         <div class="default-header__nav-tools">
           <LanguageSelect />
           <ThemeToggle />
@@ -112,12 +124,24 @@
           <div class="default-header__mobile-menu-lang">
             <LanguageSelect />
           </div>
-          <a href="/#solutions" class="default-header__mobile-link" @click="closeMobileMenu">{{ t("website.nav.solutions") }}</a>
-          <a href="/#for-dentists" class="default-header__mobile-link" @click="closeMobileMenu">{{ t("website.nav.forDentists") }}</a>
-          <a href="/#for-patients" class="default-header__mobile-link" @click="closeMobileMenu">{{ t("website.nav.forPatients") }}</a>
-          <RouterLink to="/about" class="default-header__mobile-link" @click="closeMobileMenu">{{ t("website.nav.about") }}</RouterLink>
-          <RouterLink to="/contact" class="default-header__mobile-link" @click="closeMobileMenu">{{ t("website.nav.contact") }}</RouterLink>
-          <a href="/#cta" class="default-header__mobile-cta" @click="closeMobileMenu">{{ t("website.header.cta") }}</a>
+          <template v-for="item in navItems" :key="item.labelKey">
+            <RouterLink
+              v-if="item.to"
+              :to="item.to"
+              :class="item.cta ? 'default-header__mobile-cta' : 'default-header__mobile-link'"
+              @click="closeMobileMenu"
+            >
+              {{ t(item.labelKey) }}
+            </RouterLink>
+            <a
+              v-else
+              :href="item.href"
+              :class="item.cta ? 'default-header__mobile-cta' : 'default-header__mobile-link'"
+              @click="closeMobileMenu"
+            >
+              {{ t(item.labelKey) }}
+            </a>
+          </template>
         </div>
       </aside>
     </Transition>
@@ -131,11 +155,14 @@ import ThemeToggle from "../components/ThemeToggle.vue";
 import LanguageSelect from "../components/LanguageSelect.vue";
 import { useTheme } from "../composables/useTheme";
 import { useFloatingNav } from "../composables/useFloatingNav";
+import { getHeaderNavItems } from "../config/websiteNavConfig";
 
 const { t } = useI18n();
 const { isDark } = useTheme();
 const { translateX, translateY, waveAmplitude, wavePhase, wavesVisible } = useFloatingNav();
 const mobileMenuOpen = ref(false);
+
+const navItems = getHeaderNavItems();
 
 const uid = `default-header-${Math.random().toString(36).slice(2, 9)}`;
 
@@ -200,6 +227,22 @@ function closeMobileMenu() {
 }
 
 .default-header--dark.default-header {
+  background: rgba(15, 20, 25, 0.9);
+}
+
+/* Gdy fale znikają przy scrollu – przedłuż tło w dół, żeby nie było białego paska */
+.default-header--waves-hidden.default-header::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -10px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.85);
+  pointer-events: none;
+}
+
+.default-header--waves-hidden.default-header--dark.default-header::after {
   background: rgba(15, 20, 25, 0.9);
 }
 

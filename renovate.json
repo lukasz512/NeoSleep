@@ -1,5 +1,5 @@
 {
-  "_comment": "Renovate bot (GitHub App): tworzy PR-y z aktualizacjami zależności. Harmonogram: poniedziałki przed 7:00 Dublin. Minor/patch → automerge; major → ręczny review (label: major). Dependency Dashboard: issue w repo do podglądu i ręcznego uruchomienia.",
+  "_comment": "Renovate bot (GitHub App): tworzy PR-y z aktualizacjami zależności.",
   "extends": ["config:recommended"],
   "timezone": "Europe/Dublin",
   "schedule": ["before 7am on monday"],

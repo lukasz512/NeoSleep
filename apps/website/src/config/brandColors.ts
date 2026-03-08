@@ -1,6 +1,7 @@
 /**
  * NeoSleep brand color palette.
- * Use these in theme and components; CSS variables are defined in website-theme.scss.
+ * Use in theme and components; CSS variables are defined in website-theme.scss.
+ * Single place for brand: logos in public/brand/logos/, colors here + website-theme.scss.
  */
 
 export const brandColors = {
