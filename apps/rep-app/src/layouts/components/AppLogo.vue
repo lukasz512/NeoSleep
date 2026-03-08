@@ -40,14 +40,18 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { appHomePath } from "../../router/routes";
-import { BRAND_LOGO_URL } from "../../constants";
+import { BRAND_LOGO_LIGHT_URL, BRAND_LOGO_DARK_URL } from "../../constants";
 
-defineProps<{
+const props = defineProps<{
   collapsed?: boolean;
   variant: "sidebar" | "drawer";
+  theme?: "light" | "dark";
 }>();
 
-const logoUrl = computed(() => (BRAND_LOGO_URL && BRAND_LOGO_URL.trim() ? BRAND_LOGO_URL.trim() : ""));
+const logoUrl = computed(() => {
+  const url = props.theme === "dark" ? BRAND_LOGO_DARK_URL : BRAND_LOGO_LIGHT_URL;
+  return url && url.trim() ? url.trim() : "";
+});
 
 defineEmits<{
   close: [];

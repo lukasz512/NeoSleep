@@ -8,8 +8,9 @@ export declare const REP_STORAGE_KEYS: {
 export declare const SIDEBAR_DEFAULT_COLLAPSED = false;
 /** Viewport width (px): below this = mobile (hamburger + bottom drawer) */
 export declare const MOBILE_BREAKPOINT = 768;
-/** Logo image URL (from public/brand/). Set to empty string to use inline SVG icon. */
-export declare const BRAND_LOGO_URL = "/brand/logo.svg";
+/** Logo image URLs (from public/brand/logos/). Use logo_light for light theme, logo_dark for dark. Set to empty to use inline SVG icon. */
+export declare const BRAND_LOGO_LIGHT_URL = "/brand/logos/logo_light.svg";
+export declare const BRAND_LOGO_DARK_URL = "/brand/logos/logo_dark.svg";
 /** App language options for the user menu (single source of truth). */
 export declare const REP_LANGUAGE_OPTIONS: {
   id: "en" | "pl" | "es";

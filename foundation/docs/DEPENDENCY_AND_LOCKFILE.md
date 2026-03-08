@@ -40,3 +40,13 @@ To enforce that the lockfile is in sync before every commit:
 | After changing any `package.json` | Run `pnpm install` at root and commit `pnpm-lock.yaml`. |
 | Before committing (optional) | Pre-commit runs `lockfile:check`; commit fails if lockfile is dirty. |
 | In CI | `pnpm install --frozen-lockfile` fails if lockfile and package.json disagree. |
+
+## Renovate (auto-updates)
+
+The repo uses [Renovate](https://docs.renovatebot.com/) (e.g. as a GitHub App) to open PRs that bump dependencies. Config: [renovate.json](../../renovate.json) at repo root.
+
+- **Schedule:** Mondays before 7:00 (Europe/Dublin).
+- **Minor/patch:** Automerge enabled (single PR per update type).
+- **Major:** No automerge; PRs get label `major` for manual review.
+- **Dependency Dashboard:** Renovate opens a single issue listing available updates; you can trigger runs from there.
+- **Shared versions:** With [pnpm catalogs](https://pnpm.io/catalogs) in `pnpm-workspace.yaml`, Renovate PRs that bump the catalog update all apps using `catalog:` in one go.

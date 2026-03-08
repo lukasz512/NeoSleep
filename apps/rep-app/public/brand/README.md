@@ -7,7 +7,9 @@ This folder is the **dedicated place for style-related assets** used by the rep-
 - **NeoSleep.pdf** – First design file with project colors and branding. Use it to align:
   - `apps/rep-app/src/assets/scss/_brand-colors.scss` – primary, primary-hover, accent (update hex values from the PDF).
   - Vuetify theme in `apps/rep-app/src/plugins/vuetify.ts` – keep primary colors in sync with `_brand-colors.scss`.
-- **logo.svg** – App logo shown in sidebar and mobile drawer. Replace with the official NeoSleep logo from the project. The app uses it when `BRAND_LOGO_URL` in `src/constants.ts` points here (e.g. `/brand/logo.svg`).
+- **logos/** – App logos (source of truth: repo root `brand/logos/`). Copy or symlink the four files:
+  - `icon_light.svg`, `icon_dark.svg` – PWA/manifest icons.
+  - `logo_light.svg`, `logo_dark.svg` – Full logo for sidebar and drawer. The app uses `BRAND_LOGO_LIGHT_URL` and `BRAND_LOGO_DARK_URL` in `src/constants.ts` and picks by theme.
 
 ## Updating colors from the PDF
 
@@ -20,4 +22,4 @@ This folder is the **dedicated place for style-related assets** used by the rep-
 
 ## Adding a new logo
 
-Replace **logo.svg** with your asset (SVG preferred for sharp scaling). Supported in sidebar and mobile drawer. To fall back to the inline icon only, set `BRAND_LOGO_URL` to `""` in `src/constants.ts`.
+Use the shared assets in repo root **`brand/logos/`** (icon_light, icon_dark, logo_light, logo_dark). Copy or symlink into `public/brand/logos/`. To fall back to the inline icon only, set `BRAND_LOGO_LIGHT_URL` and `BRAND_LOGO_DARK_URL` to `""` in `src/constants.ts`.

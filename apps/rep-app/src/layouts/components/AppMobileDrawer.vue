@@ -8,7 +8,7 @@
     :aria-hidden="open ? undefined : 'true'"
   >
     <div class="layout-app__mobile-drawer-logo">
-      <AppLogo variant="drawer" @close="$emit('close')" />
+      <AppLogo variant="drawer" :theme="theme" @close="$emit('close')" />
     </div>
     <div class="layout-app__mobile-drawer-user" ref="userRef">
       <VBtn

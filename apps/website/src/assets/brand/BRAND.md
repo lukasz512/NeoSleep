@@ -13,10 +13,16 @@
 | Dark grey   | White         | Primary teal (#128F83) | White |
 | Teal       | White         | White        | White (full circle outline) |
 
-### Files
+### Files (shared repo – white-label)
 
-- `logo-icon.svg` – standalone O icon (header, favicon). Top arc = primary teal, bottom arc = `currentColor` (set by parent for light/dark).
-- Dark/light icon variants can be added later (e.g. `logo-icon-dark.svg`, `logo-icon-light.svg`).
+Single source: [brand/logos/](../../../../brand/logos/) at repo root. Only four files:
+
+- **icon_light.svg** – icon (teal + white). Dark backgrounds, PWA/manifest, favicon when dark.
+- **icon_dark.svg** – icon (teal + grey). Light backgrounds, PWA/manifest, favicon when light.
+- **logo_light.svg** – full logo (icon + wordmark) for light theme. Header, sidebar.
+- **logo_dark.svg** – full logo (icon + wordmark) for dark theme. Header, footer, sidebar.
+
+Apps copy or symlink into `public/brand/logos/` and use by theme.
 
 ## Color palette
 

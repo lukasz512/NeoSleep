@@ -30,6 +30,18 @@
   --website-footer-bg: var(--neosleep-very-dark-teal);
   --website-btn-min-height: 44px;
   --website-btn-min-width: 44px;
+  --website-header-height: 72px;
+}
+
+/* Whole viewport uses theme background (no white envelope in dark mode) */
+html {
+  scroll-padding-top: var(--website-header-height);
+}
+
+html,
+body {
+  background: var(--website-bg);
+  color: var(--website-text);
 }
 
 /* Dark theme (night mode) */

@@ -1,0 +1,23 @@
+{
+  "name": "NeoSleep",
+  "short_name": "NeoSleep",
+  "description": "Better Sleep. Better Life. – Advanced dental solutions for sleep apnea.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#128F83",
+  "icons": [
+    {
+      "src": "/brand/logos/icon_dark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/brand/logos/icon_light.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

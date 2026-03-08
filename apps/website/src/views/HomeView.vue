@@ -1,5 +1,5 @@
 <template>
-  <div ref="viewHomeRef" class="view-home" :class="{ 'view-home--dark': isDark, 'view-home--container-compact': isCompact }">
+  <div ref="viewHomeRef" class="view-home" :class="{ 'view-home--dark': isDark }">
     <section ref="heroSectionRef" class="view-home__hero" :class="{ 'view-home__hero--visible': heroVisible }">
       <div class="view-home__hero-inner">
         <div class="view-home__hero-content">
@@ -192,12 +192,10 @@
 import { ref, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useTheme } from "../composables/useTheme";
-import { useContainerStyle } from "../composables/useContainerStyle";
 import { useCountUp } from "../composables/useCountUp";
 
 const { t } = useI18n();
 const { isDark } = useTheme();
-const { isCompact } = useContainerStyle();
 
 const statsSectionRef = ref<HTMLElement | null>(null);
 const statsVisible = ref(false);
@@ -299,10 +297,6 @@ onUnmounted(() => {
   padding: 3rem 1.5rem 4rem;
   position: relative;
   overflow: hidden;
-}
-
-/* Compact container: hero not full width, like Genesis */
-.view-home--container-compact .view-home__hero {
   width: calc(100% - 3rem);
   max-width: 1280px;
   margin-left: auto;
@@ -310,8 +304,6 @@ onUnmounted(() => {
   border-radius: calc(var(--website-radius) * 2);
   margin-bottom: 2rem;
   background: var(--website-bg);
-  border: 1px solid var(--website-border);
-  box-shadow: var(--website-shadow-sm);
 }
 
 @media (min-width: 901px) {
@@ -336,60 +328,190 @@ onUnmounted(() => {
   align-items: center;
 }
 
-/* Wjazd napisu z lewej */
+/* Desktop: wjazd z lewej */
 .view-home__hero-content {
   opacity: 0;
-  transform: translateX(-1.75rem);
+  transform: translateY(2.5rem);
 }
 
 .view-home__hero--visible .view-home__hero-content {
-  animation: view-home__hero-content-reveal 0.65s ease-out forwards;
+  animation: view-home__hero-content-from-bottom 1.15s linear forwards;
 }
 
-@keyframes view-home__hero-content-reveal {
-  from {
+@keyframes view-home__hero-content-from-bottom {
+  0% {
     opacity: 0;
-    transform: translateX(-1.75rem);
+    transform: translateY(2.5rem);
   }
-  to {
+  18% {
+    opacity: 0.28;
+    transform: translateY(2.15rem);
+  }
+  50% {
+    opacity: 0.92;
+    transform: translateY(0.35rem);
+  }
+  65% {
     opacity: 1;
-    transform: translateX(0);
+    transform: translateY(-0.18rem);
+  }
+  82% {
+    opacity: 1;
+    transform: translateY(0.02rem);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
-/* Obrazek: pojawienie z lekkim blurem */
+/* Obrazek: na mobile/tablet wjazd z dołu */
 .view-home__hero-image--main {
   opacity: 0;
-  filter: blur(6px);
+  transform: translateY(2rem);
+  filter: blur(4px);
 }
 
 .view-home__hero--visible .view-home__hero-image--main {
-  animation: view-home__hero-image-reveal 0.8s ease-out 0.2s forwards;
+  animation: view-home__hero-image-from-bottom 1.35s linear 0.18s forwards;
 }
 
 .view-home--dark .view-home__hero--visible .view-home__hero-image--main {
-  animation: view-home__hero-image-reveal-dark 0.8s ease-out 0.2s forwards;
+  animation: view-home__hero-image-from-bottom-dark 1.35s linear 0.18s forwards;
 }
 
-@keyframes view-home__hero-image-reveal {
-  from {
+@keyframes view-home__hero-image-from-bottom {
+  0% {
     opacity: 0;
-    filter: blur(6px);
+    transform: translateY(2rem);
+    filter: blur(4px);
   }
-  to {
+  18% {
+    opacity: 0.25;
+    transform: translateY(1.75rem);
+    filter: blur(3.5px);
+  }
+  50% {
+    opacity: 0.9;
+    transform: translateY(0.3rem);
+    filter: blur(1px);
+  }
+  65% {
     opacity: 1;
+    transform: translateY(-0.15rem);
+    filter: blur(0);
+  }
+  82% {
+    opacity: 1;
+    transform: translateY(0.02rem);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
     filter: blur(0);
   }
 }
 
-@keyframes view-home__hero-image-reveal-dark {
-  from {
+@keyframes view-home__hero-image-from-bottom-dark {
+  0% {
     opacity: 0;
+    transform: translateY(2rem);
+    filter: blur(4px);
+  }
+  18% {
+    opacity: 0.25;
+    transform: translateY(1.75rem);
+    filter: blur(3.5px);
+  }
+  50% {
+    opacity: 0.9;
+    transform: translateY(0.3rem);
+    filter: blur(1px);
+  }
+  65% {
+    opacity: 1;
+    transform: translateY(-0.15rem);
+    filter: blur(0) brightness(0.88) contrast(1.05) saturate(0.92);
+  }
+  82% {
+    opacity: 1;
+    transform: translateY(0.02rem);
+    filter: blur(0) brightness(0.88) contrast(1.05) saturate(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0) brightness(0.88) contrast(1.05) saturate(0.92);
+  }
+}
+
+@media (min-width: 901px) {
+  /* Desktop: hero content z lewej */
+  .view-home__hero-content {
+    transform: translateX(-1.75rem);
+  }
+
+  .view-home__hero--visible .view-home__hero-content {
+    animation: view-home__hero-content-from-left 1.15s linear forwards;
+  }
+
+  @keyframes view-home__hero-content-from-left {
+    0% {
+      opacity: 0;
+      transform: translateX(-1.75rem);
+    }
+    18% {
+      opacity: 0.28;
+      transform: translateX(-1.5rem);
+    }
+    50% {
+      opacity: 0.92;
+      transform: translateX(-0.2rem);
+    }
+    65% {
+      opacity: 1;
+      transform: translateX(0.08rem);
+    }
+    82% {
+      opacity: 1;
+      transform: translateX(-0.01rem);
+    }
+    100% {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  /* Desktop: obrazek tylko blur (bez translateY) */
+  .view-home__hero-image--main {
+    transform: none;
     filter: blur(6px);
   }
-  to {
-    opacity: 1;
-    filter: blur(0) brightness(0.88) contrast(1.05) saturate(0.92);
+
+  .view-home__hero--visible .view-home__hero-image--main {
+    animation: view-home__hero-image-reveal 1.35s linear 0.25s forwards;
+  }
+
+  .view-home--dark .view-home__hero--visible .view-home__hero-image--main {
+    animation: view-home__hero-image-reveal-dark 1.35s linear 0.25s forwards;
+  }
+
+  @keyframes view-home__hero-image-reveal {
+    0% { opacity: 0; filter: blur(6px); }
+    18% { opacity: 0.2; filter: blur(5px); }
+    50% { opacity: 0.88; filter: blur(1.5px); }
+    65% { opacity: 1; filter: blur(0); }
+    82% { opacity: 1; filter: blur(0); }
+    100% { opacity: 1; filter: blur(0); }
+  }
+  @keyframes view-home__hero-image-reveal-dark {
+    0% { opacity: 0; filter: blur(6px); }
+    18% { opacity: 0.2; filter: blur(5px); }
+    50% { opacity: 0.88; filter: blur(1.5px); }
+    65% { opacity: 1; filter: blur(0) brightness(0.88) contrast(1.05) saturate(0.92); }
+    82% { opacity: 1; filter: blur(0) brightness(0.88) contrast(1.05) saturate(0.92); }
+    100% { opacity: 1; filter: blur(0) brightness(0.88) contrast(1.05) saturate(0.92); }
   }
 }
 
@@ -400,7 +522,6 @@ onUnmounted(() => {
   max-height: 420px;
   overflow: hidden;
   border-radius: calc(var(--website-radius) * 2);
-  box-shadow: var(--website-shadow-md);
 }
 
 .view-home__hero-moon {

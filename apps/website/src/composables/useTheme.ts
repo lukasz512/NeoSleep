@@ -37,6 +37,27 @@ function applyTheme(dark: boolean) {
   } else {
     root.removeAttribute("data-theme");
   }
+  if (typeof document !== "undefined") {
+    const iconPath = dark ? "/brand/logos/icon_light.svg" : "/brand/logos/icon_dark.svg";
+    setFavicon(iconPath);
+  }
+}
+
+function setFavicon(href: string) {
+  let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+  let apple = document.querySelector<HTMLLinkElement>('link[rel="apple-touch-icon"]');
+  if (!link) {
+    link = document.createElement("link");
+    link.rel = "icon";
+    document.head.appendChild(link);
+  }
+  if (!apple) {
+    apple = document.createElement("link");
+    apple.rel = "apple-touch-icon";
+    document.head.appendChild(apple);
+  }
+  link.href = href;
+  apple.href = href;
 }
 
 let systemQuery: MediaQueryList | null = null;

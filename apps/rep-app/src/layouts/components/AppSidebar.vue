@@ -5,7 +5,7 @@
     aria-label="App navigation"
   >
     <div class="layout-app__sidebar-content">
-      <AppLogo variant="sidebar" :collapsed="collapsed" />
+      <AppLogo variant="sidebar" :collapsed="collapsed" :theme="theme" />
       <AppNavLinks variant="sidebar" :collapsed="collapsed" />
     </div>
     <div class="layout-app__sidebar-footer">
@@ -41,6 +41,7 @@ const SLIDE_THRESHOLD = 50;
 
 const props = defineProps<{
   collapsed: boolean;
+  theme?: "light" | "dark";
 }>();
 
 const emit = defineEmits<{

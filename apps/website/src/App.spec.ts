@@ -34,7 +34,7 @@ describe("DefaultLayout", () => {
     const header = wrapper.find(".layout-default__header");
     expect(header.exists()).toBe(true);
     expect(wrapper.find(".layout-default__brand").exists()).toBe(true);
-    expect(wrapper.find(".layout-default__logo-text").exists()).toBe(true);
+    expect(wrapper.find(".layout-default__logo-img").exists()).toBe(true);
     const nav = wrapper.find(".layout-default__nav");
     expect(nav.exists()).toBe(true);
     expect(wrapper.find(".layout-default__main").exists()).toBe(true);

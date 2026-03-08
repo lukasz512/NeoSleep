@@ -14,7 +14,7 @@
     >
       {{ t("layout.skipToMain") }}
     </a>
-    <AppSidebar :collapsed="sidebarCollapsed" @toggle="toggleSidebar" />
+    <AppSidebar :collapsed="sidebarCollapsed" :theme="theme" @toggle="toggleSidebar" />
 
     <!-- Mobile: full-width bottom bar with menu trigger (opens drawer from bottom). -->
     <div v-show="isMobile" class="layout-app__mobile-bottom-bar" role="presentation">

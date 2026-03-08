@@ -1,6 +1,13 @@
 <template>
-  <div class="layout-default" :class="{ 'layout-default--dark': isDark, 'layout-default--container-compact': isCompact }">
-    <header class="layout-default__header" :class="{ 'layout-default__header-open': mobileMenuOpen }">
+  <div class="layout-default" :class="{ 'layout-default--dark': isDark }">
+    <header
+      class="layout-default__header"
+      :class="{
+        'layout-default__header-open': mobileMenuOpen,
+        'layout-default__header--hidden': headerHidden,
+      }"
+      :style="headerStyle"
+    >
       <div class="layout-default__header-left">
         <button
           type="button"
@@ -14,8 +21,13 @@
           <span class="layout-default__hamburger-bar" />
         </button>
         <RouterLink to="/" class="layout-default__brand">
-          <LogoIcon class="layout-default__logo-icon" />
-          <span class="layout-default__logo-text">{{ t("website.logo") }}</span>
+          <img
+            :src="logoSrc"
+            alt="NeoSleep"
+            class="layout-default__logo-img"
+            width="140"
+            height="32"
+          />
         </RouterLink>
       </div>
       <nav class="layout-default__nav layout-default__nav--desktop" aria-label="Main navigation">
@@ -26,14 +38,21 @@
         <RouterLink to="/contact" class="layout-default__nav-link" @click="closeMobileMenu">{{ t("website.nav.contact") }}</RouterLink>
         <a href="/#cta" class="layout-default__cta">{{ t("website.header.cta") }}</a>
         <div class="layout-default__nav-tools">
-          <ContainerStyleToggle />
           <LanguageSelect />
           <ThemeToggle />
         </div>
       </nav>
       <div class="layout-default__header-right">
-        <ContainerStyleToggle class="layout-default__container-toggle-mobile" />
         <ThemeToggle class="layout-default__theme-mobile" />
+      </div>
+      <div class="layout-default__header-wave" aria-hidden="true">
+        <svg viewBox="0 0 1200 32" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+          <path
+            class="layout-default__header-wave-path"
+            d="M0 0h1200v32Q900 16 600 32Q300 16 0 32V0Z"
+            fill="currentColor"
+          />
+        </svg>
       </div>
     </header>
     <Transition name="mobile-menu">
@@ -71,8 +90,13 @@
     <footer class="layout-default__footer">
       <div class="layout-default__footer-inner">
         <div class="layout-default__footer-brand">
-          <LogoIcon class="layout-default__logo-icon layout-default__logo-icon--footer" :on-dark="true" />
-          <span class="layout-default__logo-text layout-default__logo-text--footer">{{ t("website.logo") }}</span>
+          <img
+            src="/brand/logos/logo_dark.svg"
+            alt="NeoSleep"
+            class="layout-default__logo-img layout-default__logo-img--footer"
+            width="140"
+            height="32"
+          />
           <p class="layout-default__footer-tagline">{{ t("website.footer.tagline") }}</p>
         </div>
         <div class="layout-default__footer-col">
@@ -112,19 +136,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, computed } from "vue";
 import { useI18n } from "vue-i18n";
-import LogoIcon from "../components/LogoIcon.vue";
 import ThemeToggle from "../components/ThemeToggle.vue";
 import LanguageSelect from "../components/LanguageSelect.vue";
-import ContainerStyleToggle from "../components/ContainerStyleToggle.vue";
 import { useTheme } from "../composables/useTheme";
-import { useContainerStyle } from "../composables/useContainerStyle";
+import { useFloatingNav } from "../composables/useFloatingNav";
 
 const { t } = useI18n();
 const { isDark } = useTheme();
-const { isCompact } = useContainerStyle();
+const { headerHidden, translateX, translateY } = useFloatingNav();
 const mobileMenuOpen = ref(false);
+
+const logoSrc = computed(() =>
+  isDark.value ? "/brand/logos/logo_dark.svg" : "/brand/logos/logo_light.svg"
+);
+
+const headerStyle = computed(() => ({
+  transform: `translate(${translateX.value}px, ${translateY.value}px)`,
+}));
 
 function closeMobileMenu() {
   mobileMenuOpen.value = false;
@@ -142,14 +172,47 @@ function closeMobileMenu() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 1.5rem;
+  padding: 1rem 1.5rem 0;
+  padding-bottom: 1.5rem;
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 10;
-  border-bottom: 1px solid var(--website-border);
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.22s ease;
+  will-change: transform;
+  overflow: visible;
+}
+
+.layout-default__header-wave {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+  line-height: 0;
+  pointer-events: none;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.layout-default--dark .layout-default__header-wave {
+  color: rgba(15, 20, 25, 0.9);
+}
+
+.layout-default__header-wave svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  vertical-align: bottom;
+}
+
+.layout-default__header--hidden {
+  transform: translateY(-100%) !important;
+  pointer-events: none;
+  opacity: 0;
 }
 
 .layout-default__header-left {
@@ -225,21 +288,14 @@ function closeMobileMenu() {
   color: var(--website-text);
 }
 
-.layout-default__logo-icon {
+.layout-default__logo-img {
+  height: 32px;
+  width: auto;
+  display: block;
   flex-shrink: 0;
 
   &--footer {
-    color: #fff;
-  }
-}
-
-.layout-default__logo-text {
-  font-weight: 700;
-  font-size: 1.25rem;
-  letter-spacing: -0.02em;
-
-  &--footer {
-    color: #fff;
+    align-self: flex-start;
   }
 }
 
@@ -298,6 +354,7 @@ function closeMobileMenu() {
   flex: 1;
   position: relative;
   z-index: 2;
+  padding-top: 5rem; /* space for fixed header + wave */
 }
 
 .layout-default__footer {
@@ -306,10 +363,6 @@ function closeMobileMenu() {
   padding: 3rem 1.5rem 2rem;
   position: relative;
   z-index: 2;
-}
-
-/* Compact container: footer not full width, like Genesis */
-.layout-default--container-compact .layout-default__footer {
   width: calc(100% - 3rem);
   max-width: 1280px;
   margin: 2rem auto 0;
@@ -439,7 +492,7 @@ function closeMobileMenu() {
   gap: 0.5rem;
 }
 
-.layout-default__footer-brand .layout-default__logo-icon {
+.layout-default__footer-brand .layout-default__logo-img--footer {
   align-self: flex-start;
 }
 

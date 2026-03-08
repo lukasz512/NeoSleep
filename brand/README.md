@@ -11,17 +11,24 @@ Brand definition and assets come from **NeoSleep.pdf** (brandbook). Extract logo
 ```
 brand/
   README.md          (this file)
-  logos/             Logo files (SVG, PNG) from the brandbook
-    logo.svg         Primary logo (recommended)
-    logo.png         Fallback / raster
-    logo-icon.svg    Icon-only or mark, if separate
+  logos/             Logo files – single source for all apps (white-label). Only 4 files:
+    icon_light.svg   Icon: teal + white. Use on dark backgrounds (dark theme). Manifest/PWA/favicon.
+    icon_dark.svg    Icon: teal + grey. Use on light backgrounds (light theme). Manifest/PWA/favicon.
+    logo_light.svg   Full logo (icon + wordmark) for light theme. Header, sidebar.
+    logo_dark.svg    Full logo (icon + wordmark) for dark theme. Header, sidebar.
   fonts/             Optional: custom font files if specified in brandbook
 ```
 
+## Usage
+
+- **Header / sidebar:** Use `logo_light.svg` when UI is light, `logo_dark.svg` when UI is dark. Apps switch `src` by theme.
+- **manifest.json (PWA, iPhone, Android):** Reference both `icon_light.svg` and `icon_dark.svg`. Where supported (e.g. `media` with `prefers-color-scheme`), the system can pick the icon by theme; otherwise the app can set one default and optionally swap at runtime. Generate PNGs (e.g. 192×192, 512×512) from these SVGs for manifest `icons` if the platform requires PNG.
+- **Favicon:** Same as icon – use `icon_dark.svg` for light browser chrome, `icon_light.svg` for dark; or switch dynamically by theme.
+
 ## Usage in apps
 
-- **Website** (`apps/website`): Reference logos from the app’s public layer. Copy or symlink `brand/logos/*` into `apps/website/public/brand/logos/` so they are served at `/brand/logos/...`, or configure the build to include this folder.
-- **Rep-app** (`apps/rep-app`): Same idea – ensure `public/brand/` (or equivalent) contains the logo assets so the app can use them (e.g. `/brand/logos/logo.svg`).
+- **Website** (`apps/website`): Copy or symlink `brand/logos/` into `apps/website/public/brand/logos/`. Use `logo_light.svg` / `logo_dark.svg` in layout by theme; use `icon_light.svg` / `icon_dark.svg` in manifest and favicon.
+- **Rep-app** (`apps/rep-app`): Same – ensure `public/brand/logos/` contains the four files. Use `logo_light` / `logo_dark` in sidebar/drawer by theme.
 
 To keep one global place and avoid duplication, you can:
 

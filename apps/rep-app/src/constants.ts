@@ -21,8 +21,9 @@ export const SIDEBAR_DEFAULT_COLLAPSED = false;
 /** Viewport width (px): below this = mobile (hamburger + bottom drawer) */
 export const MOBILE_BREAKPOINT = 768;
 
-/** Logo image URL (from public/brand/). Set to empty string to use inline SVG icon. */
-export const BRAND_LOGO_URL = "/brand/logo.svg";
+/** Logo image URLs (from public/brand/logos/). Use logo_light for light theme, logo_dark for dark. Set to empty to use inline SVG icon. */
+export const BRAND_LOGO_LIGHT_URL = "/brand/logos/logo_light.svg";
+export const BRAND_LOGO_DARK_URL = "/brand/logos/logo_dark.svg";
 
 /** App language options for the user menu (single source of truth). */
 export { LANGUAGE_OPTIONS as REP_LANGUAGE_OPTIONS } from "../../../i18n/language-options";
