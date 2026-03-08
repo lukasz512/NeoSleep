@@ -1,25 +1,23 @@
 # Deploy marketing website to GoDaddy FTP
-# - main → neosleepcare.com (production)
-# - uat   → uat.neosleepcare.com (UAT)
+# - main → neosleepcare.com (public_html/neosleepcare-site-prod/)
+# - uat  → uat.neosleepcare.com (public_html/neosleepcare-site-uat/)
 
-name: Deploy Website (FTP)
+name: Deploy NeoSleepCare Site
 
 on:
   push:
     branches: [main, uat]
+  workflow_dispatch:
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
-    # Only run for website-relevant changes when on main/uat (optional: add path filter)
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -33,22 +31,26 @@ jobs:
       - name: Build website
         run: pnpm run build:website
 
-      - name: Deploy to FTP (production)
+      - name: Deploy to PROD (neosleepcare.com)
         if: github.ref == 'refs/heads/main'
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftp
           local-dir: ./apps/website/dist/
-          server-dir: ${{ secrets.FTP_PATH_WEBSITE_PROD }}
+          server-dir: /public_html/neosleepcare-site-prod/
+          dangerous-clean-slate: false
 
-      - name: Deploy to FTP (UAT)
+      - name: Deploy to UAT (uat.neosleepcare.com)
         if: github.ref == 'refs/heads/uat'
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftp
           local-dir: ./apps/website/dist/
-          server-dir: ${{ secrets.FTP_PATH_WEBSITE_UAT }}
+          server-dir: /public_html/neosleepcare-site-uat/
+          dangerous-clean-slate: false
