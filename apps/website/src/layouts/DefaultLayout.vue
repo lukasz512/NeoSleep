@@ -2,7 +2,7 @@
   <div class="layout-default">
     <header class="layout-default__header">
       <RouterLink to="/" class="layout-default__brand">
-        <span class="layout-default__logo-icon" aria-hidden="true" />
+        <LogoIcon class="layout-default__logo-icon" />
         <span class="layout-default__logo-text">{{ t("website.logo") }}</span>
       </RouterLink>
       <nav class="layout-default__nav" aria-label="Main navigation">
@@ -10,6 +10,7 @@
         <a href="/#for-dentists" class="layout-default__nav-link">{{ t("website.nav.forDentists") }}</a>
         <a href="/#for-patients" class="layout-default__nav-link">{{ t("website.nav.forPatients") }}</a>
         <RouterLink to="/about" class="layout-default__nav-link">{{ t("website.nav.about") }}</RouterLink>
+        <RouterLink to="/contact" class="layout-default__nav-link">{{ t("website.nav.contact") }}</RouterLink>
         <a href="/#cta" class="layout-default__cta">{{ t("website.header.cta") }}</a>
       </nav>
     </header>
@@ -19,7 +20,7 @@
     <footer class="layout-default__footer">
       <div class="layout-default__footer-inner">
         <div class="layout-default__footer-brand">
-          <span class="layout-default__logo-icon layout-default__logo-icon--footer" aria-hidden="true" />
+          <LogoIcon class="layout-default__logo-icon layout-default__logo-icon--footer" :on-dark="true" />
           <span class="layout-default__logo-text layout-default__logo-text--footer">{{ t("website.logo") }}</span>
           <p class="layout-default__footer-tagline">{{ t("website.footer.tagline") }}</p>
         </div>
@@ -35,7 +36,7 @@
           <a href="/about" class="layout-default__footer-link">{{ t("website.footer.company.about") }}</a>
           <a href="#" class="layout-default__footer-link">{{ t("website.footer.company.careers") }}</a>
           <a href="#" class="layout-default__footer-link">{{ t("website.footer.company.press") }}</a>
-          <a href="#" class="layout-default__footer-link">{{ t("website.footer.company.contact") }}</a>
+          <a href="/contact" class="layout-default__footer-link">{{ t("website.footer.company.contact") }}</a>
         </div>
         <div class="layout-default__footer-col">
           <h4 class="layout-default__footer-heading">{{ t("website.footer.resources") }}</h4>
@@ -52,12 +53,16 @@
           <a href="#" class="layout-default__footer-link">{{ t("website.footer.connect.instagram") }}</a>
         </div>
       </div>
+      <div class="layout-default__footer-copy">
+        <p>© {{ new Date().getFullYear() }} NeoSleep. {{ t("website.footer.rights") }}</p>
+      </div>
     </footer>
   </div>
 </template>
 
 <script setup lang="ts">
 import { useI18n } from "vue-i18n";
+import LogoIcon from "../components/LogoIcon.vue";
 
 const { t } = useI18n();
 </script>
@@ -74,7 +79,9 @@ const { t } = useI18n();
   align-items: center;
   justify-content: space-between;
   padding: 1rem 1.5rem;
-  background: var(--website-bg);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   position: sticky;
   top: 0;
   z-index: 10;
@@ -90,14 +97,10 @@ const { t } = useI18n();
 }
 
 .layout-default__logo-icon {
-  width: 28px;
-  height: 28px;
-  background: var(--website-secondary);
-  border-radius: var(--website-radius);
   flex-shrink: 0;
 
   &--footer {
-    background: var(--website-secondary);
+    color: #fff;
   }
 }
 
@@ -131,8 +134,8 @@ const { t } = useI18n();
   transition: background-color 0.2s ease, color 0.2s ease;
 
   &:hover {
-    color: var(--website-secondary);
-    background: rgba(46, 125, 50, 0.08);
+    color: var(--website-primary);
+    background: rgba(18, 143, 131, 0.08);
   }
 }
 
@@ -142,16 +145,16 @@ const { t } = useI18n();
   justify-content: center;
   min-height: var(--website-btn-min-height);
   padding: 0 1.25rem;
-  background: var(--website-secondary);
+  background: var(--website-primary);
   color: #fff;
   font-weight: 600;
   font-size: 0.9375rem;
   text-decoration: none;
-  border-radius: var(--website-radius);
+  border-radius: 9999px;
   transition: background-color 0.2s ease;
 
   &:hover {
-    background: var(--website-secondary-hover);
+    background: var(--website-primary-hover);
     color: #fff;
   }
 }
@@ -161,7 +164,7 @@ const { t } = useI18n();
 }
 
 .layout-default__footer {
-  background: #1a1a1a;
+  background: var(--website-footer-bg);
   color: #fff;
   padding: 3rem 1.5rem 2rem;
 }
@@ -233,6 +236,19 @@ const { t } = useI18n();
 
   &:hover {
     color: #fff;
+  }
+}
+
+.layout-default__footer-copy {
+  padding-top: 2rem;
+  margin-top: 2rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: center;
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.75);
+
+  p {
+    margin: 0;
   }
 }
 </style>

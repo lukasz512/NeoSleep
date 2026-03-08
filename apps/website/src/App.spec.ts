@@ -10,10 +10,11 @@ const messages = await import("@i18n/en.json").then((m) => m.default);
 const i18n = createI18n({ legacy: false, locale: "en", messages: { en: messages } });
 
 describe("Website app", () => {
-  it("router has home and about routes", () => {
+  it("router has home, about, and contact routes", () => {
     const names = router.getRoutes().map((r) => r.name);
     expect(names).toContain("home");
     expect(names).toContain("about");
+    expect(names).toContain("contact");
   });
 
   it("catch-all redirects to home", () => {
@@ -39,7 +40,7 @@ describe("DefaultLayout", () => {
     expect(wrapper.find(".layout-default__main").exists()).toBe(true);
   });
 
-  it("nav has expected links (Solutions, For Dentists, For Patients, About) and Get Started CTA", () => {
+  it("nav has expected links (Solutions, For Dentists, For Patients, About, Contact) and Get Started CTA", () => {
     const wrapper = mount(DefaultLayout, {
       global: {
         plugins: [i18n, router],
@@ -47,12 +48,13 @@ describe("DefaultLayout", () => {
       },
     });
     const navLinks = wrapper.findAll(".layout-default__nav-link");
-    expect(navLinks.length).toBeGreaterThanOrEqual(4);
+    expect(navLinks.length).toBeGreaterThanOrEqual(5);
     const text = wrapper.find(".layout-default__nav").text();
     expect(text).toContain("Solutions");
     expect(text).toContain("For Dentists");
     expect(text).toContain("For Patients");
     expect(text).toContain("About");
+    expect(text).toContain("Contact");
     expect(wrapper.find(".layout-default__cta").text()).toContain("Get Started");
   });
 });

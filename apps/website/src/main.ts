@@ -3,13 +3,29 @@ import { createI18n } from "vue-i18n";
 import App from "./App.vue";
 import router from "./router";
 
-const messages = await import("@i18n/en.json").then((m) => m.default);
+const STORAGE_KEY = "neosleep-website-locale";
+const supportedLocales = ["en", "pl"] as const;
+
+const [en, pl] = await Promise.all([
+  import("@i18n/en.json").then((m) => m.default),
+  import("@i18n/pl.json").then((m) => m.default),
+]);
+
+function getInitialLocale(): string {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored && supportedLocales.includes(stored as (typeof supportedLocales)[number])) return stored;
+    const lang = navigator.language.slice(0, 2).toLowerCase();
+    if (supportedLocales.includes(lang as (typeof supportedLocales)[number])) return lang;
+  } catch (_) {}
+  return "en";
+}
 
 const i18n = createI18n({
   legacy: false,
-  locale: "en",
+  locale: getInitialLocale(),
   fallbackLocale: "en",
-  messages: { en: messages },
+  messages: { en, pl },
 });
 
 const app = createApp(App);

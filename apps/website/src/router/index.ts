@@ -3,6 +3,7 @@ import type { RouteRecordRaw } from "vue-router";
 import DefaultLayout from "../layouts/DefaultLayout.vue";
 import HomeView from "../views/HomeView.vue";
 import AboutView from "../views/AboutView.vue";
+import ContactView from "../views/ContactView.vue";
 
 const routes: RouteRecordRaw[] = [
   {
@@ -15,6 +16,12 @@ const routes: RouteRecordRaw[] = [
     path: "/about",
     name: "about",
     component: AboutView,
+    meta: { layout: "default" },
+  },
+  {
+    path: "/contact",
+    name: "contact",
+    component: ContactView,
     meta: { layout: "default" },
   },
   {

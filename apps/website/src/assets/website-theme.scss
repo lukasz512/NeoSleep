@@ -1,23 +1,34 @@
 /**
- * Website theme – CSS variables for marketing site.
- * Primary = main brand color (from brandbook / tbl_app_config).
- * Secondary = accent / logo color (green from NeoSleep logo).
+ * Website theme – NeoSleep brand palette.
+ * Primary = teal accent (logo, CTAs). Secondary = same for compatibility.
  * Values can be driven by GET /api/config/app later. See foundation/docs/BRAND_AND_APP_CONFIG.md.
+ * Brand colors: apps/website/src/assets/brand/colors.ts & BRAND.md
  */
 
 :root {
-  --website-primary: #1976d2;
-  --website-primary-hover: #1565c0;
-  --website-secondary: #2e7d32;
-  --website-secondary-hover: #1b5e20;
+  /* NeoSleep brand (from brandbook + logo) */
+  --neosleep-primary: #128F83;
+  --neosleep-primary-hover: #10544E;
+  --neosleep-light-teal: #8ED6CE;
+  --neosleep-darker-teal: #10544E;
+  --neosleep-very-dark-teal: #082A27;
+  --neosleep-charcoal-dark: #474747;
+  --neosleep-charcoal-medium: #555555;
+
+  --website-primary: var(--neosleep-primary);
+  --website-primary-hover: var(--neosleep-primary-hover);
+  --website-secondary: var(--neosleep-primary);
+  --website-secondary-hover: var(--neosleep-primary-hover);
   --website-radius: 8px;
   --website-font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --website-bg: #ffffff;
-  --website-text: #212121;
-  --website-text-secondary: #616161;
-  --website-border: #e0e0e0;
+  --website-text: var(--neosleep-charcoal-dark);
+  --website-text-secondary: var(--neosleep-charcoal-medium);
+  --website-border: #e5e7eb;
   --website-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
   --website-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+  /* Footer uses very dark teal */
+  --website-footer-bg: var(--neosleep-very-dark-teal);
   /* Touch target minimum (mobile) per styling rules */
   --website-btn-min-height: 44px;
   --website-btn-min-width: 44px;
