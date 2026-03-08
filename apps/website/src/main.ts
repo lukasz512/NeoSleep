@@ -3,6 +3,20 @@ import { createI18n } from "vue-i18n";
 import App from "./App.vue";
 import router from "./router";
 
+const STORAGE_KEY_THEME = "neosleep-website-theme";
+
+function initTheme() {
+  try {
+    const v = localStorage.getItem(STORAGE_KEY_THEME);
+    if (v === "dark") document.documentElement.setAttribute("data-theme", "dark");
+    else if (v !== "light") {
+      if (window.matchMedia("(prefers-color-scheme: dark)").matches)
+        document.documentElement.setAttribute("data-theme", "dark");
+    }
+  } catch (_) {}
+}
+initTheme();
+
 const STORAGE_KEY = "neosleep-website-locale";
 const supportedLocales = ["en", "pl"] as const;
 

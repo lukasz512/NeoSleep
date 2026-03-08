@@ -27,9 +27,20 @@
   --website-border: #e5e7eb;
   --website-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
   --website-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
-  /* Footer uses very dark teal */
   --website-footer-bg: var(--neosleep-very-dark-teal);
-  /* Touch target minimum (mobile) per styling rules */
   --website-btn-min-height: 44px;
   --website-btn-min-width: 44px;
 }
+
+/* Dark theme (night mode) */
+[data-theme="dark"] {
+  --website-bg: #0f1419;
+  --website-text: #e6edf3;
+  --website-text-secondary: #8b9cb3;
+  --website-border: #2d3748;
+  --website-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --website-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --neosleep-charcoal-dark: #e6edf3;
+  --neosleep-charcoal-medium: #8b9cb3;
+}
+

@@ -1,6 +1,12 @@
 <template>
-  <div class="view-home">
+  <div class="view-home" :class="{ 'view-home--dark': isDark }">
     <section class="view-home__hero">
+      <div class="view-home__hero-moon" aria-hidden="true">
+        <svg class="view-home__hero-moon-svg" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="60" cy="60" r="50" fill="rgba(255,255,255,0.12)" />
+          <circle cx="60" cy="60" r="42" fill="rgba(255,255,255,0.08)" />
+        </svg>
+      </div>
       <div class="view-home__hero-inner">
         <div class="view-home__hero-content">
           <h1 class="view-home__hero-title">
@@ -184,8 +190,10 @@
 
 <script setup lang="ts">
 import { useI18n } from "vue-i18n";
+import { useTheme } from "../composables/useTheme";
 
 const { t } = useI18n();
+const { isDark } = useTheme();
 </script>
 
 <style lang="scss" scoped>
@@ -195,6 +203,31 @@ const { t } = useI18n();
 
 .view-home__hero {
   padding: 3rem 1.5rem 4rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.view-home__hero-moon {
+  position: absolute;
+  top: 2rem;
+  right: 10%;
+  width: 180px;
+  height: 180px;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+  pointer-events: none;
+}
+
+.view-home--dark .view-home__hero-moon {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.view-home__hero-moon-svg {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 0 24px rgba(255, 255, 255, 0.15));
 }
 
 .view-home__hero-inner {
@@ -334,6 +367,10 @@ const { t } = useI18n();
   border-bottom: 1px solid var(--website-border);
 }
 
+.view-home--dark .view-home__stats {
+  background: rgba(18, 143, 131, 0.12);
+}
+
 .view-home__stats-inner {
   max-width: 1000px;
   margin: 0 auto;
@@ -369,6 +406,10 @@ const { t } = useI18n();
 
 .view-home__solutions {
   background: rgba(142, 214, 206, 0.12);
+}
+
+.view-home--dark .view-home__solutions {
+  background: rgba(18, 143, 131, 0.08);
 }
 
 .view-home__section-title {
