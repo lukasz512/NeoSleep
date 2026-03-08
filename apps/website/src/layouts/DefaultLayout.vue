@@ -1,5 +1,5 @@
 <template>
-  <div class="layout-default" :class="{ 'layout-default--dark': isDark }">
+  <div class="layout-default" :class="{ 'layout-default--dark': isDark, 'layout-default--container-compact': isCompact }">
     <header class="layout-default__header" :class="{ 'layout-default__header-open': mobileMenuOpen }">
       <div class="layout-default__header-left">
         <button
@@ -26,11 +26,13 @@
         <RouterLink to="/contact" class="layout-default__nav-link" @click="closeMobileMenu">{{ t("website.nav.contact") }}</RouterLink>
         <a href="/#cta" class="layout-default__cta">{{ t("website.header.cta") }}</a>
         <div class="layout-default__nav-tools">
+          <ContainerStyleToggle />
           <LanguageSelect />
           <ThemeToggle />
         </div>
       </nav>
       <div class="layout-default__header-right">
+        <ContainerStyleToggle class="layout-default__container-toggle-mobile" />
         <ThemeToggle class="layout-default__theme-mobile" />
       </div>
     </header>
@@ -115,10 +117,13 @@ import { useI18n } from "vue-i18n";
 import LogoIcon from "../components/LogoIcon.vue";
 import ThemeToggle from "../components/ThemeToggle.vue";
 import LanguageSelect from "../components/LanguageSelect.vue";
+import ContainerStyleToggle from "../components/ContainerStyleToggle.vue";
 import { useTheme } from "../composables/useTheme";
+import { useContainerStyle } from "../composables/useContainerStyle";
 
 const { t } = useI18n();
 const { isDark } = useTheme();
+const { isCompact } = useContainerStyle();
 const mobileMenuOpen = ref(false);
 
 function closeMobileMenu() {
@@ -200,6 +205,8 @@ function closeMobileMenu() {
 
 .layout-default__header-right {
   display: none;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .layout-default__theme-mobile {
@@ -299,6 +306,16 @@ function closeMobileMenu() {
   padding: 3rem 1.5rem 2rem;
   position: relative;
   z-index: 2;
+}
+
+/* Compact container: footer not full width, like Genesis */
+.layout-default--container-compact .layout-default__footer {
+  width: calc(100% - 3rem);
+  max-width: 1280px;
+  margin: 2rem auto 0;
+  border-radius: calc(var(--website-radius) * 2);
+  border-top-left-radius: calc(var(--website-radius) * 2);
+  border-top-right-radius: calc(var(--website-radius) * 2);
 }
 
 .layout-default__footer-inner {

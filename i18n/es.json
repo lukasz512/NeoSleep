@@ -139,6 +139,8 @@
   "website.theme.auto": "Sistema",
   "website.theme.light": "Claro",
   "website.theme.dark": "Oscuro",
+  "website.layout.containerSwitchToCompact": "Usar diseño compacto (hero y pie más estrechos)",
+  "website.layout.containerSwitchToWide": "Usar diseño a ancho completo",
   "rep.login.title": "Iniciar sesión – Rep",
   "rep.login.subtitle": "Placeholder de inicio de sesión – OIDC más adelante (SPEC-0002).",
   "rep.dashboard.title": "Panel",

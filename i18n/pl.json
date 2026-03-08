@@ -139,6 +139,8 @@
   "website.theme.auto": "System",
   "website.theme.light": "Jasny",
   "website.theme.dark": "Ciemny",
+  "website.layout.containerSwitchToCompact": "Układ wąski (hero i stopka)",
+  "website.layout.containerSwitchToWide": "Układ na pełną szerokość",
   "rep.login.title": "Logowanie – Rep",
   "rep.login.subtitle": "Placeholder logowania – OIDC później (SPEC-0002).",
   "rep.dashboard.title": "Pulpit",

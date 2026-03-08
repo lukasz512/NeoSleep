@@ -1,6 +1,6 @@
 <template>
-  <div class="view-home" :class="{ 'view-home--dark': isDark }">
-    <section class="view-home__hero">
+  <div ref="viewHomeRef" class="view-home" :class="{ 'view-home--dark': isDark, 'view-home--container-compact': isCompact }">
+    <section ref="heroSectionRef" class="view-home__hero" :class="{ 'view-home__hero--visible': heroVisible }">
       <div class="view-home__hero-inner">
         <div class="view-home__hero-content">
           <h1 class="view-home__hero-title">
@@ -35,28 +35,28 @@
       </div>
     </section>
 
-    <section class="view-home__stats">
+    <section ref="statsSectionRef" class="view-home__stats" :class="{ 'view-home__stats--visible': statsVisible }">
       <div class="view-home__stats-inner">
         <div class="view-home__stat">
-          <span class="view-home__stat-value">{{ t("website.stats.americans") }}</span>
+          <span class="view-home__stat-value">{{ statAmericans }}</span>
           <span class="view-home__stat-label">{{ t("website.stats.americansLabel") }}</span>
         </div>
         <div class="view-home__stat">
-          <span class="view-home__stat-value">{{ t("website.stats.undiagnosed") }}</span>
+          <span class="view-home__stat-value">{{ statUndiagnosed }}</span>
           <span class="view-home__stat-label">{{ t("website.stats.undiagnosedLabel") }}</span>
         </div>
         <div class="view-home__stat">
-          <span class="view-home__stat-value">{{ t("website.stats.satisfaction") }}</span>
+          <span class="view-home__stat-value">{{ statSatisfaction }}</span>
           <span class="view-home__stat-label">{{ t("website.stats.satisfactionLabel") }}</span>
         </div>
         <div class="view-home__stat">
-          <span class="view-home__stat-value">{{ t("website.stats.dentists") }}</span>
+          <span class="view-home__stat-value">{{ statDentists }}</span>
           <span class="view-home__stat-label">{{ t("website.stats.dentistsLabel") }}</span>
         </div>
       </div>
     </section>
 
-    <section id="solutions" class="view-home__section view-home__solutions">
+    <section id="solutions" class="view-home__section view-home__solutions view-home__scroll-reveal">
       <h2 class="view-home__section-title">{{ t("website.solutions.title") }}</h2>
       <h3 class="view-home__section-heading">{{ t("website.solutions.heading") }}</h3>
       <p class="view-home__section-subtitle view-home__section-subtitle--center">{{ t("website.solutions.subtitle") }}</p>
@@ -88,7 +88,7 @@
       </div>
     </section>
 
-    <section id="for-dentists" class="view-home__section view-home__for-dentists">
+    <section id="for-dentists" class="view-home__section view-home__for-dentists view-home__scroll-reveal">
       <div class="view-home__twocol view-home__twocol--image-left">
         <div class="view-home__twocol-image">
           <img src="/images/for-dentists.jpeg" alt="" class="view-home__img" width="560" height="400" />
@@ -126,7 +126,7 @@
       </div>
     </section>
 
-    <section id="for-patients" class="view-home__section view-home__for-patients">
+    <section id="for-patients" class="view-home__section view-home__for-patients view-home__scroll-reveal">
       <div class="view-home__twocol view-home__twocol--image-right">
         <div class="view-home__twocol-content">
           <h2 class="view-home__section-title">{{ t("website.forPatients.title") }}</h2>
@@ -172,7 +172,7 @@
       </div>
     </section>
 
-    <section id="cta" class="view-home__cta-banner">
+    <section id="cta" class="view-home__cta-banner view-home__scroll-reveal">
       <div class="view-home__cta-banner-inner">
         <h2 class="view-home__cta-banner-heading">{{ t("website.cta.heading") }}</h2>
         <p class="view-home__cta-banner-subtitle">{{ t("website.cta.subtitle") }}</p>
@@ -189,11 +189,105 @@
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useTheme } from "../composables/useTheme";
+import { useContainerStyle } from "../composables/useContainerStyle";
+import { useCountUp } from "../composables/useCountUp";
 
 const { t } = useI18n();
 const { isDark } = useTheme();
+const { isCompact } = useContainerStyle();
+
+const statsSectionRef = ref<HTMLElement | null>(null);
+const statsVisible = ref(false);
+
+const heroSectionRef = ref<HTMLElement | null>(null);
+const heroVisible = ref(false);
+
+const viewHomeRef = ref<HTMLElement | null>(null);
+
+const COUNT_UP_DURATION = 2200;
+
+const { displayValue: statAmericans } = useCountUp({
+  target: 25,
+  suffix: "M+",
+  duration: COUNT_UP_DURATION,
+  startWhen: statsVisible,
+});
+
+const { displayValue: statUndiagnosed } = useCountUp({
+  target: 80,
+  suffix: "%",
+  duration: COUNT_UP_DURATION,
+  startWhen: statsVisible,
+});
+
+const { displayValue: statSatisfaction } = useCountUp({
+  target: 95,
+  suffix: "%",
+  duration: COUNT_UP_DURATION,
+  startWhen: statsVisible,
+});
+
+const { displayValue: statDentists } = useCountUp({
+  target: 500,
+  suffix: "+",
+  duration: COUNT_UP_DURATION,
+  startWhen: statsVisible,
+});
+
+let observer: IntersectionObserver | null = null;
+let heroObserver: IntersectionObserver | null = null;
+let scrollRevealObserver: IntersectionObserver | null = null;
+
+onMounted(() => {
+  const el = statsSectionRef.value;
+  if (el) {
+    observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry?.isIntersecting) statsVisible.value = true;
+      },
+      { threshold: 0.2, rootMargin: "0px" }
+    );
+    observer.observe(el);
+  }
+
+  const heroEl = heroSectionRef.value;
+  if (heroEl) {
+    heroObserver = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry?.isIntersecting) heroVisible.value = true;
+      },
+      { threshold: 0.1, rootMargin: "0px" }
+    );
+    heroObserver.observe(heroEl);
+  }
+
+  const root = viewHomeRef.value;
+  if (root) {
+    const revealEls = root.querySelectorAll(".view-home__scroll-reveal");
+    scrollRevealObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("view-home__scroll-reveal--visible");
+          }
+        });
+      },
+      { threshold: 0.12, rootMargin: "0px 0px -40px 0px" }
+    );
+    revealEls.forEach((el) => scrollRevealObserver!.observe(el));
+  }
+});
+
+onUnmounted(() => {
+  observer?.disconnect();
+  heroObserver?.disconnect();
+  scrollRevealObserver?.disconnect();
+});
 </script>
 
 <style lang="scss" scoped>
@@ -207,6 +301,32 @@ const { isDark } = useTheme();
   overflow: hidden;
 }
 
+/* Compact container: hero not full width, like Genesis */
+.view-home--container-compact .view-home__hero {
+  width: calc(100% - 3rem);
+  max-width: 1280px;
+  margin-left: auto;
+  margin-right: auto;
+  border-radius: calc(var(--website-radius) * 2);
+  margin-bottom: 2rem;
+  background: var(--website-bg);
+  border: 1px solid var(--website-border);
+  box-shadow: var(--website-shadow-sm);
+}
+
+@media (min-width: 901px) {
+  .view-home__hero {
+    min-height: calc(100vh - 190px);
+    display: flex;
+    align-items: center;
+    padding: 2rem 1.5rem 3rem;
+  }
+
+  .view-home__hero-inner {
+    width: 100%;
+  }
+}
+
 .view-home__hero-inner {
   max-width: 1100px;
   margin: 0 auto;
@@ -214,6 +334,63 @@ const { isDark } = useTheme();
   grid-template-columns: 1fr 1fr;
   gap: 3rem;
   align-items: center;
+}
+
+/* Wjazd napisu z lewej */
+.view-home__hero-content {
+  opacity: 0;
+  transform: translateX(-1.75rem);
+}
+
+.view-home__hero--visible .view-home__hero-content {
+  animation: view-home__hero-content-reveal 0.65s ease-out forwards;
+}
+
+@keyframes view-home__hero-content-reveal {
+  from {
+    opacity: 0;
+    transform: translateX(-1.75rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Obrazek: pojawienie z lekkim blurem */
+.view-home__hero-image--main {
+  opacity: 0;
+  filter: blur(6px);
+}
+
+.view-home__hero--visible .view-home__hero-image--main {
+  animation: view-home__hero-image-reveal 0.8s ease-out 0.2s forwards;
+}
+
+.view-home--dark .view-home__hero--visible .view-home__hero-image--main {
+  animation: view-home__hero-image-reveal-dark 0.8s ease-out 0.2s forwards;
+}
+
+@keyframes view-home__hero-image-reveal {
+  from {
+    opacity: 0;
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+@keyframes view-home__hero-image-reveal-dark {
+  from {
+    opacity: 0;
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0) brightness(0.88) contrast(1.05) saturate(0.92);
+  }
 }
 
 .view-home__hero-images {
@@ -398,6 +575,12 @@ const { isDark } = useTheme();
   border-bottom: 1px solid var(--website-border);
 }
 
+@media (min-width: 901px) {
+  .view-home__stats {
+    flex-shrink: 0;
+  }
+}
+
 .view-home--dark .view-home__stats {
   background: rgba(18, 143, 131, 0.12);
 }
@@ -409,6 +592,32 @@ const { isDark } = useTheme();
   grid-template-columns: repeat(4, 1fr);
   gap: 2rem;
   text-align: center;
+}
+
+/* Wjazd od dołu, jedna po drugiej */
+.view-home__stat {
+  opacity: 0;
+  transform: translateY(1.25rem);
+}
+
+.view-home__stats--visible .view-home__stat {
+  animation: view-home__stat-reveal 0.5s ease-out forwards;
+}
+
+.view-home__stats--visible .view-home__stat:nth-child(1) { animation-delay: 0s; }
+.view-home__stats--visible .view-home__stat:nth-child(2) { animation-delay: 0.12s; }
+.view-home__stats--visible .view-home__stat:nth-child(3) { animation-delay: 0.24s; }
+.view-home__stats--visible .view-home__stat:nth-child(4) { animation-delay: 0.36s; }
+
+@keyframes view-home__stat-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(1.25rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @media (max-width: 600px) {
@@ -429,6 +638,27 @@ const { isDark } = useTheme();
   font-size: 0.875rem;
   color: var(--website-text-secondary);
   line-height: 1.4;
+}
+
+/* Scroll reveal: wjazd z dołu + opacity */
+.view-home__scroll-reveal {
+  opacity: 0;
+  transform: translateY(2.5rem);
+}
+
+.view-home__scroll-reveal--visible {
+  animation: view-home__scroll-reveal 0.65s ease-out forwards;
+}
+
+@keyframes view-home__scroll-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(2.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .view-home__section {

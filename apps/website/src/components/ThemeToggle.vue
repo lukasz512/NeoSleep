@@ -1,33 +1,38 @@
 <template>
-  <div class="theme-toggle" :data-mode="themeMode">
+  <div class="theme-toggle" :data-mode="themeMode" :data-dark="isDark">
     <NavTooltip :text="toggleLabel">
-    <button
-      ref="btnRef"
-      type="button"
-      class="theme-toggle__btn"
-      :aria-label="toggleLabel"
-      @click="onClick"
-    >
-      <span class="theme-toggle__icon theme-toggle__icon--auto" aria-hidden="true">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-          <path d="M3 3v5h5"/>
-          <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
-          <path d="M21 21v-5h-5"/>
-        </svg>
-      </span>
-      <span class="theme-toggle__icon theme-toggle__icon--sun" aria-hidden="true">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="4"/>
-          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
-        </svg>
-      </span>
-      <span class="theme-toggle__icon theme-toggle__icon--moon" aria-hidden="true">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
-        </svg>
-      </span>
-    </button>
+      <button
+        ref="btnRef"
+        type="button"
+        class="theme-toggle__btn"
+        :aria-label="toggleLabel"
+        @click="onClick"
+      >
+        <span class="theme-toggle__track" aria-hidden="true">
+          <span class="theme-toggle__track-sun" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="4"/>
+              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+            </svg>
+          </span>
+          <span class="theme-toggle__track-moon" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+            </svg>
+          </span>
+        </span>
+        <span class="theme-toggle__knob" aria-hidden="true">
+          <span class="theme-toggle__knob-inner">
+            <svg v-if="!isDark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="4"/>
+              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+            </svg>
+            <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+            </svg>
+          </span>
+        </span>
+      </button>
     </NavTooltip>
     <Transition name="theme-wave">
       <div
@@ -120,28 +125,28 @@ function onWaveEnd(e: TransitionEvent) {
 </script>
 
 <style lang="scss" scoped>
+$pill-w: 52px;
+$pill-h: 26px;
+$knob-d: 22px;
+$knob-offset: 2px;
+
 .theme-toggle {
   position: relative;
 }
 
 .theme-toggle__btn {
   position: relative;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  border: 1px solid var(--website-border);
-  background: var(--website-bg);
-  color: var(--website-text);
+  width: $pill-w;
+  height: $pill-h;
+  padding: 0;
+  border: none;
+  border-radius: 9999px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: border-color 0.2s, background 0.2s, color 0.2s, transform 0.25s ease;
-
-  &:hover {
-    border-color: var(--website-primary);
-    color: var(--website-primary);
-  }
+  background: transparent;
+  overflow: hidden;
 
   &:focus-visible {
     outline: 2px solid var(--website-primary);
@@ -149,38 +154,99 @@ function onWaveEnd(e: TransitionEvent) {
   }
 }
 
-.theme-toggle__icon {
+/* Pill track: day = sky blue, night = dark blue */
+.theme-toggle__track {
   position: absolute;
   inset: 0;
+  border-radius: 9999px;
+  background: #7dd3fc;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
+  transition: background 0.4s ease, box-shadow 0.3s ease;
+}
+
+.theme-toggle[data-dark="true"] .theme-toggle__track {
+  background: rgb(32, 62, 120);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+/* Side icons (sun left, moon right) */
+.theme-toggle__track-sun,
+.theme-toggle__track-moon {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0;
-  transform: scale(0.5);
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  color: rgba(255, 255, 255, 0.9);
+  transition: opacity 0.25s ease;
 
   svg {
-    width: 24px;
-    height: 24px;
+    width: 12px;
+    height: 12px;
   }
 }
 
-/* Auto (system): show monitor icon */
-.theme-toggle[data-mode="auto"] .theme-toggle__icon--auto {
-  opacity: 1;
-  transform: scale(1);
+.theme-toggle__track-sun {
+  left: 8px;
 }
 
-/* Light: show sun */
-.theme-toggle[data-mode="light"] .theme-toggle__icon--sun {
-  opacity: 1;
-  transform: scale(1);
+.theme-toggle__track-moon {
+  right: 8px;
 }
 
-/* Dark: show moon */
-.theme-toggle[data-mode="dark"] .theme-toggle__icon--moon {
-  opacity: 1;
-  transform: scale(1);
+.theme-toggle[data-dark="true"] .theme-toggle__track-sun {
+  opacity: 0.35;
+}
+
+.theme-toggle[data-dark="false"] .theme-toggle__track-moon {
+  opacity: 0.35;
+}
+
+/* Sliding knob with depth */
+.theme-toggle__knob {
+  position: absolute;
+  top: $knob-offset;
+  left: $knob-offset;
+  width: $knob-d;
+  height: $knob-d;
+  border-radius: 50%;
+  z-index: 1;
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateX(0);
+}
+
+.theme-toggle[data-dark="true"] .theme-toggle__knob {
+  transform: translateX($pill-w - $knob-d - 2 * $knob-offset);
+}
+
+/* Knob inner: gradient + shadow for depth (day = warm, night = cool) */
+.theme-toggle__knob-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #e6eda9 0%, #d7a251 100%);
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.15),
+    0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+  color: #8b6914;
+  transition: background 0.35s ease, box-shadow 0.35s ease, color 0.35s ease;
+
+  svg {
+    width: 12px;
+    height: 12px;
+  }
+}
+
+.theme-toggle[data-dark="true"] .theme-toggle__knob-inner {
+  background: linear-gradient(180deg, #f7fafb 0%, #4a5159 100%);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.15) inset;
+  color: #e2e8f0;
 }
 
 .theme-toggle__wave {

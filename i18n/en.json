@@ -136,6 +136,8 @@
   "website.theme.auto": "System",
   "website.theme.light": "Light",
   "website.theme.dark": "Dark",
+  "website.layout.containerSwitchToCompact": "Use compact layout (narrower hero and footer)",
+  "website.layout.containerSwitchToWide": "Use full-width layout",
   "admin.login.title": "Admin sign in",
   "admin.login.subtitle": "Sign in placeholder – OIDC later (SPEC-0002).",
   "admin.dashboard.title": "Admin dashboard",
