@@ -40,7 +40,7 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftp
           local-dir: ./apps/rep-app/dist/
-          server-dir: ${{ secrets.FTP_PATH_APP_PROD }}
+          server-dir: ${{ secrets.FTP_PATH_APP_PROD }}/
           dangerous-clean-slate: false
 
       - name: Deploy to UAT (app-uat.neosleepcare.com)
@@ -52,5 +52,5 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftp
           local-dir: ./apps/rep-app/dist/
-          server-dir: ${{ secrets.FTP_PATH_APP_UAT }}
+          server-dir: ${{ secrets.FTP_PATH_APP_UAT }}/
           dangerous-clean-slate: false
