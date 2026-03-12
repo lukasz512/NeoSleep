@@ -11,29 +11,28 @@ Brand definition and assets come from **NeoSleep.pdf** (brandbook). Extract logo
 ```
 brand/
   README.md          (this file)
-  logos/             Logo files – single source for all apps (white-label). Only 4 files:
-    icon_light.svg   Icon: teal + white. Use on dark backgrounds (dark theme). Manifest/PWA/favicon.
-    icon_dark.svg    Icon: teal + grey. Use on light backgrounds (light theme). Manifest/PWA/favicon.
-    logo_light.svg   Full logo (icon + wordmark) for light theme. Header, sidebar.
-    logo_dark.svg    Full logo (icon + wordmark) for dark theme. Header, sidebar.
+  logos/
+    icon/            Icon only – PWA, favicon, app icons
+      icon_light.svg   Teal + white. Dark theme / dark backgrounds.
+      icon_dark.svg    Teal + grey. Light theme / light backgrounds.
+    logo/            Full logo (icon + wordmark) – header, sidebar
+      logo_light.svg   For light theme.
+      logo_dark.svg    For dark theme.
   fonts/             Optional: custom font files if specified in brandbook
 ```
 
 ## Usage
 
-- **Header / sidebar:** Use `logo_light.svg` when UI is light, `logo_dark.svg` when UI is dark. Apps switch `src` by theme.
-- **manifest.json (PWA, iPhone, Android):** Reference both `icon_light.svg` and `icon_dark.svg`. Where supported (e.g. `media` with `prefers-color-scheme`), the system can pick the icon by theme; otherwise the app can set one default and optionally swap at runtime. Generate PNGs (e.g. 192×192, 512×512) from these SVGs for manifest `icons` if the platform requires PNG.
-- **Favicon:** Same as icon – use `icon_dark.svg` for light browser chrome, `icon_light.svg` for dark; or switch dynamically by theme.
+- **Header / sidebar:** Use `logo/logo_light.svg` when UI is light, `logo/logo_dark.svg` when UI is dark. Apps switch `src` by theme.
+- **manifest.json (PWA, iPhone, Android):** Use `icon/icon_light.svg` and `icon/icon_dark.svg`. Where supported (e.g. `media` with `prefers-color-scheme`), the system can pick by theme; otherwise set one default. Generate PNGs (e.g. 192×192, 512×512) from these SVGs for manifest `icons` if the platform requires PNG.
+- **Favicon:** Same as icon – use `icon/icon_dark.svg` for light browser chrome, `icon/icon_light.svg` for dark; or switch dynamically by theme.
 
 ## Usage in apps
 
-- **Website** (`apps/website`): Copy or symlink `brand/logos/` into `apps/website/public/brand/logos/`. Use `logo_light.svg` / `logo_dark.svg` in layout by theme; use `icon_light.svg` / `icon_dark.svg` in manifest and favicon.
-- **Rep-app** (`apps/rep-app`): Same – ensure `public/brand/logos/` contains the four files. Use `logo_light` / `logo_dark` in sidebar/drawer by theme.
+**Jedno miejsce:** wszystkie pliki są tylko w **`brand/`** (root repo). Żadnych kopii ani symlinków w aplikacjach.
 
-To keep one global place and avoid duplication, you can:
-
-1. **Copy on build**: Add a script or build step that copies `brand/logos/*` into each app’s `public/brand/logos/`.
-2. **Symlink in dev**: In each app’s `public/`, add a symlink `brand` → `../../../brand` (repo root). Vite and other servers typically follow symlinks.
+- **Website** (`apps/website`): Vite serwuje `brand/` spod `/brand` w dev i przy `pnpm build` kopiuje do `dist/brand`. W `apps/website/public/` nie ma folderu `brand`.
+- **Rep-app** (`apps/rep-app`): To samo – plugin w `vite.config.ts` serwuje `brand/` spod `/brand` i przy buildzie kopiuje do `dist/brand`. W `apps/rep-app/public/` nie ma folderu `brand`.
 
 ## Colors
 

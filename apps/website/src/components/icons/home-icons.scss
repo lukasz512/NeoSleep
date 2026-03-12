@@ -1,0 +1,208 @@
+/**
+ * Home view icons – wspólne style dla ikon w zaokrąglonym kwadracie.
+ * Używane przez HomeView; selektory nadrzędne (.view-home__card, .view-home__feature-item--card)
+ * muszą być w DOM widoku.
+ *
+ * === Jak działają animacje ikon ===
+ * 1) Animacje "na wejście" (draw): uruchamiane z JS w HomeView przez Intersection Observer –
+ *    gdy karta wchodzi w viewport, dodawana jest klasa (np. .view-home__therapy-card--draw,
+ *    .view-home__chart-revenue--draw). CSS w tym pliku wtedy odtwarza animację (@keyframes).
+ * 2) Animacje na hover: wystarczy :hover na kontenerze (.view-home__feature--card:hover itd.),
+ *    bez JS – np. graduation tail sway, heart beat, shield sparkle, smile rotate.
+ * 3) Zegar (clock): JS w HomeView na mouseenter dodaje .view-home__clock-rotating,
+ *    na animationend zamienia na .view-home__clock-done (obrót 0→360°).
+ * 4) Rysowanie linii (heartbeat EKG, chart): SVG ma pathLength="1", stroke-dasharray: 1;
+ *    animacja zmienia stroke-dashoffset (np. 1→0 = linia "rysuje się" od lewej).
+ */
+
+.view-home__icon-box {
+  width: 56px;
+  height: 56px;
+  min-width: 56px;
+  min-height: 56px;
+  background: var(--website-icon-bg);
+  color: var(--website-icon-stroke);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.25s ease, color 0.25s ease;
+  overflow: visible;
+}
+
+.view-home__icon-svg {
+  width: 28px;
+  height: 28px;
+  stroke: currentColor;
+}
+
+/* ------ Animacje ikon przy hover na karcie ------ */
+
+.view-home__icon-heartbeat-line {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+}
+
+.view-home__therapy-card--draw .view-home__icon-heartbeat-line {
+  animation: view-home__heartbeat-draw-left 1s ease-out forwards;
+}
+
+@keyframes view-home__heartbeat-draw-left {
+  0% { stroke-dashoffset: 1; }
+  100% { stroke-dashoffset: 0; }
+}
+
+@keyframes view-home__chart-draw-reverse {
+  0% { stroke-dashoffset: 0; }
+  50% { stroke-dashoffset: 1; }
+  100% { stroke-dashoffset: 0; }
+}
+
+.view-home__icon-clock-min-hand {
+  transform-origin: 12px 12px;
+}
+
+.view-home__clock-rotating .view-home__icon-clock-min-hand {
+  animation: view-home__clock-min-rotate 0.75s cubic-bezier(0.33, 0, 0.2, 1) forwards;
+}
+
+.view-home__clock-done .view-home__icon-clock-min-hand {
+  transform: rotate(360deg);
+}
+
+@keyframes view-home__clock-min-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.view-home__icon-chart-line {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+}
+
+.view-home__chart-revenue--draw .view-home__icon-chart-line {
+  animation: view-home__chart-draw-reverse 1.25s ease-in-out;
+}
+
+.view-home__icon-people-back {
+  opacity: 1;
+  transition: opacity 0.35s ease;
+}
+.view-home__feature--card:hover .view-home__icon-people-back {
+  opacity: 0;
+}
+
+.view-home__icon-people-plus {
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+.view-home__feature--card:hover .view-home__icon-people-plus {
+  opacity: 1;
+}
+
+.view-home__icon-people {
+  transition: none;
+}
+.view-home__feature--card:hover .view-home__icon-people {
+  transform: none;
+}
+
+.view-home__icon-graduation-tail {
+  transform-origin: 22px 10px;
+}
+.view-home__feature--card:hover .view-home__icon-graduation-tail {
+  animation: view-home__graduation-tail-sway 0.6s ease-in-out;
+}
+
+@keyframes view-home__graduation-tail-sway {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-15deg); }
+  75% { transform: rotate(15deg); }
+}
+
+.view-home__icon-heart-path {
+  transform-origin: 12px 12px;
+}
+.view-home__feature--card:hover .view-home__icon-heart-path {
+  animation: view-home__heart-beat-twice 0.9s ease-in-out;
+}
+
+@keyframes view-home__heart-beat-twice {
+  0%, 100% { transform: scale(1); }
+  15% { transform: scale(0.82); }
+  30% { transform: scale(1); }
+  45% { transform: scale(0.82); }
+  60%, 100% { transform: scale(1); }
+}
+
+.view-home__icon-moon {
+  overflow: visible;
+}
+.view-home__icon-moon-path {
+  transform-origin: center;
+}
+.view-home__feature-item--card:hover .view-home__icon-moon-path {
+  transform: none;
+}
+.view-home__icon-moon-star {
+  opacity: 0;
+  transform-origin: 0 0;
+  transform: translateX(-6px);
+  transition: opacity 0.3s ease, transform 0.35s ease;
+}
+.view-home__feature-item--card:hover .view-home__icon-moon-star,
+.view-home__feature-item-icon:hover .view-home__icon-moon-star {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.view-home__icon-shield {
+  transition: none;
+}
+.view-home__icon-shield-sparkle {
+  opacity: 0;
+  transform-origin: 15px 10px;
+}
+.view-home__feature-item--card:hover .view-home__icon-shield-sparkle {
+  animation: view-home__shield-sparkle 0.6s ease-out forwards;
+}
+@keyframes view-home__shield-sparkle {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+  100% {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+}
+
+.view-home__icon-smile-eyes {
+  transform-origin: 12px 12px;
+}
+.view-home__icon-smile-mouth {
+  transform-origin: 12px 12px;
+}
+.view-home__feature-item--card:hover .view-home__icon-smile-eyes {
+  animation: view-home__smile-rotate-cw 0.75s cubic-bezier(0.33, 0, 0.2, 1) forwards;
+}
+.view-home__feature-item--card:hover .view-home__icon-smile-mouth {
+  animation: view-home__smile-rotate-ccw 0.75s cubic-bezier(0.33, 0, 0.2, 1) forwards;
+}
+@keyframes view-home__smile-rotate-cw {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes view-home__smile-rotate-ccw {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(-360deg); }
+}
+
+.view-home__feature--card,
+.view-home__feature-item--card {
+  cursor: default;
+}

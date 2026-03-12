@@ -38,7 +38,7 @@ function applyTheme(dark: boolean) {
     root.removeAttribute("data-theme");
   }
   if (typeof document !== "undefined") {
-    const iconPath = dark ? "/brand/logos/icon_light.svg" : "/brand/logos/icon_dark.svg";
+    const iconPath = dark ? "/brand/logos/icon/icon_dark.svg" : "/brand/logos/icon/icon_light.svg";
     setFavicon(iconPath);
   }
 }

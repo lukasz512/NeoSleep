@@ -3,7 +3,27 @@
     <section class="view-contact__section view-contact__header">
       <div class="view-contact__inner">
         <h1 class="view-contact__title">{{ t("website.contact.title") }}</h1>
-        <p class="view-contact__subtitle">{{ t("website.contact.subtitle") }}</p>
+        <p class="view-contact__subtitle">{{ subtitleByType }}</p>
+        <div class="view-contact__tabs" role="tablist" aria-label="Contact form type">
+          <button
+            type="button"
+            role="tab"
+            :aria-selected="formType === 'patient'"
+            :class="['view-contact__tab', { 'view-contact__tab--active': formType === 'patient' }]"
+            @click="setFormType('patient')"
+          >
+            {{ t("website.contact.tabPatient") }}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            :aria-selected="formType === 'professional'"
+            :class="['view-contact__tab', { 'view-contact__tab--active': formType === 'professional' }]"
+            @click="setFormType('professional')"
+          >
+            {{ t("website.contact.tabProfessional") }}
+          </button>
+        </div>
       </div>
     </section>
     <section class="view-contact__section view-contact__form-section">
@@ -37,7 +57,7 @@
               id="contact-subject"
               v-model="form.subject"
               type="text"
-              :placeholder="t('website.contact.subjectPlaceholder')"
+              :placeholder="subjectPlaceholderByType"
               class="view-contact__input"
             />
           </div>
@@ -62,10 +82,44 @@
 </template>
 
 <script setup lang="ts">
-import { reactive } from "vue";
+import { reactive, ref, computed, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 
 const { t } = useI18n();
+const route = useRoute();
+const router = useRouter();
+
+type FormType = "patient" | "professional";
+
+const formType = ref<FormType>("patient");
+
+function setFormType(type: FormType) {
+  formType.value = type;
+  router.replace({ path: "/contact", query: { ...route.query, type } });
+}
+
+watch(
+  () => route.query.type,
+  (q) => {
+    const parsed = q === "patient" || q === "professional" ? (q as FormType) : null;
+    if (parsed) formType.value = parsed;
+  },
+  { immediate: true }
+);
+
+// On first load, if route has type, we already set it via watch; if not, default stays patient
+const subtitleByType = computed(() =>
+  formType.value === "professional"
+    ? t("website.contact.subtitleProfessional")
+    : t("website.contact.subtitlePatient")
+);
+
+const subjectPlaceholderByType = computed(() =>
+  formType.value === "professional"
+    ? t("website.contact.subjectPlaceholderProfessional")
+    : t("website.contact.subjectPlaceholder")
+);
 
 const form = reactive({
   name: "",
@@ -76,7 +130,7 @@ const form = reactive({
 
 function onSubmit() {
   // TODO: POST to BFF or form provider
-  console.log("Contact form:", form);
+  console.log("Contact form:", { ...form, type: formType.value });
 }
 </script>
 
@@ -115,8 +169,45 @@ function onSubmit() {
 .view-contact__subtitle {
   font-size: 1.0625rem;
   color: var(--website-text-secondary);
-  margin: 0;
+  margin: 0 0 1.25rem;
   line-height: 1.6;
+}
+
+.view-contact__tabs {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  background: var(--website-border);
+  border-radius: var(--website-radius);
+  width: fit-content;
+}
+
+.view-contact__tab {
+  padding: 0.5rem 1.25rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--website-text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: calc(var(--website-radius) - 2px);
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+
+  &:hover {
+    color: var(--website-text);
+  }
+
+  &--active {
+    background: var(--website-bg);
+    color: var(--website-primary);
+    box-shadow: var(--website-shadow-sm);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--website-primary);
+    outline-offset: 2px;
+  }
 }
 
 .view-contact__form {
@@ -197,6 +288,14 @@ function onSubmit() {
 @media (max-width: 600px) {
   .view-contact__form {
     padding: 1.5rem;
+  }
+
+  .view-contact__tabs {
+    width: 100%;
+  }
+
+  .view-contact__tab {
+    flex: 1;
   }
 }
 </style>

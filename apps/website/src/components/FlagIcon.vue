@@ -1,11 +1,15 @@
 <template>
   <span class="flag-icon" :class="`flag-icon--${locale}`" aria-hidden="true">
-    <!-- UK (EN): simplified flat Union Jack -->
-    <svg v-if="locale === 'en'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 20" preserveAspectRatio="xMidYMid slice" class="flag-icon__svg">
-      <rect width="30" height="20" fill="#012169"/>
-      <path fill="#fff" d="M0 0l30 20M30 0L0 20" stroke="#fff" stroke-width="4"/>
-      <path fill="#C8102E" d="M15 0v20M0 10h30" stroke="#C8102E" stroke-width="2"/>
-      <path fill="#C8102E" d="M0 0l30 20M30 0L0 20" stroke="#C8102E" stroke-width="1.2"/>
+    <!-- UK (EN): Union Jack – czytelna wersja 3:2 -->
+    <svg v-if="locale === 'en'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 40" preserveAspectRatio="xMidYMid slice" class="flag-icon__svg">
+      <rect width="60" height="40" fill="#012169"/>
+      <path fill="#fff" d="M0 0 L60 40 L57 40 L0 2.5 Z M60 0 L0 40 L0 37.5 L60 0 Z"/>
+      <rect x="24" y="0" width="12" height="40" fill="#fff"/>
+      <rect x="0" y="14" width="60" height="12" fill="#fff"/>
+      <rect x="27" y="0" width="6" height="40" fill="#C8102E"/>
+      <rect x="0" y="17" width="60" height="6" fill="#C8102E"/>
+      <path fill="#fff" d="M26 0 L34 0 L60 26 L60 34 L34 8 L26 8 L0 34 L0 26 Z M26 40 L34 40 L8 14 L0 14 L0 6 L8 6 L34 32 L26 32 L60 6 L60 14 Z"/>
+      <path fill="#C8102E" d="M29 0 L31 0 L60 29 L60 31 L31 2 L29 2 L0 31 L0 29 Z M29 40 L31 40 L2 11 L0 11 L0 9 L2 9 L31 38 L29 38 L58 9 L60 9 L60 11 L58 11 Z"/>
     </svg>
     <!-- PL: white over red -->
     <svg v-else-if="locale === 'pl'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 20" preserveAspectRatio="xMidYMid slice" class="flag-icon__svg">

@@ -1,22 +1,24 @@
 <template>
-  <div class="layout-default" :class="{ 'layout-default--dark': isDark }">
+  <div class="layout-default">
     <DefaultHeader />
     <main class="layout-default__main">
-      <RouterView />
+      <slot />
     </main>
     <DefaultFooter />
   </div>
 </template>
 
 <script setup lang="ts">
-import { useTheme } from "../composables/useTheme";
+import { onMounted } from "vue";
 import DefaultHeader from "./DefaultHeader.vue";
 import DefaultFooter from "./DefaultFooter.vue";
 
-const { isDark } = useTheme();
+onMounted(() => {
+  console.log("[Layout] mounted");
+});
 </script>
 
-<style lang="scss" scoped>
+<style scoped>
 .layout-default {
   min-height: 100vh;
   display: flex;
@@ -25,8 +27,6 @@ const { isDark } = useTheme();
 
 .layout-default__main {
   flex: 1;
-  position: relative;
-  z-index: 2;
-  padding-top: 5rem; /* space for fixed header + wave */
+  padding-top: 72px; /* space for fixed header */
 }
 </style>

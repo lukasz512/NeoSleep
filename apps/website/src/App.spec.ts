@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { mount } from "@vue/test-utils";
 import { createI18n } from "vue-i18n";
 import router from "./router";
@@ -31,11 +31,11 @@ describe("DefaultLayout", () => {
         stubs: { "router-view": true },
       },
     });
-    const header = wrapper.find(".default-header");
+    const header = wrapper.find(".site-header");
     expect(header.exists()).toBe(true);
-    expect(wrapper.find(".default-header__brand").exists()).toBe(true);
-    expect(wrapper.find(".default-header__logo").exists()).toBe(true);
-    const nav = wrapper.find(".default-header__nav");
+    expect(wrapper.find(".site-header__brand").exists()).toBe(true);
+    expect(wrapper.find(".site-header__logo").exists()).toBe(true);
+    const nav = wrapper.find(".site-header__nav");
     expect(nav.exists()).toBe(true);
     expect(wrapper.find(".layout-default__main").exists()).toBe(true);
   });
@@ -47,15 +47,15 @@ describe("DefaultLayout", () => {
         stubs: { "router-view": true },
       },
     });
-    const navLinks = wrapper.findAll(".default-header__nav-link");
+    const navLinks = wrapper.findAll(".site-header__link");
     expect(navLinks.length).toBeGreaterThanOrEqual(5);
-    const text = wrapper.find(".default-header__nav").text();
+    const text = wrapper.find(".site-header__nav").text();
     expect(text).toContain("Solutions");
     expect(text).toContain("For Dentists");
     expect(text).toContain("For Patients");
     expect(text).toContain("About");
     expect(text).toContain("Contact");
-    expect(wrapper.find(".default-header__cta").text()).toContain("Get Started");
+    expect(wrapper.find(".site-header__cta").text()).toContain("Get Started");
   });
 });
 
@@ -77,6 +77,26 @@ describe("HomeView", () => {
     const wrapper = mount(HomeView, { global: { plugins: [i18n] } });
     const ctas = wrapper.findAll(".view-home__btn");
     expect(ctas.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("hero primary CTA links to contact with type=patient", () => {
+    const wrapper = mount(HomeView, { global: { plugins: [i18n] } });
+    const primaryCta = wrapper.find(".view-home__hero-ctas .view-home__btn--primary");
+    expect(primaryCta.exists()).toBe(true);
+    expect(primaryCta.attributes("href")).toBe("/contact?type=patient");
+    expect(primaryCta.text()).toMatch(/Find a Dentist/i);
+  });
+
+  it("clicking hero Find a Dentist CTA navigates to contact via router (no full reload)", async () => {
+    const pushSpy = vi.spyOn(router, "push");
+    const wrapper = mount(HomeView, {
+      global: { plugins: [i18n, router] },
+    });
+    const primaryCta = wrapper.find(".view-home__hero-ctas .view-home__btn--primary");
+    await primaryCta.trigger("click");
+    expect(pushSpy).toHaveBeenCalledWith({ path: "/contact", query: { type: "patient" } });
+    pushSpy.mockRestore();
+    wrapper.unmount();
   });
 
   it("renders solutions, for-dentists, and for-patients sections", () => {

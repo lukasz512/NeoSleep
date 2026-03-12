@@ -31,15 +31,25 @@
   --website-btn-min-height: 44px;
   --website-btn-min-width: 44px;
   --website-header-height: 72px;
+  --website-page-margin: 1.5rem;
+  --website-page-max-width: 1280px;
+  --website-page-frame-bg: #e5e7eb;
+  --website-content-padding: 1.5rem;
+  --website-icon-bg: rgba(18, 143, 131, 0.12);
+  --website-icon-stroke: var(--neosleep-primary);
 }
 
 /* Whole viewport uses theme background (no white envelope in dark mode) */
 html {
   scroll-padding-top: var(--website-header-height);
+  margin: 0;
+  padding: 0;
 }
 
 html,
 body {
+  margin: 0;
+  padding: 0;
   background: var(--website-bg);
   color: var(--website-text);
 }
@@ -52,7 +62,10 @@ body {
   --website-border: #2d3748;
   --website-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
   --website-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --website-page-frame-bg: #1a1f26;
   --neosleep-charcoal-dark: #e6edf3;
   --neosleep-charcoal-medium: #8b9cb3;
+  --website-icon-bg: rgba(18, 143, 131, 0.2);
+  --website-icon-stroke: var(--neosleep-primary);
 }
 

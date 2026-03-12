@@ -1,6 +1,6 @@
 /**
  * Vuetify 3 plugin for rep-app. Primary colors should match apps/rep-app/src/assets/scss/_brand-colors.scss
- * (see also public/brand/NeoSleep.pdf and public/brand/README.md).
+ * (see also repo root brand/NeoSleep.pdf and brand/README.md).
  */
 import "vuetify/styles";
 import { createVuetify } from "vuetify";

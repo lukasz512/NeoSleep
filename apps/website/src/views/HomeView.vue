@@ -9,7 +9,10 @@
           </h1>
           <p class="view-home__hero-subtitle">{{ t("website.hero.subtitle") }}</p>
           <div class="view-home__hero-ctas">
-            <a href="#for-patients" class="view-home__btn view-home__btn--primary">
+            <a
+              href="#for-patients"
+              class="view-home__btn view-home__btn--primary"
+            >
               {{ t("website.hero.ctaFindDentist") }}
               <span class="view-home__btn-arrow" aria-hidden="true">→</span>
             </a>
@@ -61,9 +64,9 @@
       <h3 class="view-home__section-heading">{{ t("website.solutions.heading") }}</h3>
       <p class="view-home__section-subtitle view-home__section-subtitle--center">{{ t("website.solutions.subtitle") }}</p>
       <div class="view-home__cards view-home__cards--two">
-        <div class="view-home__card view-home__card--with-icon">
-          <div class="view-home__card-icon" aria-hidden="true">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        <div ref="therapyCardRef" class="view-home__card view-home__card--with-icon view-home__card--therapy">
+          <div class="view-home__card-icon view-home__icon-box" aria-hidden="true">
+            <IconHeartbeat />
           </div>
           <h4 class="view-home__card-title">{{ t("website.solutions.therapy.title") }}</h4>
           <p class="view-home__card-desc">{{ t("website.solutions.therapy.desc") }}</p>
@@ -74,9 +77,9 @@
           </ul>
         </div>
         <div class="view-home__card view-home__card--with-icon">
-          <div class="view-home__card-icon" aria-hidden="true">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-          </div>
+          <IconBox card-icon>
+            <IconClock />
+          </IconBox>
           <h4 class="view-home__card-title">{{ t("website.solutions.diagnostics.title") }}</h4>
           <p class="view-home__card-desc">{{ t("website.solutions.diagnostics.desc") }}</p>
           <ul class="view-home__list view-home__list--checks">
@@ -98,29 +101,39 @@
           <h3 class="view-home__section-heading">{{ t("website.forDentists.heading") }}</h3>
           <p class="view-home__section-subtitle">{{ t("website.forDentists.subtitle") }}</p>
           <div class="view-home__grid view-home__grid--2x2">
-            <div class="view-home__feature">
-              <span class="view-home__feature-icon" aria-hidden="true">👥</span>
+            <div class="view-home__feature view-home__feature--card">
+              <IconBox feature-icon>
+                <IconPeople />
+              </IconBox>
               <h4 class="view-home__feature-title">{{ t("website.forDentists.expand.title") }}</h4>
               <p class="view-home__feature-desc">{{ t("website.forDentists.expand.desc") }}</p>
             </div>
-            <div class="view-home__feature">
-              <span class="view-home__feature-icon" aria-hidden="true">📈</span>
+            <div ref="chartRevenueRef" class="view-home__feature view-home__feature--card view-home__feature--chart-revenue">
+              <IconBox feature-icon>
+                <IconChart />
+              </IconBox>
               <h4 class="view-home__feature-title">{{ t("website.forDentists.revenue.title") }}</h4>
               <p class="view-home__feature-desc">{{ t("website.forDentists.revenue.desc") }}</p>
             </div>
-            <div class="view-home__feature">
-              <span class="view-home__feature-icon" aria-hidden="true">🎓</span>
+            <div class="view-home__feature view-home__feature--card">
+              <IconBox feature-icon>
+                <IconGraduation />
+              </IconBox>
               <h4 class="view-home__feature-title">{{ t("website.forDentists.training.title") }}</h4>
               <p class="view-home__feature-desc">{{ t("website.forDentists.training.desc") }}</p>
             </div>
-            <div class="view-home__feature">
-              <span class="view-home__feature-icon" aria-hidden="true">❤️</span>
+            <div class="view-home__feature view-home__feature--card">
+              <IconBox feature-icon>
+                <IconHeart />
+              </IconBox>
               <h4 class="view-home__feature-title">{{ t("website.forDentists.outcomes.title") }}</h4>
               <p class="view-home__feature-desc">{{ t("website.forDentists.outcomes.desc") }}</p>
             </div>
           </div>
           <div class="view-home__section-cta">
-            <a href="#for-patients" class="view-home__btn view-home__btn--primary">{{ t("website.forDentists.cta") }}</a>
+            <RouterLink :to="{ path: '/contact', query: { type: 'professional' } }" class="view-home__btn view-home__btn--primary">
+              {{ t("website.forDentists.cta") }}
+            </RouterLink>
           </div>
         </div>
       </div>
@@ -133,29 +146,37 @@
           <h3 class="view-home__section-heading">{{ t("website.forPatients.heading") }}</h3>
           <p class="view-home__section-subtitle">{{ t("website.forPatients.subtitle") }}</p>
           <ul class="view-home__feature-list">
-            <li class="view-home__feature-item">
-              <span class="view-home__feature-item-icon" aria-hidden="true">🌙</span>
+            <li class="view-home__feature-item view-home__feature-item--card">
+              <IconBox feature-item-icon>
+                <IconMoon />
+              </IconBox>
               <div>
                 <h4 class="view-home__feature-title">{{ t("website.forPatients.restful.title") }}</h4>
                 <p class="view-home__feature-desc">{{ t("website.forPatients.restful.desc") }}</p>
               </div>
             </li>
-            <li class="view-home__feature-item">
-              <span class="view-home__feature-item-icon" aria-hidden="true">🛡️</span>
+            <li class="view-home__feature-item view-home__feature-item--card">
+              <IconBox feature-item-icon>
+                <IconShield />
+              </IconBox>
               <div>
                 <h4 class="view-home__feature-title">{{ t("website.forPatients.nonInvasive.title") }}</h4>
                 <p class="view-home__feature-desc">{{ t("website.forPatients.nonInvasive.desc") }}</p>
               </div>
             </li>
-            <li class="view-home__feature-item">
-              <span class="view-home__feature-item-icon" aria-hidden="true">⏱️</span>
+            <li class="view-home__feature-item view-home__feature-item--card">
+              <IconBox feature-item-icon>
+                <IconClock :patients="true" />
+              </IconBox>
               <div>
                 <h4 class="view-home__feature-title">{{ t("website.forPatients.quick.title") }}</h4>
                 <p class="view-home__feature-desc">{{ t("website.forPatients.quick.desc") }}</p>
               </div>
             </li>
-            <li class="view-home__feature-item">
-              <span class="view-home__feature-item-icon" aria-hidden="true">😊</span>
+            <li class="view-home__feature-item view-home__feature-item--card">
+              <IconBox feature-item-icon>
+                <IconSmile />
+              </IconBox>
               <div>
                 <h4 class="view-home__feature-title">{{ t("website.forPatients.health.title") }}</h4>
                 <p class="view-home__feature-desc">{{ t("website.forPatients.health.desc") }}</p>
@@ -163,7 +184,9 @@
             </li>
           </ul>
           <div class="view-home__section-cta view-home__section-cta--left">
-            <a href="#cta" class="view-home__btn view-home__btn--primary">{{ t("website.forPatients.cta") }}</a>
+            <RouterLink :to="{ path: '/contact', query: { type: 'patient' } }" class="view-home__btn view-home__btn--primary">
+              {{ t("website.forPatients.cta") }}
+            </RouterLink>
           </div>
         </div>
         <div class="view-home__twocol-image">
@@ -177,11 +200,11 @@
         <h2 class="view-home__cta-banner-heading">{{ t("website.cta.heading") }}</h2>
         <p class="view-home__cta-banner-subtitle">{{ t("website.cta.subtitle") }}</p>
         <div class="view-home__cta-banner-btns">
-          <a href="#for-patients" class="view-home__btn view-home__btn--white-outline">
+          <RouterLink :to="{ path: '/contact', query: { type: 'patient' } }" class="view-home__btn view-home__btn--white-outline">
             {{ t("website.cta.getStarted") }}
             <span class="view-home__btn-arrow" aria-hidden="true">→</span>
-          </a>
-          <a href="#for-patients" class="view-home__btn view-home__btn--white-border">{{ t("website.cta.schedule") }}</a>
+          </RouterLink>
+          <RouterLink :to="{ path: '/contact', query: { type: 'patient' } }" class="view-home__btn view-home__btn--white-border">{{ t("website.cta.schedule") }}</RouterLink>
         </div>
       </div>
     </section>
@@ -191,10 +214,24 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
+import { useRouter } from "vue-router";
 import { useTheme } from "../composables/useTheme";
 import { useCountUp } from "../composables/useCountUp";
+import {
+  IconBox,
+  IconHeartbeat,
+  IconClock,
+  IconPeople,
+  IconChart,
+  IconGraduation,
+  IconHeart,
+  IconMoon,
+  IconShield,
+  IconSmile,
+} from "../components/icons";
 
 const { t } = useI18n();
+const router = useRouter();
 const { isDark } = useTheme();
 
 const statsSectionRef = ref<HTMLElement | null>(null);
@@ -204,6 +241,18 @@ const heroSectionRef = ref<HTMLElement | null>(null);
 const heroVisible = ref(false);
 
 const viewHomeRef = ref<HTMLElement | null>(null);
+
+const therapyCardRef = ref<HTMLElement | null>(null);
+const therapyStartDone = ref(false);
+let therapyObserver: IntersectionObserver | null = null;
+let therapyLineAnimationEndCleanup: (() => void) | null = null;
+
+const chartRevenueRef = ref<HTMLElement | null>(null);
+const chartRevenueStartDone = ref(false);
+let chartRevenueObserver: IntersectionObserver | null = null;
+let chartRevenueCleanup: (() => void) | null = null;
+
+let clockCleanups: (() => void)[] = [];
 
 const COUNT_UP_DURATION = 2200;
 
@@ -279,15 +328,115 @@ onMounted(() => {
     );
     revealEls.forEach((el) => scrollRevealObserver!.observe(el));
   }
+
+  // Oral Appliance Therapy: animacja rysowania (1× na start) + obsługa hover
+  const card = therapyCardRef.value;
+  if (card) {
+    const line = card.querySelector<HTMLElement>(".view-home__icon-heartbeat-line");
+    const runDraw = () => {
+      card.classList.add("view-home__therapy-card--draw");
+    };
+    const onAnimationEnd = () => {
+      card.classList.remove("view-home__therapy-card--draw");
+    };
+    if (line) {
+      line.addEventListener("animationend", onAnimationEnd);
+    }
+    card.addEventListener("mouseenter", runDraw);
+    therapyLineAnimationEndCleanup = () => {
+      line?.removeEventListener("animationend", onAnimationEnd);
+      card.removeEventListener("mouseenter", runDraw);
+    };
+
+    therapyObserver = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry?.isIntersecting && !therapyStartDone.value) {
+          therapyStartDone.value = true;
+          runDraw();
+          therapyObserver?.disconnect();
+        }
+      },
+      { threshold: 0.25 }
+    );
+    therapyObserver.observe(card);
+  }
+
+  // Increase Revenue (wykres): domyślnie pełna, rysuje się L→R (1× na start, potem na hover)
+  const chartEl = chartRevenueRef.value;
+  if (chartEl) {
+    const line = chartEl.querySelector<HTMLElement>(".view-home__icon-chart-line");
+    const runChartDraw = () => {
+      chartEl.classList.add("view-home__chart-revenue--draw");
+    };
+    const onChartAnimationEnd = () => {
+      chartEl.classList.remove("view-home__chart-revenue--draw");
+    };
+    if (line) {
+      line.addEventListener("animationend", onChartAnimationEnd);
+    }
+    chartEl.addEventListener("mouseenter", runChartDraw);
+    chartRevenueCleanup = () => {
+      line?.removeEventListener("animationend", onChartAnimationEnd);
+      chartEl.removeEventListener("mouseenter", runChartDraw);
+    };
+
+    chartRevenueObserver = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry?.isIntersecting && !chartRevenueStartDone.value) {
+          chartRevenueStartDone.value = true;
+          runChartDraw();
+          chartRevenueObserver?.disconnect();
+        }
+      },
+      { threshold: 0.25 }
+    );
+    chartRevenueObserver.observe(chartEl);
+  }
+
+  // Zegar: jeden pełny obrót, bez cofania – po animacji zostaje na 360°
+  const rootEl = viewHomeRef.value;
+  if (rootEl) {
+    const hands = rootEl.querySelectorAll<HTMLElement>(".view-home__icon-clock-min-hand");
+    hands.forEach((hand) => {
+      const container = hand.closest<HTMLElement>(".view-home__card, .view-home__feature-item");
+      if (!container) return;
+      const onClockAnimationEnd = (e: AnimationEvent) => {
+        if (e.target !== hand) return;
+        container.classList.remove("view-home__clock-rotating");
+        container.classList.add("view-home__clock-done");
+      };
+      const onClockMouseEnter = () => {
+        container.classList.remove("view-home__clock-done");
+        container.classList.remove("view-home__clock-rotating");
+        requestAnimationFrame(() => {
+          container.classList.add("view-home__clock-rotating");
+        });
+      };
+      hand.addEventListener("animationend", onClockAnimationEnd);
+      container.addEventListener("mouseenter", onClockMouseEnter);
+      clockCleanups.push(() => {
+        hand.removeEventListener("animationend", onClockAnimationEnd);
+        container.removeEventListener("mouseenter", onClockMouseEnter);
+      });
+    });
+  }
 });
 
 onUnmounted(() => {
   observer?.disconnect();
   heroObserver?.disconnect();
   scrollRevealObserver?.disconnect();
+  therapyObserver?.disconnect();
+  therapyLineAnimationEndCleanup?.();
+  chartRevenueObserver?.disconnect();
+  chartRevenueCleanup?.();
+  clockCleanups.forEach((fn) => fn());
 });
 </script>
 
+<style lang="scss" src="../components/icons/home-icons.scss"></style>
 <style lang="scss" scoped>
 .view-home {
   max-width: 100%;
@@ -784,6 +933,7 @@ onUnmounted(() => {
 
 .view-home__section {
   padding: 3rem 1.5rem;
+  overflow: visible;
 }
 
 .view-home__solutions {
@@ -847,23 +997,26 @@ onUnmounted(() => {
 
   &--with-icon {
     position: relative;
+    overflow: visible;
   }
 }
 
 .view-home__card-icon {
-  width: 48px;
-  height: 48px;
-  background: rgba(18, 143, 131, 0.12);
-  color: var(--website-primary);
-  border-radius: var(--website-radius);
+  width: 56px;
+  height: 56px;
+  background: var(--website-icon-bg);
+  color: var(--website-icon-stroke);
+  border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 1rem;
+  transition: background-color 0.25s ease, color 0.25s ease;
+  overflow: visible;
 
   svg {
-    width: 24px;
-    height: 24px;
+    width: 28px;
+    height: 28px;
   }
 }
 
@@ -931,6 +1084,7 @@ onUnmounted(() => {
   grid-template-columns: 1fr 1fr;
   gap: 3rem;
   align-items: center;
+  overflow: visible;
 
   &--image-left .view-home__twocol-image {
     order: -1;
@@ -965,6 +1119,7 @@ onUnmounted(() => {
   grid-template-columns: 1fr 1fr;
   gap: 1.25rem 1.5rem;
   margin-bottom: 1.5rem;
+  overflow: visible;
 }
 
 .view-home__feature-title {
@@ -982,9 +1137,12 @@ onUnmounted(() => {
 }
 
 .view-home__feature-icon {
-  font-size: 1.5rem;
-  display: block;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.5rem;
+  overflow: visible;
+}
+
+.view-home__feature {
+  overflow: visible;
 }
 
 .view-home__feature-list {
@@ -998,18 +1156,12 @@ onUnmounted(() => {
   gap: 1rem;
   margin-bottom: 1.25rem;
   align-items: flex-start;
+  overflow: visible;
 }
 
 .view-home__feature-item-icon {
-  width: 44px;
-  height: 44px;
   flex-shrink: 0;
-  background: rgba(18, 143, 131, 0.12);
-  border-radius: var(--website-radius);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.25rem;
+  overflow: visible;
 }
 
 .view-home__section-cta {

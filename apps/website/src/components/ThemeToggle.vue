@@ -10,9 +10,14 @@
       >
         <span class="theme-toggle__icon theme-toggle__icon--auto" aria-hidden="true">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <!-- Księżyc (zawsze widoczny w trybie auto) -->
             <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-            <path d="M3 3v5h5"/>
             <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+          </svg>
+        </span>
+        <span class="theme-toggle__icon theme-toggle__icon--auto-star" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3v5h5"/>
             <path d="M21 21v-5h-5"/>
           </svg>
         </span>
@@ -179,6 +184,21 @@ function onWaveEnd(e: TransitionEvent) {
 .theme-toggle[data-mode="dark"] .theme-toggle__icon--moon {
   opacity: 1;
   transform: scale(1);
+}
+
+/* W trybie auto: domyślnie tylko pusty księżyc; gwiazdka widoczna wyłącznie na hover */
+.theme-toggle[data-mode="auto"] .theme-toggle__icon--auto-star {
+  opacity: 0;
+  visibility: hidden;
+  transform: scale(1);
+  transition: opacity 0.2s ease, visibility 0s linear 0.2s;
+  pointer-events: none;
+}
+.theme-toggle[data-mode="auto"] .theme-toggle__btn:hover .theme-toggle__icon--auto-star,
+.theme-toggle[data-mode="auto"]:hover .theme-toggle__icon--auto-star {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.2s ease, visibility 0s;
 }
 
 .theme-toggle__wave {
