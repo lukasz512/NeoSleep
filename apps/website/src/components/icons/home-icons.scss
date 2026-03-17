@@ -44,11 +44,21 @@
 }
 
 .view-home__therapy-card--draw .view-home__icon-heartbeat-line {
-  animation: view-home__heartbeat-draw-left 1s ease-out forwards;
+  animation: view-home__heartbeat-draw-left 1.4s linear 2 forwards;
 }
 
 @keyframes view-home__heartbeat-draw-left {
-  0% { stroke-dashoffset: 1; }
+  /* płaska lewa — spokojny scan */
+  0%   { stroke-dashoffset: 1;    animation-timing-function: linear; }
+  /* dotarliśmy do podstawy spike'a */
+  22%  { stroke-dashoffset: 0.78; animation-timing-function: ease-in; }
+  /* skok w górę — przyspiesza */
+  30%  { stroke-dashoffset: 0.62; animation-timing-function: cubic-bezier(0.1, 0, 0.05, 1); }
+  /* szczyt R → dno S — błysk */
+  55%  { stroke-dashoffset: 0.30; animation-timing-function: ease-out; }
+  /* powrót na linię — hamuje */
+  70%  { stroke-dashoffset: 0.14; animation-timing-function: linear; }
+  /* płaska prawa — spokojny finał */
   100% { stroke-dashoffset: 0; }
 }
 

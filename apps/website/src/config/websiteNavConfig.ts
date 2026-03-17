@@ -4,7 +4,35 @@
  * źródło na CMS (API) bez zmiany komponentów.
  */
 
+export interface FooterSocial {
+  id: string;
+  href: string;
+  label: string;
+}
+
+export interface FooterBrandConfig {
+  logoUrl: string;
+  name: string;
+  taglineKey: string;
+  socials: FooterSocial[];
+}
+
+/** Konfiguracja stopki – dane brandowe i social linki. Łatwe do podpięcia pod admina. */
+export const footerBrandConfig: FooterBrandConfig = {
+  logoUrl: "/brand/logos/logo/logo_dark.svg",
+  name: "NeoSleep",
+  taglineKey: "website.footer.tagline",
+  socials: [
+    { id: "instagram", href: "https://www.instagram.com/neosleepcare",   label: "Instagram"   },
+    { id: "linkedin",  href: "https://www.linkedin.com/company/neo-sleep", label: "LinkedIn"  },
+    { id: "youtube",   href: "https://www.youtube.com/@neosleep",         label: "YouTube"    },
+  ],
+};
+
 export type FooterSectionId = "product" | "company" | "resources" | "connect";
+
+/** Sekcje nawigacji widoczne w stopce (3 kolumny). "connect" pomijamy – socials w brand. */
+export const footerNavSections: FooterSectionId[] = ["company", "product", "resources"];
 
 export interface WebsiteNavItem {
   /** Klucz i18n dla etykiety */
@@ -49,12 +77,9 @@ export const websiteNavItems: WebsiteNavItem[] = [
   { labelKey: "website.nav.about", to: "/about", showInHeader: true, showInFooter: true, footerSection: "company" },
   { labelKey: "website.nav.contact", to: "/contact", showInHeader: true, showInFooter: true, footerSection: "company" },
   { labelKey: "website.header.cta", href: "/#cta", cta: true, showInHeader: true, showInFooter: true, footerSection: "product" },
-  // Tylko stopka: Product
-  { labelKey: "website.footer.product.pricing", href: "/#cta", showInFooter: true, footerSection: "product" },
   // Tylko stopka: Company
   { labelKey: "website.footer.company.about", to: "/about", showInFooter: true, footerSection: "company" },
   { labelKey: "website.footer.company.careers", href: "#", showInFooter: true, footerSection: "company" },
-  { labelKey: "website.footer.company.press", href: "#", showInFooter: true, footerSection: "company" },
   { labelKey: "website.footer.company.contact", to: "/contact", showInFooter: true, footerSection: "company" },
   // Tylko stopka: Resources
   { labelKey: "website.footer.resources.blog", href: "#", showInFooter: true, footerSection: "resources" },

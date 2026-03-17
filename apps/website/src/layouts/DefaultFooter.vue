@@ -1,53 +1,71 @@
 <template>
   <footer class="site-footer" role="contentinfo">
-    <div class="site-footer__inner">
-      <div class="site-footer__brand">
-        <img
-          :src="logoUrl"
-          alt="NeoSleep"
-          class="site-footer__logo"
-          width="140"
-          height="32"
-        />
-        <p class="site-footer__tagline">{{ t("website.footer.tagline") }}</p>
+    <div class="site-footer__card">
+      <div class="site-footer__top">
+
+        <div class="site-footer__brand">
+          <img :src="logoSrc" :alt="brand.name" class="site-footer__logo" width="140" height="32" />
+          <p class="site-footer__tagline">{{ t(brand.taglineKey) }}</p>
+          <div class="site-footer__socials">
+            <a v-for="s in brand.socials" :key="s.id" :href="s.href" :aria-label="s.label"
+               target="_blank" rel="noopener" class="site-footer__social">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path :d="socialPaths[s.id]" />
+              </svg>
+            </a>
+          </div>
+        </div>
+
+        <div v-for="section in navSections" :key="section.id" class="site-footer__col">
+          <h4 class="site-footer__col-heading">{{ t(section.headingKey) }}</h4>
+          <ul class="site-footer__col-list">
+            <li v-for="item in section.items" :key="item.labelKey">
+              <RouterLink v-if="item.to" :to="item.to" class="site-footer__link">{{ t(item.labelKey) }}</RouterLink>
+              <a v-else :href="item.href" class="site-footer__link">{{ t(item.labelKey) }}</a>
+            </li>
+          </ul>
+        </div>
+
       </div>
-      <div
-        v-for="section in sections"
-        :key="section.id"
-        class="site-footer__col"
-      >
-        <h4 class="site-footer__heading">{{ t(section.headingKey) }}</h4>
-        <template v-for="item in section.items" :key="item.labelKey">
-          <RouterLink v-if="item.to" :to="item.to" class="site-footer__link">
-            {{ t(item.labelKey) }}
-          </RouterLink>
-          <a v-else :href="item.href" class="site-footer__link">
-            {{ t(item.labelKey) }}
-          </a>
-        </template>
+      <div class="site-footer__bottom">
+        <span class="site-footer__copy">© {{ year }} {{ brand.name }}. {{ t("website.footer.rights") }}</span>
       </div>
-    </div>
-    <div class="site-footer__copy">
-      <p>© {{ new Date().getFullYear() }} NeoSleep. {{ t("website.footer.rights") }}</p>
     </div>
   </footer>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
+import { computed } from "vue";
 import { useI18n } from "vue-i18n";
+import { useTheme } from "../composables/useTheme";
 import {
+  footerBrandConfig,
+  footerNavSections,
   footerSections,
   getFooterNavItemsBySection,
   type WebsiteNavItem,
 } from "../config/websiteNavConfig";
 
-const logoUrl = "/brand/logos/logo/logo_dark.svg";
 const { t } = useI18n();
+const { isDark } = useTheme();
+const brand = footerBrandConfig;
+const year = new Date().getFullYear();
 
-const sections = computed(() => {
+const logoSrc = computed(() =>
+  isDark.value ? "/brand/logos/logo/logo_dark.svg" : "/brand/logos/logo/logo_light.svg"
+);
+
+const socialPaths: Record<string, string> = {
+  twitter:   "M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.253 5.622L18.244 2.25Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z",
+  instagram: "M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069ZM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0Zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324ZM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881Z",
+  youtube:   "M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814ZM9.545 15.568V8.432L15.818 12l-6.273 3.568Z",
+  linkedin:  "M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286ZM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065Zm1.782 13.019H3.555V9h3.564v11.452ZM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003Z",
+};
+
+const navSections = computed(() => {
   const bySection = getFooterNavItemsBySection();
   return footerSections
+    .filter((sec) => footerNavSections.includes(sec.id))
     .map((sec) => ({
       id: sec.id,
       headingKey: sec.headingKey,
@@ -55,91 +73,141 @@ const sections = computed(() => {
     }))
     .filter((sec) => sec.items.length > 0);
 });
-
-onMounted(() => {
-  console.log("[Footer] mounted");
-});
 </script>
 
-<style scoped>
+<style lang="scss" scoped>
 .site-footer {
-  background: #082a27;
-  color: #fff;
-  padding: 3rem 1.5rem 2rem;
-  margin-top: auto;
+  padding: 0 var(--website-card-inset) var(--website-card-inset);
 }
 
-.site-footer__inner {
-  max-width: 1100px;
+.site-footer__card {
+  background: var(--website-footer-bg);
+  color: var(--website-footer-text);
+  border-radius: 20px;
+  padding: 3rem 3rem 2rem;
+  max-width: var(--website-page-max-width);
   margin: 0 auto;
-  display: grid;
-  grid-template-columns: 1.5fr repeat(4, 1fr);
-  gap: 2rem;
+  transition: background-color 0.35s ease, color 0.35s ease;
 }
 
-@media (max-width: 600px) {
-  .site-footer__inner {
-    grid-template-columns: 1fr;
-    text-align: center;
-  }
+.site-footer__top {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1fr;
+  gap: 2.5rem;
+  padding-bottom: 2.5rem;
+  border-bottom: 1px solid var(--website-footer-border);
+  align-items: start;
 }
 
 .site-footer__brand {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 1rem;
 }
 
 .site-footer__logo {
-  height: 32px;
+  height: 28px;
   width: auto;
   display: block;
   align-self: flex-start;
+  margin-left: 0;
 }
 
 .site-footer__tagline {
   font-size: 0.875rem;
-  color: rgba(255, 255, 255, 0.8);
-  line-height: 1.5;
+  color: var(--website-footer-text-muted);
+  line-height: 1.65;
   margin: 0;
-  max-width: 240px;
 }
 
-.site-footer__heading {
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: rgba(255, 255, 255, 0.9);
-  margin: 0 0 1rem;
+.site-footer__socials {
+  display: flex;
+  gap: 0.625rem;
+  flex-wrap: wrap;
+  margin-top: 0.25rem;
+}
+
+.site-footer__social {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 65px;
+  height: 40px;
+  border-radius: 11px;
+  color: var(--website-footer-link);
+  background: var(--website-footer-social-bg);
+  border: 1px solid var(--website-footer-social-border);
+  text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+
+  &:hover {
+    color: var(--website-footer-link-hover);
+    background: var(--website-footer-social-hover-bg);
+    border-color: var(--website-footer-social-hover-border);
+  }
 }
 
 .site-footer__col {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.625rem;
+}
+
+.site-footer__col-heading {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--website-footer-heading);
+  margin: 0 0 0.375rem;
+}
+
+.site-footer__col-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
 }
 
 .site-footer__link {
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--website-footer-link);
   font-size: 0.875rem;
   text-decoration: none;
+  transition: color 0.15s ease;
+
+  &:hover { color: var(--website-footer-link-hover); }
 }
 
-.site-footer__link:hover {
-  color: #fff;
+.site-footer__bottom {
+  padding-top: 1.5rem;
 }
 
 .site-footer__copy {
-  padding-top: 2rem;
-  margin-top: 2rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  text-align: center;
-  font-size: 0.875rem;
-  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.8125rem;
+  color: var(--website-footer-text-muted);
 }
 
-.site-footer__copy p {
-  margin: 0;
+/* Tablet */
+@media (max-width: 900px) {
+  .site-footer__top {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+  .site-footer__brand {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Mobile */
+@media (max-width: 560px) {
+  .site-footer { padding: 0 var(--website-page-gutter-mobile) var(--website-page-gutter-mobile); }
+  .site-footer__card { padding: 2rem 1.5rem 1.5rem; border-radius: 16px; }
+  .site-footer__top { grid-template-columns: 1fr 1fr; }
+  .site-footer__brand {
+    grid-column: 1 / -1;
+    flex-direction: column;
+  }
+  .site-footer__socials { margin-top: 0; }
 }
 </style>

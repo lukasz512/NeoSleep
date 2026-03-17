@@ -27,6 +27,6 @@ onMounted(() => {
 
 .layout-default__main {
   flex: 1;
-  padding-top: 72px; /* space for fixed header */
+  padding-top: var(--website-header-height);
 }
 </style>

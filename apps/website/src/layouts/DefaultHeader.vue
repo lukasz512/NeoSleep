@@ -125,7 +125,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 1.5rem;
+  padding: 1rem var(--website-page-gutter);
   gap: 1rem;
 }
 
@@ -240,7 +240,7 @@ onMounted(() => {
   color: var(--website-primary);
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   .site-header__nav {
     display: none;
   }

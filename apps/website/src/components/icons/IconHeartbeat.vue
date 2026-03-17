@@ -10,7 +10,7 @@
     stroke-linejoin="round"
     aria-hidden="true"
   >
-    <path class="view-home__icon-heartbeat-line" pathLength="1" d="M2 12 H6 l9 9 L9 3 l9 9 h4"/>
+    <path class="view-home__icon-heartbeat-line" pathLength="1" d="M1 12 H8 L11 2 L14 22 L17 12 H23"/>
   </svg>
 </template>
 

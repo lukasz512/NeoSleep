@@ -5,7 +5,9 @@
         ref="btnRef"
         type="button"
         class="theme-toggle__btn"
+        :class="{ 'theme-toggle__btn--spinning': isSpinning }"
         :aria-label="toggleLabel"
+        @animationend="onSpinEnd"
         @click="onClick"
       >
         <span class="theme-toggle__icon theme-toggle__icon--auto" aria-hidden="true">
@@ -34,22 +36,11 @@
         </span>
       </button>
     </NavTooltip>
-    <Transition name="theme-wave">
-      <div
-        v-if="wave.active"
-        ref="waveRef"
-        class="theme-toggle__wave"
-        :class="[waveClass, { 'theme-toggle__wave--expand': wave.expand }]"
-        :style="waveStyle"
-        aria-hidden="true"
-        @transitionend="onWaveEnd"
-      />
-    </Transition>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, nextTick } from "vue";
+import { ref, computed } from "vue";
 import { useI18n } from "vue-i18n";
 import NavTooltip from "./NavTooltip.vue";
 import { useTheme } from "../composables/useTheme";
@@ -62,30 +53,10 @@ function getNextMode(current: ThemeMode): ThemeMode {
   return THEME_ORDER[(i + 1) % THEME_ORDER.length];
 }
 
-function isDarkMode(mode: ThemeMode): boolean {
-  if (mode === "auto" && typeof window !== "undefined") {
-    return window.matchMedia("(prefers-color-scheme: dark)").matches;
-  }
-  return mode === "dark";
-}
-
-function getButtonCenter(btn: HTMLElement): { x: number; y: number } {
-  const r = btn.getBoundingClientRect();
-  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-}
-
 const { t } = useI18n();
 const { themeMode, setTheme } = useTheme();
 const btnRef = ref<HTMLElement | null>(null);
-const waveRef = ref<HTMLElement | null>(null);
-
-const wave = reactive({
-  active: false,
-  expand: false,
-  targetDark: false,
-  origin: { x: 0, y: 0 },
-  pendingMode: null as ThemeMode | null,
-});
+const isSpinning = ref(false);
 
 const toggleLabel = computed(() => {
   const current = t(`rep.settings.theme.${themeMode.value}`);
@@ -93,43 +64,20 @@ const toggleLabel = computed(() => {
   return t("rep.settings.theme.tooltip", { current, next });
 });
 
-const waveClass = computed(() =>
-  wave.targetDark ? "theme-toggle__wave--dark" : "theme-toggle__wave--light"
-);
-
-const waveStyle = computed(() => ({
-  left: `${wave.origin.x}px`,
-  top: `${wave.origin.y}px`,
-}));
-
-async function startWaveTransition(button: HTMLElement, nextMode: ThemeMode) {
-  wave.origin = getButtonCenter(button);
-  wave.targetDark = isDarkMode(nextMode);
-  wave.pendingMode = nextMode;
-  wave.expand = false;
-  wave.active = true;
-  await nextTick();
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      wave.expand = true;
-    });
-  });
-}
-
 function onClick() {
-  const btn = btnRef.value;
-  if (!btn) return;
-  startWaveTransition(btn, getNextMode(themeMode.value));
+  if (!btnRef.value || isSpinning.value) return;
+  const next = getNextMode(themeMode.value);
+  isSpinning.value = true;
+  // Switch icon at the midpoint of the spin so it morphs "behind" the rotation
+  setTimeout(() => {
+    document.documentElement.classList.add("theme-transitioning");
+    setTheme(next);
+    setTimeout(() => document.documentElement.classList.remove("theme-transitioning"), 225);
+  }, 225);
 }
 
-function onWaveEnd(e: TransitionEvent) {
-  if (e.target !== waveRef.value || e.propertyName !== "transform") return;
-  if (wave.pendingMode !== null) {
-    setTheme(wave.pendingMode);
-    wave.pendingMode = null;
-  }
-  wave.expand = false;
-  wave.active = false;
+function onSpinEnd(e: AnimationEvent) {
+  if (e.animationName === "theme-toggle-spin") isSpinning.value = false;
 }
 </script>
 
@@ -150,7 +98,7 @@ function onWaveEnd(e: TransitionEvent) {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: border-color 0.2s, background 0.2s, color 0.2s, transform 0.25s ease;
+  transition: border-color 0.2s, background 0.2s, color 0.2s;
 
   &:hover {
     border-color: var(--website-primary);
@@ -161,6 +109,19 @@ function onWaveEnd(e: TransitionEvent) {
     outline: 2px solid var(--website-primary);
     outline-offset: 2px;
   }
+
+  &--spinning {
+    animation: theme-toggle-spin 0.45s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+
+    .theme-toggle__icon {
+      transition: none;
+    }
+  }
+}
+
+@keyframes theme-toggle-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 
 .theme-toggle__icon {
@@ -170,8 +131,8 @@ function onWaveEnd(e: TransitionEvent) {
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transform: scale(0.5);
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transform: rotate(90deg) scale(0.6);
+  transition: opacity 0.25s ease, transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
   svg {
     width: 24px;
@@ -180,54 +141,11 @@ function onWaveEnd(e: TransitionEvent) {
 }
 
 .theme-toggle[data-mode="auto"] .theme-toggle__icon--auto,
+.theme-toggle[data-mode="auto"] .theme-toggle__icon--auto-star,
 .theme-toggle[data-mode="light"] .theme-toggle__icon--sun,
 .theme-toggle[data-mode="dark"] .theme-toggle__icon--moon {
   opacity: 1;
-  transform: scale(1);
+  transform: rotate(0deg) scale(1);
 }
 
-/* W trybie auto: domyślnie tylko pusty księżyc; gwiazdka widoczna wyłącznie na hover */
-.theme-toggle[data-mode="auto"] .theme-toggle__icon--auto-star {
-  opacity: 0;
-  visibility: hidden;
-  transform: scale(1);
-  transition: opacity 0.2s ease, visibility 0s linear 0.2s;
-  pointer-events: none;
-}
-.theme-toggle[data-mode="auto"] .theme-toggle__btn:hover .theme-toggle__icon--auto-star,
-.theme-toggle[data-mode="auto"]:hover .theme-toggle__icon--auto-star {
-  opacity: 1;
-  visibility: visible;
-  transition: opacity 0.2s ease, visibility 0s;
-}
-
-.theme-toggle__wave {
-  position: fixed;
-  width: 200vmax;
-  height: 200vmax;
-  margin-left: -100vmax;
-  margin-top: -100vmax;
-  border-radius: 50%;
-  pointer-events: none;
-  z-index: 1;
-  transform: scale(0);
-  transition: transform 0.85s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.theme-toggle__wave--light {
-  background: #ffffff;
-}
-
-.theme-toggle__wave--dark {
-  background: #0f1419;
-}
-
-.theme-toggle__wave--expand {
-  transform: scale(1);
-}
-
-.theme-wave-enter-active,
-.theme-wave-leave-active {
-  transition: none;
-}
 </style>

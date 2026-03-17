@@ -10,6 +10,7 @@ import { presentationsRouter } from "./routes/presentations.js";
 import { logsRouter } from "./routes/logs.js";
 import { eventsRouter } from "./routes/events.js";
 import { configRouter } from "./routes/config.js";
+import { contactRouter } from "./routes/contact.js";
 import { initDb } from "./db.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
@@ -76,6 +77,7 @@ app.use(presentationsRouter);
 app.use(logsRouter);
 app.use(eventsRouter);
 app.use(configRouter);
+app.use(contactRouter);
 
 app.use(errorHandler);
 
