@@ -77,7 +77,7 @@ function onClick() {
 }
 
 function onSpinEnd(e: AnimationEvent) {
-  if (e.animationName === "theme-toggle-spin") isSpinning.value = false;
+  if (e.animationName.includes("theme-toggle-spin")) isSpinning.value = false;
 }
 </script>
 

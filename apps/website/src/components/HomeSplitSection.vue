@@ -27,8 +27,10 @@
               <IconBox :feature-icon="true">
                 <component :is="feat.icon" v-bind="feat.clockPatients ? { patients: true } : {}" />
               </IconBox>
-              <h4 class="hss-feature__title">{{ t(feat.titleKey) }}</h4>
-              <p class="hss-feature__desc">{{ t(feat.descKey) }}</p>
+              <div class="hss-feature__body">
+                <h4 class="hss-feature__title">{{ t(feat.titleKey) }}</h4>
+                <p class="hss-feature__desc">{{ t(feat.descKey) }}</p>
+              </div>
             </div>
           </div>
 
@@ -131,12 +133,11 @@ $bp-mobile:  600px;
   gap: 4rem;
   align-items: center;
 
-  &--img-left .home-split__media { order: -1; }
-
   @media (max-width: $bp-desktop) {
     grid-template-columns: 1fr;
     gap: 2rem;
-    &--img-left .home-split__media { order: 0; }
+
+    .home-split__media { order: -1; }
   }
 }
 
@@ -175,10 +176,8 @@ $bp-mobile:  600px;
 
   @media (max-width: $bp-desktop) {
     grid-template-columns: 1fr;
-    max-width: 420px;
-    margin-left: auto;
-    margin-right: auto;
-    text-align: center;
+    max-width: 460px;
+    margin-inline: auto;
   }
 }
 
@@ -187,9 +186,16 @@ $bp-mobile:  600px;
 
   @media (max-width: $bp-desktop) {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
+    gap: 0.875rem;
+    text-align: left;
   }
+}
+
+.hss-feature__body {
+  display: flex;
+  flex-direction: column;
 }
 
 .hss-feature__title {
@@ -197,6 +203,10 @@ $bp-mobile:  600px;
   font-weight: 600;
   color: var(--website-text);
   margin: 0.5rem 0 0.2rem;
+
+  @media (max-width: $bp-desktop) {
+    margin-top: 0.25rem;
+  }
 }
 
 .hss-feature__desc {

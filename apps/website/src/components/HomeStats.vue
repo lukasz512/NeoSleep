@@ -1,6 +1,6 @@
 <template>
   <section ref="sectionRef" class="home-stats" :class="{ 'home-stats--visible': visible }">
-    <div class="home-stats__grid">
+    <div class="home-stats__grid page-container">
       <div
         v-for="(stat, i) in display"
         :key="stat.labelKey"
@@ -51,8 +51,8 @@ $bp-mobile: 600px;
 .home-stats {
   padding: 2.5rem 0;
   background: rgba(142, 214, 206, 0.25);
-  border-top: 1px solid var(--website-border);
-  border-bottom: 1px solid var(--website-border);
+  border-top: 1px dashed var(--website-footer-card-border);
+  border-bottom: 1px dashed var(--website-footer-card-border);
 
   [data-theme="dark"] & {
     background: rgba(18, 143, 131, 0.12);
@@ -64,14 +64,10 @@ $bp-mobile: 600px;
   grid-template-columns: repeat(4, 1fr);
   gap: 2rem;
   text-align: center;
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 0 2rem;
 
   @media (max-width: $bp-mobile) {
     grid-template-columns: repeat(2, 1fr);
     gap: 1.5rem;
-    padding: 0 1.25rem;
   }
 }
 

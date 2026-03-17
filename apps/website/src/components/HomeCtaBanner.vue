@@ -4,7 +4,7 @@
     class="home-cta-banner home-reveal"
     :class="{ 'home-reveal--visible': visible }"
   >
-    <div class="page-container home-cta-banner__inner">
+    <div class="home-cta-banner__inner">
       <h2 class="home-cta-banner__heading">{{ t(config.headingKey) }}</h2>
       <p class="home-cta-banner__sub">{{ t(config.subtitleKey) }}</p>
       <div class="home-cta-banner__btns">
@@ -49,21 +49,26 @@ onUnmounted(() => observer?.disconnect());
 $bp-mobile: 600px;
 
 .home-cta-banner {
-  background: var(--website-primary);
-  margin: 0 var(--website-card-inset) 2.5rem;
-  border-radius: var(--website-card-radius);
+  max-width: var(--website-page-max-width);
+  margin: 0 auto 2.5rem;
+  padding: 0 var(--website-page-gutter);
 
   @media (max-width: $bp-mobile) {
-    margin: 0 0.75rem 2rem;
-    border-radius: 14px;
+    padding: 0 var(--website-page-gutter-mobile);
+    margin-bottom: var(--website-page-gutter-mobile);
   }
 }
 
 .home-cta-banner__inner {
+  background: var(--website-primary);
+  border-radius: var(--website-card-radius);
   padding: 4rem 2rem;
   text-align: center;
 
-  @media (max-width: $bp-mobile) { padding: 3rem 1.5rem; }
+  @media (max-width: $bp-mobile) {
+    padding: 3rem 1.5rem;
+    border-radius: 14px;
+  }
 }
 
 .home-cta-banner__heading {

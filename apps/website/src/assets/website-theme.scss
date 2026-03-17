@@ -39,19 +39,19 @@
   --website-footer-social-border: rgba(15, 46, 43, 0.1);
   --website-footer-social-hover-bg: rgba(15, 46, 43, 0.11);
   --website-footer-social-hover-border: rgba(15, 46, 43, 0.18);
+  --website-footer-card-border: rgba(18, 143, 131, 0.28);
   --website-btn-min-height: 44px;
   --website-btn-min-width: 44px;
   --website-header-height: 72px;
+  --website-bottom-nav-height: 64px;
   --website-page-max-width: 1280px;
   --website-page-frame-bg: #e5e7eb;
   --website-icon-bg: rgba(18, 143, 131, 0.12);
   --website-icon-stroke: var(--neosleep-primary);
 
   /* ── Layout tokens (white-label configurable via GET /api/config/app) ── */
-  --website-content-max-width: 1100px; /* max-width of page content sections   */
   --website-page-gutter: 2rem;         /* horizontal padding on desktop/tablet  */
   --website-page-gutter-mobile: 1.25rem; /* horizontal padding on mobile (<600px) */
-  --website-card-inset: 1rem;          /* left/right margin for framed cards (hero, cta-banner) */
   --website-card-radius: 20px;         /* border-radius of framed cards         */
 }
 
@@ -61,7 +61,7 @@
  * White-label: dostosuj --website-content-max-width i --website-page-gutter.
  */
 .page-container {
-  max-width: var(--website-content-max-width);
+  max-width: var(--website-page-max-width);
   margin-left: auto;
   margin-right: auto;
   padding-left: var(--website-page-gutter);
@@ -164,6 +164,12 @@ html {
   padding: 0;
 }
 
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 html,
 body {
   margin: 0;
@@ -171,6 +177,10 @@ body {
   background: var(--website-bg);
   color: var(--website-text);
   transition: background-color 0.35s ease, color 0.35s ease;
+}
+
+body {
+  overflow-x: clip;
 }
 
 /* Płynne przejście przy zmianie motywu */
@@ -198,6 +208,7 @@ html.theme-transitioning * {
   --website-footer-social-border: rgba(255, 255, 255, 0.09);
   --website-footer-social-hover-bg: rgba(255, 255, 255, 0.11);
   --website-footer-social-hover-border: rgba(255, 255, 255, 0.18);
+  --website-footer-card-border: rgba(18, 143, 131, 0.35);
   --website-bg: #0f1419;
   --website-text: #e6edf3;
   --website-text-secondary: #8b9cb3;

@@ -1,0 +1,52 @@
+/**
+ * Shared mixins for MobileBottomNav item components.
+ * Each nav item component @use-s this partial for consistent base styles.
+ */
+
+@mixin item-base {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 6px 4px;
+  border: none;
+  background: transparent;
+  color: var(--website-text-secondary);
+  cursor: pointer;
+  text-decoration: none;
+  font-family: inherit;
+  transition: color 0.2s;
+  -webkit-tap-highlight-color: transparent;
+
+  &.is-active,
+  &:hover {
+    color: var(--website-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--website-primary);
+    outline-offset: -2px;
+    border-radius: 8px;
+  }
+}
+
+@mixin icon {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+
+  svg {
+    width: 22px;
+    height: 22px;
+  }
+}
+
+@mixin label {
+  display: none;
+}

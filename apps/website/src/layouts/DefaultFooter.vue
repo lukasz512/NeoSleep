@@ -1,6 +1,6 @@
 <template>
   <footer class="site-footer" role="contentinfo">
-    <div class="site-footer__card">
+    <div ref="cardRef" class="site-footer__card home-reveal" :class="{ 'home-reveal--visible': visible }">
       <div class="site-footer__top">
 
         <div class="site-footer__brand">
@@ -28,14 +28,17 @@
 
       </div>
       <div class="site-footer__bottom">
-        <span class="site-footer__copy">© {{ year }} {{ brand.name }}. {{ t("website.footer.rights") }}</span>
+        <div class="site-footer__copy">
+          <span>© {{ year }} {{ brand.name }}.</span>
+          <span>{{ t("website.footer.rights") }}</span>
+        </div>
       </div>
     </div>
   </footer>
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useTheme } from "../composables/useTheme";
 import {
@@ -50,6 +53,21 @@ const { t } = useI18n();
 const { isDark } = useTheme();
 const brand = footerBrandConfig;
 const year = new Date().getFullYear();
+
+const cardRef = ref<HTMLElement | null>(null);
+const visible = ref(false);
+let observer: IntersectionObserver | null = null;
+
+onMounted(() => {
+  if (!cardRef.value) return;
+  observer = new IntersectionObserver(
+    ([e]) => { if (e?.isIntersecting) { visible.value = true; observer?.disconnect(); } },
+    { threshold: 0.08 }
+  );
+  observer.observe(cardRef.value);
+});
+
+onUnmounted(() => observer?.disconnect());
 
 const logoSrc = computed(() =>
   isDark.value ? "/brand/logos/logo/logo_dark.svg" : "/brand/logos/logo/logo_light.svg"
@@ -77,17 +95,18 @@ const navSections = computed(() => {
 
 <style lang="scss" scoped>
 .site-footer {
-  padding: 0 var(--website-card-inset) var(--website-card-inset);
+  max-width: var(--website-page-max-width);
+  margin: 0 auto;
+  padding: 0 var(--website-page-gutter) var(--website-page-gutter);
 }
 
 .site-footer__card {
   background: var(--website-footer-bg);
   color: var(--website-footer-text);
   border-radius: 20px;
+  border: 1px solid var(--website-footer-card-border);
   padding: 3rem 3rem 2rem;
-  max-width: var(--website-page-max-width);
-  margin: 0 auto;
-  transition: background-color 0.35s ease, color 0.35s ease;
+  transition: background-color 0.35s ease, color 0.35s ease, border-color 0.35s ease;
 }
 
 .site-footer__top {
@@ -95,7 +114,7 @@ const navSections = computed(() => {
   grid-template-columns: 1.4fr 1fr 1fr 1fr;
   gap: 2.5rem;
   padding-bottom: 2.5rem;
-  border-bottom: 1px solid var(--website-footer-border);
+  border-bottom: 1px dashed var(--website-footer-border);
   align-items: start;
 }
 
@@ -185,8 +204,15 @@ const navSections = computed(() => {
 }
 
 .site-footer__copy {
+  display: flex;
+  gap: 0.25rem;
   font-size: 0.8125rem;
   color: var(--website-footer-text-muted);
+
+  @media (max-width: 600px) {
+    flex-direction: column;
+    gap: 0;
+  }
 }
 
 /* Tablet */
@@ -200,7 +226,7 @@ const navSections = computed(() => {
 }
 
 /* Mobile */
-@media (max-width: 560px) {
+@media (max-width: 600px) {
   .site-footer { padding: 0 var(--website-page-gutter-mobile) var(--website-page-gutter-mobile); }
   .site-footer__card { padding: 2rem 1.5rem 1.5rem; border-radius: 16px; }
   .site-footer__top { grid-template-columns: 1fr 1fr; }

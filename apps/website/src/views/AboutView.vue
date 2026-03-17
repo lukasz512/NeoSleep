@@ -1,5 +1,5 @@
 <template>
-  <div class="view-about">
+  <div class="view-about page-container">
     <h1>{{ t("website.about.title") }}</h1>
     <p>{{ t("website.about.subtitle") }}</p>
   </div>
@@ -13,6 +13,7 @@ const { t } = useI18n();
 
 <style scoped>
 .view-about {
-  max-width: 640px;
+  padding-top: 3rem;
+  padding-bottom: 3rem;
 }
 </style>

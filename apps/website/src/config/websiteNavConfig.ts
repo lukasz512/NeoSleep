@@ -74,12 +74,13 @@ export const websiteNavItems: WebsiteNavItem[] = [
   { labelKey: "website.nav.solutions", href: "/#solutions", showInHeader: true, showInFooter: true, footerSection: "product" },
   { labelKey: "website.nav.forDentists", href: "/#for-dentists", showInHeader: true, showInFooter: true, footerSection: "product" },
   { labelKey: "website.nav.forPatients", href: "/#for-patients", showInHeader: true, showInFooter: true, footerSection: "product" },
-  { labelKey: "website.nav.about", to: "/about", showInHeader: true, showInFooter: true, footerSection: "company" },
-  { labelKey: "website.nav.contact", to: "/contact", showInHeader: true, showInFooter: true, footerSection: "company" },
+  { labelKey: "website.nav.about", to: "/about", showInHeader: true },
+  { labelKey: "website.nav.contact", to: "/contact", showInHeader: true },
   { labelKey: "website.header.cta", href: "/#cta", cta: true, showInHeader: true, showInFooter: true, footerSection: "product" },
   // Tylko stopka: Company
   { labelKey: "website.footer.company.about", to: "/about", showInFooter: true, footerSection: "company" },
   { labelKey: "website.footer.company.careers", href: "#", showInFooter: true, footerSection: "company" },
+  { labelKey: "website.footer.company.press", href: "#", showInFooter: true, footerSection: "company" },
   { labelKey: "website.footer.company.contact", to: "/contact", showInFooter: true, footerSection: "company" },
   // Tylko stopka: Resources
   { labelKey: "website.footer.resources.blog", href: "#", showInFooter: true, footerSection: "resources" },

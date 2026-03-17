@@ -57,23 +57,18 @@ onUnmounted(() => observer?.disconnect());
 $bp-desktop: 960px;
 $bp-mobile:  600px;
 
-$page-max: 1280px;
-
 .home-hero {
-  margin: 0 var(--website-card-inset) 2rem;
+  width: calc(100% - 2 * var(--website-page-gutter));
+  max-width: var(--website-page-max-width);
+  margin: 0 auto 2rem;
   border-radius: var(--website-card-radius);
-  background: var(--website-bg);
   overflow: hidden;
   position: relative;
-  max-width: $page-max;
 
-  @media (min-width: 1312px) {
-    margin-left: auto;
-    margin-right: auto;
-  }
   @media (max-width: $bp-mobile) {
-    margin: 0 0.75rem 1.5rem;
+    width: calc(100% - 2 * var(--website-page-gutter-mobile));
     border-radius: 14px;
+    margin-bottom: 1.5rem;
   }
 }
 
@@ -83,8 +78,6 @@ $page-max: 1280px;
   gap: 3rem;
   align-items: center;
   padding: 3rem 2.5rem 4rem;
-  max-width: 1060px;
-  margin: 0 auto;
 
   @media (min-width: #{$bp-desktop + 1px}) { min-height: calc(100vh - 190px); }
 

@@ -19,14 +19,16 @@
           <IconBox :card-icon="true">
             <component :is="card.icon" />
           </IconBox>
-          <h3 class="hsl-card__title">{{ t(card.titleKey) }}</h3>
-          <p class="hsl-card__desc">{{ t(card.descKey) }}</p>
-          <ul class="hsl-checklist">
+          <div class="hsl-card__body">
+            <h3 class="hsl-card__title">{{ t(card.titleKey) }}</h3>
+            <p class="hsl-card__desc">{{ t(card.descKey) }}</p>
+            <ul class="hsl-checklist">
             <li v-for="bk in card.bulletKeys" :key="bk">
               <span class="hsl-check" aria-hidden="true" />
               <span>{{ t(bk) }}</span>
             </li>
-          </ul>
+            </ul>
+          </div>
         </div>
       </div>
       <div class="hsl-mobile-cta">
@@ -122,12 +124,10 @@ $bp-desktop: 960px;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 1.5rem;
-  max-width: 860px;
-  margin: 0 auto 2rem;
+  margin-bottom: 2rem;
 
   @media (max-width: $bp-desktop) {
     grid-template-columns: 1fr;
-    max-width: 540px;
   }
 }
 
@@ -139,6 +139,18 @@ $bp-desktop: 960px;
   box-shadow: var(--website-shadow-sm);
   position: relative;
   overflow: visible;
+
+  @media (max-width: $bp-desktop) {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+}
+
+.hsl-card__body {
+  flex: 1;
+  min-width: 0;
 }
 
 .hsl-card__title {
@@ -146,6 +158,10 @@ $bp-desktop: 960px;
   font-weight: 700;
   color: var(--website-text);
   margin: 1rem 0 0.5rem;
+
+  @media (max-width: $bp-desktop) {
+    margin-top: 0.1rem;
+  }
 }
 
 .hsl-card__desc {

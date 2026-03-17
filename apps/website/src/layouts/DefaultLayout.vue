@@ -5,6 +5,7 @@
       <slot />
     </main>
     <DefaultFooter />
+    <MobileBottomNav />
   </div>
 </template>
 
@@ -12,6 +13,7 @@
 import { onMounted } from "vue";
 import DefaultHeader from "./DefaultHeader.vue";
 import DefaultFooter from "./DefaultFooter.vue";
+import MobileBottomNav from "../components/MobileBottomNav.vue";
 
 onMounted(() => {
   console.log("[Layout] mounted");
@@ -28,5 +30,11 @@ onMounted(() => {
 .layout-default__main {
   flex: 1;
   padding-top: var(--website-header-height);
+}
+
+@media (max-width: 1100px) {
+  .layout-default {
+    padding-bottom: var(--website-bottom-nav-height);
+  }
 }
 </style>

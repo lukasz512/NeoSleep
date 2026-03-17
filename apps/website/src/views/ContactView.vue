@@ -268,6 +268,16 @@ async function onSubmit() {
 .view-contact {
   min-height: 60vh;
   padding: 3rem 0;
+  animation: contact-page-in 0.55s ease-out both;
+
+  @media (max-width: 600px) {
+    padding: 1.5rem 0 2rem;
+  }
+}
+
+@keyframes contact-page-in {
+  from { opacity: 0; transform: translateY(1.75rem); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .view-contact__container {
@@ -299,7 +309,7 @@ async function onSubmit() {
 }
 
 .view-contact__title {
-  font-size: 2rem;
+  font-size: clamp(1.5rem, 6vw, 2rem);
   font-weight: 700;
   margin: 0 0 0.5rem;
   color: var(--website-text);
@@ -435,6 +445,7 @@ async function onSubmit() {
 }
 
 .view-contact__input {
+  width: 100%;
   padding: 0.75rem 1rem;
   border: 1px solid var(--website-border);
   border-radius: var(--website-radius);
@@ -554,7 +565,7 @@ async function onSubmit() {
 
 @media (max-width: 600px) {
   .view-contact__form {
-    padding: 1.5rem;
+    padding: 1.25rem 1rem;
   }
 
   .view-contact__tabs {
@@ -563,10 +574,16 @@ async function onSubmit() {
 
   .view-contact__tab {
     flex: 1;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
   }
 
   .view-contact__row {
     grid-template-columns: 1fr;
+  }
+
+  .view-contact__subtitle {
+    font-size: 0.9375rem;
   }
 }
 </style>

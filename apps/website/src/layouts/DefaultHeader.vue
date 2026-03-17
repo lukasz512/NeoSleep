@@ -1,6 +1,7 @@
 <template>
   <header
     class="site-header"
+    :class="{ 'site-header--hidden': headerHidden }"
     :style="headerStyle"
     role="banner"
   >
@@ -59,8 +60,6 @@
       aria-modal="true"
     >
       <div class="site-header__drawer-inner">
-        <ThemeToggle />
-        <LanguageSelect />
         <template v-for="item in navItems" :key="item.labelKey">
           <RouterLink
             v-if="item.to"
@@ -80,7 +79,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import ThemeToggle from "../components/ThemeToggle.vue";
 import LanguageSelect from "../components/LanguageSelect.vue";
@@ -106,8 +105,29 @@ function closeMobile() {
   mobileOpen.value = false;
 }
 
+// ── Scroll-hide on mobile ─────────────────────────────────────────────────
+const headerHidden = ref(false);
+let lastScrollY = 0;
+
+function onScroll() {
+  if (window.innerWidth > 1100) {
+    headerHidden.value = false;
+    return;
+  }
+  const y = window.scrollY;
+  const delta = y - lastScrollY;
+  if (delta > 8 && y > 72) headerHidden.value = true;
+  else if (delta < -8) headerHidden.value = false;
+  lastScrollY = y;
+}
+
 onMounted(() => {
-  console.log("[Header] mounted");
+  lastScrollY = window.scrollY;
+  window.addEventListener("scroll", onScroll, { passive: true });
+});
+
+onUnmounted(() => {
+  window.removeEventListener("scroll", onScroll);
 });
 </script>
 
@@ -119,6 +139,13 @@ onMounted(() => {
   right: 0;
   z-index: 9999;
   min-height: 72px;
+  transition: transform 0.3s ease;
+}
+
+.site-header--hidden {
+  @media (max-width: 1100px) {
+    transform: translateY(-100%);
+  }
 }
 
 .site-header__bar {
