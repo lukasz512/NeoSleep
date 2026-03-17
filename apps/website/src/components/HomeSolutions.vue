@@ -120,14 +120,23 @@ $bp-desktop: 960px;
   [data-theme="dark"] & { background: rgba(18, 143, 131, 0.07); }
 }
 
+:deep(.home-eyebrow),
+:deep(.home-heading) {
+  text-align: center;
+}
+
 .hsl-cards {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 1.5rem;
   margin-bottom: 2rem;
+  max-width: 900px;
+  margin-left: auto;
+  margin-right: auto;
 
   @media (max-width: $bp-desktop) {
     grid-template-columns: 1fr;
+    max-width: 480px;
   }
 }
 
@@ -142,15 +151,16 @@ $bp-desktop: 960px;
 
   @media (max-width: $bp-desktop) {
     display: flex;
-    flex-direction: row;
+    flex-direction: column;
     align-items: flex-start;
-    gap: 1rem;
+    gap: 0.75rem;
   }
 }
 
 .hsl-card__body {
   flex: 1;
   min-width: 0;
+  width: 100%;
 }
 
 .hsl-card__title {
@@ -160,7 +170,7 @@ $bp-desktop: 960px;
   margin: 1rem 0 0.5rem;
 
   @media (max-width: $bp-desktop) {
-    margin-top: 0.1rem;
+    margin-top: 0;
   }
 }
 

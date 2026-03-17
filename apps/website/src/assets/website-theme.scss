@@ -50,9 +50,11 @@
   --website-icon-stroke: var(--neosleep-primary);
 
   /* ── Layout tokens (white-label configurable via GET /api/config/app) ── */
-  --website-page-gutter: 2rem;         /* horizontal padding on desktop/tablet  */
-  --website-page-gutter-mobile: 1.25rem; /* horizontal padding on mobile (<600px) */
-  --website-card-radius: 20px;         /* border-radius of framed cards         */
+  --website-page-gutter: 2rem;            /* horizontal padding on desktop/tablet  */
+  --website-page-gutter-mobile: 1.25rem;  /* horizontal padding on mobile (<600px) */
+  --website-card-radius: 20px;            /* border-radius of framed cards         */
+  --website-drawer-width: min(300px, 85vw);
+  --website-nav-breakpoint: 1100px;
 }
 
 /**
@@ -80,8 +82,11 @@
 .home-section {
   padding: 5rem 0;
 }
-@media (max-width: 600px) {
-  .home-section { padding: 3.5rem 0; }
+@media (max-width: 1100px) {
+  .home-section {
+    padding: 3.5rem 0;
+    scroll-margin-top: -3.5rem;
+  }
 }
 
 .home-reveal {
@@ -102,6 +107,7 @@
   letter-spacing: 0.07em;
   color: var(--website-primary);
   margin: 0 0 0.5rem;
+  text-align: center;
 }
 
 .home-heading {
@@ -111,6 +117,7 @@
   line-height: 1.2;
   margin: 0 0 0.75rem;
   color: var(--website-text);
+  text-align: center;
 }
 
 .home-sub {
@@ -159,7 +166,13 @@
 
 /* Whole viewport uses theme background (no white envelope in dark mode) */
 html {
-  scroll-padding-top: var(--website-header-height);
+  scroll-padding-top: calc(var(--website-header-height) + 1.5rem);
+  --scroll-anchor-offset: 96; /* desktop: header(72) + breathing(24) */
+
+  @media (max-width: 1100px) {
+    scroll-padding-top: 0;
+    --scroll-anchor-offset: -40; /* mobile: skip section padding(56px), land 16px above image */
+  }
   margin: 0;
   padding: 0;
 }
@@ -195,9 +208,9 @@ html.theme-transitioning * {
 }
 
 /* Dark theme (night mode) */
-[data-theme="dark"] {
+html[data-theme="dark"] {
   /* Footer – dark mode: głęboki ciemny teal */
-  --website-footer-bg: #071f1d;
+  --website-footer-bg: #111111;
   --website-footer-text: #ffffff;
   --website-footer-text-muted: rgba(255, 255, 255, 0.45);
   --website-footer-link: rgba(255, 255, 255, 0.6);
@@ -209,16 +222,22 @@ html.theme-transitioning * {
   --website-footer-social-hover-bg: rgba(255, 255, 255, 0.11);
   --website-footer-social-hover-border: rgba(255, 255, 255, 0.18);
   --website-footer-card-border: rgba(18, 143, 131, 0.35);
-  --website-bg: #0f1419;
-  --website-text: #e6edf3;
-  --website-text-secondary: #8b9cb3;
-  --website-border: #2d3748;
-  --website-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --website-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-  --website-page-frame-bg: #1a1f26;
-  --neosleep-charcoal-dark: #e6edf3;
-  --neosleep-charcoal-medium: #8b9cb3;
-  --website-icon-bg: rgba(18, 143, 131, 0.2);
-  --website-icon-stroke: var(--neosleep-primary);
+  --website-bg: #1c1c1c;
+  --website-text: #f5f5f5;
+  --website-text-secondary: #999999;
+  --website-border: rgba(255, 255, 255, 0.09);
+  --website-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --website-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.55);
+  --website-page-frame-bg: #272727;
+  --neosleep-charcoal-dark: #f5f5f5;
+  --neosleep-charcoal-medium: #999999;
+  --website-primary: #17b5a5;
+  --website-primary-hover: #0f9284;
+  --website-icon-bg: rgba(23, 181, 165, 0.18);
+  --website-icon-stroke: #17b5a5;
+}
+
+html[data-theme="dark"] .home-cta-banner__inner {
+  background: linear-gradient(145deg, #0c6659 0%, #073d36 100%) !important;
 }
 

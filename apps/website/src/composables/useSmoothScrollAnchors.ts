@@ -7,12 +7,12 @@ function easeInOutQuint(t: number): number {
 }
 
 function smoothScrollToSection(el: HTMLElement, durationMs: number): void {
-  const headerHeight = parseInt(
-    getComputedStyle(document.documentElement).getPropertyValue("--website-header-height") || "72",
+  const offset = parseInt(
+    getComputedStyle(document.documentElement).getPropertyValue("--scroll-anchor-offset") || "96",
     10
   );
   const start = window.scrollY ?? document.documentElement.scrollTop;
-  const end = el.getBoundingClientRect().top + start - headerHeight;
+  const end = el.getBoundingClientRect().top + start - offset;
   const startTime = performance.now();
 
   function step(now: number): void {
@@ -31,6 +31,19 @@ function isSamePageHashLink(link: HTMLAnchorElement): boolean {
   if (hashIdx === -1 || href.slice(hashIdx) === "#") return false;
   const pathname = link.pathname || "/";
   return pathname === window.location.pathname;
+}
+
+export function smoothScrollToTop(): void {
+  const start = window.scrollY;
+  if (start === 0) return;
+  const startTime = performance.now();
+
+  function step(now: number): void {
+    const t = Math.min((now - startTime) / DURATION_MS, 1);
+    window.scrollTo(0, start * (1 - easeInOutQuint(t)));
+    if (t < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
 }
 
 /**

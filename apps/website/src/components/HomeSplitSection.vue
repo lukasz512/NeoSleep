@@ -9,7 +9,7 @@
       <div class="home-split" :class="{ 'home-split--img-left': section.imageLeft }">
 
         <div v-if="section.imageLeft" class="home-split__media">
-          <img :src="section.imageSrc" alt="" class="home-split__photo" width="560" height="400" />
+          <img :src="section.imageSrc" alt="" class="home-split__photo" width="560" height="400" :style="section.imagePosition ? { objectPosition: section.imagePosition } : {}" />
         </div>
 
         <div class="home-split__body">
@@ -42,7 +42,7 @@
         </div>
 
         <div v-if="!section.imageLeft" class="home-split__media">
-          <img :src="section.imageSrc" alt="" class="home-split__photo" width="560" height="400" />
+          <img :src="section.imageSrc" alt="" class="home-split__photo" width="560" height="400" :style="section.imagePosition ? { objectPosition: section.imagePosition } : {}" />
         </div>
 
       </div>

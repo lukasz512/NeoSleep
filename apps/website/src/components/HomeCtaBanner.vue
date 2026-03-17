@@ -60,13 +60,13 @@ $bp-mobile: 600px;
 }
 
 .home-cta-banner__inner {
-  background: var(--website-primary);
+  background: #0c6659;
   border-radius: var(--website-card-radius);
-  padding: 4rem 2rem;
+  padding: 4rem 2.5rem;
   text-align: center;
 
   @media (max-width: $bp-mobile) {
-    padding: 3rem 1.5rem;
+    padding: 3rem 1.75rem;
     border-radius: 14px;
   }
 }
@@ -75,21 +75,33 @@ $bp-mobile: 600px;
   font-size: clamp(1.75rem, 4vw, 2.25rem);
   font-weight: 700;
   color: #fff;
-  margin: 0 0 0.5rem;
-  letter-spacing: -0.02em;
+  margin: 0 0 1rem;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
 }
 
 .home-cta-banner__sub {
   font-size: 1.0625rem;
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(255, 255, 255, 0.75);
   line-height: 1.65;
-  margin: 0 0 2rem;
+  margin: 0 auto 2.5rem;
+  max-width: 520px;
 }
 
 .home-cta-banner__btns {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: center;
   gap: 0.875rem;
-  justify-content: center;
+
+  @media (min-width: #{$bp-mobile + 1px}) {
+    flex-direction: row;
+    justify-content: center;
+  }
+
+  .home-btn {
+    width: 100%;
+    max-width: 320px;
+  }
 }
 </style>

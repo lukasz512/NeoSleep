@@ -67,8 +67,9 @@ $bp-mobile:  600px;
 
   @media (max-width: $bp-mobile) {
     width: calc(100% - 2 * var(--website-page-gutter-mobile));
-    border-radius: 14px;
-    margin-bottom: 1.5rem;
+    margin: 0 auto 1.5rem;
+    border-radius: 14px 14px 0 0;
+    border-bottom: 1px solid var(--website-border);
   }
 }
 
@@ -79,7 +80,7 @@ $bp-mobile:  600px;
   align-items: center;
   padding: 3rem 2.5rem 4rem;
 
-  @media (min-width: #{$bp-desktop + 1px}) { min-height: calc(100vh - 190px); }
+  @media (min-width: #{$bp-desktop + 1px}) { min-height: calc(100vh - var(--website-header-height)); }
 
   @media (max-width: $bp-desktop) {
     grid-template-columns: 1fr;
@@ -154,7 +155,19 @@ $bp-mobile:  600px;
     aspect-ratio: 16 / 9;
     border-radius: 10px;
   }
-  @media (max-width: $bp-mobile) { max-height: 210px; }
+
+  @media (max-width: $bp-mobile) {
+    /* Bleed to card edges — negate the inner padding (1.5rem each side) */
+    margin-left: -1.5rem;
+    margin-right: -1.5rem;
+    width: calc(100% + 3rem);
+    max-height: none;
+    aspect-ratio: 4 / 3;
+    border-top-left-radius: 14px;
+    border-top-right-radius: 14px;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
 }
 
 .home-hero__img {

@@ -97,6 +97,7 @@ export interface SplitSectionConfig {
   ctaKey: string;
   ctaTo: RouteLocationRaw;
   imageSrc: string;
+  imagePosition?: string;
   imageLeft?: boolean;
   features: FeatureItem[];
 }
@@ -109,7 +110,8 @@ export const splitSections: SplitSectionConfig[] = [
     subtitleKey: "website.forDentists.subtitle",
     ctaKey: "website.forDentists.cta",
     ctaTo: { path: "/contact", query: { type: "professional" } },
-    imageSrc: "/images/for-dentists.jpg",
+    imageSrc: "/images/for-dentists.png",
+    imagePosition: "50% 50%",
     imageLeft: true,
     features: dentistFeatures,
   },
@@ -138,7 +140,7 @@ export const ctaBannerConfig = {
   headingKey: "website.cta.heading",
   subtitleKey: "website.cta.subtitle",
   buttons: [
-    { labelKey: "website.cta.getStarted", to: { path: "/contact", query: { type: "patient" } }, variant: "white-outline" as const, arrow: true },
-    { labelKey: "website.cta.schedule",   to: { path: "/contact", query: { type: "patient" } }, variant: "white-border"  as const },
+    { labelKey: "website.cta.forPatient", to: { path: "/contact", query: { type: "patient"      } }, variant: "white-outline" as const, arrow: true },
+    { labelKey: "website.cta.forDentist", to: { path: "/contact", query: { type: "professional" } }, variant: "white-border"  as const },
   ] as CtaButton[],
 };

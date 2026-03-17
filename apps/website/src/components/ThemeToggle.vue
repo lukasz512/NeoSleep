@@ -2,25 +2,17 @@
   <div class="theme-toggle" :data-mode="themeMode">
     <NavTooltip :text="toggleLabel">
       <button
-        ref="btnRef"
         type="button"
         class="theme-toggle__btn"
         :class="{ 'theme-toggle__btn--spinning': isSpinning }"
         :aria-label="toggleLabel"
-        @animationend="onSpinEnd"
         @click="onClick"
       >
         <span class="theme-toggle__icon theme-toggle__icon--auto" aria-hidden="true">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <!-- Księżyc (zawsze widoczny w trybie auto) -->
-            <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-            <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
-          </svg>
-        </span>
-        <span class="theme-toggle__icon theme-toggle__icon--auto-star" aria-hidden="true">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 3v5h5"/>
-            <path d="M21 21v-5h-5"/>
+            <path d="M23 4v6h-6"/>
+            <path d="M1 20v-6h6"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
           </svg>
         </span>
         <span class="theme-toggle__icon theme-toggle__icon--sun" aria-hidden="true">
@@ -47,6 +39,7 @@ import { useTheme } from "../composables/useTheme";
 import type { ThemeMode } from "../composables/useTheme";
 
 const THEME_ORDER: ThemeMode[] = ["auto", "light", "dark"];
+const SPIN_MS = 450; // must match CSS animation duration
 
 function getNextMode(current: ThemeMode): ThemeMode {
   const i = THEME_ORDER.indexOf(current);
@@ -55,7 +48,6 @@ function getNextMode(current: ThemeMode): ThemeMode {
 
 const { t } = useI18n();
 const { themeMode, setTheme } = useTheme();
-const btnRef = ref<HTMLElement | null>(null);
 const isSpinning = ref(false);
 
 const toggleLabel = computed(() => {
@@ -65,19 +57,19 @@ const toggleLabel = computed(() => {
 });
 
 function onClick() {
-  if (!btnRef.value || isSpinning.value) return;
+  if (isSpinning.value) return;
   const next = getNextMode(themeMode.value);
   isSpinning.value = true;
-  // Switch icon at the midpoint of the spin so it morphs "behind" the rotation
+
+  // Apply theme at animation midpoint so icon swaps "behind" the rotation
   setTimeout(() => {
     document.documentElement.classList.add("theme-transitioning");
     setTheme(next);
     setTimeout(() => document.documentElement.classList.remove("theme-transitioning"), 225);
-  }, 225);
-}
+  }, SPIN_MS / 2);
 
-function onSpinEnd(e: AnimationEvent) {
-  if (e.animationName.includes("theme-toggle-spin")) isSpinning.value = false;
+  // Unlock after the full animation — reliable alternative to animationend
+  setTimeout(() => { isSpinning.value = false; }, SPIN_MS);
 }
 </script>
 
@@ -140,10 +132,9 @@ function onSpinEnd(e: AnimationEvent) {
   }
 }
 
-.theme-toggle[data-mode="auto"] .theme-toggle__icon--auto,
-.theme-toggle[data-mode="auto"] .theme-toggle__icon--auto-star,
+.theme-toggle[data-mode="auto"]  .theme-toggle__icon--auto,
 .theme-toggle[data-mode="light"] .theme-toggle__icon--sun,
-.theme-toggle[data-mode="dark"] .theme-toggle__icon--moon {
+.theme-toggle[data-mode="dark"]  .theme-toggle__icon--moon {
   opacity: 1;
   transform: rotate(0deg) scale(1);
 }

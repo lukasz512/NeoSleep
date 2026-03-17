@@ -86,7 +86,7 @@ export const websiteNavItems: WebsiteNavItem[] = [
   { labelKey: "website.footer.resources.blog", href: "#", showInFooter: true, footerSection: "resources" },
   { labelKey: "website.footer.resources.help", href: "#", showInFooter: true, footerSection: "resources" },
   { labelKey: "website.footer.resources.research", href: "#", showInFooter: true, footerSection: "resources" },
-  { labelKey: "website.footer.resources.privacy", href: "#", showInFooter: true, footerSection: "resources" },
+  { labelKey: "website.footer.resources.privacy", to: "/privacy", showInFooter: true, footerSection: "resources" },
   // Tylko stopka: Connect
   { labelKey: "website.footer.connect.twitter", href: "#", showInFooter: true, footerSection: "connect" },
   { labelKey: "website.footer.connect.linkedin", href: "#", showInFooter: true, footerSection: "connect" },

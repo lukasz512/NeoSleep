@@ -1,4 +1,4 @@
-import { ref, onMounted } from "vue";
+import { ref } from "vue";
 
 const STORAGE_KEY = "neosleep-website-theme";
 export type ThemeMode = "light" | "dark" | "auto";
@@ -16,31 +16,21 @@ function getSystemDark(): boolean {
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
 }
 
-function getInitialMode(): ThemeMode {
-  const stored = getStored();
-  if (stored !== null) return stored;
-  return "auto";
-}
-
 function resolveDark(mode: ThemeMode): boolean {
-  if (mode === "auto") return getSystemDark();
-  return mode === "dark";
+  return mode === "auto" ? getSystemDark() : mode === "dark";
 }
-
-const themeMode = ref<ThemeMode>(getInitialMode());
-const isDark = ref<boolean>(resolveDark(themeMode.value));
 
 function applyTheme(dark: boolean) {
-  const root = document.documentElement;
+  if (typeof document === "undefined") return;
   if (dark) {
-    root.setAttribute("data-theme", "dark");
+    document.documentElement.setAttribute("data-theme", "dark");
   } else {
-    root.removeAttribute("data-theme");
+    document.documentElement.removeAttribute("data-theme");
   }
-  if (typeof document !== "undefined") {
-    const iconPath = dark ? "/brand/logos/icon/icon_dark.svg" : "/brand/logos/icon/icon_light.svg";
-    setFavicon(iconPath);
-  }
+  const iconPath = dark
+    ? "/brand/logos/icon/icon_dark.svg"
+    : "/brand/logos/icon/icon_light.svg";
+  setFavicon(iconPath);
 }
 
 function setFavicon(href: string) {
@@ -60,42 +50,33 @@ function setFavicon(href: string) {
   apple.href = href;
 }
 
-let systemQuery: MediaQueryList | null = null;
-let systemListener: (() => void) | null = null;
+// ── Singleton state (module-level — initialised once) ──────────────────────
+const themeMode = ref<ThemeMode>(getStored() ?? "auto");
+const isDark = ref<boolean>(resolveDark(themeMode.value));
 
-function ensureSystemListener() {
-  if (systemQuery && systemListener) return;
-  if (typeof window === "undefined") return;
-  systemQuery = window.matchMedia("(prefers-color-scheme: dark)");
-  systemListener = () => {
-    if (themeMode.value === "auto") {
-      isDark.value = systemQuery!.matches;
-      applyTheme(isDark.value);
-    }
-  };
-  systemQuery.addEventListener("change", systemListener);
+// Apply on first load (runs once when the module is imported)
+if (typeof document !== "undefined") {
+  applyTheme(isDark.value);
 }
 
-function removeSystemListener() {
-  if (systemQuery && systemListener) {
-    systemQuery.removeEventListener("change", systemListener);
-    systemQuery = null;
-    systemListener = null;
-  }
+// React to OS preference changes when mode is "auto"
+if (typeof window !== "undefined") {
+  window
+    .matchMedia("(prefers-color-scheme: dark)")
+    .addEventListener("change", (e) => {
+      if (themeMode.value === "auto") {
+        isDark.value = e.matches;
+        applyTheme(isDark.value);
+      }
+    });
 }
 
+// ── Public API ─────────────────────────────────────────────────────────────
 export function useTheme() {
   function setTheme(mode: ThemeMode) {
     themeMode.value = mode;
-    if (mode === "auto") {
-      isDark.value = getSystemDark();
-      applyTheme(isDark.value);
-      ensureSystemListener();
-    } else {
-      removeSystemListener();
-      isDark.value = mode === "dark";
-      applyTheme(isDark.value);
-    }
+    isDark.value = resolveDark(mode);
+    applyTheme(isDark.value);
     try {
       localStorage.setItem(STORAGE_KEY, mode);
     } catch (_) {}
@@ -107,18 +88,5 @@ export function useTheme() {
     setTheme(order[(i + 1) % order.length]);
   }
 
-  onMounted(() => {
-    const mode = getInitialMode();
-    themeMode.value = mode;
-    isDark.value = resolveDark(mode);
-    applyTheme(isDark.value);
-    if (mode === "auto") ensureSystemListener();
-  });
-
-  return {
-    isDark,
-    themeMode,
-    setTheme,
-    cycleTheme,
-  };
+  return { isDark, themeMode, setTheme, cycleTheme };
 }
