@@ -331,7 +331,7 @@ async function onSubmit() {
   padding: 4px;
   background: var(--website-border);
   border-radius: 12px;
-  width: fit-content;
+  width: 100%;
   gap: 0;
 }
 
@@ -355,7 +355,8 @@ async function onSubmit() {
 .view-contact__tab {
   position: relative;
   z-index: 1;
-  padding: 0.5rem 1.5rem;
+  flex: 1;
+  padding: 0.5rem 1rem;
   font-size: 0.9375rem;
   font-weight: 600;
   font-family: inherit;
@@ -366,6 +367,7 @@ async function onSubmit() {
   cursor: pointer;
   transition: color 0.2s ease;
   white-space: nowrap;
+  text-align: center;
 
   &:hover {
     color: var(--website-text);

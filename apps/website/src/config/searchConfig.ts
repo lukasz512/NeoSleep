@@ -44,14 +44,17 @@ export const searchIndex: SearchItem[] = [
   {
     titleKey: "website.nav.forDentists",
     descKey:  "website.forDentists.subtitle",
-    path: "/",
-    hash: "#for-dentists",
+    path: "/for-dentists",
   },
   {
     titleKey: "website.nav.forPatients",
     descKey:  "website.forPatients.subtitle",
-    path: "/",
-    hash: "#for-patients",
+    path: "/for-patients",
+  },
+  {
+    titleKey: "website.nav.findSpecialist",
+    descKey:  "website.findSpecialist.heroSub",
+    path: "/find-specialist",
   },
   {
     titleKey: "website.nav.contact",
@@ -67,6 +70,12 @@ export const searchIndex: SearchItem[] = [
     titleKey: "website.nav.about",
     descKey:  "website.about.subtitle",
     path: "/about",
+  },
+
+  {
+    titleKey: "website.footer.company.careers",
+    descKey:  "careers.hero.subtitle",
+    path: "/careers",
   },
 
   // ── Auth-protected (future portal features) ───────────────────────────────

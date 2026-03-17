@@ -72,19 +72,20 @@ export const footerSections: FooterSectionConfig[] = [
 export const websiteNavItems: WebsiteNavItem[] = [
   // Header (kolejność = kolejność w menu)
   { labelKey: "website.nav.solutions", href: "/#solutions", showInHeader: true, showInFooter: true, footerSection: "product" },
-  { labelKey: "website.nav.forDentists", href: "/#for-dentists", showInHeader: true, showInFooter: true, footerSection: "product" },
-  { labelKey: "website.nav.forPatients", href: "/#for-patients", showInHeader: true, showInFooter: true, footerSection: "product" },
+  { labelKey: "website.nav.forDentists", to: "/for-dentists", showInHeader: true, showInFooter: true, footerSection: "product" },
+  { labelKey: "website.nav.forPatients", to: "/for-patients", showInHeader: true, showInFooter: true, footerSection: "product" },
+  { labelKey: "website.nav.findSpecialist", to: "/find-specialist", showInHeader: true },
   { labelKey: "website.nav.about", to: "/about", showInHeader: true },
   { labelKey: "website.nav.contact", to: "/contact", showInHeader: true },
   { labelKey: "website.header.cta", href: "/#cta", cta: true, showInHeader: true, showInFooter: true, footerSection: "product" },
   // Tylko stopka: Company
   { labelKey: "website.footer.company.about", to: "/about", showInFooter: true, footerSection: "company" },
-  { labelKey: "website.footer.company.careers", href: "#", showInFooter: true, footerSection: "company" },
+  { labelKey: "website.footer.company.careers", to: "/careers", showInFooter: true, footerSection: "company" },
   { labelKey: "website.footer.company.press", href: "#", showInFooter: true, footerSection: "company" },
   { labelKey: "website.footer.company.contact", to: "/contact", showInFooter: true, footerSection: "company" },
   // Tylko stopka: Resources
   { labelKey: "website.footer.resources.blog", href: "#", showInFooter: true, footerSection: "resources" },
-  { labelKey: "website.footer.resources.help", href: "#", showInFooter: true, footerSection: "resources" },
+  { labelKey: "website.footer.resources.help", to: "/help", showInFooter: true, footerSection: "resources" },
   { labelKey: "website.footer.resources.research", href: "#", showInFooter: true, footerSection: "resources" },
   { labelKey: "website.footer.resources.privacy", to: "/privacy", showInFooter: true, footerSection: "resources" },
   // Tylko stopka: Connect

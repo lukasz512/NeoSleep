@@ -1,45 +1,51 @@
 <template>
-  <section
-    ref="sectionRef"
+  <div
+    ref="wrapRef"
     class="home-cta-banner home-reveal"
     :class="{ 'home-reveal--visible': visible }"
   >
-    <div class="home-cta-banner__inner">
-      <h2 class="home-cta-banner__heading">{{ t(config.headingKey) }}</h2>
-      <p class="home-cta-banner__sub">{{ t(config.subtitleKey) }}</p>
-      <div class="home-cta-banner__btns">
-        <RouterLink
-          v-for="btn in config.buttons"
-          :key="btn.labelKey"
-          :to="btn.to"
-          class="home-btn"
-          :class="`home-btn--${btn.variant}`"
-        >
-          {{ t(btn.labelKey) }}
-          <span v-if="btn.arrow" class="home-btn__arrow" aria-hidden="true">→</span>
-        </RouterLink>
-      </div>
+    <div class="page-container">
+      <TealBanner
+        variant="cta"
+        :line1-key="config.headingKey"
+        :subtitle-key="config.subtitleKey"
+      >
+        <template #ctas>
+          <RouterLink
+            v-for="btn in config.buttons"
+            :key="btn.labelKey"
+            :to="btn.to"
+            class="home-btn"
+            :class="`home-btn--${btn.variant}`"
+          >
+            {{ t(btn.labelKey) }}
+            <span v-if="btn.arrow" class="home-btn__arrow" aria-hidden="true">→</span>
+          </RouterLink>
+        </template>
+      </TealBanner>
     </div>
-  </section>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
+import { RouterLink } from "vue-router";
+import TealBanner from "./TealBanner.vue";
 import { ctaBannerConfig as config } from "../config/homeConfig";
 
 const { t } = useI18n();
-const sectionRef = ref<HTMLElement | null>(null);
+const wrapRef = ref<HTMLElement | null>(null);
 const visible = ref(false);
 let observer: IntersectionObserver | null = null;
 
 onMounted(() => {
-  if (!sectionRef.value) return;
+  if (!wrapRef.value) return;
   observer = new IntersectionObserver(
     ([e]) => { if (e?.isIntersecting) { visible.value = true; observer?.disconnect(); } },
     { threshold: 0.12 }
   );
-  observer.observe(sectionRef.value);
+  observer.observe(wrapRef.value);
 });
 
 onUnmounted(() => observer?.disconnect());
@@ -51,57 +57,9 @@ $bp-mobile: 600px;
 .home-cta-banner {
   max-width: var(--website-page-max-width);
   margin: 0 auto 2.5rem;
-  padding: 0 var(--website-page-gutter);
 
   @media (max-width: $bp-mobile) {
-    padding: 0 var(--website-page-gutter-mobile);
     margin-bottom: var(--website-page-gutter-mobile);
-  }
-}
-
-.home-cta-banner__inner {
-  background: #0c6659;
-  border-radius: var(--website-card-radius);
-  padding: 4rem 2.5rem;
-  text-align: center;
-
-  @media (max-width: $bp-mobile) {
-    padding: 3rem 1.75rem;
-    border-radius: 14px;
-  }
-}
-
-.home-cta-banner__heading {
-  font-size: clamp(1.75rem, 4vw, 2.25rem);
-  font-weight: 700;
-  color: #fff;
-  margin: 0 0 1rem;
-  letter-spacing: -0.025em;
-  line-height: 1.15;
-}
-
-.home-cta-banner__sub {
-  font-size: 1.0625rem;
-  color: rgba(255, 255, 255, 0.75);
-  line-height: 1.65;
-  margin: 0 auto 2.5rem;
-  max-width: 520px;
-}
-
-.home-cta-banner__btns {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.875rem;
-
-  @media (min-width: #{$bp-mobile + 1px}) {
-    flex-direction: row;
-    justify-content: center;
-  }
-
-  .home-btn {
-    width: 100%;
-    max-width: 320px;
   }
 }
 </style>

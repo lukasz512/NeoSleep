@@ -45,6 +45,7 @@ const formattedDate = computed(() =>
 
 .privacy-doc {
   max-width: 680px;
+  margin: 0 auto;
 }
 
 .privacy-doc__header {

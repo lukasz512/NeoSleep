@@ -180,28 +180,28 @@ $bp-mobile:  600px;
   border-radius: inherit;
   z-index: 1;
   opacity: 0;
-  filter: blur(12px) saturate(0.4);
-  transform: scale(1.045);
+  filter: blur(8px) saturate(0.5);
+  transform: scale(1.02);
 
   [data-theme="dark"] & {
-    filter: blur(12px) saturate(0.4) brightness(0.88) contrast(1.05);
+    filter: blur(8px) saturate(0.5) brightness(0.88) contrast(1.05);
   }
 }
 .home-hero--visible .home-hero__img {
-  animation: hero-img-in 2.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.1s forwards;
+  animation: hero-img-in 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 
   [data-theme="dark"] & {
     animation-name: hero-img-in-dark;
   }
 }
 @keyframes hero-img-in {
-  0%   { opacity: 0;   filter: blur(12px) saturate(0.4); transform: scale(1.045); }
-  30%  { opacity: 0.6; }
+  0%   { opacity: 0;   filter: blur(8px) saturate(0.5); transform: scale(1.02); }
+  40%  { opacity: 0.8; }
   100% { opacity: 1;   filter: blur(0) saturate(1); transform: scale(1); }
 }
 @keyframes hero-img-in-dark {
-  0%   { opacity: 0;   filter: blur(12px) saturate(0.4) brightness(0.88) contrast(1.05); transform: scale(1.045); }
-  30%  { opacity: 0.6; }
+  0%   { opacity: 0;   filter: blur(8px) saturate(0.5) brightness(0.88) contrast(1.05); transform: scale(1.02); }
+  40%  { opacity: 0.8; }
   100% { opacity: 1;   filter: blur(0) saturate(0.92) brightness(0.88) contrast(1.05); transform: scale(1); }
 }
 </style>

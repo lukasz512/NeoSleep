@@ -142,8 +142,11 @@
   min-width: 44px;
   padding: 0 1.75rem;
   border-radius: 9999px;
+  border: none;
   font-weight: 600;
   font-size: 1rem;
+  font-family: inherit;
+  cursor: pointer;
   text-decoration: none;
   transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
@@ -237,7 +240,4 @@ html[data-theme="dark"] {
   --website-icon-stroke: #17b5a5;
 }
 
-html[data-theme="dark"] .home-cta-banner__inner {
-  background: linear-gradient(145deg, #0c6659 0%, #073d36 100%) !important;
-}
 

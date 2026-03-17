@@ -1,6 +1,10 @@
 <template>
   <DefaultLayout>
-    <RouterView />
+    <RouterView v-slot="{ Component }">
+      <Transition name="page" mode="out-in">
+        <component :is="Component" />
+      </Transition>
+    </RouterView>
   </DefaultLayout>
 </template>
 
@@ -23,5 +27,19 @@ html, body {
   background: var(--website-bg);
   color: var(--website-text);
   min-height: 100vh;
+}
+
+.page-enter-active {
+  transition: opacity 0.32s ease, transform 0.32s ease;
+}
+.page-leave-active {
+  transition: opacity 0.18s ease;
+}
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(14px);
+}
+.page-leave-to {
+  opacity: 0;
 }
 </style>

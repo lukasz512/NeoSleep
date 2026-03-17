@@ -2,25 +2,22 @@
   <div class="view-about">
 
     <!-- ── Hero ─────────────────────────────────────────────────────── -->
-    <section class="ab-hero">
-      <div class="ab-hero__inner page-container">
-        <p class="ab-hero__eyebrow">{{ t("website.about.eyebrow") }}</p>
-        <h1 class="ab-hero__tagline">
-          <span class="ab-hero__tagline-l1">{{ t("website.about.heroTagline1") }}</span>
-          <span class="ab-hero__tagline-l2">{{ t("website.about.heroTagline2") }}</span>
-        </h1>
-        <p class="ab-hero__sub">{{ t("website.about.heroSub") }}</p>
-        <div class="ab-hero__ctas">
-          <RouterLink :to="{ path: '/contact', query: { type: 'patient' } }" class="home-btn home-btn--white-outline">
-            {{ t("website.about.cta.patient") }}
-            <span class="home-btn__arrow" aria-hidden="true">→</span>
-          </RouterLink>
-          <RouterLink :to="{ path: '/contact', query: { type: 'professional' } }" class="home-btn home-btn--white-border">
-            {{ t("website.about.cta.dentist") }}
-          </RouterLink>
-        </div>
-      </div>
-    </section>
+    <TealBanner
+      eyebrow-key="website.about.eyebrow"
+      line1-key="website.about.heroTagline1"
+      line2-key="website.about.heroTagline2"
+      subtitle-key="website.about.heroSub"
+    >
+      <template #ctas>
+        <RouterLink :to="{ path: '/contact', query: { type: 'patient' } }" class="home-btn home-btn--white-outline">
+          {{ t("website.about.cta.patient") }}
+          <span class="home-btn__arrow" aria-hidden="true">→</span>
+        </RouterLink>
+        <RouterLink :to="{ path: '/contact', query: { type: 'professional' } }" class="home-btn home-btn--white-border">
+          {{ t("website.about.cta.dentist") }}
+        </RouterLink>
+      </template>
+    </TealBanner>
 
     <!-- ── Mission ───────────────────────────────────────────────────── -->
     <section ref="missionRef" class="home-section ab-mission home-reveal" :class="{ 'home-reveal--visible': missionVisible }">
@@ -35,7 +32,7 @@
             <p class="ab-mission__text">{{ t("website.about.mission.body") }}</p>
           </div>
           <div class="ab-mission__media">
-            <img src="/images/hero.jpeg" alt="" class="ab-mission__img" width="600" height="400" loading="lazy" />
+            <img src="/images/mission.jpg" alt="" class="ab-mission__img" width="600" height="400" loading="lazy" />
           </div>
         </div>
       </div>
@@ -145,13 +142,76 @@
       </div>
     </section>
 
+    <!-- ── Offices ────────────────────────────────────────────────────── -->
+    <section ref="officesRef" class="home-section ab-offices home-reveal" :class="{ 'home-reveal--visible': officesVisible }">
+      <div class="page-container">
+        <p class="home-eyebrow">{{ t("website.about.offices.eyebrow") }}</p>
+        <h2 class="home-heading">{{ t("website.about.offices.heading") }}</h2>
+        <p class="home-sub home-sub--center">{{ t("website.about.offices.sub") }}</p>
+        <div class="ab-offices__grid">
+
+          <!-- Ciudad de México HQ -->
+          <div class="ab-office-card">
+            <div class="ab-office-card__top">
+              <span class="ab-office-card__badge ab-office-card__badge--hq">{{ t("website.about.offices.hq") }}</span>
+            </div>
+            <h3 class="ab-office-card__city">{{ t("website.about.offices.cdmx.city") }}</h3>
+            <p class="ab-office-card__country">{{ t("website.about.offices.cdmx.country") }}</p>
+            <address class="ab-office-card__address">{{ t("website.about.offices.cdmx.address") }}</address>
+            <a
+              href="https://maps.google.com/?q=Av.+Insurgentes+Sur+1602+Ciudad+de+Mexico"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="ab-office-card__map-link"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              {{ t("website.about.offices.mapLink") }}
+            </a>
+          </div>
+
+          <!-- Warsaw -->
+          <div class="ab-office-card">
+            <div class="ab-office-card__top">
+              <span class="ab-office-card__badge">{{ t("website.about.offices.clinic") }}</span>
+            </div>
+            <h3 class="ab-office-card__city">{{ t("website.about.offices.warsaw.city") }}</h3>
+            <p class="ab-office-card__country">{{ t("website.about.offices.warsaw.country") }}</p>
+            <address class="ab-office-card__address">{{ t("website.about.offices.warsaw.address") }}</address>
+            <a
+              href="https://maps.google.com/?q=Marszalkowska+111+Warsaw+Poland"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="ab-office-card__map-link"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              {{ t("website.about.offices.mapLink") }}
+            </a>
+          </div>
+
+          <!-- Expansion teaser -->
+          <div class="ab-office-card ab-office-card--expansion">
+            <div class="ab-office-card__expand-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+              </svg>
+            </div>
+            <h3 class="ab-office-card__city ab-office-card__city--muted">{{ t("website.about.offices.expanding.title") }}</h3>
+            <p class="ab-office-card__expand-desc">{{ t("website.about.offices.expanding.desc") }}</p>
+            <RouterLink :to="{ path: '/contact' }" class="ab-office-card__expand-link">
+              {{ t("website.about.offices.expanding.cta") }} →
+            </RouterLink>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
     <!-- ── CTA ────────────────────────────────────────────────────────── -->
     <div ref="ctaRef" class="ab-cta-wrap home-reveal" :class="{ 'home-reveal--visible': ctaVisible }">
       <div class="page-container">
-        <div class="ab-cta">
-          <h2 class="ab-cta__heading">{{ t("website.about.cta.heading") }}</h2>
-          <p class="ab-cta__sub">{{ t("website.about.cta.sub") }}</p>
-          <div class="ab-cta__btns">
+        <TealBanner variant="cta" line1-key="website.about.cta.heading" subtitle-key="website.about.cta.sub">
+          <template #ctas>
             <RouterLink :to="{ path: '/contact', query: { type: 'patient' } }" class="home-btn home-btn--white-outline">
               {{ t("website.about.cta.patient") }}
               <span class="home-btn__arrow" aria-hidden="true">→</span>
@@ -159,8 +219,8 @@
             <RouterLink :to="{ path: '/contact', query: { type: 'professional' } }" class="home-btn home-btn--white-border">
               {{ t("website.about.cta.dentist") }}
             </RouterLink>
-          </div>
-        </div>
+          </template>
+        </TealBanner>
       </div>
     </div>
 
@@ -170,18 +230,21 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
+import TealBanner from "../components/TealBanner.vue";
 
 const { t } = useI18n();
 
 const missionRef  = ref<HTMLElement | null>(null);
 const valuesRef   = ref<HTMLElement | null>(null);
 const statsRef    = ref<HTMLElement | null>(null);
+const officesRef  = ref<HTMLElement | null>(null);
 const approachRef = ref<HTMLElement | null>(null);
 const ctaRef      = ref<HTMLElement | null>(null);
 
 const missionVisible  = ref(false);
 const valuesVisible   = ref(false);
 const statsVisible    = ref(false);
+const officesVisible  = ref(false);
 const approachVisible = ref(false);
 const ctaVisible      = ref(false);
 
@@ -192,6 +255,7 @@ onMounted(() => {
     { el: missionRef.value,  visible: missionVisible,  threshold: 0.10 },
     { el: valuesRef.value,   visible: valuesVisible,   threshold: 0.08 },
     { el: statsRef.value,    visible: statsVisible,    threshold: 0.15 },
+    { el: officesRef.value,  visible: officesVisible,  threshold: 0.08 },
     { el: approachRef.value, visible: approachVisible, threshold: 0.08 },
     { el: ctaRef.value,      visible: ctaVisible,      threshold: 0.10 },
   ];
@@ -536,6 +600,136 @@ $bp-mobile:  600px;
   line-height: 1.67;
   color: var(--website-text-secondary);
   margin: 0;
+}
+
+/* ── Offices ─────────────────────────────────────────────────────────── */
+.ab-offices__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+  margin-top: 3rem;
+
+  @media (max-width: $bp-desktop) { grid-template-columns: repeat(2, 1fr); }
+  @media (max-width: $bp-mobile)  { grid-template-columns: 1fr; }
+}
+
+.ab-office-card {
+  background: var(--website-bg);
+  border: 1px solid var(--website-border);
+  border-radius: var(--website-radius);
+  padding: 1.75rem;
+  box-shadow: var(--website-shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  transition: box-shadow 0.2s, transform 0.2s;
+
+  &:hover {
+    box-shadow: var(--website-shadow-md);
+    transform: translateY(-2px);
+  }
+
+  &--expansion {
+    border-style: dashed;
+    border-color: var(--website-footer-card-border);
+    background: transparent;
+    align-items: center;
+    text-align: center;
+    justify-content: center;
+    gap: 0.75rem;
+
+    &:hover { transform: translateY(-2px); box-shadow: none; }
+  }
+}
+
+.ab-office-card__top {
+  margin-bottom: 0.75rem;
+}
+
+.ab-office-card__badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  padding: 0.2rem 0.65rem;
+  border-radius: 9999px;
+  background: var(--website-icon-bg);
+  color: var(--website-primary);
+
+  &--hq {
+    background: var(--website-primary);
+    color: #fff;
+  }
+}
+
+.ab-office-card__city {
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: var(--website-text);
+  margin: 0;
+  line-height: 1.2;
+
+  &--muted { color: var(--website-text-secondary); font-size: 1.125rem; }
+}
+
+.ab-office-card__country {
+  font-size: 0.875rem;
+  color: var(--website-text-secondary);
+  margin: 0 0 0.75rem;
+}
+
+.ab-office-card__address {
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: var(--website-text-secondary);
+  font-style: normal;
+  margin: 0 0 1rem;
+  flex: 1;
+}
+
+.ab-office-card__map-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--website-primary);
+  text-decoration: none;
+  margin-top: auto;
+
+  &:hover { text-decoration: underline; }
+}
+
+.ab-office-card__expand-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--website-icon-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  svg { width: 24px; height: 24px; color: var(--website-primary); }
+}
+
+.ab-office-card__expand-desc {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--website-text-secondary);
+  margin: 0;
+  max-width: 220px;
+}
+
+.ab-office-card__expand-link {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--website-primary);
+  text-decoration: none;
+  margin-top: 0.25rem;
+
+  &:hover { text-decoration: underline; }
 }
 
 /* ── CTA ─────────────────────────────────────────────────────────────── */
