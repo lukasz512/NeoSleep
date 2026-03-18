@@ -1,0 +1,14 @@
+/**
+ * NeoSleep brand colors for SCSS.
+ * Values must stay in sync with brand/colors.ts (single source of truth for JS/TS).
+ * SCSS cannot import TypeScript, so values are duplicated here — update both together.
+ */
+
+// Primary: brand teal (from brand/colors.ts → brandColors.primary)
+$rep-brand-primary: #128F83;
+$rep-brand-primary-hover: #10544E;
+$rep-brand-primary-light: #8ED6CE;
+
+// Dark-mode primary (from brand/colors.ts → brandColors.primaryOnDark)
+$rep-brand-primary-on-dark: #17b5a5;
+$rep-brand-primary-on-dark-hover: #0f9284;

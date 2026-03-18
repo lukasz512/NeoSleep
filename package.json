@@ -20,15 +20,13 @@
     "i18n:unused": "node scripts/i18n/unused.mjs",
     "i18n:prune": "node scripts/i18n/prune.mjs",
     "build:website": "pnpm --filter @neo/website build",
-    "build:rep-app": "pnpm --filter @neo/rep-app build",
-    "build:admin": "pnpm --filter @neo/admin build",
-    "build:portal": "pnpm --filter @neo/portal build",
+    "build:app": "pnpm --filter @neo/app build",
     "lockfile:check": "./scripts/lockfile-check.sh",
     "ci": "pnpm -r lint && pnpm -r typecheck && pnpm -r test",
     "ci:npm": "npm run lint --workspaces --if-present && npm run typecheck --workspaces --if-present && npm run test --workspaces --if-present",
     "prepare": "husky",
     "start": "./scripts/start.sh",
-    "dev": "pnpm exec concurrently --names bff,rep,website -c blue,green,magenta \"pnpm --filter @neo/bff dev\" \"pnpm --filter @neo/rep-app dev\" \"pnpm --filter @neo/website dev\"",
+    "dev": "pnpm exec concurrently --names bff,app,website -c blue,green,magenta \"pnpm --filter @neo/bff dev\" \"pnpm --filter @neo/app dev\" \"pnpm --filter @neo/website dev\"",
     "db:seed": "docker compose exec -T postgres psql -U neosleep -d neosleep < services/bff/migrations/009_dev_seed_2hco_4hcp.sql"
   },
   "devDependencies": {

@@ -1,0 +1,213 @@
+/**
+ * Rep app: light / dark theme.
+ * Primary and brand colors come from assets/scss/_brand-colors.scss (aligned with NeoSleep.pdf in repo root brand/).
+ * Can be overridden from admin later.
+ * Design tokens: foundation/docs/DESIGN_AND_UI.md.
+ */
+@use "./scss/brand-colors" as brand;
+
+$rep-breakpoint-mobile: 768px;
+$rep-touch-target-min: 44px; // Mobile/tablet: min touch target (SPEC-0042)
+$rep-touch-target-desktop: 40px; // Desktop: buttons can be slightly smaller
+
+/* Design: UI font. To use a custom font, add its link in index.html and set this to e.g. "DM Sans", system-ui, sans-serif. */
+$rep-font-sans: system-ui, -apple-system, sans-serif;
+$rep-radius: 10px;
+$rep-radius-sm: 2px; /* Small elements (e.g. loader bars) */
+$rep-modal-radius: 16px; /* Modals/dialogs: slightly larger for prominence */
+$rep-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+$rep-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+
+/* Physics-inspired transitions: smooth deceleration, subtle lift */
+$rep-ease-out-smooth: cubic-bezier(0.22, 1, 0.36, 1);
+$rep-ease-spring: cubic-bezier(0.34, 1.2, 0.64, 1);
+$rep-transition-duration: 280ms;
+
+:root,
+[data-theme="light"] {
+  --rep-font-sans: #{$rep-font-sans};
+  --rep-radius: #{$rep-radius};
+  --rep-radius-sm: #{$rep-radius-sm};
+  --rep-modal-radius: #{$rep-modal-radius};
+  --rep-ease-out-smooth: #{$rep-ease-out-smooth};
+  --rep-ease-spring: #{$rep-ease-spring};
+  --rep-transition-duration: #{$rep-transition-duration};
+  --rep-shadow-sm: #{$rep-shadow-sm};
+  --rep-shadow-md: #{$rep-shadow-md};
+  --rep-primary: #{brand.$rep-brand-primary};
+  --rep-primary-hover: #{brand.$rep-brand-primary-hover};
+  --rep-bg: #ffffff;
+  --rep-bg-secondary: #f5f5f5;
+  --rep-border: #e0e0e0;
+  --rep-text: #212121;
+  --rep-text-secondary: #666666;
+  /* Sidebar: iOS/Finder-like, slightly muted in light */
+  --rep-sidebar-bg: #f0f0f0;
+  --rep-sidebar-border: #e0e0e0;
+  --rep-sidebar-text: #1a1a1a;
+  --rep-sidebar-text-secondary: #5c5c5c;
+  --rep-sidebar-hover: rgba(0, 0, 0, 0.06);
+  --rep-sidebar-active-bg: color-mix(in srgb, #{brand.$rep-brand-primary} 12%, transparent);
+  --rep-sidebar-active-text: #ffffff;
+  --rep-sidebar-logo-bg: rgba(0, 0, 0, 0.06);
+  --rep-drawer-max-height: 70vh;
+  --rep-topbar-height: 56px;
+  --rep-content-padding-x: 16px;
+  --rep-sidebar-gap: 16px;
+  --rep-sidebar-margin: 1rem;
+  --rep-table-row-min-height: 52px;
+  --rep-table-header-bg: #f5f5f5;
+  --rep-table-header-text: #424242;
+  --rep-table-border: #e0e0e0;
+  --rep-table-row-hover: color-mix(in srgb, #{brand.$rep-brand-primary} 8%, transparent);
+  /* Buttons: desktop default; mobile/tablet use larger touch targets */
+  --rep-btn-min-height: #{$rep-touch-target-desktop};
+  --rep-btn-min-width: #{$rep-touch-target-desktop};
+}
+
+[data-theme="dark"] {
+  --rep-font-sans: #{$rep-font-sans};
+  --rep-radius: #{$rep-radius};
+  --rep-radius-sm: #{$rep-radius-sm};
+  --rep-modal-radius: #{$rep-modal-radius};
+  --rep-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2);
+  --rep-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.25);
+  --rep-primary: #{brand.$rep-brand-primary-on-dark};
+  --rep-primary-hover: #{brand.$rep-brand-primary-on-dark-hover};
+  --rep-bg: #121212;
+  --rep-bg-secondary: #1e1e1e;
+  --rep-border: #333333;
+  --rep-text: #e0e0e0;
+  --rep-text-secondary: #9e9e9e;
+  --rep-sidebar-bg: #262626;
+  --rep-sidebar-border: #3a3a3a;
+  --rep-sidebar-text: #f5f5f5;
+  --rep-sidebar-text-secondary: #a0a0a0;
+  --rep-sidebar-hover: rgba(255, 255, 255, 0.08);
+  --rep-sidebar-active-bg: color-mix(in srgb, #{brand.$rep-brand-primary-on-dark} 20%, transparent);
+  --rep-sidebar-active-text: #ffffff;
+  --rep-sidebar-logo-bg: rgba(255, 255, 255, 0.06);
+  --rep-drawer-max-height: 70vh;
+  --rep-topbar-height: 56px;
+  --rep-content-padding-x: 16px;
+  --rep-sidebar-gap: 16px;
+  --rep-sidebar-margin: 1rem;
+  --rep-table-row-min-height: 52px;
+  --rep-table-header-bg: #1e1e1e;
+  --rep-table-header-text: #e0e0e0;
+  --rep-table-border: #3a3a3a;
+  --rep-table-row-hover: color-mix(in srgb, #{brand.$rep-brand-primary-on-dark} 12%, transparent);
+}
+
+body {
+  font-family: var(--rep-font-sans);
+  background: var(--rep-bg);
+  color: var(--rep-text);
+}
+
+/* Keyboard/screen reader: visible focus ring. Don't rely on outline alone for mouse users. */
+:focus {
+  outline: 2px solid transparent;
+}
+:focus-visible {
+  outline: 2px solid var(--rep-primary, #128F83);
+  outline-offset: 2px;
+}
+[data-theme="dark"] :focus-visible {
+  outline-color: var(--rep-primary, #17b5a5);
+}
+
+/* Use design font in Vuetify components (they default to Roboto) */
+.v-application,
+.v-btn,
+.v-field,
+.v-input,
+.v-list-item,
+.v-data-table {
+  font-family: var(--rep-font-sans) !important;
+}
+
+/* Inputs: match app design (border-radius, transitions, touch targets) */
+.v-field {
+  border-radius: var(--rep-radius) !important;
+}
+
+.v-field .v-field__outline__start,
+.v-field .v-field__outline__notch::before,
+.v-field .v-field__outline__notch::after,
+.v-field .v-field__outline__end {
+  @media (prefers-reduced-motion: no-preference) {
+    transition: opacity var(--rep-transition-duration, 280ms) var(--rep-ease-out-smooth, cubic-bezier(0.22, 1, 0.36, 1));
+  }
+}
+
+/* Mobile: min 44px touch target for inputs (SPEC-0042) */
+@media (max-width: #{$rep-breakpoint-mobile - 1}) {
+  .v-input .v-field {
+    min-height: #{$rep-touch-target-min};
+  }
+}
+
+/* Button hover: no lift, only subtle color/opacity change. iOS-style: on hover-capable devices (mouse, Apple Pencil), subtle scale "attraction". */
+.v-btn {
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, opacity 0.2s ease;
+}
+.v-btn:hover {
+  /* No translateY – user prefers no lift */
+}
+.v-btn:active {
+  transform: none;
+}
+.v-btn--disabled {
+  transform: none !important;
+}
+
+/* iOS-style "attraction": subtle scale when pointer approaches (mouse, Apple Pencil). Only on hover-capable devices. */
+@media (hover: hover) and (pointer: fine) {
+  .v-btn:hover:not(.v-btn--disabled) {
+    transform: scale(1.03);
+  }
+  .v-btn:active:not(.v-btn--disabled) {
+    transform: scale(0.98);
+  }
+}
+
+/* Lead status chips: shared across LeadsView, LeadDetailView, RepFilterBar */
+.rep-lead-status-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.rep-lead-status-chip--new {
+  background: rgba(var(--v-theme-on-surface), 0.08);
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+.rep-lead-status-chip--ongoing {
+  background: rgba(var(--v-theme-warning), 0.2);
+  color: rgb(var(--v-theme-warning));
+}
+.rep-lead-status-chip--accepted {
+  background: rgba(var(--v-theme-success), 0.2);
+  color: rgb(var(--v-theme-success));
+}
+.rep-lead-status-chip--rejected {
+  background: rgba(var(--v-theme-error), 0.2);
+  color: rgb(var(--v-theme-error));
+}
+.rep-lead-status-chip--completed {
+  background: rgba(var(--v-theme-primary), 0.2);
+  color: rgb(var(--v-theme-primary));
+}
+
+/* Mobile/tablet: larger buttons for easy tap (min 44px) */
+@media (max-width: #{$rep-breakpoint-mobile - 1}) {
+  :root {
+    --rep-btn-min-height: #{$rep-touch-target-min};
+    --rep-btn-min-width: #{$rep-touch-target-min};
+  }
+}

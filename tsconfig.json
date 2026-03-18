@@ -1,9 +1,7 @@
 {
   "files": [],
   "references": [
-    { "path": "./apps/rep-app" },
-    { "path": "./apps/admin" },
-    { "path": "./apps/portal" },
+    { "path": "./apps/app" },
     { "path": "./apps/website" },
     { "path": "./services/bff" }
   ]

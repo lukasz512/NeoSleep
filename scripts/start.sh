@@ -80,16 +80,7 @@ if ! grep -q "^DATABASE_URL=" "$BFF_ENV" 2>/dev/null; then
   echo "DATABASE_URL=postgresql://neosleep:neosleep_local@localhost:5432/neosleep" >> "$BFF_ENV"
 fi
 
-# --- 5. Run migrations ---
-echo "Running database migrations..."
-MIGRATIONS="001_initial 003_console_logs_and_fix_tasks 004_users 005_rename_console_logs_to_console_errors 006_hco_hcp 007_leads_institution 008_hco_hcp_seed 009_dev_seed_2hco_4hcp 010_presentations 011_events 012_audit_log 015_app_config 016_app_config_theme 017_app_config_dark_colors"
-for f in $MIGRATIONS; do
-  MIG="$REPO_ROOT/services/bff/migrations/${f}.sql"
-  if [ -f "$MIG" ]; then
-    docker compose exec -T postgres psql -U neosleep -d neosleep < "$MIG" 2>/dev/null || true
-  fi
-done
-echo "Migrations done."
+# --- 5. (Migrations run automatically on BFF startup via runMigrations()) ---
 
 # --- 6. Install deps ---
 echo "Installing dependencies..."
@@ -102,7 +93,7 @@ echo "  ┌───────────────────────
 echo "  │  NeoSleep – Dev Environment                                 │"
 echo "  ├─────────────────────────────────────────────────────────────┤"
 echo "  │  Apps                                                       │"
-echo "  │    Rep app:   http://localhost:5173                         │"
+echo "  │    App:       http://localhost:5173                         │"
 echo "  │    Website:   http://localhost:5174                         │"
 echo "  │    BFF API:   http://localhost:3000                         │"
 echo "  ├─────────────────────────────────────────────────────────────┤"

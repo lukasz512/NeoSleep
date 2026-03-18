@@ -11,7 +11,8 @@ import { logsRouter } from "./routes/logs.js";
 import { eventsRouter } from "./routes/events.js";
 import { configRouter } from "./routes/config.js";
 import { contactRouter } from "./routes/contact.js";
-import { initDb } from "./db.js";
+import { patientsRouter } from "./routes/patients.js";
+import { runMigrations } from "./db.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
 const frontendUrl = process.env.FRONTEND_URL ?? "http://localhost:5173";
@@ -78,15 +79,17 @@ app.use(logsRouter);
 app.use(eventsRouter);
 app.use(configRouter);
 app.use(contactRouter);
+app.use(patientsRouter);
 
 app.use(errorHandler);
 
 let server: ReturnType<typeof app.listen> | null = null;
 
 if (typeof process.env.VITEST === "undefined") {
-  server = app.listen(3000, async () => {
-    console.log("BFF listening on http://localhost:3000");
-    await initDb();
+  const port = parseInt(process.env.PORT ?? "3000", 10);
+  server = app.listen(port, async () => {
+    console.log(`BFF listening on http://localhost:${port}`);
+    await runMigrations();
   });
 }
 

@@ -1,5 +1,8 @@
 # Ręczna promocja: zbuduj z gałęzi uat i wgraj na PROD (app.neosleepcare.com).
 # W Actions wybierz workflow "Promote App UAT → Prod" i kliknij "Run workflow".
+#
+# TODO: migrate to SSH (appleboy/scp-action) once Hetzner VPS is provisioned.
+# See infra/setup/provision.md for the migration runbook.
 
 name: Promote App UAT → Prod
 
@@ -27,8 +30,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build rep-app
-        run: pnpm run build:rep-app
+      - name: Build app
+        run: pnpm run build:app
 
       - name: Deploy to PROD (app.neosleepcare.com)
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
@@ -37,6 +40,6 @@ jobs:
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftp
-          local-dir: ./apps/rep-app/dist/
+          local-dir: ./apps/app/dist/
           server-dir: ${{ secrets.FTP_PATH_APP_PROD }}/
           dangerous-clean-slate: false

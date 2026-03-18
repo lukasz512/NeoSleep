@@ -1,6 +1,9 @@
 # Deploy rep-app to GoDaddy FTP
 # - PROD → app.neosleepcare.com (path: secret FTP_PATH_APP_PROD)
 # - uat  → app-uat.neosleepcare.com (path: secret FTP_PATH_APP_UAT)
+#
+# TODO: migrate to SSH (appleboy/scp-action) once Hetzner VPS is provisioned.
+# See infra/setup/provision.md for the migration runbook.
 
 name: Deploy NeoSleepCare App
 
@@ -37,7 +40,7 @@ jobs:
           fi
 
       - name: Build rep-app
-        run: pnpm run build:rep-app
+        run: pnpm run build:app
 
       - name: Deploy to PROD (app.neosleepcare.com)
         if: github.ref == 'refs/heads/PROD'
@@ -47,7 +50,7 @@ jobs:
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftp
-          local-dir: ./apps/rep-app/dist/
+          local-dir: ./apps/app/dist/
           server-dir: ${{ secrets.FTP_PATH_APP_PROD }}/
           dangerous-clean-slate: false
 
@@ -59,6 +62,6 @@ jobs:
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftp
-          local-dir: ./apps/rep-app/dist/
+          local-dir: ./apps/app/dist/
           server-dir: ${{ secrets.FTP_PATH_APP_UAT }}/
           dangerous-clean-slate: false
