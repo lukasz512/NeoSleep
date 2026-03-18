@@ -1,6 +1,6 @@
 <template>
   <component :is="tag" class="tb" :class="[`tb--${variant}`, { 'tb--photo': !!imageSrc }]">
-    <img v-if="imageSrc" :src="imageSrc" alt="" class="tb__photo" :style="imagePosition ? { objectPosition: imagePosition } : {}" aria-hidden="true" />
+    <img v-if="imageSrc" :src="imageSrc" alt="" class="tb__photo" :class="{ 'tb__photo--loaded': photoLoaded }" :style="imagePosition ? { objectPosition: imagePosition } : {}" aria-hidden="true" @load="photoLoaded = true" />
     <div class="tb__wash" aria-hidden="true" />
     <div class="tb__inner" :class="{ 'page-container': variant === 'hero' }">
       <p v-if="eyebrowKey" class="tb__eyebrow">{{ t(eyebrowKey) }}</p>
@@ -17,7 +17,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
+const photoLoaded = ref(false);
 import { useI18n } from "vue-i18n";
 
 interface Props {
@@ -58,6 +59,12 @@ $bp-mobile: 600px;
   object-position: center 30%;
   z-index: 0;
   border-radius: inherit;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+
+  &--loaded {
+    opacity: 1;
+  }
 }
 
 .tb__wash {
