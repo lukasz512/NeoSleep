@@ -5,6 +5,7 @@ import router from "./router";
 import vuetify, { repLightTheme, repDarkTheme } from "./plugins/vuetify";
 import { i18n } from "./plugins/i18n";
 import "./assets/theme.scss";
+import "./assets/transitions.css";
 import { getRepSettings } from "./utils/rep-settings";
 
 const settings = typeof localStorage !== "undefined" ? getRepSettings() : { theme: "light" as const, locale: "en" as const };
