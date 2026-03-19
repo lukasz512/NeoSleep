@@ -1,7 +1,7 @@
-import { getPool } from "./pool.js";
+import { getDb } from "./connection.js";
 import { toArray } from "./helpers.js";
 
-export interface HCORow {
+export interface HCO {
   id: string;
   name: string;
   type: string | null;
@@ -17,7 +17,7 @@ export interface GetHCOFilters {
   status?: string;
 }
 
-const MOCK_HCOS: HCORow[] = [
+const MOCK_HCOS: HCO[] = [
   { id: "mock-hco-01", name: "Clínica del Sueño NeoSleep",          type: "clinic",   region: "Central", status: "active", created_at: new Date("2025-08-01") },
   { id: "mock-hco-02", name: "Hospital General de Monterrey",       type: "hospital", region: "North",   status: "active", created_at: new Date("2025-08-05") },
   { id: "mock-hco-03", name: "Centro Pulmonar del Sur",             type: "hospital", region: "South",   status: "active", created_at: new Date("2025-08-10") },
@@ -37,8 +37,8 @@ export async function getHCOPaginated(
   limit: number,
   sortBy: string,
   sortOrder: "asc" | "desc"
-): Promise<{ rows: HCORow[]; total: number }> {
-  const p = getPool();
+): Promise<{ rows: HCO[]; total: number }> {
+  const p = getDb();
   if (!p) {
     const start = (page - 1) * limit;
     return { rows: MOCK_HCOS.slice(start, start + limit), total: MOCK_HCOS.length };
@@ -84,7 +84,7 @@ export async function getHCOPaginated(
 
   const offset = (page - 1) * limit;
   params.push(limit, offset);
-  const dataResult = await p.query<HCORow>(
+  const dataResult = await p.query<HCO>(
     `SELECT id, name, type, region, status, created_at FROM tbl_hco ${whereClause} ORDER BY ${safeOrder} ${orderDir} LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
     params
   );
@@ -92,11 +92,11 @@ export async function getHCOPaginated(
   return { rows: dataResult.rows, total };
 }
 
-export async function getHCOById(id: string): Promise<HCORow | null> {
-  const p = getPool();
+export async function getHCOById(id: string): Promise<HCO | null> {
+  const p = getDb();
   if (!p) return null;
   try {
-    const result = await p.query<HCORow>(
+    const result = await p.query<HCO>(
       "SELECT id, name, type, region, status, created_at FROM tbl_hco WHERE id = $1",
       [id]
     );

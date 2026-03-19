@@ -1,11 +1,11 @@
 import { readFileSync, readdirSync } from "fs";
 import { fileURLToPath } from "url";
 import { join, dirname } from "path";
-import { getPool } from "./pool.js";
+import { getDb } from "./connection.js";
 
 /** Run all pending .sql migrations in order. Tracks applied files in schema_migrations. */
 export async function runMigrations(): Promise<void> {
-  const p = getPool();
+  const p = getDb();
   if (!p) return;
   try {
     await p.query(`

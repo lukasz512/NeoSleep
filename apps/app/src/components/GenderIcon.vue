@@ -16,7 +16,7 @@ defineProps<{
 }>();
 </script>
 
-<style lang="scss" scoped>
+<style scoped>
 .gender-icon {
   opacity: 0.5;
   flex-shrink: 0;

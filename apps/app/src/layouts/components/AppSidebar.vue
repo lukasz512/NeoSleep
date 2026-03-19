@@ -73,14 +73,7 @@ function onSlideEnd(e: PointerEvent) {
 }
 </script>
 
-<style lang="scss" scoped>
-$sidebar-bg: var(--rep-sidebar-bg, #262626);
-$sidebar-border: var(--rep-sidebar-border, #3a3a3a);
-$sidebar-text: var(--rep-sidebar-text, #f5f5f5);
-$sidebar-text-secondary: var(--rep-sidebar-text-secondary, #a0a0a0);
-$sidebar-hover: var(--rep-sidebar-hover, rgba(255, 255, 255, 0.08));
-$sidebar-active-bg: var(--rep-sidebar-active-bg, rgba(66, 165, 245, 0.2));
-
+<style scoped>
 /* Sidebar: minimal app frame, no heavy “card” look. */
 .layout-app__sidebar {
   position: fixed;
@@ -91,8 +84,8 @@ $sidebar-active-bg: var(--rep-sidebar-active-bg, rgba(66, 165, 245, 0.2));
   flex-direction: column;
   width: 220px;
   padding: 16px;
-  background: $sidebar-bg;
-  border: 1px solid $sidebar-border;
+  background: var(--rep-sidebar-bg, #262626);
+  border: 1px solid var(--rep-sidebar-border, #3a3a3a);
   border-radius: var(--rep-radius);
   transition:
     width 0.25s ease,
@@ -149,7 +142,7 @@ $sidebar-active-bg: var(--rep-sidebar-active-bg, rgba(66, 165, 245, 0.2));
   gap: 10px;
   padding: 8px 10px;
   font-size: 0.875rem;
-  color: $sidebar-text;
+  color: var(--rep-sidebar-text, #f5f5f5);
   text-decoration: none;
   border: none;
   border-radius: var(--rep-radius);
@@ -164,19 +157,19 @@ $sidebar-active-bg: var(--rep-sidebar-active-bg, rgba(66, 165, 245, 0.2));
   /* Expanded: no button-like hover. Collapsed: subtle hover for feedback. */
   &:hover,
   &:focus-visible {
-    color: $sidebar-text;
+    color: var(--rep-sidebar-text, #f5f5f5);
     outline: none;
   }
 }
 
 .layout-app__sidebar--collapsed .layout-app__sidebar-content :deep(.layout-app__nav-link:hover),
 .layout-app__sidebar--collapsed .layout-app__sidebar-content :deep(.layout-app__nav-link:focus-visible) {
-  background: $sidebar-hover;
+  background: var(--rep-sidebar-hover, rgba(255, 255, 255, 0.08));
 }
 
 .layout-app__sidebar-content :deep(.layout-app__nav-link--active),
 .layout-app__sidebar-content :deep(.layout-app__nav-link.router-link-active) {
-  background: $sidebar-active-bg;
+  background: var(--rep-sidebar-active-bg, rgba(66, 165, 245, 0.2));
   color: var(--rep-primary, #17b5a5);
   text-decoration: none;
   border-bottom: none;
@@ -246,7 +239,7 @@ $sidebar-active-bg: var(--rep-sidebar-active-bg, rgba(66, 165, 245, 0.2));
   margin-top: auto;
   padding-top: 20px;
   padding-bottom: max(20px, env(safe-area-inset-bottom, 20px));
-  border-top: 1px solid $sidebar-border;
+  border-top: 1px solid var(--rep-sidebar-border, #3a3a3a);
   display: flex;
   justify-content: center;
   transition: padding 0.25s ease;
@@ -268,14 +261,14 @@ $sidebar-active-bg: var(--rep-sidebar-active-bg, rgba(66, 165, 245, 0.2));
   border: none;
   border-radius: var(--rep-radius);
   background: transparent;
-  color: $sidebar-text-secondary;
+  color: var(--rep-sidebar-text, #f5f5f5)-secondary;
   transition: background 0.15s, color 0.15s;
   -webkit-tap-highlight-color: transparent;
   transform: none;
 
   &:hover,
   &:focus-visible {
-    background: $sidebar-hover;
+    background: var(--rep-sidebar-hover, rgba(255, 255, 255, 0.08));
     color: var(--rep-primary, #17b5a5);
     outline: none;
     transform: none;

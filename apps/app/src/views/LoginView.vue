@@ -149,7 +149,7 @@ onMounted(async () => {
 });
 </script>
 
-<style lang="scss" scoped>
+<style scoped>
 .view-login {
   display: flex;
   align-items: center;

@@ -64,10 +64,7 @@ defineEmits<{
 }>();
 </script>
 
-<style lang="scss" scoped>
-$sidebar-border: var(--rep-sidebar-border, #3a3a3a);
-$sidebar-text: var(--rep-sidebar-text, #f5f5f5);
-
+<style scoped>
 .layout-app__logo {
   flex-shrink: 0;
   position: relative;
@@ -85,13 +82,13 @@ $sidebar-text: var(--rep-sidebar-text, #f5f5f5);
     left: 0;
     right: 0;
     height: 1px;
-    background: $sidebar-border;
+    background: var(--rep-sidebar-border, #3a3a3a);
   }
 
   .layout-app__logo-link {
     display: flex;
     align-items: center;
-    color: $sidebar-text;
+    color: var(--rep-sidebar-text, #f5f5f5);
     text-decoration: none;
     padding: 8px 4px;
     margin: -8px 0;
@@ -99,7 +96,7 @@ $sidebar-text: var(--rep-sidebar-text, #f5f5f5);
 
     &:hover,
     &:focus-visible {
-      color: $sidebar-text;
+      color: var(--rep-sidebar-text, #f5f5f5);
       outline: none;
     }
   }
@@ -142,14 +139,14 @@ $sidebar-text: var(--rep-sidebar-text, #f5f5f5);
 .layout-app__mobile-drawer-logo-link {
   display: flex;
   align-items: center;
-  color: $sidebar-text;
+  color: var(--rep-sidebar-text, #f5f5f5);
   text-decoration: none;
   padding: 8px 4px;
   -webkit-tap-highlight-color: transparent;
 
   &:hover,
   &:focus-visible {
-    color: $sidebar-text;
+    color: var(--rep-sidebar-text, #f5f5f5);
     outline: none;
   }
 }

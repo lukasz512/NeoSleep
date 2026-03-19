@@ -19,9 +19,11 @@ import { useI18n } from "vue-i18n";
 import RepEntityList from "../components/RepEntityList.vue";
 import { useRepFilters, type RepFilterDefinition } from "../composables/useRepFilters";
 import { useAuthStore } from "../stores/auth";
+import { useConfigStore } from "../stores/config";
 
 const { t } = useI18n();
 const authStore = useAuthStore();
+const configStore = useConfigStore();
 const isAdmin = computed(() => authStore.user?.role === "admin");
 
 const hcoFilterDefs: RepFilterDefinition[] = [
@@ -39,9 +41,7 @@ const typeOptions = computed(() => [
 ]);
 const regionOptions = computed(() => [
   { title: t("rep.hco.filters.all"), value: "" },
-  { title: "North", value: "North" },
-  { title: "Central", value: "Central" },
-  { title: "South", value: "South" },
+  ...configStore.regionItems,
 ]);
 const statusOptions = computed(() => [
   { title: t("rep.hco.filters.all"), value: "" },

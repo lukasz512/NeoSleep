@@ -25,7 +25,7 @@ const { t } = useI18n();
 const loaderLabel = computed(() => t("layout.loader.label"));
 </script>
 
-<style lang="scss" scoped>
+<style scoped>
 .layout-app__loader {
   height: 3px;
   min-height: 3px;

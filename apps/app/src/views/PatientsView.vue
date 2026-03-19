@@ -28,8 +28,10 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import RepEntityList from "../components/RepEntityList.vue";
 import { useRepFilters, type RepFilterDefinition } from "../composables/useRepFilters";
+import { useConfigStore } from "../stores/config";
 
 const { t } = useI18n();
+const configStore = useConfigStore();
 
 const patientFilterDefs: RepFilterDefinition[] = [
   { key: "status", labelKey: "rep.patients.filters.status", type: "select", default: "" },
@@ -45,10 +47,7 @@ const statusOptions = computed(() => [
 
 const regionOptions = computed(() => [
   { title: t("rep.patients.filters.all"), value: "" },
-  { title: "North",   value: "North" },
-  { title: "Central", value: "Central" },
-  { title: "South",   value: "South" },
-  { title: "West",    value: "West" },
+  ...configStore.regionItems,
 ]);
 
 const patientFilterDefinitions = computed<RepFilterDefinition[]>(() => [

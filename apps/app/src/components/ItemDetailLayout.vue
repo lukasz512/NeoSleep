@@ -75,7 +75,7 @@ defineProps<{
 }>();
 </script>
 
-<style lang="scss" scoped>
+<style scoped>
 .view-item {
   max-width: 100%;
 }

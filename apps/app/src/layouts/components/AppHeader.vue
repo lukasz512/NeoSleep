@@ -89,7 +89,7 @@ defineExpose({
 });
 </script>
 
-<style lang="scss" scoped>
+<style scoped>
 .layout-app__header {
   flex-shrink: 0;
   position: sticky;

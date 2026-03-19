@@ -54,7 +54,7 @@ defineEmits<{
 }>();
 </script>
 
-<style lang="scss" scoped>
+<style scoped>
 .app-empty-state {
   display: flex;
   flex-direction: column;

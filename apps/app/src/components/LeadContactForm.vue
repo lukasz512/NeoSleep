@@ -145,6 +145,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { useConfigStore } from "../stores/config";
 
 export interface LeadFormData {
   name: string;
@@ -181,6 +182,7 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
+const configStore = useConfigStore();
 const formRef = ref<{ validate: () => Promise<{ valid: boolean }> } | null>(null);
 const submitting = ref(false);
 const showDiscardConfirm = ref(false);
@@ -204,17 +206,10 @@ const statusItems = computed(() => [
 
 const regionItems = computed(() => [
   { title: t("rep.leads.filters.all"), value: "" },
-  { title: "North", value: "North" },
-  { title: "Central", value: "Central" },
-  { title: "South", value: "South" },
+  ...configStore.regionItems,
 ]);
 
-const specialtyItems = computed(() => [
-  { title: "Pulmonology", value: "Pulmonology" },
-  { title: "Sleep medicine", value: "Sleep medicine" },
-  { title: "Neurology", value: "Neurology" },
-  { title: "Internal medicine", value: "Internal medicine" },
-]);
+const specialtyItems = computed(() => configStore.specialtyItems);
 
 const isEditMode = computed(() => !!props.initialData && Object.keys(props.initialData).length > 0);
 
@@ -362,7 +357,7 @@ watch(
 );
 </script>
 
-<style lang="scss" scoped>
+<style scoped>
 .lead-contact-form__phone-prefix {
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   margin-inline-end: 4px;
@@ -380,7 +375,7 @@ watch(
 }
 </style>
 
-<style lang="scss">
+<style >
 /* Project styling: modal border-radius from design tokens (not Vuetify default) */
 .lead-contact-form-dialog__content {
   border-radius: var(--rep-modal-radius, 16px) !important;

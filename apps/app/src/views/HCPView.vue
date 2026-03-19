@@ -43,12 +43,14 @@ import { useNotifications } from "../composables/useNotifications";
 import GenderIcon from "../components/GenderIcon.vue";
 import { useRepFilters, type RepFilterDefinition } from "../composables/useRepFilters";
 import { useAuthStore } from "../stores/auth";
+import { useConfigStore } from "../stores/config";
 import { getGenderFromName } from "../utils/genderFromName";
 
 const LeadContactForm = defineAsyncComponent(() => import("../components/LeadContactForm.vue"));
 
 const { t } = useI18n();
 const authStore = useAuthStore();
+const configStore = useConfigStore();
 const isAdmin = computed(() => authStore.user?.role === "admin");
 const showAddModal = ref(false);
 const notifications = useNotifications();
@@ -61,21 +63,15 @@ const hcpFilterDefs: RepFilterDefinition[] = [
 
 const specialtyOptions = computed(() => [
   { title: t("rep.leads.filters.all"), value: "" },
-  { title: "Pulmonology", value: "Pulmonology" },
-  { title: "Sleep medicine", value: "Sleep medicine" },
-  { title: "Neurology", value: "Neurology" },
-  { title: "Internal medicine", value: "Internal medicine" },
+  ...configStore.specialtyItems,
 ]);
 const institutionOptions = computed(() => [
   { title: t("rep.leads.filters.all"), value: "" },
-  { title: "NeoSleep Care Center", value: "NeoSleep Care Center" },
-  { title: "City Hospital North", value: "City Hospital North" },
+  ...configStore.institutionTypeItems,
 ]);
 const regionOptions = computed(() => [
   { title: t("rep.leads.filters.all"), value: "" },
-  { title: "North", value: "North" },
-  { title: "Central", value: "Central" },
-  { title: "South", value: "South" },
+  ...configStore.regionItems,
 ]);
 
 const hcpFilterDefinitions = computed<RepFilterDefinition[]>(() => [
@@ -132,7 +128,7 @@ async function onContactSubmit(data: import("../components/LeadContactForm.vue")
 }
 </script>
 
-<style lang="scss" scoped>
+<style scoped>
 .hcp-name-cell {
   display: inline-flex;
   align-items: center;

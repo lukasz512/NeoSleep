@@ -13,7 +13,7 @@
       :filter-definitions="leadFilterDefs"
       :filter-definitions-with-options="leadFilterDefinitions"
       :i18n="leadsI18n"
-      :show-add-button="true"
+      :show-add-button="isAdmin"
       detail-route-name="lead-detail"
       :filter-param-keys="['status', 'region']"
       @add="onAddLead"
@@ -82,8 +82,9 @@ import GenderIcon from "../components/GenderIcon.vue";
 const LeadContactForm = defineAsyncComponent(() => import("../components/LeadContactForm.vue"));
 import { apiFetch } from "../utils/api";
 import { useNotifications } from "../composables/useNotifications";
-import { useRepFilters, type RepFilterDefinition } from "../composables/useRepFilters";
+import { type RepFilterDefinition } from "../composables/useRepFilters";
 import { useAuthStore } from "../stores/auth";
+import { useConfigStore } from "../stores/config";
 import { getGenderFromName } from "../utils/genderFromName";
 import { leadStatusClass, leadStatusI18nKey } from "../utils/leadStatus";
 
@@ -101,6 +102,7 @@ export interface Lead {
 
 const { t } = useI18n();
 const authStore = useAuthStore();
+const configStore = useConfigStore();
 const isAdmin = computed(() => authStore.user?.role === "admin");
 const showAddModal = ref(false);
 const notifications = useNotifications();
@@ -118,12 +120,7 @@ const statusOptions = computed(() => [
   { title: t("rep.leads.filters.statusRejected"), value: "rejected", chipClass: "rep-lead-status-chip--rejected" },
   { title: t("rep.leads.filters.statusCompleted"), value: "completed", chipClass: "rep-lead-status-chip--completed" },
 ]);
-const regionOptions = computed(() => [
-  { title: t("rep.leads.filters.all"), value: "" },
-  { title: "North", value: "North" },
-  { title: "Central", value: "Central" },
-  { title: "South", value: "South" },
-]);
+const regionOptions = computed(() => configStore.regionItems);
 
 const leadFilterDefinitions = computed<RepFilterDefinition[]>(() => [
   { ...leadFilterDefs[0], options: statusOptions.value },
@@ -197,7 +194,7 @@ async function onLeadSubmit(data: import("../components/LeadContactForm.vue").Le
 }
 </script>
 
-<style lang="scss" scoped>
+<style scoped>
 .leads-status-cell {
   display: flex;
   align-items: center;

@@ -9,7 +9,7 @@
 <script setup lang="ts">
 </script>
 
-<style lang="scss" scoped>
+<style scoped>
 .layout-default {
   min-height: 100vh;
   padding: 16px;

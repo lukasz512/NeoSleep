@@ -268,7 +268,7 @@ onMounted(async () => {
   if (typeof settings.sidebarCollapsed === "boolean") {
     sidebarCollapsed.value = settings.sidebarCollapsed;
   }
-  const cfg = await configStore.load();
+  const [cfg] = await Promise.all([configStore.load(), configStore.loadOptions()]);
   configStore.applyToDom(cfg);
   setTheme(cfg.color_scheme);
   updateMobile();
@@ -282,7 +282,7 @@ onUnmounted(() => {
 });
 </script>
 
-<style lang="scss">
+<style >
 /* View transitions: physics-inspired, minimal. Not scoped – transition classes are on dynamic component. */
 .view-fade-lift-enter-active,
 .view-fade-lift-leave-active {
@@ -312,13 +312,7 @@ onUnmounted(() => {
 }
 </style>
 
-<style lang="scss" scoped>
-$sidebar-bg: var(--rep-sidebar-bg, #262626);
-$sidebar-border: var(--rep-sidebar-border, #3a3a3a);
-$sidebar-text: var(--rep-sidebar-text, #f5f5f5);
-$breakpoint-mobile: 767px;
-$breakpoint-desktop: 768px;
-
+<style scoped>
 .layout-app {
   min-height: 100vh;
   height: 100vh;
@@ -346,7 +340,7 @@ $breakpoint-desktop: 768px;
   }
 }
 
-@media (max-width: $breakpoint-mobile) {
+@media (max-width: 767px) {
   :deep(.layout-app__sidebar) {
     display: none !important;
   }
@@ -370,7 +364,7 @@ $breakpoint-desktop: 768px;
   }
 }
 
-@media (min-width: $breakpoint-desktop) {
+@media (min-width: 768px) {
   .layout-app__mobile-bottom-bar,
   .layout-app__mobile-overlay,
   :deep(.layout-app__mobile-drawer) {

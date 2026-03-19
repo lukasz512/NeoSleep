@@ -1,7 +1,7 @@
-import { getPool } from "./pool.js";
+import { getDb } from "./connection.js";
 import { toArray, trimOrNull, trimOrEmpty } from "./helpers.js";
 
-export interface HCPRow {
+export interface HCP {
   id: string;
   name: string;
   email: string | null;
@@ -38,7 +38,7 @@ export interface UpdateHCPInput {
   region?: string;
 }
 
-const MOCK_HCPS: HCPRow[] = [
+const MOCK_HCPS: HCP[] = [
   { id: "mock-hcp-01", name: "Dr Anna Kowalska",        email: "a.kowalska@neosleep.example",     phone: null, specialty: "Pulmonology",       institution: "NeoSleep Care Center",           region: "Central", created_at: new Date("2025-09-01") },
   { id: "mock-hcp-02", name: "Dr Piotr Nowak",           email: "p.nowak@neosleep.example",        phone: null, specialty: "Sleep medicine",    institution: "NeoSleep Care Center",           region: "Central", created_at: new Date("2025-09-05") },
   { id: "mock-hcp-03", name: "Dr Maria Wiśniewska",      email: "m.wisniewska@hospital.example",   phone: null, specialty: "Neurology",         institution: "City Hospital North",            region: "North",   created_at: new Date("2025-09-08") },
@@ -61,7 +61,7 @@ function isHCPSortColumn(s: string): s is (typeof HCP_SORT_COLUMNS)[number] {
 
 /** Find or create HCO by name. Uses INSERT ON CONFLICT to avoid race conditions. */
 async function resolveHcoId(
-  p: NonNullable<ReturnType<typeof getPool>>,
+  p: NonNullable<ReturnType<typeof getDb>>,
   institution: string,
   region: string
 ): Promise<{ id: string; name: string }> {
@@ -80,8 +80,8 @@ export async function getHCPPaginated(
   limit: number,
   sortBy: string,
   sortOrder: "asc" | "desc"
-): Promise<{ rows: HCPRow[]; total: number }> {
-  const p = getPool();
+): Promise<{ rows: HCP[]; total: number }> {
+  const p = getDb();
   if (!p) {
     const start = (page - 1) * limit;
     return { rows: MOCK_HCPS.slice(start, start + limit), total: MOCK_HCPS.length };
@@ -130,7 +130,7 @@ export async function getHCPPaginated(
 
   const offset = (page - 1) * limit;
   params.push(limit, offset);
-  const dataResult = await p.query<HCPRow>(
+  const dataResult = await p.query<HCP>(
     `SELECT h.id, h.name, h.email, h.specialty, o.name AS institution, h.region, h.created_at
      FROM tbl_hcp h LEFT JOIN tbl_hco o ON h.hco_id = o.id
      ${whereClause} ORDER BY ${safeOrder} ${orderDir} LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
@@ -139,11 +139,11 @@ export async function getHCPPaginated(
   return { rows: dataResult.rows, total };
 }
 
-export async function getHCPById(id: string): Promise<HCPRow | null> {
-  const p = getPool();
+export async function getHCPById(id: string): Promise<HCP | null> {
+  const p = getDb();
   if (!p) return null;
   try {
-    const result = await p.query<HCPRow>(
+    const result = await p.query<HCP>(
       `SELECT h.id, h.name, h.email, h.phone, h.specialty, o.name AS institution, h.region, h.created_at
        FROM tbl_hcp h LEFT JOIN tbl_hco o ON h.hco_id = o.id WHERE h.id = $1`,
       [id]
@@ -155,8 +155,8 @@ export async function getHCPById(id: string): Promise<HCPRow | null> {
   }
 }
 
-export async function insertHCP(input: InsertHCPInput): Promise<HCPRow | null> {
-  const p = getPool();
+export async function insertHCP(input: InsertHCPInput): Promise<HCP | null> {
+  const p = getDb();
   if (!p) return null;
   try {
     const name = trimOrEmpty(input.name);
@@ -168,7 +168,7 @@ export async function insertHCP(input: InsertHCPInput): Promise<HCPRow | null> {
       ? await resolveHcoId(p, input.institution.trim(), trimOrEmpty(input.region))
       : null;
 
-    const result = await p.query<HCPRow>(
+    const result = await p.query<HCP>(
       `INSERT INTO tbl_hcp (name, email, phone, specialty, hco_id, region, status, lead_id)
        VALUES ($1, $2, $3, $4, $5, $6, 'active', $7)
        RETURNING id, name, email, specialty, region, created_at`,
@@ -183,8 +183,8 @@ export async function insertHCP(input: InsertHCPInput): Promise<HCPRow | null> {
   }
 }
 
-export async function updateHCP(id: string, input: UpdateHCPInput): Promise<HCPRow | null> {
-  const p = getPool();
+export async function updateHCP(id: string, input: UpdateHCPInput): Promise<HCP | null> {
+  const p = getDb();
   if (!p) return null;
   const existing = await getHCPById(id);
   if (!existing) return null;

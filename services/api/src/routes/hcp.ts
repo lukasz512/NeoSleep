@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { getPool, getHCPPaginated, getHCPById, insertHCP, updateHCP, insertAuditLog, type GetHCPFilters } from "../db.js";
+import { getDb, getHCPPaginated, getHCPById, insertHCP, updateHCP, insertAuditLog, type GetHCPFilters } from "../db.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
 
 const DEFAULT_PAGE = 1;
@@ -116,7 +116,7 @@ hcpRouter.post(
       res.status(400).json({ error: "Invalid email format" });
       return;
     }
-    if (!getPool()) {
+    if (!getDb()) {
       res.status(503).json({
         error: "Database not available. Ensure Postgres is running and DATABASE_URL is set.",
       });
@@ -194,7 +194,7 @@ hcpRouter.patch(
         return;
       }
     }
-    if (!getPool()) {
+    if (!getDb()) {
       res.status(503).json({
         error: "Database not available. Ensure Postgres is running and DATABASE_URL is set.",
       });

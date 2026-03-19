@@ -1,4 +1,4 @@
-import { getPool } from "./pool.js";
+import { getDb } from "./connection.js";
 import { toArray, trimOrNull, trimOrEmpty } from "./helpers.js";
 
 export interface Lead {
@@ -62,7 +62,7 @@ export async function getLeadsPaginated(
   sortBy: string,
   sortOrder: "asc" | "desc"
 ): Promise<GetLeadsPaginatedResult> {
-  const p = getPool();
+  const p = getDb();
   if (!p) {
     const start = (page - 1) * limit;
     return { rows: MOCK_LEADS.slice(start, start + limit), total: MOCK_LEADS.length };
@@ -114,7 +114,7 @@ export async function getLeadsPaginated(
 }
 
 export async function getLeadById(id: string): Promise<Lead | null> {
-  const p = getPool();
+  const p = getDb();
   if (!p) return MOCK_LEADS.find((l) => l.id === id) ?? null;
   try {
     const result = await p.query<Lead>(
@@ -130,7 +130,7 @@ export async function getLeadById(id: string): Promise<Lead | null> {
 
 /** Insert a new lead. Returns the created lead or null on error. */
 export async function insertLead(input: InsertLeadInput): Promise<Lead | null> {
-  const p = getPool();
+  const p = getDb();
   if (!p) return null;
   try {
     const name = trimOrEmpty(input.name);
@@ -150,7 +150,7 @@ export async function insertLead(input: InsertLeadInput): Promise<Lead | null> {
 
 /** Update an existing lead. Returns the updated lead or null if not found. */
 export async function updateLead(id: string, input: UpdateLeadInput): Promise<Lead | null> {
-  const p = getPool();
+  const p = getDb();
   if (!p) return null;
   try {
     const lead = await getLeadById(id);

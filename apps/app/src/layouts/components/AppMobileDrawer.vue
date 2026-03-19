@@ -97,14 +97,7 @@ defineExpose({
 });
 </script>
 
-<style lang="scss" scoped>
-$sidebar-bg: var(--rep-sidebar-bg, #262626);
-$sidebar-border: var(--rep-sidebar-border, #3a3a3a);
-$sidebar-text: var(--rep-sidebar-text, #f5f5f5);
-$sidebar-text-secondary: var(--rep-sidebar-text-secondary, #a0a0a0);
-$sidebar-hover: var(--rep-sidebar-hover, rgba(255, 255, 255, 0.08));
-$sidebar-active-bg: var(--rep-sidebar-active-bg, rgba(66, 165, 245, 0.2));
-
+<style scoped>
 .layout-app__mobile-drawer {
   position: fixed;
   left: 0;
@@ -114,9 +107,9 @@ $sidebar-active-bg: var(--rep-sidebar-active-bg, rgba(66, 165, 245, 0.2));
   width: 100%;
   max-height: var(--rep-drawer-max-height, 70vh);
   padding: var(--rep-content-padding-x, 16px) var(--rep-content-padding-x, 16px) max(var(--rep-content-padding-x, 16px), env(safe-area-inset-bottom, 12px)) var(--rep-content-padding-x, 16px);
-  background: $sidebar-bg;
+  background: var(--rep-sidebar-bg, #262626);
   border: none;
-  border-top: 1px solid $sidebar-border;
+  border-top: 1px solid var(--rep-sidebar-border, #3a3a3a);
   border-radius: var(--rep-radius) var(--rep-radius) 0 0;
   overflow: auto;
   box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.4);
@@ -137,7 +130,7 @@ $sidebar-active-bg: var(--rep-sidebar-active-bg, rgba(66, 165, 245, 0.2));
   position: relative;
   margin-bottom: 16px;
   padding-bottom: 16px;
-  border-bottom: 1px solid $sidebar-border;
+  border-bottom: 1px solid var(--rep-sidebar-border, #3a3a3a);
 }
 
 .layout-app__mobile-drawer-theme-btn {
@@ -156,7 +149,7 @@ $sidebar-active-bg: var(--rep-sidebar-active-bg, rgba(66, 165, 245, 0.2));
 
 .layout-app__mobile-drawer-theme-btn:hover,
 .layout-app__mobile-drawer-theme-btn:focus-visible {
-  background: $sidebar-hover;
+  background: var(--rep-sidebar-hover, rgba(255, 255, 255, 0.08));
   outline: none;
 }
 
@@ -186,7 +179,7 @@ $sidebar-active-bg: var(--rep-sidebar-active-bg, rgba(66, 165, 245, 0.2));
   width: 20px;
   height: 20px;
   margin-left: auto;
-  color: $sidebar-text-secondary;
+  color: var(--rep-sidebar-text, #f5f5f5)-secondary;
   flex-shrink: 0;
 }
 
@@ -207,14 +200,14 @@ $sidebar-active-bg: var(--rep-sidebar-active-bg, rgba(66, 165, 245, 0.2));
   padding: 12px 14px;
   border-radius: var(--rep-radius);
   background: transparent;
-  color: $sidebar-text;
+  color: var(--rep-sidebar-text, #f5f5f5);
   text-align: left;
   -webkit-tap-highlight-color: transparent;
   transition: background 0.15s;
 
   &:hover,
   &:focus-visible {
-    background: $sidebar-hover;
+    background: var(--rep-sidebar-hover, rgba(255, 255, 255, 0.08));
     outline: none;
   }
 }
@@ -240,12 +233,12 @@ $sidebar-active-bg: var(--rep-sidebar-active-bg, rgba(66, 165, 245, 0.2));
 .layout-app__mobile-drawer-name {
   font-size: 1rem;
   font-weight: 500;
-  color: $sidebar-text;
+  color: var(--rep-sidebar-text, #f5f5f5);
   max-width: none;
 }
 
 .layout-app__mobile-drawer-user-trigger .layout-app__user-role {
-  color: $sidebar-text-secondary;
+  color: var(--rep-sidebar-text, #f5f5f5)-secondary;
 }
 
 .layout-app__mobile-drawer-nav {
@@ -260,7 +253,7 @@ $sidebar-active-bg: var(--rep-sidebar-active-bg, rgba(66, 165, 245, 0.2));
   gap: 10px;
   padding: 8px 10px;
   font-size: 0.875rem;
-  color: $sidebar-text;
+  color: var(--rep-sidebar-text, #f5f5f5);
   text-decoration: none;
   border: none;
   border-radius: var(--rep-radius);
@@ -269,14 +262,14 @@ $sidebar-active-bg: var(--rep-sidebar-active-bg, rgba(66, 165, 245, 0.2));
 
   &:hover,
   &:focus-visible {
-    background: $sidebar-hover;
-    color: $sidebar-text;
+    background: var(--rep-sidebar-hover, rgba(255, 255, 255, 0.08));
+    color: var(--rep-sidebar-text, #f5f5f5);
     outline: none;
   }
 
   &--active,
   &.router-link-active {
-    background: $sidebar-active-bg;
+    background: var(--rep-sidebar-active-bg, rgba(66, 165, 245, 0.2));
     color: var(--rep-primary, #17b5a5);
     text-decoration: none;
     border-bottom: none;
@@ -286,14 +279,14 @@ $sidebar-active-bg: var(--rep-sidebar-active-bg, rgba(66, 165, 245, 0.2));
 .layout-app__mobile-drawer-logo {
   flex-shrink: 0;
   padding: 16px 0 12px;
-  border-bottom: 1px solid $sidebar-border;
+  border-bottom: 1px solid var(--rep-sidebar-border, #3a3a3a);
 }
 
 .layout-app__mobile-drawer-logo-link {
   display: flex;
   align-items: center;
   gap: 12px;
-  color: $sidebar-text;
+  color: var(--rep-sidebar-text, #f5f5f5);
   text-decoration: none;
   padding: 8px 10px;
   -webkit-tap-highlight-color: transparent;

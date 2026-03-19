@@ -1,5 +1,5 @@
 export * from "./helpers.js";
-export * from "./pool.js";
+export * from "./connection.js";
 export * from "./migrations.js";
 export * from "./leads.js";
 export * from "./users.js";
@@ -8,5 +8,7 @@ export * from "./hcp.js";
 export * from "./hco.js";
 export * from "./presentations.js";
 export * from "./patients.js";
-export * from "./logging.js";
+export * from "./audit-log.js";
+export * from "./console-log.js";
 export * from "./config.js";
+export * from "./config-options.js";

@@ -1,6 +1,6 @@
-import { getPool } from "./pool.js";
+import { getDb } from "./connection.js";
 
-export interface EventRow {
+export interface Event {
   id: string;
   rep_id: string;
   start_at: Date;
@@ -50,7 +50,7 @@ export interface UpdateEventInput {
 }
 
 /** Generate demo events relative to now (fallback when DB is unavailable). */
-function getMockEvents(): EventRow[] {
+function getMockEvents(): Event[] {
   const mockRepId = "00000000-0000-0000-0000-000000000001";
   const at = (daysOffset: number, hour: number, minute = 0): Date => {
     const d = new Date();
@@ -68,7 +68,7 @@ function getMockEvents(): EventRow[] {
     region: string,
     status: "scheduled" | "completed" | "cancelled" | "no_show",
     location?: string
-  ): EventRow => ({
+  ): Event => ({
     id,
     rep_id: mockRepId,
     start_at: at(daysOffset, startHour),
@@ -113,15 +113,15 @@ function getMockEvents(): EventRow[] {
 
 /** Fetch attendees for multiple events in a single query, keyed by event_id. */
 async function fetchAttendeesForEvents(
-  p: NonNullable<ReturnType<typeof getPool>>,
+  p: NonNullable<ReturnType<typeof getDb>>,
   eventIds: string[]
-): Promise<Map<string, EventRow["attendees"]>> {
+): Promise<Map<string, Event["attendees"]>> {
   if (eventIds.length === 0) return new Map();
   const result = await p.query<{ event_id: string; attendee_type: string; attendee_id: string; is_primary: boolean }>(
     "SELECT event_id, attendee_type, attendee_id, is_primary FROM tbl_event_attendees WHERE event_id = ANY($1::uuid[])",
     [eventIds]
   );
-  const map = new Map<string, EventRow["attendees"]>();
+  const map = new Map<string, Event["attendees"]>();
   for (const a of result.rows) {
     const list = map.get(a.event_id) ?? [];
     list.push({ attendee_type: a.attendee_type as "hcp" | "hco" | "lead", attendee_id: a.attendee_id, is_primary: a.is_primary ?? false });
@@ -130,8 +130,8 @@ async function fetchAttendeesForEvents(
   return map;
 }
 
-export async function getEvents(filters: GetEventsFilters): Promise<{ rows: EventRow[] }> {
-  const p = getPool();
+export async function getEvents(filters: GetEventsFilters): Promise<{ rows: Event[] }> {
+  const p = getDb();
   if (!p) return { rows: getMockEvents() };
   try {
     const conditions: string[] = [];
@@ -160,7 +160,7 @@ export async function getEvents(filters: GetEventsFilters): Promise<{ rows: Even
     }
 
     const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-    const result = await p.query<EventRow>(
+    const result = await p.query<Event>(
       `SELECT e.id, e.rep_id, e.start_at, e.end_at, e.type, e.title, e.location, e.video_link, e.notes, e.region, e.status
        FROM tbl_events e ${whereClause} ORDER BY e.start_at ASC`,
       params
@@ -174,11 +174,11 @@ export async function getEvents(filters: GetEventsFilters): Promise<{ rows: Even
   }
 }
 
-export async function getEventById(id: string): Promise<EventRow | null> {
-  const p = getPool();
+export async function getEventById(id: string): Promise<Event | null> {
+  const p = getDb();
   if (!p) return null;
   try {
-    const result = await p.query<EventRow>(
+    const result = await p.query<Event>(
       "SELECT id, rep_id, start_at, end_at, type, title, location, video_link, notes, region, status FROM tbl_events WHERE id = $1",
       [id]
     );
@@ -192,11 +192,11 @@ export async function getEventById(id: string): Promise<EventRow | null> {
   }
 }
 
-export async function insertEvent(input: InsertEventInput): Promise<EventRow | null> {
-  const p = getPool();
+export async function insertEvent(input: InsertEventInput): Promise<Event | null> {
+  const p = getDb();
   if (!p) return null;
   try {
-    const result = await p.query<EventRow>(
+    const result = await p.query<Event>(
       `INSERT INTO tbl_events (rep_id, start_at, end_at, type, title, location, video_link, notes, region, status)
        VALUES ($1, $2::timestamptz, $3::timestamptz, $4, $5, $6, $7, $8, $9, $10)
        RETURNING id, rep_id, start_at, end_at, type, title, location, video_link, notes, region, status`,
@@ -233,8 +233,8 @@ export async function insertEvent(input: InsertEventInput): Promise<EventRow | n
   }
 }
 
-export async function updateEvent(id: string, input: UpdateEventInput): Promise<EventRow | null> {
-  const p = getPool();
+export async function updateEvent(id: string, input: UpdateEventInput): Promise<Event | null> {
+  const p = getDb();
   if (!p) return null;
   try {
     const existing = await getEventById(id);

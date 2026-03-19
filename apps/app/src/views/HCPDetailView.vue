@@ -228,7 +228,7 @@ onMounted(loadHCP);
 watch(() => route.params.id, loadHCP);
 </script>
 
-<style lang="scss" scoped>
+<style scoped>
 .view-detail {
   min-height: 0;
 }

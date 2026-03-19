@@ -356,12 +356,12 @@ onMounted(loadLead);
 watch(() => route.params.id, loadLead);
 </script>
 
-<style lang="scss" scoped>
+<style scoped>
 .view-detail {
   min-height: 0;
 }
 
-// Header name
+/* Header name */
 .view-detail__header-name-wrap {
   display: flex;
   align-items: center;
@@ -378,7 +378,7 @@ watch(() => route.params.id, loadLead);
   text-overflow: ellipsis;
 }
 
-// Two-column body
+/* Two-column body */
 .view-detail__body {
   display: grid;
   grid-template-columns: 1fr;
@@ -390,7 +390,7 @@ watch(() => route.params.id, loadLead);
   }
 }
 
-// Data card
+/* Data card */
 .view-detail__card {
   padding: 24px;
   border-radius: var(--rep-radius);
@@ -455,7 +455,7 @@ watch(() => route.params.id, loadLead);
   gap: 6px;
 }
 
-// Specialty chips
+/* Specialty chips */
 .view-detail__specialty-chip {
   display: inline-block;
   padding: 3px 10px;
@@ -471,7 +471,7 @@ watch(() => route.params.id, loadLead);
   &--indigo { background: rgba(99, 102, 241, 0.12); color: #4338ca; }
 }
 
-// Map column
+/* Map column */
 .view-detail__map-col {
   display: flex;
   min-height: 260px;
@@ -489,7 +489,7 @@ watch(() => route.params.id, loadLead);
   }
 }
 
-// Buttons (delegated to ItemDetailLayout deep)
+/* Buttons (delegated to ItemDetailLayout deep) */
 .view-detail :deep(.view-item__move-to-contacts-btn) {
   min-width: 44px; min-height: 44px;
   color: rgb(var(--v-theme-primary)) !important;

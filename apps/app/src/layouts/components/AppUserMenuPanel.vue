@@ -117,7 +117,7 @@ function onLocaleChange(value: string) {
 }
 </script>
 
-<style lang="scss" scoped>
+<style scoped>
 .layout-app__user-menu,
 .layout-app__mobile-drawer-user-menu {
   position: absolute;

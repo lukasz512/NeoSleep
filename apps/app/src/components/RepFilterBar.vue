@@ -156,7 +156,7 @@ function onClear() {
 }
 </script>
 
-<style lang="scss" scoped>
+<style scoped>
 .rep-filter-bar__badge :deep(.v-badge__badge) {
   min-width: 18px;
   height: 18px;

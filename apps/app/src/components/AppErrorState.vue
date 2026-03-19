@@ -55,7 +55,7 @@ defineEmits<{
 }>();
 </script>
 
-<style lang="scss" scoped>
+<style scoped>
 .app-error-state {
   display: flex;
   flex-direction: column;

@@ -1,7 +1,27 @@
 import { defineStore } from "pinia";
-import { ref, shallowRef } from "vue";
+import { ref, shallowRef, computed } from "vue";
 import { brandColors } from "@brand/colors";
 import { apiFetch } from "../utils/api";
+
+// ---------------------------------------------------------------------------
+// Config options (regions, specialties, institution types)
+// ---------------------------------------------------------------------------
+
+export interface ConfigOption {
+  id: string;
+  type: "region" | "specialty" | "institution_type";
+  value: string;
+  label: string;
+  sort_order: number;
+}
+
+export interface ConfigOptions {
+  regions: ConfigOption[];
+  specialties: ConfigOption[];
+  institution_types: ConfigOption[];
+}
+
+const EMPTY_OPTIONS: ConfigOptions = { regions: [], specialties: [], institution_types: [] };
 
 export interface AppConfig {
   primary_color: string;
@@ -33,6 +53,7 @@ function normalizeHex(s: string | undefined | null): string | undefined {
 
 export const useConfigStore = defineStore("config", () => {
   const config = shallowRef<AppConfig>({ ...defaults });
+  const options = shallowRef<ConfigOptions>({ ...EMPTY_OPTIONS });
   const loading = ref(false);
 
   async function load(): Promise<AppConfig> {
@@ -89,6 +110,33 @@ export const useConfigStore = defineStore("config", () => {
     }
   }
 
+  async function loadOptions(): Promise<ConfigOptions> {
+    try {
+      const res = await apiFetch("/api/config/options", { handleErrors: false });
+      if (!res.ok) return options.value;
+      const data = (await res.json()) as ConfigOptions;
+      options.value = {
+        regions: Array.isArray(data.regions) ? data.regions : [],
+        specialties: Array.isArray(data.specialties) ? data.specialties : [],
+        institution_types: Array.isArray(data.institution_types) ? data.institution_types : [],
+      };
+      return options.value;
+    } catch {
+      return options.value;
+    }
+  }
+
+  // Convenience computed selects for dropdowns: [{ title, value }]
+  const regionItems = computed(() =>
+    options.value.regions.map((o) => ({ title: o.label, value: o.value }))
+  );
+  const specialtyItems = computed(() =>
+    options.value.specialties.map((o) => ({ title: o.label, value: o.value }))
+  );
+  const institutionTypeItems = computed(() =>
+    options.value.institution_types.map((o) => ({ title: o.label, value: o.value }))
+  );
+
   function applyToDom(cfg: AppConfig) {
     if (typeof document === "undefined" || !document.documentElement) return;
     const root = document.documentElement;
@@ -102,5 +150,8 @@ export const useConfigStore = defineStore("config", () => {
     root.setAttribute("data-theme", cfg.color_scheme);
   }
 
-  return { config, loading, defaults, load, save, applyToDom };
+  return {
+    config, loading, defaults, load, save, applyToDom,
+    options, loadOptions, regionItems, specialtyItems, institutionTypeItems,
+  };
 });

@@ -113,7 +113,7 @@ onUnmounted(() => {
 });
 </script>
 
-<style lang="scss" scoped>
+<style scoped>
 .presentation-viewer__container {
   display: flex;
   flex-direction: column;

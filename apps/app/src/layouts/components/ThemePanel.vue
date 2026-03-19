@@ -245,7 +245,7 @@ async function save() {
 }
 </script>
 
-<style lang="scss" scoped>
+<style scoped>
 .theme-panel-dialog__card {
   border-radius: var(--rep-modal-radius, 16px);
 }

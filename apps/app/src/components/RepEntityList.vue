@@ -397,7 +397,7 @@ watch(searchQuery, () => {
 });
 </script>
 
-<style lang="scss">
+<style >
 /* Staggered list animation: physics-inspired, minimal. Not scoped – TransitionGroup classes. */
 .list-stagger-move,
 .list-stagger-enter-active,
@@ -427,7 +427,7 @@ watch(searchQuery, () => {
 }
 </style>
 
-<style lang="scss" scoped>
+<style scoped>
 .rep-entity-list {
   max-width: 100%;
   display: flex;

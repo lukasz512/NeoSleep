@@ -1,4 +1,4 @@
-export interface PatientRow {
+export interface Patient {
   id: string;
   name: string;
   diagnosis: string;
@@ -15,7 +15,7 @@ export interface GetPatientsFilters {
 }
 
 // Mock-only until tbl_patients migration is implemented
-const MOCK_PATIENTS: PatientRow[] = [
+const MOCK_PATIENTS: Patient[] = [
   { id: "mock-pat-01", name: "Andrzej Kowalski",    diagnosis: "OSA — Obstructive Sleep Apnea",    referred_by: "Dr Kowalska",    status: "active",     region: "Central", created_at: new Date("2025-10-05") },
   { id: "mock-pat-02", name: "Marta Nowak",          diagnosis: "Snoring + Mild OSA",               referred_by: "Dr Nowak",       status: "follow-up",  region: "Central", created_at: new Date("2025-10-08") },
   { id: "mock-pat-03", name: "Tomasz Wierzbicki",   diagnosis: "Severe OSA",                       referred_by: "Dr Wiśniewska",  status: "active",     region: "North",   created_at: new Date("2025-10-10") },
@@ -34,7 +34,7 @@ export async function getPatientsPaginated(
   filters: GetPatientsFilters,
   page: number,
   limit: number
-): Promise<{ rows: PatientRow[]; total: number }> {
+): Promise<{ rows: Patient[]; total: number }> {
   let rows = [...MOCK_PATIENTS];
   const q = filters.search?.trim().toLowerCase() ?? "";
   if (q) rows = rows.filter((r) => `${r.name} ${r.diagnosis} ${r.referred_by} ${r.region}`.toLowerCase().includes(q));

@@ -10,6 +10,7 @@ import { presentationsRouter } from "./routes/presentations.js";
 import { logsRouter } from "./routes/logs.js";
 import { eventsRouter } from "./routes/events.js";
 import { configRouter } from "./routes/config.js";
+import { configOptionsRouter } from "./routes/config-options.js";
 import { contactRouter } from "./routes/contact.js";
 import { patientsRouter } from "./routes/patients.js";
 import { runMigrations } from "./db.js";
@@ -78,6 +79,7 @@ app.use(presentationsRouter);
 app.use(logsRouter);
 app.use(eventsRouter);
 app.use(configRouter);
+app.use(configOptionsRouter);
 app.use(contactRouter);
 app.use(patientsRouter);
 

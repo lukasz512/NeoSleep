@@ -1,4 +1,4 @@
-import { getPool } from "./pool.js";
+import { getDb } from "./connection.js";
 
 export interface User {
   id: string;
@@ -28,7 +28,7 @@ export async function getOrCreateUserByProvider(
   email: string,
   name?: string | null
 ): Promise<User | null> {
-  const p = getPool();
+  const p = getDb();
   if (!p) return null;
   try {
     const existing = await p.query<User>(
@@ -50,7 +50,7 @@ export async function getOrCreateUserByProvider(
 }
 
 export async function getUserById(id: string): Promise<User | null> {
-  const p = getPool();
+  const p = getDb();
   if (!p) return null;
   try {
     const r = await p.query<User>(
@@ -66,7 +66,7 @@ export async function getUserById(id: string): Promise<User | null> {
 
 /** Get first user id (dev fallback when session is empty). */
 export async function getFirstUserId(): Promise<string | null> {
-  const p = getPool();
+  const p = getDb();
   if (!p) return null;
   try {
     const r = await p.query<{ id: string }>("SELECT id FROM tbl_users ORDER BY created_at ASC LIMIT 1");
@@ -78,7 +78,7 @@ export async function getFirstUserId(): Promise<string | null> {
 }
 
 export async function getStaffUserByEmail(email: string): Promise<StaffUser | null> {
-  const p = getPool();
+  const p = getDb();
   if (!p) return null;
   try {
     const r = await p.query<StaffUser>(
@@ -93,7 +93,7 @@ export async function getStaffUserByEmail(email: string): Promise<StaffUser | nu
 }
 
 export async function getStaffUserById(id: string): Promise<StaffUser | null> {
-  const p = getPool();
+  const p = getDb();
   if (!p) return null;
   try {
     const r = await p.query<StaffUser>(
@@ -108,7 +108,7 @@ export async function getStaffUserById(id: string): Promise<StaffUser | null> {
 }
 
 export async function setUserPassword(userId: string, passwordHash: string): Promise<boolean> {
-  const p = getPool();
+  const p = getDb();
   if (!p) return false;
   try {
     await p.query(
@@ -128,7 +128,7 @@ export async function createRememberMeToken(
   expiresAt: Date,
   deviceInfo?: string | null
 ): Promise<string | null> {
-  const p = getPool();
+  const p = getDb();
   if (!p) return null;
   try {
     const r = await p.query<{ id: string }>(
@@ -147,7 +147,7 @@ export async function createRememberMeToken(
 export async function getRememberMeToken(
   tokenId: string
 ): Promise<{ userId: string; tokenHash: string } | null> {
-  const p = getPool();
+  const p = getDb();
   if (!p) return null;
   try {
     const r = await p.query<{ user_id: string; token_hash: string }>(
@@ -163,7 +163,7 @@ export async function getRememberMeToken(
 }
 
 export async function deleteRememberMeToken(tokenId: string): Promise<void> {
-  const p = getPool();
+  const p = getDb();
   if (!p) return;
   try {
     await p.query("DELETE FROM tbl_remember_me_tokens WHERE id = $1", [tokenId]);
@@ -177,7 +177,7 @@ export async function createPasswordResetToken(
   tokenHash: string,
   expiresAt: Date
 ): Promise<boolean> {
-  const p = getPool();
+  const p = getDb();
   if (!p) return false;
   try {
     await p.query(
@@ -192,7 +192,7 @@ export async function createPasswordResetToken(
 }
 
 export async function getPasswordResetUserIdByHash(tokenHash: string): Promise<string | null> {
-  const p = getPool();
+  const p = getDb();
   if (!p) return null;
   try {
     const r = await p.query<{ user_id: string }>(
@@ -207,7 +207,7 @@ export async function getPasswordResetUserIdByHash(tokenHash: string): Promise<s
 }
 
 export async function deletePasswordResetTokenByHash(tokenHash: string): Promise<void> {
-  const p = getPool();
+  const p = getDb();
   if (!p) return;
   try {
     await p.query("DELETE FROM tbl_password_reset_tokens WHERE token_hash = $1", [tokenHash]);
@@ -224,7 +224,7 @@ export async function insertStaffUser(
   passwordHash: string,
   forcePasswordChange: boolean
 ): Promise<User | null> {
-  const p = getPool();
+  const p = getDb();
   if (!p) return null;
   const normalizedEmail = email.trim().toLowerCase();
   try {
@@ -243,7 +243,7 @@ export async function insertStaffUser(
 }
 
 export async function getUserIdByEmail(email: string): Promise<string | null> {
-  const p = getPool();
+  const p = getDb();
   if (!p) return null;
   try {
     const r = await p.query<{ id: string }>(

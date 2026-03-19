@@ -335,7 +335,7 @@ async function onEventFormSubmit(payload: EventSubmitPayload) {
 }
 </script>
 
-<style lang="scss" scoped>
+<style scoped>
 .view-planner {
   display: flex;
   flex-direction: column;

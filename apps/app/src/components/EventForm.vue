@@ -483,7 +483,7 @@ watch(
 );
 </script>
 
-<style lang="scss" scoped>
+<style scoped>
 .event-form__row {
   display: flex;
   gap: 16px;
@@ -496,7 +496,7 @@ watch(
 }
 </style>
 
-<style lang="scss">
+<style >
 .event-form-dialog__content {
   border-radius: var(--rep-modal-radius, 16px) !important;
   overflow: hidden;

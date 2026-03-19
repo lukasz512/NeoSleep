@@ -115,7 +115,7 @@ function onTouchEnd(e: TouchEvent) {
 }
 </script>
 
-<style lang="scss" scoped>
+<style scoped>
 .app-notification-hub :deep(.v-snackbar__wrapper) {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   min-height: 0;

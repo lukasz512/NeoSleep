@@ -60,7 +60,7 @@ function showNotification(type: NotificationType) {
 }
 </script>
 
-<style lang="scss" scoped>
+<style scoped>
 .view-dev {
   max-width: 640px;
 }

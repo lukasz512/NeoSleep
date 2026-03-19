@@ -1,4 +1,4 @@
-import { getPool } from "./pool.js";
+import { getDb } from "./connection.js";
 
 export interface AppConfigRow {
   primary_color: string;
@@ -40,7 +40,7 @@ const DEFAULT_APP_CONFIG: AppConfigRow = {
 };
 
 export async function getAppConfig(): Promise<AppConfigRow> {
-  const p = getPool();
+  const p = getDb();
   if (!p) return DEFAULT_APP_CONFIG;
   try {
     const result = await p.query<AppConfigRow>(
@@ -73,7 +73,7 @@ export async function getAppConfig(): Promise<AppConfigRow> {
 }
 
 export async function updateAppConfig(updates: AppConfigUpdate): Promise<AppConfigRow> {
-  const p = getPool();
+  const p = getDb();
   if (!p) return DEFAULT_APP_CONFIG;
   const current = await getAppConfig();
   const row: AppConfigRow = {

@@ -79,7 +79,7 @@ function titleKey(name: string): string {
 }
 </script>
 
-<style lang="scss" scoped>
+<style scoped>
 /* Override Vuetify list so our nav classes control look; keep nav-link semantics for AppSidebar styles */
 .layout-app__nav-list,
 .layout-app__mobile-drawer-nav-list {
