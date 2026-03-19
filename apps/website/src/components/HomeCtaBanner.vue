@@ -32,7 +32,7 @@ import { ref, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink } from "vue-router";
 import TealBanner from "./TealBanner.vue";
-import { ctaBannerConfig as config } from "../config/homeConfig";
+import { ctaBannerConfig as config } from "../config/websiteContent";
 
 const { t } = useI18n();
 const wrapRef = ref<HTMLElement | null>(null);

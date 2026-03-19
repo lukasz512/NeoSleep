@@ -18,7 +18,7 @@
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useCountUp } from "../composables/useCountUp";
-import { homeStats } from "../config/homeConfig";
+import { homeStats } from "../config/websiteContent";
 
 const { t } = useI18n();
 const sectionRef = ref<HTMLElement | null>(null);

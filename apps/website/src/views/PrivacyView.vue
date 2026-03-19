@@ -21,7 +21,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { legalConfig as config } from '../config/legalConfig';
+import { legalConfig as config } from '../config/websiteContent';
 
 const { t, locale } = useI18n();
 

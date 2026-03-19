@@ -77,8 +77,8 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import CareersHero    from '../components/CareersHero.vue'
 import CareersJobCard from '../components/CareersJobCard.vue'
-import { jobListings, jobDepartments, jobCountries } from '../config/careersConfig'
-import type { JobDepartment } from '../config/careersConfig'
+import { jobListings, jobDepartments, jobCountries } from '../config/websiteContent'
+import type { JobDepartment } from '../config/websiteContent'
 
 const { t } = useI18n()
 

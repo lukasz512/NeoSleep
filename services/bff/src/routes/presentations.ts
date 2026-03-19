@@ -13,6 +13,7 @@ presentationsRouter.get(
       title: r.title,
       url: r.url,
       file_type: r.file_type,
+      thumbnail_url: r.thumbnail_url ?? null,
       created_at: r.created_at instanceof Date ? r.created_at.toISOString() : r.created_at,
     }));
     res.json({ items });
@@ -37,6 +38,7 @@ presentationsRouter.get(
       title: p.title,
       url: p.url,
       file_type: p.file_type,
+      thumbnail_url: p.thumbnail_url ?? null,
       created_at: p.created_at instanceof Date ? p.created_at.toISOString() : p.created_at,
     });
   })

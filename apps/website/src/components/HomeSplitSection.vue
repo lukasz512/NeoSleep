@@ -54,7 +54,7 @@
 import { ref, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { IconBox } from "./icons";
-import type { SplitSectionConfig, FeatureItem } from "../config/homeConfig";
+import type { SplitSectionConfig, FeatureItem } from "../config/websiteContent";
 
 defineProps<{ section: SplitSectionConfig }>();
 

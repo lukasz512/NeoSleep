@@ -67,7 +67,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { JobListing } from '../config/careersConfig'
+import type { JobListing } from '../config/websiteContent'
 
 const props = defineProps<{ job: JobListing }>()
 const { t } = useI18n()

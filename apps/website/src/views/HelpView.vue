@@ -103,8 +103,8 @@
 import { ref, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { RouterLink } from 'vue-router';
-import { helpCategories, helpFaqs } from '../config/helpConfig';
-import type { HelpCategory } from '../config/helpConfig';
+import { helpCategories, helpFaqs } from '../config/websiteContent';
+import type { HelpCategory } from '../config/websiteContent';
 import TealBanner from '../components/TealBanner.vue';
 
 const { t } = useI18n();

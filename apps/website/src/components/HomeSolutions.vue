@@ -45,7 +45,7 @@
 import { ref, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { IconBox } from "./icons";
-import { solutionCards, solutionsCtaTo, type SolutionCard } from "../config/homeConfig";
+import { solutionCards, solutionsCtaTo, type SolutionCard } from "../config/websiteContent";
 
 const { t } = useI18n();
 const sectionRef = ref<HTMLElement | null>(null);

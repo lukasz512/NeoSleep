@@ -150,8 +150,8 @@ import { useI18n } from "vue-i18n";
 import ThemeToggle from "../components/ThemeToggle.vue";
 import LanguageSelect from "../components/LanguageSelect.vue";
 import { useTheme } from "../composables/useTheme";
-import { getHeaderNavItems } from "../config/websiteNavConfig";
-import { searchIndex } from "../config/searchConfig";
+import { getHeaderNavItems } from "../config/websiteNav";
+import { searchIndex } from "../config/websiteContent";
 
 const { t } = useI18n();
 const { isDark } = useTheme();

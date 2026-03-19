@@ -52,7 +52,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { jobListings, jobCities, jobCountries } from '../config/careersConfig'
+import { jobListings, jobCities, jobCountries } from '../config/websiteContent'
 
 const props = defineProps<{ resultsCount: number }>()
 defineEmits<{ search: [q: string] }>()

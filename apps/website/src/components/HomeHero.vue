@@ -34,7 +34,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
-import { heroConfig as config } from "../config/homeConfig";
+import { heroConfig as config } from "../config/websiteContent";
 
 const { t } = useI18n();
 const sectionRef = ref<HTMLElement | null>(null);

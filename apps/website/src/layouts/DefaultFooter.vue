@@ -47,7 +47,7 @@ import {
   footerSections,
   getFooterNavItemsBySection,
   type WebsiteNavItem,
-} from "../config/websiteNavConfig";
+} from "../config/websiteNav";
 
 const { t } = useI18n();
 const { isDark } = useTheme();

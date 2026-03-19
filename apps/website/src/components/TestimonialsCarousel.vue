@@ -53,7 +53,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { patientTestimonials } from '../config/patientsConfig'
+import { patientTestimonials } from '../config/websiteContent'
 
 const { t } = useI18n()
 const items   = patientTestimonials

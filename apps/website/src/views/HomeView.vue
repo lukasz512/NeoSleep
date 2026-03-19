@@ -14,7 +14,7 @@ import HomeStats      from "../components/HomeStats.vue";
 import HomeSolutions  from "../components/HomeSolutions.vue";
 import HomeSplitSection from "../components/HomeSplitSection.vue";
 import HomeCtaBanner  from "../components/HomeCtaBanner.vue";
-import { splitSections } from "../config/homeConfig";
+import { splitSections } from "../config/websiteContent";
 </script>
 
 <style lang="scss" src="../components/icons/home-icons.scss"></style>
