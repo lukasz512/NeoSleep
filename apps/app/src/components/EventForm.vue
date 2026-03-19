@@ -121,13 +121,14 @@
             multiline
             rows="2"
           />
-          <VTextField
+          <VSelect
             v-model="form.region"
             :label="t('rep.planner.form.fieldRegion')"
+            :items="configStore.regionItems"
             variant="outlined"
             density="comfortable"
             class="mb-3"
-            autocomplete="off"
+            clearable
           />
         </VForm>
       </VCardText>
@@ -168,6 +169,7 @@
 import { ref, computed, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { apiFetch } from "../utils/api";
+import { useConfigStore } from "../stores/config";
 
 export interface EventFormData {
   title: string;
@@ -248,6 +250,7 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
+const configStore = useConfigStore();
 const formRef = ref<{ validate: () => Promise<{ valid: boolean }> } | null>(null);
 const submitting = ref(false);
 const showDiscardConfirm = ref(false);
