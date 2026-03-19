@@ -3,34 +3,22 @@ import DefaultLayout from "../layouts/DefaultLayout.vue";
 import AppLayout from "../layouts/AppLayout.vue";
 
 export { DefaultLayout, AppLayout };
-import LoginView from "../views/LoginView.vue";
-import DashboardView from "../views/DashboardView.vue";
-import DevView from "../views/DevView.vue";
-import LeadsView from "../views/LeadsView.vue";
-import LeadDetailView from "../views/LeadDetailView.vue";
-import HCPView from "../views/HCPView.vue";
-import HCPDetailView from "../views/HCPDetailView.vue";
-import HCOView from "../views/HCOView.vue";
-import HCODetailView from "../views/HCODetailView.vue";
-import PlannerView from "../views/PlannerView.vue";
-import PresentationsView from "../views/PresentationsView.vue";
-import PatientsView from "../views/PatientsView.vue";
 
 /** App starts at login; root and unknown paths send unauthenticated users to /login. */
 export const routes: RouteRecordRaw[] = [
   { path: "/", redirect: "/login" },
-  { path: "/login", name: "login", component: LoginView, meta: { layout: "default", public: true } },
-  { path: "/dev", name: "dev", component: DevView, meta: { layout: "app", devOnly: true } },
-  { path: "/dashboard", name: "dashboard", component: DashboardView, meta: { layout: "app", requiresAuth: true } },
-  { path: "/leads", name: "leads", component: LeadsView, meta: { layout: "app", requiresAuth: true } },
-  { path: "/leads/:id", name: "lead-detail", component: LeadDetailView, meta: { layout: "app", requiresAuth: true } },
-  { path: "/planner", name: "planner", component: PlannerView, meta: { layout: "app", requiresAuth: true } },
-  { path: "/hcp", name: "hcp", component: HCPView, meta: { layout: "app", requiresAuth: true } },
-  { path: "/hcp/:id", name: "hcp-detail", component: HCPDetailView, meta: { layout: "app", requiresAuth: true } },
-  { path: "/hco", name: "hco", component: HCOView, meta: { layout: "app", requiresAuth: true } },
-  { path: "/hco/:id", name: "hco-detail", component: HCODetailView, meta: { layout: "app", requiresAuth: true } },
-  { path: "/patients", name: "patients", component: PatientsView, meta: { layout: "app", requiresAuth: true } },
-  { path: "/presentations", name: "presentations", component: PresentationsView, meta: { layout: "app", requiresAuth: true } },
+  { path: "/login", name: "login", component: () => import("../views/LoginView.vue"), meta: { layout: "default", public: true } },
+  { path: "/dev", name: "dev", component: () => import("../views/DevView.vue"), meta: { layout: "app", devOnly: true } },
+  { path: "/dashboard", name: "dashboard", component: () => import("../views/DashboardView.vue"), meta: { layout: "app", requiresAuth: true } },
+  { path: "/leads", name: "leads", component: () => import("../views/LeadsView.vue"), meta: { layout: "app", requiresAuth: true } },
+  { path: "/leads/:id", name: "lead-detail", component: () => import("../views/LeadDetailView.vue"), meta: { layout: "app", requiresAuth: true } },
+  { path: "/planner", name: "planner", component: () => import("../views/PlannerView.vue"), meta: { layout: "app", requiresAuth: true } },
+  { path: "/hcp", name: "hcp", component: () => import("../views/HCPView.vue"), meta: { layout: "app", requiresAuth: true } },
+  { path: "/hcp/:id", name: "hcp-detail", component: () => import("../views/HCPDetailView.vue"), meta: { layout: "app", requiresAuth: true } },
+  { path: "/hco", name: "hco", component: () => import("../views/HCOView.vue"), meta: { layout: "app", requiresAuth: true } },
+  { path: "/hco/:id", name: "hco-detail", component: () => import("../views/HCODetailView.vue"), meta: { layout: "app", requiresAuth: true } },
+  { path: "/patients", name: "patients", component: () => import("../views/PatientsView.vue"), meta: { layout: "app", requiresAuth: true } },
+  { path: "/presentations", name: "presentations", component: () => import("../views/PresentationsView.vue"), meta: { layout: "app", requiresAuth: true } },
   { path: "/:pathMatch(.*)*", redirect: "/dashboard" },
 ];
 

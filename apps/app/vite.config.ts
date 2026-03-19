@@ -40,6 +40,16 @@ export default defineConfig({
       },
     },
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vuetify: ["vuetify"],
+          vue: ["vue", "vue-router", "pinia", "vue-i18n"],
+        },
+      },
+    },
+  },
   server: {
     host: true, // listen on 0.0.0.0 so you can open the app from another device (e.g. phone on same Wi‑Fi)
     proxy: {

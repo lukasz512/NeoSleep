@@ -131,6 +131,8 @@ import {
   ThemePanel,
 } from "./components";
 
+import { loadLocale } from "../main";
+
 const { isLoading: globalLoaderActive } = useGlobalLoader();
 const router = useRouter();
 const { t, locale } = useI18n();
@@ -246,7 +248,8 @@ function onOpenThemePanelFromDrawer() {
   });
 }
 
-function setLocale(lang: "en" | "pl" | "es") {
+async function setLocale(lang: "en" | "pl" | "es") {
+  await loadLocale(lang);
   locale.value = lang;
   setRepSettings({ locale: lang });
 }
