@@ -110,6 +110,7 @@
     </div>
 
     <PresentationViewer
+      v-if="viewerOpen"
       v-model="viewerOpen"
       :presentation="selectedPresentation"
     />
@@ -117,12 +118,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, defineAsyncComponent } from "vue";
 import { useI18n } from "vue-i18n";
 import AppEmptyState from "../components/AppEmptyState.vue";
-import PresentationViewer from "../components/PresentationViewer.vue";
 import { useAuthStore } from "../stores/auth";
-import { bffFetch } from "../composables/useBffApi";
+import { apiFetch } from "../utils/api";
+
+const PresentationViewer = defineAsyncComponent(() => import("../components/PresentationViewer.vue"));
 
 interface Presentation {
   id: string;
@@ -144,7 +146,7 @@ const selectedPresentation = ref<Presentation | null>(null);
 async function loadPresentations() {
   loading.value = true;
   try {
-    const res = await bffFetch("/api/presentations", { handleErrors: false });
+    const res = await apiFetch("/api/presentations", { handleErrors: false });
     if (res.ok) {
       const data = (await res.json()) as { items: Presentation[] };
       presentations.value = data.items ?? [];

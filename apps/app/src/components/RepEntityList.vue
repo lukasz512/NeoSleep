@@ -190,7 +190,7 @@ import { useI18n } from "vue-i18n";
 import AppEmptyState from "./AppEmptyState.vue";
 import AppErrorState from "./AppErrorState.vue";
 import RepFilterBar from "./RepFilterBar.vue";
-import { bffFetch } from "../composables/useBffApi";
+import { apiFetch } from "../utils/api";
 import { useRepFilters, type RepFilterDefinition } from "../composables/useRepFilters";
 
 export interface RepEntityListHeader {
@@ -355,7 +355,7 @@ async function loadData() {
   }
 
   try {
-    const res = await bffFetch(`${props.apiEndpoint}?${params.toString()}`, {
+    const res = await apiFetch(`${props.apiEndpoint}?${params.toString()}`, {
       errorMessageKey: props.i18n.errorLoad,
     });
     if (res.ok) {

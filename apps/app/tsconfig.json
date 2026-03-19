@@ -4,7 +4,10 @@
     "composite": true,
     "types": ["vitest/globals", "node"],
     "baseUrl": ".",
-    "paths": { "@i18n/*": ["../../i18n/*"] }
+    "paths": {
+      "@i18n/*": ["../../i18n/*"],
+      "@brand/*": ["../../brand/*"]
+    }
   },
   "include": ["src"]
 }

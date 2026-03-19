@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { getBffUrl, REP_STORAGE_KEYS, SIDEBAR_DEFAULT_COLLAPSED } from "./constants";
+import { getApiUrl, REP_STORAGE_KEYS, SIDEBAR_DEFAULT_COLLAPSED } from "./constants";
 
 describe("constants", () => {
-  it("getBffUrl returns a string (empty in dev for proxy, or http URL)", () => {
-    const url = getBffUrl();
+  it("getApiUrl returns a string (empty in dev for proxy, or http URL)", () => {
+    const url = getApiUrl();
     expect(typeof url).toBe("string");
     if (url.length > 0) {
       expect(url.startsWith("http")).toBe(true);

@@ -13,14 +13,14 @@ function isLoggingToDbEnabled(): boolean {
 export function errorHandler(err: unknown, _req: Request, res: Response, _next: NextFunction): void {
   const message = err instanceof Error ? err.message : String(err);
   const stack = err instanceof Error ? err.stack : undefined;
-  console.error("BFF error:", message, stack ?? "");
+  console.error("API error:", message, stack ?? "");
 
   if (isLoggingToDbEnabled()) {
     insertConsoleLog({
       level: "error",
-      message: `BFF: ${message}`,
+      message: `API: ${message}`,
       stack: stack ?? null,
-      source: "bff",
+      source: "api",
       metadata: stack ? { stack } : undefined,
     }).catch((e) => console.error("errorHandler insertConsoleLog failed:", e));
   }

@@ -31,12 +31,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Set BFF URL for build
+      - name: Set API URL for build
         run: |
           if [ "${{ github.ref }}" = "refs/heads/PROD" ]; then
-            echo "VITE_BFF_URL=${{ secrets.VITE_BFF_URL_PROD }}" >> $GITHUB_ENV
+            echo "VITE_API_URL=${{ secrets.VITE_API_URL_PROD }}" >> $GITHUB_ENV
           else
-            echo "VITE_BFF_URL=${{ secrets.VITE_BFF_URL_UAT }}" >> $GITHUB_ENV
+            echo "VITE_API_URL=${{ secrets.VITE_API_URL_UAT }}" >> $GITHUB_ENV
           fi
 
       - name: Build rep-app

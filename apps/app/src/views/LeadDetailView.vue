@@ -1,12 +1,14 @@
 <template>
   <div class="view-detail">
     <LeadContactForm
+      v-if="showEditModal"
       v-model="showEditModal"
       mode="lead"
       :initial-data="lead ? { name: lead.name, email: lead.email ?? '', status: lead.status, region: lead.region, institution: lead.institution ?? '' } : undefined"
       @submit="onLeadSubmit"
     />
     <LeadContactForm
+      v-if="showMoveToContactsModal"
       v-model="showMoveToContactsModal"
       mode="contact"
       :initial-data="lead ? { name: lead.name, email: lead.email ?? '', region: lead.region, institution: lead.institution ?? '' } : undefined"
@@ -14,6 +16,7 @@
       @submit="onContactSubmit"
     />
     <EventForm
+      v-if="showEventForm"
       v-model="showEventForm"
       :initial-data="eventFormInitial"
       @submit="onEventFormSubmit"
@@ -155,19 +158,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from "vue";
+import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
 import { useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuthStore } from "../stores/auth";
-import { bffFetch } from "../composables/useBffApi";
+import { apiFetch } from "../utils/api";
 import { useNotifications } from "../composables/useNotifications";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
-import LeadContactForm from "../components/LeadContactForm.vue";
-import EventForm from "../components/EventForm.vue";
 import GenderIcon from "../components/GenderIcon.vue";
 import { getGenderFromName } from "../utils/genderFromName";
 import { leadStatusClass, leadStatusI18nKey } from "../utils/leadStatus";
 import type { Lead } from "./LeadsView.vue";
+
+const LeadContactForm = defineAsyncComponent(() => import("../components/LeadContactForm.vue"));
+const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
 
 const { t } = useI18n();
 const route = useRoute();
@@ -261,7 +265,7 @@ function onScheduleVisit() {
 
 async function onEventFormSubmit(payload: import("../components/EventForm.vue").EventSubmitPayload) {
   try {
-    const res = await bffFetch("/api/events", {
+    const res = await apiFetch("/api/events", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: payload.title, start_at: payload.start_at, end_at: payload.end_at, type: payload.type, status: payload.status, location: payload.location, video_link: payload.video_link, notes: payload.notes, region: payload.region, attendees: payload.attendees }),
@@ -285,14 +289,14 @@ async function onContactSubmit(data: import("../components/LeadContactForm.vue")
   const d = data as import("../components/LeadContactForm.vue").ContactFormData;
   const leadId = lead.value?.id;
   if (!leadId) return;
-  const res = await bffFetch("/api/hcp", {
+  const res = await apiFetch("/api/hcp", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name: d.name, email: d.email || "", phone: d.phone || "", specialty: d.specialty || undefined, region: d.region || undefined, institution: d.institution || undefined, lead_id: leadId }),
     errorMessageKey: "rep.leads.errorLoad",
   });
   if (res.ok) {
-    const patchRes = await bffFetch(`/api/leads/${leadId}`, {
+    const patchRes = await apiFetch(`/api/leads/${leadId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "completed" }),
@@ -319,7 +323,7 @@ async function onLeadSubmit(data: import("../components/LeadContactForm.vue").Le
   const d = data as import("../components/LeadContactForm.vue").LeadFormData;
   const id = lead.value?.id;
   if (!id) return;
-  const res = await bffFetch(`/api/leads/${id}`, {
+  const res = await apiFetch(`/api/leads/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name: d.name, email: d.email || undefined, status: d.status || "new", region: d.region || undefined, institution: d.institution || undefined }),
@@ -339,7 +343,7 @@ async function loadLead() {
   loading.value = true;
   lead.value = null;
   try {
-    const res = await bffFetch(`/api/leads/${id}`, { errorMessageKey: "rep.leads.errorLoad" });
+    const res = await apiFetch(`/api/leads/${id}`, { errorMessageKey: "rep.leads.errorLoad" });
     if (res.ok) lead.value = (await res.json()) as Lead;
   } catch {
     lead.value = null;

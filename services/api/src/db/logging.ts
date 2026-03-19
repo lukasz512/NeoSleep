@@ -54,7 +54,7 @@ export async function insertConsoleLog(row: ConsoleLogInsert): Promise<void> {
         row.message,
         row.message_hash ?? null,
         row.stack ?? null,
-        row.source ?? "bff",
+        row.source ?? "api",
         row.env ?? process.env.NODE_ENV ?? "development",
         row.user_id ?? null,
         row.request_id ?? null,

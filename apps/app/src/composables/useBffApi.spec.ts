@@ -4,13 +4,13 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const sourcePath = path.resolve(__dirname, "useBffApi.ts");
+const sourcePath = path.resolve(__dirname, "../utils/api.ts");
 
 function getSource(): string {
   return readFileSync(sourcePath, "utf-8");
 }
 
-describe("useBffApi", () => {
+describe("apiFetch", () => {
   describe("error notification display (do not change – see OBSERVABILITY_AND_LOGGING.md)", () => {
     it("parses JSON response and extracts error or message – never shows raw JSON in notification", () => {
       const source = getSource();

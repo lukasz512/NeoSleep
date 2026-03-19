@@ -130,7 +130,7 @@
 import { ref, watch, computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { useNotifications } from "../../composables/useNotifications";
-import type { AppConfig } from "../../composables/useAppConfig";
+import type { AppConfig } from "../../stores/config";
 
 const { t } = useI18n();
 const notifications = useNotifications();
@@ -143,7 +143,6 @@ const DEFAULT_CONFIG: AppConfig = {
   border_radius: "8px",
   logo_url: null,
   surface_color: "#fafafa",
-  hero_container_style: "compact",
   color_scheme: "light",
 };
 
@@ -163,7 +162,6 @@ function normalizeConfig(c: AppConfig | undefined | null): AppConfig {
     border_radius: c.border_radius ?? DEFAULT_CONFIG.border_radius,
     logo_url: c.logo_url ?? null,
     surface_color: toLowerHex(c.surface_color) || DEFAULT_CONFIG.surface_color,
-    hero_container_style: c.hero_container_style === "wide" ? "wide" : "compact",
     color_scheme: c.color_scheme === "dark" ? "dark" : "light",
   };
 }

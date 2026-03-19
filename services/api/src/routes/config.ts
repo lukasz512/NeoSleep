@@ -13,7 +13,7 @@ configRouter.get(
   })
 );
 
-/** PATCH /api/config/app – update theme (admin only). In dev, allow when no BFF session (e.g. "Go to app" login). */
+/** PATCH /api/config/app – update theme (admin only). In dev, allow when no API session (e.g. "Go to app" login). */
 configRouter.patch(
   "/api/config/app",
   asyncHandler(async (req: Request, res: Response) => {

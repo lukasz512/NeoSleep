@@ -191,7 +191,7 @@ importers:
         specifier: 'catalog:'
         version: 4.0.18(@types/node@22.19.11)(jsdom@25.0.1)(sass@1.97.3)(tsx@4.21.0)
 
-  services/bff:
+  services/api:
     dependencies:
       bcrypt:
         specifier: ^5.1.1

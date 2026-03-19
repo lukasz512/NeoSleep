@@ -88,7 +88,7 @@ let server: ReturnType<typeof app.listen> | null = null;
 if (typeof process.env.VITEST === "undefined") {
   const port = parseInt(process.env.PORT ?? "3000", 10);
   server = app.listen(port, async () => {
-    console.log(`BFF listening on http://localhost:${port}`);
+    console.log(`API server listening on http://localhost:${port}`);
     await runMigrations();
   });
 }

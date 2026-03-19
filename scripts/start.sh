@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-command project start: Docker, Node (nvm), DB migrations, BFF + rep-app + website.
+# One-command project start: Docker, Node (nvm), DB migrations, API server + rep-app + website.
 # Usage: npm run start  or  ./scripts/start.sh
 #
 # Prerequisites: Docker Desktop running, Node 20+ (nvm use)
@@ -66,28 +66,28 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
-# --- 4. Ensure BFF .env has DATABASE_URL ---
-BFF_ENV="$REPO_ROOT/services/bff/.env"
-BFF_ENV_EXAMPLE="$REPO_ROOT/services/bff/.env.example"
-if [ ! -f "$BFF_ENV" ]; then
-  echo "Creating services/bff/.env from .env.example..."
-  cp "$BFF_ENV_EXAMPLE" "$BFF_ENV"
+# --- 4. Ensure API .env has DATABASE_URL ---
+API_ENV="$REPO_ROOT/services/api/.env"
+API_ENV_EXAMPLE="$REPO_ROOT/services/api/.env.example"
+if [ ! -f "$API_ENV" ]; then
+  echo "Creating services/api/.env from .env.example..."
+  cp "$API_ENV_EXAMPLE" "$API_ENV"
 fi
-if ! grep -q "^DATABASE_URL=" "$BFF_ENV" 2>/dev/null; then
-  echo "Adding DATABASE_URL to services/bff/.env"
-  echo "" >> "$BFF_ENV"
-  echo "# Local Postgres (auto-added by start script)" >> "$BFF_ENV"
-  echo "DATABASE_URL=postgresql://neosleep:neosleep_local@localhost:5432/neosleep" >> "$BFF_ENV"
+if ! grep -q "^DATABASE_URL=" "$API_ENV" 2>/dev/null; then
+  echo "Adding DATABASE_URL to services/api/.env"
+  echo "" >> "$API_ENV"
+  echo "# Local Postgres (auto-added by start script)" >> "$API_ENV"
+  echo "DATABASE_URL=postgresql://neosleep:neosleep_local@localhost:5432/neosleep" >> "$API_ENV"
 fi
 
-# --- 5. (Migrations run automatically on BFF startup via runMigrations()) ---
+# --- 5. (Migrations run automatically on API startup via runMigrations()) ---
 
 # --- 6. Install deps ---
 echo "Installing dependencies..."
 (corepack enable 2>/dev/null || true)
 pnpm install 2>/dev/null || npm install
 
-# --- 7. Print links and start BFF + rep-app ---
+# --- 7. Print links and start API server + rep-app ---
 echo ""
 echo "  ┌─────────────────────────────────────────────────────────────┐"
 echo "  │  NeoSleep – Dev Environment                                 │"
@@ -95,7 +95,7 @@ echo "  ├───────────────────────
 echo "  │  Apps                                                       │"
 echo "  │    App:       http://localhost:5173                         │"
 echo "  │    Website:   http://localhost:5174                         │"
-echo "  │    BFF API:   http://localhost:3000                         │"
+echo "  │    API server:   http://localhost:3000                         │"
 echo "  ├─────────────────────────────────────────────────────────────┤"
 echo "  │  Docker services                                            │"
 echo "  │    Adminer:   http://localhost:8080  (DB admin)             │"

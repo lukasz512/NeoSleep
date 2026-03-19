@@ -167,7 +167,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { bffFetch } from "../composables/useBffApi";
+import { apiFetch } from "../utils/api";
 
 export interface EventFormData {
   title: string;
@@ -325,7 +325,7 @@ function fromDatetimeLocal(local: string): string {
 async function loadHco() {
   loadingHco.value = true;
   try {
-    const res = await bffFetch("/api/hco?limit=-1", { handleErrors: false });
+    const res = await apiFetch("/api/hco?limit=-1", { handleErrors: false });
     if (res.ok) {
       const json = (await res.json()) as { items?: { id: string; name: string }[] };
       hcoOptions.value = json.items ?? [];
@@ -338,7 +338,7 @@ async function loadHco() {
 async function loadHcp() {
   loadingHcp.value = true;
   try {
-    const res = await bffFetch("/api/hcp?limit=-1", { handleErrors: false });
+    const res = await apiFetch("/api/hcp?limit=-1", { handleErrors: false });
     if (res.ok) {
       const json = (await res.json()) as { items?: { id: string; name: string }[] };
       hcpOptions.value = json.items ?? [];

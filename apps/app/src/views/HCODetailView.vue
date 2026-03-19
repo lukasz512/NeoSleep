@@ -1,6 +1,7 @@
 <template>
   <div class="view-detail">
     <EventForm
+      v-if="showEventForm"
       v-model="showEventForm"
       :initial-data="eventFormInitial"
       @submit="onEventFormSubmit"
@@ -82,14 +83,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from "vue";
+import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
 import { useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuthStore } from "../stores/auth";
-import { bffFetch } from "../composables/useBffApi";
+import { apiFetch } from "../utils/api";
 import { useNotifications } from "../composables/useNotifications";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
-import EventForm from "../components/EventForm.vue";
+
+const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
 
 const authStore = useAuthStore();
 const isAdmin = computed(() => authStore.user?.role === "admin");
@@ -140,7 +142,7 @@ function onScheduleVisit() {
 
 async function onEventFormSubmit(payload: import("../components/EventForm.vue").EventSubmitPayload) {
   try {
-    const res = await bffFetch("/api/events", {
+    const res = await apiFetch("/api/events", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -176,7 +178,7 @@ async function loadHCO() {
   loading.value = true;
   hco.value = null;
   try {
-    const res = await bffFetch(`/api/hco/${id}`, { errorMessageKey: "rep.hco.errorLoad" });
+    const res = await apiFetch(`/api/hco/${id}`, { errorMessageKey: "rep.hco.errorLoad" });
     if (res.ok) {
       hco.value = (await res.json()) as HCO;
     }

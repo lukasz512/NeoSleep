@@ -1,6 +1,7 @@
 <template>
   <div class="leads-view">
     <LeadContactForm
+      v-if="showAddModal"
       v-model="showAddModal"
       mode="lead"
       @submit="onLeadSubmit"
@@ -73,12 +74,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, defineAsyncComponent } from "vue";
 import { useI18n } from "vue-i18n";
 import RepEntityList from "../components/RepEntityList.vue";
-import LeadContactForm from "../components/LeadContactForm.vue";
 import GenderIcon from "../components/GenderIcon.vue";
-import { bffFetch } from "../composables/useBffApi";
+
+const LeadContactForm = defineAsyncComponent(() => import("../components/LeadContactForm.vue"));
+import { apiFetch } from "../utils/api";
 import { useNotifications } from "../composables/useNotifications";
 import { useRepFilters, type RepFilterDefinition } from "../composables/useRepFilters";
 import { useAuthStore } from "../stores/auth";
@@ -181,7 +183,7 @@ async function onLeadSubmit(data: import("../components/LeadContactForm.vue").Le
     region: d.region || undefined,
     institution: d.institution || undefined,
   });
-  const res = await bffFetch("/api/leads", {
+  const res = await apiFetch("/api/leads", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body,

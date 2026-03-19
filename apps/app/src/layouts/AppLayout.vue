@@ -122,7 +122,7 @@ import { getRepSettings, setRepSettings } from "../utils/rep-settings";
 import { useGlobalLoader } from "../composables/useGlobalLoader";
 import { repLightTheme, repDarkTheme } from "../plugins/vuetify";
 import { useAuthStore } from "../stores/auth";
-import { useAppConfig } from "../composables/useAppConfig";
+import { useConfigStore } from "../stores/config";
 import {
   AppSidebar,
   AppMobileDrawer,
@@ -131,18 +131,18 @@ import {
   ThemePanel,
 } from "./components";
 
-import { loadLocale } from "../main";
+import { loadLocale } from "../plugins/i18n";
 
 const { isLoading: globalLoaderActive } = useGlobalLoader();
 const router = useRouter();
 const { t, locale } = useI18n();
 const authStore = useAuthStore();
-const appConfig = useAppConfig();
+const configStore = useConfigStore();
 
 const isAdmin = computed(() => authStore.user?.role === "admin");
 const themePanelOpen = ref(false);
 /** Pass config value to ThemePanel (not the ref). */
-const themePanelConfig = computed(() => appConfig.config.value ?? appConfig.defaults);
+const themePanelConfig = computed(() => configStore.config ?? configStore.defaults);
 
 const theme = ref<"light" | "dark">("light");
 const sidebarCollapsed = ref(SIDEBAR_DEFAULT_COLLAPSED);
@@ -254,11 +254,11 @@ async function setLocale(lang: "en" | "pl" | "es") {
   setRepSettings({ locale: lang });
 }
 
-async function onThemeSave(cfg: import("../composables/useAppConfig").AppConfig) {
-  const updated = await appConfig.save(cfg);
+async function onThemeSave(cfg: import("../stores/config").AppConfig) {
+  const updated = await configStore.save(cfg);
   if (!updated) return null;
-  const fromDb = await appConfig.load();
-  appConfig.applyToDom(fromDb);
+  const fromDb = await configStore.load();
+  configStore.applyToDom(fromDb);
   setTheme(fromDb.color_scheme);
   return fromDb;
 }
@@ -268,8 +268,8 @@ onMounted(async () => {
   if (typeof settings.sidebarCollapsed === "boolean") {
     sidebarCollapsed.value = settings.sidebarCollapsed;
   }
-  const cfg = await appConfig.load();
-  appConfig.applyToDom(cfg);
+  const cfg = await configStore.load();
+  configStore.applyToDom(cfg);
   setTheme(cfg.color_scheme);
   updateMobile();
   window.addEventListener("resize", updateMobile);

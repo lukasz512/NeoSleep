@@ -10,10 +10,10 @@ const router = createRouter({
 const isDev = import.meta.env.DEV;
 
 /**
- * Auth guard: app starts at login; protected routes require valid session (BFF).
+ * Auth guard: app starts at login; protected routes require valid session (API).
  * - Root "/" redirects to /login (route config); authenticated users are redirected from /login to /dashboard.
  * - requiresAuth: ensure session is checked (fetchSession), then allow or redirect to /login?redirect=.
- * - In dev, session check is skipped so "Login as" + "Go to app" works without BFF.
+ * - In dev, session check is skipped so "Login as" + "Go to app" works without API.
  */
 router.beforeEach(async (to, _from, next) => {
   const auth = useAuthStore();

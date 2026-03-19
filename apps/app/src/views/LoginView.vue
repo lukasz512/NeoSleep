@@ -86,7 +86,7 @@ import { ref, computed, onMounted } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuthStore } from "../stores/auth";
-import { getBffUrl } from "../constants";
+import { getApiUrl } from "../constants";
 
 const { t } = useI18n();
 const router = useRouter();
@@ -97,8 +97,7 @@ const isDev = import.meta.env.DEV;
 const email = ref("");
 const password = ref("");
 
-const bffUrl = getBffUrl();
-const googleLoginUrl = computed(() => `${bffUrl}/auth/google`);
+const googleLoginUrl = computed(() => `${getApiUrl()}/auth/google`);
 
 const loginErrorKey = computed(() => {
   const err = route.query.error;
@@ -133,7 +132,7 @@ function goToApp() {
   router.push(getRedirectPath());
 }
 
-/** After Google OAuth redirect: check BFF session and sync auth state. */
+/** After Google OAuth redirect: check API session and sync auth state. */
 onMounted(async () => {
   if (route.query.from === "google") {
     try {

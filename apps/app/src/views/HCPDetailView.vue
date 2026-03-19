@@ -1,11 +1,13 @@
 <template>
   <div class="view-detail">
     <EventForm
+      v-if="showEventForm"
       v-model="showEventForm"
       :initial-data="eventFormInitial"
       @submit="onEventFormSubmit"
     />
     <LeadContactForm
+      v-if="showEditModal"
       v-model="showEditModal"
       mode="contact"
       :initial-data="hcp ? { name: hcp.name, email: hcp.email ?? '', phone: (hcp.phone ?? '').replace(/^\+\d+/, ''), specialty: hcp.specialty ?? '', region: hcp.region ?? '', institution: hcp.institution ?? '' } : undefined"
@@ -94,17 +96,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from "vue";
+import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
 import { useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuthStore } from "../stores/auth";
-import { bffFetch } from "../composables/useBffApi";
+import { apiFetch } from "../utils/api";
 import { useNotifications } from "../composables/useNotifications";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
-import LeadContactForm from "../components/LeadContactForm.vue";
-import EventForm from "../components/EventForm.vue";
 import GenderIcon from "../components/GenderIcon.vue";
 import { getGenderFromName } from "../utils/genderFromName";
+
+const LeadContactForm = defineAsyncComponent(() => import("../components/LeadContactForm.vue"));
+const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
 
 interface HCP {
   id: string;
@@ -144,7 +147,7 @@ function onScheduleVisit() {
 
 async function onEventFormSubmit(payload: import("../components/EventForm.vue").EventSubmitPayload) {
   try {
-    const res = await bffFetch("/api/events", {
+    const res = await apiFetch("/api/events", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -187,7 +190,7 @@ async function onContactSubmit(data: import("../components/LeadContactForm.vue")
     region: d.region || undefined,
     institution: d.institution || undefined,
   });
-  const res = await bffFetch(`/api/hcp/${id}`, {
+  const res = await apiFetch(`/api/hcp/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body,
@@ -210,7 +213,7 @@ async function loadHCP() {
   loading.value = true;
   hcp.value = null;
   try {
-    const res = await bffFetch(`/api/hcp/${id}`, { errorMessageKey: "rep.hcp.errorLoad" });
+    const res = await apiFetch(`/api/hcp/${id}`, { errorMessageKey: "rep.hcp.errorLoad" });
     if (res.ok) {
       hcp.value = (await res.json()) as HCP;
     }

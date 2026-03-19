@@ -1,7 +1,7 @@
 # NeoSleep — Claude Code Instructions
 
 ## Project Overview
-pnpm monorepo: 2 Vue 3 + Vite apps + 1 Express BFF + PostgreSQL.
+pnpm monorepo: 2 Vue 3 + Vite apps + 1 Express API server + PostgreSQL.
 Sleep care SaaS for pharma sales reps visiting HCPs (Healthcare Professionals).
 
 ## Terminology
@@ -14,7 +14,7 @@ Sleep care SaaS for pharma sales reps visiting HCPs (Healthcare Professionals).
 ```
 apps/app/         → Main PWA (sales rep CRM, mobile-first)
 apps/website/     → Marketing landing (public)
-services/bff/     → Express BFF (trust boundary, owns auth + secrets)
+services/api/     → Express API server (trust boundary, owns auth + secrets)
 i18n/             → en.json, pl.json, es.json (source of truth)
 foundation/       → Active docs, specs, ADRs (archive/ for frozen material)
 brand/            → Design tokens, logos, fonts
@@ -22,7 +22,7 @@ brand/            → Design tokens, logos, fonts
 
 ## Architecture Rules (NEVER violate)
 
-1. **BFF is the only trust boundary.** Frontends have zero secrets. All auth, DB, external APIs go through `services/bff/`.
+1. **API server is the only trust boundary.** Frontends have zero secrets. All auth, DB, external APIs go through `services/api/`.
 2. **Views vs. Data separation.** Navigation items, labels, icons, feature flags → config-driven, never hardcoded in components. White-label tenants swap data layer only.
 3. **All copy in i18n JSON.** Never hardcode user-facing strings in components. Use `$t('key')`.
 4. **TypeScript strict.** No `any`, no type assertions without justification.
@@ -35,9 +35,9 @@ brand/            → Design tokens, logos, fonts
 - pnpm 9 workspaces, Husky pre-commit hooks
 
 ## Key Paths
-- BFF routes: `services/bff/src/routes/`
-- BFF auth: `services/bff/src/auth.ts`
-- DB schema: `services/bff/migrations/` (run in order)
+- API routes: `services/api/src/routes/`
+- API auth: `services/api/src/auth.ts`
+- DB schema: `services/api/migrations/` (run in order)
 - App router: `apps/app/src/router/`
 - App stores: `apps/app/src/stores/`
 - App composables: `apps/app/src/composables/`
@@ -57,14 +57,14 @@ User/account model has 3 distinct identity types — do NOT conflate them:
 All tables:
 `tbl_leads`, `tbl_users`, `tbl_hcp`, `tbl_hco`, `tbl_patients`, `tbl_events`, `tbl_presentations`, `tbl_app_config`, `tbl_audit_log`, `tbl_console_errors`
 
-- New tables → add a migration in `services/bff/migrations/` (next number, `.sql`)
+- New tables → add a migration in `services/api/migrations/` (next number, `.sql`)
 - Migrations run automatically on BFF startup via `db/migrations.ts`
 - **OPEN QUESTION**: HCP auth strategy — magic link vs. separate OIDC vs. shared auth service. Needs architecture decision before building HCP portal.
 
 ## Auth
 - Session cookie (httpOnly), remember-me tokens
 - Roles: `admin`, `manager`, `rep` — region-scoped
-- RBAC middleware: `services/bff/src/auth.ts`
+- RBAC middleware: `services/api/src/auth.ts`
 - `tbl_hcp` auth: magic link planned — NOT YET IMPLEMENTED (needs architecture decision first)
 
 ## i18n

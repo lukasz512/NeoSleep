@@ -3,6 +3,6 @@
   "references": [
     { "path": "./apps/app" },
     { "path": "./apps/website" },
-    { "path": "./services/bff" }
+    { "path": "./services/api" }
   ]
 }

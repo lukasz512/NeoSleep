@@ -60,7 +60,7 @@ describe("PlannerView", () => {
     it("fetches events from /api/events", () => {
       const source = getSource();
       expect(source).toContain("/api/events");
-      expect(source).toContain("bffFetch");
+      expect(source).toContain("apiFetch");
       expect(source).toContain("fetchEvents");
     });
 

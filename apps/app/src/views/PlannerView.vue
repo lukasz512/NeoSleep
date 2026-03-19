@@ -71,6 +71,7 @@
     </VCalendar>
 
     <EventForm
+      v-if="showEventForm"
       v-model="showEventForm"
       :initial-data="eventFormInitial"
       @submit="onEventFormSubmit"
@@ -79,13 +80,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, defineAsyncComponent } from "vue";
 import { useI18n } from "vue-i18n";
-import { bffFetch } from "../composables/useBffApi";
+import { apiFetch } from "../utils/api";
 import { useNotifications } from "../composables/useNotifications";
-import EventForm from "../components/EventForm.vue";
 import type { EventFormInitialData } from "../components/EventForm.vue";
 import type { EventSubmitPayload } from "../components/EventForm.vue";
+
+const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
 
 const { t } = useI18n();
 const notifications = useNotifications();
@@ -169,7 +171,7 @@ async function fetchEvents() {
   loadingEvents.value = true;
   try {
     const { start, end } = getDateRange();
-    const res = await bffFetch(`/api/events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, {
+    const res = await apiFetch(`/api/events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, {
       errorMessageKey: "rep.planner.form.errorLoad",
     });
     if (res.ok) {
@@ -281,7 +283,7 @@ function onAdd() {
 async function onEventFormSubmit(payload: EventSubmitPayload) {
   try {
     if (payload.id) {
-      const res = await bffFetch(`/api/events/${payload.id}`, {
+      const res = await apiFetch(`/api/events/${payload.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -304,7 +306,7 @@ async function onEventFormSubmit(payload: EventSubmitPayload) {
         notifications.show(t("rep.planner.form.errorSave"), "error");
       }
     } else {
-      const res = await bffFetch("/api/events", {
+      const res = await apiFetch("/api/events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

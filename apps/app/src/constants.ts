@@ -1,11 +1,11 @@
 /**
- * BFF base URL for auth and API.
+ * API server base URL.
  * - Dev (default): empty string = use Vite proxy (/api, /auth → localhost:3000), no CORS.
- * - Prod / phone: set VITE_BFF_URL in .env (e.g. http://192.168.1.x:3000 for LAN).
+ * - Prod / phone: set VITE_API_URL in .env (e.g. http://192.168.1.x:3000 for LAN).
  */
-export function getBffUrl(): string {
-  const env = typeof import.meta !== "undefined" && (import.meta as { env?: { VITE_BFF_URL?: string; DEV?: boolean } }).env;
-  const url = env?.VITE_BFF_URL;
+export function getApiUrl(): string {
+  const env = typeof import.meta !== "undefined" && (import.meta as { env?: { VITE_API_URL?: string; DEV?: boolean } }).env;
+  const url = env?.VITE_API_URL;
   if (url !== undefined && url !== "") return url;
   return env?.DEV === true ? "" : "http://localhost:3000";
 }

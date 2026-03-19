@@ -1,6 +1,7 @@
 <template>
   <div class="hcp-view">
     <LeadContactForm
+      v-if="showAddModal"
       v-model="showAddModal"
       mode="contact"
       @submit="onContactSubmit"
@@ -34,16 +35,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, defineAsyncComponent } from "vue";
 import { useI18n } from "vue-i18n";
 import RepEntityList from "../components/RepEntityList.vue";
-import LeadContactForm from "../components/LeadContactForm.vue";
-import { bffFetch } from "../composables/useBffApi";
+import { apiFetch } from "../utils/api";
 import { useNotifications } from "../composables/useNotifications";
 import GenderIcon from "../components/GenderIcon.vue";
 import { useRepFilters, type RepFilterDefinition } from "../composables/useRepFilters";
 import { useAuthStore } from "../stores/auth";
 import { getGenderFromName } from "../utils/genderFromName";
+
+const LeadContactForm = defineAsyncComponent(() => import("../components/LeadContactForm.vue"));
 
 const { t } = useI18n();
 const authStore = useAuthStore();
@@ -116,7 +118,7 @@ async function onContactSubmit(data: import("../components/LeadContactForm.vue")
     region: d.region || undefined,
     institution: d.institution || undefined,
   });
-  const res = await bffFetch("/api/hcp", {
+  const res = await apiFetch("/api/hcp", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body,

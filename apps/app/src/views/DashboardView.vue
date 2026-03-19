@@ -90,7 +90,7 @@
 import { ref, computed, onMounted } from "vue";
 import { useI18n } from "vue-i18n";
 import VueApexCharts from "vue3-apexcharts";
-import { bffFetch } from "../composables/useBffApi";
+import { apiFetch } from "../utils/api";
 
 interface ApiEvent {
   id: string;
@@ -120,7 +120,7 @@ async function fetchUpcomingMeetings() {
   loadingMeetings.value = true;
   try {
     const { start, end } = getUpcomingRange();
-    const res = await bffFetch(
+    const res = await apiFetch(
       `/api/events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`,
       { handleErrors: false }
     );

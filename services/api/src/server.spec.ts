@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import request from "supertest";
 import { app } from "./server";
 
-describe("BFF", () => {
+describe("API server", () => {
   it("GET /health returns ok", async () => {
     const res = await request(app).get("/health");
     expect(res.status).toBe(200);
