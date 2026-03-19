@@ -501,7 +501,7 @@
   "website.help.faq.q7.q": "¿Cómo se protegen mis datos personales y de salud?",
   "website.help.faq.q7.a": "Todos los datos están cifrados en tránsito (TLS 1.3) y en reposo (AES-256). Cumplimos con el RGPD (UE), la LFPDPPP (México) y la PDPA (Tailandia). Tu información de salud solo es accesible para ti y el especialista certificado que gestiona tu caso. Nunca vendemos ni compartimos tus datos con terceros con fines comerciales.",
   "website.help.faq.q8.q": "¿Puedo solicitar la eliminación de mis datos?",
-  "website.help.faq.q8.a": "Sí. Tienes derecho a la supresión de tus datos según el RGPD y las leyes equivalentes de otras jurisdicciones. Para enviar una solicitud de eliminación, escribe a info@neosleepcare.com con el asunto 'Solicitud de eliminación de datos'. Procesaremos tu solicitud en un plazo de 30 días y te confirmaremos cuando se haya completado.",
+  "website.help.faq.q8.a": "Sí. Tienes derecho a la supresión de tus datos según el RGPD y las leyes equivalentes de otras jurisdicciones. Para enviar una solicitud de eliminación, escribe a info{'@'}neosleepcare.com con el asunto 'Solicitud de eliminación de datos'. Procesaremos tu solicitud en un plazo de 30 días y te confirmaremos cuando se haya completado.",
   "website.help.cta.heading": "¿No encontraste lo que buscabas?",
   "website.help.cta.subtitle": "Nuestro equipo está listo para ayudarte. Envíanos un mensaje y te responderemos pronto.",
   "website.help.cta.btn": "Contáctanos",
