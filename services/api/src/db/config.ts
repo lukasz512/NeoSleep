@@ -1,6 +1,6 @@
 import { getDb } from "./connection.js";
 
-export interface AppConfigRow {
+export interface AppConfig {
   primary_color: string;
   secondary_color: string;
   primary_color_dark: string;
@@ -14,7 +14,7 @@ export interface AppConfigRow {
 
 export type AppConfigUpdate = Partial<
   Pick<
-    AppConfigRow,
+    AppConfig,
     | "primary_color"
     | "secondary_color"
     | "primary_color_dark"
@@ -27,7 +27,7 @@ export type AppConfigUpdate = Partial<
   >
 >;
 
-const DEFAULT_APP_CONFIG: AppConfigRow = {
+const DEFAULT_APP_CONFIG: AppConfig = {
   primary_color: "#1976d2",
   secondary_color: "#2e7d32",
   primary_color_dark: "#42a5f5",
@@ -39,11 +39,11 @@ const DEFAULT_APP_CONFIG: AppConfigRow = {
   color_scheme: "light",
 };
 
-export async function getAppConfig(): Promise<AppConfigRow> {
+export async function getAppConfig(): Promise<AppConfig> {
   const p = getDb();
   if (!p) return DEFAULT_APP_CONFIG;
   try {
-    const result = await p.query<AppConfigRow>(
+    const result = await p.query<AppConfig>(
       `SELECT primary_color, secondary_color, border_radius, logo_url,
               COALESCE(surface_color, $1) AS surface_color,
               COALESCE(NULLIF(hero_container_style, ''), 'compact') AS hero_container_style,
@@ -72,11 +72,11 @@ export async function getAppConfig(): Promise<AppConfigRow> {
   }
 }
 
-export async function updateAppConfig(updates: AppConfigUpdate): Promise<AppConfigRow> {
+export async function updateAppConfig(updates: AppConfigUpdate): Promise<AppConfig> {
   const p = getDb();
   if (!p) return DEFAULT_APP_CONFIG;
   const current = await getAppConfig();
-  const row: AppConfigRow = {
+  const row: AppConfig = {
     primary_color:       updates.primary_color       ?? current.primary_color,
     secondary_color:     updates.secondary_color     ?? current.secondary_color,
     primary_color_dark:  updates.primary_color_dark  ?? current.primary_color_dark,

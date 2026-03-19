@@ -56,6 +56,7 @@ export default defineConfig({
       },
     },
   },
+  appType: "spa",
   server: {
     host: true, // listen on 0.0.0.0 so you can open the app from another device (e.g. phone on same Wi‑Fi)
     proxy: {

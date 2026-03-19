@@ -6,9 +6,6 @@ import {
   getOrCreateUserByProvider,
   getStaffUserByEmail,
   setUserPassword,
-  createRememberMeToken,
-  getRememberMeToken,
-  deleteRememberMeToken,
   createPasswordResetToken,
   getPasswordResetUserIdByHash,
   deletePasswordResetTokenByHash,
@@ -24,6 +21,7 @@ const GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
 const clientId = process.env.GOOGLE_CLIENT_ID ?? "";
 const clientSecret = process.env.GOOGLE_CLIENT_SECRET ?? "";
 const frontendUrl = process.env.FRONTEND_URL ?? "http://localhost:5173";
+const sessionSecret = process.env.SESSION_SECRET ?? "dev-secret-change-in-production";
 /** OAuth redirect_uri: use frontend when proxied (dev) so cookie is set for frontend origin. */
 const oauthRedirectOrigin = process.env.OAUTH_REDIRECT_ORIGIN ?? frontendUrl;
 
@@ -36,8 +34,17 @@ const REMEMBER_ME_MAX_AGE_MS = REMEMBER_ME_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
 const PASSWORD_RESET_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
 const BCRYPT_ROUNDS = 10;
 
-function hashToken(secret: string): string {
-  return crypto.createHash("sha256").update(secret, "utf8").digest("hex");
+/** SHA-256 hash for password reset tokens. */
+function hashToken(token: string): string {
+  return crypto.createHash("sha256").update(token, "utf8").digest("hex");
+}
+
+/** HMAC-SHA256 signature for remember-me cookies (userId:version). */
+function signRememberMe(userId: string, version: number): string {
+  return crypto
+    .createHmac("sha256", sessionSecret)
+    .update(`${userId}:${version}`)
+    .digest("hex");
 }
 
 export const authRouter = Router();
@@ -101,27 +108,23 @@ async function restoreSessionFromRememberMe(
     next();
     return;
   }
-  const [tokenId, secret] = cookie.split(":");
-  if (!tokenId || !secret) {
+  const [userId, versionStr, hmac] = cookie.split(":");
+  const version = parseInt(versionStr ?? "", 10);
+  if (!userId || !hmac || isNaN(version)) {
     next();
     return;
   }
-  const stored = await getRememberMeToken(tokenId);
-  if (!stored) {
+  const expected = signRememberMe(userId, version);
+  if (!crypto.timingSafeEqual(Buffer.from(hmac, "hex"), Buffer.from(expected, "hex"))) {
     next();
     return;
   }
-  const secretHash = hashToken(secret);
-  if (secretHash !== stored.tokenHash) {
+  const user = await getUserById(userId);
+  if (!user || user.token_version !== version) {
     next();
     return;
   }
-  const user = await getUserById(stored.userId);
-  if (!user) {
-    next();
-    return;
-  }
-  (req.session as Express.Session).user = {
+  req.session.user = {
     id: user.id,
     email: user.email,
     name: user.name ?? undefined,
@@ -180,29 +183,15 @@ authRouter.post(
       forcePasswordChange: staff.force_password_change,
     };
     if (remember_me === true) {
-      const secret = crypto.randomBytes(32).toString("hex");
-      const expiresAt = new Date(Date.now() + REMEMBER_ME_MAX_AGE_MS);
-      const tokenHash = hashToken(secret);
-      const deviceInfo =
-        typeof req.get("User-Agent") === "string"
-          ? req.get("User-Agent")!.slice(0, 500)
-          : null;
-      const tokenId = await createRememberMeToken(
-        staff.id,
-        tokenHash,
-        expiresAt,
-        deviceInfo
-      );
-      if (tokenId) {
-        const isProduction = process.env.NODE_ENV === "production";
-        res.cookie(REMEMBER_ME_COOKIE, `${tokenId}:${secret}`, {
-          httpOnly: true,
-          secure: isProduction,
-          sameSite: isProduction ? "lax" : "lax",
-          maxAge: REMEMBER_ME_MAX_AGE_MS,
-          path: "/",
-        });
-      }
+      const hmac = signRememberMe(staff.id, staff.token_version);
+      const isProduction = process.env.NODE_ENV === "production";
+      res.cookie(REMEMBER_ME_COOKIE, `${staff.id}:${staff.token_version}:${hmac}`, {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: "lax",
+        maxAge: REMEMBER_ME_MAX_AGE_MS,
+        path: "/",
+      });
     }
     res.status(200).json({
       user: req.session.user,
@@ -242,14 +231,7 @@ authRouter.get(
 // ---------------------------------------------------------------------------
 
 authRouter.post("/auth/logout", (req: Request, res: Response) => {
-  const cookie = req.cookies?.[REMEMBER_ME_COOKIE];
-  if (cookie && typeof cookie === "string") {
-    const tokenId = cookie.split(":")[0];
-    if (tokenId) {
-      deleteRememberMeToken(tokenId).catch(() => {});
-    }
-    res.clearCookie(REMEMBER_ME_COOKIE, { path: "/" });
-  }
+  res.clearCookie(REMEMBER_ME_COOKIE, { path: "/" });
   req.session.destroy((err) => {
     if (err) {
       res.status(500).json({ error: "Logout failed" });

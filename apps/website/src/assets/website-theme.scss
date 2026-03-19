@@ -55,6 +55,7 @@
   --website-card-radius: 20px;            /* border-radius of framed cards         */
   --website-drawer-width: min(300px, 85vw);
   --website-nav-breakpoint: 1100px;
+  --website-sticky-offset: 2rem; /* gap between sticky element and fixed header */
 }
 
 /**

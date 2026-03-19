@@ -8,6 +8,7 @@ export interface User {
   provider: string;
   provider_id: string;
   region: string | null;
+  token_version: number;
   created_at: Date;
   updated_at: Date;
 }
@@ -19,7 +20,7 @@ export interface StaffUser extends User {
 }
 
 const STAFF_AUTH_COLS =
-  "id, email, name, role, provider, provider_id, region, created_at, updated_at, password_hash, force_password_change";
+  "id, email, name, role, provider, provider_id, region, token_version, created_at, updated_at, password_hash, force_password_change";
 
 /** Get or create user by auth provider (e.g. Google). New users get role 'rep'. */
 export async function getOrCreateUserByProvider(
@@ -32,14 +33,14 @@ export async function getOrCreateUserByProvider(
   if (!p) return null;
   try {
     const existing = await p.query<User>(
-      "SELECT id, email, name, role, provider, provider_id, region, created_at, updated_at FROM tbl_users WHERE provider = $1 AND provider_id = $2",
+      "SELECT id, email, name, role, provider, provider_id, region, token_version, created_at, updated_at FROM tbl_users WHERE provider = $1 AND provider_id = $2",
       [provider, providerId]
     );
     if (existing.rows[0]) return existing.rows[0];
     const inserted = await p.query<User>(
       `INSERT INTO tbl_users (email, name, role, provider, provider_id)
        VALUES ($1, $2, 'rep', $3, $4)
-       RETURNING id, email, name, role, provider, provider_id, region, created_at, updated_at`,
+       RETURNING id, email, name, role, provider, provider_id, region, token_version, created_at, updated_at`,
       [email, name ?? null, provider, providerId]
     );
     return inserted.rows[0] ?? null;
@@ -54,7 +55,7 @@ export async function getUserById(id: string): Promise<User | null> {
   if (!p) return null;
   try {
     const r = await p.query<User>(
-      "SELECT id, email, name, role, provider, provider_id, region, created_at, updated_at FROM tbl_users WHERE id = $1",
+      "SELECT id, email, name, role, provider, provider_id, region, token_version, created_at, updated_at FROM tbl_users WHERE id = $1",
       [id]
     );
     return r.rows[0] ?? null;
@@ -122,99 +123,6 @@ export async function setUserPassword(userId: string, passwordHash: string): Pro
   }
 }
 
-export async function createRememberMeToken(
-  userId: string,
-  tokenHash: string,
-  expiresAt: Date,
-  deviceInfo?: string | null
-): Promise<string | null> {
-  const p = getDb();
-  if (!p) return null;
-  try {
-    const r = await p.query<{ id: string }>(
-      `INSERT INTO tbl_remember_me_tokens (user_id, token_hash, device_info, expires_at)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id`,
-      [userId, tokenHash, deviceInfo ?? null, expiresAt]
-    );
-    return r.rows[0]?.id ?? null;
-  } catch (err) {
-    console.error("createRememberMeToken error:", err);
-    return null;
-  }
-}
-
-export async function getRememberMeToken(
-  tokenId: string
-): Promise<{ userId: string; tokenHash: string } | null> {
-  const p = getDb();
-  if (!p) return null;
-  try {
-    const r = await p.query<{ user_id: string; token_hash: string }>(
-      `SELECT user_id, token_hash FROM tbl_remember_me_tokens WHERE id = $1 AND expires_at > now()`,
-      [tokenId]
-    );
-    const row = r.rows[0];
-    return row ? { userId: row.user_id, tokenHash: row.token_hash } : null;
-  } catch (err) {
-    console.error("getRememberMeToken error:", err);
-    return null;
-  }
-}
-
-export async function deleteRememberMeToken(tokenId: string): Promise<void> {
-  const p = getDb();
-  if (!p) return;
-  try {
-    await p.query("DELETE FROM tbl_remember_me_tokens WHERE id = $1", [tokenId]);
-  } catch (err) {
-    console.error("deleteRememberMeToken error:", err);
-  }
-}
-
-export async function createPasswordResetToken(
-  userId: string,
-  tokenHash: string,
-  expiresAt: Date
-): Promise<boolean> {
-  const p = getDb();
-  if (!p) return false;
-  try {
-    await p.query(
-      `INSERT INTO tbl_password_reset_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)`,
-      [userId, tokenHash, expiresAt]
-    );
-    return true;
-  } catch (err) {
-    console.error("createPasswordResetToken error:", err);
-    return false;
-  }
-}
-
-export async function getPasswordResetUserIdByHash(tokenHash: string): Promise<string | null> {
-  const p = getDb();
-  if (!p) return null;
-  try {
-    const r = await p.query<{ user_id: string }>(
-      `SELECT user_id FROM tbl_password_reset_tokens WHERE token_hash = $1 AND expires_at > now()`,
-      [tokenHash]
-    );
-    return r.rows[0]?.user_id ?? null;
-  } catch (err) {
-    console.error("getPasswordResetUserIdByHash error:", err);
-    return null;
-  }
-}
-
-export async function deletePasswordResetTokenByHash(tokenHash: string): Promise<void> {
-  const p = getDb();
-  if (!p) return;
-  try {
-    await p.query("DELETE FROM tbl_password_reset_tokens WHERE token_hash = $1", [tokenHash]);
-  } catch (err) {
-    console.error("deletePasswordResetTokenByHash error:", err);
-  }
-}
 
 /** Insert staff user (provider='local') for email/password login. */
 export async function insertStaffUser(
@@ -232,7 +140,7 @@ export async function insertStaffUser(
       `INSERT INTO tbl_users (email, name, role, provider, provider_id, password_hash, force_password_change)
        VALUES ($1, $2, $3, 'local', $4, $5, $6)
        ON CONFLICT (provider, provider_id) DO NOTHING
-       RETURNING id, email, name, role, provider, provider_id, region, created_at, updated_at`,
+       RETURNING id, email, name, role, provider, provider_id, region, token_version, created_at, updated_at`,
       [normalizedEmail, name ?? null, role, normalizedEmail, passwordHash, forcePasswordChange]
     );
     return r.rows[0] ?? null;
@@ -254,5 +162,21 @@ export async function getUserIdByEmail(email: string): Promise<string | null> {
   } catch (err) {
     console.error("getUserIdByEmail error:", err);
     return null;
+  }
+}
+
+/** Increment token_version to immediately invalidate all remember-me sessions for a user. */
+export async function incrementUserTokenVersion(userId: string): Promise<boolean> {
+  const p = getDb();
+  if (!p) return false;
+  try {
+    await p.query(
+      "UPDATE tbl_users SET token_version = token_version + 1 WHERE id = $1",
+      [userId]
+    );
+    return true;
+  } catch (err) {
+    console.error("incrementUserTokenVersion error:", err);
+    return false;
   }
 }

@@ -3,7 +3,7 @@
   padding: 3rem 0;
   animation: contact-page-in 0.55s ease-out both;
 
-  @media (max-width: 600px) {
+  @media (max-width: $bp-sm) {
     padding: 1.5rem 0 2rem;
   }
 }
@@ -22,14 +22,14 @@
 
 .view-contact__info {
   position: sticky;
-  top: calc(var(--website-header-height) + 2rem);
+  top: calc(var(--website-header-height) + var(--website-sticky-offset));
 }
 
 .view-contact__form-wrap {
   min-width: 0;
 }
 
-@media (max-width: 900px) {
+@media (max-width: $bp-md) {
   .view-contact__container {
     grid-template-columns: 1fr;
     gap: 2rem;
@@ -277,7 +277,7 @@
   cursor: pointer;
   align-self: flex-start;
 
-  @media (max-width: 600px) {
+  @media (max-width: $bp-sm) {
     align-self: center;
     width: 100%;
   }
@@ -298,7 +298,7 @@
   }
 }
 
-@media (max-width: 600px) {
+@media (max-width: $bp-sm) {
   .view-contact__form {
     padding: 1.25rem 1rem;
   }

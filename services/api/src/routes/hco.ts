@@ -1,33 +1,19 @@
 import { Router, type Request, type Response } from "express";
 import { getHCOPaginated, getHCOById, type GetHCOFilters } from "../db.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
+import { parsePaginationParams, isoDate } from "./utils.js";
 
-const DEFAULT_PAGE = 1;
-const DEFAULT_LIMIT = 10;
-const MAX_LIMIT = 100;
-
-function parseHCOQuery(req: Request): {
-  page: number;
-  limit: number;
-  sortBy: string;
-  sortOrder: "asc" | "desc";
-  filters: GetHCOFilters;
-} {
-  const page = Math.max(1, parseInt(String(req.query.page), 10) || DEFAULT_PAGE);
-  const rawLimit = parseInt(String(req.query.limit), 10);
-  const limit = rawLimit === -1 || rawLimit <= 0 ? MAX_LIMIT : Math.min(MAX_LIMIT, Math.max(1, rawLimit));
-  const sortBy = typeof req.query.sortBy === "string" ? req.query.sortBy.trim() || "created_at" : "created_at";
-  const sortOrder = req.query.sortOrder === "asc" ? "asc" : "desc";
+function parseHCOQuery(req: Request): { page: number; limit: number; sortBy: string; sortOrder: "asc" | "desc"; filters: GetHCOFilters } {
+  const { page, limit, sortBy, sortOrder } = parsePaginationParams(req);
   const search = typeof req.query.search === "string" ? req.query.search.trim() : undefined;
-  const type = typeof req.query.type === "string" ? req.query.type.trim() : undefined;
-  const region = typeof req.query.region === "string" ? req.query.region.trim() : undefined;
-  const status = typeof req.query.status === "string" ? req.query.status.trim() : undefined;
   return {
-    page,
-    limit,
-    sortBy,
-    sortOrder,
-    filters: { search: search || undefined, type, region, status },
+    page, limit, sortBy, sortOrder,
+    filters: {
+      search: search || undefined,
+      type: typeof req.query.type === "string" ? req.query.type.trim() : undefined,
+      region: typeof req.query.region === "string" ? req.query.region.trim() : undefined,
+      status: typeof req.query.status === "string" ? req.query.status.trim() : undefined,
+    },
   };
 }
 
@@ -44,7 +30,7 @@ hcoRouter.get(
       type: r.type ?? "",
       region: r.region,
       status: r.status,
-      created_at: r.created_at instanceof Date ? r.created_at.toISOString() : r.created_at,
+      created_at: isoDate(r.created_at),
     }));
     res.json({ items, total });
   })
@@ -54,22 +40,16 @@ hcoRouter.get(
   "/api/hco/:id",
   asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id?.trim();
-    if (!id) {
-      res.status(400).json({ error: "Missing HCO id" });
-      return;
-    }
+    if (!id) { res.status(400).json({ error: "Missing HCO id" }); return; }
     const hco = await getHCOById(id);
-    if (!hco) {
-      res.status(404).json({ error: "HCO not found" });
-      return;
-    }
+    if (!hco) { res.status(404).json({ error: "HCO not found" }); return; }
     res.json({
       id: hco.id,
       name: hco.name,
       type: hco.type ?? "",
       region: hco.region,
       status: hco.status,
-      created_at: hco.created_at instanceof Date ? hco.created_at.toISOString() : hco.created_at,
+      created_at: isoDate(hco.created_at),
     });
   })
 );
