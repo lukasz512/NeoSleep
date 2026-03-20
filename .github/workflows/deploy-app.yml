@@ -10,7 +10,7 @@ name: Deploy NeoSleepCare App
 
 on:
   push:
-    branches: [PROD, uat, dev]
+    branches: [prod, uat, dev]
   workflow_dispatch:
 
 jobs:
@@ -34,7 +34,7 @@ jobs:
 
       - name: Set API URL for build
         run: |
-          if [ "${{ github.ref }}" = "refs/heads/PROD" ]; then
+          if [ "${{ github.ref }}" = "refs/heads/prod" ]; then
             echo "VITE_API_URL=${{ secrets.VITE_API_URL_PROD }}" >> $GITHUB_ENV
           elif [ "${{ github.ref }}" = "refs/heads/uat" ]; then
             echo "VITE_API_URL=${{ secrets.VITE_API_URL_UAT }}" >> $GITHUB_ENV
@@ -46,7 +46,7 @@ jobs:
         run: pnpm run build:app
 
       - name: Deploy to PROD (app.neosleepcare.com)
-        if: github.ref == 'refs/heads/PROD'
+        if: github.ref == 'refs/heads/prod'
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}

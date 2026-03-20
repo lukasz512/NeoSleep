@@ -8,7 +8,7 @@ name: Deploy BFF
 
 on:
   push:
-    branches: [PROD, uat, dev]
+    branches: [prod, uat, dev]
     paths:
       - "services/api/**"
   workflow_dispatch:
@@ -36,7 +36,7 @@ jobs:
         run: pnpm --filter @neo/api build
 
       - name: Upload BFF build to VPS (PROD)
-        if: github.ref == 'refs/heads/PROD'
+        if: github.ref == 'refs/heads/prod'
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -47,7 +47,7 @@ jobs:
           strip_components: 2
 
       - name: Restart PM2 (PROD)
-        if: github.ref == 'refs/heads/PROD'
+        if: github.ref == 'refs/heads/prod'
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
