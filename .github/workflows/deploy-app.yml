@@ -1,6 +1,7 @@
 # Deploy rep-app to GoDaddy FTP
-# - PROD → app.neosleepcare.com (path: secret FTP_PATH_APP_PROD)
-# - uat  → app-uat.neosleepcare.com (path: secret FTP_PATH_APP_UAT)
+# - PROD → app.neosleepcare.com     (secret FTP_PATH_APP_PROD)
+# - UAT  → app-uat.neosleepcare.com (secret FTP_PATH_APP_UAT)
+# - DEV  → app-dev.neosleepcare.com (secret FTP_PATH_APP_DEV)
 #
 # TODO: migrate to SSH (appleboy/scp-action) once Hetzner VPS is provisioned.
 # See infra/setup/provision.md for the migration runbook.
@@ -9,7 +10,7 @@ name: Deploy NeoSleepCare App
 
 on:
   push:
-    branches: [PROD, uat]
+    branches: [PROD, uat, dev]
   workflow_dispatch:
 
 jobs:
@@ -35,8 +36,10 @@ jobs:
         run: |
           if [ "${{ github.ref }}" = "refs/heads/PROD" ]; then
             echo "VITE_API_URL=${{ secrets.VITE_API_URL_PROD }}" >> $GITHUB_ENV
-          else
+          elif [ "${{ github.ref }}" = "refs/heads/uat" ]; then
             echo "VITE_API_URL=${{ secrets.VITE_API_URL_UAT }}" >> $GITHUB_ENV
+          else
+            echo "VITE_API_URL=${{ secrets.VITE_API_URL_DEV }}" >> $GITHUB_ENV
           fi
 
       - name: Build rep-app
@@ -64,4 +67,16 @@ jobs:
           protocol: ftp
           local-dir: ./apps/app/dist/
           server-dir: ${{ secrets.FTP_PATH_APP_UAT }}/
+          dangerous-clean-slate: false
+
+      - name: Deploy to DEV (app-dev.neosleepcare.com)
+        if: github.ref == 'refs/heads/dev'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftp
+          local-dir: ./apps/app/dist/
+          server-dir: ${{ secrets.FTP_PATH_APP_DEV }}/
           dangerous-clean-slate: false

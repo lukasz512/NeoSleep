@@ -1,0 +1,80 @@
+# Manual promotion: build from dev branch and deploy to UAT.
+# In Actions, select workflow "Promote Dev → UAT" and click "Run workflow".
+
+name: Promote Dev → UAT
+
+on:
+  workflow_dispatch:
+
+jobs:
+  promote-app:
+    name: Promote App (dev → uat)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (dev)
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build app (with UAT API URL)
+        run: pnpm run build:app
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL_UAT }}
+
+      - name: Deploy App to UAT (app-uat.neosleepcare.com)
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftp
+          local-dir: ./apps/app/dist/
+          server-dir: ${{ secrets.FTP_PATH_APP_UAT }}/
+          dangerous-clean-slate: false
+
+  promote-website:
+    name: Promote Website (dev → uat)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (dev)
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build website
+        run: pnpm run build:website
+
+      - name: Deploy Website to UAT (uat.neosleepcare.com)
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftp
+          local-dir: ./apps/website/dist/
+          server-dir: ${{ secrets.FTP_PATH_WEBSITE_UAT }}/
+          dangerous-clean-slate: false
