@@ -19,8 +19,7 @@ configRouter.patch(
   asyncHandler(async (req: Request, res: Response) => {
     const session = req.session as { user?: { role?: string } } | undefined;
     const isAdmin = session?.user?.role === "admin";
-    const devBypass = process.env.NODE_ENV !== "production" && !session?.user;
-    if (!isAdmin && !devBypass) {
+    if (!isAdmin) {
       res.status(403).json({ error: "Admin only" });
       return;
     }

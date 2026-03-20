@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { getHCPPaginated, getHCPById, insertHCP, updateHCP, insertAuditLog, type GetHCPFilters } from "../db.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
 import { parsePaginationParams, toFilterArray, isoDate, requireDb } from "./utils.js";
+import { requireAuth } from "../middleware/requireAuth.js";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -36,6 +37,7 @@ export const hcpRouter = Router();
 
 hcpRouter.get(
   "/api/hcp",
+  requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
     const { page, limit, sortBy, sortOrder, filters } = parseHCPQuery(req);
     const { rows, total } = await getHCPPaginated(filters, page, limit, sortBy, sortOrder);
@@ -45,6 +47,7 @@ hcpRouter.get(
 
 hcpRouter.get(
   "/api/hcp/:id",
+  requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id?.trim();
     if (!id) { res.status(400).json({ error: "Missing HCP id" }); return; }

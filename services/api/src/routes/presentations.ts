@@ -1,11 +1,13 @@
 import { Router, type Request, type Response } from "express";
 import { getPresentations, getPresentationById } from "../db.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
+import { requireAuth } from "../middleware/requireAuth.js";
 
 export const presentationsRouter = Router();
 
 presentationsRouter.get(
   "/api/presentations",
+  requireAuth,
   asyncHandler(async (_req: Request, res: Response) => {
     const rows = await getPresentations();
     const items = rows.map((r) => ({

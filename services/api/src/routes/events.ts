@@ -2,6 +2,7 @@ import { Router, type Router as RouterType, type Request, type Response } from "
 import { getEvents, getEventById, insertEvent, updateEvent, getFirstUserId, type GetEventsFilters } from "../db.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
 import { isoDate } from "./utils.js";
+import { requireAuth } from "../middleware/requireAuth.js";
 
 export const eventsRouter: RouterType = Router();
 
@@ -32,6 +33,7 @@ function serializeEvent(e: EventRow) {
 
 eventsRouter.get(
   "/api/events",
+  requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
     const start = typeof req.query.start === "string" ? req.query.start.trim() : undefined;
     const end = typeof req.query.end === "string" ? req.query.end.trim() : undefined;
@@ -44,6 +46,7 @@ eventsRouter.get(
 
 eventsRouter.get(
   "/api/events/:id",
+  requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id?.trim();
     if (!id) { res.status(400).json({ error: "Missing event id" }); return; }

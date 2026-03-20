@@ -9,85 +9,69 @@ describe("API server", () => {
     expect(res.body).toEqual({ ok: true });
   });
 
-  it("GET /api/leads returns 200 and paginated leads (mock when no DB)", async () => {
+  // Auth guard — unauthenticated requests should return 401
+  it("GET /api/leads without session returns 401", async () => {
     const res = await request(app).get("/api/leads");
-    expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty("items");
-    expect(res.body).toHaveProperty("total");
-    expect(Array.isArray(res.body.items)).toBe(true);
-    expect(typeof res.body.total).toBe("number");
-    res.body.items.forEach((lead: { id: string; name: string; email: string; status: string; region: string; created_at: string }) => {
-      expect(typeof lead.id).toBe("string");
-      expect(typeof lead.name).toBe("string");
-      expect(typeof lead.email).toBe("string");
-      expect(typeof lead.status).toBe("string");
-      expect(typeof lead.region).toBe("string");
-      expect(typeof lead.created_at).toBe("string");
-    });
+    expect(res.status).toBe(401);
+    expect(res.body).toHaveProperty("error");
   });
 
-  it("GET /api/leads accepts pagination and filter query params", async () => {
+  it("GET /api/leads accepts pagination and filter query params (returns 401 without session)", async () => {
     const res = await request(app).get("/api/leads?page=2&limit=2&sortBy=name&sortOrder=asc&search=alpha&status=qualified");
-    expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty("items");
-    expect(res.body).toHaveProperty("total");
-    expect(Array.isArray(res.body.items)).toBe(true);
+    expect(res.status).toBe(401);
+    expect(res.body).toHaveProperty("error");
   });
 
-  it("GET /api/leads applies status filter server-side (only matching items returned)", async () => {
+  it("GET /api/leads applies status filter server-side (401 without session)", async () => {
     const res = await request(app).get("/api/leads?status=qualified");
-    expect(res.status).toBe(200);
-    expect(res.body.items).toBeDefined();
-    expect(res.body.total).toBeGreaterThanOrEqual(0);
-    res.body.items.forEach((lead: { status: string }) => {
-      expect(lead.status).toBe("qualified");
-    });
+    expect(res.status).toBe(401);
   });
 
-  it("GET /api/leads applies region filter server-side", async () => {
+  it("GET /api/leads applies region filter server-side (401 without session)", async () => {
     const res = await request(app).get("/api/leads?region=Central");
-    expect(res.status).toBe(200);
-    res.body.items.forEach((lead: { region: string }) => {
-      expect(lead.region).toBe("Central");
-    });
+    expect(res.status).toBe(401);
   });
 
-  it("GET /api/leads applies search filter server-side (name/email/status/region)", async () => {
+  it("GET /api/leads applies search filter server-side (401 without session)", async () => {
     const res = await request(app).get("/api/leads?search=alpha");
-    expect(res.status).toBe(200);
-    expect(res.body.total).toBeGreaterThanOrEqual(0);
-    const q = "alpha";
-    res.body.items.forEach((lead: { name: string; email: string; status: string; region: string }) => {
-      const match =
-        (lead.name && lead.name.toLowerCase().includes(q)) ||
-        (lead.email && lead.email.toLowerCase().includes(q)) ||
-        (lead.status && lead.status.toLowerCase().includes(q)) ||
-        (lead.region && lead.region.toLowerCase().includes(q));
-      expect(match).toBe(true);
-    });
+    expect(res.status).toBe(401);
+  });
+
+  it("GET /api/hcp without session returns 401", async () => {
+    const res = await request(app).get("/api/hcp");
+    expect(res.status).toBe(401);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("GET /api/events without session returns 401", async () => {
+    const res = await request(app).get("/api/events");
+    expect(res.status).toBe(401);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("GET /api/presentations without session returns 401", async () => {
+    const res = await request(app).get("/api/presentations");
+    expect(res.status).toBe(401);
+    expect(res.body).toHaveProperty("error");
   });
 
   describe("events API", () => {
-    it("GET /api/events returns 200 and items array", async () => {
+    it("GET /api/events returns 401 without session", async () => {
       const res = await request(app).get("/api/events");
-      expect(res.status).toBe(200);
-      expect(res.body).toHaveProperty("items");
-      expect(Array.isArray(res.body.items)).toBe(true);
+      expect(res.status).toBe(401);
+      expect(res.body).toHaveProperty("error");
     });
 
-    it("GET /api/events accepts start and end query params", async () => {
+    it("GET /api/events accepts start and end query params (401 without session)", async () => {
       const start = "2026-02-01T00:00:00.000Z";
       const end = "2026-02-28T23:59:59.999Z";
       const res = await request(app).get(`/api/events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
-      expect(res.status).toBe(200);
-      expect(res.body.items).toBeDefined();
-      expect(Array.isArray(res.body.items)).toBe(true);
+      expect(res.status).toBe(401);
     });
 
-    it("GET /api/events/:id returns 404 for non-existent id", async () => {
+    it("GET /api/events/:id returns 401 without session for non-existent id", async () => {
       const res = await request(app).get("/api/events/00000000-0000-0000-0000-000000000000");
-      expect(res.status).toBe(404);
-      expect(res.body).toHaveProperty("error");
+      expect(res.status).toBe(401);
     });
 
     it("POST /api/events returns 401 without session (when no DB)", async () => {
@@ -104,5 +88,51 @@ describe("API server", () => {
       expect(res.status).toBe(401);
       expect(res.body).toHaveProperty("error");
     });
+  });
+
+  // Authorization — wrong role
+  it("PATCH /api/config/app without admin session returns 403", async () => {
+    const res = await request(app)
+      .patch("/api/config/app")
+      .send({ primary_color: "#ff0000" });
+    expect(res.status).toBe(403);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  // Input validation
+  it("POST /api/contact without firstName returns 400", async () => {
+    const res = await request(app)
+      .post("/api/contact")
+      .send({ lastName: "Smith", phone: "1234567890", city: "Warsaw" });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("POST /api/contact without phone returns 400", async () => {
+    const res = await request(app)
+      .post("/api/contact")
+      .send({ firstName: "John", lastName: "Smith", city: "Warsaw" });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("POST /api/logs without message field returns 400 (when logging enabled)", async () => {
+    const original = process.env.ENABLE_CONSOLE_LOG_DB;
+    process.env.ENABLE_CONSOLE_LOG_DB = "1";
+    try {
+      const res = await request(app)
+        .post("/api/logs")
+        .send({ level: "error" });
+      expect(res.status).toBe(400);
+      expect(res.body).toHaveProperty("error");
+    } finally {
+      process.env.ENABLE_CONSOLE_LOG_DB = original;
+    }
+  });
+
+  // Public endpoints
+  it("GET /api/config/app returns 200", async () => {
+    const res = await request(app).get("/api/config/app");
+    expect(res.status).toBe(200);
   });
 });

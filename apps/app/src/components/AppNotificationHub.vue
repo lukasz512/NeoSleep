@@ -1,226 +1,141 @@
 <template>
-  <VSnackbar
-    :model-value="!!current"
-    :color="snackbarColor"
-    variant="tonal"
-    content-class="app-notification-hub__content"
-    :class="['app-notification-hub', { 'app-notification-hub--mobile': isMobile }]"
-    :timeout="NOTIFICATION_TIMEOUT"
-    :location="isMobile ? 'top center' : 'bottom right'"
-    @update:model-value="(v) => { if (!v) dismissCurrent(); }"
-  >
-    <div v-if="current" class="app-notification-hub__inner">
-      <div class="app-notification-hub__timer" :style="timerStyle" />
-      <div
-        ref="wrapRef"
-        class="app-notification-hub__wrap"
-        :class="{
-          'app-notification-hub__wrap--exiting': exiting && !isMobile,
-          'app-notification-hub__wrap--exiting-mobile': exiting && isMobile,
-        }"
-        @transitionend="onTransitionEnd"
-        @touchstart="onTouchStart"
-        @touchend="onTouchEnd"
-      >
-        <span class="app-notification-hub__message" role="status" aria-live="polite">{{ current.message }}</span>
-        <button
-          type="button"
-          class="app-notification-hub__arrow"
-          :title="t('notification.dismiss')"
-          :aria-label="t('notification.dismiss')"
-          @click="startExit"
+  <Teleport to="body">
+    <div class="notif-hub">
+      <Transition name="notif" @after-leave="onAfterLeave">
+        <div
+          v-if="visible && current"
+          :key="current.id"
+          class="notif-toast"
+          :class="`notif-toast--${current.type}`"
+          role="status"
+          @click="triggerDismiss"
+          @touchstart.passive="onTouchStart"
+          @touchend.passive="onTouchEnd"
         >
-          <svg
-            class="app-notification-hub__arrow-svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path v-if="isMobile" d="M18 15l-6-6-6 6" />
-            <path v-else d="M9 18l6-6-6-6" />
-          </svg>
-        </button>
-      </div>
+          <span class="notif-toast__msg">{{ current.message }}</span>
+          <div class="notif-toast__bar" :style="barStyle" />
+        </div>
+      </Transition>
     </div>
-  </VSnackbar>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from "vue";
-import { useDisplay } from "vuetify";
-import { useI18n } from "vue-i18n";
-import { useNotifications, type NotificationType } from "../composables/useNotifications";
-import { MOBILE_BREAKPOINT } from "../constants";
+import { ref, watch, computed, onUnmounted } from "vue";
+import { useNotifications } from "../composables/useNotifications";
 
-const NOTIFICATION_TIMEOUT = 4000;
+const TIMEOUT = 4000;
 
 const { current, dismissCurrent } = useNotifications();
-const { t } = useI18n();
-const { mobile: isMobile } = useDisplay({ mobileBreakpoint: MOBILE_BREAKPOINT });
-
-const wrapRef = ref<HTMLElement | null>(null);
-const exiting = ref(false);
-let touchStartX = 0;
+const visible = ref(false);
+let timer: ReturnType<typeof setTimeout> | null = null;
 let touchStartY = 0;
 
-const snackbarColor = computed(() => {
-  const type = current.value?.type ?? "info";
-  const map: Record<NotificationType, string> = {
-    success: "success",
-    info: "info",
-    warning: "warning",
-    error: "error",
-  };
-  return map[type];
-});
+function clearTimer() {
+  if (timer) { clearTimeout(timer); timer = null; }
+}
 
-const timerStyle = computed(() => ({
-  animationDuration: `${NOTIFICATION_TIMEOUT}ms`,
-}));
+function triggerDismiss() {
+  clearTimer();
+  visible.value = false; // transition plays, onAfterLeave calls dismissCurrent
+}
+
+function onAfterLeave() {
+  dismissCurrent();
+  // Show next if any
+  if (current.value) visible.value = true;
+}
 
 watch(current, (val) => {
-  if (val) exiting.value = false;
-});
-
-function startExit() {
-  exiting.value = true;
-}
-
-function onTransitionEnd(e: TransitionEvent) {
-  if (e.propertyName === "transform" && exiting.value) {
-    dismissCurrent();
-    exiting.value = false;
+  if (val && !visible.value) {
+    visible.value = true;
+    clearTimer();
+    timer = setTimeout(triggerDismiss, TIMEOUT);
   }
-}
+}, { immediate: true });
 
 function onTouchStart(e: TouchEvent) {
-  touchStartX = e.touches[0].clientX;
   touchStartY = e.touches[0].clientY;
 }
-
 function onTouchEnd(e: TouchEvent) {
-  const x = e.changedTouches[0].clientX;
-  const y = e.changedTouches[0].clientY;
-  const deltaX = x - touchStartX;
-  const deltaY = y - touchStartY;
-  if (isMobile.value) {
-    if (deltaY < -80) startExit();
-  } else {
-    if (deltaX > 80) startExit();
-  }
+  const deltaY = e.changedTouches[0].clientY - touchStartY;
+  if (deltaY < -40) triggerDismiss(); // swipe up
 }
+
+const barStyle = computed(() => ({
+  animationDuration: `${TIMEOUT}ms`,
+}));
+
+onUnmounted(clearTimer);
 </script>
 
 <style scoped>
-.app-notification-hub :deep(.v-snackbar__wrapper) {
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-  min-height: 0;
-  overflow: hidden;
+.notif-hub {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  pointer-events: none;
+  width: min(400px, calc(100vw - 32px));
 }
 
-.app-notification-hub :deep(.app-notification-hub__content) {
-  padding: 14px 24px 12px 24px;
-  font-size: 0.875rem;
+.notif-toast {
+  pointer-events: all;
+  padding: 14px 20px 16px;
+  border-radius: 18px;
+  cursor: pointer;
+  overflow: hidden;
+  position: relative;
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  background: rgba(20, 20, 30, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 0.9rem;
   font-weight: 400;
-  overflow: hidden;
+  line-height: 1.4;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-.app-notification-hub__inner {
-  position: relative;
-  width: 100%;
+.notif-toast--success { background: rgba(15, 80, 40, 0.85); }
+.notif-toast--error   { background: rgba(110, 20, 20, 0.88); }
+.notif-toast--warning { background: rgba(100, 50, 10, 0.85); }
+.notif-toast--info    { background: rgba(20, 50, 120, 0.85); }
+
+.notif-toast__msg {
+  display: block;
+  opacity: 0.95;
 }
 
-.app-notification-hub__wrap {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  position: relative;
-  transition: transform 0.3s ease;
-}
-
-.app-notification-hub__wrap--exiting {
-  transform: translateX(calc(100% + 24px));
-}
-
-.app-notification-hub__wrap--exiting-mobile {
-  transform: translateY(-100%);
-}
-
-.app-notification-hub__timer {
+.notif-toast__bar {
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
   height: 3px;
-  margin: 0 -24px;
-  background: currentColor;
-  opacity: 0.4;
-  transform-origin: left;
-  animation: app-notification-hub-timer linear forwards;
+  background: rgba(255, 255, 255, 0.45);
+  transform-origin: left center;
+  animation: notif-bar linear forwards;
 }
 
-.app-notification-hub--mobile .app-notification-hub__timer {
-  bottom: auto;
-  top: 0;
-  transform-origin: right;
+@keyframes notif-bar {
+  from { transform: scaleX(1); }
+  to   { transform: scaleX(0); }
 }
 
-@keyframes app-notification-hub-timer {
-  from {
-    transform: scaleX(1);
-  }
-  to {
-    transform: scaleX(0);
-  }
+/* Slide up enter / slide down leave */
+.notif-enter-active {
+  transition: transform 0.38s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.25s ease;
 }
-
-.app-notification-hub__message {
-  flex: 1 1 auto;
-  min-width: 0;
-  opacity: 0.92;
+.notif-leave-active {
+  transition: transform 0.28s ease-in, opacity 0.22s ease;
 }
-
-.app-notification-hub__arrow {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  transition: background 0.15s, transform 0.2s;
-}
-
-.app-notification-hub__arrow:hover,
-.app-notification-hub__arrow:focus-visible {
-  background: rgba(255, 255, 255, 0.2);
-  outline: none;
-}
-
-.app-notification-hub__arrow-svg {
-  width: 20px;
-  height: 20px;
-  animation: app-notification-hub-arrow-in 0.35s ease;
-}
-
-@keyframes app-notification-hub-arrow-in {
-  from {
-    opacity: 0;
-    transform: translateX(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
+.notif-enter-from,
+.notif-leave-to {
+  transform: translateY(64px);
+  opacity: 0;
 }
 </style>
