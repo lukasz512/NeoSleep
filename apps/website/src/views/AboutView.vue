@@ -14,7 +14,7 @@
           <span class="home-btn__arrow" aria-hidden="true">→</span>
         </RouterLink>
         <RouterLink :to="{ path: '/contact', query: { type: 'professional' } }" class="home-btn home-btn--white-border">
-          {{ t("website.about.cta.dentist") }}
+          {{ t("website.about.cta.professional") }}
         </RouterLink>
       </template>
     </TealBanner>
@@ -107,8 +107,8 @@
             <span class="ab-stat__label">{{ t("website.about.stats.satisfactionLabel") }}</span>
           </div>
           <div class="ab-stat">
-            <span class="ab-stat__number">{{ t("website.about.stats.dentists") }}</span>
-            <span class="ab-stat__label">{{ t("website.about.stats.dentistsLabel") }}</span>
+            <span class="ab-stat__number">{{ t("website.about.stats.professionals") }}</span>
+            <span class="ab-stat__label">{{ t("website.about.stats.specialistsLabel") }}</span>
           </div>
         </div>
       </div>
@@ -217,7 +217,7 @@
               <span class="home-btn__arrow" aria-hidden="true">→</span>
             </RouterLink>
             <RouterLink :to="{ path: '/contact', query: { type: 'professional' } }" class="home-btn home-btn--white-border">
-              {{ t("website.about.cta.dentist") }}
+              {{ t("website.about.cta.professional") }}
             </RouterLink>
           </template>
         </TealBanner>
@@ -228,11 +228,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import TealBanner from "../components/TealBanner.vue";
+import { useReveal } from "../composables/useReveal";
+import { useSeoMeta } from "../composables/useSeoMeta";
 
 const { t } = useI18n();
+useSeoMeta({ titleKey: "website.seo.about.title", descriptionKey: "website.seo.about.description" });
 
 const missionRef  = ref<HTMLElement | null>(null);
 const valuesRef   = ref<HTMLElement | null>(null);
@@ -241,36 +244,12 @@ const officesRef  = ref<HTMLElement | null>(null);
 const approachRef = ref<HTMLElement | null>(null);
 const ctaRef      = ref<HTMLElement | null>(null);
 
-const missionVisible  = ref(false);
-const valuesVisible   = ref(false);
-const statsVisible    = ref(false);
-const officesVisible  = ref(false);
-const approachVisible = ref(false);
-const ctaVisible      = ref(false);
-
-let observers: IntersectionObserver[] = [];
-
-onMounted(() => {
-  const sections = [
-    { el: missionRef.value,  visible: missionVisible,  threshold: 0.10 },
-    { el: valuesRef.value,   visible: valuesVisible,   threshold: 0.08 },
-    { el: statsRef.value,    visible: statsVisible,    threshold: 0.15 },
-    { el: officesRef.value,  visible: officesVisible,  threshold: 0.08 },
-    { el: approachRef.value, visible: approachVisible, threshold: 0.08 },
-    { el: ctaRef.value,      visible: ctaVisible,      threshold: 0.10 },
-  ];
-  for (const s of sections) {
-    if (!s.el) continue;
-    const obs = new IntersectionObserver(
-      ([e]) => { if (e?.isIntersecting) { s.visible.value = true; obs.disconnect(); } },
-      { threshold: s.threshold }
-    );
-    obs.observe(s.el);
-    observers.push(obs);
-  }
-});
-
-onUnmounted(() => observers.forEach(o => o.disconnect()));
+const missionVisible  = useReveal(missionRef,  0.10);
+const valuesVisible   = useReveal(valuesRef,   0.08);
+const statsVisible    = useReveal(statsRef,    0.15);
+const officesVisible  = useReveal(officesRef,  0.08);
+const approachVisible = useReveal(approachRef, 0.08);
+const ctaVisible      = useReveal(ctaRef,      0.10);
 </script>
 
 <style lang="scss" scoped src="./AboutView.scss" />

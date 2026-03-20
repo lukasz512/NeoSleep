@@ -32,14 +32,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Set API URL for build
+      - name: Set env vars for build
         run: |
           if [ "${{ github.ref }}" = "refs/heads/prod" ]; then
             echo "VITE_API_URL=${{ secrets.VITE_API_URL_PROD }}" >> $GITHUB_ENV
+            echo "VITE_VAPID_PUBLIC_KEY=${{ secrets.VITE_VAPID_PUBLIC_KEY_PROD }}" >> $GITHUB_ENV
           elif [ "${{ github.ref }}" = "refs/heads/uat" ]; then
             echo "VITE_API_URL=${{ secrets.VITE_API_URL_UAT }}" >> $GITHUB_ENV
+            echo "VITE_VAPID_PUBLIC_KEY=${{ secrets.VITE_VAPID_PUBLIC_KEY_UAT }}" >> $GITHUB_ENV
           else
             echo "VITE_API_URL=${{ secrets.VITE_API_URL_DEV }}" >> $GITHUB_ENV
+            echo "VITE_VAPID_PUBLIC_KEY=${{ secrets.VITE_VAPID_PUBLIC_KEY_DEV }}" >> $GITHUB_ENV
           fi
 
       - name: Build rep-app

@@ -42,15 +42,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { IconBox } from "./icons";
+import { useReveal } from "../composables/useReveal";
 import { solutionCards, solutionsCtaTo, type SolutionCard } from "../config/websiteContent";
 
 const { t } = useI18n();
 const sectionRef = ref<HTMLElement | null>(null);
-const visible = ref(false);
-let observer: IntersectionObserver | null = null;
+const visible    = useReveal(sectionRef, 0.12);
 let cleanups: (() => void)[] = [];
 
 function captureCard(card: SolutionCard, el: HTMLElement | null) {
@@ -97,19 +97,7 @@ function setupClock(el: HTMLElement) {
   });
 }
 
-onMounted(() => {
-  if (!sectionRef.value) return;
-  observer = new IntersectionObserver(
-    ([e]) => { if (e?.isIntersecting) { visible.value = true; observer?.disconnect(); } },
-    { threshold: 0.12 }
-  );
-  observer.observe(sectionRef.value);
-});
-
-onUnmounted(() => {
-  observer?.disconnect();
-  cleanups.forEach((fn) => fn());
-});
+onUnmounted(() => cleanups.forEach((fn) => fn()));
 </script>
 
 <style lang="scss" scoped>

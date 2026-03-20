@@ -22,8 +22,11 @@
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { legalConfig as config } from '../config/websiteContent';
+import { useSeoMeta } from '../composables/useSeoMeta';
 
 const { t, locale } = useI18n();
+
+useSeoMeta({ titleKey: 'website.seo.privacy.title', descriptionKey: 'website.seo.privacy.description', noindex: true });
 
 const SECTIONS = ['s1', 's2', 's3', 's4', 's5', 's6', 's7', 's8'] as const;
 

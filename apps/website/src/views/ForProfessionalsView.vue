@@ -3,18 +3,18 @@
 
     <!-- ── Hero ──────────────────────────────────────────────────────────── -->
     <TealBanner
-      eyebrow-key="website.dentistsPage.eyebrow"
-      line1-key="website.dentistsPage.heroTagline1"
-      line2-key="website.dentistsPage.heroTagline2"
-      subtitle-key="website.dentistsPage.heroSub"
+      eyebrow-key="website.professionalsPage.eyebrow"
+      line1-key="website.professionalsPage.heroTagline1"
+      line2-key="website.professionalsPage.heroTagline2"
+      subtitle-key="website.professionalsPage.heroSub"
     >
       <template #ctas>
         <RouterLink :to="{ path: '/contact', query: { type: 'professional' } }" class="home-btn home-btn--white-outline">
-          {{ t("website.dentistsPage.heroCta") }}
+          {{ t("website.professionalsPage.heroCta") }}
           <span class="home-btn__arrow" aria-hidden="true">→</span>
         </RouterLink>
         <a href="#how-to-join" class="home-btn home-btn--white-border">
-          {{ t("website.dentistsPage.heroCtaSecondary") }}
+          {{ t("website.professionalsPage.heroCtaSecondary") }}
         </a>
       </template>
     </TealBanner>
@@ -26,8 +26,8 @@
       :class="{ 'home-reveal--visible': whyVisible }"
     >
       <div class="page-container">
-        <p class="home-eyebrow">{{ t("website.dentistsPage.why.eyebrow") }}</p>
-        <h2 class="home-heading">{{ t("website.dentistsPage.why.heading") }}</h2>
+        <p class="home-eyebrow">{{ t("website.professionalsPage.why.eyebrow") }}</p>
+        <h2 class="home-heading">{{ t("website.professionalsPage.why.heading") }}</h2>
         <div class="fd-wcard-grid">
 
           <div class="fd-wcard">
@@ -38,8 +38,8 @@
                 <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
               </svg>
             </div>
-            <h3 class="fd-wcard__title">{{ t("website.dentistsPage.why.expand.title") }}</h3>
-            <p class="fd-wcard__desc">{{ t("website.dentistsPage.why.expand.desc") }}</p>
+            <h3 class="fd-wcard__title">{{ t("website.professionalsPage.why.expand.title") }}</h3>
+            <p class="fd-wcard__desc">{{ t("website.professionalsPage.why.expand.desc") }}</p>
           </div>
 
           <div class="fd-wcard">
@@ -49,8 +49,8 @@
                 <path d="M6 12v5c3 3 9 3 12 0v-5"/>
               </svg>
             </div>
-            <h3 class="fd-wcard__title">{{ t("website.dentistsPage.why.training.title") }}</h3>
-            <p class="fd-wcard__desc">{{ t("website.dentistsPage.why.training.desc") }}</p>
+            <h3 class="fd-wcard__title">{{ t("website.professionalsPage.why.training.title") }}</h3>
+            <p class="fd-wcard__desc">{{ t("website.professionalsPage.why.training.desc") }}</p>
           </div>
 
           <div class="fd-wcard">
@@ -60,8 +60,8 @@
                 <path d="M8 21h8M12 17v4"/>
               </svg>
             </div>
-            <h3 class="fd-wcard__title">{{ t("website.dentistsPage.why.platform.title") }}</h3>
-            <p class="fd-wcard__desc">{{ t("website.dentistsPage.why.platform.desc") }}</p>
+            <h3 class="fd-wcard__title">{{ t("website.professionalsPage.why.platform.title") }}</h3>
+            <p class="fd-wcard__desc">{{ t("website.professionalsPage.why.platform.desc") }}</p>
           </div>
 
           <div class="fd-wcard">
@@ -70,8 +70,8 @@
                 <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
               </svg>
             </div>
-            <h3 class="fd-wcard__title">{{ t("website.dentistsPage.why.outcomes.title") }}</h3>
-            <p class="fd-wcard__desc">{{ t("website.dentistsPage.why.outcomes.desc") }}</p>
+            <h3 class="fd-wcard__title">{{ t("website.professionalsPage.why.outcomes.title") }}</h3>
+            <p class="fd-wcard__desc">{{ t("website.professionalsPage.why.outcomes.desc") }}</p>
           </div>
 
         </div>
@@ -86,26 +86,26 @@
       :class="{ 'home-reveal--visible': howVisible }"
     >
       <div class="page-container">
-        <p class="home-eyebrow">{{ t("website.dentistsPage.how.eyebrow") }}</p>
-        <h2 class="home-heading">{{ t("website.dentistsPage.how.heading") }}</h2>
-        <p class="home-sub home-sub--center">{{ t("website.dentistsPage.how.sub") }}</p>
+        <p class="home-eyebrow">{{ t("website.professionalsPage.how.eyebrow") }}</p>
+        <h2 class="home-heading">{{ t("website.professionalsPage.how.heading") }}</h2>
+        <p class="home-sub home-sub--center">{{ t("website.professionalsPage.how.sub") }}</p>
         <div class="fd-steps">
           <div class="fd-step">
-            <span class="fd-step__num">{{ t("website.dentistsPage.how.step1.num") }}</span>
-            <h3 class="fd-step__title">{{ t("website.dentistsPage.how.step1.title") }}</h3>
-            <p class="fd-step__desc">{{ t("website.dentistsPage.how.step1.desc") }}</p>
+            <span class="fd-step__num">{{ t("website.professionalsPage.how.step1.num") }}</span>
+            <h3 class="fd-step__title">{{ t("website.professionalsPage.how.step1.title") }}</h3>
+            <p class="fd-step__desc">{{ t("website.professionalsPage.how.step1.desc") }}</p>
           </div>
           <div class="fd-step__connector" aria-hidden="true"></div>
           <div class="fd-step">
-            <span class="fd-step__num">{{ t("website.dentistsPage.how.step2.num") }}</span>
-            <h3 class="fd-step__title">{{ t("website.dentistsPage.how.step2.title") }}</h3>
-            <p class="fd-step__desc">{{ t("website.dentistsPage.how.step2.desc") }}</p>
+            <span class="fd-step__num">{{ t("website.professionalsPage.how.step2.num") }}</span>
+            <h3 class="fd-step__title">{{ t("website.professionalsPage.how.step2.title") }}</h3>
+            <p class="fd-step__desc">{{ t("website.professionalsPage.how.step2.desc") }}</p>
           </div>
           <div class="fd-step__connector" aria-hidden="true"></div>
           <div class="fd-step">
-            <span class="fd-step__num">{{ t("website.dentistsPage.how.step3.num") }}</span>
-            <h3 class="fd-step__title">{{ t("website.dentistsPage.how.step3.title") }}</h3>
-            <p class="fd-step__desc">{{ t("website.dentistsPage.how.step3.desc") }}</p>
+            <span class="fd-step__num">{{ t("website.professionalsPage.how.step3.num") }}</span>
+            <h3 class="fd-step__title">{{ t("website.professionalsPage.how.step3.title") }}</h3>
+            <p class="fd-step__desc">{{ t("website.professionalsPage.how.step3.desc") }}</p>
           </div>
         </div>
       </div>
@@ -119,9 +119,9 @@
     >
       <div class="page-container">
         <div class="fd-standards__inner">
-          <p class="home-eyebrow">{{ t("website.dentistsPage.standards.eyebrow") }}</p>
-          <h2 class="home-heading">{{ t("website.dentistsPage.standards.heading") }}</h2>
-          <p class="fd-standards__body">{{ t("website.dentistsPage.standards.body") }}</p>
+          <p class="home-eyebrow">{{ t("website.professionalsPage.standards.eyebrow") }}</p>
+          <h2 class="home-heading">{{ t("website.professionalsPage.standards.heading") }}</h2>
+          <p class="fd-standards__body">{{ t("website.professionalsPage.standards.body") }}</p>
         </div>
       </div>
     </section>
@@ -133,14 +133,14 @@
       :class="{ 'home-reveal--visible': ctaVisible }"
     >
       <div class="page-container">
-        <TealBanner variant="cta" line1-key="website.dentistsPage.cta.heading" subtitle-key="website.dentistsPage.cta.sub">
+        <TealBanner variant="cta" line1-key="website.professionalsPage.cta.heading" subtitle-key="website.professionalsPage.cta.sub">
           <template #ctas>
             <RouterLink :to="{ path: '/contact', query: { type: 'professional' } }" class="home-btn home-btn--white-outline">
-              {{ t("website.dentistsPage.cta.btn") }}
+              {{ t("website.professionalsPage.cta.btn") }}
               <span class="home-btn__arrow" aria-hidden="true">→</span>
             </RouterLink>
             <RouterLink :to="{ path: '/contact', query: { type: 'professional' } }" class="home-btn home-btn--white-border">
-              {{ t("website.dentistsPage.cta.btnSecondary") }}
+              {{ t("website.professionalsPage.cta.btnSecondary") }}
             </RouterLink>
           </template>
         </TealBanner>
@@ -151,48 +151,115 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import TealBanner from "../components/TealBanner.vue";
+import { useReveal } from "../composables/useReveal";
+import { useSeoMeta } from "../composables/useSeoMeta";
 
 const { t } = useI18n();
+useSeoMeta({ titleKey: "website.seo.forProfessionals.title", descriptionKey: "website.seo.forProfessionals.description" });
 
 const whyRef       = ref<HTMLElement | null>(null);
 const howRef       = ref<HTMLElement | null>(null);
 const standardsRef = ref<HTMLElement | null>(null);
 const ctaRef       = ref<HTMLElement | null>(null);
 
-const whyVisible       = ref(false);
-const howVisible       = ref(false);
-const standardsVisible = ref(false);
-const ctaVisible       = ref(false);
-
-let observers: IntersectionObserver[] = [];
-
-onMounted(() => {
-  const sections = [
-    { el: whyRef.value,       visible: whyVisible,       threshold: 0.08 },
-    { el: howRef.value,       visible: howVisible,       threshold: 0.08 },
-    { el: standardsRef.value, visible: standardsVisible, threshold: 0.12 },
-    { el: ctaRef.value,       visible: ctaVisible,       threshold: 0.10 },
-  ];
-  for (const s of sections) {
-    if (!s.el) continue;
-    const obs = new IntersectionObserver(
-      ([e]) => { if (e?.isIntersecting) { s.visible.value = true; obs.disconnect(); } },
-      { threshold: s.threshold }
-    );
-    obs.observe(s.el);
-    observers.push(obs);
-  }
-});
-
-onUnmounted(() => observers.forEach(o => o.disconnect()));
+const whyVisible       = useReveal(whyRef,       0.08);
+const howVisible       = useReveal(howRef,       0.08);
+const standardsVisible = useReveal(standardsRef, 0.12);
+const ctaVisible       = useReveal(ctaRef,       0.10);
 </script>
 
 <style lang="scss" scoped>
 $bp-desktop: 960px;
 $bp-mobile:  600px;
+
+/* ── Hero ────────────────────────────────────────────────────────────── */
+.fd-hero {
+  background: linear-gradient(135deg, var(--neosleep-very-dark-teal) 0%, var(--neosleep-darker-teal) 100%);
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: "";
+    position: absolute;
+    width: 700px;
+    height: 700px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(142, 214, 206, 0.14) 0%, transparent 65%);
+    top: -260px;
+    right: -140px;
+    pointer-events: none;
+  }
+  &::after {
+    content: "";
+    position: absolute;
+    width: 500px;
+    height: 500px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(142, 214, 206, 0.09) 0%, transparent 65%);
+    bottom: -200px;
+    left: 0;
+    pointer-events: none;
+  }
+}
+
+.fd-hero__inner {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  padding-top: 5rem;
+  padding-bottom: 4.5rem;
+
+  @media (max-width: $bp-desktop) {
+    padding-top: 4rem;
+    padding-bottom: 3.5rem;
+  }
+  @media (max-width: $bp-mobile) {
+    padding-top: 3rem;
+    padding-bottom: 3rem;
+  }
+}
+
+.fd-hero__eyebrow {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--neosleep-light-teal);
+  margin: 0 0 1.25rem;
+}
+
+.fd-hero__tagline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.06em;
+  font-size: clamp(2.5rem, 6vw, 4rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  margin: 0 auto 1.25rem;
+  max-width: 820px;
+}
+
+.fd-hero__tagline-l1 { color: #fff; }
+.fd-hero__tagline-l2 { color: var(--neosleep-light-teal); }
+
+.fd-hero__sub {
+  font-size: clamp(1rem, 2vw, 1.125rem);
+  line-height: 1.72;
+  color: rgba(255, 255, 255, 0.78);
+  max-width: 600px;
+  margin: 0 auto 2.5rem;
+}
+
+.fd-hero__ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.875rem;
+  justify-content: center;
+}
 
 /* ── Why NeoSleep ────────────────────────────────────────────────────── */
 .fd-why {
@@ -345,5 +412,40 @@ $bp-mobile:  600px;
   @media (max-width: $bp-mobile) {
     padding-bottom: 1.5rem;
   }
+}
+
+.fd-cta {
+  background: linear-gradient(135deg, var(--neosleep-very-dark-teal) 0%, var(--neosleep-darker-teal) 100%);
+  border-radius: var(--website-card-radius);
+  padding: 4.5rem 2rem;
+  text-align: center;
+
+  @media (max-width: $bp-mobile) {
+    padding: 3rem 1.5rem;
+    border-radius: 14px;
+  }
+}
+
+.fd-cta__heading {
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 0.625rem;
+  letter-spacing: -0.025em;
+}
+
+.fd-cta__sub {
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  color: rgba(255, 255, 255, 0.78);
+  max-width: 560px;
+  margin: 0 auto 2.25rem;
+}
+
+.fd-cta__btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.875rem;
+  justify-content: center;
 }
 </style>

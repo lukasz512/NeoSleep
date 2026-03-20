@@ -51,7 +51,7 @@
         </VTooltip>
         <RepFilterBar
           :model-value="filterState"
-          :definitions="filterDefinitions"
+          :definitions="props.filterDefinitions"
           :title-key="i18n.filtersTitle"
           :clear-key="i18n.filtersClear"
           :active-filter-count="activeFilterCount"
@@ -199,7 +199,6 @@ const props = withDefaults(
     apiEndpoint: string;
     headers: RepEntityListHeader[];
     filterDefinitions: RepFilterDefinition[];
-    filterDefinitionsWithOptions: RepFilterDefinition[];
     i18n: RepEntityListI18n;
     showAddButton?: boolean;
     detailRouteName?: string;
@@ -221,7 +220,7 @@ defineEmits<{ add: [] }>();
 
 const { t } = useI18n();
 
-const filterDefinitions = computed(() => props.filterDefinitionsWithOptions);
+
 
 const {
   searchQuery, filterState, activeFilterCount, tableOptions,

@@ -40,3 +40,13 @@ export const appNavRoutes = routes
 
 /** Home path for app layout (logo link). Same as first app nav route. */
 export const appHomePath = appNavRoutes[0]?.path ?? "/dashboard";
+
+/** Overrides for route names whose i18n key doesn't follow the `rep.<name>.title` convention. */
+const NAV_TITLE_KEY_OVERRIDES: Record<string, string> = {
+  clients: "app.clients.title",
+};
+
+/** Returns the i18n key for a nav route name. */
+export function navTitleKey(name: string): string {
+  return NAV_TITLE_KEY_OVERRIDES[name] ?? `rep.${name}.title`;
+}

@@ -10,8 +10,7 @@
       view-id="hcp"
       api-endpoint="/api/hcp"
       :headers="tableHeaders"
-      :filter-definitions="hcpFilterDefs"
-      :filter-definitions-with-options="hcpFilterDefinitions"
+      :filter-definitions="hcpFilterDefinitions"
       :i18n="hcpI18n"
       :show-add-button="true"
       detail-route-name="hcp-detail"
@@ -44,6 +43,7 @@ import GenderIcon from "../components/GenderIcon.vue";
 import { type RepFilterDefinition } from "../composables/useRepFilters";
 import { useConfigStore } from "../stores/config";
 import { getGenderFromName } from "../utils/genderFromName";
+import type { ContactFormData, LeadFormData } from "../components/LeadContactForm.vue";
 
 const LeadContactForm = defineAsyncComponent(() => import("../components/LeadContactForm.vue"));
 
@@ -101,8 +101,8 @@ function onAddContact() {
   showAddModal.value = true;
 }
 
-async function onContactSubmit(data: import("../components/LeadContactForm.vue").LeadFormData | import("../components/LeadContactForm.vue").ContactFormData) {
-  const d = data as import("../components/LeadContactForm.vue").ContactFormData;
+async function onContactSubmit(data: LeadFormData | ContactFormData) {
+  const d = data as ContactFormData;
   const body = JSON.stringify({
     name: d.name,
     email: d.email,

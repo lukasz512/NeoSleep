@@ -38,9 +38,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useTheme } from "../composables/useTheme";
+import { useReveal } from "../composables/useReveal";
 import {
   footerBrandConfig,
   footerNavSections,
@@ -55,19 +56,7 @@ const brand = footerBrandConfig;
 const year = new Date().getFullYear();
 
 const cardRef = ref<HTMLElement | null>(null);
-const visible = ref(false);
-let observer: IntersectionObserver | null = null;
-
-onMounted(() => {
-  if (!cardRef.value) return;
-  observer = new IntersectionObserver(
-    ([e]) => { if (e?.isIntersecting) { visible.value = true; observer?.disconnect(); } },
-    { threshold: 0.08 }
-  );
-  observer.observe(cardRef.value);
-});
-
-onUnmounted(() => observer?.disconnect());
+const visible = useReveal(cardRef, 0.08);
 
 const logoSrc = computed(() =>
   isDark.value ? "/brand/logos/logo/logo_dark.svg" : "/brand/logos/logo/logo_light.svg"

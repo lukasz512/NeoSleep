@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import en from "@i18n/en.json";
 import pl from "@i18n/pl.json";
-import es from "@i18n/es.json";
+import mx from "@i18n/mx.json";
 
 const REP_APP_I18N_KEYS = [
   "app.common.ok",
@@ -31,7 +31,7 @@ const REP_APP_I18N_KEYS = [
   "rep.hcp.form.validation.phoneDigitsOnly",
   "app.language.en",
   "app.language.pl",
-  "app.language.es",
+  "app.language.mx",
   "rep.login.title",
   "rep.login.subtitle",
   "rep.dashboard.title",
@@ -166,22 +166,6 @@ const REP_APP_I18N_KEYS = [
   "rep.user.placeholderName",
   "rep.user.role",
   "notification.dismiss",
-  "rep.dev.title",
-  "rep.dev.subtitle",
-  "rep.dev.linkToDevTools",
-  "rep.dev.loader.title",
-  "rep.dev.loader.hint",
-  "rep.dev.loader.trigger",
-  "rep.dev.notifications.title",
-  "rep.dev.notifications.hint",
-  "rep.dev.notifications.success",
-  "rep.dev.notifications.info",
-  "rep.dev.notifications.warning",
-  "rep.dev.notifications.error",
-  "rep.dev.notifications.sample.success",
-  "rep.dev.notifications.sample.info",
-  "rep.dev.notifications.sample.warning",
-  "rep.dev.notifications.sample.error",
   "rep.login.oidcNote",
   "rep.login.signInWithGoogle",
   "rep.login.email",
@@ -216,15 +200,15 @@ describe("rep-app i18n keys", () => {
     checkKeys(pl as Record<string, unknown>, "pl");
   });
 
-  it("es.json has all required rep-app keys", () => {
-    checkKeys(es as Record<string, unknown>, "es");
+  it("mx.json has all required rep-app keys", () => {
+    checkKeys(mx as Record<string, unknown>, "mx");
   });
 
-  it("supported locales are exactly en, pl, es", () => {
-    const locales = ["en", "pl", "es"];
+  it("supported locales are exactly en, pl, mx", () => {
+    const locales = ["en", "pl", "mx"];
     expect(locales).toHaveLength(3);
     expect(locales).toContain("en");
     expect(locales).toContain("pl");
-    expect(locales).toContain("es");
+    expect(locales).toContain("mx");
   });
 });

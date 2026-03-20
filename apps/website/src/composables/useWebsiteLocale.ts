@@ -1,7 +1,7 @@
 import { useI18n } from "vue-i18n";
 
 const STORAGE_KEY = "neosleep-website-locale";
-const SUPPORTED = ["en", "pl", "es"] as const;
+const SUPPORTED = ["en", "pl", "mx"] as const;
 
 export type WebsiteLocale = (typeof SUPPORTED)[number];
 

@@ -99,10 +99,10 @@ describe("HomeView", () => {
     wrapper.unmount();
   });
 
-  it("renders solutions, for-dentists, and for-patients sections", () => {
+  it("renders solutions, for-professionals, and for-patients sections", () => {
     const wrapper = mount(HomeView, { global: { plugins: [i18n] } });
     expect(wrapper.find("#solutions").exists()).toBe(true);
-    expect(wrapper.find("#for-dentists").exists()).toBe(true);
+    expect(wrapper.find("#for-professionals").exists()).toBe(true);
     expect(wrapper.find("#for-patients").exists()).toBe(true);
   });
 

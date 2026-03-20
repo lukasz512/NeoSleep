@@ -15,15 +15,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { useCountUp } from "../composables/useCountUp";
+import { useReveal } from "../composables/useReveal";
 import { homeStats } from "../config/websiteContent";
 
 const { t } = useI18n();
 const sectionRef = ref<HTMLElement | null>(null);
-const visible = ref(false);
-let observer: IntersectionObserver | null = null;
+const visible    = useReveal(sectionRef, 0.6);
 
 const countUps = homeStats.map((s) =>
   useCountUp({ target: s.target, suffix: s.suffix, duration: 2800, startWhen: visible })
@@ -32,17 +32,6 @@ const countUps = homeStats.map((s) =>
 const display = computed(() =>
   homeStats.map((s, i) => ({ labelKey: s.labelKey, value: countUps[i].displayValue.value }))
 );
-
-onMounted(() => {
-  if (!sectionRef.value) return;
-  observer = new IntersectionObserver(
-    ([e]) => { if (e?.isIntersecting) { visible.value = true; observer?.disconnect(); } },
-    { threshold: 0.6 }
-  );
-  observer.observe(sectionRef.value);
-});
-
-onUnmounted(() => observer?.disconnect());
 </script>
 
 <style lang="scss" scoped>

@@ -5,15 +5,21 @@ packages:
 
 # Wspólne wersje dla wszystkich aplikacji Vue – jedna aktualizacja podnosi wersje wszędzie.
 catalog:
-  vue: ^3.5.0
+  vue: ^3.5.30
   vue-router: ^4.5.0
   vue-i18n: ^10.0.0
   vuetify: ^3.12.1
-  pinia: ^3.0.0
-  "@vitejs/plugin-vue": ^6.0.0
+  pinia: ^3.0.4
+  "@vitejs/plugin-vue": ^6.0.5
+  "@vueuse/core": ^14.2.1
+  "@unhead/vue": ^2.1.12
+  "chart.js": ^4.4.0
+  vite-plugin-pwa: ^1.0.0
+  web-push: ^3.6.7
+  "@types/web-push": ^3.6.3
   vite: ^7.0.0
-  typescript: ^5.6.0
-  vitest: ^4.0.0
+  typescript: ^5.9.0
+  vitest: ^4.1.0
   eslint: ^9.0.0
   "eslint-plugin-vue": ^9.0.0
   sass: ^1.77.0

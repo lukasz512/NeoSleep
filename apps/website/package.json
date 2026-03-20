@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@unhead/vue": "catalog:",
     "vue": "catalog:",
     "vue-i18n": "catalog:",
     "vue-router": "catalog:",

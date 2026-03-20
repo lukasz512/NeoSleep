@@ -28,27 +28,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink } from "vue-router";
 import TealBanner from "./TealBanner.vue";
+import { useReveal } from "../composables/useReveal";
 import { ctaBannerConfig as config } from "../config/websiteContent";
 
 const { t } = useI18n();
 const wrapRef = ref<HTMLElement | null>(null);
-const visible = ref(false);
-let observer: IntersectionObserver | null = null;
-
-onMounted(() => {
-  if (!wrapRef.value) return;
-  observer = new IntersectionObserver(
-    ([e]) => { if (e?.isIntersecting) { visible.value = true; observer?.disconnect(); } },
-    { threshold: 0.12 }
-  );
-  observer.observe(wrapRef.value);
-});
-
-onUnmounted(() => observer?.disconnect());
+const visible = useReveal(wrapRef, 0.12);
 </script>
 
 <style lang="scss" scoped>

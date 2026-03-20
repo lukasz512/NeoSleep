@@ -66,18 +66,18 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
-# --- 4. Ensure API .env has DATABASE_URL ---
-API_ENV="$REPO_ROOT/services/api/.env"
-API_ENV_EXAMPLE="$REPO_ROOT/services/api/.env.example"
-if [ ! -f "$API_ENV" ]; then
-  echo "Creating services/api/.env from .env.example..."
-  cp "$API_ENV_EXAMPLE" "$API_ENV"
+# --- 4. Ensure root .env exists ---
+ROOT_ENV="$REPO_ROOT/.env"
+ROOT_ENV_EXAMPLE="$REPO_ROOT/.env.example"
+if [ ! -f "$ROOT_ENV" ]; then
+  echo "Creating .env from .env.example..."
+  cp "$ROOT_ENV_EXAMPLE" "$ROOT_ENV"
 fi
-if ! grep -q "^DATABASE_URL=" "$API_ENV" 2>/dev/null; then
-  echo "Adding DATABASE_URL to services/api/.env"
-  echo "" >> "$API_ENV"
-  echo "# Local Postgres (auto-added by start script)" >> "$API_ENV"
-  echo "DATABASE_URL=postgresql://neosleep:neosleep_local@localhost:5432/neosleep" >> "$API_ENV"
+if ! grep -q "^DATABASE_URL=" "$ROOT_ENV" 2>/dev/null; then
+  echo "Adding DATABASE_URL to .env"
+  echo "" >> "$ROOT_ENV"
+  echo "# Local Postgres (auto-added by start script)" >> "$ROOT_ENV"
+  echo "DATABASE_URL=postgresql://neosleep:neosleep_local@localhost:5432/neosleep" >> "$ROOT_ENV"
 fi
 
 # --- 5. (Migrations run automatically on API startup via runMigrations()) ---
@@ -93,14 +93,14 @@ echo "  ┌───────────────────────
 echo "  │  NeoSleep – Dev Environment                                 │"
 echo "  ├─────────────────────────────────────────────────────────────┤"
 echo "  │  Apps                                                       │"
-echo "  │    App:       http://localhost:5173                         │"
-echo "  │    Website:   http://localhost:5174                         │"
+echo "  │    App:          http://localhost:5173                         │"
+echo "  │    Website:      http://localhost:5174                         │"
 echo "  │    API server:   http://localhost:3000                         │"
 echo "  ├─────────────────────────────────────────────────────────────┤"
 echo "  │  Docker services                                            │"
-echo "  │    Adminer:   http://localhost:8080  (DB admin)             │"
-echo "  │    Directus:  http://localhost:8056  (CMS)                 │"
-echo "  │    Postgres:  localhost:5432                                │"
+echo "  │    Adminer:      http://localhost:8080  (DB admin)             │"
+echo "  │    Directus:     http://localhost:8056  (CMS)                 │"
+echo "  │    Postgres:     localhost:5432                                │"
 echo "  └─────────────────────────────────────────────────────────────┘"
 echo ""
 echo "  Tests:  npm test"

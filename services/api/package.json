@@ -3,11 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "tsx --env-file=../../.env watch src/server.ts",
     "lint": "eslint . --format codeframe",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "NODE_OPTIONS='--require=./vitest-crypto-polyfill.cjs' vitest run",
-    "seed:dev": "tsx ../../scripts/seed-dev.ts"
+    "seed:demo": "tsx --env-file=../../.env ../../scripts/seed-demo.ts"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",
@@ -17,7 +17,8 @@
     "express-rate-limit": "^7.4.0",
     "express-session": "^1.19.0",
     "nodemailer": "^6.9.0",
-    "pg": "^8.13.0"
+    "pg": "^8.13.0",
+    "web-push": "catalog:"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
@@ -27,6 +28,7 @@
     "@types/express-session": "^1.18.2",
     "@types/pg": "^8.11.0",
     "@types/supertest": "^6.0.2",
+    "@types/web-push": "catalog:",
     "eslint": "^9.0.0",
     "supertest": "^7.0.0",
     "tsx": "^4.21.0",

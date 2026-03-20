@@ -63,7 +63,7 @@ export const footerSections: FooterSectionConfig[] = [
 export const websiteNavItems: WebsiteNavItem[] = [
   // Header
   { labelKey: "website.nav.solutions",     href: "/#solutions",  showInHeader: true, showInFooter: true, footerSection: "product" },
-  { labelKey: "website.nav.forDentists",   to: "/for-dentists",  showInHeader: true, showInFooter: true, footerSection: "product" },
+  { labelKey: "website.nav.forProfessionals",   to: "/for-professionals",  showInHeader: true, showInFooter: true, footerSection: "product" },
   { labelKey: "website.nav.forPatients",   to: "/for-patients",  showInHeader: true, showInFooter: true, footerSection: "product" },
   { labelKey: "website.nav.findSpecialist",to: "/find-specialist",showInHeader: true },
   { labelKey: "website.nav.about",         to: "/about",          showInHeader: true },

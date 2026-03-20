@@ -10,6 +10,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const brandDir = path.resolve(__dirname, "../../brand");
 
 export default defineConfig({
+  envDir: path.resolve(__dirname, "../.."),
   css: {
     preprocessorOptions: {
       scss: {

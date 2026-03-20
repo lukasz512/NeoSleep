@@ -11,13 +11,12 @@
     "test": "NODE_OPTIONS='--require=./vitest-crypto-polyfill.cjs' vitest run"
   },
   "dependencies": {
-    "apexcharts": "^5.10.0",
     "pinia": "catalog:",
     "vue": "catalog:",
     "vue-i18n": "catalog:",
     "vue-router": "catalog:",
-    "vue3-apexcharts": "^1.4.4",
-    "vuetify": "catalog:"
+    "vuetify": "catalog:",
+    "chart.js": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",
@@ -27,6 +26,7 @@
     "sass": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
+    "vite-plugin-pwa": "catalog:",
     "vite-plugin-vuetify": "catalog:",
     "vitest": "catalog:"
   }

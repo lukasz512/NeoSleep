@@ -79,8 +79,11 @@ import CareersHero    from '../components/CareersHero.vue'
 import CareersJobCard from '../components/CareersJobCard.vue'
 import { jobListings, jobDepartments, jobCountries } from '../config/websiteContent'
 import type { JobDepartment } from '../config/websiteContent'
+import { useSeoMeta } from '../composables/useSeoMeta'
 
 const { t } = useI18n()
+
+useSeoMeta({ titleKey: 'website.seo.careers.title', descriptionKey: 'website.seo.careers.description' })
 
 const searchQuery   = ref('')
 const activeDept    = ref<JobDepartment | null>(null)

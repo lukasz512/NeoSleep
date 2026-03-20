@@ -32,25 +32,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref } from "vue";
 import { useI18n } from "vue-i18n";
+import { useReveal } from "../composables/useReveal";
 import { heroConfig as config } from "../config/websiteContent";
 
 const { t } = useI18n();
 const sectionRef = ref<HTMLElement | null>(null);
-const visible = ref(false);
-let observer: IntersectionObserver | null = null;
-
-onMounted(() => {
-  if (!sectionRef.value) return;
-  observer = new IntersectionObserver(
-    ([e]) => { if (e?.isIntersecting) { visible.value = true; observer?.disconnect(); } },
-    { threshold: 0.1 }
-  );
-  observer.observe(sectionRef.value);
-});
-
-onUnmounted(() => observer?.disconnect());
+const visible    = useReveal(sectionRef, 0.1);
 </script>
 
 <style lang="scss" scoped>

@@ -37,8 +37,8 @@
             <svg v-else-if="cat.id === 'treatment'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
             </svg>
-            <!-- dentists: graduation cap -->
-            <svg v-else-if="cat.id === 'dentists'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <!-- professionals: graduation cap -->
+            <svg v-else-if="cat.id === 'professionals'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
               <path d="M6 12v5c3 3 9 3 12 0v-5"/>
             </svg>
@@ -106,8 +106,11 @@ import { RouterLink } from 'vue-router';
 import { helpCategories, helpFaqs } from '../config/websiteContent';
 import type { HelpCategory } from '../config/websiteContent';
 import TealBanner from '../components/TealBanner.vue';
+import { useSeoMeta } from '../composables/useSeoMeta';
 
 const { t } = useI18n();
+
+useSeoMeta({ titleKey: 'website.seo.help.title', descriptionKey: 'website.seo.help.description' });
 
 const openId = ref<string | null>(null);
 const query = ref<string>('');

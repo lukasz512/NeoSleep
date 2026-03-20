@@ -1,4 +1,5 @@
 import { ref, onMounted, onUnmounted } from "vue";
+import { useMediaQuery } from "@vueuse/core";
 
 const SCROLL_HIDE_THRESHOLD = 120;
 const MOUSE_FACTOR = 0.07;
@@ -17,7 +18,7 @@ export function useFloatingNav() {
   const waveAmplitude = ref(BASE_WAVE_AMPLITUDE);
   const wavePhase = ref(0);
   const wavesVisible = ref(true);
-  const isReducedMotion = ref(false);
+  const isReducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
 
   let scrollY = 0;
   let mouseX = 0;
@@ -83,7 +84,6 @@ export function useFloatingNav() {
 
   onMounted(() => {
     if (typeof window === "undefined") return;
-    isReducedMotion.value = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     scrollY = window.scrollY;
     wavesVisible.value = scrollY <= SCROLL_HIDE_THRESHOLD;
     window.addEventListener("scroll", onScroll, { passive: true });

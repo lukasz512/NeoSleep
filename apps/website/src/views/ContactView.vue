@@ -160,8 +160,10 @@
 import { reactive, ref, computed, watch, onMounted, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
+import { useSeoMeta } from "../composables/useSeoMeta";
 
 const { t } = useI18n();
+useSeoMeta({ titleKey: "website.seo.contact.title", descriptionKey: "website.seo.contact.description", noindex: true });
 const route = useRoute();
 const router = useRouter();
 

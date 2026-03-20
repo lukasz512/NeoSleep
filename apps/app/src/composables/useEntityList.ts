@@ -1,6 +1,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
+import { useDebounceFn } from "@vueuse/core";
 import { apiFetch } from "../utils/api";
 import { useRepFilters, type RepFilterDefinition } from "./useRepFilters";
 
@@ -44,6 +45,12 @@ export function useEntityList(opts: EntityListOptions) {
     () => !loading.value && !loadError.value && total.value === 0 && !hasActiveFiltersOrSearch.value,
   );
 
+  const debouncedSearch = useDebounceFn(() => {
+    tableOptions.value.page = 1;
+    loadData();
+  }, 300);
+  watch(searchQuery, debouncedSearch);
+
   function onFilterStateUpdate(state: Record<string, string>) {
     filterState.value = state;
     tableOptions.value.page = 1;
@@ -54,12 +61,14 @@ export function useEntityList(opts: EntityListOptions) {
     searchQuery.value = "";
     clearFilters();
     tableOptions.value.page = 1;
+    debouncedSearch.cancel();
     loadData();
   }
 
   function onSearchClear() {
     searchQuery.value = "";
     tableOptions.value.page = 1;
+    debouncedSearch.cancel();
     loadData();
   }
 
@@ -68,19 +77,7 @@ export function useEntityList(opts: EntityListOptions) {
     loadData();
   }
 
-  function rowProps({ item }: { item: Record<string, unknown> }) {
-    const id = item[opts.detailRouteParam ?? "id"];
-    if (!id || !opts.detailRouteName) return {};
-    return {
-      onClick: () =>
-        router.push({
-          name: opts.detailRouteName!,
-          params: { [opts.detailRouteParam ?? "id"]: String(id) },
-        }),
-    };
-  }
-
-  function onRowClick(item: Record<string, unknown>) {
+  function navigateToDetail(item: Record<string, unknown>) {
     const id = item[opts.detailRouteParam ?? "id"];
     if (id && opts.detailRouteName) {
       router.push({
@@ -88,6 +85,15 @@ export function useEntityList(opts: EntityListOptions) {
         params: { [opts.detailRouteParam ?? "id"]: String(id) },
       });
     }
+  }
+
+  function rowProps({ item }: { item: Record<string, unknown> }) {
+    if (!item[opts.detailRouteParam ?? "id"] || !opts.detailRouteName) return {};
+    return { onClick: () => navigateToDetail(item) };
+  }
+
+  function onRowClick(item: Record<string, unknown>) {
+    navigateToDetail(item);
   }
 
   async function loadData() {
@@ -146,16 +152,6 @@ export function useEntityList(opts: EntityListOptions) {
   });
   onUnmounted(() => {
     window.removeEventListener("rep-entity-list-refresh", onRefresh);
-  });
-
-  let searchDebounce: ReturnType<typeof setTimeout> | null = null;
-  watch(searchQuery, () => {
-    if (searchDebounce) clearTimeout(searchDebounce);
-    searchDebounce = setTimeout(() => {
-      tableOptions.value.page = 1;
-      loadData();
-      searchDebounce = null;
-    }, 300);
   });
 
   return {

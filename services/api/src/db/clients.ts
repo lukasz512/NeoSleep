@@ -5,6 +5,8 @@ function isoDate(val: Date | string | null | undefined): string {
   return val instanceof Date ? val.toISOString() : String(val);
 }
 
+export type ClientReferredBySource = "website" | "instagram" | "facebook" | "hcp_referral" | "event" | "other";
+
 export interface Client {
   id: string;
   salutation: string | null;
@@ -14,6 +16,7 @@ export interface Client {
   phone: string | null;
   reason: string | null;
   referred_by: string | null;
+  referred_by_source: ClientReferredBySource | null;
   hcp_id: string | null;
   status: string;
   region: string;
@@ -37,6 +40,7 @@ export interface ClientInsert {
   phone?: string;
   reason?: string;
   referred_by?: string;
+  referred_by_source?: ClientReferredBySource;
   hcp_id?: string;
   status?: string;
   region?: string;
@@ -52,6 +56,7 @@ export interface ClientUpdate {
   phone?: string;
   reason?: string;
   referred_by?: string;
+  referred_by_source?: ClientReferredBySource;
   hcp_id?: string;
   status?: string;
   region?: string;
@@ -66,6 +71,7 @@ function buildName(c: { salutation: string | null; first_name: string; last_name
 function serialize(row: {
   id: string; salutation: string | null; first_name: string; last_name: string;
   email: string | null; phone: string | null; reason: string | null; referred_by: string | null;
+  referred_by_source: ClientReferredBySource | null;
   hcp_id: string | null; status: string; region: string; country: string | null;
   notes: string | null; created_at: Date | string; updated_at: Date | string;
 }): Client {
@@ -78,6 +84,7 @@ function serialize(row: {
     phone: row.phone,
     reason: row.reason,
     referred_by: row.referred_by,
+    referred_by_source: row.referred_by_source,
     hcp_id: row.hcp_id,
     status: row.status,
     region: row.region,
@@ -136,6 +143,7 @@ export async function getClientsPaginated(
   const dataResult = await p.query<{
     id: string; salutation: string | null; first_name: string; last_name: string;
     email: string | null; phone: string | null; reason: string | null; referred_by: string | null;
+    referred_by_source: ClientReferredBySource | null;
     hcp_id: string | null; status: string; region: string; country: string | null;
     notes: string | null; created_at: Date; updated_at: Date;
   }>(
@@ -159,6 +167,7 @@ export async function getClientById(id: string): Promise<(Client & { name: strin
   const result = await p.query<{
     id: string; salutation: string | null; first_name: string; last_name: string;
     email: string | null; phone: string | null; reason: string | null; referred_by: string | null;
+    referred_by_source: ClientReferredBySource | null;
     hcp_id: string | null; status: string; region: string; country: string | null;
     notes: string | null; created_at: Date; updated_at: Date;
   }>(
@@ -176,12 +185,13 @@ export async function insertClient(data: ClientInsert): Promise<(Client & { name
   const result = await p.query<{
     id: string; salutation: string | null; first_name: string; last_name: string;
     email: string | null; phone: string | null; reason: string | null; referred_by: string | null;
+    referred_by_source: ClientReferredBySource | null;
     hcp_id: string | null; status: string; region: string; country: string | null;
     notes: string | null; created_at: Date; updated_at: Date;
   }>(
     `INSERT INTO tbl_clients
-       (salutation, first_name, last_name, email, phone, reason, referred_by, hcp_id, status, region, country, notes)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       (salutation, first_name, last_name, email, phone, reason, referred_by, referred_by_source, hcp_id, status, region, country, notes)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
      RETURNING *`,
     [
       data.salutation ?? null,
@@ -191,6 +201,7 @@ export async function insertClient(data: ClientInsert): Promise<(Client & { name
       data.phone ?? null,
       data.reason ?? null,
       data.referred_by ?? null,
+      data.referred_by_source ?? null,
       data.hcp_id ?? null,
       data.status ?? "active",
       data.region ?? "",
@@ -215,7 +226,7 @@ export async function updateClient(
 
   const fields: (keyof ClientUpdate)[] = [
     "salutation", "first_name", "last_name", "email", "phone",
-    "reason", "referred_by", "hcp_id", "status", "region", "country", "notes",
+    "reason", "referred_by", "referred_by_source", "hcp_id", "status", "region", "country", "notes",
   ];
   for (const field of fields) {
     if (data[field] !== undefined) {
@@ -228,6 +239,7 @@ export async function updateClient(
   const result = await p.query<{
     id: string; salutation: string | null; first_name: string; last_name: string;
     email: string | null; phone: string | null; reason: string | null; referred_by: string | null;
+    referred_by_source: ClientReferredBySource | null;
     hcp_id: string | null; status: string; region: string; country: string | null;
     notes: string | null; created_at: Date; updated_at: Date;
   }>(

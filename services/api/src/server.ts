@@ -13,6 +13,7 @@ import { configRouter } from "./routes/config.js";
 import { configOptionsRouter } from "./routes/config-options.js";
 import { websiteContactRouter } from "./routes/website-contact.js";
 import { clientsRouter } from "./routes/clients.js";
+import { pushRouter } from "./routes/push.js";
 import { runMigrations } from "./db.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { apiLimiter } from "./middleware/rateLimiter.js";
@@ -84,6 +85,7 @@ app.use(configRouter);
 app.use(configOptionsRouter);
 app.use(websiteContactRouter);
 app.use(clientsRouter);
+app.use(pushRouter);
 
 app.use(errorHandler);
 

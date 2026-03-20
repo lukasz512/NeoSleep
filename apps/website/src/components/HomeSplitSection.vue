@@ -9,7 +9,8 @@
       <div class="home-split" :class="{ 'home-split--img-left': section.imageLeft }">
 
         <div v-if="section.imageLeft" class="home-split__media">
-          <img :src="section.imageSrc" alt="" class="home-split__photo" width="560" height="400" :style="section.imagePosition ? { objectPosition: section.imagePosition } : {}" />
+          <div v-if="imgLoading" class="home-split__skeleton" aria-hidden="true" />
+          <img v-else :src="section.imageSrc" alt="" class="home-split__photo" width="560" height="400" :style="section.imagePosition ? { objectPosition: section.imagePosition } : {}" />
         </div>
 
         <div class="home-split__body">
@@ -42,7 +43,8 @@
         </div>
 
         <div v-if="!section.imageLeft" class="home-split__media">
-          <img :src="section.imageSrc" alt="" class="home-split__photo" width="560" height="400" :style="section.imagePosition ? { objectPosition: section.imagePosition } : {}" />
+          <div v-if="imgLoading" class="home-split__skeleton" aria-hidden="true" />
+          <img v-else :src="section.imageSrc" alt="" class="home-split__photo" width="560" height="400" :style="section.imagePosition ? { objectPosition: section.imagePosition } : {}" />
         </div>
 
       </div>
@@ -51,17 +53,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
+import { useImage } from "@vueuse/core";
 import { IconBox } from "./icons";
+import { useReveal } from "../composables/useReveal";
 import type { SplitSectionConfig, FeatureItem } from "../config/websiteContent";
 
-defineProps<{ section: SplitSectionConfig }>();
+const props = defineProps<{ section: SplitSectionConfig }>();
 
 const { t } = useI18n();
+const { isLoading: imgLoading } = useImage(() => ({ src: props.section.imageSrc }));
 const sectionRef = ref<HTMLElement | null>(null);
-const visible = ref(false);
-let observer: IntersectionObserver | null = null;
+const visible    = useReveal(sectionRef, 0.12);
 let cleanups: (() => void)[] = [];
 
 function captureFeature(feat: FeatureItem, el: HTMLElement | null) {
@@ -108,19 +112,7 @@ function setupClock(el: HTMLElement) {
   });
 }
 
-onMounted(() => {
-  if (!sectionRef.value) return;
-  observer = new IntersectionObserver(
-    ([e]) => { if (e?.isIntersecting) { visible.value = true; observer?.disconnect(); } },
-    { threshold: 0.12 }
-  );
-  observer.observe(sectionRef.value);
-});
-
-onUnmounted(() => {
-  observer?.disconnect();
-  cleanups.forEach((fn) => fn());
-});
+onUnmounted(() => cleanups.forEach((fn) => fn()));
 </script>
 
 <style lang="scss" scoped>
@@ -160,6 +152,35 @@ $bp-mobile:  600px;
 
   [data-theme="dark"] & {
     filter: brightness(0.88) contrast(1.05) saturate(0.92);
+  }
+}
+
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to   { background-position:  200% 0; }
+}
+
+.home-split__skeleton {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    var(--website-surface-alt, #e8f0ef) 25%,
+    var(--website-surface,     #f0f7f6) 50%,
+    var(--website-surface-alt, #e8f0ef) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+
+  [data-theme="dark"] & {
+    background: linear-gradient(
+      90deg,
+      #1a2e2b 25%,
+      #22403c 50%,
+      #1a2e2b 75%
+    );
+    background-size: 200% 100%;
   }
 }
 

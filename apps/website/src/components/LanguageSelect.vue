@@ -32,8 +32,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed } from "vue";
 import { useI18n } from "vue-i18n";
+import { onClickOutside } from "@vueuse/core";
 import { useWebsiteLocale } from "../composables/useWebsiteLocale";
 import type { WebsiteLocale } from "../composables/useWebsiteLocale";
 import { LANGUAGE_OPTIONS, type LocaleId } from "@i18n/language-options";
@@ -69,16 +70,7 @@ function select(id: LocaleId) {
   }
 }
 
-function onDocumentClick(e: MouseEvent) {
-  if (wrapRef.value && !wrapRef.value.contains(e.target as Node)) open.value = false;
-}
-
-onMounted(() => {
-  document.addEventListener("click", onDocumentClick);
-});
-onUnmounted(() => {
-  document.removeEventListener("click", onDocumentClick);
-});
+onClickOutside(wrapRef, () => { open.value = false });
 </script>
 
 <style lang="scss" scoped>

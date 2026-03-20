@@ -135,41 +135,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import TestimonialsCarousel from "../components/TestimonialsCarousel.vue";
 import TealBanner from "../components/TealBanner.vue";
+import { useReveal } from "../composables/useReveal";
+import { useSeoMeta } from "../composables/useSeoMeta";
 
 const { t } = useI18n();
+useSeoMeta({ titleKey: "website.seo.forPatients.title", descriptionKey: "website.seo.forPatients.description" });
 
 const howRef      = ref<HTMLElement | null>(null);
 const benefitsRef = ref<HTMLElement | null>(null);
 const ctaRef      = ref<HTMLElement | null>(null);
 
-const howVisible      = ref(false);
-const benefitsVisible = ref(false);
-const ctaVisible      = ref(false);
-
-let observers: IntersectionObserver[] = [];
-
-onMounted(() => {
-  const sections = [
-    { el: howRef.value,      visible: howVisible,      threshold: 0.08 },
-    { el: benefitsRef.value, visible: benefitsVisible, threshold: 0.08 },
-    { el: ctaRef.value,      visible: ctaVisible,      threshold: 0.10 },
-  ];
-  for (const s of sections) {
-    if (!s.el) continue;
-    const obs = new IntersectionObserver(
-      ([e]) => { if (e?.isIntersecting) { s.visible.value = true; obs.disconnect(); } },
-      { threshold: s.threshold }
-    );
-    obs.observe(s.el);
-    observers.push(obs);
-  }
-});
-
-onUnmounted(() => observers.forEach(o => o.disconnect()));
+const howVisible      = useReveal(howRef,      0.08);
+const benefitsVisible = useReveal(benefitsRef, 0.08);
+const ctaVisible      = useReveal(ctaRef,      0.10);
 </script>
 
 <style lang="scss" scoped>

@@ -3,6 +3,7 @@
  * Single key (`rep-app-settings`) so we can later sync to backend.
  */
 
+import { useLocalStorage } from "@vueuse/core";
 import { REP_STORAGE_KEYS } from "../constants";
 
 export interface HcpFilters {
@@ -16,7 +17,7 @@ export type ViewFilters = Record<string, string | string[]>;
 
 export interface RepAppSettings {
   theme?: "light" | "dark";
-  locale?: "en" | "pl" | "es";
+  locale?: "en" | "pl" | "mx";
   sidebarCollapsed?: boolean;
   /** Keyed by view id (e.g. 'leads', 'hcp'). Each value is a record of filter key -> value. */
   filters?: Record<string, ViewFilters>;
@@ -29,32 +30,24 @@ const DEFAULTS: RepAppSettings = {
   filters: {},
 };
 
+const _store = useLocalStorage<RepAppSettings>(REP_STORAGE_KEYS.settings, { ...DEFAULTS }, {
+  mergeDefaults: true,
+});
+
 /**
- * Returns current rep-app settings from localStorage. Uses defaults when storage is empty.
+ * Returns current rep-app settings. Uses defaults when storage is empty.
  */
 export function getRepSettings(): RepAppSettings {
-  if (typeof localStorage === "undefined") return { ...DEFAULTS };
-  try {
-    const raw = localStorage.getItem(REP_STORAGE_KEYS.settings);
-    if (!raw) return { ...DEFAULTS };
-    const parsed = JSON.parse(raw) as RepAppSettings;
-    return typeof parsed === "object" && parsed !== null ? { ...DEFAULTS, ...parsed } : { ...DEFAULTS };
-  } catch {
-    return { ...DEFAULTS };
-  }
+  return { ..._store.value };
 }
 
 /**
- * Updates rep-app settings (shallow merge at top level; filters.hcp is merged).
- * Persists to localStorage under a single key.
+ * Updates rep-app settings (shallow merge at top level; filters[viewId] is merged).
+ * Persists to localStorage automatically via useLocalStorage.
  */
 export function setRepSettings(partial: Partial<RepAppSettings>): void {
-  if (typeof localStorage === "undefined") return;
-  const current = getRepSettings();
-  const next: RepAppSettings = {
-    ...current,
-    ...partial,
-  };
+  const current = _store.value;
+  const next: RepAppSettings = { ...current, ...partial };
   if (partial.filters !== undefined) {
     next.filters = { ...current.filters };
     for (const viewId of Object.keys(partial.filters)) {
@@ -65,9 +58,5 @@ export function setRepSettings(partial: Partial<RepAppSettings>): void {
       }
     }
   }
-  try {
-    localStorage.setItem(REP_STORAGE_KEYS.settings, JSON.stringify(next));
-  } catch {
-    // ignore
-  }
+  _store.value = next;
 }

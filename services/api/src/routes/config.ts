@@ -82,8 +82,8 @@ configRouter.patch(
       return;
     }
     const { locale, overrides } = req.body as { locale?: string; overrides?: Record<string, string | null> };
-    if (!locale || typeof locale !== "string" || !["en", "pl", "es"].includes(locale)) {
-      res.status(400).json({ error: "locale must be one of: en, pl, es" });
+    if (!locale || typeof locale !== "string" || !["en", "pl", "mx"].includes(locale)) {
+      res.status(400).json({ error: "locale must be one of: en, pl, mx" });
       return;
     }
     if (!overrides || typeof overrides !== "object" || Array.isArray(overrides)) {

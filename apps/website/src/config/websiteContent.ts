@@ -70,7 +70,7 @@ export const homeStats: StatConfig[] = [
   { target: 25,  suffix: "M+", labelKey: "website.stats.americansLabel"    },
   { target: 80,  suffix: "%",  labelKey: "website.stats.undiagnosedLabel"  },
   { target: 95,  suffix: "%",  labelKey: "website.stats.satisfactionLabel" },
-  { target: 500, suffix: "+",  labelKey: "website.stats.dentistsLabel"     },
+  { target: 500, suffix: "+",  labelKey: "website.stats.specialistsLabel"     },
 ];
 
 export const solutionCards: SolutionCard[] = [
@@ -99,11 +99,11 @@ export const solutionCards: SolutionCard[] = [
   },
 ];
 
-export const dentistFeatures: FeatureItem[] = [
-  { id: "expand",   icon: IconPeople,     titleKey: "website.forDentists.expand.title",   descKey: "website.forDentists.expand.desc"   },
-  { id: "revenue",  icon: IconChart,      titleKey: "website.forDentists.revenue.title",  descKey: "website.forDentists.revenue.desc",  animId: "chart" },
-  { id: "training", icon: IconGraduation, titleKey: "website.forDentists.training.title", descKey: "website.forDentists.training.desc" },
-  { id: "outcomes", icon: IconHeart,      titleKey: "website.forDentists.outcomes.title", descKey: "website.forDentists.outcomes.desc" },
+export const professionalFeatures: FeatureItem[] = [
+  { id: "expand",   icon: IconPeople,     titleKey: "website.forProfessionals.expand.title",   descKey: "website.forProfessionals.expand.desc"   },
+  { id: "revenue",  icon: IconChart,      titleKey: "website.forProfessionals.revenue.title",  descKey: "website.forProfessionals.revenue.desc",  animId: "chart" },
+  { id: "training", icon: IconGraduation, titleKey: "website.forProfessionals.training.title", descKey: "website.forProfessionals.training.desc" },
+  { id: "outcomes", icon: IconHeart,      titleKey: "website.forProfessionals.outcomes.title", descKey: "website.forProfessionals.outcomes.desc" },
 ];
 
 export const patientFeatures: FeatureItem[] = [
@@ -115,22 +115,22 @@ export const patientFeatures: FeatureItem[] = [
 
 export const heroConfig = {
   imageSrc: "/images/hero.jpeg",
-  ctaPrimary:   { href: "#for-patients", labelKey: "website.hero.ctaFindDentist" },
+  ctaPrimary:   { href: "#for-patients", labelKey: "website.hero.ctaFindSpecialist" },
   ctaSecondary: { href: "#solutions",    labelKey: "website.hero.ctaLearnMore"   },
 };
 
 export const splitSections: SplitSectionConfig[] = [
   {
-    id: "for-dentists",
-    eyebrowKey: "website.forDentists.title",
-    headingKey: "website.forDentists.heading",
-    subtitleKey: "website.forDentists.subtitle",
-    ctaKey: "website.forDentists.cta",
+    id: "for-professionals",
+    eyebrowKey: "website.forProfessionals.title",
+    headingKey: "website.forProfessionals.heading",
+    subtitleKey: "website.forProfessionals.subtitle",
+    ctaKey: "website.forProfessionals.cta",
     ctaTo: { path: "/contact", query: { type: "professional" } },
-    imageSrc: "/images/for-dentists.png",
+    imageSrc: "/images/for-professionals.png",
     imagePosition: "50% 50%",
     imageLeft: true,
-    features: dentistFeatures,
+    features: professionalFeatures,
   },
   {
     id: "for-patients",
@@ -151,7 +151,7 @@ export const ctaBannerConfig = {
   subtitleKey: "website.cta.subtitle",
   buttons: [
     { labelKey: "website.cta.forPatient", to: { path: "/contact", query: { type: "patient"      } }, variant: "white-outline" as const, arrow: true },
-    { labelKey: "website.cta.forDentist", to: { path: "/contact", query: { type: "professional" } }, variant: "white-border"  as const },
+    { labelKey: "website.cta.forProfessional", to: { path: "/contact", query: { type: "professional" } }, variant: "white-border"  as const },
   ] as CtaButton[],
 };
 
@@ -180,11 +180,11 @@ export interface JobListing {
 
 export const jobListings: JobListing[] = [
   {
-    id:              "dentist-warsaw-01",
-    titleKey:        "careers.jobs.dentistWarsaw.title",
+    id:              "specialist-warsaw-01",
+    titleKey:        "careers.jobs.specialistWarsaw.title",
     departmentKey:   "careers.dept.clinical",
     department:      "clinical",
-    descKey:         "careers.jobs.dentistWarsaw.desc",
+    descKey:         "careers.jobs.specialistWarsaw.desc",
     locationCity:    "Warsaw",
     locationCountry: "Poland",
     type:            "b2b",
@@ -208,11 +208,11 @@ export const jobListings: JobListing[] = [
     featured:        false,
   },
   {
-    id:              "dentist-madrid-01",
-    titleKey:        "careers.jobs.dentistMadrid.title",
+    id:              "specialist-madrid-01",
+    titleKey:        "careers.jobs.specialistMadrid.title",
     departmentKey:   "careers.dept.clinical",
     department:      "clinical",
-    descKey:         "careers.jobs.dentistMadrid.desc",
+    descKey:         "careers.jobs.specialistMadrid.desc",
     locationCity:    "Mexico City",
     locationCountry: "Mexico",
     type:            "b2b",
@@ -232,7 +232,7 @@ export const jobDepartments= [...new Set(jobListings.map((j) => j.department))] 
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface HelpCategory {
-  id: "condition" | "treatment" | "dentists" | "privacy";
+  id: "condition" | "treatment" | "professionals" | "privacy";
   titleKey: string;
   descKey: string;
 }
@@ -247,7 +247,7 @@ export interface FaqItem {
 export const helpCategories: HelpCategory[] = [
   { id: "condition", titleKey: "website.help.cat.condition.title", descKey: "website.help.cat.condition.desc" },
   { id: "treatment", titleKey: "website.help.cat.treatment.title", descKey: "website.help.cat.treatment.desc" },
-  { id: "dentists",  titleKey: "website.help.cat.dentists.title",  descKey: "website.help.cat.dentists.desc"  },
+  { id: "professionals",  titleKey: "website.help.cat.professionals.title",  descKey: "website.help.cat.professionals.desc"  },
   { id: "privacy",   titleKey: "website.help.cat.privacy.title",   descKey: "website.help.cat.privacy.desc"   },
 ];
 
@@ -256,8 +256,8 @@ export const helpFaqs: FaqItem[] = [
   { id: "q2", category: "condition", questionKey: "website.help.faq.q2.q", answerKey: "website.help.faq.q2.a" },
   { id: "q3", category: "treatment", questionKey: "website.help.faq.q3.q", answerKey: "website.help.faq.q3.a" },
   { id: "q4", category: "treatment", questionKey: "website.help.faq.q4.q", answerKey: "website.help.faq.q4.a" },
-  { id: "q5", category: "dentists",  questionKey: "website.help.faq.q5.q", answerKey: "website.help.faq.q5.a" },
-  { id: "q6", category: "dentists",  questionKey: "website.help.faq.q6.q", answerKey: "website.help.faq.q6.a" },
+  { id: "q5", category: "professionals",  questionKey: "website.help.faq.q5.q", answerKey: "website.help.faq.q5.a" },
+  { id: "q6", category: "professionals",  questionKey: "website.help.faq.q6.q", answerKey: "website.help.faq.q6.a" },
   { id: "q7", category: "privacy",   questionKey: "website.help.faq.q7.q", answerKey: "website.help.faq.q7.a" },
   { id: "q8", category: "privacy",   questionKey: "website.help.faq.q8.q", answerKey: "website.help.faq.q8.a" },
 ];
@@ -309,7 +309,7 @@ export const searchIndex: SearchItem[] = [
   { titleKey: "website.solutions.heading",           descKey: "website.solutions.subtitle",               path: "/",    hash: "#solutions" },
   { titleKey: "website.solutions.therapy.title",    descKey: "website.solutions.therapy.desc",           path: "/",    hash: "#solutions" },
   { titleKey: "website.solutions.diagnostics.title",descKey: "website.solutions.diagnostics.desc",       path: "/",    hash: "#solutions" },
-  { titleKey: "website.nav.forDentists",             descKey: "website.forDentists.subtitle",             path: "/for-dentists"           },
+  { titleKey: "website.nav.forProfessionals",             descKey: "website.forProfessionals.subtitle",             path: "/for-professionals"           },
   { titleKey: "website.nav.forPatients",             descKey: "website.forPatients.subtitle",             path: "/for-patients"           },
   { titleKey: "website.nav.findSpecialist",          descKey: "website.findSpecialist.heroSub",           path: "/find-specialist"        },
   { titleKey: "website.nav.contact",                 descKey: "website.contact.subtitlePatient",          path: "/contact"                },
@@ -319,5 +319,5 @@ export const searchIndex: SearchItem[] = [
   // Auth-protected (future portal)
   { titleKey: "website.search.myTreatment",          descKey: "website.search.myTreatmentDesc",           path: "/portal/treatment",    requiresAuth: true },
   { titleKey: "website.search.myAppointments",       descKey: "website.search.myAppointmentsDesc",        path: "/portal/appointments", requiresAuth: true },
-  { titleKey: "website.search.dentistDashboard",     descKey: "website.search.dentistDashboardDesc",      path: "/portal/dashboard",    requiresAuth: true },
+  { titleKey: "website.search.specialistDashboard",     descKey: "website.search.specialistDashboardDesc",      path: "/portal/dashboard",    requiresAuth: true },
 ];

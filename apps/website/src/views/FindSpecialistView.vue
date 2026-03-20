@@ -109,10 +109,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed } from "vue";
 import { useI18n } from "vue-i18n";
+import { useReveal } from "../composables/useReveal";
+import { useSeoMeta } from "../composables/useSeoMeta";
 
 const { t } = useI18n();
+useSeoMeta({ titleKey: "website.seo.findSpecialist.title", descriptionKey: "website.seo.findSpecialist.description" });
 
 const searchQuery = ref("");
 const activeQuery = ref("sleep apnea dentist");
@@ -127,28 +130,9 @@ function performSearch() {
   activeQuery.value = searchQuery.value.trim() + " sleep apnea dentist";
 }
 
-const mapRef = ref<HTMLElement | null>(null);
-const ctaRef = ref<HTMLElement | null>(null);
-const ctaVisible = ref(false);
-
-let observers: IntersectionObserver[] = [];
-
-onMounted(() => {
-  const sections = [
-    { el: ctaRef.value, visible: ctaVisible, threshold: 0.10 },
-  ];
-  for (const s of sections) {
-    if (!s.el) continue;
-    const obs = new IntersectionObserver(
-      ([e]) => { if (e?.isIntersecting) { s.visible.value = true; obs.disconnect(); } },
-      { threshold: s.threshold }
-    );
-    obs.observe(s.el);
-    observers.push(obs);
-  }
-});
-
-onUnmounted(() => observers.forEach(o => o.disconnect()));
+const mapRef    = ref<HTMLElement | null>(null);
+const ctaRef    = ref<HTMLElement | null>(null);
+const ctaVisible = useReveal(ctaRef, 0.10);
 </script>
 
 <style lang="scss" scoped>
