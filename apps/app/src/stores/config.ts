@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import { ref, shallowRef, computed } from "vue";
 import { brandColors } from "@brand/colors";
 import { apiFetch } from "../utils/api";
+import { applyI18nOverrides } from "../plugins/i18n";
 
 // ---------------------------------------------------------------------------
 // Config options (regions, specialties, institution types)
@@ -110,6 +111,17 @@ export const useConfigStore = defineStore("config", () => {
     }
   }
 
+  async function loadI18nOverrides(): Promise<void> {
+    try {
+      const res = await apiFetch("/api/config/i18n", { handleErrors: false });
+      if (!res.ok) return;
+      const data = (await res.json()) as Record<string, Record<string, string>>;
+      applyI18nOverrides(data);
+    } catch {
+      // Non-fatal — static JSON is the fallback
+    }
+  }
+
   async function loadOptions(): Promise<ConfigOptions> {
     try {
       const res = await apiFetch("/api/config/options", { handleErrors: false });
@@ -152,6 +164,6 @@ export const useConfigStore = defineStore("config", () => {
 
   return {
     config, loading, defaults, load, save, applyToDom,
-    options, loadOptions, regionItems, specialtyItems, institutionTypeItems,
+    options, loadOptions, loadI18nOverrides, regionItems, specialtyItems, institutionTypeItems,
   };
 });

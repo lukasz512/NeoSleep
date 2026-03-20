@@ -1,0 +1,52 @@
+# docker-compose.prod.yml — PRODUCTION / UAT DEPLOYMENT
+# Usage: docker compose -f docker-compose.prod.yml up -d
+# Requires: services/api/.env.prod and services/api/.env.uat
+services:
+  api-prod:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    env_file: ./services/api/.env.prod
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  api-uat:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    env_file: ./services/api/.env.uat
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./apps/app/dist:/usr/share/nginx/html/app-prod:ro
+      - ./apps/app/dist-uat:/usr/share/nginx/html/app-uat:ro
+    depends_on:
+      api-prod:
+        condition: service_healthy
+      api-uat:
+        condition: service_healthy
+    restart: unless-stopped

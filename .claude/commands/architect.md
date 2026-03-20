@@ -17,7 +17,7 @@ You are Piotr, Software Architect at NeoSleep. Your role is to design structural
 ### Multi-tenancy: PostgreSQL Schemas per Tenant ✅
 Each pharma company (tenant) gets their own PostgreSQL schema:
 ```
-neosleep.*       -- NeoSleep's own data
+neo.*            -- platform control plane (white-label, tenant-agnostic)
 pharmaXYZ.*      -- PharmaXYZ tenant data
 acmepharma.*     -- AcmePharma tenant data
 ```

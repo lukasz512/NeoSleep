@@ -82,24 +82,25 @@ export function useLayoutState() {
     return "?";
   });
 
-  // ── User menu ──────────────────────────────────────────────────────────────
-  const userMenuOpen = ref(false);
-
   // ── Locale ────────────────────────────────────────────────────────────────
+  const localeTransitioning = ref(false);
+
   async function setLocale(lang: "en" | "pl" | "es") {
+    localeTransitioning.value = true;
+    await new Promise<void>((r) => setTimeout(r, 180));
     await loadLocale(lang);
     locale.value = lang;
     setRepSettings({ locale: lang });
+    await nextTick();
+    localeTransitioning.value = false;
   }
 
   function onLangChange(lang: "en" | "pl" | "es") {
     setLocale(lang);
-    userMenuOpen.value = false;
   }
 
   // ── Auth ──────────────────────────────────────────────────────────────────
   function onLogout() {
-    userMenuOpen.value = false;
     mobileDrawerUserMenuOpen.value = false;
     mobileDrawerOpen.value = false;
     authStore.clearAuth();
@@ -142,7 +143,7 @@ export function useLayoutState() {
     if (typeof settings.sidebarCollapsed === "boolean") {
       sidebarCollapsed.value = settings.sidebarCollapsed;
     }
-    const [cfg] = await Promise.all([configStore.load(), configStore.loadOptions()]);
+    const [cfg] = await Promise.all([configStore.load(), configStore.loadOptions(), configStore.loadI18nOverrides()]);
     configStore.applyToDom(cfg);
     setTheme(cfg.color_scheme);
     updateMobile();
@@ -158,8 +159,7 @@ export function useLayoutState() {
     sidebarCollapsed, toggleSidebar,
     isMobile, mobileDrawerOpen, mobileDrawerUserMenuOpen,
     isAdmin, userDisplayName, userRole, userInitials,
-    userMenuOpen,
-    locale, setLocale, onLangChange,
+    locale, localeTransitioning, setLocale, onLangChange,
     onLogout,
     themePanelOpen, themePanelConfig, onThemeSave, onOpenThemePanelFromDrawer,
     focusMainContent,

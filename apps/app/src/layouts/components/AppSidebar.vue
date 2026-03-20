@@ -17,10 +17,7 @@
         :aria-label="toggleLabel"
         @click="$emit('toggle')"
       >
-        <svg class="layout-app__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path v-if="collapsed" d="M9 18l6-6-6-6"/>
-          <path v-else d="M15 18l-6-6 6-6"/>
-        </svg>
+        <AppIcon :name="collapsed ? 'chevron-right' : 'chevron-left'" class="layout-app__chevron" />
       </VBtn>
     </div>
     <div
@@ -36,6 +33,7 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import AppLogo from "./AppLogo.vue";
 import AppNavLinks from "./AppNavLinks.vue";
+import AppIcon from "../../components/AppIcon.vue";
 
 const SLIDE_THRESHOLD = 50;
 

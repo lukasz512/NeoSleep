@@ -1,6 +1,6 @@
 <template>
   <VApp>
-    <AppNotificationHub />
+    <AppNotifications />
     <component :is="layoutComponent" />
   </VApp>
 </template>
@@ -10,7 +10,7 @@ import { computed, watch, onMounted } from "vue";
 import { useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { DefaultLayout, AppLayout } from "./router";
-import AppNotificationHub from "./components/AppNotificationHub.vue";
+import AppNotifications from "./components/AppNotifications.vue";
 
 const route = useRoute();
 const { locale } = useI18n();

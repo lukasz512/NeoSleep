@@ -10,14 +10,9 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from "vue";
 import DefaultHeader from "./DefaultHeader.vue";
 import DefaultFooter from "./DefaultFooter.vue";
 import MobileBottomNav from "../components/MobileBottomNav.vue";
-
-onMounted(() => {
-  console.log("[Layout] mounted");
-});
 </script>
 
 <style scoped>

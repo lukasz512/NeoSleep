@@ -18,17 +18,13 @@
       </div>
       <div class="view-planner__nav">
         <VBtn icon variant="flat" size="small" class="view-planner__nav-btn" :title="t('rep.planner.prev')" :aria-label="t('rep.planner.prev')" @click="prev">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
+          <AppIcon name="chevron-left" class="view-planner__nav-icon" />
         </VBtn>
         <VBtn variant="text" size="small" class="view-planner__today" @click="goToToday">
           {{ t('rep.planner.today') }}
         </VBtn>
         <VBtn icon variant="flat" size="small" class="view-planner__nav-btn" :title="t('rep.planner.next')" :aria-label="t('rep.planner.next')" @click="next">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
-            <path d="M9 18l6-6-6-6" />
-          </svg>
+          <AppIcon name="chevron-right" class="view-planner__nav-icon" />
         </VBtn>
       </div>
       <VTooltip location="bottom">
@@ -42,10 +38,7 @@
             :aria-label="t('rep.planner.add')"
             @click="onAdd"
           >
-            <svg class="view-planner__add-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <line x1="12" y1="8" x2="12" y2="16" />
-              <line x1="8" y1="12" x2="16" y2="12" />
-            </svg>
+            <AppIcon name="plus" class="view-planner__add-icon" />
           </VBtn>
         </template>
         <span>{{ t('rep.planner.add') }}</span>
@@ -86,6 +79,7 @@ import { apiFetch } from "../utils/api";
 import { useNotifications } from "../composables/useNotifications";
 import type { EventFormInitialData } from "../components/EventForm.vue";
 import type { EventSubmitPayload } from "../components/EventForm.vue";
+import AppIcon from "../components/AppIcon.vue";
 
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
 
@@ -437,9 +431,10 @@ async function onEventFormSubmit(payload: EventSubmitPayload) {
   }
 }
 
+.view-planner__nav-icon,
 .view-planner__add-icon {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   display: block;
   color: inherit;
 }

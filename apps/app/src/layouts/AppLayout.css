@@ -1,3 +1,7 @@
+:root {
+  --rep-bottom-nav-height: 64px;
+}
+
 .layout-app {
   min-height: 100vh;
   height: 100vh;
@@ -50,9 +54,7 @@
 }
 
 @media (min-width: 768px) {
-  .layout-app__mobile-bottom-bar,
-  .layout-app__mobile-overlay,
-  :deep(.layout-app__mobile-drawer) {
+  .layout-app__mobile-bottom-bar {
     display: none !important;
   }
 }
@@ -124,7 +126,7 @@
   height: 22px;
 }
 
-.layout-app__mobile-menu-trigger-icon svg {
+.layout-app__mobile-menu-icon {
   width: 100%;
   height: 100%;
 }
@@ -153,13 +155,6 @@
   outline-offset: 2px;
 }
 
-.layout-app__mobile-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 90;
-  background: rgba(0, 0, 0, 0.5);
-  transition: opacity 0.25s ease;
-}
 
 .layout-app__main {
   position: relative;
@@ -184,6 +179,11 @@
   min-height: 0;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
+  transition: opacity 180ms ease;
+}
+
+.layout-app__scroll-wrap--locale-fading {
+  opacity: 0;
 }
 
 .layout-app__content {

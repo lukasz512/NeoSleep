@@ -3,13 +3,47 @@ import { toArray, trimOrNull, trimOrEmpty } from "./helpers.js";
 
 export interface HCP {
   id: string;
-  name: string;
-  email: string | null;
-  phone?: string | null;
-  specialty: string | null;
+  // Legacy computed field (hco name joined from tbl_hco)
   institution: string | null;
+  // Identity
+  title: string | null;
+  first_name: string;
+  last_name: string;
+  // Contact
+  email: string | null;
+  phone: string | null;
+  preferred_contact: string | null;
+  preferred_time: string | null;
+  // Professional
+  primary_specialty: string | null;
+  secondary_specialty: string | null;
+  role: string | null;
+  license_number: string | null;
+  years_experience: number | null;
+  is_key_opinion_leader: boolean;
+  // Pharma engagement
+  influence_tier: string;
+  prescribing_volume: string | null;
+  engagement_level: string;
+  contact_frequency: string | null;
+  // Relationship tracking
+  first_contact_date: Date | null;
+  visit_count: number;
+  last_visit_date: Date | null;
+  // Locale / status
+  language: string | null;
   region: string;
+  status: string;
+  // GDPR
+  data_consent_at: Date | null;
+  data_consent_withdrawn_at: Date | null;
+  // Meta
+  notes: string | null;
+  tags: string[];
+  hco_id: string | null;
+  primary_hco_id: string | null;
   created_at: Date;
+  updated_at: Date;
 }
 
 export interface GetHCPFilters {
@@ -20,40 +54,73 @@ export interface GetHCPFilters {
 }
 
 export interface InsertHCPInput {
-  name: string;
-  email: string;
-  phone: string;
-  specialty?: string | null;
-  institution?: string | null;
+  first_name: string;
+  last_name: string;
+  title?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  primary_specialty?: string | null;
+  institution?: string | null;  // resolved to hco_id
   region?: string;
   lead_id?: string | null;
+  influence_tier?: string;
+  engagement_level?: string;
+  prescribing_volume?: string | null;
+  preferred_contact?: string | null;
+  preferred_time?: string | null;
+  language?: string | null;
+  notes?: string | null;
+  tags?: string[];
 }
 
 export interface UpdateHCPInput {
-  name?: string;
-  email?: string;
-  phone?: string;
-  specialty?: string | null;
-  institution?: string | null;
+  first_name?: string;
+  last_name?: string;
+  title?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  primary_specialty?: string | null;
+  institution?: string | null;  // resolved to hco_id
   region?: string;
+  influence_tier?: string;
+  engagement_level?: string;
+  prescribing_volume?: string | null;
+  preferred_contact?: string | null;
+  preferred_time?: string | null;
+  language?: string | null;
+  notes?: string | null;
+  tags?: string[];
 }
 
 const MOCK_HCPS: HCP[] = [
-  { id: "mock-hcp-01", name: "Dr Anna Kowalska",        email: "a.kowalska@neosleep.example",     phone: null, specialty: "Pulmonology",       institution: "NeoSleep Care Center",           region: "Central", created_at: new Date("2025-09-01") },
-  { id: "mock-hcp-02", name: "Dr Piotr Nowak",           email: "p.nowak@neosleep.example",        phone: null, specialty: "Sleep medicine",    institution: "NeoSleep Care Center",           region: "Central", created_at: new Date("2025-09-05") },
-  { id: "mock-hcp-03", name: "Dr Maria Wiśniewska",      email: "m.wisniewska@hospital.example",   phone: null, specialty: "Neurology",         institution: "City Hospital North",            region: "North",   created_at: new Date("2025-09-08") },
-  { id: "mock-hcp-04", name: "Dr Jan Zieliński",         email: "j.zielinski@hospital.example",    phone: null, specialty: "Internal medicine", institution: "City Hospital North",            region: "North",   created_at: new Date("2025-09-10") },
-  { id: "mock-hcp-05", name: "Dr Katarzyna Wójcik",      email: "k.wojcik@pulm-south.example",     phone: null, specialty: "ENT",               institution: "Centrum Pulmonologii Południe",  region: "South",   created_at: new Date("2025-09-12") },
-  { id: "mock-hcp-06", name: "Dr Marek Kowalczyk",       email: "m.kowalczyk@pulm-south.example",  phone: null, specialty: "Pulmonology",       institution: "Centrum Pulmonologii Południe",  region: "South",   created_at: new Date("2025-09-14") },
-  { id: "mock-hcp-07", name: "Dr Agnieszka Lewandowska", email: "a.lewandowska@klinika-z.example", phone: null, specialty: "Sleep medicine",    institution: "Klinika Zdrowia Zachód",         region: "West",    created_at: new Date("2025-09-16") },
-  { id: "mock-hcp-08", name: "Dr Tomasz Dąbrowski",      email: "t.dabrowski@klinika-z.example",   phone: null, specialty: "Family medicine",   institution: "Klinika Zdrowia Zachód",         region: "West",    created_at: new Date("2025-09-18") },
-  { id: "mock-hcp-09", name: "Dr Ewa Szymańska",         email: "e.szymanska@entclinic.example",   phone: null, specialty: "Pneumonology",      institution: "ENT & Sleep Clinic Centrum",     region: "Central", created_at: new Date("2025-09-20") },
-  { id: "mock-hcp-10", name: "Dr Robert Wiśniewski",     email: "r.wisniewski@hospital.example",   phone: null, specialty: "ENT",               institution: "City Hospital North",            region: "North",   created_at: new Date("2025-09-22") },
-  { id: "mock-hcp-11", name: "Dr Natalia Kaczmarek",     email: "n.kaczmarek@pulm-south.example",  phone: null, specialty: "Sleep medicine",    institution: "Centrum Pulmonologii Południe",  region: "South",   created_at: new Date("2025-09-24") },
-  { id: "mock-hcp-12", name: "Dr Paweł Jankowski",       email: "p.jankowski@neosleep.example",    phone: null, specialty: "Internal medicine", institution: "NeoSleep Care Center",           region: "Central", created_at: new Date("2025-09-26") },
+  { id: "mock-hcp-01", title: "Dr.", first_name: "Anna",      last_name: "Kowalska",      email: "a.kowalska@neosleep.example",     phone: null, primary_specialty: "Pulmonology",       secondary_specialty: null, role: "doctor", institution: "NeoSleep Care Center",          region: "Central", influence_tier: "B", engagement_level: "neutral", prescribing_volume: null, is_key_opinion_leader: false, contact_frequency: null, first_contact_date: null, visit_count: 0, last_visit_date: null, language: "pl", status: "active", data_consent_at: null, data_consent_withdrawn_at: null, notes: null, tags: [], hco_id: null, primary_hco_id: null, preferred_contact: null, preferred_time: null, license_number: null, years_experience: null, created_at: new Date("2025-09-01"), updated_at: new Date("2025-09-01") },
+  { id: "mock-hcp-02", title: "Dr.", first_name: "Piotr",     last_name: "Nowak",         email: "p.nowak@neosleep.example",        phone: null, primary_specialty: "Sleep medicine",    secondary_specialty: null, role: "doctor", institution: "NeoSleep Care Center",          region: "Central", influence_tier: "A", engagement_level: "champion", prescribing_volume: "high", is_key_opinion_leader: true, contact_frequency: null, first_contact_date: null, visit_count: 2, last_visit_date: null, language: "pl", status: "active", data_consent_at: null, data_consent_withdrawn_at: null, notes: null, tags: [], hco_id: null, primary_hco_id: null, preferred_contact: null, preferred_time: null, license_number: null, years_experience: null, created_at: new Date("2025-09-05"), updated_at: new Date("2025-09-05") },
+  { id: "mock-hcp-03", title: "Dr.", first_name: "Maria",     last_name: "Wiśniewska",    email: "m.wisniewska@hospital.example",   phone: null, primary_specialty: "Neurology",         secondary_specialty: null, role: "doctor", institution: "City Hospital North",           region: "North",   influence_tier: "C", engagement_level: "unknown",  prescribing_volume: null, is_key_opinion_leader: false, contact_frequency: null, first_contact_date: null, visit_count: 0, last_visit_date: null, language: "pl", status: "active", data_consent_at: null, data_consent_withdrawn_at: null, notes: null, tags: [], hco_id: null, primary_hco_id: null, preferred_contact: null, preferred_time: null, license_number: null, years_experience: null, created_at: new Date("2025-09-08"), updated_at: new Date("2025-09-08") },
+  { id: "mock-hcp-04", title: "Dr.", first_name: "Jan",       last_name: "Zieliński",     email: "j.zielinski@hospital.example",    phone: null, primary_specialty: "Internal medicine", secondary_specialty: null, role: "doctor", institution: "City Hospital North",           region: "North",   influence_tier: "C", engagement_level: "neutral",  prescribing_volume: null, is_key_opinion_leader: false, contact_frequency: null, first_contact_date: null, visit_count: 1, last_visit_date: null, language: "pl", status: "active", data_consent_at: null, data_consent_withdrawn_at: null, notes: null, tags: [], hco_id: null, primary_hco_id: null, preferred_contact: null, preferred_time: null, license_number: null, years_experience: null, created_at: new Date("2025-09-10"), updated_at: new Date("2025-09-10") },
+  { id: "mock-hcp-05", title: "Dr.", first_name: "Katarzyna", last_name: "Wójcik",        email: "k.wojcik@pulm-south.example",     phone: null, primary_specialty: "ENT",               secondary_specialty: null, role: "doctor", institution: "Centrum Pulmonologii Południe", region: "South",   influence_tier: "C", engagement_level: "skeptic",  prescribing_volume: "low",  is_key_opinion_leader: false, contact_frequency: null, first_contact_date: null, visit_count: 0, last_visit_date: null, language: "pl", status: "active", data_consent_at: null, data_consent_withdrawn_at: null, notes: null, tags: [], hco_id: null, primary_hco_id: null, preferred_contact: null, preferred_time: null, license_number: null, years_experience: null, created_at: new Date("2025-09-12"), updated_at: new Date("2025-09-12") },
+  { id: "mock-hcp-06", title: "Dr.", first_name: "Marek",     last_name: "Kowalczyk",     email: "m.kowalczyk@pulm-south.example",  phone: null, primary_specialty: "Pulmonology",       secondary_specialty: null, role: "doctor", institution: "Centrum Pulmonologii Południe", region: "South",   influence_tier: "B", engagement_level: "neutral",  prescribing_volume: "medium", is_key_opinion_leader: false, contact_frequency: null, first_contact_date: null, visit_count: 2, last_visit_date: null, language: "pl", status: "active", data_consent_at: null, data_consent_withdrawn_at: null, notes: null, tags: [], hco_id: null, primary_hco_id: null, preferred_contact: null, preferred_time: null, license_number: null, years_experience: null, created_at: new Date("2025-09-14"), updated_at: new Date("2025-09-14") },
 ];
 
-const HCP_SORT_COLUMNS = ["name", "email", "specialty", "region", "created_at"] as const;
+const HCP_SORT_COLUMNS = ["first_name", "last_name", "email", "primary_specialty", "region", "influence_tier", "engagement_level", "created_at"] as const;
+
+const HCP_SELECT_COLS = `
+  h.id, h.title, h.first_name, h.last_name, h.email, h.phone,
+  h.primary_specialty, h.secondary_specialty, h.role, h.license_number, h.years_experience,
+  h.is_key_opinion_leader, h.influence_tier, h.prescribing_volume, h.engagement_level,
+  h.contact_frequency, h.first_contact_date, h.visit_count, h.last_visit_date,
+  h.language, h.region, h.status, h.data_consent_at, h.data_consent_withdrawn_at,
+  h.notes, h.tags, h.hco_id, h.primary_hco_id, h.preferred_contact, h.preferred_time,
+  h.created_at, h.updated_at,
+  o.name AS institution`.trim();
+
+const HCP_RETURNING_COLS = `
+  id, title, first_name, last_name, email, phone,
+  primary_specialty, secondary_specialty, role, license_number, years_experience,
+  is_key_opinion_leader, influence_tier, prescribing_volume, engagement_level,
+  contact_frequency, first_contact_date, visit_count, last_visit_date,
+  language, region, status, data_consent_at, data_consent_withdrawn_at,
+  notes, tags, hco_id, primary_hco_id, preferred_contact, preferred_time,
+  created_at, updated_at`.trim();
 
 function isHCPSortColumn(s: string): s is (typeof HCP_SORT_COLUMNS)[number] {
   return HCP_SORT_COLUMNS.includes(s as (typeof HCP_SORT_COLUMNS)[number]);
@@ -93,14 +160,14 @@ export async function getHCPPaginated(
 
   if (filters.search?.trim()) {
     conditions.push(
-      `(LOWER(h.name) LIKE $${paramIndex} OR LOWER(COALESCE(h.email,'')) LIKE $${paramIndex} OR LOWER(COALESCE(h.specialty,'')) LIKE $${paramIndex} OR LOWER(COALESCE(o.name,'')) LIKE $${paramIndex} OR LOWER(h.region) LIKE $${paramIndex})`
+      `(LOWER(h.first_name) LIKE $${paramIndex} OR LOWER(h.last_name) LIKE $${paramIndex} OR LOWER(COALESCE(h.email,'')) LIKE $${paramIndex} OR LOWER(COALESCE(h.primary_specialty,'')) LIKE $${paramIndex} OR LOWER(COALESCE(o.name,'')) LIKE $${paramIndex} OR LOWER(h.region) LIKE $${paramIndex})`
     );
     params.push(`%${filters.search.trim().toLowerCase()}%`);
     paramIndex++;
   }
   const specialtyArr = toArray(filters.specialty);
   if (specialtyArr.length > 0) {
-    conditions.push(`h.specialty = ANY($${paramIndex}::text[])`);
+    conditions.push(`h.primary_specialty = ANY($${paramIndex}::text[])`);
     params.push(specialtyArr);
     paramIndex++;
   }
@@ -131,7 +198,7 @@ export async function getHCPPaginated(
   const offset = (page - 1) * limit;
   params.push(limit, offset);
   const dataResult = await p.query<HCP>(
-    `SELECT h.id, h.name, h.email, h.specialty, o.name AS institution, h.region, h.created_at
+    `SELECT ${HCP_SELECT_COLS}
      FROM tbl_hcp h LEFT JOIN tbl_hco o ON h.hco_id = o.id
      ${whereClause} ORDER BY ${safeOrder} ${orderDir} LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
     params
@@ -144,7 +211,7 @@ export async function getHCPById(id: string): Promise<HCP | null> {
   if (!p) return null;
   try {
     const result = await p.query<HCP>(
-      `SELECT h.id, h.name, h.email, h.phone, h.specialty, o.name AS institution, h.region, h.created_at
+      `SELECT ${HCP_SELECT_COLS}
        FROM tbl_hcp h LEFT JOIN tbl_hco o ON h.hco_id = o.id WHERE h.id = $1`,
       [id]
     );
@@ -159,20 +226,43 @@ export async function insertHCP(input: InsertHCPInput): Promise<HCP | null> {
   const p = getDb();
   if (!p) return null;
   try {
-    const name = trimOrEmpty(input.name);
-    const email = trimOrEmpty(input.email);
-    const phone = trimOrEmpty(input.phone);
-    if (!name || !email || !phone) return null;
+    const firstName = trimOrEmpty(input.first_name);
+    const lastName = trimOrEmpty(input.last_name);
+    if (!firstName || !lastName) return null;
 
+    const region = trimOrEmpty(input.region);
     const hco = input.institution?.trim()
-      ? await resolveHcoId(p, input.institution.trim(), trimOrEmpty(input.region))
+      ? await resolveHcoId(p, input.institution.trim(), region)
       : null;
 
     const result = await p.query<HCP>(
-      `INSERT INTO tbl_hcp (name, email, phone, specialty, hco_id, region, status, lead_id)
-       VALUES ($1, $2, $3, $4, $5, $6, 'active', $7)
-       RETURNING id, name, email, specialty, region, created_at`,
-      [name, email, phone, trimOrNull(input.specialty), hco?.id ?? null, trimOrEmpty(input.region), trimOrNull(input.lead_id)]
+      `INSERT INTO tbl_hcp (
+         first_name, last_name, title, email, phone, primary_specialty,
+         hco_id, primary_hco_id, region, status, lead_id,
+         influence_tier, engagement_level, prescribing_volume,
+         preferred_contact, preferred_time, language, notes, tags
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8, 'active', $9, $10, $11, $12, $13, $14, $15, $16, $17)
+       RETURNING ${HCP_RETURNING_COLS}`,
+      [
+        firstName,
+        lastName,
+        trimOrNull(input.title),
+        trimOrNull(input.email),
+        trimOrNull(input.phone),
+        trimOrNull(input.primary_specialty),
+        hco?.id ?? null,
+        region,
+        trimOrNull(input.lead_id),
+        input.influence_tier ?? "C",
+        input.engagement_level ?? "unknown",
+        trimOrNull(input.prescribing_volume),
+        trimOrNull(input.preferred_contact),
+        trimOrNull(input.preferred_time),
+        trimOrNull(input.language),
+        trimOrNull(input.notes),
+        input.tags ?? [],
+      ]
     );
     const row = result.rows[0];
     if (!row) return null;
@@ -189,20 +279,64 @@ export async function updateHCP(id: string, input: UpdateHCPInput): Promise<HCP 
   const existing = await getHCPById(id);
   if (!existing) return null;
   try {
-    const name = input.name !== undefined ? trimOrEmpty(input.name) : existing.name;
-    const email = input.email !== undefined ? trimOrEmpty(input.email) : (existing.email ?? "");
-    const phone = input.phone !== undefined ? trimOrEmpty(input.phone) : (existing.phone ?? "");
-    const specialty = input.specialty !== undefined ? trimOrNull(input.specialty) : (existing.specialty ?? null);
+    const firstName = input.first_name !== undefined ? trimOrEmpty(input.first_name) : existing.first_name;
+    const lastName = input.last_name !== undefined ? trimOrEmpty(input.last_name) : existing.last_name;
+    const title = input.title !== undefined ? trimOrNull(input.title) : existing.title;
+    const email = input.email !== undefined ? trimOrNull(input.email) : existing.email;
+    const phone = input.phone !== undefined ? trimOrNull(input.phone) : existing.phone;
+    const primarySpecialty = input.primary_specialty !== undefined ? trimOrNull(input.primary_specialty) : existing.primary_specialty;
     const region = input.region ?? existing.region ?? "";
+    const influenceTier = input.influence_tier ?? existing.influence_tier;
+    const engagementLevel = input.engagement_level ?? existing.engagement_level;
+    const prescribingVolume = input.prescribing_volume !== undefined ? trimOrNull(input.prescribing_volume) : existing.prescribing_volume;
+    const preferredContact = input.preferred_contact !== undefined ? trimOrNull(input.preferred_contact) : existing.preferred_contact;
+    const preferredTime = input.preferred_time !== undefined ? trimOrNull(input.preferred_time) : existing.preferred_time;
+    const language = input.language !== undefined ? trimOrNull(input.language) : existing.language;
+    const notes = input.notes !== undefined ? trimOrNull(input.notes) : existing.notes;
+    const tags = input.tags !== undefined ? input.tags : existing.tags;
     const institutionInput = input.institution !== undefined ? trimOrNull(input.institution) : (existing.institution ?? null);
 
     const hco = institutionInput ? await resolveHcoId(p, institutionInput, region) : null;
 
-    await p.query(
-      `UPDATE tbl_hcp SET name = $1, email = $2, phone = $3, specialty = $4, hco_id = $5, region = $6 WHERE id = $7`,
-      [name, email, phone, specialty, hco?.id ?? null, region, id]
+    const updateResult = await p.query<{ updated_at: Date }>(
+      `UPDATE tbl_hcp SET
+         first_name = $1, last_name = $2, title = $3, email = $4, phone = $5,
+         primary_specialty = $6, hco_id = $7, primary_hco_id = $7, region = $8,
+         influence_tier = $9, engagement_level = $10, prescribing_volume = $11,
+         preferred_contact = $12, preferred_time = $13, language = $14, notes = $15, tags = $16,
+         updated_at = now()
+       WHERE id = $17
+       RETURNING updated_at`,
+      [
+        firstName, lastName, title, email, phone,
+        primarySpecialty, hco?.id ?? null, region,
+        influenceTier, engagementLevel, prescribingVolume,
+        preferredContact, preferredTime, language, notes, tags,
+        id,
+      ]
     );
-    return { ...existing, name, email, phone, specialty, institution: hco?.name ?? institutionInput, region };
+    return {
+      ...existing,
+      first_name: firstName,
+      last_name: lastName,
+      title,
+      email,
+      phone,
+      primary_specialty: primarySpecialty,
+      hco_id: hco?.id ?? null,
+      primary_hco_id: hco?.id ?? null,
+      region,
+      influence_tier: influenceTier,
+      engagement_level: engagementLevel,
+      prescribing_volume: prescribingVolume,
+      preferred_contact: preferredContact,
+      preferred_time: preferredTime,
+      language,
+      notes,
+      tags,
+      institution: hco?.name ?? institutionInput,
+      updated_at: updateResult.rows[0]?.updated_at ?? existing.updated_at,
+    };
   } catch (err) {
     console.error("updateHCP error:", err);
     return null;

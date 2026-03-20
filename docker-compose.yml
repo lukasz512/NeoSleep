@@ -1,7 +1,5 @@
-# Local PostgreSQL for development. See foundation/docs/LOCAL_DATABASE.md.
-# Run: docker compose up -d
-# Connect: postgresql://neosleep:neosleep_local@localhost:5432/neosleep
-# Web UI: Adminer http://localhost:8080 | Directus http://localhost:8056 (see foundation/docs/DIRECTUS_AS_ADMIN.md)
+# docker-compose.yml — LOCAL DEVELOPMENT
+# Starts PostgreSQL + Adminer. BFF and Vue apps run separately via: pnpm start
 services:
   postgres:
     image: postgres:16-alpine
@@ -13,35 +11,19 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U neosleep"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   adminer:
     image: adminer:latest
     ports:
       - "8080:8080"
     depends_on:
-      - postgres
-
-  directus:
-    image: directus/directus:11
-    ports:
-      - "8056:8055"
-    environment:
-      # Override ADMIN_PASSWORD in .env or set here for dev. KEY/SECRET: keep or set in .env.
-      KEY: "neosleep-dev-key-32chars-minimum!!"
-      SECRET: "neosleep-dev-secret-32chars-minimum!!"
-      ADMIN_EMAIL: "admin@neosleep.local"
-      ADMIN_PASSWORD: "admin"
-      DB_CLIENT: "pg"
-      DB_HOST: "postgres"
-      DB_PORT: "5432"
-      DB_DATABASE: "neosleep"
-      DB_USER: "neosleep"
-      DB_PASSWORD: "neosleep_local"
-      WEBSOCKETS_ENABLED: "true"
-      PUBLIC_URL: "http://localhost:8056"
-    depends_on:
-      - postgres
-    restart: unless-stopped
+      postgres:
+        condition: service_healthy
 
 volumes:
   postgres_data:

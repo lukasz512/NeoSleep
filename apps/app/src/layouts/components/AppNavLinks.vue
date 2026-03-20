@@ -20,7 +20,7 @@
               @click="() => navigate()"
             >
               <template #prepend>
-                <AppNavIcon :name="item.name" />
+                <AppIcon :name="('nav-' + item.name) as AppIconName" class="layout-app__nav-icon" />
               </template>
               <span class="layout-app__nav-text" :aria-hidden="collapsed">
                 {{ t(titleKey(item.name)) }}
@@ -49,7 +49,7 @@
           @click="() => { navigate(); $emit('navigate'); }"
         >
           <template #prepend>
-            <AppNavIcon :name="item.name" />
+            <AppIcon :name="('nav-' + item.name) as AppIconName" class="layout-app__nav-icon" />
           </template>
           {{ t(titleKey(item.name)) }}
         </VListItem>
@@ -61,7 +61,7 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n";
 import { appNavRoutes } from "../../router/routes";
-import AppNavIcon from "./AppNavIcon.vue";
+import AppIcon, { type AppIconName } from "../../components/AppIcon.vue";
 
 defineProps<{
   variant: "sidebar" | "drawer";

@@ -17,9 +17,7 @@
               :aria-label="t(titleKey)"
               class="rep-filter-bar__btn rep-filter-bar__btn--no-border"
             >
-              <svg class="rep-filter-bar__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-              </svg>
+              <AppIcon name="filter" class="rep-filter-bar__icon" />
             </VBtn>
           </VBadge>
         </template>
@@ -62,9 +60,7 @@
                   :aria-label="t('app.common.remove')"
                   @click.stop="removeChip(def, item.value)"
                 >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                    <path d="M18 6L6 18M6 6l12 12" />
-                  </svg>
+                  <AppIcon name="close" class="rep-filter-bar__chip-close-icon" />
                 </button>
               </span>
             </template>
@@ -98,6 +94,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { useI18n } from "vue-i18n";
+import AppIcon from "./AppIcon.vue";
 import type { RepFilterDefinition } from "../composables/useRepFilters";
 import type { ViewFilters } from "../utils/rep-settings";
 
@@ -151,9 +148,6 @@ function removeChip(def: RepFilterDefinition, value: string) {
   updateField(def.key, next);
 }
 
-function onClear() {
-  emit("clear");
-}
 </script>
 
 <style scoped>
@@ -233,9 +227,11 @@ function onClear() {
     opacity: 1;
     background: rgba(0, 0, 0, 0.08);
   }
+}
 
-  svg {
-    display: block;
-  }
+.rep-filter-bar__chip-close-icon {
+  width: 14px;
+  height: 14px;
+  display: block;
 }
 </style>

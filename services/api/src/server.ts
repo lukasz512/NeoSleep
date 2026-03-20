@@ -7,14 +7,15 @@ import { leadsRouter } from "./routes/leads.js";
 import { hcpRouter } from "./routes/hcp.js";
 import { hcoRouter } from "./routes/hco.js";
 import { presentationsRouter } from "./routes/presentations.js";
-import { logsRouter } from "./routes/logs.js";
+import { clientLogsRouter } from "./routes/client-logs.js";
 import { eventsRouter } from "./routes/events.js";
 import { configRouter } from "./routes/config.js";
 import { configOptionsRouter } from "./routes/config-options.js";
-import { contactRouter } from "./routes/contact.js";
-import { patientsRouter } from "./routes/patients.js";
+import { websiteContactRouter } from "./routes/website-contact.js";
+import { clientsRouter } from "./routes/clients.js";
 import { runMigrations } from "./db.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { apiLimiter } from "./middleware/rateLimiter.js";
 
 const frontendUrl = process.env.FRONTEND_URL ?? "http://localhost:5173";
 const sessionSecret = process.env.SESSION_SECRET ?? "dev-secret-change-in-production";
@@ -55,7 +56,8 @@ app.use(
   })
 );
 app.use(cookieParser());
-app.use(express.json());
+app.use(express.json({ limit: "50kb" }));
+app.use(apiLimiter);
 app.use(
   session({
     secret: sessionSecret,
@@ -64,7 +66,7 @@ app.use(
     cookie: {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "lax" : "lax",
+      sameSite: "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     },
   })
@@ -76,12 +78,12 @@ app.use(leadsRouter);
 app.use(hcpRouter);
 app.use(hcoRouter);
 app.use(presentationsRouter);
-app.use(logsRouter);
+app.use(clientLogsRouter);
 app.use(eventsRouter);
 app.use(configRouter);
 app.use(configOptionsRouter);
-app.use(contactRouter);
-app.use(patientsRouter);
+app.use(websiteContactRouter);
+app.use(clientsRouter);
 
 app.use(errorHandler);
 
@@ -89,9 +91,17 @@ let server: ReturnType<typeof app.listen> | null = null;
 
 if (typeof process.env.VITEST === "undefined") {
   const port = parseInt(process.env.PORT ?? "3000", 10);
-  server = app.listen(port, async () => {
-    console.log(`API server listening on http://localhost:${port}`);
+
+  async function start() {
     await runMigrations();
+    server = app.listen(port, () => {
+      console.log(`API server listening on http://localhost:${port}`);
+    });
+  }
+
+  start().catch((err) => {
+    console.error("Failed to start server:", err);
+    process.exit(1);
   });
 }
 

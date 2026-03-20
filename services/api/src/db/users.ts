@@ -3,11 +3,20 @@ import { getDb } from "./connection.js";
 export interface User {
   id: string;
   email: string;
-  name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  name: string | null;  // backward compat; may be derived from first_name + last_name
   role: "admin" | "manager" | "rep";
   provider: string;
   provider_id: string;
   region: string | null;
+  territory: string | null;
+  manager_id: string | null;
+  phone: string | null;
+  avatar_url: string | null;
+  language: string;
+  hire_date: Date | null;
+  is_active: boolean;
   token_version: number;
   created_at: Date;
   updated_at: Date;
@@ -19,8 +28,11 @@ export interface StaffUser extends User {
   force_password_change: boolean;
 }
 
+const USER_COLS =
+  "id, email, first_name, last_name, name, role, provider, provider_id, region, territory, manager_id, phone, avatar_url, language, hire_date, is_active, token_version, created_at, updated_at";
+
 const STAFF_AUTH_COLS =
-  "id, email, name, role, provider, provider_id, region, token_version, created_at, updated_at, password_hash, force_password_change";
+  `${USER_COLS}, password_hash, force_password_change`;
 
 /** Get or create user by auth provider (e.g. Google). New users get role 'rep'. */
 export async function getOrCreateUserByProvider(
@@ -33,14 +45,14 @@ export async function getOrCreateUserByProvider(
   if (!p) return null;
   try {
     const existing = await p.query<User>(
-      "SELECT id, email, name, role, provider, provider_id, region, token_version, created_at, updated_at FROM tbl_users WHERE provider = $1 AND provider_id = $2",
+      `SELECT ${USER_COLS} FROM tbl_users WHERE provider = $1 AND provider_id = $2`,
       [provider, providerId]
     );
     if (existing.rows[0]) return existing.rows[0];
     const inserted = await p.query<User>(
       `INSERT INTO tbl_users (email, name, role, provider, provider_id)
        VALUES ($1, $2, 'rep', $3, $4)
-       RETURNING id, email, name, role, provider, provider_id, region, token_version, created_at, updated_at`,
+       RETURNING ${USER_COLS}`,
       [email, name ?? null, provider, providerId]
     );
     return inserted.rows[0] ?? null;
@@ -55,7 +67,7 @@ export async function getUserById(id: string): Promise<User | null> {
   if (!p) return null;
   try {
     const r = await p.query<User>(
-      "SELECT id, email, name, role, provider, provider_id, region, token_version, created_at, updated_at FROM tbl_users WHERE id = $1",
+      `SELECT ${USER_COLS} FROM tbl_users WHERE id = $1`,
       [id]
     );
     return r.rows[0] ?? null;
@@ -140,7 +152,7 @@ export async function insertStaffUser(
       `INSERT INTO tbl_users (email, name, role, provider, provider_id, password_hash, force_password_change)
        VALUES ($1, $2, $3, 'local', $4, $5, $6)
        ON CONFLICT (provider, provider_id) DO NOTHING
-       RETURNING id, email, name, role, provider, provider_id, region, token_version, created_at, updated_at`,
+       RETURNING ${USER_COLS}`,
       [normalizedEmail, name ?? null, role, normalizedEmail, passwordHash, forcePasswordChange]
     );
     return r.rows[0] ?? null;

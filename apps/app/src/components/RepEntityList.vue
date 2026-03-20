@@ -25,9 +25,7 @@
                 :aria-label="t(i18n.filtersClear)"
                 @click="onSearchClear"
               >
-                <svg class="rep-entity-list__clear-filters-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M18 6L6 18M6 6l12 12" />
-                </svg>
+                <AppIcon name="close" class="rep-entity-list__icon" />
               </VBtn>
             </template>
             <span>{{ t(i18n.filtersClear) }}</span>
@@ -46,9 +44,7 @@
               :aria-label="t(i18n.filtersClear)"
               @click="onFiltersClear"
             >
-              <svg class="rep-entity-list__clear-filters-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M18 6L6 18M6 6l12 12" />
-              </svg>
+              <AppIcon name="close" class="rep-entity-list__icon" />
             </VBtn>
           </template>
           <span>{{ t(i18n.filtersClear) }}</span>
@@ -73,10 +69,7 @@
               :aria-label="t(i18n.add)"
               @click="$emit('add')"
             >
-              <svg class="rep-entity-list__add-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <line x1="12" y1="8" x2="12" y2="16" />
-                <line x1="8" y1="12" x2="16" y2="12" />
-              </svg>
+              <AppIcon name="plus" class="rep-entity-list__icon" />
             </VBtn>
           </template>
           <span>{{ t(i18n.add) }}</span>
@@ -110,18 +103,7 @@
         role="status"
       >
         <div class="rep-entity-list__no-results-icon-wrap" aria-hidden="true">
-          <svg
-            class="rep-entity-list__no-results-icon"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
+          <AppIcon name="search" class="rep-entity-list__no-results-icon" />
         </div>
         <p class="rep-entity-list__no-results-title">{{ t(i18n.noResultsForCriteria) }}</p>
         <p class="rep-entity-list__no-results-subtitle">{{ t(i18n.noResultsForCriteriaSubtitle) }}</p>
@@ -187,6 +169,7 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import AppEmptyState from "./AppEmptyState.vue";
 import AppErrorState from "./AppErrorState.vue";
+import AppIcon from "./AppIcon.vue";
 import RepFilterBar from "./RepFilterBar.vue";
 import { useEntityList } from "../composables/useEntityList";
 import type { RepFilterDefinition } from "../composables/useRepFilters";

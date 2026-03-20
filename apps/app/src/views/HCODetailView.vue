@@ -27,12 +27,7 @@
             :aria-label="t('rep.detail.scheduleVisit')"
             @click="onScheduleVisit"
           >
-            <svg class="view-item__schedule-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-              <line x1="16" y1="2" x2="16" y2="6" />
-              <line x1="8" y1="2" x2="8" y2="6" />
-              <line x1="3" y1="10" x2="21" y2="10" />
-            </svg>
+            <AppIcon name="calendar" class="view-item__schedule-icon" />
           </VBtn>
         </template>
         <span>{{ t('rep.detail.scheduleVisit') }}</span>
@@ -48,10 +43,7 @@
             disabled
             :aria-label="t('rep.hco.detail.editComingSoon')"
           >
-            <svg class="view-item__edit-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-            </svg>
+            <AppIcon name="pencil" class="view-item__edit-icon" />
           </VBtn>
         </template>
         <span>{{ t('rep.hco.detail.editComingSoon') }}</span>
@@ -90,6 +82,7 @@ import { useAuthStore } from "../stores/auth";
 import { apiFetch } from "../utils/api";
 import { useNotifications } from "../composables/useNotifications";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
+import AppIcon from "../components/AppIcon.vue";
 
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
 

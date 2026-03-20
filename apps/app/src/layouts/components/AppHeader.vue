@@ -14,36 +14,43 @@
         :aria-label="t('rep.themePanel.openTitle')"
         @click="$emit('open-theme-panel')"
       >
-        <VIcon icon="mdi-palette" />
+        <AppIcon name="palette" class="layout-app__action-icon" />
       </VBtn>
-      <div v-show="showUserMenu" ref="userWrapRef" class="layout-app__user-wrap">
-      <VBtn
-        variant="text"
-        class="layout-app__user-trigger layout-app__user-trigger--vuetify"
-        :title="t('rep.user.menu')"
-        :aria-label="t('rep.user.menu')"
-        :aria-expanded="userMenuOpen"
-        aria-haspopup="true"
-        @click="$emit('toggle-user-menu')"
+
+      <VMenu
+        v-if="showUserMenu"
+        v-model="menuOpen"
+        location="bottom end"
+        :close-on-content-click="false"
+        min-width="220"
       >
-        <div class="layout-app__user-info">
-          <span class="layout-app__user-name">{{ userDisplayName }}</span>
-          <span class="layout-app__user-role">{{ userRole }}</span>
-        </div>
-        <span class="layout-app__user-avatar" aria-hidden="true">{{ userInitials }}</span>
-      </VBtn>
-      <AppUserMenuPanel
-        v-show="userMenuOpen"
-        :theme="theme"
-        :locale="locale"
-        :show-theme-panel-button="showThemePanelButton"
-        @toggle-theme="$emit('toggle-theme'); $emit('close-user-menu')"
-        @change-locale="(lang: string) => $emit('change-locale', lang)"
-        @open-theme-panel="$emit('open-theme-panel'); $emit('close-user-menu')"
-        @logout="$emit('logout'); $emit('close-user-menu')"
-        @close="$emit('close-user-menu')"
-      />
-      </div>
+        <template #activator="{ props: menuProps }">
+          <VBtn
+            v-bind="menuProps"
+            variant="text"
+            class="layout-app__user-trigger layout-app__user-trigger--vuetify"
+            :title="t('rep.user.menu')"
+            :aria-label="t('rep.user.menu')"
+          >
+            <div class="layout-app__user-info">
+              <span class="layout-app__user-name">{{ userDisplayName }}</span>
+              <span class="layout-app__user-role">{{ userRole }}</span>
+            </div>
+            <span class="layout-app__user-avatar" aria-hidden="true">{{ userInitials }}</span>
+          </VBtn>
+        </template>
+
+        <AppUserMenuPanel
+          :theme="theme"
+          :locale="locale"
+          :show-theme-panel-button="showThemePanelButton"
+          @toggle-theme="$emit('toggle-theme')"
+          @change-locale="(lang: string) => $emit('change-locale', lang)"
+          @open-theme-panel="$emit('open-theme-panel')"
+          @logout="$emit('logout')"
+          @close="menuOpen = false"
+        />
+      </VMenu>
     </div>
   </header>
 </template>
@@ -53,6 +60,7 @@ import { ref, computed } from "vue";
 import { useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
 import AppUserMenuPanel from "./AppUserMenuPanel.vue";
+import AppIcon from "../../components/AppIcon.vue";
 
 defineProps<{
   showUserMenu: boolean;
@@ -60,32 +68,24 @@ defineProps<{
   userDisplayName: string;
   userRole: string;
   userInitials: string;
-  userMenuOpen: boolean;
   theme: "light" | "dark";
   locale: string;
 }>();
 
 defineEmits<{
-  "toggle-user-menu": [];
   "toggle-theme": [];
   "change-locale": [lang: string];
-  "close-user-menu": [];
   "open-theme-panel": [];
   logout: [];
 }>();
 
 const route = useRoute();
 const { t } = useI18n();
-const userWrapRef = ref<HTMLElement | null>(null);
+const menuOpen = ref(false);
 
-/** Module title from current route: t('rep.{routeName}.title'). */
 const moduleTitle = computed(() => {
   const name = route.name;
   return typeof name === "string" ? t(`rep.${name}.title`) : "";
-});
-
-defineExpose({
-  userWrapEl: userWrapRef,
 });
 </script>
 
@@ -155,10 +155,9 @@ defineExpose({
   }
 }
 
-.layout-app__user-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
+.layout-app__action-icon {
+  width: 20px;
+  height: 20px;
 }
 
 .layout-app__user-trigger {
@@ -166,19 +165,9 @@ defineExpose({
   align-items: center;
   gap: 8px;
   padding: 4px 8px 4px 4px;
-  border: none;
   border-radius: 999px;
-  background: transparent;
   color: var(--rep-text, #212121);
-  cursor: pointer;
-  transition: background 0.15s;
   -webkit-tap-highlight-color: transparent;
-}
-
-.layout-app__user-trigger:hover,
-.layout-app__user-trigger:focus-visible {
-  background: color-mix(in srgb, var(--rep-text, #212121) 6%, transparent);
-  outline: none;
 }
 
 .layout-app__user-trigger--vuetify {

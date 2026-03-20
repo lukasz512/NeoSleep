@@ -17,7 +17,7 @@ export const routes: RouteRecordRaw[] = [
   { path: "/hcp/:id", name: "hcp-detail", component: () => import("../views/HCPDetailView.vue"), meta: { layout: "app", requiresAuth: true } },
   { path: "/hco", name: "hco", component: () => import("../views/HCOView.vue"), meta: { layout: "app", requiresAuth: true } },
   { path: "/hco/:id", name: "hco-detail", component: () => import("../views/HCODetailView.vue"), meta: { layout: "app", requiresAuth: true } },
-  { path: "/patients", name: "patients", component: () => import("../views/PatientsView.vue"), meta: { layout: "app", requiresAuth: true } },
+  { path: "/clients", name: "clients", component: () => import("../views/ClientsView.vue"), meta: { layout: "app", requiresAuth: true } },
   { path: "/presentations", name: "presentations", component: () => import("../views/PresentationsView.vue"), meta: { layout: "app", requiresAuth: true } },
   { path: "/:pathMatch(.*)*", redirect: "/dashboard" },
 ];

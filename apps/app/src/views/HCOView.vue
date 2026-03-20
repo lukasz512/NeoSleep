@@ -17,7 +17,7 @@
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import RepEntityList from "../components/RepEntityList.vue";
-import { useRepFilters, type RepFilterDefinition } from "../composables/useRepFilters";
+import { type RepFilterDefinition } from "../composables/useRepFilters";
 import { useAuthStore } from "../stores/auth";
 import { useConfigStore } from "../stores/config";
 
@@ -34,10 +34,10 @@ const hcoFilterDefs: RepFilterDefinition[] = [
 
 const typeOptions = computed(() => [
   { title: t("rep.hco.filters.all"), value: "" },
-  { title: "Clinic", value: "clinic" },
-  { title: "Hospital", value: "hospital" },
-  { title: "Practice", value: "practice" },
-  { title: "Other", value: "other" },
+  { title: t("rep.hco.filters.typeClinic"), value: "clinic" },
+  { title: t("rep.hco.filters.typeHospital"), value: "hospital" },
+  { title: t("rep.hco.filters.typePractice"), value: "practice" },
+  { title: t("rep.hco.filters.typeOther"), value: "other" },
 ]);
 const regionOptions = computed(() => [
   { title: t("rep.hco.filters.all"), value: "" },
@@ -45,9 +45,9 @@ const regionOptions = computed(() => [
 ]);
 const statusOptions = computed(() => [
   { title: t("rep.hco.filters.all"), value: "" },
-  { title: "Active", value: "active" },
-  { title: "Inactive", value: "inactive" },
-  { title: "Pending", value: "pending" },
+  { title: t("rep.hco.filters.statusActive"), value: "active" },
+  { title: t("rep.hco.filters.statusInactive"), value: "inactive" },
+  { title: t("rep.hco.filters.statusPending"), value: "pending" },
 ]);
 
 const hcoFilterDefinitions = computed<RepFilterDefinition[]>(() => [

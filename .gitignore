@@ -40,3 +40,4 @@ secrets/
 .env.test.local
 .env.production.local
 .env.uat.local
+.claude/worktrees/

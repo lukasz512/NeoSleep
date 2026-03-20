@@ -14,9 +14,7 @@
       <!-- Collapsed: icon only -->
       <span v-if="collapsed" class="layout-app__logo-icon" aria-hidden="true">
         <img v-if="iconUrl" :src="iconUrl" alt="" class="layout-app__logo-icon-img" />
-        <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-        </svg>
+        <AppIcon v-else name="moon" />
       </span>
       <!-- Expanded: full wordmark -->
       <img v-else-if="logoUrl" :src="logoUrl" alt="NeoSleep" class="layout-app__logo-wordmark" />
@@ -38,12 +36,14 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { appHomePath } from "../../router/routes";
+import AppIcon from "../../components/AppIcon.vue";
 import {
   BRAND_LOGO_LIGHT_URL,
   BRAND_LOGO_DARK_URL,
   BRAND_ICON_LIGHT_URL,
   BRAND_ICON_DARK_URL,
 } from "../../constants";
+import { useConfigStore } from "../../stores/config";
 
 const props = defineProps<{
   collapsed?: boolean;
@@ -51,13 +51,20 @@ const props = defineProps<{
   theme?: "light" | "dark";
 }>();
 
-const logoUrl = computed(() =>
-  props.theme === "dark" ? BRAND_LOGO_DARK_URL : BRAND_LOGO_LIGHT_URL,
-);
+const configStore = useConfigStore();
 
-const iconUrl = computed(() =>
-  props.theme === "dark" ? BRAND_ICON_DARK_URL : BRAND_ICON_LIGHT_URL,
-);
+// Tenant branding from DB, fallback to static /brand/ assets for default NeoSleep instance.
+const logoUrl = computed(() => {
+  const dark = props.theme === "dark";
+  return (dark ? configStore.config.logo_dark_url : configStore.config.logo_url)
+    ?? (dark ? BRAND_LOGO_DARK_URL : BRAND_LOGO_LIGHT_URL);
+});
+
+const iconUrl = computed(() => {
+  const dark = props.theme === "dark";
+  return (dark ? configStore.config.icon_dark_url : configStore.config.icon_url)
+    ?? (dark ? BRAND_ICON_DARK_URL : BRAND_ICON_LIGHT_URL);
+});
 
 defineEmits<{
   close: [];

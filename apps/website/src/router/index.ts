@@ -7,7 +7,7 @@ import PrivacyView from "../views/PrivacyView.vue";
 import HelpView from "../views/HelpView.vue";
 import CareersView from "../views/CareersView.vue";
 import ForPatientsView from "../views/ForPatientsView.vue";
-import ForDentistsView from "../views/ForDentistsView.vue";
+import ForProfessionalsView from "../views/ForProfessionalsView.vue";
 import FindSpecialistView from "../views/FindSpecialistView.vue";
 
 const routes: RouteRecordRaw[] = [
@@ -18,7 +18,8 @@ const routes: RouteRecordRaw[] = [
   { path: "/help", name: "help", component: HelpView, meta: { layout: "default" } },
   { path: "/careers", name: "careers", component: CareersView, meta: { layout: "default" } },
   { path: "/for-patients", name: "for-patients", component: ForPatientsView, meta: { layout: "default" } },
-  { path: "/for-dentists", name: "for-dentists", component: ForDentistsView, meta: { layout: "default" } },
+  { path: "/for-professionals", name: "for-professionals", component: ForProfessionalsView, meta: { layout: "default" } },
+  { path: "/for-dentists", redirect: "/for-professionals" },
   { path: "/find-specialist", name: "find-specialist", component: FindSpecialistView, meta: { layout: "default" } },
   {
     path: "/:pathMatch(.*)*",

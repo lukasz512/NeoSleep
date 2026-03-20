@@ -26,26 +26,13 @@
         @click="mobileDrawerOpen = !mobileDrawerOpen"
       >
         <span class="layout-app__mobile-menu-trigger-icon" aria-hidden="true">
-          <svg v-if="!mobileDrawerOpen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="4" width="18" height="4" rx="1"/><rect x="3" y="10" width="18" height="4" rx="1"/><rect x="3" y="16" width="18" height="4" rx="1"/>
-          </svg>
-          <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M18 6L6 18M6 6l12 12"/>
-          </svg>
+          <AppIcon :name="mobileDrawerOpen ? 'close' : 'menu'" class="layout-app__mobile-menu-icon" />
         </span>
         <span class="layout-app__mobile-menu-trigger-label">{{ mobileDrawerOpen ? t("layout.sidebar.collapse") : t("layout.sidebar.expand") }}</span>
       </button>
     </div>
 
-    <div
-      v-show="isMobile && mobileDrawerOpen"
-      class="layout-app__mobile-overlay"
-      aria-hidden="true"
-      @click="mobileDrawerOpen = false"
-    />
-
-    <AppMobileDrawer
-      ref="mobileDrawerRef"
+    <AppNavDrawer
       :open="isMobile && mobileDrawerOpen"
       :show-theme-panel-button="isAdmin"
       :user-display-name="userDisplayName"
@@ -54,7 +41,7 @@
       :user-menu-open="mobileDrawerUserMenuOpen"
       :theme="theme"
       :locale="locale"
-      @close="mobileDrawerOpen = false"
+      @close="mobileDrawerOpen = false; mobileDrawerUserMenuOpen = false"
       @toggle-user-menu="mobileDrawerUserMenuOpen = !mobileDrawerUserMenuOpen"
       @toggle-theme="toggleTheme"
       @change-locale="(lang: string) => setLocale(lang as 'en' | 'pl' | 'es')"
@@ -65,23 +52,19 @@
 
     <div class="layout-app__main">
       <AppHeader
-        ref="headerRef"
         :show-user-menu="!isMobile"
         :show-theme-panel-button="isAdmin"
         :user-display-name="userDisplayName"
         :user-role="userRole"
         :user-initials="userInitials"
-        :user-menu-open="userMenuOpen"
         :theme="theme"
         :locale="locale"
-        @toggle-user-menu="userMenuOpen = !userMenuOpen"
         @toggle-theme="toggleTheme"
         @change-locale="(lang: string) => onLangChange(lang as 'en' | 'pl' | 'es')"
-        @close-user-menu="userMenuOpen = false"
         @open-theme-panel="themePanelOpen = true"
         @logout="onLogout"
       />
-      <div class="layout-app__scroll-wrap">
+      <div class="layout-app__scroll-wrap" :class="{ 'layout-app__scroll-wrap--locale-fading': localeTransitioning }">
         <AppGlobalLoader :active="globalLoaderActive" />
         <div
           v-show="globalLoaderActive"
@@ -109,52 +92,31 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useGlobalLoader } from "../composables/useGlobalLoader";
 import { useLayoutState } from "../composables/useLayoutState";
 import {
   AppSidebar,
-  AppMobileDrawer,
+  AppNavDrawer,
   AppHeader,
   AppGlobalLoader,
   ThemePanel,
 } from "./components";
+import AppIcon from "../components/AppIcon.vue";
 
 const { isLoading: globalLoaderActive } = useGlobalLoader();
 const { t } = useI18n();
-
-const headerRef = ref<InstanceType<typeof AppHeader> | null>(null);
-const mobileDrawerRef = ref<InstanceType<typeof AppMobileDrawer> | null>(null);
 
 const {
   theme, toggleTheme, setTheme,
   sidebarCollapsed, toggleSidebar,
   isMobile, mobileDrawerOpen, mobileDrawerUserMenuOpen,
   isAdmin, userDisplayName, userRole, userInitials,
-  userMenuOpen,
-  locale, setLocale, onLangChange,
+  locale, localeTransitioning, setLocale, onLangChange,
   onLogout,
   themePanelOpen, themePanelConfig, onThemeSave, onOpenThemePanelFromDrawer,
   focusMainContent,
 } = useLayoutState();
-
-/** Close user menus when clicking outside their containers. Uses template refs — stays in component. */
-function closeUserMenuOnClickOutside(e: MouseEvent) {
-  const target = e.target as Node;
-  if (!target) return;
-  const el = target as HTMLElement;
-  if (el instanceof HTMLSelectElement || el instanceof HTMLOptionElement || el.closest?.("select")) {
-    return;
-  }
-  const headerEl = headerRef.value?.userWrapEl;
-  if (headerEl && !headerEl.contains(target)) userMenuOpen.value = false;
-  const drawerUserEl = mobileDrawerRef.value?.userMenuEl;
-  if (drawerUserEl && !drawerUserEl.contains(target)) mobileDrawerUserMenuOpen.value = false;
-}
-
-onMounted(() => document.addEventListener("click", closeUserMenuOnClickOutside));
-onUnmounted(() => document.removeEventListener("click", closeUserMenuOnClickOutside));
 </script>
 
 <style scoped src="./AppLayout.css" />

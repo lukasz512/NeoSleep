@@ -1,15 +1,13 @@
 import { Router, type Router as RouterType, type Request, type Response } from "express";
-import { getEvents, getEventById, insertEvent, updateEvent, getFirstUserId, type GetEventsFilters } from "../db.js";
+import { getEvents, getEventById, insertEvent, updateEvent, type GetEventsFilters } from "../db.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
 import { isoDate } from "./utils.js";
+import { requireAuth } from "../middleware/requireAuth.js";
 
 export const eventsRouter: RouterType = Router();
 
-async function getRepIdOrFallback(req: Request): Promise<string | null> {
-  const userId = (req.session as { user?: { id: string } })?.user?.id;
-  if (userId?.trim()) return userId.trim();
-  if (process.env.NODE_ENV !== "production") return await getFirstUserId();
-  return null;
+function getRepId(req: Request): string {
+  return (req.session as { user?: { id: string } }).user!.id;
 }
 
 type EventRow = { id: string; title?: string | null; start_at: Date | string; end_at: Date | string; type: string; status: string; location?: string | null; video_link?: string | null; notes?: string | null; region?: string | null; attendees?: unknown[] };
@@ -32,11 +30,12 @@ function serializeEvent(e: EventRow) {
 
 eventsRouter.get(
   "/api/events",
+  requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
     const start = typeof req.query.start === "string" ? req.query.start.trim() : undefined;
     const end = typeof req.query.end === "string" ? req.query.end.trim() : undefined;
     const region = typeof req.query.region === "string" ? req.query.region.trim() : undefined;
-    const filters: GetEventsFilters = { start, end, region, repId: await getRepIdOrFallback(req) };
+    const filters: GetEventsFilters = { start, end, region, repId: getRepId(req) };
     const { rows } = await getEvents(filters);
     res.json({ items: rows.map(serializeEvent) });
   })
@@ -44,6 +43,7 @@ eventsRouter.get(
 
 eventsRouter.get(
   "/api/events/:id",
+  requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id?.trim();
     if (!id) { res.status(400).json({ error: "Missing event id" }); return; }
@@ -55,9 +55,9 @@ eventsRouter.get(
 
 eventsRouter.post(
   "/api/events",
+  requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const repId = await getRepIdOrFallback(req);
-    if (!repId) { res.status(401).json({ error: "Authentication required to create events" }); return; }
+    const repId = getRepId(req);
     const body = req.body as { title?: string; start_at?: string; end_at?: string; type?: string; status?: string; location?: string; video_link?: string; notes?: string; region?: string; attendees?: { attendee_type: "hcp" | "hco" | "lead"; attendee_id: string; is_primary?: boolean }[] };
     const startAt = typeof body.start_at === "string" ? body.start_at.trim() : "";
     const endAt = typeof body.end_at === "string" ? body.end_at.trim() : "";
@@ -85,6 +85,7 @@ eventsRouter.post(
 
 eventsRouter.patch(
   "/api/events/:id",
+  requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id?.trim();
     if (!id) { res.status(400).json({ error: "Missing event id" }); return; }

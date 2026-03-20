@@ -1,8 +1,8 @@
-import { Router, type Request, type Response } from "express";
-import { getAppConfig, updateAppConfig, type AppConfigUpdate } from "../db.js";
+import { Router, type Router as RouterType, type Request, type Response } from "express";
+import { getAppConfig, updateAppConfig, type AppConfigUpdate, getI18nOverrides, upsertI18nOverrides } from "../db.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
 
-export const configRouter = Router();
+export const configRouter: RouterType = Router();
 
 /** GET /api/config/app – app theme/branding (public, used by website and rep-app). */
 configRouter.get(
@@ -19,8 +19,7 @@ configRouter.patch(
   asyncHandler(async (req: Request, res: Response) => {
     const session = req.session as { user?: { role?: string } } | undefined;
     const isAdmin = session?.user?.role === "admin";
-    const devBypass = process.env.NODE_ENV !== "production" && !session?.user;
-    if (!isAdmin && !devBypass) {
+    if (!isAdmin) {
       res.status(403).json({ error: "Admin only" });
       return;
     }
@@ -57,5 +56,41 @@ configRouter.patch(
     }
     const config = await updateAppConfig(updates);
     res.json(config);
+  })
+);
+
+/** GET /api/config/i18n – DB label overrides (public, layered on top of static JSON in frontend). */
+configRouter.get(
+  "/api/config/i18n",
+  asyncHandler(async (_req: Request, res: Response) => {
+    const overrides = await getI18nOverrides();
+    res.json(overrides);
+  })
+);
+
+/** PATCH /api/config/i18n – upsert label overrides (admin only).
+ *  Body: { locale: "en" | "pl" | "es", overrides: { "key": "value" | null } }
+ *  null value removes the override (falls back to static JSON).
+ */
+configRouter.patch(
+  "/api/config/i18n",
+  asyncHandler(async (req: Request, res: Response) => {
+    const session = req.session as { user?: { role?: string } } | undefined;
+    const isAdmin = session?.user?.role === "admin";
+    if (!isAdmin) {
+      res.status(403).json({ error: "Admin only" });
+      return;
+    }
+    const { locale, overrides } = req.body as { locale?: string; overrides?: Record<string, string | null> };
+    if (!locale || typeof locale !== "string" || !["en", "pl", "es"].includes(locale)) {
+      res.status(400).json({ error: "locale must be one of: en, pl, es" });
+      return;
+    }
+    if (!overrides || typeof overrides !== "object" || Array.isArray(overrides)) {
+      res.status(400).json({ error: "overrides must be an object { key: value | null }" });
+      return;
+    }
+    const updated = await upsertI18nOverrides(locale, overrides);
+    res.json(updated);
   })
 );

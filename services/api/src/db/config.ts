@@ -6,10 +6,15 @@ export interface AppConfig {
   primary_color_dark: string;
   secondary_color_dark: string;
   border_radius: string;
-  logo_url: string | null;
   surface_color: string;
   hero_container_style: "compact" | "wide";
   color_scheme: "light" | "dark";
+  // Branding — all nullable: fall back to static /brand/ assets when not set
+  tenant_name: string;
+  logo_url: string | null;
+  logo_dark_url: string | null;
+  icon_url: string | null;
+  icon_dark_url: string | null;
 }
 
 export type AppConfigUpdate = Partial<
@@ -33,10 +38,14 @@ const DEFAULT_APP_CONFIG: AppConfig = {
   primary_color_dark: "#42a5f5",
   secondary_color_dark: "#66bb6a",
   border_radius: "8px",
-  logo_url: null,
   surface_color: "#fafafa",
   hero_container_style: "compact",
   color_scheme: "light",
+  tenant_name: "NeoSleep",
+  logo_url: null,
+  logo_dark_url: null,
+  icon_url: null,
+  icon_dark_url: null,
 };
 
 export async function getAppConfig(): Promise<AppConfig> {
@@ -44,27 +53,33 @@ export async function getAppConfig(): Promise<AppConfig> {
   if (!p) return DEFAULT_APP_CONFIG;
   try {
     const result = await p.query<AppConfig>(
-      `SELECT primary_color, secondary_color, border_radius, logo_url,
-              COALESCE(surface_color, $1) AS surface_color,
+      `SELECT primary_color, secondary_color, border_radius,
+              logo_url, logo_dark_url, icon_url, icon_dark_url,
+              COALESCE(NULLIF(tenant_name, ''), $1) AS tenant_name,
+              COALESCE(surface_color, $2) AS surface_color,
               COALESCE(NULLIF(hero_container_style, ''), 'compact') AS hero_container_style,
               COALESCE(NULLIF(color_scheme, ''), 'light') AS color_scheme,
-              COALESCE(primary_color_dark, $2) AS primary_color_dark,
-              COALESCE(secondary_color_dark, $3) AS secondary_color_dark
+              COALESCE(primary_color_dark, $3) AS primary_color_dark,
+              COALESCE(secondary_color_dark, $4) AS secondary_color_dark
        FROM tbl_app_config LIMIT 1`,
-      [DEFAULT_APP_CONFIG.surface_color, DEFAULT_APP_CONFIG.primary_color_dark, DEFAULT_APP_CONFIG.secondary_color_dark]
+      [DEFAULT_APP_CONFIG.tenant_name, DEFAULT_APP_CONFIG.surface_color, DEFAULT_APP_CONFIG.primary_color_dark, DEFAULT_APP_CONFIG.secondary_color_dark]
     );
     const row = result.rows[0];
     if (!row) return DEFAULT_APP_CONFIG;
     return {
-      primary_color: row.primary_color ?? DEFAULT_APP_CONFIG.primary_color,
-      secondary_color: row.secondary_color ?? DEFAULT_APP_CONFIG.secondary_color,
-      primary_color_dark: row.primary_color_dark ?? DEFAULT_APP_CONFIG.primary_color_dark,
+      primary_color:        row.primary_color        ?? DEFAULT_APP_CONFIG.primary_color,
+      secondary_color:      row.secondary_color      ?? DEFAULT_APP_CONFIG.secondary_color,
+      primary_color_dark:   row.primary_color_dark   ?? DEFAULT_APP_CONFIG.primary_color_dark,
       secondary_color_dark: row.secondary_color_dark ?? DEFAULT_APP_CONFIG.secondary_color_dark,
-      border_radius: row.border_radius ?? DEFAULT_APP_CONFIG.border_radius,
-      logo_url: row.logo_url ?? null,
-      surface_color: row.surface_color ?? DEFAULT_APP_CONFIG.surface_color,
+      border_radius:        row.border_radius        ?? DEFAULT_APP_CONFIG.border_radius,
+      surface_color:        row.surface_color        ?? DEFAULT_APP_CONFIG.surface_color,
       hero_container_style: row.hero_container_style === "wide" ? "wide" : "compact",
-      color_scheme: row.color_scheme === "dark" ? "dark" : "light",
+      color_scheme:         row.color_scheme         === "dark" ? "dark" : "light",
+      tenant_name:          row.tenant_name          ?? DEFAULT_APP_CONFIG.tenant_name,
+      logo_url:             row.logo_url             ?? null,
+      logo_dark_url:        row.logo_dark_url        ?? null,
+      icon_url:             row.icon_url             ?? null,
+      icon_dark_url:        row.icon_dark_url        ?? null,
     };
   } catch (err) {
     console.error("getAppConfig error:", err);

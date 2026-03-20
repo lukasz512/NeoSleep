@@ -27,6 +27,17 @@ function extractErrorMessage(bodyText: string): string {
   return bodyText;
 }
 
+export async function sendFrontendError(message: string, stack: string, meta: Record<string, unknown> = {}) {
+  try {
+    await fetch(`${getApiUrl()}/api/logs`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ level: "error", message: message.slice(0, 500), stack: stack.slice(0, 2000), source: "frontend", metadata: meta }),
+    });
+  } catch { /* ignore */ }
+}
+
 async function sendErrorLog(path: string, status: number, message: string) {
   try {
     await fetch(`${getApiUrl()}/api/logs`, {
@@ -46,7 +57,8 @@ export async function apiFetch(path: string, options: ApiFetchOptions = {}): Pro
     const bodyText = await res.clone().text().catch(() => "");
     const message = extractErrorMessage(bodyText) || res.statusText || `HTTP ${res.status}`;
     const toShow = errorMessageKey ? message : `Request failed: ${res.status} ${path}`;
-    useNotifications().show(toShow, "error", errorMessageKey);
+    const notifications = useNotifications();
+    notifications.show(toShow, "error", errorMessageKey);
     await sendErrorLog(path, res.status, message);
   }
 

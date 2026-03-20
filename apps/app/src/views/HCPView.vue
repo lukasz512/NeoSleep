@@ -41,17 +41,14 @@ import RepEntityList from "../components/RepEntityList.vue";
 import { apiFetch } from "../utils/api";
 import { useNotifications } from "../composables/useNotifications";
 import GenderIcon from "../components/GenderIcon.vue";
-import { useRepFilters, type RepFilterDefinition } from "../composables/useRepFilters";
-import { useAuthStore } from "../stores/auth";
+import { type RepFilterDefinition } from "../composables/useRepFilters";
 import { useConfigStore } from "../stores/config";
 import { getGenderFromName } from "../utils/genderFromName";
 
 const LeadContactForm = defineAsyncComponent(() => import("../components/LeadContactForm.vue"));
 
 const { t } = useI18n();
-const authStore = useAuthStore();
 const configStore = useConfigStore();
-const isAdmin = computed(() => authStore.user?.role === "admin");
 const showAddModal = ref(false);
 const notifications = useNotifications();
 

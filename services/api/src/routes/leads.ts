@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { getLeadsPaginated, getLeadById, insertLead, updateLead, insertAuditLog, type GetLeadsFilters } from "../db.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
 import { parsePaginationParams, toFilterArray, isoDate, requireDb } from "./utils.js";
+import { requireAuth } from "../middleware/requireAuth.js";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -36,6 +37,7 @@ export const leadsRouter = Router();
 
 leadsRouter.get(
   "/api/leads",
+  requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
     const { page, limit, sortBy, sortOrder, filters } = parseLeadsQuery(req);
     const { rows, total } = await getLeadsPaginated(filters, page, limit, sortBy, sortOrder);
@@ -45,6 +47,7 @@ leadsRouter.get(
 
 leadsRouter.get(
   "/api/leads/:id",
+  requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id?.trim();
     if (!id) { res.status(400).json({ error: "Missing lead id" }); return; }

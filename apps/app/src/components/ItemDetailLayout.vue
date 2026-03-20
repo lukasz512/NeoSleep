@@ -10,9 +10,7 @@
         :title="backLabel"
         :aria-label="backLabel"
       >
-        <svg class="view-item__back-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <path d="M19 12H5M12 19l-7-7 7-7"/>
-        </svg>
+        <AppIcon name="arrow-left" class="view-item__back-icon" />
       </VBtn>
       <div v-if="$slots['header-title']" class="view-item__header-title">
         <slot name="header-title" />
@@ -44,9 +42,7 @@
         :title="backLabel"
         :aria-label="backLabel"
       >
-        <svg class="view-item__back-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <path d="M19 12H5M12 19l-7-7 7-7"/>
-        </svg>
+        <AppIcon name="arrow-left" class="view-item__back-icon" />
       </VBtn>
     </div>
     <div v-else class="view-item__loading">
@@ -58,6 +54,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { RouteLocationRaw } from "vue-router";
+import AppIcon from "./AppIcon.vue";
 
 defineProps<{
   /** Whether item data is loaded and present. */
