@@ -34,9 +34,9 @@ function resolveInitialLocale(): "en" | "pl" | "mx" {
 const savedLocale = resolveInitialLocale();
 
 const localeLoaders: Record<string, () => Promise<Record<string, unknown>>> = {
-  en: async () => ({ ...(await import("@neo/i18n/en.json")).default, $vuetify: vuetifyEn }),
-  pl: async () => ({ ...(await import("@neo/i18n/pl.json")).default, $vuetify: vuetifyPl }),
-  mx: async () => ({ ...(await import("@neo/i18n/mx.json")).default, $vuetify: vuetifyEs }),
+  en: async () => ({ ...(await import("@i18n/en.json")).default, $vuetify: vuetifyEn }),
+  pl: async () => ({ ...(await import("@i18n/pl.json")).default, $vuetify: vuetifyPl }),
+  mx: async () => ({ ...(await import("@i18n/mx.json")).default, $vuetify: vuetifyEs }),
 };
 
 const initialMessages = await localeLoaders[savedLocale]();

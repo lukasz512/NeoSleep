@@ -122,7 +122,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { useReveal } from "@neo/shared/composables/useReveal";
+import { useReveal } from "@shared/composables/useReveal";
 import { useSeoMeta } from "../composables/useSeoMeta";
 
 const { t } = useI18n();

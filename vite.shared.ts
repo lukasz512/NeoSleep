@@ -49,11 +49,13 @@ export function sharedViteConfig(appDir: string): Partial<UserConfig> {
     plugins: [brandAssetsPlugin(appDir)],
     resolve: {
       alias: {
-        "@neo/i18n":    path.resolve(rootDir, "platform/i18n"),
-        "@neo/brand":   brandDir,
-        "@neo/shared":  path.resolve(rootDir, "platform/shared"),
-        "@neo/api": path.resolve(rootDir, "packages/api/src/index.ts"),
-        "@neo/ui":  path.resolve(rootDir, "packages/ui/src/index.ts"),
+        "@i18n":    path.resolve(rootDir, "platform/i18n"),
+        "@brand":   brandDir,
+        "@shared":  path.resolve(rootDir, "platform/shared"),
+        "@api":     path.resolve(rootDir, "packages/api/src/index.ts"),
+        "@ui":      path.resolve(rootDir, "packages/ui/src/index.ts"),
+        "@stores":  path.resolve(rootDir, "packages/stores/src/index.ts"),
+        "@vuetify": path.resolve(rootDir, "packages/vuetify/src/index.ts"),
       },
     },
   };
@@ -63,11 +65,13 @@ export function sharedViteConfig(appDir: string): Partial<UserConfig> {
 export function sharedVitestResolve(): UserConfig["resolve"] {
   return {
     alias: {
-      "@neo/i18n":    path.resolve(rootDir, "platform/i18n"),
-      "@neo/brand":   brandDir,
-      "@neo/shared":  path.resolve(rootDir, "platform/shared"),
-      "@neo/api": path.resolve(rootDir, "packages/api/src/index.ts"),
-      "@neo/ui":  path.resolve(rootDir, "packages/ui/src/index.ts"),
+      "@i18n":    path.resolve(rootDir, "platform/i18n"),
+      "@brand":   brandDir,
+      "@shared":  path.resolve(rootDir, "platform/shared"),
+      "@api":     path.resolve(rootDir, "packages/api/src/index.ts"),
+      "@ui":      path.resolve(rootDir, "packages/ui/src/index.ts"),
+      "@stores":  path.resolve(rootDir, "packages/stores/src/index.ts"),
+      "@vuetify": path.resolve(rootDir, "packages/vuetify/src/index.ts"),
     },
   };
 }

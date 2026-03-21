@@ -57,7 +57,7 @@ import { ref, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useImage } from "@vueuse/core";
 import { IconBox } from "./icons";
-import { useReveal } from "@neo/shared/composables/useReveal";
+import { useReveal } from "@shared/composables/useReveal";
 import type { SplitSectionConfig, FeatureItem } from "../config/websiteContent";
 
 const props = defineProps<{ section: SplitSectionConfig }>();

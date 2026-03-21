@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
-import type { ApiFetchOptions } from "@neo/api";
+import type { ApiFetchOptions } from "@api";
 
 export type UserRole = "admin" | "manager" | "rep";
 
@@ -20,7 +20,7 @@ type ApiFetchFn = (path: string, options?: ApiFetchOptions) => Promise<Response>
  *
  * @example
  * // apps/app/src/stores/auth.ts
- * import { createAuthStore } from "@neo/stores";
+ * import { createAuthStore } from "@stores";
  * import { apiFetch } from "../utils/api";
  * export const useAuthStore = createAuthStore(apiFetch);
  */

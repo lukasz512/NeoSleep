@@ -1,7 +1,7 @@
 import { ref, computed } from "vue";
 import { onClickOutside } from "@vueuse/core";
 import { useWebsiteLocale } from "./useWebsiteLocale";
-import { LANGUAGE_OPTIONS } from "@neo/i18n/language-options";
+import { LANGUAGE_OPTIONS } from "@i18n/language-options";
 import type { WebsiteLocale } from "./useWebsiteLocale";
 
 export function useLanguageSelect() {

@@ -3,5 +3,5 @@
 </template>
 
 <script setup lang="ts">
-import { LoginView } from "@neo/ui";
+import { LoginView } from "@ui";
 </script>

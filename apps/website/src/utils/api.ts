@@ -1,4 +1,4 @@
-import { createApiFetch, type ApiFetchOptions } from "@neo/api";
+import { createApiFetch, type ApiFetchOptions } from "@api";
 
 export type { ApiFetchOptions };
 

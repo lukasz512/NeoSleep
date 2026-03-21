@@ -6,10 +6,14 @@
     "types": ["vitest/globals", "node", "vite/client"],
     "baseUrl": ".",
     "paths": {
-      "@i18n/*":    ["../../i18n/*"],
-      "@brand/*":   ["../../brand/*"],
-      "@shared/*":  ["../../shared/*"]
+      "@i18n/*":    ["../../platform/i18n/*"],
+      "@brand/*":   ["../../platform/brand/*"],
+      "@shared/*":  ["../../platform/shared/*"],
+      "@api":       ["../../packages/api/src/index.ts"],
+      "@ui":        ["../../packages/ui/src/index.ts"],
+      "@stores":    ["../../packages/stores/src/index.ts"],
+      "@vuetify":   ["../../packages/vuetify/src/index.ts"]
     }
   },
-  "include": ["src", "../../shared"]
+  "include": ["src", "../../platform/shared"]
 }

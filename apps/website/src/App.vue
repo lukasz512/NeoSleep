@@ -10,11 +10,11 @@
 
 <script setup lang="ts">
 import DefaultLayout from "./layouts/DefaultLayout.vue";
-import { useDocumentLang } from "@neo/shared/composables/useDocumentLang";
+import { useDocumentLang } from "@shared/composables/useDocumentLang";
 import { useAppHead } from "./composables/useAppHead";
-import { useSmoothScrollAnchors } from "@neo/shared/composables/useSmoothScrollAnchors";
+import { useSmoothScrollAnchors } from "@shared/composables/useSmoothScrollAnchors";
 import "./assets/website-theme.scss";
-import "@neo/shared/styles/transitions.css";
+import "@shared/styles/transitions.css";
 
 useDocumentLang();
 useAppHead();

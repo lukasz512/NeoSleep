@@ -5,7 +5,14 @@
     "emitDeclarationOnly": true,
     "types": ["vitest/globals", "vite/client"],
     "baseUrl": ".",
-    "paths": { "@i18n/*": ["../../i18n/*"], "@brand/*": ["../../brand/*"], "@shared/*": ["../../shared/*"] }
+    "paths": {
+      "@i18n/*":    ["../../platform/i18n/*"],
+      "@brand/*":   ["../../platform/brand/*"],
+      "@shared/*":  ["../../platform/shared/*"],
+      "@api":       ["../../packages/api/src/index.ts"],
+      "@ui":        ["../../packages/ui/src/index.ts"],
+      "@stores":    ["../../packages/stores/src/index.ts"]
+    }
   },
-  "include": ["src", "../../i18n", "../../shared"]
+  "include": ["src", "../../platform/i18n", "../../platform/shared"]
 }

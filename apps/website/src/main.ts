@@ -25,9 +25,9 @@ const supportedLocales = ["en", "pl", "mx"] as const;
 const tenantId = getTenantId();
 
 const [en, pl, mx, tEn, tPl, tMx] = await Promise.all([
-  import("@neo/i18n/en.json").then((m) => m.default),
-  import("@neo/i18n/pl.json").then((m) => m.default),
-  import("@neo/i18n/mx.json").then((m) => m.default),
+  import("@i18n/en.json").then((m) => m.default),
+  import("@i18n/pl.json").then((m) => m.default),
+  import("@i18n/mx.json").then((m) => m.default),
   loadTenantOverlay(tenantId, "en"),
   loadTenantOverlay(tenantId, "pl"),
   loadTenantOverlay(tenantId, "mx"),

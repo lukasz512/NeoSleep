@@ -2,10 +2,10 @@
  * Vuetify 3 plugin for rep-app.
  * Theme names and brand colors are passed to the shared factory.
  */
-import { createNeoVuetify } from "@neo/vuetify";
+import { createNeoVuetify } from "@vuetify";
 import { useI18n } from "vue-i18n";
 import { i18n } from "./i18n";
-import { brandColors } from "@neo/brand/colors";
+import { brandColors } from "@brand/colors";
 
 export const repLightTheme = "repLight";
 export const repDarkTheme  = "repDark";

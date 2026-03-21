@@ -6,7 +6,7 @@ import App from "./App.vue";
 import HomeView from "./views/HomeView.vue";
 import DefaultLayout from "./layouts/DefaultLayout.vue";
 
-const messages = await import("@neo/i18n/en.json").then((m) => m.default);
+const messages = await import("@i18n/en.json").then((m) => m.default);
 const i18n = createI18n({ legacy: false, locale: "en", messages: { en: messages } });
 
 describe("Website app", () => {

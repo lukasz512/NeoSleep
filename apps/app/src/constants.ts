@@ -30,4 +30,4 @@ export const BRAND_ICON_LIGHT_URL = "/brand/logos/icon/icon_light.svg";
 export const BRAND_ICON_DARK_URL = "/brand/logos/icon/icon_dark.svg";
 
 /** App language options for the user menu (single source of truth). */
-export { LANGUAGE_OPTIONS as REP_LANGUAGE_OPTIONS } from "@neo/i18n/language-options";
+export { LANGUAGE_OPTIONS as REP_LANGUAGE_OPTIONS } from "@i18n/language-options";

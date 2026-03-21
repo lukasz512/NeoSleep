@@ -1,4 +1,4 @@
-@import "@neo/shared/styles/transitions.css";
+@import "@shared/styles/transitions.css";
 
 /* ── Staggered list animation (RepEntityList mobile feed) ────────────────── */
 .list-stagger-move,

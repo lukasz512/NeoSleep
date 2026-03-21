@@ -3,7 +3,7 @@
  * When the API returns JSON like `{"error":"..."}` or `{"message":"..."}`, the notification shows ONLY the
  * extracted string. Never show raw JSON in the notification. See foundation/docs/OBSERVABILITY_AND_LOGGING.md.
  */
-import { createApiFetch, extractErrorMessage, type ApiFetchOptions } from "@neo/api";
+import { createApiFetch, extractErrorMessage, type ApiFetchOptions } from "@api";
 import { getApiUrl } from "../constants";
 import { useNotifications } from "../composables/useNotifications";
 

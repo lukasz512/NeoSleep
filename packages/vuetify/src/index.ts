@@ -2,7 +2,7 @@
  * Shared Vuetify 3 factory for NeoSleep apps.
  *
  * Usage in plugins/vuetify.ts:
- *   import { createNeoVuetify } from "@neo/vuetify";
+ *   import { createNeoVuetify } from "@vuetify";
  *   import { createVueI18nAdapter } from "vuetify/locale/adapters/vue-i18n";
  *   import { useI18n } from "vue-i18n";
  *   import { i18n } from "./i18n";

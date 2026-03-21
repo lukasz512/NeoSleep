@@ -104,10 +104,10 @@
 import { ref, computed, defineAsyncComponent, inject } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
-import { createConfigStore } from "@neo/stores";
+import { createConfigStore } from "@stores";
 import { createUseLoginFlow } from "../composables/useLoginFlow";
-import type { ApiFetchOptions } from "@neo/api";
-import { createAuthStore } from "@neo/stores";
+import type { ApiFetchOptions } from "@api";
+import { createAuthStore } from "@stores";
 
 type ApiFetchFn = (path: string, options?: ApiFetchOptions) => Promise<Response>;
 

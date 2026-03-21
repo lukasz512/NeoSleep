@@ -6,7 +6,7 @@
 import { computed } from "vue";
 import { useRoute } from "vue-router";
 import { PublicLayout, AppLayout } from "./router";
-import { useDocumentLang } from "@neo/shared/composables/useDocumentLang";
+import { useDocumentLang } from "@shared/composables/useDocumentLang";
 
 useDocumentLang();
 

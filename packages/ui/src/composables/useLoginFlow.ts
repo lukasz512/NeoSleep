@@ -1,7 +1,7 @@
 import { ref, computed } from "vue";
 import { useRouter, useRoute } from "vue-router";
-import { createAuthStore } from "@neo/stores";
-import type { ApiFetchOptions } from "@neo/api";
+import { createAuthStore } from "@stores";
+import type { ApiFetchOptions } from "@api";
 
 type ApiFetchFn = (path: string, options?: ApiFetchOptions) => Promise<Response>;
 

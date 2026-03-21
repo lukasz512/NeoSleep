@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import en from "@neo/i18n/en.json";
-import pl from "@neo/i18n/pl.json";
-import mx from "@neo/i18n/mx.json";
+import en from "@i18n/en.json";
+import pl from "@i18n/pl.json";
+import mx from "@i18n/mx.json";
 
 const REP_APP_I18N_KEYS = [
   "app.common.ok",

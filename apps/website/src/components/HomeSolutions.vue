@@ -45,7 +45,7 @@
 import { ref, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { IconBox } from "./icons";
-import { useReveal } from "@neo/shared/composables/useReveal";
+import { useReveal } from "@shared/composables/useReveal";
 import { solutionCards, solutionsCtaTo, type SolutionCard } from "../config/websiteContent";
 
 const { t } = useI18n();
