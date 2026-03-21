@@ -1,13 +1,13 @@
 import type { RouteRecordRaw } from "vue-router";
-import DefaultLayout from "../layouts/DefaultLayout.vue";
+import PublicLayout from "../layouts/PublicLayout.vue";
 import AppLayout from "../layouts/AppLayout.vue";
 
-export { DefaultLayout, AppLayout };
+export { PublicLayout, AppLayout };
 
 /** App starts at login; root and unknown paths send unauthenticated users to /login. */
 export const routes: RouteRecordRaw[] = [
   { path: "/", redirect: "/login" },
-  { path: "/login", name: "login", component: () => import("../views/LoginView.vue"), meta: { layout: "default", public: true } },
+  { path: "/login", name: "login", component: () => import("../views/LoginView.vue"), meta: { layout: "public", public: true } },
   { path: "/dev", name: "dev", component: () => import("../views/DevView.vue"), meta: { layout: "app", devOnly: true } },
   { path: "/dashboard", name: "dashboard", component: () => import("../views/DashboardView.vue"), meta: { layout: "app", requiresAuth: true } },
   { path: "/leads", name: "leads", component: () => import("../views/LeadsView.vue"), meta: { layout: "app", requiresAuth: true } },
@@ -17,7 +17,7 @@ export const routes: RouteRecordRaw[] = [
   { path: "/hcp/:id", name: "hcp-detail", component: () => import("../views/HCPDetailView.vue"), meta: { layout: "app", requiresAuth: true } },
   { path: "/hco", name: "hco", component: () => import("../views/HCOView.vue"), meta: { layout: "app", requiresAuth: true } },
   { path: "/hco/:id", name: "hco-detail", component: () => import("../views/HCODetailView.vue"), meta: { layout: "app", requiresAuth: true } },
-  { path: "/clients", name: "clients", component: () => import("../views/ClientsView.vue"), meta: { layout: "app", requiresAuth: true } },
+  { path: "/patients", name: "patients", component: () => import("../views/PatientsView.vue"), meta: { layout: "app", requiresAuth: true } },
   { path: "/presentations", name: "presentations", component: () => import("../views/PresentationsView.vue"), meta: { layout: "app", requiresAuth: true } },
   { path: "/:pathMatch(.*)*", redirect: "/dashboard" },
 ];
@@ -43,7 +43,7 @@ export const appHomePath = appNavRoutes[0]?.path ?? "/dashboard";
 
 /** Overrides for route names whose i18n key doesn't follow the `rep.<name>.title` convention. */
 const NAV_TITLE_KEY_OVERRIDES: Record<string, string> = {
-  clients: "app.clients.title",
+  patients: "app.patients.title",
 };
 
 /** Returns the i18n key for a nav route name. */

@@ -74,4 +74,4 @@ if (isDev) {
 
 export default router;
 export { routes, appNavRoutes, appHomePath } from "./routes";
-export { DefaultLayout, AppLayout } from "./routes";
+export { PublicLayout, AppLayout } from "./routes";

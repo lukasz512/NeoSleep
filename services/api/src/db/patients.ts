@@ -1,11 +1,30 @@
+import { getDb } from "./connection.js";
+import { AppError, DatabaseError } from "../errors.js";
+
+function isoDate(val: Date | string | null | undefined): string {
+  if (!val) return "";
+  return val instanceof Date ? val.toISOString() : String(val);
+}
+
+export type PatientReferredBySource = "website" | "instagram" | "facebook" | "hcp_referral" | "event" | "other";
+
 export interface Patient {
   id: string;
-  name: string;
-  diagnosis: string;
-  referred_by: string;
+  salutation: string | null;
+  first_name: string;
+  last_name: string;
+  email: string | null;
+  phone: string | null;
+  reason: string | null;
+  referred_by: string | null;
+  referred_by_source: PatientReferredBySource | null;
+  hcp_id: string | null;
   status: string;
   region: string;
-  created_at: Date;
+  country: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface GetPatientsFilters {
@@ -14,32 +33,197 @@ export interface GetPatientsFilters {
   region?: string;
 }
 
-// Mock-only until tbl_patients migration is implemented
-const MOCK_PATIENTS: Patient[] = [
-  { id: "mock-pat-01", name: "Andrzej Kowalski",    diagnosis: "OSA — Obstructive Sleep Apnea",    referred_by: "Dr Kowalska",    status: "active",     region: "Central", created_at: new Date("2025-10-05") },
-  { id: "mock-pat-02", name: "Marta Nowak",          diagnosis: "Snoring + Mild OSA",               referred_by: "Dr Nowak",       status: "follow-up",  region: "Central", created_at: new Date("2025-10-08") },
-  { id: "mock-pat-03", name: "Tomasz Wierzbicki",   diagnosis: "Severe OSA",                       referred_by: "Dr Wiśniewska",  status: "active",     region: "North",   created_at: new Date("2025-10-10") },
-  { id: "mock-pat-04", name: "Katarzyna Jabłońska", diagnosis: "UARS",                             referred_by: "Dr Zieliński",   status: "active",     region: "North",   created_at: new Date("2025-10-12") },
-  { id: "mock-pat-05", name: "Paweł Kozłowski",     diagnosis: "Moderate OSA + Hypertension",      referred_by: "Dr Wójcik",      status: "active",     region: "South",   created_at: new Date("2025-10-14") },
-  { id: "mock-pat-06", name: "Ewa Malinowska",       diagnosis: "Severe OSA",                       referred_by: "Dr Kaczmarek",   status: "follow-up",  region: "South",   created_at: new Date("2025-10-16") },
-  { id: "mock-pat-07", name: "Robert Szymański",    diagnosis: "OSA post-surgery",                 referred_by: "Dr Lewandowska", status: "active",     region: "West",    created_at: new Date("2025-10-18") },
-  { id: "mock-pat-08", name: "Agnieszka Wiśniewska",diagnosis: "Mild OSA",                         referred_by: "Dr Dąbrowski",   status: "discharged", region: "West",    created_at: new Date("2025-10-20") },
-  { id: "mock-pat-09", name: "Mariusz Krawczyk",    diagnosis: "Severe OSA",                       referred_by: "Dr Szymańska",   status: "active",     region: "Central", created_at: new Date("2025-10-22") },
-  { id: "mock-pat-10", name: "Zofia Michalska",      diagnosis: "OSA + GERD",                       referred_by: "Dr Jankowski",   status: "follow-up",  region: "Central", created_at: new Date("2025-10-24") },
-  { id: "mock-pat-11", name: "Bartłomiej Kowalczyk",diagnosis: "CPAP non-compliant — Severe OSA",  referred_by: "Dr Kowalczyk",   status: "active",     region: "South",   created_at: new Date("2025-10-26") },
-  { id: "mock-pat-12", name: "Natalia Piotrowska",   diagnosis: "Positional OSA",                   referred_by: "Dr Wiśniewski",  status: "active",     region: "North",   created_at: new Date("2025-10-28") },
-];
+export interface PatientInsert {
+  salutation?: string;
+  first_name: string;
+  last_name: string;
+  email?: string;
+  phone?: string;
+  reason?: string;
+  referred_by?: string;
+  referred_by_source?: PatientReferredBySource;
+  hcp_id?: string;
+  status?: string;
+  region?: string;
+  country?: string;
+  notes?: string;
+}
+
+export interface PatientUpdate {
+  salutation?: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  phone?: string;
+  reason?: string;
+  referred_by?: string;
+  referred_by_source?: PatientReferredBySource;
+  hcp_id?: string;
+  status?: string;
+  region?: string;
+  country?: string;
+  notes?: string;
+}
+
+function buildName(p: { salutation: string | null; first_name: string; last_name: string }): string {
+  return [p.salutation, p.first_name, p.last_name].filter(Boolean).join(" ");
+}
+
+function serialize(row: {
+  id: string; salutation: string | null; first_name: string; last_name: string;
+  email: string | null; phone: string | null; reason: string | null; referred_by: string | null;
+  referred_by_source: PatientReferredBySource | null;
+  hcp_id: string | null; status: string; region: string; country: string | null;
+  notes: string | null; created_at: Date | string; updated_at: Date | string;
+}): Patient {
+  return {
+    id: row.id,
+    salutation: row.salutation,
+    first_name: row.first_name,
+    last_name: row.last_name,
+    email: row.email,
+    phone: row.phone,
+    reason: row.reason,
+    referred_by: row.referred_by,
+    referred_by_source: row.referred_by_source,
+    hcp_id: row.hcp_id,
+    status: row.status,
+    region: row.region,
+    country: row.country,
+    notes: row.notes,
+    created_at: isoDate(row.created_at),
+    updated_at: isoDate(row.updated_at),
+  };
+}
+
+type PatientRow = {
+  id: string; salutation: string | null; first_name: string; last_name: string;
+  email: string | null; phone: string | null; reason: string | null; referred_by: string | null;
+  referred_by_source: PatientReferredBySource | null;
+  hcp_id: string | null; status: string; region: string; country: string | null;
+  notes: string | null; created_at: Date; updated_at: Date;
+};
 
 export async function getPatientsPaginated(
   filters: GetPatientsFilters,
   page: number,
-  limit: number
-): Promise<{ rows: Patient[]; total: number }> {
-  let rows = [...MOCK_PATIENTS];
-  const q = filters.search?.trim().toLowerCase() ?? "";
-  if (q) rows = rows.filter((r) => `${r.name} ${r.diagnosis} ${r.referred_by} ${r.region}`.toLowerCase().includes(q));
-  if (filters.status?.trim()) rows = rows.filter((r) => r.status === filters.status);
-  if (filters.region?.trim()) rows = rows.filter((r) => r.region === filters.region);
-  const total = rows.length;
-  return { rows: rows.slice((page - 1) * limit, page * limit), total };
+  limit: number,
+  sortBy = "created_at",
+  sortOrder: "asc" | "desc" = "desc"
+): Promise<{ rows: (Patient & { name: string })[]; total: number }> {
+  const allowed = ["created_at", "last_name", "first_name", "status", "region", "referred_by"];
+  const col = allowed.includes(sortBy) ? sortBy : "created_at";
+  const dir = sortOrder === "asc" ? "ASC" : "DESC";
+
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+
+  if (filters.search?.trim()) {
+    params.push(`%${filters.search.trim().toLowerCase()}%`);
+    conditions.push(
+      `(LOWER(first_name || ' ' || last_name) LIKE $${params.length}
+       OR LOWER(COALESCE(reason,'')) LIKE $${params.length}
+       OR LOWER(COALESCE(referred_by,'')) LIKE $${params.length}
+       OR LOWER(region) LIKE $${params.length})`
+    );
+  }
+  if (filters.status?.trim()) {
+    params.push(filters.status.trim());
+    conditions.push(`status = $${params.length}`);
+  }
+  if (filters.region?.trim()) {
+    params.push(filters.region.trim());
+    conditions.push(`region = $${params.length}`);
+  }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+  try {
+    const countResult = await getDb().query<{ count: string }>(
+      `SELECT COUNT(*) AS count FROM tbl_clients ${where}`,
+      params
+    );
+    const total = parseInt(countResult.rows[0]?.count ?? "0", 10);
+
+    const offset = (page - 1) * limit;
+    params.push(limit, offset);
+    const dataResult = await getDb().query<PatientRow>(
+      `SELECT * FROM tbl_clients ${where}
+       ORDER BY ${col} ${dir}
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params
+    );
+    return { rows: dataResult.rows.map((r) => ({ ...serialize(r), name: buildName(r) })), total };
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getPatientsPaginated", err);
+  }
+}
+
+export async function getPatientById(id: string): Promise<(Patient & { name: string }) | null> {
+  try {
+    const result = await getDb().query<PatientRow>(`SELECT * FROM tbl_clients WHERE id = $1`, [id]);
+    if (!result.rows[0]) return null;
+    const r = result.rows[0];
+    return { ...serialize(r), name: buildName(r) };
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getPatientById", err);
+  }
+}
+
+export async function insertPatient(data: PatientInsert): Promise<Patient & { name: string }> {
+  try {
+    const result = await getDb().query<PatientRow>(
+      `INSERT INTO tbl_clients
+         (salutation, first_name, last_name, email, phone, reason, referred_by, referred_by_source, hcp_id, status, region, country, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+       RETURNING *`,
+      [
+        data.salutation ?? null, data.first_name, data.last_name,
+        data.email ?? null, data.phone ?? null, data.reason ?? null,
+        data.referred_by ?? null, data.referred_by_source ?? null, data.hcp_id ?? null,
+        data.status ?? "active", data.region ?? "", data.country ?? null, data.notes ?? null,
+      ]
+    );
+    if (!result.rows[0]) throw new DatabaseError("insertPatient", new Error("Insert returned no rows"));
+    const r = result.rows[0];
+    return { ...serialize(r), name: buildName(r) };
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("insertPatient", err);
+  }
+}
+
+export async function updatePatient(
+  id: string,
+  data: PatientUpdate
+): Promise<(Patient & { name: string }) | null> {
+  const sets: string[] = ["updated_at = now()"];
+  const params: unknown[] = [];
+
+  const fields: (keyof PatientUpdate)[] = [
+    "salutation", "first_name", "last_name", "email", "phone",
+    "reason", "referred_by", "referred_by_source", "hcp_id", "status", "region", "country", "notes",
+  ];
+  for (const field of fields) {
+    if (data[field] !== undefined) {
+      params.push(data[field] ?? null);
+      sets.push(`${field} = $${params.length}`);
+    }
+  }
+
+  params.push(id);
+  try {
+    const result = await getDb().query<PatientRow>(
+      `UPDATE tbl_clients SET ${sets.join(", ")} WHERE id = $${params.length} RETURNING *`,
+      params
+    );
+    if (!result.rows[0]) return null;
+    const r = result.rows[0];
+    return { ...serialize(r), name: buildName(r) };
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("updatePatient", err);
+  }
 }

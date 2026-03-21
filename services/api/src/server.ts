@@ -2,17 +2,18 @@ import express from "express";
 import session from "express-session";
 import cookieParser from "cookie-parser";
 import cors from "cors";
+import { requestIdMiddleware } from "./middleware/requestId.js";
 import { authRouter } from "./auth.js";
 import { leadsRouter } from "./routes/leads.js";
 import { hcpRouter } from "./routes/hcp.js";
 import { hcoRouter } from "./routes/hco.js";
 import { presentationsRouter } from "./routes/presentations.js";
-import { clientLogsRouter } from "./routes/client-logs.js";
+import { diagnosticsRouter } from "./routes/diagnostics.js";
 import { eventsRouter } from "./routes/events.js";
 import { configRouter } from "./routes/config.js";
 import { configOptionsRouter } from "./routes/config-options.js";
 import { websiteContactRouter } from "./routes/website-contact.js";
-import { clientsRouter } from "./routes/clients.js";
+import { patientsRouter } from "./routes/patients.js";
 import { pushRouter } from "./routes/push.js";
 import { runMigrations } from "./db.js";
 import { errorHandler } from "./middleware/errorHandler.js";
@@ -50,6 +51,7 @@ function corsOrigin(origin: string | undefined, cb: (err: Error | null, allow?: 
 
 export const app = express();
 
+app.use(requestIdMiddleware);
 app.use(
   cors({
     origin: corsOrigin,
@@ -79,12 +81,12 @@ app.use(leadsRouter);
 app.use(hcpRouter);
 app.use(hcoRouter);
 app.use(presentationsRouter);
-app.use(clientLogsRouter);
+app.use(diagnosticsRouter);
 app.use(eventsRouter);
 app.use(configRouter);
 app.use(configOptionsRouter);
 app.use(websiteContactRouter);
-app.use(clientsRouter);
+app.use(patientsRouter);
 app.use(pushRouter);
 
 app.use(errorHandler);

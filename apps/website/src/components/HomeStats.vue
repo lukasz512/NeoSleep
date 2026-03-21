@@ -17,8 +17,8 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
 import { useI18n } from "vue-i18n";
-import { useCountUp } from "../composables/useCountUp";
-import { useReveal } from "../composables/useReveal";
+import { useCountUp } from "@neo/shared/composables/useCountUp";
+import { useReveal } from "@neo/shared/composables/useReveal";
 import { homeStats } from "../config/websiteContent";
 
 const { t } = useI18n();

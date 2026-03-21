@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx --env-file=../../.env watch src/server.ts",
+    "dev": "tsx --env-file=../../.env --watch src/server.ts",
     "lint": "eslint . --format codeframe",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "NODE_OPTIONS='--require=./vitest-crypto-polyfill.cjs' vitest run",

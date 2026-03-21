@@ -14,27 +14,20 @@
     "format": "prettier --write .",
     "lint": "eslint . --format codeframe",
     "typecheck": "tsc -b",
-    "test": "npm run test --workspaces --if-present",
-    "test:e2e": "playwright test",
-    "i18n:extract": "node scripts/i18n/extract.mjs",
-    "i18n:unused": "node scripts/i18n/unused.mjs",
-    "i18n:prune": "node scripts/i18n/prune.mjs",
+    "i18n:extract": "node infra/scripts/i18n/extract.mjs",
+    "i18n:unused": "node infra/scripts/i18n/unused.mjs",
+    "i18n:prune": "node infra/scripts/i18n/prune.mjs",
     "build:website": "pnpm --filter @neo/website build",
     "build:app": "pnpm --filter @neo/app build",
-    "lockfile:check": "./scripts/lockfile-check.sh",
+    "lockfile:check": "./infra/scripts/lockfile-check.sh",
     "ci": "pnpm -r lint && pnpm -r typecheck && pnpm -r test",
-    "ci:npm": "npm run lint --workspaces --if-present && npm run typecheck --workspaces --if-present && npm run test --workspaces --if-present",
     "prepare": "husky",
-    "start": "./scripts/start.sh",
-    "dev": "pnpm exec concurrently --names api,app,website -c blue,green,magenta \"pnpm --filter @neo/api dev\" \"pnpm --filter @neo/app dev\" \"pnpm --filter @neo/website dev\"",
-    "db:seed": "docker compose exec -T postgres psql -U neosleep -d neosleep < services/api/migrations/009_dev_seed_2hco_4hcp.sql"
-  },
-  "dependencies": {
-    "@vueuse/core": "catalog:"
+    "start": "./infra/scripts/start.sh",
+    "dev": "pnpm exec concurrently --names api,app,website,telegram -c blue,green,magenta,cyan \"pnpm --filter @neo/api dev\" \"pnpm --filter @neo/app dev\" \"pnpm --filter @neo/website dev\" \"pnpm --filter @neo/telegram dev\"",
+    "db:seed": "docker compose -f infra/docker-compose.yml exec -T postgres psql -U neosleep -d neosleep < services/api/migrations/009_dev_seed_2hco_4hcp.sql"
   },
   "devDependencies": {
-    "@playwright/test": "^1.50.0",
-    "@types/supertest": "^6.0.2",
+    "vite": "catalog:",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "concurrently": "^9.1.0",
@@ -42,10 +35,7 @@
     "eslint-config-prettier": "^9.0.0",
     "eslint-plugin-vue": "^9.0.0",
     "husky": "^9.1.7",
-    "jsdom": "^25.0.0",
     "prettier": "^3.2.5",
-    "supertest": "^7.0.0",
-    "typescript": "^5.6.0",
-    "vitest": "^4.0.0"
+    "typescript": "^5.6.0"
   }
 }

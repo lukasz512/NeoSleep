@@ -11,7 +11,9 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@neo/api": "workspace:*",
     "@unhead/vue": "catalog:",
+    "@vueuse/core": "catalog:",
     "vue": "catalog:",
     "vue-i18n": "catalog:",
     "vue-router": "catalog:",

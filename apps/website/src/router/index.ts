@@ -19,7 +19,6 @@ const routes: RouteRecordRaw[] = [
   { path: "/careers", name: "careers", component: CareersView, meta: { layout: "default" } },
   { path: "/for-patients", name: "for-patients", component: ForPatientsView, meta: { layout: "default" } },
   { path: "/for-professionals", name: "for-professionals", component: ForProfessionalsView, meta: { layout: "default" } },
-  { path: "/for-dentists", redirect: "/for-professionals" },
   { path: "/find-specialist", name: "find-specialist", component: FindSpecialistView, meta: { layout: "default" } },
   {
     path: "/:pathMatch(.*)*",

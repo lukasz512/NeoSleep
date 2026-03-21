@@ -1,4 +1,5 @@
 import { getDb } from "./connection.js";
+import { AppError, DatabaseError } from "../errors.js";
 
 export interface AppConfig {
   primary_color: string;
@@ -9,7 +10,6 @@ export interface AppConfig {
   surface_color: string;
   hero_container_style: "compact" | "wide";
   color_scheme: "light" | "dark";
-  // Branding — all nullable: fall back to static /brand/ assets when not set
   tenant_name: string;
   logo_url: string | null;
   logo_dark_url: string | null;
@@ -49,10 +49,8 @@ const DEFAULT_APP_CONFIG: AppConfig = {
 };
 
 export async function getAppConfig(): Promise<AppConfig> {
-  const p = getDb();
-  if (!p) return DEFAULT_APP_CONFIG;
   try {
-    const result = await p.query<AppConfig>(
+    const result = await getDb().query<AppConfig>(
       `SELECT primary_color, secondary_color, border_radius,
               logo_url, logo_dark_url, icon_url, icon_dark_url,
               COALESCE(NULLIF(tenant_name, ''), $1) AS tenant_name,
@@ -82,28 +80,27 @@ export async function getAppConfig(): Promise<AppConfig> {
       icon_dark_url:        row.icon_dark_url        ?? null,
     };
   } catch (err) {
+    if (err instanceof AppError) throw err;
     console.error("getAppConfig error:", err);
     return DEFAULT_APP_CONFIG;
   }
 }
 
 export async function updateAppConfig(updates: AppConfigUpdate): Promise<AppConfig> {
-  const p = getDb();
-  if (!p) return DEFAULT_APP_CONFIG;
   const current = await getAppConfig();
-  const row: AppConfig = {
-    primary_color:       updates.primary_color       ?? current.primary_color,
-    secondary_color:     updates.secondary_color     ?? current.secondary_color,
-    primary_color_dark:  updates.primary_color_dark  ?? current.primary_color_dark,
-    secondary_color_dark:updates.secondary_color_dark?? current.secondary_color_dark,
-    border_radius:       updates.border_radius        ?? current.border_radius,
-    logo_url:            updates.logo_url !== undefined ? updates.logo_url : current.logo_url,
-    surface_color:       updates.surface_color        ?? current.surface_color,
-    hero_container_style:updates.hero_container_style ?? current.hero_container_style,
-    color_scheme:        updates.color_scheme         ?? current.color_scheme,
+  const row = {
+    primary_color:        updates.primary_color        ?? current.primary_color,
+    secondary_color:      updates.secondary_color      ?? current.secondary_color,
+    primary_color_dark:   updates.primary_color_dark   ?? current.primary_color_dark,
+    secondary_color_dark: updates.secondary_color_dark ?? current.secondary_color_dark,
+    border_radius:        updates.border_radius        ?? current.border_radius,
+    logo_url:             updates.logo_url !== undefined ? updates.logo_url : current.logo_url,
+    surface_color:        updates.surface_color        ?? current.surface_color,
+    hero_container_style: updates.hero_container_style ?? current.hero_container_style,
+    color_scheme:         updates.color_scheme         ?? current.color_scheme,
   };
   try {
-    const result = await p.query(
+    const result = await getDb().query(
       `UPDATE tbl_app_config SET
         primary_color = $1, secondary_color = $2, primary_color_dark = $3, secondary_color_dark = $4,
         border_radius = $5, logo_url = $6, surface_color = $7, hero_container_style = $8, color_scheme = $9,
@@ -115,7 +112,7 @@ export async function updateAppConfig(updates: AppConfigUpdate): Promise<AppConf
       ]
     );
     if (result.rowCount === 0) {
-      await p.query(
+      await getDb().query(
         `INSERT INTO tbl_app_config
           (primary_color, secondary_color, primary_color_dark, secondary_color_dark,
            border_radius, logo_url, surface_color, hero_container_style, color_scheme)
@@ -126,9 +123,9 @@ export async function updateAppConfig(updates: AppConfigUpdate): Promise<AppConf
         ]
       );
     }
-    return row;
+    return { ...current, ...row };
   } catch (err) {
-    console.error("updateAppConfig error:", err);
-    return current;
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("updateAppConfig", err);
   }
 }

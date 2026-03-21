@@ -15,8 +15,10 @@ Sleep care SaaS for pharma sales reps visiting HCPs (Healthcare Professionals).
 apps/app/         → Main PWA (sales rep CRM, mobile-first)
 apps/website/     → Marketing landing (public)
 services/api/     → Express API server (trust boundary, owns auth + secrets)
-i18n/             → en.json, pl.json, es.json (source of truth)
-foundation/       → Active docs, specs, ADRs (archive/ for frozen material)
+packages/         → Shared packages (@neo/api, @neo/ui, @neo/stores, @neo/utils)
+shared/           → Shared composables (useDocumentLang, useReveal, useCountUp…)
+i18n/             → en.json, pl.json, es.json, mx.json (source of truth)
+foundation/       → Active docs, specs, ADRs
 brand/            → Design tokens, logos, fonts
 ```
 
@@ -43,7 +45,7 @@ brand/            → Design tokens, logos, fonts
 - App composables: `apps/app/src/composables/`
 - API composable: `apps/app/src/composables/useBffApi.ts` (use this for all BFF calls)
 - App config: `apps/app/src/composables/useAppConfig.ts`
-- Tenant config: `foundation/config/`
+- Tenant config: `platform/foundation/config/`
 
 ## Database
 User/account model has 3 distinct identity types — do NOT conflate them:
@@ -55,7 +57,7 @@ User/account model has 3 distinct identity types — do NOT conflate them:
 | `tbl_patients` | Patients referred by HCPs | TBD (future) | TBD |
 
 All tables:
-`tbl_leads`, `tbl_users`, `tbl_hcp`, `tbl_hco`, `tbl_patients`, `tbl_events`, `tbl_presentations`, `tbl_app_config`, `tbl_audit_log`, `tbl_console_errors`
+`tbl_leads`, `tbl_users`, `tbl_hcp`, `tbl_hco`, `tbl_patients`, `tbl_events`, `tbl_presentations`, `tbl_app_config`, `tbl_audit_log`, `tbl_diagnostics`
 
 - New tables → add a migration in `services/api/migrations/` (next number, `.sql`)
 - Migrations run automatically on BFF startup via `db/migrations.ts`
@@ -69,7 +71,7 @@ All tables:
 
 ## i18n
 - Active languages: EN, PL, ES
-- Add keys to `i18n/en.json` first, then run `npm run i18n:extract`
+- Add keys to `platform/i18n/en.json` first, then run `npm run i18n:extract`
 - Never leave a key only in one language file — CI enforces parity
 
 ## Tests
@@ -106,7 +108,16 @@ pnpm i18n:prune        # Mark unused keys
 - Do not mock PostgreSQL in BFF integration tests
 - Do not start portal or admin apps until rep app Stage 1-3 is done
 
+## Git tags — milestones
+Use `git tag v<name>` to mark stable states before big changes:
+```bash
+git tag v1.0-rep-mvp       # milestone snapshot
+git tag v0.9-before-rename # before a large refactor
+git push origin --tags     # share tags with the team
+```
+Tags are immutable — always point to the same commit. Use `git checkout <tag>` to return to any point.
+
 ## Current Focus (March 2026)
-Stage 1: Google Workspace OIDC — rep logs in, sees their data (mocked).
+Stage 1 done (OIDC auth, app shell, layout). Cleaning up before Stage 2 (real DB reads).
 Next: Stage 2 (direct DB) → Stage 3 (CRM views complete).
-Portal and admin are archived — do not start until rep app MVP is done.
+Portal and admin: do not start until rep app Stage 1–3 is done.

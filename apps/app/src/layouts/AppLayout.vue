@@ -9,6 +9,7 @@
       {{ t("layout.skipToMain") }}
     </a>
 
+    <AppNotifications />
     <AppOfflineBar />
 
     <VNavigationDrawer
@@ -54,9 +55,6 @@
     </VNavigationDrawer>
 
     <VAppBar flat border="b" :height="56">
-      <template v-if="isMobile" #prepend>
-        <VAppBarNavIcon @click="mobileDrawerOpen = !mobileDrawerOpen" />
-      </template>
 
       <VAppBarTitle class="layout-appbar__title">{{ moduleTitle }}</VAppBarTitle>
 
@@ -123,6 +121,19 @@
       </div>
     </VMain>
 
+    <div v-if="isMobile" class="layout-mobile-bottom-bar" role="presentation">
+      <button
+        type="button"
+        class="layout-mobile-menu-trigger"
+        :aria-label="mobileDrawerOpen ? t('layout.sidebar.collapse') : t('layout.sidebar.expand')"
+        :aria-expanded="mobileDrawerOpen"
+        @click="mobileDrawerOpen = !mobileDrawerOpen"
+      >
+        <AppIcon :name="mobileDrawerOpen ? 'close' : 'menu'" class="layout-mobile-menu-icon" />
+        <span>{{ mobileDrawerOpen ? t("layout.sidebar.collapse") : t("layout.sidebar.expand") }}</span>
+      </button>
+    </div>
+
     <ThemePanel
       v-model="themePanelOpen"
       :config="themePanelConfig"
@@ -147,6 +158,7 @@ import {
   AppOfflineBar,
 } from "./components";
 import AppIcon from "../components/AppIcon.vue";
+import AppNotifications from "../components/AppNotifications.vue";
 
 const { isLoading: globalLoaderActive } = useGlobalLoader();
 const route = useRoute();
@@ -263,6 +275,12 @@ const moduleTitle = computed(() => {
   flex-direction: column;
 }
 
+@media (max-width: 959px) {
+  .layout-main__inner {
+    padding-bottom: calc(16px + 44px + 24px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
 .layout-main__inner:focus {
   outline: none;
 }
@@ -274,16 +292,49 @@ const moduleTitle = computed(() => {
   flex-direction: column;
 }
 
-.view-fade-lift-enter-active,
-.view-fade-lift-leave-active {
-  transition: opacity 0.18s ease, transform 0.18s ease;
+/* ── Mobile bottom bar ────────────────────────────────────────────────────── */
+.layout-mobile-bottom-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  padding: 12px 16px max(12px, env(safe-area-inset-bottom, 12px));
+  background: var(--rep-bg, #fff);
+  border-top: 1px solid var(--rep-border, #e0e0e0);
+  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.06);
 }
-.view-fade-lift-enter-from {
-  opacity: 0;
-  transform: translateY(6px);
+
+.layout-mobile-menu-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid var(--rep-border, #e0e0e0);
+  border-radius: var(--rep-radius, 8px);
+  background: var(--rep-bg-secondary, #f5f5f5);
+  color: var(--rep-text, #212121);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
-.view-fade-lift-leave-to {
-  opacity: 0;
-  transform: translateY(-4px);
+
+.layout-mobile-menu-trigger:hover,
+.layout-mobile-menu-trigger:focus-visible {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: var(--rep-primary, #128F83);
+  color: var(--rep-primary, #128F83);
+  outline: none;
 }
+
+.layout-mobile-menu-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
 </style>

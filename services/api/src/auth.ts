@@ -1,7 +1,8 @@
-import { Router, type Request, type Response } from "express";
+import { Router, type Request, type Response, type NextFunction } from "express";
 import crypto from "node:crypto";
 import bcrypt from "bcrypt";
 import rateLimit from "express-rate-limit";
+import { asyncHandler } from "./middleware/errorHandler.js";
 import {
   getOrCreateUserByProvider,
   getStaffUserByEmail,
@@ -97,40 +98,29 @@ export async function ensureStaffAdmin(): Promise<void> {
 async function restoreSessionFromRememberMe(
   req: Request,
   _res: Response,
-  next: () => void
+  next: NextFunction
 ): Promise<void> {
-  if (req.session?.user) {
-    next();
-    return;
-  }
+  if (req.session?.user) { next(); return; }
   const cookie = req.cookies?.[REMEMBER_ME_COOKIE];
-  if (!cookie || typeof cookie !== "string") {
-    next();
-    return;
-  }
+  if (!cookie || typeof cookie !== "string") { next(); return; }
   const [userId, versionStr, hmac] = cookie.split(":");
   const version = parseInt(versionStr ?? "", 10);
-  if (!userId || !hmac || isNaN(version)) {
-    next();
-    return;
-  }
+  if (!userId || !hmac || isNaN(version)) { next(); return; }
   const expected = signRememberMe(userId, version);
-  if (!crypto.timingSafeEqual(Buffer.from(hmac, "hex"), Buffer.from(expected, "hex"))) {
-    next();
-    return;
+  if (!crypto.timingSafeEqual(Buffer.from(hmac, "hex"), Buffer.from(expected, "hex"))) { next(); return; }
+  try {
+    const user = await getUserById(userId);
+    if (!user || user.token_version !== version) { next(); return; }
+    req.session.user = {
+      id: user.id,
+      email: user.email,
+      name: user.name ?? undefined,
+      role: user.role,
+      forcePasswordChange: false,
+    };
+  } catch {
+    // Invalid/expired remember-me — clear it silently
   }
-  const user = await getUserById(userId);
-  if (!user || user.token_version !== version) {
-    next();
-    return;
-  }
-  req.session.user = {
-    id: user.id,
-    email: user.email,
-    name: user.name ?? undefined,
-    role: user.role,
-    forcePasswordChange: false,
-  };
   next();
 }
 
@@ -142,7 +132,7 @@ authRouter.post(
   "/auth/login",
   loginRateLimiter,
   restoreSessionFromRememberMe,
-  async (req: Request, res: Response) => {
+  asyncHandler(async (req: Request, res: Response) => {
     if (req.session?.user) {
       const force = (req.session.user as { forcePasswordChange?: boolean }).forcePasswordChange;
       return res.status(200).json({
@@ -197,7 +187,7 @@ authRouter.post(
       user: req.session.user,
       forcePasswordChange: staff.force_password_change,
     });
-  }
+  })
 );
 
 // ---------------------------------------------------------------------------
@@ -245,7 +235,7 @@ authRouter.post("/auth/logout", (req: Request, res: Response) => {
 // POST /auth/change-password (authenticated; current + new password)
 // ---------------------------------------------------------------------------
 
-authRouter.post("/auth/change-password", async (req: Request, res: Response) => {
+authRouter.post("/auth/change-password", asyncHandler(async (req: Request, res: Response) => {
   if (!req.session?.user) {
     res.status(401).json({ error: "Not authenticated" });
     return;
@@ -271,20 +261,16 @@ authRouter.post("/auth/change-password", async (req: Request, res: Response) => 
     return;
   }
   const hash = await bcrypt.hash(newStr, BCRYPT_ROUNDS);
-  const ok = await setUserPassword(req.session.user.id, hash);
-  if (!ok) {
-    res.status(500).json({ error: "Failed to update password." });
-    return;
-  }
+  await setUserPassword(req.session.user.id, hash);
   (req.session.user as { forcePasswordChange?: boolean }).forcePasswordChange = false;
   res.status(200).json({ success: true });
-});
+}));
 
 // ---------------------------------------------------------------------------
 // POST /auth/forgot-password (email → create token, send email placeholder)
 // ---------------------------------------------------------------------------
 
-authRouter.post("/auth/forgot-password", async (req: Request, res: Response) => {
+authRouter.post("/auth/forgot-password", asyncHandler(async (req: Request, res: Response) => {
   const { email } = req.body as { email?: string };
   const emailStr = typeof email === "string" ? email.trim().toLowerCase() : "";
   if (!emailStr) {
@@ -304,24 +290,20 @@ authRouter.post("/auth/forgot-password", async (req: Request, res: Response) => 
   const token = crypto.randomBytes(32).toString("hex");
   const tokenHash = hashToken(token);
   const expiresAt = new Date(Date.now() + PASSWORD_RESET_EXPIRY_MS);
-  const created = await createPasswordResetToken(userId, tokenHash, expiresAt);
-  if (!created) {
-    res.status(500).json({ error: "Could not create reset link. Try again later." });
-    return;
-  }
+  await createPasswordResetToken(userId, tokenHash, expiresAt);
   const resetLink = `${frontendUrl}/reset-password?token=${encodeURIComponent(token)}`;
   console.log("[auth] Password reset link for", emailStr, ":", resetLink);
   res.status(200).json({
     message: "If an account exists, you will receive an email.",
     devResetLink: process.env.NODE_ENV !== "production" ? resetLink : undefined,
   });
-});
+}));
 
 // ---------------------------------------------------------------------------
 // GET /auth/reset-password/validate?token= (check if token valid)
 // ---------------------------------------------------------------------------
 
-authRouter.get("/auth/reset-password/validate", async (req: Request, res: Response) => {
+authRouter.get("/auth/reset-password/validate", asyncHandler(async (req: Request, res: Response) => {
   const token = typeof req.query.token === "string" ? req.query.token : "";
   if (!token) {
     res.status(400).json({ valid: false, error: "Token is required." });
@@ -330,13 +312,13 @@ authRouter.get("/auth/reset-password/validate", async (req: Request, res: Respon
   const tokenHash = hashToken(token);
   const userId = await getPasswordResetUserIdByHash(tokenHash);
   res.status(200).json({ valid: !!userId });
-});
+}));
 
 // ---------------------------------------------------------------------------
 // POST /auth/reset-password (token + new_password; single use)
 // ---------------------------------------------------------------------------
 
-authRouter.post("/auth/reset-password", async (req: Request, res: Response) => {
+authRouter.post("/auth/reset-password", asyncHandler(async (req: Request, res: Response) => {
   const { token, new_password } = req.body as { token?: string; new_password?: string };
   const tokenStr = typeof token === "string" ? token : "";
   const newStr = typeof new_password === "string" ? new_password : "";
@@ -355,14 +337,10 @@ authRouter.post("/auth/reset-password", async (req: Request, res: Response) => {
     return;
   }
   const hash = await bcrypt.hash(newStr, BCRYPT_ROUNDS);
-  const ok = await setUserPassword(userId, hash);
+  await setUserPassword(userId, hash);
   await deletePasswordResetTokenByHash(tokenHash);
-  if (!ok) {
-    res.status(500).json({ error: "Failed to update password." });
-    return;
-  }
   res.status(200).json({ success: true });
-});
+}));
 
 // ---------------------------------------------------------------------------
 // Google OAuth (for portal/doctors; rep-app uses email/password only)
@@ -388,7 +366,7 @@ authRouter.get("/auth/google", (req: Request, res: Response) => {
   res.redirect(`${GOOGLE_AUTH_URL}?${params.toString()}`);
 });
 
-authRouter.get("/auth/google/callback", async (req: Request, res: Response) => {
+authRouter.get("/auth/google/callback", asyncHandler(async (req: Request, res: Response) => {
   const { code, state } = req.query as { code?: string; state?: string };
   const savedState = req.session.state;
 
@@ -467,4 +445,4 @@ authRouter.get("/auth/google/callback", async (req: Request, res: Response) => {
   }
 
   res.redirect(`${frontendUrl}/login?from=google`);
-});
+}));

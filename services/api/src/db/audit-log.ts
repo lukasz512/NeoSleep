@@ -9,12 +9,10 @@ export interface AuditLogInsert {
 }
 
 export async function insertAuditLog(row: AuditLogInsert): Promise<void> {
-  const p = getDb();
-  if (!p) return;
   try {
     const userId = row.user_id?.trim();
     const isValidUuid = userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
-    await p.query(
+    await getDb().query(
       `INSERT INTO tbl_audit_log (user_id, action, entity_type, entity_id, metadata)
        VALUES ($1, $2, $3, $4, $5)`,
       [

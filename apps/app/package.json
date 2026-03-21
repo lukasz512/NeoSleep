@@ -11,6 +11,10 @@
     "test": "NODE_OPTIONS='--require=./vitest-crypto-polyfill.cjs' vitest run"
   },
   "dependencies": {
+    "@neo/api": "workspace:*",
+    "@neo/stores": "workspace:*",
+    "@neo/vuetify": "workspace:*",
+    "@vueuse/core": "catalog:",
     "pinia": "catalog:",
     "vue": "catalog:",
     "vue-i18n": "catalog:",

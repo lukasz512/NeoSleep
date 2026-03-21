@@ -7,7 +7,8 @@ import { i18n } from "./plugins/i18n";
 import "./assets/theme.scss";
 import "./assets/transitions.css";
 import { getRepSettings } from "./utils/rep-settings";
-import { setupErrorReporter } from "./composables/useErrorReporter";
+import { setupDiagnosticReporter } from "./composables/useDiagnosticReporter";
+import { apiFetch } from "./utils/api";
 
 const settings = typeof localStorage !== "undefined" ? getRepSettings() : { theme: "light" as const, locale: "en" as const };
 const savedTheme = settings.theme === "dark" ? "dark" : "light";
@@ -24,6 +25,7 @@ app.use(vuetify);
 app.use(router);
 app.use(i18n);
 
-setupErrorReporter(app);
+setupDiagnosticReporter(app);
 
+app.provide("neo:apiFetch", apiFetch);
 app.mount("#app");

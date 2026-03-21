@@ -15,9 +15,9 @@
           type="text"
           :placeholder="t('website.findSpecialist.searchPlaceholder')"
           class="fs-search__input"
-          @keydown.enter="performSearch"
+          @keydown.enter="openModal"
         />
-        <button class="home-btn home-btn--primary" @click="performSearch">
+        <button class="home-btn home-btn--primary" @click="openModal">
           {{ t("website.findSpecialist.searchBtn") }}
         </button>
       </div>
@@ -26,7 +26,7 @@
     <!-- ── Map ───────────────────────────────────────────────────────────── -->
     <div ref="mapRef" class="fs-map-wrap">
       <iframe
-        :src="mapSrc"
+        src="https://maps.google.com/maps?q=Ciudad+de+Mexico&output=embed&z=11"
         class="fs-map"
         width="100%"
         height="100%"
@@ -37,49 +37,39 @@
       ></iframe>
     </div>
 
-    <!-- ── Nearby specialists ─────────────────────────────────────────────── -->
+    <!-- ── Specialist directory ──────────────────────────────────────────── -->
     <section class="home-section fs-results page-container">
       <h2 class="home-heading">{{ t("website.findSpecialist.nearbyTitle") }}</h2>
-      <p class="fs-results__note">{{ t("website.findSpecialist.nearbyNote") }}</p>
-      <div class="fs-results__grid">
+      <p class="fs-results__note">{{ t("website.findSpecialist.networkNote") }}</p>
 
-        <!-- TODO: replace with real API data -->
-        <div class="fs-clinic-card">
-          <span class="fs-clinic-card__badge">Certified Partner</span>
-          <p class="fs-clinic-card__name">Dr. Anna Kowalska</p>
-          <p class="fs-clinic-card__addr">ul. Marszałkowska 142, Warsaw</p>
-          <a
-            href="https://maps.google.com/maps?q=ul.+Marsza%C5%82kowska+142+Warsaw"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="fs-clinic-card__link"
-          >View on map →</a>
+      <div class="fs-network-grid">
+
+        <!-- Empty state -->
+        <div class="fs-network-empty">
+          <div class="fs-network-empty__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+          </div>
+          <p class="fs-network-empty__title">{{ t("website.findSpecialist.network.emptyTitle") }}</p>
+          <p class="fs-network-empty__desc">{{ t("website.findSpecialist.network.emptyDesc") }}</p>
         </div>
 
-        <!-- TODO: replace with real API data -->
-        <div class="fs-clinic-card">
-          <span class="fs-clinic-card__badge">Certified Partner</span>
-          <p class="fs-clinic-card__name">Dr. Jan Nowak</p>
-          <p class="fs-clinic-card__addr">al. Ujazdowskie 26, Warsaw</p>
-          <a
-            href="https://maps.google.com/maps?q=al.+Ujazdowskie+26+Warsaw"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="fs-clinic-card__link"
-          >View on map →</a>
-        </div>
-
-        <!-- TODO: replace with real API data -->
-        <div class="fs-clinic-card">
-          <span class="fs-clinic-card__badge">Certified Partner</span>
-          <p class="fs-clinic-card__name">Centrum Snu</p>
-          <p class="fs-clinic-card__addr">ul. Puławska 39, Warsaw</p>
-          <a
-            href="https://maps.google.com/maps?q=ul.+Pu%C5%82awska+39+Warsaw"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="fs-clinic-card__link"
-          >View on map →</a>
+        <!-- Partner callout -->
+        <div class="fs-network-partner">
+          <div class="fs-network-partner__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+            </svg>
+          </div>
+          <h3 class="fs-network-partner__title">{{ t("website.findSpecialist.network.partnerTitle") }}</h3>
+          <p class="fs-network-partner__desc">{{ t("website.findSpecialist.network.partnerDesc") }}</p>
+          <RouterLink :to="{ path: '/contact', query: { type: 'professional' } }" class="fs-network-partner__link">
+            {{ t("website.findSpecialist.network.partnerCta") }} →
+          </RouterLink>
         </div>
 
       </div>
@@ -105,33 +95,48 @@
       </div>
     </div>
 
+    <!-- ── Coming Soon Modal ──────────────────────────────────────────────── -->
+    <Transition name="fs-modal">
+      <div v-if="modalOpen" class="fs-modal-overlay" @click.self="modalOpen = false">
+        <div class="fs-modal" role="dialog" :aria-label="t('website.findSpecialist.modal.title')">
+          <button class="fs-modal__close" :aria-label="t('website.findSpecialist.modal.close')" @click="modalOpen = false">✕</button>
+          <div class="fs-modal__icon">🔬</div>
+          <h2 class="fs-modal__title">{{ t("website.findSpecialist.modal.title") }}</h2>
+          <p class="fs-modal__body">{{ t("website.findSpecialist.modal.body") }}</p>
+          <p class="fs-modal__nudge">{{ t("website.findSpecialist.modal.nudge") }}</p>
+          <RouterLink
+            :to="{ path: '/contact', query: { type: 'patient', ref: 'specialist-search' } }"
+            class="home-btn home-btn--primary fs-modal__cta"
+            @click="modalOpen = false"
+          >
+            {{ t("website.findSpecialist.modal.cta") }}
+            <span class="home-btn__arrow" aria-hidden="true">→</span>
+          </RouterLink>
+        </div>
+      </div>
+    </Transition>
+
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { useReveal } from "../composables/useReveal";
+import { useReveal } from "@neo/shared/composables/useReveal";
 import { useSeoMeta } from "../composables/useSeoMeta";
 
 const { t } = useI18n();
 useSeoMeta({ titleKey: "website.seo.findSpecialist.title", descriptionKey: "website.seo.findSpecialist.description" });
 
 const searchQuery = ref("");
-const activeQuery = ref("sleep apnea dentist");
+const modalOpen = ref(false);
 
-const mapSrc = computed(() => {
-  const q = activeQuery.value || "sleep apnea dentist";
-  return `https://maps.google.com/maps?q=${encodeURIComponent(q)}&output=embed&z=12`;
-});
-
-function performSearch() {
+function openModal() {
   if (!searchQuery.value.trim()) return;
-  activeQuery.value = searchQuery.value.trim() + " sleep apnea dentist";
+  modalOpen.value = true;
 }
 
-const mapRef    = ref<HTMLElement | null>(null);
-const ctaRef    = ref<HTMLElement | null>(null);
+const ctaRef = ref<HTMLElement | null>(null);
 const ctaVisible = useReveal(ctaRef, 0.10);
 </script>
 
@@ -222,7 +227,7 @@ $bp-mobile:  600px;
   height: 100%;
 }
 
-/* ── Results ─────────────────────────────────────────────────────────── */
+/* ── Specialist directory ────────────────────────────────────────────── */
 .fs-results {
   text-align: left;
 }
@@ -233,74 +238,110 @@ $bp-mobile:  600px;
   margin: 0.5rem 0 0;
 }
 
-.fs-results__grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+.fs-network-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 1rem;
   margin-top: 1.75rem;
-
-  @media (max-width: $bp-tablet) {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  @media (max-width: $bp-mobile) {
-    grid-template-columns: 1fr;
-  }
 }
 
-.fs-clinic-card {
+.fs-network-empty,
+.fs-network-partner {
+  flex: 1 1 280px;
+  max-width: 420px;
+}
+
+.fs-network-empty {
   background: var(--website-bg);
   border: 1px solid var(--website-border);
   border-radius: var(--website-card-radius);
-  padding: 1.25rem 1.5rem;
+  padding: 2.5rem 2rem;
   display: flex;
   flex-direction: column;
-  gap: 0.375rem;
-  transition: box-shadow 0.22s ease, transform 0.22s ease;
-
-  &:hover {
-    box-shadow: var(--website-shadow-md);
-    transform: translateY(-2px);
-  }
-}
-
-.fs-clinic-card__badge {
-  display: inline-flex;
   align-items: center;
-  background: var(--website-icon-bg);
-  color: var(--website-primary);
-  font-size: 0.75rem;
-  font-weight: 700;
-  padding: 0.2rem 0.65rem;
-  border-radius: 9999px;
-  align-self: flex-start;
-  margin-bottom: 0.25rem;
+  text-align: center;
+  gap: 0.75rem;
 }
 
-.fs-clinic-card__name {
+.fs-network-empty__icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--website-icon-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.25rem;
+
+  svg { width: 24px; height: 24px; color: var(--website-primary); }
+}
+
+.fs-network-empty__title {
   font-size: 1rem;
   font-weight: 700;
   color: var(--website-text);
   margin: 0;
 }
 
-.fs-clinic-card__addr {
-  font-size: 0.875rem;
+.fs-network-empty__desc {
+  font-size: 0.9375rem;
+  line-height: 1.65;
   color: var(--website-text-secondary);
-  line-height: 1.5;
+  margin: 0;
+  max-width: 320px;
+}
+
+.fs-network-partner {
+  border: 1px dashed var(--website-footer-card-border);
+  border-radius: var(--website-card-radius);
+  padding: 2.5rem 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.75rem;
+  transition: transform 0.2s;
+
+  &:hover { transform: translateY(-2px); }
+}
+
+.fs-network-partner__icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--website-icon-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.25rem;
+
+  svg { width: 24px; height: 24px; color: var(--website-primary); }
+}
+
+.fs-network-partner__title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--website-text-secondary);
   margin: 0;
 }
 
-.fs-clinic-card__link {
+.fs-network-partner__desc {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--website-text-secondary);
+  margin: 0;
+  max-width: 260px;
+}
+
+.fs-network-partner__link {
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--website-primary);
   text-decoration: none;
   margin-top: 0.25rem;
-  align-self: flex-start;
 
-  &:hover {
-    text-decoration: underline;
-  }
+  &:hover { text-decoration: underline; }
 }
 
 /* ── CTA ─────────────────────────────────────────────────────────────── */
@@ -345,5 +386,109 @@ $bp-mobile:  600px;
   flex-wrap: wrap;
   gap: 0.875rem;
   justify-content: center;
+}
+
+/* ── Modal ───────────────────────────────────────────────────────────── */
+.fs-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.fs-modal {
+  position: relative;
+  background: var(--website-bg);
+  border: 1px solid var(--website-border);
+  border-radius: 20px;
+  padding: 3rem 2.5rem 2.5rem;
+  max-width: 480px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.18);
+
+  @media (max-width: $bp-mobile) {
+    padding: 2.5rem 1.5rem 2rem;
+    border-radius: 16px;
+  }
+}
+
+.fs-modal__close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  font-size: 1.125rem;
+  color: var(--website-text-secondary);
+  cursor: pointer;
+  line-height: 1;
+  padding: 0.25rem;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+
+  &:hover {
+    opacity: 1;
+  }
+}
+
+.fs-modal__icon {
+  font-size: 2.75rem;
+  line-height: 1;
+  margin-bottom: 1.25rem;
+}
+
+.fs-modal__title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--website-text);
+  margin: 0 0 0.875rem;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.fs-modal__body {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--website-text-secondary);
+  margin: 0 0 0.75rem;
+}
+
+.fs-modal__nudge {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--website-primary);
+  margin: 0 0 1.75rem;
+}
+
+.fs-modal__cta {
+  display: inline-flex;
+  width: 100%;
+  justify-content: center;
+}
+
+/* ── Modal transition ────────────────────────────────────────────────── */
+.fs-modal-enter-active,
+.fs-modal-leave-active {
+  transition: opacity 0.22s ease;
+
+  .fs-modal {
+    transition: transform 0.22s ease, opacity 0.22s ease;
+  }
+}
+
+.fs-modal-enter-from,
+.fs-modal-leave-to {
+  opacity: 0;
+
+  .fs-modal {
+    transform: translateY(16px) scale(0.97);
+    opacity: 0;
+  }
 }
 </style>

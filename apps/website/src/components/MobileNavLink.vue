@@ -9,7 +9,7 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { smoothScrollToTop } from '../composables/useSmoothScrollAnchors'
+import { smoothScrollToTop } from '@neo/shared/composables/useSmoothScrollAnchors'
 
 const props = defineProps<{ to: string; labelKey: string }>()
 

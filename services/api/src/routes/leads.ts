@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { getLeadsPaginated, getLeadById, insertLead, updateLead, insertAuditLog, type GetLeadsFilters } from "../db.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
-import { parsePaginationParams, toFilterArray, isoDate, requireDb } from "./utils.js";
+import { parsePaginationParams, toFilterArray, isoDate } from "./utils.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -65,7 +65,6 @@ leadsRouter.post(
     if (!name) { res.status(400).json({ error: "Name is required" }); return; }
     const email = typeof body.email === "string" ? body.email.trim() : undefined;
     if (email && !EMAIL_REGEX.test(email)) { res.status(400).json({ error: "Invalid email format" }); return; }
-    if (!requireDb(res)) return;
     const lead = await insertLead({
       name,
       email,
@@ -88,7 +87,6 @@ leadsRouter.patch(
     const body = req.body as { name?: string; email?: string; status?: string; region?: string; institution?: string };
     const email = typeof body.email === "string" ? body.email.trim() : undefined;
     if (email !== undefined && email !== "" && !EMAIL_REGEX.test(email)) { res.status(400).json({ error: "Invalid email format" }); return; }
-    if (!requireDb(res)) return;
     const lead = await updateLead(id, {
       name: typeof body.name === "string" ? body.name : undefined,
       email: body.email !== undefined ? body.email : undefined,

@@ -2,12 +2,14 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "composite": true,
+    "emitDeclarationOnly": true,
     "types": ["vitest/globals", "node", "vite/client"],
     "baseUrl": ".",
     "paths": {
-      "@i18n/*": ["../../i18n/*"],
-      "@brand/*": ["../../brand/*"]
+      "@i18n/*":    ["../../i18n/*"],
+      "@brand/*":   ["../../brand/*"],
+      "@shared/*":  ["../../shared/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "../../shared"]
 }

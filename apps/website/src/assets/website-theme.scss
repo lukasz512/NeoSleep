@@ -242,3 +242,35 @@ html[data-theme="dark"] {
 }
 
 
+
+/* Global base styles */
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+#app {
+  font-family: var(--website-font-sans);
+  background: var(--website-bg);
+  color: var(--website-text);
+  min-height: 100vh;
+}
+
+/* ── Default layout ───────────────────────────────────────────────────────── */
+.layout-default {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.layout-default__main {
+  flex: 1;
+  padding-top: var(--website-header-height);
+}
+
+@media (max-width: 1100px) {
+  .layout-default {
+    padding-bottom: var(--website-bottom-nav-height);
+  }
+}
+

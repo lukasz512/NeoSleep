@@ -1,6 +1,6 @@
 import { createApp } from "vue";
 import { createI18n } from "vue-i18n";
-import { createHead } from "@unhead/vue";
+import { createUnhead, headSymbol } from "@unhead/vue";
 import App from "./App.vue";
 import router from "./router";
 import { getTenantId, loadTenantOverlay } from "./composables/useTenantI18n";
@@ -25,9 +25,9 @@ const supportedLocales = ["en", "pl", "mx"] as const;
 const tenantId = getTenantId();
 
 const [en, pl, mx, tEn, tPl, tMx] = await Promise.all([
-  import("@i18n/en.json").then((m) => m.default),
-  import("@i18n/pl.json").then((m) => m.default),
-  import("@i18n/mx.json").then((m) => m.default),
+  import("@neo/i18n/en.json").then((m) => m.default),
+  import("@neo/i18n/pl.json").then((m) => m.default),
+  import("@neo/i18n/mx.json").then((m) => m.default),
   loadTenantOverlay(tenantId, "en"),
   loadTenantOverlay(tenantId, "pl"),
   loadTenantOverlay(tenantId, "mx"),
@@ -58,5 +58,5 @@ const i18n = createI18n({
 const app = createApp(App);
 app.use(router);
 app.use(i18n);
-app.use(createHead());
+app.provide(headSymbol, createUnhead());
 app.mount("#app");

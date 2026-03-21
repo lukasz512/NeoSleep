@@ -1,4 +1,5 @@
 import { createI18n } from "vue-i18n";
+import { en as vuetifyEn, pl as vuetifyPl, es as vuetifyEs } from "vuetify/locale";
 import { REP_STORAGE_KEYS } from "../constants";
 
 /** Detect browser preferred locale, mapped to our supported locales. */
@@ -32,10 +33,10 @@ function resolveInitialLocale(): "en" | "pl" | "mx" {
 
 const savedLocale = resolveInitialLocale();
 
-const localeLoaders: Record<string, () => Promise<Record<string, string>>> = {
-  en: () => import("@i18n/en.json").then((m) => m.default),
-  pl: () => import("@i18n/pl.json").then((m) => m.default),
-  mx: () => import("@i18n/mx.json").then((m) => m.default),
+const localeLoaders: Record<string, () => Promise<Record<string, unknown>>> = {
+  en: async () => ({ ...(await import("@neo/i18n/en.json")).default, $vuetify: vuetifyEn }),
+  pl: async () => ({ ...(await import("@neo/i18n/pl.json")).default, $vuetify: vuetifyPl }),
+  mx: async () => ({ ...(await import("@neo/i18n/mx.json")).default, $vuetify: vuetifyEs }),
 };
 
 const initialMessages = await localeLoaders[savedLocale]();

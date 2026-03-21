@@ -211,3 +211,16 @@ body {
     --rep-btn-min-width: #{$rep-touch-target-min};
   }
 }
+
+
+/* Global base styles */
+#app {
+  font-family: var(--rep-font-sans, system-ui, sans-serif);
+}
+a {
+  color: var(--rep-primary, #128F83);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--rep-primary-hover, #10544E);
+}

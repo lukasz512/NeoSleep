@@ -110,17 +110,17 @@ describe("API server", () => {
     expect(res.body).toHaveProperty("error");
   });
 
-  it("POST /api/logs without message field returns 400 (when logging enabled)", async () => {
-    const original = process.env.ENABLE_CONSOLE_LOG_DB;
-    process.env.ENABLE_CONSOLE_LOG_DB = "1";
+  it("POST /api/diagnostics without message field returns 400 (when diagnostics enabled)", async () => {
+    const original = process.env.ENABLE_DIAGNOSTICS_DB;
+    process.env.ENABLE_DIAGNOSTICS_DB = "1";
     try {
       const res = await request(app)
-        .post("/api/logs")
+        .post("/api/diagnostics")
         .send({ level: "error" });
       expect(res.status).toBe(400);
       expect(res.body).toHaveProperty("error");
     } finally {
-      process.env.ENABLE_CONSOLE_LOG_DB = original;
+      process.env.ENABLE_DIAGNOSTICS_DB = original;
     }
   });
 

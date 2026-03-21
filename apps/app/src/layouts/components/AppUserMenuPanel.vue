@@ -69,7 +69,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
-import { LANGUAGE_OPTIONS } from "@i18n/language-options";
+import { LANGUAGE_OPTIONS } from "@neo/i18n/language-options";
 import AppIcon from "../../components/AppIcon.vue";
 
 const props = defineProps<{

@@ -9,7 +9,7 @@
       @click="open = !open"
     >
       <span class="nav-lang__icon" aria-hidden="true">
-        <FlagIcon v-if="currentOption" :locale="currentOption.id" class="nav-lang__flag" />
+        <span class="nav-lang__badge">{{ currentOption?.id.toUpperCase() }}</span>
       </span>
       <span class="nav-lang__label">{{ currentOption?.nativeLabel ?? 'Lang' }}</span>
     </button>
@@ -25,7 +25,7 @@
           :class="{ 'nav-lang__item--active': locale === opt.id }"
           @click="select(opt.id)"
         >
-          <FlagIcon :locale="opt.id" class="nav-lang__item-flag" />
+          <span class="nav-lang__badge">{{ opt.id.toUpperCase() }}</span>
           <span>{{ opt.nativeLabel }}</span>
         </button>
       </div>
@@ -34,36 +34,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { onClickOutside } from '@vueuse/core'
-import { useI18n } from 'vue-i18n'
-import { useWebsiteLocale } from '../composables/useWebsiteLocale'
-import { LANGUAGE_OPTIONS } from '@i18n/language-options'
-import type { WebsiteLocale } from '../composables/useWebsiteLocale'
-import FlagIcon from './FlagIcon.vue'
+import { useI18n } from "vue-i18n";
+import { useLanguageSelect } from "../composables/useLanguageSelect";
 
-const { t } = useI18n()
-const { locale, supported, setLocale } = useWebsiteLocale()
-
-const wrapRef = ref<HTMLElement | null>(null)
-const open = ref(false)
-
-const options = computed(() =>
-  LANGUAGE_OPTIONS.filter((o) => supported.includes(o.id as WebsiteLocale))
-)
-
-const currentOption = computed(() =>
-  options.value.find((o) => o.id === locale.value)
-)
-
-function select(id: string) {
-  if (supported.includes(id as WebsiteLocale)) {
-    setLocale(id as WebsiteLocale)
-    open.value = false
-  }
-}
-
-onClickOutside(wrapRef, () => { open.value = false })
+const { t } = useI18n();
+const { locale, wrapRef, open, options, currentOption, select } = useLanguageSelect();
 </script>
 
 <style lang="scss" scoped>
@@ -84,21 +59,17 @@ onClickOutside(wrapRef, () => { open.value = false })
   @include nav.icon;
 }
 
-.nav-lang__flag {
-  width: 22px;
-  height: 22px;
-}
-
-.nav-lang__flag :deep(.flag-icon) {
-  width: 100%;
-  height: 100%;
+.nav-lang__badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1;
 }
 
 .nav-lang__label {
   @include nav.label;
 }
 
-// ── Dropdown (opens upward) ───────────────────────────────────────────────────
 .nav-lang__dropdown {
   position: absolute;
   bottom: calc(100% + 8px);
@@ -137,13 +108,6 @@ onClickOutside(wrapRef, () => { open.value = false })
   }
 }
 
-.nav-lang__item-flag {
-  width: 22px;
-  height: 22px;
-  flex-shrink: 0;
-}
-
-// ── Transition ────────────────────────────────────────────────────────────────
 .nav-lang-up-enter-active,
 .nav-lang-up-leave-active {
   transition: opacity 0.15s ease, transform 0.15s ease;

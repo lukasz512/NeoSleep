@@ -1,0 +1,12 @@
+{
+  "name": "@neo/vuetify",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "vue-i18n": "catalog:",
+    "vuetify": "catalog:"
+  }
+}

@@ -1,16 +1,16 @@
 <template>
   <div ref="wrapRef" class="lang-select">
-    <NavTooltip :text="tooltipLabel">
-    <button
-      type="button"
-      class="lang-select__trigger"
-      :aria-label="tooltipLabel"
-      :aria-expanded="open"
-      aria-haspopup="true"
-      @click="toggle"
-    >
-      <FlagIcon v-if="currentOption" :locale="currentOption.id" class="lang-select__flag" />
-    </button>
+    <NavTooltip :text="t('rep.settings.language')">
+      <button
+        type="button"
+        class="lang-select__trigger"
+        :aria-label="t('rep.settings.language')"
+        :aria-expanded="open"
+        aria-haspopup="true"
+        @click="open = !open"
+      >
+        <span class="lang-select__badge">{{ currentOption?.id.toUpperCase() }}</span>
+      </button>
     </NavTooltip>
     <Transition name="lang-drop">
       <div v-show="open" class="lang-select__dropdown" role="menu">
@@ -23,7 +23,7 @@
           :class="{ 'lang-select__item--active': locale === opt.id }"
           @click="select(opt.id)"
         >
-          <FlagIcon :locale="opt.id" class="lang-select__item-flag" />
+          <span class="lang-select__badge">{{ opt.id.toUpperCase() }}</span>
           <span class="lang-select__item-name">{{ opt.nativeLabel }}</span>
         </button>
       </div>
@@ -32,45 +32,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from "vue";
 import { useI18n } from "vue-i18n";
-import { onClickOutside } from "@vueuse/core";
-import { useWebsiteLocale } from "../composables/useWebsiteLocale";
-import type { WebsiteLocale } from "../composables/useWebsiteLocale";
-import { LANGUAGE_OPTIONS, type LocaleId } from "@i18n/language-options";
+import { useLanguageSelect } from "../composables/useLanguageSelect";
 import NavTooltip from "./NavTooltip.vue";
-import FlagIcon from "./FlagIcon.vue";
 
 const { t } = useI18n();
-const { locale, supported, setLocale } = useWebsiteLocale();
-
-const wrapRef = ref<HTMLElement | null>(null);
-const open = ref(false);
-
-const options = computed(() =>
-  LANGUAGE_OPTIONS.filter((o) => supported.includes(o.id as WebsiteLocale))
-);
-
-const currentOption = computed(() => options.value.find((o) => o.id === locale.value));
-
-const currentLabel = computed(() =>
-  currentOption.value ? t(currentOption.value.labelKey) : "Language"
-);
-
-const tooltipLabel = computed(() => t("rep.settings.language"));
-
-function toggle() {
-  open.value = !open.value;
-}
-
-function select(id: LocaleId) {
-  if (supported.includes(id as WebsiteLocale)) {
-    setLocale(id as WebsiteLocale);
-    open.value = false;
-  }
-}
-
-onClickOutside(wrapRef, () => { open.value = false });
+const { locale, wrapRef, open, options, currentOption, select } = useLanguageSelect();
 </script>
 
 <style lang="scss" scoped>
@@ -84,8 +51,6 @@ onClickOutside(wrapRef, () => { open.value = false });
   justify-content: center;
   width: 34px;
   height: 34px;
-  min-width: 34px;
-  min-height: 34px;
   padding: 0;
   border: none;
   border-radius: var(--website-radius);
@@ -103,15 +68,12 @@ onClickOutside(wrapRef, () => { open.value = false });
   }
 }
 
-.lang-select__flag {
-  flex-shrink: 0;
-  width: 30px;
-  height: 30px;
-}
-
-.lang-select__flag :deep(.flag-icon) {
-  width: 100%;
-  height: 100%;
+.lang-select__badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--website-text-muted);
+  line-height: 1;
 }
 
 .lang-select__dropdown {
@@ -149,10 +111,6 @@ onClickOutside(wrapRef, () => { open.value = false });
     font-weight: 600;
     color: var(--website-primary);
   }
-}
-
-.lang-select__item-flag {
-  flex-shrink: 0;
 }
 
 .lang-drop-enter-active,

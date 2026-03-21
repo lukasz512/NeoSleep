@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { getHCPPaginated, getHCPById, insertHCP, updateHCP, insertAuditLog, type GetHCPFilters } from "../db.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
-import { parsePaginationParams, toFilterArray, isoDate, requireDb } from "./utils.js";
+import { parsePaginationParams, toFilterArray, isoDate } from "./utils.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

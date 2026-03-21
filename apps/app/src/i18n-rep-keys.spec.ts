@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import en from "@i18n/en.json";
-import pl from "@i18n/pl.json";
-import mx from "@i18n/mx.json";
+import en from "@neo/i18n/en.json";
+import pl from "@neo/i18n/pl.json";
+import mx from "@neo/i18n/mx.json";
 
 const REP_APP_I18N_KEYS = [
   "app.common.ok",
@@ -166,17 +166,22 @@ const REP_APP_I18N_KEYS = [
   "rep.user.placeholderName",
   "rep.user.role",
   "notification.dismiss",
-  "rep.login.oidcNote",
-  "rep.login.signInWithGoogle",
   "rep.login.email",
   "rep.login.password",
-  "rep.login.or",
-  "rep.login.emailPasswordMockup",
+  "rep.login.rememberMe",
+  "rep.login.signIn",
+  "rep.login.forgotPassword",
+  "rep.login.logoAlt",
+  "rep.login.error.invalidCredentials",
+  "rep.login.error.tooManyAttempts",
+  "rep.login.error.network",
+  "rep.login.validation.emailRequired",
+  "rep.login.validation.emailInvalid",
+  "rep.login.validation.passwordRequired",
   "rep.login.loginAsDev",
   "rep.login.goToApp",
   "rep.login.devUser.rep",
   "rep.login.devUser.admin",
-  "rep.login.devUser.viewer",
   "rep.detail.scheduleVisit",
   "rep.lead-detail.title",
   "rep.hcp-detail.title",

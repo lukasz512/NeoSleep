@@ -32,7 +32,7 @@ import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink } from "vue-router";
 import TealBanner from "./TealBanner.vue";
-import { useReveal } from "../composables/useReveal";
+import { useReveal } from "@neo/shared/composables/useReveal";
 import { ctaBannerConfig as config } from "../config/websiteContent";
 
 const { t } = useI18n();

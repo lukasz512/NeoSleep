@@ -101,16 +101,11 @@ const ICONS = {
             <line x1="12" y1="9" x2="12" y2="15" />
             <line x1="9" y1="12" x2="15" y2="12" />`,
   },
-  "nav-clients": {
+  "nav-patients": {
     strokeWidth: 2,
     paths: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
             <circle cx="12" cy="7" r="4" />
             <path d="M8 13h8" />`,
-  },
-  "nav-patients": {
-    strokeWidth: 2,
-    paths: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-            <circle cx="12" cy="7" r="4" />`,
   },
   "nav-planner": {
     strokeWidth: 2,

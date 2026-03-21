@@ -1,6 +1,3 @@
-/** Demo enrichment data for LeadDetailView.
- * Temporary until Stage 2 connects real DB. Remove when real data is available. */
-
 export const DEMO_SPECIALTIES: Record<string, string> = {
   "City Hospital North":  "Pulmonology & Sleep Medicine",
   "Clinic Central":       "ENT & Sleep-Disordered Breathing",

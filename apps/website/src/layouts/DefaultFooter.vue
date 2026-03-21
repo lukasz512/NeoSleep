@@ -41,7 +41,7 @@
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useTheme } from "../composables/useTheme";
-import { useReveal } from "../composables/useReveal";
+import { useReveal } from "@neo/shared/composables/useReveal";
 import {
   footerBrandConfig,
   footerNavSections,

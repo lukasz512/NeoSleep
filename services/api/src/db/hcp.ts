@@ -1,43 +1,35 @@
 import { getDb } from "./connection.js";
 import { toArray, trimOrNull, trimOrEmpty } from "./helpers.js";
+import { AppError, DatabaseError, ValidationError } from "../errors.js";
 
 export interface HCP {
   id: string;
-  // Legacy computed field (hco name joined from tbl_hco)
   institution: string | null;
-  // Identity
   title: string | null;
   first_name: string;
   last_name: string;
-  // Contact
   email: string | null;
   phone: string | null;
   preferred_contact: string | null;
   preferred_time: string | null;
-  // Professional
   primary_specialty: string | null;
   secondary_specialty: string | null;
   role: string | null;
   license_number: string | null;
   years_experience: number | null;
   is_key_opinion_leader: boolean;
-  // Pharma engagement
   influence_tier: string;
   prescribing_volume: string | null;
   engagement_level: string;
   contact_frequency: string | null;
-  // Relationship tracking
   first_contact_date: Date | null;
   visit_count: number;
   last_visit_date: Date | null;
-  // Locale / status
   language: string | null;
   region: string;
   status: string;
-  // GDPR
   data_consent_at: Date | null;
   data_consent_withdrawn_at: Date | null;
-  // Meta
   notes: string | null;
   tags: string[];
   hco_id: string | null;
@@ -60,7 +52,7 @@ export interface InsertHCPInput {
   email?: string | null;
   phone?: string | null;
   primary_specialty?: string | null;
-  institution?: string | null;  // resolved to hco_id
+  institution?: string | null;
   region?: string;
   lead_id?: string | null;
   influence_tier?: string;
@@ -80,7 +72,7 @@ export interface UpdateHCPInput {
   email?: string | null;
   phone?: string | null;
   primary_specialty?: string | null;
-  institution?: string | null;  // resolved to hco_id
+  institution?: string | null;
   region?: string;
   influence_tier?: string;
   engagement_level?: string;
@@ -91,15 +83,6 @@ export interface UpdateHCPInput {
   notes?: string | null;
   tags?: string[];
 }
-
-const MOCK_HCPS: HCP[] = [
-  { id: "mock-hcp-01", title: "Dr.", first_name: "Anna",      last_name: "Kowalska",      email: "a.kowalska@neosleep.example",     phone: null, primary_specialty: "Pulmonology",       secondary_specialty: null, role: "doctor", institution: "NeoSleep Care Center",          region: "Central", influence_tier: "B", engagement_level: "neutral", prescribing_volume: null, is_key_opinion_leader: false, contact_frequency: null, first_contact_date: null, visit_count: 0, last_visit_date: null, language: "pl", status: "active", data_consent_at: null, data_consent_withdrawn_at: null, notes: null, tags: [], hco_id: null, primary_hco_id: null, preferred_contact: null, preferred_time: null, license_number: null, years_experience: null, created_at: new Date("2025-09-01"), updated_at: new Date("2025-09-01") },
-  { id: "mock-hcp-02", title: "Dr.", first_name: "Piotr",     last_name: "Nowak",         email: "p.nowak@neosleep.example",        phone: null, primary_specialty: "Sleep medicine",    secondary_specialty: null, role: "doctor", institution: "NeoSleep Care Center",          region: "Central", influence_tier: "A", engagement_level: "champion", prescribing_volume: "high", is_key_opinion_leader: true, contact_frequency: null, first_contact_date: null, visit_count: 2, last_visit_date: null, language: "pl", status: "active", data_consent_at: null, data_consent_withdrawn_at: null, notes: null, tags: [], hco_id: null, primary_hco_id: null, preferred_contact: null, preferred_time: null, license_number: null, years_experience: null, created_at: new Date("2025-09-05"), updated_at: new Date("2025-09-05") },
-  { id: "mock-hcp-03", title: "Dr.", first_name: "Maria",     last_name: "Wiśniewska",    email: "m.wisniewska@hospital.example",   phone: null, primary_specialty: "Neurology",         secondary_specialty: null, role: "doctor", institution: "City Hospital North",           region: "North",   influence_tier: "C", engagement_level: "unknown",  prescribing_volume: null, is_key_opinion_leader: false, contact_frequency: null, first_contact_date: null, visit_count: 0, last_visit_date: null, language: "pl", status: "active", data_consent_at: null, data_consent_withdrawn_at: null, notes: null, tags: [], hco_id: null, primary_hco_id: null, preferred_contact: null, preferred_time: null, license_number: null, years_experience: null, created_at: new Date("2025-09-08"), updated_at: new Date("2025-09-08") },
-  { id: "mock-hcp-04", title: "Dr.", first_name: "Jan",       last_name: "Zieliński",     email: "j.zielinski@hospital.example",    phone: null, primary_specialty: "Internal medicine", secondary_specialty: null, role: "doctor", institution: "City Hospital North",           region: "North",   influence_tier: "C", engagement_level: "neutral",  prescribing_volume: null, is_key_opinion_leader: false, contact_frequency: null, first_contact_date: null, visit_count: 1, last_visit_date: null, language: "pl", status: "active", data_consent_at: null, data_consent_withdrawn_at: null, notes: null, tags: [], hco_id: null, primary_hco_id: null, preferred_contact: null, preferred_time: null, license_number: null, years_experience: null, created_at: new Date("2025-09-10"), updated_at: new Date("2025-09-10") },
-  { id: "mock-hcp-05", title: "Dr.", first_name: "Katarzyna", last_name: "Wójcik",        email: "k.wojcik@pulm-south.example",     phone: null, primary_specialty: "ENT",               secondary_specialty: null, role: "doctor", institution: "Centrum Pulmonologii Południe", region: "South",   influence_tier: "C", engagement_level: "skeptic",  prescribing_volume: "low",  is_key_opinion_leader: false, contact_frequency: null, first_contact_date: null, visit_count: 0, last_visit_date: null, language: "pl", status: "active", data_consent_at: null, data_consent_withdrawn_at: null, notes: null, tags: [], hco_id: null, primary_hco_id: null, preferred_contact: null, preferred_time: null, license_number: null, years_experience: null, created_at: new Date("2025-09-12"), updated_at: new Date("2025-09-12") },
-  { id: "mock-hcp-06", title: "Dr.", first_name: "Marek",     last_name: "Kowalczyk",     email: "m.kowalczyk@pulm-south.example",  phone: null, primary_specialty: "Pulmonology",       secondary_specialty: null, role: "doctor", institution: "Centrum Pulmonologii Południe", region: "South",   influence_tier: "B", engagement_level: "neutral",  prescribing_volume: "medium", is_key_opinion_leader: false, contact_frequency: null, first_contact_date: null, visit_count: 2, last_visit_date: null, language: "pl", status: "active", data_consent_at: null, data_consent_withdrawn_at: null, notes: null, tags: [], hco_id: null, primary_hco_id: null, preferred_contact: null, preferred_time: null, license_number: null, years_experience: null, created_at: new Date("2025-09-14"), updated_at: new Date("2025-09-14") },
-];
 
 const HCP_SORT_COLUMNS = ["first_name", "last_name", "email", "primary_specialty", "region", "influence_tier", "engagement_level", "created_at"] as const;
 
@@ -126,13 +109,11 @@ function isHCPSortColumn(s: string): s is (typeof HCP_SORT_COLUMNS)[number] {
   return HCP_SORT_COLUMNS.includes(s as (typeof HCP_SORT_COLUMNS)[number]);
 }
 
-/** Find or create HCO by name. Uses INSERT ON CONFLICT to avoid race conditions. */
 async function resolveHcoId(
-  p: NonNullable<ReturnType<typeof getDb>>,
   institution: string,
   region: string
 ): Promise<{ id: string; name: string }> {
-  const result = await p.query<{ id: string }>(
+  const result = await getDb().query<{ id: string }>(
     `INSERT INTO tbl_hco (name, region, status) VALUES ($1, $2, 'active')
      ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
      RETURNING id`,
@@ -148,12 +129,6 @@ export async function getHCPPaginated(
   sortBy: string,
   sortOrder: "asc" | "desc"
 ): Promise<{ rows: HCP[]; total: number }> {
-  const p = getDb();
-  if (!p) {
-    const start = (page - 1) * limit;
-    return { rows: MOCK_HCPS.slice(start, start + limit), total: MOCK_HCPS.length };
-  }
-
   const conditions: string[] = [];
   const params: unknown[] = [];
   let paramIndex = 1;
@@ -189,53 +164,54 @@ export async function getHCPPaginated(
   const orderDir = sortOrder === "asc" ? "ASC" : "DESC";
   const safeOrder = orderCol === "created_at" ? "h.created_at" : `h."${orderCol}"`;
 
-  const countResult = await p.query<{ count: string }>(
-    `SELECT COUNT(*) AS count FROM tbl_hcp h LEFT JOIN tbl_hco o ON h.hco_id = o.id ${whereClause}`,
-    params
-  );
-  const total = Number(countResult.rows[0]?.count ?? 0);
+  try {
+    const countResult = await getDb().query<{ count: string }>(
+      `SELECT COUNT(*) AS count FROM tbl_hcp h LEFT JOIN tbl_hco o ON h.hco_id = o.id ${whereClause}`,
+      params
+    );
+    const total = Number(countResult.rows[0]?.count ?? 0);
 
-  const offset = (page - 1) * limit;
-  params.push(limit, offset);
-  const dataResult = await p.query<HCP>(
-    `SELECT ${HCP_SELECT_COLS}
-     FROM tbl_hcp h LEFT JOIN tbl_hco o ON h.hco_id = o.id
-     ${whereClause} ORDER BY ${safeOrder} ${orderDir} LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
-    params
-  );
-  return { rows: dataResult.rows, total };
+    const offset = (page - 1) * limit;
+    params.push(limit, offset);
+    const dataResult = await getDb().query<HCP>(
+      `SELECT ${HCP_SELECT_COLS}
+       FROM tbl_hcp h LEFT JOIN tbl_hco o ON h.hco_id = o.id
+       ${whereClause} ORDER BY ${safeOrder} ${orderDir} LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+      params
+    );
+    return { rows: dataResult.rows, total };
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getHCPPaginated", err);
+  }
 }
 
 export async function getHCPById(id: string): Promise<HCP | null> {
-  const p = getDb();
-  if (!p) return null;
   try {
-    const result = await p.query<HCP>(
+    const result = await getDb().query<HCP>(
       `SELECT ${HCP_SELECT_COLS}
        FROM tbl_hcp h LEFT JOIN tbl_hco o ON h.hco_id = o.id WHERE h.id = $1`,
       [id]
     );
     return result.rows[0] ?? null;
   } catch (err) {
-    console.error("getHCPById error:", err);
-    return null;
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getHCPById", err);
   }
 }
 
-export async function insertHCP(input: InsertHCPInput): Promise<HCP | null> {
-  const p = getDb();
-  if (!p) return null;
-  try {
-    const firstName = trimOrEmpty(input.first_name);
-    const lastName = trimOrEmpty(input.last_name);
-    if (!firstName || !lastName) return null;
+export async function insertHCP(input: InsertHCPInput): Promise<HCP> {
+  const firstName = trimOrEmpty(input.first_name);
+  const lastName = trimOrEmpty(input.last_name);
+  if (!firstName || !lastName) throw new ValidationError("HCP first_name and last_name are required");
 
+  try {
     const region = trimOrEmpty(input.region);
     const hco = input.institution?.trim()
-      ? await resolveHcoId(p, input.institution.trim(), region)
+      ? await resolveHcoId(input.institution.trim(), region)
       : null;
 
-    const result = await p.query<HCP>(
+    const result = await getDb().query<HCP>(
       `INSERT INTO tbl_hcp (
          first_name, last_name, title, email, phone, primary_specialty,
          hco_id, primary_hco_id, region, status, lead_id,
@@ -265,19 +241,18 @@ export async function insertHCP(input: InsertHCPInput): Promise<HCP | null> {
       ]
     );
     const row = result.rows[0];
-    if (!row) return null;
+    if (!row) throw new DatabaseError("insertHCP", new Error("Insert returned no rows"));
     return { ...row, institution: hco?.name ?? null };
   } catch (err) {
-    console.error("insertHCP error:", err);
-    return null;
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("insertHCP", err);
   }
 }
 
 export async function updateHCP(id: string, input: UpdateHCPInput): Promise<HCP | null> {
-  const p = getDb();
-  if (!p) return null;
   const existing = await getHCPById(id);
   if (!existing) return null;
+
   try {
     const firstName = input.first_name !== undefined ? trimOrEmpty(input.first_name) : existing.first_name;
     const lastName = input.last_name !== undefined ? trimOrEmpty(input.last_name) : existing.last_name;
@@ -296,9 +271,9 @@ export async function updateHCP(id: string, input: UpdateHCPInput): Promise<HCP 
     const tags = input.tags !== undefined ? input.tags : existing.tags;
     const institutionInput = input.institution !== undefined ? trimOrNull(input.institution) : (existing.institution ?? null);
 
-    const hco = institutionInput ? await resolveHcoId(p, institutionInput, region) : null;
+    const hco = institutionInput ? await resolveHcoId(institutionInput, region) : null;
 
-    const updateResult = await p.query<{ updated_at: Date }>(
+    const updateResult = await getDb().query<{ updated_at: Date }>(
       `UPDATE tbl_hcp SET
          first_name = $1, last_name = $2, title = $3, email = $4, phone = $5,
          primary_specialty = $6, hco_id = $7, primary_hco_id = $7, region = $8,
@@ -338,7 +313,7 @@ export async function updateHCP(id: string, input: UpdateHCPInput): Promise<HCP 
       updated_at: updateResult.rows[0]?.updated_at ?? existing.updated_at,
     };
   } catch (err) {
-    console.error("updateHCP error:", err);
-    return null;
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("updateHCP", err);
   }
 }

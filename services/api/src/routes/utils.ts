@@ -1,5 +1,4 @@
-import type { Request, Response } from "express";
-import { getDb } from "../db.js";
+import type { Request } from "express";
 
 const DEFAULT_PAGE = 1;
 const DEFAULT_LIMIT = 10;
@@ -31,12 +30,4 @@ export function toFilterArray(q: unknown): string[] | undefined {
 
 export function isoDate(val: Date | string | null | undefined): string {
   return val instanceof Date ? val.toISOString() : (val ?? "");
-}
-
-export function requireDb(res: Response): boolean {
-  if (!getDb()) {
-    res.status(503).json({ error: "Database not available. Ensure Postgres is running and DATABASE_URL is set." });
-    return false;
-  }
-  return true;
 }

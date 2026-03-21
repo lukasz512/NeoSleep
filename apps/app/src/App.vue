@@ -1,44 +1,18 @@
 <template>
-  <VApp>
-    <AppNotifications />
-    <component :is="layoutComponent" />
-  </VApp>
+  <component :is="layoutComponent" />
 </template>
 
 <script setup lang="ts">
-import { computed, watch, onMounted } from "vue";
+import { computed } from "vue";
 import { useRoute } from "vue-router";
-import { useI18n } from "vue-i18n";
-import { DefaultLayout, AppLayout } from "./router";
-import AppNotifications from "./components/AppNotifications.vue";
+import { PublicLayout, AppLayout } from "./router";
+import { useDocumentLang } from "@neo/shared/composables/useDocumentLang";
+
+useDocumentLang();
 
 const route = useRoute();
-const { locale } = useI18n();
-
-function setDocumentLang(lang: string) {
-  if (typeof document !== "undefined" && document.documentElement) {
-    document.documentElement.lang = lang;
-  }
-}
-
-watch(locale, setDocumentLang);
-onMounted(() => setDocumentLang(locale.value));
-
 const layoutComponent = computed(() => {
   const name = (route.meta.layout as string) || "default";
-  return name === "app" ? AppLayout : DefaultLayout;
+  return name === "app" ? AppLayout : PublicLayout;
 });
 </script>
-
-<style>
-#app {
-  font-family: system-ui, sans-serif;
-}
-a {
-  color: var(--rep-primary, #128F83);
-  text-decoration: none;
-}
-a:hover {
-  color: var(--rep-primary-hover, #10544E);
-}
-</style>

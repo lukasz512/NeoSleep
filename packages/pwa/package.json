@@ -1,9 +1,0 @@
-{
-  "name": "@neo/pwa",
-  "private": true,
-  "type": "module",
-  "exports": {
-    "./vite-config": "./src/vite-pwa-config.ts",
-    "./composables/usePushNotifications": "./src/composables/usePushNotifications.ts"
-  }
-}

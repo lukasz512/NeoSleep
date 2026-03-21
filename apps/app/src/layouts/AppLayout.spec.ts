@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import en from "@i18n/en.json";
+import en from "@neo/i18n/en.json";
 import { appNavRoutes } from "../router/routes";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
