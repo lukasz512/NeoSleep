@@ -32,7 +32,7 @@ NVM_SCRIPT="${NVM_DIR:-$HOME/.nvm}/nvm.sh"
 if [ -s "$NVM_SCRIPT" ]; then
   # shellcheck source=/dev/null
   . "$NVM_SCRIPT"
-  nvm use 2>/dev/null || true
+  nvm use --silent 2>/dev/null || true
 else
   echo "nvm nie znaleziony. Upewnij się że masz Node >= 20 (patrz .nvmrc). Kontynuuję..."
 fi
@@ -68,7 +68,7 @@ fi
 # pnpm install jest szybkie jeśli lockfile się nie zmienił — bezpieczne do odpalania za każdym razem
 echo "Instaluję zależności..."
 (corepack enable 2>/dev/null || true)
-pnpm install 2>/dev/null || npm install
+pnpm install --reporter=silent 2>/dev/null || npm install --silent
 
 # ─── 7. Uruchom serwisy (API + app + website + telegram) ──────────────────────
 # Migracje BD uruchamiają się automatycznie przy starcie API (services/api/src/db/migrations.ts)
