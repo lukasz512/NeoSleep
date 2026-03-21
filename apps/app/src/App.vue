@@ -5,10 +5,12 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useRoute } from "vue-router";
+import { useI18n } from "vue-i18n";
 import { PublicLayout, AppLayout } from "./router";
 import { useDocumentLang } from "@shared/composables/useDocumentLang";
 
-useDocumentLang();
+const { locale } = useI18n();
+useDocumentLang(locale);
 
 const route = useRoute();
 const layoutComponent = computed(() => {

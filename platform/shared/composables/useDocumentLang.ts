@@ -1,8 +1,6 @@
-import { watch } from "vue";
-import { useI18n } from "vue-i18n";
+import { watch, type Ref } from "vue";
 
-export function useDocumentLang(): void {
-  const { locale } = useI18n();
+export function useDocumentLang(locale: Ref<string>): void {
   watch(
     locale,
     (lang) => {
