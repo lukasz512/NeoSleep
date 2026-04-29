@@ -45,8 +45,8 @@ defineEmits<{
 }
 
 .app-empty-state__icon {
-  width: 96px;
-  height: 96px;
+  width: clamp(96px, 10vw, 120px);
+  height: clamp(96px, 10vw, 120px);
   margin-bottom: 20px;
   opacity: 0.55;
   color: rgb(var(--v-theme-primary));
@@ -54,7 +54,7 @@ defineEmits<{
 
 .app-empty-state__title {
   margin: 0 0 8px;
-  font-size: 1.125rem;
+  font-size: clamp(1.125rem, 2vw, 1.25rem);
   font-weight: 500;
   color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
 }
@@ -74,16 +74,5 @@ defineEmits<{
 .app-empty-state__btn-icon {
   width: 20px;
   height: 20px;
-}
-
-@media (min-width: 768px) {
-  .app-empty-state__icon {
-    width: 120px;
-    height: 120px;
-  }
-
-  .app-empty-state__title {
-    font-size: 1.25rem;
-  }
 }
 </style>

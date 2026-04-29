@@ -3,19 +3,23 @@ import { getPresentations, getPresentationById } from "../db.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 
-export const presentationsRouter = Router();
+export const presentationsRouter: import('express').Router = Router();
 
 presentationsRouter.get(
-  "/api/presentations",
+  "/presentations",
   requireAuth,
   asyncHandler(async (_req: Request, res: Response) => {
     const rows = await getPresentations();
     const items = rows.map((r) => ({
       id: r.id,
       title: r.title,
+      // file_url is canonical; url is the backward-compat alias
+      file_url: r.file_url,
       url: r.url,
-      file_type: r.file_type,
       thumbnail_url: r.thumbnail_url ?? null,
+      locale: r.locale ?? null,
+      tags: r.tags ?? [],
+      status: r.status,
       created_at: r.created_at instanceof Date ? r.created_at.toISOString() : r.created_at,
     }));
     res.json({ items });
@@ -23,7 +27,8 @@ presentationsRouter.get(
 );
 
 presentationsRouter.get(
-  "/api/presentations/:id",
+  "/presentations/:id",
+  requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id?.trim();
     if (!id) {
@@ -38,9 +43,13 @@ presentationsRouter.get(
     res.json({
       id: p.id,
       title: p.title,
+      file_url: p.file_url,
       url: p.url,
-      file_type: p.file_type,
       thumbnail_url: p.thumbnail_url ?? null,
+      locale: p.locale ?? null,
+      tags: p.tags ?? [],
+      status: p.status,
+      metadata: p.metadata ?? null,
       created_at: p.created_at instanceof Date ? p.created_at.toISOString() : p.created_at,
     });
   })

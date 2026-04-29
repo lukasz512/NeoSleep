@@ -40,15 +40,11 @@ const wrapRef = ref<HTMLElement | null>(null);
 const visible = useReveal(wrapRef, 0.12);
 </script>
 
-<style lang="scss" scoped>
-$bp-mobile: 600px;
-
-.home-cta-banner {
-  max-width: var(--website-page-max-width);
-  margin: 0 auto 2.5rem;
-
-  @media (max-width: $bp-mobile) {
-    margin-bottom: var(--website-page-gutter-mobile);
+<style lang="scss">
+@layer components {
+  .home-cta-banner {
+    max-width: var(--website-page-max-width);
+    margin: 0 auto 2.5rem;
   }
 }
 </style>

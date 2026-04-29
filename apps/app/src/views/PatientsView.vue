@@ -1,8 +1,8 @@
 <template>
   <div class="patients-view">
-    <RepEntityList
+    <AppEntityList
       view-id="patients"
-      api-endpoint="/api/patients"
+      api-endpoint="/api/v1/patients"
       :headers="tableHeaders"
       :filter-definitions="patientFilterDefinitions"
       :i18n="patientsI18n"
@@ -28,21 +28,21 @@
           {{ (item as { status?: string }).status }}
         </VChip>
       </template>
-    </RepEntityList>
+    </AppEntityList>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
-import RepEntityList from "../components/RepEntityList.vue";
-import { type RepFilterDefinition } from "../composables/useRepFilters";
+import AppEntityList from "../components/AppEntityList.vue";
+import { type FilterDefinition } from "../composables/useFilters";
 import { useConfigStore } from "../stores/config";
 
 const { t } = useI18n();
 const configStore = useConfigStore();
 
-const patientFilterDefs: RepFilterDefinition[] = [
+const patientFilterDefs: FilterDefinition[] = [
   { key: "status",             labelKey: "app.patients.filters.status",           type: "select", default: "" },
   { key: "region",             labelKey: "app.patients.filters.region",           type: "select", default: "" },
   { key: "referred_by_source", labelKey: "app.patients.filters.referredBySource", type: "select", default: "" },
@@ -70,7 +70,7 @@ const sourceOptions = computed(() => [
   { title: t("app.patients.filters.sourceOther"),            value: "other" },
 ]);
 
-const patientFilterDefinitions = computed<RepFilterDefinition[]>(() => [
+const patientFilterDefinitions = computed<FilterDefinition[]>(() => [
   { ...patientFilterDefs[0], options: statusOptions.value },
   { ...patientFilterDefs[1], options: regionOptions.value },
   { ...patientFilterDefs[2], options: sourceOptions.value },

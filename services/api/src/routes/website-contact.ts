@@ -3,10 +3,10 @@ import { asyncHandler } from "../middleware/errorHandler.js";
 import { sendContactEmail } from "../mailer.js";
 import { contactFormLimiter } from "../middleware/rateLimiter.js";
 
-export const websiteContactRouter = Router();
+export const websiteContactRouter: import('express').Router = Router();
 
 websiteContactRouter.post(
-  "/api/contact",
+  "/contact",
   contactFormLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     console.log("[contact] POST /api/contact body:", JSON.stringify(req.body));

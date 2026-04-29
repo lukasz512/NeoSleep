@@ -309,7 +309,7 @@ describe("AppLayout", () => {
     it("i18n has title key for each app module route so header can show module name above the line", () => {
       const messages = en as Record<string, string>;
       for (const routeName of APP_MODULE_ROUTES) {
-        const key = `rep.${routeName}.title`;
+        const key = `user.${routeName}.title`;
         expect(messages[key], `missing i18n key: ${key}`).toBeDefined();
         expect(typeof messages[key]).toBe("string");
         expect(messages[key].length).toBeGreaterThan(0);
@@ -318,16 +318,16 @@ describe("AppLayout", () => {
 
     it("route-to-title mapping covers all app module routes", () => {
       const MODULE_TITLE_KEYS: Record<string, string> = {
-        dashboard: "rep.dashboard.title",
-        leads: "rep.leads.title",
-        hcp: "rep.hcp.title",
-        hco: "rep.hco.title",
-        planner: "rep.planner.title",
-        presentations: "rep.presentations.title",
+        dashboard: "user.dashboard.title",
+        leads: "user.leads.title",
+        hcp: "user.hcp.title",
+        hco: "user.hco.title",
+        planner: "user.planner.title",
+        presentations: "user.presentations.title",
       };
       for (const name of APP_MODULE_ROUTES) {
         expect(MODULE_TITLE_KEYS[name]).toBeDefined();
-        expect(MODULE_TITLE_KEYS[name]).toBe(`rep.${name}.title`);
+        expect(MODULE_TITLE_KEYS[name]).toBe(`user.${name}.title`);
       }
     });
 

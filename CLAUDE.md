@@ -50,14 +50,17 @@ brand/            → Design tokens, logos, fonts
 ## Database
 User/account model has 3 distinct identity types — do NOT conflate them:
 
+FHIR R4-aligned schema. All tables use singular names, no `tbl_` prefix.
+
 | Table | Who | Auth | App |
 |---|---|---|---|
-| `tbl_users` | Internal: reps, managers, admins (pharma company employees) | Google OIDC + password | apps/app |
-| `tbl_hcp` | Healthcare Professionals (doctors, specialists) | magic link (planned) | HCP portal (future) |
-| `tbl_patients` | Patients referred by HCPs | TBD (future) | TBD |
+| `users` + `person` | Internal: reps, managers, admins (pharma company employees) | Google OIDC + password | apps/app |
+| `practitioner` + `person` | Healthcare Professionals (doctors, specialists) | magic link (planned) | HCP portal (future) |
+| `patient` + `person` | Patients referred by HCPs | TBD (future) | TBD |
 
-All tables:
-`tbl_leads`, `tbl_users`, `tbl_hcp`, `tbl_hco`, `tbl_patients`, `tbl_events`, `tbl_presentations`, `tbl_app_config`, `tbl_audit_log`, `tbl_diagnostics`
+Platform schema: `platform.companies`, `platform.tenants`, `platform.roles`, `platform.permissions`, `platform.platform_users`, `platform.feature_flags`
+
+Tenant schema (FHIR naming): `person`, `users`, `user_roles`, `organization`, `practitioner`, `patient`, `related_person`, `lead`, `encounter`, `observation`, `communication`, `presentation`, `consent`, `app_config`, `audit_log`, `push_subscription`
 
 - New tables → add a migration in `services/api/migrations/` (next number, `.sql`)
 - Migrations run automatically on BFF startup via `db/migrations.ts`
@@ -67,10 +70,11 @@ All tables:
 - Session cookie (httpOnly), remember-me tokens
 - Roles: `admin`, `manager`, `rep` — region-scoped
 - RBAC middleware: `services/api/src/auth.ts`
-- `tbl_hcp` auth: magic link planned — NOT YET IMPLEMENTED (needs architecture decision first)
+- `practitioner` auth: magic link planned — NOT YET IMPLEMENTED (needs architecture decision first)
 
 ## i18n
-- Active languages: EN, PL, ES
+- Active languages: EN, PL, MX (Mexican Spanish)
+- Internal locale IDs: `en`, `pl`, `mx` — `mx` is the app's internal key for `es-MX` (Mexican Spanish). The browser locale `es-MX` maps to `mx` internally via `i18n.ts`. Do NOT rename to `es-MX` — it is used consistently as a short key throughout the codebase.
 - Add keys to `platform/i18n/en.json` first, then run `npm run i18n:extract`
 - Never leave a key only in one language file — CI enforces parity
 

@@ -1,6 +1,6 @@
 import { createI18n } from "vue-i18n";
 import { en as vuetifyEn, pl as vuetifyPl, es as vuetifyEs } from "vuetify/locale";
-import { REP_STORAGE_KEYS } from "../constants";
+import { APP_STORAGE_KEYS } from "../constants";
 
 /** Detect browser preferred locale, mapped to our supported locales. */
 function detectBrowserLocale(): "en" | "pl" | "mx" {
@@ -18,7 +18,7 @@ function detectBrowserLocale(): "en" | "pl" | "mx" {
 function resolveInitialLocale(): "en" | "pl" | "mx" {
   if (typeof localStorage === "undefined") return detectBrowserLocale();
   try {
-    const raw = localStorage.getItem(REP_STORAGE_KEYS.settings);
+    const raw = localStorage.getItem(APP_STORAGE_KEYS.settings);
     if (raw) {
       const parsed = JSON.parse(raw) as { locale?: string };
       if (parsed?.locale === "pl" || parsed?.locale === "mx" || parsed?.locale === "en") {
@@ -46,14 +46,17 @@ const [enMessages, activeMessages] = await Promise.all([
   savedLocale !== "en" ? localeLoaders[savedLocale]() : Promise.resolve(null),
 ]);
 
+// Messages are dynamically loaded (Record<string, unknown>) — cast to expected shape.
+// vue-i18n's strict typing only matters when using typed message schemas;
+// for runtime-loaded JSON messages the cast is safe.
 export const i18n = createI18n({
-  legacy: false,
+  legacy: false as const,
   locale: savedLocale,
   fallbackLocale: "en",
   messages: {
     en: enMessages,
     ...(savedLocale !== "en" && activeMessages ? { [savedLocale]: activeMessages } : {}),
-  },
+  } as unknown as Record<string, Record<string, string>>,
 });
 
 /** Load locale messages on demand before switching i18n.global.locale. */

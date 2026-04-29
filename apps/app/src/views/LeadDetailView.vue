@@ -26,8 +26,8 @@
       :has-content="!!lead"
       :loading="loading"
       :back-route="backRoute"
-      :back-label="t('rep.leads.detail.back')"
-      :not-found-label="t('rep.leads.detail.notFound')"
+      :back-label="t('user.leads.detail.back')"
+      :not-found-label="t('user.leads.detail.notFound')"
     >
       <!-- Name inline with back arrow -->
       <template #header-title v-if="lead">
@@ -39,29 +39,29 @@
         <VTooltip location="bottom">
           <template #activator="{ props: tooltipProps }">
             <VBtn v-bind="tooltipProps" icon variant="flat" size="large" color="success"
-              class="view-item__schedule-btn" :aria-label="t('rep.detail.scheduleVisit')" @click="onScheduleVisit">
+              class="view-item__schedule-btn" :aria-label="t('user.detail.scheduleVisit')" @click="onScheduleVisit">
               <AppIcon name="calendar" class="view-item__schedule-icon" />
             </VBtn>
           </template>
-          <span>{{ t('rep.detail.scheduleVisit') }}</span>
+          <span>{{ t('user.detail.scheduleVisit') }}</span>
         </VTooltip>
         <VTooltip v-if="lead && !isCompleted(lead)" location="bottom">
           <template #activator="{ props: tooltipProps }">
             <VBtn v-bind="tooltipProps" icon variant="flat" size="large"
-              class="view-item__move-to-contacts-btn" :aria-label="t('rep.leads.detail.moveToContacts')" @click="onMoveToContacts">
+              class="view-item__move-to-contacts-btn" :aria-label="t('user.leads.detail.moveToContacts')" @click="onMoveToContacts">
               <AppIcon name="user-arrow" class="view-item__move-to-contacts-icon" />
             </VBtn>
           </template>
-          <span>{{ t('rep.leads.detail.moveToContacts') }}</span>
+          <span>{{ t('user.leads.detail.moveToContacts') }}</span>
         </VTooltip>
         <VTooltip v-if="isAdmin" location="bottom">
           <template #activator="{ props: tooltipProps }">
             <VBtn v-bind="tooltipProps" icon variant="flat" size="large"
-              class="view-item__edit-btn view-item__edit-btn--no-border" :aria-label="t('rep.leads.detail.edit')" @click="onEdit">
+              class="view-item__edit-btn view-item__edit-btn--no-border" :aria-label="t('user.leads.detail.edit')" @click="onEdit">
               <AppIcon name="pencil" class="view-item__edit-icon" />
             </VBtn>
           </template>
-          <span>{{ t('rep.leads.detail.edit') }}</span>
+          <span>{{ t('user.leads.detail.edit') }}</span>
         </VTooltip>
       </template>
 
@@ -74,7 +74,7 @@
             <dl class="view-detail__fields">
 
               <div v-if="!isRejected(lead)" class="view-detail__row">
-                <dt class="view-detail__label">{{ t("rep.leads.detail.email") }}</dt>
+                <dt class="view-detail__label">{{ t("user.leads.detail.email") }}</dt>
                 <dd class="view-detail__value">
                   <a v-if="lead.email" :href="`mailto:${lead.email}`" class="view-detail__link">{{ lead.email }}</a>
                   <span v-else class="view-detail__empty">—</span>
@@ -82,7 +82,7 @@
               </div>
 
               <div v-if="!isRejected(lead)" class="view-detail__row">
-                <dt class="view-detail__label">{{ t("rep.leads.detail.phone") }}</dt>
+                <dt class="view-detail__label">{{ t("user.leads.detail.phone") }}</dt>
                 <dd class="view-detail__value">
                   <a v-if="lead.phone" :href="`tel:${lead.phone}`" class="view-detail__link">{{ lead.phone }}</a>
                   <span v-else class="view-detail__empty">—</span>
@@ -90,7 +90,7 @@
               </div>
 
               <div class="view-detail__row">
-                <dt class="view-detail__label">{{ t("rep.leads.detail.status") }}</dt>
+                <dt class="view-detail__label">{{ t("user.leads.detail.status") }}</dt>
                 <dd class="view-detail__value">
                   <span :class="['rep-lead-status-chip', `rep-lead-status-chip--${leadStatusClass(lead.status)}`]">
                     {{ statusLabel(lead.status) }}
@@ -99,7 +99,7 @@
               </div>
 
               <div class="view-detail__row view-detail__row--chips">
-                <dt class="view-detail__label">{{ t("rep.leads.detail.specialty") }}</dt>
+                <dt class="view-detail__label">{{ t("user.leads.detail.specialty") }}</dt>
                 <dd class="view-detail__value view-detail__value--chips">
                   <span
                     v-for="(spec, i) in specialtyChips"
@@ -110,12 +110,12 @@
               </div>
 
               <div class="view-detail__row">
-                <dt class="view-detail__label">{{ t("rep.leads.detail.region") }}</dt>
+                <dt class="view-detail__label">{{ t("user.leads.detail.region") }}</dt>
                 <dd class="view-detail__value">{{ lead.region || "—" }}</dd>
               </div>
 
               <div v-if="lead.institution != null" class="view-detail__row">
-                <dt class="view-detail__label">{{ t("rep.leads.detail.institution") }}</dt>
+                <dt class="view-detail__label">{{ t("user.leads.detail.institution") }}</dt>
                 <dd class="view-detail__value">
                   <RouterLink v-if="lead.institution" :to="hcoLink(lead.institution)" class="view-detail__link">
                     {{ lead.institution }}
@@ -125,7 +125,7 @@
               </div>
 
               <div class="view-detail__row view-detail__row--notes">
-                <dt class="view-detail__label">{{ t("rep.leads.detail.notes") }}</dt>
+                <dt class="view-detail__label">{{ t("user.leads.detail.notes") }}</dt>
                 <dd class="view-detail__value view-detail__value--notes">{{ lead.notes || demoNotes }}</dd>
               </div>
 
@@ -153,6 +153,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
+import { useDisplay } from "vuetify";
 import { useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuthStore } from "../stores/auth";
@@ -170,7 +171,11 @@ const LeadContactForm = defineAsyncComponent(() => import("../components/LeadCon
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
 
 const { t } = useI18n();
+const { mobile } = useDisplay();
 const route = useRoute();
+
+const bodyColumns = computed(() => mobile.value ? "1fr" : "1fr 320px");
+const mapHeight = computed(() => mobile.value ? "300px" : "100%");
 const authStore = useAuthStore();
 const notifications = useNotifications();
 const isAdmin = computed(() => authStore.user?.role === "admin");
@@ -192,7 +197,7 @@ const backRoute = computed(() => ({ name: "leads" }));
 
 function statusLabel(status: string): string {
   const key = leadStatusI18nKey(status);
-  return key ? t(key) : status || t("rep.leads.filters.statusNew");
+  return key ? t(key) : status || t("user.leads.filters.statusNew");
 }
 
 function isRejected(lead: Lead): boolean {
@@ -216,19 +221,19 @@ function onScheduleVisit() {
 
 async function onEventFormSubmit(payload: import("../components/EventForm.vue").EventSubmitPayload) {
   try {
-    const res = await apiFetch("/api/events", {
+    const res = await apiFetch("/api/v1/interactions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: payload.title, start_at: payload.start_at, end_at: payload.end_at, type: payload.type, status: payload.status, location: payload.location, video_link: payload.video_link, notes: payload.notes, region: payload.region, attendees: payload.attendees }),
     });
     if (res.ok) {
-      notifications.show(t("rep.planner.form.success"), "success");
+      notifications.show(t("user.planner.form.success"), "success");
       showEventForm.value = false;
     } else {
-      notifications.show(t("rep.planner.form.errorSave"), "error");
+      notifications.show(t("user.planner.form.errorSave"), "error");
     }
   } catch {
-    notifications.show(t("rep.planner.form.errorSave"), "error");
+    notifications.show(t("user.planner.form.errorSave"), "error");
   }
 }
 
@@ -240,24 +245,24 @@ async function onContactSubmit(data: import("../components/LeadContactForm.vue")
   const d = data as import("../components/LeadContactForm.vue").ContactFormData;
   const leadId = lead.value?.id;
   if (!leadId) return;
-  const res = await apiFetch("/api/hcp", {
+  const res = await apiFetch("/api/v1/hcp", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name: d.name, email: d.email || "", phone: d.phone || "", specialty: d.specialty || undefined, region: d.region || undefined, institution: d.institution || undefined, lead_id: leadId }),
-    errorMessageKey: "rep.leads.errorLoad",
+    errorMessageKey: "user.leads.errorLoad",
   });
   if (res.ok) {
-    const patchRes = await apiFetch(`/api/leads/${leadId}`, {
+    const patchRes = await apiFetch(`/api/v1/leads/${leadId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "completed" }),
-      errorMessageKey: "rep.leads.errorLoad",
+      errorMessageKey: "user.leads.errorLoad",
     });
     if (patchRes.ok) {
-      notifications.show(t("rep.hcp.form.contactCreated"), "success");
+      notifications.show(t("user.hcp.form.contactCreated"), "success");
       showMoveToContactsModal.value = false;
       await loadLead();
-      window.dispatchEvent(new Event("rep-entity-list-refresh"));
+      window.dispatchEvent(new Event("entity-list-refresh"));
     }
   }
 }
@@ -274,17 +279,17 @@ async function onLeadSubmit(data: import("../components/LeadContactForm.vue").Le
   const d = data as import("../components/LeadContactForm.vue").LeadFormData;
   const id = lead.value?.id;
   if (!id) return;
-  const res = await apiFetch(`/api/leads/${id}`, {
+  const res = await apiFetch(`/api/v1/leads/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name: d.name, email: d.email || undefined, status: d.status || "new", region: d.region || undefined, institution: d.institution || undefined }),
-    errorMessageKey: "rep.leads.errorLoad",
+    errorMessageKey: "user.leads.errorLoad",
   });
   if (res.ok) {
-    notifications.show(t("rep.leads.form.editSuccess"), "success");
+    notifications.show(t("user.leads.form.editSuccess"), "success");
     showEditModal.value = false;
     await loadLead();
-    window.dispatchEvent(new Event("rep-entity-list-refresh"));
+    window.dispatchEvent(new Event("entity-list-refresh"));
   }
 }
 
@@ -294,7 +299,7 @@ async function loadLead() {
   loading.value = true;
   lead.value = null;
   try {
-    const res = await apiFetch(`/api/leads/${id}`, { errorMessageKey: "rep.leads.errorLoad" });
+    const res = await apiFetch(`/api/v1/leads/${id}`, { errorMessageKey: "user.leads.errorLoad" });
     if (res.ok) lead.value = (await res.json()) as Lead;
   } catch {
     lead.value = null;
@@ -332,13 +337,9 @@ watch(() => route.params.id, loadLead);
 /* Two-column body */
 .view-detail__body {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: v-bind(bodyColumns);
+  align-items: stretch;
   gap: 16px;
-
-  @media (min-width: 700px) {
-    grid-template-columns: 1fr 320px;
-    align-items: stretch;
-  }
 }
 
 /* Data card */
@@ -430,14 +431,10 @@ watch(() => route.params.id, loadLead);
 
 .view-detail__map {
   width: 100%;
-  height: 300px;
+  height: v-bind(mapHeight);
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   border-radius: var(--rep-radius, 8px);
   display: block;
-
-  @media (min-width: 700px) {
-    height: 100%;
-  }
 }
 
 /* Buttons (delegated to ItemDetailLayout deep) */

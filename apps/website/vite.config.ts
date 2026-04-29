@@ -17,7 +17,7 @@ export default defineConfig(mergeConfig(sharedViteConfig(__dirname), {
           $bp-sm:  600px;
           $bp-md:  900px;
           $bp-lg:  960px;
-          $bp-nav: 1100px;
+          $bp-nav: 1024px;
         `,
       },
     },

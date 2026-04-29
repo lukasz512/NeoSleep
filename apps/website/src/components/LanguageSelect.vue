@@ -1,10 +1,10 @@
 <template>
   <div ref="wrapRef" class="lang-select">
-    <NavTooltip :text="t('rep.settings.language')">
+    <NavTooltip :text="t('user.settings.language')">
       <button
         type="button"
         class="lang-select__trigger"
-        :aria-label="t('rep.settings.language')"
+        :aria-label="t('user.settings.language')"
         :aria-expanded="open"
         aria-haspopup="true"
         @click="open = !open"

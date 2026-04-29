@@ -6,9 +6,9 @@
       mode="contact"
       @submit="onContactSubmit"
     />
-    <RepEntityList
+    <AppEntityList
       view-id="hcp"
-      api-endpoint="/api/hcp"
+      api-endpoint="/api/v1/hcp"
       :headers="tableHeaders"
       :filter-definitions="hcpFilterDefinitions"
       :i18n="hcpI18n"
@@ -29,18 +29,18 @@
         {{ (item as { name?: string }).name }}
       </span>
     </template>
-    </RepEntityList>
+    </AppEntityList>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, defineAsyncComponent } from "vue";
 import { useI18n } from "vue-i18n";
-import RepEntityList from "../components/RepEntityList.vue";
+import AppEntityList from "../components/AppEntityList.vue";
 import { apiFetch } from "../utils/api";
 import { useNotifications } from "../composables/useNotifications";
 import GenderIcon from "../components/GenderIcon.vue";
-import { type RepFilterDefinition } from "../composables/useRepFilters";
+import { type FilterDefinition } from "../composables/useFilters";
 import { useConfigStore } from "../stores/config";
 import { getGenderFromName } from "../utils/genderFromName";
 import type { ContactFormData, LeadFormData } from "../components/LeadContactForm.vue";
@@ -52,49 +52,49 @@ const configStore = useConfigStore();
 const showAddModal = ref(false);
 const notifications = useNotifications();
 
-const hcpFilterDefs: RepFilterDefinition[] = [
-  { key: "specialty", labelKey: "rep.hcp.filters.specialty", type: "select", default: "" },
-  { key: "institution", labelKey: "rep.hcp.filters.institution", type: "select", default: "" },
-  { key: "region", labelKey: "rep.hcp.filters.region", type: "select", default: "" },
+const hcpFilterDefs: FilterDefinition[] = [
+  { key: "specialty", labelKey: "user.hcp.filters.specialty", type: "select", default: "" },
+  { key: "institution", labelKey: "user.hcp.filters.institution", type: "select", default: "" },
+  { key: "region", labelKey: "user.hcp.filters.region", type: "select", default: "" },
 ];
 
 const specialtyOptions = computed(() => [
-  { title: t("rep.leads.filters.all"), value: "" },
+  { title: t("user.leads.filters.all"), value: "" },
   ...configStore.specialtyItems,
 ]);
 const institutionOptions = computed(() => [
-  { title: t("rep.leads.filters.all"), value: "" },
+  { title: t("user.leads.filters.all"), value: "" },
   ...configStore.institutionTypeItems,
 ]);
 const regionOptions = computed(() => [
-  { title: t("rep.leads.filters.all"), value: "" },
+  { title: t("user.leads.filters.all"), value: "" },
   ...configStore.regionItems,
 ]);
 
-const hcpFilterDefinitions = computed<RepFilterDefinition[]>(() => [
+const hcpFilterDefinitions = computed<FilterDefinition[]>(() => [
   { ...hcpFilterDefs[0], options: specialtyOptions.value },
   { ...hcpFilterDefs[1], options: institutionOptions.value },
   { ...hcpFilterDefs[2], options: regionOptions.value },
 ]);
 
 const tableHeaders = computed(() => [
-  { title: t("rep.hcp.table.name"), key: "name", sortable: true },
-  { title: t("rep.hcp.table.specialty"), key: "specialty", sortable: true },
-  { title: t("rep.hcp.table.institution"), key: "institution", sortable: true },
-  { title: t("rep.hcp.table.region"), key: "region", sortable: true },
+  { title: t("user.hcp.table.name"), key: "name", sortable: true },
+  { title: t("user.hcp.table.specialty"), key: "specialty", sortable: true },
+  { title: t("user.hcp.table.institution"), key: "institution", sortable: true },
+  { title: t("user.hcp.table.region"), key: "region", sortable: true },
 ]);
 
 const hcpI18n = computed(() => ({
-  searchPlaceholder: "rep.hcp.searchPlaceholder",
-  filtersTitle: "rep.hcp.filters.title",
-  filtersClear: "rep.hcp.filters.clear",
-  add: "rep.hcp.add",
-  emptyTitle: "rep.hcp.emptyTitle",
-  emptySubtitle: "rep.hcp.emptySubtitle",
-  noResultsForCriteria: "rep.hcp.noResultsForCriteria",
-  noResultsForCriteriaSubtitle: "rep.hcp.noResultsForCriteriaSubtitle",
-  tableNoResults: "rep.hcp.table.noResults",
-  errorLoad: "rep.hcp.errorLoad",
+  searchPlaceholder: "user.hcp.searchPlaceholder",
+  filtersTitle: "user.hcp.filters.title",
+  filtersClear: "user.hcp.filters.clear",
+  add: "user.hcp.add",
+  emptyTitle: "user.hcp.emptyTitle",
+  emptySubtitle: "user.hcp.emptySubtitle",
+  noResultsForCriteria: "user.hcp.noResultsForCriteria",
+  noResultsForCriteriaSubtitle: "user.hcp.noResultsForCriteriaSubtitle",
+  tableNoResults: "user.hcp.table.noResults",
+  errorLoad: "user.hcp.errorLoad",
 }));
 
 function onAddContact() {
@@ -102,6 +102,7 @@ function onAddContact() {
 }
 
 async function onContactSubmit(data: LeadFormData | ContactFormData) {
+  // This view uses mode="contact", so the emitted payload is always ContactFormData.
   const d = data as ContactFormData;
   const body = JSON.stringify({
     name: d.name,
@@ -111,16 +112,16 @@ async function onContactSubmit(data: LeadFormData | ContactFormData) {
     region: d.region || undefined,
     institution: d.institution || undefined,
   });
-  const res = await apiFetch("/api/hcp", {
+  const res = await apiFetch("/api/v1/hcp", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body,
-    errorMessageKey: "rep.hcp.errorLoad",
+    errorMessageKey: "user.hcp.errorLoad",
   });
   if (res.ok) {
-    notifications.show(t("rep.hcp.form.success"), "success");
+    notifications.show(t("user.hcp.form.success"), "success");
     showAddModal.value = false;
-    window.dispatchEvent(new Event("rep-entity-list-refresh"));
+    window.dispatchEvent(new Event("entity-list-refresh"));
   }
 }
 </script>

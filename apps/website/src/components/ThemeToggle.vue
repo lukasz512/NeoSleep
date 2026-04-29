@@ -51,9 +51,9 @@ const { themeMode, setTheme } = useTheme();
 const isSpinning = ref(false);
 
 const toggleLabel = computed(() => {
-  const current = t(`rep.settings.theme.${themeMode.value}`);
-  const next = t(`rep.settings.theme.${getNextMode(themeMode.value)}`);
-  return t("rep.settings.theme.tooltip", { current, next });
+  const current = t(`user.settings.theme.${themeMode.value}`);
+  const next = t(`user.settings.theme.${getNextMode(themeMode.value)}`);
+  return t("user.settings.theme.tooltip", { current, next });
 });
 
 function onClick() {

@@ -4,17 +4,17 @@
     max-width="680"
     content-class="theme-panel-dialog__content"
     class="theme-panel-dialog"
-    :aria-label="t('rep.themePanel.title')"
+    :aria-label="t('user.themePanel.title')"
     @update:model-value="emit('update:modelValue', $event)"
   >
     <VCard class="theme-panel-dialog__card">
       <VCardTitle class="d-flex align-center justify-space-between mx-2 mt-2 text-h6">
-        {{ t("rep.themePanel.title") }}
+        {{ t("user.themePanel.title") }}
         <VBtn
           icon
           variant="text"
           size="small"
-          :aria-label="t('rep.themePanel.close')"
+          :aria-label="t('user.themePanel.close')"
           @click="emit('update:modelValue', false)"
         >
           <VIcon icon="mdi-close" />
@@ -23,7 +23,7 @@
       <VCardText class="pt-0">
         <!-- Color scheme first -->
         <div class="theme-panel-section">
-          <h3 class="theme-panel-section__label">{{ t("rep.themePanel.colorScheme") }}</h3>
+          <h3 class="theme-panel-section__label">{{ t("user.themePanel.colorScheme") }}</h3>
           <div class="theme-panel-toggle-group" role="group" aria-label="Color scheme">
             <button
               type="button"
@@ -32,7 +32,7 @@
               :aria-pressed="safeLocal.color_scheme === 'light'"
               @click="local.color_scheme = 'light'"
             >
-              {{ t("rep.themePanel.light") }}
+              {{ t("user.themePanel.light") }}
             </button>
             <button
               type="button"
@@ -41,7 +41,7 @@
               :aria-pressed="safeLocal.color_scheme === 'dark'"
               @click="local.color_scheme = 'dark'"
             >
-              {{ t("rep.themePanel.dark") }}
+              {{ t("user.themePanel.dark") }}
             </button>
           </div>
         </div>
@@ -49,7 +49,7 @@
         <!-- Primary and Secondary for the selected scheme only -->
         <template v-if="safeLocal.color_scheme === 'light'">
           <div class="theme-panel-section">
-            <h3 class="theme-panel-section__label">{{ t("rep.themePanel.primaryColor") }}</h3>
+            <h3 class="theme-panel-section__label">{{ t("user.themePanel.primaryColor") }}</h3>
             <div class="theme-panel-swatches">
               <button
                 v-for="color in primaryPalette"
@@ -65,7 +65,7 @@
             </div>
           </div>
           <div class="theme-panel-section">
-            <h3 class="theme-panel-section__label">{{ t("rep.themePanel.secondaryColor") }}</h3>
+            <h3 class="theme-panel-section__label">{{ t("user.themePanel.secondaryColor") }}</h3>
             <div class="theme-panel-swatches">
               <button
                 v-for="color in secondaryPalette"
@@ -83,7 +83,7 @@
         </template>
         <template v-else>
           <div class="theme-panel-section">
-            <h3 class="theme-panel-section__label">{{ t("rep.themePanel.primaryColor") }}</h3>
+            <h3 class="theme-panel-section__label">{{ t("user.themePanel.primaryColor") }}</h3>
             <div class="theme-panel-swatches">
               <button
                 v-for="color in primaryPalette"
@@ -99,7 +99,7 @@
             </div>
           </div>
           <div class="theme-panel-section">
-            <h3 class="theme-panel-section__label">{{ t("rep.themePanel.secondaryColor") }}</h3>
+            <h3 class="theme-panel-section__label">{{ t("user.themePanel.secondaryColor") }}</h3>
             <div class="theme-panel-swatches">
               <button
                 v-for="color in secondaryPalette"
@@ -119,7 +119,7 @@
 
       <VCardActions class="px-4 pb-4 pt-0">
         <VBtn color="primary" :loading="saving" :disabled="saving" @click="save">
-          {{ t("rep.themePanel.save") }}
+          {{ t("user.themePanel.save") }}
         </VBtn>
       </VCardActions>
     </VCard>
@@ -240,7 +240,7 @@ async function save() {
     if (typeof result === "object" && result !== null && "primary_color" in result) {
       local.value = normalizeConfig(result as AppConfig);
     }
-    notifications.show(t("rep.themePanel.saved"), "success");
+    notifications.show(t("user.themePanel.saved"), "success");
   }
 }
 </script>

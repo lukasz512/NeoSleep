@@ -1,9 +1,17 @@
 /**
- * Website theme – NeoSleep brand palette.
+ * Website theme — NeoSleep brand palette.
  * Primary = teal accent (logo, CTAs). Secondary = same for compatibility.
  * Values can be driven by GET /api/config/app later. See foundation/docs/BRAND_AND_APP_CONFIG.md.
  * Brand: logos in public/brand/logos/, colors in src/config/brandColors.ts.
+ *
+ * Cascade layers: base → components → responsive
+ * All responsive rules live in website-responsive.scss (@layer responsive).
  */
+
+/* Declare cascade layer order — must come first, before any @layer usage. */
+@layer base, components, responsive;
+
+@layer base {
 
 :root {
   /* NeoSleep brand (from brandbook + logo) */
@@ -14,6 +22,17 @@
   --neosleep-very-dark-teal: #082A27;
   --neosleep-charcoal-dark: #474747;
   --neosleep-charcoal-medium: #555555;
+
+  /*
+   * Brand-level radius tokens — white-label configurable per tenant.
+   * Source of truth: app_config.border_radius_btn / app_config.border_radius (card)
+   * Served via GET /api/config/app → injected as CSS vars on <html> by useAppConfig.
+   * Fallback values here are NeoSleep defaults; each tenant can override in DB.
+   * --brand-radius-btn  → app_config.border_radius_btn  (buttons, pills, tags)
+   * --brand-radius-card → app_config.border_radius       (cards, panels, modals)
+   */
+  --brand-radius-btn:  9999px;
+  --brand-radius-card: 20px;
 
   --website-primary: var(--neosleep-primary);
   --website-primary-hover: var(--neosleep-primary-hover);
@@ -27,7 +46,7 @@
   --website-border: #e5e7eb;
   --website-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
   --website-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
-  /* Footer – light mode: delikatny teal medyczny */
+  /* Footer – light mode */
   --website-footer-bg: #e8f5f4;
   --website-footer-text: #0f2e2b;
   --website-footer-text-muted: rgba(15, 46, 43, 0.45);
@@ -49,21 +68,30 @@
   --website-icon-bg: rgba(18, 143, 131, 0.12);
   --website-icon-stroke: var(--neosleep-primary);
 
+  /* Skeleton / shimmer loading state */
+  --website-skeleton-base:      #eaf2f1;
+  --website-skeleton-highlight: #f5fbfa;
+
   /* ── Layout tokens (white-label configurable via GET /api/config/app) ── */
-  --website-page-gutter: 2rem;            /* horizontal padding on desktop/tablet  */
-  --website-page-gutter-mobile: 1.25rem;  /* horizontal padding on mobile (<600px) */
-  --website-card-radius: 20px;            /* border-radius of framed cards         */
+  --website-page-gutter: 2rem;
+  --website-page-gutter-mobile: 1.25rem;
+  --website-card-radius: var(--brand-radius-card);
   --website-drawer-width: min(300px, 85vw);
-  --website-nav-breakpoint: 1100px;
-  --website-sticky-offset: 2rem; /* gap between sticky element and fixed header */
+  --website-nav-breakpoint: 1024px;
+  --website-sticky-offset: 2rem;
 }
 
 /**
- * Global page container – jedno miejsce, jeden token.
- * Każdy widok i layout używa tej klasy dla spójnych marginesów.
- * White-label: dostosuj --website-content-max-width i --website-page-gutter.
+ * Global page container — one place, one token.
+ * Every view and layout uses this class for consistent margins.
+ * White-label: adjust --website-page-max-width and --website-page-gutter.
+ *
+ * container-name: page — enables @container page (max-width: ...) queries
+ * for elements nested inside .page-container in website-responsive.scss.
  */
 .page-container {
+  container-name: page;
+  container-type: inline-size;
   max-width: var(--website-page-max-width);
   margin-left: auto;
   margin-right: auto;
@@ -71,23 +99,10 @@
   padding-right: var(--website-page-gutter);
 }
 
-@media (max-width: 600px) {
-  .page-container {
-    padding-left: var(--website-page-gutter-mobile);
-    padding-right: var(--website-page-gutter-mobile);
-  }
-}
-
 /* ── Home page shared utilities ─────────────────────────────────────────────── */
 
 .home-section {
   padding: 5rem 0;
-}
-@media (max-width: 1100px) {
-  .home-section {
-    padding: 3.5rem 0;
-    scroll-margin-top: -3.5rem;
-  }
 }
 
 .home-reveal {
@@ -142,7 +157,7 @@
   min-height: 52px;
   min-width: 44px;
   padding: 0 1.75rem;
-  border-radius: 9999px;
+  border-radius: var(--brand-radius-btn);
   border: none;
   font-weight: 600;
   font-size: 1rem;
@@ -150,13 +165,6 @@
   cursor: pointer;
   text-decoration: none;
   transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
-}
-@media (max-width: 960px) {
-  .home-btn {
-    min-height: 60px;
-    padding: 0 2.25rem;
-    font-size: 1.0625rem;
-  }
 }
 .home-btn__arrow { font-size: 1.1em; }
 .home-btn--primary { background: var(--website-primary); color: #fff; }
@@ -168,15 +176,9 @@
 .home-btn--white-border { background: transparent; color: #fff; border: 2px solid #fff; }
 .home-btn--white-border:hover { background: rgba(255,255,255,0.15); }
 
-/* Whole viewport uses theme background (no white envelope in dark mode) */
 html {
   scroll-padding-top: calc(var(--website-header-height) + 1.5rem);
   --scroll-anchor-offset: 96; /* desktop: header(72) + breathing(24) */
-
-  @media (max-width: 1100px) {
-    scroll-padding-top: 0;
-    --scroll-anchor-offset: -40; /* mobile: skip section padding(56px), land 16px above image */
-  }
   margin: 0;
   padding: 0;
 }
@@ -200,7 +202,7 @@ body {
   overflow-x: clip;
 }
 
-/* Płynne przejście przy zmianie motywu */
+/* Smooth transition on theme change */
 html.theme-transitioning,
 html.theme-transitioning body,
 html.theme-transitioning * {
@@ -211,9 +213,9 @@ html.theme-transitioning * {
     box-shadow 0.35s ease !important;
 }
 
-/* Dark theme (night mode) */
+/* Dark theme */
 html[data-theme="dark"] {
-  /* Footer – dark mode: głęboki ciemny teal */
+  /* Footer – dark mode */
   --website-footer-bg: #111111;
   --website-footer-text: #ffffff;
   --website-footer-text-muted: rgba(255, 255, 255, 0.45);
@@ -226,6 +228,10 @@ html[data-theme="dark"] {
   --website-footer-social-hover-bg: rgba(255, 255, 255, 0.11);
   --website-footer-social-hover-border: rgba(255, 255, 255, 0.18);
   --website-footer-card-border: rgba(18, 143, 131, 0.35);
+  /* Skeleton – dark mode */
+  --website-skeleton-base:      #1b2f2c;
+  --website-skeleton-highlight: #243f3b;
+
   --website-bg: #1c1c1c;
   --website-text: #f5f5f5;
   --website-text-secondary: #999999;
@@ -241,8 +247,6 @@ html[data-theme="dark"] {
   --website-icon-stroke: #17b5a5;
 }
 
-
-
 /* Global base styles */
 html, body {
   margin: 0;
@@ -257,20 +261,29 @@ html, body {
 }
 
 /* ── Default layout ───────────────────────────────────────────────────────── */
+
+/**
+ * container-name: layout — enables @container layout queries in website-responsive.scss.
+ * Used for: footer responsive rules and any other layout-level container queries.
+ */
 .layout-default {
+  container-name: layout;
+  container-type: inline-size;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
 
+/**
+ * container-name: main — enables @container main queries in website-responsive.scss.
+ * Used for: full-width sections (HomeHero, HomeStats, TestimonialsCarousel, etc.)
+ * that need responsive overrides based on the main content area width.
+ */
 .layout-default__main {
+  container-name: main;
+  container-type: inline-size;
   flex: 1;
   padding-top: var(--website-header-height);
 }
 
-@media (max-width: 1100px) {
-  .layout-default {
-    padding-bottom: var(--website-bottom-nav-height);
-  }
-}
-
+} /* end @layer base */

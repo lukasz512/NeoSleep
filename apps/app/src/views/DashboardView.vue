@@ -1,6 +1,6 @@
 <template>
   <div class="dashboard-view">
-    <p class="dashboard-view__placeholder">{{ t("rep.dashboard.title") }}</p>
+    <p class="dashboard-view__placeholder">{{ t("user.dashboard.title") }}</p>
   </div>
 </template>
 

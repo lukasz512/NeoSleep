@@ -42,3 +42,5 @@ secrets/
 .env.production.local
 .env.uat.local
 .claude/worktrees/
+.claude/projects/
+.claude/settings.local.json

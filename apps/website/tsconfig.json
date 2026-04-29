@@ -11,8 +11,9 @@
       "@shared/*":  ["../../platform/shared/*"],
       "@api":       ["../../packages/api/src/index.ts"],
       "@ui":        ["../../packages/ui/src/index.ts"],
-      "@stores":    ["../../packages/stores/src/index.ts"]
+      "@stores":    ["../../packages/stores/src/index.ts"],
+      "vue":        ["node_modules/vue/dist/vue.d.ts"]
     }
   },
-  "include": ["src", "../../platform/i18n", "../../platform/shared"]
+  "include": ["src", "../../platform/i18n", "../../platform/shared", "../../platform/brand", "../../packages/api/src"]
 }

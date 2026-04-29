@@ -23,25 +23,9 @@ import MobileNavTheme from './MobileNavTheme.vue'
 import MobileNavLanguage from './MobileNavLanguage.vue'
 </script>
 
-<style scoped>
+<style>
+/* Responsive rules live in website-responsive.scss (@layer responsive) */
 .mbn {
   display: none;
-}
-
-@media (max-width: 1100px) {
-  .mbn {
-    display: flex;
-    align-items: stretch;
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: var(--website-bottom-nav-height, 64px);
-    z-index: 9998;
-    background: var(--website-bg);
-    border-top: 1px solid var(--website-border);
-    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
-    padding-bottom: env(safe-area-inset-bottom);
-  }
 }
 </style>

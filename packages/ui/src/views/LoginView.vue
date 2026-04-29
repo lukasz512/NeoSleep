@@ -6,7 +6,7 @@
         <VImg
           v-if="logoUrl"
           :src="logoUrl"
-          :alt="t('rep.login.logoAlt')"
+          :alt="t('user.login.logoAlt')"
           max-height="56"
           contain
           class="login-view__logo"
@@ -15,8 +15,8 @@
       </div>
 
       <VCardText class="login-view__body">
-        <h1 class="login-view__title">{{ t('rep.login.title') }}</h1>
-        <p class="login-view__subtitle">{{ t('rep.login.subtitle') }}</p>
+        <h1 class="login-view__title">{{ t('user.login.title') }}</h1>
+        <p class="login-view__subtitle">{{ t('user.login.subtitle') }}</p>
 
         <VAlert
           v-if="errorKey"
@@ -34,7 +34,7 @@
           <VTextField
             v-model="email"
             type="email"
-            :label="t('rep.login.email')"
+            :label="t('user.login.email')"
             variant="outlined"
             density="comfortable"
             autocomplete="email"
@@ -46,7 +46,7 @@
           <VTextField
             v-model="password"
             :type="showPassword ? 'text' : 'password'"
-            :label="t('rep.login.password')"
+            :label="t('user.login.password')"
             variant="outlined"
             density="comfortable"
             autocomplete="current-password"
@@ -60,7 +60,7 @@
           <div class="login-view__row">
             <VCheckbox
               v-model="rememberMe"
-              :label="t('rep.login.rememberMe')"
+              :label="t('user.login.rememberMe')"
               density="compact"
               hide-details
               class="login-view__remember"
@@ -75,7 +75,7 @@
             :loading="loading"
             class="login-view__submit"
           >
-            {{ t('rep.login.signIn') }}
+            {{ t('user.login.signIn') }}
           </VBtn>
         </VForm>
 
@@ -86,7 +86,7 @@
             disabled
             class="login-view__forgot"
           >
-            {{ t('rep.login.forgotPassword') }}
+            {{ t('user.login.forgotPassword') }}
           </VBtn>
         </div>
       </VCardText>
@@ -132,11 +132,11 @@ const DevPanel = isDev
   : null;
 
 const ruleEmailRequired = (v: string) =>
-  !!v.trim() || t("rep.login.validation.emailRequired");
+  !!v.trim() || t("user.login.validation.emailRequired");
 const ruleEmailFormat = (v: string) =>
-  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()) || t("rep.login.validation.emailInvalid");
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()) || t("user.login.validation.emailInvalid");
 const rulePasswordRequired = (v: string) =>
-  !!v || t("rep.login.validation.passwordRequired");
+  !!v || t("user.login.validation.passwordRequired");
 
 async function handleSubmit() {
   if (!form.value) return;

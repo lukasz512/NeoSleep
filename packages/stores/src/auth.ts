@@ -35,7 +35,7 @@ export function createAuthStore(apiFetch: ApiFetchFn) {
 
     async function fetchSession(): Promise<boolean> {
       try {
-        const res = await apiFetch("/auth/session", { handleErrors: false });
+        const res = await apiFetch("/api/v1/auth/session", { handleErrors: false });
         sessionChecked.value = true;
         if (res.ok) {
           const data = (await res.json()) as { user?: AuthUser };

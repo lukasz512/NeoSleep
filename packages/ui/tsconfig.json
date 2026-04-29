@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@brand/*": ["../../platform/brand/*"],
+      "@api":     ["../../packages/api/src/index.ts"],
+      "@stores":  ["../../packages/stores/src/index.ts"]
+    }
+  },
+  "include": ["src"]
+}

@@ -70,7 +70,7 @@ export function createConfigStore(apiFetch: ApiFetchFn, applyI18nOverrides?: I18
     async function load(): Promise<AppConfig> {
       loading.value = true;
       try {
-        const res = await apiFetch("/api/config/app", { handleErrors: false });
+        const res = await apiFetch("/api/v1/config/app", { handleErrors: false });
         if (!res.ok) {
           config.value = { ...defaults };
           return config.value;
@@ -95,7 +95,7 @@ export function createConfigStore(apiFetch: ApiFetchFn, applyI18nOverrides?: I18
     async function save(updates: Partial<AppConfig>): Promise<AppConfig | null> {
       loading.value = true;
       try {
-        const res = await apiFetch("/api/config/app", {
+        const res = await apiFetch("/api/v1/config/app", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(updates),
@@ -124,7 +124,7 @@ export function createConfigStore(apiFetch: ApiFetchFn, applyI18nOverrides?: I18
     async function loadI18nOverrides(): Promise<void> {
       if (!applyI18nOverrides) return;
       try {
-        const res = await apiFetch("/api/config/i18n", { handleErrors: false });
+        const res = await apiFetch("/api/v1/config/i18n", { handleErrors: false });
         if (!res.ok) return;
         const data = (await res.json()) as Record<string, Record<string, string>>;
         applyI18nOverrides(data);
@@ -135,7 +135,7 @@ export function createConfigStore(apiFetch: ApiFetchFn, applyI18nOverrides?: I18
 
     async function loadOptions(): Promise<ConfigOptions> {
       try {
-        const res = await apiFetch("/api/config/options", { handleErrors: false });
+        const res = await apiFetch("/api/v1/config/options", { handleErrors: false });
         if (!res.ok) return options.value;
         const data = (await res.json()) as ConfigOptions;
         options.value = {

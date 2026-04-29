@@ -22,12 +22,12 @@
           rounded="lg"
           class="mb-6"
         >
-          {{ t('rep.leads.form.verifyDataInfo') }}
+          {{ t('user.leads.form.verifyDataInfo') }}
         </VAlert>
         <VForm ref="formRef" @submit.prevent="onSubmit">
           <VTextField
             v-model="form.name"
-            :label="t('rep.leads.form.name')"
+            :label="t('user.leads.form.name')"
             :rules="nameRules"
             variant="outlined"
             density="comfortable"
@@ -37,7 +37,7 @@
           <VTextField
             v-model="form.email"
             type="email"
-            :label="t('rep.leads.form.email')"
+            :label="t('user.leads.form.email')"
             :rules="emailRules"
             variant="outlined"
             density="comfortable"
@@ -47,8 +47,8 @@
           <template v-if="mode === 'contact'">
             <VTextField
               :model-value="form.phone"
-              :label="t('rep.hcp.form.phone')"
-              :placeholder="t('rep.hcp.form.phonePlaceholder')"
+              :label="t('user.hcp.form.phone')"
+              :placeholder="t('user.hcp.form.phonePlaceholder')"
               :rules="phoneRules"
               variant="outlined"
               density="comfortable"
@@ -65,7 +65,7 @@
             <template v-if="mode === 'lead'">
               <VSelect
                 v-model="form.status"
-                :label="t('rep.leads.form.status')"
+                :label="t('user.leads.form.status')"
                 :items="statusItems"
                 item-title="title"
                 item-value="value"
@@ -77,7 +77,7 @@
             <template v-if="mode === 'contact'">
               <VSelect
                 v-model="form.specialty"
-                :label="t('rep.hcp.form.specialty')"
+                :label="t('user.hcp.form.specialty')"
                 :items="specialtyItems"
                 item-title="title"
                 item-value="value"
@@ -89,7 +89,7 @@
             </template>
             <VSelect
               v-model="form.region"
-              :label="t('rep.leads.form.region')"
+              :label="t('user.leads.form.region')"
               :items="regionItems"
               item-title="title"
               item-value="value"
@@ -101,7 +101,7 @@
           </div>
           <VTextField
             v-model="form.institution"
-            :label="t('rep.leads.form.institution')"
+            :label="t('user.leads.form.institution')"
             variant="outlined"
             density="comfortable"
             class="mb-3"
@@ -198,14 +198,14 @@ const form = ref({
 });
 
 const statusItems = computed(() => [
-  { title: t("rep.leads.filters.statusNew"), value: "new" },
-  { title: t("rep.leads.filters.statusOngoing"), value: "ongoing" },
-  { title: t("rep.leads.filters.statusAccepted"), value: "accepted" },
-  { title: t("rep.leads.filters.statusRejected"), value: "rejected" },
+  { title: t("user.leads.filters.statusNew"), value: "new" },
+  { title: t("user.leads.filters.statusOngoing"), value: "ongoing" },
+  { title: t("user.leads.filters.statusAccepted"), value: "accepted" },
+  { title: t("user.leads.filters.statusRejected"), value: "rejected" },
 ]);
 
 const regionItems = computed(() => [
-  { title: t("rep.leads.filters.all"), value: "" },
+  { title: t("user.leads.filters.all"), value: "" },
   ...configStore.regionItems,
 ]);
 
@@ -215,33 +215,33 @@ const isEditMode = computed(() => !!props.initialData && Object.keys(props.initi
 
 const formTitle = computed(() => {
   if (props.mode === "lead") {
-    return isEditMode.value ? t("rep.leads.form.editTitle") : t("rep.leads.form.title");
+    return isEditMode.value ? t("user.leads.form.editTitle") : t("user.leads.form.title");
   }
-  return t("rep.hcp.form.title");
+  return t("user.hcp.form.title");
 });
 
 const formSubmitLabel = computed(() => {
   if (props.mode === "lead") {
-    return isEditMode.value ? t("rep.leads.form.editSubmit") : t("rep.leads.form.submit");
+    return isEditMode.value ? t("user.leads.form.editSubmit") : t("user.leads.form.submit");
   }
-  return t("rep.hcp.form.submit");
+  return t("user.hcp.form.submit");
 });
 
 const nameRules = computed(() => [
-  (v: string) => !!v?.trim() || t("rep.leads.form.validation.nameRequired"),
+  (v: string) => !!v?.trim() || t("user.leads.form.validation.nameRequired"),
 ]);
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const emailRules = computed(() => {
   const required = props.mode === "contact"
-    ? [(v: string) => !!v?.trim() || t("rep.hcp.form.validation.emailRequired")]
+    ? [(v: string) => !!v?.trim() || t("user.hcp.form.validation.emailRequired")]
     : [];
   const format = [
     (v: string) => {
       const s = (v ?? "").trim();
       if (!s) return true;
-      return EMAIL_REGEX.test(s) || t("rep.leads.form.validation.emailInvalid");
+      return EMAIL_REGEX.test(s) || t("user.leads.form.validation.emailInvalid");
     },
   ];
   return [...required, ...format];
@@ -286,14 +286,14 @@ function onCancelClick() {
 const phoneRules = computed(() => {
   if (props.mode !== "contact") return [];
   return [
-    (v: string) => !!v?.trim() || t("rep.hcp.form.validation.phoneRequired"),
+    (v: string) => !!v?.trim() || t("user.hcp.form.validation.phoneRequired"),
     (v: string) => {
       const digits = (v ?? "").replace(/\D/g, "");
-      return digits.length >= 10 || t("rep.hcp.form.validation.phoneMinDigits");
+      return digits.length >= 10 || t("user.hcp.form.validation.phoneMinDigits");
     },
     (v: string) => {
       const digits = (v ?? "").replace(/\D/g, "");
-      return /^\d*$/.test(digits) || t("rep.hcp.form.validation.phoneDigitsOnly");
+      return /^\d*$/.test(digits) || t("user.hcp.form.validation.phoneDigitsOnly");
     },
   ];
 });

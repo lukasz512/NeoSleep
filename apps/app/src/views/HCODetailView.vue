@@ -10,8 +10,8 @@
     :has-content="!!hco"
     :loading="loading"
     :back-route="{ name: 'hco' }"
-    :back-label="t('rep.hco.detail.back')"
-    :not-found-label="t('rep.hco.detail.notFound')"
+    :back-label="t('user.hco.detail.back')"
+    :not-found-label="t('user.hco.detail.notFound')"
     :title="hco?.name"
   >
     <template #header-actions v-if="hco">
@@ -24,13 +24,13 @@
             size="large"
             color="success"
             class="view-item__schedule-btn"
-            :aria-label="t('rep.detail.scheduleVisit')"
+            :aria-label="t('user.detail.scheduleVisit')"
             @click="onScheduleVisit"
           >
             <AppIcon name="calendar" class="view-item__schedule-icon" />
           </VBtn>
         </template>
-        <span>{{ t('rep.detail.scheduleVisit') }}</span>
+        <span>{{ t('user.detail.scheduleVisit') }}</span>
       </VTooltip>
       <VTooltip v-if="isAdmin" location="bottom">
         <template #activator="{ props: tooltipProps }">
@@ -41,29 +41,29 @@
             size="large"
             class="view-item__edit-btn view-item__edit-btn--no-border"
             disabled
-            :aria-label="t('rep.hco.detail.editComingSoon')"
+            :aria-label="t('user.hco.detail.editComingSoon')"
           >
             <AppIcon name="pencil" class="view-item__edit-icon" />
           </VBtn>
         </template>
-        <span>{{ t('rep.hco.detail.editComingSoon') }}</span>
+        <span>{{ t('user.hco.detail.editComingSoon') }}</span>
       </VTooltip>
     </template>
     <template #sections v-if="hco">
       <div class="view-item__row">
-        <dt class="view-item__label">{{ t("rep.hco.detail.type") }}</dt>
+        <dt class="view-item__label">{{ t("user.hco.detail.type") }}</dt>
         <dd class="view-item__value">{{ hco.type || "—" }}</dd>
       </div>
       <div class="view-item__row">
-        <dt class="view-item__label">{{ t("rep.hco.detail.region") }}</dt>
+        <dt class="view-item__label">{{ t("user.hco.detail.region") }}</dt>
         <dd class="view-item__value">{{ hco.region || "—" }}</dd>
       </div>
       <div class="view-item__row">
-        <dt class="view-item__label">{{ t("rep.hco.detail.status") }}</dt>
+        <dt class="view-item__label">{{ t("user.hco.detail.status") }}</dt>
         <dd class="view-item__value">{{ hco.status || "—" }}</dd>
       </div>
       <div class="view-item__row">
-        <dt class="view-item__label">{{ t("rep.hco.detail.phone") }}</dt>
+        <dt class="view-item__label">{{ t("user.hco.detail.phone") }}</dt>
         <dd class="view-item__value">
           <a v-if="hco.phone" :href="`tel:${hco.phone}`" class="view-item__link">{{ hco.phone }}</a>
           <span v-else class="view-item__empty">{{ demoPhone }}</span>
@@ -135,7 +135,7 @@ function onScheduleVisit() {
 
 async function onEventFormSubmit(payload: import("../components/EventForm.vue").EventSubmitPayload) {
   try {
-    const res = await apiFetch("/api/events", {
+    const res = await apiFetch("/api/v1/interactions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -152,13 +152,13 @@ async function onEventFormSubmit(payload: import("../components/EventForm.vue").
       }),
     });
     if (res.ok) {
-      notifications.show(t("rep.planner.form.success"), "success");
+      notifications.show(t("user.planner.form.success"), "success");
       showEventForm.value = false;
     } else {
-      notifications.show(t("rep.planner.form.errorSave"), "error");
+      notifications.show(t("user.planner.form.errorSave"), "error");
     }
   } catch {
-    notifications.show(t("rep.planner.form.errorSave"), "error");
+    notifications.show(t("user.planner.form.errorSave"), "error");
   }
 }
 
@@ -171,7 +171,7 @@ async function loadHCO() {
   loading.value = true;
   hco.value = null;
   try {
-    const res = await apiFetch(`/api/hco/${id}`, { errorMessageKey: "rep.hco.errorLoad" });
+    const res = await apiFetch(`/api/v1/hco/${id}`, { errorMessageKey: "user.hco.errorLoad" });
     if (res.ok) {
       hco.value = (await res.json()) as HCO;
     }

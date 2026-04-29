@@ -2,45 +2,45 @@ i18n:prune — Would remove 13 keys from locale files.
 Unused list from: 2026-02-19T00:31:15.713Z
 Mode: DRY RUN (no files modified)
 
-Would remove 'rep.hcp.title' from en.json
-Would remove 'rep.hcp.subtitle' from en.json
-Would remove 'rep.planner.title' from en.json
-Would remove 'rep.presentations.title' from en.json
+Would remove 'user.hcp.title' from en.json
+Would remove 'user.hcp.subtitle' from en.json
+Would remove 'user.planner.title' from en.json
+Would remove 'user.presentations.title' from en.json
 Would remove 'layout.app.nav' from en.json
 Would remove 'app.language.en' from en.json
 Would remove 'app.language.pl' from en.json
 Would remove 'app.language.es' from en.json
-Would remove 'rep.dev.notifications.sample.success' from en.json
-Would remove 'rep.dev.notifications.sample.info' from en.json
-Would remove 'rep.dev.notifications.sample.warning' from en.json
-Would remove 'rep.dev.notifications.sample.error' from en.json
-Would remove 'rep.login.oidcNote' from en.json
+Would remove 'user.dev.notifications.sample.success' from en.json
+Would remove 'user.dev.notifications.sample.info' from en.json
+Would remove 'user.dev.notifications.sample.warning' from en.json
+Would remove 'user.dev.notifications.sample.error' from en.json
+Would remove 'user.login.oidcNote' from en.json
 Would remove 'app.language.en' from es.json
 Would remove 'app.language.pl' from es.json
 Would remove 'app.language.es' from es.json
-Would remove 'rep.hcp.title' from es.json
-Would remove 'rep.hcp.subtitle' from es.json
-Would remove 'rep.planner.title' from es.json
-Would remove 'rep.presentations.title' from es.json
+Would remove 'user.hcp.title' from es.json
+Would remove 'user.hcp.subtitle' from es.json
+Would remove 'user.planner.title' from es.json
+Would remove 'user.presentations.title' from es.json
 Would remove 'layout.app.nav' from es.json
-Would remove 'rep.dev.notifications.sample.success' from es.json
-Would remove 'rep.dev.notifications.sample.info' from es.json
-Would remove 'rep.dev.notifications.sample.warning' from es.json
-Would remove 'rep.dev.notifications.sample.error' from es.json
-Would remove 'rep.login.oidcNote' from es.json
+Would remove 'user.dev.notifications.sample.success' from es.json
+Would remove 'user.dev.notifications.sample.info' from es.json
+Would remove 'user.dev.notifications.sample.warning' from es.json
+Would remove 'user.dev.notifications.sample.error' from es.json
+Would remove 'user.login.oidcNote' from es.json
 Would remove 'app.language.en' from pl.json
 Would remove 'app.language.pl' from pl.json
 Would remove 'app.language.es' from pl.json
-Would remove 'rep.hcp.title' from pl.json
-Would remove 'rep.hcp.subtitle' from pl.json
-Would remove 'rep.planner.title' from pl.json
-Would remove 'rep.presentations.title' from pl.json
+Would remove 'user.hcp.title' from pl.json
+Would remove 'user.hcp.subtitle' from pl.json
+Would remove 'user.planner.title' from pl.json
+Would remove 'user.presentations.title' from pl.json
 Would remove 'layout.app.nav' from pl.json
-Would remove 'rep.dev.notifications.sample.success' from pl.json
-Would remove 'rep.dev.notifications.sample.info' from pl.json
-Would remove 'rep.dev.notifications.sample.warning' from pl.json
-Would remove 'rep.dev.notifications.sample.error' from pl.json
-Would remove 'rep.login.oidcNote' from pl.json
+Would remove 'user.dev.notifications.sample.success' from pl.json
+Would remove 'user.dev.notifications.sample.info' from pl.json
+Would remove 'user.dev.notifications.sample.warning' from pl.json
+Would remove 'user.dev.notifications.sample.error' from pl.json
+Would remove 'user.login.oidcNote' from pl.json
 
 Summary: Would remove 39 key(s) across 3 file(s).
   en.json: 13 keys

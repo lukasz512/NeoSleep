@@ -11,7 +11,7 @@ Base: `/api`
 - `GET /api/tenant/config` – resolved tenant-config (cached, versioned)
 
 ## App config (theme / branding)
-- `GET /api/config/app` – app-wide theme and branding (primary_color, secondary_color, border_radius, logo_url). Shared by website and rep-app. Source: `tbl_app_config`. See foundation/docs/BRAND_AND_APP_CONFIG.md.
+- `GET /api/config/app` – app-wide theme and branding (primary_color, secondary_color, border_radius, logo_url). Shared by website and rep-app. Source: `app_config`. See foundation/docs/BRAND_AND_APP_CONFIG.md.
 
 ## CRM data (Notion-backed v1)
 - `GET /api/leads?query=&region=` – list

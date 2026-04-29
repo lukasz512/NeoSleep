@@ -17,8 +17,8 @@
     :has-content="!!hcp"
     :loading="loading"
     :back-route="{ name: 'hcp' }"
-    :back-label="t('rep.hcp.detail.back')"
-    :not-found-label="t('rep.hcp.detail.notFound')"
+    :back-label="t('user.hcp.detail.back')"
+    :not-found-label="t('user.hcp.detail.notFound')"
     :title="hcp?.name"
   >
     <template #header-actions v-if="hcp">
@@ -31,13 +31,13 @@
             size="large"
             color="success"
             class="view-item__schedule-btn"
-            :aria-label="t('rep.detail.scheduleVisit')"
+            :aria-label="t('user.detail.scheduleVisit')"
             @click="onScheduleVisit"
           >
             <AppIcon name="calendar" class="view-item__schedule-icon" />
           </VBtn>
         </template>
-        <span>{{ t('rep.detail.scheduleVisit') }}</span>
+        <span>{{ t('user.detail.scheduleVisit') }}</span>
       </VTooltip>
       <VTooltip v-if="isAdmin" location="bottom">
         <template #activator="{ props: tooltipProps }">
@@ -47,13 +47,13 @@
             variant="flat"
             size="large"
             class="view-item__edit-btn view-item__edit-btn--no-border"
-            :aria-label="t('rep.hcp.detail.edit')"
+            :aria-label="t('user.hcp.detail.edit')"
             @click="onEdit"
           >
             <AppIcon name="pencil" class="view-item__edit-icon" />
           </VBtn>
         </template>
-        <span>{{ t('rep.hcp.detail.edit') }}</span>
+        <span>{{ t('user.hcp.detail.edit') }}</span>
       </VTooltip>
     </template>
     <template #title v-if="hcp">
@@ -64,22 +64,22 @@
     </template>
     <template #sections v-if="hcp">
       <div class="view-item__row">
-        <dt class="view-item__label">{{ t("rep.hcp.detail.email") }}</dt>
+        <dt class="view-item__label">{{ t("user.hcp.detail.email") }}</dt>
         <dd class="view-item__value">
           <a v-if="hcp.email" :href="`mailto:${hcp.email}`" class="view-item__link">{{ hcp.email }}</a>
           <span v-else class="view-item__empty">—</span>
         </dd>
       </div>
       <div class="view-item__row">
-        <dt class="view-item__label">{{ t("rep.hcp.detail.specialty") }}</dt>
+        <dt class="view-item__label">{{ t("user.hcp.detail.specialty") }}</dt>
         <dd class="view-item__value">{{ hcp.specialty || "—" }}</dd>
       </div>
       <div class="view-item__row">
-        <dt class="view-item__label">{{ t("rep.hcp.detail.institution") }}</dt>
+        <dt class="view-item__label">{{ t("user.hcp.detail.institution") }}</dt>
         <dd class="view-item__value">{{ hcp.institution || "—" }}</dd>
       </div>
       <div class="view-item__row">
-        <dt class="view-item__label">{{ t("rep.hcp.detail.region") }}</dt>
+        <dt class="view-item__label">{{ t("user.hcp.detail.region") }}</dt>
         <dd class="view-item__value">{{ hcp.region || "—" }}</dd>
       </div>
     </template>
@@ -140,7 +140,7 @@ function onScheduleVisit() {
 
 async function onEventFormSubmit(payload: import("../components/EventForm.vue").EventSubmitPayload) {
   try {
-    const res = await apiFetch("/api/events", {
+    const res = await apiFetch("/api/v1/interactions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -157,13 +157,13 @@ async function onEventFormSubmit(payload: import("../components/EventForm.vue").
       }),
     });
     if (res.ok) {
-      notifications.show(t("rep.planner.form.success"), "success");
+      notifications.show(t("user.planner.form.success"), "success");
       showEventForm.value = false;
     } else {
-      notifications.show(t("rep.planner.form.errorSave"), "error");
+      notifications.show(t("user.planner.form.errorSave"), "error");
     }
   } catch {
-    notifications.show(t("rep.planner.form.errorSave"), "error");
+    notifications.show(t("user.planner.form.errorSave"), "error");
   }
 }
 
@@ -183,17 +183,17 @@ async function onContactSubmit(data: import("../components/LeadContactForm.vue")
     region: d.region || undefined,
     institution: d.institution || undefined,
   });
-  const res = await apiFetch(`/api/hcp/${id}`, {
+  const res = await apiFetch(`/api/v1/hcp/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body,
-    errorMessageKey: "rep.hcp.errorLoad",
+    errorMessageKey: "user.hcp.errorLoad",
   });
   if (res.ok) {
-    notifications.show(t("rep.hcp.form.editSuccess"), "success");
+    notifications.show(t("user.hcp.form.editSuccess"), "success");
     showEditModal.value = false;
     await loadHCP();
-    window.dispatchEvent(new Event("rep-entity-list-refresh"));
+    window.dispatchEvent(new Event("entity-list-refresh"));
   }
 }
 
@@ -206,7 +206,7 @@ async function loadHCP() {
   loading.value = true;
   hcp.value = null;
   try {
-    const res = await apiFetch(`/api/hcp/${id}`, { errorMessageKey: "rep.hcp.errorLoad" });
+    const res = await apiFetch(`/api/v1/hcp/${id}`, { errorMessageKey: "user.hcp.errorLoad" });
     if (res.ok) {
       hcp.value = (await res.json()) as HCP;
     }

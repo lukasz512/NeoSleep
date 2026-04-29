@@ -108,135 +108,132 @@ const filtered = computed(() => {
 })
 </script>
 
-<style lang="scss" scoped>
-$bp: 640px;
-
-.view-careers {
-  padding-bottom: 5rem;
-}
-
-// ── Filters ───────────────────────────────────────────────────────────────────
-.cv-filters {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding-top: 2rem;
-  padding-bottom: 2rem;
-  border-bottom: 1px solid var(--website-border);
-}
-
-.cv-filter-group {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.cv-filter-label {
-  font-size: 0.8rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--website-text-secondary);
-  white-space: nowrap;
-  min-width: 80px;
-}
-
-.cv-pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-.cv-pill {
-  padding: 0.375rem 0.875rem;
-  border-radius: 999px;
-  border: 1px solid var(--website-border);
-  background: var(--website-bg);
-  color: var(--website-text-secondary);
-  font-size: 0.8125rem;
-  font-weight: 500;
-  font-family: inherit;
-  cursor: pointer;
-  transition: all 0.15s;
-  white-space: nowrap;
-  outline: none;
-
-  &:hover {
-    border-color: var(--website-primary);
-    color: var(--website-primary);
+<style lang="scss">
+@layer components {
+  .view-careers {
+    padding-bottom: 5rem;
   }
 
-  &:focus-visible {
-    box-shadow: 0 0 0 3px rgba(18, 143, 131, 0.25);
-    border-color: var(--website-primary);
+  // ── Filters ───────────────────────────────────────────────────────────────────
+  .cv-filters {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid var(--website-border);
   }
 
-  &--active {
-    background: var(--website-primary);
-    border-color: var(--website-primary);
-    color: #fff;
+  .cv-filter-group {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
   }
-}
 
-// ── Grid ──────────────────────────────────────────────────────────────────────
-.cv-results {
-  padding-top: 2.5rem;
-}
+  .cv-filter-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--website-text-secondary);
+    white-space: nowrap;
+    min-width: 80px;
+  }
 
-.cv-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1.25rem;
+  .cv-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
 
-  @media (max-width: 960px) { grid-template-columns: repeat(2, 1fr); }
-  @media (max-width: $bp)   { grid-template-columns: 1fr; }
-}
+  .cv-pill {
+    padding: 0.375rem 0.875rem;
+    border-radius: 999px;
+    border: 1px solid var(--website-border);
+    background: var(--website-bg);
+    color: var(--website-text-secondary);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+    outline: none;
 
-.cv-empty {
-  text-align: center;
-  color: var(--website-text-secondary);
-  padding: 4rem 0;
-  font-size: 1rem;
-}
+    &:hover {
+      border-color: var(--website-primary);
+      color: var(--website-primary);
+    }
 
-// ── Card transition ───────────────────────────────────────────────────────────
-.cv-card-enter-active { transition: opacity 0.25s ease, transform 0.25s ease; }
-.cv-card-leave-active { transition: opacity 0.2s ease, transform 0.2s ease; position: absolute; }
-.cv-card-enter-from   { opacity: 0; transform: translateY(12px); }
-.cv-card-leave-to     { opacity: 0; transform: translateY(-8px); }
-.cv-card-move         { transition: transform 0.3s ease; }
+    &:focus-visible {
+      box-shadow: 0 0 0 3px rgba(18, 143, 131, 0.25);
+      border-color: var(--website-primary);
+    }
 
-// ── Bottom CTA ────────────────────────────────────────────────────────────────
-.cv-cta {
-  margin-top: 4rem;
-}
+    &--active {
+      background: var(--website-primary);
+      border-color: var(--website-primary);
+      color: #fff;
+    }
+  }
 
-.cv-cta__inner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  padding: 3.5rem 2rem;
-  background: rgba(18, 143, 131, 0.05);
-  border: 1px solid rgba(18, 143, 131, 0.15);
-  border-radius: 20px;
-  gap: 0.5rem;
-}
+  // ── Grid ──────────────────────────────────────────────────────────────────────
+  .cv-results {
+    padding-top: 2.5rem;
+  }
 
-.cv-cta__heading {
-  font-size: clamp(1.4rem, 3vw, 1.875rem);
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--website-text);
-  margin: 0.25rem 0 0.5rem;
-}
+  .cv-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.25rem;
+  }
 
-.cv-cta__sub {
-  font-size: 1rem;
-  line-height: 1.6;
-  color: var(--website-text-secondary);
-  max-width: 440px;
-  margin: 0 0 1.25rem;
+  .cv-empty {
+    text-align: center;
+    color: var(--website-text-secondary);
+    padding: 4rem 0;
+    font-size: 1rem;
+  }
+
+  // ── Card transition ───────────────────────────────────────────────────────────
+  .cv-card-enter-active { transition: opacity 0.25s ease, transform 0.25s ease; }
+  .cv-card-leave-active { transition: opacity 0.2s ease, transform 0.2s ease; position: absolute; }
+  .cv-card-enter-from   { opacity: 0; transform: translateY(12px); }
+  .cv-card-leave-to     { opacity: 0; transform: translateY(-8px); }
+  .cv-card-move         { transition: transform 0.3s ease; }
+
+  // ── Bottom CTA ────────────────────────────────────────────────────────────────
+  .cv-cta {
+    margin-top: 4rem;
+  }
+
+  .cv-cta__inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 3.5rem 2rem;
+    background: rgba(18, 143, 131, 0.05);
+    border: 1px solid rgba(18, 143, 131, 0.15);
+    border-radius: 20px;
+    gap: 0.5rem;
+  }
+
+  .cv-cta__heading {
+    font-size: clamp(1.4rem, 3vw, 1.875rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--website-text);
+    margin: 0.25rem 0 0.5rem;
+  }
+
+  .cv-cta__sub {
+    font-size: 1rem;
+    line-height: 1.6;
+    color: var(--website-text-secondary);
+    max-width: 440px;
+    margin: 0 0 1.25rem;
+  }
 }
 </style>

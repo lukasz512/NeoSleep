@@ -6,9 +6,9 @@
       mode="lead"
       @submit="onLeadSubmit"
     />
-    <RepEntityList
+    <AppEntityList
       view-id="leads"
-      api-endpoint="/api/leads"
+      api-endpoint="/api/v1/leads"
       :headers="tableHeaders"
       :filter-definitions="leadFilterDefinitions"
       :i18n="leadsI18n"
@@ -68,20 +68,20 @@
       </RouterLink>
       <span v-else class="rep-entity-list__cell-empty">—</span>
     </template>
-    </RepEntityList>
+    </AppEntityList>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, defineAsyncComponent } from "vue";
 import { useI18n } from "vue-i18n";
-import RepEntityList from "../components/RepEntityList.vue";
+import AppEntityList from "../components/AppEntityList.vue";
 import GenderIcon from "../components/GenderIcon.vue";
 
 const LeadContactForm = defineAsyncComponent(() => import("../components/LeadContactForm.vue"));
 import { apiFetch } from "../utils/api";
 import { useNotifications } from "../composables/useNotifications";
-import { type RepFilterDefinition } from "../composables/useRepFilters";
+import { type FilterDefinition } from "../composables/useFilters";
 import { useAuthStore } from "../stores/auth";
 import { useConfigStore } from "../stores/config";
 import { getGenderFromName } from "../utils/genderFromName";
@@ -106,57 +106,58 @@ const isAdmin = computed(() => authStore.user?.role === "admin");
 const showAddModal = ref(false);
 const notifications = useNotifications();
 
-const leadFilterDefs: RepFilterDefinition[] = [
-  { key: "status", labelKey: "rep.leads.filters.status", type: "select", default: "" },
-  { key: "region", labelKey: "rep.leads.filters.region", type: "select", default: "" },
+const leadFilterDefs: FilterDefinition[] = [
+  { key: "status", labelKey: "user.leads.filters.status", type: "select", default: "" },
+  { key: "region", labelKey: "user.leads.filters.region", type: "select", default: "" },
 ];
 
 const statusOptions = computed(() => [
-  { title: t("rep.leads.filters.all"), value: "" },
-  { title: t("rep.leads.filters.statusNew"), value: "new", chipClass: "rep-lead-status-chip--new" },
-  { title: t("rep.leads.filters.statusOngoing"), value: "ongoing", chipClass: "rep-lead-status-chip--ongoing" },
-  { title: t("rep.leads.filters.statusAccepted"), value: "accepted", chipClass: "rep-lead-status-chip--accepted" },
-  { title: t("rep.leads.filters.statusRejected"), value: "rejected", chipClass: "rep-lead-status-chip--rejected" },
-  { title: t("rep.leads.filters.statusCompleted"), value: "completed", chipClass: "rep-lead-status-chip--completed" },
+  { title: t("user.leads.filters.all"), value: "" },
+  { title: t("user.leads.filters.statusNew"), value: "new", chipClass: "rep-lead-status-chip--new" },
+  { title: t("user.leads.filters.statusOngoing"), value: "ongoing", chipClass: "rep-lead-status-chip--ongoing" },
+  { title: t("user.leads.filters.statusAccepted"), value: "accepted", chipClass: "rep-lead-status-chip--accepted" },
+  { title: t("user.leads.filters.statusRejected"), value: "rejected", chipClass: "rep-lead-status-chip--rejected" },
+  { title: t("user.leads.filters.statusCompleted"), value: "completed", chipClass: "rep-lead-status-chip--completed" },
 ]);
 const regionOptions = computed(() => configStore.regionItems);
 
-const leadFilterDefinitions = computed<RepFilterDefinition[]>(() => [
+const leadFilterDefinitions = computed<FilterDefinition[]>(() => [
   { ...leadFilterDefs[0], options: statusOptions.value },
   { ...leadFilterDefs[1], options: regionOptions.value },
 ]);
 
 const tableHeaders = computed(() => [
-  { title: t("rep.leads.table.name"), key: "name", sortable: true },
-  { title: t("rep.leads.table.email"), key: "email", sortable: true },
-  { title: t("rep.leads.table.status"), key: "status", sortable: true },
-  { title: t("rep.leads.table.region"), key: "region", sortable: true },
-  { title: t("rep.leads.table.institution"), key: "institution", sortable: false },
+  { title: t("user.leads.table.name"), key: "name", sortable: true },
+  { title: t("user.leads.table.email"), key: "email", sortable: true },
+  { title: t("user.leads.table.status"), key: "status", sortable: true },
+  { title: t("user.leads.table.region"), key: "region", sortable: true },
+  { title: t("user.leads.table.institution"), key: "institution", sortable: false },
 ]);
 
 
 const leadsI18n = computed(() => ({
-  searchPlaceholder: "rep.leads.searchPlaceholder",
-  filtersTitle: "rep.leads.filters.title",
-  filtersClear: "rep.leads.filters.clear",
-  add: "rep.leads.add",
-  emptyTitle: "rep.leads.emptyTitle",
-  emptySubtitle: "rep.leads.emptySubtitle",
-  noResultsForCriteria: "rep.leads.noResultsForCriteria",
-  noResultsForCriteriaSubtitle: "rep.leads.noResultsForCriteriaSubtitle",
-  tableNoResults: "rep.leads.table.noResults",
-  errorLoad: "rep.leads.errorLoad",
+  searchPlaceholder: "user.leads.searchPlaceholder",
+  filtersTitle: "user.leads.filters.title",
+  filtersClear: "user.leads.filters.clear",
+  add: "user.leads.add",
+  emptyTitle: "user.leads.emptyTitle",
+  emptySubtitle: "user.leads.emptySubtitle",
+  noResultsForCriteria: "user.leads.noResultsForCriteria",
+  noResultsForCriteriaSubtitle: "user.leads.noResultsForCriteriaSubtitle",
+  tableNoResults: "user.leads.table.noResults",
+  errorLoad: "user.leads.errorLoad",
 }));
 
 function statusLabel(status: string): string {
   const key = leadStatusI18nKey(status);
-  return key ? t(key) : status || t("rep.leads.filters.statusNew");
+  return key ? t(key) : status || t("user.leads.filters.statusNew");
 }
 
 function isRejected(lead: Lead): boolean {
   return (lead.status || "").toLowerCase() === "rejected";
 }
 
+/** Unwrap Vuetify's internal item wrapper (VDataTable provides `{ raw: T }` via slot). */
 function getLeadFromItem(item: unknown): Lead {
   const o = item as { raw?: Lead };
   return (o?.raw ?? item) as Lead;
@@ -171,6 +172,7 @@ function onAddLead() {
 }
 
 async function onLeadSubmit(data: import("../components/LeadContactForm.vue").LeadFormData | import("../components/LeadContactForm.vue").ContactFormData) {
+  // This view uses mode="lead", so the emitted payload is always LeadFormData.
   const d = data as import("../components/LeadContactForm.vue").LeadFormData;
   const body = JSON.stringify({
     name: d.name,
@@ -179,16 +181,16 @@ async function onLeadSubmit(data: import("../components/LeadContactForm.vue").Le
     region: d.region || undefined,
     institution: d.institution || undefined,
   });
-  const res = await apiFetch("/api/leads", {
+  const res = await apiFetch("/api/v1/leads", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body,
-    errorMessageKey: "rep.leads.errorLoad",
+    errorMessageKey: "user.leads.errorLoad",
   });
   if (res.ok) {
-    notifications.show(t("rep.leads.form.success"), "success");
+    notifications.show(t("user.leads.form.success"), "success");
     showAddModal.value = false;
-    window.dispatchEvent(new Event("rep-entity-list-refresh"));
+    window.dispatchEvent(new Event("entity-list-refresh"));
   }
 }
 </script>

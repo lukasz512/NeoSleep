@@ -3,12 +3,12 @@ import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useDebounceFn } from "@vueuse/core";
 import { apiFetch } from "../utils/api";
-import { useRepFilters, type RepFilterDefinition } from "./useRepFilters";
+import { useFilters, type FilterDefinition } from "./useFilters";
 
 export interface EntityListOptions {
   viewId: string;
   apiEndpoint: string;
-  filterDefinitions: RepFilterDefinition[];
+  filterDefinitions: FilterDefinition[];
   i18n: { errorLoad: string };
   detailRouteName?: string;
   detailRouteParam?: string;
@@ -21,7 +21,7 @@ export function useEntityList(opts: EntityListOptions) {
   const router = useRouter();
 
   const searchQuery = ref("");
-  const { filterState, activeFilterCount, clearFilters } = useRepFilters(
+  const { filterState, activeFilterCount, clearFilters } = useFilters(
     opts.viewId,
     opts.filterDefinitions,
   );
@@ -61,14 +61,14 @@ export function useEntityList(opts: EntityListOptions) {
     searchQuery.value = "";
     clearFilters();
     tableOptions.value.page = 1;
-    debouncedSearch.cancel();
+    (debouncedSearch as unknown as { cancel: () => void }).cancel?.();
     loadData();
   }
 
   function onSearchClear() {
     searchQuery.value = "";
     tableOptions.value.page = 1;
-    debouncedSearch.cancel();
+    (debouncedSearch as unknown as { cancel: () => void }).cancel?.();
     loadData();
   }
 
@@ -148,10 +148,10 @@ export function useEntityList(opts: EntityListOptions) {
 
   onMounted(() => {
     loadData();
-    window.addEventListener("rep-entity-list-refresh", onRefresh);
+    window.addEventListener("entity-list-refresh", onRefresh);
   });
   onUnmounted(() => {
-    window.removeEventListener("rep-entity-list-refresh", onRefresh);
+    window.removeEventListener("entity-list-refresh", onRefresh);
   });
 
   return {

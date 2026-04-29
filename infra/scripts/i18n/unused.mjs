@@ -1,6 +1,6 @@
 /**
  * Detect i18n keys that exist in en.json but are not referenced in source (static scan).
- * Writes i18n/_unused.json with the list. Dynamic keys (e.g. rep.${name}.title) are not
+ * Writes i18n/_unused.json with the list. Dynamic keys (e.g. user.${name}.title) are not
  * detected; they may appear as "unused" and should be reviewed before pruning.
  */
 import fs from "node:fs";

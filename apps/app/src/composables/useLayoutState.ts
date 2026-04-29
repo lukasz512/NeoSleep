@@ -5,8 +5,8 @@ import { useTheme } from "vuetify";
 import { useDebounceFn } from "@vueuse/core";
 import { SIDEBAR_DEFAULT_COLLAPSED, MOBILE_BREAKPOINT } from "../constants";
 import { getNextTheme } from "../utils/theme";
-import { getRepSettings, setRepSettings } from "../utils/rep-settings";
-import { repLightTheme, repDarkTheme } from "../plugins/vuetify";
+import { getUserSettings, setUserSettings } from "../utils/user-settings";
+import { lightTheme, darkTheme } from "../plugins/vuetify";
 import { useAuthStore } from "../stores/auth";
 import { useConfigStore } from "../stores/config";
 import { loadLocale } from "../plugins/i18n";
@@ -24,10 +24,10 @@ export function useLayoutState() {
 
   function setTheme(id: "light" | "dark") {
     theme.value = id;
-    vuetifyTheme.change(id === "dark" ? repDarkTheme : repLightTheme);
+    vuetifyTheme.change(id === "dark" ? darkTheme : lightTheme);
     if (typeof document !== "undefined") {
       document.documentElement.setAttribute("data-theme", id);
-      setRepSettings({ theme: id });
+      setUserSettings({ theme: id });
     }
   }
 
@@ -40,7 +40,7 @@ export function useLayoutState() {
 
   function toggleSidebar() {
     sidebarCollapsed.value = !sidebarCollapsed.value;
-    setRepSettings({ sidebarCollapsed: sidebarCollapsed.value });
+    setUserSettings({ sidebarCollapsed: sidebarCollapsed.value });
   }
 
   // ── Mobile ─────────────────────────────────────────────────────────────────
@@ -61,15 +61,15 @@ export function useLayoutState() {
   const isAdmin = computed(() => authStore.user?.role === "admin");
 
   const userDisplayName = computed(
-    () => authStore.displayName ?? authStore.user?.email ?? t("rep.user.placeholderName"),
+    () => authStore.displayName ?? authStore.user?.email ?? t("user.user.placeholderName"),
   );
 
   const userRole = computed(() => {
     const role = authStore.user?.role;
-    if (role === "admin") return t("rep.user.roleAdmin");
-    if (role === "manager") return t("rep.user.roleManager");
-    if (role === "rep") return t("rep.user.roleRep");
-    return t("rep.user.role");
+    if (role === "admin") return t("user.user.roleAdmin");
+    if (role === "manager") return t("user.user.roleManager");
+    if (role === "rep") return t("user.user.roleRep");
+    return t("user.user.role");
   });
 
   const userInitials = computed(() => {
@@ -91,7 +91,7 @@ export function useLayoutState() {
     await new Promise<void>((r) => setTimeout(r, 180));
     await loadLocale(lang);
     locale.value = lang;
-    setRepSettings({ locale: lang });
+    setUserSettings({ locale: lang });
     await nextTick();
     localeTransitioning.value = false;
   }
@@ -136,7 +136,7 @@ export function useLayoutState() {
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
   onMounted(async () => {
-    const settings = getRepSettings();
+    const settings = getUserSettings();
     if (typeof settings.sidebarCollapsed === "boolean") {
       sidebarCollapsed.value = settings.sidebarCollapsed;
     }

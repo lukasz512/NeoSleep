@@ -1,19 +1,19 @@
 <template>
   <div :key="locale" :class="menuClass" role="menu">
     <div class="layout-app__user-menu-section">
-      <p class="layout-app__user-menu-label">{{ t("rep.settings.theme") }}</p>
+      <p class="layout-app__user-menu-label">{{ t("user.settings.theme") }}</p>
       <VBtn
         variant="text"
         block
         density="comfortable"
         class="layout-app__user-menu-item layout-app__user-menu-item--vuetify"
-        :title="theme === 'light' ? t('rep.settings.theme.switchToDark') : t('rep.settings.theme.switchToLight')"
+        :title="theme === 'light' ? t('user.settings.theme.switchToDark') : t('user.settings.theme.switchToLight')"
         @click="$emit('toggle-theme'); $emit('close')"
       >
         <span class="layout-app__theme-icon" aria-hidden="true">
           <AppIcon :name="theme === 'light' ? 'sun' : 'moon'" class="layout-app__menu-icon" />
         </span>
-        {{ theme === "light" ? t("rep.settings.theme.light") : t("rep.settings.theme.dark") }}
+        {{ theme === "light" ? t("user.settings.theme.light") : t("user.settings.theme.dark") }}
       </VBtn>
     </div>
     <div v-if="showThemePanelButton" class="layout-app__user-menu-section">
@@ -22,18 +22,18 @@
         block
         density="comfortable"
         class="layout-app__user-menu-item layout-app__user-menu-item--vuetify"
-        :title="t('rep.themePanel.openTitle')"
-        :aria-label="t('rep.themePanel.openTitle')"
+        :title="t('user.themePanel.openTitle')"
+        :aria-label="t('user.themePanel.openTitle')"
         @click="$emit('open-theme-panel'); $emit('close')"
       >
         <span class="layout-app__theme-icon" aria-hidden="true">
           <AppIcon name="palette" class="layout-app__menu-icon" />
         </span>
-        {{ t("rep.themePanel.title") }}
+        {{ t("user.themePanel.title") }}
       </VBtn>
     </div>
     <div class="layout-app__user-menu-section">
-      <p class="layout-app__user-menu-label">{{ t("rep.settings.language") }}</p>
+      <p class="layout-app__user-menu-label">{{ t("user.settings.language") }}</p>
       <VSelect
         :model-value="locale"
         :items="languageSelectItems"
@@ -43,7 +43,7 @@
         hide-details
         variant="outlined"
         class="layout-app__user-menu-select"
-        :aria-label="t('rep.settings.language')"
+        :aria-label="t('user.settings.language')"
         @update:model-value="onLocaleChange"
       />
     </div>
@@ -53,14 +53,14 @@
         block
         density="comfortable"
         class="layout-app__user-menu-item layout-app__user-menu-item--vuetify"
-        :title="t('rep.settings.logOut')"
-        :aria-label="t('rep.settings.logOut')"
+        :title="t('user.settings.logOut')"
+        :aria-label="t('user.settings.logOut')"
         @click="$emit('logout'); $emit('close')"
       >
         <span class="layout-app__theme-icon" aria-hidden="true">
           <AppIcon name="logout" class="layout-app__menu-icon" />
         </span>
-        {{ t("rep.settings.logOut") }}
+        {{ t("user.settings.logOut") }}
       </VBtn>
     </div>
   </div>

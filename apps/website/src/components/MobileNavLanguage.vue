@@ -3,7 +3,7 @@
     <button
       type="button"
       class="nav-lang__btn"
-      :aria-label="t('rep.settings.language')"
+      :aria-label="t('user.settings.language')"
       :aria-expanded="open"
       aria-haspopup="true"
       @click="open = !open"

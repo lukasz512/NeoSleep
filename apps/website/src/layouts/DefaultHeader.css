@@ -2,7 +2,7 @@
  * DefaultHeader — white-label ready.
  * All colours come from CSS variables defined in website-theme.scss.
  * Swap --website-primary / --website-bg / --website-border to re-skin.
- * Mobile breakpoint: 1100px (--website-nav-breakpoint, CSS-variable only).
+ * Mobile breakpoint: 1024px (--website-nav-breakpoint, CSS-variable only).
  */
 
 /* ── Shared transition (theme change) ──────────────────────────────────── */
@@ -27,7 +27,7 @@
 }
 
 .site-header--hidden {
-  @media (max-width: 1100px) { transform: translateY(-100%); }
+  /* responsive: @media (max-width: 1024px) → translateY(-100%) — in website-responsive.scss */
 }
 
 .site-header__bar {
@@ -37,10 +37,7 @@
   height: var(--website-header-height);
   padding: 0 var(--website-page-gutter);
   gap: 1rem;
-
-  @media (max-width: 1100px) {
-    padding: 0 var(--website-page-gutter-mobile);
-  }
+  /* responsive: @media (max-width: 1024px) → padding-mobile — in website-responsive.scss */
 }
 
 .site-header__brand {
@@ -107,8 +104,7 @@
   background: transparent;
   color: inherit;
   cursor: pointer;
-
-  @media (max-width: 1100px) { display: flex; }
+  /* responsive: @media (max-width: 1024px) → display: flex — in website-responsive.scss */
 }
 
 .site-header__hamburger-bar {
@@ -121,9 +117,7 @@
 }
 
 /* ── Nav breakpoint ─────────────────────────────────────────────────────── */
-@media (max-width: 1100px) {
-  .site-header__nav { display: none; }
-}
+/* .site-header__nav display: none at 1024px — in website-responsive.scss */
 
 /* ── Overlay ────────────────────────────────────────────────────────────── */
 .site-header__overlay {

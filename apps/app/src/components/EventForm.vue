@@ -14,7 +14,7 @@
         <VForm ref="formRef" @submit.prevent="onSubmit">
           <VTextField
             v-model="form.title"
-            :label="t('rep.planner.form.fieldTitle')"
+            :label="t('user.planner.form.fieldTitle')"
             variant="outlined"
             density="comfortable"
             class="mb-3"
@@ -23,7 +23,7 @@
           <div class="event-form__row mb-3">
             <VTextField
               v-model="form.start"
-              :label="t('rep.planner.form.fieldStart')"
+              :label="t('user.planner.form.fieldStart')"
               type="datetime-local"
               variant="outlined"
               density="comfortable"
@@ -32,7 +32,7 @@
             />
             <VTextField
               v-model="form.end"
-              :label="t('rep.planner.form.fieldEnd')"
+              :label="t('user.planner.form.fieldEnd')"
               type="datetime-local"
               variant="outlined"
               density="comfortable"
@@ -43,7 +43,7 @@
           <div class="event-form__row mb-3">
             <VSelect
               v-model="form.type"
-              :label="t('rep.planner.form.fieldType')"
+              :label="t('user.planner.form.fieldType')"
               :items="typeItems"
               item-title="title"
               item-value="value"
@@ -53,7 +53,7 @@
             />
             <VSelect
               v-model="form.status"
-              :label="t('rep.planner.form.fieldStatus')"
+              :label="t('user.planner.form.fieldStatus')"
               :items="statusItems"
               item-title="title"
               item-value="value"
@@ -64,7 +64,7 @@
           </div>
           <VAutocomplete
             v-model="form.hcoIds"
-            :label="t('rep.planner.form.fieldHco')"
+            :label="t('user.planner.form.fieldHco')"
             :items="hcoOptions"
             item-title="name"
             item-value="id"
@@ -75,11 +75,11 @@
             chips
             closable-chips
             :loading="loadingHco"
-            :placeholder="t('rep.planner.form.fieldHcoPlaceholder')"
+            :placeholder="t('user.planner.form.fieldHcoPlaceholder')"
           />
           <VAutocomplete
             v-model="form.hcpIds"
-            :label="t('rep.planner.form.fieldHcp')"
+            :label="t('user.planner.form.fieldHcp')"
             :items="hcpOptions"
             item-title="name"
             item-value="id"
@@ -90,12 +90,12 @@
             chips
             closable-chips
             :loading="loadingHcp"
-            :placeholder="t('rep.planner.form.fieldHcpPlaceholder')"
+            :placeholder="t('user.planner.form.fieldHcpPlaceholder')"
           />
           <VTextField
             v-if="form.type === 'f2f'"
             v-model="form.location"
-            :label="t('rep.planner.form.fieldLocation')"
+            :label="t('user.planner.form.fieldLocation')"
             variant="outlined"
             density="comfortable"
             class="mb-3"
@@ -104,7 +104,7 @@
           <VTextField
             v-if="form.type === 'video'"
             v-model="form.videoLink"
-            :label="t('rep.planner.form.fieldVideoLink')"
+            :label="t('user.planner.form.fieldVideoLink')"
             variant="outlined"
             density="comfortable"
             class="mb-3"
@@ -113,7 +113,7 @@
           />
           <VTextField
             v-model="form.notes"
-            :label="t('rep.planner.form.fieldNotes')"
+            :label="t('user.planner.form.fieldNotes')"
             variant="outlined"
             density="comfortable"
             class="mb-3"
@@ -123,7 +123,7 @@
           />
           <VSelect
             v-model="form.region"
-            :label="t('rep.planner.form.fieldRegion')"
+            :label="t('user.planner.form.fieldRegion')"
             :items="configStore.regionItems"
             variant="outlined"
             density="comfortable"

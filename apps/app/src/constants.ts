@@ -4,15 +4,17 @@
  * - Prod / phone: set VITE_API_URL in .env (e.g. http://192.168.1.x:3000 for LAN).
  */
 export function getApiUrl(): string {
-  const env = typeof import.meta !== "undefined" && (import.meta as { env?: { VITE_API_URL?: string; DEV?: boolean } }).env;
+  const env = typeof import.meta !== "undefined"
+    ? (import.meta as { env?: { VITE_API_URL?: string; DEV?: boolean } }).env
+    : undefined;
   const url = env?.VITE_API_URL;
   if (url !== undefined && url !== "") return url;
   return env?.DEV === true ? "" : "http://localhost:3000";
 }
 
-export const REP_STORAGE_KEYS = {
-  /** Single key for all rep-app settings (theme, locale, sidebar, filters). Later can sync to backend. */
-  settings: "rep-app-settings",
+export const APP_STORAGE_KEYS = {
+  /** Single key for all app settings (theme, locale, sidebar, filters). Later can sync to backend. */
+  settings: "app-settings",
 } as const;
 
 /** Default sidebar state: expanded (false = not collapsed) */

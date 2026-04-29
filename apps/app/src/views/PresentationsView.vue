@@ -6,10 +6,10 @@
 
     <div v-else-if="presentations.length === 0" class="view-presentations__empty">
       <AppEmptyState
-        :title="t('rep.presentations.emptyTitle')"
-        :subtitle="t('rep.presentations.emptySubtitle')"
+        :title="t('user.presentations.emptyTitle')"
+        :subtitle="t('user.presentations.emptySubtitle')"
         :show-add-button="isAdmin"
-        :add-label="t('rep.presentations.add')"
+        :add-label="t('user.presentations.add')"
         @add="onAdd"
       />
     </div>
@@ -146,7 +146,7 @@ const selectedPresentation = ref<Presentation | null>(null);
 async function loadPresentations() {
   loading.value = true;
   try {
-    const res = await apiFetch("/api/presentations", { handleErrors: false });
+    const res = await apiFetch("/api/v1/presentations", { handleErrors: false });
     if (res.ok) {
       const data = (await res.json()) as { items: Presentation[] };
       presentations.value = data.items ?? [];

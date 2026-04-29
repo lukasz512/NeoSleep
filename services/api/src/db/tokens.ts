@@ -8,7 +8,7 @@ export async function createPasswordResetToken(
 ): Promise<void> {
   try {
     await getDb().query(
-      `INSERT INTO tbl_password_reset_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)`,
+      `INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)`,
       [userId, tokenHash, expiresAt]
     );
   } catch (err) {
@@ -19,7 +19,7 @@ export async function createPasswordResetToken(
 export async function getPasswordResetUserIdByHash(tokenHash: string): Promise<string | null> {
   try {
     const r = await getDb().query<{ user_id: string }>(
-      `SELECT user_id FROM tbl_password_reset_tokens WHERE token_hash = $1 AND expires_at > now()`,
+      `SELECT user_id FROM password_reset_tokens WHERE token_hash = $1 AND expires_at > now()`,
       [tokenHash]
     );
     return r.rows[0]?.user_id ?? null;
@@ -30,7 +30,7 @@ export async function getPasswordResetUserIdByHash(tokenHash: string): Promise<s
 
 export async function deletePasswordResetTokenByHash(tokenHash: string): Promise<void> {
   try {
-    await getDb().query("DELETE FROM tbl_password_reset_tokens WHERE token_hash = $1", [tokenHash]);
+    await getDb().query("DELETE FROM password_reset_tokens WHERE token_hash = $1", [tokenHash]);
   } catch (err) {
     throw new DatabaseError("deletePasswordResetTokenByHash", err);
   }

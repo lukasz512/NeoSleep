@@ -14,14 +14,14 @@ describe("PlannerView", () => {
   describe("calendar and toolbar", () => {
     it("has view toggle for day, week, month", () => {
       const source = getSource();
-      expect(source).toContain("rep.planner.viewDay");
-      expect(source).toContain("rep.planner.viewWeek");
-      expect(source).toContain("rep.planner.viewMonth");
+      expect(source).toContain("user.planner.viewDay");
+      expect(source).toContain("user.planner.viewWeek");
+      expect(source).toContain("user.planner.viewMonth");
     });
 
     it("has prev, next, today navigation", () => {
       const source = getSource();
-      expect(source).toContain("rep.planner.today");
+      expect(source).toContain("user.planner.today");
       expect(source).toContain("prev");
       expect(source).toContain("next");
       expect(source).toContain("goToToday");
@@ -29,7 +29,7 @@ describe("PlannerView", () => {
 
     it("has Add button for creating events", () => {
       const source = getSource();
-      expect(source).toContain("rep.planner.add");
+      expect(source).toContain("user.planner.add");
       expect(source).toContain("onAdd");
     });
 
@@ -59,7 +59,7 @@ describe("PlannerView", () => {
 
     it("fetches events from /api/events", () => {
       const source = getSource();
-      expect(source).toContain("/api/events");
+      expect(source).toContain("/api/v1/interactions");
       expect(source).toContain("apiFetch");
       expect(source).toContain("fetchEvents");
     });

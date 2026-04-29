@@ -85,16 +85,11 @@ onMounted(startTimer)
 onUnmounted(() => { if (timer) clearInterval(timer) })
 </script>
 
-<style lang="scss" scoped>
-$bp-mobile: 600px;
-
+<style lang="scss">
+@layer components {
 .tc {
   padding: 5rem 0 4.5rem;
   background: var(--website-bg);
-
-  @media (max-width: $bp-mobile) {
-    padding: 3.5rem 0 3rem;
-  }
 }
 
 .tc__inner {
@@ -205,4 +200,5 @@ $bp-mobile: 600px;
   opacity: 0;
   transform: translateY(-10px);
 }
+} /* end @layer components */
 </style>

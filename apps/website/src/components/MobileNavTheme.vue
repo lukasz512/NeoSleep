@@ -51,9 +51,9 @@ function nextMode(m: ThemeMode): ThemeMode {
 const isSpinning = ref(false)
 const shortLabel = computed(() => SHORT_LABELS[themeMode.value])
 const ariaLabel = computed(() => {
-  const current = t(`rep.settings.theme.${themeMode.value}`)
-  const next = t(`rep.settings.theme.${nextMode(themeMode.value)}`)
-  return t('rep.settings.theme.tooltip', { current, next })
+  const current = t(`user.settings.theme.${themeMode.value}`)
+  const next = t(`user.settings.theme.${nextMode(themeMode.value)}`)
+  return t('user.settings.theme.tooltip', { current, next })
 })
 
 const SPIN_MS = 450

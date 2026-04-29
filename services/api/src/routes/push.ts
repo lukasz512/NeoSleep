@@ -17,7 +17,7 @@ import webpush from "web-push";
 import { asyncHandler } from "../middleware/errorHandler.js";
 import { getDb } from "../db/connection.js";
 
-export const pushRouter = Router();
+export const pushRouter: import('express').Router = Router();
 
 function getVapidConfig() {
   const publicKey  = process.env.VAPID_PUBLIC_KEY;
@@ -42,7 +42,7 @@ if (isVapidConfigured()) {
 
 /** POST /api/push/subscribe */
 pushRouter.post(
-  "/api/push/subscribe",
+  "/push/subscribe",
   asyncHandler(async (req: Request, res: Response) => {
     if (!isVapidConfigured()) {
       res.status(503).json({ error: "Push notifications not configured" });
@@ -67,7 +67,7 @@ pushRouter.post(
 
     if (db) {
       await db.query(
-        `INSERT INTO tbl_push_subscriptions (user_id, endpoint, keys, user_agent)
+        `INSERT INTO push_subscription (user_id, endpoint, keys, user_agent)
          VALUES ($1, $2, $3::jsonb, $4)
          ON CONFLICT (endpoint) DO UPDATE
            SET user_id = EXCLUDED.user_id,
@@ -83,14 +83,14 @@ pushRouter.post(
 
 /** DELETE /api/push/subscribe */
 pushRouter.delete(
-  "/api/push/subscribe",
+  "/push/subscribe",
   asyncHandler(async (req: Request, res: Response) => {
     const { endpoint } = req.body as { endpoint?: string };
     if (!endpoint) { res.status(400).json({ error: "endpoint required" }); return; }
 
     const db = getDb();
     if (db) {
-      await db.query("DELETE FROM tbl_push_subscriptions WHERE endpoint = $1", [endpoint]);
+      await db.query("DELETE FROM push_subscription WHERE endpoint = $1", [endpoint]);
     }
 
     res.status(204).end();
@@ -111,7 +111,7 @@ export async function sendPushToUser(
   if (!db) return;
 
   const { rows } = await db.query<{ endpoint: string; keys: { p256dh: string; auth: string } }>(
-    "SELECT endpoint, keys FROM tbl_push_subscriptions WHERE user_id = $1",
+    "SELECT endpoint, keys FROM push_subscription WHERE user_id = $1",
     [userId]
   );
 
@@ -120,11 +120,11 @@ export async function sendPushToUser(
       const subscription = { endpoint: row.endpoint, keys: row.keys };
       try {
         await webpush.sendNotification(subscription, JSON.stringify(payload));
-        await db.query("UPDATE tbl_push_subscriptions SET last_used = NOW() WHERE endpoint = $1", [row.endpoint]);
+        await db.query("UPDATE push_subscription SET last_used = NOW() WHERE endpoint = $1", [row.endpoint]);
       } catch (err: unknown) {
         // 410 Gone = subscription expired/revoked — clean up
         if (typeof err === "object" && err !== null && "statusCode" in err && (err as { statusCode: number }).statusCode === 410) {
-          await db.query("DELETE FROM tbl_push_subscriptions WHERE endpoint = $1", [row.endpoint]);
+          await db.query("DELETE FROM push_subscription WHERE endpoint = $1", [row.endpoint]);
         }
       }
     })

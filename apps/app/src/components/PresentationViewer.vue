@@ -9,7 +9,7 @@
   >
     <div ref="containerRef" class="presentation-viewer__container" :class="{ 'presentation-viewer__container--rotated': shouldRotate }">
       <div class="presentation-viewer__toolbar">
-        <VBtn icon variant="text" :title="t('rep.presentations.close')" :aria-label="t('rep.presentations.close')" @click="$emit('update:modelValue', false)">
+        <VBtn icon variant="text" :title="t('user.presentations.close')" :aria-label="t('user.presentations.close')" @click="$emit('update:modelValue', false)">
           <VIcon icon="mdi-close" />
         </VBtn>
         <span class="presentation-viewer__title">{{ presentation?.title }}</span>
@@ -17,8 +17,8 @@
           v-if="presentation?.file_type === 'pdf'"
           icon
           variant="text"
-          :title="t('rep.presentations.rotate')"
-          :aria-label="t('rep.presentations.rotate')"
+          :title="t('user.presentations.rotate')"
+          :aria-label="t('user.presentations.rotate')"
           @click="toggleRotate"
         >
           <VIcon icon="mdi-rotate-right" />

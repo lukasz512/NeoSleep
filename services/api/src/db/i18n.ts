@@ -6,7 +6,7 @@ export type I18nOverrides = Record<string, Record<string, string>>;
 export async function getI18nOverrides(): Promise<I18nOverrides> {
   try {
     const result = await getDb().query<{ locale: string; key: string; value: string }>(
-      `SELECT locale, key, value FROM tbl_i18n_overrides ORDER BY locale, key`
+      `SELECT locale, key, value FROM i18n_overrides ORDER BY locale, key`
     );
     const out: I18nOverrides = {};
     for (const row of result.rows) {
@@ -32,7 +32,7 @@ export async function upsertI18nOverrides(
 
     if (deleteKeys.length > 0) {
       await getDb().query(
-        `DELETE FROM tbl_i18n_overrides WHERE locale = $1 AND key = ANY($2::text[])`,
+        `DELETE FROM i18n_overrides WHERE locale = $1 AND key = ANY($2::text[])`,
         [locale, deleteKeys]
       );
     }
@@ -40,7 +40,7 @@ export async function upsertI18nOverrides(
       const keys = upsertEntries.map(([k]) => k);
       const values = upsertEntries.map(([, v]) => v);
       await getDb().query(
-        `INSERT INTO tbl_i18n_overrides (locale, key, value, updated_at)
+        `INSERT INTO i18n_overrides (locale, key, value, updated_at)
          SELECT $1, unnest($2::text[]), unnest($3::text[]), now()
          ON CONFLICT (locale, key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
         [locale, keys, values]

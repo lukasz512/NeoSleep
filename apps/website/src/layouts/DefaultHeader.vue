@@ -213,7 +213,7 @@ const headerHidden = ref(false);
 let lastScrollY = 0;
 
 function onScroll() {
-  if (window.innerWidth > 1100) {
+  if (window.innerWidth > 1024) {
     headerHidden.value = false;
     return;
   }

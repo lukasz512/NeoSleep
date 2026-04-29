@@ -66,8 +66,8 @@ describe("LeadContactForm", () => {
         source.indexOf("lead-contact-form__row"),
         source.indexOf("lead-contact-form__row") + 800
       );
-      expect(rowBlock).toContain("rep.leads.form.status");
-      expect(rowBlock).toContain("rep.leads.form.region");
+      expect(rowBlock).toContain("user.leads.form.status");
+      expect(rowBlock).toContain("user.leads.form.region");
       expect(rowBlock).toContain("lead-contact-form__row-item");
     });
   });

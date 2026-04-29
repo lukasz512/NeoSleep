@@ -10,7 +10,7 @@
 
         <div v-if="section.imageLeft" class="home-split__media">
           <div v-if="imgLoading" class="home-split__skeleton" aria-hidden="true" />
-          <img v-else :src="section.imageSrc" alt="" class="home-split__photo" width="560" height="400" :style="section.imagePosition ? { objectPosition: section.imagePosition } : {}" />
+          <img v-else :src="section.imageSrc" alt="" class="home-split__photo" width="560" height="400" loading="lazy" :style="section.imagePosition ? { objectPosition: section.imagePosition } : {}" />
         </div>
 
         <div class="home-split__body">
@@ -44,7 +44,7 @@
 
         <div v-if="!section.imageLeft" class="home-split__media">
           <div v-if="imgLoading" class="home-split__skeleton" aria-hidden="true" />
-          <img v-else :src="section.imageSrc" alt="" class="home-split__photo" width="560" height="400" :style="section.imagePosition ? { objectPosition: section.imagePosition } : {}" />
+          <img v-else :src="section.imageSrc" alt="" class="home-split__photo" width="560" height="400" loading="lazy" :style="section.imagePosition ? { objectPosition: section.imagePosition } : {}" />
         </div>
 
       </div>
@@ -115,132 +115,90 @@ function setupClock(el: HTMLElement) {
 onUnmounted(() => cleanups.forEach((fn) => fn()));
 </script>
 
-<style lang="scss" scoped>
-$bp-desktop: 960px;
-$bp-mobile:  600px;
-
-.home-split {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4rem;
-  align-items: center;
-
-  @media (max-width: $bp-desktop) {
-    grid-template-columns: 1fr;
-    gap: 2rem;
-
-    .home-split__media { order: -1; }
+<style lang="scss">
+@layer components {
+  .home-split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4rem;
+    align-items: center;
   }
-}
 
-.home-split__media {
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: var(--website-shadow-md);
-  height: clamp(300px, 48vw, 560px);
-
-  @media (max-width: $bp-desktop) { height: 260px; border-radius: 12px; }
-  @media (max-width: $bp-mobile)  { height: 210px; border-radius: 10px; }
-}
-
-.home-split__photo {
-  width: 100%;
-  height: 100%;
-  display: block;
-  object-fit: cover;
-  object-position: center 30%;
-
-  [data-theme="dark"] & {
-    filter: brightness(0.88) contrast(1.05) saturate(0.92);
+  .home-split__media {
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: var(--website-shadow-md);
+    height: clamp(300px, 48vw, 560px);
   }
-}
 
-@keyframes shimmer {
-  from { background-position: -200% 0; }
-  to   { background-position:  200% 0; }
-}
+  .home-split__photo {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+    object-position: center 30%;
 
-.home-split__skeleton {
-  width: 100%;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(
-    90deg,
-    var(--website-surface-alt, #e8f0ef) 25%,
-    var(--website-surface,     #f0f7f6) 50%,
-    var(--website-surface-alt, #e8f0ef) 75%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.4s ease-in-out infinite;
+    [data-theme="dark"] & {
+      filter: brightness(0.88) contrast(1.05) saturate(0.92);
+    }
+  }
 
-  [data-theme="dark"] & {
+  @keyframes shimmer {
+    from { background-position: -200% 0; }
+    to   { background-position:  200% 0; }
+  }
+
+  .home-split__skeleton {
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
     background: linear-gradient(
       90deg,
-      #1a2e2b 25%,
-      #22403c 50%,
-      #1a2e2b 75%
+      var(--website-skeleton-base)      25%,
+      var(--website-skeleton-highlight) 50%,
+      var(--website-skeleton-base)      75%
     );
     background-size: 200% 100%;
+    animation: shimmer 1.6s ease-in-out infinite;
   }
-}
 
-.home-split__body {
-  @media (max-width: $bp-desktop) { text-align: center; }
-}
-
-.hss-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem 1.25rem;
-  margin-bottom: 1.75rem;
-  overflow: visible;
-
-  @media (max-width: $bp-desktop) {
-    grid-template-columns: 1fr;
-    max-width: 460px;
-    margin-inline: auto;
+  .home-split__body {
+    // responsive text-align center handled in website-responsive.scss
   }
-}
 
-.hss-feature {
-  overflow: visible;
+  .hss-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem 1.25rem;
+    margin-bottom: 1.75rem;
+    overflow: visible;
+  }
 
-  @media (max-width: $bp-desktop) {
+  .hss-feature {
+    overflow: visible;
+  }
+
+  .hss-feature__body {
     display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 0.875rem;
-    text-align: left;
+    flex-direction: column;
   }
-}
 
-.hss-feature__body {
-  display: flex;
-  flex-direction: column;
-}
-
-.hss-feature__title {
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: var(--website-text);
-  margin: 0.5rem 0 0.2rem;
-
-  @media (max-width: $bp-desktop) {
-    margin-top: 0.25rem;
+  .hss-feature__title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--website-text);
+    margin: 0.5rem 0 0.2rem;
   }
-}
 
-.hss-feature__desc {
-  font-size: 0.875rem;
-  line-height: 1.5;
-  color: var(--website-text-secondary);
-  margin: 0;
-}
+  .hss-feature__desc {
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--website-text-secondary);
+    margin: 0;
+  }
 
-.hss-cta {
-  @media (max-width: $bp-desktop) {
-    display: flex;
-    justify-content: center;
+  .hss-cta {
+    // responsive justify-content center handled in website-responsive.scss
   }
 }
 </style>

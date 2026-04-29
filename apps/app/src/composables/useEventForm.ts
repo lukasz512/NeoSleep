@@ -1,7 +1,7 @@
 import { ref, computed, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { apiFetch } from "../utils/api";
-import type { EventFormData, EventFormInitialData, EventSubmitPayload } from "../components/EventForm.vue";
+import type { EventFormData, EventFormInitialData, EventSubmitPayload } from "../components/EventForm.types";
 
 /** Map UI status → API status. */
 export const UI_TO_API_STATUS: Record<string, "scheduled" | "completed" | "cancelled" | "no_show"> = {
@@ -40,31 +40,31 @@ export function useEventForm(
   });
 
   const typeItems = computed(() => [
-    { title: t("rep.planner.form.typeF2f"),   value: "f2f"   },
-    { title: t("rep.planner.form.typeVideo"),  value: "video" },
+    { title: t("user.planner.form.typeF2f"),   value: "f2f"   },
+    { title: t("user.planner.form.typeVideo"),  value: "video" },
   ]);
 
   const statusItems = computed(() => [
-    { title: t("rep.planner.form.statusPlanned"),  value: "planned"  },
-    { title: t("rep.planner.form.statusDone"),     value: "done"     },
-    { title: t("rep.planner.form.statusRejected"), value: "rejected" },
-    { title: t("rep.planner.form.statusNoShow"),   value: "no_show"  },
+    { title: t("user.planner.form.statusPlanned"),  value: "planned"  },
+    { title: t("user.planner.form.statusDone"),     value: "done"     },
+    { title: t("user.planner.form.statusRejected"), value: "rejected" },
+    { title: t("user.planner.form.statusNoShow"),   value: "no_show"  },
   ]);
 
   const isEditMode  = computed(() => !!props.initialData?.id);
-  const formTitle   = computed(() => isEditMode.value ? t("rep.planner.form.editTitle") : t("rep.planner.form.title"));
-  const formSubmitLabel = computed(() => isEditMode.value ? t("rep.planner.form.editSubmit") : t("rep.planner.form.submit"));
+  const formTitle   = computed(() => isEditMode.value ? t("user.planner.form.editTitle") : t("user.planner.form.title"));
+  const formSubmitLabel = computed(() => isEditMode.value ? t("user.planner.form.editSubmit") : t("user.planner.form.submit"));
 
   const startRules = computed(() => [
-    (v: string) => !!v?.trim() || t("rep.planner.form.validation.startRequired"),
+    (v: string) => !!v?.trim() || t("user.planner.form.validation.startRequired"),
   ]);
   const endRules = computed(() => [
-    (v: string) => !!v?.trim() || t("rep.planner.form.validation.endRequired"),
+    (v: string) => !!v?.trim() || t("user.planner.form.validation.endRequired"),
     (v: string) => {
       const start = form.value.start?.trim();
       const end = v?.trim();
       if (!start || !end) return true;
-      return new Date(end) > new Date(start) || t("rep.planner.form.validation.endAfterStart");
+      return new Date(end) > new Date(start) || t("user.planner.form.validation.endAfterStart");
     },
   ]);
 
@@ -85,7 +85,7 @@ export function useEventForm(
   async function loadHco() {
     loadingHco.value = true;
     try {
-      const res = await apiFetch("/api/hco?limit=-1", { handleErrors: false });
+      const res = await apiFetch("/api/v1/hco?limit=-1", { handleErrors: false });
       if (res.ok) {
         const json = (await res.json()) as { items?: { id: string; name: string }[] };
         hcoOptions.value = json.items ?? [];
@@ -98,7 +98,7 @@ export function useEventForm(
   async function loadHcp() {
     loadingHcp.value = true;
     try {
-      const res = await apiFetch("/api/hcp?limit=-1", { handleErrors: false });
+      const res = await apiFetch("/api/v1/hcp?limit=-1", { handleErrors: false });
       if (res.ok) {
         const json = (await res.json()) as { items?: { id: string; name: string }[] };
         hcpOptions.value = json.items ?? [];

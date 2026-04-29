@@ -1,7 +1,7 @@
 <template>
   <VCard class="dev-panel" variant="outlined" max-width="420" rounded="lg">
     <VCardText>
-      <p class="dev-panel__label">{{ t('rep.login.loginAsDev') }}</p>
+      <p class="dev-panel__label">{{ t('user.login.loginAsDev') }}</p>
       <VSelect
         v-model="devUser"
         :items="devUserItems"
@@ -19,7 +19,7 @@
         class="mt-3"
         @click="emit('login', devUser)"
       >
-        {{ t('rep.login.goToApp') }}
+        {{ t('user.login.goToApp') }}
       </VBtn>
     </VCardText>
   </VCard>
@@ -35,8 +35,8 @@ const emit = defineEmits<{ login: [role: string] }>();
 
 const devUser = ref("admin");
 const devUserItems = computed(() => [
-  { id: "rep",   title: t("rep.login.devUser.rep") },
-  { id: "admin", title: t("rep.login.devUser.admin") },
+  { id: "rep",   title: t("user.login.devUser.rep") },
+  { id: "admin", title: t("user.login.devUser.admin") },
 ]);
 </script>
 

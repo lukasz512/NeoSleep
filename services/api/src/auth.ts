@@ -48,7 +48,7 @@ function signRememberMe(userId: string, version: number): string {
     .digest("hex");
 }
 
-export const authRouter = Router();
+export const authRouter: import('express').Router = Router();
 
 declare module "express-session" {
   interface SessionData {
@@ -134,11 +134,12 @@ authRouter.post(
   restoreSessionFromRememberMe,
   asyncHandler(async (req: Request, res: Response) => {
     if (req.session?.user) {
-      const force = (req.session.user as { forcePasswordChange?: boolean }).forcePasswordChange;
-      return res.status(200).json({
+      const force = req.session.user.forcePasswordChange;
+      res.status(200).json({
         user: req.session.user,
         forcePasswordChange: force ?? false,
       });
+      return;
     }
     const { email, password, remember_me } = req.body as {
       email?: string;
@@ -165,7 +166,7 @@ authRouter.post(
       res.status(401).json({ error: "Invalid email or password." });
       return;
     }
-    (req.session as Express.Session).user = {
+    req.session.user = {
       id: staff.id,
       email: staff.email,
       name: staff.name ?? undefined,
@@ -202,7 +203,6 @@ authRouter.get(
       res.status(401).json({ error: "Not authenticated" });
       return;
     }
-    const u = req.session.user as { forcePasswordChange?: boolean };
     res.json({
       user: {
         id: req.session.user.id,
@@ -210,7 +210,7 @@ authRouter.get(
         name: req.session.user.name,
         picture: req.session.user.picture,
         role: req.session.user.role,
-        forcePasswordChange: u.forcePasswordChange ?? false,
+        forcePasswordChange: req.session.user.forcePasswordChange ?? false,
       },
     });
   }
@@ -262,7 +262,7 @@ authRouter.post("/auth/change-password", asyncHandler(async (req: Request, res: 
   }
   const hash = await bcrypt.hash(newStr, BCRYPT_ROUNDS);
   await setUserPassword(req.session.user.id, hash);
-  (req.session.user as { forcePasswordChange?: boolean }).forcePasswordChange = false;
+  req.session.user.forcePasswordChange = false;
   res.status(200).json({ success: true });
 }));
 
@@ -353,7 +353,7 @@ authRouter.get("/auth/google", (req: Request, res: Response) => {
   }
   const state = crypto.randomBytes(24).toString("hex");
   req.session.state = state;
-  const redirectUri = `${oauthRedirectOrigin}/auth/google/callback`;
+  const redirectUri = `${oauthRedirectOrigin}/api/v1/auth/google/callback`;
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
@@ -381,7 +381,7 @@ authRouter.get("/auth/google/callback", asyncHandler(async (req: Request, res: R
     return;
   }
 
-  const redirectUri = `${oauthRedirectOrigin}/auth/google/callback`;
+  const redirectUri = `${oauthRedirectOrigin}/api/v1/auth/google/callback`;
   const body = new URLSearchParams({
     code,
     client_id: clientId,

@@ -38,7 +38,7 @@ brand/
 
 Brand **primary** and **secondary** colours are not stored as image files here; they are defined in:
 
-- **Database**: `tbl_app_config` (see `services/bff/migrations/015_app_config.sql`) holds `primary_color`, `secondary_color`, `border_radius`, etc., shared across website and rep-app.
-- **Fallback in code**: Until the app loads config from the BFF, rep-app uses `apps/rep-app/src/assets/scss/_brand-colors.scss` and website uses `apps/website/src/assets/website-theme.scss`. The colour in the logo (green) is the **secondary** brand colour; the **primary** is to be set in the brandbook and in `tbl_app_config`.
+- **Database**: `app_config` (tenant schema, seeded by `services/api/migrations/002_tenant.sql`) holds `primary_color`, `secondary_color`, `border_radius`, etc., shared across website and rep-app.
+- **Fallback in code**: Until the app loads config from the BFF, rep-app uses `apps/rep-app/src/assets/scss/_brand-colors.scss` and website uses `apps/website/src/assets/website-theme.scss`. The colour in the logo (green) is the **secondary** brand colour; the **primary** is to be set in the brandbook and in `app_config`.
 
 See **foundation/docs/BRAND_AND_APP_CONFIG.md** for how app config and theme are wired.

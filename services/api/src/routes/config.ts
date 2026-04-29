@@ -6,16 +6,29 @@ export const configRouter: RouterType = Router();
 
 /** GET /api/config/app – app theme/branding (public, used by website and rep-app). */
 configRouter.get(
-  "/api/config/app",
+  "/config/app",
   asyncHandler(async (_req: Request, res: Response) => {
     const config = await getAppConfig();
     res.json(config);
   })
 );
 
+/** Shape of the PATCH /api/config/app request body. */
+interface AppConfigPatchBody {
+  primary_color?: unknown;
+  secondary_color?: unknown;
+  primary_color_dark?: unknown;
+  secondary_color_dark?: unknown;
+  border_radius?: unknown;
+  logo_url?: unknown;
+  surface_color?: unknown;
+  hero_container_style?: unknown;
+  color_scheme?: unknown;
+}
+
 /** PATCH /api/config/app – update theme (admin only). In dev, allow when no API session (e.g. "Go to app" login). */
 configRouter.patch(
-  "/api/config/app",
+  "/config/app",
   asyncHandler(async (req: Request, res: Response) => {
     const session = req.session as { user?: { role?: string } } | undefined;
     const isAdmin = session?.user?.role === "admin";
@@ -23,7 +36,7 @@ configRouter.patch(
       res.status(403).json({ error: "Admin only" });
       return;
     }
-    const body = req.body as Record<string, unknown>;
+    const body = req.body as AppConfigPatchBody;
     const updates: AppConfigUpdate = {};
     const normHex = (s: unknown) =>
       typeof s === "string" && s.trim() ? s.trim().toLowerCase() : "";
@@ -61,7 +74,7 @@ configRouter.patch(
 
 /** GET /api/config/i18n – DB label overrides (public, layered on top of static JSON in frontend). */
 configRouter.get(
-  "/api/config/i18n",
+  "/config/i18n",
   asyncHandler(async (_req: Request, res: Response) => {
     const overrides = await getI18nOverrides();
     res.json(overrides);
@@ -73,7 +86,7 @@ configRouter.get(
  *  null value removes the override (falls back to static JSON).
  */
 configRouter.patch(
-  "/api/config/i18n",
+  "/config/i18n",
   asyncHandler(async (req: Request, res: Response) => {
     const session = req.session as { user?: { role?: string } } | undefined;
     const isAdmin = session?.user?.role === "admin";

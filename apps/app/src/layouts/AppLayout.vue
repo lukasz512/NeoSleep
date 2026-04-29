@@ -64,8 +64,8 @@
           icon
           variant="text"
           size="small"
-          :title="t('rep.themePanel.openTitle')"
-          :aria-label="t('rep.themePanel.openTitle')"
+          :title="t('user.themePanel.openTitle')"
+          :aria-label="t('user.themePanel.openTitle')"
           @click="themePanelOpen = true"
         >
           <AppIcon name="palette" class="layout-appbar__icon" />
@@ -83,8 +83,8 @@
               v-bind="menuProps"
               variant="text"
               class="layout-user-btn"
-              :title="t('rep.user.menu')"
-              :aria-label="t('rep.user.menu')"
+              :title="t('user.user.menu')"
+              :aria-label="t('user.user.menu')"
             >
               <div class="layout-user-info">
                 <span class="layout-user-name">{{ user.displayName }}</span>
@@ -176,6 +176,12 @@ const {
 } = useLayoutState();
 
 const menuOpen = ref(false);
+
+const mobileBottomPadding = computed(() =>
+  isMobile.value
+    ? "calc(16px + 44px + 24px + env(safe-area-inset-bottom, 0px))"
+    : "16px"
+);
 
 const moduleTitle = computed(() => {
   const name = route.name;
@@ -269,16 +275,11 @@ const moduleTitle = computed(() => {
 
 .layout-main__inner {
   padding: 16px;
+  padding-bottom: v-bind(mobileBottomPadding);
   min-height: 100%;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-}
-
-@media (max-width: 959px) {
-  .layout-main__inner {
-    padding-bottom: calc(16px + 44px + 24px + env(safe-area-inset-bottom, 0px));
-  }
 }
 
 .layout-main__inner:focus {

@@ -30,7 +30,7 @@ export function createUseLoginFlow(apiFetch: ApiFetchFn) {
       errorKey.value = null;
       loading.value = true;
       try {
-        const res = await apiFetch("/auth/login", {
+        const res = await apiFetch("/api/v1/auth/login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -42,15 +42,15 @@ export function createUseLoginFlow(apiFetch: ApiFetchFn) {
         });
 
         if (res.status === 401) {
-          errorKey.value = "rep.login.error.invalidCredentials";
+          errorKey.value = "user.login.error.invalidCredentials";
           return;
         }
         if (res.status === 429) {
-          errorKey.value = "rep.login.error.tooManyAttempts";
+          errorKey.value = "user.login.error.tooManyAttempts";
           return;
         }
         if (!res.ok) {
-          errorKey.value = "rep.login.error.network";
+          errorKey.value = "user.login.error.network";
           return;
         }
 
@@ -68,7 +68,7 @@ export function createUseLoginFlow(apiFetch: ApiFetchFn) {
           await router.push(redirectPath.value);
         }
       } catch {
-        errorKey.value = "rep.login.error.network";
+        errorKey.value = "user.login.error.network";
       } finally {
         loading.value = false;
       }

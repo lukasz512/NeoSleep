@@ -15,6 +15,7 @@ import { useDocumentLang } from "@shared/composables/useDocumentLang";
 import { useAppHead } from "./composables/useAppHead";
 import { useSmoothScrollAnchors } from "@shared/composables/useSmoothScrollAnchors";
 import "./assets/website-theme.scss";
+import "./assets/website-responsive.scss";
 import "@shared/styles/transitions.css";
 
 const { locale } = useI18n();

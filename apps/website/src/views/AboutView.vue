@@ -252,4 +252,4 @@ const approachVisible = useReveal(approachRef, 0.08);
 const ctaVisible      = useReveal(ctaRef,      0.10);
 </script>
 
-<style lang="scss" scoped src="./AboutView.scss" />
+<style lang="scss" src="./AboutView.scss" />

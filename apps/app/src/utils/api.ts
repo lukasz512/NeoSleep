@@ -12,7 +12,7 @@ export { extractErrorMessage };
 
 export async function sendDiagnostic(message: string, stack: string, meta: Record<string, unknown> = {}) {
   try {
-    await fetch(`${getApiUrl()}/api/diagnostics`, {
+    await fetch(`${getApiUrl()}/api/v1/diagnostics`, {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
@@ -23,7 +23,7 @@ export async function sendDiagnostic(message: string, stack: string, meta: Recor
 
 async function sendErrorLog(path: string, status: number, message: string) {
   try {
-    await fetch(`${getApiUrl()}/api/diagnostics`, {
+    await fetch(`${getApiUrl()}/api/v1/diagnostics`, {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },

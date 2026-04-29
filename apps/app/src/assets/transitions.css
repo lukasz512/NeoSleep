@@ -1,6 +1,6 @@
 @import "@shared/styles/transitions.css";
 
-/* ── Staggered list animation (RepEntityList mobile feed) ────────────────── */
+/* ── Staggered list animation (AppEntityList mobile feed) ────────────────── */
 .list-stagger-move,
 .list-stagger-enter-active,
 .list-stagger-leave-active {

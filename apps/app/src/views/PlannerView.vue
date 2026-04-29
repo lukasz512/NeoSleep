@@ -11,19 +11,19 @@
           rounded="lg"
           class="view-planner__view-toggle-group"
         >
-          <VBtn value="day" size="small">{{ t('rep.planner.viewDay') }}</VBtn>
-          <VBtn value="week" size="small">{{ t('rep.planner.viewWeek') }}</VBtn>
-          <VBtn value="month" size="small">{{ t('rep.planner.viewMonth') }}</VBtn>
+          <VBtn value="day" size="small">{{ t('user.planner.viewDay') }}</VBtn>
+          <VBtn value="week" size="small">{{ t('user.planner.viewWeek') }}</VBtn>
+          <VBtn value="month" size="small">{{ t('user.planner.viewMonth') }}</VBtn>
         </VBtnToggle>
       </div>
       <div class="view-planner__nav">
-        <VBtn icon variant="flat" size="small" class="view-planner__nav-btn" :title="t('rep.planner.prev')" :aria-label="t('rep.planner.prev')" @click="prev">
+        <VBtn icon variant="flat" size="small" class="view-planner__nav-btn" :title="t('user.planner.prev')" :aria-label="t('user.planner.prev')" @click="prev">
           <AppIcon name="chevron-left" class="view-planner__nav-icon" />
         </VBtn>
         <VBtn variant="text" size="small" class="view-planner__today" @click="goToToday">
-          {{ t('rep.planner.today') }}
+          {{ t('user.planner.today') }}
         </VBtn>
-        <VBtn icon variant="flat" size="small" class="view-planner__nav-btn" :title="t('rep.planner.next')" :aria-label="t('rep.planner.next')" @click="next">
+        <VBtn icon variant="flat" size="small" class="view-planner__nav-btn" :title="t('user.planner.next')" :aria-label="t('user.planner.next')" @click="next">
           <AppIcon name="chevron-right" class="view-planner__nav-icon" />
         </VBtn>
       </div>
@@ -35,13 +35,13 @@
             variant="flat"
             size="large"
             class="view-planner__add"
-            :aria-label="t('rep.planner.add')"
+            :aria-label="t('user.planner.add')"
             @click="onAdd"
           >
             <AppIcon name="plus" class="view-planner__add-icon" />
           </VBtn>
         </template>
-        <span>{{ t('rep.planner.add') }}</span>
+        <span>{{ t('user.planner.add') }}</span>
       </VTooltip>
     </div>
 
@@ -96,20 +96,20 @@ interface ApiEvent {
   title: string;
   start_at: string;
   end_at: string;
-  type: string;
-  status: string;
+  type: "f2f" | "video";
+  status: "scheduled" | "completed" | "cancelled" | "no_show";
   location?: string;
   video_link?: string;
   notes?: string;
   region?: string;
-  attendees?: { attendee_type: string; attendee_id: string }[];
+  attendees?: { attendee_type: "hcp" | "hco" | "lead"; attendee_id: string; is_primary?: boolean }[];
 }
 
 const apiEvents = ref<ApiEvent[]>([]);
 const loadingEvents = ref(false);
 
 /** Map event type+status to a warm/varied color for visual richness. */
-function eventColor(type: string, status: string): string {
+function eventColor(type: "f2f" | "video", status: "scheduled" | "completed" | "cancelled" | "no_show"): string {
   if (status === "cancelled") return "#9E9E9E";
   if (status === "completed") return "#4CAF50";
   if (status === "no_show")   return "#FF7043";
@@ -122,7 +122,7 @@ function eventColor(type: string, status: string): string {
 const calendarEvents = computed(() =>
   apiEvents.value.map((e) => ({
     id: e.id,
-    name: e.title || t("rep.planner.form.fieldTitle"),
+    name: e.title || t("user.planner.form.fieldTitle"),
     start: toCalendarDateTime(e.start_at),
     end: toCalendarDateTime(e.end_at),
     color: eventColor(e.type, e.status),
@@ -165,8 +165,8 @@ async function fetchEvents() {
   loadingEvents.value = true;
   try {
     const { start, end } = getDateRange();
-    const res = await apiFetch(`/api/events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, {
-      errorMessageKey: "rep.planner.form.errorLoad",
+    const res = await apiFetch(`/api/v1/interactions?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, {
+      errorMessageKey: "user.planner.form.errorLoad",
     });
     if (res.ok) {
       const json = (await res.json()) as { items?: ApiEvent[] };
@@ -210,7 +210,7 @@ function formatWeekday(scope: { weekday?: number; date?: string }): string {
     w = d.getDay();
   }
   if (w == null || w < 0 || w > 6) return "—";
-  const key = `rep.planner.weekday${w}`;
+  const key = `user.planner.weekday${w}`;
   const translated = t(key);
   return translated !== key ? translated : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][w];
 }
@@ -250,7 +250,7 @@ function onEventClick(payload: unknown) {
     title: apiEvent.title,
     start_at: apiEvent.start_at,
     end_at: apiEvent.end_at,
-    type: apiEvent.type as "f2f" | "video",
+    type: apiEvent.type,
     status: apiEvent.status,
     attendees: apiEvent.attendees,
     location: apiEvent.location,
@@ -277,7 +277,7 @@ function onAdd() {
 async function onEventFormSubmit(payload: EventSubmitPayload) {
   try {
     if (payload.id) {
-      const res = await apiFetch(`/api/events/${payload.id}`, {
+      const res = await apiFetch(`/api/v1/interactions/${payload.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -294,13 +294,13 @@ async function onEventFormSubmit(payload: EventSubmitPayload) {
         }),
       });
       if (res.ok) {
-        notifications.show(t("rep.planner.form.editSuccess"), "success");
+        notifications.show(t("user.planner.form.editSuccess"), "success");
         await fetchEvents();
       } else {
-        notifications.show(t("rep.planner.form.errorSave"), "error");
+        notifications.show(t("user.planner.form.errorSave"), "error");
       }
     } else {
-      const res = await apiFetch("/api/events", {
+      const res = await apiFetch("/api/v1/interactions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -317,14 +317,14 @@ async function onEventFormSubmit(payload: EventSubmitPayload) {
         }),
       });
       if (res.ok) {
-        notifications.show(t("rep.planner.form.success"), "success");
+        notifications.show(t("user.planner.form.success"), "success");
         await fetchEvents();
       } else {
-        notifications.show(t("rep.planner.form.errorSave"), "error");
+        notifications.show(t("user.planner.form.errorSave"), "error");
       }
     }
   } catch {
-    notifications.show(t("rep.planner.form.errorSave"), "error");
+    notifications.show(t("user.planner.form.errorSave"), "error");
   }
 }
 </script>
@@ -400,21 +400,13 @@ async function onEventFormSubmit(payload: EventSubmitPayload) {
 }
 
 .view-planner__nav-btn {
-  min-width: 36px;
-  min-height: 36px;
-
-  @media (max-width: 767px) {
-    min-width: var(--rep-btn-min-width, 44px);
-    min-height: var(--rep-btn-min-height, 44px);
-  }
+  min-width: var(--rep-btn-min-width, 44px);
+  min-height: var(--rep-btn-min-height, 44px);
 }
 
 .view-planner__today {
   min-width: 80px;
-
-  @media (max-width: 767px) {
-    min-height: var(--rep-btn-min-height, 44px);
-  }
+  min-height: var(--rep-btn-min-height, 44px);
 }
 
 .view-planner__add {

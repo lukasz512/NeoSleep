@@ -17,7 +17,7 @@ export async function insertDiagnostic(row: DiagnosticInsert): Promise<void> {
   if (!p) return;
   try {
     await p.query(
-      `INSERT INTO tbl_diagnostics (level, message, message_hash, stack, source, env, user_id, request_id, metadata)
+      `INSERT INTO diagnostics (level, message, message_hash, stack, source, env, user_id, request_id, metadata)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [
         row.level || "log",

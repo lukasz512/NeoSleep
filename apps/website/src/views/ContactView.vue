@@ -266,4 +266,4 @@ async function onSubmit() {
 }
 </script>
 
-<style lang="scss" scoped src="./ContactView.scss" />
+<style lang="scss" src="./ContactView.scss" />

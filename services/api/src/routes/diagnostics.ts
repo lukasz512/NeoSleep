@@ -1,5 +1,5 @@
 /**
- * POST /api/diagnostics – accept diagnostic log payloads from frontend or API and persist to tbl_diagnostics.
+ * POST /api/diagnostics – accept diagnostic log payloads from frontend or API and persist to diagnostics.
  * Enabled only when ENABLE_DIAGNOSTICS_DB=1 or NODE_ENV=production.
  */
 import { Request, Response, Router } from "express";
@@ -20,24 +20,36 @@ function hashMessage(message: string): string {
   return crypto.createHash("sha256").update(normalized).digest("hex");
 }
 
+/** Shape of the POST /api/diagnostics request body (all fields are optional until validated). */
+interface DiagnosticBody {
+  message?: unknown;
+  level?: unknown;
+  stack?: unknown;
+  source?: unknown;
+  user_id?: unknown;
+  request_id?: unknown;
+  metadata?: unknown;
+}
+
 router.post(
-  "/api/diagnostics",
+  "/diagnostics",
   asyncHandler(async (req: Request, res: Response) => {
     if (!isDiagnosticsEnabled()) {
       res.status(204).end();
       return;
     }
 
-    const body = req.body;
+    const body = req.body as DiagnosticBody;
     if (!body || typeof body.message !== "string") {
       res.status(400).json({ error: "message required" });
       return;
     }
 
-    const level = ["log", "info", "warn", "error"].includes(body.level) ? body.level : "log";
+    const levelRaw = typeof body.level === "string" ? body.level : "";
+    const level = (["log", "info", "warn", "error"] as const).includes(levelRaw as "log") ? levelRaw : "log";
     const message = String(body.message).slice(0, 10000);
     const stack = typeof body.stack === "string" ? body.stack.slice(0, 50000) : null;
-    const source = body.source === "frontend" ? "frontend" : "api";
+    const source: "frontend" | "api" = body.source === "frontend" ? "frontend" : "api";
     const env = process.env.NODE_ENV ?? "development";
     const userId = typeof body.user_id === "string" ? body.user_id.slice(0, 256) : null;
     const requestId = typeof body.request_id === "string" ? body.request_id.slice(0, 256) : null;
@@ -64,4 +76,4 @@ router.post(
   })
 );
 
-export const diagnosticsRouter = router;
+export const diagnosticsRouter: import("express").Router = router;

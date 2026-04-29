@@ -43,8 +43,8 @@ defineEmits<{
 }
 
 .app-error-state__icon {
-  width: 96px;
-  height: 96px;
+  width: clamp(96px, 10vw, 120px);
+  height: clamp(96px, 10vw, 120px);
   margin-bottom: 20px;
   opacity: 0.4;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
@@ -52,7 +52,7 @@ defineEmits<{
 
 .app-error-state__title {
   margin: 0 0 8px;
-  font-size: 1.125rem;
+  font-size: clamp(1.125rem, 2vw, 1.25rem);
   font-weight: 500;
   color: var(--rep-text-primary, rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity)));
 }
@@ -72,16 +72,5 @@ defineEmits<{
 .app-error-state__btn-icon {
   width: 20px;
   height: 20px;
-}
-
-@media (min-width: 768px) {
-  .app-error-state__icon {
-    width: 120px;
-    height: 120px;
-  }
-
-  .app-error-state__title {
-    font-size: 1.25rem;
-  }
 }
 </style>
