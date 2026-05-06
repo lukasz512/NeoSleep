@@ -1,0 +1,125 @@
+[
+  {
+    "num": 1,
+    "specialty": "Psicología del sueño",
+    "color": "#5B8DB8",
+    "name": null,
+    "photo": null,
+    "link": null,
+    "topic": "Impacto en bienestar, ansiedad y productividad.",
+    "bullets": [
+      "Relación entre sueño y salud mental",
+      "Trastornos del sueño y su impacto emocional",
+      "Estrategias psicológicas para mejorar el sueño",
+      "El papel del clínico en el bienestar integral del paciente"
+    ]
+  },
+  {
+    "num": 2,
+    "specialty": "Neumología",
+    "color": "#4A9B8E",
+    "name": null,
+    "photo": null,
+    "link": null,
+    "topic": "Importancia del diagnóstico y riesgos de no tratar apnea.",
+    "bullets": [
+      "Prevalencia y subdiagnóstico de la apnea del sueño",
+      "Consecuencias cardiovasculares y metabólicas",
+      "Criterios clínicos para derivación al dentista",
+      "Trabajo multidisciplinario médico-dentista"
+    ]
+  },
+  {
+    "num": 3,
+    "specialty": "Nutrición",
+    "color": "#6BAA6F",
+    "name": null,
+    "photo": null,
+    "link": null,
+    "topic": "Relación entre alimentación y calidad del sueño.",
+    "bullets": [
+      "Alimentos que favorecen o perjudican el sueño",
+      "Inflamación, microbiota y trastornos respiratorios",
+      "Nutrición como parte del protocolo de tratamiento",
+      "Recomendaciones prácticas para el paciente"
+    ]
+  },
+  {
+    "num": 4,
+    "specialty": "Dentista",
+    "color": "#128F83",
+    "name": "Dra. Lorena González",
+    "photo": "/images/speakers/lorena-gonzalez.jpg",
+    "link": null,
+    "topic": "Tratamiento de la apnea del sueño en odontología: de la detección a la intervención.",
+    "bullets": [
+      "Presentación de caso clínico completo",
+      "Detección temprana de apnea en el consultorio dental",
+      "Evaluación de la vía aérea y criterios de derivación",
+      "Tratamiento con DAM (NOA by OrthoApnea)",
+      "Protocolos de seguimiento y adherencia del paciente"
+    ]
+  },
+  {
+    "num": 5,
+    "specialty": "Biologix (IA)",
+    "color": "#7A6BA8",
+    "name": null,
+    "photo": null,
+    "link": null,
+    "topic": "Diagnóstico inteligente, datos claros, decisiones mejoradas.",
+    "bullets": [
+      "Estudio del sueño en casa con tecnología de IA",
+      "Interpretación automatizada de resultados",
+      "Datos claros para el dentista y el paciente",
+      "Re-evaluación para medir el progreso del tratamiento"
+    ]
+  },
+  {
+    "num": 6,
+    "specialty": "OrthoApnea",
+    "color": "#B87A5B",
+    "name": null,
+    "photo": null,
+    "link": null,
+    "topic": "Tratamiento con DAM, eficiencia clínica, resultados comprobables.",
+    "bullets": [
+      "Dispositivo de Avance Mandibular (NOA) a medida",
+      "Indicaciones clínicas y ajuste del DAM",
+      "Eficiencia en flujo de trabajo para la clínica",
+      "Evidencia clínica y resultados comprobables"
+    ]
+  },
+  {
+    "num": 7,
+    "specialty": "Chief Technology Officer",
+    "color": "#5B7AB8",
+    "name": "Łukasz Ostrowski",
+    "photo": "/images/speakers/lukasz-ostrowski.jpeg",
+    "link": null,
+    "topic": "Infraestructura digital NeoSleep: integración de IA, flujo clínico automatizado y escalabilidad multi-clínica.",
+    "bio": "Łukasz es el arquitecto tecnológico detrás de NeoSleep. Responsable del diseño y desarrollo de la plataforma digital que integra diagnóstico con IA, seguimiento clínico y gestión de pacientes en un solo ecosistema. Con experiencia en desarrollo de software a escala internacional, lidera la implementación tecnológica que convierte datos del sueño en decisiones clínicas accionables para dentistas y especialistas.",
+    "bullets": [
+      "Plataforma de conexión paciente–clínica",
+      "Gestión de citas y comunicación integrada",
+      "Seguimiento del tratamiento y adherencia",
+      "Escalabilidad para redes de clínicas"
+    ]
+  },
+  {
+    "num": 8,
+    "specialty": "Founder & Director",
+    "color": "#B85B8A",
+    "name": "Alfred Jan Diaz",
+    "photo": "/images/speakers/alfred-jan.jpeg",
+    "link": null,
+    "topic": "Sleep Marketing: Cómo Crear Demanda Antes del Diagnóstico",
+    "bio": "Alfred Jan es fundador de NeoSleep y especialista en creación de experiencias, marketing y desarrollo de marcas con enfoque internacional. Con trayectoria en México, España y Canadá, lidera la visión de NeoSleep integrando tecnología, diagnóstico y odontología del sueño para transformar la manera en que se detecta y trata la apnea del sueño.",
+    "bullets": [
+      "Cómo posicionar tu clínica en odontología del sueño",
+      "Estrategias de captación de pacientes con apnea",
+      "Contenido y canales que funcionan en salud dental",
+      "Crecimiento sostenible y escalable para la clínica"
+    ]
+  }
+]

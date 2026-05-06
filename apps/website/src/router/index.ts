@@ -9,8 +9,10 @@ import CareersView from "../views/CareersView.vue";
 import ForPatientsView from "../views/ForPatientsView.vue";
 import ForProfessionalsView from "../views/ForProfessionalsView.vue";
 import FindSpecialistView from "../views/FindSpecialistView.vue";
+import EventoView from "../views/EventoView.vue";
 
 const routes: RouteRecordRaw[] = [
+  { path: "/evento", name: "evento", component: EventoView, meta: { layout: "event" } },
   { path: "/", name: "home", component: HomeView, meta: { layout: "default" } },
   { path: "/about", name: "about", component: AboutView, meta: { layout: "default" } },
   { path: "/contact", name: "contact", component: ContactView, meta: { layout: "default" } },

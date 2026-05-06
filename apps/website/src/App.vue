@@ -1,17 +1,25 @@
 <template>
-  <DefaultLayout>
+  <component :is="currentLayout">
     <RouterView v-slot="{ Component }">
       <Transition name="page" mode="out-in">
         <component :is="Component" />
       </Transition>
     </RouterView>
-  </DefaultLayout>
+  </component>
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
+import { useRoute } from "vue-router";
 import DefaultLayout from "./layouts/DefaultLayout.vue";
+import EventLayout from "./layouts/EventLayout.vue";
 import { useSmoothScrollAnchors } from "./composables/useSmoothScrollAnchors";
 import "./assets/website-theme.scss";
+
+const route = useRoute();
+const currentLayout = computed(() =>
+  route.meta.layout === "event" ? EventLayout : DefaultLayout
+);
 
 useSmoothScrollAnchors();
 </script>
