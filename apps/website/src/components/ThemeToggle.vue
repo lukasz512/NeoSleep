@@ -80,8 +80,8 @@ function onClick() {
 
 .theme-toggle__btn {
   position: relative;
-  width: 48px;
-  height: 48px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   border: 1px solid var(--website-border);
   background: var(--website-bg);
@@ -127,8 +127,8 @@ function onClick() {
   transition: opacity 0.25s ease, transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
   svg {
-    width: 24px;
-    height: 24px;
+    width: 18px;
+    height: 18px;
   }
 }
 

@@ -28,6 +28,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Set GA ID for build
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/PROD" ]; then
+            echo "VITE_GA_ID=${{ secrets.VITE_GA_ID_PROD }}" >> $GITHUB_ENV
+          else
+            echo "VITE_GA_ID=${{ secrets.VITE_GA_ID_UAT }}" >> $GITHUB_ENV
+          fi
+
       - name: Build website
         run: pnpm run build:website
 

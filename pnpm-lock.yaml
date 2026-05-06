@@ -110,6 +110,9 @@ importers:
       vue:
         specifier: 'catalog:'
         version: 3.5.28(typescript@5.9.3)
+      vue-gtag:
+        specifier: ^3.7.1
+        version: 3.7.1(vue-router@4.6.4(vue@3.5.28(typescript@5.9.3)))(vue@3.5.28(typescript@5.9.3))
       vue-i18n:
         specifier: 'catalog:'
         version: 10.0.8(vue@3.5.28(typescript@5.9.3))
@@ -156,6 +159,9 @@ importers:
       vue:
         specifier: 'catalog:'
         version: 3.5.28(typescript@5.9.3)
+      vue-gtag:
+        specifier: ^3.7.1
+        version: 3.7.1(vue-router@4.6.4(vue@3.5.28(typescript@5.9.3)))(vue@3.5.28(typescript@5.9.3))
       vue-i18n:
         specifier: 'catalog:'
         version: 10.0.8(vue@3.5.28(typescript@5.9.3))
@@ -2425,6 +2431,15 @@ packages:
     engines: {node: ^14.17.0 || >=16.0.0}
     peerDependencies:
       eslint: '>=6.0.0'
+
+  vue-gtag@3.7.1:
+    resolution: {integrity: sha512-V4S+ks1p/VdfTrxZrgrAjwdcBp3rGjuR4Ts/9KmNOeGlcATOsLZRjIxkrIDWW6oHy7HM4zcviYDEb2QOR9+AKQ==}
+    peerDependencies:
+      vue: ^3.5.13
+      vue-router: ^4.5.0 || ^5.0.0
+    peerDependenciesMeta:
+      vue-router:
+        optional: true
 
   vue-i18n@10.0.8:
     resolution: {integrity: sha512-mIjy4utxMz9lMMo6G9vYePv7gUFt4ztOMhY9/4czDJxZ26xPeJ49MAGa9wBAE3XuXbYCrtVPmPxNjej7JJJkZQ==}
@@ -4709,6 +4724,12 @@ snapshots:
       semver: 7.7.4
     transitivePeerDependencies:
       - supports-color
+
+  vue-gtag@3.7.1(vue-router@4.6.4(vue@3.5.28(typescript@5.9.3)))(vue@3.5.28(typescript@5.9.3)):
+    dependencies:
+      vue: 3.5.28(typescript@5.9.3)
+    optionalDependencies:
+      vue-router: 4.6.4(vue@3.5.28(typescript@5.9.3))
 
   vue-i18n@10.0.8(vue@3.5.28(typescript@5.9.3)):
     dependencies:

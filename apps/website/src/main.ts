@@ -1,5 +1,6 @@
 import { createApp } from "vue";
 import { createI18n } from "vue-i18n";
+import { createGtag } from "vue-gtag";
 import App from "./App.vue";
 import router from "./router";
 
@@ -46,4 +47,10 @@ const i18n = createI18n({
 const app = createApp(App);
 app.use(router);
 app.use(i18n);
+
+const gaId = import.meta.env.VITE_GA_ID as string | undefined;
+if (import.meta.env.PROD && gaId) {
+  app.use(createGtag({ tagId: gaId, pageTracker: { router } }));
+}
+
 app.mount("#app");

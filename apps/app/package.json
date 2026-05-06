@@ -14,6 +14,7 @@
     "apexcharts": "^5.10.0",
     "pinia": "catalog:",
     "vue": "catalog:",
+    "vue-gtag": "^3.7.1",
     "vue-i18n": "catalog:",
     "vue-router": "catalog:",
     "vue3-apexcharts": "^1.4.4",
