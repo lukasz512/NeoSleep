@@ -1,12 +1,13 @@
 # Deploy marketing website to GoDaddy FTP
-# - PROD → neosleepcare.com (path: secret FTP_PATH_WEBSITE_PROD)
-# - uat  → uat.neosleepcare.com (path: secret FTP_PATH_WEBSITE_UAT)
+# - PROD → neosleepcare.com         (secret FTP_PATH_WEBSITE_PROD)
+# - UAT  → uat.neosleepcare.com     (secret FTP_PATH_WEBSITE_UAT)
+# - DEV  → dev.neosleepcare.com     (secret FTP_PATH_WEBSITE_DEV)
 
 name: Deploy NeoSleepCare Site
 
 on:
   push:
-    branches: [PROD, uat]
+    branches: [prod, uat, dev]
   workflow_dispatch:
 
 jobs:
@@ -28,19 +29,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Set GA ID for build
-        run: |
-          if [ "${{ github.ref }}" = "refs/heads/PROD" ]; then
-            echo "VITE_GA_ID=${{ secrets.VITE_GA_ID_PROD }}" >> $GITHUB_ENV
-          else
-            echo "VITE_GA_ID=${{ secrets.VITE_GA_ID_UAT }}" >> $GITHUB_ENV
-          fi
-
       - name: Build website
         run: pnpm run build:website
 
       - name: Deploy to PROD (neosleepcare.com)
-        if: github.ref == 'refs/heads/PROD'
+        if: github.ref == 'refs/heads/prod'
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
@@ -61,4 +54,16 @@ jobs:
           protocol: ftp
           local-dir: ./apps/website/dist/
           server-dir: ${{ secrets.FTP_PATH_WEBSITE_UAT }}/
+          dangerous-clean-slate: false
+
+      - name: Deploy to DEV (dev.neosleepcare.com)
+        if: github.ref == 'refs/heads/dev'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftp
+          local-dir: ./apps/website/dist/
+          server-dir: ${{ secrets.FTP_PATH_WEBSITE_DEV }}/
           dangerous-clean-slate: false
