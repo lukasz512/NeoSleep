@@ -6,7 +6,9 @@
     </main>
     <footer class="layout-event__footer">
       <div class="page-container layout-event__footer-inner">
-        <img :src="logoSrc" alt="NeoSleep" class="layout-event__logo" width="110" height="25" />
+        <RouterLink to="/" aria-label="NeoSleep – strona główna">
+          <img :src="logoSrc" alt="NeoSleep" class="layout-event__logo" width="110" height="25" />
+        </RouterLink>
         <div class="layout-event__footer-right">
           <span class="layout-event__tagline">Powered by AI</span>
           <span class="layout-event__sep" aria-hidden="true">·</span>

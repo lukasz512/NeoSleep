@@ -68,7 +68,7 @@ export const websiteNavItems: WebsiteNavItem[] = [
   { labelKey: "website.nav.findSpecialist",to: "/find-specialist",showInHeader: true },
   { labelKey: "website.nav.about",         to: "/about",          showInHeader: true },
   { labelKey: "website.nav.contact",       to: "/contact",        showInHeader: true },
-  { labelKey: "website.header.cta",        to: "/evento", cta: true, showInHeader: false, showInFooter: true, footerSection: "product" },
+  { labelKey: "website.header.cta",        to: "/evento", cta: true, showInHeader: false, showInFooter: false, footerSection: "product" },
   // Footer: Company
   { labelKey: "website.footer.company.about",   to: "/about",   showInFooter: true, footerSection: "company" },
   { labelKey: "website.footer.company.careers", to: "/careers", showInFooter: true, footerSection: "company" },
