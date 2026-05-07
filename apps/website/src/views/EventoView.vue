@@ -10,9 +10,9 @@
         <span class="ev-hero__title-sub">— Powered by AI</span>
       </h1>
       <div class="ev-hero__meta">
-        <span class="ev-badge">17 de junio · 2026</span>
-        <span class="ev-badge">10:00 – 13:00 h</span>
         <span class="ev-badge">Soho House Mexico City</span>
+        <span class="ev-badge">10:00 – 13:00 h</span>
+        <span class="ev-badge">17 de junio · 2026</span>
       </div>
     </div>
   </section>
@@ -346,11 +346,13 @@
           </div>
 
           <form v-else key="form" class="ev-form" @submit.prevent="onSubmitEvento">
-            <div class="ev-form__row">
+            <div class="ev-form__row ev-form__row--full">
               <div class="ev-field">
                 <input id="ev-nombre" v-model="evForm.firstName" type="text" required placeholder=" " class="ev-field__input" />
                 <label for="ev-nombre" class="ev-field__label">Nombres</label>
               </div>
+            </div>
+            <div class="ev-form__row ev-form__row--full">
               <div class="ev-field">
                 <input id="ev-apellido" v-model="evForm.lastName" type="text" required placeholder=" " class="ev-field__input" />
                 <label for="ev-apellido" class="ev-field__label">Apellidos</label>
@@ -694,10 +696,11 @@ const speakers: Speaker[] = speakersData as Speaker[];
 
 .ev-hero__meta {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.625rem;
+  flex-wrap: nowrap;
+  gap: 0.5rem;
   margin-bottom: 2.5rem;
   animation: ev-fade-up 0.55s 0.9s ease both;
+  overflow-x: auto;
 }
 
 .ev-badge {
@@ -1416,7 +1419,8 @@ const speakers: Speaker[] = speakersData as Speaker[];
 
 .ev-contacto__event-meta {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;
   align-items: flex-start;
   gap: 0.5rem;
 
@@ -1455,6 +1459,8 @@ const speakers: Speaker[] = speakersData as Speaker[];
   gap: 0.875rem;
 
   @media (max-width: 540px) { grid-template-columns: 1fr; }
+
+  &--full { grid-template-columns: 1fr; }
 }
 
 /* ── Floating label field ────────────────────────────────────────────────── */

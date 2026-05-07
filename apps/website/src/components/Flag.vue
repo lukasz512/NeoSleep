@@ -25,7 +25,6 @@ const w = computed(() => Math.round(props.size * 1.333));
   display: inline-block;
   flex-shrink: 0;
   border-radius: 2px;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.09);
   vertical-align: middle;
 }
 </style>
