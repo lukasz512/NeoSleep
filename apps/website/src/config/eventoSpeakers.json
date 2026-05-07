@@ -1,17 +1,20 @@
 [
   {
     "num": 1,
-    "specialty": "Psicología del sueño",
-    "color": "#5B8DB8",
-    "name": null,
-    "photo": null,
+    "specialty": "Lic. en psicología",
+    "color": "#6A7FB8",
+    "name": "Ulises Jiménez Correa",
+    "photo": "/images/speakers/ulises-jimenez.jpg",
     "link": null,
-    "topic": "Impacto en bienestar, ansiedad y productividad.",
+    "flags": ["mx"],
+    "subtitle": "Maestro en psicobiología. Egresado de la UNAM",
+    "topic": "Insomnio comórbido con apnea del sueño (COMISA)",
+    "bio": "Licenciado en Psicología, Maestro en Psicobiología egresado de la UNAM y Doctor en Biología Experimental egresado de la UAM. Investigador y clínico especializado en trastornos del sueño, con enfoque en la relación entre salud mental, neurobiología y patología respiratoria nocturna.",
     "bullets": [
-      "Relación entre sueño y salud mental",
-      "Trastornos del sueño y su impacto emocional",
-      "Estrategias psicológicas para mejorar el sueño",
-      "El papel del clínico en el bienestar integral del paciente"
+      "COMISA: cuando el insomnio y la apnea del sueño coexisten en el mismo paciente",
+      "Por qué tratar solo una condición no es suficiente: el riesgo del subdiagnóstico",
+      "La importancia del diagnóstico y tratamiento con visión interdisciplinaria entre dentistas, médicos y psicólogos",
+      "Cómo identificar al paciente COMISA en el consultorio dental y cuándo derivar"
     ]
   },
   {
@@ -21,6 +24,7 @@
     "name": null,
     "photo": null,
     "link": null,
+    "flags": ["mx"],
     "topic": "Importancia del diagnóstico y riesgos de no tratar apnea.",
     "bullets": [
       "Prevalencia y subdiagnóstico de la apnea del sueño",
@@ -36,6 +40,7 @@
     "name": null,
     "photo": null,
     "link": null,
+    "flags": ["mx", "ca"],
     "topic": "Relación entre alimentación y calidad del sueño.",
     "bullets": [
       "Alimentos que favorecen o perjudican el sueño",
@@ -51,6 +56,7 @@
     "name": "Dra. Lorena González",
     "photo": "/images/speakers/lorena-gonzalez.jpg",
     "link": null,
+    "flags": ["ve"],
     "topic": "Tratamiento de la apnea del sueño en odontología: de la detección a la intervención.",
     "bullets": [
       "Presentación de caso clínico completo",
@@ -62,11 +68,12 @@
   },
   {
     "num": 5,
-    "specialty": "Biologix (IA)",
+    "specialty": "Biologix",
     "color": "#7A6BA8",
     "name": null,
-    "photo": null,
+    "photo": "/images/speakers/biologix.png",
     "link": null,
+    "flags": ["br"],
     "topic": "Diagnóstico inteligente, datos claros, decisiones mejoradas.",
     "bullets": [
       "Estudio del sueño en casa con tecnología de IA",
@@ -77,17 +84,19 @@
   },
   {
     "num": 6,
-    "specialty": "OrthoApnea",
+    "specialty": "International Business Developer",
     "color": "#B87A5B",
-    "name": null,
-    "photo": null,
+    "name": "José Naranjo González",
+    "photo": "/images/speakers/jose-naranjo.jpg",
     "link": null,
-    "topic": "Tratamiento con DAM, eficiencia clínica, resultados comprobables.",
+    "flags": ["es"],
+    "topic": "Cómo integrar el DAM en tu clínica: del primer paciente al flujo rentable.",
+    "bio": "José Naranjo González es International Business Developer en OrthoApnea, responsable del desarrollo y expansión comercial de la marca en mercados internacionales. Con una trayectoria enfocada en la odontología del sueño, acompaña a clínicas dentales en el proceso de adopción del dispositivo NOA: desde la formación inicial y la integración al flujo clínico, hasta la construcción de un modelo de negocio sostenible basado en el tratamiento de la apnea.",
     "bullets": [
-      "Dispositivo de Avance Mandibular (NOA) a medida",
-      "Indicaciones clínicas y ajuste del DAM",
-      "Eficiencia en flujo de trabajo para la clínica",
-      "Evidencia clínica y resultados comprobables"
+      "Cómo empezar a ofrecer tratamiento DAM sin experiencia previa en apnea",
+      "El dispositivo NOA: indicaciones clínicas, fabricación digital y protocolo de ajuste",
+      "Modelo de negocio: ingresos recurrentes y retorno de inversión para la clínica",
+      "Soporte clínico, formación continua y acompañamiento desde OrthoApnea"
     ]
   },
   {
@@ -97,6 +106,7 @@
     "name": "Łukasz Ostrowski",
     "photo": "/images/speakers/lukasz-ostrowski.jpeg",
     "link": null,
+    "flags": ["pl"],
     "topic": "Infraestructura digital NeoSleep: integración de IA, flujo clínico automatizado y escalabilidad multi-clínica.",
     "bio": "Łukasz es el arquitecto tecnológico detrás de NeoSleep. Responsable del diseño y desarrollo de la plataforma digital que integra diagnóstico con IA, seguimiento clínico y gestión de pacientes en un solo ecosistema. Con experiencia en desarrollo de software a escala internacional, lidera la implementación tecnológica que convierte datos del sueño en decisiones clínicas accionables para dentistas y especialistas.",
     "bullets": [
@@ -110,9 +120,10 @@
     "num": 8,
     "specialty": "Founder & Director",
     "color": "#B85B8A",
-    "name": "Alfred Jan Diaz",
+    "name": "Alfred Jan Díaz",
     "photo": "/images/speakers/alfred-jan.jpeg",
     "link": null,
+    "flags": ["mx", "ve"],
     "topic": "Sleep Marketing: Cómo Crear Demanda Antes del Diagnóstico",
     "bio": "Alfred Jan es fundador de NeoSleep y especialista en creación de experiencias, marketing y desarrollo de marcas con enfoque internacional. Con trayectoria en México, España y Canadá, lidera la visión de NeoSleep integrando tecnología, diagnóstico y odontología del sueño para transformar la manera en que se detecta y trata la apnea del sueño.",
     "bullets": [

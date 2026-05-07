@@ -3,7 +3,8 @@
     "allow": [
       "Bash(python3 -c *)",
       "Bash(pnpm --filter website exec vue-tsc *)",
-      "Bash(pnpm --filter website build *)"
+      "Bash(pnpm --filter website build *)",
+      "Bash(pnpm add *)"
     ]
   }
 }

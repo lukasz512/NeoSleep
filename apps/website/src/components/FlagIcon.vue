@@ -1,70 +1,14 @@
 <template>
-  <span class="flag-icon" :class="`flag-icon--${locale}`" aria-hidden="true">
-    <!-- UK (EN): Union Jack -->
-    <svg v-if="locale === 'en'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 40" preserveAspectRatio="xMidYMid slice" class="flag-icon__svg">
-      <rect width="60" height="40" fill="#012169"/>
-      <line x1="0" y1="0" x2="60" y2="40" stroke="#fff" stroke-width="13"/>
-      <line x1="60" y1="0" x2="0" y2="40" stroke="#fff" stroke-width="13"/>
-      <line x1="0" y1="0" x2="60" y2="40" stroke="#C8102E" stroke-width="5.5"/>
-      <line x1="60" y1="0" x2="0" y2="40" stroke="#C8102E" stroke-width="5.5"/>
-      <rect x="23.5" y="0" width="13" height="40" fill="#fff"/>
-      <rect x="0" y="13.5" width="60" height="13" fill="#fff"/>
-      <rect x="26.5" y="0" width="7" height="40" fill="#C8102E"/>
-      <rect x="0" y="16.5" width="60" height="7" fill="#C8102E"/>
-    </svg>
-    <!-- PL: white over red -->
-    <svg v-else-if="locale === 'pl'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 20" preserveAspectRatio="xMidYMid slice" class="flag-icon__svg">
-      <rect width="30" height="20" fill="#dc143c"/>
-      <rect width="30" height="10" fill="#fff"/>
-    </svg>
-    <!-- ES: red-yellow-red -->
-    <svg v-else-if="locale === 'es'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 20" preserveAspectRatio="xMidYMid slice" class="flag-icon__svg">
-      <rect width="30" height="20" fill="#c60b1e"/>
-      <rect y="5" width="30" height="10" fill="#ffc400"/>
-    </svg>
-    <span v-else class="flag-icon__fallback">{{ fallbackEmoji }}</span>
-  </span>
+  <Flag :code="countryCode" :size="18" />
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import type { LocaleId } from "@i18n/language-options";
+import Flag from "./Flag.vue";
+import { LOCALE_FLAG_CODE } from "../config/localeFlags";
 
-const props = withDefaults(
-  defineProps<{ locale: LocaleId }>(),
-  {}
-);
+const props = defineProps<{ locale: LocaleId }>();
 
-const fallbackEmoji = { en: "🇺🇸", pl: "🇵🇱", es: "🇪🇸" }[props.locale] ?? "🏳";
+const countryCode = computed(() => LOCALE_FLAG_CODE[props.locale] ?? props.locale);
 </script>
-
-<style lang="scss" scoped>
-.flag-icon {
-  display: inline-flex;
-  align-items: stretch;
-  justify-content: stretch;
-  width: 24px;
-  height: 24px;
-  flex-shrink: 0;
-  border-radius: 4px;
-  overflow: hidden;
-  background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  box-sizing: border-box;
-  padding: 0;
-  line-height: 0;
-}
-
-.flag-icon__svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  padding: 0;
-  vertical-align: top;
-}
-
-.flag-icon__fallback {
-  font-size: 1rem;
-  line-height: 1;
-}
-</style>

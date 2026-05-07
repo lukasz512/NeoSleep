@@ -383,6 +383,12 @@
   }
 }
 
+.ab-office-card__city-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .ab-office-card__city {
   font-size: 1.375rem;
   font-weight: 700;

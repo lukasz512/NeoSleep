@@ -4,7 +4,7 @@
     <div class="ev-hero__arc ev-hero__arc--1" aria-hidden="true" />
     <div class="ev-hero__arc ev-hero__arc--2" aria-hidden="true" />
     <div class="page-container ev-hero__content">
-      <p class="ev-eyebrow">NEOSLEEP BREAKFAST</p>
+      <p class="ev-eyebrow">NEOSLEEP BREAKFAST &amp; new Business opportunities</p>
       <h1 class="ev-hero__title">
         The Future of Sleep Medicine &amp; Dentistry
         <span class="ev-hero__title-sub">— Powered by AI</span>
@@ -25,7 +25,7 @@
       <div class="ev-manifesto__grid">
         <div v-for="p in pillars" :key="p.title" class="ev-pillar">
           <div class="ev-pillar__img-wrap">
-            <img :src="p.img" :alt="p.title" class="ev-pillar__img" />
+            <img :src="p.img" :alt="p.title" class="ev-pillar__img ev-img-lazy" loading="lazy" decoding="async" @load="onImgLoad" />
           </div>
           <div class="ev-pillar__body">
             <h3 class="ev-pillar__title">{{ p.title }}</h3>
@@ -103,16 +103,22 @@
           @click="openModal(s)"
         >
           <div class="ev-speaker__avatar" :style="s.photo ? {} : { background: s.color }">
-            <img v-if="s.photo" :src="s.photo" :alt="s.name ?? s.specialty" class="ev-speaker__photo" />
+            <img v-if="s.photo" :src="s.photo" :alt="s.name ?? s.specialty" class="ev-speaker__photo ev-img-lazy" loading="lazy" decoding="async" @load="onImgLoad" />
             <svg v-else class="ev-speaker__person" viewBox="0 0 80 90" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
               <circle cx="40" cy="28" r="16" fill="rgba(255,255,255,0.92)"/>
               <path d="M8 82 C8 62 72 62 72 82" fill="rgba(255,255,255,0.92)"/>
             </svg>
           </div>
           <div class="ev-speaker__info">
-            <h4 class="ev-speaker__specialty">{{ s.name ?? s.specialty }}</h4>
+            <div class="ev-speaker__name-row">
+              <h4 class="ev-speaker__specialty">{{ s.name ?? s.specialty }}</h4>
+              <span v-if="s.flags?.length" class="ev-speaker__flags" aria-hidden="true">
+                <Flag v-for="code in s.flags" :key="code" :code="code" :size="14" />
+              </span>
+            </div>
             <p v-if="s.name" class="ev-speaker__role ev-speaker__role--teal">{{ s.specialty }}</p>
-            <p class="ev-speaker__topic">{{ s.topic }}</p>
+            <p v-if="s.subtitle" class="ev-speaker__subtitle">{{ s.subtitle }}</p>
+            <p v-if="!s.subtitle" class="ev-speaker__topic">{{ s.topic }}</p>
           </div>
           <span class="ev-speaker__hint" aria-hidden="true">Ver más →</span>
         </button>
@@ -139,14 +145,19 @@
 
           <div class="ev-modal__header">
             <div class="ev-modal__avatar" :style="active.photo ? {} : { background: active.color }">
-              <img v-if="active.photo" :src="active.photo" :alt="active.name ?? active.specialty" class="ev-modal__photo" />
+              <img v-if="active.photo" :src="active.photo" :alt="active.name ?? active.specialty" class="ev-modal__photo ev-img-lazy" loading="lazy" decoding="async" @load="onImgLoad" />
               <svg v-else class="ev-modal__person" viewBox="0 0 80 90" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                 <circle cx="40" cy="28" r="16" fill="rgba(255,255,255,0.92)"/>
                 <path d="M8 82 C8 62 72 62 72 82" fill="rgba(255,255,255,0.92)"/>
               </svg>
             </div>
             <div>
-              <h3 class="ev-modal__specialty">{{ active.name ?? active.specialty }}</h3>
+              <div class="ev-modal__name-row">
+                <h3 class="ev-modal__specialty">{{ active.name ?? active.specialty }}</h3>
+                <span v-if="active.flags?.length" class="ev-modal__flags" aria-hidden="true">
+                  <Flag v-for="code in active.flags" :key="code" :code="code" :size="18" />
+                </span>
+              </div>
               <p v-if="active.name" class="ev-modal__role ev-modal__role--teal">{{ active.specialty }}</p>
             </div>
           </div>
@@ -216,18 +227,18 @@
           <!-- OrthoApnea -->
           <template v-if="sponsorModal === 'orthoapnea'">
             <div class="ev-sponsor-modal__header">
-              <img src="/images/noa.png" alt="NOA by OrthoApnea" class="ev-sponsor-modal__logo ev-sponsor-modal__logo--product" />
+              <img src="/images/noa.png" alt="NOA by OrthoApnea" class="ev-sponsor-modal__logo ev-sponsor-modal__logo--product ev-img-lazy" loading="lazy" decoding="async" @load="onImgLoad" />
             </div>
             <h3 class="ev-sponsor-modal__name">OrthoApnea NOA</h3>
             <p class="ev-sponsor-modal__desc">El dispositivo de avance mandibular OrthoApnea NOA es una solución clínicamente validada para el tratamiento de la apnea obstructiva del sueño (AOS) y el ronquido. Fabricado en poliamida 12 con certificación de biocompatibilidad clase IIa, está diseñado de forma personalizada mediante tecnología digital adaptada a la biomecánica mandibular de cada paciente.</p>
             <p class="ev-sponsor-modal__desc">Su mecanismo de avance progresivo por milímetros permite una titulación precisa, indicado tanto en AOS leve-moderada como en casos severos con intolerancia a otros tratamientos.</p>
-            <a href="https://www.orthoapnea.com/en/orthoapnea-noa/" target="_blank" rel="noopener" class="ev-sponsor-modal__link">Más información →</a>
+            <a href="https://www.orthoapnea.com/orthoapnea-noa/" target="_blank" rel="noopener" class="ev-sponsor-modal__link">Más información →</a>
           </template>
 
           <!-- Biologix -->
           <template v-else-if="sponsorModal === 'biologix'">
             <div class="ev-sponsor-modal__header">
-              <img src="/images/biologix.png" alt="Biologix" class="ev-sponsor-modal__logo ev-sponsor-modal__logo--product" />
+              <img src="/images/biologix.png" alt="Biologix" class="ev-sponsor-modal__logo ev-sponsor-modal__logo--product ev-img-lazy" loading="lazy" decoding="async" @load="onImgLoad" />
             </div>
             <h3 class="ev-sponsor-modal__name">Biologix — Diagnóstico del sueño en casa</h3>
             <p class="ev-sponsor-modal__desc">Biologix es una plataforma de diagnóstico domiciliario del sueño basada en el sensor inalámbrico Oxistar®, que replica la polisomnografía convencional con una precisión superior al 90% validada en estudios clínicos. El dispositivo monitoriza niveles de oxigenación, frecuencia cardíaca, episodios apneicos y patrones de ronquido a lo largo de la noche, de forma no invasiva y desde la comodidad del hogar.</p>
@@ -258,7 +269,7 @@
         </button>
       </div>
       <button class="ev-sede__preview" @click="sedeModalOpen = true" aria-label="Ver Soho House Mexico City">
-        <img src="/images/soho-house-cdmx.jpeg" alt="Soho House Mexico City" class="ev-sede__preview-img" />
+        <img src="/images/soho-house-cdmx.jpeg" alt="Soho House Mexico City" class="ev-sede__preview-img ev-img-lazy" loading="lazy" decoding="async" @load="onImgLoad" />
         <div class="ev-sede__preview-overlay" aria-hidden="true">
           <span class="ev-sede__preview-label">Ver espacio →</span>
         </div>
@@ -280,7 +291,7 @@
         <div class="ev-sede-modal">
           <button class="ev-modal__close" @click="sedeModalOpen = false" aria-label="Cerrar">✕</button>
           <div class="ev-sede-modal__img-wrap">
-            <img src="/images/soho-house-cdmx-2.jpeg" alt="Soho House Mexico City" class="ev-sede-modal__img" />
+            <img src="/images/soho-house-cdmx-2.jpeg" alt="Soho House Mexico City" class="ev-sede-modal__img ev-img-lazy" loading="lazy" decoding="async" @load="onImgLoad" />
           </div>
           <div class="ev-sede-modal__body">
             <h3 class="ev-sede-modal__name">Soho House Mexico City</h3>
@@ -385,6 +396,11 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, onUnmounted } from "vue";
+import Flag from "../components/Flag.vue";
+
+function onImgLoad(e: Event) {
+  (e.target as HTMLImageElement).classList.add("ev-img-lazy--loaded");
+}
 import speakersData from "../config/eventoSpeakers.json";
 
 /* ── Speaker modal ──────────────────────────────────────────────────────── */
@@ -395,6 +411,8 @@ interface Speaker {
   name: string | null;
   photo: string | null;
   link: string | null;
+  flags: string[];
+  subtitle?: string | null;
   topic: string;
   bio?: string | null;
   bullets: string[];
@@ -553,6 +571,35 @@ const speakers: Speaker[] = speakersData as Speaker[];
 </script>
 
 <style scoped lang="scss">
+/* ── Lazy image loading ───────────────────────────────────────────────────── */
+@keyframes ev-shimmer {
+  from { background-position: -200% 0; }
+  to   { background-position:  200% 0; }
+}
+
+.ev-img-lazy {
+  opacity: 0;
+  transition: opacity 0.45s ease;
+
+  &--loaded { opacity: 1; }
+}
+
+.ev-pillar__img-wrap,
+.ev-speaker__avatar,
+.ev-modal__avatar,
+.ev-sede__preview,
+.ev-sede-modal__img-wrap,
+.ev-sponsor-modal__header {
+  background: linear-gradient(
+    90deg,
+    var(--website-border) 25%,
+    color-mix(in srgb, var(--website-border) 60%, var(--website-bg)) 50%,
+    var(--website-border) 75%
+  );
+  background-size: 200% 100%;
+  animation: ev-shimmer 1.6s ease-in-out infinite;
+}
+
 /* ── Reveal keyframes ─────────────────────────────────────────────────────── */
 @keyframes ev-hero-open {
   from {
@@ -1004,6 +1051,27 @@ const speakers: Speaker[] = speakersData as Speaker[];
   margin: 0.25rem 0 0;
 }
 
+.ev-speaker__name-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.ev-speaker__flags {
+  display: flex;
+  gap: 5px;
+  flex-shrink: 0;
+  margin-top: 0.25rem;
+}
+
+
+.ev-speaker__subtitle {
+  font-size: 0.75rem;
+  color: var(--website-text-secondary);
+  margin: 0;
+  line-height: 1.4;
+}
+
 .ev-speaker__hint {
   font-size: 0.75rem;
   font-weight: 600;
@@ -1115,6 +1183,20 @@ const speakers: Speaker[] = speakersData as Speaker[];
   color: var(--website-text);
   margin: 0;
   line-height: 1.25;
+}
+
+.ev-modal__name-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  flex-wrap: wrap;
+}
+
+.ev-modal__flags {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-top: 0.3rem;
 }
 
 .ev-modal__topic {

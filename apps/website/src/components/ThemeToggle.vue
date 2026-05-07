@@ -83,7 +83,7 @@ function onClick() {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  border: 1px solid var(--website-border);
+  border: none;
   background: var(--website-bg);
   color: var(--website-text);
   cursor: pointer;

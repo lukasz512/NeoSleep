@@ -26,6 +26,7 @@ export interface StatConfig {
   target: number;
   suffix: string;
   labelKey: string;
+  source: string;
 }
 
 export interface SolutionCard {
@@ -66,12 +67,26 @@ export interface CtaButton {
   arrow?: boolean;
 }
 
-export const homeStats: StatConfig[] = [
-  { target: 25,  suffix: "M+", labelKey: "website.stats.americansLabel"    },
-  { target: 80,  suffix: "%",  labelKey: "website.stats.undiagnosedLabel"  },
-  { target: 95,  suffix: "%",  labelKey: "website.stats.satisfactionLabel" },
-  { target: 500, suffix: "+",  labelKey: "website.stats.dentistsLabel"     },
-];
+export const homeStatsByLocale: Record<string, StatConfig[]> = {
+  en: [
+    { target: 26, suffix: "M+", labelKey: "website.stats.populationLabel",   source: "AASM, 2022" },
+    { target: 80, suffix: "%",  labelKey: "website.stats.undiagnosedLabel",  source: "AASM + NIH, 2021" },
+    { target: 3,  suffix: "x",  labelKey: "website.stats.cardioRiskLabel",   source: "Lévy et al., Eur Respir J 2012" },
+    { target: 50, suffix: "%",  labelKey: "website.stats.hypertensionLabel", source: "Peppard et al., NEJM 2000" },
+  ],
+  pl: [
+    { target: 3,  suffix: "M+", labelKey: "website.stats.populationLabel",   source: "WHO Europe / PTChP, 2020" },
+    { target: 85, suffix: "%",  labelKey: "website.stats.undiagnosedLabel",  source: "European Respiratory Society, 2019" },
+    { target: 3,  suffix: "x",  labelKey: "website.stats.cardioRiskLabel",   source: "Lévy et al., Eur Respir J 2012" },
+    { target: 50, suffix: "%",  labelKey: "website.stats.hypertensionLabel", source: "Peppard et al., NEJM 2000" },
+  ],
+  es: [
+    { target: 10, suffix: "M+", labelKey: "website.stats.populationLabel",   source: "Guerrero et al., Sleep Medicine 2016" },
+    { target: 90, suffix: "%",  labelKey: "website.stats.undiagnosedLabel",  source: "Sociedad Mexicana de Medicina del Sueño" },
+    { target: 3,  suffix: "x",  labelKey: "website.stats.cardioRiskLabel",   source: "Lévy et al., Eur Respir J 2012" },
+    { target: 50, suffix: "%",  labelKey: "website.stats.hypertensionLabel", source: "Peppard et al., NEJM 2000" },
+  ],
+};
 
 export const solutionCards: SolutionCard[] = [
   {

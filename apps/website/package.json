@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "flag-icons": "^7.5.0",
     "vue": "catalog:",
     "vue-gtag": "^3.7.1",
     "vue-i18n": "catalog:",
