@@ -1,4 +1,5 @@
 import { createApp } from "vue";
+import "flag-icons/css/flag-icons.min.css";
 import { createI18n } from "vue-i18n";
 import { createGtag } from "vue-gtag";
 import App from "./App.vue";

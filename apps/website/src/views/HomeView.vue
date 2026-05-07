@@ -1,7 +1,7 @@
 <template>
   <div class="view-home">
     <HomeHero />
-    <HomeStats />
+    <HomeStats :key="locale" />
     <HomeSolutions />
     <HomeSplitSection v-for="section in splitSections" :key="section.id" :section="section" />
     <HomeCtaBanner />
@@ -15,6 +15,9 @@ import HomeSolutions  from "../components/HomeSolutions.vue";
 import HomeSplitSection from "../components/HomeSplitSection.vue";
 import HomeCtaBanner  from "../components/HomeCtaBanner.vue";
 import { splitSections } from "../config/websiteContent";
+import { useI18n } from "vue-i18n";
+
+const { locale } = useI18n();
 </script>
 
 <style lang="scss" src="../components/icons/home-icons.scss"></style>
