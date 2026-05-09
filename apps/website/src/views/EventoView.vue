@@ -562,10 +562,10 @@ const pillars = [
 ];
 
 const steps = [
-  { label: "Diagnóstico con IA", sub: "Biologix" },
+  { label: "Diagnóstico domiciliario", sub: "Clinical-Grade AI" },
   { label: "Revisión médica", sub: "Especializada" },
   { label: "Tratamiento DAM", sub: "NOA by OrthoApnea" },
-  { label: "Re-evaluación IA", sub: "Biologix" },
+  { label: "Re-evaluación", sub: "Aggregate Diagnostics" },
   { label: "Resultado medible", sub: "Clínico y validable" },
 ] as const;
 
@@ -1218,6 +1218,7 @@ const speakers: Speaker[] = speakersData as Speaker[];
   margin: 0 0 1.5rem;
   padding-bottom: 1.5rem;
   border-bottom: 1px solid var(--website-border);
+  white-space: pre-line;
 }
 
 .ev-modal__bullets {
