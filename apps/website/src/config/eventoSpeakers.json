@@ -19,51 +19,52 @@
   },
   {
     "num": 2,
-    "specialty": "Neumología",
+    "specialty": "Neumólogo Pediatra, Pediatra, Medicina de Sueño",
     "color": "#4A9B8E",
-    "name": null,
-    "photo": null,
+    "name": "Dr. Jhonatan Mata Aranda",
+    "photo": "/images/speakers/jhonatan-mata-aranda.jpg",
     "link": null,
     "flags": ["mx"],
-    "topic": "Importancia del diagnóstico y riesgos de no tratar apnea.",
+    "topic": "Apnea Obstructiva del Sueño y Dispositivo de Avance Mandibular: Selección del Paciente Ideal",
+    "bio": "Médico con Alta especialidad en Medicina de Sueño, Subespecialista en Neumología Pediátrica, Certificado por el Consejo de Neumología y Cirugía de Tórax, Médico Especialista en Pediatría, Certificado por el Consejo Mexicano de Certificación en Pediatría A.C.\n\nCursó sus estudios de Licenciatura de Médico Cirujano en la Facultad de Estudios Superiores de Iztacala (UNAM).\n\nSus estudios de posgrado los realizó en la Universidad Nacional Autónoma de México y es egresado del Hospital Regional de Alta Especialidad de Ixtapaluca (HRAEI) como Médico Pediatra y del Instituto Nacional de Enfermedades Respiratorias (INER) como Neumólogo Pediatra; realizó su Alta Especialidad en la Clínica de Trastornos del Sueño de la UNAM dentro del Hospital General de México.\n\nMaestría en Administración de Hospitales y Salud Pública en el Instituto de Estudios Superiores de Administración Pública (IESAP).\n\nHa participado como conferencista y presentador de trabajos de investigación médica en congresos nacionales, así como consultor de temas de interés en el área médica en sitios de internet y medios de comunicación de televisión y radio.\n\nActualmente se desempeña como Médico Subespecialista en el Hospital Regional de Alta Especialidad de Ixtapaluca; así como en el Hospital Pediátrico de Azcapotzalco, donde actualmente es Jefe de Neumología e Inhaloterapia, y ejerce como Consultor Médico en el medio privado.\n\nTrabaja en un protocolo de investigación del Instituto Politécnico Nacional (IPN) relacionado al uso del extracto dializable de leucocitos (factor de transferencia) en pacientes adultos con infección por COVID-19.",
     "bullets": [
-      "Prevalencia y subdiagnóstico de la apnea del sueño",
-      "Consecuencias cardiovasculares y metabólicas",
-      "Criterios clínicos para derivación al dentista",
-      "Trabajo multidisciplinario médico-dentista"
+      "Miembro activo de la Sociedad Mexicana de Pediatría A.C.",
+      "Miembro activo del Colegio Mexicano de Neumólogos Pediatras A.C.",
+      "Miembro activo de la Sociedad Mexicana de Neumología y Cirugía de Tórax A.C."
     ]
   },
   {
     "num": 3,
-    "specialty": "Nutrición",
+    "specialty": "Nutrióloga Registrada en BC, Canadá",
     "color": "#6BAA6F",
-    "name": null,
-    "photo": null,
+    "name": "Adriana de la Parra Sólomon MSc, RD",
+    "photo": "/images/speakers/adriana-de-la-parra.jpg",
     "link": null,
     "flags": ["mx", "ca"],
-    "topic": "Relación entre alimentación y calidad del sueño.",
-    "bullets": [
-      "Alimentos que favorecen o perjudican el sueño",
-      "Inflamación, microbiota y trastornos respiratorios",
-      "Nutrición como parte del protocolo de tratamiento",
-      "Recomendaciones prácticas para el paciente"
-    ]
+    "topic": "Más allá del ronquido: cómo la alimentación, estilo de vida y el peso impactan el sueño",
+    "bio": "Nutrióloga Registrada en BC, Canadá, con Licenciatura en Nutrición y Ciencias de los Alimentos por la Universidad Iberoamericana Ciudad de México y una Maestría en Nutrición Humana por la Universidad de McGill en Montreal, Canadá. Especializada en nutrición deportiva por el Comité Olímpico Internacional, con experiencia en consulta privada, educación en salud y bienestar, así como en conferencias impartidas en distintas partes de México. A lo largo de su trayectoria ha colaborado con instituciones como el Gatorade Sports Science Institute (GSSI), el CNAR y la Federación Mexicana de Nutrición Deportiva, además de impartir clases online para el Instituto Universitario Vive Sano y la Universidad Intercontinental (UIC). Su trabajo se enfoca en promover hábitos sostenibles relacionados con la alimentación, la actividad física, el descanso y el bienestar integral para mejorar la salud y calidad de vida de las personas.",
+    "bullets": []
   },
   {
     "num": 4,
-    "specialty": "Dentista",
+    "specialty": "Odontóloga",
     "color": "#128F83",
     "name": "Dra. Lorena González",
     "photo": "/images/speakers/lorena-gonzalez.jpg",
     "link": null,
     "flags": ["ve"],
     "topic": "Tratamiento de la apnea del sueño en odontología: de la detección a la intervención.",
+    "bio": "Odontóloga General, egresada de la Universidad Central de Venezuela.\n\nEstudiante de Maestría de Endodoncia, en el Instituto de especialidades odontológicas Yury Kuttler.\n\nCertificada con OrthoApnea para tratamientos con dispositivos de avance mandibular.",
     "bullets": [
-      "Presentación de caso clínico completo",
-      "Detección temprana de apnea en el consultorio dental",
-      "Evaluación de la vía aérea y criterios de derivación",
-      "Tratamiento con DAM (NOA by OrthoApnea)",
-      "Protocolos de seguimiento y adherencia del paciente"
+      "Cómo sospechar apnea en consulta",
+      "Screening y cuestionarios",
+      "Signos clínicos odontológicos",
+      "Referencia y diagnóstico médico",
+      "¿Cuándo intervenir?",
+      "Flujo clínico con DAM",
+      "George Gauge + escaneo",
+      "OrthoApnea",
+      "Seguimiento"
     ]
   },
   {
@@ -91,12 +92,12 @@
     "link": null,
     "flags": ["es"],
     "topic": "Cómo integrar el DAM en tu clínica: del primer paciente al flujo rentable.",
-    "bio": "José Naranjo González es International Business Developer en OrthoApnea, responsable del desarrollo y expansión comercial de la marca en mercados internacionales. Con una trayectoria enfocada en la odontología del sueño, acompaña a clínicas dentales en el proceso de adopción del dispositivo NOA: desde la formación inicial y la integración al flujo clínico, hasta la construcción de un modelo de negocio sostenible basado en el tratamiento de la apnea.",
+    "bio": "Licenciado en Administración y Dirección de Empresas (LADE) por la Universidad Carlos III de Madrid. José desarrolla su actividad internacional en español, francés e inglés, con una sólida experiencia en sectores de alto valor añadido, donde la excelencia en el servicio, el acompañamiento profesional y la experiencia del cliente marcan la diferencia.\n\nEn OrthoApnea es responsable del desarrollo y consolidación de mercados de habla hispana, impulsando la expansión de soluciones avanzadas para el tratamiento de los trastornos respiratorios del sueño mediante dispositivos de avance mandibular.",
     "bullets": [
-      "Cómo empezar a ofrecer tratamiento DAM sin experiencia previa en apnea",
-      "El dispositivo NOA: indicaciones clínicas, fabricación digital y protocolo de ajuste",
-      "Modelo de negocio: ingresos recurrentes y retorno de inversión para la clínica",
-      "Soporte clínico, formación continua y acompañamiento desde OrthoApnea"
+      "Desarrollo internacional y expansión de mercados",
+      "Acompañamiento clínico y formación a profesionales",
+      "Medicina Dental del Sueño y terapia DAM",
+      "Estrategia de colaboración y desarrollo de negocio"
     ]
   },
   {
