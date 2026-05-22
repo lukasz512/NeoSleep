@@ -41,7 +41,7 @@
     <div class="page-container ev-split__inner">
       <div class="ev-split__col">
         <p class="ev-split__label">El Problema</p>
-        <h3 class="ev-split__heading">Millones sin diagnóstico.</h3>
+        <h3 class="ev-split__heading">Millones sin diagnóstico</h3>
         <p class="ev-split__body">
           Millones de personas en México sufren trastornos del sueño sin saberlo. La apnea no
           diagnosticada afecta la calidad de vida, la salud cardiovascular y la productividad.
@@ -51,7 +51,7 @@
       <div class="ev-split__divider" aria-hidden="true" />
       <div class="ev-split__col ev-split__col--accent">
         <p class="ev-split__label">La Oportunidad</p>
-        <h3 class="ev-split__heading">Nueva línea de negocio.</h3>
+        <h3 class="ev-split__heading">Nueva línea de negocio</h3>
         <p class="ev-split__body">
           Una línea basada en diagnóstico + tratamiento + seguimiento validado. NeoSleep no solo
           mejora la calidad de vida de los pacientes,
@@ -110,12 +110,12 @@
             </svg>
           </div>
           <div class="ev-speaker__info">
-            <div class="ev-speaker__name-row">
-              <h4 class="ev-speaker__specialty">{{ s.name ?? s.specialty }}</h4>
+            <h4 class="ev-speaker__specialty">
+              {{ s.name ?? s.specialty }}
               <span v-if="s.flags?.length" class="ev-speaker__flags" aria-hidden="true">
                 <Flag v-for="code in s.flags" :key="code" :code="code" :size="14" />
               </span>
-            </div>
+            </h4>
             <p v-if="s.name" class="ev-speaker__role ev-speaker__role--teal">{{ s.specialty }}</p>
             <p v-if="s.subtitle" class="ev-speaker__subtitle">{{ s.subtitle }}</p>
             <p v-if="!s.subtitle" class="ev-speaker__topic">{{ s.topic }}</p>
@@ -189,7 +189,7 @@
     <div class="ev-cierre__arc" aria-hidden="true" />
     <div class="page-container ev-cierre__inner">
       <p class="ev-cierre__kicker">Invitación exclusiva — CDMX</p>
-      <h2 class="ev-cierre__heading">Hoy no estamos invitando a todos.</h2>
+      <h2 class="ev-cierre__heading">Hoy no estamos invitando a todos</h2>
       <p class="ev-cierre__body">
         Estamos buscando un grupo selecto de clínicas en CDMX para construir esta red desde el inicio.
       </p>
@@ -205,7 +205,7 @@
   <!-- ── Patrocinadores ───────────────────────────────────────────────────── -->
   <section ref="patrocinRef" class="home-section ev-patrocin home-reveal">
     <div class="page-container ev-patrocin__inner">
-      <p class="ev-eyebrow ev-patrocin__label">Patrocinadores</p>
+      <p class="ev-eyebrow ev-patrocin__label">Partners</p>
       <div class="ev-patrocin__logos">
         <button class="ev-patrocin__logo-btn" @click="sponsorModal = 'orthoapnea'" aria-label="Ver información de OrthoApnea">
           <img src="/images/patrocinadores/orthoapnea.svg" alt="OrthoApnea" class="ev-patrocin__logo ev-patrocin__logo--lg" />
@@ -379,6 +379,17 @@
                 <label for="ev-email" class="ev-field__label">Correo electrónico</label>
               </div>
             </div>
+            <div class="ev-form__row ev-form__row--full">
+              <div class="ev-field">
+                <div class="ev-field--prefix">
+                  <span class="ev-field__prefix">@</span>
+                  <div class="ev-field__input-wrap">
+                    <input id="ev-instagram" v-model="evForm.instagram" type="text" placeholder=" " class="ev-field__input ev-field__input--prefixed" autocomplete="off" />
+                    <label for="ev-instagram" class="ev-field__label">Instagram <span class="ev-field__optional">(opcional)</span></label>
+                  </div>
+                </div>
+              </div>
+            </div>
 
             <button type="submit" class="ev-form__btn" :disabled="evStatus === 'loading'">
               <span>{{ evStatus === 'loading' ? 'Enviando…' : 'Quiero asistir' }}</span>
@@ -470,6 +481,7 @@ const evForm = reactive({
   clinica: "",
   phone: "",
   email: "",
+  instagram: "",
 });
 
 const MX_PHONE_RE = /^(\+?52\s?)?[1-9]\d{9}$/;
@@ -497,6 +509,7 @@ async function onSubmitEvento() {
         clinica: evForm.clinica,
         telefono: evForm.phone,
         email: evForm.email,
+        instagram: evForm.instagram ? `@${evForm.instagram.replace(/^@/, "")}` : "",
       }),
     });
     const data = (await res.json()) as { success: boolean; message?: string };
@@ -508,6 +521,7 @@ async function onSubmitEvento() {
     evForm.clinica = "";
     evForm.phone = "";
     evForm.email = "";
+    evForm.instagram = "";
   } catch {
     evStatus.value = "error";
   }
@@ -546,17 +560,17 @@ onUnmounted(() => observer?.disconnect());
 const pillars = [
   {
     img: "/images/manifesto/medir.jpg",
-    title: "No tratamos sin medir.",
+    title: "No tratamos sin medir",
     text: "Cada paciente que llega a una clínica NeoSleep pasa primero por un diagnóstico objetivo. No recomendamos ningún tratamiento si los datos no lo respaldan. Esta disciplina protege al paciente, genera confianza y eleva el estándar clínico de la odontología del sueño.",
   },
   {
     img: "/images/manifesto/ia.jpg",
-    title: "Medimos con inteligencia.",
+    title: "Medimos con inteligencia",
     text: "Nuestra infraestructura integra inteligencia artificial en cada etapa: desde el estudio del sueño en casa hasta la interpretación automatizada de resultados y su entrega al paciente. Reducimos el tiempo entre diagnóstico y tratamiento, eliminando fricciones en el flujo clínico.",
   },
   {
     img: "/images/manifesto/datos.jpg",
-    title: "De intuición clínica a medicina basada en datos.",
+    title: "De intuición clínica a medicina basada en datos",
     text: "La odontología del sueño es aún un territorio inexplorado para muchos dentistas, que desconocen que pueden diagnosticar y tratar la apnea. En NeoSleep, los resultados de cada estudio son la base de todas las decisiones: a quién tratar, cómo hacerlo y cuándo re-evaluar.",
   },
 ];
@@ -701,6 +715,14 @@ const speakers: Speaker[] = speakersData as Speaker[];
   margin-bottom: 2.5rem;
   animation: ev-fade-up 0.55s 0.9s ease both;
   overflow-x: auto;
+}
+
+@media (max-width: 599px) {
+  .ev-hero__meta {
+    flex-direction: column;
+    align-items: flex-start;
+    overflow-x: visible;
+  }
 }
 
 .ev-badge {
@@ -969,8 +991,8 @@ const speakers: Speaker[] = speakersData as Speaker[];
   gap: 1.25rem;
   margin-top: 2.5rem;
 
-  @media (max-width: 960px) { grid-template-columns: repeat(2, 1fr); }
-  @media (max-width: 480px) { grid-template-columns: 1fr; }
+  @media (max-width: 1100px) { grid-template-columns: repeat(2, 1fr); }
+  @media (max-width: 760px)  { grid-template-columns: 1fr; }
 }
 
 .ev-speaker {
@@ -1054,17 +1076,11 @@ const speakers: Speaker[] = speakersData as Speaker[];
   margin: 0.25rem 0 0;
 }
 
-.ev-speaker__name-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-}
-
 .ev-speaker__flags {
-  display: flex;
+  display: inline-flex;
   gap: 5px;
-  flex-shrink: 0;
-  margin-top: 0.25rem;
+  vertical-align: middle;
+  margin-left: 0.3rem;
 }
 
 
@@ -1591,6 +1607,53 @@ const speakers: Speaker[] = speakersData as Speaker[];
   color: var(--website-primary);
   margin: 0;
   font-weight: 500;
+}
+
+/* ── Instagram prefix field ──────────────────────────────────────────────── */
+.ev-field--prefix {
+  display: flex;
+  align-items: stretch;
+}
+
+.ev-field__prefix {
+  display: flex;
+  align-items: center;
+  padding: 0 0.75rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--website-text-secondary);
+  background: color-mix(in srgb, var(--website-border) 30%, var(--website-bg));
+  border: 1px solid var(--website-border);
+  border-right: none;
+  border-radius: 10px 0 0 10px;
+  pointer-events: none;
+  transition: border-color 0.2s ease;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.ev-field--prefix:focus-within .ev-field__prefix {
+  border-color: var(--website-primary);
+}
+
+.ev-field__input-wrap {
+  position: relative;
+  flex: 1;
+}
+
+.ev-field__input-wrap .ev-field__input {
+  width: 100%;
+  border-radius: 0 10px 10px 0;
+}
+
+.ev-field__input-wrap .ev-field__label {
+  left: 0.875rem;
+}
+
+.ev-field__optional {
+  font-size: 0.6875rem;
+  font-weight: 400;
+  opacity: 0.65;
 }
 
 /* ── Phone error ─────────────────────────────────────────────────────────── */
