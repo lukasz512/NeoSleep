@@ -241,9 +241,9 @@
               <img src="/images/biologix.png" alt="Biologix" class="ev-sponsor-modal__logo ev-sponsor-modal__logo--product ev-img-lazy" loading="lazy" decoding="async" @load="onImgLoad" />
             </div>
             <h3 class="ev-sponsor-modal__name">Biologix — Diagnóstico del sueño en casa</h3>
-            <p class="ev-sponsor-modal__desc">Biologix es una plataforma de diagnóstico domiciliario del sueño basada en el sensor inalámbrico Oxistar®, que replica la polisomnografía convencional con una precisión superior al 90% validada en estudios clínicos. El dispositivo monitoriza niveles de oxigenación, frecuencia cardíaca, episodios apneicos y patrones de ronquido a lo largo de la noche, de forma no invasiva y desde la comodidad del hogar.</p>
-            <p class="ev-sponsor-modal__desc">Sus resultados se integran directamente en el flujo clínico de NeoSleep, permitiendo el diagnóstico inicial, el seguimiento de la adherencia al tratamiento y la re-evaluación objetiva de la eficacia del DAM.</p>
-            <a href="https://www.biologix.com.br/en/" target="_blank" rel="noopener" class="ev-sponsor-modal__link">Más información →</a>
+            <p class="ev-sponsor-modal__desc">El Biologix Sleep Test® es una polisomnografía multimodal diseñada para diagnosticar ronquidos y apnea obstructiva del sueño. Esta evaluación es sencilla y solo requiere un smartphone y un sensor compacto e inalámbrico. A pesar de su simplicidad, ofrece una sensibilidad, especificidad y precisión superiores al 90 % en comparación con otros tipos de polisomnografías domiciliarias y ambulatorias, según tres publicaciones científicas.</p>
+            <p class="ev-sponsor-modal__desc">Por sus características, los resultados de este examen son totalmente compatibles y pueden integrarse al flujo clínico de NeoSleep, facilitando el diagnóstico inicial, el seguimiento de la adherencia al tratamiento y la reevaluación objetiva de la eficacia del DAM.</p>
+            <a href="https://www.biologix.com.br/es/" target="_blank" rel="noopener" class="ev-sponsor-modal__link">Más información →</a>
           </template>
         </div>
       </div>
