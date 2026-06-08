@@ -10,7 +10,7 @@
         <span class="ev-hero__title-sub">— Powered by AI</span>
       </h1>
       <div class="ev-hero__meta">
-        <span class="ev-badge">Soho House Mexico City</span>
+        <span class="ev-badge">Andaz Condesa · Terraza Cabuya</span>
         <span class="ev-badge">10:00 – 13:00 h</span>
         <span class="ev-badge">17 de junio · 2026</span>
       </div>
@@ -255,11 +255,11 @@
     <div class="page-container ev-sede__inner">
       <div class="ev-sede__text">
         <p class="ev-eyebrow">El Lugar</p>
-        <h2 class="ev-sede__heading">Soho House<br>Mexico City</h2>
+        <h2 class="ev-sede__heading">Hotel Andaz Condesa<br><span class="ev-sede__heading-sub">Terraza Cabuya</span></h2>
         <p class="ev-sede__body">
-          Ubicado en el corazón de la Colonia Juárez, Soho House Mexico City es un espacio
-          diseñado para la conexión entre profesionales de vanguardia. Su ambiente íntimo y
-          contemporáneo crea el marco ideal para conversaciones clínicas de alto nivel.
+          En lo alto del Hotel Andaz Condesa, la Terraza Cabuya ofrece una vista privilegiada
+          del skyline de la ciudad junto a un ambiente íntimo y contemporáneo. El entorno perfecto
+          para un desayuno clínico de alto nivel.
         </p>
         <p class="ev-sede__body">
           Un desayuno de trabajo. Un grupo selecto. Ideas que transforman la medicina del sueño en México.
@@ -268,8 +268,8 @@
           Ver el espacio <span class="home-btn__arrow">→</span>
         </button>
       </div>
-      <button class="ev-sede__preview" @click="sedeModalOpen = true" aria-label="Ver Soho House Mexico City">
-        <img src="/images/soho-house-cdmx.jpeg" alt="Soho House Mexico City" class="ev-sede__preview-img ev-img-lazy" loading="lazy" decoding="async" @load="onImgLoad" />
+      <button class="ev-sede__preview" @click="sedeModalOpen = true" aria-label="Ver Terraza Cabuya, Hotel Andaz Condesa">
+        <img src="/images/hotel-andaz-condesa.jpeg" alt="Hotel Andaz Condesa" class="ev-sede__preview-img ev-img-lazy" loading="lazy" decoding="async" @load="onImgLoad" />
         <div class="ev-sede__preview-overlay" aria-hidden="true">
           <span class="ev-sede__preview-label">Ver espacio →</span>
         </div>
@@ -285,24 +285,31 @@
         class="ev-modal-backdrop"
         role="dialog"
         aria-modal="true"
-        aria-label="Soho House Mexico City"
+        aria-label="Terraza Cabuya, Hotel Andaz Condesa"
         @click.self="sedeModalOpen = false"
       >
         <div class="ev-sede-modal">
           <button class="ev-modal__close" @click="sedeModalOpen = false" aria-label="Cerrar">✕</button>
           <div class="ev-sede-modal__img-wrap">
-            <img src="/images/soho-house-cdmx-2.jpeg" alt="Soho House Mexico City" class="ev-sede-modal__img ev-img-lazy" loading="lazy" decoding="async" @load="onImgLoad" />
+            <img src="/images/hotel-andaz-condesa-2.jpeg" alt="Hotel Andaz Condesa" class="ev-sede-modal__img ev-img-lazy" loading="lazy" decoding="async" @load="onImgLoad" />
           </div>
           <div class="ev-sede-modal__body">
-            <h3 class="ev-sede-modal__name">Soho House Mexico City</h3>
+            <h3 class="ev-sede-modal__name">Hotel Andaz Condesa</h3>
+            <p class="ev-sede-modal__hotel">Terraza Cabuya</p>
             <p class="ev-sede-modal__address">
               <span class="ev-sede-modal__pin" aria-hidden="true">📍</span>
-              Colonia Juárez, Ciudad de México
+              <a
+                href="https://maps.google.com/?q=Hotel+Andaz+Condesa,+Aguascalientes+158,+Hip%C3%B3dromo+Condesa,+06100+Ciudad+de+M%C3%A9xico"
+                target="_blank"
+                rel="noopener"
+                class="ev-sede-modal__map-link"
+              >Aguascalientes 158, Hipódromo Condesa, 06100 Ciudad de México</a>
             </p>
             <p class="ev-sede-modal__desc">
-              Un espacio exclusivo concebido para profesionales que buscan más que un evento tradicional.
-              Arquitectura de autor, gastronomía de calidad y un entorno diseñado para hacer circular ideas.
-              El escenario perfecto para redefinir el futuro de la medicina del sueño en México.
+              La Terraza Cabuya corona el Hotel Andaz Condesa con una terraza al aire libre de diseño
+              contemporáneo y vistas panorámicas de la ciudad. Un espacio exclusivo y relajado que
+              combina gastronomía de calidad con el espíritu creativo de la Condesa — el escenario
+              ideal para redefinir el futuro de la medicina del sueño en México.
             </p>
             <div class="ev-sede-modal__meta">
               <span>17 de junio · 2026</span>
@@ -331,7 +338,7 @@
         <div class="ev-contacto__event-meta">
           <span>17 jun 2026</span>
           <span>10:00 – 13:00 h</span>
-          <span>Soho House Mexico City</span>
+          <span>Terraza Cabuya · Andaz Condesa</span>
         </div>
       </div>
 
@@ -342,7 +349,7 @@
             <div class="ev-contacto__success-icon" aria-hidden="true">✓</div>
             <h3>¡Registro recibido con éxito!</h3>
             <p>Tu solicitud ha sido procesada. Nuestro equipo clínico revisará tu perfil y se pondrá en contacto contigo en las próximas <strong>24–48 horas</strong> para confirmar tu participación.</p>
-            <p class="ev-contacto__success-note">Nos vemos el <strong>17 de junio</strong> en Soho House Mexico City.</p>
+            <p class="ev-contacto__success-note">Nos vemos el <strong>17 de junio</strong> en la Terraza Cabuya, Hotel Andaz Condesa.</p>
           </div>
 
           <form v-else key="form" class="ev-form" @submit.prevent="onSubmitEvento">
@@ -1791,6 +1798,15 @@ const speakers: Speaker[] = speakersData as Speaker[];
   margin: 0.5rem 0 1.25rem;
 }
 
+.ev-sede__heading-sub {
+  display: block;
+  font-size: 0.55em;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--website-primary);
+  margin-top: 0.3rem;
+}
+
 .ev-sede__body {
   font-size: 1rem;
   line-height: 1.7;
@@ -1899,6 +1915,13 @@ const speakers: Speaker[] = speakersData as Speaker[];
   margin: 0 0 0.375rem;
 }
 
+.ev-sede-modal__hotel {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--website-primary);
+  margin: 0.1rem 0 0.625rem;
+}
+
 .ev-sede-modal__address {
   font-size: 0.9375rem;
   color: var(--website-text-secondary);
@@ -1906,6 +1929,16 @@ const speakers: Speaker[] = speakersData as Speaker[];
   display: flex;
   align-items: center;
   gap: 0.375rem;
+}
+
+.ev-sede-modal__map-link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: rgba(18,143,131,0.4);
+  text-underline-offset: 2px;
+  transition: color 0.15s ease, text-decoration-color 0.15s ease;
+
+  &:hover { color: var(--website-primary); text-decoration-color: var(--website-primary); }
 }
 
 .ev-sede-modal__desc {
