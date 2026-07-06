@@ -9,6 +9,7 @@ import CareersView from "../views/CareersView.vue";
 import ForPatientsView from "../views/ForPatientsView.vue";
 import ForProfessionalsView from "../views/ForProfessionalsView.vue";
 import FindSpecialistView from "../views/FindSpecialistView.vue";
+import EventoView from "../views/EventoView.vue";
 
 const routes: RouteRecordRaw[] = [
   { path: "/", name: "home", component: HomeView, meta: { layout: "default" } },
@@ -20,6 +21,7 @@ const routes: RouteRecordRaw[] = [
   { path: "/for-patients", name: "for-patients", component: ForPatientsView, meta: { layout: "default" } },
   { path: "/for-professionals", name: "for-professionals", component: ForProfessionalsView, meta: { layout: "default" } },
   { path: "/find-specialist", name: "find-specialist", component: FindSpecialistView, meta: { layout: "default" } },
+  { path: "/evento", name: "evento", component: EventoView, meta: { layout: "default" } },
   {
     path: "/:pathMatch(.*)*",
     redirect: "/",

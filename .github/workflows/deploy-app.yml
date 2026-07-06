@@ -1,7 +1,6 @@
 # Deploy rep-app to GoDaddy FTP
-# - PROD → app.neosleepcare.com     (secret FTP_PATH_APP_PROD)
-# - UAT  → app-uat.neosleepcare.com (secret FTP_PATH_APP_UAT)
-# - DEV  → app-dev.neosleepcare.com (secret FTP_PATH_APP_DEV)
+# - PROD → app.neosleepcare.com (path: secret FTP_PATH_APP_PROD)
+# - uat  → app-uat.neosleepcare.com (path: secret FTP_PATH_APP_UAT)
 #
 # TODO: migrate to SSH (appleboy/scp-action) once Hetzner VPS is provisioned.
 # See infra/setup/provision.md for the migration runbook.
@@ -10,7 +9,7 @@ name: Deploy NeoSleepCare App
 
 on:
   push:
-    branches: [prod, uat, dev]
+    branches: [PROD, uat]
   workflow_dispatch:
 
 jobs:
@@ -32,24 +31,21 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Set env vars for build
+      - name: Set API URL for build
         run: |
-          if [ "${{ github.ref }}" = "refs/heads/prod" ]; then
+          if [ "${{ github.ref }}" = "refs/heads/PROD" ]; then
             echo "VITE_API_URL=${{ secrets.VITE_API_URL_PROD }}" >> $GITHUB_ENV
-            echo "VITE_VAPID_PUBLIC_KEY=${{ secrets.VITE_VAPID_PUBLIC_KEY_PROD }}" >> $GITHUB_ENV
-          elif [ "${{ github.ref }}" = "refs/heads/uat" ]; then
-            echo "VITE_API_URL=${{ secrets.VITE_API_URL_UAT }}" >> $GITHUB_ENV
-            echo "VITE_VAPID_PUBLIC_KEY=${{ secrets.VITE_VAPID_PUBLIC_KEY_UAT }}" >> $GITHUB_ENV
+            echo "VITE_GA_ID=${{ secrets.VITE_GA_ID_PROD }}" >> $GITHUB_ENV
           else
-            echo "VITE_API_URL=${{ secrets.VITE_API_URL_DEV }}" >> $GITHUB_ENV
-            echo "VITE_VAPID_PUBLIC_KEY=${{ secrets.VITE_VAPID_PUBLIC_KEY_DEV }}" >> $GITHUB_ENV
+            echo "VITE_API_URL=${{ secrets.VITE_API_URL_UAT }}" >> $GITHUB_ENV
+            echo "VITE_GA_ID=${{ secrets.VITE_GA_ID_UAT }}" >> $GITHUB_ENV
           fi
 
       - name: Build rep-app
         run: pnpm run build:app
 
       - name: Deploy to PROD (app.neosleepcare.com)
-        if: github.ref == 'refs/heads/prod'
+        if: github.ref == 'refs/heads/PROD'
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
@@ -70,16 +66,4 @@ jobs:
           protocol: ftp
           local-dir: ./apps/app/dist/
           server-dir: ${{ secrets.FTP_PATH_APP_UAT }}/
-          dangerous-clean-slate: false
-
-      - name: Deploy to DEV (app-dev.neosleepcare.com)
-        if: github.ref == 'refs/heads/dev'
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          protocol: ftp
-          local-dir: ./apps/app/dist/
-          server-dir: ${{ secrets.FTP_PATH_APP_DEV }}/
           dangerous-clean-slate: false

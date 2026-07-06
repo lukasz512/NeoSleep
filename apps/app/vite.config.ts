@@ -98,9 +98,9 @@ export default defineConfig(mergeConfig(sharedViteConfig(__dirname), {
   server: {
     host: true,
     proxy: {
-      "/api":    { target: "http://localhost:3000", changeOrigin: true },
-      "/auth":   { target: "http://localhost:3000", changeOrigin: true },
-      "/health": { target: "http://localhost:3000", changeOrigin: true },
+      "/api":    { target: "http://localhost:8000", changeOrigin: true },
+      "/auth":   { target: "http://localhost:8000", changeOrigin: true },
+      "/health": { target: "http://localhost:8000", changeOrigin: true },
     },
   },
 }));

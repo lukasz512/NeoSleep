@@ -6,6 +6,8 @@ export interface ApiFetchOptions extends Omit<RequestInit, "credentials"> {
 export interface ApiClientConfig {
   getApiBase: () => string;
   onError?: (path: string, status: number, message: string, errorMessageKey?: string) => void;
+  /** Optional custom fetch implementation (e.g. auth-aware interceptor). Defaults to global fetch. */
+  fetchFn?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 }
 
 export function extractErrorMessage(bodyText: string): string {
@@ -25,11 +27,12 @@ export function extractErrorMessage(bodyText: string): string {
 }
 
 export function createApiFetch(config: ApiClientConfig) {
+  const fetchImpl = config.fetchFn ?? fetch;
   return async function apiFetch(path: string, options: ApiFetchOptions = {}): Promise<Response> {
     const { handleErrors = true, errorMessageKey, ...init } = options;
     const base = config.getApiBase();
     const url = `${base}${path.startsWith("/") ? path : `/${path}`}`;
-    const res = await fetch(url, { ...init, credentials: "include" });
+    const res = await fetchImpl(url, { ...init, credentials: "include" });
 
     if (!res.ok && handleErrors && config.onError) {
       const bodyText = await res.clone().text().catch(() => "");
