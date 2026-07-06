@@ -155,11 +155,14 @@
             <div class="ab-office-card__top">
               <span class="ab-office-card__badge ab-office-card__badge--hq">{{ t("website.about.offices.hq") }}</span>
             </div>
-            <h3 class="ab-office-card__city">{{ t("website.about.offices.cdmx.city") }}</h3>
+            <div class="ab-office-card__city-row">
+              <h3 class="ab-office-card__city">{{ t("website.about.offices.cdmx.city") }}</h3>
+              <Flag code="mx" :size="16" />
+            </div>
             <p class="ab-office-card__country">{{ t("website.about.offices.cdmx.country") }}</p>
             <address class="ab-office-card__address">{{ t("website.about.offices.cdmx.address") }}</address>
             <a
-              href="https://maps.google.com/?q=Av.+Insurgentes+Sur+1602+Ciudad+de+Mexico"
+              href="https://maps.google.com/?q=Liverpool+39+06600+Ciudad+de+Mexico"
               target="_blank"
               rel="noopener noreferrer"
               class="ab-office-card__map-link"
@@ -174,11 +177,14 @@
             <div class="ab-office-card__top">
               <span class="ab-office-card__badge">{{ t("website.about.offices.clinic") }}</span>
             </div>
-            <h3 class="ab-office-card__city">{{ t("website.about.offices.warsaw.city") }}</h3>
+            <div class="ab-office-card__city-row">
+              <h3 class="ab-office-card__city">{{ t("website.about.offices.warsaw.city") }}</h3>
+              <Flag code="pl" :size="16" />
+            </div>
             <p class="ab-office-card__country">{{ t("website.about.offices.warsaw.country") }}</p>
             <address class="ab-office-card__address">{{ t("website.about.offices.warsaw.address") }}</address>
             <a
-              href="https://maps.google.com/?q=Marszalkowska+111+Warsaw+Poland"
+              href="https://maps.google.com/?q=Sielecka+26+00-738+Warszawa+Poland"
               target="_blank"
               rel="noopener noreferrer"
               class="ab-office-card__map-link"
@@ -233,6 +239,7 @@ import { useI18n } from "vue-i18n";
 import TealBanner from "../components/TealBanner.vue";
 import { useReveal } from "@shared/composables/useReveal";
 import { useSeoMeta } from "../composables/useSeoMeta";
+import Flag from "../components/Flag.vue";
 
 const { t } = useI18n();
 useSeoMeta({ titleKey: "website.seo.about.title", descriptionKey: "website.seo.about.description" });

@@ -1,0 +1,22 @@
+/* Base styles from flag-icons – only the 7 flags we use */
+.fib, .fi {
+  background-size: contain;
+  background-position: 50%;
+  background-repeat: no-repeat;
+}
+.fi {
+  position: relative;
+  display: inline-block;
+  width: 1.333333em;
+  line-height: 1em;
+}
+.fi:before { content: " "; }
+.fi.fis { width: 1em; }
+
+.fi-mx { background-image: url("../../node_modules/flag-icons/flags/4x3/mx.svg"); }
+.fi-pl { background-image: url("../../node_modules/flag-icons/flags/4x3/pl.svg"); }
+.fi-gb { background-image: url("../../node_modules/flag-icons/flags/4x3/gb.svg"); }
+.fi-ca { background-image: url("../../node_modules/flag-icons/flags/4x3/ca.svg"); }
+.fi-ve { background-image: url("../../node_modules/flag-icons/flags/4x3/ve.svg"); }
+.fi-es { background-image: url("../../node_modules/flag-icons/flags/4x3/es.svg"); }
+.fi-br { background-image: url("../../node_modules/flag-icons/flags/4x3/br.svg"); }

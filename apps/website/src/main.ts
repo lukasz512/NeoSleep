@@ -1,6 +1,8 @@
 import { createApp } from "vue";
+import "./assets/flags.css";
 import { createI18n } from "vue-i18n";
 import { createUnhead, headSymbol } from "@unhead/vue";
+import { createGtag } from "vue-gtag";
 import App from "./App.vue";
 import router from "./router";
 import { getTenantId, loadTenantOverlay } from "./composables/useTenantI18n";
@@ -59,4 +61,10 @@ const app = createApp(App);
 app.use(router);
 app.use(i18n);
 app.provide(headSymbol, createUnhead());
+
+const gaId = import.meta.env.VITE_GA_ID as string | undefined;
+if (import.meta.env.PROD && gaId) {
+  app.use(createGtag({ tagId: gaId, pageTracker: { router } }));
+}
+
 app.mount("#app");

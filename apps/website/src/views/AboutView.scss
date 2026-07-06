@@ -445,3 +445,121 @@
     justify-content: center;
   }
 }
+
+.ab-office-card__city-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ab-office-card__city {
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: var(--website-text);
+  margin: 0;
+  line-height: 1.2;
+
+  &--muted { color: var(--website-text-secondary); font-size: 1.125rem; }
+}
+
+.ab-office-card__country {
+  font-size: 0.875rem;
+  color: var(--website-text-secondary);
+  margin: 0 0 0.75rem;
+}
+
+.ab-office-card__address {
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: var(--website-text-secondary);
+  font-style: normal;
+  margin: 0 0 1rem;
+  flex: 1;
+}
+
+.ab-office-card__map-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--website-primary);
+  text-decoration: none;
+  margin-top: auto;
+
+  &:hover { text-decoration: underline; }
+}
+
+.ab-office-card__expand-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--website-icon-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  svg { width: 24px; height: 24px; color: var(--website-primary); }
+}
+
+.ab-office-card__expand-desc {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--website-text-secondary);
+  margin: 0;
+  max-width: 220px;
+}
+
+.ab-office-card__expand-link {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--website-primary);
+  text-decoration: none;
+  margin-top: 0.25rem;
+
+  &:hover { text-decoration: underline; }
+}
+
+/* ── CTA ─────────────────────────────────────────────────────────────── */
+.ab-cta-wrap {
+  padding-bottom: 2.5rem;
+
+  @media (max-width: $bp-sm) {
+    padding-bottom: 1.5rem;
+  }
+}
+
+.ab-cta {
+  background: linear-gradient(135deg, var(--neosleep-very-dark-teal) 0%, var(--neosleep-darker-teal) 100%);
+  border-radius: var(--website-card-radius);
+  padding: 4.5rem 2rem;
+  text-align: center;
+
+  @media (max-width: $bp-sm) {
+    padding: 3rem 1.5rem;
+    border-radius: 14px;
+  }
+}
+
+.ab-cta__heading {
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 0.625rem;
+  letter-spacing: -0.025em;
+}
+
+.ab-cta__sub {
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  color: rgba(255, 255, 255, 0.78);
+  max-width: 560px;
+  margin: 0 auto 2.25rem;
+}
+
+.ab-cta__btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.875rem;
+  justify-content: center;
+}

@@ -1,4 +1,5 @@
 import { createApp } from "vue";
+import { createGtag } from "vue-gtag";
 import { createPinia } from "pinia";
 import App from "./App.vue";
 import router from "./router";
@@ -29,4 +30,9 @@ app.use(i18n);
 setupDiagnosticReporter(app);
 
 app.provide("neo:apiFetch", apiFetch);
+const gaId = import.meta.env.VITE_GA_ID as string | undefined;
+if (import.meta.env.PROD && gaId) {
+  app.use(createGtag({ tagId: gaId, pageTracker: { router } }));
+}
+
 app.mount("#app");

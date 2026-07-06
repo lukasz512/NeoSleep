@@ -1,77 +1,23 @@
-/**
- * Website static content config — home page, careers, help, patients, legal, search.
- * All user-facing strings are i18n keys; components never hardcode copy.
- * Replace any section with a CMS/API fetch without touching components.
- */
-
-import type { Component } from "vue";
-import type { RouteLocationRaw } from "vue-router";
-import {
-  IconHeartbeat,
-  IconClock,
-  IconPeople,
-  IconChart,
-  IconGraduation,
-  IconHeart,
-  IconMoon,
-  IconShield,
-  IconSmile,
-} from "../components/icons";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// HOME
-// ─────────────────────────────────────────────────────────────────────────────
-
-export interface StatConfig {
-  target: number;
-  suffix: string;
-  labelKey: string;
-}
-
-export interface SolutionCard {
-  id: string;
-  icon: Component;
-  titleKey: string;
-  descKey: string;
-  bulletKeys: [string, string, string];
-  animId?: "heartbeat";
-}
-
-export interface FeatureItem {
-  id: string;
-  icon: Component;
-  titleKey: string;
-  descKey: string;
-  animId?: "chart";
-  clockPatients?: true;
-}
-
-export interface SplitSectionConfig {
-  id: string;
-  eyebrowKey: string;
-  headingKey: string;
-  subtitleKey: string;
-  ctaKey: string;
-  ctaTo: RouteLocationRaw;
-  imageSrc: string;
-  imagePosition?: string;
-  imageLeft?: boolean;
-  features: FeatureItem[];
-}
-
-export interface CtaButton {
-  labelKey: string;
-  to: RouteLocationRaw;
-  variant: "white-outline" | "white-border";
-  arrow?: boolean;
-}
-
-export const homeStats: StatConfig[] = [
-  { target: 25,  suffix: "M+", labelKey: "website.stats.americansLabel"    },
-  { target: 80,  suffix: "%",  labelKey: "website.stats.undiagnosedLabel"  },
-  { target: 95,  suffix: "%",  labelKey: "website.stats.satisfactionLabel" },
-  { target: 500, suffix: "+",  labelKey: "website.stats.specialistsLabel"     },
-];
+export const homeStatsByLocale: Record<string, StatConfig[]> = {
+  en: [
+    { target: 26, suffix: "M+", labelKey: "website.stats.populationLabel",   source: "AASM, 2022" },
+    { target: 80, suffix: "%",  labelKey: "website.stats.undiagnosedLabel",  source: "AASM + NIH, 2021" },
+    { target: 3,  suffix: "x",  labelKey: "website.stats.cardioRiskLabel",   source: "Lévy et al., Eur Respir J 2012" },
+    { target: 50, suffix: "%",  labelKey: "website.stats.hypertensionLabel", source: "Peppard et al., NEJM 2000" },
+  ],
+  pl: [
+    { target: 3,  suffix: "M+", labelKey: "website.stats.populationLabel",   source: "WHO Europe / PTChP, 2020" },
+    { target: 85, suffix: "%",  labelKey: "website.stats.undiagnosedLabel",  source: "European Respiratory Society, 2019" },
+    { target: 3,  suffix: "x",  labelKey: "website.stats.cardioRiskLabel",   source: "Lévy et al., Eur Respir J 2012" },
+    { target: 50, suffix: "%",  labelKey: "website.stats.hypertensionLabel", source: "Peppard et al., NEJM 2000" },
+  ],
+  es: [
+    { target: 10, suffix: "M+", labelKey: "website.stats.populationLabel",   source: "Guerrero et al., Sleep Medicine 2016" },
+    { target: 90, suffix: "%",  labelKey: "website.stats.undiagnosedLabel",  source: "Sociedad Mexicana de Medicina del Sueño" },
+    { target: 3,  suffix: "x",  labelKey: "website.stats.cardioRiskLabel",   source: "Lévy et al., Eur Respir J 2012" },
+    { target: 50, suffix: "%",  labelKey: "website.stats.hypertensionLabel", source: "Peppard et al., NEJM 2000" },
+  ],
+};
 
 export const solutionCards: SolutionCard[] = [
   {

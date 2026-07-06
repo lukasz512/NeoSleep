@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint . --format codeframe",
@@ -14,7 +14,9 @@
     "@neo/api": "workspace:*",
     "@unhead/vue": "catalog:",
     "@vueuse/core": "catalog:",
+    "flag-icons": "^7.5.0",
     "vue": "catalog:",
+    "vue-gtag": "^3.7.1",
     "vue-i18n": "catalog:",
     "vue-router": "catalog:",
     "vuetify": "catalog:"

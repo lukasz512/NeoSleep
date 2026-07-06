@@ -1,15 +1,20 @@
 # NeoSleep — Claude Code Instructions
 
 ## Project Overview
-pnpm monorepo: 2 Vue 3 + Vite apps + 1 Express API server + PostgreSQL.
-Sleep care SaaS for pharma sales reps visiting HCPs (Healthcare Professionals).
+pnpm monorepo: 2 Vue 3 + Vite apps + 1 Express API server + PostgreSQL (Supabase for MVP).
+White-label pharma CRM SaaS. Tenants = pharma companies. Users = their field force (reps, KAMs, MSLs, FFMs).
+Active markets: **PL, MX**. Thailand planned. One tenant can operate in multiple countries — country is a `region` attribute on users/territories, NOT a separate tenant.
 
 ## Terminology
-- **HCP** = Healthcare Professional (stomatolodzy, laryngolodzy, pneumonolodzy, lekarze rodzinni)
+- **HCP** = Healthcare Professional (doctors, dentists, ENT, pulmonologists, GPs)
 - **HCO** = Healthcare Organization (clinic, hospital, practice)
-- **Rep** = Sales Representative (pharma field rep using the app)
+- **MR / Rep** = Medical Rep / Sales Representative (field rep, primary app user)
+- **KAM** = Key Account Manager (manages hospitals/large clinics, multi-stakeholder)
+- **FFM** = Field Force Manager (manages a team of MRs, tracks team KPIs)
+- **MSL** = Medical Science Liaison (scientific/educational HCP engagement, not promotional)
 - **PCF** = Post Call Form (form filled after each HCP visit)
 - **Tenant** = white-label client (pharma company licensing the platform)
+- **Region** = country/territory grouping (PL, MX, TH) — attribute on users and HCPs, not a tenant
 
 ```
 apps/app/         → Main PWA (sales rep CRM, mobile-first)
@@ -33,6 +38,7 @@ brand/            → Design tokens, logos, fonts
 ## Tech Stack
 - Vue 3.5, Vite 7, Pinia 3, Vuetify 3.12, Vue Router 4.5, Vue i18n 10
 - Express 4, PostgreSQL 15 (pg 8), express-session, bcrypt, nodemailer
+- **DB hosting: Supabase** (managed PostgreSQL, schema-per-tenant, built-in auth helpers, RLS)
 - Vitest 4, ESLint 9, TypeScript 5.6, Prettier 3.2
 - pnpm 9 workspaces, Husky pre-commit hooks
 
@@ -48,7 +54,15 @@ brand/            → Design tokens, logos, fonts
 - Tenant config: `platform/foundation/config/`
 
 ## Database
-User/account model has 3 distinct identity types — do NOT conflate them:
+
+### Multi-tenancy model: schema-per-tenant on Supabase
+- Each pharma company (tenant) gets its own PostgreSQL schema: `tenant_<slug>` (e.g. `tenant_acmepharma_pl`)
+- Shared `public` schema for system-level tables (`tbl_tenants`, `tbl_app_config`)
+- Supabase project: single instance for MVP. Connection string in `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` env vars (BFF only — never frontend)
+- Migrations: `services/api/migrations/` — numbered `.sql` files, run on BFF startup via `db/migrations.ts`
+- New tables → always add a new numbered migration, never mutate old ones
+
+### Identity types — do NOT conflate:
 
 FHIR R4-aligned schema. All tables use singular names, no `tbl_` prefix.
 
@@ -62,13 +76,11 @@ Platform schema: `platform.companies`, `platform.tenants`, `platform.roles`, `pl
 
 Tenant schema (FHIR naming): `person`, `users`, `user_roles`, `organization`, `practitioner`, `patient`, `related_person`, `lead`, `encounter`, `observation`, `communication`, `presentation`, `consent`, `app_config`, `audit_log`, `push_subscription`
 
-- New tables → add a migration in `services/api/migrations/` (next number, `.sql`)
-- Migrations run automatically on BFF startup via `db/migrations.ts`
-- **OPEN QUESTION**: HCP auth strategy — magic link vs. separate OIDC vs. shared auth service. Needs architecture decision before building HCP portal.
+**OPEN QUESTION**: HCP auth strategy — magic link vs. separate OIDC. Decide before building HCP portal.
 
 ## Auth
 - Session cookie (httpOnly), remember-me tokens
-- Roles: `admin`, `manager`, `rep` — region-scoped
+- Roles: `admin`, `ffm` (field force manager), `kam`, `msl`, `rep` — region-scoped
 - RBAC middleware: `services/api/src/auth.ts`
 - `practitioner` auth: magic link planned — NOT YET IMPLEMENTED (needs architecture decision first)
 
@@ -77,6 +89,7 @@ Tenant schema (FHIR naming): `person`, `users`, `user_roles`, `organization`, `p
 - Internal locale IDs: `en`, `pl`, `mx` — `mx` is the app's internal key for `es-MX` (Mexican Spanish). The browser locale `es-MX` maps to `mx` internally via `i18n.ts`. Do NOT rename to `es-MX` — it is used consistently as a short key throughout the codebase.
 - Add keys to `platform/i18n/en.json` first, then run `npm run i18n:extract`
 - Never leave a key only in one language file — CI enforces parity
+- RTL: not needed now. Thai (TH) uses LTR — but test font rendering
 
 ## Tests
 - Run: `pnpm test` (all workspaces)
