@@ -1,4 +1,0 @@
-# SPA fallback: serve index.html for all routes not matching real files or directories.
-# Fixes 404 on direct URL access / page refresh for Vue Router (createWebHistory).
-Options -MultiViews
-FallbackResource /index.html

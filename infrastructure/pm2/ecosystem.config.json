@@ -1,0 +1,24 @@
+{
+  "apps": [
+    {
+      "name": "bff-prod",
+      "script": "dist/server.js",
+      "cwd": "/home/deploy/apps/bff-prod",
+      "node_args": "--env-file=.env",
+      "env": { "NODE_ENV": "production", "PORT": "3000" },
+      "instances": 1,
+      "autorestart": true,
+      "max_memory_restart": "300M"
+    },
+    {
+      "name": "bff-uat",
+      "script": "dist/server.js",
+      "cwd": "/home/deploy/apps/bff-uat",
+      "node_args": "--env-file=.env",
+      "env": { "NODE_ENV": "production", "PORT": "3001" },
+      "instances": 1,
+      "autorestart": true,
+      "max_memory_restart": "300M"
+    }
+  ]
+}

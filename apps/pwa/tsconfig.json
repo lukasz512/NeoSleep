@@ -1,0 +1,26 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "emitDeclarationOnly": true,
+    "types": ["vitest/globals", "node", "vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      "@i18n/*":    ["../../packages/i18n/*"],
+      "@brand/*":   ["../../packages/brand/*"],
+      "@api":       ["../../apps/api/client/src/index.ts"],
+      "@ui":        ["../../packages/ui/src/index.ts"],
+      "@stores":    ["../../packages/stores/src/index.ts"],
+      "@vuetify":   ["../../packages/vuetify/src/index.ts"],
+      "vue":        ["node_modules/vue/dist/vue.d.ts"]
+    }
+  },
+  "include": [
+    "src",
+    "../../packages/i18n",
+    "../../packages/brand",
+    "../../packages/vuetify/src",
+    "../../packages/stores/src",
+    "../../apps/api/client/src"
+  ]
+}

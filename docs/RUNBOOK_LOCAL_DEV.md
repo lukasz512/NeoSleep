@@ -91,7 +91,7 @@ npm run test --workspace=@neo/rep-app
 - Rep app: `npm run dev --workspace=@neo/rep-app`
 - Admin: `npm run dev --workspace=@neo/admin`
 - Portal: `npm run dev --workspace=@neo/portal`
-- Website: `npm run dev --workspace=@neo/website`
+- Website: `npm run dev --workspace=@neo/web`
 
 **Albo wejdź do katalogu appki i uruchom tam:**
 ```bash

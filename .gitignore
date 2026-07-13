@@ -12,15 +12,11 @@ playwright-report
 # Transpiled TS artifacts — source is .ts, ignore siblings
 apps/*/src/**/*.js
 apps/*/src/**/*.d.ts
-services/*/src/**/*.js
-services/*/src/**/*.d.ts
 i18n/*.js
 i18n/*.d.ts
 
 # Build output
-services/*/dist/
 apps/*/tsconfig.tsbuildinfo
-services/*/tsconfig.tsbuildinfo
 
 # Secrets and keys (never commit)
 *.pem
@@ -41,3 +37,5 @@ secrets/
 .env.production.local
 .env.uat.local
 .claude/worktrees/
+.claude/projects/
+.claude/settings.local.json

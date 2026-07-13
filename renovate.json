@@ -1,22 +1,31 @@
 {
-  "_comment": "Renovate bot (GitHub App): tworzy PR-y z aktualizacjami zależności.",
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended"],
-  "timezone": "Europe/Dublin",
-  "schedule": ["before 7am on monday"],
+  "timezone": "Europe/Warsaw",
+  "schedule": ["every monday"],
   "dependencyDashboard": true,
   "labels": ["dependencies"],
   "rangeStrategy": "replace",
   "packageRules": [
     {
-      "matchUpdateTypes": ["major"],
-      "addLabels": ["major"],
-      "automerge": false
-    },
-    {
-      "matchUpdateTypes": ["minor", "patch"],
+      "description": "patch + minor: automerge co poniedziałek",
+      "matchUpdateTypes": ["patch", "minor"],
       "automerge": true,
       "automergeType": "pr",
-      "requiredStatusChecks": null
+      "platformAutomerge": true
+    },
+    {
+      "description": "major: PR do manualnego review",
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "addLabels": ["upgrade-major"]
+    },
+    {
+      "description": "GitHub Actions: automerge patch/minor",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "automerge": true
     }
-  ]
+  ],
+  "ignorePaths": ["**/node_modules/**"]
 }

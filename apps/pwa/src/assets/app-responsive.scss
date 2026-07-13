@@ -1,0 +1,64 @@
+/**
+ * app-responsive.scss — single source of truth for all responsive rules in the rep app.
+ *
+ * ARCHITECTURE
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Vuetify 3.12 owns the design system and grid. Do NOT recreate breakpoints
+ * that Vuetify already handles. This file covers only what Vuetify cannot:
+ *   - WCAG accessibility queries (prefers-reduced-motion)
+ *   - env(safe-area-inset-*) — must be @media, resolved at paint time
+ *   - Global CSS custom property adjustments at viewport breakpoints
+ *
+ * Responsive patterns used in components (NOT this file):
+ *   - clamp()                → fluid size scaling (icon/font)
+ *   - CSS vars (theme.scss)  → --rep-btn-min-height changes at 767px
+ *   - v-bind()               → reactive CSS from isMobile / useDisplay().mobile
+ *   - v-show / v-if          → Vue reactivity for show/hide toggling
+ *
+ * theme.scss already defines (do not duplicate here):
+ *   @media (max-width: 767px)              → --rep-btn-min-height/width + v-field touch targets
+ *   @media (hover: hover) and (pointer: fine) → v-btn scale on mouse devices
+ *   @media (prefers-reduced-motion: no-preference) → Vuetify field transition
+ *
+ * FILE STRUCTURE
+ * ─────────────────────────────────────────────────────────────────────────────
+ * ── SECTION A: GLOBAL DEFAULTS ── accessibility, safe-area, global tokens
+ * ── SECTION B: COMPONENT OVERRIDES ── per-component rules (TBD, separate file)
+ */
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SECTION A — GLOBAL DEFAULTS
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── A1. Accessibility: prefers-reduced-motion ─────────────────────────────
+// WCAG 2.3.3. Matches the website's identical rule for consistency.
+// Users with vestibular disorders / epilepsy / motion sensitivity.
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration:        0.01ms !important;
+    animation-iteration-count: 1      !important;
+    transition-duration:       0.01ms !important;
+    scroll-behavior: auto            !important;
+  }
+}
+
+// ── A2. Safe-area insets (iOS notch / home bar) ───────────────────────────
+// env() values resolve at paint time — cannot be driven by JS or container queries.
+// The layout bottom padding is handled via v-bind() in AppLayout.vue using
+// isMobile, but the env() function itself must appear in a CSS declaration.
+// If you need a global env()-based rule not covered by v-bind(), add it here.
+
+// (none currently — AppLayout.vue uses v-bind(mobileBottomPadding) which
+//  already includes env(safe-area-inset-bottom) when isMobile is true)
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SECTION B — COMPONENT OVERRIDES
+// Per-component responsive rules that cannot use clamp() / v-bind() / v-show.
+// Will move to a dedicated file (TBD). Until then, add here.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// (empty — all component @media have been eliminated via clamp/v-bind/v-show)

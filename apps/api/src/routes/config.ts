@@ -1,0 +1,109 @@
+import { Router, type Router as RouterType, type Request, type Response } from "express";
+import { getAppConfig, updateAppConfig, type AppConfigUpdate, getI18nOverrides, upsertI18nOverrides } from "../db.js";
+import { asyncHandler } from "../middleware/errorHandler.js";
+
+export const configRouter: RouterType = Router();
+
+/** GET /api/config/app – app theme/branding (public, used by website and rep-app). */
+configRouter.get(
+  "/config/app",
+  asyncHandler(async (_req: Request, res: Response) => {
+    const config = await getAppConfig();
+    res.json(config);
+  })
+);
+
+/** Shape of the PATCH /api/config/app request body. */
+interface AppConfigPatchBody {
+  primary_color?: unknown;
+  secondary_color?: unknown;
+  primary_color_dark?: unknown;
+  secondary_color_dark?: unknown;
+  border_radius?: unknown;
+  logo_url?: unknown;
+  surface_color?: unknown;
+  hero_container_style?: unknown;
+  color_scheme?: unknown;
+}
+
+/** PATCH /api/config/app – update theme (admin only). In dev, allow when no API session (e.g. "Go to app" login). */
+configRouter.patch(
+  "/config/app",
+  asyncHandler(async (req: Request, res: Response) => {
+    const session = req.session as { user?: { role?: string } } | undefined;
+    const isAdmin = session?.user?.role === "admin";
+    if (!isAdmin) {
+      res.status(403).json({ error: "Admin only" });
+      return;
+    }
+    const body = req.body as AppConfigPatchBody;
+    const updates: AppConfigUpdate = {};
+    const normHex = (s: unknown) =>
+      typeof s === "string" && s.trim() ? s.trim().toLowerCase() : "";
+    if (normHex(body.primary_color)) {
+      updates.primary_color = normHex(body.primary_color);
+    }
+    if (normHex(body.secondary_color)) {
+      updates.secondary_color = normHex(body.secondary_color);
+    }
+    if (normHex(body.primary_color_dark)) {
+      updates.primary_color_dark = normHex(body.primary_color_dark);
+    }
+    if (normHex(body.secondary_color_dark)) {
+      updates.secondary_color_dark = normHex(body.secondary_color_dark);
+    }
+    if (typeof body.border_radius === "string" && body.border_radius.trim()) {
+      updates.border_radius = body.border_radius.trim();
+    }
+    if (body.logo_url !== undefined) {
+      updates.logo_url = typeof body.logo_url === "string" ? body.logo_url.trim() || null : null;
+    }
+    if (normHex(body.surface_color)) {
+      updates.surface_color = normHex(body.surface_color);
+    }
+    if (body.hero_container_style === "wide" || body.hero_container_style === "compact") {
+      updates.hero_container_style = body.hero_container_style;
+    }
+    if (body.color_scheme === "light" || body.color_scheme === "dark") {
+      updates.color_scheme = body.color_scheme;
+    }
+    const config = await updateAppConfig(updates);
+    res.json(config);
+  })
+);
+
+/** GET /api/config/i18n – DB label overrides (public, layered on top of static JSON in frontend). */
+configRouter.get(
+  "/config/i18n",
+  asyncHandler(async (_req: Request, res: Response) => {
+    const overrides = await getI18nOverrides();
+    res.json(overrides);
+  })
+);
+
+/** PATCH /api/config/i18n – upsert label overrides (admin only).
+ *  Body: { locale: "en" | "pl" | "es", overrides: { "key": "value" | null } }
+ *  null value removes the override (falls back to static JSON).
+ */
+configRouter.patch(
+  "/config/i18n",
+  asyncHandler(async (req: Request, res: Response) => {
+    const session = req.session as { user?: { role?: string } } | undefined;
+    const isAdmin = session?.user?.role === "admin";
+    if (!isAdmin) {
+      res.status(403).json({ error: "Admin only" });
+      return;
+    }
+    const { locale, overrides } = req.body as { locale?: string; overrides?: Record<string, string | null> };
+    if (!locale || typeof locale !== "string" || !["en", "pl", "mx"].includes(locale)) {
+      res.status(400).json({ error: "locale must be one of: en, pl, mx" });
+      return;
+    }
+    if (!overrides || typeof overrides !== "object" || Array.isArray(overrides)) {
+      res.status(400).json({ error: "overrides must be an object { key: value | null }" });
+      return;
+    }
+    const updated = await upsertI18nOverrides(locale, overrides);
+    res.json(updated);
+  })
+);

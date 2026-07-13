@@ -1,0 +1,27 @@
+/* ── Staggered list animation (AppEntityList mobile feed) ────────────────── */
+.list-stagger-move,
+.list-stagger-enter-active,
+.list-stagger-leave-active {
+  transition:
+    opacity 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.list-stagger-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.list-stagger-enter-active {
+  transition-delay: var(--stagger-delay, 0ms);
+}
+
+.list-stagger-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+.list-stagger-leave-active {
+  position: absolute;
+  width: 100%;
+}
