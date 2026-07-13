@@ -57,13 +57,13 @@ Promotion:
 
 ### Static (Vue PWA / Website) — FTP or rsync
 ```yaml
-- run: pnpm build:app
+- run: pnpm build:pwa
 - uses: SamKirkland/FTP-Deploy-Action@v4.3.4
   with:
     server: ${{ secrets.FTP_SERVER }}
     username: ${{ secrets.FTP_USERNAME }}
     password: ${{ secrets.FTP_PASSWORD }}
-    local-dir: apps/app/dist/
+    local-dir: apps/pwa/dist/
     server-dir: /public_html/app/
 ```
 

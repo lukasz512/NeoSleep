@@ -24,7 +24,7 @@ Does it drive global UI (badge count, sidebar state)?   ──No──▶  Compo
 
 ## Composable — local, destroyed on unmount
 
-`apps/app/src/composables/useHcps.ts`
+`apps/pwa/src/composables/useHcps.ts`
 
 ```typescript
 // Data lives here while HcpsView is mounted. Destroyed when user navigates away.
@@ -55,7 +55,7 @@ const { hcps, loading, error, filters } = useHcps()
 
 ## Pinia Store — shared, persists navigation
 
-`apps/app/src/stores/auth.ts` — shared across every view, never destroyed.
+`apps/pwa/src/stores/auth.ts` — shared across every view, never destroyed.
 
 ```typescript
 export const useAuthStore = defineStore('auth', () => {

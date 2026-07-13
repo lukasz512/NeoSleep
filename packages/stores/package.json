@@ -6,7 +6,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@neo/api": "workspace:*",
+    "@neo/api-client": "workspace:*",
     "pinia": "catalog:",
     "vue": "catalog:"
   }

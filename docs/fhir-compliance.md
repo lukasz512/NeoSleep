@@ -37,7 +37,7 @@
 
 | Item | Status | File |
 |---|---|---|
-| Dual-format error middleware | ⬜ | `services/api/src/middleware/errorHandler.ts` |
+| Dual-format error middleware | ⬜ | `apps/api/src/middleware/errorHandler.ts` |
 | FHIR clients get `OperationOutcome` | ⬜ | — |
 | Non-FHIR clients get `{ error: { code, message } }` | ⬜ | — |
 | Checked via `Accept: application/fhir+json` header | ⬜ | — |
@@ -55,8 +55,8 @@
 | `IDENTIFIER_SYSTEMS` constants (NPI, PWZ, PESEL, CEDULA, RFC) | ⬜ | `packages/shared/src/types/identifier.ts` |
 | `Identifier.find()` helper | ⬜ | `packages/shared/src/types/identifier.ts` |
 | `Identifier.set()` helper | ⬜ | `packages/shared/src/types/identifier.ts` |
-| SQL migration: JSONB object → JSONB array | ⬜ | `services/api/migrations/004_fhir_identifiers.sql` |
-| DB functions updated to use `Identifier.find/set` | ⬜ | `services/api/src/db/practitioner.ts`, `patient.ts`, `lead.ts` |
+| SQL migration: JSONB object → JSONB array | ⬜ | `apps/api/migrations/004_fhir_identifiers.sql` |
+| DB functions updated to use `Identifier.find/set` | ⬜ | `apps/api/src/db/practitioner.ts`, `patient.ts`, `lead.ts` |
 | `pg_dump` backup taken before migration | ⬜ | — |
 
 > Pattern: `.claude/skills/arch/assets/examples/good-fhir-api.md` §3
@@ -206,6 +206,6 @@ Current DB-to-FHIR mapping. Every resource must either have a table or a documen
 | `docs/ADR-009-fhir-compliance-scope.md` | Decision record for this approach |
 | `.claude/skills/arch/assets/examples/good-fhir-api.md` | Phase 1 implementation patterns |
 | `.claude/skills/arch/assets/examples/good-fhir-alignment.md` | Full schema-to-FHIR resource map |
-| `services/api/src/routes/fhir.ts` | CapabilityStatement route (to create) |
+| `apps/api/src/routes/fhir.ts` | CapabilityStatement route (to create) |
 | `packages/shared/src/types/identifier.ts` | FHIR Identifier type + constants (to create) |
-| `services/api/migrations/004_fhir_identifiers.sql` | `national_ids` migration (to create) |
+| `apps/api/migrations/004_fhir_identifiers.sql` | `national_ids` migration (to create) |

@@ -17,19 +17,21 @@ Active markets: **PL, MX**. Thailand planned. One tenant can operate in multiple
 - **Region** = country/territory grouping (PL, MX, TH) — attribute on users and HCPs, not a tenant
 
 ```
-apps/app/         → Main PWA (sales rep CRM, mobile-first)
-apps/website/     → Marketing landing (public)
-services/api/     → Express API server (trust boundary, owns auth + secrets)
-packages/         → Shared packages (@neo/api, @neo/ui, @neo/stores, @neo/utils)
-shared/           → Shared composables (useDocumentLang, useReveal, useCountUp…)
-i18n/             → en.json, pl.json, es.json, mx.json (source of truth)
-foundation/       → Active docs, specs, ADRs
-brand/            → Design tokens, logos, fonts
+apps/pwa/         → Main PWA (sales rep CRM, mobile-first)
+apps/web/         → Marketing landing (public)
+apps/api/         → Express API server (trust boundary, owns auth + secrets)
+apps/api/client/  → @neo/api-client — frontend HTTP fetch wrapper (kept next to the API it calls)
+apps/telegram/    → Telegram bot
+packages/         → Shared packages (@neo/ui, @neo/stores, @neo/vuetify)
+packages/i18n/    → en.json, pl.json, mx.json (source of truth), plus locale-bound composables (useDocumentLang)
+packages/brand/   → Design tokens, logos, fonts, shared global CSS (transitions.css) — per-tenant branding is DB-driven via app_config, not more folders
+infrastructure/   → Docker Compose, nginx, scripts
+docs/             → Architecture docs, ADRs, docs/foundation/ (backlog, presentations)
 ```
 
 ## Architecture Rules (NEVER violate)
 
-1. **API server is the only trust boundary.** Frontends have zero secrets. All auth, DB, external APIs go through `services/api/`.
+1. **API server is the only trust boundary.** Frontends have zero secrets. All auth, DB, external APIs go through `apps/api/`.
 2. **Views vs. Data separation.** Navigation items, labels, icons, feature flags → config-driven, never hardcoded in components. White-label tenants swap data layer only.
 3. **All copy in i18n JSON.** Never hardcode user-facing strings in components. Use `$t('key')`.
 4. **TypeScript strict.** No `any`, no type assertions without justification.
@@ -43,15 +45,15 @@ brand/            → Design tokens, logos, fonts
 - pnpm 9 workspaces, Husky pre-commit hooks
 
 ## Key Paths
-- API routes: `services/api/src/routes/`
-- API auth: `services/api/src/auth.ts`
-- DB schema: `services/api/migrations/` (run in order)
-- App router: `apps/app/src/router/`
-- App stores: `apps/app/src/stores/`
-- App composables: `apps/app/src/composables/`
-- API composable: `apps/app/src/composables/useBffApi.ts` (use this for all BFF calls)
-- App config: `apps/app/src/composables/useAppConfig.ts`
-- Tenant config: `platform/foundation/config/`
+- API routes: `apps/api/src/routes/`
+- API auth: `apps/api/src/auth.ts`
+- DB schema: `apps/api/migrations/` (run in order)
+- App router: `apps/pwa/src/router/`
+- App stores: `apps/pwa/src/stores/`
+- App composables: `apps/pwa/src/composables/`
+- API composable: `apps/pwa/src/composables/useBffApi.ts` (use this for all BFF calls)
+- App config: `apps/pwa/src/composables/useAppConfig.ts`
+- Tenant config: DB-driven, `app_config` table (tenant schema) — not a filesystem path
 
 ## Database
 
@@ -59,7 +61,7 @@ brand/            → Design tokens, logos, fonts
 - Each pharma company (tenant) gets its own PostgreSQL schema: `tenant_<slug>` (e.g. `tenant_acmepharma_pl`)
 - Shared `public` schema for system-level tables (`tbl_tenants`, `tbl_app_config`)
 - Supabase project: single instance for MVP. Connection string in `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` env vars (BFF only — never frontend)
-- Migrations: `services/api/migrations/` — numbered `.sql` files, run on BFF startup via `db/migrations.ts`
+- Migrations: `apps/api/migrations/` — numbered `.sql` files, run on BFF startup via `db/migrations.ts`
 - New tables → always add a new numbered migration, never mutate old ones
 
 ### Identity types — do NOT conflate:
@@ -68,7 +70,7 @@ FHIR R4-aligned schema. All tables use singular names, no `tbl_` prefix.
 
 | Table | Who | Auth | App |
 |---|---|---|---|
-| `users` + `person` | Internal: reps, managers, admins (pharma company employees) | Google OIDC + password | apps/app |
+| `users` + `person` | Internal: reps, managers, admins (pharma company employees) | Google OIDC + password | apps/pwa |
 | `practitioner` + `person` | Healthcare Professionals (doctors, specialists) | magic link (planned) | HCP portal (future) |
 | `patient` + `person` | Patients referred by HCPs | TBD (future) | TBD |
 
@@ -81,13 +83,13 @@ Tenant schema (FHIR naming): `person`, `users`, `user_roles`, `organization`, `p
 ## Auth
 - Session cookie (httpOnly), remember-me tokens
 - Roles: `admin`, `ffm` (field force manager), `kam`, `msl`, `rep` — region-scoped
-- RBAC middleware: `services/api/src/auth.ts`
+- RBAC middleware: `apps/api/src/auth.ts`
 - `practitioner` auth: magic link planned — NOT YET IMPLEMENTED (needs architecture decision first)
 
 ## i18n
 - Active languages: EN, PL, MX (Mexican Spanish)
 - Internal locale IDs: `en`, `pl`, `mx` — `mx` is the app's internal key for `es-MX` (Mexican Spanish). The browser locale `es-MX` maps to `mx` internally via `i18n.ts`. Do NOT rename to `es-MX` — it is used consistently as a short key throughout the codebase.
-- Add keys to `platform/i18n/en.json` first, then run `npm run i18n:extract`
+- Add keys to `packages/i18n/en.json` first, then run `npm run i18n:extract`
 - Never leave a key only in one language file — CI enforces parity
 - RTL: not needed now. Thai (TH) uses LTR — but test font rendering
 
@@ -99,8 +101,8 @@ Tenant schema (FHIR naming): `person`, `users`, `user_roles`, `organization`, `p
 ## Dev Workflow
 ```bash
 pnpm start             # Docker (Postgres) + BFF + app concurrently
-pnpm build:app         # Build app
-pnpm build:website     # Build website
+pnpm build:pwa         # Build app
+pnpm build:web         # Build website
 pnpm ci                # Full CI gate: lint + typecheck + test
 pnpm i18n:extract      # Extract new i18n keys from source
 pnpm i18n:prune        # Mark unused keys
@@ -112,9 +114,9 @@ pnpm i18n:prune        # Mark unused keys
   - DEV:  `dev` → app-dev.neosleepcare.com / dev.neosleepcare.com
   - UAT:  `uat` → app-uat.neosleepcare.com / uat.neosleepcare.com
   - PROD: `PROD` → app.neosleepcare.com / neosleepcare.com
-- CI/CD: `.github/workflows/deploy-app.yml`, `deploy-website.yml`, `deploy-bff.yml`
+- CI/CD: `.github/workflows/deploy-pwa.yml`, `deploy-web.yml`, `deploy-bff.yml`
 - Promote DEV → UAT via `promote-dev-to-uat.yml`
-- Promote UAT → PROD via `promote-app-uat-to-prod.yml` / `promote-website-uat-to-prod.yml`
+- Promote UAT → PROD via `promote-pwa-uat-to-prod.yml` / `promote-web-uat-to-prod.yml`
 
 ## What NOT to do
 - Do not hardcode navigation items, labels or feature flags in components

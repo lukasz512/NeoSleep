@@ -181,12 +181,12 @@ These test types can never be omitted. If they are missing from any entity, QA m
 
 ## Consumer-Driven Contract Tests (Pact) — API Fitness Function
 
-For the API boundary between `apps/app` (consumer) and `services/api` (provider), **Pact** is the recommended fitness function. This is stronger than manual API_CONTRACT.md review — it fails the build automatically when a provider breaks a consumer's expectation.
+For the API boundary between `apps/pwa` (consumer) and `apps/api` (provider), **Pact** is the recommended fitness function. This is stronger than manual API_CONTRACT.md review — it fails the build automatically when a provider breaks a consumer's expectation.
 
 **How it works in NeoCRM:**
-1. `apps/app` publishes a **pact file** (JSON describing what it expects from each endpoint — response shape, status codes, required fields)
-2. `services/api` runs **pact verification** in CI against the published pact
-3. If `services/api` changes a response shape that `apps/app` depends on → CI fails immediately, before deploy
+1. `apps/pwa` publishes a **pact file** (JSON describing what it expects from each endpoint — response shape, status codes, required fields)
+2. `apps/api` runs **pact verification** in CI against the published pact
+3. If `apps/api` changes a response shape that `apps/pwa` depends on → CI fails immediately, before deploy
 
 **When to add Pact tests:**
 - Any API endpoint that Alfred's tenant (`neosleep_mx`) or the rep PWA depends on for critical data flows
@@ -197,14 +197,14 @@ For the API boundary between `apps/app` (consumer) and `services/api` (provider)
 ## QA Task: pact-contract
 
 Entity/endpoint: [e.g. GET /api/encounters]
-Consumer: apps/app
-Provider: services/api
+Consumer: apps/pwa
+Provider: apps/api
 Critical fields in response: [list of fields that must not change shape]
 Nullable fields: [fields that can be null — pact must allow it]
 Auth required: [yes — session cookie]
 ```
 
-**QA output**: pact file at `tests/contracts/[entity].pact.json` + verification script in `services/api/src/pact.verify.ts`.
+**QA output**: pact file at `tests/contracts/[entity].pact.json` + verification script in `apps/api/src/pact.verify.ts`.
 
 ---
 

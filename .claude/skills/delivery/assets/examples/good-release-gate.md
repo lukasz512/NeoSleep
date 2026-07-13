@@ -108,8 +108,8 @@ Deadline: before PROD. UAT allowed. ADR: No.
 
 | Artifact | Location |
 |---|---|
-| Migration SQL | `services/api/migrations/004_encounter.sql` |
-| Rollback SQL | `services/api/migrations/004_encounter.rollback.sql` |
+| Migration SQL | `apps/api/migrations/004_encounter.sql` |
+| Rollback SQL | `apps/api/migrations/004_encounter.rollback.sql` |
 | git tag | `v0.3.0-before-encounter` |
 | Alfred notification | Telegram #neosleep-mx-tech (2026-03-15) |
 | Data map | `docs/data-map.md` (commit `a30b97cb`) |

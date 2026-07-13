@@ -11,7 +11,7 @@ First thing every FHIR auditor checks. Without it: automatic fail in the first 5
 One route, static JSON, zero DB calls.
 
 ```typescript
-// services/api/src/routes/fhir.ts
+// apps/api/src/routes/fhir.ts
 import { Router } from 'express'
 const router = Router()
 
@@ -51,7 +51,7 @@ export default router
 Replace `{ error: { code, message } }` with FHIR OperationOutcome. One middleware change.
 
 ```typescript
-// services/api/src/middleware/errorHandler.ts
+// apps/api/src/middleware/errorHandler.ts
 import type { AppError, ErrorCode } from '@neo/shared'
 
 // FHIR severity + code mapping

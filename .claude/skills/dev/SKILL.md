@@ -58,7 +58,7 @@ You are the Senior Full-Stack Developer on NeoCRM. You write clean, minimal, wor
 // New lookup INSERT always needs fhir_code + fhir_system
 // Standard value → check v3-ActCode / SNOMED first
 // Custom value → fhir_code: null, fhir_system: 'urn:neosleep:lookup'
-// Display text → add key to platform/i18n/en.json — NOT stored in DB
+// Display text → add key to packages/i18n/en.json — NOT stored in DB
 ```
 
 ### Audit log — always use the full signature
@@ -120,7 +120,7 @@ When `refactor` mode — scan scope for:
 **Może bez pytania:**
 - Read, edit, write files
 - Run: `pnpm typecheck`, `pnpm test`, `pnpm lint`, `pnpm outdated`
-- Run: `pnpm build:app`, `pnpm build:website` (local only)
+- Run: `pnpm build:pwa`, `pnpm build:web` (local only)
 
 **Wymaga potwierdzenia:**
 - `git` operations (commit, branch, push) — never without explicit instruction
@@ -147,11 +147,11 @@ When `refactor` mode — scan scope for:
 
 When asked to scaffold a new feature, produce in this order:
 
-1. **Composable** `apps/app/src/composables/use[Entity].ts` — loading, error, data, fetch
-2. **View shell** `apps/app/src/views/[Entity]View.vue` — loading/empty/error states wired up, no business logic
-3. **Route entry** in `apps/app/src/router/routes.ts`
-4. **i18n keys** in `platform/i18n/en.json` under `user.[entity].*`
-5. **API stub** in `apps/app/src/utils/api.ts` or direct `useBffApi` call
+1. **Composable** `apps/pwa/src/composables/use[Entity].ts` — loading, error, data, fetch
+2. **View shell** `apps/pwa/src/views/[Entity]View.vue` — loading/empty/error states wired up, no business logic
+3. **Route entry** in `apps/pwa/src/router/routes.ts`
+4. **i18n keys** in `packages/i18n/en.json` under `user.[entity].*`
+5. **API stub** in `apps/pwa/src/utils/api.ts` or direct `useBffApi` call
 
 No BFF route, no DB table — that's `/arch new-entity`. Dev builds the frontend slice.
 

@@ -72,8 +72,8 @@ Audit log is what powers the change history shown to both rep and admin in the d
 | DB | `apps/api/db/hcp.ts` — `getHcps`, `getHcpById`, `insertHcp`, `updateHcp`, `softDeleteHcp` |
 | Route | `apps/api/routes/hcp.ts` — GET /api/hcps → `Hcp[]`, GET /api/hcps/:id → `HcpDetail`, POST, PATCH /api/hcps/:id (includes primaryHcoId), DELETE, POST /api/hcps/:id/affiliations, DELETE /api/hcps/:id/affiliations/:hcoId |
 | Types | `packages/shared/src/types/hcp.ts` |
-| Composable | `apps/app/src/composables/useHcps.ts` — not a store |
-| View | `apps/app/src/views/HcpsView.vue` — AppEntityList slot |
+| Composable | `apps/pwa/src/composables/useHcps.ts` — not a store |
+| View | `apps/pwa/src/views/HcpsView.vue` — AppEntityList slot |
 | i18n | `user.hcps.*` |
 
 ---
@@ -168,8 +168,8 @@ export type UpdateHcoInput = Partial<InsertHcoInput>
 | DB | `apps/api/db/hco.ts` — `getHcos`, `getHcoById`, `insertHco` (creates address in transaction), `updateHco`, `softDeleteHco` |
 | Route | `apps/api/routes/hco.ts` — GET /api/hcos, GET /api/hcos/:id, POST, PATCH, DELETE |
 | Types | `packages/shared/src/types/hco.ts`, `packages/shared/src/types/address.ts` |
-| Composable | `apps/app/src/composables/useHcos.ts` |
-| View | `apps/app/src/views/HcosView.vue` |
+| Composable | `apps/pwa/src/composables/useHcos.ts` |
+| View | `apps/pwa/src/views/HcosView.vue` |
 | i18n | `user.hcos.*` |
 
 ---
@@ -218,8 +218,8 @@ export type UpdateProductInput = Partial<InsertProductInput & { active: boolean 
 | DB | `apps/api/db/product.ts` — `getProducts`, `getProductById`, `insertProduct`, `updateProduct`, `softDeleteProduct` |
 | Route | `apps/api/routes/product.ts` — GET /api/products, GET /api/products/:id, POST, PATCH, DELETE |
 | Types | `packages/shared/src/types/product.ts` |
-| Composable | `apps/app/src/composables/useProducts.ts` |
-| View | `apps/app/src/views/ProductsView.vue` (admin-only) |
+| Composable | `apps/pwa/src/composables/useProducts.ts` |
+| View | `apps/pwa/src/views/ProductsView.vue` (admin-only) |
 | i18n | `user.products.*` |
 
 ---

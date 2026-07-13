@@ -31,7 +31,7 @@ INSERT INTO platform.feature_flags VALUES ('presentations', 'tenant', 'neosleep_
 
 ---
 
-## 2. DB Query — `services/api/src/db/feature-flags.ts`
+## 2. DB Query — `apps/api/src/db/feature-flags.ts`
 
 Tenant wins over company wins over global. One query, priority via `ORDER BY + DISTINCT ON`.
 
@@ -57,7 +57,7 @@ export async function getFeatureFlags(ctx: RequestContext): Promise<Record<strin
 
 ---
 
-## 3. Route Guard — `services/api/src/auth.ts`
+## 3. Route Guard — `apps/api/src/auth.ts`
 
 ```typescript
 export function requireFeature(feature: string) {

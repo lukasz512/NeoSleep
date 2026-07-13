@@ -36,7 +36,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useReveal } from '@shared/composables/useReveal'
+import { useReveal } from '../composables/useReveal'
 
 const { t }      = useI18n()
 const sectionRef = ref<HTMLElement | null>(null)

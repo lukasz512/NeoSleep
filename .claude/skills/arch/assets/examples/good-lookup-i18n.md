@@ -10,7 +10,7 @@
 
 | Concern | Who reads it | Where it lives |
 |---|---|---|
-| **Display text** ("Face to face", "Wizyta osobista") | Human — rep, HCP, auditor | `platform/i18n/en.json` → already works |
+| **Display text** ("Face to face", "Wizyta osobista") | Human — rep, HCP, auditor | `packages/i18n/en.json` → already works |
 | **FHIR code** (`AMB`, `PHONE`, `VR`) | Machine — Epic, Cerner, FHIR validator | `lookup.fhir_code` + `lookup.fhir_system` |
 
 These are two different problems. Mixing them (storing translations in the DB) is unnecessary complexity. The codebase already solves display text via i18n. We only need to add the FHIR codes.

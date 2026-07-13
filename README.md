@@ -53,7 +53,7 @@ Tests run automatically on pre-commit (Husky).
 | Rep PWA | `apps/rep-app` | app.neosleepcare.com |
 | Admin | `apps/admin` | admin.neosleepcare.com |
 | HCP Portal | `apps/portal` | client.neosleepcare.com |
-| Website | `apps/website` | neosleepcare.com |
+| Website | `apps/web` | neosleepcare.com |
 
 ## Local dev (manual)
 

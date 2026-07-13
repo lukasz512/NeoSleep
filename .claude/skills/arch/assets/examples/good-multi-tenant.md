@@ -18,7 +18,7 @@ export interface RequestContext {
 
 ---
 
-## 2. DB Wrapper — `services/api/src/db/tenant.ts`
+## 2. DB Wrapper — `apps/api/src/db/tenant.ts`
 
 `SET LOCAL` is transaction-scoped — reverts on COMMIT or ROLLBACK. Pool connections are always clean.
 
@@ -51,7 +51,7 @@ export async function withTenant<T>(tenantSlug: string, fn: (client: PoolClient)
 
 ---
 
-## 3. Auth — `services/api/src/auth.ts`
+## 3. Auth — `apps/api/src/auth.ts`
 
 Typed once. No casts anywhere — session and request shapes declared via module augmentation.
 
@@ -96,7 +96,7 @@ export function requireRole(...roles: RequestContext['role'][]) {
 
 ---
 
-## 4. DB Function Shape — `services/api/src/db/[entity].ts`
+## 4. DB Function Shape — `apps/api/src/db/[entity].ts`
 
 `ctx` first. Slug from session. `withTenant` owns the transaction — never call BEGIN/COMMIT inside.
 Mutations: write audit_log in the same `withTenant` call — atomically with the change.
@@ -132,7 +132,7 @@ export async function updateEntity(ctx: RequestContext, id: string, input: Updat
 
 ---
 
-## 5. Route Shape — `services/api/src/routes/[entity].ts`
+## 5. Route Shape — `apps/api/src/routes/[entity].ts`
 
 Thin. `req.ctx` in, `next(e)` out. No session, no business logic.
 

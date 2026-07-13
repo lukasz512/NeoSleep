@@ -55,7 +55,7 @@ type I18nOverrideFn = (overrides: Record<string, Record<string, string>>) => voi
  * an i18n override function to apply DB label overrides on load.
  *
  * @example
- * // apps/app/src/stores/config.ts
+ * // apps/pwa/src/stores/config.ts
  * import { createConfigStore } from "@stores";
  * import { apiFetch } from "../utils/api";
  * import { applyI18nOverrides } from "../plugins/i18n";

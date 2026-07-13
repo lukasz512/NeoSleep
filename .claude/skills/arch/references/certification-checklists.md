@@ -66,7 +66,7 @@ Architecture
 
 ---
 
-## HONcode (Medical Website — apps/website)
+## HONcode (Medical Website — apps/web)
 
 ```
 Content

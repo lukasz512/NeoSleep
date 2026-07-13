@@ -1,6 +1,5 @@
 node_modules/
 **/node_modules/
-services/api/migrations/
 dist
 .DS_Store
 .env
@@ -13,15 +12,11 @@ playwright-report
 # Transpiled TS artifacts — source is .ts, ignore siblings
 apps/*/src/**/*.js
 apps/*/src/**/*.d.ts
-services/*/src/**/*.js
-services/*/src/**/*.d.ts
 i18n/*.js
 i18n/*.d.ts
 
 # Build output
-services/*/dist/
 apps/*/tsconfig.tsbuildinfo
-services/*/tsconfig.tsbuildinfo
 
 # Secrets and keys (never commit)
 *.pem

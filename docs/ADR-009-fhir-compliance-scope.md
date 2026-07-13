@@ -49,7 +49,7 @@ Three additive changes, no breaking API changes:
 2. **OperationOutcome error format** — dual-format error middleware
    - FHIR clients (`Accept: application/fhir+json`) receive FHIR OperationOutcome
    - Existing clients receive `{ error: { code, message, hint } }` — no breaking change
-   - One middleware change in `services/api/src/middleware/errorHandler.ts`
+   - One middleware change in `apps/api/src/middleware/errorHandler.ts`
 
 3. **FHIR Identifier[]** — `national_ids` migration
    - From: `{ "npi": "1234567890", "pwz": "..." }` flat JSONB

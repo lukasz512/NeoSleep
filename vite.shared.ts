@@ -13,10 +13,9 @@ import type { Plugin, UserConfig } from "vite";
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 
-export const brandDir       = path.resolve(rootDir, "platform/brand");
-export const sharedPublicDir = path.resolve(rootDir, "platform/shared/public");
+export const brandDir = path.resolve(rootDir, "packages/brand");
 
-/** Brand assets served at /brand in dev; copied to dist/brand + dist/ at build time. */
+/** Brand assets served at /brand in dev; copied to dist/brand at build time. */
 export function brandAssetsPlugin(appDir: string): Plugin {
   return {
     name: "brand-assets",
@@ -36,8 +35,6 @@ export function brandAssetsPlugin(appDir: string): Plugin {
     closeBundle() {
       if (fs.existsSync(brandDir))
         fs.cpSync(brandDir, path.resolve(appDir, "dist/brand"), { recursive: true });
-      if (fs.existsSync(sharedPublicDir))
-        fs.cpSync(sharedPublicDir, path.resolve(appDir, "dist"), { recursive: true });
     },
   };
 }
@@ -49,10 +46,9 @@ export function sharedViteConfig(appDir: string): Partial<UserConfig> {
     plugins: [brandAssetsPlugin(appDir)],
     resolve: {
       alias: {
-        "@i18n":    path.resolve(rootDir, "platform/i18n"),
+        "@i18n":    path.resolve(rootDir, "packages/i18n"),
         "@brand":   brandDir,
-        "@shared":  path.resolve(rootDir, "platform/shared"),
-        "@api":     path.resolve(rootDir, "packages/api/src/index.ts"),
+        "@api":     path.resolve(rootDir, "apps/api/client/src/index.ts"),
         "@ui":      path.resolve(rootDir, "packages/ui/src/index.ts"),
         "@stores":  path.resolve(rootDir, "packages/stores/src/index.ts"),
         "@vuetify": path.resolve(rootDir, "packages/vuetify/src/index.ts"),
@@ -65,10 +61,9 @@ export function sharedViteConfig(appDir: string): Partial<UserConfig> {
 export function sharedVitestResolve(): UserConfig["resolve"] {
   return {
     alias: {
-      "@i18n":    path.resolve(rootDir, "platform/i18n"),
+      "@i18n":    path.resolve(rootDir, "packages/i18n"),
       "@brand":   brandDir,
-      "@shared":  path.resolve(rootDir, "platform/shared"),
-      "@api":     path.resolve(rootDir, "packages/api/src/index.ts"),
+      "@api":     path.resolve(rootDir, "apps/api/client/src/index.ts"),
       "@ui":      path.resolve(rootDir, "packages/ui/src/index.ts"),
       "@stores":  path.resolve(rootDir, "packages/stores/src/index.ts"),
       "@vuetify": path.resolve(rootDir, "packages/vuetify/src/index.ts"),

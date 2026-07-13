@@ -1,7 +1,7 @@
 # NeoSleep — Feature Status Catalog
 
 > Last updated: 2026-03-21
-> Status assessed from: `apps/app/src/`, `services/api/src/`, `packages/`
+> Status assessed from: `apps/pwa/src/`, `apps/api/src/`, `packages/`
 
 ---
 
@@ -34,10 +34,10 @@
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| App shell with sidebar layout | **Complete** | `apps/app/src/layouts/` |
+| App shell with sidebar layout | **Complete** | `apps/pwa/src/layouts/` |
 | Route guard (auth) | **Complete** | `router/` |
 | Dark/light theme | **Complete** | Vuetify theme switching |
-| i18n (EN, PL, ES) | **Complete** | `platform/i18n/` |
+| i18n (EN, PL, ES) | **Complete** | `packages/i18n/` |
 | PWA manifest | **Partial** | Vite PWA config present, not verified |
 | Offline mode | **Missing** | No service worker caching strategy |
 
@@ -164,7 +164,7 @@
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Marketing landing page | **Complete** | `apps/website/` |
+| Marketing landing page | **Complete** | `apps/web/` |
 | Contact form → BFF | **Complete** | `/api/contact` → nodemailer |
 | SEO / sitemap | **Partial** | |
 

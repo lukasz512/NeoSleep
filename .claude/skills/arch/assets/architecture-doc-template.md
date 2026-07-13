@@ -54,11 +54,11 @@ neoCRM/
 
 | Location today | Target | Status |
 |---|---|---|
-| `services/api/` | `apps/api/` | migration debt |
-| `apps/app/` | `apps/client-pwa/` | migration debt |
-| `apps/website/` | `apps/web/` | migration debt |
+| `apps/api/` | `apps/api/` | migration debt |
+| `apps/pwa/` | `apps/client-pwa/` | migration debt |
+| `apps/web/` | `apps/web/` | migration debt |
 | `packages/@neo/api` | `packages/shared/` | rename |
-| `platform/i18n/` | `platform/i18n/` | ✅ correct |
+| `packages/i18n/` | `packages/i18n/` | ✅ correct |
 ---
 
 ## Application Descriptions
@@ -115,7 +115,7 @@ HTTP Response                  ← no stack traces, no internal field names
 | Attribute | Value |
 |-----------|-------|
 | Port | 3001 (dev) |
-| Package | `@neo/app` |
+| Package | `@neo/pwa` |
 | Routing | Vue Router 4.5 |
 
 **Purpose**: Pharma sales rep CRM. Mobile-first PWA. White-label — tenants change colors + logo only.
@@ -224,7 +224,7 @@ VPS / Cloud Server
 | `traefik` | traefik:v3 | Reverse proxy, SSL, routing |
 | `api` | build: apps/api | Depends on postgres |
 | `client-pwa` | build: apps/client-pwa | Depends on api |
-| `website` | build: apps/website | Static or SSR |
+| `website` | build: apps/web | Static or SSR |
 | `postgres` | postgres:15-alpine | Volume: postgres_data |
 
 ### Environment variables (required)
@@ -298,7 +298,7 @@ Authorization is always enforced server-side. Frontend role checks are decoratio
 | Tool | Use | Integration |
 |------|-----|-------------|
 | `platform.errors` table | Centralized error log for all tenants | `insertDiagnostic()` — uses root pool, not withTenant |
-| Telegram | Operator alerts (errors, new leads, key events) | `services/telegram/` |
+| Telegram | Operator alerts (errors, new leads, key events) | `apps/telegram/` |
 | Health endpoint | `/api/health` | Docker health check + CI |
 
 ---

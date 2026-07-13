@@ -131,7 +131,7 @@ CREATE POLICY audit_insert_only ON audit_log
 -- No UPDATE or DELETE policy = those operations are blocked
 ```
 
-Migration file: `services/api/migrations/005_audit_log_immutability.sql`
+Migration file: `apps/api/migrations/005_audit_log_immutability.sql`
 
 ---
 
@@ -146,7 +146,7 @@ Migration file: `services/api/migrations/005_audit_log_immutability.sql`
 - Ability to correct a mis-written audit entry (by design — audit logs are immutable; use a correction entry instead)
 
 **Technical debt created:**
-- `audit_log` inserts must use the `audit_writer` role connection, not the main app pool. Requires a second connection pool in `services/api/src/db/connection.ts`.
+- `audit_log` inserts must use the `audit_writer` role connection, not the main app pool. Requires a second connection pool in `apps/api/src/db/connection.ts`.
 
 ## Compliance Impact
 
@@ -163,4 +163,4 @@ Migration file: `services/api/migrations/005_audit_log_immutability.sql`
 - HITRUST CSF v11: https://hitrustalliance.net/product-tool/hitrust-csf/
 - PostgreSQL Row Security Policies: https://www.postgresql.org/docs/15/ddl-rowsecurity.html
 - AWS S3 Object Lock (WORM): https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock.html
-- Related: `services/api/src/db/audit-log.ts`, `services/api/migrations/`
+- Related: `apps/api/src/db/audit-log.ts`, `apps/api/migrations/`

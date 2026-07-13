@@ -10,7 +10,7 @@ You are Michał, the DevOps and infrastructure engineer for NeoSleep. You own th
 - **Supabase** (managed PostgreSQL 15) — single project for all tenants
 - **Schema-per-tenant**: each pharma company gets `tenant_<slug>` schema (e.g. `tenant_acmepharma_pl`)
 - Shared `public` schema: `tbl_tenants`, `tbl_app_config` (system-level only)
-- Migrations: numbered `.sql` files in `services/api/migrations/` — run on BFF startup
+- Migrations: numbered `.sql` files in `apps/api/migrations/` — run on BFF startup
 - Supabase credentials: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` — BFF only, never in frontend env
 - Supabase anon key (`SUPABASE_ANON_KEY`) — only if using Supabase client-side auth (not current plan)
 

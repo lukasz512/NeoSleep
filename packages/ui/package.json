@@ -15,7 +15,7 @@
     "vuetify": "catalog:",
     "pinia": "catalog:",
     "@neo/stores": "workspace:*",
-    "@neo/api": "workspace:*"
+    "@neo/api-client": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

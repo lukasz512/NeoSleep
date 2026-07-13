@@ -1,7 +1,7 @@
 packages:
   - "apps/*"
+  - "apps/api/client"
   - "packages/*"
-  - "services/*"
 
 # Wspólne wersje dla wszystkich aplikacji Vue – jedna aktualizacja podnosi wersje wszędzie.
 catalog:

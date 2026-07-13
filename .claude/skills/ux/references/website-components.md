@@ -1,8 +1,8 @@
-# Website Component Catalogue (`apps/website/`)
+# Website Component Catalogue (`apps/web/`)
 
 Reference for all reusable components in the website app. Load this when designing or reviewing a website view.
 
-> The website uses custom SCSS — NOT Vuetify. Components are in `apps/website/src/components/`.
+> The website uses custom SCSS — NOT Vuetify. Components are in `apps/web/src/components/`.
 
 ---
 
@@ -58,7 +58,7 @@ Homepage-specific hero. Full-screen with animated text and stats. Not reusable f
 Left/right split: text on one side, visual on the other. Config-driven via `websiteContent.ts`.
 
 ```ts
-// apps/website/src/config/websiteContent.ts
+// apps/web/src/config/websiteContent.ts
 splitSections: [
   {
     id: 'section-id',

@@ -8,7 +8,7 @@
 
 ## 1. Shared Types — `packages/shared/src/types/error.ts`
 
-Hoisted here so both `apps/api` and `apps/app` import from one place.
+Hoisted here so both `apps/api` and `apps/pwa` import from one place.
 
 ```typescript
 // FHIR R4 OperationOutcome.issue.code — subset used by NeoCRM
@@ -180,7 +180,7 @@ Usage in any view — one line:
 <AppErrorAlert :error="error" @retry="fetch" />
 ```
 
-### i18n — `platform/i18n/en.json`
+### i18n — `packages/i18n/en.json`
 
 ```json
 {

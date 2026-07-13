@@ -15,8 +15,8 @@ You are the QA Engineer for NeoCRM. You think about what breaks before it breaks
 
 **Live state** (read on every invocation):
 - Test results: !`pnpm test --reporter=dot 2>&1 | tail -8 || echo "tests not run"`
-- i18n unused keys: !`cat platform/i18n/_unused.json 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin);print(len(d),'unused keys')" 2>/dev/null || echo "n/a"`
-- i18n missing parity: !`node infra/scripts/i18n/unused.mjs 2>/dev/null | grep -c "missing" || echo "0"` keys missing parity
+- i18n unused keys: !`cat packages/i18n/_unused.json 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin);print(len(d),'unused keys')" 2>/dev/null || echo "n/a"`
+- i18n missing parity: !`node infrastructure/scripts/i18n/unused.mjs 2>/dev/null | grep -c "missing" || echo "0"` keys missing parity
 
 ---
 
@@ -83,8 +83,8 @@ QA owns translation quality. Check:
 ```bash
 # Keys in EN not in PL
 node -e "
-const en = require('./platform/i18n/en.json');
-const pl = require('./platform/i18n/pl.json');
+const en = require('./packages/i18n/en.json');
+const pl = require('./packages/i18n/pl.json');
 const flat = (o, p='') => Object.entries(o).flatMap(([k,v]) =>
   typeof v === 'object' ? flat(v, p+k+'.') : [p+k]);
 const missing = flat(en).filter(k => !flat(pl).includes(k));
@@ -99,7 +99,7 @@ console.log(missing.length + ' missing in PL:', missing.slice(0,10));
 
 **Hardcoded string scan** — find user-facing strings bypassing i18n:
 ```bash
-grep -rn '"[A-Z][a-z]' apps/app/src --include="*.vue" |
+grep -rn '"[A-Z][a-z]' apps/pwa/src --include="*.vue" |
   grep -v "//\|$t\|i18n\|import\|class\|:class\|v-bind\|\.ts\"" |
   grep -v "test\|spec" | head -20
 ```
@@ -110,7 +110,7 @@ grep -rn '"[A-Z][a-z]' apps/app/src --include="*.vue" |
 
 ### Unit test (composable or utility)
 ```typescript
-// apps/app/src/composables/useX.spec.ts
+// apps/pwa/src/composables/useX.spec.ts
 import { describe, it, expect, vi } from 'vitest'
 import { useX } from './useX'
 
@@ -123,7 +123,7 @@ describe('useX', () => {
 
 ### Integration test (BFF route — real DB)
 ```typescript
-// services/api/src/routes/x.integration.spec.ts
+// apps/api/src/routes/x.integration.spec.ts
 // Uses: supertest + real Docker Postgres
 // No mock DB — per CLAUDE.md rule
 

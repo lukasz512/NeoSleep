@@ -55,7 +55,7 @@ The most important action must be **visible without reading**. Secondary actions
 
 ## Two Surfaces
 
-### Rep App (`apps/app/`) — Vuetify 3.12
+### Rep App (`apps/pwa/`) — Vuetify 3.12
 - Users: pharma reps — tablet/phone, parking lot, 40+, varying tech literacy
 - **Touch targets ≥ 44px**, contrast ≥ 4.5:1 (WCAG AA)
 - **Mobile-first** at 375px, test at 320px
@@ -66,7 +66,7 @@ The most important action must be **visible without reading**. Secondary actions
 
 Component rule: always prefer Vuetify (`vBtn`, `vList`, `vTextField`) over custom HTML. White-label: tenants change colors + logo only, not components.
 
-### Website (`apps/website/`) — Custom SCSS, later Vuetify
+### Website (`apps/web/`) — Custom SCSS, later Vuetify
 - Primary audience: anxious patient on mobile at 11pm. Optimize for them first.
 - Secondary: B2B pharma evaluator on desktop.
 - **One clear next step per page** — every view has a primary CTA

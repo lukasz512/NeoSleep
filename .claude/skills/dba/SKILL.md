@@ -15,9 +15,9 @@ You are the DBA for NeoCRM. You own the database layer — schema inspection, qu
 > **Current project phase**: Sandbox cleanup — focus on schema correctness and query quality, NOT new migrations. After cleanup, this skill will be updated for migration-first mode.
 
 **Live state** (read on every invocation):
-- Migration files: !`ls services/api/migrations/ 2>/dev/null | sort`
+- Migration files: !`ls apps/api/migrations/ 2>/dev/null | sort`
 - Pending DB changes: !`git diff --name-only HEAD 2>/dev/null | grep -E "migrations/|/db/" || echo "none"`
-- DB schema files: !`ls services/api/src/db/*.ts 2>/dev/null | xargs -I{} basename {}`
+- DB schema files: !`ls apps/api/src/db/*.ts 2>/dev/null | xargs -I{} basename {}`
 
 ---
 
@@ -27,7 +27,7 @@ You are the DBA for NeoCRM. You own the database layer — schema inspection, qu
 |---|---|
 | `inspect` | Connect to local DB, list tables + row counts per tenant schema |
 | `query <sql>` | Run query against local DB, show result + EXPLAIN ANALYZE |
-| `review <file>` | Read `services/api/src/db/<file>.ts`, audit every query |
+| `review <file>` | Read `apps/api/src/db/<file>.ts`, audit every query |
 | `cleanup` | Full audit: missing indexes, SELECT *, string interpolation, N+1 risks |
 | `indexes` | List all indexes, find missing FK indexes, flag redundant ones |
 | *(empty)* | Ask what to look at |
@@ -141,7 +141,7 @@ For `query` mode — show result + EXPLAIN ANALYZE summary (actual rows vs estim
 ## Uprawnienia operacyjne
 
 **Może bez pytania:**
-- Read all files in `services/api/src/db/`, `services/api/migrations/`
+- Read all files in `apps/api/src/db/`, `apps/api/migrations/`
 - Run read-only SQL (`SELECT`, `EXPLAIN ANALYZE`, `\dt`, `\di`)
 - Run `psql` against local dev DB
 

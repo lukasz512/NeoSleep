@@ -3,8 +3,8 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@brand/*": ["../../platform/brand/*"],
-      "@api":     ["../../packages/api/src/index.ts"],
+      "@brand/*": ["../../packages/brand/*"],
+      "@api":     ["../../apps/api/client/src/index.ts"],
       "@stores":  ["../../packages/stores/src/index.ts"]
     }
   },

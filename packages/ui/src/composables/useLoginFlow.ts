@@ -55,7 +55,7 @@ export function createUseLoginFlow(apiFetch: ApiFetchFn) {
         }
 
         const data = (await res.json()) as {
-          user: { id: string; email: string; name?: string; picture?: string; role: "admin" | "manager" | "rep"; forcePasswordChange?: boolean };
+          user: { id: string; email: string; name?: string; picture?: string; role: "admin" | "ffm" | "kam" | "msl" | "rep"; forcePasswordChange?: boolean };
           forcePasswordChange: boolean;
         };
 

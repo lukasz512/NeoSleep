@@ -1,0 +1,301 @@
+/*
+ * DefaultHeader — white-label ready.
+ * All colours come from CSS variables defined in website-theme.scss.
+ * Swap --website-primary / --website-bg / --website-border to re-skin.
+ * Mobile breakpoint: 1024px (--website-nav-breakpoint, CSS-variable only).
+ */
+
+/* ── Shared transition (theme change) ──────────────────────────────────── */
+.site-header,
+.site-header__drawer {
+  transition:
+    transform 0.3s ease,
+    background-color 0.35s ease,
+    color 0.35s ease,
+    border-color 0.35s ease;
+}
+
+/* ── Header bar ─────────────────────────────────────────────────────────── */
+.site-header {
+  position: fixed;
+  inset: 0 0 auto;               /* top / left / right, height driven by content */
+  z-index: 9999;
+  min-height: var(--website-header-height);
+  background: var(--website-bg);
+  color: var(--website-text);
+  border-bottom: 1px solid var(--website-border);
+}
+
+.site-header--hidden {
+  /* responsive: @media (max-width: 1024px) → translateY(-100%) — in website-responsive.scss */
+}
+
+.site-header__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--website-header-height);
+  padding: 0 var(--website-page-gutter);
+  gap: 1rem;
+  /* responsive: @media (max-width: 1024px) → padding-mobile — in website-responsive.scss */
+}
+
+.site-header__brand {
+  display: inline-flex;
+  text-decoration: none;
+  color: inherit;
+}
+
+.site-header__logo {
+  height: 32px;
+  width: auto;
+  display: block;
+}
+
+/* ── Desktop nav ────────────────────────────────────────────────────────── */
+/* display: flex in @layer base (website-theme.scss); display: none at ≤1100px in @layer responsive */
+.site-header__nav {
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.site-header__link {
+  color: inherit;
+  text-decoration: none;
+  font-size: 0.9375rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: 8px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    background: color-mix(in srgb, var(--website-primary) 10%, transparent);
+    color: var(--website-primary);
+  }
+}
+
+.site-header__cta {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.5rem 1.25rem;
+  background: var(--website-primary);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  text-decoration: none;
+  border-radius: 9999px;
+  transition: background-color 0.15s ease;
+
+  &:hover { background: var(--website-primary-hover); }
+}
+
+/* ── Hamburger ──────────────────────────────────────────────────────────── */
+/* display: none in @layer base (website-theme.scss); display: flex at ≤1100px in @layer responsive */
+.site-header__hamburger {
+  order: -1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  /* responsive: @media (max-width: 1024px) → display: flex — in website-responsive.scss */
+}
+
+.site-header__hamburger-bar {
+  display: block;
+  width: 22px;
+  height: 2px;
+  border-radius: 1px;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+/* ── Nav breakpoint ─────────────────────────────────────────────────────── */
+/* .site-header__nav display: none at 1024px — in website-responsive.scss */
+
+/* ── Overlay ────────────────────────────────────────────────────────────── */
+.site-header__overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 10000;
+}
+
+/* ── Drawer ─────────────────────────────────────────────────────────────── */
+.site-header__drawer {
+  position: fixed;
+  inset: 0 auto 0 0;             /* full height, left-anchored */
+  width: var(--website-drawer-width);
+  z-index: 10001;
+  display: flex;
+  flex-direction: column;
+  background: var(--website-bg);
+  color: var(--website-text);
+  border-right: 1px solid var(--website-border);
+}
+
+/*
+ * Drawer header: same height / bg / border as .site-header__bar
+ * so the two panels look like one continuous top bar.
+ */
+.site-header__drawer-header {
+  flex-shrink: 0;
+  height: var(--website-header-height);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--website-page-gutter-mobile);
+  background: var(--website-bg);
+  border-bottom: 1px solid var(--website-border);
+  transition: background-color 0.35s ease, border-color 0.35s ease;
+}
+
+.site-header__drawer-search {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--website-primary) 30%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--website-primary) 8%, var(--website-bg));
+  color: var(--website-text);
+  transition: border-color 0.15s ease, background-color 0.35s ease;
+
+  &:focus-within {
+    border-color: var(--website-primary);
+    background: color-mix(in srgb, var(--website-primary) 12%, var(--website-bg));
+  }
+}
+
+.site-header__search-icon {
+  flex-shrink: 0;
+  color: var(--website-primary);
+}
+
+.site-header__search-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--website-text);
+  font-family: inherit;
+  font-size: 0.9375rem;
+  outline: none;
+  min-width: 0;
+
+  &::placeholder { color: var(--website-text-secondary); }
+
+  /* Remove browser default clear button — we have our own */
+  &::-webkit-search-cancel-button { display: none; }
+}
+
+.site-header__search-clear {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: none;
+  color: var(--website-text-secondary);
+  cursor: pointer;
+  padding: 0;
+  border-radius: 4px;
+  transition: color 0.15s ease;
+
+  &:hover { color: var(--website-primary); }
+}
+
+/* Scrollable nav links */
+.site-header__drawer-nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.site-header__drawer-link {
+  display: block;
+  padding: 0.75rem 1rem;
+  color: var(--website-text);
+  text-decoration: none;
+  font-size: 1rem;
+  border-radius: 8px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    background: color-mix(in srgb, var(--website-primary) 8%, transparent);
+    color: var(--website-primary);
+  }
+}
+
+/* ── Search results ─────────────────────────────────────────────────────── */
+.site-header__result {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.625rem 1rem;
+  border-radius: 8px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+
+  &:hover:not(.site-header__result--locked) {
+    background: color-mix(in srgb, var(--website-primary) 8%, transparent);
+  }
+
+  &--locked {
+    opacity: 0.55;
+    cursor: default;
+  }
+}
+
+.site-header__result-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--website-text);
+  line-height: 1.3;
+}
+
+.site-header__result-desc {
+  font-size: 0.8125rem;
+  color: var(--website-text-secondary);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.site-header__result-lock {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.2rem;
+  font-size: 0.75rem;
+  color: var(--website-primary);
+  font-weight: 500;
+}
+
+.site-header__no-results {
+  padding: 1rem;
+  font-size: 0.9375rem;
+  color: var(--website-text-secondary);
+  text-align: center;
+  margin: 0;
+}
+
+/* ── Vue transitions ────────────────────────────────────────────────────── */
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
+.fade-enter-from,  .fade-leave-to      { opacity: 0; }
+
+.slide-enter-active, .slide-leave-active { transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
+.slide-enter-from,   .slide-leave-to     { transform: translateX(-100%); }

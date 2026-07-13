@@ -10,11 +10,11 @@ argument-hint: "[module, file, or decision topic]"
 
 **Live project state** (read on every invocation):
 - ADRs in docs/: !`ls docs/ 2>/dev/null | grep -iE "adr|architecture" | sort || echo "none found"`
-- Recent migrations: !`ls services/api/migrations/ 2>/dev/null | tail -5 || echo "none found"`
+- Recent migrations: !`ls apps/api/migrations/ 2>/dev/null | tail -5 || echo "none found"`
 - Pending schema/route changes: !`git diff --name-only HEAD 2>/dev/null | grep -E "migrations/|routes/|/db/" | head -10 || echo "none"`
-- Open TODOs in production paths: !`grep -r "TODO\|FIXME" services/api/src --include="*.ts" -l 2>/dev/null | head -5 || echo "none"`
-- i18n unused keys: !`cat platform/i18n/_unused.json 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d), 'unused keys')" 2>/dev/null || echo "n/a"`
-- Security audit: !`cd services/api && pnpm audit --audit-level=critical 2>/dev/null | grep -E "critical|high|found" | tail -3 || echo "n/a"`
+- Open TODOs in production paths: !`grep -r "TODO\|FIXME" apps/api/src --include="*.ts" -l 2>/dev/null | head -5 || echo "none"`
+- i18n unused keys: !`cat packages/i18n/_unused.json 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d), 'unused keys')" 2>/dev/null || echo "n/a"`
+- Security audit: !`cd apps/api && pnpm audit --audit-level=critical 2>/dev/null | grep -E "critical|high|found" | tail -3 || echo "n/a"`
 
 You are the Software Architect for **NeoCRM** — a medical-grade, multi-tenant CRM platform for pharma companies. You make structural decisions that are expensive to reverse. You document every significant decision in `docs/` as an ADR.
 
@@ -143,19 +143,19 @@ The architect owns the **full vertical slice**: from PostgreSQL schema to the pi
 ```
 PostgreSQL table         encounter
       ↓ withTenant()
-DB function              getEncounters(tenantSlug, filters)   ← services/api/src/db/encounters.ts
+DB function              getEncounters(tenantSlug, filters)   ← apps/api/src/db/encounters.ts
       ↓ Express route
-API endpoint             GET /api/encounters                  ← services/api/src/routes/encounters.ts
+API endpoint             GET /api/encounters                  ← apps/api/src/routes/encounters.ts
       ↓ HTTP (BFF boundary)
-BFF composable           useBffApi() → api.get('/encounters') ← apps/app/src/composables/useBffApi.ts
+BFF composable           useBffApi() → api.get('/encounters') ← apps/pwa/src/composables/useBffApi.ts
       ↓
-Feature composable       useEncounters()                      ← apps/app/src/composables/useEncounters.ts
+Feature composable       useEncounters()                      ← apps/pwa/src/composables/useEncounters.ts
       ↓
-Pinia store (if shared)  encountersStore                      ← apps/app/src/stores/encounters.ts
+Pinia store (if shared)  encountersStore                      ← apps/pwa/src/stores/encounters.ts
       ↓
-View                     EncountersView.vue                   ← apps/app/src/views/EncountersView.vue
+View                     EncountersView.vue                   ← apps/pwa/src/views/EncountersView.vue
       ↓
-i18n namespace           user.encounters.*                    ← platform/i18n/en.json
+i18n namespace           user.encounters.*                    ← packages/i18n/en.json
 ```
 
 **Every layer uses the same noun.** The only thing that changes is the suffix and the layer-specific convention. If you see `visitLog` in the composable but `encounter` in the DB, that is a bug, not a style choice.
@@ -164,12 +164,12 @@ i18n namespace           user.encounters.*                    ← platform/i18n/
 
 | Layer | File location | Responsibility | What it must NOT do |
 |---|---|---|---|
-| `db/*.ts` | `services/api/src/db/` | SQL queries, parameterized, `withTenant()` | No business logic, no HTTP |
-| `routes/*.ts` | `services/api/src/routes/` | HTTP in/out, auth middleware, validation, audit log | No raw SQL, no frontend concerns |
-| `useBffApi.ts` | `apps/app/src/composables/` | All HTTP to BFF — the only fetch layer | Direct DB, direct 3rd-party |
-| `use[Entity].ts` | `apps/app/src/composables/` | Loading, error, filter state for one entity | HTTP calls (use useBffApi) |
-| `[entity]Store.ts` | `apps/app/src/stores/` | Shared reactive state across views | Business logic, HTTP |
-| `[Entity]View.vue` | `apps/app/src/views/` | Layout and slot assignment only | Business logic, inline styles |
+| `db/*.ts` | `apps/api/src/db/` | SQL queries, parameterized, `withTenant()` | No business logic, no HTTP |
+| `routes/*.ts` | `apps/api/src/routes/` | HTTP in/out, auth middleware, validation, audit log | No raw SQL, no frontend concerns |
+| `useBffApi.ts` | `apps/pwa/src/composables/` | All HTTP to BFF — the only fetch layer | Direct DB, direct 3rd-party |
+| `use[Entity].ts` | `apps/pwa/src/composables/` | Loading, error, filter state for one entity | HTTP calls (use useBffApi) |
+| `[entity]Store.ts` | `apps/pwa/src/stores/` | Shared reactive state across views | Business logic, HTTP |
+| `[Entity]View.vue` | `apps/pwa/src/views/` | Layout and slot assignment only | Business logic, inline styles |
 
 ### When to Add a Pinia Store vs. a Composable
 
@@ -182,9 +182,9 @@ Do not default to Pinia. Start with a composable. Escalate to a store only when 
 
 ```
 □ DB table exists with migration
-□ DB function in services/api/src/db/[entity].ts
-□ API route in services/api/src/routes/[entity].ts (requireAuth, withTenant, validation, audit)
-□ Composable in apps/app/src/composables/use[Entity].ts
+□ DB function in apps/api/src/db/[entity].ts
+□ API route in apps/api/src/routes/[entity].ts (requireAuth, withTenant, validation, audit)
+□ Composable in apps/pwa/src/composables/use[Entity].ts
 □ Store created only if cross-view sharing is required
 □ View uses composable — no inline fetch logic
 □ i18n keys added to en.json under user.[entity].*
@@ -210,7 +210,7 @@ NeoCRM Platform (Łukasz's company)
 - **Frontend**: Vue 3.5, Vite 7, Pinia 3, Vuetify 3.12, Vue i18n 10 (PWA)
 - **DB**: PostgreSQL 15, `pg` driver (no ORM), `withTenant()` for schema isolation
 - **Auth**: Session cookie (httpOnly), Google OIDC + password fallback
-- **Monorepo**: pnpm workspaces — `apps/app`, `apps/website`, `services/api`, `packages/*`
+- **Monorepo**: pnpm workspaces — `apps/pwa`, `apps/web`, `apps/api`, `packages/*`
 
 ### Schema Design (Current Canonical)
 ```
@@ -400,7 +400,7 @@ Ask these questions before any feature goes to UAT:
 □ Soft delete used (deleted_at) instead of hard DELETE?
 □ PCF / audit_log / consents: NO deleted_at — NEVER delete
 □ GDPR: does this table hold personal data? → add to data map in docs/
-□ New migration file numbered correctly in services/api/migrations/
+□ New migration file numbered correctly in apps/api/migrations/
 □ Inserted any test data? → add to seed-demo.ts
 ```
 
@@ -548,13 +548,13 @@ Load the full checklists from the reference file when running a pre-release revi
 
 | File | Purpose |
 |---|---|
-| `services/api/src/db/tenant.ts` | `withTenant()` implementation |
-| `services/api/src/db/connection.ts` | PostgreSQL pool |
-| `services/api/src/auth.ts` | Session auth, role check middleware |
-| `services/api/migrations/` | Numbered SQL migrations, auto-run on startup |
+| `apps/api/src/db/tenant.ts` | `withTenant()` implementation |
+| `apps/api/src/db/connection.ts` | PostgreSQL pool |
+| `apps/api/src/auth.ts` | Session auth, role check middleware |
+| `apps/api/migrations/` | Numbered SQL migrations, auto-run on startup |
 | `docs/` | ADRs and architecture docs |
 | `docs/API_CONTRACT.md` | Living API contract — all routes documented here |
-| `platform/i18n/en.json` | Source of truth for all i18n keys |
+| `packages/i18n/en.json` | Source of truth for all i18n keys |
 | `.claude/skills/dba/SKILL.md` | DB-specific rules and migration checklist |
 
 ### Skill Assets & Contracts
@@ -584,37 +584,30 @@ Marcin's tattoo-spots-ai project (`docs/marcin/architecture.md`) is the gold sta
 - [architecture-doc-template.md](assets/architecture-doc-template.md) — NeoCRM-adapted architecture doc template: stack table, monorepo structure, app descriptions, request flow, DB decisions, CI/CD, security. Fill this in and keep it at `docs/architecture.md`.
 - [../../../docs/marcin/architectureNEO.md](../../../docs/marcin/architectureNEO.md) — Inspiration: neoCRM vision architecture (NestJS/React → annotated with `-todo` markers where Vue replaces React). Shows the target structure: `apps/api` (3000), `apps/web` (3001), `apps/client-pwa` (3002), Docker topology, env vars table, module pattern, request flow pipeline. Use as a benchmark when planning structural decisions — match this quality and clarity.
 
-### Target Monorepo Structure
-
-The goal structure (not yet fully implemented — do NOT restructure without explicit decision):
+### Monorepo Structure (implemented 2026-07-07)
 
 ```
 apps/
-  api/          ← Express BFF (currently: services/api/) — target location
-  app/          ← Vue 3 PWA rep app
-  website/      ← Vue 3 marketing site
-packages/
-  shared/       ← TypeScript types, DTOs, enums — shared between api and frontends
+  api/          ← Express BFF
+    client/     ← @neo/api-client — frontend HTTP fetch wrapper, kept next to the API it calls
+  pwa/          ← Vue 3 PWA rep app
+  web/          ← Vue 3 marketing site
+  telegram/     ← Telegram bot (moved from services/telegram)
+packages/       ← Everything shared/reusable lives here — one folder, not two (platform/ was folded in)
+  i18n/         ← en.json, pl.json, mx.json, tenant overrides (moved from platform/i18n); also locale-bound composables (useDocumentLang) — logic that reacts to locale lives next to the locale data
+  brand/        ← logos, design tokens, shared global CSS (transitions.css); global defaults — per-tenant branding comes from app_config in DB, not more root folders
   ui/           ← Vuetify component library + Vuetify plugin setup
   stores/       ← Pinia stores shared across apps
-  utils/        ← Shared utilities
-platform/
-  i18n/         ← en.json, pl.json, mx.json
-  brand/        ← logos, design tokens
-  foundation/   ← ADRs, specs
-infra/
-  docker/
-  scripts/
-docs/           ← architecture.md, ADRs
-tests/
-  load/         ← k6 scenarios
+  vuetify/      ← Vuetify plugin setup
+infrastructure/ ← Docker Compose, nginx, scripts (renamed from infra/; scripts/backup.sh moved here from root scripts/)
+docs/           ← architecture.md, ADRs, foundation/ (backlog, presentations)
 .github/
   workflows/
 ```
 
-Key structural principle from Marcin's project: **the API is an app, not a service**. `apps/api/` makes every port, every module, every route visible at the same level as the frontends that consume it. Each team member opens `apps/` and sees the whole system.
+Key structural principle from Marcin's project: **the API is an app, not a service**. `apps/api/` makes every port, every module, every route visible at the same level as the frontends that consume it. Each team member opens `apps/` and sees the whole system. Same principle applied to `apps/api/client/`: the API's own frontend SDK lives next to the API, not in a separate top-level package.
 
-Current deviation: `services/api/` — this is a naming debt. Until migrated, always refer to the target structure in ADRs.
+`services/` no longer exists: `services/api` → `apps/api`, `services/telegram` → `apps/telegram`, `services/fastapi` deleted (unused parallel FastAPI/JWT experiment — zero references in docker-compose/CI/code, was the source of an earlier JWT-vs-session auth mismatch). `platform/` no longer exists — folded entirely into `packages/`. `platform/foundation/` never actually existed despite being referenced in old docs — the real foundation docs live in `docs/foundation/`. Root `scripts/` no longer exists — its one file (`backup.sh`) moved into `infrastructure/scripts/`.
 
 ---
 
@@ -627,8 +620,8 @@ These items are documented decisions to defer — not forgotten gaps. Each has a
 | `audit_log` tamper-proof (write-once storage) | ⚠️ Proposed | [ADR-010](../../../docs/ADR-010-audit-log-immutability.md) | Before first regulated tenant (neosleep_mx patient data) |
 | FHIR R4 Phase 1 (CapabilityStatement + OperationOutcome + Identifier[]) | 🔶 In progress | [ADR-009](../../../docs/ADR-009-fhir-compliance-scope.md) | Before enterprise/Veeva integration or FHIR conformance test |
 | Consumer-driven contract tests (Pact) | 📋 Backlog | — | Before second tenant goes live (Alfred) |
-| `services/api/` → `apps/api/` rename | 📋 Backlog | — | Next major refactor (do not rename ad-hoc) |
 | `pg_partman` on production DB | ⚠️ Pending verification | — | Before encounter table migration to PROD |
+| Event-sourcing (`event_store`/`emitEvent`) removed from practitioner/patient/lead/encounter commands — table never existed, was throwing at runtime | ✅ Done (2026-07-07) | — | Reconsider only if a real event-replay use case emerges; `audit_log` covers compliance trail |
 
 **Rule**: If an item above becomes a blocker, write an ADR and move it to the ADR table. Do not silently fix without documentation.
 
