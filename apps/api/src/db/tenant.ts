@@ -61,8 +61,13 @@ export async function withTenant<T>(
   }
 }
 
-export function tenantSlugFromHost(hostname: string): string {
-  const parts = hostname.split(".");
-  if (parts.length >= 3) return parts[0].toLowerCase();
+/**
+ * Tenant is chosen at login via a picker, not by subdomain (ADR-002) — there is
+ * no hostname convention this can reliably parse. Any 3-label host (Render's
+ * own <service>.onrender.com, or a future api.neosleepcare.com) would otherwise
+ * be misread as "<service>" or "api" being the tenant slug. Single-tenant for
+ * now, so always resolve to DEFAULT_TENANT_SLUG.
+ */
+export function tenantSlugFromHost(_hostname: string): string {
   return process.env.DEFAULT_TENANT_SLUG ?? "neosleep";
 }
