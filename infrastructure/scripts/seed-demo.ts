@@ -40,7 +40,7 @@ async function run(): Promise<void> {
     // users — manager + rep (TPT: identities first, then users)
     // -------------------------------------------------------------------------
     const managerIdentityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (salutation, first_name, last_name, email, phone, language)
+      `INSERT INTO identities (title, first_name, last_name, email, phone, language)
        VALUES (NULL, 'Andrzej', 'Wiśniewski', 'manager@demo.com', NULL, 'pl')
        ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
        RETURNING id`
@@ -69,7 +69,7 @@ async function run(): Promise<void> {
     console.log(`[seed] manager user: ${managerId}`);
 
     const repIdentityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (salutation, first_name, last_name, email, phone, language)
+      `INSERT INTO identities (title, first_name, last_name, email, phone, language)
        VALUES (NULL, 'Karolina', 'Nowicka', 'rep@demo.com', NULL, 'pl')
        ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
        RETURNING id`
@@ -127,7 +127,7 @@ async function run(): Promise<void> {
 
     // Practitioner 1: Pulmonologist KOL
     const p1IdentityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (salutation, first_name, last_name, email, phone, language)
+      `INSERT INTO identities (title, first_name, last_name, email, phone, language)
        VALUES ('Dr.', 'Marek', 'Kowalski', 'm.kowalski@klinikasnu.example', '+48600100200', 'pl')
        ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
        RETURNING id`
@@ -147,7 +147,7 @@ async function run(): Promise<void> {
 
     // Practitioner 2: Pulmonologist standard
     const p2IdentityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (salutation, first_name, last_name, email, phone, language)
+      `INSERT INTO identities (title, first_name, last_name, email, phone, language)
        VALUES ('Dr.', 'Anna', 'Zielińska', 'a.zielinska@klinikasnu.example', '+48600200300', 'pl')
        ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
        RETURNING id`
@@ -167,7 +167,7 @@ async function run(): Promise<void> {
 
     // Practitioner 3: Sleep medicine KOL
     const p3IdentityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (salutation, first_name, last_name, email, phone, language)
+      `INSERT INTO identities (title, first_name, last_name, email, phone, language)
        VALUES ('Prof.', 'Tomasz', 'Wróblewski', 't.wroblewski@szpitalpoludniowy.example', '+48500300400', 'pl')
        ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
        RETURNING id`
@@ -187,7 +187,7 @@ async function run(): Promise<void> {
 
     // Practitioner 4: ENT
     const p4IdentityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (salutation, first_name, last_name, email, phone, language)
+      `INSERT INTO identities (title, first_name, last_name, email, phone, language)
        VALUES ('Dr.', 'Ewa', 'Dąbrowska', 'e.dabrowska@szpitalpoludniowy.example', '+48500400500', 'pl')
        ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
        RETURNING id`
@@ -215,7 +215,7 @@ async function run(): Promise<void> {
     ];
     for (const l of leadData) {
       const liResult = await client.query<{ id: string }>(
-        `INSERT INTO identities (salutation, first_name, last_name, email, language)
+        `INSERT INTO identities (title, first_name, last_name, email, language)
          VALUES ($1, $2, $3, $4, 'pl')
          ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
          RETURNING id`,
