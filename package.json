@@ -21,7 +21,7 @@
     "build:pwa": "pnpm --filter @neo/pwa build",
     "lockfile:check": "./infrastructure/scripts/lockfile-check.sh",
     "ci": "pnpm -r lint && pnpm -r typecheck && pnpm -r test",
-    "prepare": "husky",
+    "prepare": "husky || true",
     "start": "./infrastructure/scripts/start.sh",
     "dev": "pnpm exec concurrently --names api,pwa,web -c blue,green,magenta \"pnpm --filter @neo/api dev\" \"pnpm --filter @neo/pwa dev\" \"pnpm --filter @neo/web dev\"",
     "db:seed": "pnpm --filter @neo/api seed:demo"
