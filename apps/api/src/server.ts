@@ -53,6 +53,13 @@ function corsOrigin(origin: string | undefined, cb: (err: Error | null, allow?: 
 
 export const app: Express = express();
 
+// Render (and any reverse-proxy host) sits in front of this process and sets
+// X-Forwarded-For / X-Forwarded-Proto. Without this, express-rate-limit
+// refuses to trust X-Forwarded-For (ERR_ERL_UNEXPECTED_X_FORWARDED_FOR) and
+// req.secure misreports the connection as insecure behind TLS-terminating
+// proxies, which affects secure-cookie handling.
+app.set("trust proxy", 1);
+
 app.use(requestIdMiddleware);
 // Security headers: HSTS, X-Frame-Options, X-Content-Type-Options, CSP, etc.
 // CSP allows same-origin only; relax specific directives per environment if needed.
