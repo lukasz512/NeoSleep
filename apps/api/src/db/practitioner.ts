@@ -71,7 +71,7 @@ const PRAC_SELECT_COLS = `
   p.primary_specialty, p.specialties, p.influence_tier,
   p.region, p.territory_id, p.status, p.metadata,
   p.created_at, p.updated_at,
-  i.salutation, i.first_name, i.last_name, i.email, i.phone, i.language,
+  i.title AS salutation, i.first_name, i.last_name, i.email, i.phone, i.language,
   o.name AS institution`.trim();
 
 function isPracSortColumn(s: string): s is (typeof PRAC_SORT_COLUMNS)[number] {
@@ -202,7 +202,7 @@ export async function insertPractitioner(client: PoolClient, input: InsertPracti
       : null;
 
     const identityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (salutation, first_name, last_name, email, phone, language)
+      `INSERT INTO identities (title, first_name, last_name, email, phone, language)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id`,
       [
@@ -263,7 +263,7 @@ export async function updatePractitioner(client: PoolClient, id: string, input: 
     const org = institutionInput ? await resolveOrganizationId(client, institutionInput, region) : null;
 
     await client.query(
-      `UPDATE identities SET salutation = $1, first_name = $2, last_name = $3, email = $4, phone = $5, language = $6, updated_at = now()
+      `UPDATE identities SET title = $1, first_name = $2, last_name = $3, email = $4, phone = $5, language = $6, updated_at = now()
        WHERE id = $7`,
       [salutation, firstName, lastName, email, phone, language, existing.identity_id]
     );
