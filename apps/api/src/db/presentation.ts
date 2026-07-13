@@ -1,5 +1,5 @@
-import { getDb } from "./connection.js";
 import { AppError, DatabaseError } from "../errors.js";
+import { withTenant, tenantSlugFromHost } from "./tenant.js";
 
 export interface Presentation {
   id: string;
@@ -24,8 +24,10 @@ const PRESENTATION_SELECT_COLS = `
 
 export async function getPresentations(): Promise<Presentation[]> {
   try {
-    const result = await getDb().query<Presentation>(
-      `SELECT ${PRESENTATION_SELECT_COLS} FROM presentation WHERE deleted_at IS NULL ORDER BY created_at DESC`
+    const result = await withTenant(tenantSlugFromHost(""), (client) =>
+      client.query<Presentation>(
+        `SELECT ${PRESENTATION_SELECT_COLS} FROM presentation WHERE deleted_at IS NULL ORDER BY created_at DESC`
+      )
     );
     return result.rows;
   } catch (err) {
@@ -36,9 +38,11 @@ export async function getPresentations(): Promise<Presentation[]> {
 
 export async function getPresentationById(id: string): Promise<Presentation | null> {
   try {
-    const result = await getDb().query<Presentation>(
-      `SELECT ${PRESENTATION_SELECT_COLS} FROM presentation WHERE id = $1 AND deleted_at IS NULL`,
-      [id]
+    const result = await withTenant(tenantSlugFromHost(""), (client) =>
+      client.query<Presentation>(
+        `SELECT ${PRESENTATION_SELECT_COLS} FROM presentation WHERE id = $1 AND deleted_at IS NULL`,
+        [id]
+      )
     );
     return result.rows[0] ?? null;
   } catch (err) {

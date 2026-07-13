@@ -1,5 +1,5 @@
-import { getDb } from "./connection.js";
 import { AppError, DatabaseError } from "../errors.js";
+import { withTenant, tenantSlugFromHost } from "./tenant.js";
 
 export interface AppConfig {
   primary_color: string;
@@ -71,8 +71,9 @@ const DEFAULT_APP_CONFIG: AppConfig = {
 
 export async function getAppConfig(): Promise<AppConfig> {
   try {
-    const result = await getDb().query<AppConfig>(
-      `SELECT primary_color, secondary_color, border_radius,
+    const result = await withTenant(tenantSlugFromHost(""), (client) =>
+      client.query<AppConfig>(
+        `SELECT primary_color, secondary_color, border_radius,
               logo_url, logo_dark_url, icon_url, icon_dark_url,
               font_family, pwa_theme_color,
               COALESCE(integrations, '{}') AS integrations,
@@ -84,7 +85,8 @@ export async function getAppConfig(): Promise<AppConfig> {
               COALESCE(primary_color_dark, $4) AS primary_color_dark,
               COALESCE(secondary_color_dark, $5) AS secondary_color_dark
        FROM app_config LIMIT 1`,
-      [DEFAULT_APP_CONFIG.tenant_name, DEFAULT_APP_CONFIG.surface_color, DEFAULT_APP_CONFIG.surface_color_dark, DEFAULT_APP_CONFIG.primary_color_dark, DEFAULT_APP_CONFIG.secondary_color_dark]
+        [DEFAULT_APP_CONFIG.tenant_name, DEFAULT_APP_CONFIG.surface_color, DEFAULT_APP_CONFIG.surface_color_dark, DEFAULT_APP_CONFIG.primary_color_dark, DEFAULT_APP_CONFIG.secondary_color_dark]
+      )
     );
     const row = result.rows[0];
     if (!row) return DEFAULT_APP_CONFIG;
@@ -128,29 +130,31 @@ export async function updateAppConfig(updates: AppConfigUpdate): Promise<AppConf
     color_scheme:         updates.color_scheme         ?? current.color_scheme,
   };
   try {
-    const result = await getDb().query(
-      `UPDATE app_config SET
-        primary_color = $1, secondary_color = $2, primary_color_dark = $3, secondary_color_dark = $4,
-        border_radius = $5, logo_url = $6, surface_color = $7, hero_container_style = $8, color_scheme = $9,
-        updated_at = now()
-       WHERE id = (SELECT id FROM app_config LIMIT 1)`,
-      [
-        row.primary_color, row.secondary_color, row.primary_color_dark, row.secondary_color_dark,
-        row.border_radius, row.logo_url, row.surface_color, row.hero_container_style, row.color_scheme,
-      ]
-    );
-    if (result.rowCount === 0) {
-      await getDb().query(
-        `INSERT INTO app_config
-          (primary_color, secondary_color, primary_color_dark, secondary_color_dark,
-           border_radius, logo_url, surface_color, hero_container_style, color_scheme)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    await withTenant(tenantSlugFromHost(""), async (client) => {
+      const result = await client.query(
+        `UPDATE app_config SET
+          primary_color = $1, secondary_color = $2, primary_color_dark = $3, secondary_color_dark = $4,
+          border_radius = $5, logo_url = $6, surface_color = $7, hero_container_style = $8, color_scheme = $9,
+          updated_at = now()
+         WHERE id = (SELECT id FROM app_config LIMIT 1)`,
         [
           row.primary_color, row.secondary_color, row.primary_color_dark, row.secondary_color_dark,
           row.border_radius, row.logo_url, row.surface_color, row.hero_container_style, row.color_scheme,
         ]
       );
-    }
+      if (result.rowCount === 0) {
+        await client.query(
+          `INSERT INTO app_config
+            (primary_color, secondary_color, primary_color_dark, secondary_color_dark,
+             border_radius, logo_url, surface_color, hero_container_style, color_scheme)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [
+            row.primary_color, row.secondary_color, row.primary_color_dark, row.secondary_color_dark,
+            row.border_radius, row.logo_url, row.surface_color, row.hero_container_style, row.color_scheme,
+          ]
+        );
+      }
+    });
     return { ...current, ...row };
   } catch (err) {
     if (err instanceof AppError) throw err;
