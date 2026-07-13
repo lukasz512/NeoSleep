@@ -1,0 +1,52 @@
+# Render Blueprint for apps/api (BFF).
+# One service, tracking the `prod` branch only. Dev happens locally
+# (pnpm start / pnpm dev, against the same Supabase DB) or on the `dev`
+# branch — nothing deploys from there. Merge dev -> prod when ready and
+# Render redeploys automatically. No GitHub Actions, no SSH, no PM2, no
+# nginx: git push to `prod` is the whole deploy pipeline.
+#
+# apps/pwa and apps/web are unaffected — they still deploy to GoDaddy via FTP.
+# Supabase (DATABASE_URL) is unchanged.
+#
+# Secrets marked `sync: false` must be entered once in the Render dashboard
+# (Environment tab) — never committed here.
+
+services:
+  - type: web
+    name: neosleep-bff
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: prod
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @neo/api build
+    startCommand: node apps/api/dist/server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: OAUTH_REDIRECT_ORIGIN
+        sync: false
+      - key: GMAIL_USER
+        sync: false
+      - key: GMAIL_APP_PASSWORD
+        sync: false
+      - key: GMAIL_TO
+        sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
+      - key: DEFAULT_TENANT_SLUG
+        sync: false

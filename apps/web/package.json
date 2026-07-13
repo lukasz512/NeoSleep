@@ -1,0 +1,35 @@
+{
+  "name": "@neo/web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint . --format codeframe",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@neo/api-client": "workspace:*",
+    "@neo/ui": "workspace:*",
+    "@unhead/vue": "catalog:",
+    "@vueuse/core": "catalog:",
+    "flag-icons": "^7.5.0",
+    "vue": "catalog:",
+    "vue-gtag": "^3.7.1",
+    "vue-i18n": "catalog:",
+    "vue-router": "catalog:",
+    "vuetify": "catalog:"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "catalog:",
+    "@vue/test-utils": "catalog:",
+    "eslint": "catalog:",
+    "eslint-plugin-vue": "catalog:",
+    "sass": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

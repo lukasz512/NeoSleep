@@ -1,0 +1,217 @@
+.app-entity-list {
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.app-entity-list__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+
+.app-entity-list__toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.app-entity-list__clear-filters {
+  min-width: var(--rep-btn-min-width, 44px);
+  min-height: var(--rep-btn-min-height, 44px);
+}
+
+.app-entity-list__clear-filters--no-border {
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  color: rgb(var(--v-theme-primary));
+
+  &:hover {
+    background: rgba(var(--v-theme-primary), 0.12);
+  }
+}
+
+.app-entity-list__clear-filters-icon {
+  width: 24px;
+  height: 24px;
+  display: block;
+  color: inherit;
+}
+
+.app-entity-list__search-clear {
+  min-width: 36px;
+  min-height: 36px;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  color: rgb(var(--v-theme-primary));
+
+  &:hover {
+    background: rgba(var(--v-theme-primary), 0.12);
+  }
+}
+
+
+.app-entity-list__add {
+  min-width: 44px;
+  min-height: 44px;
+  color: var(--rep-text, currentColor);
+}
+
+.app-entity-list__add--no-border {
+  border: none;
+  box-shadow: none;
+  background: transparent;
+
+  &:hover {
+    background: rgba(var(--v-theme-on-surface), 0.08);
+  }
+}
+
+.app-entity-list__add-icon {
+  width: 24px;
+  height: 24px;
+  display: block;
+  color: inherit;
+}
+
+.app-entity-list__search {
+  max-width: 320px;
+  min-width: 180px;
+}
+
+.app-entity-list__empty-wrap,
+.app-entity-list__error-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-entity-list__table-wrap {
+  flex: 1 1 0;
+  min-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--rep-radius);
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+
+.app-entity-list__table-wrap :deep(.v-data-table) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
+}
+
+.app-entity-list__table-wrap :deep(.v-data-table__td) {
+  transition: opacity 0.5s ease;
+}
+
+.app-entity-list__table-wrap :deep(.v-data-table tbody tr) {
+  transition: opacity 0.45s ease, background-color 0.25s ease;
+}
+
+.app-entity-list__table-wrap :deep(.v-data-table-progress) {
+  transition: opacity 0.4s ease;
+}
+
+.app-entity-list__table-wrap :deep(.v-table__wrapper) {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.app-entity-list__table-wrap :deep(.v-data-table__tr--clickable) {
+  cursor: pointer;
+}
+
+.app-entity-list__card--clickable {
+  cursor: pointer;
+}
+
+.app-entity-list__no-results-placeholder {
+  flex: 1;
+  min-height: 40vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+}
+
+.app-entity-list__no-results-icon-wrap {
+  flex-shrink: 0;
+  margin-bottom: 4px;
+}
+
+.app-entity-list__no-results-icon {
+  width: clamp(72px, 10vw, 96px);
+  height: clamp(72px, 10vw, 96px);
+  opacity: 0.5;
+  color: rgb(var(--v-theme-primary));
+}
+
+.app-entity-list__no-results-title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+}
+
+.app-entity-list__no-results-subtitle {
+  margin: 0;
+  font-size: 0.875rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+.app-entity-list__no-results-clear {
+  margin-top: 8px;
+}
+
+.app-entity-list__table {
+  min-width: 560px;
+}
+
+.app-entity-list__feed {
+  display: block;
+  padding: 12px 0;
+  border: none;
+  position: relative;
+}
+
+.app-entity-list__card {
+  margin-bottom: 12px;
+}
+
+.app-entity-list__card:last-of-type {
+  margin-bottom: 0;
+}
+
+.app-entity-list__feed-empty {
+  margin: 0;
+}
+
+.app-entity-list__institution-link {
+  color: rgb(var(--v-theme-primary));
+  text-decoration: none;
+}
+.app-entity-list__institution-link:hover {
+  text-decoration: underline;
+}
+
+.app-entity-list__cell-empty {
+  color: rgba(var(--v-theme-on-surface), var(--v-disabled-opacity));
+}

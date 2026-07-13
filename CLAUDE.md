@@ -17,17 +17,21 @@ Active markets: **PL, MX**. Thailand planned. One tenant can operate in multiple
 - **Region** = country/territory grouping (PL, MX, TH) — attribute on users and HCPs, not a tenant
 
 ```
-apps/app/         → Main PWA (sales rep CRM, mobile-first)
-apps/website/     → Marketing landing (public)
-services/api/     → Express API server (trust boundary, owns auth + secrets)
-i18n/             → en.json, pl.json, es.json, th.json (source of truth)
-foundation/       → Active docs, specs, ADRs (archive/ for frozen material)
-brand/            → Design tokens, logos, fonts
+apps/pwa/         → Main PWA (sales rep CRM, mobile-first)
+apps/web/         → Marketing landing (public)
+apps/api/         → Express API server (trust boundary, owns auth + secrets)
+apps/api/client/  → @neo/api-client — frontend HTTP fetch wrapper (kept next to the API it calls)
+apps/telegram/    → Telegram bot
+packages/         → Shared packages (@neo/ui, @neo/stores, @neo/vuetify)
+packages/i18n/    → en.json, pl.json, mx.json (source of truth), plus locale-bound composables (useDocumentLang)
+packages/brand/   → Design tokens, logos, fonts, shared global CSS (transitions.css) — per-tenant branding is DB-driven via app_config, not more folders
+infrastructure/   → Docker Compose, nginx, scripts
+docs/             → Architecture docs, ADRs, docs/foundation/ (backlog, presentations)
 ```
 
 ## Architecture Rules (NEVER violate)
 
-1. **API server is the only trust boundary.** Frontends have zero secrets. All auth, DB, external APIs go through `services/api/`.
+1. **API server is the only trust boundary.** Frontends have zero secrets. All auth, DB, external APIs go through `apps/api/`.
 2. **Views vs. Data separation.** Navigation items, labels, icons, feature flags → config-driven, never hardcoded in components. White-label tenants swap data layer only.
 3. **All copy in i18n JSON.** Never hardcode user-facing strings in components. Use `$t('key')`.
 4. **TypeScript strict.** No `any`, no type assertions without justification.
@@ -41,15 +45,15 @@ brand/            → Design tokens, logos, fonts
 - pnpm 9 workspaces, Husky pre-commit hooks
 
 ## Key Paths
-- API routes: `services/api/src/routes/`
-- API auth: `services/api/src/auth.ts`
-- DB schema: `services/api/migrations/` (run in order)
-- App router: `apps/app/src/router/`
-- App stores: `apps/app/src/stores/`
-- App composables: `apps/app/src/composables/`
-- API composable: `apps/app/src/composables/useBffApi.ts` (use this for all BFF calls)
-- App config: `apps/app/src/composables/useAppConfig.ts`
-- Tenant config: `foundation/config/`
+- API routes: `apps/api/src/routes/`
+- API auth: `apps/api/src/auth.ts`
+- DB schema: `apps/api/migrations/` (run in order)
+- App router: `apps/pwa/src/router/`
+- App stores: `apps/pwa/src/stores/`
+- App composables: `apps/pwa/src/composables/`
+- API composable: `apps/pwa/src/composables/useBffApi.ts` (use this for all BFF calls)
+- App config: `apps/pwa/src/composables/useAppConfig.ts`
+- Tenant config: DB-driven, `app_config` table (tenant schema) — not a filesystem path
 
 ## Database
 
@@ -57,44 +61,35 @@ brand/            → Design tokens, logos, fonts
 - Each pharma company (tenant) gets its own PostgreSQL schema: `tenant_<slug>` (e.g. `tenant_acmepharma_pl`)
 - Shared `public` schema for system-level tables (`tbl_tenants`, `tbl_app_config`)
 - Supabase project: single instance for MVP. Connection string in `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` env vars (BFF only — never frontend)
-- Migrations: `services/api/migrations/` — numbered `.sql` files, run on BFF startup via `db/migrations.ts`
+- Migrations: `apps/api/migrations/` — numbered `.sql` files, run on BFF startup via `db/migrations.ts`
 - New tables → always add a new numbered migration, never mutate old ones
 
 ### Identity types — do NOT conflate:
 
+FHIR R4-aligned schema. All tables use singular names, no `tbl_` prefix.
+
 | Table | Who | Auth | App |
 |---|---|---|---|
-| `tbl_users` | Field force: MRs, KAMs, FFMs, MSLs, admins | Google OIDC + password | apps/app |
-| `tbl_hcp` | Healthcare Professionals (doctors, dentists, specialists) | magic link (planned) | HCP portal (future) |
-| `tbl_patients` | Patients referred by HCPs | TBD (future) | TBD |
+| `users` + `person` | Internal: reps, managers, admins (pharma company employees) | Google OIDC + password | apps/pwa |
+| `practitioner` + `person` | Healthcare Professionals (doctors, specialists) | magic link (planned) | HCP portal (future) |
+| `patient` + `person` | Patients referred by HCPs | TBD (future) | TBD |
 
-All tables:
-`tbl_tenants`, `tbl_leads`, `tbl_users`, `tbl_hcp`, `tbl_hco`, `tbl_patients`, `tbl_events`, `tbl_presentations`, `tbl_app_config`, `tbl_audit_log`, `tbl_diagnostics`
+Platform schema: `platform.companies`, `platform.tenants`, `platform.roles`, `platform.permissions`, `platform.platform_users`, `platform.feature_flags`
+
+Tenant schema (FHIR naming): `person`, `users`, `user_roles`, `organization`, `practitioner`, `patient`, `related_person`, `lead`, `encounter`, `observation`, `communication`, `presentation`, `consent`, `app_config`, `audit_log`, `push_subscription`
 
 **OPEN QUESTION**: HCP auth strategy — magic link vs. separate OIDC. Decide before building HCP portal.
 
 ## Auth
 - Session cookie (httpOnly), remember-me tokens
 - Roles: `admin`, `ffm` (field force manager), `kam`, `msl`, `rep` — region-scoped
-- RBAC middleware: `services/api/src/auth.ts`
-- `tbl_hcp` auth: magic link planned — NOT YET IMPLEMENTED
-
-## Compliance (MUST respect in every feature)
-| Market | Regulation | Key requirement |
-|---|---|---|
-| PL/EU | GDPR Art. 9 | Health data = special category, explicit consent |
-| MX | LFPDPPP | Aviso de privacidad + explicit consent for sensitive data |
-| TH | PDPA | Similar to GDPR — explicit consent, data residency options |
-| All | EFPIA / PhRMA Code | Rep–HCP interactions must be documented, no improper transfers of value |
-
-- NeoSleep = **data processor**. Tenant (pharma company) = **data controller**. Each tenant needs a signed DPA before any data flows.
-- PCF data (visit records) retention: 5 years minimum in EU pharma context (check per country)
-- `tbl_audit_log` is mandatory — never skip audit logging for HCP/patient data mutations
-- HCP has GDPR Art. 15 right to access their own data
+- RBAC middleware: `apps/api/src/auth.ts`
+- `practitioner` auth: magic link planned — NOT YET IMPLEMENTED (needs architecture decision first)
 
 ## i18n
-- Active languages: EN, PL, ES (MX variant), TH
-- Add keys to `i18n/en.json` first, then run `npm run i18n:extract`
+- Active languages: EN, PL, MX (Mexican Spanish)
+- Internal locale IDs: `en`, `pl`, `mx` — `mx` is the app's internal key for `es-MX` (Mexican Spanish). The browser locale `es-MX` maps to `mx` internally via `i18n.ts`. Do NOT rename to `es-MX` — it is used consistently as a short key throughout the codebase.
+- Add keys to `packages/i18n/en.json` first, then run `npm run i18n:extract`
 - Never leave a key only in one language file — CI enforces parity
 - RTL: not needed now. Thai (TH) uses LTR — but test font rendering
 
@@ -106,23 +101,22 @@ All tables:
 ## Dev Workflow
 ```bash
 pnpm start             # Docker (Postgres) + BFF + app concurrently
-pnpm build:app         # Build app
-pnpm build:website     # Build website
+pnpm build:pwa         # Build app
+pnpm build:web         # Build website
 pnpm ci                # Full CI gate: lint + typecheck + test
 pnpm i18n:extract      # Extract new i18n keys from source
 pnpm i18n:prune        # Mark unused keys
 ```
 
 ## Deployment
-- FTP to GoDaddy (current, migrating to Hetzner VPS post-MVP)
+- FTP to GoDaddy (current, to be migrated to VPS)
 - Environments (branch → URL):
   - DEV:  `dev` → app-dev.neosleepcare.com / dev.neosleepcare.com
   - UAT:  `uat` → app-uat.neosleepcare.com / uat.neosleepcare.com
   - PROD: `PROD` → app.neosleepcare.com / neosleepcare.com
-- CI/CD: `.github/workflows/deploy-app.yml`, `deploy-website.yml`, `deploy-bff.yml`
+- CI/CD: `.github/workflows/deploy-pwa.yml`, `deploy-web.yml`, `deploy-bff.yml`
 - Promote DEV → UAT via `promote-dev-to-uat.yml`
-- Promote UAT → PROD via `promote-app-uat-to-prod.yml`
-- **Supabase env vars** (BFF only, never frontend): `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `SUPABASE_ANON_KEY`
+- Promote UAT → PROD via `promote-pwa-uat-to-prod.yml` / `promote-web-uat-to-prod.yml`
 
 ## What NOT to do
 - Do not hardcode navigation items, labels or feature flags in components
@@ -133,8 +127,16 @@ pnpm i18n:prune        # Mark unused keys
 - Do not mock PostgreSQL in BFF integration tests
 - Do not start portal or admin apps until rep app Stage 1-3 is done
 
-## Current Focus (May 2026)
-MVP: HCP database — centralized doctor records with visit history, filterable by rep/region/specialty.
-Stage 1 done (OIDC auth, app shell). Stage 2 in progress (production Supabase DB, real data reads).
-Next: Stage 2 (DB reads) → Stage 3 (CRM views: HCP list, profile, PCF history).
-Do NOT start: HCP portal, patient features, admin panel — until rep app Stage 1–3 is done.
+## Git tags — milestones
+Use `git tag v<name>` to mark stable states before big changes:
+```bash
+git tag v1.0-rep-mvp       # milestone snapshot
+git tag v0.9-before-rename # before a large refactor
+git push origin --tags     # share tags with the team
+```
+Tags are immutable — always point to the same commit. Use `git checkout <tag>` to return to any point.
+
+## Current Focus (March 2026)
+Stage 1 done (OIDC auth, app shell, layout). Cleaning up before Stage 2 (real DB reads).
+Next: Stage 2 (direct DB) → Stage 3 (CRM views complete).
+Portal and admin: do not start until rep app Stage 1–3 is done.

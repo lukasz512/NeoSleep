@@ -1,0 +1,22 @@
+{
+  "unused": [
+    "app.language.en",
+    "app.language.mx",
+    "app.language.pl",
+    "layout.app.nav",
+    "user.dev.notifications.sample.error",
+    "user.dev.notifications.sample.info",
+    "user.dev.notifications.sample.success",
+    "user.dev.notifications.sample.warning",
+    "user.hcp.subtitle",
+    "user.hcp.title",
+    "user.login.oidcNote",
+    "user.planner.title",
+    "user.presentations.title"
+  ],
+  "scannedAt": "2026-02-19T00:31:15.713Z",
+  "sourceFilesScanned": 78,
+  "usedKeysCount": 72,
+  "totalKeysInEn": 84,
+  "unusedCount": 13
+}

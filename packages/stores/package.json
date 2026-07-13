@@ -1,0 +1,13 @@
+{
+  "name": "@neo/stores",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@neo/api-client": "workspace:*",
+    "pinia": "catalog:",
+    "vue": "catalog:"
+  }
+}
