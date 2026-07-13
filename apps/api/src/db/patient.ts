@@ -74,7 +74,7 @@ const PATIENT_SELECT_COLS = `
   p.id, p.identity_id, p.practitioner_id, p.diagnosis_code, p.ahi_baseline,
   p.cpap_device, p.medical_record, p.region, p.status, p.metadata,
   p.created_at, p.updated_at,
-  i.salutation, i.first_name, i.last_name, i.email, i.phone`.trim();
+  i.title AS salutation, i.first_name, i.last_name, i.email, i.phone`.trim();
 
 type PatientRow = {
   id: string;
@@ -201,7 +201,7 @@ export async function getPatientById(client: PoolClient, id: string): Promise<(P
 export async function insertPatient(client: PoolClient, data: PatientInsert): Promise<Patient & { name: string }> {
   try {
     const identityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (salutation, first_name, last_name, email, phone)
+      `INSERT INTO identities (title, first_name, last_name, email, phone)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING id`,
       [
@@ -259,11 +259,18 @@ export async function updatePatient(
     const identityParams: unknown[] = [];
     let idx = 1;
 
-    const identityFields: (keyof PatientUpdate)[] = ["salutation", "first_name", "last_name", "email", "phone"];
-    for (const field of identityFields) {
+    // JS field name -> actual identities column name (identities.title stores what the app calls "salutation")
+    const identityFieldToColumn: Partial<Record<keyof PatientUpdate, string>> = {
+      salutation: "title",
+      first_name: "first_name",
+      last_name: "last_name",
+      email: "email",
+      phone: "phone",
+    };
+    for (const [field, column] of Object.entries(identityFieldToColumn) as [keyof PatientUpdate, string][]) {
       if (data[field] !== undefined) {
         identityParams.push(data[field] ?? null);
-        identitySets.push(`${field} = $${idx++}`);
+        identitySets.push(`${column} = $${idx++}`);
       }
     }
     identityParams.push(existing.identity_id);
