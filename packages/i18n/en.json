@@ -281,7 +281,7 @@
   "user.settings.menu": "Display settings",
   "user.settings.theme": "Theme",
   "user.settings.language": "Language",
-  "user.settings.theme.auto": "System",
+  "user.settings.theme.system": "System",
   "user.settings.theme.light": "Light",
   "user.settings.theme.dark": "Dark",
   "user.settings.theme.tooltip": "Theme: {current}. Click for {next}",

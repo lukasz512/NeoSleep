@@ -14,5 +14,5 @@
       "vue":        ["node_modules/vue/dist/vue.d.ts"]
     }
   },
-  "include": ["src", "../../packages/i18n", "../../packages/brand", "../../apps/api/client/src"]
+  "include": ["src", "../../packages/i18n", "../../packages/brand", "../../packages/stores/src", "../../apps/api/client/src"]
 }

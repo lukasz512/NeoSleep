@@ -38,7 +38,7 @@ import NavTooltip from "./NavTooltip.vue";
 import { useTheme } from "../composables/useTheme";
 import type { ThemeMode } from "../composables/useTheme";
 
-const THEME_ORDER: ThemeMode[] = ["auto", "light", "dark"];
+const THEME_ORDER: ThemeMode[] = ["system", "light", "dark"];
 const SPIN_MS = 450; // must match CSS animation duration
 
 function getNextMode(current: ThemeMode): ThemeMode {
@@ -132,7 +132,7 @@ function onClick() {
   }
 }
 
-.theme-toggle[data-mode="auto"]  .theme-toggle__icon--auto,
+.theme-toggle[data-mode="system"]  .theme-toggle__icon--auto,
 .theme-toggle[data-mode="light"] .theme-toggle__icon--sun,
 .theme-toggle[data-mode="dark"]  .theme-toggle__icon--moon {
   opacity: 1;
