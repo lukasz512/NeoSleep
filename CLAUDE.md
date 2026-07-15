@@ -111,8 +111,8 @@ pnpm i18n:prune        # Mark unused keys
 ## Deployment
 - FTP to GoDaddy (current, to be migrated to VPS)
 - Environments (branch → URL): only `dev` and `prod` exist for now — UAT is removed from the project until reintroduced
-  - DEV:  `dev` → app-dev.neosleepcare.com / dev.neosleepcare.com
-  - PROD: `prod` → app.neosleepcare.com / neosleepcare.com
+  - DEV:  `dev` → pwa.dev.neosleepcare.com (rep app) / dev.neosleepcare.com (website)
+  - PROD: `prod` → pwa.neosleepcare.com (rep app) / neosleepcare.com (website)
 - CI/CD: `.github/workflows/deploy-pwa.yml`, `deploy-web.yml`, `deploy-bff.yml`
 - Promote DEV → PROD via `promote-pwa-dev-to-prod.yml` / `promote-web-dev-to-prod.yml`
 

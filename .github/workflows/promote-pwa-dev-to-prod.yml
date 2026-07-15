@@ -1,4 +1,4 @@
-# Ręczna promocja: zbuduj z gałęzi dev i wgraj na PROD (app.neosleepcare.com).
+# Ręczna promocja: zbuduj z gałęzi dev i wgraj na PROD (pwa.neosleepcare.com).
 # W Actions wybierz workflow "Promote PWA Dev → Prod" i kliknij "Run workflow".
 #
 # TODO: migrate to SSH (appleboy/scp-action) once Hetzner VPS is provisioned.
@@ -38,7 +38,7 @@ jobs:
       - name: Build app
         run: pnpm run build:pwa
 
-      - name: Deploy to PROD (app.neosleepcare.com)
+      - name: Deploy to PROD (pwa.neosleepcare.com)
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}

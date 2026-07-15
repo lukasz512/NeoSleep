@@ -1,6 +1,6 @@
 # Deploy rep-app to GoDaddy FTP
-# - prod → app.neosleepcare.com (path: secret FTP_PATH_APP_PROD)
-# - dev  → app-dev.neosleepcare.com (path: secret FTP_PATH_APP_DEV)
+# - prod → pwa.neosleepcare.com (path: secret FTP_PATH_APP_PROD)
+# - dev  → pwa.dev.neosleepcare.com (path: secret FTP_PATH_APP_DEV)
 #
 # TODO: migrate to SSH (appleboy/scp-action) once Hetzner VPS is provisioned.
 # See infrastructure/setup/provision.md for the migration runbook.
@@ -44,7 +44,7 @@ jobs:
       - name: Build rep-app
         run: pnpm run build:pwa
 
-      - name: Deploy to PROD (app.neosleepcare.com)
+      - name: Deploy to PROD (pwa.neosleepcare.com)
         if: github.ref == 'refs/heads/prod'
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
@@ -56,7 +56,7 @@ jobs:
           server-dir: ${{ secrets.FTP_PATH_APP_PROD }}/
           dangerous-clean-slate: false
 
-      - name: Deploy to DEV (app-dev.neosleepcare.com)
+      - name: Deploy to DEV (pwa.dev.neosleepcare.com)
         if: github.ref == 'refs/heads/dev'
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
