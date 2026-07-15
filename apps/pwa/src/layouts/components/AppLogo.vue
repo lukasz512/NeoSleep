@@ -5,7 +5,7 @@
     class="layout-app__logo"
     :class="{ 'layout-app__logo--collapsed': collapsed }"
   >
-    <router-link
+    <RouterLink
       :to="appHomePath"
       class="layout-app__logo-link"
       aria-label="NeoSleep – Home"
@@ -19,9 +19,9 @@
       <!-- Expanded: full wordmark -->
       <img v-else-if="logoUrl" :src="logoUrl" alt="NeoSleep" class="layout-app__logo-wordmark" />
       <span v-else class="layout-app__logo-text">NeoSleep</span>
-    </router-link>
+    </RouterLink>
   </div>
-  <router-link
+  <RouterLink
     v-else
     :to="appHomePath"
     class="layout-app__logo-link layout-app__mobile-drawer-logo-link"
@@ -30,7 +30,7 @@
   >
     <img v-if="logoUrl" :src="logoUrl" alt="NeoSleep" class="layout-app__logo-wordmark" />
     <span v-else class="layout-app__mobile-drawer-logo-text">NeoSleep</span>
-  </router-link>
+  </RouterLink>
 </template>
 
 <script setup lang="ts">

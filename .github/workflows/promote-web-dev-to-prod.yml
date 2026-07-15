@@ -5,6 +5,7 @@ name: Promote Web Dev → Prod
 
 on:
   workflow_dispatch:
+  workflow_call:
 
 jobs:
   promote:

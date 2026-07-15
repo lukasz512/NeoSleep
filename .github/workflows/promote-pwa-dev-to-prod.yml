@@ -8,6 +8,7 @@ name: Promote PWA Dev → Prod
 
 on:
   workflow_dispatch:
+  workflow_call:
 
 jobs:
   promote:

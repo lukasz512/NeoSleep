@@ -12,6 +12,7 @@ playwright-report
 # Transpiled TS artifacts — source is .ts, ignore siblings
 apps/*/src/**/*.js
 apps/*/src/**/*.d.ts
+!apps/*/src/vite-env.d.ts
 i18n/*.js
 i18n/*.d.ts
 
