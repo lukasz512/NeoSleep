@@ -1,10 +1,10 @@
-# Ręczna promocja: zbuduj z gałęzi uat i wgraj na PROD (app.neosleepcare.com).
-# W Actions wybierz workflow "Promote PWA UAT → Prod" i kliknij "Run workflow".
+# Ręczna promocja: zbuduj z gałęzi dev i wgraj na PROD (app.neosleepcare.com).
+# W Actions wybierz workflow "Promote PWA Dev → Prod" i kliknij "Run workflow".
 #
 # TODO: migrate to SSH (appleboy/scp-action) once Hetzner VPS is provisioned.
 # See infrastructure/setup/provision.md for the migration runbook.
 
-name: Promote PWA UAT → Prod
+name: Promote PWA Dev → Prod
 
 on:
   workflow_dispatch:
@@ -13,10 +13,10 @@ jobs:
   promote:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout (uat)
+      - name: Checkout (dev)
         uses: actions/checkout@v4
         with:
-          ref: uat
+          ref: dev
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
