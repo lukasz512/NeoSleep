@@ -1,6 +1,10 @@
 # Deploy rep-app to GoDaddy FTP
-# - prod → pwa.neosleepcare.com (path: secret FTP_PATH_APP_PROD)
-# - dev  → pwa.dev.neosleepcare.com (path: secret FTP_PATH_APP_DEV)
+# - prod → pwa.neosleepcare.com (path: secret GODADY_FTP_PWA_PROD)
+# - dev  → pwa.dev.neosleepcare.com (path: secret GODADY_FTP_PWA_DEV)
+#
+# NOTE: GODADY_FTP_PWA_* secrets must hold the FTP server-dir path (e.g.
+# /neosleepcare.com/pwa/prod), not the public https:// URL — see
+# secrets/deploy-notes.md for the exact paths.
 #
 # TODO: migrate to SSH (appleboy/scp-action) once Hetzner VPS is provisioned.
 # See infrastructure/setup/provision.md for the migration runbook.
@@ -53,7 +57,7 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftp
           local-dir: ./apps/pwa/dist/
-          server-dir: ${{ secrets.FTP_PATH_APP_PROD }}/
+          server-dir: ${{ secrets.GODADY_FTP_PWA_PROD }}/
           dangerous-clean-slate: false
 
       - name: Deploy to DEV (pwa.dev.neosleepcare.com)
@@ -65,5 +69,5 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftp
           local-dir: ./apps/pwa/dist/
-          server-dir: ${{ secrets.FTP_PATH_APP_DEV }}/
+          server-dir: ${{ secrets.GODADY_FTP_PWA_DEV }}/
           dangerous-clean-slate: false
