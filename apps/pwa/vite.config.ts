@@ -5,6 +5,7 @@ import vue from "@vitejs/plugin-vue";
 import vuetify from "vite-plugin-vuetify";
 import { VitePWA } from "vite-plugin-pwa";
 import type { VitePWAOptions } from "vite-plugin-pwa";
+import basicSsl from "@vitejs/plugin-basic-ssl";
 import { sharedViteConfig } from "../../vite.shared.ts";
 
 interface NeoPwaOptions {
@@ -64,8 +65,19 @@ function neoPwaPlugin(opts: NeoPwaOptions): ReturnType<typeof VitePWA> {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// Dev-server proxy target for /api, /auth, /health — never used in production
+// builds (those get VITE_API_URL baked in at build time by CI, see deploy-pwa.yml).
+// Defaults to the local BFF; set VITE_DEV_API_TARGET to a remote HTTPS URL
+// (e.g. the Render deploy) to test against a deployed API instead.
+const devApiTarget = process.env.VITE_DEV_API_TARGET || "http://localhost:3000";
+const devApiIsHttps = devApiTarget.startsWith("https://");
+
 export default defineConfig(mergeConfig(sharedViteConfig(__dirname), {
   plugins: [
+    // Self-signed HTTPS for the dev server, only needed when proxying to a
+    // remote HTTPS target — Secure session cookies are dropped by the browser
+    // if the dev server itself isn't served over HTTPS.
+    ...(devApiIsHttps ? [basicSsl()] : []),
     vue(),
     neoPwaPlugin({
       name:        "NeoSleep Rep",
@@ -98,9 +110,9 @@ export default defineConfig(mergeConfig(sharedViteConfig(__dirname), {
   server: {
     host: true,
     proxy: {
-      "/api":    { target: "http://localhost:3000", changeOrigin: true },
-      "/auth":   { target: "http://localhost:3000", changeOrigin: true },
-      "/health": { target: "http://localhost:3000", changeOrigin: true },
+      "/api":    { target: devApiTarget, changeOrigin: true, secure: devApiIsHttps },
+      "/auth":   { target: devApiTarget, changeOrigin: true, secure: devApiIsHttps },
+      "/health": { target: devApiTarget, changeOrigin: true, secure: devApiIsHttps },
     },
   },
 }));
