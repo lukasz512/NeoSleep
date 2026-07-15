@@ -6,11 +6,23 @@
       :initial-data="eventFormInitial"
       @submit="onEventFormSubmit"
     />
-    <LeadContactForm
+    <PractitionerForm
       v-if="showEditModal"
       v-model="showEditModal"
-      mode="contact"
-      :initial-data="hcp ? { name: hcp.name, email: hcp.email ?? '', phone: (hcp.phone ?? '').replace(/^\+\d+/, ''), specialty: hcp.specialty ?? '', region: hcp.region ?? '', institution: hcp.institution ?? '' } : undefined"
+      :initial-data="hcp ? {
+        id: hcp.id,
+        salutation: hcp.salutation ?? '',
+        first_name: hcp.first_name ?? '',
+        last_name: hcp.last_name ?? '',
+        email: hcp.email ?? '',
+        phone: (hcp.phone ?? '').replace(/^\+\d+/, ''),
+        primary_specialty: hcp.primary_specialty ?? hcp.specialty ?? '',
+        region: hcp.region ?? '',
+        institution: hcp.institution ?? '',
+        influence_tier: hcp.influence_tier ?? 'C',
+        language: hcp.language ?? '',
+        national_ids: hcp.national_ids ?? null,
+      } : undefined"
       @submit="onContactSubmit"
     />
     <ItemDetailLayout
@@ -99,17 +111,24 @@ import AppIcon from "../components/AppIcon.vue";
 import GenderIcon from "../components/GenderIcon.vue";
 import { getGenderFromName } from "../utils/genderFromName";
 
-const LeadContactForm = defineAsyncComponent(() => import("../components/LeadContactForm.vue"));
+const PractitionerForm = defineAsyncComponent(() => import("../components/PractitionerForm.vue"));
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
 
 interface HCP {
   id: string;
   name: string;
+  salutation?: string | null;
+  first_name?: string;
+  last_name?: string;
   email?: string;
   phone?: string;
   specialty?: string;
+  primary_specialty?: string;
   institution?: string;
   region?: string;
+  influence_tier?: string;
+  language?: string | null;
+  national_ids?: Record<string, string> | null;
 }
 
 const { t } = useI18n();
@@ -171,17 +190,21 @@ function onEdit() {
   showEditModal.value = true;
 }
 
-async function onContactSubmit(data: import("../components/LeadContactForm.vue").LeadFormData | import("../components/LeadContactForm.vue").ContactFormData) {
-  const d = data as import("../components/LeadContactForm.vue").ContactFormData;
+async function onContactSubmit(data: import("../components/PractitionerForm.vue").PractitionerSubmitPayload) {
   const id = hcp.value?.id;
   if (!id) return;
   const body = JSON.stringify({
-    name: d.name,
-    email: d.email,
-    phone: d.phone ? `+52${d.phone.replace(/\D/g, "")}` : undefined,
-    specialty: d.specialty || undefined,
-    region: d.region || undefined,
-    institution: d.institution || undefined,
+    salutation: data.salutation,
+    first_name: data.first_name,
+    last_name: data.last_name,
+    email: data.email,
+    phone: data.phone ? `+52${data.phone.replace(/\D/g, "")}` : undefined,
+    primary_specialty: data.primary_specialty,
+    region: data.region,
+    institution: data.institution,
+    influence_tier: data.influence_tier,
+    language: data.language,
+    national_ids: data.national_ids,
   });
   const res = await apiFetch(`/api/v1/practitioner/${id}`, {
     method: "PATCH",
@@ -206,11 +229,14 @@ async function loadHCP() {
   loading.value = true;
   hcp.value = null;
   try {
-    const res = await apiFetch(`/api/v1/practitioner/${id}`, { errorMessageKey: "user.hcp.errorLoad" });
+    const res = await apiFetch(`/api/v1/practitioner/${id}`, { handleErrors: false });
     if (res.ok) {
       hcp.value = (await res.json()) as HCP;
+    } else if (res.status !== 404) {
+      notifications.show(t("user.hcp.errorLoad"), "error");
     }
   } catch {
+    notifications.show(t("user.hcp.errorLoad"), "error");
     hcp.value = null;
   } finally {
     loading.value = false;

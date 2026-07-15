@@ -12,6 +12,15 @@ import "./assets/transitions.css";
 import { getUserSettings } from "./utils/user-settings";
 import { setupDiagnosticReporter } from "./composables/useDiagnosticReporter";
 import { apiFetch } from "./utils/api";
+import { getApiUrl } from "./constants";
+
+// Silent wake-up ping: the API can cold-start (Render free tier spins down when
+// idle), so hit the cheapest possible route as early as possible — before the
+// user even reaches the login form — instead of waiting for their first real
+// request to eat the cold-start delay. Fire-and-forget: no loading state, no
+// error surfaced (plain fetch, not apiFetch, so a failure never reaches the
+// notification pipeline).
+fetch(`${getApiUrl()}/health`).catch(() => {});
 
 const settings = typeof localStorage !== "undefined" ? getUserSettings() : { theme: "light" as const, locale: "en" as const };
 const savedTheme = settings.theme === "dark" ? "dark" : "light";

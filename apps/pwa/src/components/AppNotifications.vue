@@ -12,7 +12,7 @@
           @touchstart.passive="onTouchStart"
           @touchend.passive="onTouchEnd"
         >
-          <span class="notif-toast__msg">{{ current.message }}</span>
+          <span class="notif-toast__msg">{{ current.key ? t(current.key) : current.message }}</span>
           <div class="notif-toast__bar" :style="barStyle" />
         </div>
       </Transition>
@@ -22,10 +22,12 @@
 
 <script setup lang="ts">
 import { ref, watch, computed, onUnmounted } from "vue";
+import { useI18n } from "vue-i18n";
 import { useNotifications } from "../composables/useNotifications";
 
 const TIMEOUT = 4000;
 
+const { t } = useI18n();
 const { current, dismissCurrent } = useNotifications();
 const visible = ref(false);
 let timer: ReturnType<typeof setTimeout> | null = null;

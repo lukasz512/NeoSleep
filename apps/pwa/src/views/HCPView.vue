@@ -1,9 +1,8 @@
 <template>
   <div class="hcp-view">
-    <LeadContactForm
+    <PractitionerForm
       v-if="showAddModal"
       v-model="showAddModal"
-      mode="contact"
       @submit="onContactSubmit"
     />
     <AppEntityList
@@ -43,9 +42,9 @@ import GenderIcon from "../components/GenderIcon.vue";
 import { type FilterDefinition } from "../composables/useFilters";
 import { useConfigStore } from "../stores/config";
 import { getGenderFromName } from "../utils/genderFromName";
-import type { ContactFormData, LeadFormData } from "../components/LeadContactForm.vue";
+import type { PractitionerSubmitPayload } from "../components/PractitionerForm.vue";
 
-const LeadContactForm = defineAsyncComponent(() => import("../components/LeadContactForm.vue"));
+const PractitionerForm = defineAsyncComponent(() => import("../components/PractitionerForm.vue"));
 
 const { t } = useI18n();
 const configStore = useConfigStore();
@@ -101,16 +100,19 @@ function onAddContact() {
   showAddModal.value = true;
 }
 
-async function onContactSubmit(data: LeadFormData | ContactFormData) {
-  // This view uses mode="contact", so the emitted payload is always ContactFormData.
-  const d = data as ContactFormData;
+async function onContactSubmit(data: PractitionerSubmitPayload) {
   const body = JSON.stringify({
-    name: d.name,
-    email: d.email,
-    phone: d.phone,
-    specialty: d.specialty || undefined,
-    region: d.region || undefined,
-    institution: d.institution || undefined,
+    salutation: data.salutation,
+    first_name: data.first_name,
+    last_name: data.last_name,
+    email: data.email,
+    phone: data.phone,
+    primary_specialty: data.primary_specialty,
+    region: data.region,
+    institution: data.institution,
+    influence_tier: data.influence_tier,
+    language: data.language,
+    national_ids: data.national_ids,
   });
   const res = await apiFetch("/api/v1/practitioner", {
     method: "POST",

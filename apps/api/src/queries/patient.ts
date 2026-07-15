@@ -25,6 +25,7 @@ export interface PatientDto {
   email: string | null;
   phone: string | null;
   practitioner_id: string | null;
+  practitioner_name: string | null;
   diagnosis_code: Record<string, unknown> | null;
   ahi_baseline: number | null;
   cpap_device: string | null;
@@ -46,6 +47,7 @@ function toDto(p: Patient & { name: string }): PatientDto {
     email:           p.email ?? null,
     phone:           p.phone ?? null,
     practitioner_id: p.practitioner_id ?? null,
+    practitioner_name: p.practitioner_name ?? null,
     diagnosis_code:  p.diagnosis_code ?? null,
     ahi_baseline:    p.ahi_baseline ?? null,
     cpap_device:     p.cpap_device ?? null,

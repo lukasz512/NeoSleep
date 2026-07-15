@@ -4,6 +4,7 @@
     "baseUrl": ".",
     "paths": {
       "@brand/*": ["../../packages/brand/*"],
+      "@i18n/*":  ["../../packages/i18n/*"],
       "@api":     ["../../apps/api/client/src/index.ts"],
       "@stores":  ["../../packages/stores/src/index.ts"]
     }

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@neo/api-client": "workspace:*",
+    "@neo/stores": "workspace:*",
     "@neo/ui": "workspace:*",
     "@unhead/vue": "catalog:",
     "@vueuse/core": "catalog:",

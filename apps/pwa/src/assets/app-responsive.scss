@@ -11,12 +11,12 @@
  *
  * Responsive patterns used in components (NOT this file):
  *   - clamp()                → fluid size scaling (icon/font)
- *   - CSS vars (theme.scss)  → --rep-btn-min-height changes at 767px
+ *   - CSS vars (theme.scss)  → --pwa-btn-min-height changes at 767px
  *   - v-bind()               → reactive CSS from isMobile / useDisplay().mobile
  *   - v-show / v-if          → Vue reactivity for show/hide toggling
  *
  * theme.scss already defines (do not duplicate here):
- *   @media (max-width: 767px)              → --rep-btn-min-height/width + v-field touch targets
+ *   @media (max-width: 767px)              → --pwa-btn-min-height/width + v-field touch targets
  *   @media (hover: hover) and (pointer: fine) → v-btn scale on mouse devices
  *   @media (prefers-reduced-motion: no-preference) → Vuetify field transition
  *

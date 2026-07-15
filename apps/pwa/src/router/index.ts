@@ -1,6 +1,8 @@
 import { createRouter, createWebHistory } from "vue-router";
-import { routes } from "./routes";
+import { routes, isRoleAllowed, appHomePath } from "./routes";
 import { useAuthStore } from "../stores/auth";
+import { useRolePreviewStore } from "../stores/rolePreview";
+import type { UserRole } from "../stores/auth";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -13,10 +15,10 @@ const isDev = import.meta.env.DEV;
  * Auth guard: app starts at login; protected routes require valid session (API).
  * - Root "/" redirects to /login (route config); authenticated users are redirected from /login to /dashboard.
  * - requiresAuth: ensure session is checked (fetchSession), then allow or redirect to /login?redirect=.
- * - In dev, session check is skipped so "Login as" + "Go to app" works without API.
  */
 router.beforeEach(async (to, _from, next) => {
   const auth = useAuthStore();
+  const rolePreview = useRolePreviewStore();
 
   if (to.meta.devOnly) {
     if (isDev) {
@@ -29,7 +31,7 @@ router.beforeEach(async (to, _from, next) => {
 
   if (to.meta.public) {
     if (to.path === "/login") {
-      if (!isDev && !auth.sessionChecked) await auth.fetchSession();
+      if (!auth.sessionChecked) await auth.fetchSession();
       if (auth.isAuthenticated) {
         const redirect = typeof to.query.redirect === "string" && to.query.redirect ? to.query.redirect : "/dashboard";
         next({ path: redirect, query: {} });
@@ -41,19 +43,21 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   if (to.meta.requiresAuth) {
-    if (isDev) {
-      if (!auth.isAuthenticated) {
-        next({ path: "/login", query: to.path !== "/login" ? { redirect: to.fullPath } : {} });
-        return;
-      }
-      next();
-      return;
-    }
     if (!auth.sessionChecked) {
       await auth.fetchSession();
     }
     if (!auth.isAuthenticated) {
       next({ path: "/login", query: { redirect: to.fullPath } });
+      return;
+    }
+    // Admin's "view as" preview (rolePreview.ts) is respected here too — only for
+    // navigation, so testing as another role actually redirects like the real
+    // thing would. It never affects auth.user?.role itself, so every API call
+    // still runs with the real, unaffected permissions underneath.
+    const roles = to.meta.roles as UserRole[] | undefined;
+    const effectiveRole = rolePreview.previewRole ?? auth.user?.role;
+    if (!isRoleAllowed(roles, effectiveRole)) {
+      next({ path: appHomePath });
       return;
     }
     next();

@@ -102,7 +102,11 @@ export const apiFetch = createApiFetch({
   getApiBase: getApiUrl,
   fetchFn: fetchWithAuth,
   onError: (path, status, message, errorMessageKey) => {
-    const toShow = errorMessageKey ? message : `Request failed: ${status} ${path}`;
+    // errorMessageKey (when the caller provides one) wins — AppNotifications.vue
+    // translates it. `message` (the server's own error text, or a generic
+    // "HTTP <code>" fallback — see extractErrorMessage) is always passed too,
+    // as what shows if the key is absent or fails to resolve.
+    const toShow = message || `Request failed: ${status} ${path}`;
     useNotifications().show(toShow, "error", errorMessageKey);
     void sendErrorLog(path, status, message);
   },

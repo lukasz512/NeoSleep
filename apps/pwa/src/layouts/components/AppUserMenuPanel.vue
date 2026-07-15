@@ -16,22 +16,6 @@
         {{ theme === "light" ? t("user.settings.theme.light") : t("user.settings.theme.dark") }}
       </VBtn>
     </div>
-    <div v-if="showThemePanelButton" class="layout-app__user-menu-section">
-      <VBtn
-        variant="text"
-        block
-        density="comfortable"
-        class="layout-app__user-menu-item layout-app__user-menu-item--vuetify"
-        :title="t('user.themePanel.openTitle')"
-        :aria-label="t('user.themePanel.openTitle')"
-        @click="$emit('open-theme-panel'); $emit('close')"
-      >
-        <span class="layout-app__theme-icon" aria-hidden="true">
-          <AppIcon name="palette" class="layout-app__menu-icon" />
-        </span>
-        {{ t("user.themePanel.title") }}
-      </VBtn>
-    </div>
     <div class="layout-app__user-menu-section">
       <p class="layout-app__user-menu-label">{{ t("user.settings.language") }}</p>
       <VSelect
@@ -77,8 +61,6 @@ const props = defineProps<{
   locale: string;
   /** When true, use drawer menu class (same styles, different BEM block) */
   drawer?: boolean;
-  /** When true, show "Theme & style" menu item (admin). */
-  showThemePanelButton?: boolean;
 }>();
 
 const menuClass = computed(() =>
@@ -88,7 +70,6 @@ const menuClass = computed(() =>
 const emit = defineEmits<{
   "toggle-theme": [];
   "change-locale": [lang: string];
-  "open-theme-panel": [];
   logout: [];
   close: [];
 }>();
@@ -113,9 +94,9 @@ function onLocaleChange(value: string) {
 .layout-app__mobile-drawer-user-menu {
   min-width: 220px;
   padding: 12px;
-  background: var(--rep-bg, #fff);
-  border: 1px solid var(--rep-border, #e0e0e0);
-  border-radius: var(--rep-radius);
+  background: var(--pwa-bg, #fff);
+  border: 1px solid var(--pwa-border, #e0e0e0);
+  border-radius: var(--pwa-radius);
 }
 
 .layout-app__user-menu-section {
@@ -130,7 +111,7 @@ function onLocaleChange(value: string) {
   margin: 0 0 6px 0;
   font-size: 0.7rem;
   font-weight: 600;
-  color: var(--rep-text-secondary, #666);
+  color: var(--pwa-text-secondary, #666);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -154,7 +135,7 @@ function onLocaleChange(value: string) {
 }
 
 .layout-app__user-menu-select :deep(.v-field) {
-  border-radius: var(--rep-radius);
+  border-radius: var(--pwa-radius);
 }
 
 .layout-app__menu-icon {

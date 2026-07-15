@@ -2,7 +2,7 @@ import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 import type { ApiFetchOptions } from "@api";
 
-export type UserRole = "admin" | "ffm" | "kam" | "msl" | "rep";
+export type UserRole = "admin" | "manager" | "kam" | "msl" | "rep" | "doctor";
 
 export interface AuthUser {
   id: string;
@@ -69,7 +69,7 @@ export function createAuthStore(apiFetch: ApiFetchFn) {
       sessionChecked.value = true;
     }
 
-    /** Used after login (real or dev-only bypass) to set the authenticated user directly. */
+    /** Used after a successful login response to set the authenticated user directly. */
     function setAuthenticated(value: boolean, userData?: AuthUser | null): void {
       sessionChecked.value = true;
       if (!value) { clearAuth(); return; }

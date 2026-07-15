@@ -1,9 +1,8 @@
 <template>
   <div class="leads-view">
-    <LeadContactForm
+    <LeadForm
       v-if="showAddModal"
       v-model="showAddModal"
-      mode="lead"
       @submit="onLeadSubmit"
     />
     <AppEntityList
@@ -30,13 +29,13 @@
       </span>
     </template>
     <template #item.email="{ item }">
-      <span v-if="isRejected(getLeadFromItem(item))" class="rep-entity-list__cell-empty">—</span>
+      <span v-if="isInactive(getLeadFromItem(item))" class="app-entity-list__cell-empty">—</span>
       <span v-else>{{ getLeadFromItem(item).email || "—" }}</span>
     </template>
     <template #item.status="{ item }">
       <div class="leads-status-cell">
         <span
-          :class="['rep-lead-status-chip', `rep-lead-status-chip--${leadStatusClass(getLeadFromItem(item).status)}`]"
+          :class="['pwa-lead-status-chip', `pwa-lead-status-chip--${leadStatusClass(getLeadFromItem(item).status)}`]"
         >
           {{ statusLabel(getLeadFromItem(item).status) }}
         </span>
@@ -45,12 +44,12 @@
     <template #feed-card-meta="{ item }">
       <span class="leads-feed-meta">
         <span
-          :class="['rep-lead-status-chip', `rep-lead-status-chip--${leadStatusClass(getLeadFromItem(item).status)}`]"
+          :class="['pwa-lead-status-chip', `pwa-lead-status-chip--${leadStatusClass(getLeadFromItem(item).status)}`]"
         >
           {{ statusLabel(getLeadFromItem(item).status) }}
         </span>
         <span
-          v-if="!isRejected(getLeadFromItem(item)) && (getLeadFromItem(item).email || getLeadFromItem(item).region)"
+          v-if="!isInactive(getLeadFromItem(item)) && (getLeadFromItem(item).email || getLeadFromItem(item).region)"
           class="leads-feed-meta-rest"
         >
           {{ [getLeadFromItem(item).email, getLeadFromItem(item).region].filter(Boolean).join(" · ") }}
@@ -61,12 +60,12 @@
       <RouterLink
         v-if="getLeadFromItem(item).institution"
         :to="hcoLink(getLeadFromItem(item).institution!)"
-        class="rep-entity-list__institution-link"
+        class="app-entity-list__institution-link"
         @click.stop
       >
         {{ getLeadFromItem(item).institution }}
       </RouterLink>
-      <span v-else class="rep-entity-list__cell-empty">—</span>
+      <span v-else class="app-entity-list__cell-empty">—</span>
     </template>
     </AppEntityList>
   </div>
@@ -78,7 +77,7 @@ import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
 import GenderIcon from "../components/GenderIcon.vue";
 
-const LeadContactForm = defineAsyncComponent(() => import("../components/LeadContactForm.vue"));
+const LeadForm = defineAsyncComponent(() => import("../components/LeadForm.vue"));
 import { apiFetch } from "../utils/api";
 import { useNotifications } from "../composables/useNotifications";
 import { type FilterDefinition } from "../composables/useFilters";
@@ -90,6 +89,8 @@ import { leadStatusClass, leadStatusI18nKey } from "../utils/leadStatus";
 export interface Lead {
   id: string;
   name: string;
+  first_name: string;
+  last_name: string;
   email: string;
   phone?: string;
   status: string;
@@ -97,6 +98,10 @@ export interface Lead {
   institution?: string;
   specialty?: string;
   notes?: string;
+  country_code?: string | null;
+  converted_to_id?: string | null;
+  converted_to_type?: string | null;
+  converted_at?: string | null;
 }
 
 const { t } = useI18n();
@@ -113,11 +118,11 @@ const leadFilterDefs: FilterDefinition[] = [
 
 const statusOptions = computed(() => [
   { title: t("user.leads.filters.all"), value: "" },
-  { title: t("user.leads.filters.statusNew"), value: "new", chipClass: "rep-lead-status-chip--new" },
-  { title: t("user.leads.filters.statusOngoing"), value: "ongoing", chipClass: "rep-lead-status-chip--ongoing" },
-  { title: t("user.leads.filters.statusAccepted"), value: "accepted", chipClass: "rep-lead-status-chip--accepted" },
-  { title: t("user.leads.filters.statusRejected"), value: "rejected", chipClass: "rep-lead-status-chip--rejected" },
-  { title: t("user.leads.filters.statusCompleted"), value: "completed", chipClass: "rep-lead-status-chip--completed" },
+  { title: t("user.leads.filters.statusNew"), value: "new", chipClass: "pwa-lead-status-chip--new" },
+  { title: t("user.leads.filters.statusContacted"), value: "contacted", chipClass: "pwa-lead-status-chip--contacted" },
+  { title: t("user.leads.filters.statusQualified"), value: "qualified", chipClass: "pwa-lead-status-chip--qualified" },
+  { title: t("user.leads.filters.statusInactive"), value: "inactive", chipClass: "pwa-lead-status-chip--inactive" },
+  { title: t("user.leads.filters.statusConverted"), value: "converted", chipClass: "pwa-lead-status-chip--converted" },
 ]);
 const regionOptions = computed(() => configStore.regionItems);
 
@@ -153,8 +158,8 @@ function statusLabel(status: string): string {
   return key ? t(key) : status || t("user.leads.filters.statusNew");
 }
 
-function isRejected(lead: Lead): boolean {
-  return (lead.status || "").toLowerCase() === "rejected";
+function isInactive(lead: Lead): boolean {
+  return (lead.status || "").toLowerCase() === "inactive";
 }
 
 /** Unwrap Vuetify's internal item wrapper (VDataTable provides `{ raw: T }` via slot). */
@@ -171,15 +176,15 @@ function onAddLead() {
   showAddModal.value = true;
 }
 
-async function onLeadSubmit(data: import("../components/LeadContactForm.vue").LeadFormData | import("../components/LeadContactForm.vue").ContactFormData) {
-  // This view uses mode="lead", so the emitted payload is always LeadFormData.
-  const d = data as import("../components/LeadContactForm.vue").LeadFormData;
+async function onLeadSubmit(data: import("../components/LeadForm.vue").LeadSubmitPayload) {
   const body = JSON.stringify({
-    name: d.name,
-    email: d.email || undefined,
-    status: d.status || "new",
-    region: d.region || undefined,
-    institution: d.institution || undefined,
+    first_name: data.first_name,
+    last_name: data.last_name,
+    email: data.email,
+    phone: data.phone,
+    status: data.status || "new",
+    region: data.region,
+    institution: data.institution,
   });
   const res = await apiFetch("/api/v1/lead", {
     method: "POST",

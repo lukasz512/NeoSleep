@@ -30,12 +30,12 @@ const loaderLabel = computed(() => t("layout.loader.label"));
   height: 3px;
   min-height: 3px;
   max-height: 3px;
-  margin: 0 var(--rep-content-padding-x, 16px);
+  margin: 0 var(--pwa-content-padding-x, 16px);
   overflow: hidden;
   flex-shrink: 0;
   flex-grow: 0;
   box-sizing: border-box;
-  border-radius: var(--rep-radius-sm, 2px);
+  border-radius: var(--pwa-radius-sm, 2px);
 }
 
 .layout-app__loader-track {
@@ -43,7 +43,7 @@ const loaderLabel = computed(() => t("layout.loader.label"));
   height: 100%;
   width: 100%;
   overflow: hidden;
-  border-radius: var(--rep-radius-sm, 2px);
+  border-radius: var(--pwa-radius-sm, 2px);
   background: rgba(var(--v-theme-primary), 0.12);
 }
 
@@ -53,7 +53,7 @@ const loaderLabel = computed(() => t("layout.loader.label"));
   top: 0;
   height: 100%;
   width: 40%;
-  border-radius: var(--rep-radius-sm, 2px);
+  border-radius: var(--pwa-radius-sm, 2px);
   background: linear-gradient(
     90deg,
     transparent 0%,
@@ -61,10 +61,10 @@ const loaderLabel = computed(() => t("layout.loader.label"));
     rgb(var(--v-theme-primary)) 70%,
     transparent 100%
   );
-  animation: rep-loader-shimmer 1.4s ease-in-out infinite;
+  animation: pwa-loader-shimmer 1.4s ease-in-out infinite;
 }
 
-@keyframes rep-loader-shimmer {
+@keyframes pwa-loader-shimmer {
   0% {
     transform: translateX(-100%);
   }

@@ -3,6 +3,7 @@ import {
   insertLead,
   updateLead,
   getLeadById,
+  convertLead,
   type InsertLeadInput,
   type UpdateLeadInput,
   type Lead,
@@ -24,6 +25,16 @@ import { ValidationError } from "../errors.js";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/** Matches lead_status_check in the DB exactly — the PWA uses this same vocabulary, no translation. */
+const VALID_LEAD_STATUSES = ["new", "contacted", "qualified", "inactive", "converted"];
+
+function normalizeLeadStatus(input: string | undefined): string | undefined {
+  if (input === undefined) return undefined;
+  const value = input.trim().toLowerCase();
+  if (!VALID_LEAD_STATUSES.includes(value)) throw new ValidationError(`Invalid lead status: "${input}"`);
+  return value;
+}
+
 // ---------------------------------------------------------------------------
 // CREATE LEAD
 // ---------------------------------------------------------------------------
@@ -42,7 +53,6 @@ export interface CreateLeadInput {
 
 /**
  * Creates a new Lead.
- * Supports the legacy `name` field (splits on first space) for backward compat.
  */
 export async function CreateLeadCommand(
   ctx: TenantContext,
@@ -61,7 +71,7 @@ export async function CreateLeadCommand(
     last_name:   lastName,
     email:       email || null,
     phone:       input.phone?.trim() ?? null,
-    status:      input.status?.trim() || "new",
+    status:      normalizeLeadStatus(input.status) ?? "new",
     region:      input.region?.trim() ?? "",
     source:      input.source?.trim() ?? null,
     assigned_to: input.assigned_to?.trim() ?? null,
@@ -119,7 +129,7 @@ export async function UpdateLeadCommand(
     last_name:   input.last_name,
     email:       input.email,
     phone:       input.phone,
-    status:      input.status,
+    status:      normalizeLeadStatus(input.status),
     region:      input.region,
     source:      input.source,
     assigned_to: input.assigned_to,
@@ -137,6 +147,66 @@ export async function UpdateLeadCommand(
     entity_before: { status: before.status, region: before.region },
     entity_after:  { status: after.status,  region: after.region },
     request_id:    ctx.requestId,
+  });
+
+  return after;
+}
+
+// ---------------------------------------------------------------------------
+// CONVERT LEAD
+// ---------------------------------------------------------------------------
+
+export interface ConvertLeadPayload {
+  converted_to_id: string;
+  converted_to_type: string;
+}
+
+/**
+ * Marks a lead as converted, atomically setting status='converted' plus
+ * converted_to_id/converted_to_type/converted_at. Returns null if the lead
+ * does not exist. Audited as its own "convert" action so it's distinguishable
+ * from a generic field update.
+ *
+ * Called both from the PATCH /lead/:id route (when the body carries
+ * converted_to_id/converted_to_type) and from CreatePractitionerCommand
+ * (same ctx.client / transaction) when a practitioner is created from a lead.
+ */
+export async function ConvertLeadCommand(
+  ctx: TenantContext,
+  id: string,
+  input: ConvertLeadPayload
+): Promise<Lead | null> {
+  if (!id?.trim()) throw new ValidationError("lead id is required");
+
+  const convertedToId = input.converted_to_id?.trim();
+  if (!convertedToId) throw new ValidationError("converted_to_id is required");
+
+  const convertedToType = input.converted_to_type?.trim().toLowerCase();
+  if (convertedToType !== "practitioner" && convertedToType !== "organization") {
+    throw new ValidationError(`Invalid converted_to_type: "${input.converted_to_type}"`);
+  }
+
+  const before = await getLeadById(ctx.client, id);
+  if (!before) return null;
+
+  const after = await convertLead(ctx.client, id, {
+    converted_to_id:   convertedToId,
+    converted_to_type: convertedToType,
+  });
+  if (!after) return null;
+
+  await insertAuditLog(ctx.client, {
+    user_id:       ctx.user.id,
+    action:        "convert",
+    entity_type:   "Lead",
+    entity_id:     id,
+    entity_before: { status: before.status, converted_to_id: before.converted_to_id },
+    entity_after:  {
+      status:            after.status,
+      converted_to_id:   after.converted_to_id,
+      converted_to_type: after.converted_to_type,
+    },
+    request_id: ctx.requestId,
   });
 
   return after;

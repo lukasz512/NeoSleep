@@ -25,10 +25,13 @@ export interface LeadDto {
   email: string;
   phone: string;
   status: string;
+  country_code: string | null;
   region: string;
   source: string | null;
   assigned_to: string | null;
   converted_to_id: string | null;
+  converted_to_type: string | null;
+  converted_at: string | null;
   metadata: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
@@ -43,10 +46,13 @@ function toDto(l: Lead): LeadDto {
     email:          l.email ?? "",
     phone:          l.phone ?? "",
     status:         l.status,
+    country_code:   l.country_code ?? null,
     region:         l.region,
     source:         l.source ?? null,
     assigned_to:    l.assigned_to ?? null,
-    converted_to_id: l.converted_to_id ?? null,
+    converted_to_id:   l.converted_to_id ?? null,
+    converted_to_type: l.converted_to_type ?? null,
+    converted_at:      l.converted_at instanceof Date ? l.converted_at.toISOString() : (l.converted_at ?? null),
     metadata:       l.metadata ?? null,
     created_at:     l.created_at instanceof Date ? l.created_at.toISOString() : String(l.created_at),
     updated_at:     l.updated_at instanceof Date ? l.updated_at.toISOString() : String(l.updated_at),

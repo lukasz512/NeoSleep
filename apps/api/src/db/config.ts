@@ -59,7 +59,7 @@ const DEFAULT_APP_CONFIG: AppConfig = {
   border_radius: "8px",
   hero_container_style: "compact",
   color_scheme: "light",
-  tenant_name: "neoSLEEP mx",
+  tenant_name: "NeoSleep",
   logo_url: null,
   logo_dark_url: null,
   icon_url: null,

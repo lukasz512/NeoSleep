@@ -3,7 +3,7 @@ import { asyncHandler } from "../middleware/errorHandler.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
-import { CreateLeadCommand, UpdateLeadCommand } from "../commands/lead.js";
+import { CreateLeadCommand, UpdateLeadCommand, ConvertLeadCommand } from "../commands/lead.js";
 import { GetLeadListQuery, GetLeadByIdQuery } from "../queries/lead.js";
 import { ValidationError } from "../errors.js";
 import { parsePaginationParams, toFilterArray } from "./utils.js";
@@ -78,26 +78,17 @@ leadsRouter.post(
   asyncHandler(async (req: Request, res: Response) => {
     const slug = tenantSlugFromHost(req.hostname);
     const body = req.body as {
-      name?: string; first_name?: string; last_name?: string;
+      first_name?: string; last_name?: string;
       email?: string; phone?: string; status?: string;
       region?: string; source?: string; assigned_to?: string;
       metadata?: Record<string, unknown>;
     };
 
-    // Support legacy `name` field: split on first space
-    let firstName = typeof body.first_name === "string" ? body.first_name.trim() : "";
-    let lastName  = typeof body.last_name  === "string" ? body.last_name.trim()  : "";
-    if (!firstName && !lastName && typeof body.name === "string" && body.name.trim()) {
-      const parts = body.name.trim().split(" ");
-      firstName = parts[0] ?? "";
-      lastName  = parts.slice(1).join(" ") || firstName;
-    }
-
     const lead = await withTenant(slug, async (client) => {
       const ctx = buildContext(req, client, slug);
       return CreateLeadCommand(ctx, {
-        first_name:  firstName,
-        last_name:   lastName,
+        first_name:  typeof body.first_name === "string" ? body.first_name.trim() : "",
+        last_name:   typeof body.last_name  === "string" ? body.last_name.trim()  : "",
         email:       typeof body.email       === "string" ? body.email.trim()       : null,
         phone:       typeof body.phone       === "string" ? body.phone.trim()       : null,
         status:      typeof body.status      === "string" ? body.status             : undefined,
@@ -124,26 +115,35 @@ leadsRouter.patch(
 
     const slug = tenantSlugFromHost(req.hostname);
     const body = req.body as {
-      name?: string; first_name?: string; last_name?: string;
+      first_name?: string; last_name?: string;
       email?: string; phone?: string; status?: string;
       region?: string; source?: string; assigned_to?: string;
       metadata?: Record<string, unknown>;
+      converted_to_id?: string; converted_to_type?: string;
     };
 
-    // Support legacy name field
-    let firstName = typeof body.first_name === "string" ? body.first_name : undefined;
-    let lastName  = typeof body.last_name  === "string" ? body.last_name  : undefined;
-    if (firstName === undefined && lastName === undefined && typeof body.name === "string" && body.name.trim()) {
-      const parts = body.name.trim().split(" ");
-      firstName = parts[0] ?? "";
-      lastName  = parts.slice(1).join(" ") || firstName;
+    // Conversion is a distinct write (status + converted_to_id/type/at, all
+    // atomic) — route to ConvertLeadCommand instead of a generic field update
+    // whenever the body carries both conversion fields.
+    if (typeof body.converted_to_id === "string" && typeof body.converted_to_type === "string") {
+      const lead = await withTenant(slug, async (client) => {
+        const ctx = buildContext(req, client, slug);
+        return ConvertLeadCommand(ctx, id, {
+          converted_to_id:   body.converted_to_id!,
+          converted_to_type: body.converted_to_type!,
+        });
+      });
+
+      if (!lead) { res.status(404).json({ error: "Lead not found" }); return; }
+      res.json(lead);
+      return;
     }
 
     const lead = await withTenant(slug, async (client) => {
       const ctx = buildContext(req, client, slug);
       return UpdateLeadCommand(ctx, id, {
-        first_name:  firstName,
-        last_name:   lastName,
+        first_name:  typeof body.first_name === "string" ? body.first_name : undefined,
+        last_name:   typeof body.last_name  === "string" ? body.last_name  : undefined,
         email:       body.email       !== undefined ? body.email       : undefined,
         phone:       body.phone       !== undefined ? body.phone       : undefined,
         status:      typeof body.status      === "string" ? body.status  : undefined,

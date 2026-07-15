@@ -1,6 +1,7 @@
 import { Router, type Router as RouterType, type Request, type Response } from "express";
 import { getAppConfig, updateAppConfig, type AppConfigUpdate, getI18nOverrides, upsertI18nOverrides } from "../db.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
+import { requireRole } from "../middleware/requireRole.js";
 
 export const configRouter: RouterType = Router();
 
@@ -26,16 +27,11 @@ interface AppConfigPatchBody {
   color_scheme?: unknown;
 }
 
-/** PATCH /api/config/app – update theme (admin only). In dev, allow when no API session (e.g. "Go to app" login). */
+/** PATCH /api/config/app – update theme (admin only). */
 configRouter.patch(
   "/config/app",
+  requireRole("admin"),
   asyncHandler(async (req: Request, res: Response) => {
-    const session = req.session as { user?: { role?: string } } | undefined;
-    const isAdmin = session?.user?.role === "admin";
-    if (!isAdmin) {
-      res.status(403).json({ error: "Admin only" });
-      return;
-    }
     const body = req.body as AppConfigPatchBody;
     const updates: AppConfigUpdate = {};
     const normHex = (s: unknown) =>
@@ -87,13 +83,8 @@ configRouter.get(
  */
 configRouter.patch(
   "/config/i18n",
+  requireRole("admin"),
   asyncHandler(async (req: Request, res: Response) => {
-    const session = req.session as { user?: { role?: string } } | undefined;
-    const isAdmin = session?.user?.role === "admin";
-    if (!isAdmin) {
-      res.status(403).json({ error: "Admin only" });
-      return;
-    }
     const { locale, overrides } = req.body as { locale?: string; overrides?: Record<string, string | null> };
     if (!locale || typeof locale !== "string" || !["en", "pl", "mx"].includes(locale)) {
       res.status(400).json({ error: "locale must be one of: en, pl, mx" });

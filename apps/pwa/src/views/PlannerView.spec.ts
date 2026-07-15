@@ -88,7 +88,7 @@ describe("PlannerView", () => {
   describe("touch targets", () => {
     it("nav buttons have min 44px touch target on mobile", () => {
       const source = getSource();
-      expect(source).toMatch(/--rep-btn-min-width|--rep-btn-min-height/);
+      expect(source).toMatch(/--pwa-btn-min-width|--pwa-btn-min-height/);
       expect(source).toMatch(/767px|max-width:\s*767/);
     });
   });

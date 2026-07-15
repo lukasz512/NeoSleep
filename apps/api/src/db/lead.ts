@@ -13,7 +13,10 @@ export interface Lead {
   // From lead table
   source: string | null;
   status: string;
+  country_code: string | null;
   converted_to_id: string | null;
+  converted_to_type: string | null;
+  converted_at: Date | null;
   region: string;
   assigned_to: string | null;
   metadata: Record<string, unknown> | null;
@@ -68,7 +71,8 @@ function isLeadSortColumn(s: string): s is LeadSortColumn {
 }
 
 const LEAD_SELECT_COLS = `
-  l.id, l.identity_id, l.source, l.status, l.converted_to_id, l.region,
+  l.id, l.identity_id, l.source, l.status, l.country_code,
+  l.converted_to_id, l.converted_to_type, l.converted_at, l.region,
   l.assigned_to, l.metadata, l.created_at, l.updated_at,
   i.first_name, i.last_name, i.email, i.phone`.trim();
 
@@ -277,6 +281,40 @@ export async function updateLead(client: PoolClient, id: string, input: UpdateLe
   } catch (err) {
     if (err instanceof AppError) throw err;
     throw new DatabaseError("updateLead", err);
+  }
+
+  return getLeadById(client, id);
+}
+
+export interface ConvertLeadInput {
+  converted_to_id: string;
+  // DB CHECK constraint (lead_converted_to_type_check) only allows these two
+  // lowercase values (or NULL) — see infrastructure/db/schema-snapshot.sql.
+  converted_to_type: "practitioner" | "organization";
+}
+
+/**
+ * Atomically marks a lead as converted: sets status='converted' plus
+ * converted_to_id/converted_to_type/converted_at in a single write.
+ * Kept separate from updateLead() so the "convert" transition (and its own
+ * audit action) stays explicit rather than folded into a generic partial update.
+ * The client must already be in a transaction (withTenant handles this).
+ */
+export async function convertLead(client: PoolClient, id: string, input: ConvertLeadInput): Promise<Lead | null> {
+  const lead = await getLeadById(client, id);
+  if (!lead) return null;
+
+  try {
+    await client.query(
+      `UPDATE lead
+       SET status = 'converted', converted_to_id = $1, converted_to_type = $2,
+           converted_at = now(), updated_at = now()
+       WHERE id = $3`,
+      [input.converted_to_id, input.converted_to_type, id]
+    );
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("convertLead", err);
   }
 
   return getLeadById(client, id);

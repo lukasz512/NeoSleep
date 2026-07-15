@@ -77,7 +77,7 @@ defineEmits<{
   position: relative;
   display: flex;
   align-items: center;
-  height: calc(var(--rep-topbar-height, 56px) - 8px);
+  height: calc(var(--pwa-topbar-height, 56px) - 8px);
   margin-bottom: 16px;
   padding-bottom: 0;
   box-sizing: border-box;
@@ -89,13 +89,13 @@ defineEmits<{
     left: 0;
     right: 0;
     height: 1px;
-    background: var(--rep-sidebar-border, #3a3a3a);
+    background: var(--pwa-sidebar-border, #3a3a3a);
   }
 
   .layout-app__logo-link {
     display: flex;
     align-items: center;
-    color: var(--rep-sidebar-text, #f5f5f5);
+    color: var(--pwa-sidebar-text, #f5f5f5);
     text-decoration: none;
     padding: 8px 4px;
     margin: -8px 0;
@@ -103,7 +103,7 @@ defineEmits<{
 
     &:hover,
     &:focus-visible {
-      color: var(--rep-sidebar-text, #f5f5f5);
+      color: var(--pwa-sidebar-text, #f5f5f5);
       outline: none;
     }
   }
@@ -146,14 +146,14 @@ defineEmits<{
 .layout-app__mobile-drawer-logo-link {
   display: flex;
   align-items: center;
-  color: var(--rep-sidebar-text, #f5f5f5);
+  color: var(--pwa-sidebar-text, #f5f5f5);
   text-decoration: none;
   padding: 8px 4px;
   -webkit-tap-highlight-color: transparent;
 
   &:hover,
   &:focus-visible {
-    color: var(--rep-sidebar-text, #f5f5f5);
+    color: var(--pwa-sidebar-text, #f5f5f5);
     outline: none;
   }
 }

@@ -1,5 +1,5 @@
 import type { TenantContext } from "../context/TenantContext.js";
-import { getUsersPaginated, type GetUsersFilters, type User } from "../db.js";
+import { getUsersPaginated, getUserById, type GetUsersFilters, type User } from "../db.js";
 
 /**
  * QUERIES — User domain.
@@ -67,4 +67,9 @@ export async function GetUserListQuery(
 
   const { rows, total } = await getUsersPaginated(ctx.client, filters, page, limit, sortBy, sortOrder);
   return { items: rows.map(toDto), total };
+}
+
+export async function GetUserByIdQuery(ctx: TenantContext, id: string): Promise<UserDto | null> {
+  const user = await getUserById(ctx.client, id);
+  return user ? toDto(user) : null;
 }

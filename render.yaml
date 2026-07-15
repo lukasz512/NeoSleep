@@ -1,9 +1,8 @@
 # Render Blueprint for apps/api (BFF).
-# One service, tracking the `prod` branch only. Dev happens locally
-# (pnpm start / pnpm dev, against the same Supabase DB) or on the `dev`
-# branch — nothing deploys from there. Merge dev -> prod when ready and
-# Render redeploys automatically. No GitHub Actions, no SSH, no PM2, no
-# nginx: git push to `prod` is the whole deploy pipeline.
+# One service. Currently tracking `dev` for initial testing — switch
+# `branch` below to `prod` once verified working, then dev work goes back
+# to being local-only / non-deploying. No GitHub Actions, no SSH, no PM2,
+# no nginx: a git push to the tracked branch is the whole deploy pipeline.
 #
 # apps/pwa and apps/web are unaffected — they still deploy to GoDaddy via FTP.
 # Supabase (DATABASE_URL) is unchanged.
@@ -17,7 +16,7 @@ services:
     runtime: node
     plan: free
     region: frankfurt
-    branch: prod
+    branch: dev
     buildCommand: corepack enable && NODE_ENV=development pnpm install --frozen-lockfile && pnpm --filter @neo/api build
     startCommand: node apps/api/dist/server.js
     healthCheckPath: /health

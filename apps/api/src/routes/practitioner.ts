@@ -85,13 +85,14 @@ practitionerRouter.post(
       institution?: string; region?: string;
       influence_tier?: string; language?: string;
       national_ids?: Record<string, string>;
+      lead_id?: string;
     };
 
     const practitioner = await withTenant(slug, async (client) => {
       const ctx = buildContext(req, client, slug);
       return CreatePractitionerCommand(ctx, {
-        first_name:        typeof body.first_name        === "string" ? body.first_name.trim()        : "",
-        last_name:         typeof body.last_name         === "string" ? body.last_name.trim()         : "",
+        first_name:        typeof body.first_name === "string" ? body.first_name.trim() : "",
+        last_name:         typeof body.last_name  === "string" ? body.last_name.trim()  : "",
         salutation:        typeof body.salutation        === "string" ? body.salutation               : null,
         email:             typeof body.email             === "string" ? body.email.trim()             : null,
         phone:             typeof body.phone             === "string" ? body.phone.trim()             : null,
@@ -102,6 +103,7 @@ practitionerRouter.post(
         influence_tier:    typeof body.influence_tier    === "string" ? body.influence_tier           : undefined,
         language:          typeof body.language          === "string" ? body.language                 : null,
         national_ids:      body.national_ids ?? null,
+        lead_id:           typeof body.lead_id           === "string" ? body.lead_id.trim()           : null,
       });
     });
 
@@ -132,8 +134,8 @@ practitionerRouter.patch(
     const practitioner = await withTenant(slug, async (client) => {
       const ctx = buildContext(req, client, slug);
       return UpdatePractitionerCommand(ctx, id, {
-        first_name:        typeof body.first_name        === "string" ? body.first_name        : undefined,
-        last_name:         typeof body.last_name         === "string" ? body.last_name         : undefined,
+        first_name:        typeof body.first_name === "string" ? body.first_name.trim() : undefined,
+        last_name:         typeof body.last_name  === "string" ? body.last_name.trim()  : undefined,
         salutation:        typeof body.salutation        === "string" ? body.salutation        : undefined,
         email:             typeof body.email             === "string" ? body.email             : undefined,
         phone:             typeof body.phone             === "string" ? body.phone             : undefined,

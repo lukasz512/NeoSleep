@@ -95,9 +95,9 @@ defineProps<{
 }
 
 .view-item__back-btn {
-  min-height: var(--rep-btn-min-height, 44px);
-  min-width: var(--rep-btn-min-width, 44px);
-  color: var(--rep-text, rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity)));
+  min-height: var(--pwa-btn-min-height, 44px);
+  min-width: var(--pwa-btn-min-width, 44px);
+  color: var(--pwa-text, rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity)));
 }
 
 .view-item__back-btn--no-border {
@@ -118,7 +118,7 @@ defineProps<{
 
 .view-item__card {
   padding: 24px;
-  border-radius: var(--rep-radius);
+  border-radius: var(--pwa-radius);
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   background: rgba(var(--v-theme-surface), 1);
 }
@@ -188,15 +188,15 @@ defineProps<{
 }
 
 /* Edit button: same style as filter/add (circular, no border, transparent, theme color) */
-/* :deep() needed because Edit is slot content from parent; use --rep-text for reliable light/dark contrast */
+/* :deep() needed because Edit is slot content from parent; use --pwa-text for reliable light/dark contrast */
 .view-item__header-actions :deep(.view-item__edit-btn) {
-  min-width: var(--rep-btn-min-width, 44px);
-  min-height: var(--rep-btn-min-height, 44px);
-  color: var(--rep-text, rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity))) !important;
+  min-width: var(--pwa-btn-min-width, 44px);
+  min-height: var(--pwa-btn-min-height, 44px);
+  color: var(--pwa-text, rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity))) !important;
 
   &,
   * {
-    color: var(--rep-text, rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity))) !important;
+    color: var(--pwa-text, rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity))) !important;
   }
 }
 
@@ -214,14 +214,14 @@ defineProps<{
   width: 24px;
   height: 24px;
   display: block;
-  color: var(--rep-text, rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity))) !important;
-  stroke: var(--rep-text, rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity))) !important;
+  color: var(--pwa-text, rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity))) !important;
+  stroke: var(--pwa-text, rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity))) !important;
 }
 
 /* Schedule visit button: green (success), same shape as edit/move */
 .view-item__header-actions :deep(.view-item__schedule-btn) {
-  min-width: var(--rep-btn-min-width, 44px);
-  min-height: var(--rep-btn-min-height, 44px);
+  min-width: var(--pwa-btn-min-width, 44px);
+  min-height: var(--pwa-btn-min-height, 44px);
   color: rgb(var(--v-theme-success)) !important;
   border: none !important;
   box-shadow: none !important;

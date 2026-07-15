@@ -1,5 +1,35 @@
 <template>
   <div class="login-view">
+    <div class="login-view__topbar">
+      <VMenu
+        v-model="settingsMenuOpen"
+        location="bottom end"
+        :close-on-content-click="false"
+        min-width="220"
+      >
+        <template #activator="{ props: menuProps }">
+          <VBtn
+            v-bind="menuProps"
+            icon
+            variant="text"
+            size="small"
+            :aria-label="t('user.settings.menu')"
+            :title="t('user.settings.menu')"
+          >
+            <VIcon icon="mdi-cog-outline" />
+          </VBtn>
+        </template>
+        <VCard class="login-view__settings-card">
+          <ThemeLocaleSwitcher
+            :theme="theme"
+            :locale="locale"
+            @toggle-theme="toggleTheme"
+            @change-locale="onChangeLocale"
+          />
+        </VCard>
+      </VMenu>
+    </div>
+
     <VCard class="login-view__card" elevation="4" rounded="lg">
 
       <div class="login-view__logo-wrap">
@@ -91,29 +121,44 @@
         </div>
       </VCardText>
     </VCard>
-
-    <component
-      :is="DevPanel"
-      v-if="isDev && DevPanel"
-      @login="handleDevLogin"
-    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, defineAsyncComponent, inject } from "vue";
+import { ref, computed, inject } from "vue";
 import { useI18n } from "vue-i18n";
-import { useRouter } from "vue-router";
+import { useTheme } from "vuetify";
+import { en as vuetifyEn, pl as vuetifyPl, es as vuetifyEs } from "vuetify/locale";
 import { createConfigStore } from "@stores";
 import { createUseLoginFlow } from "../composables/useLoginFlow";
+import { loadLocaleMessages, type SupportedLocale } from "@i18n/loadLocale";
 import type { ApiFetchOptions } from "@api";
-import { createAuthStore } from "@stores";
+import ThemeLocaleSwitcher from "../components/ThemeLocaleSwitcher.vue";
 
 type ApiFetchFn = (path: string, options?: ApiFetchOptions) => Promise<Response>;
 
-const { t } = useI18n();
-const router = useRouter();
-const isDev = import.meta.env.DEV;
+const i18n = useI18n();
+const { t, locale } = i18n;
+
+const settingsMenuOpen = ref(false);
+const vuetifyTheme = useTheme();
+const theme = computed<"light" | "dark">(() => (vuetifyTheme.current.value.dark ? "dark" : "light"));
+
+function toggleTheme() {
+  vuetifyTheme.change(theme.value === "dark" ? "light" : "dark");
+}
+
+const vuetifyLocales: Record<SupportedLocale, Record<string, unknown>> = {
+  en: vuetifyEn,
+  pl: vuetifyPl,
+  mx: vuetifyEs,
+};
+
+async function onChangeLocale(lang: string) {
+  const next = lang as SupportedLocale;
+  await loadLocaleMessages(i18n, next, { $vuetify: vuetifyLocales[next] });
+  locale.value = next;
+}
 
 const apiFetch = inject<ApiFetchFn>("neo:apiFetch")!;
 
@@ -127,10 +172,6 @@ const { email, password, rememberMe, loading, errorKey, submit } = useLoginFlow(
 const showPassword = ref(false);
 const form = ref<{ validate: () => Promise<{ valid: boolean }> } | null>(null);
 
-const DevPanel = isDev
-  ? defineAsyncComponent(() => import("../components/LoginDevPanel.vue"))
-  : null;
-
 const ruleEmailRequired = (v: string) =>
   !!v.trim() || t("user.login.validation.emailRequired");
 const ruleEmailFormat = (v: string) =>
@@ -143,23 +184,11 @@ async function handleSubmit() {
   const { valid } = await form.value.validate();
   if (valid) await submit();
 }
-
-const useAuthStore = createAuthStore(apiFetch);
-
-async function handleDevLogin(role: string) {
-  const authStore = useAuthStore();
-  authStore.setAuthenticated(true, {
-    id: "dev-user",
-    email: "dev@neosleep.local",
-    name: role === "admin" ? "Anna (Admin)" : "Jan (Rep)",
-    role: role === "admin" ? "admin" : "rep",
-  });
-  await router.push("/dashboard");
-}
 </script>
 
 <style scoped>
 .login-view {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -167,6 +196,17 @@ async function handleDevLogin(role: string) {
   min-height: 100dvh;
   padding: 24px 16px;
   gap: 16px;
+}
+
+.login-view__topbar {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+
+.login-view__settings-card {
+  min-width: 220px;
+  padding: 12px;
 }
 
 .login-view__card {

@@ -1,14 +1,17 @@
 import express, { type Express } from "express";
 import helmet from "helmet";
 import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import { requestIdMiddleware } from "./middleware/requestId.js";
-import { authRouter } from "./auth.js";
+import { SESSION_SECRET, FRONTEND_URL } from "./env.js";
+import { getDb } from "./db/connection.js";
+import { authRouter, ensureInitialUserPasswords } from "./auth.js";
 import { leadsRouter } from "./routes/leads.js";
 import { practitionerRouter } from "./routes/practitioner.js";
 import { organizationRouter } from "./routes/organization.js";
-import { presentationsRouter } from "./routes/presentations.js";
+import { presentationRouter } from "./routes/presentation.js";
 import { diagnosticsRouter } from "./routes/diagnostics.js";
 import { encounterRouter } from "./routes/encounter.js";
 import { configRouter } from "./routes/config.js";
@@ -21,11 +24,8 @@ import { runMigrations } from "./db.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { apiLimiter } from "./middleware/rateLimiter.js";
 
-const frontendUrl = process.env.FRONTEND_URL ?? "http://localhost:5173";
-const sessionSecret = process.env.SESSION_SECRET ?? "dev-secret-change-in-production";
-
 // Allow multiple origins (e.g. localhost + LAN IP for phone testing): set FRONTEND_URL="http://localhost:5173,http://192.168.1.x:5173"
-const corsOrigins = frontendUrl.split(",").map((s) => s.trim()).filter(Boolean);
+const corsOrigins = FRONTEND_URL.split(",").map((s) => s.trim()).filter(Boolean);
 
 /** In dev, allow localhost, LAN IPs (192.168, 10.x), and link-local (169.254.x.x) on Vite ports. */
 const DEV_ORIGIN_REGEX =
@@ -78,9 +78,18 @@ app.use(
 app.use(cookieParser());
 app.use(express.json({ limit: "50kb" }));
 app.use(apiLimiter);
+const PgSessionStore = connectPgSimple(session);
+
 app.use(
   session({
-    secret: sessionSecret,
+    store: new PgSessionStore({
+      pool: getDb(),
+      schemaName: "platform",
+      tableName: "sessions",
+      createTableIfMissing: false,
+      pruneSessionInterval: 900,
+    }),
+    secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -99,7 +108,7 @@ app.use("/api/v1", authRouter);
 app.use("/api/v1", leadsRouter);
 app.use("/api/v1", practitionerRouter);
 app.use("/api/v1", organizationRouter);
-app.use("/api/v1", presentationsRouter);
+app.use("/api/v1", presentationRouter);
 app.use("/api/v1", diagnosticsRouter);
 app.use("/api/v1", encounterRouter);
 app.use("/api/v1", configRouter);
@@ -146,6 +155,7 @@ if (typeof process.env.VITEST === "undefined") {
 
   async function start() {
     await runMigrations();
+    await ensureInitialUserPasswords(process.env.DEFAULT_TENANT_SLUG ?? "neosleep");
     server = app.listen(port, () => {
       console.log(`[neocrm-api] listening on http://localhost:${port}`);
     });

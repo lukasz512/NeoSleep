@@ -15,6 +15,8 @@ export function getApiUrl(): string {
 export const APP_STORAGE_KEYS = {
   /** Single key for all app settings (theme, locale, sidebar, filters). Later can sync to backend. */
   settings: "app-settings",
+  /** Admin-only "view as" nav preview (see stores/rolePreview.ts) — separate key, not a general app setting. */
+  rolePreview: "app-role-preview",
 } as const;
 
 /** Default sidebar state: expanded (false = not collapsed) */

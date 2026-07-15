@@ -96,7 +96,7 @@ VAPID_PUBLIC_KEY=
 VAPID_PRIVATE_KEY=
 VAPID_SUBJECT=
 DEFAULT_TENANT_SLUG=
-ADMIN_DEFAULT_PASSWORD=            # only if used for initial seed
+INITIAL_USER_PASSWORD=             # set for any seeded staff account with no password yet
 ```
 
 Lock down permissions: `chmod 600 /home/deploy/apps/bff-*/.env`.
