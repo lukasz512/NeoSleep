@@ -38,5 +38,5 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftp
           local-dir: ./apps/web/dist/
-          server-dir: ${{ secrets.FTP_PATH_WEBSITE_PROD }}/
+          server-dir: ${{ secrets.GODADY_FTP_WEB_PROD }}/
           dangerous-clean-slate: false
