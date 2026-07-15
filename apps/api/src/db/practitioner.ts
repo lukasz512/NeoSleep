@@ -44,7 +44,6 @@ export interface InsertPractitionerInput {
   primary_specialty?: string | null;
   institution?: string | null;
   region?: string;
-  lead_id?: string | null;
   influence_tier?: string;
   language?: string | null;
   national_ids?: Record<string, string> | null;
@@ -87,13 +86,19 @@ async function resolveOrganizationId(
   name: string,
   region: string
 ): Promise<{ id: string; name: string }> {
-  const result = await client.query<{ id: string }>(
-    `INSERT INTO organization (name, region, status) VALUES ($1, $2, 'active')
-     ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-     RETURNING id`,
+  // No unique constraint on organization.name exists, so this can't be an
+  // ON CONFLICT upsert — look up first, insert only if nothing matched.
+  const existing = await client.query<{ id: string }>(
+    `SELECT id FROM organization WHERE name = $1 AND deleted_at IS NULL LIMIT 1`,
+    [name]
+  );
+  if (existing.rows[0]) return { id: existing.rows[0].id, name };
+
+  const inserted = await client.query<{ id: string }>(
+    `INSERT INTO organization (name, region, status) VALUES ($1, $2, 'active') RETURNING id`,
     [name, region]
   );
-  return { id: result.rows[0]!.id, name };
+  return { id: inserted.rows[0]!.id, name };
 }
 
 export async function getPractitionerPaginated(

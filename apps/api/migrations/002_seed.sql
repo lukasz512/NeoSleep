@@ -423,7 +423,9 @@ WHERE country_code = 'TH' AND code != 'TH' AND parent_id IS NULL;
 --   d) neosleep.user_roles — admin role assignment
 --
 -- Password is NOT seeded here. BFF reads ADMIN_DEFAULT_PASSWORD env var and
--- sets the bcrypt hash on first startup via the auth.ts seedAdmin() call.
+-- sets the bcrypt hash on first startup via auth.ts's ensureAdminBootstrap()
+-- call (server.ts, runs after runMigrations() on every startup; no-op once
+-- a real password_hash exists).
 -- force_password_change = true forces a reset on the very first login.
 --
 -- Idempotent: all inserts use ON CONFLICT DO NOTHING.

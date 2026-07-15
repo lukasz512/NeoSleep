@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import bcrypt from "bcrypt";
 import type { TenantContext } from "../context/TenantContext.js";
 import {
@@ -5,23 +6,29 @@ import {
   updateUser,
   softDeleteUser,
   getUserIdByEmail,
+  getUserById,
+  createPasswordResetToken,
   type UpdateUserInput,
   type StaffRole,
   type User,
 } from "../db.js";
 import { insertAuditLog } from "../db.js";
-import { ConflictError, ValidationError } from "../errors.js";
+import { ConflictError, NotFoundError, ValidationError } from "../errors.js";
+import { FRONTEND_URL } from "../env.js";
+import { hashToken } from "../utils/hashToken.js";
+import { sendPasswordResetEmail } from "../mailer.js";
 
 /**
- * COMMANDS — User (staff: rep/ffm/kam/msl/admin) domain.
+ * COMMANDS — User (staff: rep/manager/kam/msl/admin/doctor) domain.
  *
  * Each command validates, writes, writes audit log, returns result.
  * No req/res. No getDb(). Only ctx.client (tenant-scoped, same transaction).
  */
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const VALID_ROLES: StaffRole[] = ["admin", "ffm", "kam", "msl", "rep"];
+const VALID_ROLES: StaffRole[] = ["admin", "manager", "kam", "msl", "rep", "doctor"];
 const BCRYPT_ROUNDS = 12;
+const PASSWORD_RESET_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
 
 // ---------------------------------------------------------------------------
 // CREATE USER
@@ -91,6 +98,9 @@ export async function UpdateUserCommand(
   if (input.status && !["active", "inactive", "suspended"].includes(input.status)) {
     throw new ValidationError("Invalid status");
   }
+  if (input.role && !VALID_ROLES.includes(input.role)) {
+    throw new ValidationError(`role must be one of: ${VALID_ROLES.join(", ")}`);
+  }
 
   const before = await updateUser(ctx.client, id, input);
   if (!before) return null;
@@ -100,11 +110,38 @@ export async function UpdateUserCommand(
     action: "update",
     entity_type: "Person",
     entity_id: id,
-    entity_after: { status: before.status, region: before.region },
+    entity_after: { status: before.status, region: before.region, role: before.role },
     request_id: ctx.requestId,
   });
 
   return before;
+}
+
+// ---------------------------------------------------------------------------
+// RESET USER PASSWORD (admin/manager triggered — emails the target user a reset link)
+// ---------------------------------------------------------------------------
+
+export async function ResetUserPasswordCommand(ctx: TenantContext, id: string): Promise<void> {
+  if (!id?.trim()) throw new ValidationError("user id is required");
+
+  const user = await getUserById(ctx.client, id);
+  if (!user) throw new NotFoundError("User", id);
+
+  const token = crypto.randomBytes(32).toString("hex");
+  const tokenHash = hashToken(token);
+  const expiresAt = new Date(Date.now() + PASSWORD_RESET_EXPIRY_MS);
+  await createPasswordResetToken(ctx.client, user.id, tokenHash, expiresAt);
+
+  const resetLink = `${FRONTEND_URL}/reset-password?token=${encodeURIComponent(token)}`;
+  await sendPasswordResetEmail(user.email, resetLink);
+
+  await insertAuditLog(ctx.client, {
+    user_id: ctx.user.id,
+    action: "reset_password",
+    entity_type: "Person",
+    entity_id: id,
+    request_id: ctx.requestId,
+  });
 }
 
 // ---------------------------------------------------------------------------

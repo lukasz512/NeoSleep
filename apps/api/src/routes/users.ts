@@ -1,10 +1,10 @@
 import { Router, type Router as RouterType, type Request, type Response } from "express";
 import { asyncHandler } from "../middleware/errorHandler.js";
-import { requireAuth } from "../middleware/requireAuth.js";
+import { requireRole } from "../middleware/requireRole.js";
 import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
-import { CreateUserCommand, UpdateUserCommand, DeleteUserCommand } from "../commands/users.js";
-import { GetUserListQuery } from "../queries/users.js";
+import { CreateUserCommand, UpdateUserCommand, DeleteUserCommand, ResetUserPasswordCommand } from "../commands/users.js";
+import { GetUserListQuery, GetUserByIdQuery } from "../queries/users.js";
 import { ValidationError } from "../errors.js";
 import { parsePaginationParams, toFilterArray } from "./utils.js";
 import type { StaffRole } from "../db.js";
@@ -21,7 +21,7 @@ export const usersRouter: RouterType = Router();
 // ---------------------------------------------------------------------------
 usersRouter.get(
   "/users",
-  requireAuth,
+  requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
     const slug = tenantSlugFromHost(req.hostname);
     const { page, limit, sortBy, sortOrder } = parsePaginationParams(req);
@@ -44,11 +44,32 @@ usersRouter.get(
 );
 
 // ---------------------------------------------------------------------------
+// GET /api/v1/users/:id — single user
+// ---------------------------------------------------------------------------
+usersRouter.get(
+  "/users/:id",
+  requireRole("admin", "manager"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id?.trim();
+    if (!id) throw new ValidationError("Missing user id");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    const user = await withTenant(slug, async (client) => {
+      const ctx = buildContext(req, client, slug);
+      return GetUserByIdQuery(ctx, id);
+    });
+
+    if (!user) { res.status(404).json({ error: "User not found" }); return; }
+    res.json(user);
+  })
+);
+
+// ---------------------------------------------------------------------------
 // POST /api/v1/users — create a new user
 // ---------------------------------------------------------------------------
 usersRouter.post(
   "/users",
-  requireAuth,
+  requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
     const slug = tenantSlugFromHost(req.hostname);
     const body = req.body as {
@@ -79,7 +100,7 @@ usersRouter.post(
 // ---------------------------------------------------------------------------
 usersRouter.patch(
   "/users/:id",
-  requireAuth,
+  requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id?.trim();
     if (!id) throw new ValidationError("Missing user id");
@@ -87,7 +108,7 @@ usersRouter.patch(
     const slug = tenantSlugFromHost(req.hostname);
     const body = req.body as {
       first_name?: string; last_name?: string; phone?: string;
-      status?: "active" | "inactive" | "suspended"; country_code?: string;
+      status?: "active" | "inactive" | "suspended"; country_code?: string; role?: StaffRole;
     };
 
     const user = await withTenant(slug, async (client) => {
@@ -98,6 +119,7 @@ usersRouter.patch(
         phone: body.phone !== undefined ? body.phone : undefined,
         status: body.status,
         country_code: body.country_code !== undefined ? body.country_code : undefined,
+        role: body.role,
       });
     });
 
@@ -107,11 +129,31 @@ usersRouter.patch(
 );
 
 // ---------------------------------------------------------------------------
+// POST /api/v1/users/:id/reset-password — admin/manager triggers a reset email
+// ---------------------------------------------------------------------------
+usersRouter.post(
+  "/users/:id/reset-password",
+  requireRole("admin", "manager"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id?.trim();
+    if (!id) throw new ValidationError("Missing user id");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    await withTenant(slug, async (client) => {
+      const ctx = buildContext(req, client, slug);
+      await ResetUserPasswordCommand(ctx, id);
+    });
+
+    res.json({ success: true });
+  })
+);
+
+// ---------------------------------------------------------------------------
 // DELETE /api/v1/users/:id — soft delete
 // ---------------------------------------------------------------------------
 usersRouter.delete(
   "/users/:id",
-  requireAuth,
+  requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id?.trim();
     if (!id) throw new ValidationError("Missing user id");

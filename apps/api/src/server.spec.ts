@@ -84,12 +84,12 @@ describe("API server", () => {
     });
   });
 
-  // Authorization — wrong role
-  it("PATCH /api/config/app without admin session returns 403", async () => {
+  // Authorization — no session at all
+  it("PATCH /api/config/app without any session returns 401", async () => {
     const res = await request(app)
       .patch("/api/config/app")
       .send({ primary_color: "#ff0000" });
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
     expect(res.body).toHaveProperty("error");
   });
 

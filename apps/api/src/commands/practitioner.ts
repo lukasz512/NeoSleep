@@ -9,6 +9,7 @@ import {
 } from "../db.js";
 import { insertAuditLog } from "../db.js";
 import { ValidationError } from "../errors.js";
+import { ConvertLeadCommand } from "./lead.js";
 
 /**
  * COMMANDS — Practitioner domain.
@@ -37,6 +38,9 @@ export interface CreatePractitionerInput {
   influence_tier?: string;
   language?: string | null;
   national_ids?: Record<string, string> | null;
+  /** When set, this practitioner is being created from a lead ("move to contacts") —
+   *  the lead is atomically marked converted in the same transaction. */
+  lead_id?: string | null;
 }
 
 export async function CreatePractitionerCommand(
@@ -86,6 +90,16 @@ export async function CreatePractitionerCommand(
     },
     request_id: ctx.requestId,
   });
+
+  const leadId = input.lead_id?.trim();
+  if (leadId) {
+    // Same ctx.client / transaction as the insert above — the practitioner
+    // create and the lead conversion commit or roll back together.
+    await ConvertLeadCommand(ctx, leadId, {
+      converted_to_id:   practitioner.id,
+      converted_to_type: "practitioner",
+    });
+  }
 
   return practitioner;
 }
