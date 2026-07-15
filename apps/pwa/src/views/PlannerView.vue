@@ -352,8 +352,8 @@ async function onEventFormSubmit(payload: EventSubmitPayload) {
 
 /* Segmented control: pill container (grey), selected segment (white + primary border). */
 .view-planner__view-toggle-group {
-  background: var(--rep-bg-secondary, rgba(var(--v-theme-on-surface), 0.04));
-  border-radius: var(--rep-radius, 10px);
+  background: var(--pwa-bg-secondary, rgba(var(--v-theme-on-surface), 0.04));
+  border-radius: var(--pwa-radius, 10px);
   padding: 4px;
   gap: 0;
   box-shadow: none;
@@ -386,9 +386,9 @@ async function onEventFormSubmit(payload: EventSubmitPayload) {
 
   :deep(.v-btn--selected),
   :deep(.v-btn[aria-pressed="true"]) {
-    background: var(--rep-bg, rgb(var(--v-theme-surface)));
-    color: var(--rep-text, rgba(var(--v-theme-on-surface), 0.87));
-    border-color: var(--rep-primary, rgb(var(--v-theme-primary)));
+    background: var(--pwa-bg, rgb(var(--v-theme-surface)));
+    color: var(--pwa-text, rgba(var(--v-theme-on-surface), 0.87));
+    border-color: var(--pwa-primary, rgb(var(--v-theme-primary)));
     box-shadow: none;
   }
 }
@@ -400,13 +400,13 @@ async function onEventFormSubmit(payload: EventSubmitPayload) {
 }
 
 .view-planner__nav-btn {
-  min-width: var(--rep-btn-min-width, 44px);
-  min-height: var(--rep-btn-min-height, 44px);
+  min-width: var(--pwa-btn-min-width, 44px);
+  min-height: var(--pwa-btn-min-height, 44px);
 }
 
 .view-planner__today {
   min-width: 80px;
-  min-height: var(--rep-btn-min-height, 44px);
+  min-height: var(--pwa-btn-min-height, 44px);
 }
 
 .view-planner__add {
@@ -416,7 +416,7 @@ async function onEventFormSubmit(payload: EventSubmitPayload) {
   border: none;
   box-shadow: none;
   background: transparent;
-  color: var(--rep-text, currentColor);
+  color: var(--pwa-text, currentColor);
 
   &:hover {
     background: rgba(var(--v-theme-on-surface), 0.08);
@@ -434,7 +434,7 @@ async function onEventFormSubmit(payload: EventSubmitPayload) {
 .view-planner__calendar {
   flex: 1 1 auto;
   min-height: 400px;
-  border-radius: var(--rep-radius);
+  border-radius: var(--pwa-radius);
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   overflow: hidden;
 }

@@ -6,6 +6,26 @@
       :initial-data="eventFormInitial"
       @submit="onEventFormSubmit"
     />
+    <OrganizationForm
+      v-if="showEditModal"
+      v-model="showEditModal"
+      :initial-data="hco ? {
+        id: hco.id,
+        name: hco.name ?? '',
+        type: hco.type ?? '',
+        status: hco.status ?? '',
+        region: hco.region ?? '',
+        address_line1: hco.address_line1 ?? '',
+        city: hco.city ?? '',
+        state: hco.state ?? '',
+        postal_code: hco.postal_code ?? '',
+        country_code: hco.country_code ?? '',
+        phone: hco.phone ?? '',
+        email: hco.email ?? '',
+        website: hco.website ?? '',
+      } : undefined"
+      @submit="onAccountSubmit"
+    />
     <ItemDetailLayout
     :has-content="!!hco"
     :loading="loading"
@@ -40,13 +60,13 @@
             variant="flat"
             size="large"
             class="view-item__edit-btn view-item__edit-btn--no-border"
-            disabled
-            :aria-label="t('user.hco.detail.editComingSoon')"
+            :aria-label="t('user.hco.detail.edit')"
+            @click="onEdit"
           >
             <AppIcon name="pencil" class="view-item__edit-icon" />
           </VBtn>
         </template>
-        <span>{{ t('user.hco.detail.editComingSoon') }}</span>
+        <span>{{ t('user.hco.detail.edit') }}</span>
       </VTooltip>
     </template>
     <template #sections v-if="hco">
@@ -66,8 +86,42 @@
         <dt class="view-item__label">{{ t("user.hco.detail.phone") }}</dt>
         <dd class="view-item__value">
           <a v-if="hco.phone" :href="`tel:${hco.phone}`" class="view-item__link">{{ hco.phone }}</a>
-          <span v-else class="view-item__empty">{{ demoPhone }}</span>
+          <span v-else class="view-item__empty">—</span>
         </dd>
+      </div>
+      <div class="view-item__row">
+        <dt class="view-item__label">{{ t("user.hco.detail.email") }}</dt>
+        <dd class="view-item__value">
+          <a v-if="hco.email" :href="`mailto:${hco.email}`" class="view-item__link">{{ hco.email }}</a>
+          <span v-else class="view-item__empty">—</span>
+        </dd>
+      </div>
+      <div class="view-item__row">
+        <dt class="view-item__label">{{ t("user.hco.detail.website") }}</dt>
+        <dd class="view-item__value">
+          <a v-if="hco.website" :href="hco.website" target="_blank" rel="noopener noreferrer" class="view-item__link">{{ hco.website }}</a>
+          <span v-else class="view-item__empty">—</span>
+        </dd>
+      </div>
+      <div class="view-item__row">
+        <dt class="view-item__label">{{ t("user.hco.detail.addressLine1") }}</dt>
+        <dd class="view-item__value">{{ hco.address_line1 || "—" }}</dd>
+      </div>
+      <div class="view-item__row">
+        <dt class="view-item__label">{{ t("user.hco.detail.city") }}</dt>
+        <dd class="view-item__value">{{ hco.city || "—" }}</dd>
+      </div>
+      <div class="view-item__row">
+        <dt class="view-item__label">{{ t("user.hco.detail.state") }}</dt>
+        <dd class="view-item__value">{{ hco.state || "—" }}</dd>
+      </div>
+      <div class="view-item__row">
+        <dt class="view-item__label">{{ t("user.hco.detail.postalCode") }}</dt>
+        <dd class="view-item__value">{{ hco.postal_code || "—" }}</dd>
+      </div>
+      <div class="view-item__row">
+        <dt class="view-item__label">{{ t("user.hco.detail.countryCode") }}</dt>
+        <dd class="view-item__value">{{ hco.country_code || "—" }}</dd>
       </div>
     </template>
   </ItemDetailLayout>
@@ -85,6 +139,7 @@ import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import AppIcon from "../components/AppIcon.vue";
 
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
+const OrganizationForm = defineAsyncComponent(() => import("../components/OrganizationForm.vue"));
 
 const authStore = useAuthStore();
 const isAdmin = computed(() => authStore.user?.role === "admin");
@@ -95,27 +150,23 @@ interface HCO {
   type?: string;
   region?: string;
   status?: string;
+  address_line1?: string;
+  city?: string;
+  state?: string;
+  postal_code?: string;
+  country_code?: string;
   phone?: string;
+  email?: string;
+  website?: string;
 }
 
 const { t } = useI18n();
 const route = useRoute();
 const notifications = useNotifications();
 
-const DEMO_PHONES: Record<string, string> = {
-  "Clínica del Sueño NeoSleep":           "+52 81 2345 6789",
-  "Hospital General de Monterrey":        "+52 81 8765 4321",
-  "Centro Pulmonar del Sur":              "+52 55 3456 7890",
-  "Clínica Salud Integral Occidente":     "+52 33 4567 8901",
-  "Unidad de ORL y Trastornos del Sueño": "+52 81 5678 9012",
-};
-
-const demoPhone = computed(() =>
-  hco.value ? (DEMO_PHONES[hco.value.name] ?? "+52 55 0000 0000") : "—"
-);
-
 const hco = ref<HCO | null>(null);
 const loading = ref(true);
+const showEditModal = ref(false);
 const showEventForm = ref(false);
 const eventFormInitial = ref<{ start_at: string; end_at: string; hcoIds?: string[] } | undefined>(undefined);
 
@@ -162,6 +213,41 @@ async function onEventFormSubmit(payload: import("../components/EventForm.vue").
   }
 }
 
+function onEdit() {
+  showEditModal.value = true;
+}
+
+async function onAccountSubmit(data: import("../components/OrganizationForm.vue").OrganizationSubmitPayload) {
+  const id = hco.value?.id;
+  if (!id) return;
+  const body = JSON.stringify({
+    name: data.name,
+    type: data.type,
+    status: data.status,
+    region: data.region,
+    address_line1: data.address_line1,
+    city: data.city,
+    state: data.state,
+    postal_code: data.postal_code,
+    country_code: data.country_code,
+    phone: data.phone,
+    email: data.email,
+    website: data.website,
+  });
+  const res = await apiFetch(`/api/v1/organization/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body,
+    errorMessageKey: "user.hco.errorLoad",
+  });
+  if (res.ok) {
+    notifications.show(t("user.hco.form.editSuccess"), "success");
+    showEditModal.value = false;
+    await loadHCO();
+    window.dispatchEvent(new Event("entity-list-refresh"));
+  }
+}
+
 async function loadHCO() {
   const id = route.params.id as string;
   if (!id) {
@@ -171,11 +257,14 @@ async function loadHCO() {
   loading.value = true;
   hco.value = null;
   try {
-    const res = await apiFetch(`/api/v1/organization/${id}`, { errorMessageKey: "user.hco.errorLoad" });
+    const res = await apiFetch(`/api/v1/organization/${id}`, { handleErrors: false });
     if (res.ok) {
       hco.value = (await res.json()) as HCO;
+    } else if (res.status !== 404) {
+      notifications.show(t("user.hco.errorLoad"), "error");
     }
   } catch {
+    notifications.show(t("user.hco.errorLoad"), "error");
     hco.value = null;
   } finally {
     loading.value = false;

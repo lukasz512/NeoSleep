@@ -1,5 +1,6 @@
 import { createI18n } from "vue-i18n";
-import { en as vuetifyEn, pl as vuetifyPl, es as vuetifyEs } from "vuetify/locale";
+import { vuetifyLocales } from "@vuetify";
+import { loadLocaleMessages, type SupportedLocale } from "@i18n/loadLocale";
 import { APP_STORAGE_KEYS } from "../constants";
 
 /** Detect browser preferred locale, mapped to our supported locales. */
@@ -34,9 +35,9 @@ function resolveInitialLocale(): "en" | "pl" | "mx" {
 const savedLocale = resolveInitialLocale();
 
 const localeLoaders: Record<string, () => Promise<Record<string, unknown>>> = {
-  en: async () => ({ ...(await import("@i18n/en.json")).default, $vuetify: vuetifyEn }),
-  pl: async () => ({ ...(await import("@i18n/pl.json")).default, $vuetify: vuetifyPl }),
-  mx: async () => ({ ...(await import("@i18n/mx.json")).default, $vuetify: vuetifyEs }),
+  en: async () => ({ ...(await import("@i18n/en.json")).default, $vuetify: vuetifyLocales.en }),
+  pl: async () => ({ ...(await import("@i18n/pl.json")).default, $vuetify: vuetifyLocales.pl }),
+  mx: async () => ({ ...(await import("@i18n/mx.json")).default, $vuetify: vuetifyLocales.mx }),
 };
 
 // Zawsze ładuj en jako fallback — Vue i18n sięga po niego gdy klucz brakuje w aktywnym locale.
@@ -60,10 +61,8 @@ export const i18n = createI18n({
 });
 
 /** Load locale messages on demand before switching i18n.global.locale. */
-export async function loadLocale(locale: "en" | "pl" | "mx"): Promise<void> {
-  if (i18n.global.availableLocales.includes(locale)) return;
-  const messages = await localeLoaders[locale]();
-  i18n.global.setLocaleMessage(locale, messages);
+export async function loadLocale(locale: SupportedLocale): Promise<void> {
+  await loadLocaleMessages(i18n.global, locale, { $vuetify: vuetifyLocales[locale] });
 }
 
 /**

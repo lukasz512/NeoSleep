@@ -6,6 +6,9 @@ settings:
 
 catalogs:
   default:
+    '@mdi/font':
+      specifier: ^7.4.47
+      version: 7.4.47
     '@types/node':
       specifier: ^22.0.0
       version: 22.19.11
@@ -274,6 +277,9 @@ importers:
       '@neo/api-client':
         specifier: workspace:*
         version: link:../api/client
+      '@neo/stores':
+        specifier: workspace:*
+        version: link:../../packages/stores
       '@neo/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -381,6 +387,9 @@ importers:
 
   packages/vuetify:
     dependencies:
+      '@mdi/font':
+        specifier: 'catalog:'
+        version: 7.4.47
       vue-i18n:
         specifier: 'catalog:'
         version: 10.0.8(vue@3.5.30(typescript@5.9.3))
@@ -1180,6 +1189,9 @@ packages:
   '@mapbox/node-pre-gyp@1.0.11':
     resolution: {integrity: sha512-Yhlar6v9WQgUp/He7BdgzOz8lqMQ8sU+jkCq7Wx8Myc5YFJLbEe7lgui/V7G1qB1DJykHSGwreceSaD60Y0PUQ==}
     hasBin: true
+
+  '@mdi/font@7.4.47':
+    resolution: {integrity: sha512-43MtGpd585SNzHZPcYowu/84Vz2a2g31TvPMTm9uTiCSWzaheQySUcSyUH/46fPnuPQWof2yd0pGBtzee/IQWw==}
 
   '@noble/hashes@1.8.0':
     resolution: {integrity: sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A==}
@@ -4968,6 +4980,8 @@ snapshots:
     transitivePeerDependencies:
       - encoding
       - supports-color
+
+  '@mdi/font@7.4.47': {}
 
   '@noble/hashes@1.8.0': {}
 

@@ -10,7 +10,6 @@ import { lightTheme, darkTheme } from "../plugins/vuetify";
 import { useAuthStore } from "../stores/auth";
 import { useConfigStore } from "../stores/config";
 import { loadLocale } from "../plugins/i18n";
-import type { AppConfig } from "../stores/config";
 
 export function useLayoutState() {
   const router = useRouter();
@@ -46,14 +45,12 @@ export function useLayoutState() {
   // ── Mobile ─────────────────────────────────────────────────────────────────
   const isMobile = ref(false);
   const mobileDrawerOpen = ref(false);
-  const mobileDrawerUserMenuOpen = ref(false);
 
   const updateMobile = useDebounceFn(() => {
     if (typeof window === "undefined") return;
     isMobile.value = window.innerWidth < MOBILE_BREAKPOINT;
     if (!isMobile.value) {
       mobileDrawerOpen.value = false;
-      mobileDrawerUserMenuOpen.value = false;
     }
   }, 150);
 
@@ -67,10 +64,11 @@ export function useLayoutState() {
   const userRole = computed(() => {
     const role = authStore.user?.role;
     if (role === "admin") return t("user.user.roleAdmin");
-    if (role === "ffm") return t("user.user.roleFfm");
+    if (role === "manager") return t("user.user.roleManager");
     if (role === "kam") return t("user.user.roleKam");
     if (role === "msl") return t("user.user.roleMsl");
     if (role === "rep") return t("user.user.roleRep");
+    if (role === "doctor") return t("user.user.roleDoctor");
     return t("user.user.role");
   });
 
@@ -100,31 +98,9 @@ export function useLayoutState() {
 
   // ── Auth ──────────────────────────────────────────────────────────────────
   function onLogout() {
-    mobileDrawerUserMenuOpen.value = false;
     mobileDrawerOpen.value = false;
     authStore.clearAuth();
     router.push("/login");
-  }
-
-  // ── Theme panel ───────────────────────────────────────────────────────────
-  const themePanelOpen = ref(false);
-  const themePanelConfig = computed(() => configStore.config ?? configStore.defaults);
-
-  async function onThemeSave(cfg: AppConfig) {
-    const updated = await configStore.save(cfg);
-    if (!updated) return null;
-    const fromDb = await configStore.load();
-    configStore.applyToDom(fromDb);
-    setTheme(fromDb.color_scheme);
-    return fromDb;
-  }
-
-  function onOpenThemePanelFromDrawer() {
-    themePanelOpen.value = true;
-    mobileDrawerUserMenuOpen.value = false;
-    nextTick(() => {
-      mobileDrawerOpen.value = false;
-    });
   }
 
   // ── Accessibility ─────────────────────────────────────────────────────────
@@ -162,11 +138,10 @@ export function useLayoutState() {
   return {
     theme, toggleTheme, setTheme,
     sidebarCollapsed, toggleSidebar,
-    isMobile, mobileDrawerOpen, mobileDrawerUserMenuOpen,
+    isMobile, mobileDrawerOpen,
     isAdmin, user,
     locale, localeTransitioning, setLocale,
     onLogout,
-    themePanelOpen, themePanelConfig, onThemeSave, onOpenThemePanelFromDrawer,
     focusMainContent,
   };
 }

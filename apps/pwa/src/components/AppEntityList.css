@@ -23,8 +23,8 @@
 }
 
 .app-entity-list__clear-filters {
-  min-width: var(--rep-btn-min-width, 44px);
-  min-height: var(--rep-btn-min-height, 44px);
+  min-width: var(--pwa-btn-min-width, 44px);
+  min-height: var(--pwa-btn-min-height, 44px);
 }
 
 .app-entity-list__clear-filters--no-border {
@@ -62,7 +62,7 @@
 .app-entity-list__add {
   min-width: 44px;
   min-height: 44px;
-  color: var(--rep-text, currentColor);
+  color: var(--pwa-text, currentColor);
 }
 
 .app-entity-list__add--no-border {
@@ -102,7 +102,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-radius: var(--rep-radius);
+  border-radius: var(--pwa-radius);
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
 

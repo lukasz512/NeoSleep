@@ -54,13 +54,13 @@ defineEmits<{
   margin: 0 0 8px;
   font-size: clamp(1.125rem, 2vw, 1.25rem);
   font-weight: 500;
-  color: var(--rep-text-primary, rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity)));
+  color: var(--pwa-text-primary, rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity)));
 }
 
 .app-error-state__subtitle {
   margin: 0 0 24px;
   font-size: 0.9375rem;
-  color: var(--rep-text-secondary, rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)));
+  color: var(--pwa-text-secondary, rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)));
   max-width: 360px;
 }
 

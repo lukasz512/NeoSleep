@@ -3,12 +3,15 @@ import en from "@i18n/en.json";
 import pl from "@i18n/pl.json";
 import mx from "@i18n/mx.json";
 
-const REP_APP_I18N_KEYS = [
+const PWA_APP_I18N_KEYS = [
   "app.common.ok",
   "app.common.remove",
   "app.common.cancel",
   "user.leads.form.title",
   "user.leads.form.name",
+  "user.leads.form.firstName",
+  "user.leads.form.lastName",
+  "user.leads.form.phone",
   "user.leads.form.email",
   "user.leads.form.status",
   "user.leads.form.region",
@@ -19,13 +22,23 @@ const REP_APP_I18N_KEYS = [
   "user.leads.form.editSuccess",
   "user.leads.form.success",
   "user.leads.form.validation.nameRequired",
+  "user.leads.form.validation.firstNameRequired",
   "user.hcp.form.title",
+  "user.hcp.form.firstName",
+  "user.hcp.form.lastName",
+  "user.hcp.form.salutation",
+  "user.hcp.form.salutationPlaceholder",
   "user.hcp.form.phone",
   "user.hcp.form.phonePlaceholder",
   "user.hcp.form.specialty",
+  "user.hcp.form.influenceTier",
+  "user.hcp.form.language",
+  "user.hcp.form.nationalId",
   "user.hcp.form.submit",
   "user.hcp.form.success",
   "user.hcp.form.validation.emailRequired",
+  "user.hcp.form.validation.firstNameRequired",
+  "user.hcp.form.validation.lastNameRequired",
   "user.hcp.form.validation.phoneRequired",
   "user.hcp.form.validation.phoneMinDigits",
   "user.hcp.form.validation.phoneDigitsOnly",
@@ -67,9 +80,10 @@ const REP_APP_I18N_KEYS = [
   "user.leads.filters.region",
   "user.leads.filters.all",
   "user.leads.filters.statusNew",
-  "user.leads.filters.statusOngoing",
-  "user.leads.filters.statusAccepted",
-  "user.leads.filters.statusRejected",
+  "user.leads.filters.statusContacted",
+  "user.leads.filters.statusQualified",
+  "user.leads.filters.statusInactive",
+  "user.leads.filters.statusConverted",
   "user.emptyState.title",
   "user.emptyState.subtitle",
   "user.emptyState.add",
@@ -81,6 +95,8 @@ const REP_APP_I18N_KEYS = [
   "user.hcp.add",
   "user.hco.title",
   "user.hco.subtitle",
+  "user.patients.title",
+  "user.patients.subtitle",
   "user.hco.emptyTitle",
   "user.hco.emptySubtitle",
   "user.hco.add",
@@ -150,6 +166,34 @@ const REP_APP_I18N_KEYS = [
   "user.planner.subtitle",
   "user.presentations.title",
   "user.presentations.subtitle",
+  "user.presentations.searchPlaceholder",
+  "user.presentations.errorLoad",
+  "user.presentations.filters.title",
+  "user.presentations.filters.clear",
+  "user.presentations.filters.status",
+  "user.presentations.filters.locale",
+  "user.presentations.filters.all",
+  "user.presentations.filters.statusActive",
+  "user.presentations.filters.statusArchived",
+  "user.presentations.filters.statusDraft",
+  "user.presentations.noResultsForCriteria",
+  "user.presentations.noResultsForCriteriaSubtitle",
+  "user.presentations.form.title",
+  "user.presentations.form.editTitle",
+  "user.presentations.form.submit",
+  "user.presentations.form.editSubmit",
+  "user.presentations.form.success",
+  "user.presentations.form.editSuccess",
+  "user.presentations.form.fieldTitle",
+  "user.presentations.form.fieldFileUrl",
+  "user.presentations.form.fieldThumbnailUrl",
+  "user.presentations.form.fieldLocale",
+  "user.presentations.form.fieldStatus",
+  "user.presentations.form.fieldTags",
+  "user.presentations.form.fieldKeywords",
+  "user.presentations.form.hintFileUrl",
+  "user.presentations.form.validation.fileUrlInvalid",
+  "app.formRenderer.validation.required",
   "user.settings.theme",
   "user.settings.language",
   "user.settings.theme.light",
@@ -178,34 +222,85 @@ const REP_APP_I18N_KEYS = [
   "user.login.validation.emailRequired",
   "user.login.validation.emailInvalid",
   "user.login.validation.passwordRequired",
-  "user.login.loginAsDev",
-  "user.login.goToApp",
-  "user.login.devUser.rep",
-  "user.login.devUser.admin",
   "user.detail.scheduleVisit",
   "user.lead-detail.title",
   "user.hcp-detail.title",
   "user.hco-detail.title",
+  "app.patients.form.title",
+  "app.patients.form.editTitle",
+  "app.patients.form.submit",
+  "app.patients.form.editSubmit",
+  "app.patients.form.success",
+  "app.patients.form.editSuccess",
+  "app.patients.form.salutation",
+  "app.patients.form.firstName",
+  "app.patients.form.lastName",
+  "app.patients.form.email",
+  "app.patients.form.phone",
+  "app.patients.form.practitioner",
+  "app.patients.form.status",
+  "app.patients.form.region",
+  "app.patients.form.ahiBaseline",
+  "app.patients.form.cpapDevice",
+  "app.patients.form.medicalRecord",
+  "app.patients.form.validation.firstNameRequired",
+  "app.patients.form.validation.lastNameRequired",
+  "app.patients.form.validation.emailInvalid",
+  "app.patients.form.validation.phoneDigitsOnly",
+  "app.patients.form.validation.phoneMinDigits",
+  "app.patients.form.validation.ahiBaselineInvalid",
+  "app.patients.searchPlaceholder",
+  "app.patients.errorLoad",
+  "app.patients.add",
+  "app.patients.emptyTitle",
+  "app.patients.emptySubtitle",
+  "app.patients.noResultsForCriteria",
+  "app.patients.noResultsForCriteriaSubtitle",
+  "app.patients.table.name",
+  "app.patients.table.contact",
+  "app.patients.table.practitioner",
+  "app.patients.table.status",
+  "app.patients.table.region",
+  "app.patients.table.noResults",
+  "app.patients.filters.title",
+  "app.patients.filters.clear",
+  "app.patients.filters.status",
+  "app.patients.filters.region",
+  "app.patients.filters.all",
+  "app.patients.filters.statusActive",
+  "app.patients.filters.statusFollowUp",
+  "app.patients.filters.statusDischarged",
+  "app.patients.detail.back",
+  "app.patients.detail.notFound",
+  "app.patients.detail.edit",
+  "app.patients.detail.email",
+  "app.patients.detail.phone",
+  "app.patients.detail.practitioner",
+  "app.patients.detail.status",
+  "app.patients.detail.region",
+  "app.patients.detail.ahiBaseline",
+  "app.patients.detail.cpapDevice",
+  "app.patients.detail.medicalRecord",
 ];
 
 function checkKeys(messages: Record<string, unknown>, locale: string) {
-  for (const key of REP_APP_I18N_KEYS) {
+  for (const key of PWA_APP_I18N_KEYS) {
     expect(messages[key], `missing ${locale}: ${key}`).toBeDefined();
     expect(typeof messages[key]).toBe("string");
     expect((messages[key] as string).length).toBeGreaterThan(0);
   }
 }
 
-describe("rep-app i18n keys", () => {
-  it("en.json has all required rep-app keys", () => {
+describe("pwa-app i18n keys", () => {
+  it("en.json has all required pwa-app keys", () => {
     checkKeys(en as Record<string, unknown>, "en");
   });
 
-  it("pl.json has all required rep-app keys", () => {
+  it("pl.json has all required pwa-app keys", () => {
     checkKeys(pl as Record<string, unknown>, "pl");
   });
 
-  it("mx.json has all required rep-app keys", () => {
+  it("mx.json has all required pwa-app keys", () => {
     checkKeys(mx as Record<string, unknown>, "mx");
   });
 

@@ -1,7 +1,7 @@
 /**
  * Vuetify SASS variable overrides.
- * Aligns Vuetify's rounded utilities and component radius with project design tokens (--rep-radius).
- * See apps/rep-app/src/assets/theme.scss for $rep-radius.
+ * Aligns Vuetify's rounded utilities and component radius with project design tokens (--pwa-radius).
+ * See apps/pwa/src/assets/theme.scss for $pwa-radius.
  */
 @use 'vuetify/settings' with (
   $border-radius-root: 10px

@@ -1,17 +1,15 @@
 <template>
   <div class="view-detail">
-    <LeadContactForm
+    <LeadForm
       v-if="showEditModal"
       v-model="showEditModal"
-      mode="lead"
-      :initial-data="lead ? { name: lead.name, email: lead.email ?? '', status: lead.status, region: lead.region, institution: lead.institution ?? '' } : undefined"
+      :initial-data="lead ? { id: lead.id, first_name: lead.first_name, last_name: lead.last_name, email: lead.email ?? '', phone: lead.phone ?? '', status: lead.status, region: lead.region, institution: lead.institution ?? '' } : undefined"
       @submit="onLeadSubmit"
     />
-    <LeadContactForm
+    <PractitionerForm
       v-if="showMoveToContactsModal"
       v-model="showMoveToContactsModal"
-      mode="contact"
-      :initial-data="lead ? { name: lead.name, email: lead.email ?? '', region: lead.region, institution: lead.institution ?? '' } : undefined"
+      :initial-data="lead ? { first_name: lead.first_name, last_name: lead.last_name, email: lead.email ?? '', phone: lead.phone ?? '', region: lead.region, institution: lead.institution ?? '' } : undefined"
       :show-verify-info="true"
       @submit="onContactSubmit"
     />
@@ -45,7 +43,7 @@
           </template>
           <span>{{ t('user.detail.scheduleVisit') }}</span>
         </VTooltip>
-        <VTooltip v-if="lead && !isCompleted(lead)" location="bottom">
+        <VTooltip v-if="lead && !isConverted(lead)" location="bottom">
           <template #activator="{ props: tooltipProps }">
             <VBtn v-bind="tooltipProps" icon variant="flat" size="large"
               class="view-item__move-to-contacts-btn" :aria-label="t('user.leads.detail.moveToContacts')" @click="onMoveToContacts">
@@ -65,15 +63,14 @@
         </VTooltip>
       </template>
 
-      <!-- Two-column body: data left, map right -->
       <template #body v-if="lead">
         <div class="view-detail__body">
 
-          <!-- Left: data card -->
+          <!-- Data card -->
           <div class="view-detail__card">
             <dl class="view-detail__fields">
 
-              <div v-if="!isRejected(lead)" class="view-detail__row">
+              <div v-if="!isInactive(lead)" class="view-detail__row">
                 <dt class="view-detail__label">{{ t("user.leads.detail.email") }}</dt>
                 <dd class="view-detail__value">
                   <a v-if="lead.email" :href="`mailto:${lead.email}`" class="view-detail__link">{{ lead.email }}</a>
@@ -81,7 +78,7 @@
                 </dd>
               </div>
 
-              <div v-if="!isRejected(lead)" class="view-detail__row">
+              <div v-if="!isInactive(lead)" class="view-detail__row">
                 <dt class="view-detail__label">{{ t("user.leads.detail.phone") }}</dt>
                 <dd class="view-detail__value">
                   <a v-if="lead.phone" :href="`tel:${lead.phone}`" class="view-detail__link">{{ lead.phone }}</a>
@@ -92,20 +89,9 @@
               <div class="view-detail__row">
                 <dt class="view-detail__label">{{ t("user.leads.detail.status") }}</dt>
                 <dd class="view-detail__value">
-                  <span :class="['rep-lead-status-chip', `rep-lead-status-chip--${leadStatusClass(lead.status)}`]">
+                  <span :class="['pwa-lead-status-chip', `pwa-lead-status-chip--${leadStatusClass(lead.status)}`]">
                     {{ statusLabel(lead.status) }}
                   </span>
-                </dd>
-              </div>
-
-              <div class="view-detail__row view-detail__row--chips">
-                <dt class="view-detail__label">{{ t("user.leads.detail.specialty") }}</dt>
-                <dd class="view-detail__value view-detail__value--chips">
-                  <span
-                    v-for="(spec, i) in specialtyChips"
-                    :key="spec"
-                    :class="['view-detail__specialty-chip', `view-detail__specialty-chip--${SPECIALTY_COLORS[i % SPECIALTY_COLORS.length]}`]"
-                  >{{ spec }}</span>
                 </dd>
               </div>
 
@@ -126,22 +112,13 @@
 
               <div class="view-detail__row view-detail__row--notes">
                 <dt class="view-detail__label">{{ t("user.leads.detail.notes") }}</dt>
-                <dd class="view-detail__value view-detail__value--notes">{{ lead.notes || demoNotes }}</dd>
+                <dd class="view-detail__value view-detail__value--notes">
+                  <span v-if="lead.notes">{{ lead.notes }}</span>
+                  <span v-else class="view-detail__empty">—</span>
+                </dd>
               </div>
 
             </dl>
-          </div>
-
-          <!-- Right: map -->
-          <div class="view-detail__map-col">
-            <iframe
-              class="view-detail__map"
-              :src="mapUrl"
-              title="Location map"
-              loading="lazy"
-              referrerpolicy="no-referrer"
-              sandbox="allow-scripts allow-same-origin"
-            />
           </div>
 
         </div>
@@ -153,7 +130,6 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
-import { useDisplay } from "vuetify";
 import { useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuthStore } from "../stores/auth";
@@ -165,23 +141,17 @@ import GenderIcon from "../components/GenderIcon.vue";
 import { getGenderFromName } from "../utils/genderFromName";
 import { leadStatusClass, leadStatusI18nKey } from "../utils/leadStatus";
 import type { Lead } from "./LeadsView.vue";
-import { DEMO_SPECIALTIES, DEMO_NOTES, SPECIALTY_COLORS, getMapUrl } from "../utils/leadDemoData";
 
-const LeadContactForm = defineAsyncComponent(() => import("../components/LeadContactForm.vue"));
+const LeadForm = defineAsyncComponent(() => import("../components/LeadForm.vue"));
+const PractitionerForm = defineAsyncComponent(() => import("../components/PractitionerForm.vue"));
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
 
 const { t } = useI18n();
-const { mobile } = useDisplay();
 const route = useRoute();
 
-const bodyColumns = computed(() => mobile.value ? "1fr" : "1fr 320px");
-const mapHeight = computed(() => mobile.value ? "300px" : "100%");
 const authStore = useAuthStore();
 const notifications = useNotifications();
 const isAdmin = computed(() => authStore.user?.role === "admin");
-
-
-const mapUrl = computed(() => getMapUrl(lead.value?.region));
 
 // ---------------------------------------------------------------------------
 // Core state
@@ -200,12 +170,12 @@ function statusLabel(status: string): string {
   return key ? t(key) : status || t("user.leads.filters.statusNew");
 }
 
-function isRejected(lead: Lead): boolean {
-  return (lead.status || "").toLowerCase() === "rejected";
+function isInactive(lead: Lead): boolean {
+  return (lead.status || "").toLowerCase() === "inactive";
 }
 
-function isCompleted(lead: Lead): boolean {
-  return (lead.status || "").toLowerCase() === "completed";
+function isConverted(lead: Lead): boolean {
+  return (lead.status || "").toLowerCase() === "converted";
 }
 
 function onScheduleVisit() {
@@ -241,29 +211,36 @@ function onMoveToContacts() {
   showMoveToContactsModal.value = true;
 }
 
-async function onContactSubmit(data: import("../components/LeadContactForm.vue").LeadFormData | import("../components/LeadContactForm.vue").ContactFormData) {
-  const d = data as import("../components/LeadContactForm.vue").ContactFormData;
+async function onContactSubmit(data: import("../components/PractitionerForm.vue").PractitionerSubmitPayload) {
   const leadId = lead.value?.id;
   if (!leadId) return;
+  // Conversion (status -> converted, converted_to_id/type/at) now happens
+  // atomically server-side via ConvertLeadCommand when lead_id is present —
+  // no separate PATCH needed here anymore.
   const res = await apiFetch("/api/v1/practitioner", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name: d.name, email: d.email || "", phone: d.phone || "", specialty: d.specialty || undefined, region: d.region || undefined, institution: d.institution || undefined, lead_id: leadId }),
+    body: JSON.stringify({
+      salutation: data.salutation,
+      first_name: data.first_name,
+      last_name: data.last_name,
+      email: data.email,
+      phone: data.phone,
+      primary_specialty: data.primary_specialty,
+      region: data.region,
+      institution: data.institution,
+      influence_tier: data.influence_tier,
+      language: data.language,
+      national_ids: data.national_ids,
+      lead_id: leadId,
+    }),
     errorMessageKey: "user.leads.errorLoad",
   });
   if (res.ok) {
-    const patchRes = await apiFetch(`/api/v1/lead/${leadId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "completed" }),
-      errorMessageKey: "user.leads.errorLoad",
-    });
-    if (patchRes.ok) {
-      notifications.show(t("user.hcp.form.contactCreated"), "success");
-      showMoveToContactsModal.value = false;
-      await loadLead();
-      window.dispatchEvent(new Event("entity-list-refresh"));
-    }
+    notifications.show(t("user.hcp.form.contactCreated"), "success");
+    showMoveToContactsModal.value = false;
+    await loadLead();
+    window.dispatchEvent(new Event("entity-list-refresh"));
   }
 }
 
@@ -275,14 +252,21 @@ function onEdit() {
   showEditModal.value = true;
 }
 
-async function onLeadSubmit(data: import("../components/LeadContactForm.vue").LeadFormData | import("../components/LeadContactForm.vue").ContactFormData) {
-  const d = data as import("../components/LeadContactForm.vue").LeadFormData;
+async function onLeadSubmit(data: import("../components/LeadForm.vue").LeadSubmitPayload) {
   const id = lead.value?.id;
   if (!id) return;
   const res = await apiFetch(`/api/v1/lead/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name: d.name, email: d.email || undefined, status: d.status || "new", region: d.region || undefined, institution: d.institution || undefined }),
+    body: JSON.stringify({
+      first_name: data.first_name,
+      last_name: data.last_name,
+      email: data.email,
+      phone: data.phone,
+      status: data.status || "new",
+      region: data.region,
+      institution: data.institution,
+    }),
     errorMessageKey: "user.leads.errorLoad",
   });
   if (res.ok) {
@@ -299,9 +283,14 @@ async function loadLead() {
   loading.value = true;
   lead.value = null;
   try {
-    const res = await apiFetch(`/api/v1/lead/${id}`, { errorMessageKey: "user.leads.errorLoad" });
-    if (res.ok) lead.value = (await res.json()) as Lead;
+    const res = await apiFetch(`/api/v1/lead/${id}`, { handleErrors: false });
+    if (res.ok) {
+      lead.value = (await res.json()) as Lead;
+    } else if (res.status !== 404) {
+      notifications.show(t("user.leads.errorLoad"), "error");
+    }
   } catch {
+    notifications.show(t("user.leads.errorLoad"), "error");
     lead.value = null;
   } finally {
     loading.value = false;
@@ -334,10 +323,9 @@ watch(() => route.params.id, loadLead);
   text-overflow: ellipsis;
 }
 
-/* Two-column body */
 .view-detail__body {
   display: grid;
-  grid-template-columns: v-bind(bodyColumns);
+  grid-template-columns: 1fr;
   align-items: stretch;
   gap: 16px;
 }
@@ -345,7 +333,7 @@ watch(() => route.params.id, loadLead);
 /* Data card */
 .view-detail__card {
   padding: 24px;
-  border-radius: var(--rep-radius);
+  border-radius: var(--pwa-radius);
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   background: rgba(var(--v-theme-surface), 1);
 }
@@ -395,46 +383,6 @@ watch(() => route.params.id, loadLead);
 
 .view-detail__empty {
   color: rgba(var(--v-theme-on-surface), var(--v-disabled-opacity));
-}
-
-.view-detail__row--chips {
-  align-items: start;
-}
-
-.view-detail__value--chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-/* Specialty chips */
-.view-detail__specialty-chip {
-  display: inline-block;
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-size: 0.8125rem;
-  font-weight: 500;
-
-  &--teal   { background: rgba(18, 143, 131, 0.12); color: #0d7a70; }
-  &--violet { background: rgba(139, 92, 246, 0.12); color: #7c3aed; }
-  &--amber  { background: rgba(245, 158, 11, 0.12); color: #b45309; }
-  &--blue   { background: rgba(59, 130, 246, 0.12); color: #1d4ed8; }
-  &--green  { background: rgba(34, 197, 94, 0.12);  color: #15803d; }
-  &--indigo { background: rgba(99, 102, 241, 0.12); color: #4338ca; }
-}
-
-/* Map column */
-.view-detail__map-col {
-  display: flex;
-  min-height: 260px;
-}
-
-.view-detail__map {
-  width: 100%;
-  height: v-bind(mapHeight);
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  border-radius: var(--rep-radius, 8px);
-  display: block;
 }
 
 /* Buttons (delegated to ItemDetailLayout deep) */

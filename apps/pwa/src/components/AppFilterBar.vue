@@ -50,7 +50,7 @@
           >
             <template v-if="hasChipOptions(def)" #chip="{ item }">
               <span
-                :class="['rep-lead-status-chip', 'app-filter-bar__chip', item.raw?.chipClass ?? '']"
+                :class="['pwa-lead-status-chip', 'app-filter-bar__chip', item.raw?.chipClass ?? '']"
                 class="app-filter-bar__chip-wrap"
               >
                 {{ item.raw?.title ?? item.title }}
@@ -67,7 +67,7 @@
             <template v-if="hasChipOptions(def)" #item="{ item, props: itemProps }">
               <VListItem v-bind="{ ...itemProps, title: item.raw?.chipClass ? undefined : itemProps.title }">
                 <template v-if="item.raw?.chipClass" #default>
-                  <span :class="['rep-lead-status-chip', item.raw.chipClass]">
+                  <span :class="['pwa-lead-status-chip', item.raw.chipClass]">
                     {{ item.raw?.title ?? item.title }}
                   </span>
                 </template>
@@ -158,9 +158,9 @@ function removeChip(def: FilterDefinition, value: string) {
 }
 
 .app-filter-bar__btn {
-  min-width: var(--rep-btn-min-width, 44px);
-  min-height: var(--rep-btn-min-height, 44px);
-  color: var(--rep-text, currentColor);
+  min-width: var(--pwa-btn-min-width, 44px);
+  min-height: var(--pwa-btn-min-height, 44px);
+  color: var(--pwa-text, currentColor);
 }
 
 .app-filter-bar__btn--no-border {
@@ -181,7 +181,7 @@ function removeChip(def: FilterDefinition, value: string) {
 }
 
 .app-filter-bar__card {
-  border-radius: var(--rep-radius);
+  border-radius: var(--pwa-radius);
 }
 
 .app-filter-bar__card-title {

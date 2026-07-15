@@ -31,7 +31,7 @@ describe("AppFilterBar", () => {
   it("filter button has min touch target (app-filter-bar__btn with CSS var)", () => {
     const source = getAppFilterBarSource();
     expect(source).toContain("app-filter-bar__btn");
-    expect(source).toMatch(/--rep-btn-min-(width|height)/);
+    expect(source).toMatch(/--pwa-btn-min-(width|height)/);
   });
 
   it("filter button has no border (app-filter-bar__btn--no-border)", () => {
@@ -57,6 +57,6 @@ describe("AppFilterBar", () => {
     expect(source).toContain("chips");
     expect(source).toContain("closable-chips");
     expect(source).toContain("hasChipOptions");
-    expect(source).toContain("rep-lead-status-chip");
+    expect(source).toContain("pwa-lead-status-chip");
   });
 });

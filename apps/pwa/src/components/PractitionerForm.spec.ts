@@ -4,28 +4,33 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const componentPath = path.resolve(__dirname, "LeadContactForm.vue");
+const componentPath = path.resolve(__dirname, "PractitionerForm.vue");
+const composablePath = path.resolve(__dirname, "../composables/usePractitionerForm.ts");
 
 function getSource(): string {
   return readFileSync(componentPath, "utf-8");
 }
 
-describe("LeadContactForm", () => {
+function getComposableSource(): string {
+  return readFileSync(composablePath, "utf-8");
+}
+
+describe("PractitionerForm", () => {
   describe("modal layout and styling", () => {
     it("modal has max-width 680 or wider for comfortable form layout", () => {
       const source = getSource();
       expect(source).toMatch(/max-width=["']68\d+["']/);
     });
 
-    it("modal uses project border-radius (--rep-modal-radius) for consistent styling", () => {
+    it("modal uses project border-radius (--pwa-modal-radius) for consistent styling", () => {
       const source = getSource();
-      expect(source).toContain("lead-contact-form-dialog__content");
-      expect(source).toMatch(/--rep-modal-radius|border-radius:\s*var\(--rep-modal-radius/);
+      expect(source).toContain("practitioner-form-dialog__content");
+      expect(source).toMatch(/--pwa-modal-radius|border-radius:\s*var\(--pwa-modal-radius/);
     });
 
     it("card has padding for header, body, and footer", () => {
       const source = getSource();
-      expect(source).toContain("lead-contact-form-dialog__card");
+      expect(source).toContain("practitioner-form-dialog__card");
       expect(source).toContain(".v-card-title");
       expect(source).toContain(".v-card-text");
       expect(source).toContain(".v-card-actions");
@@ -59,30 +64,36 @@ describe("LeadContactForm", () => {
     });
   });
 
-  describe("lead form layout", () => {
-    it("status and region are in the same row for lead mode", () => {
-      const source = getSource();
-      const rowBlock = source.slice(
-        source.indexOf("lead-contact-form__row"),
-        source.indexOf("lead-contact-form__row") + 800
-      );
-      expect(rowBlock).toContain("user.leads.form.status");
-      expect(rowBlock).toContain("user.leads.form.region");
-      expect(rowBlock).toContain("lead-contact-form__row-item");
-    });
-  });
-
   describe("specialty and region in one row", () => {
-    it("specialty and region are wrapped in lead-contact-form__row for single-line layout", () => {
+    it("specialty and region are wrapped in practitioner-form__row for single-line layout", () => {
       const source = getSource();
-      expect(source).toContain("lead-contact-form__row");
-      expect(source).toContain("lead-contact-form__row-item");
+      const anchor = source.indexOf("user.hcp.form.specialty");
+      const rowBlock = source.slice(Math.max(0, anchor - 400), anchor + 700);
+      expect(rowBlock).toContain("user.hcp.form.specialty");
+      expect(rowBlock).toContain("user.leads.form.region");
+      expect(source).toContain("practitioner-form__row-item");
     });
 
     it("row uses flex layout with gap for specialty and region side by side", () => {
       const source = getSource();
-      expect(source).toMatch(/\.lead-contact-form__row\s*\{[\s\S]*?display:\s*flex/);
-      expect(source).toMatch(/\.lead-contact-form__row\s*\{[\s\S]*?gap:/);
+      expect(source).toMatch(/\.practitioner-form__row\s*\{[\s\S]*?display:\s*flex/);
+      expect(source).toMatch(/\.practitioner-form__row\s*\{[\s\S]*?gap:/);
+    });
+  });
+
+  describe("fields", () => {
+    it("has native first_name and last_name fields (no combined name field)", () => {
+      const source = getSource();
+      expect(source).toContain("form.first_name");
+      expect(source).toContain("form.last_name");
+    });
+
+    it("has salutation, influence tier, language, and national ID fields", () => {
+      const source = getSource();
+      expect(source).toContain("form.salutation");
+      expect(source).toContain("form.influence_tier");
+      expect(source).toContain("form.language");
+      expect(source).toContain("form.national_id");
     });
   });
 
@@ -93,8 +104,8 @@ describe("LeadContactForm", () => {
       expect(source).toMatch(/initial-data|initialData/);
     });
 
-    it("emits submit with form data for both add and edit", () => {
-      const source = getSource();
+    it("emits submit with form data for both add and edit (via usePractitionerForm composable)", () => {
+      const source = getComposableSource();
       expect(source).toContain('emit("submit"');
     });
   });
