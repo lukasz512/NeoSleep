@@ -19,6 +19,14 @@
       } : undefined"
       @submit="onPatientSubmit"
     />
+    <ConfirmDialog
+      v-model="showDeleteConfirm"
+      :message="t('app.patients.actions.deleteConfirmText')"
+      :confirm-label="t('app.patients.actions.delete')"
+      :cancel-label="t('app.common.cancel')"
+      @confirm="onDelete"
+      @cancel="showDeleteConfirm = false"
+    />
     <ItemDetailLayout
       :has-content="!!patient"
       :loading="loading"
@@ -43,6 +51,22 @@
             </VBtn>
           </template>
           <span>{{ t('app.patients.detail.edit') }}</span>
+        </VTooltip>
+        <VTooltip v-if="isAdmin" location="bottom">
+          <template #activator="{ props: tooltipProps }">
+            <VBtn
+              v-bind="tooltipProps"
+              icon
+              variant="flat"
+              size="large"
+              class="view-item__delete-btn view-item__delete-btn--no-border"
+              :aria-label="t('app.patients.actions.delete')"
+              @click="showDeleteConfirm = true"
+            >
+              <AppIcon name="trash" class="view-item__delete-icon" />
+            </VBtn>
+          </template>
+          <span>{{ t('app.patients.actions.delete') }}</span>
         </VTooltip>
       </template>
       <template #sections v-if="patient">
@@ -91,12 +115,13 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuthStore } from "../stores/auth";
 import { apiFetch } from "../utils/api";
 import { useNotifications } from "../composables/useNotifications";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
+import ConfirmDialog from "../components/ConfirmDialog.vue";
 import AppIcon from "../components/AppIcon.vue";
 
 const PatientForm = defineAsyncComponent(() => import("../components/PatientForm.vue"));
@@ -123,11 +148,13 @@ interface PatientDetail {
 
 const { t } = useI18n();
 const route = useRoute();
+const router = useRouter();
 const notifications = useNotifications();
 
 const patient = ref<PatientDetail | null>(null);
 const loading = ref(true);
 const showEditModal = ref(false);
+const showDeleteConfirm = ref(false);
 
 function statusLabel(status?: string): string {
   switch (status) {
@@ -172,6 +199,21 @@ async function onPatientSubmit(data: import("../components/PatientForm.vue").Pat
   }
 }
 
+async function onDelete() {
+  const id = patient.value?.id;
+  if (!id) return;
+  const res = await apiFetch(`/api/v1/patient/${id}`, {
+    method: "DELETE",
+    errorMessageKey: "app.patients.errorLoad",
+  });
+  if (res.ok) {
+    showDeleteConfirm.value = false;
+    notifications.show(t("app.patients.actions.deleteSuccess"), "success");
+    window.dispatchEvent(new Event("entity-list-refresh"));
+    router.push({ name: "patients" });
+  }
+}
+
 async function loadPatient() {
   const id = route.params.id as string;
   if (!id) {
@@ -198,3 +240,29 @@ async function loadPatient() {
 onMounted(loadPatient);
 watch(() => route.params.id, loadPatient);
 </script>
+
+<style scoped>
+.view-detail :deep(.view-item__delete-btn) {
+  min-width: var(--pwa-btn-min-width, 44px);
+  min-height: var(--pwa-btn-min-height, 44px);
+  color: rgb(var(--v-theme-error)) !important;
+}
+
+.view-detail :deep(.view-item__delete-btn--no-border) {
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+
+  &:hover {
+    background: rgba(var(--v-theme-error), 0.12) !important;
+  }
+}
+
+.view-detail :deep(.view-item__delete-icon) {
+  width: 22px;
+  height: 22px;
+  display: block;
+  color: rgb(var(--v-theme-error)) !important;
+  stroke: rgb(var(--v-theme-error)) !important;
+}
+</style>

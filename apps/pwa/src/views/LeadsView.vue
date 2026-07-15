@@ -89,6 +89,7 @@ import { leadStatusClass, leadStatusI18nKey } from "../utils/leadStatus";
 export interface Lead {
   id: string;
   name: string;
+  salutation?: string | null;
   first_name: string;
   last_name: string;
   email: string;
@@ -178,6 +179,7 @@ function onAddLead() {
 
 async function onLeadSubmit(data: import("../components/LeadForm.vue").LeadSubmitPayload) {
   const body = JSON.stringify({
+    salutation: data.salutation,
     first_name: data.first_name,
     last_name: data.last_name,
     email: data.email,

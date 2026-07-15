@@ -9,10 +9,10 @@ import "./assets/theme.scss";
 import "./assets/app-responsive.scss";
 import "@brand/transitions.css";
 import "./assets/transitions.css";
-import { getUserSettings } from "./utils/user-settings";
 import { setupDiagnosticReporter } from "./composables/useDiagnosticReporter";
 import { apiFetch } from "./utils/api";
 import { getApiUrl } from "./constants";
+import { resolveInitialThemeMode } from "@stores";
 
 // Silent wake-up ping: the API can cold-start (Render free tier spins down when
 // idle), so hit the cheapest possible route as early as possible — before the
@@ -22,8 +22,10 @@ import { getApiUrl } from "./constants";
 // notification pipeline).
 fetch(`${getApiUrl()}/health`).catch(() => {});
 
-const settings = typeof localStorage !== "undefined" ? getUserSettings() : { theme: "light" as const, locale: "en" as const };
-const savedTheme = settings.theme === "dark" ? "dark" : "light";
+// Pre-mount, before Pinia exists — avoids a flash of the wrong theme. The
+// theme store re-resolves reactively (incl. the tenant-default tier) once
+// the app mounts; see composables/useLayoutState.ts.
+const savedTheme = resolveInitialThemeMode();
 
 if (typeof document !== "undefined" && document.documentElement) {
   document.documentElement.setAttribute("data-theme", savedTheme);

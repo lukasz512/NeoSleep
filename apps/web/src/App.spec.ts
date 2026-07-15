@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { mount } from "@vue/test-utils";
+import { createPinia } from "pinia";
 import { createI18n } from "vue-i18n";
 import router from "./router";
 import App from "./App.vue";
@@ -27,7 +28,7 @@ describe("DefaultLayout", () => {
   it("has header with logo and main nav", () => {
     const wrapper = mount(DefaultLayout, {
       global: {
-        plugins: [i18n, router],
+        plugins: [i18n, router, createPinia()],
         stubs: { "router-view": true },
       },
     });
@@ -43,7 +44,7 @@ describe("DefaultLayout", () => {
   it("nav has expected links (Solutions, For Dentists, For Patients, About, Contact) and Get Started CTA", () => {
     const wrapper = mount(DefaultLayout, {
       global: {
-        plugins: [i18n, router],
+        plugins: [i18n, router, createPinia()],
         stubs: { "router-view": true },
       },
     });

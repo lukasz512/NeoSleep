@@ -1,4 +1,5 @@
 import { createApp } from "vue";
+import { createPinia } from "pinia";
 import "./assets/flags.css";
 import { createI18n } from "vue-i18n";
 import { createUnhead, headSymbol } from "@unhead/vue";
@@ -6,20 +7,14 @@ import { createGtag } from "vue-gtag";
 import App from "./App.vue";
 import router from "./router";
 import { getTenantId, loadTenantOverlay } from "./composables/useTenantI18n";
+import { resolveInitialThemeMode } from "@stores";
 
-const STORAGE_KEY_THEME = "neosleep-website-theme";
-
-function initTheme() {
-  try {
-    const v = localStorage.getItem(STORAGE_KEY_THEME);
-    if (v === "dark") document.documentElement.setAttribute("data-theme", "dark");
-    else if (v !== "light") {
-      if (window.matchMedia("(prefers-color-scheme: dark)").matches)
-        document.documentElement.setAttribute("data-theme", "dark");
-    }
-  } catch (_) {}
+// Pre-mount, before Pinia exists — avoids a flash of the wrong theme. The
+// theme store re-resolves reactively (incl. the tenant-default tier) once
+// the app mounts; see apps/web/src/composables/useTheme.ts.
+if (typeof document !== "undefined") {
+  document.documentElement.setAttribute("data-theme", resolveInitialThemeMode());
 }
-initTheme();
 
 const STORAGE_KEY = "neosleep-website-locale";
 const supportedLocales = ["en", "pl", "mx"] as const;
@@ -58,6 +53,7 @@ const i18n = createI18n({
 });
 
 const app = createApp(App);
+app.use(createPinia());
 app.use(router);
 app.use(i18n);
 app.provide(headSymbol, createUnhead());

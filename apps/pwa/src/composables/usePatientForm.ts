@@ -1,6 +1,7 @@
 import { ref, computed, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { apiFetch } from "../utils/api";
+import { useSalutationOptions } from "./useSalutationOptions";
 import type {
   PatientFormData,
   PatientFormInitialData,
@@ -25,6 +26,7 @@ export function usePatientForm(
   emit: (event: "update:modelValue" | "submit", ...args: unknown[]) => void,
 ) {
   const { t } = useI18n();
+  const { salutationItems } = useSalutationOptions();
 
   const formRef = ref<{ validate: () => Promise<{ valid: boolean }> } | null>(null);
   const submitting = ref(false);
@@ -190,7 +192,7 @@ export function usePatientForm(
   return {
     formRef, form, submitting, showDiscardConfirm,
     practitionerOptions, loadingPractitioners,
-    statusItems,
+    statusItems, salutationItems,
     isEditMode, formTitle, formSubmitLabel,
     firstNameRules, lastNameRules, emailRules, phoneRules, ahiBaselineRules,
     onDialogUpdate, confirmDiscard, onCancelClick, onSubmit,

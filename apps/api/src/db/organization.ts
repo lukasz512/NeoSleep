@@ -298,3 +298,17 @@ export async function updateOrganization(client: PoolClient, id: string, input: 
 
   return getOrganizationById(client, id);
 }
+
+/**
+ * Soft-deletes an organization by setting deleted_at — status is left
+ * untouched (every read query already filters deleted_at IS NULL, so that
+ * alone is sufficient for visibility; see softDeleteLead for the same call).
+ */
+export async function softDeleteOrganization(client: PoolClient, id: string): Promise<void> {
+  try {
+    await client.query(`UPDATE organization SET deleted_at = now() WHERE id = $1`, [id]);
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("softDeleteOrganization", err);
+  }
+}

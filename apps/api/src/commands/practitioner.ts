@@ -3,6 +3,7 @@ import {
   insertPractitioner,
   updatePractitioner,
   getPractitionerById,
+  softDeletePractitioner,
   type InsertPractitionerInput,
   type UpdatePractitionerInput,
   type Practitioner,
@@ -173,4 +174,22 @@ export async function UpdatePractitionerCommand(
   });
 
   return after;
+}
+
+// ---------------------------------------------------------------------------
+// DELETE PRACTITIONER (soft delete)
+// ---------------------------------------------------------------------------
+
+export async function DeletePractitionerCommand(ctx: TenantContext, id: string): Promise<void> {
+  if (!id?.trim()) throw new ValidationError("practitioner id is required");
+
+  await softDeletePractitioner(ctx.client, id);
+
+  await insertAuditLog(ctx.client, {
+    user_id:    ctx.user.id,
+    action:     "delete",
+    entity_type: "Practitioner",
+    entity_id:  id,
+    request_id: ctx.requestId,
+  });
 }

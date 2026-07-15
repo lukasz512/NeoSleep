@@ -1,10 +1,10 @@
-import { ref, computed, onMounted, onUnmounted, nextTick } from "vue";
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from "vue";
 import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useTheme } from "vuetify";
 import { useDebounceFn } from "@vueuse/core";
+import { useThemeStore } from "@stores";
 import { SIDEBAR_DEFAULT_COLLAPSED, MOBILE_BREAKPOINT } from "../constants";
-import { getNextTheme } from "../utils/theme";
 import { getUserSettings, setUserSettings } from "../utils/user-settings";
 import { lightTheme, darkTheme } from "../plugins/vuetify";
 import { useAuthStore } from "../stores/auth";
@@ -19,19 +19,24 @@ export function useLayoutState() {
   const vuetifyTheme = useTheme();
 
   // ── Theme ──────────────────────────────────────────────────────────────────
-  const theme = ref<"light" | "dark">("light");
+  // All resolution/persistence lives in the shared store (packages/stores/theme.ts)
+  // — including data-theme on <html>. Only the Vuetify-specific side effect
+  // (pwa only, not shared) lives here.
+  const themeStore = useThemeStore();
+  const theme = computed(() => themeStore.mode);
+
+  watch(
+    theme,
+    (mode) => vuetifyTheme.change(mode === "dark" ? darkTheme : lightTheme),
+    { immediate: true, flush: "sync" }
+  );
 
   function setTheme(id: "light" | "dark") {
-    theme.value = id;
-    vuetifyTheme.change(id === "dark" ? darkTheme : lightTheme);
-    if (typeof document !== "undefined") {
-      document.documentElement.setAttribute("data-theme", id);
-      setUserSettings({ theme: id });
-    }
+    themeStore.setPreference(id);
   }
 
   function toggleTheme() {
-    setTheme(getNextTheme(theme.value));
+    themeStore.toggleMode();
   }
 
   // ── Sidebar ────────────────────────────────────────────────────────────────
@@ -120,7 +125,11 @@ export function useLayoutState() {
     }
     const [cfg] = await Promise.all([configStore.load(), configStore.loadOptions(), configStore.loadI18nOverrides()]);
     configStore.applyToDom(cfg);
-    setTheme(cfg.color_scheme);
+    // NOTE: configStore.load() already feeds cfg.color_scheme into the theme
+    // store's tenant-default tier — no setTheme() call here. Calling it would
+    // override the user's own explicit choice on every mount, which was the
+    // pre-existing bug this migration fixes (personal theme preference never
+    // actually persisted across reloads).
     updateMobile();
     window.addEventListener("resize", updateMobile);
   });

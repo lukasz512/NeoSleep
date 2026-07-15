@@ -16,7 +16,8 @@ export interface HcpFilters {
 export type ViewFilters = Record<string, string | string[]>;
 
 export interface AppSettings {
-  theme?: "light" | "dark";
+  // Theme lives in the shared theme store (packages/stores/theme.ts) — its
+  // own localStorage key, not here. Do not re-add it here.
   locale?: "en" | "pl" | "mx";
   sidebarCollapsed?: boolean;
   /** Keyed by view id (e.g. 'leads', 'hcp'). Each value is a record of filter key -> value. */
@@ -24,7 +25,6 @@ export interface AppSettings {
 }
 
 const DEFAULTS: AppSettings = {
-  theme: "light",
   locale: "en",
   sidebarCollapsed: false,
   filters: {},

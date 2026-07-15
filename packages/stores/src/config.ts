@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import { ref, shallowRef, computed } from "vue";
 import { brandColors } from "@brand/colors";
 import type { ApiFetchOptions } from "@api";
+import { useThemeStore } from "./theme";
 
 /** Matches the API's LookupItem shape (apps/api/src/db/lookup.ts) — key is the stable
  *  machine value to store/filter by, value is the translated display label. */
@@ -29,6 +30,9 @@ export interface AppConfig {
   secondary_color_dark: string;
   border_radius: string;
   logo_url: string | null;
+  logo_dark_url: string | null;
+  icon_url: string | null;
+  icon_dark_url: string | null;
   surface_color: string;
   color_scheme: "light" | "dark";
 }
@@ -40,6 +44,9 @@ const defaults: AppConfig = {
   secondary_color_dark: brandColors.primaryOnDark,
   border_radius:      "8px",
   logo_url:           null,
+  logo_dark_url:      null,
+  icon_url:           null,
+  icon_dark_url:      null,
   surface_color:      "#fafafa",
   color_scheme:       "light",
 };
@@ -86,9 +93,13 @@ export function createConfigStore(apiFetch: ApiFetchFn, applyI18nOverrides?: I18
           secondary_color_dark:normalizeHex(data.secondary_color_dark)?? defaults.secondary_color_dark,
           border_radius:       data.border_radius  ?? defaults.border_radius,
           logo_url:            data.logo_url       ?? null,
+          logo_dark_url:       data.logo_dark_url  ?? null,
+          icon_url:            data.icon_url       ?? null,
+          icon_dark_url:       data.icon_dark_url  ?? null,
           surface_color:       normalizeHex(data.surface_color)       ?? defaults.surface_color,
           color_scheme:        data.color_scheme === "dark" ? "dark" : "light",
         };
+        useThemeStore().setTenantDefault(config.value.color_scheme);
         return config.value;
       } finally {
         loading.value = false;
@@ -117,6 +128,7 @@ export function createConfigStore(apiFetch: ApiFetchFn, applyI18nOverrides?: I18
             secondary_color_dark:normalizeHex(data.secondary_color_dark) ?? data.secondary_color_dark?? defaults.secondary_color_dark,
             surface_color:       normalizeHex(data.surface_color)        ?? data.surface_color       ?? defaults.surface_color,
           };
+          useThemeStore().setTenantDefault(config.value.color_scheme);
         }
         return config.value;
       } finally {
@@ -172,7 +184,8 @@ export function createConfigStore(apiFetch: ApiFetchFn, applyI18nOverrides?: I18
       root.style.setProperty("--pwa-secondary-dark", cfg.secondary_color_dark);
       root.style.setProperty("--pwa-surface",        cfg.surface_color);
       root.style.setProperty("--pwa-bg-secondary",   cfg.surface_color);
-      root.setAttribute("data-theme", cfg.color_scheme);
+      // data-theme is owned by useThemeStore (packages/stores/theme.ts), not here —
+      // color_scheme only feeds its tenant-default tier via setTenantDefault() above.
     }
 
     return {

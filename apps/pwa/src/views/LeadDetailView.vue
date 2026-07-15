@@ -3,21 +3,35 @@
     <LeadForm
       v-if="showEditModal"
       v-model="showEditModal"
-      :initial-data="lead ? { id: lead.id, first_name: lead.first_name, last_name: lead.last_name, email: lead.email ?? '', phone: lead.phone ?? '', status: lead.status, region: lead.region, institution: lead.institution ?? '' } : undefined"
+      :initial-data="lead ? { id: lead.id, salutation: lead.salutation ?? '', first_name: lead.first_name, last_name: lead.last_name, email: lead.email ?? '', phone: lead.phone ?? '', status: lead.status, region: lead.region, institution: lead.institution ?? '' } : undefined"
       @submit="onLeadSubmit"
     />
     <PractitionerForm
       v-if="showMoveToContactsModal"
       v-model="showMoveToContactsModal"
-      :initial-data="lead ? { first_name: lead.first_name, last_name: lead.last_name, email: lead.email ?? '', phone: lead.phone ?? '', region: lead.region, institution: lead.institution ?? '' } : undefined"
+      :initial-data="lead ? { salutation: lead.salutation ?? '', first_name: lead.first_name, last_name: lead.last_name, email: lead.email ?? '', phone: lead.phone ?? '', region: lead.region, institution: lead.institution ?? '' } : undefined"
       :show-verify-info="true"
       @submit="onContactSubmit"
+    />
+    <PatientForm
+      v-if="showConvertToPatientModal"
+      v-model="showConvertToPatientModal"
+      :initial-data="lead ? { salutation: lead.salutation ?? '', first_name: lead.first_name, last_name: lead.last_name, email: lead.email ?? '', phone: lead.phone ?? '', region: lead.region } : undefined"
+      @submit="onConvertToPatientSubmit"
     />
     <EventForm
       v-if="showEventForm"
       v-model="showEventForm"
       :initial-data="eventFormInitial"
       @submit="onEventFormSubmit"
+    />
+    <ConfirmDialog
+      v-model="showDeleteConfirm"
+      :message="t('user.leads.actions.deleteConfirmText')"
+      :confirm-label="t('user.leads.actions.delete')"
+      :cancel-label="t('app.common.cancel')"
+      @confirm="onDelete"
+      @cancel="showDeleteConfirm = false"
     />
 
     <ItemDetailLayout
@@ -52,6 +66,15 @@
           </template>
           <span>{{ t('user.leads.detail.moveToContacts') }}</span>
         </VTooltip>
+        <VTooltip v-if="lead && !isConverted(lead)" location="bottom">
+          <template #activator="{ props: tooltipProps }">
+            <VBtn v-bind="tooltipProps" icon variant="flat" size="large"
+              class="view-item__move-to-contacts-btn" :aria-label="t('user.leads.detail.convertToPatient')" @click="onConvertToPatient">
+              <AppIcon name="nav-patients" class="view-item__move-to-contacts-icon" />
+            </VBtn>
+          </template>
+          <span>{{ t('user.leads.detail.convertToPatient') }}</span>
+        </VTooltip>
         <VTooltip v-if="isAdmin" location="bottom">
           <template #activator="{ props: tooltipProps }">
             <VBtn v-bind="tooltipProps" icon variant="flat" size="large"
@@ -60,6 +83,15 @@
             </VBtn>
           </template>
           <span>{{ t('user.leads.detail.edit') }}</span>
+        </VTooltip>
+        <VTooltip v-if="isAdmin" location="bottom">
+          <template #activator="{ props: tooltipProps }">
+            <VBtn v-bind="tooltipProps" icon variant="flat" size="large"
+              class="view-item__delete-btn view-item__delete-btn--no-border" :aria-label="t('user.leads.actions.delete')" @click="showDeleteConfirm = true">
+              <AppIcon name="trash" class="view-item__delete-icon" />
+            </VBtn>
+          </template>
+          <span>{{ t('user.leads.actions.delete') }}</span>
         </VTooltip>
       </template>
 
@@ -130,12 +162,13 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuthStore } from "../stores/auth";
 import { apiFetch } from "../utils/api";
 import { useNotifications } from "../composables/useNotifications";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
+import ConfirmDialog from "../components/ConfirmDialog.vue";
 import AppIcon from "../components/AppIcon.vue";
 import GenderIcon from "../components/GenderIcon.vue";
 import { getGenderFromName } from "../utils/genderFromName";
@@ -144,10 +177,12 @@ import type { Lead } from "./LeadsView.vue";
 
 const LeadForm = defineAsyncComponent(() => import("../components/LeadForm.vue"));
 const PractitionerForm = defineAsyncComponent(() => import("../components/PractitionerForm.vue"));
+const PatientForm = defineAsyncComponent(() => import("../components/PatientForm.vue"));
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
 
 const { t } = useI18n();
 const route = useRoute();
+const router = useRouter();
 
 const authStore = useAuthStore();
 const notifications = useNotifications();
@@ -160,6 +195,8 @@ const lead = ref<Lead | null>(null);
 const loading = ref(true);
 const showEditModal = ref(false);
 const showMoveToContactsModal = ref(false);
+const showConvertToPatientModal = ref(false);
+const showDeleteConfirm = ref(false);
 const showEventForm = ref(false);
 const eventFormInitial = ref<{ start_at: string; end_at: string } | undefined>(undefined);
 
@@ -244,6 +281,38 @@ async function onContactSubmit(data: import("../components/PractitionerForm.vue"
   }
 }
 
+function onConvertToPatient() {
+  showConvertToPatientModal.value = true;
+}
+
+async function onConvertToPatientSubmit(data: import("../components/PatientForm.vue").PatientSubmitPayload) {
+  const leadId = lead.value?.id;
+  if (!leadId) return;
+  // Conversion (status -> converted, converted_to_id/type/at) happens
+  // atomically server-side via ConvertLeadCommand when lead_id is present —
+  // same pattern as onContactSubmit's Lead->Practitioner conversion above.
+  const res = await apiFetch("/api/v1/patient", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      salutation: data.salutation,
+      first_name: data.first_name,
+      last_name: data.last_name,
+      email: data.email,
+      phone: data.phone,
+      region: data.region,
+      lead_id: leadId,
+    }),
+    errorMessageKey: "user.leads.errorLoad",
+  });
+  if (res.ok) {
+    notifications.show(t("app.patients.form.success"), "success");
+    showConvertToPatientModal.value = false;
+    await loadLead();
+    window.dispatchEvent(new Event("entity-list-refresh"));
+  }
+}
+
 function hcoLink(institutionName: string) {
   return { path: "/hco", query: { institution: institutionName } };
 }
@@ -259,6 +328,7 @@ async function onLeadSubmit(data: import("../components/LeadForm.vue").LeadSubmi
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
+      salutation: data.salutation,
       first_name: data.first_name,
       last_name: data.last_name,
       email: data.email,
@@ -274,6 +344,21 @@ async function onLeadSubmit(data: import("../components/LeadForm.vue").LeadSubmi
     showEditModal.value = false;
     await loadLead();
     window.dispatchEvent(new Event("entity-list-refresh"));
+  }
+}
+
+async function onDelete() {
+  const id = lead.value?.id;
+  if (!id) return;
+  const res = await apiFetch(`/api/v1/lead/${id}`, {
+    method: "DELETE",
+    errorMessageKey: "user.leads.errorLoad",
+  });
+  if (res.ok) {
+    showDeleteConfirm.value = false;
+    notifications.show(t("user.leads.actions.deleteSuccess"), "success");
+    window.dispatchEvent(new Event("entity-list-refresh"));
+    router.push({ name: "leads" });
   }
 }
 
@@ -396,5 +481,29 @@ watch(() => route.params.id, loadLead);
   width: 24px; height: 24px; display: block;
   color: rgb(var(--v-theme-primary)) !important;
   stroke: rgb(var(--v-theme-primary)) !important;
+}
+
+.view-detail :deep(.view-item__delete-btn) {
+  min-width: var(--pwa-btn-min-width, 44px);
+  min-height: var(--pwa-btn-min-height, 44px);
+  color: rgb(var(--v-theme-error)) !important;
+}
+
+.view-detail :deep(.view-item__delete-btn--no-border) {
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+
+  &:hover {
+    background: rgba(var(--v-theme-error), 0.12) !important;
+  }
+}
+
+.view-detail :deep(.view-item__delete-icon) {
+  width: 22px;
+  height: 22px;
+  display: block;
+  color: rgb(var(--v-theme-error)) !important;
+  stroke: rgb(var(--v-theme-error)) !important;
 }
 </style>

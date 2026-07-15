@@ -12,7 +12,7 @@
   ],
   "scripts": {
     "format": "prettier --write .",
-    "lint": "eslint . --format codeframe",
+    "lint": "eslint .",
     "typecheck": "tsc -b",
     "i18n:extract": "node infrastructure/scripts/i18n/extract.mjs",
     "i18n:unused": "node infrastructure/scripts/i18n/unused.mjs",

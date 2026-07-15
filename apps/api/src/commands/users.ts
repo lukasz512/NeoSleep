@@ -35,6 +35,7 @@ const PASSWORD_RESET_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
 // ---------------------------------------------------------------------------
 
 export interface CreateUserInput {
+  salutation?: string | null;
   first_name: string;
   last_name: string;
   email: string;
@@ -66,10 +67,12 @@ export async function CreateUserCommand(ctx: TenantContext, input: CreateUserInp
   const user = await insertStaffUser(
     ctx.client,
     email,
-    `${firstName} ${lastName}`,
+    firstName,
+    lastName,
     role,
     passwordHash,
-    !input.password
+    !input.password,
+    input.salutation
   );
   if (!user) throw new ConflictError("A user with this email already exists");
 

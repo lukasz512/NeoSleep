@@ -12,10 +12,23 @@ import { useConfigStore } from "../../stores/config";
  * row action to email the new user a set-password link. Admins never
  * type/see another person's password.
  *
- * `email` stays in the field list for create, but UpdateUserCommand ignores
- * it on edit (email isn't editable yet) — the field is harmlessly a no-op
- * when submitted from the edit dialog.
+ * `email` is marked `immutableOnEdit` — FormRenderer disables it once
+ * initialData.id is set, so the edit dialog no longer shows a live-looking
+ * field that UpdateUserCommand silently ignores.
  */
+
+// value is the literal text (not a code) — matches what these i18n keys
+// resolve to in every locale file today (see useSalutationOptions.ts, the
+// bespoke equivalent used by LeadForm/PractitionerForm/PatientForm, where
+// the translated string doubles as both label and stored value).
+const SALUTATION_OPTIONS = [
+  { title: "app.common.salutation.mr", value: "Mr." },
+  { title: "app.common.salutation.mrs", value: "Mrs." },
+  { title: "app.common.salutation.ms", value: "Ms." },
+  { title: "app.common.salutation.miss", value: "Miss" },
+  { title: "app.common.salutation.dr", value: "Dr." },
+  { title: "app.common.salutation.dra", value: "Dra." },
+];
 
 const ROLE_OPTIONS = [
   { title: "user.users.role.admin", value: "admin" },
@@ -40,6 +53,13 @@ async function loadRegionOptions() {
 
 export const userFormFields: FormFieldDef[] = [
   {
+    key: "salutation",
+    type: "combobox",
+    labelKey: "user.users.form.fieldSalutation",
+    options: SALUTATION_OPTIONS,
+    cols: 12,
+  },
+  {
     key: "first_name",
     type: "text",
     labelKey: "user.users.form.fieldFirstName",
@@ -58,6 +78,7 @@ export const userFormFields: FormFieldDef[] = [
     type: "email",
     labelKey: "user.users.form.fieldEmail",
     required: true,
+    immutableOnEdit: true,
     cols: 12,
   },
   {
