@@ -1,0 +1,79 @@
+# Runs on every pull request: lint + typecheck across all workspaces, plus
+# test suites. apps/api needs a real Postgres for its integration tests (see
+# CLAUDE.md: "No mock-only tests for BFF") — a fresh postgres:15 service
+# container is migrated before tests run, kept separate from the shared
+# Supabase dev/prod DB.
+#
+# apps/pwa and apps/web test suites currently have pre-existing failures
+# being triaged separately (test-quality audit, not caused by a given PR) —
+# they still run for visibility but don't block merge yet via continue-on-error.
+# Once that audit lands, promote them to blocking the same way api/ui are.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [dev, prod]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      DEFAULT_TENANT_SLUG: neosleep
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint (all workspaces)
+        run: pnpm -r lint
+
+      - name: Typecheck (all workspaces)
+        run: pnpm -r typecheck
+
+      - name: Run DB migrations
+        run: pnpm --filter @neo/api migrate
+
+      - name: Test — api (blocking)
+        run: pnpm --filter @neo/api test
+
+      - name: Test — ui package (blocking)
+        run: pnpm --filter @neo/ui test
+
+      - name: Test — pwa (informational — pre-existing failures being triaged, not yet a merge gate)
+        run: pnpm --filter @neo/pwa test
+        continue-on-error: true
+
+      - name: Test — web (informational — pre-existing failures being triaged, not yet a merge gate)
+        run: pnpm --filter @neo/web test
+        continue-on-error: true
