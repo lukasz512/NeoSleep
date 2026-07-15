@@ -334,3 +334,18 @@ export async function updatePatient(
 
   return getPatientById(client, id);
 }
+
+/**
+ * Soft-deletes a patient by setting deleted_at — status is left untouched:
+ * the patient status CHECK doesn't even have an 'inactive' value
+ * ('active'|'follow_up'|'discharged'), and every read query already filters
+ * deleted_at IS NULL, so deleted_at alone is sufficient for visibility.
+ */
+export async function softDeletePatient(client: PoolClient, id: string): Promise<void> {
+  try {
+    await client.query(`UPDATE patient SET deleted_at = now() WHERE id = $1`, [id]);
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("softDeletePatient", err);
+  }
+}

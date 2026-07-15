@@ -1,5 +1,6 @@
 import { ref, computed, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { useSalutationOptions } from "./useSalutationOptions";
 import type { LeadFormData, LeadFormInitialData, LeadSubmitPayload } from "../components/LeadForm.types";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -9,6 +10,7 @@ export function useLeadForm(
   emit: (event: "update:modelValue" | "submit", ...args: unknown[]) => void,
 ) {
   const { t } = useI18n();
+  const { salutationItems } = useSalutationOptions();
 
   const formRef = ref<{ validate: () => Promise<{ valid: boolean }> } | null>(null);
   const submitting = ref(false);
@@ -16,7 +18,7 @@ export function useLeadForm(
   const initialFormSnapshot = ref<LeadFormData | null>(null);
 
   const form = ref<LeadFormData>({
-    first_name: "", last_name: "", email: "", phone: "", status: "new", region: "", institution: "",
+    salutation: "", first_name: "", last_name: "", email: "", phone: "", status: "new", region: "", institution: "",
   });
 
   // converted isn't offered here — it's a system transition (ConvertLeadCommand,
@@ -58,6 +60,7 @@ export function useLeadForm(
     const f = form.value;
     const eq = (a: string, b: string) => (a ?? "").trim() === (b ?? "").trim();
     return (
+      !eq(f.salutation, snap.salutation) ||
       !eq(f.first_name, snap.first_name) || !eq(f.last_name, snap.last_name) ||
       !eq(f.email, snap.email) || !eq(f.phone, snap.phone) ||
       f.status !== snap.status || !eq(f.region, snap.region) || !eq(f.institution, snap.institution)
@@ -96,6 +99,7 @@ export function useLeadForm(
       const lastName = form.value.last_name.trim() || firstName;
       const payload: LeadSubmitPayload = {
         id:          props.initialData?.id,
+        salutation:  form.value.salutation.trim() || undefined,
         first_name:  firstName,
         last_name:   lastName,
         email:       form.value.email.trim() || undefined,
@@ -117,6 +121,7 @@ export function useLeadForm(
       if (open) {
         if (initial && initial.id) {
           form.value = {
+            salutation:  (initial.salutation ?? "").trim(),
             first_name:  (initial.first_name ?? "").trim(),
             last_name:   (initial.last_name ?? "").trim(),
             email:       (initial.email ?? "").trim(),
@@ -127,7 +132,7 @@ export function useLeadForm(
           };
         } else {
           form.value = {
-            first_name: "", last_name: "", email: "", phone: "", status: "new", region: "", institution: "",
+            salutation: "", first_name: "", last_name: "", email: "", phone: "", status: "new", region: "", institution: "",
           };
         }
         initialFormSnapshot.value = { ...form.value };
@@ -139,7 +144,7 @@ export function useLeadForm(
 
   return {
     formRef, form, submitting, showDiscardConfirm,
-    statusItems,
+    statusItems, salutationItems,
     isEditMode, formTitle, formSubmitLabel,
     firstNameRules, emailRules, phoneRules,
     onDialogUpdate, confirmDiscard, onCancelClick, onSubmit,

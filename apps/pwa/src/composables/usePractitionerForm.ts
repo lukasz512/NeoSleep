@@ -1,5 +1,6 @@
 import { ref, computed, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { useSalutationOptions } from "./useSalutationOptions";
 import type {
   PractitionerFormData,
   PractitionerFormInitialData,
@@ -13,6 +14,7 @@ export function usePractitionerForm(
   emit: (event: "update:modelValue" | "submit", ...args: unknown[]) => void,
 ) {
   const { t } = useI18n();
+  const { salutationItems } = useSalutationOptions();
 
   const formRef = ref<{ validate: () => Promise<{ valid: boolean }> } | null>(null);
   const submitting = ref(false);
@@ -163,7 +165,7 @@ export function usePractitionerForm(
 
   return {
     formRef, form, submitting, showDiscardConfirm,
-    influenceTierItems,
+    influenceTierItems, salutationItems,
     isEditMode, formTitle, formSubmitLabel,
     firstNameRules, lastNameRules, emailRules, phoneRules,
     onDialogUpdate, confirmDiscard, onCancelClick, onSubmit,

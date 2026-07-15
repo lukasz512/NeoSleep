@@ -9,6 +9,7 @@ export interface User {
   identity_id: string;
   // From identities JOIN
   email: string;
+  salutation: string | null;
   first_name: string | null;
   last_name: string | null;
   /** Computed: first_name + ' ' + last_name */
@@ -36,7 +37,7 @@ const USER_JOIN = `
   LEFT JOIN user_roles ur ON ur.user_id = u.id`.trim();
 
 const USER_COLS = `
-  u.id, u.identity_id, i.email, i.first_name, i.last_name,
+  u.id, u.identity_id, i.email, i.title AS salutation, i.first_name, i.last_name,
   TRIM(COALESCE(i.first_name, '') || ' ' || COALESCE(i.last_name, '')) AS name,
   COALESCE(ur.role, 'rep') AS role,
   u.google_sub, u.region, u.territory_id, u.status, u.token_version,
@@ -143,21 +144,21 @@ export async function setUserPassword(
 export async function insertStaffUser(
   client: PoolClient,
   email: string,
-  name: string | null,
+  firstName: string | null,
+  lastName: string | null,
   role: StaffRole,
   passwordHash: string | null,
-  forcePasswordChange: boolean
+  forcePasswordChange: boolean,
+  salutation?: string | null
 ): Promise<User | null> {
   const normalizedEmail = email.trim().toLowerCase();
-  const firstName = name ? name.split(" ")[0] ?? null : null;
-  const lastName = name && name.includes(" ") ? name.split(" ").slice(1).join(" ") : null;
 
   try {
     const identityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (email, first_name, last_name) VALUES ($1, $2, $3)
+      `INSERT INTO identities (email, title, first_name, last_name) VALUES ($1, $2, $3, $4)
        ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
        RETURNING id`,
-      [normalizedEmail, firstName, lastName]
+      [normalizedEmail, salutation?.trim() || null, firstName, lastName]
     );
     const identityId = identityResult.rows[0]!.id;
 
@@ -296,6 +297,7 @@ export async function getUsersPaginated(
 }
 
 export interface UpdateUserInput {
+  salutation?: string | null;
   first_name?: string;
   last_name?: string;
   phone?: string | null;
@@ -309,16 +311,28 @@ export async function updateUser(client: PoolClient, id: string, input: UpdateUs
   if (!existing) return null;
 
   try {
-    if (input.first_name !== undefined || input.last_name !== undefined || input.phone !== undefined) {
+    if (
+      input.salutation !== undefined ||
+      input.first_name !== undefined ||
+      input.last_name !== undefined ||
+      input.phone !== undefined
+    ) {
+      // Unconditional write per field (not COALESCE) so an explicit null
+      // (e.g. clearing the salutation combobox) actually clears it, while a
+      // field simply absent from the payload falls back to its current value.
+      const salutation = input.salutation !== undefined ? (input.salutation?.trim() || null) : existing.salutation;
+      const firstName  = input.first_name !== undefined ? input.first_name : existing.first_name;
+      const lastName   = input.last_name  !== undefined ? input.last_name  : existing.last_name;
       await client.query(
         `UPDATE identities i SET
-           first_name = COALESCE($1, i.first_name),
-           last_name  = COALESCE($2, i.last_name),
-           phone      = $3,
+           title      = $1,
+           first_name = $2,
+           last_name  = $3,
+           phone      = $4,
            updated_at = now()
          FROM users u
-         WHERE u.identity_id = i.id AND u.id = $4`,
-        [input.first_name ?? null, input.last_name ?? null, input.phone ?? null, id]
+         WHERE u.identity_id = i.id AND u.id = $5`,
+        [salutation, firstName, lastName, input.phone ?? null, id]
       );
     }
     if (input.status !== undefined) {

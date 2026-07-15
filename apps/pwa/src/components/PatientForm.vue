@@ -12,13 +12,14 @@
       </VCardTitle>
       <VCardText>
         <VForm ref="formRef" @submit.prevent="onSubmit">
-          <VTextField
+          <VCombobox
             v-model="form.salutation"
             :label="t('app.patients.form.salutation')"
+            :items="salutationItems"
             variant="outlined"
             density="comfortable"
             class="mb-3"
-            autocomplete="honorific-prefix"
+            clearable
           />
           <div class="pwa-form-row mb-3">
             <VTextField
@@ -220,7 +221,7 @@ const configStore = useConfigStore();
 const {
   formRef, form, submitting, showDiscardConfirm,
   practitionerOptions, loadingPractitioners,
-  statusItems,
+  statusItems, salutationItems,
   formTitle, formSubmitLabel,
   firstNameRules, lastNameRules, emailRules, phoneRules, ahiBaselineRules,
   onDialogUpdate, confirmDiscard, onCancelClick, onSubmit,

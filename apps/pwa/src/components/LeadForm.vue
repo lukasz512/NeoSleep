@@ -12,6 +12,15 @@
       </VCardTitle>
       <VCardText>
         <VForm ref="formRef" @submit.prevent="onSubmit">
+          <VCombobox
+            v-model="form.salutation"
+            :label="t('user.leads.form.salutation')"
+            :items="salutationItems"
+            variant="outlined"
+            density="comfortable"
+            class="mb-3"
+            clearable
+          />
           <div class="pwa-form-row mb-3">
             <VTextField
               v-model="form.first_name"
@@ -123,6 +132,7 @@ import { useConfigStore } from "../stores/config";
 import { useLeadForm } from "../composables/useLeadForm";
 
 export interface LeadFormData {
+  salutation: string;
   first_name: string;
   last_name: string;
   email: string;
@@ -134,6 +144,7 @@ export interface LeadFormData {
 
 export interface LeadFormInitialData {
   id?: string;
+  salutation?: string;
   first_name?: string;
   last_name?: string;
   email?: string;
@@ -145,6 +156,7 @@ export interface LeadFormInitialData {
 
 export interface LeadSubmitPayload {
   id?: string;
+  salutation?: string;
   first_name: string;
   last_name: string;
   email?: string;
@@ -169,7 +181,7 @@ const configStore = useConfigStore();
 
 const {
   formRef, form, submitting, showDiscardConfirm,
-  statusItems,
+  statusItems, salutationItems,
   formTitle, formSubmitLabel,
   firstNameRules, emailRules, phoneRules,
   onDialogUpdate, confirmDiscard, onCancelClick, onSubmit,

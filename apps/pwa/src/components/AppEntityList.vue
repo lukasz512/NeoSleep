@@ -148,6 +148,9 @@
                 {{ formatMeta(item) }}
               </slot>
             </VCardSubtitle>
+            <div v-if="$slots['feed-card-actions']" class="app-entity-list__card-actions" @click.stop>
+              <slot name="feed-card-actions" :item="item" />
+            </div>
           </VCard>
           <VAlert
             v-if="!loading && items.length === 0"

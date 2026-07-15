@@ -140,6 +140,7 @@ function componentFor(type: FormFieldType): string {
   switch (type) {
     case "select": return "VSelect";
     case "autocomplete": return "VAutocomplete";
+    case "combobox": return "VCombobox";
     case "chips": return "VCombobox";
     case "textarea": return "VTextarea";
     default: return "VTextField";
@@ -156,6 +157,7 @@ function fieldAttrs(f: FormFieldDef): Record<string, unknown> {
     rules: rulesFor(f),
     hint: f.hint ? t(f.hint) : undefined,
     persistentHint: !!f.hint,
+    disabled: !!f.immutableOnEdit && isEditMode.value,
   };
 
   switch (f.type) {
@@ -185,6 +187,8 @@ function fieldAttrs(f: FormFieldDef): Record<string, unknown> {
         chips: !!f.multiple,
         closableChips: !!f.multiple,
       };
+    case "combobox":
+      return { ...common, items: resolvedOptions(f), itemTitle: "title", itemValue: "value", clearable: true };
     case "chips":
       return { ...common, items: [], multiple: true, chips: true, closableChips: true };
     case "date":
