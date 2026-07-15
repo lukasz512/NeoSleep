@@ -30,6 +30,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Set API URL for build
+        run: |
+          echo "VITE_API_URL=${{ secrets.VITE_BFF_URL_PROD }}" >> $GITHUB_ENV
+          echo "VITE_GA_ID=${{ secrets.VITE_GA_ID_PROD }}" >> $GITHUB_ENV
+
       - name: Build app
         run: pnpm run build:pwa
 
