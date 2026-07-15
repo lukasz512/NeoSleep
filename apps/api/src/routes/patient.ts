@@ -1,9 +1,10 @@
 import { Router, type Router as RouterType, type Request, type Response } from "express";
 import { asyncHandler } from "../middleware/errorHandler.js";
 import { requireAuth } from "../middleware/requireAuth.js";
+import { requireRole } from "../middleware/requireRole.js";
 import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
-import { CreatePatientCommand, UpdatePatientCommand } from "../commands/patient.js";
+import { CreatePatientCommand, UpdatePatientCommand, DeletePatientCommand } from "../commands/patient.js";
 import { GetPatientListQuery, GetPatientByIdQuery } from "../queries/patient.js";
 import { ValidationError } from "../errors.js";
 import { parsePaginationParams, toFilterArray } from "./utils.js";
@@ -86,6 +87,7 @@ patientRouter.post(
       ahi_baseline?: number; cpap_device?: string; medical_record?: string;
       diagnosis_code?: Record<string, unknown>;
       metadata?: Record<string, unknown>;
+      lead_id?: string;
     };
 
     const patient = await withTenant(slug, async (client) => {
@@ -105,6 +107,7 @@ patientRouter.post(
         medical_record:  typeof body.medical_record  === "string" ? body.medical_record.trim() || undefined : undefined,
         diagnosis_code:  body.diagnosis_code,
         metadata:        body.metadata,
+        lead_id:         typeof body.lead_id         === "string" ? body.lead_id.trim() || null : null,
       });
     });
 
@@ -155,5 +158,25 @@ patientRouter.patch(
 
     if (!patient) { res.status(404).json({ error: "Patient not found" }); return; }
     res.json(patient);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// DELETE /api/v1/patient/:id — soft delete
+// ---------------------------------------------------------------------------
+patientRouter.delete(
+  "/patient/:id",
+  requireRole("admin", "manager"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id?.trim();
+    if (!id) throw new ValidationError("Missing patient id");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    await withTenant(slug, async (client) => {
+      const ctx = buildContext(req, client, slug);
+      await DeletePatientCommand(ctx, id);
+    });
+
+    res.json({ success: true });
   })
 );

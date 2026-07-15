@@ -25,6 +25,14 @@
       } : undefined"
       @submit="onContactSubmit"
     />
+    <ConfirmDialog
+      v-model="showDeleteConfirm"
+      :message="t('user.hcp.actions.deleteConfirmText')"
+      :confirm-label="t('user.hcp.actions.delete')"
+      :cancel-label="t('app.common.cancel')"
+      @confirm="onDelete"
+      @cancel="showDeleteConfirm = false"
+    />
     <ItemDetailLayout
     :has-content="!!hcp"
     :loading="loading"
@@ -67,6 +75,22 @@
         </template>
         <span>{{ t('user.hcp.detail.edit') }}</span>
       </VTooltip>
+      <VTooltip v-if="isAdmin" location="bottom">
+        <template #activator="{ props: tooltipProps }">
+          <VBtn
+            v-bind="tooltipProps"
+            icon
+            variant="flat"
+            size="large"
+            class="view-item__delete-btn view-item__delete-btn--no-border"
+            :aria-label="t('user.hcp.actions.delete')"
+            @click="showDeleteConfirm = true"
+          >
+            <AppIcon name="trash" class="view-item__delete-icon" />
+          </VBtn>
+        </template>
+        <span>{{ t('user.hcp.actions.delete') }}</span>
+      </VTooltip>
     </template>
     <template #title v-if="hcp">
       <span class="view-item__title-wrap">
@@ -101,12 +125,13 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuthStore } from "../stores/auth";
 import { apiFetch } from "../utils/api";
 import { useNotifications } from "../composables/useNotifications";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
+import ConfirmDialog from "../components/ConfirmDialog.vue";
 import AppIcon from "../components/AppIcon.vue";
 import GenderIcon from "../components/GenderIcon.vue";
 import { getGenderFromName } from "../utils/genderFromName";
@@ -133,6 +158,7 @@ interface HCP {
 
 const { t } = useI18n();
 const route = useRoute();
+const router = useRouter();
 const authStore = useAuthStore();
 const notifications = useNotifications();
 const isAdmin = computed(() => authStore.user?.role === "admin");
@@ -140,6 +166,7 @@ const isAdmin = computed(() => authStore.user?.role === "admin");
 const hcp = ref<HCP | null>(null);
 const loading = ref(true);
 const showEditModal = ref(false);
+const showDeleteConfirm = ref(false);
 const showEventForm = ref(false);
 const eventFormInitial = ref<{ start_at: string; end_at: string; hcpIds?: string[] } | undefined>(undefined);
 
@@ -220,6 +247,21 @@ async function onContactSubmit(data: import("../components/PractitionerForm.vue"
   }
 }
 
+async function onDelete() {
+  const id = hcp.value?.id;
+  if (!id) return;
+  const res = await apiFetch(`/api/v1/practitioner/${id}`, {
+    method: "DELETE",
+    errorMessageKey: "user.hcp.errorLoad",
+  });
+  if (res.ok) {
+    showDeleteConfirm.value = false;
+    notifications.show(t("user.hcp.actions.deleteSuccess"), "success");
+    window.dispatchEvent(new Event("entity-list-refresh"));
+    router.push({ name: "hcp" });
+  }
+}
+
 async function loadHCP() {
   const id = route.params.id as string;
   if (!id) {
@@ -256,5 +298,29 @@ watch(() => route.params.id, loadHCP);
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.view-detail :deep(.view-item__delete-btn) {
+  min-width: var(--pwa-btn-min-width, 44px);
+  min-height: var(--pwa-btn-min-height, 44px);
+  color: rgb(var(--v-theme-error)) !important;
+}
+
+.view-detail :deep(.view-item__delete-btn--no-border) {
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+
+  &:hover {
+    background: rgba(var(--v-theme-error), 0.12) !important;
+  }
+}
+
+.view-detail :deep(.view-item__delete-icon) {
+  width: 22px;
+  height: 22px;
+  display: block;
+  color: rgb(var(--v-theme-error)) !important;
+  stroke: rgb(var(--v-theme-error)) !important;
 }
 </style>

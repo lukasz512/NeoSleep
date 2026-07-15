@@ -23,6 +23,7 @@ export type FormFieldType =
   | "number"
   | "select"
   | "autocomplete"
+  | "combobox"
   | "chips"
   | "date";
 
@@ -71,6 +72,13 @@ export interface FormFieldDef {
   options?: FormFieldOption[] | (() => Promise<FormFieldOption[]>);
   /** Allow multiple selections — only meaningful for type 'autocomplete'. */
   multiple?: boolean;
+  /**
+   * Disables (not hides) this field when the dialog is editing an existing
+   * record (initialData has an id) — for values with real backend
+   * implications (e.g. email/login identity) that a plain edit form
+   * shouldn't silently no-op or let a rep casually change.
+   */
+  immutableOnEdit?: boolean;
   /** Value used to seed the field when there is no initialData for it. */
   default?: unknown;
   /** i18n key for optional helper text shown under the field. */

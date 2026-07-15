@@ -19,16 +19,43 @@
           {{ t(`user.users.status.${(item as Record<string, unknown>).status}`) }}
         </span>
       </template>
+      <template #item.actions="{ item }">
+        <VBtn icon variant="text" size="small" :aria-label="t('user.users.detail.edit')" @click.stop="onRowEdit(item as Record<string, unknown>)">
+          <AppIcon name="pencil" class="users-view__row-icon" />
+        </VBtn>
+        <VBtn icon variant="text" size="small" :aria-label="t('user.users.actions.delete')" @click.stop="onRowDeleteClick(item as Record<string, unknown>)">
+          <AppIcon name="trash" class="users-view__row-icon users-view__row-icon--error" />
+        </VBtn>
+      </template>
+      <template #feed-card-actions="{ item }">
+        <VBtn icon variant="text" size="small" :aria-label="t('user.users.detail.edit')" @click="onRowEdit(item as Record<string, unknown>)">
+          <AppIcon name="pencil" class="users-view__row-icon" />
+        </VBtn>
+        <VBtn icon variant="text" size="small" :aria-label="t('user.users.actions.delete')" @click="onRowDeleteClick(item as Record<string, unknown>)">
+          <AppIcon name="trash" class="users-view__row-icon users-view__row-icon--error" />
+        </VBtn>
+      </template>
     </AppEntityList>
 
     <FormRenderer
       v-if="showForm"
       v-model="showForm"
       :fields="userFormFields"
+      :initial-data="editingUser ?? undefined"
       title-key="user.users.form.title"
+      edit-title-key="user.users.form.editTitle"
       submit-label-key="user.users.form.submit"
       edit-submit-label-key="user.users.form.editSubmit"
       @submit="onSubmit"
+    />
+
+    <ConfirmDialog
+      v-model="showDeleteConfirm"
+      :message="t('user.users.actions.deleteConfirmText')"
+      :confirm-label="t('user.users.actions.delete')"
+      :cancel-label="t('app.common.cancel')"
+      @confirm="onDelete"
+      @cancel="showDeleteConfirm = false"
     />
   </div>
 </template>
@@ -37,6 +64,8 @@
 import { ref, computed, defineAsyncComponent } from "vue";
 import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
+import AppIcon from "../components/AppIcon.vue";
+import ConfirmDialog from "../components/ConfirmDialog.vue";
 import { apiFetch } from "../utils/api";
 import { useNotifications } from "../composables/useNotifications";
 import type { FilterDefinition } from "../composables/useFilters";
@@ -48,6 +77,9 @@ const { t } = useI18n();
 const notifications = useNotifications();
 
 const showForm = ref(false);
+const editingUser = ref<Record<string, unknown> | null>(null);
+const showDeleteConfirm = ref(false);
+const deletingUserId = ref<string | null>(null);
 
 const usersFilterDefs: FilterDefinition[] = [
   { key: "role", labelKey: "user.users.filters.role", type: "select", default: "" },
@@ -78,6 +110,7 @@ const tableHeaders = computed(() => [
   { title: t("user.users.table.email"), key: "email", sortable: true },
   { title: t("user.users.table.role"), key: "role", sortable: false },
   { title: t("user.users.table.status"), key: "status", sortable: true },
+  { title: "", key: "actions", sortable: false },
 ]);
 
 const usersI18n = computed(() => ({
@@ -98,19 +131,47 @@ function roleKeyOf(item: Record<string, unknown>): string {
 }
 
 function onAdd() {
+  editingUser.value = null;
   showForm.value = true;
 }
 
+function onRowEdit(item: Record<string, unknown>) {
+  editingUser.value = item;
+  showForm.value = true;
+}
+
+function onRowDeleteClick(item: Record<string, unknown>) {
+  deletingUserId.value = String(item.id);
+  showDeleteConfirm.value = true;
+}
+
 async function onSubmit(payload: Record<string, unknown>) {
-  const res = await apiFetch("/api/v1/users", {
-    method: "POST",
+  const id = editingUser.value?.id;
+  const res = await apiFetch(id ? `/api/v1/users/${id}` : "/api/v1/users", {
+    method: id ? "PATCH" : "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
     errorMessageKey: "user.users.errorLoad",
   });
   if (res.ok) {
-    notifications.show(t("user.users.form.success"), "success");
+    notifications.show(t(id ? "user.users.form.editSuccess" : "user.users.form.success"), "success");
     showForm.value = false;
+    editingUser.value = null;
+    window.dispatchEvent(new Event("entity-list-refresh"));
+  }
+}
+
+async function onDelete() {
+  const id = deletingUserId.value;
+  if (!id) return;
+  const res = await apiFetch(`/api/v1/users/${id}`, {
+    method: "DELETE",
+    errorMessageKey: "user.users.errorLoad",
+  });
+  if (res.ok) {
+    showDeleteConfirm.value = false;
+    deletingUserId.value = null;
+    notifications.show(t("user.users.actions.deleteSuccess"), "success");
     window.dispatchEvent(new Event("entity-list-refresh"));
   }
 }
@@ -143,5 +204,16 @@ async function onSubmit(payload: Record<string, unknown>) {
 .users-view__status--suspended {
   background: rgba(var(--v-theme-on-surface), 0.08);
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+.users-view__row-icon {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.users-view__row-icon--error {
+  color: rgb(var(--v-theme-error));
+  stroke: rgb(var(--v-theme-error));
 }
 </style>

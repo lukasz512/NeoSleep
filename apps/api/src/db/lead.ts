@@ -6,6 +6,7 @@ export interface Lead {
   id: string;
   identity_id: string;
   // From identities JOIN
+  salutation: string | null;
   first_name: string;
   last_name: string;
   email: string | null;
@@ -14,6 +15,7 @@ export interface Lead {
   source: string | null;
   status: string;
   country_code: string | null;
+  institution: string | null;
   converted_to_id: string | null;
   converted_to_type: string | null;
   converted_at: Date | null;
@@ -39,6 +41,7 @@ export interface GetLeadsPaginatedResult {
 }
 
 export interface InsertLeadInput {
+  salutation?: string | null;
   first_name: string;
   last_name: string;
   email?: string | null;
@@ -46,11 +49,13 @@ export interface InsertLeadInput {
   status?: string;
   region?: string;
   source?: string | null;
+  institution?: string | null;
   assigned_to?: string | null;
   metadata?: Record<string, unknown> | null;
 }
 
 export interface UpdateLeadInput {
+  salutation?: string | null;
   first_name?: string;
   last_name?: string;
   email?: string | null;
@@ -58,6 +63,7 @@ export interface UpdateLeadInput {
   status?: string;
   region?: string;
   source?: string | null;
+  institution?: string | null;
   assigned_to?: string | null;
   metadata?: Record<string, unknown> | null;
 }
@@ -71,10 +77,10 @@ function isLeadSortColumn(s: string): s is LeadSortColumn {
 }
 
 const LEAD_SELECT_COLS = `
-  l.id, l.identity_id, l.source, l.status, l.country_code,
+  l.id, l.identity_id, l.source, l.status, l.country_code, l.institution,
   l.converted_to_id, l.converted_to_type, l.converted_at, l.region,
   l.assigned_to, l.metadata, l.created_at, l.updated_at,
-  i.first_name, i.last_name, i.email, i.phone`.trim();
+  i.title AS salutation, i.first_name, i.last_name, i.email, i.phone`.trim();
 
 function buildName(row: { first_name: string; last_name: string }): string {
   return `${row.first_name} ${row.last_name}`.trim();
@@ -181,22 +187,23 @@ export async function insertLead(client: PoolClient, input: InsertLeadInput): Pr
 
   try {
     const identityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (first_name, last_name, email, phone)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO identities (title, first_name, last_name, email, phone)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING id`,
-      [firstName, lastName, trimOrNull(input.email), trimOrNull(input.phone)]
+      [trimOrNull(input.salutation), firstName, lastName, trimOrNull(input.email), trimOrNull(input.phone)]
     );
     const identityId = identityResult.rows[0]!.id;
 
     const leadResult = await client.query<{ id: string }>(
-      `INSERT INTO lead (identity_id, status, region, source, assigned_to, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO lead (identity_id, status, region, source, institution, assigned_to, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id`,
       [
         identityId,
         trimOrEmpty(input.status) || "new",
         trimOrEmpty(input.region),
         trimOrNull(input.source),
+        trimOrNull(input.institution),
         trimOrNull(input.assigned_to),
         input.metadata ? JSON.stringify(input.metadata) : null,
       ]
@@ -226,6 +233,10 @@ export async function updateLead(client: PoolClient, id: string, input: UpdateLe
     const identityParams: unknown[] = [];
     let iidx = 1;
 
+    if (input.salutation !== undefined) {
+      identityParams.push(trimOrNull(input.salutation));
+      identitySets.push(`title = $${iidx++}`);
+    }
     if (input.first_name !== undefined) {
       identityParams.push(trimOrEmpty(input.first_name) || lead.first_name);
       identitySets.push(`first_name = $${iidx++}`);
@@ -265,6 +276,10 @@ export async function updateLead(client: PoolClient, id: string, input: UpdateLe
       leadParams.push(trimOrNull(input.source));
       leadSets.push(`source = $${lidx++}`);
     }
+    if (input.institution !== undefined) {
+      leadParams.push(trimOrNull(input.institution));
+      leadSets.push(`institution = $${lidx++}`);
+    }
     if (input.assigned_to !== undefined) {
       leadParams.push(trimOrNull(input.assigned_to));
       leadSets.push(`assigned_to = $${lidx++}`);
@@ -286,11 +301,26 @@ export async function updateLead(client: PoolClient, id: string, input: UpdateLe
   return getLeadById(client, id);
 }
 
+/**
+ * Soft-deletes a lead by setting deleted_at — status is left untouched:
+ * 'inactive' already means a rep-set workflow state on this entity, distinct
+ * from "deleted by admin", and every read query already filters on
+ * deleted_at IS NULL, so deleted_at alone is sufficient for visibility.
+ */
+export async function softDeleteLead(client: PoolClient, id: string): Promise<void> {
+  try {
+    await client.query(`UPDATE lead SET deleted_at = now() WHERE id = $1`, [id]);
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("softDeleteLead", err);
+  }
+}
+
 export interface ConvertLeadInput {
   converted_to_id: string;
-  // DB CHECK constraint (lead_converted_to_type_check) only allows these two
-  // lowercase values (or NULL) — see infrastructure/db/schema-snapshot.sql.
-  converted_to_type: "practitioner" | "organization";
+  // DB CHECK constraint (lead_converted_to_type_check) only allows these
+  // lowercase values (or NULL) — see 005_lead_institution_and_patient_conversion.sql.
+  converted_to_type: "practitioner" | "organization" | "patient";
 }
 
 /**

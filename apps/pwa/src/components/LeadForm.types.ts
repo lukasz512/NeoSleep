@@ -1,4 +1,5 @@
 export interface LeadFormData {
+  salutation: string;
   first_name: string;
   last_name: string;
   email: string;
@@ -10,6 +11,7 @@ export interface LeadFormData {
 
 export interface LeadFormInitialData {
   id?: string;
+  salutation?: string;
   first_name?: string;
   last_name?: string;
   email?: string;
@@ -21,6 +23,7 @@ export interface LeadFormInitialData {
 
 export interface LeadSubmitPayload {
   id?: string;
+  salutation?: string;
   first_name: string;
   last_name: string;
   email?: string;

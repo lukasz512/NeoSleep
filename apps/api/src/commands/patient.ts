@@ -3,12 +3,14 @@ import {
   insertPatient,
   updatePatient,
   getPatientById,
+  softDeletePatient,
   type PatientInsert,
   type PatientUpdate,
   type Patient,
 } from "../db.js";
 import { insertAuditLog } from "../db.js";
 import { ValidationError } from "../errors.js";
+import { ConvertLeadCommand } from "./lead.js";
 
 /**
  * COMMANDS — Patient domain.
@@ -39,6 +41,9 @@ export interface CreatePatientInput {
   status?: string;
   region?: string;
   metadata?: Record<string, unknown>;
+  /** When set, this patient is being created from a lead ("move to contacts") —
+   *  the lead is atomically marked converted in the same transaction. */
+  lead_id?: string | null;
 }
 
 export async function CreatePatientCommand(
@@ -82,6 +87,16 @@ export async function CreatePatientCommand(
     entity_after: { id: patient.id, status: patient.status, region: patient.region },
     request_id:   ctx.requestId,
   });
+
+  const leadId = input.lead_id?.trim();
+  if (leadId) {
+    // Same ctx.client / transaction as the insert above — the patient create
+    // and the lead conversion commit or roll back together.
+    await ConvertLeadCommand(ctx, leadId, {
+      converted_to_id:   patient.id,
+      converted_to_type: "patient",
+    });
+  }
 
   return patient;
 }
@@ -160,4 +175,22 @@ export async function UpdatePatientCommand(
   });
 
   return after;
+}
+
+// ---------------------------------------------------------------------------
+// DELETE PATIENT (soft delete)
+// ---------------------------------------------------------------------------
+
+export async function DeletePatientCommand(ctx: TenantContext, id: string): Promise<void> {
+  if (!id?.trim()) throw new ValidationError("patient id is required");
+
+  await softDeletePatient(ctx.client, id);
+
+  await insertAuditLog(ctx.client, {
+    user_id:    ctx.user.id,
+    action:     "delete",
+    entity_type: "Patient",
+    entity_id:  id,
+    request_id: ctx.requestId,
+  });
 }

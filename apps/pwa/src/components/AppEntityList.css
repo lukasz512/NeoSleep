@@ -200,6 +200,13 @@
   margin-bottom: 0;
 }
 
+.app-entity-list__card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 0 16px 8px;
+}
+
 .app-entity-list__feed-empty {
   margin: 0;
 }
