@@ -1,10 +1,10 @@
-# Ręczna promocja: zbuduj z gałęzi uat i wgraj na PROD (app.neosleepcare.com).
-# W Actions wybierz workflow "Promote PWA UAT → Prod" i kliknij "Run workflow".
+# Ręczna promocja: zbuduj z gałęzi dev i wgraj na PROD (pwa.neosleepcare.com).
+# W Actions wybierz workflow "Promote PWA Dev → Prod" i kliknij "Run workflow".
 #
 # TODO: migrate to SSH (appleboy/scp-action) once Hetzner VPS is provisioned.
 # See infrastructure/setup/provision.md for the migration runbook.
 
-name: Promote PWA UAT → Prod
+name: Promote PWA Dev → Prod
 
 on:
   workflow_dispatch:
@@ -13,10 +13,10 @@ jobs:
   promote:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout (uat)
+      - name: Checkout (dev)
         uses: actions/checkout@v4
         with:
-          ref: uat
+          ref: dev
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -30,10 +30,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Set API URL for build
+        run: |
+          echo "VITE_API_URL=${{ secrets.RENDER_API_URL_PROD }}" >> $GITHUB_ENV
+          echo "VITE_GA_ID=${{ secrets.VITE_GA_ID_PROD }}" >> $GITHUB_ENV
+
       - name: Build app
         run: pnpm run build:pwa
 
-      - name: Deploy to PROD (app.neosleepcare.com)
+      - name: Deploy to PROD (pwa.neosleepcare.com)
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
@@ -41,5 +46,5 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftp
           local-dir: ./apps/pwa/dist/
-          server-dir: ${{ secrets.FTP_PATH_APP_PROD }}/
+          server-dir: ${{ secrets.GODADY_FTP_PWA_PROD }}/
           dangerous-clean-slate: false

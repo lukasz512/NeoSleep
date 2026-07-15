@@ -1,6 +1,10 @@
 # Deploy rep-app to GoDaddy FTP
-# - PROD → app.neosleepcare.com (path: secret FTP_PATH_APP_PROD)
-# - uat  → app-uat.neosleepcare.com (path: secret FTP_PATH_APP_UAT)
+# - prod → pwa.neosleepcare.com (path: secret GODADY_FTP_PWA_PROD)
+# - dev  → pwa.dev.neosleepcare.com (path: secret GODADY_FTP_PWA_DEV)
+#
+# NOTE: GODADY_FTP_PWA_* secrets must hold the FTP server-dir path (e.g.
+# /neosleepcare.com/pwa/prod), not the public https:// URL — see
+# secrets/deploy-notes.md for the exact paths.
 #
 # TODO: migrate to SSH (appleboy/scp-action) once Hetzner VPS is provisioned.
 # See infrastructure/setup/provision.md for the migration runbook.
@@ -9,7 +13,7 @@ name: Deploy NeoSleepCare App
 
 on:
   push:
-    branches: [PROD, uat]
+    branches: [prod, dev]
   workflow_dispatch:
 
 jobs:
@@ -33,19 +37,19 @@ jobs:
 
       - name: Set API URL for build
         run: |
-          if [ "${{ github.ref }}" = "refs/heads/PROD" ]; then
-            echo "VITE_API_URL=${{ secrets.VITE_API_URL_PROD }}" >> $GITHUB_ENV
+          if [ "${{ github.ref }}" = "refs/heads/prod" ]; then
+            echo "VITE_API_URL=${{ secrets.RENDER_API_URL_PROD }}" >> $GITHUB_ENV
             echo "VITE_GA_ID=${{ secrets.VITE_GA_ID_PROD }}" >> $GITHUB_ENV
           else
-            echo "VITE_API_URL=${{ secrets.VITE_API_URL_UAT }}" >> $GITHUB_ENV
-            echo "VITE_GA_ID=${{ secrets.VITE_GA_ID_UAT }}" >> $GITHUB_ENV
+            echo "VITE_API_URL=${{ secrets.RENDER_API_URL_DEV }}" >> $GITHUB_ENV
+            echo "VITE_GA_ID=${{ secrets.VITE_GA_ID_DEV }}" >> $GITHUB_ENV
           fi
 
       - name: Build rep-app
         run: pnpm run build:pwa
 
-      - name: Deploy to PROD (app.neosleepcare.com)
-        if: github.ref == 'refs/heads/PROD'
+      - name: Deploy to PROD (pwa.neosleepcare.com)
+        if: github.ref == 'refs/heads/prod'
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
@@ -53,11 +57,11 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftp
           local-dir: ./apps/pwa/dist/
-          server-dir: ${{ secrets.FTP_PATH_APP_PROD }}/
+          server-dir: ${{ secrets.GODADY_FTP_PWA_PROD }}/
           dangerous-clean-slate: false
 
-      - name: Deploy to UAT (app-uat.neosleepcare.com)
-        if: github.ref == 'refs/heads/uat'
+      - name: Deploy to DEV (pwa.dev.neosleepcare.com)
+        if: github.ref == 'refs/heads/dev'
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
@@ -65,5 +69,5 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftp
           local-dir: ./apps/pwa/dist/
-          server-dir: ${{ secrets.FTP_PATH_APP_UAT }}/
+          server-dir: ${{ secrets.GODADY_FTP_PWA_DEV }}/
           dangerous-clean-slate: false

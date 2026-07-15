@@ -1,13 +1,16 @@
 # Deploy marketing website to GoDaddy FTP
-# - PROD → neosleepcare.com         (secret FTP_PATH_WEBSITE_PROD)
-# - UAT  → uat.neosleepcare.com     (secret FTP_PATH_WEBSITE_UAT)
-# - DEV  → dev.neosleepcare.com     (secret FTP_PATH_WEBSITE_DEV)
+# - PROD → neosleepcare.com         (secret GODADY_FTP_WEB_PROD)
+# - DEV  → dev.neosleepcare.com     (secret GODADY_FTP_WEB_DEV)
+#
+# NOTE: GODADY_FTP_WEB_* secrets must hold the FTP server-dir path (e.g.
+# /public_html/neosleepcare.com/web/prod), not the public https:// URL —
+# see secrets/deploy-notes.md for the exact paths.
 
 name: Deploy NeoSleepCare Site
 
 on:
   push:
-    branches: [prod, uat, dev]
+    branches: [prod, dev]
   workflow_dispatch:
 
 jobs:
@@ -41,19 +44,7 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftp
           local-dir: ./apps/web/dist/
-          server-dir: ${{ secrets.FTP_PATH_WEBSITE_PROD }}/
-          dangerous-clean-slate: false
-
-      - name: Deploy to UAT (uat.neosleepcare.com)
-        if: github.ref == 'refs/heads/uat'
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          protocol: ftp
-          local-dir: ./apps/web/dist/
-          server-dir: ${{ secrets.FTP_PATH_WEBSITE_UAT }}/
+          server-dir: ${{ secrets.GODADY_FTP_WEB_PROD }}/
           dangerous-clean-slate: false
 
       - name: Deploy to DEV (dev.neosleepcare.com)
@@ -65,5 +56,5 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftp
           local-dir: ./apps/web/dist/
-          server-dir: ${{ secrets.FTP_PATH_WEBSITE_DEV }}/
+          server-dir: ${{ secrets.GODADY_FTP_WEB_DEV }}/
           dangerous-clean-slate: false

@@ -1,7 +1,7 @@
-# Ręczna promocja: zbuduj z gałęzi uat i wgraj na PROD (neosleepcare.com).
-# W Actions wybierz workflow "Promote Web UAT → Prod" i kliknij "Run workflow".
+# Ręczna promocja: zbuduj z gałęzi dev i wgraj na PROD (neosleepcare.com).
+# W Actions wybierz workflow "Promote Web Dev → Prod" i kliknij "Run workflow".
 
-name: Promote Web UAT → Prod
+name: Promote Web Dev → Prod
 
 on:
   workflow_dispatch:
@@ -10,10 +10,10 @@ jobs:
   promote:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout (uat)
+      - name: Checkout (dev)
         uses: actions/checkout@v4
         with:
-          ref: uat
+          ref: dev
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -38,5 +38,5 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftp
           local-dir: ./apps/web/dist/
-          server-dir: ${{ secrets.FTP_PATH_WEBSITE_PROD }}/
+          server-dir: ${{ secrets.GODADY_FTP_WEB_PROD }}/
           dangerous-clean-slate: false

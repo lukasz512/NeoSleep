@@ -110,13 +110,11 @@ pnpm i18n:prune        # Mark unused keys
 
 ## Deployment
 - FTP to GoDaddy (current, to be migrated to VPS)
-- Environments (branch → URL):
-  - DEV:  `dev` → app-dev.neosleepcare.com / dev.neosleepcare.com
-  - UAT:  `uat` → app-uat.neosleepcare.com / uat.neosleepcare.com
-  - PROD: `PROD` → app.neosleepcare.com / neosleepcare.com
+- Environments (branch → URL): only `dev` and `prod` exist for now — UAT is removed from the project until reintroduced
+  - DEV:  `dev` → pwa.dev.neosleepcare.com (rep app) / dev.neosleepcare.com (website)
+  - PROD: `prod` → pwa.neosleepcare.com (rep app) / neosleepcare.com (website)
 - CI/CD: `.github/workflows/deploy-pwa.yml`, `deploy-web.yml`, `deploy-bff.yml`
-- Promote DEV → UAT via `promote-dev-to-uat.yml`
-- Promote UAT → PROD via `promote-pwa-uat-to-prod.yml` / `promote-web-uat-to-prod.yml`
+- Promote DEV → PROD via `promote-pwa-dev-to-prod.yml` / `promote-web-dev-to-prod.yml`
 
 ## What NOT to do
 - Do not hardcode navigation items, labels or feature flags in components

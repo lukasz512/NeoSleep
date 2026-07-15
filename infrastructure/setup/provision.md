@@ -151,12 +151,12 @@ Repo → Settings → Secrets and variables → Actions:
 
 ## 10. First real deploy
 
-Push to `uat` branch (or `workflow_dispatch` the `Deploy BFF` action) first, verify
-`https://api-uat.neosleepcare.com/health`, then repeat for `PROD`.
+Push to `dev` branch (or `workflow_dispatch` the `Deploy BFF` action) first, verify
+`https://api-dev.neosleepcare.com/health`, then repeat for `prod`.
 
 ## 11. Update frontend env
 
-`VITE_API_URL_UAT` / `VITE_API_URL_PROD` (used by `deploy-pwa.yml`) need to point
-at `https://api-uat.neosleepcare.com` / `https://api.neosleepcare.com` once this
-is live, and `FRONTEND_URL` in each `.env` above needs the matching PWA origin
-so CORS + session cookies keep working.
+`RENDER_API_URL_DEV` / `RENDER_API_URL_PROD` (used by `deploy-pwa.yml`) need to
+point at `https://api-dev.neosleepcare.com` / `https://api.neosleepcare.com`
+once this is live, and `FRONTEND_URL` in each `.env` above needs the matching
+PWA origin so CORS + session cookies keep working.
