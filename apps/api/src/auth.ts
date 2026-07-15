@@ -12,11 +12,19 @@ import {
   createPasswordResetToken,
   getPasswordResetUserIdByHash,
   deletePasswordResetTokenByHash,
-  insertStaffUser,
   getUserIdByEmail,
   getUserById,
+  getUsersWithoutPassword,
+  createRememberMeToken,
+  getRememberMeTokenById,
+  touchRememberMeToken,
+  revokeRememberMeToken,
+  revokeAllRememberMeTokensForUser,
   type StaffRole,
 } from "./db.js";
+import { sendPasswordResetEmail } from "./mailer.js";
+import { FRONTEND_URL } from "./env.js";
+import { hashToken } from "./utils/hashToken.js";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -24,32 +32,17 @@ const GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
 
 const clientId = process.env.GOOGLE_CLIENT_ID ?? "";
 const clientSecret = process.env.GOOGLE_CLIENT_SECRET ?? "";
-const frontendUrl = process.env.FRONTEND_URL ?? "http://localhost:5173";
-const sessionSecret = process.env.SESSION_SECRET ?? "dev-secret-change-in-production";
 /** OAuth redirect_uri: use frontend when proxied (dev) so cookie is set for frontend origin. */
-const oauthRedirectOrigin = process.env.OAUTH_REDIRECT_ORIGIN ?? frontendUrl;
+const oauthRedirectOrigin = process.env.OAUTH_REDIRECT_ORIGIN ?? FRONTEND_URL;
 
-/** Default password for admin@neosleep.com when created (user must change on first login). */
-const ADMIN_DEFAULT_PASSWORD = process.env.ADMIN_DEFAULT_PASSWORD ?? "ChangeMe1!";
+/** Initial password set for any seeded staff account with no password yet (user must change on first login). */
+const INITIAL_USER_PASSWORD = process.env.INITIAL_USER_PASSWORD ?? "ChangeMe1!";
 
 const REMEMBER_ME_COOKIE = "remember_me";
 const REMEMBER_ME_MAX_AGE_DAYS = 30;
 const REMEMBER_ME_MAX_AGE_MS = REMEMBER_ME_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
 const PASSWORD_RESET_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
 const BCRYPT_ROUNDS = 10;
-
-/** SHA-256 hash for password reset tokens. */
-function hashToken(token: string): string {
-  return crypto.createHash("sha256").update(token, "utf8").digest("hex");
-}
-
-/** HMAC-SHA256 signature for remember-me cookies (userId:version). */
-function signRememberMe(userId: string, version: number): string {
-  return crypto
-    .createHmac("sha256", sessionSecret)
-    .update(`${userId}:${version}`)
-    .digest("hex");
-}
 
 export const authRouter: import('express').Router = Router();
 
@@ -76,22 +69,19 @@ const loginRateLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-/** Ensure admin@neosleep.com exists with default password for the given tenant (call after initDb). */
-export async function ensureStaffAdmin(slug: string): Promise<void> {
+/**
+ * Set an initial password for any seeded staff account that was never given one
+ * (seed migrations insert rows with password_hash NULL — no code path sets it
+ * otherwise). Safe on every startup: only touches accounts with no password yet,
+ * so it never overwrites a real one once the user has changed it.
+ */
+export async function ensureInitialUserPasswords(slug: string): Promise<void> {
   await withTenant(slug, async (client) => {
-    const existing = await getUserIdByEmail(client, "admin@neosleep.com");
-    if (existing) return;
-    const hash = await bcrypt.hash(ADMIN_DEFAULT_PASSWORD, BCRYPT_ROUNDS);
-    const user = await insertStaffUser(
-      client,
-      "admin@neosleep.com",
-      "Admin",
-      "admin",
-      hash,
-      true
-    );
-    if (user) {
-      console.log(`[auth] Created admin@neosleep.com in ${slug} (change password on first login).`);
+    const pending = await getUsersWithoutPassword(client);
+    for (const user of pending) {
+      const hash = await bcrypt.hash(INITIAL_USER_PASSWORD, BCRYPT_ROUNDS);
+      await setUserPassword(client, user.id, hash, true);
+      console.log(`[auth] Set initial password for ${user.email} in ${slug} (change required on first login).`);
     }
   });
 }
@@ -100,7 +90,7 @@ export async function ensureStaffAdmin(slug: string): Promise<void> {
 // Session: restore from remember-me cookie if no session
 // ---------------------------------------------------------------------------
 
-/** Middleware: if no session but valid remember_me cookie, restore session. */
+/** Middleware: if no session but valid remember_me cookie, restore session. Cookie: `<tokenId>.<secret>`; DB stores only sha256(secret). */
 async function restoreSessionFromRememberMe(
   req: Request,
   _res: Response,
@@ -109,22 +99,27 @@ async function restoreSessionFromRememberMe(
   if (req.session?.user) { next(); return; }
   const cookie = req.cookies?.[REMEMBER_ME_COOKIE];
   if (!cookie || typeof cookie !== "string") { next(); return; }
-  const [userId, versionStr, hmac] = cookie.split(":");
-  const version = parseInt(versionStr ?? "", 10);
-  if (!userId || !hmac || isNaN(version)) { next(); return; }
-  const expected = signRememberMe(userId, version);
-  if (!crypto.timingSafeEqual(Buffer.from(hmac, "hex"), Buffer.from(expected, "hex"))) { next(); return; }
+  const [tokenId, secret] = cookie.split(".");
+  if (!tokenId || !secret) { next(); return; }
   try {
     const slug = tenantSlugFromHost(req.hostname);
-    const user = await withTenant(slug, (client) => getUserById(client, userId));
-    if (!user || user.token_version !== version) { next(); return; }
-    req.session.user = {
-      id: user.id,
-      email: user.email,
-      name: user.name ?? undefined,
-      role: user.role,
-      forcePasswordChange: false,
-    };
+    await withTenant(slug, async (client) => {
+      const token = await getRememberMeTokenById(client, tokenId);
+      if (!token) return;
+      const expected = Buffer.from(token.token_hash, "hex");
+      const actual = Buffer.from(hashToken(secret), "hex");
+      if (expected.length !== actual.length || !crypto.timingSafeEqual(expected, actual)) return;
+      const user = await getUserById(client, token.user_id);
+      if (!user) return;
+      req.session.user = {
+        id: user.id,
+        email: user.email,
+        name: user.name ?? undefined,
+        role: user.role,
+        forcePasswordChange: false,
+      };
+      await touchRememberMeToken(client, tokenId);
+    });
   } catch {
     // Invalid/expired remember-me — clear it silently
   }
@@ -174,9 +169,13 @@ authRouter.post(
       forcePasswordChange: staff.force_password_change,
     };
     if (remember_me === true) {
-      const hmac = signRememberMe(staff.id, staff.token_version);
+      const secret = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + REMEMBER_ME_MAX_AGE_MS);
+      const tokenId = await withTenant(slug, (client) =>
+        createRememberMeToken(client, staff.id, hashToken(secret), expiresAt)
+      );
       const isProduction = process.env.NODE_ENV === "production";
-      res.cookie(REMEMBER_ME_COOKIE, `${staff.id}:${staff.token_version}:${hmac}`, {
+      res.cookie(REMEMBER_ME_COOKIE, `${tokenId}.${secret}`, {
         httpOnly: true,
         secure: isProduction,
         sameSite: "lax",
@@ -220,7 +219,15 @@ authRouter.get(
 // POST /auth/logout (clear session and remember_me cookie)
 // ---------------------------------------------------------------------------
 
-authRouter.post("/auth/logout", (req: Request, res: Response) => {
+authRouter.post("/auth/logout", asyncHandler(async (req: Request, res: Response) => {
+  const cookie = req.cookies?.[REMEMBER_ME_COOKIE];
+  if (typeof cookie === "string") {
+    const [tokenId] = cookie.split(".");
+    if (tokenId) {
+      const slug = tenantSlugFromHost(req.hostname);
+      await withTenant(slug, (client) => revokeRememberMeToken(client, tokenId));
+    }
+  }
   res.clearCookie(REMEMBER_ME_COOKIE, { path: "/" });
   req.session.destroy((err) => {
     if (err) {
@@ -229,7 +236,7 @@ authRouter.post("/auth/logout", (req: Request, res: Response) => {
     }
     res.status(204).end();
   });
-});
+}));
 
 // ---------------------------------------------------------------------------
 // POST /auth/change-password (authenticated; current + new password)
@@ -265,6 +272,7 @@ authRouter.post("/auth/change-password", asyncHandler(async (req: Request, res: 
     }
     const hash = await bcrypt.hash(newStr, BCRYPT_ROUNDS);
     await setUserPassword(client, sessionUser.id, hash);
+    await revokeAllRememberMeTokensForUser(client, sessionUser.id);
     sessionUser.forcePasswordChange = false;
     res.status(200).json({ success: true });
   });
@@ -297,8 +305,14 @@ authRouter.post("/auth/forgot-password", asyncHandler(async (req: Request, res: 
     const tokenHash = hashToken(token);
     const expiresAt = new Date(Date.now() + PASSWORD_RESET_EXPIRY_MS);
     await createPasswordResetToken(client, userId, tokenHash, expiresAt);
-    const resetLink = `${frontendUrl}/reset-password?token=${encodeURIComponent(token)}`;
-    console.log("[auth] Password reset link for", emailStr, ":", resetLink);
+    const resetLink = `${FRONTEND_URL}/reset-password?token=${encodeURIComponent(token)}`;
+    if (process.env.NODE_ENV === "production") {
+      sendPasswordResetEmail(emailStr, resetLink).catch((err) => {
+        console.error("[auth] Failed to send password reset email:", err);
+      });
+    } else {
+      console.log("[auth] Password reset link for", emailStr, ":", resetLink);
+    }
     res.status(200).json({
       message: "If an account exists, you will receive an email.",
       devResetLink: process.env.NODE_ENV !== "production" ? resetLink : undefined,
@@ -349,6 +363,7 @@ authRouter.post("/auth/reset-password", asyncHandler(async (req: Request, res: R
     const hash = await bcrypt.hash(newStr, BCRYPT_ROUNDS);
     await setUserPassword(client, userId, hash);
     await deletePasswordResetTokenByHash(client, tokenHash);
+    await revokeAllRememberMeTokensForUser(client, userId);
     res.status(200).json({ success: true });
   });
 }));
@@ -382,13 +397,13 @@ authRouter.get("/auth/google/callback", asyncHandler(async (req: Request, res: R
   const savedState = req.session.state;
 
   if (!code || !state || state !== savedState) {
-    res.redirect(`${frontendUrl}/login?error=auth_failed`);
+    res.redirect(`${FRONTEND_URL}/login?error=auth_failed`);
     return;
   }
   delete req.session.state;
 
   if (!clientId || !clientSecret) {
-    res.redirect(`${frontendUrl}/login?error=server_config`);
+    res.redirect(`${FRONTEND_URL}/login?error=server_config`);
     return;
   }
 
@@ -410,14 +425,14 @@ authRouter.get("/auth/google/callback", asyncHandler(async (req: Request, res: R
   if (!tokenRes.ok) {
     const errText = await tokenRes.text();
     console.error("Google token error:", tokenRes.status, errText);
-    res.redirect(`${frontendUrl}/login?error=token_exchange`);
+    res.redirect(`${FRONTEND_URL}/login?error=token_exchange`);
     return;
   }
 
   const tokens = (await tokenRes.json()) as { access_token?: string };
   const accessToken = tokens.access_token;
   if (!accessToken) {
-    res.redirect(`${frontendUrl}/login?error=no_token`);
+    res.redirect(`${FRONTEND_URL}/login?error=no_token`);
     return;
   }
 
@@ -425,7 +440,7 @@ authRouter.get("/auth/google/callback", asyncHandler(async (req: Request, res: R
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!userRes.ok) {
-    res.redirect(`${frontendUrl}/login?error=userinfo`);
+    res.redirect(`${FRONTEND_URL}/login?error=userinfo`);
     return;
   }
 
@@ -440,23 +455,18 @@ authRouter.get("/auth/google/callback", asyncHandler(async (req: Request, res: R
   const dbUser = await withTenant(slug, (client) =>
     getOrCreateUserByProvider(client, "google", userInfo.sub, email, userInfo.name)
   );
-  if (dbUser) {
-    req.session.user = {
-      id: dbUser.id,
-      email: dbUser.email,
-      name: dbUser.name ?? undefined,
-      picture: userInfo.picture,
-      role: dbUser.role,
-    };
-  } else {
-    req.session.user = {
-      id: userInfo.sub,
-      email,
-      name: userInfo.name,
-      picture: userInfo.picture,
-      role: "rep",
-    };
+  if (!dbUser) {
+    res.redirect(`${FRONTEND_URL}/login?error=account_provision_failed`);
+    return;
   }
 
-  res.redirect(`${frontendUrl}/login?from=google`);
+  req.session.user = {
+    id: dbUser.id,
+    email: dbUser.email,
+    name: dbUser.name ?? undefined,
+    picture: userInfo.picture,
+    role: dbUser.role,
+  };
+
+  res.redirect(`${FRONTEND_URL}/login?from=google`);
 }));

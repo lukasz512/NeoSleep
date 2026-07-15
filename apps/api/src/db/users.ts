@@ -2,7 +2,7 @@ import type { PoolClient } from "pg";
 import { toArray } from "./helpers.js";
 import { AppError, DatabaseError } from "../errors.js";
 
-export type StaffRole = "admin" | "ffm" | "kam" | "msl" | "rep";
+export type StaffRole = "admin" | "manager" | "kam" | "msl" | "rep" | "doctor";
 
 export interface User {
   id: string;
@@ -123,11 +123,16 @@ export async function getStaffUserByEmail(client: PoolClient, email: string): Pr
   }
 }
 
-export async function setUserPassword(client: PoolClient, userId: string, passwordHash: string): Promise<void> {
+export async function setUserPassword(
+  client: PoolClient,
+  userId: string,
+  passwordHash: string,
+  forcePasswordChange = false
+): Promise<void> {
   try {
     await client.query(
-      `UPDATE users SET password_hash = $1, force_password_change = false, updated_at = now() WHERE id = $2`,
-      [passwordHash, userId]
+      `UPDATE users SET password_hash = $1, force_password_change = $2, updated_at = now() WHERE id = $3`,
+      [passwordHash, forcePasswordChange, userId]
     );
   } catch (err) {
     if (err instanceof AppError) throw err;
@@ -179,6 +184,20 @@ export async function insertStaffUser(
   } catch (err) {
     if (err instanceof AppError) throw err;
     throw new DatabaseError("insertStaffUser", err);
+  }
+}
+
+/** Seeded staff accounts with no password set yet (bootstrapped on startup — see auth.ts). */
+export async function getUsersWithoutPassword(client: PoolClient): Promise<{ id: string; email: string }[]> {
+  try {
+    const r = await client.query<{ id: string; email: string }>(
+      `SELECT u.id, i.email FROM users u JOIN identities i ON u.identity_id = i.id
+       WHERE u.password_hash IS NULL AND u.deleted_at IS NULL`
+    );
+    return r.rows;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getUsersWithoutPassword", err);
   }
 }
 
@@ -282,6 +301,7 @@ export interface UpdateUserInput {
   phone?: string | null;
   status?: "active" | "inactive" | "suspended";
   country_code?: string | null;
+  role?: StaffRole;
 }
 
 export async function updateUser(client: PoolClient, id: string, input: UpdateUserInput): Promise<User | null> {
@@ -306,6 +326,12 @@ export async function updateUser(client: PoolClient, id: string, input: UpdateUs
     }
     if (input.country_code !== undefined) {
       await client.query(`UPDATE users SET country_code = $1, updated_at = now() WHERE id = $2`, [input.country_code, id]);
+    }
+    if (input.role !== undefined) {
+      // Single global role per user (region IS NULL) — replace rather than upsert,
+      // since UNIQUE(user_id, role, region) treats NULL region as never-equal.
+      await client.query(`DELETE FROM user_roles WHERE user_id = $1 AND region IS NULL`, [id]);
+      await client.query(`INSERT INTO user_roles (user_id, role) VALUES ($1, $2)`, [id, input.role]);
     }
   } catch (err) {
     if (err instanceof AppError) throw err;

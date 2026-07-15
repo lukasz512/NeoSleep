@@ -26,6 +26,9 @@ export interface Patient {
   metadata: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
+  // Computed from practitioner + identities JOIN (resolved display name, mirrors
+  // practitioner.ts's own organization.name AS institution join for the same need)
+  practitioner_name: string | null;
 }
 
 export interface GetPatientsFilters {
@@ -74,7 +77,18 @@ const PATIENT_SELECT_COLS = `
   p.id, p.identity_id, p.practitioner_id, p.diagnosis_code, p.ahi_baseline,
   p.cpap_device, p.medical_record, p.region, p.status, p.metadata,
   p.created_at, p.updated_at,
-  i.title AS salutation, i.first_name, i.last_name, i.email, i.phone`.trim();
+  i.title AS salutation, i.first_name, i.last_name, i.email, i.phone,
+  pi.first_name AS practitioner_first_name, pi.last_name AS practitioner_last_name`.trim();
+
+// Shared FROM/JOIN fragment for the two read queries below — resolves the
+// assigned practitioner's display name via practitioner + identities, mirroring
+// how practitioner.ts's own list/detail queries LEFT JOIN organization for
+// "institution" (same resolved-display-name need, same no-deleted_at-filter shape).
+const PATIENT_JOIN = `
+  FROM patient p
+  JOIN identities i ON p.identity_id = i.id
+  LEFT JOIN practitioner pr ON p.practitioner_id = pr.id
+  LEFT JOIN identities pi ON pr.identity_id = pi.id`.trim();
 
 type PatientRow = {
   id: string;
@@ -94,7 +108,17 @@ type PatientRow = {
   metadata: Record<string, unknown> | null;
   created_at: Date;
   updated_at: Date;
+  practitioner_first_name: string | null;
+  practitioner_last_name: string | null;
 };
+
+function buildPractitionerName(row: {
+  practitioner_first_name: string | null;
+  practitioner_last_name: string | null;
+}): string | null {
+  const name = [row.practitioner_first_name, row.practitioner_last_name].filter(Boolean).join(" ").trim();
+  return name || null;
+}
 
 function serialize(row: PatientRow): Patient & { name: string } {
   return {
@@ -115,6 +139,7 @@ function serialize(row: PatientRow): Patient & { name: string } {
     metadata: row.metadata,
     created_at: isoDate(row.created_at),
     updated_at: isoDate(row.updated_at),
+    practitioner_name: buildPractitionerName(row),
     name: buildName(row),
   };
 }
@@ -164,7 +189,7 @@ export async function getPatientsPaginated(
     params.push(limit, offset);
     const dataResult = await client.query<PatientRow>(
       `SELECT ${PATIENT_SELECT_COLS}
-       FROM patient p JOIN identities i ON p.identity_id = i.id
+       ${PATIENT_JOIN}
        ${where}
        ORDER BY ${safeCol} ${dir}
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
@@ -181,7 +206,7 @@ export async function getPatientById(client: PoolClient, id: string): Promise<(P
   try {
     const result = await client.query<PatientRow>(
       `SELECT ${PATIENT_SELECT_COLS}
-       FROM patient p JOIN identities i ON p.identity_id = i.id
+       ${PATIENT_JOIN}
        WHERE p.id = $1 AND p.deleted_at IS NULL`,
       [id]
     );

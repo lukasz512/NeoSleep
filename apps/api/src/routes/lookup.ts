@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { withTenant, tenantSlugFromHost, getConfigOptions, upsertTenantLookupItem, disableTenantLookupItem } from "../db.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
+import { requireRole } from "../middleware/requireRole.js";
 import { ValidationError } from "../errors.js";
 
 /**
@@ -9,8 +10,8 @@ import { ValidationError } from "../errors.js";
  * API PATHS (clean, no legacy aliases):
  *   GET  /api/v1/lookups/options         — grouped options for filter dropdowns (public)
  *   GET  /api/v1/lookups/:type           — all items for a type (auth required)
- *   POST /api/v1/lookups                 — add custom item or override (admin/manager)
- *   DELETE /api/v1/lookups/disable/:id   — hide a platform item for this tenant (admin/manager)
+ *   POST /api/v1/lookups                 — add custom item or override (admin only)
+ *   DELETE /api/v1/lookups/disable/:id   — hide a platform item for this tenant (admin only)
  *
  * HOW TENANT CONTEXT FLOWS:
  *   1. tenantSlugFromHost() extracts the subdomain (e.g. "neosleep_pl" from app-uat.neosleepcare.com)
@@ -22,18 +23,6 @@ import { ValidationError } from "../errors.js";
  */
 
 export const lookupRouter: import("express").Router = Router();
-
-function requireAdminOrManager(req: Request, res: Response): boolean {
-  const session = req.session as { user?: { role?: string } } | undefined;
-  const role = session?.user?.role;
-  const isAllowed = role === "admin" || role === "manager";
-  const devBypass = process.env.NODE_ENV !== "production" && !session?.user;
-  if (!isAllowed && !devBypass) {
-    res.status(403).json({ error: "Admin or manager only" });
-    return false;
-  }
-  return true;
-}
 
 /**
  * GET /api/v1/lookups/options
@@ -78,7 +67,7 @@ lookupRouter.get(
 /**
  * POST /api/v1/lookups
  * Add a custom lookup item or override a platform item's label/sort_order.
- * Admin or manager only.
+ * Admin only.
  *
  * Body: { type, key, value, locale?, sort_order?, global_id? }
  *   - global_id present → override a platform.lookups item (changes label/sort_order)
@@ -86,9 +75,8 @@ lookupRouter.get(
  */
 lookupRouter.post(
   "/lookups",
+  requireRole("admin"),
   asyncHandler(async (req: Request, res: Response) => {
-    if (!requireAdminOrManager(req, res)) return;
-
     const slug = tenantSlugFromHost(req.hostname);
     const body = req.body as {
       type?: unknown; key?: unknown; value?: unknown;
@@ -117,13 +105,12 @@ lookupRouter.post(
  * DELETE /api/v1/lookups/disable/:globalId
  * Hides a non-locked platform lookup item for this tenant.
  * Locked items (locked=true in platform.lookups) cannot be hidden.
- * Admin or manager only.
+ * Admin only.
  */
 lookupRouter.delete(
   "/lookups/disable/:globalId",
+  requireRole("admin"),
   asyncHandler(async (req: Request, res: Response) => {
-    if (!requireAdminOrManager(req, res)) return;
-
     const slug     = tenantSlugFromHost(req.hostname);
     const globalId = req.params.globalId?.trim();
     if (!globalId) { res.status(400).json({ error: "globalId is required" }); return; }

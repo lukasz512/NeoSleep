@@ -49,3 +49,31 @@ export async function sendContactEmail(subject: string, rows: [string, string][]
     throw err;
   }
 }
+
+export async function sendPasswordResetEmail(to: string, resetLink: string): Promise<void> {
+  if (!transporter || !gmailUser) {
+    console.warn("[mailer] Gmail not configured – set GMAIL_USER, GMAIL_APP_PASSWORD in .env");
+    return;
+  }
+
+  const html = `
+    <div style="font-family:sans-serif;max-width:560px">
+      <h2 style="margin-bottom:16px">Reset your password</h2>
+      <p>Click the link below to reset your NeoSleep password. This link expires in 1 hour.</p>
+      <p><a href="${escapeHtml(resetLink)}">${escapeHtml(resetLink)}</a></p>
+      <p>If you didn't request this, you can ignore this email.</p>
+    </div>`;
+
+  try {
+    await transporter.sendMail({
+      from: `"NeoSleep" <${gmailUser}>`,
+      to,
+      subject: "Reset your NeoSleep password",
+      html,
+    });
+    console.log(`[mailer] Sent password reset email to ${to}`);
+  } catch (err) {
+    console.error("[mailer] Failed to send password reset email:", err);
+    throw err;
+  }
+}
