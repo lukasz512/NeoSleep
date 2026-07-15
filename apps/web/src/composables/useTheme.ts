@@ -1,39 +1,13 @@
-import { ref } from "vue";
+import { computed, watch } from "vue";
+import { storeToRefs } from "pinia";
+import { useThemeStore, type ThemePreference } from "@stores";
 
-const STORAGE_KEY = "neosleep-website-theme";
-export type ThemeMode = "light" | "dark" | "auto";
+export type ThemeMode = ThemePreference; // "light" | "dark" | "system"
 
-function getStored(): ThemeMode | null {
-  try {
-    const v = localStorage.getItem(STORAGE_KEY);
-    if (v === "light" || v === "dark" || v === "auto") return v;
-  } catch (_) {}
-  return null;
-}
+const ICON_LIGHT = "/brand/logos/icon/icon_light.svg";
+const ICON_DARK = "/brand/logos/icon/icon_dark.svg";
 
-function getSystemDark(): boolean {
-  if (typeof window === "undefined") return false;
-  return window.matchMedia("(prefers-color-scheme: dark)").matches;
-}
-
-function resolveDark(mode: ThemeMode): boolean {
-  return mode === "auto" ? getSystemDark() : mode === "dark";
-}
-
-function applyTheme(dark: boolean) {
-  if (typeof document === "undefined") return;
-  if (dark) {
-    document.documentElement.setAttribute("data-theme", "dark");
-  } else {
-    document.documentElement.removeAttribute("data-theme");
-  }
-  const iconPath = dark
-    ? "/brand/logos/icon/icon_dark.svg"
-    : "/brand/logos/icon/icon_light.svg";
-  setFavicon(iconPath);
-}
-
-function setFavicon(href: string) {
+function setFavicon(href: string): void {
   let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
   let apple = document.querySelector<HTMLLinkElement>('link[rel="apple-touch-icon"]');
   if (!link) {
@@ -50,43 +24,39 @@ function setFavicon(href: string) {
   apple.href = href;
 }
 
-// ── Singleton state (module-level — initialised once) ──────────────────────
-const themeMode = ref<ThemeMode>(getStored() ?? "auto");
-const isDark = ref<boolean>(resolveDark(themeMode.value));
+let faviconWatcherStarted = false;
 
-// Apply on first load (runs once when the module is imported)
-if (typeof document !== "undefined") {
-  applyTheme(isDark.value);
-}
-
-// React to OS preference changes when mode is "auto"
-if (typeof window !== "undefined") {
-  window
-    .matchMedia("(prefers-color-scheme: dark)")
-    .addEventListener("change", (e) => {
-      if (themeMode.value === "auto") {
-        isDark.value = e.matches;
-        applyTheme(isDark.value);
-      }
-    });
-}
-
-// ── Public API ─────────────────────────────────────────────────────────────
+/**
+ * Thin wrapper over the shared theme store (packages/stores/theme.ts) — kept
+ * so existing components (ThemeToggle.vue, MobileNavTheme.vue) keep the same
+ * `useTheme()` call shape. All theme state and persistence lives in the store.
+ *
+ * Must only touch Pinia inside this function (called from component setup(),
+ * after app.use(pinia)) — never at module top level, which runs at import
+ * time before any Pinia instance exists.
+ */
 export function useTheme() {
-  function setTheme(mode: ThemeMode) {
-    themeMode.value = mode;
-    isDark.value = resolveDark(mode);
-    applyTheme(isDark.value);
-    try {
-      localStorage.setItem(STORAGE_KEY, mode);
-    } catch (_) {}
+  const store = useThemeStore();
+  const { mode, preference } = storeToRefs(store);
+
+  // Web-specific side effect only — the shared store already owns data-theme.
+  if (!faviconWatcherStarted && typeof document !== "undefined") {
+    faviconWatcherStarted = true;
+    watch(
+      mode,
+      (m) => setFavicon(m === "dark" ? ICON_DARK : ICON_LIGHT),
+      { immediate: true, flush: "sync" }
+    );
   }
 
-  function cycleTheme() {
-    const order: ThemeMode[] = ["auto", "light", "dark"];
-    const i = order.indexOf(themeMode.value);
-    setTheme(order[(i + 1) % order.length]);
-  }
-
-  return { isDark, themeMode, setTheme, cycleTheme };
+  return {
+    isDark: computed(() => mode.value === "dark"),
+    themeMode: preference,
+    setTheme(m: ThemeMode) {
+      store.setPreference(m);
+    },
+    cycleTheme() {
+      store.cyclePreference();
+    },
+  };
 }

@@ -270,7 +270,7 @@
   "user.settings.menu": "Ustawienia wyświetlania",
   "user.settings.theme": "Motyw",
   "user.settings.language": "Język",
-  "user.settings.theme.auto": "System",
+  "user.settings.theme.system": "System",
   "user.settings.theme.light": "Jasny",
   "user.settings.theme.dark": "Ciemny",
   "user.settings.theme.tooltip": "Motyw: {current}. Kliknij: {next}",

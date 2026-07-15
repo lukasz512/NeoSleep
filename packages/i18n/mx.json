@@ -270,7 +270,7 @@
   "user.settings.menu": "Configuración de pantalla",
   "user.settings.theme": "Tema",
   "user.settings.language": "Idioma",
-  "user.settings.theme.auto": "Sistema",
+  "user.settings.theme.system": "Sistema",
   "user.settings.theme.light": "Claro",
   "user.settings.theme.dark": "Oscuro",
   "user.settings.theme.tooltip": "Tema: {current}. Clic para {next}",

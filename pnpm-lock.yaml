@@ -301,6 +301,9 @@ importers:
       flag-icons:
         specifier: ^7.5.0
         version: 7.5.0
+      pinia:
+        specifier: 'catalog:'
+        version: 3.0.4(typescript@5.9.3)(vue@3.5.30(typescript@5.9.3))
       vue:
         specifier: 'catalog:'
         version: 3.5.30(typescript@5.9.3)
@@ -353,6 +356,19 @@ importers:
       vue:
         specifier: 'catalog:'
         version: 3.5.30(typescript@5.9.3)
+    devDependencies:
+      '@vitejs/plugin-vue':
+        specifier: 'catalog:'
+        version: 6.0.5(vite@7.3.1(@types/node@22.19.11)(sass@1.97.3)(terser@5.46.1)(tsx@4.21.0))(vue@3.5.30(typescript@5.9.3))
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vite:
+        specifier: 'catalog:'
+        version: 7.3.1(@types/node@22.19.11)(sass@1.97.3)(terser@5.46.1)(tsx@4.21.0)
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.0(@types/node@22.19.11)(jsdom@25.0.1)(vite@7.3.1(@types/node@22.19.11)(sass@1.97.3)(terser@5.46.1)(tsx@4.21.0))
 
   packages/ui:
     dependencies:

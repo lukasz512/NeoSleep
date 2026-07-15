@@ -41,8 +41,8 @@ import type { ThemeMode } from '../composables/useTheme'
 const { t } = useI18n()
 const { themeMode, setTheme } = useTheme()
 
-const ORDER: ThemeMode[] = ['auto', 'light', 'dark']
-const SHORT_LABELS: Record<ThemeMode, string> = { auto: 'Auto', light: 'Light', dark: 'Dark' }
+const ORDER: ThemeMode[] = ['system', 'light', 'dark']
+const SHORT_LABELS: Record<ThemeMode, string> = { system: 'Auto', light: 'Light', dark: 'Dark' }
 
 function nextMode(m: ThemeMode): ThemeMode {
   return ORDER[(ORDER.indexOf(m) + 1) % ORDER.length]
@@ -100,7 +100,7 @@ function onToggle() {
   svg { width: 22px; height: 22px; }
 }
 
-.nav-theme[data-mode="auto"]  .nav-theme__ti--auto,
+.nav-theme[data-mode="system"]  .nav-theme__ti--auto,
 .nav-theme[data-mode="light"] .nav-theme__ti--sun,
 .nav-theme[data-mode="dark"]  .nav-theme__ti--moon {
   opacity: 1;
