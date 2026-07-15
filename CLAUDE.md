@@ -113,7 +113,7 @@ pnpm i18n:prune        # Mark unused keys
 - Environments (branch → URL):
   - DEV:  `dev` → app-dev.neosleepcare.com / dev.neosleepcare.com
   - UAT:  `uat` → app-uat.neosleepcare.com / uat.neosleepcare.com
-  - PROD: `PROD` → app.neosleepcare.com / neosleepcare.com
+  - PROD: `prod` → app.neosleepcare.com / neosleepcare.com
 - CI/CD: `.github/workflows/deploy-pwa.yml`, `deploy-web.yml`, `deploy-bff.yml`
 - Promote DEV → UAT via `promote-dev-to-uat.yml`
 - Promote UAT → PROD via `promote-pwa-uat-to-prod.yml` / `promote-web-uat-to-prod.yml`
