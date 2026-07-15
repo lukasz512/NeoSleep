@@ -4,7 +4,7 @@ import { routes } from "./router/routes";
 
 const router = createRouter({ history: createMemoryHistory(), routes });
 
-describe("Rep-app", () => {
+describe("Pwa app", () => {
   it("router has login and dashboard routes", () => {
     const names = router.getRoutes().map((r) => r.name);
     expect(names).toContain("login");
@@ -26,7 +26,7 @@ describe("Rep-app", () => {
     expect(redirect?.redirect).toBe("/login");
   });
 
-  it("rep-app has only rep view routes (no portal-only views)", () => {
+  it("pwa app has only rep view routes (no portal-only views)", () => {
     const names = router.getRoutes().map((r) => r.name).filter(Boolean) as string[];
     const portalOnly = ["documents", "agreements", "profile"];
     for (const name of portalOnly) {

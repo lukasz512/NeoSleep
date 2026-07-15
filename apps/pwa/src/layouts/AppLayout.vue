@@ -12,64 +12,61 @@
     <AppNotifications />
     <AppOfflineBar />
 
-    <VNavigationDrawer
+    <AppShell
       v-model="mobileDrawerOpen"
-      :rail="!isMobile && sidebarCollapsed"
-      :permanent="!isMobile"
-      :temporary="isMobile"
-      width="220"
-      :rail-width="56"
-      class="layout-nav"
+      :rail-collapsed="sidebarCollapsed"
+      :nav-items="visibleNavItems"
+      :menu-label="t('layout.sidebar.expand')"
+      class="layout-shell"
     >
-      <AppLogo variant="sidebar" :collapsed="!isMobile && sidebarCollapsed" :theme="theme" />
-      <AppNavLinks variant="sidebar" :collapsed="!isMobile && sidebarCollapsed" />
-
-      <template #append>
-        <VDivider />
-        <div class="layout-nav__footer">
-          <VBtn
-            v-if="!isMobile"
-            icon
-            variant="text"
-            size="small"
-            :title="sidebarCollapsed ? t('layout.sidebar.expand') : t('layout.sidebar.collapse')"
-            :aria-label="sidebarCollapsed ? t('layout.sidebar.expand') : t('layout.sidebar.collapse')"
-            @click="toggleSidebar"
-          >
-            <AppIcon :name="sidebarCollapsed ? 'chevron-right' : 'chevron-left'" class="layout-nav__chevron" />
-          </VBtn>
-          <AppUserMenuPanel
-            v-else
-            :theme="theme"
-            :locale="(locale as string)"
-            :show-theme-panel-button="isAdmin"
-            drawer
-            @toggle-theme="toggleTheme"
-            @change-locale="(lang) => setLocale(lang as 'en' | 'pl' | 'mx')"
-            @open-theme-panel="onOpenThemePanelFromDrawer"
-            @logout="onLogout"
-            @close="mobileDrawerOpen = false"
-          />
-        </div>
+      <template #logo="{ collapsed }">
+        <AppLogo variant="sidebar" :collapsed="collapsed" :theme="theme" />
       </template>
-    </VNavigationDrawer>
 
-    <VAppBar flat border="b" :height="56">
+      <template #nav>
+        <AppNavLinks :collapsed="!isMobile && sidebarCollapsed" @navigate="mobileDrawerOpen = false" />
+      </template>
 
-      <VAppBarTitle class="layout-appbar__title">{{ moduleTitle }}</VAppBarTitle>
-
-      <template #append>
+      <template #drawer-footer>
         <VBtn
-          v-if="isAdmin"
+          v-if="!isMobile"
           icon
           variant="text"
           size="small"
-          :title="t('user.themePanel.openTitle')"
-          :aria-label="t('user.themePanel.openTitle')"
-          @click="themePanelOpen = true"
+          :title="sidebarCollapsed ? t('layout.sidebar.expand') : t('layout.sidebar.collapse')"
+          :aria-label="sidebarCollapsed ? t('layout.sidebar.expand') : t('layout.sidebar.collapse')"
+          @click="toggleSidebar"
         >
-          <AppIcon name="palette" class="layout-appbar__icon" />
+          <AppIcon :name="sidebarCollapsed ? 'chevron-right' : 'chevron-left'" class="layout-nav__chevron" />
         </VBtn>
+        <AppUserMenuPanel
+          v-else
+          :theme="theme"
+          :locale="(locale as string)"
+          drawer
+          @toggle-theme="toggleTheme"
+          @change-locale="(lang) => setLocale(lang as 'en' | 'pl' | 'mx')"
+          @logout="onLogout"
+          @close="mobileDrawerOpen = false"
+        />
+      </template>
+
+      <template #app-bar-title>
+        <span class="layout-appbar__title">{{ moduleTitle }}</span>
+      </template>
+
+      <template #app-bar-actions>
+        <VSelect
+          v-if="isAdmin"
+          :model-value="rolePreviewStore.previewRole ?? 'admin'"
+          :items="rolePreviewItems"
+          density="compact"
+          variant="outlined"
+          hide-details
+          class="layout-appbar__role-preview"
+          :label="t('user.rolePreview.label')"
+          @update:model-value="onRolePreviewChange"
+        />
 
         <VMenu
           v-if="!isMobile"
@@ -99,19 +96,19 @@
           <AppUserMenuPanel
             :theme="theme"
             :locale="(locale as string)"
-            :show-theme-panel-button="isAdmin"
             @toggle-theme="toggleTheme"
             @change-locale="(lang) => setLocale(lang as 'en' | 'pl' | 'mx')"
-            @open-theme-panel="themePanelOpen = true"
             @logout="onLogout"
             @close="menuOpen = false"
           />
         </VMenu>
       </template>
-    </VAppBar>
 
-    <VMain :class="{ 'layout-main--fading': localeTransitioning }">
-      <div id="main-content" tabindex="-1" class="layout-main__inner">
+      <template #nav-icon="{ item }">
+        <AppIcon :name="('nav-' + item.name) as AppIconName" />
+      </template>
+
+      <div id="main-content" tabindex="-1" class="layout-main__inner" :class="{ 'layout-main--fading': localeTransitioning }">
         <AppGlobalLoader :active="globalLoaderActive" />
         <RouterView v-slot="{ Component }">
           <Transition name="view-fade-lift" mode="out-in">
@@ -119,26 +116,7 @@
           </Transition>
         </RouterView>
       </div>
-    </VMain>
-
-    <div v-if="isMobile" class="layout-mobile-bottom-bar" role="presentation">
-      <button
-        type="button"
-        class="layout-mobile-menu-trigger"
-        :aria-label="mobileDrawerOpen ? t('layout.sidebar.collapse') : t('layout.sidebar.expand')"
-        :aria-expanded="mobileDrawerOpen"
-        @click="mobileDrawerOpen = !mobileDrawerOpen"
-      >
-        <AppIcon :name="mobileDrawerOpen ? 'close' : 'menu'" class="layout-mobile-menu-icon" />
-        <span>{{ mobileDrawerOpen ? t("layout.sidebar.collapse") : t("layout.sidebar.expand") }}</span>
-      </button>
-    </div>
-
-    <ThemePanel
-      v-model="themePanelOpen"
-      :config="themePanelConfig"
-      :save-handler="onThemeSave"
-    />
+    </AppShell>
   </VApp>
 </template>
 
@@ -147,17 +125,20 @@ import { ref, computed } from "vue";
 import { useRoute } from "vue-router";
 import { navTitleKey } from "../router/routes";
 import { useI18n } from "vue-i18n";
+import { AppShell } from "@ui";
 import { useGlobalLoader } from "../composables/useGlobalLoader";
 import { useLayoutState } from "../composables/useLayoutState";
+import { useVisibleNavRoutes } from "../composables/useVisibleNavRoutes";
+import { useRolePreviewStore } from "../stores/rolePreview";
+import type { UserRole } from "../stores/auth";
 import {
   AppLogo,
   AppNavLinks,
   AppUserMenuPanel,
   AppGlobalLoader,
-  ThemePanel,
   AppOfflineBar,
 } from "./components";
-import AppIcon from "../components/AppIcon.vue";
+import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
 import AppNotifications from "../components/AppNotifications.vue";
 
 const { isLoading: globalLoaderActive } = useGlobalLoader();
@@ -171,17 +152,24 @@ const {
   isAdmin, user,
   localeTransitioning, setLocale,
   onLogout,
-  themePanelOpen, themePanelConfig, onThemeSave, onOpenThemePanelFromDrawer,
   focusMainContent,
 } = useLayoutState();
 
+const { visibleNavItems } = useVisibleNavRoutes();
+
 const menuOpen = ref(false);
 
-const mobileBottomPadding = computed(() =>
-  isMobile.value
-    ? "calc(16px + 44px + 24px + env(safe-area-inset-bottom, 0px))"
-    : "16px"
-);
+const rolePreviewStore = useRolePreviewStore();
+const rolePreviewItems = computed(() => [
+  { title: t("user.rolePreview.admin"), value: "admin" },
+  { title: t("user.rolePreview.manager"), value: "manager" },
+  { title: t("user.rolePreview.rep"), value: "rep" },
+  { title: t("user.rolePreview.doctor"), value: "doctor" },
+]);
+
+function onRolePreviewChange(value: string) {
+  rolePreviewStore.setPreviewRole(value === "admin" ? null : (value as UserRole));
+}
 
 const moduleTitle = computed(() => {
   const name = route.name;
@@ -197,29 +185,23 @@ const moduleTitle = computed(() => {
   left: 0;
   z-index: 1000;
   padding: 12px 16px;
-  background: var(--rep-primary, #128F83);
+  background: var(--pwa-primary, #128F83);
   color: #fff;
   font-weight: 500;
   text-decoration: none;
-  border-radius: 0 0 var(--rep-radius) 0;
+  border-radius: 0 0 var(--pwa-radius) 0;
   transform: translateY(-100%);
   transition: transform 0.2s ease;
 }
 .layout-skip-link:focus {
   transform: translateY(0);
-  outline: 2px solid var(--rep-primary-hover, #10544E);
+  outline: 2px solid var(--pwa-primary-hover, #10544E);
   outline-offset: 2px;
 }
 
-.layout-nav {
-  background: var(--rep-sidebar-bg, #262626) !important;
-  color: var(--rep-sidebar-text, #f5f5f5);
-}
-
-.layout-nav__footer {
-  display: flex;
-  justify-content: center;
-  padding: 12px;
+.layout-shell :deep(.app-shell__nav) {
+  background: var(--pwa-sidebar-bg, #262626) !important;
+  color: var(--pwa-sidebar-text, #f5f5f5);
 }
 
 .layout-nav__chevron {
@@ -232,9 +214,9 @@ const moduleTitle = computed(() => {
   font-weight: 600;
 }
 
-.layout-appbar__icon {
-  width: 20px;
-  height: 20px;
+.layout-appbar__role-preview {
+  max-width: 160px;
+  margin-right: 8px;
 }
 
 .layout-user-btn {
@@ -275,7 +257,6 @@ const moduleTitle = computed(() => {
 
 .layout-main__inner {
   padding: 16px;
-  padding-bottom: v-bind(mobileBottomPadding);
   min-height: 100%;
   box-sizing: border-box;
   display: flex;
@@ -292,50 +273,4 @@ const moduleTitle = computed(() => {
   display: flex;
   flex-direction: column;
 }
-
-/* ── Mobile bottom bar ────────────────────────────────────────────────────── */
-.layout-mobile-bottom-bar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 30;
-  padding: 12px 16px max(12px, env(safe-area-inset-bottom, 12px));
-  background: var(--rep-bg, #fff);
-  border-top: 1px solid var(--rep-border, #e0e0e0);
-  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.06);
-}
-
-.layout-mobile-menu-trigger {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  width: 100%;
-  min-height: 44px;
-  padding: 10px 16px;
-  border: 1px solid var(--rep-border, #e0e0e0);
-  border-radius: var(--rep-radius, 8px);
-  background: var(--rep-bg-secondary, #f5f5f5);
-  color: var(--rep-text, #212121);
-  font-size: 0.9375rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
-}
-
-.layout-mobile-menu-trigger:hover,
-.layout-mobile-menu-trigger:focus-visible {
-  background: rgba(0, 0, 0, 0.06);
-  border-color: var(--rep-primary, #128F83);
-  color: var(--rep-primary, #128F83);
-  outline: none;
-}
-
-.layout-mobile-menu-icon {
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-}
-
 </style>

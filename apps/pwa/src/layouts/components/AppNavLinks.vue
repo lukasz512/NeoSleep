@@ -1,8 +1,8 @@
 <template>
-  <nav v-if="variant === 'sidebar'" class="layout-app__nav" aria-label="App sections">
+  <nav class="layout-app__nav" aria-label="App sections">
     <VList class="layout-app__nav-list" density="compact" bg-color="transparent">
       <VTooltip
-        v-for="item in appNavRoutes"
+        v-for="item in visibleNavRoutes"
         :key="item.path"
         :text="t(navTitleKey(item.name))"
         location="end"
@@ -17,7 +17,7 @@
                 { 'layout-app__nav-link--active': isActive, 'router-link-active': isActive },
               ]"
               rounded="lg"
-              @click="() => navigate()"
+              @click="() => { navigate(); $emit('navigate'); }"
             >
               <template #prepend>
                 <AppIcon :name="('nav-' + item.name) as AppIconName" class="layout-app__nav-icon" />
@@ -31,40 +31,15 @@
       </VTooltip>
     </VList>
   </nav>
-  <nav v-else class="layout-app__mobile-drawer-nav" aria-label="App sections">
-    <VList density="compact" bg-color="transparent" class="layout-app__mobile-drawer-nav-list">
-      <RouterLink
-        v-for="item in appNavRoutes"
-        :key="item.path"
-        v-slot="{ navigate, isActive }"
-        :to="item.path"
-        custom
-      >
-        <VListItem
-          :class="[
-            'layout-app__mobile-drawer-link',
-            { 'layout-app__mobile-drawer-link--active': isActive, 'router-link-active': isActive },
-          ]"
-          rounded="lg"
-          @click="() => { navigate(); $emit('navigate'); }"
-        >
-          <template #prepend>
-            <AppIcon :name="('nav-' + item.name) as AppIconName" class="layout-app__nav-icon" />
-          </template>
-          {{ t(navTitleKey(item.name)) }}
-        </VListItem>
-      </RouterLink>
-    </VList>
-  </nav>
 </template>
 
 <script setup lang="ts">
 import { useI18n } from "vue-i18n";
-import { appNavRoutes, navTitleKey } from "../../router/routes";
+import { navTitleKey } from "../../router/routes";
+import { useVisibleNavRoutes } from "../../composables/useVisibleNavRoutes";
 import AppIcon, { type AppIconName } from "../../components/AppIcon.vue";
 
 defineProps<{
-  variant: "sidebar" | "drawer";
   collapsed?: boolean;
 }>();
 
@@ -73,13 +48,11 @@ defineEmits<{
 }>();
 
 const { t } = useI18n();
-
+const { visibleNavRoutes } = useVisibleNavRoutes();
 </script>
 
 <style scoped>
-/* Override Vuetify list so our nav classes control look; keep nav-link semantics for AppSidebar styles */
-.layout-app__nav-list,
-.layout-app__mobile-drawer-nav-list {
+.layout-app__nav-list {
   padding: 0;
   margin: 0;
   display: flex;
@@ -87,39 +60,29 @@ const { t } = useI18n();
   gap: 2px;
 }
 
-.layout-app__nav-list :deep(.v-list-item),
-.layout-app__mobile-drawer-nav-list :deep(.v-list-item) {
+.layout-app__nav-list :deep(.v-list-item) {
   min-height: unset;
   padding: 8px 10px;
 }
 
-.layout-app__nav-list :deep(.v-list-item__prepend),
-.layout-app__mobile-drawer-nav-list :deep(.v-list-item__prepend) {
+.layout-app__nav-list :deep(.v-list-item__prepend) {
   margin-inline-end: 10px;
   opacity: 1;
   min-width: 20px;
   flex-shrink: 0;
 }
 
-
 /* Ensure nav icons are visible (VListItem prepend can be hidden by density) */
-.layout-app__nav-list :deep(.v-list-item__prepend .layout-app__nav-icon),
-.layout-app__mobile-drawer-nav-list :deep(.v-list-item__prepend .layout-app__nav-icon) {
+.layout-app__nav-list :deep(.v-list-item__prepend .layout-app__nav-icon) {
   display: flex !important;
   width: 20px;
   height: 20px;
   flex-shrink: 0;
 }
 
-/* Sidebar: hide default VListItem text color so theme variables apply */
+/* Hide default VListItem text color so theme variables apply */
 .layout-app__nav-link :deep(.v-list-item__content),
 .layout-app__nav-link :deep(.v-list-item-title) {
-  color: inherit;
-  font-size: 0.875rem;
-}
-
-.layout-app__mobile-drawer-link :deep(.v-list-item__content),
-.layout-app__mobile-drawer-link :deep(.v-list-item-title) {
   color: inherit;
   font-size: 0.875rem;
 }

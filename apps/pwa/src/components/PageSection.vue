@@ -13,7 +13,7 @@
 <script setup lang="ts">
 /**
  * Reusable page section (card with title + optional subtitle or slot).
- * Used in rep-app now; intended for reuse in client, portal, and admin when shared UI base exists.
+ * Used in pwa now; intended for reuse in client, portal, and admin when shared UI base exists.
  */
 defineProps<{
   title: string;

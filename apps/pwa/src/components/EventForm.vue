@@ -2,11 +2,11 @@
   <VDialog
     :model-value="modelValue"
     max-width="680"
-    content-class="event-form-dialog__content"
+    content-class="pwa-form-dialog__content"
     class="event-form-dialog"
     @update:model-value="onDialogUpdate"
   >
-    <VCard class="event-form-dialog__card">
+    <VCard class="pwa-form-dialog__card">
       <VCardTitle class="mx-2 mt-2 text-h6">
         {{ formTitle }}
       </VCardTitle>
@@ -20,14 +20,14 @@
             class="mb-3"
             autocomplete="off"
           />
-          <div class="event-form__row mb-3">
+          <div class="pwa-form-row mb-3">
             <VTextField
               v-model="form.start"
               :label="t('user.planner.form.fieldStart')"
               type="datetime-local"
               variant="outlined"
               density="comfortable"
-              class="event-form__row-item"
+              class="pwa-form-row-item"
               :rules="startRules"
             />
             <VTextField
@@ -36,11 +36,11 @@
               type="datetime-local"
               variant="outlined"
               density="comfortable"
-              class="event-form__row-item"
+              class="pwa-form-row-item"
               :rules="endRules"
             />
           </div>
-          <div class="event-form__row mb-3">
+          <div class="pwa-form-row mb-3">
             <VSelect
               v-model="form.type"
               :label="t('user.planner.form.fieldType')"
@@ -49,7 +49,7 @@
               item-value="value"
               variant="outlined"
               density="comfortable"
-              class="event-form__row-item"
+              class="pwa-form-row-item"
             />
             <VSelect
               v-model="form.status"
@@ -59,7 +59,7 @@
               item-value="value"
               variant="outlined"
               density="comfortable"
-              class="event-form__row-item"
+              class="pwa-form-row-item"
             />
           </div>
           <VAutocomplete
@@ -146,7 +146,7 @@
     <VDialog
       v-model="showDiscardConfirm"
       max-width="360"
-      content-class="event-form-dialog__content"
+      content-class="pwa-form-dialog__content"
       persistent
     >
       <VCard>
@@ -240,38 +240,5 @@ const {
 } = useEventForm(props, emit as (event: string, ...args: unknown[]) => void);
 </script>
 
-<style >
-.event-form-dialog__content {
-  border-radius: var(--rep-modal-radius, 16px) !important;
-  overflow: hidden;
-}
+<!-- .pwa-form-dialog__*/.pwa-form-row* are shared, global classes — see assets/theme.scss -->
 
-.event-form-dialog__card {
-  border-radius: var(--rep-modal-radius, 16px) !important;
-}
-
-.event-form-dialog__card :deep(.v-card-title) {
-  padding: 32px 24px !important;
-}
-
-.event-form-dialog__card :deep(.v-card-text) {
-  padding: 24px !important;
-}
-
-.event-form-dialog__card :deep(.v-card-actions) {
-  padding: 24px 24px 32px !important;
-}
-</style>
-
-<style scoped>
-.event-form__row {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.event-form__row-item {
-  flex: 1 1 180px;
-  min-width: 0;
-}
-</style>

@@ -3,7 +3,7 @@
  */
 if (typeof globalThis.window === "undefined") {
   const noop = () => {};
-  const navigator = { maxTouchPoints: 0, userAgent: "Node" };
+  const navigator = { maxTouchPoints: 0, userAgent: "Node", language: "en-US" };
   const win = {
     history: { replaceState: noop, pushState: noop, go: noop, back: noop, forward: noop },
     location: { pathname: "/", search: "", hash: "" },
@@ -11,7 +11,11 @@ if (typeof globalThis.window === "undefined") {
     removeEventListener: noop,
     navigator,
   };
-  (globalThis as unknown as { window: unknown }).window = win;
-  (globalThis as unknown as { navigator: unknown }).navigator = navigator;
-  (globalThis as unknown as { location: unknown }).location = win.location;
+  // Modern Node (21+) ships its own read-only `navigator` global (getter, no
+  // setter) so a plain `globalThis.navigator = ...` assignment throws in
+  // strict mode. The property descriptor is still configurable, so redefine
+  // it via defineProperty instead of assigning to it directly.
+  Object.defineProperty(globalThis, "window", { value: win, configurable: true, writable: true });
+  Object.defineProperty(globalThis, "navigator", { value: navigator, configurable: true, writable: true });
+  Object.defineProperty(globalThis, "location", { value: win.location, configurable: true, writable: true });
 }

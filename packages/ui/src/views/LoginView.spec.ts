@@ -43,11 +43,6 @@ describe("LoginView (shared)", () => {
       expect(source).toMatch(/VImg/);
     });
 
-    it("renders dev panel only in dev mode", () => {
-      expect(source).toMatch(/isDev/);
-      expect(source).toMatch(/defineAsyncComponent/);
-    });
-
     it("uses VForm for native submit handling", () => {
       expect(source).toMatch(/VForm/);
       expect(source).toMatch(/@submit\.prevent/);

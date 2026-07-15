@@ -1,13 +1,14 @@
-export type LeadStatus = "new" | "ongoing" | "accepted" | "rejected" | "completed";
+// Matches lead_status_check in the DB exactly — no UI-vocabulary translation layer.
+export type LeadStatus = "new" | "contacted" | "qualified" | "inactive" | "converted";
 
-export const LEAD_STATUS_OPTIONS = ["new", "ongoing", "accepted", "rejected", "completed"] as const;
+export const LEAD_STATUS_OPTIONS = ["new", "contacted", "qualified", "inactive", "converted"] as const;
 
 export const LEAD_STATUS_I18N_KEYS: Record<string, string> = {
   new: "user.leads.filters.statusNew",
-  ongoing: "user.leads.filters.statusOngoing",
-  accepted: "user.leads.filters.statusAccepted",
-  rejected: "user.leads.filters.statusRejected",
-  completed: "user.leads.filters.statusCompleted",
+  contacted: "user.leads.filters.statusContacted",
+  qualified: "user.leads.filters.statusQualified",
+  inactive: "user.leads.filters.statusInactive",
+  converted: "user.leads.filters.statusConverted",
 };
 
 function isLeadStatus(s: string): s is LeadStatus {

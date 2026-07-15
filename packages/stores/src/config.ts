@@ -3,21 +3,24 @@ import { ref, shallowRef, computed } from "vue";
 import { brandColors } from "@brand/colors";
 import type { ApiFetchOptions } from "@api";
 
+/** Matches the API's LookupItem shape (apps/api/src/db/lookup.ts) — key is the stable
+ *  machine value to store/filter by, value is the translated display label. */
 export interface ConfigOption {
-  id: string;
-  type: "region" | "specialty" | "institution_type";
+  key: string;
   value: string;
-  label: string;
+  locale: string;
   sort_order: number;
+  locked: boolean;
+  custom: boolean;
 }
 
 export interface ConfigOptions {
   regions: ConfigOption[];
   specialties: ConfigOption[];
-  institution_types: ConfigOption[];
+  organization_types: ConfigOption[];
 }
 
-const EMPTY_OPTIONS: ConfigOptions = { regions: [], specialties: [], institution_types: [] };
+const EMPTY_OPTIONS: ConfigOptions = { regions: [], specialties: [], organization_types: [] };
 
 export interface AppConfig {
   primary_color: string;
@@ -135,13 +138,13 @@ export function createConfigStore(apiFetch: ApiFetchFn, applyI18nOverrides?: I18
 
     async function loadOptions(): Promise<ConfigOptions> {
       try {
-        const res = await apiFetch("/api/v1/config/options", { handleErrors: false });
+        const res = await apiFetch("/api/v1/lookups/options", { handleErrors: false });
         if (!res.ok) return options.value;
         const data = (await res.json()) as ConfigOptions;
         options.value = {
-          regions:          Array.isArray(data.regions)          ? data.regions          : [],
-          specialties:      Array.isArray(data.specialties)      ? data.specialties      : [],
-          institution_types:Array.isArray(data.institution_types)? data.institution_types: [],
+          regions:           Array.isArray(data.regions)           ? data.regions           : [],
+          specialties:       Array.isArray(data.specialties)       ? data.specialties       : [],
+          organization_types:Array.isArray(data.organization_types)? data.organization_types : [],
         };
         return options.value;
       } catch {
@@ -150,25 +153,25 @@ export function createConfigStore(apiFetch: ApiFetchFn, applyI18nOverrides?: I18
     }
 
     const regionItems = computed(() =>
-      options.value.regions.map((o) => ({ title: o.label, value: o.value }))
+      options.value.regions.map((o) => ({ title: o.value, value: o.key }))
     );
     const specialtyItems = computed(() =>
-      options.value.specialties.map((o) => ({ title: o.label, value: o.value }))
+      options.value.specialties.map((o) => ({ title: o.value, value: o.key }))
     );
     const institutionTypeItems = computed(() =>
-      options.value.institution_types.map((o) => ({ title: o.label, value: o.value }))
+      options.value.organization_types.map((o) => ({ title: o.value, value: o.key }))
     );
 
     function applyToDom(cfg: AppConfig) {
       if (typeof document === "undefined" || !document.documentElement) return;
       const root = document.documentElement;
-      root.style.setProperty("--rep-primary",        cfg.primary_color);
-      root.style.setProperty("--rep-primary-hover",  cfg.primary_color);
-      root.style.setProperty("--rep-secondary",      cfg.secondary_color);
-      root.style.setProperty("--rep-primary-dark",   cfg.primary_color_dark);
-      root.style.setProperty("--rep-secondary-dark", cfg.secondary_color_dark);
-      root.style.setProperty("--rep-surface",        cfg.surface_color);
-      root.style.setProperty("--rep-bg-secondary",   cfg.surface_color);
+      root.style.setProperty("--pwa-primary",        cfg.primary_color);
+      root.style.setProperty("--pwa-primary-hover",  cfg.primary_color);
+      root.style.setProperty("--pwa-secondary",      cfg.secondary_color);
+      root.style.setProperty("--pwa-primary-dark",   cfg.primary_color_dark);
+      root.style.setProperty("--pwa-secondary-dark", cfg.secondary_color_dark);
+      root.style.setProperty("--pwa-surface",        cfg.surface_color);
+      root.style.setProperty("--pwa-bg-secondary",   cfg.surface_color);
       root.setAttribute("data-theme", cfg.color_scheme);
     }
 

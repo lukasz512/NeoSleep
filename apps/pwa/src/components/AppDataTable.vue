@@ -85,7 +85,7 @@ function formatMeta(item: object): string {
 <style scoped>
 .app-data-table__table-wrap {
   overflow-x: auto;
-  border-radius: var(--rep-radius);
+  border-radius: var(--pwa-radius);
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
 
