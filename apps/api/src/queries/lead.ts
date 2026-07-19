@@ -20,15 +20,16 @@ import {
 export interface LeadDto {
   id: string;
   name: string;
+  salutation: string | null;
   first_name: string;
   last_name: string;
-  title: string | null;
   email: string;
   phone: string;
   status: string;
   country_code: string | null;
   region: string;
   source: string | null;
+  institution: string | null;
   assigned_to: string | null;
   converted_to_id: string | null;
   converted_to_type: string | null;
@@ -42,15 +43,16 @@ function toDto(l: Lead): LeadDto {
   return {
     id:             l.id,
     name:           l.name,
+    salutation:     l.salutation ?? null,
     first_name:     l.first_name,
     last_name:      l.last_name,
-    title:          l.title ?? null,
     email:          l.email ?? "",
     phone:          l.phone ?? "",
     status:         l.status,
     country_code:   l.country_code ?? null,
     region:         l.region,
     source:         l.source ?? null,
+    institution:    l.institution ?? null,
     assigned_to:    l.assigned_to ?? null,
     converted_to_id:   l.converted_to_id ?? null,
     converted_to_type: l.converted_to_type ?? null,

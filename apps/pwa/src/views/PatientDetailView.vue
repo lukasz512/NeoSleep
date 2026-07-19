@@ -62,6 +62,22 @@
           </template>
           <span>{{ t('app.patients.detail.edit') }}</span>
         </VTooltip>
+        <VTooltip v-if="isAdmin" location="bottom">
+          <template #activator="{ props: tooltipProps }">
+            <AppButton
+              v-bind="tooltipProps"
+              icon
+              variant="flat"
+              size="large"
+              :class="entityActionBtnClass('delete')"
+              :aria-label="t('app.patients.actions.delete')"
+              @click="showDeleteConfirm = true"
+            >
+              <AppIcon :name="entityActionIcon('delete')" class="view-item__action-icon" />
+            </AppButton>
+          </template>
+          <span>{{ t('app.patients.actions.delete') }}</span>
+        </VTooltip>
       </template>
       <template #sections v-if="patient">
         <div class="view-item__row">
@@ -104,16 +120,32 @@
         </div>
       </template>
     </ItemDetailLayout>
+
+    <VDialog v-model="showDeleteConfirm" max-width="360" persistent>
+      <VCard>
+        <VCardText>{{ t("app.patients.actions.deleteConfirmText") }}</VCardText>
+        <VCardActions>
+          <VSpacer />
+          <AppButton variant="text" @click="showDeleteConfirm = false">
+            {{ t("app.common.cancel") }}
+          </AppButton>
+          <AppButton color="error" variant="text" :loading="deleteLoading" @click="onDelete">
+            {{ t("app.patients.actions.delete") }}
+          </AppButton>
+        </VCardActions>
+      </VCard>
+    </VDialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuthStore } from "../stores/auth";
 import { apiFetch } from "../utils/api";
 import { useNotifications } from "../composables/useNotifications";
+import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
@@ -146,6 +178,7 @@ interface PatientDetail {
 
 const { t } = useI18n();
 const route = useRoute();
+const router = useRouter();
 const notifications = useNotifications();
 
 const patient = ref<PatientDetail | null>(null);
@@ -153,6 +186,7 @@ const loading = ref(true);
 const showEditModal = ref(false);
 const showEventForm = ref(false);
 const eventFormInitial = ref<{ start_at: string; end_at: string; patientIds?: string[] } | undefined>(undefined);
+const showDeleteConfirm = ref(false);
 
 function statusLabel(status?: string): string {
   switch (status) {
@@ -223,6 +257,20 @@ async function onPatientSubmit(data: Record<string, unknown>, done: (ok: boolean
     done(false);
   }
 }
+
+const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
+  const id = patient.value?.id;
+  if (!id) return;
+  const res = await apiFetch(`/api/v1/patient/${id}`, {
+    method: "DELETE",
+  });
+  if (res.ok) {
+    showDeleteConfirm.value = false;
+    notifications.show(t("app.patients.actions.deleteSuccess"), "success");
+    window.dispatchEvent(new Event("entity-list-refresh"));
+    router.push({ name: "patients" });
+  }
+});
 
 async function loadPatient() {
   const id = route.params.id as string;

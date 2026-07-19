@@ -13,9 +13,12 @@ import { identityFields } from "./identityFields";
  * row action to email the new user a set-password link. Admins never
  * type/see another person's password.
  *
- * `email` stays in the field list for create, but UpdateUserCommand ignores
- * it on edit (email isn't editable yet) — the field is harmlessly a no-op
- * when submitted from the edit dialog.
+ * `email` is marked `immutableOnEdit` — FormRenderer disables it once
+ * initialData.id is set, so the edit dialog no longer shows a live-looking
+ * field that UpdateUserCommand silently ignores.
+ *
+ * Reuses the shared Identity block (prefix key overridden to "salutation",
+ * matching patientForm.ts/hcpForm.ts's DB-layer naming convention).
  */
 
 const ROLE_OPTIONS = [
@@ -39,8 +42,12 @@ async function loadRegionOptions() {
   return configStore.regionItems;
 }
 
+const identity = identityFields();
+identity[0] = { ...identity[0], key: "salutation" };
+identity[3] = { ...identity[3], immutableOnEdit: true };
+
 export const userFormFields: FormFieldDef[] = [
-  ...identityFields(),
+  ...identity,
   {
     key: "role",
     type: "select",

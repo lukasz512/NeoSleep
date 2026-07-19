@@ -35,9 +35,9 @@ const PASSWORD_RESET_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
 // ---------------------------------------------------------------------------
 
 export interface CreateUserInput {
+  salutation?: string | null;
   first_name: string;
   last_name: string;
-  title?: string | null;
   email: string;
   password?: string | null;
   role?: StaffRole;
@@ -67,11 +67,12 @@ export async function CreateUserCommand(ctx: TenantContext, input: CreateUserInp
   const user = await insertStaffUser(
     ctx.client,
     email,
-    `${firstName} ${lastName}`,
+    firstName,
+    lastName,
     role,
     passwordHash,
     !input.password,
-    input.title ?? null,
+    input.salutation ?? null,
     input.phone ?? null
   );
   if (!user) throw new ConflictError("A user with this email already exists");
@@ -137,7 +138,7 @@ export async function ResetUserPasswordCommand(ctx: TenantContext, id: string): 
 
   const resetLink = `${FRONTEND_URL}/reset-password?token=${encodeURIComponent(token)}`;
   await sendPasswordResetEmail(user.email, resetLink, {
-    title: user.title,
+    title: user.salutation,
     firstName: user.first_name,
     lastName: user.last_name,
     language: user.language,

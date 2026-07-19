@@ -10,9 +10,9 @@ import { getUsersPaginated, getUserById, type GetUsersFilters, type User } from 
 export interface UserDto {
   id: string;
   name: string;
+  salutation: string | null;
   first_name: string | null;
   last_name: string | null;
-  title: string | null;
   email: string;
   phone: string;
   role: string;
@@ -28,9 +28,9 @@ function toDto(u: User): UserDto {
   return {
     id: u.id,
     name: u.name ?? "",
+    salutation: u.salutation ?? null,
     first_name: u.first_name,
     last_name: u.last_name,
-    title: u.title,
     email: u.email,
     phone: u.phone ?? "",
     role: u.role,

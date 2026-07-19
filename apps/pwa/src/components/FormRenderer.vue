@@ -285,6 +285,7 @@ function fieldAttrs(f: FormFieldDef): Record<string, unknown> {
     hint: f.hint ? t(f.hint) : undefined,
     persistentHint: !!f.hint,
     placeholder: f.placeholder ? t(f.placeholder) : undefined,
+    disabled: !!f.immutableOnEdit && isEditMode.value,
   };
 
   switch (f.type) {
@@ -326,6 +327,8 @@ function fieldAttrs(f: FormFieldDef): Record<string, unknown> {
         chips: !!f.multiple,
         closableChips: !!f.multiple,
       };
+    case "combobox":
+      return { ...common, items: resolvedOptions(f), itemTitle: "title", itemValue: "value", clearable: true };
     case "chips":
       return { ...common, items: [], multiple: true, chips: true, closableChips: true };
     case "date":

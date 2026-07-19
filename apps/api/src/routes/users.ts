@@ -73,16 +73,16 @@ usersRouter.post(
   asyncHandler(async (req: Request, res: Response) => {
     const slug = tenantSlugFromHost(req.hostname);
     const body = req.body as {
-      first_name?: string; last_name?: string; title?: string; email?: string; password?: string;
+      salutation?: string; first_name?: string; last_name?: string; email?: string; password?: string;
       role?: StaffRole; region?: string; country_code?: string; phone?: string;
     };
 
     const user = await withTenant(slug, async (client) => {
       const ctx = buildContext(req, client, slug);
       return CreateUserCommand(ctx, {
+        salutation: typeof body.salutation === "string" ? body.salutation : null,
         first_name: typeof body.first_name === "string" ? body.first_name : "",
         last_name: typeof body.last_name === "string" ? body.last_name : "",
-        title: typeof body.title === "string" ? body.title : null,
         email: typeof body.email === "string" ? body.email : "",
         password: typeof body.password === "string" ? body.password : null,
         role: body.role,
@@ -108,16 +108,16 @@ usersRouter.patch(
 
     const slug = tenantSlugFromHost(req.hostname);
     const body = req.body as {
-      first_name?: string; last_name?: string; title?: string; phone?: string;
+      salutation?: string; first_name?: string; last_name?: string; phone?: string;
       status?: "active" | "inactive" | "suspended"; country_code?: string; role?: StaffRole;
     };
 
     const user = await withTenant(slug, async (client) => {
       const ctx = buildContext(req, client, slug);
       return UpdateUserCommand(ctx, id, {
+        salutation: body.salutation !== undefined ? body.salutation : undefined,
         first_name: typeof body.first_name === "string" ? body.first_name : undefined,
         last_name: typeof body.last_name === "string" ? body.last_name : undefined,
-        title: body.title !== undefined ? body.title : undefined,
         phone: body.phone !== undefined ? body.phone : undefined,
         status: body.status,
         country_code: body.country_code !== undefined ? body.country_code : undefined,

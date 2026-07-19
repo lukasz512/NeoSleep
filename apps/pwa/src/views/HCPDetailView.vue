@@ -58,6 +58,22 @@
         </template>
         <span>{{ t('user.hcp.detail.edit') }}</span>
       </VTooltip>
+      <VTooltip v-if="isAdmin" location="bottom">
+        <template #activator="{ props: tooltipProps }">
+          <AppButton
+            v-bind="tooltipProps"
+            icon
+            variant="flat"
+            size="large"
+            :class="entityActionBtnClass('delete')"
+            :aria-label="t('user.hcp.actions.delete')"
+            @click="showDeleteConfirm = true"
+          >
+            <AppIcon :name="entityActionIcon('delete')" class="view-item__action-icon" />
+          </AppButton>
+        </template>
+        <span>{{ t('user.hcp.actions.delete') }}</span>
+      </VTooltip>
     </template>
     <template #title v-if="hcp">
       <span class="view-item__title-wrap">
@@ -88,16 +104,32 @@
       </div>
     </template>
   </ItemDetailLayout>
+
+  <VDialog v-model="showDeleteConfirm" max-width="360" persistent>
+    <VCard>
+      <VCardText>{{ t("user.hcp.actions.deleteConfirmText") }}</VCardText>
+      <VCardActions>
+        <VSpacer />
+        <AppButton variant="text" @click="showDeleteConfirm = false">
+          {{ t("app.common.cancel") }}
+        </AppButton>
+        <AppButton color="error" variant="text" :loading="deleteLoading" @click="onDelete">
+          {{ t("user.hcp.actions.delete") }}
+        </AppButton>
+      </VCardActions>
+    </VCard>
+  </VDialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuthStore } from "../stores/auth";
 import { apiFetch } from "../utils/api";
 import { useNotifications } from "../composables/useNotifications";
+import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
@@ -131,6 +163,7 @@ interface HCP {
 
 const { t } = useI18n();
 const route = useRoute();
+const router = useRouter();
 const authStore = useAuthStore();
 const notifications = useNotifications();
 const isAdmin = computed(() => authStore.user?.role === "admin");
@@ -138,6 +171,7 @@ const isAdmin = computed(() => authStore.user?.role === "admin");
 const hcp = ref<HCP | null>(null);
 const loading = ref(true);
 const showEditModal = ref(false);
+const showDeleteConfirm = ref(false);
 const showEventForm = ref(false);
 const eventFormInitial = ref<{ start_at: string; end_at: string; hcpIds?: string[] } | undefined>(undefined);
 
@@ -240,6 +274,20 @@ async function onContactSubmit(data: Record<string, unknown>, done: (ok: boolean
     done(false);
   }
 }
+
+const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
+  const id = hcp.value?.id;
+  if (!id) return;
+  const res = await apiFetch(`/api/v1/practitioner/${id}`, {
+    method: "DELETE",
+  });
+  if (res.ok) {
+    showDeleteConfirm.value = false;
+    notifications.show(t("user.hcp.actions.deleteSuccess"), "success");
+    window.dispatchEvent(new Event("entity-list-refresh"));
+    router.push({ name: "hcp" });
+  }
+});
 
 async function loadHCP() {
   const id = route.params.id as string;

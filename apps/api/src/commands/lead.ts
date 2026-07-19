@@ -41,14 +41,15 @@ function normalizeLeadStatus(input: string | undefined): string | undefined {
 // ---------------------------------------------------------------------------
 
 export interface CreateLeadInput {
+  salutation?: string | null;
   first_name: string;
   last_name: string;
-  title?: string | null;
   email?: string | null;
   phone?: string | null;
   status?: string;
   region?: string;
   source?: string | null;
+  institution?: string | null;
   assigned_to?: string | null;
   /**
    * Organization name — no dedicated column, lives at metadata.institution
@@ -80,14 +81,15 @@ export async function CreateLeadCommand(
   if (email && !EMAIL_REGEX.test(email)) throw new ValidationError("Invalid email format");
 
   const insertInput: InsertLeadInput = {
+    salutation:  input.salutation?.trim() || null,
     first_name:  firstName,
     last_name:   lastName,
-    title:       input.title?.trim() || null,
     email:       email || null,
     phone:       input.phone?.trim() ?? null,
     status:      normalizeLeadStatus(input.status) ?? "new",
     region:      input.region?.trim() ?? "",
     source:      input.source?.trim() ?? null,
+    institution: input.institution?.trim() || null,
     assigned_to: input.assigned_to?.trim() ?? null,
     metadata:    { ...input.metadata, institution },
   };
@@ -111,14 +113,15 @@ export async function CreateLeadCommand(
 // ---------------------------------------------------------------------------
 
 export interface UpdateLeadPayload {
+  salutation?: string | null;
   first_name?: string;
   last_name?: string;
-  title?: string | null;
   email?: string | null;
   phone?: string | null;
   status?: string;
   region?: string;
   source?: string | null;
+  institution?: string | null;
   assigned_to?: string | null;
   /** See CreateLeadInput.metadata — institution lives at metadata.institution. */
   metadata?: Record<string, unknown> | null;
@@ -141,14 +144,15 @@ export async function UpdateLeadCommand(
   if (!before) return null;
 
   const updateInput: UpdateLeadInput = {
+    salutation:  input.salutation,
     first_name:  input.first_name,
     last_name:   input.last_name,
-    title:       input.title,
     email:       input.email,
     phone:       input.phone,
     status:      normalizeLeadStatus(input.status),
     region:      input.region,
     source:      input.source,
+    institution: input.institution,
     assigned_to: input.assigned_to,
     metadata:    input.metadata,
   };
@@ -199,7 +203,7 @@ export async function ConvertLeadCommand(
   if (!convertedToId) throw new ValidationError("converted_to_id is required");
 
   const convertedToType = input.converted_to_type?.trim().toLowerCase();
-  if (convertedToType !== "practitioner" && convertedToType !== "organization") {
+  if (convertedToType !== "practitioner" && convertedToType !== "organization" && convertedToType !== "patient") {
     throw new ValidationError(`Invalid converted_to_type: "${input.converted_to_type}"`);
   }
 
@@ -239,10 +243,10 @@ export async function DeleteLeadCommand(ctx: TenantContext, id: string): Promise
   await softDeleteLead(ctx.client, id);
 
   await insertAuditLog(ctx.client, {
-    user_id: ctx.user.id,
-    action: "delete",
+    user_id:    ctx.user.id,
+    action:     "delete",
     entity_type: "Lead",
-    entity_id: id,
+    entity_id:  id,
     request_id: ctx.requestId,
   });
 }

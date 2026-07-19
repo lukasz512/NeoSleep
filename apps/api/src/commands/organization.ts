@@ -4,6 +4,7 @@ import {
   updateOrganization,
   getOrganizationById,
   getOrganizationIdByName,
+  softDeleteOrganization,
   type InsertOrganizationInput,
   type UpdateOrganizationInput,
   type Organization,
@@ -211,4 +212,22 @@ export async function UpdateOrganizationCommand(
   });
 
   return after;
+}
+
+// ---------------------------------------------------------------------------
+// DELETE ORGANIZATION (soft delete)
+// ---------------------------------------------------------------------------
+
+export async function DeleteOrganizationCommand(ctx: TenantContext, id: string): Promise<void> {
+  if (!id?.trim()) throw new ValidationError("organization id is required");
+
+  await softDeleteOrganization(ctx.client, id);
+
+  await insertAuditLog(ctx.client, {
+    user_id:    ctx.user.id,
+    action:     "delete",
+    entity_type: "Organization",
+    entity_id:  id,
+    request_id: ctx.requestId,
+  });
 }

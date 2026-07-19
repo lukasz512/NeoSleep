@@ -22,6 +22,16 @@
       avatar-entity-type="hcp"
       @submit="onContactSubmit"
     />
+    <FormRenderer
+      v-model="showConvertToPatientModal"
+      :fields="patientFormFields"
+      :initial-data="convertToPatientInitialData"
+      title-key="app.patients.form.title"
+      submit-label-key="app.patients.form.submit"
+      verify-info-key="user.leads.form.verifyDataInfo"
+      avatar-entity-type="patient"
+      @submit="onConvertToPatientSubmit"
+    />
     <EventForm
       v-model="showEventForm"
       :initial-data="eventFormInitial"
@@ -62,6 +72,15 @@
             </AppButton>
           </template>
           <span>{{ t('user.leads.detail.moveToContacts') }}</span>
+        </VTooltip>
+        <VTooltip v-if="lead && !isConverted(lead)" location="bottom">
+          <template #activator="{ props: tooltipProps }">
+            <AppButton v-bind="tooltipProps" icon variant="flat" size="large"
+              :class="entityActionBtnClass('convertToPatient')" :aria-label="t('user.leads.detail.convertToPatient')" @click="onConvertToPatient">
+              <AppIcon :name="entityActionIcon('convertToPatient')" class="view-item__action-icon" />
+            </AppButton>
+          </template>
+          <span>{{ t('user.leads.detail.convertToPatient') }}</span>
         </VTooltip>
         <VTooltip v-if="isAdmin" location="bottom">
           <template #activator="{ props: tooltipProps }">
@@ -188,6 +207,7 @@ import { getGenderFromName } from "../utils/genderFromName";
 import { leadStatusClass, leadStatusI18nKey, leadInstitution } from "../utils/leadStatus";
 import { leadFormFields } from "../config/forms/leadForm";
 import { hcpFormFields, hcpFormDerive } from "../config/forms/hcpForm";
+import { patientFormFields } from "../config/forms/patientForm";
 import { entityActionIcon, entityActionBtnClass } from "../config/entityActions";
 import type { Lead } from "./LeadsView.vue";
 
@@ -209,6 +229,7 @@ const lead = ref<Lead | null>(null);
 const loading = ref(true);
 const showEditModal = ref(false);
 const showMoveToContactsModal = ref(false);
+const showConvertToPatientModal = ref(false);
 const showEventForm = ref(false);
 const showDeleteConfirm = ref(false);
 const eventFormInitial = ref<{ start_at: string; end_at: string } | undefined>(undefined);
@@ -220,10 +241,21 @@ const eventFormInitial = ref<{ start_at: string; end_at: string } | undefined>(u
  * silently defeats the discard-changes confirmation.
  */
 const moveToContactsInitialData = computed(() => (lead.value ? {
+  salutation: lead.value.salutation ?? "",
   first_name: lead.value.first_name,
   last_name: lead.value.last_name,
   email: lead.value.email ?? "",
   phone: lead.value.phone ?? "",
+} : undefined));
+
+/** Same stable-reference rationale as moveToContactsInitialData above. */
+const convertToPatientInitialData = computed(() => (lead.value ? {
+  salutation: lead.value.salutation ?? "",
+  first_name: lead.value.first_name,
+  last_name: lead.value.last_name,
+  email: lead.value.email ?? "",
+  phone: lead.value.phone ?? "",
+  region: lead.value.region,
 } : undefined));
 
 const backRoute = computed(() => ({ name: "leads" }));
@@ -293,6 +325,35 @@ async function onContactSubmit(data: Record<string, unknown>, done: (ok: boolean
     });
     if (res.ok) {
       notifications.show(t("user.hcp.form.contactCreated"), "success");
+      await loadLead();
+      window.dispatchEvent(new Event("entity-list-refresh"));
+      done(true);
+    } else {
+      done(false);
+    }
+  } catch {
+    done(false);
+  }
+}
+
+function onConvertToPatient() {
+  showConvertToPatientModal.value = true;
+}
+
+async function onConvertToPatientSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
+  const leadId = lead.value?.id;
+  if (!leadId) { done(false); return; }
+  // Conversion (status -> converted, converted_to_id/type/at) happens
+  // atomically server-side via ConvertLeadCommand when lead_id is present —
+  // same pattern as onContactSubmit's Lead->Practitioner conversion above.
+  try {
+    const res = await apiFetch("/api/v1/patient", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...data, lead_id: leadId }),
+    });
+    if (res.ok) {
+      notifications.show(t("app.patients.form.success"), "success");
       await loadLead();
       window.dispatchEvent(new Event("entity-list-refresh"));
       done(true);

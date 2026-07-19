@@ -1,9 +1,10 @@
 import { Router, type Router as RouterType, type Request, type Response } from "express";
 import { asyncHandler } from "../middleware/errorHandler.js";
 import { requireAuth } from "../middleware/requireAuth.js";
+import { requireRole } from "../middleware/requireRole.js";
 import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
-import { CreateOrganizationCommand, UpdateOrganizationCommand } from "../commands/organization.js";
+import { CreateOrganizationCommand, UpdateOrganizationCommand, DeleteOrganizationCommand } from "../commands/organization.js";
 import { GetOrganizationListQuery, GetOrganizationByIdQuery } from "../queries/organization.js";
 import { ValidationError } from "../errors.js";
 import { parsePaginationParams } from "./utils.js";
@@ -153,5 +154,25 @@ organizationRouter.patch(
 
     if (!organization) { res.status(404).json({ error: "Organization not found" }); return; }
     res.json(organization);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// DELETE /api/v1/organization/:id — soft delete
+// ---------------------------------------------------------------------------
+organizationRouter.delete(
+  "/organization/:id",
+  requireRole("admin", "manager"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id?.trim();
+    if (!id) throw new ValidationError("Missing organization id");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    await withTenant(slug, async (client) => {
+      const ctx = buildContext(req, client, slug);
+      await DeleteOrganizationCommand(ctx, id);
+    });
+
+    res.json({ success: true });
   })
 );

@@ -145,9 +145,9 @@ import { leadStatusClass, leadStatusI18nKey, leadInstitution } from "../utils/le
 export interface Lead {
   id: string;
   name: string;
+  salutation?: string | null;
   first_name: string;
   last_name: string;
-  title?: string | null;
   email: string;
   phone?: string;
   status: string;

@@ -54,6 +54,9 @@
           <VListItem :title="t('user.users.actions.edit')" @click="onEditUser(item as UserListItem)">
             <template #prepend><AppIcon :name="entityActionIcon('edit')" :class="entityActionMenuIconClass('edit')" /></template>
           </VListItem>
+          <VListItem :title="t('user.users.actions.delete')" @click="onDeleteClick(item as UserListItem)">
+            <template #prepend><AppIcon :name="entityActionIcon('delete')" :class="entityActionMenuIconClass('delete')" /></template>
+          </VListItem>
         </AppListItemMenu>
       </template>
     </AppEntityList>
@@ -78,6 +81,21 @@
       avatar-entity-type="user"
       @submit="onEditSubmit"
     />
+
+    <VDialog v-model="showDeleteConfirm" max-width="360" persistent>
+      <VCard>
+        <VCardText>{{ t("user.users.actions.deleteConfirmText") }}</VCardText>
+        <VCardActions>
+          <VSpacer />
+          <AppButton variant="text" @click="showDeleteConfirm = false">
+            {{ t("app.common.cancel") }}
+          </AppButton>
+          <AppButton color="error" variant="text" :loading="deleteLoading" @click="onDelete">
+            {{ t("user.users.actions.delete") }}
+          </AppButton>
+        </VCardActions>
+      </VCard>
+    </VDialog>
   </div>
 </template>
 
@@ -86,6 +104,7 @@ import { ref, computed, defineAsyncComponent } from "vue";
 import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
 import AppAvatar from "../components/AppAvatar.vue";
+import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppListItemMenu from "../components/AppListItemMenu.vue";
 import { entityActionIcon, entityActionMenuIconClass } from "../config/entityActions";
@@ -111,6 +130,8 @@ const showForm = ref(false);
 const showEditModal = ref(false);
 const selectedUser = ref<UserListItem | null>(null);
 const loadingItemId = ref<string | null>(null);
+const showDeleteConfirm = ref(false);
+const deletingUserId = ref<string | null>(null);
 
 const usersFilterDefs: FilterDefinition[] = [
   { key: "role", labelKey: "user.users.filters.role", type: "select", default: "" },
@@ -237,6 +258,25 @@ async function onToggleStatusClick(user: UserListItem) {
     loadingItemId.value = null;
   }
 }
+
+function onDeleteClick(user: UserListItem) {
+  deletingUserId.value = user.id;
+  showDeleteConfirm.value = true;
+}
+
+const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
+  const id = deletingUserId.value;
+  if (!id) return;
+  const res = await apiFetch(`/api/v1/users/${id}`, {
+    method: "DELETE",
+  });
+  if (res.ok) {
+    showDeleteConfirm.value = false;
+    deletingUserId.value = null;
+    notifications.show(t("user.users.actions.deleteSuccess"), "success");
+    window.dispatchEvent(new Event("entity-list-refresh"));
+  }
+});
 
 async function onSubmit(payload: Record<string, unknown>, done: (ok: boolean) => void) {
   try {

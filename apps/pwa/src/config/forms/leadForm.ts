@@ -12,10 +12,16 @@ import { identityFields } from "./identityFields";
  * `status`/`region` are silently defaulted rather than surfaced as controls
  * (lead.region is NOT NULL in the DB) — the create/edit dialog only ever
  * shows Identity + organization name, per the "nothing else for now" scope.
+ *
+ * Reuses the shared Identity block (prefix key overridden to "salutation",
+ * matching patientForm.ts/hcpForm.ts's DB-layer naming convention).
  */
 
+const identity = identityFields();
+identity[0] = { ...identity[0], key: "salutation" };
+
 export const leadFormFields: FormFieldDef[] = [
-  ...identityFields(),
+  ...identity,
   {
     key: "institution",
     type: "text",

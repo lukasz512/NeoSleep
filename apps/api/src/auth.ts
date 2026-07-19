@@ -326,7 +326,7 @@ authRouter.post("/auth/forgot-password", asyncHandler(async (req: Request, res: 
     // isn't configured, so this is safe locally too. The console log + devResetLink below
     // stay regardless, so local dev works without needing real Gmail creds set up.
     sendPasswordResetEmail(emailStr, resetLink, {
-      title: staff.title,
+      title: staff.salutation,
       firstName: staff.first_name,
       lastName: staff.last_name,
       language: staff.language,

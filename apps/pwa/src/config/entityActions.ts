@@ -24,12 +24,13 @@ export interface EntityActionDef {
 }
 
 export const ENTITY_ACTIONS = {
-  scheduleVisit:  { icon: "calendar",   tone: "success" },
-  moveToContacts: { icon: "user-arrow", tone: "primary" },
-  edit:           { icon: "pencil",     tone: "primary" },
-  resetPassword:  { icon: "key",        tone: "neutral" },
-  toggleStatus:   { icon: "power",      tone: "neutral" },
-  delete:         { icon: "trash",      tone: "error" },
+  scheduleVisit:    { icon: "calendar",     tone: "success" },
+  moveToContacts:   { icon: "user-arrow",   tone: "primary" },
+  convertToPatient: { icon: "nav-patients", tone: "primary" },
+  edit:             { icon: "pencil",       tone: "primary" },
+  resetPassword:    { icon: "key",          tone: "neutral" },
+  toggleStatus:     { icon: "power",        tone: "neutral" },
+  delete:           { icon: "trash",        tone: "error" },
 } satisfies Record<string, EntityActionDef>;
 
 export type EntityActionKey = keyof typeof ENTITY_ACTIONS;

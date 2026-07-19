@@ -79,23 +79,24 @@ leadsRouter.post(
   asyncHandler(async (req: Request, res: Response) => {
     const slug = tenantSlugFromHost(req.hostname);
     const body = req.body as {
-      first_name?: string; last_name?: string; title?: string;
+      salutation?: string; first_name?: string; last_name?: string;
       email?: string; phone?: string; status?: string;
-      region?: string; source?: string; assigned_to?: string;
+      region?: string; source?: string; institution?: string; assigned_to?: string;
       metadata?: Record<string, unknown>;
     };
 
     const lead = await withTenant(slug, async (client) => {
       const ctx = buildContext(req, client, slug);
       return CreateLeadCommand(ctx, {
+        salutation:  typeof body.salutation === "string" ? body.salutation.trim() : null,
         first_name:  typeof body.first_name === "string" ? body.first_name.trim() : "",
         last_name:   typeof body.last_name  === "string" ? body.last_name.trim()  : "",
-        title:       typeof body.title       === "string" ? body.title             : null,
         email:       typeof body.email       === "string" ? body.email.trim()       : null,
         phone:       typeof body.phone       === "string" ? body.phone.trim()       : null,
         status:      typeof body.status      === "string" ? body.status             : undefined,
         region:      typeof body.region      === "string" ? body.region             : undefined,
         source:      typeof body.source      === "string" ? body.source             : null,
+        institution: typeof body.institution === "string" ? body.institution.trim() : null,
         assigned_to: typeof body.assigned_to === "string" ? body.assigned_to.trim() : null,
         metadata:    body.metadata ?? null,
       });
@@ -117,9 +118,9 @@ leadsRouter.patch(
 
     const slug = tenantSlugFromHost(req.hostname);
     const body = req.body as {
-      first_name?: string; last_name?: string; title?: string;
+      salutation?: string; first_name?: string; last_name?: string;
       email?: string; phone?: string; status?: string;
-      region?: string; source?: string; assigned_to?: string;
+      region?: string; source?: string; institution?: string; assigned_to?: string;
       metadata?: Record<string, unknown>;
       converted_to_id?: string; converted_to_type?: string;
     };
@@ -144,14 +145,15 @@ leadsRouter.patch(
     const lead = await withTenant(slug, async (client) => {
       const ctx = buildContext(req, client, slug);
       return UpdateLeadCommand(ctx, id, {
+        salutation:  typeof body.salutation === "string" ? body.salutation : undefined,
         first_name:  typeof body.first_name === "string" ? body.first_name : undefined,
         last_name:   typeof body.last_name  === "string" ? body.last_name  : undefined,
-        title:       body.title       !== undefined ? body.title       : undefined,
         email:       body.email       !== undefined ? body.email       : undefined,
         phone:       body.phone       !== undefined ? body.phone       : undefined,
         status:      typeof body.status      === "string" ? body.status  : undefined,
         region:      typeof body.region      === "string" ? body.region  : undefined,
         source:      typeof body.source      === "string" ? body.source  : undefined,
+        institution: typeof body.institution === "string" ? body.institution : undefined,
         assigned_to: typeof body.assigned_to === "string" ? body.assigned_to : undefined,
         metadata:    body.metadata !== undefined ? body.metadata : undefined,
       });
@@ -167,7 +169,7 @@ leadsRouter.patch(
 // ---------------------------------------------------------------------------
 leadsRouter.delete(
   "/lead/:id",
-  requireRole("admin"),
+  requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id?.trim();
     if (!id) throw new ValidationError("Missing lead id");
