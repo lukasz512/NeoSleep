@@ -38,7 +38,7 @@ async function createLoginUser(
 ): Promise<void> {
   const hash = await bcrypt.hash(opts.password ?? TEST_PASSWORD, 4);
   await withTenant(TENANT_SLUG, (client) =>
-    insertStaffUser(client, email, "QA Pilot", "rep", hash, opts.forcePasswordChange ?? false),
+    insertStaffUser(client, email, "QA", "Pilot", "rep", hash, opts.forcePasswordChange ?? false),
   );
 }
 

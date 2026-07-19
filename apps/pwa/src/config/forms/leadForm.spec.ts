@@ -8,7 +8,7 @@ function isHidden(field: { hidden?: boolean | (() => boolean) }): boolean {
 describe("leadFormFields", () => {
   it("leads with the shared Identity block", () => {
     expect(leadFormFields.slice(0, 5).map((f) => f.key)).toEqual([
-      "title", "first_name", "last_name", "email", "phone",
+      "salutation", "first_name", "last_name", "email", "phone",
     ]);
   });
 
@@ -29,7 +29,7 @@ describe("leadFormFields", () => {
 
   it("exposes only Identity + institution + hidden status/region — nothing else", () => {
     expect(leadFormFields.map((f) => f.key)).toEqual([
-      "title", "first_name", "last_name", "email", "phone", "institution", "status", "region",
+      "salutation", "first_name", "last_name", "email", "phone", "institution", "status", "region",
     ]);
   });
 });

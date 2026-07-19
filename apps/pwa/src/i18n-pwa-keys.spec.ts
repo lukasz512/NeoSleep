@@ -27,7 +27,6 @@ const PWA_APP_I18N_KEYS = [
   "user.hcp.form.firstName",
   "user.hcp.form.lastName",
   "user.hcp.form.salutation",
-  "user.hcp.form.salutationPlaceholder",
   "user.hcp.form.phone",
   "user.hcp.form.phonePlaceholder",
   "user.hcp.form.specialty",
