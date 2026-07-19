@@ -11,6 +11,7 @@
  * stores/auth.ts after store creation.
  */
 import { createApiFetch, extractErrorMessage, type ApiFetchOptions } from "@api";
+import { useGlobalLoaderStore } from "@stores";
 import { getApiUrl } from "../constants";
 import { useNotifications } from "../composables/useNotifications";
 
@@ -36,7 +37,11 @@ function isAuthPath(url: string): boolean {
   return AUTH_PATHS.some((p) => url.includes(p));
 }
 
-/** Fetch wrapper: on 401 from a non-auth endpoint, clear the local auth store. */
+/**
+ * Fetch wrapper: on 401 from a non-auth endpoint, clear the local auth store.
+ * Also drives the global loader store so any in-flight apiFetch call is
+ * reflected app-wide (AppButton reads this to disable itself while busy).
+ */
 async function fetchWithAuth(
   input: RequestInfo | URL,
   init?: RequestInit,
@@ -48,13 +53,19 @@ async function fetchWithAuth(
         ? input.toString()
         : (input as Request).url;
 
-  const res = await fetch(input, init);
+  const loader = useGlobalLoaderStore();
+  loader.startLoading();
+  try {
+    const res = await fetch(input, init);
 
-  if (res.status === 401 && !isAuthPath(url)) {
-    _clearAuth?.();
+    if (res.status === 401 && !isAuthPath(url)) {
+      _clearAuth?.();
+    }
+
+    return res;
+  } finally {
+    loader.stopLoading();
   }
-
-  return res;
 }
 
 // ── Diagnostics helpers ───────────────────────────────────────────────────────

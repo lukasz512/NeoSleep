@@ -73,19 +73,18 @@ const ICONS = {
   },
   "nav-leads": {
     strokeWidth: 2,
-    paths: `<line x1="8" y1="6" x2="21" y2="6" />
-            <line x1="8" y1="12" x2="21" y2="12" />
-            <line x1="8" y1="18" x2="21" y2="18" />
-            <line x1="3" y1="6" x2="3.01" y2="6" />
-            <line x1="3" y1="12" x2="3.01" y2="12" />
-            <line x1="3" y1="18" x2="3.01" y2="18" />`,
+    paths: `<path d="M7 20v-8a5 5 0 0 1 10 0v8" />
+            <line x1="5" y1="20" x2="9" y2="20" />
+            <line x1="15" y1="20" x2="19" y2="20" />`,
   },
   "nav-hcp": {
     strokeWidth: 2,
-    paths: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-            <circle cx="12" cy="7" r="4" />
-            <line x1="12" y1="13" x2="12" y2="17" />
-            <line x1="10" y1="15" x2="14" y2="15" />`,
+    paths: `<path d="M11 2v2" />
+            <path d="M5 2v2" />
+            <path d="M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1" />
+            <path d="M8 15a6 6 0 0 0 12 0v-3" />
+            <circle cx="20" cy="10" r="2" />
+            <circle cx="20" cy="10" r="0.6" fill="currentColor" />`,
   },
   "nav-hco": {
     strokeWidth: 2,
@@ -206,6 +205,64 @@ const ICONS = {
             <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
             <line x1="10" y1="11" x2="10" y2="17" />
             <line x1="14" y1="11" x2="14" y2="17" />`,
+  },
+  "dots-vertical": {
+    strokeWidth: 2,
+    paths: `<circle cx="12" cy="5" r="1" fill="currentColor" />
+            <circle cx="12" cy="12" r="1" fill="currentColor" />
+            <circle cx="12" cy="19" r="1" fill="currentColor" />`,
+  },
+  // ── Form-field icons (Identity template + HCO/HCP contact fields) ──────────
+  "mail": {
+    strokeWidth: 2,
+    paths: `<rect x="2" y="4" width="20" height="16" rx="2" />
+            <polyline points="2 6 12 13 22 6" />`,
+  },
+  "phone": {
+    strokeWidth: 2,
+    paths: `<path d="M4 3h4l2 6-3 2a12 12 0 0 0 6 6l2-3 6 2v4a2 2 0 0 1-2 2A17 17 0 0 1 2 5a2 2 0 0 1 2-2z" />`,
+  },
+  "globe": {
+    strokeWidth: 1.5,
+    paths: `<circle cx="12" cy="12" r="10" />
+            <line x1="2" y1="12" x2="22" y2="12" />
+            <path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z" />`,
+  },
+  "id-card": {
+    strokeWidth: 2,
+    paths: `<rect x="2" y="5" width="20" height="14" rx="2" />
+            <circle cx="8" cy="12" r="2" />
+            <line x1="14" y1="10" x2="19" y2="10" />
+            <line x1="14" y1="14" x2="19" y2="14" />`,
+  },
+  "linkedin": {
+    strokeWidth: 1.5,
+    paths: `<rect x="3" y="3" width="18" height="18" rx="2" />
+            <line x1="7" y1="10" x2="7" y2="16" />
+            <circle cx="7" cy="7" r="0.5" fill="currentColor" />
+            <path d="M11 16v-4a2 2 0 0 1 4 0v4" />
+            <line x1="11" y1="10" x2="11" y2="16" />`,
+  },
+  "instagram": {
+    strokeWidth: 1.5,
+    paths: `<rect x="3" y="3" width="18" height="18" rx="4" />
+            <circle cx="12" cy="12" r="4" />
+            <circle cx="17.5" cy="6.5" r="0.6" fill="currentColor" />`,
+  },
+  "facebook": {
+    strokeWidth: 1.5,
+    paths: `<rect x="3" y="3" width="18" height="18" rx="2" />
+            <path d="M14 21v-7h2.5l0.5-3H14V9a1.5 1.5 0 0 1 1.5-1.5H17V5h-2A3.5 3.5 0 0 0 11.5 8.5V11H9.5v3H11.5v7" />`,
+  },
+  "map-pin": {
+    strokeWidth: 1.75,
+    paths: `<path d="M12 22s7-6.5 7-12a7 7 0 0 0-14 0c0 5.5 7 12 7 12z" />
+            <circle cx="12" cy="10" r="2.5" />`,
+  },
+  "at": {
+    strokeWidth: 1.75,
+    paths: `<circle cx="12" cy="12" r="4" />
+            <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94" />`,
   },
 } as const;
 </script>

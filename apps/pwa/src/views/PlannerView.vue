@@ -11,25 +11,25 @@
           rounded="lg"
           class="view-planner__view-toggle-group"
         >
-          <VBtn value="day" size="small">{{ t('user.planner.viewDay') }}</VBtn>
-          <VBtn value="week" size="small">{{ t('user.planner.viewWeek') }}</VBtn>
-          <VBtn value="month" size="small">{{ t('user.planner.viewMonth') }}</VBtn>
+          <AppButton value="day" size="small">{{ t('user.planner.viewDay') }}</AppButton>
+          <AppButton value="week" size="small">{{ t('user.planner.viewWeek') }}</AppButton>
+          <AppButton value="month" size="small">{{ t('user.planner.viewMonth') }}</AppButton>
         </VBtnToggle>
       </div>
       <div class="view-planner__nav">
-        <VBtn icon variant="flat" size="small" class="view-planner__nav-btn" :title="t('user.planner.prev')" :aria-label="t('user.planner.prev')" @click="prev">
+        <AppButton icon variant="flat" size="small" :loading="prevLoading" class="view-planner__nav-btn" :title="t('user.planner.prev')" :aria-label="t('user.planner.prev')" @click="prev">
           <AppIcon name="chevron-left" class="view-planner__nav-icon" />
-        </VBtn>
-        <VBtn variant="text" size="small" class="view-planner__today" @click="goToToday">
+        </AppButton>
+        <AppButton variant="text" size="small" :loading="todayLoading" class="view-planner__today" @click="goToToday">
           {{ t('user.planner.today') }}
-        </VBtn>
-        <VBtn icon variant="flat" size="small" class="view-planner__nav-btn" :title="t('user.planner.next')" :aria-label="t('user.planner.next')" @click="next">
+        </AppButton>
+        <AppButton icon variant="flat" size="small" :loading="nextLoading" class="view-planner__nav-btn" :title="t('user.planner.next')" :aria-label="t('user.planner.next')" @click="next">
           <AppIcon name="chevron-right" class="view-planner__nav-icon" />
-        </VBtn>
+        </AppButton>
       </div>
       <VTooltip location="bottom">
         <template #activator="{ props: tooltipProps }">
-          <VBtn
+          <AppButton
             v-bind="tooltipProps"
             icon
             variant="flat"
@@ -39,7 +39,7 @@
             @click="onAdd"
           >
             <AppIcon name="plus" class="view-planner__add-icon" />
-          </VBtn>
+          </AppButton>
         </template>
         <span>{{ t('user.planner.add') }}</span>
       </VTooltip>
@@ -64,7 +64,6 @@
     </VCalendar>
 
     <EventForm
-      v-if="showEventForm"
       v-model="showEventForm"
       :initial-data="eventFormInitial"
       @submit="onEventFormSubmit"
@@ -79,6 +78,7 @@ import { apiFetch } from "../utils/api";
 import { useNotifications } from "../composables/useNotifications";
 import type { EventFormInitialData } from "../components/EventForm.vue";
 import type { EventSubmitPayload } from "../components/EventForm.vue";
+import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
 
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
@@ -102,11 +102,24 @@ interface ApiEvent {
   video_link?: string;
   notes?: string;
   region?: string;
-  attendees?: { attendee_type: "hcp" | "hco" | "lead"; attendee_id: string; is_primary?: boolean }[];
+  attendees?: { attendee_type: "doctor" | "hco" | "lead"; attendee_id: string; is_primary?: boolean }[];
 }
 
 const apiEvents = ref<ApiEvent[]>([]);
 const loadingEvents = ref(false);
+
+/**
+ * `fetchEvents` runs reactively off the `[calendarValue, calendarType]`
+ * watcher below (so it also fires from things unrelated to prev/next/today,
+ * like VBtnToggle's day/week/month switch) — this tracks which nav button
+ * (if any) caused the pending change, so only *that* button's `:loading`
+ * lights up instead of all three sharing the one `loadingEvents` flag.
+ */
+type NavAction = "prev" | "next" | "today" | null;
+const pendingNavAction = ref<NavAction>(null);
+const prevLoading = computed(() => loadingEvents.value && pendingNavAction.value === "prev");
+const nextLoading = computed(() => loadingEvents.value && pendingNavAction.value === "next");
+const todayLoading = computed(() => loadingEvents.value && pendingNavAction.value === "today");
 
 /** Map event type+status to a warm/varied color for visual richness. */
 function eventColor(type: "f2f" | "video", status: "scheduled" | "completed" | "cancelled" | "no_show"): string {
@@ -174,6 +187,7 @@ async function fetchEvents() {
     }
   } finally {
     loadingEvents.value = false;
+    pendingNavAction.value = null;
   }
 }
 
@@ -184,6 +198,7 @@ watch(
 );
 
 function prev() {
+  pendingNavAction.value = "prev";
   const d = new Date(calendarValue.value);
   if (calendarType.value === "day") d.setDate(d.getDate() - 1);
   else if (calendarType.value === "week") d.setDate(d.getDate() - 7);
@@ -192,6 +207,7 @@ function prev() {
 }
 
 function next() {
+  pendingNavAction.value = "next";
   const d = new Date(calendarValue.value);
   if (calendarType.value === "day") d.setDate(d.getDate() + 1);
   else if (calendarType.value === "week") d.setDate(d.getDate() + 7);
@@ -200,6 +216,7 @@ function next() {
 }
 
 function goToToday() {
+  pendingNavAction.value = "today";
   calendarValue.value = new Date();
 }
 
@@ -274,7 +291,7 @@ function onAdd() {
   showEventForm.value = true;
 }
 
-async function onEventFormSubmit(payload: EventSubmitPayload) {
+async function onEventFormSubmit(payload: EventSubmitPayload, done: (ok: boolean) => void) {
   try {
     if (payload.id) {
       const res = await apiFetch(`/api/v1/encounter/${payload.id}`, {
@@ -296,8 +313,10 @@ async function onEventFormSubmit(payload: EventSubmitPayload) {
       if (res.ok) {
         notifications.show(t("user.planner.form.editSuccess"), "success");
         await fetchEvents();
+        done(true);
       } else {
         notifications.show(t("user.planner.form.errorSave"), "error");
+        done(false);
       }
     } else {
       const res = await apiFetch("/api/v1/encounter", {
@@ -319,12 +338,15 @@ async function onEventFormSubmit(payload: EventSubmitPayload) {
       if (res.ok) {
         notifications.show(t("user.planner.form.success"), "success");
         await fetchEvents();
+        done(true);
       } else {
         notifications.show(t("user.planner.form.errorSave"), "error");
+        done(false);
       }
     }
   } catch {
     notifications.show(t("user.planner.form.errorSave"), "error");
+    done(false);
   }
 }
 </script>

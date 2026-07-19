@@ -72,7 +72,8 @@ export async function CreateUserCommand(ctx: TenantContext, input: CreateUserInp
     role,
     passwordHash,
     !input.password,
-    input.salutation
+    input.salutation ?? null,
+    input.phone ?? null
   );
   if (!user) throw new ConflictError("A user with this email already exists");
 
@@ -136,7 +137,13 @@ export async function ResetUserPasswordCommand(ctx: TenantContext, id: string): 
   await createPasswordResetToken(ctx.client, user.id, tokenHash, expiresAt);
 
   const resetLink = `${FRONTEND_URL}/reset-password?token=${encodeURIComponent(token)}`;
-  await sendPasswordResetEmail(user.email, resetLink);
+  await sendPasswordResetEmail(user.email, resetLink, {
+    title: user.salutation,
+    firstName: user.first_name,
+    lastName: user.last_name,
+    language: user.language,
+    region: user.region,
+  });
 
   await insertAuditLog(ctx.client, {
     user_id: ctx.user.id,

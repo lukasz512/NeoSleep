@@ -1,9 +1,39 @@
 <template>
   <div class="leads-view">
-    <LeadForm
-      v-if="showAddModal"
+    <FormRenderer
       v-model="showAddModal"
+      :fields="leadFormFields"
+      title-key="user.leads.form.title"
+      submit-label-key="user.leads.form.submit"
+      avatar-entity-type="lead"
       @submit="onLeadSubmit"
+    />
+    <FormRenderer
+      v-model="showEditModal"
+      :fields="leadFormFields"
+      :initial-data="selectedLead ?? undefined"
+      title-key="user.leads.form.title"
+      edit-title-key="user.leads.form.editTitle"
+      submit-label-key="user.leads.form.submit"
+      edit-submit-label-key="user.leads.form.editSubmit"
+      avatar-entity-type="lead"
+      @submit="onLeadEditSubmit"
+    />
+    <FormRenderer
+      v-model="showMoveToContactsModal"
+      :fields="hcpFormFields"
+      :derive="hcpFormDerive"
+      :initial-data="moveToContactsInitialData"
+      title-key="user.hcp.form.title"
+      submit-label-key="user.hcp.form.submit"
+      verify-info-key="user.leads.form.verifyDataInfo"
+      avatar-entity-type="hcp"
+      @submit="onContactSubmit"
+    />
+    <EventForm
+      v-model="showEventForm"
+      :initial-data="eventFormInitial"
+      @submit="onEventFormSubmit"
     />
     <AppEntityList
       view-id="leads"
@@ -18,9 +48,13 @@
     >
     <template #item.name="{ item }">
       <span class="leads-name-cell">
+        <AppAvatar :name="getLeadFromItem(item).name" entity-type="lead" :size="32" />
         <GenderIcon :gender="getGenderFromName(getLeadFromItem(item).name)" />
         {{ getLeadFromItem(item).name }}
       </span>
+    </template>
+    <template #feed-card-avatar="{ item }">
+      <AppAvatar :name="getLeadFromItem(item).name" entity-type="lead" size="100%" />
     </template>
     <template #feed-card-title="{ item }">
       <span class="leads-name-cell">
@@ -42,30 +76,45 @@
       </div>
     </template>
     <template #feed-card-meta="{ item }">
-      <span class="leads-feed-meta">
-        <span
-          :class="['pwa-lead-status-chip', `pwa-lead-status-chip--${leadStatusClass(getLeadFromItem(item).status)}`]"
-        >
-          {{ statusLabel(getLeadFromItem(item).status) }}
-        </span>
-        <span
-          v-if="!isInactive(getLeadFromItem(item)) && (getLeadFromItem(item).email || getLeadFromItem(item).region)"
-          class="leads-feed-meta-rest"
-        >
-          {{ [getLeadFromItem(item).email, getLeadFromItem(item).region].filter(Boolean).join(" · ") }}
-        </span>
+      <span v-if="leadSecondaryLine(getLeadFromItem(item))">
+        {{ leadSecondaryLine(getLeadFromItem(item)) }}
+      </span>
+    </template>
+    <template #feed-card-status="{ item }">
+      <span
+        :class="['pwa-lead-status-chip', `pwa-lead-status-chip--${leadStatusClass(getLeadFromItem(item).status)}`]"
+      >
+        {{ statusLabel(getLeadFromItem(item).status) }}
       </span>
     </template>
     <template #item.institution="{ item }">
       <RouterLink
-        v-if="getLeadFromItem(item).institution"
-        :to="hcoLink(getLeadFromItem(item).institution!)"
+        v-if="leadInstitution(getLeadFromItem(item))"
+        :to="hcoLink(leadInstitution(getLeadFromItem(item)))"
         class="app-entity-list__institution-link"
         @click.stop
       >
-        {{ getLeadFromItem(item).institution }}
+        <AppIcon name="nav-hco" class="app-entity-list__institution-icon" />
+        {{ leadInstitution(getLeadFromItem(item)) }}
       </RouterLink>
       <span v-else class="app-entity-list__cell-empty">—</span>
+    </template>
+    <template #feed-card-actions="{ item }">
+      <AppListItemMenu :aria-label="t('app.common.moreActions')">
+        <VListItem :title="t('user.detail.scheduleVisit')" @click="onScheduleVisit()">
+          <template #prepend><AppIcon :name="entityActionIcon('scheduleVisit')" :class="entityActionMenuIconClass('scheduleVisit')" /></template>
+        </VListItem>
+        <VListItem
+          v-if="!isConverted(getLeadFromItem(item))"
+          :title="t('user.leads.detail.moveToContacts')"
+          @click="onMoveToContacts(getLeadFromItem(item))"
+        >
+          <template #prepend><AppIcon :name="entityActionIcon('moveToContacts')" :class="entityActionMenuIconClass('moveToContacts')" /></template>
+        </VListItem>
+        <VListItem v-if="isAdmin" :title="t('user.leads.detail.edit')" @click="onEditLead(getLeadFromItem(item))">
+          <template #prepend><AppIcon :name="entityActionIcon('edit')" :class="entityActionMenuIconClass('edit')" /></template>
+        </VListItem>
+      </AppListItemMenu>
     </template>
     </AppEntityList>
   </div>
@@ -75,16 +124,23 @@
 import { ref, computed, defineAsyncComponent } from "vue";
 import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
+import AppAvatar from "../components/AppAvatar.vue";
 import GenderIcon from "../components/GenderIcon.vue";
+import AppIcon from "../components/AppIcon.vue";
+import AppListItemMenu from "../components/AppListItemMenu.vue";
+import { entityActionIcon, entityActionMenuIconClass } from "../config/entityActions";
 
-const LeadForm = defineAsyncComponent(() => import("../components/LeadForm.vue"));
+const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
+const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
+import { leadFormFields } from "../config/forms/leadForm";
+import { hcpFormFields, hcpFormDerive } from "../config/forms/hcpForm";
 import { apiFetch } from "../utils/api";
 import { useNotifications } from "../composables/useNotifications";
 import { type FilterDefinition } from "../composables/useFilters";
 import { useAuthStore } from "../stores/auth";
 import { useConfigStore } from "../stores/config";
 import { getGenderFromName } from "../utils/genderFromName";
-import { leadStatusClass, leadStatusI18nKey } from "../utils/leadStatus";
+import { leadStatusClass, leadStatusI18nKey, leadInstitution } from "../utils/leadStatus";
 
 export interface Lead {
   id: string;
@@ -96,7 +152,7 @@ export interface Lead {
   phone?: string;
   status: string;
   region: string;
-  institution?: string;
+  metadata?: Record<string, unknown> | null;
   specialty?: string;
   notes?: string;
   country_code?: string | null;
@@ -110,7 +166,21 @@ const authStore = useAuthStore();
 const configStore = useConfigStore();
 const isAdmin = computed(() => authStore.user?.role === "admin");
 const showAddModal = ref(false);
+const showEditModal = ref(false);
+const showMoveToContactsModal = ref(false);
+const showEventForm = ref(false);
+const selectedLead = ref<Lead | null>(null);
+const eventFormInitial = ref<{ start_at: string; end_at: string } | undefined>(undefined);
 const notifications = useNotifications();
+
+/** Stable reference — see LeadDetailView.vue's identical computed for why an
+ *  inline object literal would silently reset FormRenderer's open form. */
+const moveToContactsInitialData = computed(() => (selectedLead.value ? {
+  first_name: selectedLead.value.first_name,
+  last_name: selectedLead.value.last_name,
+  email: selectedLead.value.email ?? "",
+  phone: selectedLead.value.phone ?? "",
+} : undefined));
 
 const leadFilterDefs: FilterDefinition[] = [
   { key: "status", labelKey: "user.leads.filters.status", type: "select", default: "" },
@@ -163,6 +233,101 @@ function isInactive(lead: Lead): boolean {
   return (lead.status || "").toLowerCase() === "inactive";
 }
 
+function isConverted(lead: Lead): boolean {
+  return (lead.status || "").toLowerCase() === "converted";
+}
+
+/** Second tile line — specialty when known, else the clinic the lead came in through. */
+function leadSecondaryLine(lead: Lead): string {
+  return lead.specialty || leadInstitution(lead) || "";
+}
+
+function onScheduleVisit() {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  eventFormInitial.value = {
+    start_at: new Date(`${date} 09:00`).toISOString(),
+    end_at: new Date(`${date} 10:00`).toISOString(),
+  };
+  showEventForm.value = true;
+}
+
+async function onEventFormSubmit(
+  payload: import("../components/EventForm.vue").EventSubmitPayload,
+  done: (ok: boolean) => void,
+) {
+  try {
+    const res = await apiFetch("/api/v1/encounter", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: payload.title, start_at: payload.start_at, end_at: payload.end_at, type: payload.type, status: payload.status, location: payload.location, video_link: payload.video_link, notes: payload.notes, region: payload.region, attendees: payload.attendees }),
+    });
+    if (res.ok) {
+      notifications.show(t("user.planner.form.success"), "success");
+      done(true);
+    } else {
+      notifications.show(t("user.planner.form.errorSave"), "error");
+      done(false);
+    }
+  } catch {
+    notifications.show(t("user.planner.form.errorSave"), "error");
+    done(false);
+  }
+}
+
+function onMoveToContacts(lead: Lead) {
+  selectedLead.value = lead;
+  showMoveToContactsModal.value = true;
+}
+
+async function onContactSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
+  const leadId = selectedLead.value?.id;
+  if (!leadId) { done(false); return; }
+  try {
+    const res = await apiFetch("/api/v1/practitioner", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...data, lead_id: leadId }),
+    });
+    if (res.ok) {
+      notifications.show(t("user.hcp.form.contactCreated"), "success");
+      window.dispatchEvent(new Event("entity-list-refresh"));
+      done(true);
+    } else {
+      done(false);
+    }
+  } catch {
+    done(false);
+  }
+}
+
+function onEditLead(lead: Lead) {
+  selectedLead.value = lead;
+  showEditModal.value = true;
+}
+
+async function onLeadEditSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
+  const id = selectedLead.value?.id;
+  if (!id) { done(false); return; }
+  try {
+    const res = await apiFetch(`/api/v1/lead/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (res.ok) {
+      notifications.show(t("user.leads.form.editSuccess"), "success");
+      window.dispatchEvent(new Event("entity-list-refresh"));
+      done(true);
+    } else {
+      done(false);
+    }
+  } catch {
+    done(false);
+  }
+}
+
 /** Unwrap Vuetify's internal item wrapper (VDataTable provides `{ raw: T }` via slot). */
 function getLeadFromItem(item: unknown): Lead {
   const o = item as { raw?: Lead };
@@ -177,27 +342,22 @@ function onAddLead() {
   showAddModal.value = true;
 }
 
-async function onLeadSubmit(data: import("../components/LeadForm.vue").LeadSubmitPayload) {
-  const body = JSON.stringify({
-    salutation: data.salutation,
-    first_name: data.first_name,
-    last_name: data.last_name,
-    email: data.email,
-    phone: data.phone,
-    status: data.status || "new",
-    region: data.region,
-    institution: data.institution,
-  });
-  const res = await apiFetch("/api/v1/lead", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body,
-    errorMessageKey: "user.leads.errorLoad",
-  });
-  if (res.ok) {
-    notifications.show(t("user.leads.form.success"), "success");
-    showAddModal.value = false;
-    window.dispatchEvent(new Event("entity-list-refresh"));
+async function onLeadSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
+  try {
+    const res = await apiFetch("/api/v1/lead", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (res.ok) {
+      notifications.show(t("user.leads.form.success"), "success");
+      window.dispatchEvent(new Event("entity-list-refresh"));
+      done(true);
+    } else {
+      done(false);
+    }
+  } catch {
+    done(false);
   }
 }
 </script>

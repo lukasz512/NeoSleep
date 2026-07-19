@@ -32,6 +32,14 @@ export function useEntityList(opts: EntityListOptions) {
     sortBy: [{ key: "created_at", order: "desc" as const }],
   });
   const loading = ref(false);
+  /**
+   * Separate from `loading` (which drives the table/search-field spinner for
+   * *any* reload) so that clicking "clear search" doesn't also light up the
+   * "clear filters" button and vice versa — each clear action gets its own
+   * button-scoped loading flag.
+   */
+  const clearingSearch = ref(false);
+  const clearingFilters = ref(false);
   const loadError = ref("");
   const items = ref<Record<string, unknown>[]>([]);
   const total = ref(0);
@@ -57,19 +65,29 @@ export function useEntityList(opts: EntityListOptions) {
     loadData();
   }
 
-  function onFiltersClear() {
+  async function onFiltersClear() {
     searchQuery.value = "";
     clearFilters();
     tableOptions.value.page = 1;
     (debouncedSearch as unknown as { cancel: () => void }).cancel?.();
-    loadData();
+    clearingFilters.value = true;
+    try {
+      await loadData();
+    } finally {
+      clearingFilters.value = false;
+    }
   }
 
-  function onSearchClear() {
+  async function onSearchClear() {
     searchQuery.value = "";
     tableOptions.value.page = 1;
     (debouncedSearch as unknown as { cancel: () => void }).cancel?.();
-    loadData();
+    clearingSearch.value = true;
+    try {
+      await loadData();
+    } finally {
+      clearingSearch.value = false;
+    }
   }
 
   function onOptionsUpdate() {
@@ -160,6 +178,8 @@ export function useEntityList(opts: EntityListOptions) {
     activeFilterCount,
     tableOptions,
     loading,
+    clearingSearch,
+    clearingFilters,
     loadError,
     items,
     total,

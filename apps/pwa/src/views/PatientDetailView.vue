@@ -1,31 +1,20 @@
 <template>
   <div class="view-detail">
-    <PatientForm
-      v-if="showEditModal"
+    <FormRenderer
       v-model="showEditModal"
-      :initial-data="patient ? {
-        id: patient.id,
-        salutation: patient.salutation ?? '',
-        first_name: patient.first_name ?? '',
-        last_name: patient.last_name ?? '',
-        email: patient.email ?? '',
-        phone: patient.phone ?? '',
-        practitioner_id: patient.practitioner_id ?? '',
-        status: patient.status ?? '',
-        region: patient.region ?? '',
-        ahi_baseline: patient.ahi_baseline ?? null,
-        cpap_device: patient.cpap_device ?? '',
-        medical_record: patient.medical_record ?? '',
-      } : undefined"
+      :fields="patientFormFields"
+      :initial-data="patient ?? undefined"
+      title-key="app.patients.form.title"
+      edit-title-key="app.patients.form.editTitle"
+      submit-label-key="app.patients.form.submit"
+      edit-submit-label-key="app.patients.form.editSubmit"
+      avatar-entity-type="patient"
       @submit="onPatientSubmit"
     />
-    <ConfirmDialog
-      v-model="showDeleteConfirm"
-      :message="t('app.patients.actions.deleteConfirmText')"
-      :confirm-label="t('app.patients.actions.delete')"
-      :cancel-label="t('app.common.cancel')"
-      @confirm="onDelete"
-      @cancel="showDeleteConfirm = false"
+    <EventForm
+      v-model="showEventForm"
+      :initial-data="eventFormInitial"
+      @submit="onEventFormSubmit"
     />
     <ItemDetailLayout
       :has-content="!!patient"
@@ -33,38 +22,59 @@
       :back-route="{ name: 'patients' }"
       :back-label="t('app.patients.detail.back')"
       :not-found-label="t('app.patients.detail.notFound')"
-      :title="patient?.name"
     >
+      <template #title v-if="patient">
+        <span class="view-item__title-wrap">
+          <AppAvatar :name="patient.name" entity-type="patient" :size="40" />
+          <h1 class="view-item__title">{{ patient.name }}</h1>
+        </span>
+      </template>
       <template #header-actions v-if="patient">
-        <VTooltip v-if="isAdmin" location="bottom">
+        <VTooltip location="bottom">
           <template #activator="{ props: tooltipProps }">
-            <VBtn
+            <AppButton
               v-bind="tooltipProps"
               icon
               variant="flat"
               size="large"
-              class="view-item__edit-btn view-item__edit-btn--no-border"
+              :class="entityActionBtnClass('scheduleVisit')"
+              :aria-label="t('user.detail.scheduleVisit')"
+              @click="onScheduleVisit"
+            >
+              <AppIcon :name="entityActionIcon('scheduleVisit')" class="view-item__action-icon" />
+            </AppButton>
+          </template>
+          <span>{{ t('user.detail.scheduleVisit') }}</span>
+        </VTooltip>
+        <VTooltip v-if="isAdmin" location="bottom">
+          <template #activator="{ props: tooltipProps }">
+            <AppButton
+              v-bind="tooltipProps"
+              icon
+              variant="flat"
+              size="large"
+              :class="entityActionBtnClass('edit')"
               :aria-label="t('app.patients.detail.edit')"
               @click="onEdit"
             >
-              <AppIcon name="pencil" class="view-item__edit-icon" />
-            </VBtn>
+              <AppIcon :name="entityActionIcon('edit')" class="view-item__action-icon" />
+            </AppButton>
           </template>
           <span>{{ t('app.patients.detail.edit') }}</span>
         </VTooltip>
         <VTooltip v-if="isAdmin" location="bottom">
           <template #activator="{ props: tooltipProps }">
-            <VBtn
+            <AppButton
               v-bind="tooltipProps"
               icon
               variant="flat"
               size="large"
-              class="view-item__delete-btn view-item__delete-btn--no-border"
+              :class="entityActionBtnClass('delete')"
               :aria-label="t('app.patients.actions.delete')"
               @click="showDeleteConfirm = true"
             >
-              <AppIcon name="trash" class="view-item__delete-icon" />
-            </VBtn>
+              <AppIcon :name="entityActionIcon('delete')" class="view-item__action-icon" />
+            </AppButton>
           </template>
           <span>{{ t('app.patients.actions.delete') }}</span>
         </VTooltip>
@@ -110,6 +120,21 @@
         </div>
       </template>
     </ItemDetailLayout>
+
+    <VDialog v-model="showDeleteConfirm" max-width="360" persistent>
+      <VCard>
+        <VCardText>{{ t("app.patients.actions.deleteConfirmText") }}</VCardText>
+        <VCardActions>
+          <VSpacer />
+          <AppButton variant="text" @click="showDeleteConfirm = false">
+            {{ t("app.common.cancel") }}
+          </AppButton>
+          <AppButton color="error" variant="text" :loading="deleteLoading" @click="onDelete">
+            {{ t("app.patients.actions.delete") }}
+          </AppButton>
+        </VCardActions>
+      </VCard>
+    </VDialog>
   </div>
 </template>
 
@@ -120,11 +145,16 @@ import { useI18n } from "vue-i18n";
 import { useAuthStore } from "../stores/auth";
 import { apiFetch } from "../utils/api";
 import { useNotifications } from "../composables/useNotifications";
+import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
-import ConfirmDialog from "../components/ConfirmDialog.vue";
+import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
+import AppAvatar from "../components/AppAvatar.vue";
+import { patientFormFields } from "../config/forms/patientForm";
+import { entityActionIcon, entityActionBtnClass } from "../config/entityActions";
 
-const PatientForm = defineAsyncComponent(() => import("../components/PatientForm.vue"));
+const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
+const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
 
 const authStore = useAuthStore();
 const isAdmin = computed(() => authStore.user?.role === "admin");
@@ -154,6 +184,8 @@ const notifications = useNotifications();
 const patient = ref<PatientDetail | null>(null);
 const loading = ref(true);
 const showEditModal = ref(false);
+const showEventForm = ref(false);
+const eventFormInitial = ref<{ start_at: string; end_at: string; patientIds?: string[] } | undefined>(undefined);
 const showDeleteConfirm = ref(false);
 
 function statusLabel(status?: string): string {
@@ -169,42 +201,68 @@ function onEdit() {
   showEditModal.value = true;
 }
 
-async function onPatientSubmit(data: import("../components/PatientForm.vue").PatientSubmitPayload) {
-  const id = patient.value?.id;
-  if (!id) return;
-  const body = JSON.stringify({
-    salutation:      data.salutation,
-    first_name:      data.first_name,
-    last_name:       data.last_name,
-    email:           data.email,
-    phone:           data.phone,
-    practitioner_id: data.practitioner_id,
-    status:          data.status,
-    region:          data.region,
-    ahi_baseline:    data.ahi_baseline,
-    cpap_device:     data.cpap_device,
-    medical_record:  data.medical_record,
-  });
-  const res = await apiFetch(`/api/v1/patient/${id}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body,
-    errorMessageKey: "app.patients.errorLoad",
-  });
-  if (res.ok) {
-    notifications.show(t("app.patients.form.editSuccess"), "success");
-    showEditModal.value = false;
-    await loadPatient();
-    window.dispatchEvent(new Event("entity-list-refresh"));
+function onScheduleVisit() {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  eventFormInitial.value = {
+    start_at: new Date(`${date} 09:00`).toISOString(),
+    end_at: new Date(`${date} 10:00`).toISOString(),
+    patientIds: patient.value?.id ? [patient.value.id] : [],
+  };
+  showEventForm.value = true;
+}
+
+async function onEventFormSubmit(
+  payload: import("../components/EventForm.vue").EventSubmitPayload,
+  done: (ok: boolean) => void,
+) {
+  try {
+    const res = await apiFetch("/api/v1/encounter", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: payload.title, start_at: payload.start_at, end_at: payload.end_at, type: payload.type, status: payload.status, location: payload.location, video_link: payload.video_link, notes: payload.notes, region: payload.region, attendees: payload.attendees }),
+    });
+    if (res.ok) {
+      notifications.show(t("user.planner.form.success"), "success");
+      done(true);
+    } else {
+      notifications.show(t("user.planner.form.errorSave"), "error");
+      done(false);
+    }
+  } catch {
+    notifications.show(t("user.planner.form.errorSave"), "error");
+    done(false);
   }
 }
 
-async function onDelete() {
+async function onPatientSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
+  const id = patient.value?.id;
+  if (!id) { done(false); return; }
+  try {
+    const res = await apiFetch(`/api/v1/patient/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (res.ok) {
+      notifications.show(t("app.patients.form.editSuccess"), "success");
+      await loadPatient();
+      window.dispatchEvent(new Event("entity-list-refresh"));
+      done(true);
+    } else {
+      done(false);
+    }
+  } catch {
+    done(false);
+  }
+}
+
+const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
   const id = patient.value?.id;
   if (!id) return;
   const res = await apiFetch(`/api/v1/patient/${id}`, {
     method: "DELETE",
-    errorMessageKey: "app.patients.errorLoad",
   });
   if (res.ok) {
     showDeleteConfirm.value = false;
@@ -212,7 +270,7 @@ async function onDelete() {
     window.dispatchEvent(new Event("entity-list-refresh"));
     router.push({ name: "patients" });
   }
-}
+});
 
 async function loadPatient() {
   const id = route.params.id as string;
@@ -242,27 +300,9 @@ watch(() => route.params.id, loadPatient);
 </script>
 
 <style scoped>
-.view-detail :deep(.view-item__delete-btn) {
-  min-width: var(--pwa-btn-min-width, 44px);
-  min-height: var(--pwa-btn-min-height, 44px);
-  color: rgb(var(--v-theme-error)) !important;
-}
-
-.view-detail :deep(.view-item__delete-btn--no-border) {
-  border: none !important;
-  box-shadow: none !important;
-  background: transparent !important;
-
-  &:hover {
-    background: rgba(var(--v-theme-error), 0.12) !important;
-  }
-}
-
-.view-detail :deep(.view-item__delete-icon) {
-  width: 22px;
-  height: 22px;
-  display: block;
-  color: rgb(var(--v-theme-error)) !important;
-  stroke: rgb(var(--v-theme-error)) !important;
+.view-item__title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 </style>

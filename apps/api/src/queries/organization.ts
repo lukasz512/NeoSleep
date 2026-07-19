@@ -32,6 +32,8 @@ export interface OrganizationDto {
   phone: string;
   email: string;
   website: string;
+  google_link: string;
+  specialties: string[];
   status: string;
   metadata: Record<string, unknown> | null;
   created_at: string;
@@ -54,6 +56,8 @@ function toDto(o: Organization): OrganizationDto {
     phone:         o.phone ?? "",
     email:         o.email ?? "",
     website:       o.website ?? "",
+    google_link:   o.google_link ?? "",
+    specialties:   o.specialties ?? [],
     status:        o.status,
     metadata:      o.metadata ?? null,
     created_at:    o.created_at instanceof Date ? o.created_at.toISOString() : String(o.created_at),

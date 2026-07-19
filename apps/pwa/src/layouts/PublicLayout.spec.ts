@@ -16,7 +16,12 @@ describe("PublicLayout", () => {
     });
 
     it("renders router outlet for child routes", () => {
-      expect(source).toMatch(/<router-view\s*\/?>|<RouterView\s*\/?>/);
+      expect(source).toMatch(/<router-view[\s>]|<RouterView[\s>]/);
+    });
+
+    it("uses Transition with view-fade-lift for smooth route changes (same as AppLayout)", () => {
+      expect(source).toContain("Transition");
+      expect(source).toContain('name="view-fade-lift"');
     });
 
     it("has no sidebar or app chrome (minimal wrapper)", () => {
@@ -26,8 +31,9 @@ describe("PublicLayout", () => {
   });
 
   describe("styles", () => {
-    it("layout-public has full viewport min-height and padding", () => {
-      expect(source).toMatch(/\.layout-public\s*\{[\s\S]*?min-height:\s*100vh/);
+    it("layout-public is a fixed, non-scrolling full viewport with padding", () => {
+      expect(source).toMatch(/\.layout-public\s*\{[\s\S]*?height:\s*100dvh/);
+      expect(source).toMatch(/\.layout-public\s*\{[\s\S]*?overflow:\s*hidden/);
       expect(source).toMatch(/\.layout-public\s*\{[\s\S]*?padding:\s*16px/);
     });
 

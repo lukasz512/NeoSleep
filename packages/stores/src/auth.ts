@@ -11,6 +11,9 @@ export interface AuthUser {
   picture?: string;
   role?: UserRole;
   tenant?: string;
+  country_code?: string;
+  region?: string;
+  language?: string;
 }
 
 type ApiFetchFn = (path: string, options?: ApiFetchOptions) => Promise<Response>;

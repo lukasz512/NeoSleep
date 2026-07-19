@@ -1,7 +1,6 @@
 <template>
   <div class="view-detail">
     <FormRenderer
-      v-if="showEditModal"
       v-model="showEditModal"
       :fields="userFormFields"
       :initial-data="user ?? undefined"
@@ -9,6 +8,7 @@
       edit-title-key="user.users.form.editTitle"
       submit-label-key="user.users.form.submit"
       edit-submit-label-key="user.users.form.editSubmit"
+      avatar-entity-type="user"
       @submit="onSubmit"
     />
     <ItemDetailLayout
@@ -17,70 +17,77 @@
       :back-route="{ name: 'users' }"
       :back-label="t('user.users.detail.back')"
       :not-found-label="t('user.users.detail.notFound')"
-      :title="user?.name"
     >
+      <template #title v-if="user">
+        <span class="view-item__title-wrap">
+          <AppAvatar :name="user.name" entity-type="user" :size="40" />
+          <h1 class="view-item__title">{{ user.name }}</h1>
+        </span>
+      </template>
       <template #header-actions v-if="user">
         <VTooltip location="bottom">
           <template #activator="{ props: tooltipProps }">
-            <VBtn
+            <AppButton
               v-bind="tooltipProps"
               icon
               variant="flat"
               size="large"
-              class="view-item__reset-password-btn view-item__reset-password-btn--no-border"
+              :loading="resetPasswordLoading"
+              :class="entityActionBtnClass('resetPassword')"
               :aria-label="t('user.users.actions.resetPassword')"
               @click="onResetPassword"
             >
-              <AppIcon name="key" class="view-item__reset-password-icon" />
-            </VBtn>
+              <AppIcon :name="entityActionIcon('resetPassword')" class="view-item__action-icon" />
+            </AppButton>
           </template>
           <span>{{ t('user.users.actions.resetPassword') }}</span>
         </VTooltip>
         <VTooltip location="bottom">
           <template #activator="{ props: tooltipProps }">
-            <VBtn
+            <AppButton
               v-bind="tooltipProps"
               icon
               variant="flat"
               size="large"
-              class="view-item__toggle-status-btn view-item__toggle-status-btn--no-border"
+              :loading="toggleStatusLoading"
+              :class="[entityActionBtnClass('toggleStatus'), { 'view-item__action-btn--inactive': !isActive }]"
               :aria-label="t(isActive ? 'user.users.actions.disable' : 'user.users.actions.enable')"
               @click="onToggleStatus"
             >
-              <AppIcon name="power" class="view-item__toggle-status-icon" />
-            </VBtn>
+              <AppIcon :name="entityActionIcon('toggleStatus')" class="view-item__action-icon" />
+            </AppButton>
           </template>
           <span>{{ t(isActive ? 'user.users.actions.disable' : 'user.users.actions.enable') }}</span>
         </VTooltip>
         <VTooltip location="bottom">
           <template #activator="{ props: tooltipProps }">
-            <VBtn
+            <AppButton
               v-bind="tooltipProps"
               icon
               variant="flat"
               size="large"
-              class="view-item__edit-btn view-item__edit-btn--no-border"
+              :class="entityActionBtnClass('edit')"
               :aria-label="t('user.users.detail.edit')"
               @click="onEdit"
             >
-              <AppIcon name="pencil" class="view-item__edit-icon" />
-            </VBtn>
+              <AppIcon :name="entityActionIcon('edit')" class="view-item__action-icon" />
+            </AppButton>
           </template>
           <span>{{ t('user.users.detail.edit') }}</span>
         </VTooltip>
         <VTooltip location="bottom">
           <template #activator="{ props: tooltipProps }">
-            <VBtn
+            <AppButton
               v-bind="tooltipProps"
               icon
               variant="flat"
               size="large"
-              class="view-item__delete-btn view-item__delete-btn--no-border"
+              :class="entityActionBtnClass('delete')"
               :aria-label="t('user.users.actions.delete')"
               @click="showDeleteConfirm = true"
             >
-              <AppIcon name="trash" class="view-item__delete-icon" />
-            </VBtn>
+              <AppIcon :name="entityActionIcon('delete')" class="view-item__action-icon" />
+            </AppButton>
           </template>
           <span>{{ t('user.users.actions.delete') }}</span>
         </VTooltip>
@@ -121,12 +128,12 @@
         <VCardText>{{ t("user.users.actions.deleteConfirmText") }}</VCardText>
         <VCardActions>
           <VSpacer />
-          <VBtn variant="text" @click="showDeleteConfirm = false">
+          <AppButton variant="text" @click="showDeleteConfirm = false">
             {{ t("app.common.cancel") }}
-          </VBtn>
-          <VBtn color="error" variant="text" @click="onDelete">
+          </AppButton>
+          <AppButton color="error" variant="text" :loading="deleteLoading" @click="onDelete">
             {{ t("user.users.actions.delete") }}
-          </VBtn>
+          </AppButton>
         </VCardActions>
       </VCard>
     </VDialog>
@@ -139,9 +146,13 @@ import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { apiFetch } from "../utils/api";
 import { useNotifications } from "../composables/useNotifications";
+import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
+import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
+import AppAvatar from "../components/AppAvatar.vue";
 import { userFormFields } from "../config/forms/userForm";
+import { entityActionIcon, entityActionBtnClass } from "../config/entityActions";
 
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
 
@@ -174,36 +185,40 @@ function onEdit() {
   showEditModal.value = true;
 }
 
-async function onSubmit(payload: Record<string, unknown>) {
+async function onSubmit(payload: Record<string, unknown>, done: (ok: boolean) => void) {
   const id = user.value?.id;
-  if (!id) return;
-  const res = await apiFetch(`/api/v1/users/${id}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-    errorMessageKey: "user.users.errorLoad",
-  });
-  if (res.ok) {
-    notifications.show(t("user.users.form.editSuccess"), "success");
-    showEditModal.value = false;
-    await loadUser();
-    window.dispatchEvent(new Event("entity-list-refresh"));
+  if (!id) { done(false); return; }
+  try {
+    const res = await apiFetch(`/api/v1/users/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      notifications.show(t("user.users.form.editSuccess"), "success");
+      await loadUser();
+      window.dispatchEvent(new Event("entity-list-refresh"));
+      done(true);
+    } else {
+      done(false);
+    }
+  } catch {
+    done(false);
   }
 }
 
-async function onResetPassword() {
+const { loading: resetPasswordLoading, run: onResetPassword } = useAsyncAction(async () => {
   const id = user.value?.id;
   if (!id) return;
   const res = await apiFetch(`/api/v1/users/${id}/reset-password`, {
     method: "POST",
-    errorMessageKey: "user.users.errorLoad",
   });
   if (res.ok) {
     notifications.show(t("user.users.actions.resetPasswordSuccess"), "success");
   }
-}
+});
 
-async function onToggleStatus() {
+const { loading: toggleStatusLoading, run: onToggleStatus } = useAsyncAction(async () => {
   const id = user.value?.id;
   if (!id) return;
   const nextStatus = isActive.value ? "inactive" : "active";
@@ -211,7 +226,6 @@ async function onToggleStatus() {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ status: nextStatus }),
-    errorMessageKey: "user.users.errorLoad",
   });
   if (res.ok) {
     notifications.show(
@@ -220,14 +234,13 @@ async function onToggleStatus() {
     );
     await loadUser();
   }
-}
+});
 
-async function onDelete() {
+const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
   const id = user.value?.id;
   if (!id) return;
   const res = await apiFetch(`/api/v1/users/${id}`, {
     method: "DELETE",
-    errorMessageKey: "user.users.errorLoad",
   });
   if (res.ok) {
     showDeleteConfirm.value = false;
@@ -235,7 +248,7 @@ async function onDelete() {
     window.dispatchEvent(new Event("entity-list-refresh"));
     router.push({ name: "users" });
   }
-}
+});
 
 async function loadUser() {
   const id = route.params.id as string;
@@ -266,52 +279,9 @@ watch(() => route.params.id, loadUser);
 </script>
 
 <style scoped>
-.view-detail :deep(.view-item__reset-password-btn),
-.view-detail :deep(.view-item__toggle-status-btn) {
-  min-width: var(--pwa-btn-min-width, 44px);
-  min-height: var(--pwa-btn-min-height, 44px);
-  color: var(--pwa-text, rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity))) !important;
-}
-
-.view-detail :deep(.view-item__reset-password-btn--no-border),
-.view-detail :deep(.view-item__toggle-status-btn--no-border) {
-  border: none !important;
-  box-shadow: none !important;
-  background: transparent !important;
-
-  &:hover {
-    background: rgba(var(--v-theme-on-surface), 0.08) !important;
-  }
-}
-
-.view-detail :deep(.view-item__reset-password-icon),
-.view-detail :deep(.view-item__toggle-status-icon) {
-  width: 22px;
-  height: 22px;
-  display: block;
-}
-
-.view-detail :deep(.view-item__delete-btn) {
-  min-width: var(--pwa-btn-min-width, 44px);
-  min-height: var(--pwa-btn-min-height, 44px);
-  color: rgb(var(--v-theme-error)) !important;
-}
-
-.view-detail :deep(.view-item__delete-btn--no-border) {
-  border: none !important;
-  box-shadow: none !important;
-  background: transparent !important;
-
-  &:hover {
-    background: rgba(var(--v-theme-error), 0.12) !important;
-  }
-}
-
-.view-detail :deep(.view-item__delete-icon) {
-  width: 22px;
-  height: 22px;
-  display: block;
-  color: rgb(var(--v-theme-error)) !important;
-  stroke: rgb(var(--v-theme-error)) !important;
+.view-item__title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 </style>

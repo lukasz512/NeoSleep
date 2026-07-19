@@ -7,37 +7,84 @@
     @update:model-value="onDialogUpdate"
   >
     <VCard class="pwa-form-dialog__card">
-      <VCardTitle class="mx-2 mt-2 text-h6">
-        {{ formTitle }}
+      <VCardTitle class="mx-2 mt-2 text-h6 pwa-form-dialog__title-row">
+        <AppAvatar
+          v-if="avatarEntityType"
+          :name="avatarName"
+          :entity-type="avatarEntityType"
+          :size="40"
+        />
+        <span>{{ formTitle }}</span>
       </VCardTitle>
       <VCardText>
+        <VAlert
+          v-if="verifyInfoKey"
+          type="info"
+          variant="tonal"
+          density="comfortable"
+          border="start"
+          color="primary"
+          border-color="primary"
+          rounded="lg"
+          class="mb-6"
+        >
+          {{ t(verifyInfoKey) }}
+        </VAlert>
         <VForm ref="formRef" @submit.prevent="onSubmit">
           <template v-for="(row, ri) in rows" :key="ri">
             <div v-if="row.length > 1" class="pwa-form-row mb-3">
-              <div v-for="f in row" :key="f.key" class="pwa-form-row-item">
+              <div v-for="f in row" :key="f.key" class="pwa-form-row-item" :style="rowItemStyle(f)">
                 <component
                   :is="componentFor(f.type)"
+                  :ref="(el: unknown) => setFieldEl(f.key, el)"
                   v-bind="fieldAttrs(f)"
-                />
+                >
+                  <template v-if="f.icon" #prepend-inner>
+                    <button
+                      v-if="f.icon === 'at'"
+                      type="button"
+                      class="pwa-email-at-btn"
+                      :aria-label="t('app.identity.form.emailInsertAt')"
+                      @mousedown.prevent="insertAtSign(f)"
+                    >
+                      <AppIcon name="at" class="pwa-form-field-icon" />
+                    </button>
+                    <AppIcon v-else :name="f.icon" class="pwa-form-field-icon" />
+                  </template>
+                </component>
               </div>
             </div>
             <div v-else class="mb-3">
               <component
                 :is="componentFor(row[0].type)"
+                :ref="(el: unknown) => setFieldEl(row[0].key, el)"
                 v-bind="fieldAttrs(row[0])"
-              />
+              >
+                <template v-if="row[0].icon" #prepend-inner>
+                  <button
+                    v-if="row[0].icon === 'at'"
+                    type="button"
+                    class="pwa-email-at-btn"
+                    :aria-label="t('app.identity.form.emailInsertAt')"
+                    @mousedown.prevent="insertAtSign(row[0])"
+                  >
+                    <AppIcon name="at" class="pwa-form-field-icon" />
+                  </button>
+                  <AppIcon v-else :name="row[0].icon" class="pwa-form-field-icon" />
+                </template>
+              </component>
             </div>
           </template>
         </VForm>
       </VCardText>
       <VCardActions class="mx-2 mb-2">
         <VSpacer />
-        <VBtn variant="text" @click="onCancelClick">
+        <AppButton variant="text" @click="onCancelClick">
           {{ t("app.common.cancel") }}
-        </VBtn>
-        <VBtn color="primary" :loading="submitting" @click="onSubmit">
+        </AppButton>
+        <AppButton color="primary" :loading="submitting" @click="onSubmit">
           {{ formSubmitLabel }}
-        </VBtn>
+        </AppButton>
       </VCardActions>
     </VCard>
 
@@ -45,18 +92,19 @@
       v-model="showDiscardConfirm"
       max-width="360"
       content-class="pwa-form-dialog__content"
+      class="pwa-discard-dialog"
       persistent
     >
-      <VCard>
+      <VCard elevation="8">
         <VCardText>{{ t("app.common.discardChanges") }}</VCardText>
         <VCardActions>
           <VSpacer />
-          <VBtn variant="text" @click="showDiscardConfirm = false">
+          <AppButton variant="text" @click="showDiscardConfirm = false">
             {{ t("app.common.cancel") }}
-          </VBtn>
-          <VBtn color="error" variant="text" @click="confirmDiscard">
+          </AppButton>
+          <AppButton color="error" variant="text" @click="confirmDiscard">
             {{ t("app.common.discard") }}
-          </VBtn>
+          </AppButton>
         </VCardActions>
       </VCard>
     </VDialog>
@@ -64,10 +112,27 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { VTextField, VSelect, VAutocomplete, VCombobox, VTextarea } from "vuetify/components";
 import { useFormRenderer } from "../composables/useFormRenderer";
+import { scrollToFormTop } from "../utils/scrollToFormTop";
+import AppButton from "./AppButton.vue";
+import AppIcon from "./AppIcon.vue";
+import AppAvatar, { type AppAvatarEntityType } from "./AppAvatar.vue";
+import PhoneField from "./PhoneField.vue";
 import type { FormFieldDef, FormFieldType } from "../types/formField";
+
+/**
+ * componentFor() below resolves to these imported component OBJECTS, never
+ * bare name strings like "VTextField" — vite-plugin-vuetify auto-registers a
+ * Vuetify component for an SFC only when it sees a literal <VTextField>-style
+ * tag in that file's own template (static AST scan). This file only ever
+ * referenced these components dynamically via `:is`, so none of them were
+ * ever actually registered here — `<component :is="'VTextField'">` silently
+ * failed to resolve (console: "Failed to resolve component"), rendering
+ * nothing. Importing the real component avoids the name-lookup entirely.
+ */
 
 /**
  * Generic, config-driven form dialog. Renders one shared component from a
@@ -88,13 +153,24 @@ const props = withDefaults(
     editTitleKey?: string;
     submitLabelKey?: string;
     editSubmitLabelKey?: string;
+    /** Entity-specific derived-fields hook — see useFormRenderer.ts's 3rd param. */
+    derive?: (form: Record<string, unknown>) => Partial<Record<string, unknown>> | void;
+    /** i18n key for an info banner shown above the form (e.g. "verify this data"). */
+    verifyInfoKey?: string;
+    /** Shows an AppAvatar next to the dialog title, live-previewing first/last name — opt-in, only for identity-based forms (hcp/lead/patient/user). */
+    avatarEntityType?: AppAvatarEntityType;
   }>(),
   { modelValue: false },
 );
 
 const emit = defineEmits<{
   "update:modelValue": [value: boolean];
-  submit: [payload: Record<string, unknown>];
+  /**
+   * `done` must be called by the listener once its own async submit work
+   * (the actual apiFetch call) settles — true closes the dialog, false
+   * keeps it open (e.g. after a failed request) so the user can retry.
+   */
+  submit: [payload: Record<string, unknown>, done: (ok: boolean) => void];
 }>();
 
 const { t } = useI18n();
@@ -105,7 +181,7 @@ const {
   resolvedOptions, loadingOptions, loadAllAsyncOptions,
   rulesFor, validate, buildPayload,
   resetForm, hasChanged,
-} = useFormRenderer(props.fields, initialDataRef);
+} = useFormRenderer(props.fields, initialDataRef, props.derive);
 
 const submitting = ref(false);
 const showDiscardConfirm = ref(false);
@@ -113,19 +189,32 @@ const showDiscardConfirm = ref(false);
 const formTitle = computed(() =>
   isEditMode.value && props.editTitleKey ? t(props.editTitleKey) : t(props.titleKey),
 );
+/** first_name/last_name for identity forms (hcp/lead/patient/user); a plain "name" field for org-style forms (hco). */
+const avatarName = computed(() => {
+  const fullName = [String(form.value.first_name ?? "").trim(), String(form.value.last_name ?? "").trim()]
+    .filter(Boolean)
+    .join(" ");
+  return fullName || String(form.value.name ?? "").trim();
+});
 const formSubmitLabel = computed(() => {
   if (isEditMode.value) return t(props.editSubmitLabelKey ?? props.submitLabelKey ?? props.titleKey);
   return t(props.submitLabelKey ?? props.titleKey);
 });
 
+function isFieldHidden(f: FormFieldDef): boolean {
+  return typeof f.hidden === "function" ? f.hidden() : !!f.hidden;
+}
+
 const rows = computed(() => {
   const result: FormFieldDef[][] = [];
-  const fields = props.fields;
+  const fields = props.fields.filter((f) => !isFieldHidden(f));
   let i = 0;
   while (i < fields.length) {
     const f = fields[i];
     const next = fields[i + 1];
-    if (f.cols === 6 && next?.cols === 6) {
+    const fCols = f.cols ?? 12;
+    const nextCols = next?.cols ?? 12;
+    if (fCols < 12 && nextCols < 12 && fCols + nextCols === 12) {
       result.push([f, next]);
       i += 2;
     } else {
@@ -136,14 +225,52 @@ const rows = computed(() => {
   return result;
 });
 
-function componentFor(type: FormFieldType): string {
+/**
+ * flex-grow ratio, not a literal percentage — flex-basis 0% makes flexbox
+ * split the row's free space by the cols ratio directly (6/6 → 50/50,
+ * 2/10 → ~17/83), independent of the row's actual pixel width or gap.
+ */
+function rowItemStyle(f: FormFieldDef): Record<string, string> {
+  const cols = f.cols ?? 6;
+  return { flex: `${cols} 1 0%`, minWidth: cols <= 2 ? "72px" : "0" };
+}
+
+const fieldEls: Record<string, unknown> = {};
+function setFieldEl(key: string, el: unknown) {
+  if (el) fieldEls[key] = el;
+  else delete fieldEls[key];
+}
+
+/** Inserts "@" at the caret in an email field's underlying input — a no-op once one is already present (an email has at most one). */
+function insertAtSign(f: FormFieldDef) {
+  const current = String(form.value[f.key] ?? "");
+  if (current.includes("@")) return;
+  const el = fieldEls[f.key] as { $el?: HTMLElement } | undefined;
+  const inputEl = el?.$el?.querySelector("input") ?? undefined;
+  const start = inputEl?.selectionStart ?? current.length;
+  const end = inputEl?.selectionEnd ?? current.length;
+  form.value[f.key] = current.slice(0, start) + "@" + current.slice(end);
+  nextTick(() => {
+    inputEl?.focus();
+    // type="email" doesn't support the selection API — setSelectionRange
+    // throws InvalidStateError there, so re-placing the caret is best-effort.
+    try {
+      inputEl?.setSelectionRange(start + 1, start + 1);
+    } catch {
+      // no-op: unsupported input type, focus() above is enough
+    }
+  });
+}
+
+function componentFor(type: FormFieldType) {
   switch (type) {
-    case "select": return "VSelect";
-    case "autocomplete": return "VAutocomplete";
-    case "combobox": return "VCombobox";
-    case "chips": return "VCombobox";
-    case "textarea": return "VTextarea";
-    default: return "VTextField";
+    case "select": return VSelect;
+    case "autocomplete": return VAutocomplete;
+    case "chips": return VCombobox;
+    case "combobox": return VCombobox;
+    case "textarea": return VTextarea;
+    case "phone": return PhoneField;
+    default: return VTextField;
   }
 }
 
@@ -157,6 +284,7 @@ function fieldAttrs(f: FormFieldDef): Record<string, unknown> {
     rules: rulesFor(f),
     hint: f.hint ? t(f.hint) : undefined,
     persistentHint: !!f.hint,
+    placeholder: f.placeholder ? t(f.placeholder) : undefined,
     disabled: !!f.immutableOnEdit && isEditMode.value,
   };
 
@@ -164,18 +292,30 @@ function fieldAttrs(f: FormFieldDef): Record<string, unknown> {
     case "email":
       return { ...common, type: "email", autocomplete: "email" };
     case "phone":
-      return {
-        ...common,
-        type: "tel",
-        autocomplete: "tel",
-        "onUpdate:modelValue": (v: unknown) => { form.value[f.key] = String(v ?? "").replace(/\D/g, ""); },
-      };
+      return common;
     case "textarea":
       return { ...common, autoGrow: true, rows: 3 };
     case "number":
       return { ...common, type: "number" };
     case "select":
-      return { ...common, items: resolvedOptions(f), itemTitle: "title", itemValue: "value" };
+      // No menu-icon: at this width (often cols: 2/6, paired with another
+      // field) the whole field is already the click target for its own menu —
+      // the affix was pure visual weight, not a functional affordance.
+      return {
+        ...common,
+        items: resolvedOptions(f),
+        itemTitle: "title",
+        itemValue: "value",
+        menuIcon: "",
+      };
+    case "combobox":
+      return {
+        ...common,
+        items: resolvedOptions(f),
+        itemTitle: "title",
+        itemValue: "value",
+        menuIcon: "",
+      };
     case "autocomplete":
       return {
         ...common,
@@ -222,12 +362,15 @@ function onCancelClick() {
 
 async function onSubmit() {
   const valid = await validate();
-  if (!valid) return;
+  if (!valid) {
+    scrollToFormTop(formRef.value?.$el);
+    return;
+  }
   submitting.value = true;
   try {
     const payload = buildPayload();
-    emit("submit", payload);
-    emit("update:modelValue", false);
+    const ok = await new Promise<boolean>((resolve) => emit("submit", payload, resolve));
+    if (ok) emit("update:modelValue", false);
   } finally {
     submitting.value = false;
   }

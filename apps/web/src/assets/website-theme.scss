@@ -44,6 +44,20 @@
   --website-text: var(--neosleep-charcoal-dark);
   --website-text-secondary: var(--neosleep-charcoal-medium);
   --website-border: #e5e7eb;
+  /* Maps packages/ui's MobileNavDrawer (shared with apps/pwa) onto website
+     colors — defined once here since var() references re-resolve live, no
+     need to repeat in the dark-theme block below. */
+  --mobile-nav-drawer-bg: var(--website-bg);
+  --mobile-nav-drawer-text: var(--website-text);
+  --mobile-nav-drawer-border: var(--website-border);
+  /* Maps packages/ui's MobileBottomNavBar/MobileBottomNavItem (shared with
+     apps/pwa) onto website colors — same live-re-resolve reasoning as
+     --mobile-nav-drawer-* above. */
+  --mobile-bottom-nav-bg: var(--website-bg);
+  --mobile-bottom-nav-border: var(--website-border);
+  --mobile-bottom-nav-height: var(--website-bottom-nav-height);
+  --mobile-bottom-nav-item-color: var(--website-text-secondary);
+  --mobile-bottom-nav-item-active-color: var(--website-primary);
   --website-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
   --website-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
   /* Footer – light mode */

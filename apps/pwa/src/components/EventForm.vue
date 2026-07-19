@@ -7,8 +7,9 @@
     @update:model-value="onDialogUpdate"
   >
     <VCard class="pwa-form-dialog__card">
-      <VCardTitle class="mx-2 mt-2 text-h6">
-        {{ formTitle }}
+      <VCardTitle class="mx-2 mt-2 text-h6 pwa-form-dialog__title-row">
+        <AppAvatar :name="form.title" entity-type="event" :size="40" />
+        <span>{{ formTitle }}</span>
       </VCardTitle>
       <VCardText>
         <VForm ref="formRef" @submit.prevent="onSubmit">
@@ -91,6 +92,25 @@
             closable-chips
             :loading="loadingHcp"
             :placeholder="t('user.planner.form.fieldHcpPlaceholder')"
+          >
+            <template #prepend-inner>
+              <AppIcon name="nav-hcp" class="pwa-form-field-icon" />
+            </template>
+          </VAutocomplete>
+          <VAutocomplete
+            v-model="form.patientIds"
+            :label="t('user.planner.form.fieldPatient')"
+            :items="patientOptions"
+            item-title="name"
+            item-value="id"
+            variant="outlined"
+            density="comfortable"
+            class="mb-3"
+            multiple
+            chips
+            closable-chips
+            :loading="loadingPatient"
+            :placeholder="t('user.planner.form.fieldPatientPlaceholder')"
           />
           <VTextField
             v-if="form.type === 'f2f'"
@@ -134,12 +154,12 @@
       </VCardText>
       <VCardActions class="mx-2 mb-2">
         <VSpacer />
-        <VBtn variant="text" @click="onCancelClick">
+        <AppButton variant="text" @click="onCancelClick">
           {{ t("app.common.cancel") }}
-        </VBtn>
-        <VBtn color="primary" :loading="submitting" @click="onSubmit">
+        </AppButton>
+        <AppButton color="primary" :loading="submitting" @click="onSubmit">
           {{ formSubmitLabel }}
-        </VBtn>
+        </AppButton>
       </VCardActions>
     </VCard>
 
@@ -147,18 +167,19 @@
       v-model="showDiscardConfirm"
       max-width="360"
       content-class="pwa-form-dialog__content"
+      class="pwa-discard-dialog"
       persistent
     >
-      <VCard>
+      <VCard elevation="8">
         <VCardText>{{ t("app.common.discardChanges") }}</VCardText>
         <VCardActions>
           <VSpacer />
-          <VBtn variant="text" @click="showDiscardConfirm = false">
+          <AppButton variant="text" @click="showDiscardConfirm = false">
             {{ t("app.common.cancel") }}
-          </VBtn>
-          <VBtn color="error" variant="text" @click="confirmDiscard">
+          </AppButton>
+          <AppButton color="error" variant="text" @click="confirmDiscard">
             {{ t("app.common.discard") }}
-          </VBtn>
+          </AppButton>
         </VCardActions>
       </VCard>
     </VDialog>
@@ -169,6 +190,9 @@
 import { useI18n } from "vue-i18n";
 import { useConfigStore } from "../stores/config";
 import { useEventForm } from "../composables/useEventForm";
+import AppButton from "./AppButton.vue";
+import AppAvatar from "./AppAvatar.vue";
+import AppIcon from "./AppIcon.vue";
 
 export interface EventFormData {
   title: string;
@@ -178,6 +202,7 @@ export interface EventFormData {
   status: string;
   hcoIds: string[];
   hcpIds: string[];
+  patientIds: string[];
   location: string;
   videoLink: string;
   notes: string;
@@ -195,6 +220,7 @@ export interface EventFormInitialData {
   status?: string;
   hcoIds?: string[];
   hcpIds?: string[];
+  patientIds?: string[];
   attendees?: { attendee_type: string; attendee_id: string }[];
   location?: string;
   video_link?: string;
@@ -214,7 +240,7 @@ export interface EventSubmitPayload {
   video_link?: string | null;
   notes?: string | null;
   region: string;
-  attendees: { attendee_type: "hcp" | "hco" | "lead"; attendee_id: string; is_primary?: boolean }[];
+  attendees: { attendee_type: "doctor" | "hco" | "lead" | "patient"; attendee_id: string; is_primary?: boolean }[];
 }
 
 const props = withDefaults(
@@ -224,7 +250,8 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   "update:modelValue": [value: boolean];
-  submit: [payload: EventSubmitPayload];
+  /** `done` must be called once the caller's apiFetch settles — true closes the dialog, false keeps it open to retry. */
+  submit: [payload: EventSubmitPayload, done: (ok: boolean) => void];
 }>();
 
 const { t } = useI18n();
@@ -232,7 +259,7 @@ const configStore = useConfigStore();
 
 const {
   formRef, form, submitting, showDiscardConfirm,
-  hcoOptions, hcpOptions, loadingHco, loadingHcp,
+  hcoOptions, hcpOptions, patientOptions, loadingHco, loadingHcp, loadingPatient,
   typeItems, statusItems,
   formTitle, formSubmitLabel,
   startRules, endRules,

@@ -51,6 +51,14 @@ export interface CreateLeadInput {
   source?: string | null;
   institution?: string | null;
   assigned_to?: string | null;
+  /**
+   * Organization name — no dedicated column, lives at metadata.institution
+   * (see the header comment near ConvertLeadCommand: a Lead is deliberately
+   * "dirty" data, no live FK to organization until an explicit convert step).
+   * The frontend's FormRenderer nests this field under `metadata` itself
+   * (see config/forms/leadForm.ts's `nestUnder: "metadata"`), so it already
+   * arrives here as `metadata.institution` — required, validated below.
+   */
   metadata?: Record<string, unknown> | null;
 }
 
@@ -66,6 +74,9 @@ export async function CreateLeadCommand(
   if (!firstName) throw new ValidationError("first_name is required");
   if (!lastName)  throw new ValidationError("last_name is required");
 
+  const institution = typeof input.metadata?.institution === "string" ? input.metadata.institution.trim() : "";
+  if (!institution) throw new ValidationError("institution is required");
+
   const email = input.email?.trim() ?? null;
   if (email && !EMAIL_REGEX.test(email)) throw new ValidationError("Invalid email format");
 
@@ -80,7 +91,7 @@ export async function CreateLeadCommand(
     source:      input.source?.trim() ?? null,
     institution: input.institution?.trim() || null,
     assigned_to: input.assigned_to?.trim() ?? null,
-    metadata:    input.metadata ?? null,
+    metadata:    { ...input.metadata, institution },
   };
 
   const lead = await insertLead(ctx.client, insertInput);
@@ -112,6 +123,7 @@ export interface UpdateLeadPayload {
   source?: string | null;
   institution?: string | null;
   assigned_to?: string | null;
+  /** See CreateLeadInput.metadata — institution lives at metadata.institution. */
   metadata?: Record<string, unknown> | null;
 }
 

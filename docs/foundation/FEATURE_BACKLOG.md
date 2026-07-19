@@ -133,6 +133,14 @@
 
 ---
 
+## Design System
+
+| Feature | Status | Notes |
+|---|---|---|
+| Material 3 rollout (full app) | `planned` | Direction confirmed 2026-07-19 (monochrome tonal-layered "Luma" reference — see `docs/foundation/DESIGN_AND_UI.md`). Piloted on AppEntityList mobile feed cards: Fibonacci shape/spacing scale, `outline` / `outline-variant` / `surface-container-*` color roles (packages/vuetify/src/index.ts), tonal `::after` state-layer on hover/press instead of elevation lift. Existing teal primary stays — no new accent color. Next: extend the same roles to buttons (pill shape decision pending), dialogs, inputs, and the desktop data table, across pwa (and web). Waiting on: current pending local changes to be committed first |
+
+---
+
 ## Social Media & Marketing Automation
 
 | Feature | Status | Notes |
@@ -155,5 +163,5 @@
 
 ---
 
-_Last updated: 2026-05-24_
+_Last updated: 2026-07-19_
 _To add a feature: add a row, assign stage, update status as work progresses._

@@ -6,7 +6,7 @@
   >
     <div class="site-header__bar">
       <RouterLink to="/" class="site-header__brand">
-        <img :src="logoSrc" alt="NeoSleep" class="site-header__logo" width="140" height="32" />
+        <BrandLogo :dark="isDark" class="site-header__logo" width="140" height="32" />
       </RouterLink>
       <nav class="site-header__nav" aria-label="Main navigation">
         <template v-for="item in navItems" :key="item.labelKey">
@@ -43,27 +43,8 @@
     </div>
   </header>
 
-  <Transition name="fade">
-    <div
-      v-show="mobileOpen"
-      class="site-header__overlay"
-      aria-hidden="true"
-      @click="closeMobile"
-    />
-  </Transition>
-
-  <Transition name="slide">
-    <aside
-      v-show="mobileOpen"
-      class="site-header__drawer"
-      :style="drawerSwipeStyle"
-      aria-label="Mobile navigation"
-      role="dialog"
-      aria-modal="true"
-      @touchstart.passive="onTouchStart"
-      @touchmove.passive="onTouchMove"
-      @touchend="onTouchEnd"
-    >
+  <MobileNavDrawer v-model="mobileOpen" width="var(--website-drawer-width)" aria-label="Mobile navigation">
+    <template #header>
       <!-- Search — aligned to header height -->
       <div class="site-header__drawer-header">
         <div class="site-header__drawer-search" role="search">
@@ -93,60 +74,61 @@
           </button>
         </div>
       </div>
+    </template>
 
-      <!-- Nav links / Search results -->
-      <nav class="site-header__drawer-nav" aria-label="Mobile navigation links">
-        <!-- Default nav -->
-        <template v-if="!searchQuery">
-          <template v-for="item in navItems" :key="item.labelKey">
-            <RouterLink
-              v-if="item.to"
-              :to="item.to"
-              class="site-header__drawer-link"
-              @click="closeMobile"
-            >
-              {{ t(item.labelKey) }}
-            </RouterLink>
-            <a v-else :href="item.href" class="site-header__drawer-link" @click="closeMobile">
-              {{ t(item.labelKey) }}
-            </a>
-          </template>
+    <!-- Nav links / Search results -->
+    <div class="site-header__drawer-nav" aria-label="Mobile navigation links">
+      <!-- Default nav -->
+      <template v-if="!searchQuery">
+        <template v-for="item in navItems" :key="item.labelKey">
+          <RouterLink
+            v-if="item.to"
+            :to="item.to"
+            class="site-header__drawer-link"
+            @click="closeMobile"
+          >
+            {{ t(item.labelKey) }}
+          </RouterLink>
+          <a v-else :href="item.href" class="site-header__drawer-link" @click="closeMobile">
+            {{ t(item.labelKey) }}
+          </a>
         </template>
+      </template>
 
-        <!-- Search results -->
-        <template v-else>
-          <template v-if="searchResults.length">
-            <component
-              :is="item.requiresAuth ? 'div' : 'RouterLink'"
-              v-for="item in searchResults"
-              :key="item.titleKey"
-              v-bind="item.requiresAuth ? {} : { to: item.path }"
-              class="site-header__result"
-              :class="{ 'site-header__result--locked': item.requiresAuth }"
-              @click="!item.requiresAuth && closeMobile()"
-            >
-              <span class="site-header__result-title">{{ t(item.titleKey) }}</span>
-              <span class="site-header__result-desc">{{ t(item.descKey) }}</span>
-              <span v-if="item.requiresAuth" class="site-header__result-lock">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                </svg>
-                {{ t('website.nav.searchProtected') }}
-              </span>
-            </component>
-          </template>
-          <p v-else class="site-header__no-results">
-            {{ t('website.nav.searchNoResults', { query: searchQuery }) }}
-          </p>
+      <!-- Search results -->
+      <template v-else>
+        <template v-if="searchResults.length">
+          <component
+            :is="item.requiresAuth ? 'div' : 'RouterLink'"
+            v-for="item in searchResults"
+            :key="item.titleKey"
+            v-bind="item.requiresAuth ? {} : { to: item.path }"
+            class="site-header__result"
+            :class="{ 'site-header__result--locked': item.requiresAuth }"
+            @click="!item.requiresAuth && closeMobile()"
+          >
+            <span class="site-header__result-title">{{ t(item.titleKey) }}</span>
+            <span class="site-header__result-desc">{{ t(item.descKey) }}</span>
+            <span v-if="item.requiresAuth" class="site-header__result-lock">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+              {{ t('website.nav.searchProtected') }}
+            </span>
+          </component>
         </template>
-      </nav>
-    </aside>
-  </Transition>
+        <p v-else class="site-header__no-results">
+          {{ t('website.nav.searchNoResults', { query: searchQuery }) }}
+        </p>
+      </template>
+    </div>
+  </MobileNavDrawer>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
+import { BrandLogo, MobileNavDrawer } from "@ui";
 import ThemeToggle from "../components/ThemeToggle.vue";
 import LanguageSelect from "../components/LanguageSelect.vue";
 import { useTheme } from "../composables/useTheme";
@@ -173,40 +155,16 @@ const searchResults = computed(() => {
   });
 });
 
-// ── Swipe to close ────────────────────────────────────────────────────────
-const drawerX = ref(0);
-let touchStartX = 0;
-
-const drawerSwipeStyle = computed(() =>
-  drawerX.value ? { transform: `translateX(${drawerX.value}px)`, transition: "none" } : {}
-);
-
-function onTouchStart(e: TouchEvent) {
-  touchStartX = e.touches[0]!.clientX;
-}
-
-function onTouchMove(e: TouchEvent) {
-  const delta = e.touches[0]!.clientX - touchStartX;
-  if (delta < 0) drawerX.value = delta;
-}
-
-function onTouchEnd() {
-  if (drawerX.value < -72) {
-    closeMobile();
-  } else {
-    drawerX.value = 0;
-  }
-}
-
-const logoSrc = computed(() =>
-  isDark.value ? "/brand/logos/logo/logo_dark.svg" : "/brand/logos/logo/logo_light.svg"
-);
-
 function closeMobile() {
-  drawerX.value = 0;
   mobileOpen.value = false;
-  searchQuery.value = "";
 }
+
+// Swipe-to-close and overlay-click (inside MobileNavDrawer) also flip
+// mobileOpen straight to false, bypassing closeMobile() — clear search here
+// so all three close paths behave the same.
+watch(mobileOpen, (open) => {
+  if (!open) searchQuery.value = "";
+});
 
 // ── Scroll-hide on mobile ─────────────────────────────────────────────────
 const headerHidden = ref(false);

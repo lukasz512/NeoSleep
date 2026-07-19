@@ -20,9 +20,20 @@ const ALL_STAFF_ROLES: UserRole[] = ["rep", "doctor", "manager", "admin"];
 // a route directly with the wrong role redirects to /dashboard instead of
 // rendering the view. admin always bypasses this (see isRoleAllowed) — sees
 // every view regardless of what's listed here.
+// /login, /forgot-password and /reset-password all share this one lazy-import
+// reference (not separate `() => import(...)` closures per path) so Vue
+// Router resolves them to the literal same async component — RouterView then
+// reuses the mounted instance across navigation between them instead of
+// remounting it. That's what keeps the card shell, logo and settings icon
+// (AuthChrome/AuthCard, rendered once inside AuthView.vue) on screen the
+// whole time — only the inner step content transitions. See AuthView.vue.
+const authViewComponent = () => import("../views/LoginView.vue");
+
 export const routes: RouteRecordRaw[] = [
   { path: "/", redirect: "/login" },
-  { path: "/login", name: "login", component: () => import("../views/LoginView.vue"), meta: { layout: "public", public: true } },
+  { path: "/login", name: "login", component: authViewComponent, meta: { layout: "public", public: true } },
+  { path: "/forgot-password", name: "forgot-password", component: authViewComponent, meta: { layout: "public", public: true } },
+  { path: "/reset-password", name: "reset-password", component: authViewComponent, meta: { layout: "public", public: true } },
   { path: "/change-password", name: "change-password", component: () => import("../views/ChangePasswordView.vue"), meta: { layout: "public", requiresAuth: true } },
   { path: "/dev", name: "dev", component: () => import("../views/DevView.vue"), meta: { layout: "app", devOnly: true } },
   { path: "/leads", name: "leads", component: () => import("../views/LeadsView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep"] } },
@@ -81,4 +92,23 @@ export const appHomePath = routes.find((r) => (r as { name?: string }).name === 
 /** Returns the i18n key for a nav route name. Every entry follows `user.<name>.title`. */
 export function navTitleKey(name: string): string {
   return `user.${name}.title`;
+}
+
+/** Detail route name → its parent list route name, for resolving nav icons on detail pages. */
+const detailRouteParents: Record<string, string> = {
+  "lead-detail": "leads",
+  "hcp-detail": "hcp",
+  "hco-detail": "hco",
+  "patient-detail": "patients",
+  "user-detail": "users",
+};
+
+/**
+ * Returns the AppIcon name (e.g. `nav-leads`) for a route, reusing the same
+ * sidebar/bottom-nav icon on detail pages. Undefined for routes with no nav
+ * entry (dashboard, login, dev, ...) — AppIcon has no icon registered for those.
+ */
+export function navIconName(name: string): string | undefined {
+  const listName = detailRouteParents[name] ?? name;
+  return appNavRoutes.some((r) => r.name === listName) ? `nav-${listName}` : undefined;
 }

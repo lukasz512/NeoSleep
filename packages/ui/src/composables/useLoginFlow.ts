@@ -20,13 +20,13 @@ export function createUseLoginFlow(apiFetch: ApiFetchFn) {
 
     const email = ref("");
     const password = ref("");
-    const rememberMe = ref(false);
+    const rememberMe = ref(true);
     const loading = ref(false);
     const errorKey = ref<string | null>(null);
 
     const redirectPath = computed(() => getRedirectPath(route.query.redirect));
 
-    async function submit(): Promise<void> {
+    async function submit(options?: { onSuccess?: () => Promise<void> | void }): Promise<void> {
       errorKey.value = null;
       loading.value = true;
       try {
@@ -61,6 +61,10 @@ export function createUseLoginFlow(apiFetch: ApiFetchFn) {
 
         const authStore = useAuthStore();
         authStore.setAuthenticated(true, data.user);
+
+        // Let the caller play an exit transition (e.g. AnimatedCard.playExit())
+        // before the route actually changes, instead of the view vanishing instantly.
+        await options?.onSuccess?.();
 
         if (data.forcePasswordChange) {
           await router.push("/change-password");

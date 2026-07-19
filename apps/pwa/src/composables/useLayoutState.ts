@@ -6,6 +6,7 @@ import { useDebounceFn } from "@vueuse/core";
 import { useThemeStore } from "@stores";
 import { SIDEBAR_DEFAULT_COLLAPSED, MOBILE_BREAKPOINT } from "../constants";
 import { getUserSettings, setUserSettings } from "../utils/user-settings";
+import { getInitials } from "../utils/initials";
 import { lightTheme, darkTheme } from "../plugins/vuetify";
 import { useAuthStore } from "../stores/auth";
 import { useConfigStore } from "../stores/config";
@@ -60,8 +61,6 @@ export function useLayoutState() {
   }, 150);
 
   // ── User info ──────────────────────────────────────────────────────────────
-  const isAdmin = computed(() => authStore.user?.role === "admin");
-
   const userDisplayName = computed(
     () => authStore.displayName ?? authStore.user?.email ?? t("user.user.placeholderName"),
   );
@@ -77,16 +76,7 @@ export function useLayoutState() {
     return t("user.user.role");
   });
 
-  const userInitials = computed(() => {
-    const name = userDisplayName.value;
-    const parts = name
-      .trim()
-      .split(/\s+/)
-      .filter((w) => /^[a-zA-ZÀ-žżźćńółęąśŻŹĆŃÓŁĘĄŚ]/.test(w));
-    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-    return "?";
-  });
+  const userInitials = computed(() => getInitials(userDisplayName.value));
 
   // ── Locale ────────────────────────────────────────────────────────────────
   const localeTransitioning = ref(false);
@@ -102,9 +92,9 @@ export function useLayoutState() {
   }
 
   // ── Auth ──────────────────────────────────────────────────────────────────
-  function onLogout() {
+  async function onLogout() {
     mobileDrawerOpen.value = false;
-    authStore.clearAuth();
+    await authStore.logout();
     router.push("/login");
   }
 
@@ -148,7 +138,7 @@ export function useLayoutState() {
     theme, toggleTheme, setTheme,
     sidebarCollapsed, toggleSidebar,
     isMobile, mobileDrawerOpen,
-    isAdmin, user,
+    user,
     locale, localeTransitioning, setLocale,
     onLogout,
     focusMainContent,

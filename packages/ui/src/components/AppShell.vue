@@ -1,27 +1,9 @@
 <template>
-  <VNavigationDrawer
-    v-model="drawerOpenModel"
-    :rail="!mobile && railCollapsed"
-    :permanent="!mobile"
-    :temporary="mobile"
-    :width="width"
-    :rail-width="railWidth"
-    class="app-shell__nav"
-  >
-    <div class="app-shell__logo">
-      <slot name="logo" :collapsed="!mobile && railCollapsed" />
-    </div>
-    <slot name="nav" />
-
-    <template #append>
-      <VDivider />
-      <div class="app-shell__nav-footer">
-        <slot name="drawer-footer" />
-      </div>
-    </template>
-  </VNavigationDrawer>
-
-  <VAppBar flat border="b" :height="56" class="app-shell__bar">
+  <!-- VAppBar registers with Vuetify's layout system before VNavigationDrawer
+       so it claims the full top-of-viewport width; the drawer then registers
+       below it, on the left, rather than the app-bar being squeezed to the
+       right of a full-height drawer. -->
+  <VAppBar flat :border="mobile ? false : 'b'" :height="56" class="app-shell__bar">
     <template v-if="mobile" #prepend>
       <VBtn
         icon
@@ -45,38 +27,68 @@
 
     <template #append>
       <slot name="app-bar-actions" />
-      <div v-if="mobile" class="app-shell__bar-logo">
-        <slot name="logo" :collapsed="false" />
+      <div class="app-shell__bar-logo">
+        <slot name="logo" :collapsed="false" location="bar" />
       </div>
     </template>
   </VAppBar>
 
-  <VMain class="app-shell__main">
+  <MobileNavDrawer v-if="mobile" v-model="drawerOpenModel" :width="width" :aria-label="menuLabel">
+    <template #header>
+      <slot name="logo" :collapsed="false" location="nav" />
+    </template>
+    <slot name="nav" />
+    <template #footer>
+      <slot name="drawer-footer" />
+    </template>
+  </MobileNavDrawer>
+
+  <VNavigationDrawer
+    v-else
+    v-model="drawerOpenModel"
+    :rail="railCollapsed"
+    permanent
+    :width="width"
+    :rail-width="railWidth"
+    class="app-shell__nav"
+  >
+    <div class="app-shell__logo">
+      <slot name="logo" :collapsed="railCollapsed" location="nav" />
+    </div>
+    <slot name="nav" />
+
+    <template #append>
+      <VDivider />
+      <div class="app-shell__nav-footer">
+        <slot name="drawer-footer" />
+      </div>
+    </template>
+  </VNavigationDrawer>
+
+  <VMain class="app-shell__main" :class="{ 'app-shell__main--bottom-nav-space': mobile && showBottomNav }">
     <slot />
   </VMain>
 
-  <VBottomNavigation
-    v-if="mobile && showBottomNav"
-    grow
-    :height="64"
-    class="app-shell__bottom-nav"
-  >
-    <VBtn
+  <MobileBottomNavBar v-if="mobile && showBottomNav" :aria-label="menuLabel" class="app-shell__bottom-nav">
+    <MobileBottomNavItem
       v-for="item in primaryNavItems"
       :key="item.path"
       :to="item.path"
-      class="app-shell__bottom-nav-btn"
+      :label="item.label"
+      :show-label="bottomNavShowLabels"
     >
       <slot name="nav-icon" :item="item" />
-      <span class="app-shell__bottom-nav-label">{{ item.label }}</span>
-    </VBtn>
+    </MobileBottomNavItem>
     <slot name="bottom-nav-extra" />
-  </VBottomNavigation>
+  </MobileBottomNavBar>
 </template>
 
 <script setup lang="ts">
 import { computed } from "vue";
 import { useDisplay } from "vuetify";
+import MobileNavDrawer from "./MobileNavDrawer.vue";
+import MobileBottomNavBar from "./MobileBottomNavBar.vue";
+import MobileBottomNavItem from "./MobileBottomNavItem.vue";
 
 export interface AppShellNavItem {
   path: string;
@@ -89,11 +101,13 @@ const BOTTOM_NAV_ITEM_COUNT = 4;
 
 /**
  * Shared responsive app shell (packages/ui) — the structural chrome only:
- * a left VNavigationDrawer (permanent on desktop, temporary + hamburger-
- * triggered on mobile), a VAppBar, a mobile VBottomNavigation showing the
- * first 4 nav items (full stop — no "more"/overflow button; the hamburger
- * in the app bar is always available as the way to reach everything else),
- * and a VMain for routed content.
+ * a left nav drawer (permanent + rail-collapsible VNavigationDrawer on
+ * desktop; the shared MobileNavDrawer — hamburger-triggered, swipeable,
+ * same feel as apps/web's — on mobile), a VAppBar, a mobile bottom nav bar
+ * (the shared MobileBottomNavBar/MobileBottomNavItem, same feel as
+ * apps/web's) showing the first 4 nav items (full stop — no "more"/overflow
+ * button; the hamburger in the app bar is always available as the way to
+ * reach everything else), and a VMain for routed content.
  *
  * Deliberately has no knowledge of roles, auth, theming, or branding — those
  * are app-specific concerns supplied via slots (logo, nav, app-bar-actions,
@@ -109,6 +123,8 @@ const props = withDefaults(
     /** Nav items — the mobile bottom bar shows exactly the first 4. */
     navItems?: AppShellNavItem[];
     showBottomNav?: boolean;
+    /** Show text labels under the bottom-nav icons (apps/web keeps them icon-only). */
+    bottomNavShowLabels?: boolean;
     menuLabel?: string;
     width?: number;
     railWidth?: number;
@@ -118,6 +134,7 @@ const props = withDefaults(
     railCollapsed: false,
     navItems: () => [],
     showBottomNav: true,
+    bottomNavShowLabels: false,
     menuLabel: "Menu",
     width: 220,
     railWidth: 56,
@@ -130,8 +147,14 @@ const emit = defineEmits<{
 
 const { mobile } = useDisplay();
 
+// On desktop the drawer is `:permanent`, which only affects the scrim/closability
+// — Vuetify still renders it translated off-screen unless its own v-model reports
+// "open". Since this v-model is also the mobile hamburger's open/close toggle
+// (defaults closed), forcing it through unchanged would leave the desktop drawer
+// closed on first paint. So: report true whenever not mobile, and only defer to
+// the real toggle state while mobile (temporary) drawer behavior actually applies.
 const drawerOpenModel = computed({
-  get: () => props.modelValue,
+  get: () => (mobile.value ? props.modelValue : true),
   set: (value: boolean) => emit("update:modelValue", value),
 });
 
@@ -175,12 +198,11 @@ const primaryNavItems = computed(() => props.navItems.slice(0, BOTTOM_NAV_ITEM_C
   }
 }
 
-.app-shell__bottom-nav-btn {
-  text-transform: none;
-  letter-spacing: normal;
+/* MobileBottomNavBar is position: fixed, not a Vuetify layout item, so VMain
+   never learns to reserve space for it — without this, scrollable content
+   (e.g. entity list feeds) renders its last rows underneath the nav bar. */
+.app-shell__main--bottom-nav-space {
+  padding-bottom: calc(var(--mobile-bottom-nav-height, 64px) + env(safe-area-inset-bottom));
 }
 
-.app-shell__bottom-nav-label {
-  font-size: 0.6875rem;
-}
 </style>

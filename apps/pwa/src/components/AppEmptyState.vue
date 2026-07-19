@@ -3,7 +3,7 @@
     <AppIcon name="plus-circle" class="app-empty-state__icon" />
     <p class="app-empty-state__title">{{ title }}</p>
     <p v-if="subtitle" class="app-empty-state__subtitle">{{ subtitle }}</p>
-    <VBtn
+    <AppButton
       v-if="showAddButton && addLabel"
       color="primary"
       variant="outlined"
@@ -15,11 +15,12 @@
         <AppIcon name="plus" class="app-empty-state__btn-icon" />
       </template>
       {{ addLabel }}
-    </VBtn>
+    </AppButton>
   </div>
 </template>
 
 <script setup lang="ts">
+import AppButton from "./AppButton.vue";
 import AppIcon from "./AppIcon.vue";
 
 defineProps<{
