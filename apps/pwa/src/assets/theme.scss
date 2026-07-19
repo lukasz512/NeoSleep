@@ -23,6 +23,28 @@ $pwa-ease-out-smooth: cubic-bezier(0.22, 1, 0.36, 1);
 $pwa-ease-spring: cubic-bezier(0.34, 1.2, 0.64, 1);
 $pwa-transition-duration: 280ms;
 
+/* Fibonacci spacing scale (5/8/13/21/34/55) — a natural, organic rhythm for
+   the mobile feed's list-item cards (AppEntityList.css). Theme-invariant
+   (spacing, not color), so declared once in a plain :root block rather than
+   duplicated per light/dark theme like the tokens below. */
+$pwa-fib-xs: 5px;
+$pwa-fib-sm: 8px;
+$pwa-fib-md: 13px;
+$pwa-fib-lg: 21px;
+$pwa-fib-xl: 34px;
+$pwa-fib-xxl: 55px;
+$pwa-fib-3xl: 89px;
+
+:root {
+  --pwa-fib-xs: #{$pwa-fib-xs};
+  --pwa-fib-sm: #{$pwa-fib-sm};
+  --pwa-fib-md: #{$pwa-fib-md};
+  --pwa-fib-lg: #{$pwa-fib-lg};
+  --pwa-fib-xl: #{$pwa-fib-xl};
+  --pwa-fib-xxl: #{$pwa-fib-xxl};
+  --pwa-fib-3xl: #{$pwa-fib-3xl};
+}
+
 :root,
 [data-theme="light"] {
   --pwa-font-sans: #{$pwa-font-sans};
@@ -50,6 +72,21 @@ $pwa-transition-duration: 280ms;
   --pwa-sidebar-active-bg: color-mix(in srgb, #{brand.$pwa-brand-primary} 12%, transparent);
   --pwa-sidebar-active-text: #ffffff;
   --pwa-sidebar-logo-bg: rgba(0, 0, 0, 0.06);
+  /* Maps packages/ui's MobileNavDrawer (shared with apps/web) onto the
+     sidebar palette — defined once here since var() references re-resolve
+     live against whichever [data-theme] block is active, no need to repeat
+     in the dark-theme block below. */
+  --mobile-nav-drawer-bg: var(--pwa-sidebar-bg);
+  --mobile-nav-drawer-text: var(--pwa-sidebar-text);
+  --mobile-nav-drawer-border: var(--pwa-sidebar-border);
+  /* Maps packages/ui's MobileBottomNavBar/MobileBottomNavItem (shared with
+     apps/web) onto the main surface palette — same live-re-resolve reasoning
+     as --mobile-nav-drawer-* above. */
+  --mobile-bottom-nav-bg: var(--pwa-bg);
+  --mobile-bottom-nav-border: var(--pwa-border);
+  --mobile-bottom-nav-item-color: var(--pwa-text-secondary);
+  --mobile-bottom-nav-item-active-color: var(--pwa-primary);
+  --mobile-bottom-nav-radius: var(--pwa-radius);
   --pwa-drawer-max-height: 70vh;
   --pwa-topbar-height: 56px;
   --pwa-content-padding-x: 16px;
@@ -141,6 +178,22 @@ body {
   }
 }
 
+/*
+ * Compact single/two-value pickers (VSelect, VCombobox — e.g. identityFields'
+ * prefix, hcpForm's influence tier, PhoneField's area code) read as more
+ * "chooser" than "search" at their narrow width, so Vuetify's default
+ * mdi-menu-down (a bold filled triangle) reads as heavier than the field
+ * warrants. Swap it for a slimmer two-stroke chevron at reduced emphasis.
+ * VAutocomplete is deliberately excluded — at its usual full-row width
+ * (clinic/specialty pickers) the default affix already reads fine and
+ * doubles as the field's only "this is searchable" affordance.
+ */
+.v-select__menu-icon,
+.v-combobox__menu-icon {
+  opacity: var(--v-medium-emphasis-opacity, 0.6);
+  font-size: 20px;
+}
+
 /* Mobile: min 44px touch target for inputs (SPEC-0042) */
 @media (max-width: #{$pwa-breakpoint-mobile - 1}) {
   .v-input .v-field {
@@ -148,28 +201,32 @@ body {
   }
 }
 
-/* Button hover: no lift, only subtle color/opacity change. iOS-style: on hover-capable devices (mouse, Apple Pencil), subtle scale "attraction". */
+/* Button hover: flat everywhere — no lift, no scale, only subtle color/opacity change. */
 .v-btn {
-  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, opacity 0.2s ease;
-}
-.v-btn:hover {
-  /* No translateY – user prefers no lift */
-}
-.v-btn:active {
-  transform: none;
-}
-.v-btn--disabled {
+  transition: box-shadow 0.2s ease, background-color 0.2s ease, opacity 0.2s ease;
   transform: none !important;
 }
 
-/* iOS-style "attraction": subtle scale when pointer approaches (mouse, Apple Pencil). Only on hover-capable devices. */
-@media (hover: hover) and (pointer: fine) {
-  .v-btn:hover:not(.v-btn--disabled) {
-    transform: scale(1.03);
-  }
-  .v-btn:active:not(.v-btn--disabled) {
-    transform: scale(0.98);
-  }
+/*
+ * Icon buttons (AppButton with `icon`, variant="flat"): Vuetify's own
+ * .v-btn--disabled.v-btn--variant-flat rule paints an opaque
+ * rgb(var(--v-theme-surface)) background, which shows as a gray box behind
+ * disabled icon buttons instead of the transparent one they have when
+ * enabled. Every icon button app-wide should look the same disabled or not.
+ *
+ * That's not the whole story though: Vuetify also renders a separate
+ * `.v-btn__overlay` child (absolutely positioned, full size) whose base rule
+ * is `background-color: currentColor` at `opacity: 0` — invisible normally.
+ * The disabled-state rule bumps that opacity to ~0.46, so even once the
+ * button's own background above is transparent, this overlay still paints a
+ * visible gray circle on top. Both rules have to be neutralized together.
+ */
+.v-btn--icon.v-btn--disabled.v-btn--variant-flat {
+  background: transparent !important;
+  opacity: 0.4 !important;
+}
+.v-btn--icon.v-btn--disabled.v-btn--variant-flat .v-btn__overlay {
+  opacity: 0 !important;
 }
 
 /* Lead status chips: shared across LeadsView, LeadDetailView, RepFilterBar */
@@ -204,6 +261,25 @@ body {
   color: rgb(var(--v-theme-primary));
 }
 
+/* Entity-action icon colors (list-item context menus) — kept in sync with
+   config/entityActions.ts and the header-action button tones in
+   ItemDetailLayout.vue, so a given action (edit, schedule visit, ...) is
+   the same color everywhere instead of being redecided per view. */
+.pwa-action-icon {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+.pwa-action-icon--success {
+  color: rgb(var(--v-theme-success));
+}
+.pwa-action-icon--primary {
+  color: rgb(var(--v-theme-primary));
+}
+.pwa-action-icon--error {
+  color: rgb(var(--v-theme-error));
+}
+
 /* Mobile/tablet: larger buttons for easy tap (min 44px) */
 @media (max-width: #{$pwa-breakpoint-mobile - 1}) {
   :root {
@@ -230,21 +306,87 @@ a:hover {
  * PractitionerForm, OrganizationForm, PatientForm, ...). One definition
  * instead of a copy per component.
  */
+/*
+ * No `overflow` here (deliberately): this content-class is shared by every
+ * dialog built on this shell, including small ones like the discard-changes
+ * confirm — box-shadow (elevation) is painted outside a card's own box, so
+ * `overflow: hidden`/`auto` on this wrapper clipped it away to invisible.
+ * Corner-rounding + its own clip happens per-card below on
+ * `.pwa-form-dialog__card` instead, which the small confirm dialogs don't
+ * use, so they're unaffected.
+ */
 .pwa-form-dialog__content {
   border-radius: var(--pwa-modal-radius, 16px) !important;
-  overflow: hidden;
 }
 .pwa-form-dialog__card {
   border-radius: var(--pwa-modal-radius, 16px) !important;
+  overflow: hidden;
 }
 .pwa-form-dialog__card .v-card-title {
   padding: 32px 24px !important;
+}
+/* AppAvatar preview next to the title, opt-in via FormRenderer's avatarEntityType prop. */
+.pwa-form-dialog__title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 .pwa-form-dialog__card .v-card-text {
   padding: 24px !important;
 }
 .pwa-form-dialog__card .v-card-actions {
   padding: 24px 24px 32px !important;
+}
+
+/*
+ * MobileBottomNavBar (packages/ui) is fixed to the viewport bottom with
+ * z-index: 9998, and Vuetify's own overlay stacking (VOverlay's useStack)
+ * only guarantees a dialog's z-index beats *other Vuetify overlays* — it
+ * knows nothing about that plain fixed nav bar. Force these top-level entity
+ * dialogs above it with !important so they cover the nav instead of the nav
+ * covering their bottom (action buttons). Targets the `.v-overlay` root
+ * (scrim + content together, see VDialog's own `class` prop) via the class
+ * each dialog sets on itself, not `.pwa-form-dialog__content`, which only
+ * reaches the inner content div.
+ */
+.form-renderer-dialog,
+.event-form-dialog {
+  z-index: 10000 !important;
+}
+
+/*
+ * Nested discard-changes confirm dialog: Vuetify's stack composable computes
+ * a fresh overlay's z-index from its *own* JS-tracked global stack (parent's
+ * un-overridden ~2000-range value + 10), not from the CSS !important above,
+ * so without this it would render under the 10000 parent. Force it one level
+ * higher than the parent entity dialogs.
+ */
+.pwa-discard-dialog {
+  z-index: 10001 !important;
+}
+
+/*
+ * Same root cause, different symptom: a VSelect/VAutocomplete/VCombobox menu
+ * opened *inside* one of the forced-z-index dialogs above computes its own
+ * z-index from Vuetify's un-overridden JS stack too (parent dialog's real
+ * stack value + 10, e.g. ~2014) — nowhere near the CSS-forced 10000/10001 the
+ * dialog actually renders at. The menu opens but paints behind the dialog
+ * card, i.e. invisible ("dropdown doesn't show"). These menus teleport to
+ * <body> as siblings of the dialog, so they can't be reached via a descendant
+ * selector — target their own class instead (one per component, always
+ * present regardless of which field/dialog opened them).
+ *
+ * The z-index has to land on `.v-menu` specifically, not just its
+ * `.v-select__content`-style child (verified by rendering it: the child kept
+ * z-index: 10002 in computed style but still painted invisible). `.v-menu` is
+ * itself `position: absolute` with its own (low, ~2400) z-index, which makes
+ * it a stacking context — a child's z-index only orders it among *its own*
+ * siblings inside that context, it can never let the child escape and beat a
+ * sibling stacking context (the dialog's, at 10000) from the outside. The
+ * override has to sit on the context-establishing element itself.
+ */
+.v-menu {
+  z-index: 10002 !important;
 }
 
 /* Shared two-column responsive row layout used by the same form components. */
@@ -256,4 +398,27 @@ a:hover {
 .pwa-form-row-item {
   flex: 1 1 180px;
   min-width: 0;
+}
+
+/*
+ * AppIcon renders a bare <svg> with no intrinsic size — every other consumer
+ * supplies its own sizing class, but FormRenderer's field-icon slot (icon
+ * form fields on HCO/HCP/Lead) never did, so it collapsed to 0x0 inside
+ * Vuetify's prepend-inner. This is the shared size for all of those.
+ */
+.pwa-form-field-icon {
+  width: 20px;
+  height: 20px;
+}
+
+/* Clickable "@" prepend-inner icon on identityFields' email input — see FormRenderer.vue's insertAtSign(). */
+.pwa-email-at-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  color: rgb(var(--v-theme-primary));
 }

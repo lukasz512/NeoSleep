@@ -1,5 +1,6 @@
 import type { FormFieldDef } from "../../types/formField";
 import { useConfigStore } from "../../stores/config";
+import { identityFields } from "./identityFields";
 
 /**
  * Staff user entity config for the generic FormRenderer (apps/pwa/src/
@@ -39,27 +40,7 @@ async function loadRegionOptions() {
 }
 
 export const userFormFields: FormFieldDef[] = [
-  {
-    key: "first_name",
-    type: "text",
-    labelKey: "user.users.form.fieldFirstName",
-    required: true,
-    cols: 6,
-  },
-  {
-    key: "last_name",
-    type: "text",
-    labelKey: "user.users.form.fieldLastName",
-    required: true,
-    cols: 6,
-  },
-  {
-    key: "email",
-    type: "email",
-    labelKey: "user.users.form.fieldEmail",
-    required: true,
-    cols: 12,
-  },
+  ...identityFields(),
   {
     key: "role",
     type: "select",
@@ -74,12 +55,6 @@ export const userFormFields: FormFieldDef[] = [
     type: "autocomplete",
     labelKey: "user.users.form.fieldRegion",
     options: loadRegionOptions,
-    cols: 6,
-  },
-  {
-    key: "phone",
-    type: "phone",
-    labelKey: "user.users.form.fieldPhone",
     cols: 6,
   },
   {

@@ -9,7 +9,10 @@
  *   export default createNeoVuetify({ i18n, useI18n }, { colors: { ... } });
  */
 import "vuetify/styles";
+import "@mdi/font/css/materialdesignicons.css";
 import { createVueI18nAdapter } from "vuetify/locale/adapters/vue-i18n";
+/** Vuetify's own built-in translations (dialog labels, pagination, etc.) for NeoSleep's 3 supported locales. */
+export declare const vuetifyLocales: Record<"en" | "pl" | "mx", Record<string, unknown>>;
 export interface NeoVuetifyColors {
     lightPrimary: string;
     lightPrimaryDarken: string;
@@ -20,6 +23,14 @@ export interface NeoVuetifyOptions {
     lightThemeName?: string;
     darkThemeName?: string;
     colors: NeoVuetifyColors;
+    /**
+     * Overrides Vuetify's own mobile/desktop threshold (default 'lg' = 1280px)
+     * so `useDisplay().mobile` agrees with the app's own mobile breakpoint —
+     * otherwise app-level chrome (hamburger, bottom nav) and Vuetify-driven
+     * chrome (permanent nav drawer) can flip at different widths, leaving a
+     * dead zone with neither a visible left menu nor consistent app state.
+     */
+    mobileBreakpoint?: number;
 }
 export declare function createNeoVuetify(adapterInput: Parameters<typeof createVueI18nAdapter>[0], options: NeoVuetifyOptions): {
     install: (app: import("vue").App<any>) => void;

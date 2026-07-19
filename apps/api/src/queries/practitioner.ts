@@ -27,12 +27,14 @@ export interface PractitionerDto {
   // primary_specialty is the canonical field; specialty is the legacy alias
   primary_specialty: string;
   specialty: string;
+  organization_id: string | null;
   institution: string;
   region: string;
   influence_tier: string;
   status: string;
   language: string | null;
   national_ids: Record<string, string> | null;
+  social_links: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }
@@ -49,12 +51,14 @@ function toDto(p: Practitioner): PractitionerDto {
     phone:             p.phone ?? "",
     primary_specialty: p.primary_specialty ?? "",
     specialty:         p.primary_specialty ?? "",  // legacy alias
+    organization_id:   p.organization_id ?? null,
     institution:       p.institution ?? "",
     region:            p.region,
     influence_tier:    p.influence_tier ?? "C",
     status:            p.status ?? "active",
     language:          p.language ?? null,
     national_ids:      p.national_ids ?? null,
+    social_links:      p.social_links ?? null,
     created_at:        p.created_at instanceof Date ? p.created_at.toISOString() : String(p.created_at),
     updated_at:        p.updated_at instanceof Date ? p.updated_at.toISOString() : String(p.updated_at),
   };

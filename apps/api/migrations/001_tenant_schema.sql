@@ -365,6 +365,8 @@ BEGIN
       phone         TEXT,
       email         TEXT,
       website       TEXT,
+      google_link   TEXT,       -- Google Maps/Business profile URL
+      specialties   TEXT[]      NOT NULL DEFAULT ''{}''::TEXT[],  -- mirrors practitioner.specialties vocabulary
       status        TEXT        NOT NULL DEFAULT ''active''
                       CHECK (status IN (''pending_approval'', ''active'', ''inactive'')),
       metadata      JSONB,
@@ -379,6 +381,8 @@ BEGIN
     slug||'_org_status_idx', slug);
   EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %I.organization (country_code)',
     slug||'_org_country_idx', slug);
+  EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %I.organization USING GIN (specialties)',
+    slug||'_org_specialties_gin', slug);
 
   -- ===========================================================================
   -- PRACTITIONERS (HCP — doctors, dentists, specialists)

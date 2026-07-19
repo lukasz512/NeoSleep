@@ -1,7 +1,7 @@
 <template>
-  <LoginView />
+  <AuthView />
 </template>
 
 <script setup lang="ts">
-import { LoginView } from "@ui";
+import { AuthView } from "@ui";
 </script>

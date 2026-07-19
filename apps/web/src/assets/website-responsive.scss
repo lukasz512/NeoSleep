@@ -56,22 +56,14 @@
   }
 
   // ── A2. Viewport: mobile bottom nav ───────────────────────────────────────
-  // position: fixed, env(safe-area-inset-bottom) → must be @media
+  // .mbn is a plain wrapper div around the shared MobileBottomNavBar
+  // (packages/ui), which owns all positioning/sizing/color — this just
+  // toggles it on. display: contents (not flex) so the wrapper stays out of
+  // layout and the bar's own `position: fixed` takes over unchanged.
 
   @media (max-width: 1024px) {
     .mbn {
-      display: flex;
-      align-items: stretch;
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: var(--website-bottom-nav-height, 64px);
-      z-index: 9998;
-      background: var(--website-bg);
-      border-top: 1px solid var(--website-border);
-      box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
-      padding-bottom: env(safe-area-inset-bottom);
+      display: contents;
     }
 
     /* Clear space for fixed bottom nav */

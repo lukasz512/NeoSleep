@@ -1,51 +1,57 @@
 <template>
   <div class="view-presentations app-entity-list">
-    <div v-if="!isTrulyEmpty && !loadError" class="app-entity-list__toolbar">
-      <VTextField
-        v-model="searchQuery"
-        type="search"
-        class="app-entity-list__search"
-        :placeholder="t('user.presentations.searchPlaceholder')"
-        :aria-label="t('user.presentations.searchPlaceholder')"
-        autocomplete="off"
-        density="comfortable"
-        variant="outlined"
-        hide-details
-        :clearable="false"
-      >
-        <template #append-inner>
-          <VTooltip v-if="searchQuery.trim()" location="bottom">
-            <template #activator="{ props: tooltipProps }">
-              <VBtn
-                v-bind="tooltipProps"
-                icon
-                variant="flat"
-                size="small"
-                class="app-entity-list__search-clear"
-                :aria-label="t('user.presentations.filters.clear')"
-                @click="onSearchClear"
-              >
-                <AppIcon name="close" class="app-entity-list__icon" />
-              </VBtn>
-            </template>
-            <span>{{ t("user.presentations.filters.clear") }}</span>
-          </VTooltip>
-        </template>
-      </VTextField>
-      <div class="app-entity-list__toolbar-right">
+    <div v-if="!isTrulyEmpty && !loadError && !isInitialLoading" class="app-entity-list__toolbar">
+      <div class="app-entity-list__search-group">
+        <VTextField
+          v-model="searchQuery"
+          type="search"
+          class="app-entity-list__search"
+          :placeholder="t('user.presentations.searchPlaceholder')"
+          :aria-label="t('user.presentations.searchPlaceholder')"
+          autocomplete="off"
+          density="comfortable"
+          variant="outlined"
+          hide-details
+          :clearable="false"
+          :loading="loading ? 'primary' : false"
+        >
+          <template #prepend-inner>
+            <AppIcon name="search" class="app-entity-list__search-icon" />
+          </template>
+          <template #append-inner>
+            <VTooltip v-if="searchQuery.trim()" location="bottom">
+              <template #activator="{ props: tooltipProps }">
+                <AppButton
+                  v-bind="tooltipProps"
+                  icon
+                  variant="flat"
+                  size="small"
+                  :loading="clearingSearch"
+                  class="app-entity-list__search-clear"
+                  :aria-label="t('user.presentations.filters.clear')"
+                  @click="onSearchClear"
+                >
+                  <AppIcon name="close" class="app-entity-list__icon" />
+                </AppButton>
+              </template>
+              <span>{{ t("user.presentations.filters.clear") }}</span>
+            </VTooltip>
+          </template>
+        </VTextField>
         <VTooltip v-if="hasActiveFiltersOrSearch" location="bottom">
           <template #activator="{ props: tooltipProps }">
-            <VBtn
+            <AppButton
               v-bind="tooltipProps"
               icon
               variant="flat"
               size="large"
+              :loading="clearingFilters"
               class="app-entity-list__clear-filters app-entity-list__clear-filters--no-border"
               :aria-label="t('user.presentations.filters.clear')"
               @click="onFiltersClear"
             >
               <AppIcon name="close" class="app-entity-list__icon" />
-            </VBtn>
+            </AppButton>
           </template>
           <span>{{ t("user.presentations.filters.clear") }}</span>
         </VTooltip>
@@ -58,23 +64,23 @@
           @update:model-value="onFilterStateUpdate"
           @clear="onFiltersClear"
         />
-        <VTooltip v-if="isAdmin" location="bottom">
-          <template #activator="{ props: tooltipProps }">
-            <VBtn
-              v-bind="tooltipProps"
-              icon
-              variant="flat"
-              size="large"
-              class="app-entity-list__add app-entity-list__add--no-border"
-              :aria-label="t('user.presentations.add')"
-              @click="onAdd"
-            >
-              <AppIcon name="plus" class="app-entity-list__icon" />
-            </VBtn>
-          </template>
-          <span>{{ t("user.presentations.add") }}</span>
-        </VTooltip>
       </div>
+      <VTooltip v-if="isAdmin" location="bottom">
+        <template #activator="{ props: tooltipProps }">
+          <AppButton
+            v-bind="tooltipProps"
+            icon
+            variant="flat"
+            size="large"
+            class="app-entity-list__add app-entity-list__add--no-border"
+            :aria-label="t('user.presentations.add')"
+            @click="onAdd"
+          >
+            <AppIcon name="plus" class="app-entity-list__icon" />
+          </AppButton>
+        </template>
+        <span>{{ t("user.presentations.add") }}</span>
+      </VTooltip>
     </div>
 
     <div v-if="loadError" class="app-entity-list__error-wrap">
@@ -82,12 +88,13 @@
         :title="t('app.errorState.title')"
         :subtitle="loadError"
         :refresh-label="t('app.errorState.refresh')"
+        :loading="loading"
         @refresh="loadData"
       />
     </div>
 
-    <div v-else-if="loading && items.length === 0" class="view-presentations__loading">
-      <VProgressLinear indeterminate color="primary" />
+    <div v-else-if="isInitialLoading" class="view-presentations__loading">
+      <AppLoadingState />
     </div>
 
     <div v-else-if="isTrulyEmpty" class="view-presentations__empty">
@@ -110,9 +117,9 @@
       </div>
       <p class="app-entity-list__no-results-title">{{ t("user.presentations.noResultsForCriteria") }}</p>
       <p class="app-entity-list__no-results-subtitle">{{ t("user.presentations.noResultsForCriteriaSubtitle") }}</p>
-      <VBtn variant="outlined" color="primary" class="app-entity-list__no-results-clear" @click="onFiltersClear">
+      <AppButton variant="outlined" color="primary" :loading="clearingFilters" class="app-entity-list__no-results-clear" @click="onFiltersClear">
         {{ t("user.presentations.filters.clear") }}
-      </VBtn>
+      </AppButton>
     </div>
 
     <template v-else>
@@ -199,7 +206,7 @@
               </svg>
             </div>
             <span v-if="fileTypeOf(p)" class="view-presentations__cover-badge">{{ fileTypeOf(p).toUpperCase() }}</span>
-            <VBtn
+            <AppButton
               v-if="isAdmin"
               icon
               variant="flat"
@@ -209,7 +216,7 @@
               @click.stop="onEdit(p)"
             >
               <AppIcon name="pencil" class="app-entity-list__icon" />
-            </VBtn>
+            </AppButton>
           </div>
 
           <!-- Card body -->
@@ -240,7 +247,6 @@
     />
 
     <FormRenderer
-      v-if="showForm"
       v-model="showForm"
       :fields="presentationFormFields"
       :initial-data="editingItem ?? undefined"
@@ -256,8 +262,10 @@
 <script setup lang="ts">
 import { ref, computed, defineAsyncComponent } from "vue";
 import { useI18n } from "vue-i18n";
+import AppButton from "../components/AppButton.vue";
 import AppEmptyState from "../components/AppEmptyState.vue";
 import AppErrorState from "../components/AppErrorState.vue";
+import AppLoadingState from "../components/AppLoadingState.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppFilterBar from "../components/AppFilterBar.vue";
 import { useAuthStore } from "../stores/auth";
@@ -312,7 +320,7 @@ const presentationFilterDefinitions = computed<FilterDefinition[]>(() => [
 
 const {
   searchQuery, filterState, activeFilterCount, tableOptions,
-  loading, loadError, items, total,
+  loading, clearingSearch, clearingFilters, loadError, items, total,
   hasActiveFiltersOrSearch, isTrulyEmpty,
   onFilterStateUpdate, onFiltersClear, onSearchClear,
   onOptionsUpdate, loadData,
@@ -324,6 +332,7 @@ const {
   filterParamKeys: ["status", "locale"],
 });
 
+const isInitialLoading = computed(() => loading.value && items.value.length === 0);
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / tableOptions.value.itemsPerPage)));
 
 function idOf(item: Record<string, unknown>): string {
@@ -376,26 +385,31 @@ function onEdit(p: Record<string, unknown>) {
   showForm.value = true;
 }
 
-async function onSubmit(payload: Record<string, unknown>) {
+async function onSubmit(payload: Record<string, unknown>, done: (ok: boolean) => void) {
   const isEdit = typeof payload.id === "string" && payload.id;
   const url = isEdit ? `/api/v1/presentation/${payload.id}` : "/api/v1/presentation";
   const method = isEdit ? "PATCH" : "POST";
   const { id, ...body } = payload;
   void id;
-  const res = await apiFetch(url, {
-    method,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    errorMessageKey: "user.presentations.errorLoad",
-  });
-  if (res.ok) {
-    notifications.show(
-      t(isEdit ? "user.presentations.form.editSuccess" : "user.presentations.form.success"),
-      "success",
-    );
-    showForm.value = false;
-    editingItem.value = null;
-    window.dispatchEvent(new Event("entity-list-refresh"));
+  try {
+    const res = await apiFetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      notifications.show(
+        t(isEdit ? "user.presentations.form.editSuccess" : "user.presentations.form.success"),
+        "success",
+      );
+      editingItem.value = null;
+      window.dispatchEvent(new Event("entity-list-refresh"));
+      done(true);
+    } else {
+      done(false);
+    }
+  } catch {
+    done(false);
   }
 }
 </script>
@@ -412,8 +426,11 @@ async function onSubmit(payload: Record<string, unknown>) {
 }
 
 .view-presentations__loading {
-  flex: 1;
-  padding: 24px;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .view-presentations__empty {

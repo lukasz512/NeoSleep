@@ -13,7 +13,7 @@
           @touchend.passive="onTouchEnd"
         >
           <span class="notif-toast__msg">{{ current.key ? t(current.key) : current.message }}</span>
-          <div class="notif-toast__bar" :style="barStyle" />
+          <div v-if="current.type !== 'error'" class="notif-toast__bar" :style="barStyle" />
         </div>
       </Transition>
     </div>
@@ -51,7 +51,10 @@ function onAfterLeave() {
 watch(current, (val) => {
   if (val) {
     clearTimer();
-    timer = setTimeout(triggerDismiss, TIMEOUT);
+    // Errors stay up until the rep taps/swipes them away — a 4s auto-dismiss
+    // is too easy to miss while attention is on a form, and the message is
+    // often the only feedback the rep gets that their submit failed.
+    if (val.type !== "error") timer = setTimeout(triggerDismiss, TIMEOUT);
     if (!visible.value) visible.value = true;
   }
 }, { immediate: true });

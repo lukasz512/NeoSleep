@@ -4,6 +4,7 @@ import {
   updateLead,
   getLeadById,
   convertLead,
+  softDeleteLead,
   type InsertLeadInput,
   type UpdateLeadInput,
   type Lead,
@@ -42,12 +43,21 @@ function normalizeLeadStatus(input: string | undefined): string | undefined {
 export interface CreateLeadInput {
   first_name: string;
   last_name: string;
+  title?: string | null;
   email?: string | null;
   phone?: string | null;
   status?: string;
   region?: string;
   source?: string | null;
   assigned_to?: string | null;
+  /**
+   * Organization name — no dedicated column, lives at metadata.institution
+   * (see the header comment near ConvertLeadCommand: a Lead is deliberately
+   * "dirty" data, no live FK to organization until an explicit convert step).
+   * The frontend's FormRenderer nests this field under `metadata` itself
+   * (see config/forms/leadForm.ts's `nestUnder: "metadata"`), so it already
+   * arrives here as `metadata.institution` — required, validated below.
+   */
   metadata?: Record<string, unknown> | null;
 }
 
@@ -63,19 +73,23 @@ export async function CreateLeadCommand(
   if (!firstName) throw new ValidationError("first_name is required");
   if (!lastName)  throw new ValidationError("last_name is required");
 
+  const institution = typeof input.metadata?.institution === "string" ? input.metadata.institution.trim() : "";
+  if (!institution) throw new ValidationError("institution is required");
+
   const email = input.email?.trim() ?? null;
   if (email && !EMAIL_REGEX.test(email)) throw new ValidationError("Invalid email format");
 
   const insertInput: InsertLeadInput = {
     first_name:  firstName,
     last_name:   lastName,
+    title:       input.title?.trim() || null,
     email:       email || null,
     phone:       input.phone?.trim() ?? null,
     status:      normalizeLeadStatus(input.status) ?? "new",
     region:      input.region?.trim() ?? "",
     source:      input.source?.trim() ?? null,
     assigned_to: input.assigned_to?.trim() ?? null,
-    metadata:    input.metadata ?? null,
+    metadata:    { ...input.metadata, institution },
   };
 
   const lead = await insertLead(ctx.client, insertInput);
@@ -99,12 +113,14 @@ export async function CreateLeadCommand(
 export interface UpdateLeadPayload {
   first_name?: string;
   last_name?: string;
+  title?: string | null;
   email?: string | null;
   phone?: string | null;
   status?: string;
   region?: string;
   source?: string | null;
   assigned_to?: string | null;
+  /** See CreateLeadInput.metadata — institution lives at metadata.institution. */
   metadata?: Record<string, unknown> | null;
 }
 
@@ -127,6 +143,7 @@ export async function UpdateLeadCommand(
   const updateInput: UpdateLeadInput = {
     first_name:  input.first_name,
     last_name:   input.last_name,
+    title:       input.title,
     email:       input.email,
     phone:       input.phone,
     status:      normalizeLeadStatus(input.status),
@@ -210,4 +227,22 @@ export async function ConvertLeadCommand(
   });
 
   return after;
+}
+
+// ---------------------------------------------------------------------------
+// DELETE LEAD (soft delete)
+// ---------------------------------------------------------------------------
+
+export async function DeleteLeadCommand(ctx: TenantContext, id: string): Promise<void> {
+  if (!id?.trim()) throw new ValidationError("lead id is required");
+
+  await softDeleteLead(ctx.client, id);
+
+  await insertAuditLog(ctx.client, {
+    user_id: ctx.user.id,
+    action: "delete",
+    entity_type: "Lead",
+    entity_id: id,
+    request_id: ctx.requestId,
+  });
 }

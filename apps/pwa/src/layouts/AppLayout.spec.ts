@@ -128,18 +128,53 @@ describe("AppLayout", () => {
   });
 
   describe("admin-only controls", () => {
-    it("role-preview 'view as' select is gated behind isAdmin", () => {
-      const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
-      expect(appLayoutSource).toMatch(/v-if="isAdmin"[\s\S]*?VSelect|VSelect[\s\S]*?v-if="isAdmin"/);
-      expect(appLayoutSource).toContain("user.rolePreview.label");
-    });
-
     it("theme panel feature (Theme & style editor) has been fully removed, not just hidden", () => {
       const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
       expect(appLayoutSource).not.toContain("ThemePanel");
       expect(appLayoutSource).not.toContain("themePanel");
       const componentsDir = path.resolve(__dirname, "components");
       expect(readdirSync(componentsDir)).not.toContain("ThemePanel.vue");
+    });
+  });
+
+  describe("top bar: logo-only on the right, hamburger + title on the left", () => {
+    it("app bar's right side renders only the logo — no role-preview select, no user menu", () => {
+      const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
+      expect(appLayoutSource).not.toContain("app-bar-actions");
+      expect(appLayoutSource).not.toContain("rolePreview");
+      expect(appLayoutSource).not.toContain("VSelect");
+    });
+
+    it("app bar logo slot renders only for the 'bar' location — the left drawer no longer shows a logo", () => {
+      const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
+      expect(appLayoutSource).toMatch(/v-if=["']location === ['"]bar['"]["']/);
+
+      const appLogoSource = readFileSync(path.resolve(__dirname, "components/AppLogo.vue"), "utf-8");
+      // The sidebar/drawer logo variant has been removed entirely, not just hidden.
+      expect(appLogoSource).not.toContain("variant");
+      expect(appLogoSource).not.toContain("layout-app__logo-icon");
+      expect(appLogoSource).toContain("layout-app__bar-logo-link");
+      const barLinkClassBody = appLogoSource.match(/\.layout-app__bar-logo-link\s*\{[\s\S]*?\n\}/)?.[0] ?? "";
+      expect(barLinkClassBody).not.toContain("::after");
+      expect(barLinkClassBody).not.toContain("border");
+    });
+
+    it("the shared AppShell always shows the app-bar logo (not mobile-only)", () => {
+      const appShellSource = readFileSync(
+        path.resolve(__dirname, "../../../../packages/ui/src/components/AppShell.vue"),
+        "utf-8",
+      );
+      expect(appShellSource).not.toContain('v-if="mobile" class="app-shell__bar-logo"');
+      expect(appShellSource).toContain("app-shell__bar-logo");
+    });
+  });
+
+  describe("user menu and sidebar collapse toggle live in the desktop drawer footer", () => {
+    it("desktop drawer-footer renders both the user menu and the collapse toggle", () => {
+      const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
+      expect(appLayoutSource).toContain("layout-nav-footer");
+      expect(appLayoutSource).toContain("AppUserMenuPanel");
+      expect(appLayoutSource).toContain("toggleSidebar");
     });
   });
 

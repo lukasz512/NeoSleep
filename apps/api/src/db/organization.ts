@@ -17,6 +17,8 @@ export interface Organization {
   phone: string | null;
   email: string | null;
   website: string | null;
+  google_link: string | null;
+  specialties: string[];
   status: string;
   metadata: Record<string, unknown> | null;
   created_at: Date;
@@ -42,6 +44,8 @@ export interface InsertOrganizationInput {
   phone?: string | null;
   email?: string | null;
   website?: string | null;
+  google_link?: string | null;
+  specialties?: string[];
   status?: string;
   metadata?: Record<string, unknown> | null;
 }
@@ -58,6 +62,8 @@ export interface UpdateOrganizationInput {
   phone?: string | null;
   email?: string | null;
   website?: string | null;
+  google_link?: string | null;
+  specialties?: string[];
   status?: string;
   metadata?: Record<string, unknown> | null;
 }
@@ -70,8 +76,8 @@ function isOrgSortColumn(s: string): s is (typeof ORG_SORT_COLUMNS)[number] {
 
 const ORG_SELECT_COLS = `
   id, name, type, identifiers, address_line1, city, state, postal_code,
-  country_code, region, territory_id, phone, email, website, status,
-  metadata, created_at, updated_at`.trim();
+  country_code, region, territory_id, phone, email, website, google_link,
+  specialties, status, metadata, created_at, updated_at`.trim();
 
 export async function getOrganizationPaginated(
   client: PoolClient,
@@ -193,8 +199,8 @@ export async function insertOrganization(client: PoolClient, input: InsertOrgani
   try {
     const result = await client.query<{ id: string }>(
       `INSERT INTO organization
-         (name, type, address_line1, city, state, postal_code, country_code, region, phone, email, website, status, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+         (name, type, address_line1, city, state, postal_code, country_code, region, phone, email, website, google_link, specialties, status, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        RETURNING id`,
       [
         name,
@@ -208,6 +214,8 @@ export async function insertOrganization(client: PoolClient, input: InsertOrgani
         trimOrNull(input.phone),
         trimOrNull(input.email),
         trimOrNull(input.website),
+        trimOrNull(input.google_link),
+        input.specialties ?? [],
         trimOrEmpty(input.status) || "active",
         input.metadata ? JSON.stringify(input.metadata) : null,
       ]
@@ -279,6 +287,14 @@ export async function updateOrganization(client: PoolClient, id: string, input: 
     if (input.website !== undefined) {
       params.push(trimOrNull(input.website));
       sets.push(`website = $${idx++}`);
+    }
+    if (input.google_link !== undefined) {
+      params.push(trimOrNull(input.google_link));
+      sets.push(`google_link = $${idx++}`);
+    }
+    if (input.specialties !== undefined) {
+      params.push(input.specialties ?? []);
+      sets.push(`specialties = $${idx++}`);
     }
     if (input.status !== undefined) {
       params.push(input.status);

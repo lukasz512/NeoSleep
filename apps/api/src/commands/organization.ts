@@ -65,6 +65,8 @@ export interface CreateOrganizationInput {
   phone?: string | null;
   email?: string | null;
   website?: string | null;
+  google_link?: string | null;
+  specialties?: string[];
   metadata?: Record<string, unknown> | null;
 }
 
@@ -105,6 +107,8 @@ export async function CreateOrganizationCommand(
     phone:         input.phone?.trim() ?? null,
     email:         email || null,
     website:       input.website?.trim() ?? null,
+    google_link:   input.google_link?.trim() ?? null,
+    specialties:   input.specialties,
     metadata:      input.metadata ?? null,
   };
 
@@ -145,6 +149,8 @@ export interface UpdateOrganizationPayload {
   phone?: string | null;
   email?: string | null;
   website?: string | null;
+  google_link?: string | null;
+  specialties?: string[];
   metadata?: Record<string, unknown> | null;
 }
 
@@ -186,6 +192,8 @@ export async function UpdateOrganizationCommand(
     phone:         input.phone,
     email:         input.email,
     website:       input.website,
+    google_link:   input.google_link,
+    specialties:   input.specialties,
     metadata:      input.metadata,
   };
 

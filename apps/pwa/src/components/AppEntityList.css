@@ -15,11 +15,19 @@
   flex-shrink: 0;
 }
 
-.app-entity-list__toolbar-right {
+.app-entity-list__search-group {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-left: auto;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.app-entity-list__search-icon {
+  width: 20px;
+  height: 20px;
+  display: block;
+  color: var(--pwa-text, currentColor);
 }
 
 .app-entity-list__clear-filters {
@@ -36,13 +44,6 @@
   &:hover {
     background: rgba(var(--v-theme-primary), 0.12);
   }
-}
-
-.app-entity-list__clear-filters-icon {
-  width: 24px;
-  height: 24px;
-  display: block;
-  color: inherit;
 }
 
 .app-entity-list__search-clear {
@@ -62,7 +63,9 @@
 .app-entity-list__add {
   min-width: 44px;
   min-height: 44px;
-  color: var(--pwa-text, currentColor);
+  margin-left: auto;
+  flex-shrink: 0;
+  color: rgb(var(--v-theme-primary));
 }
 
 .app-entity-list__add--no-border {
@@ -71,11 +74,16 @@
   background: transparent;
 
   &:hover {
-    background: rgba(var(--v-theme-on-surface), 0.08);
+    background: rgba(var(--v-theme-primary), 0.12);
   }
 }
 
-.app-entity-list__add-icon {
+/* Shared sizing for every inline AppIcon rendered inside a toolbar icon
+   button (search-clear, clear-filters, add) — without an explicit size the
+   raw <svg> falls back to the browser's intrinsic 300x150 default and gets
+   clipped to nothing by the button's overflow, which is why these icons
+   were invisible despite correct color. */
+.app-entity-list__icon {
   width: 24px;
   height: 24px;
   display: block;
@@ -83,12 +91,77 @@
 }
 
 .app-entity-list__search {
-  max-width: 320px;
-  min-width: 180px;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  transition: max-width var(--pwa-transition-duration, 280ms) var(--pwa-ease-out-smooth, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+/* Vuetify thickens the outline to 2px on focus/error by default — keep it at
+   the same thin 1px while the mobile search expands, so the box only grows
+   in width, not stroke weight. */
+.app-entity-list__search :deep(.v-field--focused .v-field__outline) {
+  --v-field-border-width: 1px;
+}
+
+/* Full-width search reads well stacked on mobile, but stretched edge-to-edge
+   on desktop it fights the toolbar's icon buttons for visual weight — cap it
+   there instead. */
+@media (min-width: 768px) {
+  .app-entity-list__search {
+    max-width: 320px;
+  }
+}
+
+/* Mobile: search collapses to just the prepend icon and sits flush with the
+   filter/add icons at the right edge; focusing (or typing) grows it leftward.
+   search-group keeps flex:1 (fills the toolbar row) but packs its own
+   children (search, filter, clear) at its right edge via flex-end, so the
+   field's flex-grow consumes free space growing left instead of the group's
+   box just leaving a dead gap before the add button. */
+@media (max-width: 767px) {
+  .app-entity-list__search-group {
+    justify-content: flex-end;
+  }
+
+  /* 20px (desktop, inside a full-width field) reads noticeably thinner than
+     the 24px filter/add icons once it's a bare icon sitting next to them at
+     rest — bump to 24px here so the stroke weight matches. */
+  .app-entity-list__search-icon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .app-entity-list__search {
+    max-width: 200px;
+    overflow: hidden;
+    transition: max-width 280ms var(--pwa-ease-out-smooth, cubic-bezier(0.22, 1, 0.36, 1)) 60ms;
+  }
+
+  /* Expanded (focused or has a value): border fades in first, box starts
+     growing 60ms later (see .app-entity-list__search transition above). */
+  .app-entity-list__search :deep(.v-field__outline) {
+    opacity: 1;
+    transition: opacity 120ms ease;
+  }
+
+  /* Collapsed (rest): bare icon, no border box around it. Shrinks back to
+     the icon first, border fades out last so it doesn't hang in empty space
+     while the field is still mid-collapse. */
+  .app-entity-list__search--collapsed {
+    max-width: 44px;
+    transition: max-width 280ms var(--pwa-ease-out-smooth, cubic-bezier(0.22, 1, 0.36, 1));
+  }
+
+  .app-entity-list__search--collapsed :deep(.v-field__outline) {
+    opacity: 0;
+    transition: opacity 120ms ease 200ms;
+  }
 }
 
 .app-entity-list__empty-wrap,
-.app-entity-list__error-wrap {
+.app-entity-list__error-wrap,
+.app-entity-list__loading-wrap {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
@@ -104,6 +177,14 @@
   overflow: hidden;
   border-radius: var(--pwa-radius);
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+
+/* Mobile feed items carry their own border + elevation (below) — the
+   outer wrap border would otherwise double up as a card-around-cards box. */
+.app-entity-list__table-wrap--flat {
+  overflow: visible;
+  border: none;
+  border-radius: 0;
 }
 
 .app-entity-list__table-wrap :deep(.v-data-table) {
@@ -122,10 +203,6 @@
   transition: opacity 0.45s ease, background-color 0.25s ease;
 }
 
-.app-entity-list__table-wrap :deep(.v-data-table-progress) {
-  transition: opacity 0.4s ease;
-}
-
 .app-entity-list__table-wrap :deep(.v-table__wrapper) {
   flex: 1;
   min-height: 0;
@@ -138,6 +215,27 @@
 
 .app-entity-list__card--clickable {
   cursor: pointer;
+  position: relative;
+}
+
+/* M3 state layer as a separate overlay (not a background-color swap) so it
+   composites on top of the card's own surface-container-low tint instead of
+   replacing it — a plain background-color here would just override the base
+   tone on hover instead of tinting it. */
+.app-entity-list__card--clickable::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-color: rgb(var(--v-theme-on-surface));
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+.app-entity-list__card--clickable:hover::after {
+  opacity: 0.04;
+}
+.app-entity-list__card--clickable:active::after {
+  opacity: 0.08;
 }
 
 .app-entity-list__no-results-placeholder {
@@ -187,17 +285,117 @@
 
 .app-entity-list__feed {
   display: block;
-  padding: 12px 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: var(--pwa-fib-md, 13px) 0;
   border: none;
   position: relative;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
+/* Card shape/rhythm follows the Fibonacci scale (--pwa-fib-*, theme.scss)
+   instead of the flat control radius (--pwa-radius) — a more expressive,
+   rounder shape for the feed's list-item cards specifically. */
 .app-entity-list__card {
-  margin-bottom: 12px;
+  position: relative;
+  margin-bottom: var(--pwa-fib-md, 13px);
+  border-radius: var(--pwa-fib-lg, 21px);
+  /* M3 outline-variant + surface-container-low (packages/vuetify theme
+     colors) instead of Vuetify's generic --v-border-color/surface — a
+     low-emphasis divider around a faintly tonal card, the M3 "filled card"
+     look, rather than a plain outline on the page background. */
+  border: 1px solid rgb(var(--v-theme-outline-variant));
+  background: rgb(var(--v-theme-surface-container-low));
+  overflow: hidden;
+  transition: opacity 0.2s ease, background-color 0.2s ease;
 }
 
 .app-entity-list__card:last-of-type {
   margin-bottom: 0;
+}
+
+.app-entity-list__card--disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* min-height keeps the tile itself on the Fibonacci scale (89px), not just
+   its internal padding — at content-driven auto height the two-line
+   title/meta collapsed the card down to a visually "flat" strip. The 55px
+   circular avatar centered inside it (see .app-entity-list__card-avatar)
+   lands on the golden ratio (89/55 ≈ 1.618) that falls naturally out of two
+   consecutive Fibonacci numbers. */
+.app-entity-list__card-body {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  min-height: var(--pwa-fib-3xl, 89px);
+}
+
+/* Circular avatar (Material 3's default leading-image shape for a list
+   item): a fixed square instead of the old stretch-to-row-height rectangle
+   — a non-square box would have squashed VAvatar's circle into an oval.
+   Centered in the now-taller (89px) card via align-self, with a Fibonacci
+   inset (13px) from the card's left edge instead of sitting flush against it. */
+.app-entity-list__card-avatar {
+  flex-shrink: 0;
+  align-self: center;
+  width: var(--pwa-fib-xxl, 55px);
+  height: var(--pwa-fib-xxl, 55px);
+  margin-left: var(--pwa-fib-md, 13px);
+}
+
+.app-entity-list__card-avatar :deep(.v-avatar) {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.app-entity-list__card-avatar :deep(img) {
+  object-fit: cover;
+}
+
+.app-entity-list__card-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: var(--pwa-fib-md, 13px) var(--pwa-fib-sm, 8px) var(--pwa-fib-md, 13px) var(--pwa-fib-md, 13px);
+}
+
+.app-entity-list__card-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-entity-list__card-meta {
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-entity-list__card-side {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--pwa-fib-xs, 5px);
+  padding: var(--pwa-fib-sm, 8px) var(--pwa-fib-sm, 8px) var(--pwa-fib-sm, 8px) 0;
+}
+
+.app-entity-list__card-status {
+  flex-shrink: 0;
+}
+
+.app-entity-list__card-actions {
+  flex-shrink: 0;
+}
+
+.app-entity-list__card-loader {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
 }
 
 .app-entity-list__feed-empty {
@@ -205,11 +403,20 @@
 }
 
 .app-entity-list__institution-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: rgb(var(--v-theme-primary));
   text-decoration: none;
 }
 .app-entity-list__institution-link:hover {
   text-decoration: underline;
+}
+
+.app-entity-list__institution-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
 }
 
 .app-entity-list__cell-empty {

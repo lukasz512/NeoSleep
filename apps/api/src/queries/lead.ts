@@ -22,6 +22,7 @@ export interface LeadDto {
   name: string;
   first_name: string;
   last_name: string;
+  title: string | null;
   email: string;
   phone: string;
   status: string;
@@ -43,6 +44,7 @@ function toDto(l: Lead): LeadDto {
     name:           l.name,
     first_name:     l.first_name,
     last_name:      l.last_name,
+    title:          l.title ?? null,
     email:          l.email ?? "",
     phone:          l.phone ?? "",
     status:         l.status,

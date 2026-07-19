@@ -40,7 +40,15 @@ echo "Instaluję zależności..."
 (corepack enable 2>/dev/null || true)
 pnpm install --reporter=silent 2>/dev/null || npm install --silent
 
-# ─── 4. Uruchom serwisy (API + app + website + telegram) ──────────────────────
+# ─── 4. Zbuduj pakiety kompilowane (nie surowe .ts jak packages/stores/ui) ─────
+# @neo/email jest prawdziwym skompilowanym pakietem (apps/api to zwykły Node bez
+# bundlera, nie może zaimportować surowego .ts jak robią to Vite'owe apps/pwa i
+# apps/web) — bez tego kroku `tsx --watch` w apps/api wywali się na starcie z
+# ERR_MODULE_NOT_FOUND, bo node_modules/@neo/email/dist jeszcze nie istnieje.
+echo "Buduję @neo/email..."
+pnpm --filter @neo/email build
+
+# ─── 5. Uruchom serwisy (API + app + website + telegram) ──────────────────────
 # Migracje BD uruchamiają się automatycznie przy starcie API (apps/api/src/db/migrations.ts)
 # przeciwko DATABASE_URL z .env (Supabase) — nie ma lokalnej bazy do czekania.
 # concurrently odpala wszystkie procesy z kolorowymi prefixami w jednym terminalu

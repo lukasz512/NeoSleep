@@ -82,9 +82,11 @@ practitionerRouter.post(
       first_name?: string; last_name?: string; salutation?: string;
       email?: string; phone?: string; primary_specialty?: string;
       specialty?: string; // legacy alias
+      organization_id?: string;
       institution?: string; region?: string;
       influence_tier?: string; language?: string;
       national_ids?: Record<string, string>;
+      social_links?: Record<string, unknown>;
       lead_id?: string;
     };
 
@@ -98,11 +100,13 @@ practitionerRouter.post(
         phone:             typeof body.phone             === "string" ? body.phone.trim()             : null,
         primary_specialty: typeof body.primary_specialty === "string" ? body.primary_specialty        : null,
         specialty:         typeof body.specialty         === "string" ? body.specialty                : null,
+        organization_id:   typeof body.organization_id    === "string" ? body.organization_id          : undefined,
         institution:       typeof body.institution       === "string" ? body.institution              : null,
         region:            typeof body.region            === "string" ? body.region                   : undefined,
         influence_tier:    typeof body.influence_tier    === "string" ? body.influence_tier           : undefined,
         language:          typeof body.language          === "string" ? body.language                 : null,
         national_ids:      body.national_ids ?? null,
+        social_links:      body.social_links ?? null,
         lead_id:           typeof body.lead_id           === "string" ? body.lead_id.trim()           : null,
       });
     });
@@ -126,9 +130,11 @@ practitionerRouter.patch(
       first_name?: string; last_name?: string; salutation?: string;
       email?: string; phone?: string; primary_specialty?: string;
       specialty?: string; // legacy alias
+      organization_id?: string;
       institution?: string; region?: string;
       influence_tier?: string; language?: string;
       national_ids?: Record<string, string>;
+      social_links?: Record<string, unknown>;
     };
 
     const practitioner = await withTenant(slug, async (client) => {
@@ -141,11 +147,13 @@ practitionerRouter.patch(
         phone:             typeof body.phone             === "string" ? body.phone             : undefined,
         primary_specialty: typeof body.primary_specialty === "string" ? body.primary_specialty : undefined,
         specialty:         typeof body.specialty         === "string" ? body.specialty         : undefined,
+        organization_id:   typeof body.organization_id    === "string" ? body.organization_id   : undefined,
         institution:       typeof body.institution       === "string" ? body.institution       : undefined,
         region:            typeof body.region            === "string" ? body.region            : undefined,
         influence_tier:    typeof body.influence_tier    === "string" ? body.influence_tier    : undefined,
         language:          typeof body.language          === "string" ? body.language          : undefined,
         national_ids:      body.national_ids !== undefined ? body.national_ids : undefined,
+        social_links:      body.social_links !== undefined ? body.social_links : undefined,
       });
     });
 

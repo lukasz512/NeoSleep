@@ -82,6 +82,7 @@ organizationRouter.post(
       name?: string; type?: string; status?: string;
       address_line1?: string; city?: string; state?: string; postal_code?: string;
       country_code?: string; region?: string; phone?: string; email?: string; website?: string;
+      google_link?: string; specialties?: string[];
       metadata?: Record<string, unknown>;
     };
 
@@ -100,6 +101,8 @@ organizationRouter.post(
         phone:         typeof body.phone         === "string" ? body.phone         : null,
         email:         typeof body.email         === "string" ? body.email         : null,
         website:       typeof body.website       === "string" ? body.website       : null,
+        google_link:   typeof body.google_link   === "string" ? body.google_link   : null,
+        specialties:   Array.isArray(body.specialties) ? body.specialties : undefined,
         metadata:      body.metadata ?? null,
       });
     });
@@ -123,6 +126,7 @@ organizationRouter.patch(
       name?: string; type?: string; status?: string;
       address_line1?: string; city?: string; state?: string; postal_code?: string;
       country_code?: string; region?: string; phone?: string; email?: string; website?: string;
+      google_link?: string; specialties?: string[];
       metadata?: Record<string, unknown>;
     };
 
@@ -141,6 +145,8 @@ organizationRouter.patch(
         phone:         body.phone                !== undefined ? body.phone         : undefined,
         email:         body.email                !== undefined ? body.email        : undefined,
         website:       body.website              !== undefined ? body.website      : undefined,
+        google_link:   body.google_link          !== undefined ? body.google_link  : undefined,
+        specialties:   Array.isArray(body.specialties) ? body.specialties : undefined,
         metadata:      body.metadata             !== undefined ? body.metadata     : undefined,
       });
     });

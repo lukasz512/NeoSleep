@@ -47,12 +47,12 @@
 
 // ── A2. Safe-area insets (iOS notch / home bar) ───────────────────────────
 // env() values resolve at paint time — cannot be driven by JS or container queries.
-// The layout bottom padding is handled via v-bind() in AppLayout.vue using
-// isMobile, but the env() function itself must appear in a CSS declaration.
-// If you need a global env()-based rule not covered by v-bind(), add it here.
+// The mobile bottom-nav clearance (height + safe-area-inset-bottom) is handled
+// in packages/ui/src/components/AppShell.vue (.app-shell__main--bottom-nav-space),
+// since that's the shared component owning both VMain and the fixed bottom nav bar.
+// If you need a global env()-based rule not covered there, add it here.
 
-// (none currently — AppLayout.vue uses v-bind(mobileBottomPadding) which
-//  already includes env(safe-area-inset-bottom) when isMobile is true)
+// (none currently)
 
 
 // ═══════════════════════════════════════════════════════════════════════════

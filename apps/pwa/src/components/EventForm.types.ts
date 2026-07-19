@@ -6,6 +6,7 @@ export interface EventFormData {
   status: string;
   hcoIds: string[];
   hcpIds: string[];
+  patientIds: string[];
   location: string;
   videoLink: string;
   notes: string;
@@ -23,6 +24,7 @@ export interface EventFormInitialData {
   status?: string;
   hcoIds?: string[];
   hcpIds?: string[];
+  patientIds?: string[];
   attendees?: { attendee_type: string; attendee_id: string }[];
   location?: string;
   video_link?: string;
@@ -42,5 +44,5 @@ export interface EventSubmitPayload {
   video_link?: string | null;
   notes?: string | null;
   region: string;
-  attendees: { attendee_type: "hcp" | "hco" | "lead"; attendee_id: string; is_primary?: boolean }[];
+  attendees: { attendee_type: "doctor" | "hco" | "lead" | "patient"; attendee_id: string; is_primary?: boolean }[];
 }

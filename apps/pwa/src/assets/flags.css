@@ -1,0 +1,18 @@
+/* Base styles from flag-icons – only the active/planned market flags (PL, MX, TH). */
+.fi {
+  background-size: contain;
+  background-position: 50%;
+  background-repeat: no-repeat;
+  display: inline-block;
+  /* Explicit height, not line-height-driven: this sits in a flex prepend-inner
+     slot (PhoneField's VCombobox) with no text content, where a pseudo-element
+     content hack for height doesn't reliably size a flex item across engines —
+     it rendered as a 0-height (invisible) box until this was made explicit. */
+  width: 1.333333em;
+  height: 1em;
+  border-radius: 2px;
+}
+
+.fi-pl { background-image: url("../../node_modules/flag-icons/flags/4x3/pl.svg"); }
+.fi-mx { background-image: url("../../node_modules/flag-icons/flags/4x3/mx.svg"); }
+.fi-th { background-image: url("../../node_modules/flag-icons/flags/4x3/th.svg"); }

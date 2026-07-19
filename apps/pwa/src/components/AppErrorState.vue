@@ -3,10 +3,11 @@
     <AppIcon name="sad-cloud" class="app-error-state__icon" />
     <p class="app-error-state__title">{{ title }}</p>
     <p v-if="subtitle" class="app-error-state__subtitle">{{ subtitle }}</p>
-    <VBtn
+    <AppButton
       color="primary"
       variant="outlined"
       class="app-error-state__refresh"
+      :loading="loading"
       :aria-label="refreshLabel"
       @click="$emit('refresh')"
     >
@@ -14,18 +15,23 @@
         <AppIcon name="refresh" class="app-error-state__btn-icon" />
       </template>
       {{ refreshLabel }}
-    </VBtn>
+    </AppButton>
   </div>
 </template>
 
 <script setup lang="ts">
+import AppButton from "./AppButton.vue";
 import AppIcon from "./AppIcon.vue";
 
-defineProps<{
-  title: string;
-  subtitle?: string;
-  refreshLabel: string;
-}>();
+withDefaults(
+  defineProps<{
+    title: string;
+    subtitle?: string;
+    refreshLabel: string;
+    loading?: boolean;
+  }>(),
+  { loading: false },
+);
 
 defineEmits<{
   refresh: [];

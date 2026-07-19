@@ -2,7 +2,7 @@
   <div :key="locale" :class="menuClass" role="menu">
     <div class="layout-app__user-menu-section">
       <p class="layout-app__user-menu-label">{{ t("user.settings.theme") }}</p>
-      <VBtn
+      <AppButton
         variant="text"
         block
         density="comfortable"
@@ -14,7 +14,7 @@
           <AppIcon :name="theme === 'light' ? 'sun' : 'moon'" class="layout-app__menu-icon" />
         </span>
         {{ theme === "light" ? t("user.settings.theme.light") : t("user.settings.theme.dark") }}
-      </VBtn>
+      </AppButton>
     </div>
     <div class="layout-app__user-menu-section">
       <p class="layout-app__user-menu-label">{{ t("user.settings.language") }}</p>
@@ -32,7 +32,7 @@
       />
     </div>
     <div class="layout-app__user-menu-section">
-      <VBtn
+      <AppButton
         variant="text"
         block
         density="comfortable"
@@ -45,7 +45,7 @@
           <AppIcon name="logout" class="layout-app__menu-icon" />
         </span>
         {{ t("user.settings.logOut") }}
-      </VBtn>
+      </AppButton>
     </div>
   </div>
 </template>
@@ -54,6 +54,7 @@
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { LANGUAGE_OPTIONS } from "@i18n/language-options";
+import AppButton from "../../components/AppButton.vue";
 import AppIcon from "../../components/AppIcon.vue";
 
 const props = defineProps<{

@@ -8,6 +8,7 @@ export interface Lead {
   // From identities JOIN
   first_name: string;
   last_name: string;
+  title: string | null;
   email: string | null;
   phone: string | null;
   // From lead table
@@ -41,6 +42,7 @@ export interface GetLeadsPaginatedResult {
 export interface InsertLeadInput {
   first_name: string;
   last_name: string;
+  title?: string | null;
   email?: string | null;
   phone?: string | null;
   status?: string;
@@ -53,6 +55,7 @@ export interface InsertLeadInput {
 export interface UpdateLeadInput {
   first_name?: string;
   last_name?: string;
+  title?: string | null;
   email?: string | null;
   phone?: string | null;
   status?: string;
@@ -74,7 +77,7 @@ const LEAD_SELECT_COLS = `
   l.id, l.identity_id, l.source, l.status, l.country_code,
   l.converted_to_id, l.converted_to_type, l.converted_at, l.region,
   l.assigned_to, l.metadata, l.created_at, l.updated_at,
-  i.first_name, i.last_name, i.email, i.phone`.trim();
+  i.first_name, i.last_name, i.title, i.email, i.phone`.trim();
 
 function buildName(row: { first_name: string; last_name: string }): string {
   return `${row.first_name} ${row.last_name}`.trim();
@@ -181,10 +184,10 @@ export async function insertLead(client: PoolClient, input: InsertLeadInput): Pr
 
   try {
     const identityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (first_name, last_name, email, phone)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO identities (first_name, last_name, title, email, phone)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING id`,
-      [firstName, lastName, trimOrNull(input.email), trimOrNull(input.phone)]
+      [firstName, lastName, trimOrNull(input.title), trimOrNull(input.email), trimOrNull(input.phone)]
     );
     const identityId = identityResult.rows[0]!.id;
 
@@ -233,6 +236,10 @@ export async function updateLead(client: PoolClient, id: string, input: UpdateLe
     if (input.last_name !== undefined) {
       identityParams.push(trimOrEmpty(input.last_name) || lead.last_name);
       identitySets.push(`last_name = $${iidx++}`);
+    }
+    if (input.title !== undefined) {
+      identityParams.push(trimOrNull(input.title));
+      identitySets.push(`title = $${iidx++}`);
     }
     if (input.email !== undefined) {
       identityParams.push(trimOrNull(input.email));
@@ -284,6 +291,22 @@ export async function updateLead(client: PoolClient, id: string, input: UpdateLe
   }
 
   return getLeadById(client, id);
+}
+
+/**
+ * Soft-deletes a lead (GDPR-friendly): sets deleted_at + status='inactive'
+ * rather than removing the row — mirrors softDeleteUser (db/users.ts).
+ */
+export async function softDeleteLead(client: PoolClient, id: string): Promise<void> {
+  try {
+    await client.query(
+      `UPDATE lead SET deleted_at = now(), status = 'inactive' WHERE id = $1`,
+      [id]
+    );
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("softDeleteLead", err);
+  }
 }
 
 export interface ConvertLeadInput {

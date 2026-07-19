@@ -12,6 +12,7 @@ export interface Practitioner {
   email: string | null;
   phone: string | null;
   language: string | null;
+  social_links: Record<string, unknown> | null;
   // From practitioner table
   organization_id: string | null;
   national_ids: Record<string, string> | null;
@@ -42,11 +43,15 @@ export interface InsertPractitionerInput {
   email?: string | null;
   phone?: string | null;
   primary_specialty?: string | null;
+  /** Prefer this when the clinic is already a known organization id — falls
+   *  back to the freetext institution-name-resolve flow only when absent. */
+  organization_id?: string | null;
   institution?: string | null;
   region?: string;
   influence_tier?: string;
   language?: string | null;
   national_ids?: Record<string, string> | null;
+  social_links?: Record<string, unknown> | null;
 }
 
 export interface UpdatePractitionerInput {
@@ -56,11 +61,13 @@ export interface UpdatePractitionerInput {
   email?: string | null;
   phone?: string | null;
   primary_specialty?: string | null;
+  organization_id?: string | null;
   institution?: string | null;
   region?: string;
   influence_tier?: string;
   language?: string | null;
   national_ids?: Record<string, string> | null;
+  social_links?: Record<string, unknown> | null;
 }
 
 const PRAC_SORT_COLUMNS = ["first_name", "last_name", "email", "primary_specialty", "region", "influence_tier", "created_at"] as const;
@@ -70,7 +77,7 @@ const PRAC_SELECT_COLS = `
   p.primary_specialty, p.specialties, p.influence_tier,
   p.region, p.territory_id, p.status, p.metadata,
   p.created_at, p.updated_at,
-  i.title AS salutation, i.first_name, i.last_name, i.email, i.phone, i.language,
+  i.title AS salutation, i.first_name, i.last_name, i.email, i.phone, i.language, i.social_links,
   o.name AS institution`.trim();
 
 function isPracSortColumn(s: string): s is (typeof PRAC_SORT_COLUMNS)[number] {
@@ -202,13 +209,15 @@ export async function insertPractitioner(client: PoolClient, input: InsertPracti
   const region = trimOrEmpty(input.region);
 
   try {
-    const org = input.institution?.trim()
-      ? await resolveOrganizationId(client, input.institution.trim(), region)
-      : null;
+    const orgId = input.organization_id !== undefined
+      ? input.organization_id
+      : input.institution?.trim()
+        ? (await resolveOrganizationId(client, input.institution.trim(), region)).id
+        : null;
 
     const identityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (title, first_name, last_name, email, phone, language)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO identities (title, first_name, last_name, email, phone, language, social_links)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id`,
       [
         trimOrNull(input.salutation),
@@ -217,6 +226,7 @@ export async function insertPractitioner(client: PoolClient, input: InsertPracti
         trimOrNull(input.email),
         trimOrNull(input.phone),
         trimOrNull(input.language),
+        JSON.stringify(input.social_links ?? {}),
       ]
     );
     const identityId = identityResult.rows[0]!.id;
@@ -227,7 +237,7 @@ export async function insertPractitioner(client: PoolClient, input: InsertPracti
        RETURNING id`,
       [
         identityId,
-        org?.id ?? null,
+        orgId ?? null,
         trimOrNull(input.primary_specialty),
         input.influence_tier ?? "C",
         region,
@@ -264,19 +274,26 @@ export async function updatePractitioner(client: PoolClient, id: string, input: 
     const region = input.region ?? existing.region ?? "";
     const influenceTier = input.influence_tier ?? existing.influence_tier;
     const nationalIds = input.national_ids !== undefined ? input.national_ids : existing.national_ids;
-    const institutionInput = input.institution !== undefined ? trimOrNull(input.institution) : (existing.institution ?? null);
-    const org = institutionInput ? await resolveOrganizationId(client, institutionInput, region) : null;
+    const socialLinks = input.social_links !== undefined ? input.social_links : existing.social_links;
+
+    let orgId: string | null;
+    if (input.organization_id !== undefined) {
+      orgId = input.organization_id;
+    } else {
+      const institutionInput = input.institution !== undefined ? trimOrNull(input.institution) : (existing.institution ?? null);
+      orgId = institutionInput ? (await resolveOrganizationId(client, institutionInput, region)).id : null;
+    }
 
     await client.query(
-      `UPDATE identities SET title = $1, first_name = $2, last_name = $3, email = $4, phone = $5, language = $6, updated_at = now()
-       WHERE id = $7`,
-      [salutation, firstName, lastName, email, phone, language, existing.identity_id]
+      `UPDATE identities SET title = $1, first_name = $2, last_name = $3, email = $4, phone = $5, language = $6, social_links = $7, updated_at = now()
+       WHERE id = $8`,
+      [salutation, firstName, lastName, email, phone, language, JSON.stringify(socialLinks ?? {}), existing.identity_id]
     );
 
     await client.query(
       `UPDATE practitioner SET organization_id = $1, primary_specialty = $2, influence_tier = $3, region = $4, national_ids = $5, updated_at = now()
        WHERE id = $6`,
-      [org?.id ?? null, primarySpecialty, influenceTier, region, nationalIds ? JSON.stringify(nationalIds) : null, id]
+      [orgId ?? null, primarySpecialty, influenceTier, region, nationalIds ? JSON.stringify(nationalIds) : null, id]
     );
   } catch (err) {
     if (err instanceof AppError) throw err;

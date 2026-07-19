@@ -11,6 +11,8 @@ export interface User {
   email: string;
   first_name: string | null;
   last_name: string | null;
+  title: string | null;
+  phone: string | null;
   /** Computed: first_name + ' ' + last_name */
   name: string | null;
   // From user_roles JOIN — matches the user_roles.role CHECK constraint
@@ -18,6 +20,9 @@ export interface User {
   // From users table
   google_sub: string | null;
   region: string | null;
+  country_code: string | null;
+  // From identities JOIN
+  language: string | null;
   territory_id: string | null;
   status: string;
   token_version: number;
@@ -36,10 +41,10 @@ const USER_JOIN = `
   LEFT JOIN user_roles ur ON ur.user_id = u.id`.trim();
 
 const USER_COLS = `
-  u.id, u.identity_id, i.email, i.first_name, i.last_name,
+  u.id, u.identity_id, i.email, i.first_name, i.last_name, i.title, i.phone,
   TRIM(COALESCE(i.first_name, '') || ' ' || COALESCE(i.last_name, '')) AS name,
   COALESCE(ur.role, 'rep') AS role,
-  u.google_sub, u.region, u.territory_id, u.status, u.token_version,
+  u.google_sub, u.region, u.country_code, i.language, u.territory_id, u.status, u.token_version,
   u.created_at, u.updated_at`.trim();
 
 const STAFF_AUTH_COLS = `${USER_COLS}, u.password_hash, u.force_password_change`;
@@ -146,7 +151,9 @@ export async function insertStaffUser(
   name: string | null,
   role: StaffRole,
   passwordHash: string | null,
-  forcePasswordChange: boolean
+  forcePasswordChange: boolean,
+  title?: string | null,
+  phone?: string | null
 ): Promise<User | null> {
   const normalizedEmail = email.trim().toLowerCase();
   const firstName = name ? name.split(" ")[0] ?? null : null;
@@ -154,10 +161,10 @@ export async function insertStaffUser(
 
   try {
     const identityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (email, first_name, last_name) VALUES ($1, $2, $3)
+      `INSERT INTO identities (email, first_name, last_name, title, phone) VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
        RETURNING id`,
-      [normalizedEmail, firstName, lastName]
+      [normalizedEmail, firstName, lastName, title ?? null, phone ?? null]
     );
     const identityId = identityResult.rows[0]!.id;
 
@@ -171,8 +178,13 @@ export async function insertStaffUser(
     if (!userResult.rows[0]) return null;
     const userId = userResult.rows[0].id;
 
+    // Plain insert, no ON CONFLICT: userId was just created above in this same
+    // transaction, so no existing user_roles row can reference it yet — and
+    // user_roles' only unique constraint is the composite (user_id, role,
+    // region), not user_id alone, so `ON CONFLICT (user_id)` doesn't match any
+    // constraint and Postgres rejects the statement outright (42P10).
     await client.query(
-      `INSERT INTO user_roles (user_id, role) VALUES ($1, $2) ON CONFLICT (user_id) DO NOTHING`,
+      `INSERT INTO user_roles (user_id, role) VALUES ($1, $2)`,
       [userId, role]
     );
 
@@ -298,6 +310,7 @@ export async function getUsersPaginated(
 export interface UpdateUserInput {
   first_name?: string;
   last_name?: string;
+  title?: string | null;
   phone?: string | null;
   status?: "active" | "inactive" | "suspended";
   country_code?: string | null;
@@ -309,16 +322,17 @@ export async function updateUser(client: PoolClient, id: string, input: UpdateUs
   if (!existing) return null;
 
   try {
-    if (input.first_name !== undefined || input.last_name !== undefined || input.phone !== undefined) {
+    if (input.first_name !== undefined || input.last_name !== undefined || input.title !== undefined || input.phone !== undefined) {
       await client.query(
         `UPDATE identities i SET
            first_name = COALESCE($1, i.first_name),
            last_name  = COALESCE($2, i.last_name),
-           phone      = $3,
+           title      = CASE WHEN $3 THEN $4 ELSE i.title END,
+           phone      = $5,
            updated_at = now()
          FROM users u
-         WHERE u.identity_id = i.id AND u.id = $4`,
-        [input.first_name ?? null, input.last_name ?? null, input.phone ?? null, id]
+         WHERE u.identity_id = i.id AND u.id = $6`,
+        [input.first_name ?? null, input.last_name ?? null, input.title !== undefined, input.title ?? null, input.phone ?? null, id]
       );
     }
     if (input.status !== undefined) {

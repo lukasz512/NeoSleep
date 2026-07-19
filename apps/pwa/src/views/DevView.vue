@@ -9,9 +9,9 @@
       <VCardText>
         <p class="text-body-2 text-medium-emphasis mb-3">{{ t("user.dev.loader.hint") }}</p>
         <div class="d-flex gap-2 flex-wrap">
-          <VBtn color="primary" variant="outlined" @click="triggerLoader">
+          <AppButton color="primary" variant="outlined" @click="triggerLoader">
             {{ t("user.dev.loader.trigger") }}
-          </VBtn>
+          </AppButton>
         </div>
       </VCardText>
     </VCard>
@@ -20,18 +20,18 @@
       <VCardText>
         <p class="text-body-2 text-medium-emphasis mb-3">{{ t("user.dev.notifications.hint") }}</p>
         <div class="d-flex gap-2 flex-wrap">
-          <VBtn color="success" variant="outlined" size="small" @click="showNotification('success')">
+          <AppButton color="success" variant="outlined" size="small" @click="showNotification('success')">
             {{ t("user.dev.notifications.success") }}
-          </VBtn>
-          <VBtn color="info" variant="outlined" size="small" @click="showNotification('info')">
+          </AppButton>
+          <AppButton color="info" variant="outlined" size="small" @click="showNotification('info')">
             {{ t("user.dev.notifications.info") }}
-          </VBtn>
-          <VBtn color="warning" variant="outlined" size="small" @click="showNotification('warning')">
+          </AppButton>
+          <AppButton color="warning" variant="outlined" size="small" @click="showNotification('warning')">
             {{ t("user.dev.notifications.warning") }}
-          </VBtn>
-          <VBtn color="error" variant="outlined" size="small" @click="showNotification('error')">
+          </AppButton>
+          <AppButton color="error" variant="outlined" size="small" @click="showNotification('error')">
             {{ t("user.dev.notifications.error") }}
-          </VBtn>
+          </AppButton>
         </div>
       </VCardText>
     </VCard>
@@ -40,12 +40,13 @@
 
 <script setup lang="ts">
 import { useI18n } from "vue-i18n";
+import AppButton from "../components/AppButton.vue";
 import PageSection from "../components/PageSection.vue";
-import { useGlobalLoader } from "../composables/useGlobalLoader";
+import { useGlobalLoaderStore } from "@stores";
 import { useNotifications, type NotificationType } from "../composables/useNotifications";
 
 const { t } = useI18n();
-const { startLoading, stopLoading } = useGlobalLoader();
+const { startLoading, stopLoading } = useGlobalLoaderStore();
 const { show } = useNotifications();
 
 function triggerLoader() {
