@@ -5,6 +5,7 @@ import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
 import { CreateUserCommand, UpdateUserCommand, DeleteUserCommand, ResetUserPasswordCommand } from "../commands/users.js";
 import { GetUserListQuery, GetUserByIdQuery } from "../queries/users.js";
+import { GetUserDocumentsQuery, GetUserDocumentDownloadUrlQuery } from "../queries/documents.js";
 import { ValidationError } from "../errors.js";
 import { parsePaginationParams, toFilterArray } from "./utils.js";
 import type { StaffRole } from "../db.js";
@@ -147,6 +148,45 @@ usersRouter.post(
     });
 
     res.json({ success: true });
+  })
+);
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/users/:id/documents — signed GDPR/partner-agreement documents
+// ---------------------------------------------------------------------------
+usersRouter.get(
+  "/users/:id/documents",
+  requireRole("admin", "manager"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id?.trim();
+    if (!id) throw new ValidationError("Missing user id");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    const documents = await withTenant(slug, async (client) => {
+      const ctx = buildContext(req, client, slug);
+      return GetUserDocumentsQuery(ctx, id);
+    });
+    res.json(documents);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/users/:id/documents/:documentId/download — short-lived signed URL
+// ---------------------------------------------------------------------------
+usersRouter.get(
+  "/users/:id/documents/:documentId/download",
+  requireRole("admin", "manager"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id?.trim();
+    const documentId = req.params.documentId?.trim();
+    if (!id || !documentId) throw new ValidationError("Missing user id or document id");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    const url = await withTenant(slug, async (client) => {
+      const ctx = buildContext(req, client, slug);
+      return GetUserDocumentDownloadUrlQuery(ctx, id, documentId);
+    });
+    res.json({ url });
   })
 );
 

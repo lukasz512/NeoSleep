@@ -20,6 +20,7 @@ import { websiteContactRouter } from "./routes/website-contact.js";
 import { patientRouter } from "./routes/patient.js";
 import { pushRouter } from "./routes/push.js";
 import { usersRouter } from "./routes/users.js";
+import { inviteRouter } from "./routes/invite.js";
 import { notificationRouter } from "./routes/notification.js";
 import { runMigrations } from "./db.js";
 import { errorHandler } from "./middleware/errorHandler.js";
@@ -122,6 +123,7 @@ app.use("/api/v1", websiteContactRouter);
 app.use("/api/v1", patientRouter);
 app.use("/api/v1", pushRouter);
 app.use("/api/v1", usersRouter);
+app.use("/api/v1", inviteRouter);
 app.use("/api/v1", notificationRouter);
 
 app.use(errorHandler);

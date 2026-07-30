@@ -16,3 +16,6 @@ export * from "./lookup.js";      // replaces config-options.js
 export * from "./tenant.js";
 export * from "./i18n.js";
 export * from "./notification.js";
+export * from "./invite.js";
+export * from "./consent.js";
+export * from "./fileAttachment.js";

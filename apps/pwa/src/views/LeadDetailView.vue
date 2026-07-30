@@ -38,12 +38,22 @@
       @submit="onEventFormSubmit"
     />
 
+    <VAlert
+      v-if="isOffline"
+      type="warning"
+      variant="tonal"
+      density="compact"
+      class="view-detail__offline-banner"
+      :text="t('app.common.offlineShowingCached')"
+    />
     <ItemDetailLayout
       :has-content="!!lead"
       :loading="loading"
+      :load-error="loadFailed"
       :back-route="backRoute"
       :back-label="t('user.leads.detail.back')"
       :not-found-label="t('user.leads.detail.notFound')"
+      @retry="loadLead"
     >
       <!-- Name inline with back arrow -->
       <template #header-title v-if="lead">
@@ -64,7 +74,7 @@
           </template>
           <span>{{ t('user.detail.scheduleVisit') }}</span>
         </VTooltip>
-        <VTooltip v-if="lead && !isConverted(lead)" location="bottom">
+        <VTooltip v-if="lead && lead.type === 'doctor' && !isConverted(lead)" location="bottom">
           <template #activator="{ props: tooltipProps }">
             <AppButton v-bind="tooltipProps" icon variant="flat" size="large"
               :class="entityActionBtnClass('moveToContacts')" :aria-label="t('user.leads.detail.moveToContacts')" @click="onMoveToContacts">
@@ -73,7 +83,7 @@
           </template>
           <span>{{ t('user.leads.detail.moveToContacts') }}</span>
         </VTooltip>
-        <VTooltip v-if="lead && !isConverted(lead)" location="bottom">
+        <VTooltip v-if="lead && lead.type === 'patient' && !isConverted(lead)" location="bottom">
           <template #activator="{ props: tooltipProps }">
             <AppButton v-bind="tooltipProps" icon variant="flat" size="large"
               :class="entityActionBtnClass('convertToPatient')" :aria-label="t('user.leads.detail.convertToPatient')" @click="onConvertToPatient">
@@ -173,7 +183,7 @@
 
     </ItemDetailLayout>
 
-    <VDialog v-model="showDeleteConfirm" max-width="360" persistent>
+    <VDialog v-model="showDeleteConfirm" max-width="360" :transition="originDialogTransition" persistent>
       <VCard>
         <VCardText>{{ t("user.leads.actions.deleteConfirmText") }}</VCardText>
         <VCardActions>
@@ -192,10 +202,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
+import { originDialogTransition } from "@ui";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuthStore } from "../stores/auth";
-import { apiFetch } from "../utils/api";
+import { apiFetch } from "../composables/useBffApi";
+import { useEntityCacheStore } from "../stores/entityCache";
 import { useNotifications } from "../composables/useNotifications";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
@@ -208,6 +220,7 @@ import { leadStatusClass, leadStatusI18nKey, leadInstitution } from "../utils/le
 import { leadFormFields } from "../config/forms/leadForm";
 import { hcpFormFields, hcpFormDerive } from "../config/forms/hcpForm";
 import { patientFormFields } from "../config/forms/patientForm";
+import { createPractitionerFromLead } from "../utils/leadConversion";
 import { entityActionIcon, entityActionBtnClass } from "../config/entityActions";
 import type { Lead } from "./LeadsView.vue";
 
@@ -225,8 +238,13 @@ const isAdmin = computed(() => authStore.user?.role === "admin");
 // ---------------------------------------------------------------------------
 // Core state
 // ---------------------------------------------------------------------------
+const leadCache = useEntityCacheStore("leads");
 const lead = ref<Lead | null>(null);
 const loading = ref(true);
+/** True while `lead` is being served from the offline cache — see docs/ADR-013-offline-read-cache.md. */
+const isOffline = ref(false);
+/** True when loadLead() failed for a reason other than a genuine 404 (network/server) — see loadLead(). */
+const loadFailed = ref(false);
 const showEditModal = ref(false);
 const showMoveToContactsModal = ref(false);
 const showConvertToPatientModal = ref(false);
@@ -246,6 +264,10 @@ const moveToContactsInitialData = computed(() => (lead.value ? {
   last_name: lead.value.last_name,
   email: lead.value.email ?? "",
   phone: lead.value.phone ?? "",
+  // Pre-fills the clinic combobox with the lead's own institution name —
+  // isCreatingNewOrganization() resolves it against the loaded clinic list
+  // once options finish loading (see hcpForm.ts).
+  organization_id: leadInstitution(lead.value),
 } : undefined));
 
 /** Same stable-reference rationale as moveToContactsInitialData above. */
@@ -316,14 +338,12 @@ async function onContactSubmit(data: Record<string, unknown>, done: (ok: boolean
   if (!leadId) { done(false); return; }
   // Conversion (status -> converted, converted_to_id/type/at) now happens
   // atomically server-side via ConvertLeadCommand when lead_id is present —
-  // no separate PATCH needed here anymore.
+  // no separate PATCH needed here anymore. createPractitionerFromLead()
+  // additionally creates the clinic first when the rep typed a new one
+  // (see hcpForm.ts's isCreatingNewOrganization()).
   try {
-    const res = await apiFetch("/api/v1/practitioner", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...data, lead_id: leadId }),
-    });
-    if (res.ok) {
+    const ok = await createPractitionerFromLead(data, leadId);
+    if (ok) {
       notifications.show(t("user.hcp.form.contactCreated"), "success");
       await loadLead();
       window.dispatchEvent(new Event("entity-list-refresh"));
@@ -414,16 +434,29 @@ async function loadLead() {
   if (!id) { loading.value = false; return; }
   loading.value = true;
   lead.value = null;
+  loadFailed.value = false;
   try {
     const res = await apiFetch(`/api/v1/lead/${id}`, { handleErrors: false });
     if (res.ok) {
       lead.value = (await res.json()) as Lead;
+      isOffline.value = false;
+      void leadCache.cacheOne(lead.value as unknown as Record<string, unknown>);
     } else if (res.status !== 404) {
-      notifications.show(t("user.leads.errorLoad"), "error");
+      // Not a genuine 404 — ItemDetailLayout renders its own "connection
+      // problem" + retry state for this (see :load-error), so no separate
+      // toast on top of it.
+      loadFailed.value = true;
     }
   } catch {
-    notifications.show(t("user.leads.errorLoad"), "error");
-    lead.value = null;
+    // Network failure, not a server error — fall back to the cached record if we have one.
+    const cached = await leadCache.readOne(id);
+    if (cached) {
+      lead.value = cached as unknown as Lead;
+      isOffline.value = true;
+    } else {
+      loadFailed.value = true;
+      lead.value = null;
+    }
   } finally {
     loading.value = false;
   }
@@ -436,6 +469,10 @@ watch(() => route.params.id, loadLead);
 <style scoped>
 .view-detail {
   min-height: 0;
+}
+
+.view-detail__offline-banner {
+  margin: 0 0 12px;
 }
 
 /* Header name */

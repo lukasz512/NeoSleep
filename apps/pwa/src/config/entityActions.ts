@@ -26,6 +26,7 @@ export interface EntityActionDef {
 export const ENTITY_ACTIONS = {
   scheduleVisit:    { icon: "calendar",     tone: "success" },
   moveToContacts:   { icon: "user-arrow",   tone: "primary" },
+  inviteToPartner:  { icon: "mail",         tone: "primary" },
   convertToPatient: { icon: "nav-patients", tone: "primary" },
   edit:             { icon: "pencil",       tone: "primary" },
   resetPassword:    { icon: "key",          tone: "neutral" },

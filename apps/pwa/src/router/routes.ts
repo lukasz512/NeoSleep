@@ -8,13 +8,12 @@ export { PublicLayout, AppLayout };
 const ALL_STAFF_ROLES: UserRole[] = ["rep", "doctor", "manager", "admin"];
 
 /** App starts at login; root and unknown paths send unauthenticated users to /login. */
-// Nav order: leads, hcp, hco, patients, planner, presentations, users — the
-// mobile bottom bar (AppShell) shows exactly the first 4 of whatever's
-// visible for the current role. appNavRoutes below derives from this array's
-// order — reordering here reorders both the sidebar and the bottom bar.
-// "dashboard" stays a real route (default post-login landing page, logo
-// link target) but is deliberately excluded from the nav lists below —
-// same treatment as /login and /dev.
+// Nav order: dashboard, leads, hcp, hco, patients, planner, presentations,
+// users — the mobile bottom bar (AppShell) shows exactly the first 4 of
+// whatever's visible for the current role. appNavRoutes below derives from
+// this array's order — reordering here reorders both the sidebar and the
+// bottom bar. "dashboard" is also the default post-login landing page and
+// logo link target (see appHomePath).
 // Each app-layout route carries a `roles` meta — AppNavLinks.vue filters the
 // sidebar by it, and the router guard (router/index.ts) enforces it: visiting
 // a route directly with the wrong role redirects to /dashboard instead of
@@ -35,7 +34,9 @@ export const routes: RouteRecordRaw[] = [
   { path: "/forgot-password", name: "forgot-password", component: authViewComponent, meta: { layout: "public", public: true } },
   { path: "/reset-password", name: "reset-password", component: authViewComponent, meta: { layout: "public", public: true } },
   { path: "/change-password", name: "change-password", component: () => import("../views/ChangePasswordView.vue"), meta: { layout: "public", requiresAuth: true } },
+  { path: "/partner-register", name: "partner-register", component: () => import("../views/PartnerRegistrationView.vue"), meta: { layout: "public", public: true } },
   { path: "/dev", name: "dev", component: () => import("../views/DevView.vue"), meta: { layout: "app", devOnly: true } },
+  { path: "/dashboard", name: "dashboard", component: () => import("../views/DashboardView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
   { path: "/leads", name: "leads", component: () => import("../views/LeadsView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep"] } },
   { path: "/leads/:id", name: "lead-detail", component: () => import("../views/LeadDetailView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep"] } },
   { path: "/hcp", name: "hcp", component: () => import("../views/HCPView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep", "manager", "admin"] } },
@@ -46,14 +47,13 @@ export const routes: RouteRecordRaw[] = [
   { path: "/patients/:id", name: "patient-detail", component: () => import("../views/PatientDetailView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
   { path: "/planner", name: "planner", component: () => import("../views/PlannerView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
   { path: "/presentations", name: "presentations", component: () => import("../views/PresentationsView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
-  { path: "/dashboard", name: "dashboard", component: () => import("../views/DashboardView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
   { path: "/users", name: "users", component: () => import("../views/UsersView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin", "manager"] } },
   { path: "/users/:id", name: "user-detail", component: () => import("../views/UserDetailView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin", "manager"] } },
   { path: "/:pathMatch(.*)*", redirect: "/dashboard" },
 ];
 
 /** App layout nav: one source of truth for sidebar/drawer + bottom-bar links; derived from routes. */
-/** List routes only (no detail routes like /leads/:id, and no /dashboard — see comment above). */
+/** List routes only (no detail routes like /leads/:id). */
 export const appNavRoutes = routes
   .filter(
     (r): r is (typeof routes)[number] & { path: string; name: string } =>
@@ -62,7 +62,6 @@ export const appNavRoutes = routes
       r.path !== "/" &&
       r.path !== "/login" &&
       r.path !== "/dev" &&
-      r.path !== "/dashboard" &&
       typeof (r as { name?: string }).name === "string" &&
       (r.meta as { layout?: string; devOnly?: boolean } | undefined)?.layout === "app" &&
       !(r.meta as { devOnly?: boolean } | undefined)?.devOnly,
@@ -106,7 +105,7 @@ const detailRouteParents: Record<string, string> = {
 /**
  * Returns the AppIcon name (e.g. `nav-leads`) for a route, reusing the same
  * sidebar/bottom-nav icon on detail pages. Undefined for routes with no nav
- * entry (dashboard, login, dev, ...) — AppIcon has no icon registered for those.
+ * entry (login, dev, ...) — AppIcon has no icon registered for those.
  */
 export function navIconName(name: string): string | undefined {
   const listName = detailRouteParents[name] ?? name;

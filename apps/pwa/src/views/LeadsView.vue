@@ -30,6 +30,25 @@
       avatar-entity-type="hcp"
       @submit="onContactSubmit"
     />
+    <FormRenderer
+      v-model="showInviteModal"
+      :fields="partnerInviteFormFields"
+      :initial-data="inviteInitialData"
+      title-key="user.leads.form.inviteTitle"
+      submit-label-key="user.leads.form.inviteSubmit"
+      avatar-entity-type="lead"
+      @submit="onInviteSubmit"
+    />
+    <FormRenderer
+      v-model="showConvertToPatientModal"
+      :fields="patientFormFields"
+      :initial-data="convertToPatientInitialData"
+      title-key="app.patients.form.title"
+      submit-label-key="app.patients.form.submit"
+      verify-info-key="user.leads.form.verifyDataInfo"
+      avatar-entity-type="patient"
+      @submit="onConvertToPatientSubmit"
+    />
     <EventForm
       v-model="showEventForm"
       :initial-data="eventFormInitial"
@@ -43,7 +62,7 @@
       :i18n="leadsI18n"
       :show-add-button="isAdmin"
       detail-route-name="lead-detail"
-      :filter-param-keys="['status', 'region']"
+      :filter-param-keys="['status', 'region', 'type']"
       @add="onAddLead"
     >
     <template #item.name="{ item }">
@@ -54,7 +73,7 @@
       </span>
     </template>
     <template #feed-card-avatar="{ item }">
-      <AppAvatar :name="getLeadFromItem(item).name" entity-type="lead" size="100%" />
+      <AppAvatar :name="getLeadFromItem(item).name" entity-type="lead" :size="55" />
     </template>
     <template #feed-card-title="{ item }">
       <span class="leads-name-cell">
@@ -74,6 +93,9 @@
           {{ statusLabel(getLeadFromItem(item).status) }}
         </span>
       </div>
+    </template>
+    <template #item.type="{ item }">
+      {{ typeLabel(getLeadFromItem(item).type) }}
     </template>
     <template #feed-card-meta="{ item }">
       <span v-if="leadSecondaryLine(getLeadFromItem(item))">
@@ -105,11 +127,25 @@
           <template #prepend><AppIcon :name="entityActionIcon('scheduleVisit')" :class="entityActionMenuIconClass('scheduleVisit')" /></template>
         </VListItem>
         <VListItem
-          v-if="!isConverted(getLeadFromItem(item))"
+          v-if="getLeadFromItem(item).type === 'doctor' && !isConverted(getLeadFromItem(item))"
           :title="t('user.leads.detail.moveToContacts')"
           @click="onMoveToContacts(getLeadFromItem(item))"
         >
           <template #prepend><AppIcon :name="entityActionIcon('moveToContacts')" :class="entityActionMenuIconClass('moveToContacts')" /></template>
+        </VListItem>
+        <VListItem
+          v-if="getLeadFromItem(item).type === 'patient' && !isConverted(getLeadFromItem(item))"
+          :title="t('user.leads.detail.convertToPatient')"
+          @click="onConvertToPatient(getLeadFromItem(item))"
+        >
+          <template #prepend><AppIcon :name="entityActionIcon('convertToPatient')" :class="entityActionMenuIconClass('convertToPatient')" /></template>
+        </VListItem>
+        <VListItem
+          v-if="getLeadFromItem(item).type === 'doctor' && !isConverted(getLeadFromItem(item))"
+          :title="t('user.leads.detail.inviteToPartner')"
+          @click="onInvitePartner(getLeadFromItem(item))"
+        >
+          <template #prepend><AppIcon :name="entityActionIcon('inviteToPartner')" :class="entityActionMenuIconClass('inviteToPartner')" /></template>
         </VListItem>
         <VListItem v-if="isAdmin" :title="t('user.leads.detail.edit')" @click="onEditLead(getLeadFromItem(item))">
           <template #prepend><AppIcon :name="entityActionIcon('edit')" :class="entityActionMenuIconClass('edit')" /></template>
@@ -134,7 +170,10 @@ const FormRenderer = defineAsyncComponent(() => import("../components/FormRender
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
 import { leadFormFields } from "../config/forms/leadForm";
 import { hcpFormFields, hcpFormDerive } from "../config/forms/hcpForm";
-import { apiFetch } from "../utils/api";
+import { patientFormFields } from "../config/forms/patientForm";
+import { partnerInviteFormFields } from "../config/forms/partnerInviteForm";
+import { createPractitionerFromLead } from "../utils/leadConversion";
+import { apiFetch } from "../composables/useBffApi";
 import { useNotifications } from "../composables/useNotifications";
 import { type FilterDefinition } from "../composables/useFilters";
 import { useAuthStore } from "../stores/auth";
@@ -151,6 +190,7 @@ export interface Lead {
   email: string;
   phone?: string;
   status: string;
+  type?: string;
   region: string;
   metadata?: Record<string, unknown> | null;
   specialty?: string;
@@ -168,6 +208,8 @@ const isAdmin = computed(() => authStore.user?.role === "admin");
 const showAddModal = ref(false);
 const showEditModal = ref(false);
 const showMoveToContactsModal = ref(false);
+const showConvertToPatientModal = ref(false);
+const showInviteModal = ref(false);
 const showEventForm = ref(false);
 const selectedLead = ref<Lead | null>(null);
 const eventFormInitial = ref<{ start_at: string; end_at: string } | undefined>(undefined);
@@ -180,11 +222,32 @@ const moveToContactsInitialData = computed(() => (selectedLead.value ? {
   last_name: selectedLead.value.last_name,
   email: selectedLead.value.email ?? "",
   phone: selectedLead.value.phone ?? "",
+  // Pre-fills the clinic combobox with the lead's own institution name —
+  // isCreatingNewOrganization() resolves it against the loaded clinic list
+  // once options finish loading (see hcpForm.ts).
+  organization_id: leadInstitution(selectedLead.value),
+} : undefined));
+
+/** Same stable-reference reasoning as moveToContactsInitialData above. */
+const inviteInitialData = computed(() => (selectedLead.value ? {
+  first_name: selectedLead.value.first_name,
+  last_name: selectedLead.value.last_name,
+  email: selectedLead.value.email ?? "",
+} : undefined));
+
+/** Same stable-reference reasoning as moveToContactsInitialData above. */
+const convertToPatientInitialData = computed(() => (selectedLead.value ? {
+  first_name: selectedLead.value.first_name,
+  last_name: selectedLead.value.last_name,
+  email: selectedLead.value.email ?? "",
+  phone: selectedLead.value.phone ?? "",
+  region: selectedLead.value.region,
 } : undefined));
 
 const leadFilterDefs: FilterDefinition[] = [
   { key: "status", labelKey: "user.leads.filters.status", type: "select", default: "" },
   { key: "region", labelKey: "user.leads.filters.region", type: "select", default: "" },
+  { key: "type", labelKey: "user.leads.filters.type", type: "select", default: "" },
 ];
 
 const statusOptions = computed(() => [
@@ -197,15 +260,26 @@ const statusOptions = computed(() => [
 ]);
 const regionOptions = computed(() => configStore.regionItems);
 
+const typeOptions = computed(() => [
+  { title: t("user.leads.filters.all"), value: "" },
+  { title: t("user.leads.filters.typeDoctor"), value: "doctor" },
+  { title: t("user.leads.filters.typeHospital"), value: "hospital" },
+  { title: t("user.leads.filters.typePharmacy"), value: "pharmacy" },
+  { title: t("user.leads.filters.typePatient"), value: "patient" },
+  { title: t("user.leads.filters.typeOther"), value: "other" },
+]);
+
 const leadFilterDefinitions = computed<FilterDefinition[]>(() => [
   { ...leadFilterDefs[0], options: statusOptions.value },
   { ...leadFilterDefs[1], options: regionOptions.value },
+  { ...leadFilterDefs[2], options: typeOptions.value },
 ]);
 
 const tableHeaders = computed(() => [
   { title: t("user.leads.table.name"), key: "name", sortable: true },
   { title: t("user.leads.table.email"), key: "email", sortable: true },
   { title: t("user.leads.table.status"), key: "status", sortable: true },
+  { title: t("user.leads.table.type"), key: "type", sortable: false },
   { title: t("user.leads.table.region"), key: "region", sortable: true },
   { title: t("user.leads.table.institution"), key: "institution", sortable: false },
 ]);
@@ -227,6 +301,19 @@ const leadsI18n = computed(() => ({
 function statusLabel(status: string): string {
   const key = leadStatusI18nKey(status);
   return key ? t(key) : status || t("user.leads.filters.statusNew");
+}
+
+const TYPE_LABEL_KEYS: Record<string, string> = {
+  doctor: "user.leads.filters.typeDoctor",
+  hospital: "user.leads.filters.typeHospital",
+  pharmacy: "user.leads.filters.typePharmacy",
+  patient: "user.leads.filters.typePatient",
+  other: "user.leads.filters.typeOther",
+};
+
+function typeLabel(type: string | undefined): string {
+  const key = TYPE_LABEL_KEYS[type ?? "other"];
+  return key ? t(key) : t("user.leads.filters.typeOther");
 }
 
 function isInactive(lead: Lead): boolean {
@@ -281,16 +368,64 @@ function onMoveToContacts(lead: Lead) {
   showMoveToContactsModal.value = true;
 }
 
-async function onContactSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
+function onConvertToPatient(lead: Lead) {
+  selectedLead.value = lead;
+  showConvertToPatientModal.value = true;
+}
+
+async function onConvertToPatientSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
   const leadId = selectedLead.value?.id;
   if (!leadId) { done(false); return; }
   try {
-    const res = await apiFetch("/api/v1/practitioner", {
+    const res = await apiFetch("/api/v1/patient", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...data, lead_id: leadId }),
     });
     if (res.ok) {
+      notifications.show(t("app.patients.form.success"), "success");
+      window.dispatchEvent(new Event("entity-list-refresh"));
+      done(true);
+    } else {
+      done(false);
+    }
+  } catch {
+    done(false);
+  }
+}
+
+function onInvitePartner(lead: Lead) {
+  selectedLead.value = lead;
+  showInviteModal.value = true;
+}
+
+async function onInviteSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
+  const leadId = selectedLead.value?.id;
+  if (!leadId) { done(false); return; }
+  try {
+    const res = await apiFetch(`/api/v1/lead/${leadId}/invite`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (res.ok) {
+      notifications.show(t("user.leads.form.inviteSuccess"), "success");
+      window.dispatchEvent(new Event("entity-list-refresh"));
+      done(true);
+    } else {
+      done(false);
+    }
+  } catch {
+    done(false);
+  }
+}
+
+async function onContactSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
+  const leadId = selectedLead.value?.id;
+  if (!leadId) { done(false); return; }
+  try {
+    const ok = await createPractitionerFromLead(data, leadId);
+    if (ok) {
       notifications.show(t("user.hcp.form.contactCreated"), "success");
       window.dispatchEvent(new Event("entity-list-refresh"));
       done(true);
