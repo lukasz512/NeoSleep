@@ -15,3 +15,4 @@ export * from "./config.js";
 export * from "./lookup.js";      // replaces config-options.js
 export * from "./tenant.js";
 export * from "./i18n.js";
+export * from "./notification.js";

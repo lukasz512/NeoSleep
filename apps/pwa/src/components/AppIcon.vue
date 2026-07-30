@@ -23,16 +23,22 @@ const ICONS = {
   // ── State icons ──────────────────────────────────────────────────────────
   "plus-circle": {
     strokeWidth: 1.5,
-    paths: `<circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="8" x2="12" y2="16" stroke-width="2" />
-            <line x1="8" y1="12" x2="16" y2="12" stroke-width="2" />`,
+    // pathLength="1" on every shape below (also see "sad-cloud", "search")
+    // normalizes each one to a 0..1 stroke-dasharray space regardless of its
+    // actual geometry — lets AppStateView's icon-draw animation use one fixed
+    // `stroke-dasharray: 1; stroke-dashoffset: 1 → 0` for any icon, no
+    // per-icon path-length measuring. No effect anywhere dasharray/dashoffset
+    // isn't set (i.e. every other usage of these icons in the app).
+    paths: `<circle cx="12" cy="12" r="10" pathLength="1" />
+            <line x1="12" y1="8" x2="12" y2="16" stroke-width="2" pathLength="1" />
+            <line x1="8" y1="12" x2="16" y2="12" stroke-width="2" pathLength="1" />`,
   },
   "sad-cloud": {
     strokeWidth: 1.25,
-    paths: `<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
-            <circle cx="8.5" cy="14" r="0.8" />
-            <circle cx="15.5" cy="14" r="0.8" />
-            <path d="M9 17.5 Q12 19.5 15 17.5" />`,
+    paths: `<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" pathLength="1" />
+            <circle cx="8.5" cy="14" r="0.8" pathLength="1" />
+            <circle cx="15.5" cy="14" r="0.8" pathLength="1" />
+            <path d="M9 17.5 Q12 19.5 15 17.5" pathLength="1" />`,
   },
   // ── Action icons ─────────────────────────────────────────────────────────
   "plus": {
@@ -161,8 +167,8 @@ const ICONS = {
   },
   "search": {
     strokeWidth: 2,
-    paths: `<circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />`,
+    paths: `<circle cx="11" cy="11" r="8" pathLength="1" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" pathLength="1" />`,
   },
   "menu": {
     strokeWidth: 2,
@@ -264,10 +270,22 @@ const ICONS = {
     paths: `<circle cx="12" cy="12" r="4" />
             <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94" />`,
   },
+  "bell": {
+    strokeWidth: 1.6,
+    paths: `<path d="M12 3.5c-2.9 0-5 2.3-5 5.2 0 3.7-.9 5.7-1.8 6.8a1 1 0 0 0 .8 1.6h12a1 1 0 0 0 .8-1.6c-.9-1.1-1.8-3.1-1.8-6.8 0-2.9-2.1-5.2-5-5.2z" />
+            <path d="M9.5 20a2.5 2.5 0 0 0 5 0" />`,
+  },
 } as const;
 </script>
 
 <style scoped>
+/* Zero-specificity default so any consumer's own sizing class (e.g. for the
+   large empty-state icons) always wins regardless of stylesheet order. */
+:where(.app-icon) {
+  width: 20px;
+  height: 20px;
+}
+
 .app-icon {
   display: block;
   flex-shrink: 0;
