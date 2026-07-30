@@ -1,4 +1,4 @@
-import { ref, computed, type Ref } from "vue";
+import { ref, computed, watch, type Ref } from "vue";
 import { useI18n } from "vue-i18n";
 import type { FormFieldDef, FormFieldOption } from "../types/formField";
 
@@ -18,10 +18,11 @@ import type { FormFieldDef, FormFieldOption } from "../types/formField";
 export function useFormRenderer(
   fields: FormFieldDef[],
   initialData: Ref<Record<string, unknown> | undefined>,
+  derive?: (form: Record<string, unknown>) => Partial<Record<string, unknown>> | void,
 ) {
   const { t } = useI18n();
 
-  const formRef = ref<{ validate: () => Promise<{ valid: boolean }> } | null>(null);
+  const formRef = ref<{ validate: () => Promise<{ valid: boolean }>; $el?: Element } | null>(null);
   const form = ref<Record<string, unknown>>({});
   const snapshot = ref<Record<string, unknown>>({});
   const optionsCache = ref<Record<string, FormFieldOption[]>>({});
@@ -29,23 +30,40 @@ export function useFormRenderer(
 
   const isEditMode = computed(() => !!initialData.value?.id);
 
+  /**
+   * VSelect/VAutocomplete/VCombobox treat an empty *string* as a real chosen
+   * value (they synthesize a one-item selection from it), not as "nothing
+   * selected" — only `null`/`undefined` collapse their internal model to an
+   * empty array. Label-floating and dirty-state both key off that array's
+   * length, so seeding these fields with `""` left their label permanently
+   * floated even when empty, unlike a plain text field. `null` is the actual
+   * "empty" value for this trio of picker types.
+   */
+  function isPickerField(field: FormFieldDef): boolean {
+    return !field.multiple
+      && (field.type === "select" || field.type === "autocomplete" || field.type === "combobox");
+  }
+
   function defaultValueFor(field: FormFieldDef): unknown {
+    if (typeof field.default === "function") return (field.default as () => unknown)();
     if (field.default !== undefined) return field.default;
-    return field.type === "chips" ? [] : "";
+    if (field.type === "chips" || field.multiple) return [];
+    return isPickerField(field) ? null : "";
   }
 
   function buildFormState(source?: Record<string, unknown>): Record<string, unknown> {
     const next: Record<string, unknown> = {};
     for (const f of fields) {
-      const raw = source ? source[f.key] : undefined;
-      if (raw === undefined || raw === null) {
+      const container = f.nestUnder
+        ? (source?.[f.nestUnder] as Record<string, unknown> | undefined)
+        : source;
+      const raw = container ? container[f.key] : undefined;
+      if (raw === undefined || raw === null || (raw === "" && isPickerField(f))) {
         next[f.key] = defaultValueFor(f);
-      } else if (f.type === "chips") {
+      } else if (f.type === "chips" || f.multiple) {
         next[f.key] = Array.isArray(raw) ? [...raw] : [];
       } else if (f.type === "number") {
         next[f.key] = raw === "" ? "" : String(raw);
-      } else if (f.type === "phone") {
-        next[f.key] = String(raw).replace(/\D/g, "");
       } else if (typeof raw === "string") {
         next[f.key] = raw.trim();
       } else {
@@ -91,17 +109,57 @@ export function useFormRenderer(
     return optionsCache.value[field.key] ?? [];
   }
 
-  async function loadOptionsFor(field: FormFieldDef) {
+  async function loadOptionsFor(field: FormFieldDef, force = false) {
     if (typeof field.options !== "function") return;
-    if (optionsCache.value[field.key]) return; // cached — loaded once
+    if (!force && optionsCache.value[field.key]) return; // cached — loaded once
     loadingOptions.value = { ...loadingOptions.value, [field.key]: true };
     try {
       const loader = field.options;
-      const opts = await loader();
+      const opts = await loader(form.value);
       optionsCache.value = { ...optionsCache.value, [field.key]: opts };
+      if (field.autoSelectFirstIfEmpty && !form.value[field.key] && opts[0]) {
+        form.value = { ...form.value, [field.key]: opts[0].value };
+      }
     } finally {
       loadingOptions.value = { ...loadingOptions.value, [field.key]: false };
     }
+  }
+
+  // Fields with `dependsOn` reload (and force-refresh, bypassing the cache)
+  // whenever any of the depended-on fields' values change. Registered once —
+  // this composable instance lives for the dialog's whole lifetime.
+  //
+  // Each depended-on key is passed as its OWN getter (Vue's multi-source
+  // watch form) rather than one getter returning `keys.map(...)` — a single
+  // getter would return a brand-new array every run, which is always
+  // "changed" by reference, so the callback would spuriously refire on
+  // every unrelated `form.value` reassignment (e.g. another field's
+  // autoSelectFirstIfEmpty or the `derive` hook below). The multi-source
+  // form compares each key's own value individually.
+  for (const f of fields) {
+    if (f.dependsOn?.length) {
+      const sources = f.dependsOn.map((k) => () => form.value[k]);
+      watch(sources, () => { loadOptionsFor(f, true); });
+    }
+  }
+
+  // Optional entity-specific derived-fields hook (e.g. a hidden field synced
+  // live from another field's value, like HCP.region from the selected clinic).
+  if (derive) {
+    watch(
+      form,
+      (val) => {
+        const patch = derive(val);
+        if (!patch) return;
+        let changed = false;
+        const next = { ...val };
+        for (const k in patch) {
+          if (next[k] !== patch[k]) { next[k] = patch[k]; changed = true; }
+        }
+        if (changed) form.value = next;
+      },
+      { deep: true },
+    );
   }
 
   /** Loads every async ('autocomplete') field's options — call on dialog open. */
@@ -113,9 +171,13 @@ export function useFormRenderer(
     );
   }
 
+  function isFieldRequired(field: FormFieldDef): boolean {
+    return typeof field.required === "function" ? field.required(form.value) : !!field.required;
+  }
+
   function rulesFor(field: FormFieldDef): ((v: unknown) => true | string)[] {
     const rules: ((v: unknown) => true | string)[] = [];
-    if (field.required) {
+    if (isFieldRequired(field)) {
       rules.push((v: unknown) => {
         const empty = v === undefined || v === null
           || (Array.isArray(v) ? v.length === 0 : String(v).trim() === "");
@@ -141,16 +203,24 @@ export function useFormRenderer(
     const payload: Record<string, unknown> = {};
     for (const f of fields) {
       const v = form.value[f.key];
+      let out: unknown;
       if (f.type === "chips") {
-        payload[f.key] = Array.isArray(v) ? v.map((s) => String(s).trim()).filter(Boolean) : [];
+        out = Array.isArray(v) ? v.map((s) => String(s).trim()).filter(Boolean) : [];
       } else if (f.type === "number") {
         const s = String(v ?? "").trim();
-        payload[f.key] = s === "" ? undefined : Number(s);
+        out = s === "" ? undefined : Number(s);
       } else if (typeof v === "string") {
         const trimmed = v.trim();
-        payload[f.key] = trimmed === "" ? undefined : trimmed;
+        out = trimmed === "" ? undefined : trimmed;
       } else {
-        payload[f.key] = v;
+        out = v;
+      }
+
+      if (f.nestUnder) {
+        const bucket = (payload[f.nestUnder] ??= {}) as Record<string, unknown>;
+        if (out !== undefined) bucket[f.key] = out;
+      } else {
+        payload[f.key] = out;
       }
     }
     if (initialData.value?.id) payload.id = initialData.value.id;

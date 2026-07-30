@@ -1,5 +1,6 @@
 import type { FormFieldDef } from "../../types/formField";
 import { useConfigStore } from "../../stores/config";
+import { identityFields } from "./identityFields";
 
 /**
  * Staff user entity config for the generic FormRenderer (apps/pwa/src/
@@ -15,20 +16,10 @@ import { useConfigStore } from "../../stores/config";
  * `email` is marked `immutableOnEdit` — FormRenderer disables it once
  * initialData.id is set, so the edit dialog no longer shows a live-looking
  * field that UpdateUserCommand silently ignores.
+ *
+ * Reuses the shared Identity block (prefix key overridden to "salutation",
+ * matching patientForm.ts/hcpForm.ts's DB-layer naming convention).
  */
-
-// value is the literal text (not a code) — matches what these i18n keys
-// resolve to in every locale file today (see useSalutationOptions.ts, the
-// bespoke equivalent used by LeadForm/PractitionerForm/PatientForm, where
-// the translated string doubles as both label and stored value).
-const SALUTATION_OPTIONS = [
-  { title: "app.common.salutation.mr", value: "Mr." },
-  { title: "app.common.salutation.mrs", value: "Mrs." },
-  { title: "app.common.salutation.ms", value: "Ms." },
-  { title: "app.common.salutation.miss", value: "Miss" },
-  { title: "app.common.salutation.dr", value: "Dr." },
-  { title: "app.common.salutation.dra", value: "Dra." },
-];
 
 const ROLE_OPTIONS = [
   { title: "user.users.role.admin", value: "admin" },
@@ -51,36 +42,12 @@ async function loadRegionOptions() {
   return configStore.regionItems;
 }
 
+const identity = identityFields();
+identity[0] = { ...identity[0], key: "salutation" };
+identity[3] = { ...identity[3], immutableOnEdit: true };
+
 export const userFormFields: FormFieldDef[] = [
-  {
-    key: "salutation",
-    type: "combobox",
-    labelKey: "user.users.form.fieldSalutation",
-    options: SALUTATION_OPTIONS,
-    cols: 12,
-  },
-  {
-    key: "first_name",
-    type: "text",
-    labelKey: "user.users.form.fieldFirstName",
-    required: true,
-    cols: 6,
-  },
-  {
-    key: "last_name",
-    type: "text",
-    labelKey: "user.users.form.fieldLastName",
-    required: true,
-    cols: 6,
-  },
-  {
-    key: "email",
-    type: "email",
-    labelKey: "user.users.form.fieldEmail",
-    required: true,
-    immutableOnEdit: true,
-    cols: 12,
-  },
+  ...identity,
   {
     key: "role",
     type: "select",
@@ -95,12 +62,6 @@ export const userFormFields: FormFieldDef[] = [
     type: "autocomplete",
     labelKey: "user.users.form.fieldRegion",
     options: loadRegionOptions,
-    cols: 6,
-  },
-  {
-    key: "phone",
-    type: "phone",
-    labelKey: "user.users.form.fieldPhone",
     cols: 6,
   },
   {

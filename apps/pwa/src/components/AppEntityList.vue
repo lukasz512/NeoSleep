@@ -1,53 +1,61 @@
 <template>
   <div class="app-entity-list">
-    <div v-if="!isTrulyEmpty && !loadError" class="app-entity-list__toolbar">
-      <VTextField
-        v-model="searchQuery"
-        type="search"
-        class="app-entity-list__search"
-        :placeholder="t(i18n.searchPlaceholder)"
-        :aria-label="t(i18n.searchPlaceholder)"
-        autocomplete="off"
-        density="comfortable"
-        variant="outlined"
-        hide-details
-        :clearable="false"
+    <div
+      v-if="!isTrulyEmpty && !loadError && !isInitialLoading"
+      :class="['app-entity-list__toolbar', { 'app-entity-list__toolbar--hidden': mobile && toolbarHiddenByScroll }]"
+    >
+      <div
+        :class="['app-entity-list__search-group', { 'app-entity-list__search-group--active': hasActiveFiltersOrSearch }]"
       >
-        <template #append-inner>
-          <VTooltip v-if="searchQuery.trim() && !mobile" location="bottom">
-            <template #activator="{ props: tooltipProps }">
-              <VBtn
-                v-bind="tooltipProps"
-                icon
-                variant="flat"
-                size="small"
-                class="app-entity-list__search-clear"
-                :aria-label="t(i18n.filtersClear)"
-                @click="onSearchClear"
-              >
-                <AppIcon name="close" class="app-entity-list__icon" />
-              </VBtn>
-            </template>
-            <span>{{ t(i18n.filtersClear) }}</span>
-          </VTooltip>
-        </template>
-      </VTextField>
-      <div class="app-entity-list__toolbar-right">
-        <VTooltip v-if="hasActiveFiltersOrSearch" location="bottom">
-          <template #activator="{ props: tooltipProps }">
-            <VBtn
-              v-bind="tooltipProps"
-              icon
-              variant="flat"
-              size="large"
-              class="app-entity-list__clear-filters app-entity-list__clear-filters--no-border"
-              :aria-label="t(i18n.filtersClear)"
-              @click="onFiltersClear"
+        <VTooltip :disabled="!searchCollapsed" location="bottom">
+          <template #activator="{ props: searchTooltipProps }">
+            <VTextField
+              ref="searchFieldRef"
+              v-bind="searchTooltipProps"
+              v-model="searchQuery"
+              type="search"
+              :class="['app-entity-list__search', { 'app-entity-list__search--collapsed': searchCollapsed }]"
+              :placeholder="t(i18n.searchPlaceholder)"
+              :aria-label="t(i18n.searchPlaceholder)"
+              autocomplete="off"
+              density="comfortable"
+              variant="outlined"
+              rounded="pill"
+              hide-details
+              :clearable="false"
+              :loading="loading ? 'primary' : false"
+              @focus="isSearchFocused = true"
+              @blur="isSearchFocused = false"
             >
-              <AppIcon name="close" class="app-entity-list__icon" />
-            </VBtn>
+              <template #prepend-inner>
+                <AppIcon name="search" class="app-entity-list__search-icon" />
+              </template>
+              <template #append-inner>
+                <div :class="['app-entity-list__search-clear-wrap', { 'app-entity-list__search-clear-wrap--hidden': !searchQuery.trim() }]">
+                  <VTooltip :disabled="!searchQuery.trim()" location="bottom">
+                    <template #activator="{ props: tooltipProps }">
+                      <AppButton
+                        v-bind="tooltipProps"
+                        icon
+                        variant="flat"
+                        size="small"
+                        :loading="clearingSearch"
+                        ignore-global-loading
+                        :tabindex="searchQuery.trim() ? 0 : -1"
+                        class="app-entity-list__search-clear"
+                        :aria-label="t(i18n.filtersClear)"
+                        @click="onSearchClearClick"
+                      >
+                        <AppIcon name="close" class="app-entity-list__icon" />
+                      </AppButton>
+                    </template>
+                    <span>{{ t(i18n.filtersClear) }}</span>
+                  </VTooltip>
+                </div>
+              </template>
+            </VTextField>
           </template>
-          <span>{{ t(i18n.filtersClear) }}</span>
+          <span>{{ t(i18n.searchPlaceholder) }}</span>
         </VTooltip>
         <AppFilterBar
           :model-value="filterState"
@@ -58,30 +66,61 @@
           @update:model-value="onFilterStateUpdate"
           @clear="onFiltersClear"
         />
-        <VTooltip v-if="showAddButton" location="bottom">
-          <template #activator="{ props: tooltipProps }">
-            <VBtn
-              v-bind="tooltipProps"
-              icon
-              variant="flat"
-              size="large"
-              class="app-entity-list__add app-entity-list__add--no-border"
-              :aria-label="t(i18n.add)"
-              @click="$emit('add')"
-            >
-              <AppIcon name="plus" class="app-entity-list__icon" />
-            </VBtn>
-          </template>
-          <span>{{ t(i18n.add) }}</span>
-        </VTooltip>
+        <div :class="['app-entity-list__clear-filters-wrap', { 'app-entity-list__clear-filters-wrap--hidden': !hasActiveFiltersOrSearch }]">
+          <VTooltip :disabled="!hasActiveFiltersOrSearch" location="bottom">
+            <template #activator="{ props: tooltipProps }">
+              <AppButton
+                v-bind="tooltipProps"
+                icon
+                variant="flat"
+                size="large"
+                :loading="clearingFilters"
+                ignore-global-loading
+                :tabindex="hasActiveFiltersOrSearch ? 0 : -1"
+                class="app-entity-list__clear-filters app-entity-list__clear-filters--no-border"
+                :aria-label="t(i18n.filtersClear)"
+                @click="onFiltersClear"
+              >
+                <AppIcon name="close" class="app-entity-list__icon" />
+              </AppButton>
+            </template>
+            <span>{{ t(i18n.filtersClear) }}</span>
+          </VTooltip>
+        </div>
       </div>
+      <VTooltip v-if="showAddButton" location="bottom">
+        <template #activator="{ props: tooltipProps }">
+          <AppButton
+            v-bind="tooltipProps"
+            icon
+            variant="flat"
+            size="large"
+            class="app-entity-list__add app-entity-list__add--no-border"
+            :aria-label="t(i18n.add)"
+            @click="$emit('add')"
+          >
+            <AppIcon name="plus" class="app-entity-list__icon" />
+          </AppButton>
+        </template>
+        <span>{{ t(i18n.add) }}</span>
+      </VTooltip>
     </div>
+
+    <VAlert
+      v-if="isOffline"
+      type="warning"
+      variant="tonal"
+      density="compact"
+      class="app-entity-list__offline-banner"
+      :text="t('app.common.offlineShowingCached')"
+    />
 
     <div v-if="loadError" class="app-entity-list__error-wrap">
       <AppErrorState
         :title="t('app.errorState.title')"
         :subtitle="loadError"
         :refresh-label="t('app.errorState.refresh')"
+        :loading="loading"
         @refresh="loadData"
       />
     </div>
@@ -96,7 +135,11 @@
       />
     </div>
 
-    <div v-else class="app-entity-list__table-wrap">
+    <div v-else-if="isInitialLoading" class="app-entity-list__loading-wrap">
+      <AppLoadingState />
+    </div>
+
+    <div v-else :class="['app-entity-list__table-wrap', { 'app-entity-list__table-wrap--flat': mobile }]">
       <div
         v-if="!loading && total === 0 && hasActiveFiltersOrSearch"
         class="app-entity-list__no-results-placeholder"
@@ -107,9 +150,9 @@
         </div>
         <p class="app-entity-list__no-results-title">{{ t(i18n.noResultsForCriteria) }}</p>
         <p class="app-entity-list__no-results-subtitle">{{ t(i18n.noResultsForCriteriaSubtitle) }}</p>
-        <VBtn variant="outlined" color="primary" class="app-entity-list__no-results-clear" @click="onFiltersClear">
+        <AppButton variant="outlined" color="primary" :loading="clearingFilters" class="app-entity-list__no-results-clear" @click="onFiltersClear">
           {{ t(i18n.filtersClear) }}
-        </VBtn>
+        </AppButton>
       </div>
       <template v-else>
         <VDataTableServer
@@ -118,7 +161,6 @@
           :headers="headers"
           :items="items"
           :items-length="total"
-          :loading="loading"
           :item-value="itemValue"
           class="app-entity-list__table"
           hover
@@ -129,53 +171,86 @@
             <slot :name="name" v-bind="slotData" />
           </template>
         </VDataTableServer>
-        <TransitionGroup v-show="mobile" name="list-stagger" tag="div" class="app-entity-list__feed">
-          <VCard
-            v-for="(item, index) in items"
-            :key="(item as Record<string, unknown>)[itemValue]"
-            variant="outlined"
-            class="app-entity-list__card app-entity-list__card--clickable"
-            :style="{ '--stagger-delay': `${index * 40}ms` }"
-            @click="onRowClick(item)"
-          >
-            <VCardTitle class="text-body-1 font-weight-medium app-entity-list__card-title">
-              <slot name="feed-card-title" :item="item">
-                {{ getCell(item, titleKey) }}
-              </slot>
-            </VCardTitle>
-            <VCardSubtitle v-if="metaKeys.length" class="text-caption text-medium-emphasis app-entity-list__card-meta">
-              <slot name="feed-card-meta" :item="item">
-                {{ formatMeta(item) }}
-              </slot>
-            </VCardSubtitle>
-            <div v-if="$slots['feed-card-actions']" class="app-entity-list__card-actions" @click.stop>
-              <slot name="feed-card-actions" :item="item" />
+        <div v-show="mobile" ref="feedScrollRef" class="app-entity-list__feed-scroll" @scroll="onFeedScroll">
+          <TransitionGroup name="list-stagger" tag="div" class="app-entity-list__feed">
+            <VCard
+              v-for="(item, index) in mobileItems"
+              :key="(item as Record<string, unknown>)[itemValue]"
+              variant="flat"
+              elevation="1"
+              :class="[
+                'app-entity-list__card',
+                'app-entity-list__card--clickable',
+                { 'app-entity-list__card--disabled': isOtherItemLoading(item) },
+              ]"
+              :style="{ '--stagger-delay': `${index * 40}ms` }"
+              @click="onRowClick(item)"
+            >
+              <div class="app-entity-list__card-body">
+                <div v-if="$slots['feed-card-avatar']" class="app-entity-list__card-avatar">
+                  <slot name="feed-card-avatar" :item="item" />
+                </div>
+                <div class="app-entity-list__card-main">
+                  <div class="text-body-1 font-weight-medium app-entity-list__card-title">
+                    <slot name="feed-card-title" :item="item">
+                      {{ getCell(item, titleKey) }}
+                    </slot>
+                  </div>
+                  <div v-if="metaKeys.length" class="text-caption text-medium-emphasis app-entity-list__card-meta">
+                    <slot name="feed-card-meta" :item="item">
+                      {{ formatMeta(item) }}
+                    </slot>
+                  </div>
+                </div>
+                <div class="app-entity-list__card-side">
+                  <div v-if="$slots['feed-card-status']" class="app-entity-list__card-status">
+                    <slot name="feed-card-status" :item="item" />
+                  </div>
+                  <div v-if="$slots['feed-card-actions']" class="app-entity-list__card-actions" @click.stop>
+                    <slot name="feed-card-actions" :item="item" />
+                  </div>
+                </div>
+              </div>
+              <VProgressLinear
+                v-if="isItemLoading(item)"
+                indeterminate
+                height="2"
+                color="primary"
+                class="app-entity-list__card-loader"
+              />
+            </VCard>
+            <VAlert
+              v-if="!loading && mobileItems.length === 0"
+              key="_empty"
+              type="info"
+              variant="tonal"
+              density="comfortable"
+              class="app-entity-list__feed-empty"
+            >
+              {{ t(i18n.tableNoResults) }}
+            </VAlert>
+            <div v-if="mobileHasMore" key="_load-more" ref="loadMoreSentinelRef" class="app-entity-list__load-more">
+              <AppSpinner v-if="loadingMore" size="24" width="2" />
             </div>
-          </VCard>
-          <VAlert
-            v-if="!loading && items.length === 0"
-            key="_empty"
-            type="info"
-            variant="tonal"
-            density="comfortable"
-            class="app-entity-list__feed-empty"
-          >
-            {{ t(i18n.tableNoResults) }}
-          </VAlert>
-        </TransitionGroup>
+          </TransitionGroup>
+        </div>
       </template>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useDisplay } from "vuetify";
 import { useI18n } from "vue-i18n";
+import { useIntersectionObserver } from "@vueuse/core";
+import AppButton from "./AppButton.vue";
 import AppEmptyState from "./AppEmptyState.vue";
 import AppErrorState from "./AppErrorState.vue";
+import AppLoadingState from "./AppLoadingState.vue";
 import AppIcon from "./AppIcon.vue";
 import AppFilterBar from "./AppFilterBar.vue";
+import AppSpinner from "./AppSpinner.vue";
 import { useEntityList } from "../composables/useEntityList";
 import type { FilterDefinition } from "../composables/useFilters";
 
@@ -211,6 +286,13 @@ const props = withDefaults(
     filterParamKeys?: string[];
     searchParamKey?: string;
     sortColumns?: string[];
+    /** id of the mobile feed item currently running a menu action (no dialog) —
+     *  shows a bottom loading bar on that item and dims/disables the rest,
+     *  mirroring AppButton's disabled-while-loading convention. */
+    loadingItemId?: string | null;
+    /** Offline read cache (see docs/ADR-013-offline-read-cache.md) — set false for entities
+     *  that must not be persisted client-side (`patient`, GDPR Art. 9 data). */
+    cacheable?: boolean;
   }>(),
   {
     showAddButton: false,
@@ -218,6 +300,8 @@ const props = withDefaults(
     filterParamKeys: () => [],
     searchParamKey: "search",
     sortColumns: undefined,
+    loadingItemId: null,
+    cacheable: true,
   }
 );
 
@@ -230,10 +314,11 @@ const { mobile } = useDisplay();
 
 const {
   searchQuery, filterState, activeFilterCount, tableOptions,
-  loading, loadError, items, total,
-  hasActiveFiltersOrSearch, isTrulyEmpty,
+  loading, clearingSearch, clearingFilters, loadError, isOffline, items, total,
+  mobileItems, mobileHasMore, loadingMore,
+  hasActiveFiltersOrSearch, isTrulyEmpty, hasCompletedInitialLoad,
   onFilterStateUpdate, onFiltersClear, onSearchClear,
-  onOptionsUpdate, rowProps, onRowClick, loadData,
+  onOptionsUpdate, rowProps, onRowClick, loadData, loadMoreMobile,
 } = useEntityList({
   viewId: props.viewId,
   apiEndpoint: props.apiEndpoint,
@@ -243,9 +328,58 @@ const {
   detailRouteParam: props.detailRouteParam,
   filterParamKeys: props.filterParamKeys,
   searchParamKey: props.searchParamKey,
+  cacheable: props.cacheable,
 });
 
+const loadMoreSentinelRef = ref<HTMLElement | null>(null);
+useIntersectionObserver(loadMoreSentinelRef, ([entry]) => {
+  if (entry?.isIntersecting && mobile.value) loadMoreMobile();
+});
+
+/* Mobile only: the search/filter toolbar collapses away while scrolling down
+   the feed (more room for the list) and reinstates as soon as the rep
+   scrolls back up, or nears the top — a small buffer around the direction
+   flip avoids it flickering on sub-pixel scroll jitter. */
+const feedScrollRef = ref<HTMLElement | null>(null);
+const toolbarHiddenByScroll = ref(false);
+let lastScrollTop = 0;
+const SCROLL_HIDE_BUFFER = 8;
+
+function onFeedScroll(e: Event) {
+  const el = e.currentTarget as HTMLElement;
+  const scrollTop = el.scrollTop;
+  const delta = scrollTop - lastScrollTop;
+
+  if (scrollTop <= SCROLL_HIDE_BUFFER) {
+    toolbarHiddenByScroll.value = false;
+  } else if (delta > SCROLL_HIDE_BUFFER) {
+    toolbarHiddenByScroll.value = true;
+  } else if (delta < -SCROLL_HIDE_BUFFER) {
+    toolbarHiddenByScroll.value = false;
+  }
+  lastScrollTop = scrollTop;
+}
+
+const isSearchFocused = ref(false);
+const searchCollapsed = computed(
+  () => mobile.value && !isSearchFocused.value && !searchQuery.value.trim(),
+);
+
+const searchFieldRef = ref<{ focus: () => void } | null>(null);
+function onSearchClearClick() {
+  onSearchClear();
+  searchFieldRef.value?.focus();
+}
+
 const itemValue = "id";
+/* Only the very first load for this view (nothing fetched yet) shows the
+   full-page skeleton. A search/filter-triggered reload sets `loading` too,
+   but items/total stay at their previous values until the response lands —
+   gating on items.length===0 here used to also catch "search already
+   matched nothing, now typing more" and tear down the toolbar + swap in the
+   skeleton mid-keystroke, which flashed away the very input being typed
+   into. */
+const isInitialLoading = computed(() => loading.value && !hasCompletedInitialLoad.value);
 const titleKey = computed(() => (props.headers.length > 0 ? props.headers[0].key : "name"));
 const metaKeys = computed(() => props.headers.slice(1).map((h) => h.key));
 
@@ -259,6 +393,18 @@ function formatMeta(item: Record<string, unknown>): string {
     .map((k) => getCell(item, k))
     .filter(Boolean)
     .join(" · ");
+}
+
+function rawItemId(item: unknown): unknown {
+  return (item as Record<string, unknown>)[itemValue];
+}
+
+function isItemLoading(item: unknown): boolean {
+  return props.loadingItemId != null && rawItemId(item) === props.loadingItemId;
+}
+
+function isOtherItemLoading(item: unknown): boolean {
+  return props.loadingItemId != null && rawItemId(item) !== props.loadingItemId;
 }
 </script>
 

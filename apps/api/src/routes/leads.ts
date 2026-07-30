@@ -5,6 +5,7 @@ import { requireRole } from "../middleware/requireRole.js";
 import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
 import { CreateLeadCommand, UpdateLeadCommand, ConvertLeadCommand, DeleteLeadCommand } from "../commands/lead.js";
+import { InvitePractitionerCommand } from "../commands/invitePractitioner.js";
 import { GetLeadListQuery, GetLeadByIdQuery } from "../queries/lead.js";
 import { ValidationError } from "../errors.js";
 import { parsePaginationParams, toFilterArray } from "./utils.js";
@@ -80,7 +81,7 @@ leadsRouter.post(
     const slug = tenantSlugFromHost(req.hostname);
     const body = req.body as {
       salutation?: string; first_name?: string; last_name?: string;
-      email?: string; phone?: string; status?: string;
+      email?: string; phone?: string; status?: string; type?: string;
       region?: string; source?: string; institution?: string; assigned_to?: string;
       metadata?: Record<string, unknown>;
     };
@@ -94,6 +95,7 @@ leadsRouter.post(
         email:       typeof body.email       === "string" ? body.email.trim()       : null,
         phone:       typeof body.phone       === "string" ? body.phone.trim()       : null,
         status:      typeof body.status      === "string" ? body.status             : undefined,
+        type:        typeof body.type        === "string" ? body.type               : undefined,
         region:      typeof body.region      === "string" ? body.region             : undefined,
         source:      typeof body.source      === "string" ? body.source             : null,
         institution: typeof body.institution === "string" ? body.institution.trim() : null,
@@ -119,7 +121,7 @@ leadsRouter.patch(
     const slug = tenantSlugFromHost(req.hostname);
     const body = req.body as {
       salutation?: string; first_name?: string; last_name?: string;
-      email?: string; phone?: string; status?: string;
+      email?: string; phone?: string; status?: string; type?: string;
       region?: string; source?: string; institution?: string; assigned_to?: string;
       metadata?: Record<string, unknown>;
       converted_to_id?: string; converted_to_type?: string;
@@ -151,6 +153,7 @@ leadsRouter.patch(
         email:       body.email       !== undefined ? body.email       : undefined,
         phone:       body.phone       !== undefined ? body.phone       : undefined,
         status:      typeof body.status      === "string" ? body.status  : undefined,
+        type:        typeof body.type        === "string" ? body.type   : undefined,
         region:      typeof body.region      === "string" ? body.region  : undefined,
         source:      typeof body.source      === "string" ? body.source  : undefined,
         institution: typeof body.institution === "string" ? body.institution : undefined,
@@ -161,6 +164,31 @@ leadsRouter.patch(
 
     if (!lead) { res.status(404).json({ error: "Lead not found" }); return; }
     res.json(lead);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// POST /api/v1/lead/:id/invite — invite a doctor-type lead to register online
+// ---------------------------------------------------------------------------
+leadsRouter.post(
+  "/lead/:id/invite",
+  requireRole("admin", "manager"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id?.trim();
+    if (!id) throw new ValidationError("Missing lead id");
+
+    const body = req.body as { first_name?: string; last_name?: string; email?: string };
+    const slug = tenantSlugFromHost(req.hostname);
+    await withTenant(slug, async (client) => {
+      const ctx = buildContext(req, client, slug);
+      await InvitePractitionerCommand(ctx, id, {
+        first_name: typeof body.first_name === "string" ? body.first_name : undefined,
+        last_name:  typeof body.last_name  === "string" ? body.last_name  : undefined,
+        email:      typeof body.email      === "string" ? body.email      : undefined,
+      });
+    });
+
+    res.json({ success: true });
   })
 );
 

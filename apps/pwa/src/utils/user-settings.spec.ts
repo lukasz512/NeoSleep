@@ -32,7 +32,9 @@ describe("user-settings", () => {
 
   it("getUserSettings returns defaults when storage is empty", () => {
     const s = getUserSettings();
-    expect(s.locale).toBe("en");
+    // No default locale — resolveInitialLocale() (plugins/i18n.ts) owns first-visit
+    // detection from the browser language; a default here would race and override it.
+    expect(s.locale).toBeUndefined();
     expect(s.sidebarCollapsed).toBe(false);
     expect(s.filters).toEqual({});
   });
@@ -62,7 +64,7 @@ describe("user-settings", () => {
 
   it("getUserSettings with empty storage returns defaults without persisting", () => {
     const s = getUserSettings();
-    expect(s.locale).toBe("en");
+    expect(s.locale).toBeUndefined();
     expect(s.sidebarCollapsed).toBe(false);
     if (typeof globalThis.localStorage !== "undefined") {
       const raw = globalThis.localStorage.getItem(APP_STORAGE_KEYS.settings);

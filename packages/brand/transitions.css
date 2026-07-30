@@ -28,3 +28,53 @@
   opacity: 0;
   transform: translateY(-6px);
 }
+
+/* ── Theme (light/dark) switch ───────────────────────────────────
+ * Trigger lives in packages/stores/src/theme.ts, shared by web + pwa.
+ * Primary path: View Transitions API crossfades the whole page.
+ * Fallback: browsers without support get a plain color transition instead
+ * (guarded by @supports so the two mechanisms never double-animate). */
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 280ms;
+    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  @supports not (view-transition-name: none) {
+    html,
+    body {
+      transition:
+        background-color 280ms cubic-bezier(0.22, 1, 0.36, 1),
+        color 280ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+  }
+}
+
+/* ── Title swap transitions (e.g. app-bar module title) ─────────── */
+.title-fade-enter-active,
+.title-fade-leave-active {
+  transition:
+    opacity 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.title-fade-enter-from {
+  opacity: 0;
+  transform: translateX(-6px);
+}
+
+.title-fade-enter-to {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.title-fade-leave-from {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.title-fade-leave-to {
+  opacity: 0;
+  transform: translateX(-6px);
+}

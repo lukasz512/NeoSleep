@@ -75,9 +75,10 @@ function buildName(p: { salutation: string | null; first_name: string; last_name
 
 const PATIENT_SELECT_COLS = `
   p.id, p.identity_id, p.practitioner_id, p.diagnosis_code, p.ahi_baseline,
-  p.cpap_device, p.medical_record, p.region, p.status, p.metadata,
+  p.cpap_device, p.medical_record, p.status, p.metadata,
   p.created_at, p.updated_at,
   i.title AS salutation, i.first_name, i.last_name, i.email, i.phone,
+  COALESCE(i.region, '') AS region,
   pi.first_name AS practitioner_first_name, pi.last_name AS practitioner_last_name`.trim();
 
 // Shared FROM/JOIN fragment for the two read queries below — resolves the
@@ -155,7 +156,7 @@ export async function getPatientsPaginated(
   const allowed = ["created_at", "last_name", "first_name", "status", "region"];
   const col = allowed.includes(sortBy) ? sortBy : "created_at";
   const dir = sortOrder === "asc" ? "ASC" : "DESC";
-  const safeCol = ["first_name", "last_name"].includes(col) ? `i.${col}` : `p.${col}`;
+  const safeCol = ["first_name", "last_name", "region"].includes(col) ? `i.${col}` : `p.${col}`;
 
   const conditions: string[] = ["p.deleted_at IS NULL"];
   const params: unknown[] = [];
@@ -164,7 +165,7 @@ export async function getPatientsPaginated(
     params.push(`%${filters.search.trim().toLowerCase()}%`);
     conditions.push(
       `(LOWER(i.first_name || ' ' || i.last_name) LIKE $${params.length}
-       OR LOWER(p.region) LIKE $${params.length})`
+       OR LOWER(COALESCE(i.region,'')) LIKE $${params.length})`
     );
   }
   if (filters.status?.trim()) {
@@ -173,7 +174,7 @@ export async function getPatientsPaginated(
   }
   if (filters.region?.trim()) {
     params.push(filters.region.trim());
-    conditions.push(`p.region = $${params.length}`);
+    conditions.push(`i.region = $${params.length}`);
   }
 
   const where = `WHERE ${conditions.join(" AND ")}`;
@@ -226,8 +227,8 @@ export async function getPatientById(client: PoolClient, id: string): Promise<(P
 export async function insertPatient(client: PoolClient, data: PatientInsert): Promise<Patient & { name: string }> {
   try {
     const identityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (title, first_name, last_name, email, phone)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO identities (title, first_name, last_name, email, phone, region)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id`,
       [
         data.salutation ?? null,
@@ -235,13 +236,14 @@ export async function insertPatient(client: PoolClient, data: PatientInsert): Pr
         data.last_name,
         data.email ?? null,
         data.phone ?? null,
+        data.region ?? null,
       ]
     );
     const identityId = identityResult.rows[0]!.id;
 
     const patientResult = await client.query<{ id: string }>(
-      `INSERT INTO patient (identity_id, practitioner_id, diagnosis_code, ahi_baseline, cpap_device, medical_record, status, region, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `INSERT INTO patient (identity_id, practitioner_id, diagnosis_code, ahi_baseline, cpap_device, medical_record, status, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id`,
       [
         identityId,
@@ -251,7 +253,6 @@ export async function insertPatient(client: PoolClient, data: PatientInsert): Pr
         data.cpap_device ?? null,
         data.medical_record ?? null,
         data.status ?? "active",
-        data.region ?? "",
         data.metadata ? JSON.stringify(data.metadata) : null,
       ]
     );
@@ -291,6 +292,7 @@ export async function updatePatient(
       last_name: "last_name",
       email: "email",
       phone: "phone",
+      region: "region",
     };
     for (const [field, column] of Object.entries(identityFieldToColumn) as [keyof PatientUpdate, string][]) {
       if (data[field] !== undefined) {
@@ -311,7 +313,7 @@ export async function updatePatient(
 
     const patientFields: (keyof PatientUpdate)[] = [
       "practitioner_id", "diagnosis_code", "ahi_baseline",
-      "cpap_device", "medical_record", "status", "region", "metadata",
+      "cpap_device", "medical_record", "status", "metadata",
     ];
     for (const field of patientFields) {
       if (data[field] !== undefined) {

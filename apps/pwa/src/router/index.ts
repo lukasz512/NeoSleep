@@ -30,7 +30,7 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   if (to.meta.public) {
-    if (to.path === "/login") {
+    if (to.path === "/login" || to.path === "/forgot-password") {
       if (!auth.sessionChecked) await auth.fetchSession();
       if (auth.isAuthenticated) {
         const redirect = typeof to.query.redirect === "string" && to.query.redirect ? to.query.redirect : "/dashboard";

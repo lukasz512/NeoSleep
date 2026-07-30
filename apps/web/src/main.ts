@@ -7,7 +7,7 @@ import { createGtag } from "vue-gtag";
 import App from "./App.vue";
 import router from "./router";
 import { getTenantId, loadTenantOverlay } from "./composables/useTenantI18n";
-import { resolveInitialThemeMode } from "@stores";
+import { resolveInitialThemeMode, useMotionPreferenceStore } from "@stores";
 
 // Pre-mount, before Pinia exists — avoids a flash of the wrong theme. The
 // theme store re-resolves reactively (incl. the tenant-default tier) once
@@ -57,6 +57,8 @@ app.use(createPinia());
 app.use(router);
 app.use(i18n);
 app.provide(headSymbol, createUnhead());
+
+useMotionPreferenceStore().startListening();
 
 const gaId = import.meta.env.VITE_GA_ID as string | undefined;
 if (import.meta.env.PROD && gaId) {

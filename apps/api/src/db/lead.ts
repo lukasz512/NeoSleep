@@ -14,6 +14,8 @@ export interface Lead {
   // From lead table
   source: string | null;
   status: string;
+  /** doctor/hospital/pharmacy/patient/other — see 009_partner_invite_and_documents.sql. Drives the "Invite to collaborate" action (doctor-only). */
+  type: string;
   country_code: string | null;
   institution: string | null;
   converted_to_id: string | null;
@@ -47,6 +49,7 @@ export interface InsertLeadInput {
   email?: string | null;
   phone?: string | null;
   status?: string;
+  type?: string;
   region?: string;
   source?: string | null;
   institution?: string | null;
@@ -61,6 +64,7 @@ export interface UpdateLeadInput {
   email?: string | null;
   phone?: string | null;
   status?: string;
+  type?: string;
   region?: string;
   source?: string | null;
   institution?: string | null;
@@ -77,10 +81,11 @@ function isLeadSortColumn(s: string): s is LeadSortColumn {
 }
 
 const LEAD_SELECT_COLS = `
-  l.id, l.identity_id, l.source, l.status, l.country_code, l.institution,
-  l.converted_to_id, l.converted_to_type, l.converted_at, l.region,
+  l.id, l.identity_id, l.source, l.status, l.type, l.institution,
+  l.converted_to_id, l.converted_to_type, l.converted_at,
   l.assigned_to, l.metadata, l.created_at, l.updated_at,
-  i.title AS salutation, i.first_name, i.last_name, i.email, i.phone`.trim();
+  i.title AS salutation, i.first_name, i.last_name, i.email, i.phone,
+  COALESCE(i.region, '') AS region, i.country_code`.trim();
 
 function buildName(row: { first_name: string; last_name: string }): string {
   return `${row.first_name} ${row.last_name}`.trim();
@@ -106,7 +111,7 @@ export async function getLeadsPaginated(
 
   if (filters.search?.trim()) {
     conditions.push(
-      `(LOWER(i.first_name || ' ' || i.last_name) LIKE $${paramIndex} OR LOWER(COALESCE(i.email,'')) LIKE $${paramIndex} OR LOWER(l.status) LIKE $${paramIndex} OR LOWER(l.region) LIKE $${paramIndex})`
+      `(LOWER(i.first_name || ' ' || i.last_name) LIKE $${paramIndex} OR LOWER(COALESCE(i.email,'')) LIKE $${paramIndex} OR LOWER(l.status) LIKE $${paramIndex} OR LOWER(COALESCE(i.region,'')) LIKE $${paramIndex})`
     );
     params.push(`%${filters.search.trim().toLowerCase()}%`);
     paramIndex++;
@@ -119,7 +124,7 @@ export async function getLeadsPaginated(
   }
   const regionArr = toArray(filters.region);
   if (regionArr.length > 0) {
-    conditions.push(`l.region = ANY($${paramIndex}::text[])`);
+    conditions.push(`i.region = ANY($${paramIndex}::text[])`);
     params.push(regionArr);
     paramIndex++;
   }
@@ -130,7 +135,7 @@ export async function getLeadsPaginated(
   const whereClause = `WHERE ${conditions.join(" AND ")}`;
   const orderCol = isLeadSortColumn(sortBy) ? sortBy : "created_at";
   const orderDir = sortOrder === "asc" ? "ASC" : "DESC";
-  const identityCols: LeadSortColumn[] = ["first_name", "last_name", "email"];
+  const identityCols: LeadSortColumn[] = ["first_name", "last_name", "email", "region"];
   const safeOrder = identityCols.includes(orderCol as LeadSortColumn)
     ? `i."${orderCol}"`
     : orderCol === "created_at"
@@ -187,21 +192,21 @@ export async function insertLead(client: PoolClient, input: InsertLeadInput): Pr
 
   try {
     const identityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (title, first_name, last_name, email, phone)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO identities (title, first_name, last_name, email, phone, region)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id`,
-      [trimOrNull(input.salutation), firstName, lastName, trimOrNull(input.email), trimOrNull(input.phone)]
+      [trimOrNull(input.salutation), firstName, lastName, trimOrNull(input.email), trimOrNull(input.phone), trimOrEmpty(input.region) || null]
     );
     const identityId = identityResult.rows[0]!.id;
 
     const leadResult = await client.query<{ id: string }>(
-      `INSERT INTO lead (identity_id, status, region, source, institution, assigned_to, metadata)
+      `INSERT INTO lead (identity_id, status, type, source, institution, assigned_to, metadata)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id`,
       [
         identityId,
         trimOrEmpty(input.status) || "new",
-        trimOrEmpty(input.region),
+        trimOrEmpty(input.type) || "other",
         trimOrNull(input.source),
         trimOrNull(input.institution),
         trimOrNull(input.assigned_to),
@@ -253,6 +258,10 @@ export async function updateLead(client: PoolClient, id: string, input: UpdateLe
       identityParams.push(trimOrNull(input.phone));
       identitySets.push(`phone = $${iidx++}`);
     }
+    if (input.region !== undefined) {
+      identityParams.push(trimOrEmpty(input.region) || null);
+      identitySets.push(`region = $${iidx++}`);
+    }
     identityParams.push(lead.identity_id);
     await client.query(
       `UPDATE identities SET ${identitySets.join(", ")} WHERE id = $${iidx}`,
@@ -268,9 +277,9 @@ export async function updateLead(client: PoolClient, id: string, input: UpdateLe
       leadParams.push(input.status);
       leadSets.push(`status = $${lidx++}`);
     }
-    if (input.region !== undefined) {
-      leadParams.push(input.region);
-      leadSets.push(`region = $${lidx++}`);
+    if (input.type !== undefined) {
+      leadParams.push(input.type);
+      leadSets.push(`type = $${lidx++}`);
     }
     if (input.source !== undefined) {
       leadParams.push(trimOrNull(input.source));
@@ -319,8 +328,9 @@ export async function softDeleteLead(client: PoolClient, id: string): Promise<vo
 export interface ConvertLeadInput {
   converted_to_id: string;
   // DB CHECK constraint (lead_converted_to_type_check) only allows these
-  // lowercase values (or NULL) — see 005_lead_institution_and_patient_conversion.sql.
-  converted_to_type: "practitioner" | "organization" | "patient";
+  // lowercase values (or NULL) — see 005_lead_institution_and_patient_conversion.sql
+  // and 009_partner_invite_and_documents.sql (added 'user').
+  converted_to_type: "practitioner" | "organization" | "patient" | "user";
 }
 
 /**

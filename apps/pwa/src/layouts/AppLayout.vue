@@ -15,12 +15,13 @@
     <AppShell
       v-model="mobileDrawerOpen"
       :rail-collapsed="sidebarCollapsed"
+      :rail-width="64"
       :nav-items="visibleNavItems"
       :menu-label="t('layout.sidebar.expand')"
-      class="layout-shell"
+      bottom-nav-show-labels
     >
-      <template #logo="{ collapsed }">
-        <AppLogo variant="sidebar" :collapsed="collapsed" :theme="theme" />
+      <template #logo="{ location }">
+        <AppLogo v-if="location === 'bar'" :theme="theme" />
       </template>
 
       <template #nav>
@@ -28,17 +29,53 @@
       </template>
 
       <template #drawer-footer>
-        <VBtn
-          v-if="!isMobile"
-          icon
-          variant="text"
-          size="small"
-          :title="sidebarCollapsed ? t('layout.sidebar.expand') : t('layout.sidebar.collapse')"
-          :aria-label="sidebarCollapsed ? t('layout.sidebar.expand') : t('layout.sidebar.collapse')"
-          @click="toggleSidebar"
-        >
-          <AppIcon :name="sidebarCollapsed ? 'chevron-right' : 'chevron-left'" class="layout-nav__chevron" />
-        </VBtn>
+        <div v-if="!isMobile" class="layout-nav-footer" :class="{ 'layout-nav-footer--collapsed': sidebarCollapsed }">
+          <VMenu
+            v-model="menuOpen"
+            location="end top"
+            :close-on-content-click="false"
+            min-width="220"
+          >
+            <template #activator="{ props: menuProps }">
+              <AppButton
+                v-bind="menuProps"
+                variant="text"
+                class="layout-user-btn"
+                :title="t('user.user.menu')"
+                :aria-label="t('user.user.menu')"
+              >
+                <VAvatar size="32" color="primary">
+                  <span class="text-caption font-weight-bold">{{ user.initials }}</span>
+                </VAvatar>
+                <div v-if="!sidebarCollapsed" class="layout-user-info">
+                  <span class="layout-user-name">{{ user.displayName }}</span>
+                  <span class="layout-user-role">{{ user.role }}</span>
+                </div>
+              </AppButton>
+            </template>
+
+            <AppUserMenuPanel
+              :theme="theme"
+              :locale="(locale as string)"
+              @toggle-theme="toggleTheme"
+              @change-locale="(lang) => setLocale(lang as 'en' | 'pl' | 'mx')"
+              @logout="onLogout"
+              @close="menuOpen = false"
+            />
+          </VMenu>
+
+          <AppButton
+            icon
+            variant="text"
+            size="small"
+            class="layout-collapse-btn"
+            :title="sidebarCollapsed ? t('layout.sidebar.expand') : t('layout.sidebar.collapse')"
+            :aria-label="sidebarCollapsed ? t('layout.sidebar.expand') : t('layout.sidebar.collapse')"
+            @click="toggleSidebar"
+          >
+            <AppIcon :name="sidebarCollapsed ? 'chevron-right' : 'chevron-left'" class="layout-nav__chevron" />
+          </AppButton>
+        </div>
         <AppUserMenuPanel
           v-else
           :theme="theme"
@@ -52,66 +89,32 @@
       </template>
 
       <template #app-bar-title>
-        <span class="layout-appbar__title">{{ moduleTitle }}</span>
-      </template>
-
-      <template #app-bar-actions>
-        <VSelect
-          v-if="isAdmin"
-          :model-value="rolePreviewStore.previewRole ?? 'admin'"
-          :items="rolePreviewItems"
-          density="compact"
-          variant="outlined"
-          hide-details
-          class="layout-appbar__role-preview"
-          :label="t('user.rolePreview.label')"
-          @update:model-value="onRolePreviewChange"
-        />
-
-        <VMenu
-          v-if="!isMobile"
-          v-model="menuOpen"
-          location="bottom end"
-          :close-on-content-click="false"
-          min-width="220"
-        >
-          <template #activator="{ props: menuProps }">
-            <VBtn
-              v-bind="menuProps"
-              variant="text"
-              class="layout-user-btn"
-              :title="t('user.user.menu')"
-              :aria-label="t('user.user.menu')"
-            >
-              <div class="layout-user-info">
-                <span class="layout-user-name">{{ user.displayName }}</span>
-                <span class="layout-user-role">{{ user.role }}</span>
-              </div>
-              <VAvatar size="32" color="primary" class="ml-2">
-                <span class="text-caption font-weight-bold">{{ user.initials }}</span>
-              </VAvatar>
-            </VBtn>
-          </template>
-
-          <AppUserMenuPanel
-            :theme="theme"
-            :locale="(locale as string)"
-            @toggle-theme="toggleTheme"
-            @change-locale="(lang) => setLocale(lang as 'en' | 'pl' | 'mx')"
-            @logout="onLogout"
-            @close="menuOpen = false"
-          />
-        </VMenu>
+        <Transition name="title-fade" mode="out-in">
+          <div :key="moduleTitle" class="layout-appbar__title-group">
+            <AppIcon v-if="isMobile && moduleIcon" :name="moduleIcon" class="layout-appbar__icon" />
+            <span class="layout-appbar__title">{{ moduleTitle }}</span>
+          </div>
+        </Transition>
       </template>
 
       <template #nav-icon="{ item }">
-        <AppIcon :name="('nav-' + item.name) as AppIconName" />
+        <span class="layout-appbar__nav-icon-wrap">
+          <AppIcon :name="('nav-' + item.name) as AppIconName" />
+          <span
+            v-if="item.name === 'dashboard' && unreadCount > 0"
+            class="layout-appbar__nav-dot"
+            aria-hidden="true"
+          />
+        </span>
       </template>
 
       <div id="main-content" tabindex="-1" class="layout-main__inner" :class="{ 'layout-main--fading': localeTransitioning }">
-        <AppGlobalLoader :active="globalLoaderActive" />
         <RouterView v-slot="{ Component }">
-          <Transition name="view-fade-lift" mode="out-in">
+          <!-- appear: this app-layout mount is only reached right after the
+               auth screen's own exit sequence finishes (see AuthView.vue),
+               so the first screen the user lands on — dashboard, etc. —
+               should fade in too, not pop in instantly. -->
+          <Transition name="view-fade-lift" mode="out-in" appear>
             <component :is="Component" :key="route.path" />
           </Transition>
         </RouterView>
@@ -121,27 +124,24 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRoute } from "vue-router";
-import { navTitleKey } from "../router/routes";
+import { navTitleKey, navIconName } from "../router/routes";
 import { useI18n } from "vue-i18n";
 import { AppShell } from "@ui";
-import { useGlobalLoader } from "../composables/useGlobalLoader";
 import { useLayoutState } from "../composables/useLayoutState";
 import { useVisibleNavRoutes } from "../composables/useVisibleNavRoutes";
-import { useRolePreviewStore } from "../stores/rolePreview";
-import type { UserRole } from "../stores/auth";
 import {
   AppLogo,
   AppNavLinks,
   AppUserMenuPanel,
-  AppGlobalLoader,
   AppOfflineBar,
 } from "./components";
+import AppButton from "../components/AppButton.vue";
 import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
 import AppNotifications from "../components/AppNotifications.vue";
+import { useNotificationCenter } from "../composables/useNotificationCenter";
 
-const { isLoading: globalLoaderActive } = useGlobalLoader();
 const route = useRoute();
 const { t, locale } = useI18n();
 
@@ -149,7 +149,7 @@ const {
   theme, toggleTheme,
   sidebarCollapsed, toggleSidebar,
   isMobile, mobileDrawerOpen,
-  isAdmin, user,
+  user,
   localeTransitioning, setLocale,
   onLogout,
   focusMainContent,
@@ -157,24 +157,26 @@ const {
 
 const { visibleNavItems } = useVisibleNavRoutes();
 
+// AppLayout is mounted for the whole authenticated session, so it — not
+// AppNotificationCenter.vue, which now only renders on DashboardView — owns
+// the unread-count polling lifecycle. That's what keeps the nav badge dots
+// (sidebar + bottom nav) live while the rep is on any other screen.
+const { unreadCount, startPolling, stopPolling } = useNotificationCenter();
+onMounted(startPolling);
+onUnmounted(stopPolling);
+
 const menuOpen = ref(false);
-
-const rolePreviewStore = useRolePreviewStore();
-const rolePreviewItems = computed(() => [
-  { title: t("user.rolePreview.admin"), value: "admin" },
-  { title: t("user.rolePreview.manager"), value: "manager" },
-  { title: t("user.rolePreview.rep"), value: "rep" },
-  { title: t("user.rolePreview.doctor"), value: "doctor" },
-]);
-
-function onRolePreviewChange(value: string) {
-  rolePreviewStore.setPreviewRole(value === "admin" ? null : (value as UserRole));
-}
 
 const moduleTitle = computed(() => {
   const name = route.name;
   if (typeof name !== "string") return "";
   return t(navTitleKey(name));
+});
+
+const moduleIcon = computed(() => {
+  const name = route.name;
+  if (typeof name !== "string") return undefined;
+  return navIconName(name) as AppIconName | undefined;
 });
 </script>
 
@@ -199,14 +201,92 @@ const moduleTitle = computed(() => {
   outline-offset: 2px;
 }
 
-.layout-shell :deep(.app-shell__nav) {
-  background: var(--pwa-sidebar-bg, #262626) !important;
-  color: var(--pwa-sidebar-text, #f5f5f5);
-}
+/* AppShell's VNavigationDrawer (`.app-shell__nav`) is themed entirely via its
+   own `color="surface-container-low"` prop (packages/ui/AppShell.vue) —
+   Vuetify's standard theme-color mechanism, no override needed here. */
 
 .layout-nav__chevron {
   width: 18px;
   height: 18px;
+}
+
+.layout-appbar__title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* title-fade (packages/brand/transitions.css) slides the whole group left as
+   one block. Here the icon and title split apart in opposite directions on
+   the way out, and converge from opposite sides on the way in, instead. */
+.layout-appbar__title-group.title-fade-enter-from,
+.layout-appbar__title-group.title-fade-leave-to {
+  transform: none;
+}
+
+.layout-appbar__title-group.title-fade-enter-active .layout-appbar__icon,
+.layout-appbar__title-group.title-fade-leave-active .layout-appbar__icon,
+.layout-appbar__title-group.title-fade-enter-active .layout-appbar__title,
+.layout-appbar__title-group.title-fade-leave-active .layout-appbar__title {
+  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.layout-appbar__title-group.title-fade-leave-to .layout-appbar__icon {
+  transform: translateX(-8px);
+}
+
+.layout-appbar__title-group.title-fade-leave-to .layout-appbar__title {
+  transform: translateX(8px);
+}
+
+.layout-appbar__title-group.title-fade-enter-from .layout-appbar__icon {
+  transform: translateX(8px);
+}
+
+.layout-appbar__title-group.title-fade-enter-from .layout-appbar__title {
+  transform: translateX(-8px);
+}
+
+.layout-appbar__icon {
+  flex-shrink: 0;
+  color: rgb(var(--v-theme-primary));
+}
+
+.layout-appbar__nav-icon-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.layout-appbar__nav-dot {
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pwa-error, #d32f2f);
+  border: 1.5px solid var(--pwa-bg, #fff);
+}
+
+.layout-appbar__nav-dot::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--pwa-error, #d32f2f);
+  animation: notif-dot-pulse 1.8s ease-out infinite;
+}
+
+@keyframes notif-dot-pulse {
+  0%   { transform: scale(1); opacity: 0.55; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .layout-appbar__nav-dot::before {
+    animation: none;
+  }
 }
 
 .layout-appbar__title {
@@ -214,22 +294,52 @@ const moduleTitle = computed(() => {
   font-weight: 600;
 }
 
-.layout-appbar__role-preview {
-  max-width: 160px;
-  margin-right: 8px;
+.layout-nav-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.layout-nav-footer--collapsed {
+  flex-direction: row;
+  justify-content: center;
+  gap: 2px;
+}
+
+:deep(.app-shell__nav-footer:has(.layout-nav-footer--collapsed)) {
+  padding-inline: 4px;
+}
+
+.layout-collapse-btn {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
 }
 
 .layout-user-btn {
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: flex-start;
+  padding-inline: 8px;
   text-transform: none;
   letter-spacing: normal;
+}
+
+.layout-nav-footer--collapsed .layout-user-btn {
+  flex: none;
+  min-width: unset;
+  padding-inline: 0;
+  justify-content: center;
 }
 
 .layout-user-info {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 1px;
   min-width: 0;
+  margin-left: 8px;
 }
 
 .layout-user-name {

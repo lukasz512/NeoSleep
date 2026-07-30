@@ -1,70 +1,74 @@
 <template>
   <div class="view-detail">
     <EventForm
-      v-if="showEventForm"
       v-model="showEventForm"
       :initial-data="eventFormInitial"
       @submit="onEventFormSubmit"
     />
-    <OrganizationForm
-      v-if="showEditModal"
+    <FormRenderer
       v-model="showEditModal"
-      :initial-data="hco ? {
-        id: hco.id,
-        name: hco.name ?? '',
-        type: hco.type ?? '',
-        status: hco.status ?? '',
-        region: hco.region ?? '',
-        address_line1: hco.address_line1 ?? '',
-        city: hco.city ?? '',
-        state: hco.state ?? '',
-        postal_code: hco.postal_code ?? '',
-        country_code: hco.country_code ?? '',
-        phone: hco.phone ?? '',
-        email: hco.email ?? '',
-        website: hco.website ?? '',
-      } : undefined"
+      :fields="hcoFormFields"
+      :initial-data="hco ?? undefined"
+      title-key="user.hco.form.title"
+      edit-title-key="user.hco.form.editTitle"
+      submit-label-key="user.hco.form.submit"
+      edit-submit-label-key="user.hco.form.editSubmit"
+      avatar-entity-type="hco"
       @submit="onAccountSubmit"
+    />
+    <VAlert
+      v-if="isOffline"
+      type="warning"
+      variant="tonal"
+      density="compact"
+      class="view-detail__offline-banner"
+      :text="t('app.common.offlineShowingCached')"
     />
     <ItemDetailLayout
     :has-content="!!hco"
     :loading="loading"
+    :load-error="loadFailed"
     :back-route="{ name: 'hco' }"
     :back-label="t('user.hco.detail.back')"
     :not-found-label="t('user.hco.detail.notFound')"
-    :title="hco?.name"
+    @retry="loadHCO"
   >
+    <template #title v-if="hco">
+      <span class="view-item__title-wrap">
+        <AppAvatar :name="hco.name" entity-type="hco" :size="40" />
+        <h1 class="view-item__title">{{ hco.name }}</h1>
+      </span>
+    </template>
     <template #header-actions v-if="hco">
       <VTooltip location="bottom">
         <template #activator="{ props: tooltipProps }">
-          <VBtn
+          <AppButton
             v-bind="tooltipProps"
             icon
             variant="flat"
             size="large"
-            color="success"
-            class="view-item__schedule-btn"
+            :class="entityActionBtnClass('scheduleVisit')"
             :aria-label="t('user.detail.scheduleVisit')"
             @click="onScheduleVisit"
           >
-            <AppIcon name="calendar" class="view-item__schedule-icon" />
-          </VBtn>
+            <AppIcon :name="entityActionIcon('scheduleVisit')" class="view-item__action-icon" />
+          </AppButton>
         </template>
         <span>{{ t('user.detail.scheduleVisit') }}</span>
       </VTooltip>
       <VTooltip v-if="isAdmin" location="bottom">
         <template #activator="{ props: tooltipProps }">
-          <VBtn
+          <AppButton
             v-bind="tooltipProps"
             icon
             variant="flat"
             size="large"
-            class="view-item__edit-btn view-item__edit-btn--no-border"
+            :class="entityActionBtnClass('edit')"
             :aria-label="t('user.hco.detail.edit')"
             @click="onEdit"
           >
-            <AppIcon name="pencil" class="view-item__edit-icon" />
-          </VBtn>
+            <AppIcon :name="entityActionIcon('edit')" class="view-item__action-icon" />
+          </AppButton>
         </template>
         <span>{{ t('user.hco.detail.edit') }}</span>
       </VTooltip>
@@ -133,13 +137,18 @@ import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
 import { useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuthStore } from "../stores/auth";
-import { apiFetch } from "../utils/api";
+import { apiFetch } from "../composables/useBffApi";
+import { useEntityCacheStore } from "../stores/entityCache";
 import { useNotifications } from "../composables/useNotifications";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
+import AppButton from "../components/AppButton.vue";
+import AppAvatar from "../components/AppAvatar.vue";
 import AppIcon from "../components/AppIcon.vue";
+import { hcoFormFields } from "../config/forms/hcoForm";
+import { entityActionIcon, entityActionBtnClass } from "../config/entityActions";
 
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
-const OrganizationForm = defineAsyncComponent(() => import("../components/OrganizationForm.vue"));
+const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
 
 const authStore = useAuthStore();
 const isAdmin = computed(() => authStore.user?.role === "admin");
@@ -158,14 +167,21 @@ interface HCO {
   phone?: string;
   email?: string;
   website?: string;
+  google_link?: string;
+  specialties?: string[];
 }
 
 const { t } = useI18n();
 const route = useRoute();
 const notifications = useNotifications();
 
+const hcoCache = useEntityCacheStore("hco");
 const hco = ref<HCO | null>(null);
 const loading = ref(true);
+/** True while `hco` is being served from the offline cache — see docs/ADR-013-offline-read-cache.md. */
+const isOffline = ref(false);
+/** True when loadHCO() failed for a reason other than a genuine 404 (network/server) — see loadHCO(). */
+const loadFailed = ref(false);
 const showEditModal = ref(false);
 const showEventForm = ref(false);
 const eventFormInitial = ref<{ start_at: string; end_at: string; hcoIds?: string[] } | undefined>(undefined);
@@ -184,7 +200,10 @@ function onScheduleVisit() {
   showEventForm.value = true;
 }
 
-async function onEventFormSubmit(payload: import("../components/EventForm.vue").EventSubmitPayload) {
+async function onEventFormSubmit(
+  payload: import("../components/EventForm.vue").EventSubmitPayload,
+  done: (ok: boolean) => void,
+) {
   try {
     const res = await apiFetch("/api/v1/encounter", {
       method: "POST",
@@ -204,12 +223,14 @@ async function onEventFormSubmit(payload: import("../components/EventForm.vue").
     });
     if (res.ok) {
       notifications.show(t("user.planner.form.success"), "success");
-      showEventForm.value = false;
+      done(true);
     } else {
       notifications.show(t("user.planner.form.errorSave"), "error");
+      done(false);
     }
   } catch {
     notifications.show(t("user.planner.form.errorSave"), "error");
+    done(false);
   }
 }
 
@@ -217,34 +238,25 @@ function onEdit() {
   showEditModal.value = true;
 }
 
-async function onAccountSubmit(data: import("../components/OrganizationForm.vue").OrganizationSubmitPayload) {
+async function onAccountSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
   const id = hco.value?.id;
-  if (!id) return;
-  const body = JSON.stringify({
-    name: data.name,
-    type: data.type,
-    status: data.status,
-    region: data.region,
-    address_line1: data.address_line1,
-    city: data.city,
-    state: data.state,
-    postal_code: data.postal_code,
-    country_code: data.country_code,
-    phone: data.phone,
-    email: data.email,
-    website: data.website,
-  });
-  const res = await apiFetch(`/api/v1/organization/${id}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body,
-    errorMessageKey: "user.hco.errorLoad",
-  });
-  if (res.ok) {
-    notifications.show(t("user.hco.form.editSuccess"), "success");
-    showEditModal.value = false;
-    await loadHCO();
-    window.dispatchEvent(new Event("entity-list-refresh"));
+  if (!id) { done(false); return; }
+  try {
+    const res = await apiFetch(`/api/v1/organization/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (res.ok) {
+      notifications.show(t("user.hco.form.editSuccess"), "success");
+      await loadHCO();
+      window.dispatchEvent(new Event("entity-list-refresh"));
+      done(true);
+    } else {
+      done(false);
+    }
+  } catch {
+    done(false);
   }
 }
 
@@ -256,15 +268,28 @@ async function loadHCO() {
   }
   loading.value = true;
   hco.value = null;
+  loadFailed.value = false;
   try {
     const res = await apiFetch(`/api/v1/organization/${id}`, { handleErrors: false });
     if (res.ok) {
       hco.value = (await res.json()) as HCO;
+      isOffline.value = false;
+      void hcoCache.cacheOne(hco.value as unknown as Record<string, unknown>);
     } else if (res.status !== 404) {
-      notifications.show(t("user.hco.errorLoad"), "error");
+      // Not a genuine 404 — ItemDetailLayout renders its own "connection
+      // problem" + retry state for this (see :load-error), so no separate
+      // toast on top of it.
+      loadFailed.value = true;
     }
   } catch {
-    notifications.show(t("user.hco.errorLoad"), "error");
+    // Network failure, not a server error — fall back to the cached record if we have one.
+    const cached = await hcoCache.readOne(id);
+    if (cached) {
+      hco.value = cached as unknown as HCO;
+      isOffline.value = true;
+      return;
+    }
+    loadFailed.value = true;
     hco.value = null;
   } finally {
     loading.value = false;
@@ -274,3 +299,15 @@ async function loadHCO() {
 onMounted(loadHCO);
 watch(() => route.params.id, loadHCO);
 </script>
+
+<style scoped>
+.view-detail__offline-banner {
+  margin: 0 0 12px;
+}
+
+.view-item__title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+</style>

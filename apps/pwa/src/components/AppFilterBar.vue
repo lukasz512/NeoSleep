@@ -9,7 +9,7 @@
             :model-value="activeFilterCount > 0"
             class="app-filter-bar__badge"
           >
-            <VBtn
+            <AppButton
               v-bind="{ ...menuProps, ...tooltipProps }"
               icon
               variant="flat"
@@ -18,7 +18,7 @@
               class="app-filter-bar__btn app-filter-bar__btn--no-border"
             >
               <AppIcon name="filter" class="app-filter-bar__icon" />
-            </VBtn>
+            </AppButton>
           </VBadge>
         </template>
         <span>{{ t(titleKey) }}</span>
@@ -94,6 +94,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { useI18n } from "vue-i18n";
+import AppButton from "./AppButton.vue";
 import AppIcon from "./AppIcon.vue";
 import type { FilterDefinition } from "../composables/useFilters";
 import type { ViewFilters } from "../utils/user-settings";
@@ -151,6 +152,15 @@ function removeChip(def: FilterDefinition, value: string) {
 </script>
 
 <style scoped>
+/* flex-shrink:0: this sits next to AppEntityList's search field, which has
+   a generous flex-basis that can push the row's total preferred width past
+   what fits — ordinary flex-shrink would then squash this button's own
+   small basis proportionally too, flattening its circle into an oval. Only
+   the search field should ever compress. */
+.app-filter-bar__badge {
+  flex-shrink: 0;
+}
+
 .app-filter-bar__badge :deep(.v-badge__badge) {
   min-width: 18px;
   height: 18px;

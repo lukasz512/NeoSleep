@@ -14,12 +14,14 @@
     "vue-i18n": "catalog:",
     "vuetify": "catalog:",
     "pinia": "catalog:",
+    "motion": "^12.42.2",
     "@neo/stores": "workspace:*",
     "@neo/api-client": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",
     "@vitejs/plugin-vue": "catalog:",
+    "@vue/test-utils": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:"

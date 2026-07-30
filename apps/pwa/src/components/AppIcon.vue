@@ -23,16 +23,22 @@ const ICONS = {
   // ── State icons ──────────────────────────────────────────────────────────
   "plus-circle": {
     strokeWidth: 1.5,
-    paths: `<circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="8" x2="12" y2="16" stroke-width="2" />
-            <line x1="8" y1="12" x2="16" y2="12" stroke-width="2" />`,
+    // pathLength="1" on every shape below (also see "sad-cloud", "search")
+    // normalizes each one to a 0..1 stroke-dasharray space regardless of its
+    // actual geometry — lets AppStateView's icon-draw animation use one fixed
+    // `stroke-dasharray: 1; stroke-dashoffset: 1 → 0` for any icon, no
+    // per-icon path-length measuring. No effect anywhere dasharray/dashoffset
+    // isn't set (i.e. every other usage of these icons in the app).
+    paths: `<circle cx="12" cy="12" r="10" pathLength="1" />
+            <line x1="12" y1="8" x2="12" y2="16" stroke-width="2" pathLength="1" />
+            <line x1="8" y1="12" x2="16" y2="12" stroke-width="2" pathLength="1" />`,
   },
   "sad-cloud": {
     strokeWidth: 1.25,
-    paths: `<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
-            <circle cx="8.5" cy="14" r="0.8" />
-            <circle cx="15.5" cy="14" r="0.8" />
-            <path d="M9 17.5 Q12 19.5 15 17.5" />`,
+    paths: `<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" pathLength="1" />
+            <circle cx="8.5" cy="14" r="0.8" pathLength="1" />
+            <circle cx="15.5" cy="14" r="0.8" pathLength="1" />
+            <path d="M9 17.5 Q12 19.5 15 17.5" pathLength="1" />`,
   },
   // ── Action icons ─────────────────────────────────────────────────────────
   "plus": {
@@ -73,19 +79,18 @@ const ICONS = {
   },
   "nav-leads": {
     strokeWidth: 2,
-    paths: `<line x1="8" y1="6" x2="21" y2="6" />
-            <line x1="8" y1="12" x2="21" y2="12" />
-            <line x1="8" y1="18" x2="21" y2="18" />
-            <line x1="3" y1="6" x2="3.01" y2="6" />
-            <line x1="3" y1="12" x2="3.01" y2="12" />
-            <line x1="3" y1="18" x2="3.01" y2="18" />`,
+    paths: `<path d="M7 20v-8a5 5 0 0 1 10 0v8" />
+            <line x1="5" y1="20" x2="9" y2="20" />
+            <line x1="15" y1="20" x2="19" y2="20" />`,
   },
   "nav-hcp": {
     strokeWidth: 2,
-    paths: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-            <circle cx="12" cy="7" r="4" />
-            <line x1="12" y1="13" x2="12" y2="17" />
-            <line x1="10" y1="15" x2="14" y2="15" />`,
+    paths: `<path d="M11 2v2" />
+            <path d="M5 2v2" />
+            <path d="M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1" />
+            <path d="M8 15a6 6 0 0 0 12 0v-3" />
+            <circle cx="20" cy="10" r="2" />
+            <circle cx="20" cy="10" r="0.6" fill="currentColor" />`,
   },
   "nav-hco": {
     strokeWidth: 2,
@@ -162,8 +167,8 @@ const ICONS = {
   },
   "search": {
     strokeWidth: 2,
-    paths: `<circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />`,
+    paths: `<circle cx="11" cy="11" r="8" pathLength="1" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" pathLength="1" />`,
   },
   "menu": {
     strokeWidth: 2,
@@ -207,10 +212,80 @@ const ICONS = {
             <line x1="10" y1="11" x2="10" y2="17" />
             <line x1="14" y1="11" x2="14" y2="17" />`,
   },
+  "dots-vertical": {
+    strokeWidth: 2,
+    paths: `<circle cx="12" cy="5" r="1" fill="currentColor" />
+            <circle cx="12" cy="12" r="1" fill="currentColor" />
+            <circle cx="12" cy="19" r="1" fill="currentColor" />`,
+  },
+  // ── Form-field icons (Identity template + HCO/HCP contact fields) ──────────
+  "mail": {
+    strokeWidth: 2,
+    paths: `<rect x="2" y="4" width="20" height="16" rx="2" />
+            <polyline points="2 6 12 13 22 6" />`,
+  },
+  "phone": {
+    strokeWidth: 2,
+    paths: `<path d="M4 3h4l2 6-3 2a12 12 0 0 0 6 6l2-3 6 2v4a2 2 0 0 1-2 2A17 17 0 0 1 2 5a2 2 0 0 1 2-2z" />`,
+  },
+  "globe": {
+    strokeWidth: 1.5,
+    paths: `<circle cx="12" cy="12" r="10" />
+            <line x1="2" y1="12" x2="22" y2="12" />
+            <path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z" />`,
+  },
+  "id-card": {
+    strokeWidth: 2,
+    paths: `<rect x="2" y="5" width="20" height="14" rx="2" />
+            <circle cx="8" cy="12" r="2" />
+            <line x1="14" y1="10" x2="19" y2="10" />
+            <line x1="14" y1="14" x2="19" y2="14" />`,
+  },
+  "linkedin": {
+    strokeWidth: 1.5,
+    paths: `<rect x="3" y="3" width="18" height="18" rx="2" />
+            <line x1="7" y1="10" x2="7" y2="16" />
+            <circle cx="7" cy="7" r="0.5" fill="currentColor" />
+            <path d="M11 16v-4a2 2 0 0 1 4 0v4" />
+            <line x1="11" y1="10" x2="11" y2="16" />`,
+  },
+  "instagram": {
+    strokeWidth: 1.5,
+    paths: `<rect x="3" y="3" width="18" height="18" rx="4" />
+            <circle cx="12" cy="12" r="4" />
+            <circle cx="17.5" cy="6.5" r="0.6" fill="currentColor" />`,
+  },
+  "facebook": {
+    strokeWidth: 1.5,
+    paths: `<rect x="3" y="3" width="18" height="18" rx="2" />
+            <path d="M14 21v-7h2.5l0.5-3H14V9a1.5 1.5 0 0 1 1.5-1.5H17V5h-2A3.5 3.5 0 0 0 11.5 8.5V11H9.5v3H11.5v7" />`,
+  },
+  "map-pin": {
+    strokeWidth: 1.75,
+    paths: `<path d="M12 22s7-6.5 7-12a7 7 0 0 0-14 0c0 5.5 7 12 7 12z" />
+            <circle cx="12" cy="10" r="2.5" />`,
+  },
+  "at": {
+    strokeWidth: 1.75,
+    paths: `<circle cx="12" cy="12" r="4" />
+            <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94" />`,
+  },
+  "bell": {
+    strokeWidth: 1.6,
+    paths: `<path d="M12 3.5c-2.9 0-5 2.3-5 5.2 0 3.7-.9 5.7-1.8 6.8a1 1 0 0 0 .8 1.6h12a1 1 0 0 0 .8-1.6c-.9-1.1-1.8-3.1-1.8-6.8 0-2.9-2.1-5.2-5-5.2z" />
+            <path d="M9.5 20a2.5 2.5 0 0 0 5 0" />`,
+  },
 } as const;
 </script>
 
 <style scoped>
+/* Zero-specificity default so any consumer's own sizing class (e.g. for the
+   large empty-state icons) always wins regardless of stylesheet order. */
+:where(.app-icon) {
+  width: 20px;
+  height: 20px;
+}
+
 .app-icon {
   display: block;
   flex-shrink: 0;

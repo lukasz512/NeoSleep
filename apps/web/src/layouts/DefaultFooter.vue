@@ -4,7 +4,7 @@
       <div class="site-footer__top">
 
         <div class="site-footer__brand">
-          <img :src="logoSrc" :alt="brand.name" class="site-footer__logo" width="140" height="32" />
+          <BrandLogo :dark="isDark" :alt="brand.name" class="site-footer__logo" width="140" height="32" />
           <p class="site-footer__tagline">{{ t(brand.taglineKey) }}</p>
           <div class="site-footer__socials">
             <a v-for="s in brand.socials" :key="s.id" :href="s.href" :aria-label="s.label"
@@ -40,6 +40,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
+import { BrandLogo } from "@ui";
 import { useTheme } from "../composables/useTheme";
 import { useReveal } from "../composables/useReveal";
 import {
@@ -57,10 +58,6 @@ const year = new Date().getFullYear();
 
 const cardRef = ref<HTMLElement | null>(null);
 const visible = useReveal(cardRef, 0.08);
-
-const logoSrc = computed(() =>
-  isDark.value ? "/brand/logos/logo/logo_dark.svg" : "/brand/logos/logo/logo_light.svg"
-);
 
 const socialPaths: Record<string, string> = {
   twitter:   "M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.253 5.622L18.244 2.25Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z",

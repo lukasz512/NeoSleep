@@ -1,95 +1,119 @@
 <template>
   <div class="view-detail">
-    <LeadForm
-      v-if="showEditModal"
+    <FormRenderer
       v-model="showEditModal"
-      :initial-data="lead ? { id: lead.id, salutation: lead.salutation ?? '', first_name: lead.first_name, last_name: lead.last_name, email: lead.email ?? '', phone: lead.phone ?? '', status: lead.status, region: lead.region, institution: lead.institution ?? '' } : undefined"
+      :fields="leadFormFields"
+      :initial-data="lead ?? undefined"
+      title-key="user.leads.form.title"
+      edit-title-key="user.leads.form.editTitle"
+      submit-label-key="user.leads.form.submit"
+      edit-submit-label-key="user.leads.form.editSubmit"
+      avatar-entity-type="lead"
       @submit="onLeadSubmit"
     />
-    <PractitionerForm
-      v-if="showMoveToContactsModal"
+    <FormRenderer
       v-model="showMoveToContactsModal"
-      :initial-data="lead ? { salutation: lead.salutation ?? '', first_name: lead.first_name, last_name: lead.last_name, email: lead.email ?? '', phone: lead.phone ?? '', region: lead.region, institution: lead.institution ?? '' } : undefined"
-      :show-verify-info="true"
+      :fields="hcpFormFields"
+      :derive="hcpFormDerive"
+      :initial-data="moveToContactsInitialData"
+      title-key="user.hcp.form.title"
+      submit-label-key="user.hcp.form.submit"
+      verify-info-key="user.leads.form.verifyDataInfo"
+      avatar-entity-type="hcp"
       @submit="onContactSubmit"
     />
-    <PatientForm
-      v-if="showConvertToPatientModal"
+    <FormRenderer
       v-model="showConvertToPatientModal"
-      :initial-data="lead ? { salutation: lead.salutation ?? '', first_name: lead.first_name, last_name: lead.last_name, email: lead.email ?? '', phone: lead.phone ?? '', region: lead.region } : undefined"
+      :fields="patientFormFields"
+      :initial-data="convertToPatientInitialData"
+      title-key="app.patients.form.title"
+      submit-label-key="app.patients.form.submit"
+      verify-info-key="user.leads.form.verifyDataInfo"
+      avatar-entity-type="patient"
       @submit="onConvertToPatientSubmit"
     />
     <EventForm
-      v-if="showEventForm"
       v-model="showEventForm"
       :initial-data="eventFormInitial"
       @submit="onEventFormSubmit"
     />
-    <ConfirmDialog
-      v-model="showDeleteConfirm"
-      :message="t('user.leads.actions.deleteConfirmText')"
-      :confirm-label="t('user.leads.actions.delete')"
-      :cancel-label="t('app.common.cancel')"
-      @confirm="onDelete"
-      @cancel="showDeleteConfirm = false"
-    />
 
+    <VAlert
+      v-if="isOffline"
+      type="warning"
+      variant="tonal"
+      density="compact"
+      class="view-detail__offline-banner"
+      :text="t('app.common.offlineShowingCached')"
+    />
     <ItemDetailLayout
       :has-content="!!lead"
       :loading="loading"
+      :load-error="loadFailed"
       :back-route="backRoute"
       :back-label="t('user.leads.detail.back')"
       :not-found-label="t('user.leads.detail.notFound')"
+      @retry="loadLead"
     >
       <!-- Name inline with back arrow -->
       <template #header-title v-if="lead">
-        <h1 class="view-detail__header-name">{{ lead.name }}</h1>
+        <span class="view-detail__header-name-wrap">
+          <AppAvatar :name="lead.name" entity-type="lead" :size="32" />
+          <h1 class="view-detail__header-name">{{ lead.name }}</h1>
+        </span>
       </template>
 
       <!-- Actions on the right -->
       <template #header-actions v-if="lead">
         <VTooltip location="bottom">
           <template #activator="{ props: tooltipProps }">
-            <VBtn v-bind="tooltipProps" icon variant="flat" size="large" color="success"
-              class="view-item__schedule-btn" :aria-label="t('user.detail.scheduleVisit')" @click="onScheduleVisit">
-              <AppIcon name="calendar" class="view-item__schedule-icon" />
-            </VBtn>
+            <AppButton v-bind="tooltipProps" icon variant="flat" size="large"
+              :class="entityActionBtnClass('scheduleVisit')" :aria-label="t('user.detail.scheduleVisit')" @click="onScheduleVisit">
+              <AppIcon :name="entityActionIcon('scheduleVisit')" class="view-item__action-icon" />
+            </AppButton>
           </template>
           <span>{{ t('user.detail.scheduleVisit') }}</span>
         </VTooltip>
-        <VTooltip v-if="lead && !isConverted(lead)" location="bottom">
+        <VTooltip v-if="lead && lead.type === 'doctor' && !isConverted(lead)" location="bottom">
           <template #activator="{ props: tooltipProps }">
-            <VBtn v-bind="tooltipProps" icon variant="flat" size="large"
-              class="view-item__move-to-contacts-btn" :aria-label="t('user.leads.detail.moveToContacts')" @click="onMoveToContacts">
-              <AppIcon name="user-arrow" class="view-item__move-to-contacts-icon" />
-            </VBtn>
+            <AppButton v-bind="tooltipProps" icon variant="flat" size="large"
+              :class="entityActionBtnClass('moveToContacts')" :aria-label="t('user.leads.detail.moveToContacts')" @click="onMoveToContacts">
+              <AppIcon :name="entityActionIcon('moveToContacts')" class="view-item__action-icon" />
+            </AppButton>
           </template>
           <span>{{ t('user.leads.detail.moveToContacts') }}</span>
         </VTooltip>
-        <VTooltip v-if="lead && !isConverted(lead)" location="bottom">
+        <VTooltip v-if="lead && lead.type === 'patient' && !isConverted(lead)" location="bottom">
           <template #activator="{ props: tooltipProps }">
-            <VBtn v-bind="tooltipProps" icon variant="flat" size="large"
-              class="view-item__move-to-contacts-btn" :aria-label="t('user.leads.detail.convertToPatient')" @click="onConvertToPatient">
-              <AppIcon name="nav-patients" class="view-item__move-to-contacts-icon" />
-            </VBtn>
+            <AppButton v-bind="tooltipProps" icon variant="flat" size="large"
+              :class="entityActionBtnClass('convertToPatient')" :aria-label="t('user.leads.detail.convertToPatient')" @click="onConvertToPatient">
+              <AppIcon :name="entityActionIcon('convertToPatient')" class="view-item__action-icon" />
+            </AppButton>
           </template>
           <span>{{ t('user.leads.detail.convertToPatient') }}</span>
         </VTooltip>
         <VTooltip v-if="isAdmin" location="bottom">
           <template #activator="{ props: tooltipProps }">
-            <VBtn v-bind="tooltipProps" icon variant="flat" size="large"
-              class="view-item__edit-btn view-item__edit-btn--no-border" :aria-label="t('user.leads.detail.edit')" @click="onEdit">
-              <AppIcon name="pencil" class="view-item__edit-icon" />
-            </VBtn>
+            <AppButton v-bind="tooltipProps" icon variant="flat" size="large"
+              :class="entityActionBtnClass('edit')" :aria-label="t('user.leads.detail.edit')" @click="onEdit">
+              <AppIcon :name="entityActionIcon('edit')" class="view-item__action-icon" />
+            </AppButton>
           </template>
           <span>{{ t('user.leads.detail.edit') }}</span>
         </VTooltip>
         <VTooltip v-if="isAdmin" location="bottom">
           <template #activator="{ props: tooltipProps }">
-            <VBtn v-bind="tooltipProps" icon variant="flat" size="large"
-              class="view-item__delete-btn view-item__delete-btn--no-border" :aria-label="t('user.leads.actions.delete')" @click="showDeleteConfirm = true">
-              <AppIcon name="trash" class="view-item__delete-icon" />
-            </VBtn>
+            <AppButton
+              v-bind="tooltipProps"
+              icon
+              variant="flat"
+              size="large"
+              :class="entityActionBtnClass('delete')"
+              :aria-label="t('user.leads.actions.delete')"
+              @click="showDeleteConfirm = true"
+            >
+              <AppIcon :name="entityActionIcon('delete')" class="view-item__action-icon" />
+            </AppButton>
           </template>
           <span>{{ t('user.leads.actions.delete') }}</span>
         </VTooltip>
@@ -132,11 +156,12 @@
                 <dd class="view-detail__value">{{ lead.region || "—" }}</dd>
               </div>
 
-              <div v-if="lead.institution != null" class="view-detail__row">
+              <div class="view-detail__row">
                 <dt class="view-detail__label">{{ t("user.leads.detail.institution") }}</dt>
                 <dd class="view-detail__value">
-                  <RouterLink v-if="lead.institution" :to="hcoLink(lead.institution)" class="view-detail__link">
-                    {{ lead.institution }}
+                  <RouterLink v-if="leadInstitution(lead)" :to="hcoLink(leadInstitution(lead))" class="view-detail__link view-detail__institution-link">
+                    <AppIcon name="nav-hco" class="view-detail__institution-icon" />
+                    {{ leadInstitution(lead) }}
                   </RouterLink>
                   <span v-else class="view-detail__empty">—</span>
                 </dd>
@@ -157,27 +182,49 @@
       </template>
 
     </ItemDetailLayout>
+
+    <VDialog v-model="showDeleteConfirm" max-width="360" :transition="originDialogTransition" persistent>
+      <VCard>
+        <VCardText>{{ t("user.leads.actions.deleteConfirmText") }}</VCardText>
+        <VCardActions>
+          <VSpacer />
+          <AppButton variant="text" @click="showDeleteConfirm = false">
+            {{ t("app.common.cancel") }}
+          </AppButton>
+          <AppButton color="error" variant="text" :loading="deleteLoading" @click="onDelete">
+            {{ t("user.leads.actions.delete") }}
+          </AppButton>
+        </VCardActions>
+      </VCard>
+    </VDialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
+import { originDialogTransition } from "@ui";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuthStore } from "../stores/auth";
-import { apiFetch } from "../utils/api";
+import { apiFetch } from "../composables/useBffApi";
+import { useEntityCacheStore } from "../stores/entityCache";
 import { useNotifications } from "../composables/useNotifications";
+import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
-import ConfirmDialog from "../components/ConfirmDialog.vue";
+import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
+import AppAvatar from "../components/AppAvatar.vue";
 import GenderIcon from "../components/GenderIcon.vue";
 import { getGenderFromName } from "../utils/genderFromName";
-import { leadStatusClass, leadStatusI18nKey } from "../utils/leadStatus";
+import { leadStatusClass, leadStatusI18nKey, leadInstitution } from "../utils/leadStatus";
+import { leadFormFields } from "../config/forms/leadForm";
+import { hcpFormFields, hcpFormDerive } from "../config/forms/hcpForm";
+import { patientFormFields } from "../config/forms/patientForm";
+import { createPractitionerFromLead } from "../utils/leadConversion";
+import { entityActionIcon, entityActionBtnClass } from "../config/entityActions";
 import type { Lead } from "./LeadsView.vue";
 
-const LeadForm = defineAsyncComponent(() => import("../components/LeadForm.vue"));
-const PractitionerForm = defineAsyncComponent(() => import("../components/PractitionerForm.vue"));
-const PatientForm = defineAsyncComponent(() => import("../components/PatientForm.vue"));
+const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
 
 const { t } = useI18n();
@@ -191,14 +238,47 @@ const isAdmin = computed(() => authStore.user?.role === "admin");
 // ---------------------------------------------------------------------------
 // Core state
 // ---------------------------------------------------------------------------
+const leadCache = useEntityCacheStore("leads");
 const lead = ref<Lead | null>(null);
 const loading = ref(true);
+/** True while `lead` is being served from the offline cache — see docs/ADR-013-offline-read-cache.md. */
+const isOffline = ref(false);
+/** True when loadLead() failed for a reason other than a genuine 404 (network/server) — see loadLead(). */
+const loadFailed = ref(false);
 const showEditModal = ref(false);
 const showMoveToContactsModal = ref(false);
 const showConvertToPatientModal = ref(false);
-const showDeleteConfirm = ref(false);
 const showEventForm = ref(false);
+const showDeleteConfirm = ref(false);
 const eventFormInitial = ref<{ start_at: string; end_at: string } | undefined>(undefined);
+
+/**
+ * Stable reference (see hcpFormInitialData in HCPDetailView.vue) — an inline
+ * object literal in the template would get a new identity on every re-render,
+ * which resets FormRenderer's open form and dirty snapshot together and
+ * silently defeats the discard-changes confirmation.
+ */
+const moveToContactsInitialData = computed(() => (lead.value ? {
+  salutation: lead.value.salutation ?? "",
+  first_name: lead.value.first_name,
+  last_name: lead.value.last_name,
+  email: lead.value.email ?? "",
+  phone: lead.value.phone ?? "",
+  // Pre-fills the clinic combobox with the lead's own institution name —
+  // isCreatingNewOrganization() resolves it against the loaded clinic list
+  // once options finish loading (see hcpForm.ts).
+  organization_id: leadInstitution(lead.value),
+} : undefined));
+
+/** Same stable-reference rationale as moveToContactsInitialData above. */
+const convertToPatientInitialData = computed(() => (lead.value ? {
+  salutation: lead.value.salutation ?? "",
+  first_name: lead.value.first_name,
+  last_name: lead.value.last_name,
+  email: lead.value.email ?? "",
+  phone: lead.value.phone ?? "",
+  region: lead.value.region,
+} : undefined));
 
 const backRoute = computed(() => ({ name: "leads" }));
 
@@ -226,7 +306,10 @@ function onScheduleVisit() {
   showEventForm.value = true;
 }
 
-async function onEventFormSubmit(payload: import("../components/EventForm.vue").EventSubmitPayload) {
+async function onEventFormSubmit(
+  payload: import("../components/EventForm.vue").EventSubmitPayload,
+  done: (ok: boolean) => void,
+) {
   try {
     const res = await apiFetch("/api/v1/encounter", {
       method: "POST",
@@ -235,12 +318,14 @@ async function onEventFormSubmit(payload: import("../components/EventForm.vue").
     });
     if (res.ok) {
       notifications.show(t("user.planner.form.success"), "success");
-      showEventForm.value = false;
+      done(true);
     } else {
       notifications.show(t("user.planner.form.errorSave"), "error");
+      done(false);
     }
   } catch {
     notifications.show(t("user.planner.form.errorSave"), "error");
+    done(false);
   }
 }
 
@@ -248,36 +333,26 @@ function onMoveToContacts() {
   showMoveToContactsModal.value = true;
 }
 
-async function onContactSubmit(data: import("../components/PractitionerForm.vue").PractitionerSubmitPayload) {
+async function onContactSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
   const leadId = lead.value?.id;
-  if (!leadId) return;
+  if (!leadId) { done(false); return; }
   // Conversion (status -> converted, converted_to_id/type/at) now happens
   // atomically server-side via ConvertLeadCommand when lead_id is present —
-  // no separate PATCH needed here anymore.
-  const res = await apiFetch("/api/v1/practitioner", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      salutation: data.salutation,
-      first_name: data.first_name,
-      last_name: data.last_name,
-      email: data.email,
-      phone: data.phone,
-      primary_specialty: data.primary_specialty,
-      region: data.region,
-      institution: data.institution,
-      influence_tier: data.influence_tier,
-      language: data.language,
-      national_ids: data.national_ids,
-      lead_id: leadId,
-    }),
-    errorMessageKey: "user.leads.errorLoad",
-  });
-  if (res.ok) {
-    notifications.show(t("user.hcp.form.contactCreated"), "success");
-    showMoveToContactsModal.value = false;
-    await loadLead();
-    window.dispatchEvent(new Event("entity-list-refresh"));
+  // no separate PATCH needed here anymore. createPractitionerFromLead()
+  // additionally creates the clinic first when the rep typed a new one
+  // (see hcpForm.ts's isCreatingNewOrganization()).
+  try {
+    const ok = await createPractitionerFromLead(data, leadId);
+    if (ok) {
+      notifications.show(t("user.hcp.form.contactCreated"), "success");
+      await loadLead();
+      window.dispatchEvent(new Event("entity-list-refresh"));
+      done(true);
+    } else {
+      done(false);
+    }
+  } catch {
+    done(false);
   }
 }
 
@@ -285,31 +360,28 @@ function onConvertToPatient() {
   showConvertToPatientModal.value = true;
 }
 
-async function onConvertToPatientSubmit(data: import("../components/PatientForm.vue").PatientSubmitPayload) {
+async function onConvertToPatientSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
   const leadId = lead.value?.id;
-  if (!leadId) return;
+  if (!leadId) { done(false); return; }
   // Conversion (status -> converted, converted_to_id/type/at) happens
   // atomically server-side via ConvertLeadCommand when lead_id is present —
   // same pattern as onContactSubmit's Lead->Practitioner conversion above.
-  const res = await apiFetch("/api/v1/patient", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      salutation: data.salutation,
-      first_name: data.first_name,
-      last_name: data.last_name,
-      email: data.email,
-      phone: data.phone,
-      region: data.region,
-      lead_id: leadId,
-    }),
-    errorMessageKey: "user.leads.errorLoad",
-  });
-  if (res.ok) {
-    notifications.show(t("app.patients.form.success"), "success");
-    showConvertToPatientModal.value = false;
-    await loadLead();
-    window.dispatchEvent(new Event("entity-list-refresh"));
+  try {
+    const res = await apiFetch("/api/v1/patient", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...data, lead_id: leadId }),
+    });
+    if (res.ok) {
+      notifications.show(t("app.patients.form.success"), "success");
+      await loadLead();
+      window.dispatchEvent(new Event("entity-list-refresh"));
+      done(true);
+    } else {
+      done(false);
+    }
+  } catch {
+    done(false);
   }
 }
 
@@ -321,38 +393,33 @@ function onEdit() {
   showEditModal.value = true;
 }
 
-async function onLeadSubmit(data: import("../components/LeadForm.vue").LeadSubmitPayload) {
+async function onLeadSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
   const id = lead.value?.id;
-  if (!id) return;
-  const res = await apiFetch(`/api/v1/lead/${id}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      salutation: data.salutation,
-      first_name: data.first_name,
-      last_name: data.last_name,
-      email: data.email,
-      phone: data.phone,
-      status: data.status || "new",
-      region: data.region,
-      institution: data.institution,
-    }),
-    errorMessageKey: "user.leads.errorLoad",
-  });
-  if (res.ok) {
-    notifications.show(t("user.leads.form.editSuccess"), "success");
-    showEditModal.value = false;
-    await loadLead();
-    window.dispatchEvent(new Event("entity-list-refresh"));
+  if (!id) { done(false); return; }
+  try {
+    const res = await apiFetch(`/api/v1/lead/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (res.ok) {
+      notifications.show(t("user.leads.form.editSuccess"), "success");
+      await loadLead();
+      window.dispatchEvent(new Event("entity-list-refresh"));
+      done(true);
+    } else {
+      done(false);
+    }
+  } catch {
+    done(false);
   }
 }
 
-async function onDelete() {
+const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
   const id = lead.value?.id;
   if (!id) return;
   const res = await apiFetch(`/api/v1/lead/${id}`, {
     method: "DELETE",
-    errorMessageKey: "user.leads.errorLoad",
   });
   if (res.ok) {
     showDeleteConfirm.value = false;
@@ -360,23 +427,36 @@ async function onDelete() {
     window.dispatchEvent(new Event("entity-list-refresh"));
     router.push({ name: "leads" });
   }
-}
+});
 
 async function loadLead() {
   const id = route.params.id as string;
   if (!id) { loading.value = false; return; }
   loading.value = true;
   lead.value = null;
+  loadFailed.value = false;
   try {
     const res = await apiFetch(`/api/v1/lead/${id}`, { handleErrors: false });
     if (res.ok) {
       lead.value = (await res.json()) as Lead;
+      isOffline.value = false;
+      void leadCache.cacheOne(lead.value as unknown as Record<string, unknown>);
     } else if (res.status !== 404) {
-      notifications.show(t("user.leads.errorLoad"), "error");
+      // Not a genuine 404 — ItemDetailLayout renders its own "connection
+      // problem" + retry state for this (see :load-error), so no separate
+      // toast on top of it.
+      loadFailed.value = true;
     }
   } catch {
-    notifications.show(t("user.leads.errorLoad"), "error");
-    lead.value = null;
+    // Network failure, not a server error — fall back to the cached record if we have one.
+    const cached = await leadCache.readOne(id);
+    if (cached) {
+      lead.value = cached as unknown as Lead;
+      isOffline.value = true;
+    } else {
+      loadFailed.value = true;
+      lead.value = null;
+    }
   } finally {
     loading.value = false;
   }
@@ -389,6 +469,10 @@ watch(() => route.params.id, loadLead);
 <style scoped>
 .view-detail {
   min-height: 0;
+}
+
+.view-detail__offline-banner {
+  margin: 0 0 12px;
 }
 
 /* Header name */
@@ -466,44 +550,19 @@ watch(() => route.params.id, loadLead);
   &:hover { text-decoration: underline; }
 }
 
+.view-detail__institution-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.view-detail__institution-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
 .view-detail__empty {
   color: rgba(var(--v-theme-on-surface), var(--v-disabled-opacity));
-}
-
-/* Buttons (delegated to ItemDetailLayout deep) */
-.view-detail :deep(.view-item__move-to-contacts-btn) {
-  min-width: 44px; min-height: 44px;
-  color: rgb(var(--v-theme-primary)) !important;
-  border: none !important; box-shadow: none !important; background: transparent !important;
-  &:hover { background: rgba(var(--v-theme-primary), 0.12) !important; }
-}
-.view-detail :deep(.view-item__move-to-contacts-icon) {
-  width: 24px; height: 24px; display: block;
-  color: rgb(var(--v-theme-primary)) !important;
-  stroke: rgb(var(--v-theme-primary)) !important;
-}
-
-.view-detail :deep(.view-item__delete-btn) {
-  min-width: var(--pwa-btn-min-width, 44px);
-  min-height: var(--pwa-btn-min-height, 44px);
-  color: rgb(var(--v-theme-error)) !important;
-}
-
-.view-detail :deep(.view-item__delete-btn--no-border) {
-  border: none !important;
-  box-shadow: none !important;
-  background: transparent !important;
-
-  &:hover {
-    background: rgba(var(--v-theme-error), 0.12) !important;
-  }
-}
-
-.view-detail :deep(.view-item__delete-icon) {
-  width: 22px;
-  height: 22px;
-  display: block;
-  color: rgb(var(--v-theme-error)) !important;
-  stroke: rgb(var(--v-theme-error)) !important;
 }
 </style>

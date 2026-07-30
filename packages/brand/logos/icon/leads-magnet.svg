@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none" stroke="#111111" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+  <g transform="translate(4,17)">
+    <!-- Horseshoe magnet, angled 45° -->
+    <g transform="rotate(45 100 60)">
+      <path d="M55 60V140A45 45 0 0 0 145 140V60H127V140A27 27 0 0 1 73 140V60Z" />
+    </g>
+
+    <!-- Attraction sparks -->
+    <line x1="66" y1="26" x2="58" y2="18" />
+    <line x1="74" y1="20" x2="68" y2="10" />
+    <line x1="130" y1="78" x2="140" y2="68" />
+    <line x1="138" y1="88" x2="150" y2="80" />
+
+    <!-- Person -->
+    <circle cx="148" cy="58" r="20" />
+    <path d="M108 156V110Q108 86 132 86H164Q188 86 188 110V156" />
+  </g>
+</svg>

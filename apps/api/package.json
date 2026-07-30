@@ -12,6 +12,8 @@
     "migrate": "tsx scripts/migrate.ts"
   },
   "dependencies": {
+    "@neo/email": "workspace:*",
+    "@supabase/supabase-js": "^2.110.7",
     "bcrypt": "^5.1.1",
     "connect-pg-simple": "^10.0.0",
     "cookie-parser": "^1.4.7",
@@ -21,6 +23,7 @@
     "express-session": "^1.19.0",
     "helmet": "^8.1.0",
     "nodemailer": "^6.9.0",
+    "pdf-lib": "^1.17.1",
     "pg": "^8.13.0",
     "web-push": "catalog:"
   },

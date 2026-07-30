@@ -1,34 +1,108 @@
 <template>
-  <OrganizationForm
-    v-if="showAddModal"
-    v-model="showAddModal"
-    @submit="onAccountSubmit"
-  />
-  <AppEntityList
-    view-id="hco"
-    api-endpoint="/api/v1/organization"
-    :headers="tableHeaders"
-    :filter-definitions="hcoFilterDefinitions"
-    :i18n="hcoI18n"
-    :show-add-button="isAdmin"
-    detail-route-name="hco-detail"
-    :filter-param-keys="['type', 'region', 'status']"
-    @add="onAddAccount"
-  />
+  <div class="hco-view">
+    <FormRenderer
+      v-model="showAddModal"
+      :fields="hcoFormFields"
+      title-key="user.hco.form.title"
+      submit-label-key="user.hco.form.submit"
+      avatar-entity-type="hco"
+      @submit="onAccountSubmit"
+    />
+    <FormRenderer
+      v-model="showEditModal"
+      :fields="hcoFormFields"
+      :initial-data="selectedHco ?? undefined"
+      title-key="user.hco.form.title"
+      edit-title-key="user.hco.form.editTitle"
+      submit-label-key="user.hco.form.submit"
+      edit-submit-label-key="user.hco.form.editSubmit"
+      avatar-entity-type="hco"
+      @submit="onEditSubmit"
+    />
+    <EventForm
+      v-model="showEventForm"
+      :initial-data="eventFormInitial"
+      @submit="onEventFormSubmit"
+    />
+    <AppEntityList
+      view-id="hco"
+      api-endpoint="/api/v1/organization"
+      :headers="tableHeaders"
+      :filter-definitions="hcoFilterDefinitions"
+      :i18n="hcoI18n"
+      :show-add-button="isAdmin"
+      detail-route-name="hco-detail"
+      :filter-param-keys="['type', 'region', 'status']"
+      @add="onAddAccount"
+    >
+      <template #item.name="{ item }">
+        <span class="hco-name-cell">
+          <AppAvatar :name="(item as HCOListItem).name" entity-type="hco" :size="32" />
+          {{ (item as HCOListItem).name }}
+        </span>
+      </template>
+      <template #feed-card-avatar="{ item }">
+        <AppAvatar :name="(item as HCOListItem).name" entity-type="hco" :size="55" />
+      </template>
+      <template #feed-card-title="{ item }">
+        {{ (item as HCOListItem).name }}
+      </template>
+      <template #feed-card-meta="{ item }">
+        {{ hcoTypeLabel((item as HCOListItem).type) }}
+      </template>
+      <template #feed-card-status="{ item }">
+        <VChip :color="hcoStatusColor((item as HCOListItem).status)" size="x-small" variant="tonal">
+          {{ hcoStatusLabel((item as HCOListItem).status) }}
+        </VChip>
+      </template>
+      <template #feed-card-actions="{ item }">
+        <AppListItemMenu :aria-label="t('app.common.moreActions')">
+          <VListItem :title="t('user.detail.scheduleVisit')" @click="onScheduleVisit(item as HCOListItem)">
+            <template #prepend><AppIcon :name="entityActionIcon('scheduleVisit')" :class="entityActionMenuIconClass('scheduleVisit')" /></template>
+          </VListItem>
+          <VListItem v-if="isAdmin" :title="t('user.hco.detail.edit')" @click="onEditAccount(item as HCOListItem)">
+            <template #prepend><AppIcon :name="entityActionIcon('edit')" :class="entityActionMenuIconClass('edit')" /></template>
+          </VListItem>
+        </AppListItemMenu>
+      </template>
+    </AppEntityList>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, defineAsyncComponent } from "vue";
 import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
+import AppAvatar from "../components/AppAvatar.vue";
+import AppIcon from "../components/AppIcon.vue";
+import AppListItemMenu from "../components/AppListItemMenu.vue";
+import { entityActionIcon, entityActionMenuIconClass } from "../config/entityActions";
 import { type FilterDefinition } from "../composables/useFilters";
 import { useAuthStore } from "../stores/auth";
 import { useConfigStore } from "../stores/config";
-import { apiFetch } from "../utils/api";
+import { apiFetch } from "../composables/useBffApi";
 import { useNotifications } from "../composables/useNotifications";
-import type { OrganizationSubmitPayload } from "../components/OrganizationForm.vue";
+import { hcoFormFields } from "../config/forms/hcoForm";
 
-const OrganizationForm = defineAsyncComponent(() => import("../components/OrganizationForm.vue"));
+const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
+const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
+
+interface HCOListItem {
+  id: string;
+  name?: string;
+  type?: string;
+  region?: string;
+  status?: string;
+  address_line1?: string;
+  city?: string;
+  state?: string;
+  postal_code?: string;
+  country_code?: string;
+  phone?: string;
+  email?: string;
+  website?: string;
+  specialties?: string[];
+}
 
 const { t } = useI18n();
 const authStore = useAuthStore();
@@ -36,6 +110,10 @@ const configStore = useConfigStore();
 const notifications = useNotifications();
 const isAdmin = computed(() => authStore.user?.role === "admin");
 const showAddModal = ref(false);
+const showEditModal = ref(false);
+const showEventForm = ref(false);
+const selectedHco = ref<HCOListItem | null>(null);
+const eventFormInitial = ref<{ start_at: string; end_at: string; hcoIds?: string[] } | undefined>(undefined);
 
 const hcoFilterDefs: FilterDefinition[] = [
   { key: "type", labelKey: "user.hco.filters.type", type: "select", default: "" },
@@ -90,35 +168,112 @@ const hcoI18n = computed(() => ({
   errorLoad: "user.hco.errorLoad",
 }));
 
+function hcoTypeLabel(type?: string): string {
+  return typeOptions.value.find((o) => o.value === type)?.title ?? (type ?? "");
+}
+
+function hcoStatusLabel(status?: string): string {
+  return statusOptions.value.find((o) => o.value === status)?.title ?? (status ?? "");
+}
+
+function hcoStatusColor(status?: string): string {
+  switch (status) {
+    case "active":           return "success";
+    case "pending_approval": return "warning";
+    default:                 return "default";
+  }
+}
+
 function onAddAccount() {
   showAddModal.value = true;
 }
 
-async function onAccountSubmit(data: OrganizationSubmitPayload) {
-  const body = JSON.stringify({
-    name: data.name,
-    type: data.type,
-    status: data.status,
-    region: data.region,
-    address_line1: data.address_line1,
-    city: data.city,
-    state: data.state,
-    postal_code: data.postal_code,
-    country_code: data.country_code,
-    phone: data.phone,
-    email: data.email,
-    website: data.website,
-  });
-  const res = await apiFetch("/api/v1/organization", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body,
-    errorMessageKey: "user.hco.errorLoad",
-  });
-  if (res.ok) {
-    notifications.show(t("user.hco.form.success"), "success");
-    showAddModal.value = false;
-    window.dispatchEvent(new Event("entity-list-refresh"));
+async function onAccountSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
+  try {
+    const res = await apiFetch("/api/v1/organization", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (res.ok) {
+      notifications.show(t("user.hco.form.success"), "success");
+      window.dispatchEvent(new Event("entity-list-refresh"));
+      done(true);
+    } else {
+      done(false);
+    }
+  } catch {
+    done(false);
+  }
+}
+
+function onEditAccount(hco: HCOListItem) {
+  selectedHco.value = hco;
+  showEditModal.value = true;
+}
+
+async function onEditSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
+  const id = selectedHco.value?.id;
+  if (!id) { done(false); return; }
+  try {
+    const res = await apiFetch(`/api/v1/organization/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (res.ok) {
+      notifications.show(t("user.hco.form.editSuccess"), "success");
+      window.dispatchEvent(new Event("entity-list-refresh"));
+      done(true);
+    } else {
+      done(false);
+    }
+  } catch {
+    done(false);
+  }
+}
+
+function onScheduleVisit(hco: HCOListItem) {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  eventFormInitial.value = {
+    start_at: new Date(`${date} 09:00`).toISOString(),
+    end_at: new Date(`${date} 10:00`).toISOString(),
+    hcoIds: hco.id ? [hco.id] : [],
+  };
+  showEventForm.value = true;
+}
+
+async function onEventFormSubmit(
+  payload: import("../components/EventForm.vue").EventSubmitPayload,
+  done: (ok: boolean) => void,
+) {
+  try {
+    const res = await apiFetch("/api/v1/encounter", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: payload.title, start_at: payload.start_at, end_at: payload.end_at, type: payload.type, status: payload.status, location: payload.location, video_link: payload.video_link, notes: payload.notes, region: payload.region, attendees: payload.attendees }),
+    });
+    if (res.ok) {
+      notifications.show(t("user.planner.form.success"), "success");
+      done(true);
+    } else {
+      notifications.show(t("user.planner.form.errorSave"), "error");
+      done(false);
+    }
+  } catch {
+    notifications.show(t("user.planner.form.errorSave"), "error");
+    done(false);
   }
 }
 </script>
+
+<style scoped>
+.hco-name-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+</style>
+

@@ -14,9 +14,12 @@ export interface UserDto {
   first_name: string | null;
   last_name: string | null;
   email: string;
+  phone: string;
   role: string;
   status: string;
   region: string | null;
+  country_code: string | null;
+  language: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -29,9 +32,12 @@ function toDto(u: User): UserDto {
     first_name: u.first_name,
     last_name: u.last_name,
     email: u.email,
+    phone: u.phone ?? "",
     role: u.role,
     status: u.status,
     region: u.region,
+    country_code: u.country_code,
+    language: u.language,
     created_at: u.created_at instanceof Date ? u.created_at.toISOString() : String(u.created_at),
     updated_at: u.updated_at instanceof Date ? u.updated_at.toISOString() : String(u.updated_at),
   };

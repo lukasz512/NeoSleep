@@ -1,99 +1,93 @@
 <template>
   <div class="view-detail">
     <EventForm
-      v-if="showEventForm"
       v-model="showEventForm"
       :initial-data="eventFormInitial"
       @submit="onEventFormSubmit"
     />
-    <PractitionerForm
-      v-if="showEditModal"
+    <FormRenderer
       v-model="showEditModal"
-      :initial-data="hcp ? {
-        id: hcp.id,
-        salutation: hcp.salutation ?? '',
-        first_name: hcp.first_name ?? '',
-        last_name: hcp.last_name ?? '',
-        email: hcp.email ?? '',
-        phone: (hcp.phone ?? '').replace(/^\+\d+/, ''),
-        primary_specialty: hcp.primary_specialty ?? hcp.specialty ?? '',
-        region: hcp.region ?? '',
-        institution: hcp.institution ?? '',
-        influence_tier: hcp.influence_tier ?? 'C',
-        language: hcp.language ?? '',
-        national_ids: hcp.national_ids ?? null,
-      } : undefined"
+      :fields="hcpFormFields"
+      :derive="hcpFormDerive"
+      :initial-data="hcpFormInitialData"
+      title-key="user.hcp.form.title"
+      edit-title-key="user.hcp.form.editTitle"
+      submit-label-key="user.hcp.form.submit"
+      edit-submit-label-key="user.hcp.form.editSubmit"
+      avatar-entity-type="hcp"
       @submit="onContactSubmit"
     />
-    <ConfirmDialog
-      v-model="showDeleteConfirm"
-      :message="t('user.hcp.actions.deleteConfirmText')"
-      :confirm-label="t('user.hcp.actions.delete')"
-      :cancel-label="t('app.common.cancel')"
-      @confirm="onDelete"
-      @cancel="showDeleteConfirm = false"
+    <VAlert
+      v-if="isOffline"
+      type="warning"
+      variant="tonal"
+      density="compact"
+      class="view-detail__offline-banner"
+      :text="t('app.common.offlineShowingCached')"
     />
     <ItemDetailLayout
     :has-content="!!hcp"
     :loading="loading"
+    :load-error="loadFailed"
     :back-route="{ name: 'hcp' }"
     :back-label="t('user.hcp.detail.back')"
     :not-found-label="t('user.hcp.detail.notFound')"
     :title="hcp?.name"
+    @retry="loadHCP"
   >
     <template #header-actions v-if="hcp">
       <VTooltip location="bottom">
         <template #activator="{ props: tooltipProps }">
-          <VBtn
+          <AppButton
             v-bind="tooltipProps"
             icon
             variant="flat"
             size="large"
-            color="success"
-            class="view-item__schedule-btn"
+            :class="entityActionBtnClass('scheduleVisit')"
             :aria-label="t('user.detail.scheduleVisit')"
             @click="onScheduleVisit"
           >
-            <AppIcon name="calendar" class="view-item__schedule-icon" />
-          </VBtn>
+            <AppIcon :name="entityActionIcon('scheduleVisit')" class="view-item__action-icon" />
+          </AppButton>
         </template>
         <span>{{ t('user.detail.scheduleVisit') }}</span>
       </VTooltip>
       <VTooltip v-if="isAdmin" location="bottom">
         <template #activator="{ props: tooltipProps }">
-          <VBtn
+          <AppButton
             v-bind="tooltipProps"
             icon
             variant="flat"
             size="large"
-            class="view-item__edit-btn view-item__edit-btn--no-border"
+            :class="entityActionBtnClass('edit')"
             :aria-label="t('user.hcp.detail.edit')"
             @click="onEdit"
           >
-            <AppIcon name="pencil" class="view-item__edit-icon" />
-          </VBtn>
+            <AppIcon :name="entityActionIcon('edit')" class="view-item__action-icon" />
+          </AppButton>
         </template>
         <span>{{ t('user.hcp.detail.edit') }}</span>
       </VTooltip>
       <VTooltip v-if="isAdmin" location="bottom">
         <template #activator="{ props: tooltipProps }">
-          <VBtn
+          <AppButton
             v-bind="tooltipProps"
             icon
             variant="flat"
             size="large"
-            class="view-item__delete-btn view-item__delete-btn--no-border"
+            :class="entityActionBtnClass('delete')"
             :aria-label="t('user.hcp.actions.delete')"
             @click="showDeleteConfirm = true"
           >
-            <AppIcon name="trash" class="view-item__delete-icon" />
-          </VBtn>
+            <AppIcon :name="entityActionIcon('delete')" class="view-item__action-icon" />
+          </AppButton>
         </template>
         <span>{{ t('user.hcp.actions.delete') }}</span>
       </VTooltip>
     </template>
     <template #title v-if="hcp">
       <span class="view-item__title-wrap">
+        <AppAvatar :name="hcp.name" entity-type="hcp" :size="40" />
         <GenderIcon :gender="getGenderFromName(hcp.name)" />
         <h1 class="view-item__title">{{ hcp.name }}</h1>
       </span>
@@ -120,23 +114,44 @@
       </div>
     </template>
   </ItemDetailLayout>
+
+  <VDialog v-model="showDeleteConfirm" max-width="360" :transition="originDialogTransition" persistent>
+    <VCard>
+      <VCardText>{{ t("user.hcp.actions.deleteConfirmText") }}</VCardText>
+      <VCardActions>
+        <VSpacer />
+        <AppButton variant="text" @click="showDeleteConfirm = false">
+          {{ t("app.common.cancel") }}
+        </AppButton>
+        <AppButton color="error" variant="text" :loading="deleteLoading" @click="onDelete">
+          {{ t("user.hcp.actions.delete") }}
+        </AppButton>
+      </VCardActions>
+    </VCard>
+  </VDialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
+import { originDialogTransition } from "@ui";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuthStore } from "../stores/auth";
-import { apiFetch } from "../utils/api";
+import { apiFetch } from "../composables/useBffApi";
+import { useEntityCacheStore } from "../stores/entityCache";
 import { useNotifications } from "../composables/useNotifications";
+import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
-import ConfirmDialog from "../components/ConfirmDialog.vue";
+import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
+import AppAvatar from "../components/AppAvatar.vue";
 import GenderIcon from "../components/GenderIcon.vue";
 import { getGenderFromName } from "../utils/genderFromName";
+import { hcpFormFields, hcpFormDerive } from "../config/forms/hcpForm";
+import { entityActionIcon, entityActionBtnClass } from "../config/entityActions";
 
-const PractitionerForm = defineAsyncComponent(() => import("../components/PractitionerForm.vue"));
+const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
 
 interface HCP {
@@ -149,11 +164,13 @@ interface HCP {
   phone?: string;
   specialty?: string;
   primary_specialty?: string;
+  organization_id?: string | null;
   institution?: string;
   region?: string;
   influence_tier?: string;
   language?: string | null;
   national_ids?: Record<string, string> | null;
+  social_links?: Record<string, unknown> | null;
 }
 
 const { t } = useI18n();
@@ -163,12 +180,43 @@ const authStore = useAuthStore();
 const notifications = useNotifications();
 const isAdmin = computed(() => authStore.user?.role === "admin");
 
+const hcpCache = useEntityCacheStore("hcp");
 const hcp = ref<HCP | null>(null);
 const loading = ref(true);
+/** True while `hcp` is being served from the offline cache — see docs/ADR-013-offline-read-cache.md. */
+const isOffline = ref(false);
+/** True when loadHCP() failed for a reason other than a genuine 404 (network/server) — see loadHCP(). */
+const loadFailed = ref(false);
 const showEditModal = ref(false);
 const showDeleteConfirm = ref(false);
 const showEventForm = ref(false);
 const eventFormInitial = ref<{ start_at: string; end_at: string; hcpIds?: string[] } | undefined>(undefined);
+
+/**
+ * Must stay a computed (stable reference until `hcp.value` itself changes),
+ * not an inline object literal in the template — FormRenderer's watch keys
+ * off this object's identity to decide when to call resetForm(). A fresh
+ * literal on every parent re-render (e.g. from unrelated reactive state like
+ * `loading` or tooltip hover) would silently reset the open form and its
+ * dirty snapshot together, making the discard-changes confirmation never
+ * trigger. See LeadDetailView/HCODetailView/PatientDetailView, which pass
+ * their entity ref directly for the same reason.
+ */
+const hcpFormInitialData = computed(() => (hcp.value ? {
+  id: hcp.value.id,
+  salutation: hcp.value.salutation ?? "",
+  first_name: hcp.value.first_name ?? "",
+  last_name: hcp.value.last_name ?? "",
+  email: hcp.value.email ?? "",
+  phone: hcp.value.phone ?? "",
+  primary_specialty: hcp.value.primary_specialty ?? hcp.value.specialty ?? "",
+  organization_id: hcp.value.organization_id ?? "",
+  region: hcp.value.region ?? "",
+  influence_tier: hcp.value.influence_tier ?? "A",
+  language: hcp.value.language ?? "",
+  national_ids: hcp.value.national_ids ?? null,
+  social_links: hcp.value.social_links ?? null,
+} : undefined));
 
 function onScheduleVisit() {
   const d = new Date();
@@ -184,7 +232,10 @@ function onScheduleVisit() {
   showEventForm.value = true;
 }
 
-async function onEventFormSubmit(payload: import("../components/EventForm.vue").EventSubmitPayload) {
+async function onEventFormSubmit(
+  payload: import("../components/EventForm.vue").EventSubmitPayload,
+  done: (ok: boolean) => void,
+) {
   try {
     const res = await apiFetch("/api/v1/encounter", {
       method: "POST",
@@ -204,12 +255,14 @@ async function onEventFormSubmit(payload: import("../components/EventForm.vue").
     });
     if (res.ok) {
       notifications.show(t("user.planner.form.success"), "success");
-      showEventForm.value = false;
+      done(true);
     } else {
       notifications.show(t("user.planner.form.errorSave"), "error");
+      done(false);
     }
   } catch {
     notifications.show(t("user.planner.form.errorSave"), "error");
+    done(false);
   }
 }
 
@@ -217,42 +270,33 @@ function onEdit() {
   showEditModal.value = true;
 }
 
-async function onContactSubmit(data: import("../components/PractitionerForm.vue").PractitionerSubmitPayload) {
+async function onContactSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
   const id = hcp.value?.id;
-  if (!id) return;
-  const body = JSON.stringify({
-    salutation: data.salutation,
-    first_name: data.first_name,
-    last_name: data.last_name,
-    email: data.email,
-    phone: data.phone ? `+52${data.phone.replace(/\D/g, "")}` : undefined,
-    primary_specialty: data.primary_specialty,
-    region: data.region,
-    institution: data.institution,
-    influence_tier: data.influence_tier,
-    language: data.language,
-    national_ids: data.national_ids,
-  });
-  const res = await apiFetch(`/api/v1/practitioner/${id}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body,
-    errorMessageKey: "user.hcp.errorLoad",
-  });
-  if (res.ok) {
-    notifications.show(t("user.hcp.form.editSuccess"), "success");
-    showEditModal.value = false;
-    await loadHCP();
-    window.dispatchEvent(new Event("entity-list-refresh"));
+  if (!id) { done(false); return; }
+  try {
+    const res = await apiFetch(`/api/v1/practitioner/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (res.ok) {
+      notifications.show(t("user.hcp.form.editSuccess"), "success");
+      await loadHCP();
+      window.dispatchEvent(new Event("entity-list-refresh"));
+      done(true);
+    } else {
+      done(false);
+    }
+  } catch {
+    done(false);
   }
 }
 
-async function onDelete() {
+const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
   const id = hcp.value?.id;
   if (!id) return;
   const res = await apiFetch(`/api/v1/practitioner/${id}`, {
     method: "DELETE",
-    errorMessageKey: "user.hcp.errorLoad",
   });
   if (res.ok) {
     showDeleteConfirm.value = false;
@@ -260,7 +304,7 @@ async function onDelete() {
     window.dispatchEvent(new Event("entity-list-refresh"));
     router.push({ name: "hcp" });
   }
-}
+});
 
 async function loadHCP() {
   const id = route.params.id as string;
@@ -270,16 +314,29 @@ async function loadHCP() {
   }
   loading.value = true;
   hcp.value = null;
+  loadFailed.value = false;
   try {
     const res = await apiFetch(`/api/v1/practitioner/${id}`, { handleErrors: false });
     if (res.ok) {
       hcp.value = (await res.json()) as HCP;
+      isOffline.value = false;
+      void hcpCache.cacheOne(hcp.value as unknown as Record<string, unknown>);
     } else if (res.status !== 404) {
-      notifications.show(t("user.hcp.errorLoad"), "error");
+      // Not a genuine 404 — ItemDetailLayout renders its own "connection
+      // problem" + retry state for this (see :load-error), so no separate
+      // toast on top of it.
+      loadFailed.value = true;
     }
   } catch {
-    notifications.show(t("user.hcp.errorLoad"), "error");
-    hcp.value = null;
+    // Network failure, not a server error — fall back to the cached record if we have one.
+    const cached = await hcpCache.readOne(id);
+    if (cached) {
+      hcp.value = cached as unknown as HCP;
+      isOffline.value = true;
+    } else {
+      loadFailed.value = true;
+      hcp.value = null;
+    }
   } finally {
     loading.value = false;
   }
@@ -294,33 +351,13 @@ watch(() => route.params.id, loadHCP);
   min-height: 0;
 }
 
+.view-detail__offline-banner {
+  margin: 0 0 12px;
+}
+
 .view-item__title-wrap {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.view-detail :deep(.view-item__delete-btn) {
-  min-width: var(--pwa-btn-min-width, 44px);
-  min-height: var(--pwa-btn-min-height, 44px);
-  color: rgb(var(--v-theme-error)) !important;
-}
-
-.view-detail :deep(.view-item__delete-btn--no-border) {
-  border: none !important;
-  box-shadow: none !important;
-  background: transparent !important;
-
-  &:hover {
-    background: rgba(var(--v-theme-error), 0.12) !important;
-  }
-}
-
-.view-detail :deep(.view-item__delete-icon) {
-  width: 22px;
-  height: 22px;
-  display: block;
-  color: rgb(var(--v-theme-error)) !important;
-  stroke: rgb(var(--v-theme-error)) !important;
 }
 </style>

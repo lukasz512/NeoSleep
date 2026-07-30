@@ -34,11 +34,13 @@ export interface CreatePractitionerInput {
   primary_specialty?: string | null;
   // Legacy alias accepted at command level for backward compat
   specialty?: string | null;
+  organization_id?: string | null;
   institution?: string | null;
   region?: string;
   influence_tier?: string;
   language?: string | null;
   national_ids?: Record<string, string> | null;
+  social_links?: Record<string, unknown> | null;
   /** When set, this practitioner is being created from a lead ("move to contacts") —
    *  the lead is atomically marked converted in the same transaction. */
   lead_id?: string | null;
@@ -69,11 +71,15 @@ export async function CreatePractitionerCommand(
     email:            email || null,
     phone:            phone || null,
     primary_specialty: input.primary_specialty ?? input.specialty ?? null,
+    // Preserve the undefined/null distinction: undefined => fall back to
+    // resolving `institution` by name (see insertPractitioner); null/id => use directly.
+    organization_id:  input.organization_id !== undefined ? input.organization_id : undefined,
     institution:      input.institution ?? null,
     region:           input.region,
     influence_tier:   input.influence_tier,
     language:         input.language ?? null,
     national_ids:     input.national_ids ?? null,
+    social_links:     input.social_links ?? null,
   };
 
   const practitioner = await insertPractitioner(ctx.client, insertInput);
@@ -117,11 +123,13 @@ export interface UpdatePractitionerPayload {
   phone?: string | null;
   primary_specialty?: string | null;
   specialty?: string | null;
+  organization_id?: string | null;
   institution?: string | null;
   region?: string;
   influence_tier?: string;
   language?: string | null;
   national_ids?: Record<string, string> | null;
+  social_links?: Record<string, unknown> | null;
 }
 
 /**
@@ -153,11 +161,13 @@ export async function UpdatePractitionerCommand(
     email:            input.email,
     phone:            input.phone,
     primary_specialty: input.primary_specialty ?? input.specialty,
+    organization_id:  input.organization_id,
     institution:      input.institution,
     region:           input.region,
     influence_tier:   input.influence_tier,
     language:         input.language,
     national_ids:     input.national_ids,
+    social_links:     input.social_links,
   };
 
   const after = await updatePractitioner(ctx.client, id, updateInput);

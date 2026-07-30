@@ -7,7 +7,7 @@ import cors from "cors";
 import { requestIdMiddleware } from "./middleware/requestId.js";
 import { SESSION_SECRET, FRONTEND_URL } from "./env.js";
 import { getDb } from "./db/connection.js";
-import { authRouter, ensureInitialUserPasswords } from "./auth.js";
+import { authRouter, ensureInitialUserPasswords, restoreSessionFromRememberMe } from "./auth.js";
 import { leadsRouter } from "./routes/leads.js";
 import { practitionerRouter } from "./routes/practitioner.js";
 import { organizationRouter } from "./routes/organization.js";
@@ -20,6 +20,8 @@ import { websiteContactRouter } from "./routes/website-contact.js";
 import { patientRouter } from "./routes/patient.js";
 import { pushRouter } from "./routes/push.js";
 import { usersRouter } from "./routes/users.js";
+import { inviteRouter } from "./routes/invite.js";
+import { notificationRouter } from "./routes/notification.js";
 import { runMigrations } from "./db.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { apiLimiter } from "./middleware/rateLimiter.js";
@@ -103,6 +105,10 @@ app.use(
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
+// Silently restores the session from the remember_me cookie before any route sees the request —
+// otherwise requireAuth 401s on a live remember-me cookie the moment the (shorter-lived) session expires.
+app.use(restoreSessionFromRememberMe);
+
 // All BFF routes are versioned under /api/v1 — auth router registers /auth/* paths separately
 app.use("/api/v1", authRouter);
 app.use("/api/v1", leadsRouter);
@@ -117,6 +123,8 @@ app.use("/api/v1", websiteContactRouter);
 app.use("/api/v1", patientRouter);
 app.use("/api/v1", pushRouter);
 app.use("/api/v1", usersRouter);
+app.use("/api/v1", inviteRouter);
+app.use("/api/v1", notificationRouter);
 
 app.use(errorHandler);
 

@@ -9,11 +9,11 @@
   >
     <div ref="containerRef" class="presentation-viewer__container" :class="{ 'presentation-viewer__container--rotated': shouldRotate }">
       <div class="presentation-viewer__toolbar">
-        <VBtn icon variant="text" :title="t('user.presentations.close')" :aria-label="t('user.presentations.close')" @click="$emit('update:modelValue', false)">
+        <AppButton icon variant="text" :title="t('user.presentations.close')" :aria-label="t('user.presentations.close')" @click="$emit('update:modelValue', false)">
           <VIcon icon="mdi-close" />
-        </VBtn>
+        </AppButton>
         <span class="presentation-viewer__title">{{ presentation?.title }}</span>
-        <VBtn
+        <AppButton
           v-if="presentation?.file_type === 'pdf'"
           icon
           variant="text"
@@ -22,7 +22,7 @@
           @click="toggleRotate"
         >
           <VIcon icon="mdi-rotate-right" />
-        </VBtn>
+        </AppButton>
       </div>
       <div class="presentation-viewer__content">
         <iframe
@@ -45,6 +45,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
+import AppButton from "./AppButton.vue";
 
 export interface Presentation {
   id: string;

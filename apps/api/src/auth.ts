@@ -54,6 +54,9 @@ declare module "express-session" {
       name?: string;
       picture?: string;
       role: StaffRole;
+      country_code?: string;
+      region?: string;
+      language?: string;
       forcePasswordChange?: boolean;
     };
     state?: string;
@@ -90,8 +93,14 @@ export async function ensureInitialUserPasswords(slug: string): Promise<void> {
 // Session: restore from remember-me cookie if no session
 // ---------------------------------------------------------------------------
 
-/** Middleware: if no session but valid remember_me cookie, restore session. Cookie: `<tokenId>.<secret>`; DB stores only sha256(secret). */
-async function restoreSessionFromRememberMe(
+/**
+ * Middleware: if no session but valid remember_me cookie, restore session. Cookie: `<tokenId>.<secret>`; DB stores only sha256(secret).
+ * Mounted globally in server.ts (right after the session middleware, before any router) so remember-me
+ * silently restores the session on ANY request, not just /auth/login and /auth/session — otherwise a request
+ * to a protected route (requireAuth) 401s the moment the 7-day session cookie outlives its usefulness, even
+ * though a 30-day remember-me cookie is still valid.
+ */
+export async function restoreSessionFromRememberMe(
   req: Request,
   _res: Response,
   next: NextFunction
@@ -116,6 +125,9 @@ async function restoreSessionFromRememberMe(
         email: user.email,
         name: user.name ?? undefined,
         role: user.role,
+        country_code: user.country_code ?? undefined,
+        region: user.region ?? undefined,
+        language: user.language ?? undefined,
         forcePasswordChange: false,
       };
       await touchRememberMeToken(client, tokenId);
@@ -133,7 +145,6 @@ async function restoreSessionFromRememberMe(
 authRouter.post(
   "/auth/login",
   loginRateLimiter,
-  restoreSessionFromRememberMe,
   asyncHandler(async (req: Request, res: Response) => {
     const { email, password, remember_me } = req.body as {
       email?: string;
@@ -166,6 +177,9 @@ authRouter.post(
       email: staff.email,
       name: staff.name ?? undefined,
       role: staff.role,
+      country_code: staff.country_code ?? undefined,
+      region: staff.region ?? undefined,
+      language: staff.language ?? undefined,
       forcePasswordChange: staff.force_password_change,
     };
     if (remember_me === true) {
@@ -191,12 +205,11 @@ authRouter.post(
 );
 
 // ---------------------------------------------------------------------------
-// GET /auth/session (also restore from remember_me)
+// GET /auth/session (remember-me restore happens upstream, in server.ts)
 // ---------------------------------------------------------------------------
 
 authRouter.get(
   "/auth/session",
-  restoreSessionFromRememberMe,
   (req: Request, res: Response) => {
     if (!req.session?.user) {
       res.status(401).json({ error: "Not authenticated" });
@@ -209,6 +222,9 @@ authRouter.get(
         name: req.session.user.name,
         picture: req.session.user.picture,
         role: req.session.user.role,
+        country_code: req.session.user.country_code,
+        region: req.session.user.region,
+        language: req.session.user.language,
         forcePasswordChange: req.session.user.forcePasswordChange ?? false,
       },
     });
@@ -306,11 +322,19 @@ authRouter.post("/auth/forgot-password", asyncHandler(async (req: Request, res: 
     const expiresAt = new Date(Date.now() + PASSWORD_RESET_EXPIRY_MS);
     await createPasswordResetToken(client, userId, tokenHash, expiresAt);
     const resetLink = `${FRONTEND_URL}/reset-password?token=${encodeURIComponent(token)}`;
-    if (process.env.NODE_ENV === "production") {
-      sendPasswordResetEmail(emailStr, resetLink).catch((err) => {
-        console.error("[auth] Failed to send password reset email:", err);
-      });
-    } else {
+    // Always attempt to send — mailer.ts itself no-ops (with a console warning) if Gmail
+    // isn't configured, so this is safe locally too. The console log + devResetLink below
+    // stay regardless, so local dev works without needing real Gmail creds set up.
+    sendPasswordResetEmail(emailStr, resetLink, {
+      title: staff.salutation,
+      firstName: staff.first_name,
+      lastName: staff.last_name,
+      language: staff.language,
+      region: staff.region,
+    }).catch((err) => {
+      console.error("[auth] Failed to send password reset email:", err);
+    });
+    if (process.env.NODE_ENV !== "production") {
       console.log("[auth] Password reset link for", emailStr, ":", resetLink);
     }
     res.status(200).json({
@@ -466,6 +490,9 @@ authRouter.get("/auth/google/callback", asyncHandler(async (req: Request, res: R
     name: dbUser.name ?? undefined,
     picture: userInfo.picture,
     role: dbUser.role,
+    country_code: dbUser.country_code ?? undefined,
+    region: dbUser.region ?? undefined,
+    language: dbUser.language ?? undefined,
   };
 
   res.redirect(`${FRONTEND_URL}/login?from=google`);

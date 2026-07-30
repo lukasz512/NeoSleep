@@ -1,6 +1,7 @@
 import { ref, computed, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { apiFetch } from "../utils/api";
+import { apiFetch } from "./useBffApi";
+import { scrollToFormTop } from "../utils/scrollToFormTop";
 import type { EventFormData, EventFormInitialData, EventSubmitPayload } from "../components/EventForm.types";
 
 /** Map UI status → API status. */
@@ -25,18 +26,20 @@ export function useEventForm(
 ) {
   const { t } = useI18n();
 
-  const formRef = ref<{ validate: () => Promise<{ valid: boolean }> } | null>(null);
+  const formRef = ref<{ validate: () => Promise<{ valid: boolean }>; $el?: Element } | null>(null);
   const submitting = ref(false);
   const showDiscardConfirm = ref(false);
   const initialFormSnapshot = ref<EventFormData | null>(null);
   const hcoOptions = ref<{ id: string; name: string }[]>([]);
   const hcpOptions = ref<{ id: string; name: string }[]>([]);
+  const patientOptions = ref<{ id: string; name: string }[]>([]);
   const loadingHco = ref(false);
   const loadingHcp = ref(false);
+  const loadingPatient = ref(false);
 
   const form = ref<EventFormData>({
     title: "", start: "", end: "", type: "f2f", status: "planned",
-    hcoIds: [], hcpIds: [], location: "", videoLink: "", notes: "", region: "",
+    hcoIds: [], hcpIds: [], patientIds: [], location: "", videoLink: "", notes: "", region: "",
   });
 
   const typeItems = computed(() => [
@@ -108,14 +111,29 @@ export function useEventForm(
     }
   }
 
-  function getHcoHcpFromAttendees(attendees?: { attendee_type: string; attendee_id: string }[]) {
+  async function loadPatient() {
+    loadingPatient.value = true;
+    try {
+      const res = await apiFetch("/api/v1/patient?limit=-1", { handleErrors: false });
+      if (res.ok) {
+        const json = (await res.json()) as { items?: { id: string; name: string }[] };
+        patientOptions.value = json.items ?? [];
+      }
+    } finally {
+      loadingPatient.value = false;
+    }
+  }
+
+  function getAttendeesByType(attendees?: { attendee_type: string; attendee_id: string }[]) {
     const hcoIds: string[] = [];
     const hcpIds: string[] = [];
+    const patientIds: string[] = [];
     for (const a of attendees ?? []) {
       if (a.attendee_type === "hco") hcoIds.push(a.attendee_id);
-      if (a.attendee_type === "hcp") hcpIds.push(a.attendee_id);
+      if (a.attendee_type === "doctor") hcpIds.push(a.attendee_id);
+      if (a.attendee_type === "patient") patientIds.push(a.attendee_id);
     }
-    return { hcoIds, hcpIds };
+    return { hcoIds, hcpIds, patientIds };
   }
 
   function hasFormChanged(): boolean {
@@ -128,6 +146,7 @@ export function useEventForm(
       f.type !== snap.type || f.status !== snap.status ||
       JSON.stringify([...f.hcoIds].sort()) !== JSON.stringify([...snap.hcoIds].sort()) ||
       JSON.stringify([...f.hcpIds].sort()) !== JSON.stringify([...snap.hcpIds].sort()) ||
+      JSON.stringify([...f.patientIds].sort()) !== JSON.stringify([...snap.patientIds].sort()) ||
       !eq(f.location, snap.location) || !eq(f.videoLink, snap.videoLink) ||
       !eq(f.notes, snap.notes) || !eq(f.region, snap.region)
     );
@@ -156,14 +175,19 @@ export function useEventForm(
 
   async function onSubmit() {
     const valid = await formRef.value?.validate();
-    if (!valid?.valid) return;
+    if (!valid?.valid) {
+      scrollToFormTop(formRef.value?.$el);
+      return;
+    }
     submitting.value = true;
     try {
       const attendees: EventSubmitPayload["attendees"] = [];
       for (const id of form.value.hcoIds)
         attendees.push({ attendee_type: "hco", attendee_id: id, is_primary: false });
       for (const id of form.value.hcpIds)
-        attendees.push({ attendee_type: "hcp", attendee_id: id, is_primary: false });
+        attendees.push({ attendee_type: "doctor", attendee_id: id, is_primary: false });
+      for (const id of form.value.patientIds)
+        attendees.push({ attendee_type: "patient", attendee_id: id, is_primary: false });
       const payload: EventSubmitPayload = {
         id: props.initialData?.id,
         title: form.value.title.trim(),
@@ -177,8 +201,8 @@ export function useEventForm(
         region: form.value.region.trim(),
         attendees,
       };
-      emit("submit", payload);
-      emit("update:modelValue", false);
+      const ok = await new Promise<boolean>((resolve) => emit("submit", payload, resolve));
+      if (ok) emit("update:modelValue", false);
     } finally {
       submitting.value = false;
     }
@@ -190,12 +214,13 @@ export function useEventForm(
       if (open) {
         loadHco();
         loadHcp();
+        loadPatient();
         if (initial && (initial.id || initial.start || initial.end || initial.start_at || initial.end_at)) {
           const startIso = initial.start ?? initial.start_at ?? "";
           const endIso   = initial.end   ?? initial.end_at   ?? "";
-          const { hcoIds, hcpIds } = initial.hcoIds || initial.hcpIds
-            ? { hcoIds: initial.hcoIds ?? [], hcpIds: initial.hcpIds ?? [] }
-            : getHcoHcpFromAttendees(initial.attendees);
+          const { hcoIds, hcpIds, patientIds } = initial.hcoIds || initial.hcpIds || initial.patientIds
+            ? { hcoIds: initial.hcoIds ?? [], hcpIds: initial.hcpIds ?? [], patientIds: initial.patientIds ?? [] }
+            : getAttendeesByType(initial.attendees);
           form.value = {
             title:     (initial.title ?? "").trim(),
             start:     toDatetimeLocal(startIso),
@@ -204,6 +229,7 @@ export function useEventForm(
             status:    initial.status ? (API_TO_UI_STATUS[initial.status] ?? initial.status) : "planned",
             hcoIds:    [...hcoIds],
             hcpIds:    [...hcpIds],
+            patientIds: [...patientIds],
             location:  (initial.location ?? "").trim(),
             videoLink: (initial.videoLink ?? initial.video_link ?? "").trim(),
             notes:     (initial.notes ?? "").trim(),
@@ -212,7 +238,7 @@ export function useEventForm(
         } else {
           form.value = {
             title: "", start: "", end: "", type: "f2f", status: "planned",
-            hcoIds: [], hcpIds: [], location: "", videoLink: "", notes: "", region: "",
+            hcoIds: [], hcpIds: [], patientIds: [], location: "", videoLink: "", notes: "", region: "",
           };
         }
         initialFormSnapshot.value = { ...form.value };
@@ -224,7 +250,7 @@ export function useEventForm(
 
   return {
     formRef, form, submitting, showDiscardConfirm,
-    hcoOptions, hcpOptions, loadingHco, loadingHcp,
+    hcoOptions, hcpOptions, patientOptions, loadingHco, loadingHcp, loadingPatient,
     typeItems, statusItems,
     isEditMode, formTitle, formSubmitLabel,
     startRules, endRules,

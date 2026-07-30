@@ -12,6 +12,7 @@ export interface User {
   salutation: string | null;
   first_name: string | null;
   last_name: string | null;
+  phone: string | null;
   /** Computed: first_name + ' ' + last_name */
   name: string | null;
   // From user_roles JOIN — matches the user_roles.role CHECK constraint
@@ -19,6 +20,9 @@ export interface User {
   // From users table
   google_sub: string | null;
   region: string | null;
+  country_code: string | null;
+  // From identities JOIN
+  language: string | null;
   territory_id: string | null;
   status: string;
   token_version: number;
@@ -37,10 +41,10 @@ const USER_JOIN = `
   LEFT JOIN user_roles ur ON ur.user_id = u.id`.trim();
 
 const USER_COLS = `
-  u.id, u.identity_id, i.email, i.title AS salutation, i.first_name, i.last_name,
+  u.id, u.identity_id, i.email, i.title AS salutation, i.first_name, i.last_name, i.phone,
   TRIM(COALESCE(i.first_name, '') || ' ' || COALESCE(i.last_name, '')) AS name,
   COALESCE(ur.role, 'rep') AS role,
-  u.google_sub, u.region, u.territory_id, u.status, u.token_version,
+  u.google_sub, i.region, i.country_code, i.language, i.territory_id, u.status, u.token_version,
   u.created_at, u.updated_at`.trim();
 
 const STAFF_AUTH_COLS = `${USER_COLS}, u.password_hash, u.force_password_change`;
@@ -141,6 +145,24 @@ export async function setUserPassword(
   }
 }
 
+/** Shallow-merges into identities.metadata JSONB — used to record clinic/invoice data collected at partner-invite acceptance. */
+export async function mergeIdentityMetadataForUser(
+  client: PoolClient,
+  userId: string,
+  patch: Record<string, unknown>
+): Promise<void> {
+  try {
+    await client.query(
+      `UPDATE identities i SET metadata = COALESCE(i.metadata, '{}'::jsonb) || $1::jsonb, updated_at = now()
+       FROM users u WHERE u.identity_id = i.id AND u.id = $2`,
+      [JSON.stringify(patch), userId]
+    );
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("mergeIdentityMetadataForUser", err);
+  }
+}
+
 export async function insertStaffUser(
   client: PoolClient,
   email: string,
@@ -149,16 +171,17 @@ export async function insertStaffUser(
   role: StaffRole,
   passwordHash: string | null,
   forcePasswordChange: boolean,
-  salutation?: string | null
+  salutation?: string | null,
+  phone?: string | null
 ): Promise<User | null> {
   const normalizedEmail = email.trim().toLowerCase();
 
   try {
     const identityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (email, title, first_name, last_name) VALUES ($1, $2, $3, $4)
+      `INSERT INTO identities (email, title, first_name, last_name, phone) VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
        RETURNING id`,
-      [normalizedEmail, salutation?.trim() || null, firstName, lastName]
+      [normalizedEmail, salutation?.trim() || null, firstName, lastName, phone ?? null]
     );
     const identityId = identityResult.rows[0]!.id;
 
@@ -172,8 +195,13 @@ export async function insertStaffUser(
     if (!userResult.rows[0]) return null;
     const userId = userResult.rows[0].id;
 
+    // Plain insert, no ON CONFLICT: userId was just created above in this same
+    // transaction, so no existing user_roles row can reference it yet — and
+    // user_roles' only unique constraint is the composite (user_id, role,
+    // region), not user_id alone, so `ON CONFLICT (user_id)` doesn't match any
+    // constraint and Postgres rejects the statement outright (42P10).
     await client.query(
-      `INSERT INTO user_roles (user_id, role) VALUES ($1, $2) ON CONFLICT (user_id) DO NOTHING`,
+      `INSERT INTO user_roles (user_id, role) VALUES ($1, $2)`,
       [userId, role]
     );
 
@@ -323,6 +351,7 @@ export async function updateUser(client: PoolClient, id: string, input: UpdateUs
       const salutation = input.salutation !== undefined ? (input.salutation?.trim() || null) : existing.salutation;
       const firstName  = input.first_name !== undefined ? input.first_name : existing.first_name;
       const lastName   = input.last_name  !== undefined ? input.last_name  : existing.last_name;
+      const phone      = input.phone      !== undefined ? input.phone      : existing.phone;
       await client.query(
         `UPDATE identities i SET
            title      = $1,
@@ -332,14 +361,14 @@ export async function updateUser(client: PoolClient, id: string, input: UpdateUs
            updated_at = now()
          FROM users u
          WHERE u.identity_id = i.id AND u.id = $5`,
-        [salutation, firstName, lastName, input.phone ?? null, id]
+        [salutation, firstName, lastName, phone, id]
       );
     }
     if (input.status !== undefined) {
       await client.query(`UPDATE users SET status = $1, updated_at = now() WHERE id = $2`, [input.status, id]);
     }
     if (input.country_code !== undefined) {
-      await client.query(`UPDATE users SET country_code = $1, updated_at = now() WHERE id = $2`, [input.country_code, id]);
+      await client.query(`UPDATE identities SET country_code = $1, updated_at = now() WHERE id = $2`, [input.country_code, existing.identity_id]);
     }
     if (input.role !== undefined) {
       // Single global role per user (region IS NULL) — replace rather than upsert,

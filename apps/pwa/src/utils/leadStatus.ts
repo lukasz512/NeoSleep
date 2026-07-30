@@ -23,3 +23,10 @@ export function leadStatusClass(status: string): LeadStatus {
 export function leadStatusI18nKey(status: string): string | undefined {
   return LEAD_STATUS_I18N_KEYS[(status || "new").toLowerCase()];
 }
+
+/** institution has no dedicated column on lead — it lives at metadata.institution
+ *  (see apps/api/src/commands/lead.ts). */
+export function leadInstitution(lead: { metadata?: Record<string, unknown> | null }): string {
+  const v = lead.metadata?.institution;
+  return typeof v === "string" ? v : "";
+}

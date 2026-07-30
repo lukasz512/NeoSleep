@@ -24,8 +24,12 @@ export interface AppSettings {
   filters?: Record<string, ViewFilters>;
 }
 
+// No default for `locale` here: this module's useLocalStorage() singleton persists
+// its defaults to localStorage as soon as it's created, which — depending on module
+// import order — can happen before plugins/i18n.ts's resolveInitialLocale() runs its
+// browser-language detection. A hardcoded default here would race that detection and
+// silently pin every first-time visitor to "en" regardless of their browser locale.
 const DEFAULTS: AppSettings = {
-  locale: "en",
   sidebarCollapsed: false,
   filters: {},
 };

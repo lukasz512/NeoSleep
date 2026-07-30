@@ -6,3 +6,8 @@ export type { AppConfig, ConfigOption, ConfigOptions } from "./config";
 
 export { useThemeStore, resolveInitialThemeMode } from "./theme";
 export type { ThemeMode, ThemePreference } from "./theme";
+
+export { useGlobalLoaderStore } from "./loader";
+
+export { useMotionPreferenceStore } from "./motionPreference";
+export type { MotionPreference } from "./motionPreference";
