@@ -55,6 +55,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # @neo/email is a real compiled package (dist/ is gitignored, apps/api
+      # is plain Node without a bundler so it needs the built .js/.d.ts, not
+      # raw .ts) — without this, `pnpm -r typecheck`/`pnpm -r lint` hit
+      # apps/api before packages/email has ever been built and fail with
+      # "Cannot find module '@neo/email'". See infrastructure/scripts/start.sh
+      # step 4 for the same requirement in local dev.
+      - name: Build @neo/email
+        run: pnpm --filter @neo/email build
+
       - name: Lint (all workspaces)
         run: pnpm -r lint
 
