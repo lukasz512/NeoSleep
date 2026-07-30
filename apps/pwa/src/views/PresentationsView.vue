@@ -269,7 +269,7 @@ import AppLoadingState from "../components/AppLoadingState.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppFilterBar from "../components/AppFilterBar.vue";
 import { useAuthStore } from "../stores/auth";
-import { apiFetch } from "../utils/api";
+import { apiFetch } from "../composables/useBffApi";
 import { useNotifications } from "../composables/useNotifications";
 import { useEntityList } from "../composables/useEntityList";
 import type { FilterDefinition } from "../composables/useFilters";

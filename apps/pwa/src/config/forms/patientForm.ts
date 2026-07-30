@@ -1,5 +1,5 @@
 import type { FormFieldDef, FormFieldOption } from "../../types/formField";
-import { apiFetch } from "../../utils/api";
+import { apiFetch } from "../../composables/useBffApi";
 import { useConfigStore } from "../../stores/config";
 import { identityFields } from "./identityFields";
 
@@ -14,10 +14,12 @@ import { identityFields } from "./identityFields";
  */
 
 // DB CHECK constraint patient_status_check (infrastructure/db/schema-snapshot.sql).
-const STATUS_OPTIONS = [
-  { title: "app.patients.filters.statusActive", value: "active" },
-  { title: "app.patients.filters.statusFollowUp", value: "follow_up" },
-  { title: "app.patients.filters.statusDischarged", value: "discharged" },
+// Colors mirror PatientsView.vue's statusColor() so the pill reads the same
+// here as it does in the patient list/detail views.
+const STATUS_OPTIONS: FormFieldOption[] = [
+  { title: "app.patients.filters.statusActive", value: "active", color: "success" },
+  { title: "app.patients.filters.statusFollowUp", value: "follow_up", color: "warning" },
+  { title: "app.patients.filters.statusDischarged", value: "discharged", color: "default" },
 ];
 
 async function loadRegionOptions() {
@@ -44,8 +46,16 @@ export const patientFormFields: FormFieldDef[] = [
     key: "practitioner_id",
     type: "autocomplete",
     labelKey: "app.patients.form.practitioner",
+    placeholder: "app.patients.form.practitionerPlaceholder",
+    // VAutocomplete/VSelect treat a "" modelValue as an already-set custom
+    // value (wrapped into a length-1 internal array), which suppresses the
+    // placeholder even when nothing is actually selected — seeding null
+    // instead (skipped by Vuetify's own internal transform) is what makes
+    // an unset field register as empty and actually show the placeholder.
+    default: null,
     options: loadPractitionerOptions,
     icon: "nav-hcp",
+    avatarEntityType: "hcp",
     cols: 12,
   },
   {

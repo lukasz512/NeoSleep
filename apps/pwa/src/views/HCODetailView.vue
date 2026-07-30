@@ -16,12 +16,22 @@
       avatar-entity-type="hco"
       @submit="onAccountSubmit"
     />
+    <VAlert
+      v-if="isOffline"
+      type="warning"
+      variant="tonal"
+      density="compact"
+      class="view-detail__offline-banner"
+      :text="t('app.common.offlineShowingCached')"
+    />
     <ItemDetailLayout
     :has-content="!!hco"
     :loading="loading"
+    :load-error="loadFailed"
     :back-route="{ name: 'hco' }"
     :back-label="t('user.hco.detail.back')"
     :not-found-label="t('user.hco.detail.notFound')"
+    @retry="loadHCO"
   >
     <template #title v-if="hco">
       <span class="view-item__title-wrap">
@@ -127,7 +137,8 @@ import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
 import { useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuthStore } from "../stores/auth";
-import { apiFetch } from "../utils/api";
+import { apiFetch } from "../composables/useBffApi";
+import { useEntityCacheStore } from "../stores/entityCache";
 import { useNotifications } from "../composables/useNotifications";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import AppButton from "../components/AppButton.vue";
@@ -164,8 +175,13 @@ const { t } = useI18n();
 const route = useRoute();
 const notifications = useNotifications();
 
+const hcoCache = useEntityCacheStore("hco");
 const hco = ref<HCO | null>(null);
 const loading = ref(true);
+/** True while `hco` is being served from the offline cache — see docs/ADR-013-offline-read-cache.md. */
+const isOffline = ref(false);
+/** True when loadHCO() failed for a reason other than a genuine 404 (network/server) — see loadHCO(). */
+const loadFailed = ref(false);
 const showEditModal = ref(false);
 const showEventForm = ref(false);
 const eventFormInitial = ref<{ start_at: string; end_at: string; hcoIds?: string[] } | undefined>(undefined);
@@ -252,15 +268,28 @@ async function loadHCO() {
   }
   loading.value = true;
   hco.value = null;
+  loadFailed.value = false;
   try {
     const res = await apiFetch(`/api/v1/organization/${id}`, { handleErrors: false });
     if (res.ok) {
       hco.value = (await res.json()) as HCO;
+      isOffline.value = false;
+      void hcoCache.cacheOne(hco.value as unknown as Record<string, unknown>);
     } else if (res.status !== 404) {
-      notifications.show(t("user.hco.errorLoad"), "error");
+      // Not a genuine 404 — ItemDetailLayout renders its own "connection
+      // problem" + retry state for this (see :load-error), so no separate
+      // toast on top of it.
+      loadFailed.value = true;
     }
   } catch {
-    notifications.show(t("user.hco.errorLoad"), "error");
+    // Network failure, not a server error — fall back to the cached record if we have one.
+    const cached = await hcoCache.readOne(id);
+    if (cached) {
+      hco.value = cached as unknown as HCO;
+      isOffline.value = true;
+      return;
+    }
+    loadFailed.value = true;
     hco.value = null;
   } finally {
     loading.value = false;
@@ -272,6 +301,10 @@ watch(() => route.params.id, loadHCO);
 </script>
 
 <style scoped>
+.view-detail__offline-banner {
+  margin: 0 0 12px;
+}
+
 .view-item__title-wrap {
   display: flex;
   align-items: center;

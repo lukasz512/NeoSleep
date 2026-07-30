@@ -16,6 +16,21 @@ describe("FormRenderer", () => {
     expect(source).toMatch(/props\.fields\.filter\(\(f\)\s*=>\s*!isFieldHidden\(f\)\)/);
   });
 
+  it("hidden/label/color functions receive the live form state, not just static flags", () => {
+    const source = getSource();
+    // Reactive to a sibling field's value (e.g. institution hidden/required
+    // by the lead's `type`, or the clinic combobox's label/color flipping
+    // once it stops matching an existing organization) — not just a
+    // zero-arg closure reading an external store.
+    expect(source).toMatch(/f\.hidden === "function" \? f\.hidden\(form\.value\)/);
+    expect(source).toContain("function labelFor(f: FormFieldDef): string {");
+    expect(source).toContain("function colorFor(f: FormFieldDef): string | undefined {");
+    expect(source).toMatch(/f\.labelKey === "function" \? f\.labelKey\(form\.value\)/);
+    expect(source).toMatch(/f\.color === "function" \? f\.color\(form\.value\)/);
+    expect(source).toContain("label: labelFor(f)");
+    expect(source).toContain("color: colorFor(f)");
+  });
+
   it("maps type 'phone' to the PhoneField component and 'combobox' to VCombobox", () => {
     const source = getSource();
     expect(source).toContain('import PhoneField from "./PhoneField.vue"');

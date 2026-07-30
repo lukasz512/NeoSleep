@@ -10,17 +10,91 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  /* Same gap as search-group below so search/filter/add read as one evenly
+     spaced row instead of the group's own icons sitting tighter together
+     than the add button sits from the group. */
+  gap: var(--pwa-fib-sm, 8px);
   margin-bottom: 16px;
   flex-shrink: 0;
+  /* Collapses away on mobile while scrolling the feed down (see
+     --hidden below) — max-height needs a real "from" value (not the
+     default `none`) for the collapse to animate instead of snapping shut. */
+  max-height: 160px;
+  overflow: hidden;
+  transition: max-height var(--pwa-fib-t-xl, 233ms) ease, opacity var(--pwa-fib-t-lg, 144ms) ease,
+    margin-bottom var(--pwa-fib-t-xl, 233ms) ease;
 }
 
+.app-entity-list__toolbar--hidden {
+  max-height: 0;
+  opacity: 0;
+  margin-bottom: 0;
+  pointer-events: none;
+}
+
+/* Search + filter + clear-all read as one cluster, pinned to the right edge
+   of the toolbar, flush against the add button. Content-hugging (not
+   flex:1) so the --active tonal background below hugs just the visible
+   controls instead of stretching across unused toolbar width.
+   margin-left:auto here is the *only* auto margin in this row — the add
+   button (further down) deliberately has none. Two competing auto margins
+   split the leftover space between them instead of both collapsing to
+   zero-gap, which is exactly what left this group sitting in the middle of
+   the toolbar with add pushed off to the far right past a gap. */
+/* Active search/filters: tonal M3 pill behind the whole group (field +
+   filter + clear-all) so the three read as one connected control instead of
+   three separate icons that happen to be near each other. Same
+   surface-container-low tone already used for the table header and mobile
+   feed cards elsewhere in this file.
+   This used to be a separate ::after pseudo-element, absolutely positioned
+   with a negative inset to bleed outward without occupying real layout
+   space. That kept breaking: border-radius on a manually-inset box is only
+   ever as good as the browser correctly clamping *that* box's own corner
+   radius to *its own* dimensions, and something about the extra layer kept
+   reading as flattened/uneven rather than a clean stadium.
+   box-shadow's spread avoids the whole problem: a solid (non-blurred)
+   shadow with 0 blur and a spread radius traces the element's *own*
+   border-radius outward by exactly that spread amount — the browser
+   guarantees the offset curve is parallel to the original, so the "bleed"
+   is mathematically tied to this element's real shape instead of being a
+   second box that has to be kept in sync with it by hand. No extra
+   pseudo-element, no z-index/stacking to manage, no separate inset to keep
+   matched to the icon row's own gap. */
 .app-entity-list__search-group {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex: 1 1 auto;
+  gap: var(--pwa-fib-sm, 8px);
+  flex: 0 1 auto;
+  margin-left: auto;
   min-width: 0;
+  border-radius: var(--pwa-radius-pill, 9999px);
+  /* No real padding here on purpose — the icon row's own spacing must equal
+     the toolbar's gap to the add button (that's the "equal spacing" this
+     component is supposed to have). Real padding on this box would inflate
+     it beyond that shared gap: the group's own padding-right + the
+     toolbar's gap would double up, so filter→+ reads wider than
+     search→filter. The --active pill's breathing room comes from the
+     box-shadow spread below instead, which doesn't occupy real layout
+     space — same visual buffer, but it can't disturb the icon spacing or
+     the group's own size (no jump between active/inactive either, since
+     nothing here resizes).
+     No flex-grow here, even while typing — flex-grow saturates at "fill all
+     remaining space" and can never overshoot past that regardless of the
+     eased value transiently exceeding 1, which is why the group used to
+     grow via flex-grow:1 and the field never visibly bounced: there was no
+     slack for a spring curve to overshoot *into*. The field's own
+     flex-basis (below) is a real, generous-but-bounded px value instead —
+     content-hugging auto-sizing here naturally grows the group to match it
+     (a definite child basis participates in the parent's own preferred-size
+     computation even when the parent itself isn't flex-growing), and a
+     definite basis *can* genuinely overshoot past its target before
+     settling, which is what the bounce actually needs. */
+  box-shadow: 0 0 0 0 transparent;
+  transition: box-shadow var(--pwa-fib-t-md, 89ms) ease;
+}
+
+.app-entity-list__search-group--active {
+  box-shadow: 0 0 0 var(--pwa-fib-sm, 8px) rgb(var(--v-theme-surface-container-low));
 }
 
 .app-entity-list__search-icon {
@@ -30,40 +104,104 @@
   color: var(--pwa-text, currentColor);
 }
 
-.app-entity-list__clear-filters {
-  min-width: var(--pwa-btn-min-width, 44px);
-  min-height: var(--pwa-btn-min-height, 44px);
-}
-
 .app-entity-list__clear-filters--no-border {
   border: none;
   box-shadow: none;
   background: transparent;
-  color: rgb(var(--v-theme-primary));
+  /* Clears search + every filter at once — the more destructive of the two
+     clear actions, so it reads as error/red, distinct from the single-field
+     clear inside the search box below. */
+  color: rgb(var(--v-theme-error));
 
   &:hover {
-    background: rgba(var(--v-theme-primary), 0.12);
+    background: rgba(var(--v-theme-error), 0.12);
   }
+}
+
+/* Both clear buttons stay mounted at all times (no v-if) and collapse via
+   max-width/opacity on this wrapper instead — a v-if mount/unmount is an
+   instant DOM splice, snapping the filter/add icons sideways in one frame.
+   Animating the wrapper's width lets the browser reflow siblings
+   continuously across the same spring/Fibonacci timing used for the search
+   field itself, so the icons visibly slide left/right instead of jumping.
+
+   The "shown" max-width has to match the button's *true* rendered size
+   exactly, not the min-width floor we used to set on the button itself
+   (removed — it was never actually binding). Vuetify's icon button sets an
+   *explicit* width/height from size + density, not just a min:
+   size="large" → 56x56, size="default" density → +12px over --v-btn-height.
+   A cap even 1px under that crops the circle into a squashed, non-round
+   shape — confirmed against vuetify's own compiled VBtn.css rather than
+   guessed (44px and then 64px were both wrong guesses in earlier passes). */
+.app-entity-list__clear-filters-wrap {
+  max-width: 56px;
+  /* Without this, the search field's own generous flex-basis (610px, see
+     below) can push total preferred width in this row well past what
+     actually fits — ordinary flex-shrink distributes that overflow
+     proportionally to every sibling's basis, including this one's small
+     56px, squashing the wrapper (and the circular button clipped inside
+     it) into a flattened oval instead of a circle. Only the search field
+     should ever compress; this button's shape is fixed. */
+  flex-shrink: 0;
+  overflow: hidden;
+  opacity: 1;
+  transition: max-width var(--pwa-fib-t-lg, 144ms) var(--pwa-ease-spring, cubic-bezier(0.34, 1.2, 0.64, 1)),
+    opacity var(--pwa-fib-t-sm, 55ms) ease,
+    margin-left var(--pwa-fib-t-lg, 144ms) var(--pwa-ease-spring, cubic-bezier(0.34, 1.2, 0.64, 1));
+}
+
+/* Collapsing max-width to 0 doesn't collapse the search-group's own `gap`
+   before this item — gap reserves that space between every adjacent pair
+   regardless of either item's size, so a hidden-but-still-0-width wrap left
+   an extra phantom 8px between filter and the group's edge that a real,
+   visible sibling pair never had. Cancelling it with an equal negative
+   margin is what actually made search↔filter and filter↔+ read as the same
+   gap at rest. */
+.app-entity-list__clear-filters-wrap--hidden {
+  max-width: 0;
+  opacity: 0;
+  margin-left: calc(-1 * var(--pwa-fib-sm, 8px));
+  pointer-events: none;
 }
 
 .app-entity-list__search-clear {
-  min-width: 36px;
-  min-height: 36px;
   border: none;
   box-shadow: none;
   background: transparent;
-  color: rgb(var(--v-theme-primary));
+  /* Only clears this one field's text, not the filters — neutral on-surface
+     instead of the primary/error accent colors used by the other two
+     buttons in this row. */
+  color: rgb(var(--v-theme-on-surface));
 
   &:hover {
-    background: rgba(var(--v-theme-primary), 0.12);
+    background: rgba(var(--v-theme-on-surface), 0.08);
   }
 }
 
+/* size="small" → true rendered size 40x40 (see the comment on
+   .app-entity-list__clear-filters-wrap above for the general reasoning,
+   including the flex-shrink:0 — same squish risk if the field's own box
+   gets compressed). */
+.app-entity-list__search-clear-wrap {
+  max-width: 40px;
+  flex-shrink: 0;
+  overflow: hidden;
+  opacity: 1;
+  transition: max-width var(--pwa-fib-t-lg, 144ms) var(--pwa-ease-spring, cubic-bezier(0.34, 1.2, 0.64, 1)),
+    opacity var(--pwa-fib-t-sm, 55ms) ease;
+}
 
+.app-entity-list__search-clear-wrap--hidden {
+  max-width: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* No margin-left:auto here — .app-entity-list__search-group above already
+   owns the single auto margin that pins the whole cluster to the right; a
+   second one here would split the available space between the two instead
+   of pushing them together. */
 .app-entity-list__add {
-  min-width: 44px;
-  min-height: 44px;
-  margin-left: auto;
   flex-shrink: 0;
   color: rgb(var(--v-theme-primary));
 }
@@ -90,11 +228,68 @@
   color: inherit;
 }
 
+/* Width is a deterministic flex-basis per state, not flex-grow competing for
+   "leftover space" inside a content-hugging parent. .app-entity-list__search-group
+   only grows (flex-grow:1) in the --typing state — at rest it hugs its own
+   content, meaning a field relying on flex-grow to reach its size has
+   nothing to grow *into* and collapses to its own minimum content width
+   instead (this is what truncated the placeholder to "Searc"). A fixed
+   basis sizes it correctly regardless of what the parent is doing.
+   One transition on the base rule covers every state (collapsed, medium,
+   desktop, typing) — a single continuous spring motion instead of the
+   previous per-state transitions with their own extra staggered delays,
+   which read as several small disjointed motions rather than one fluid one. */
 .app-entity-list__search {
-  flex: 1 1 auto;
+  /* One open width, used from the moment it opens — no separate smaller
+     "just focused" stage that then grows again once typing starts. It's a
+     real, bounded px value (610 — a term of the same Fibonacci sequence
+     used throughout this file) rather than flex-grow:1 filling literally
+     100% of the row, which read as *too* wide (swallowing the whole
+     toolbar, no breathing room before filter/add) when this was still a
+     separate --typing-only state. flex-shrink:1 lets it yield gracefully
+     on phones where 610px genuinely doesn't fit next to filter+add. */
+  flex: 0 1 610px;
   min-width: 0;
-  width: 100%;
-  transition: max-width var(--pwa-transition-duration, 280ms) var(--pwa-ease-out-smooth, cubic-bezier(0.22, 1, 0.36, 1));
+  transition: flex-basis var(--pwa-fib-t-xl, 233ms) var(--pwa-ease-spring, cubic-bezier(0.34, 1.2, 0.64, 1));
+}
+
+/* Belt-and-suspenders floor under the flex-basis above: even if this outer
+   box gets squeezed by flex-shrink on a narrow screen, the actual visible
+   control (icon + typed text + clear button) never renders under 300px, so
+   typed text stays legible instead of getting clipped mid-word. Can make
+   the field visually overflow its own (shrunk) outer box on very narrow
+   viewports rather than silently truncating — an intentional trade-off,
+   legible-but-slightly-overflowing beats illegible-but-contained.
+   :not(--collapsed) matters here: this must NOT apply to the bare 44px
+   mobile icon (no text to protect there, and forcing 300px onto a
+   supposedly-collapsed control just re-expands it right back open). */
+.app-entity-list__search:not(.app-entity-list__search--collapsed) :deep(.v-input__control) {
+  min-width: 300px;
+}
+
+/* The filter/add buttons beside it are fully circular (.v-btn--icon, see
+   theme.scss) — the field's own flat --pwa-radius (10px) read as a
+   mismatched shape sitting in the same row. Two things are needed together,
+   not either alone:
+   1. `rounded="pill"` on the VTextField widens Vuetify's own __start/__end
+      outline pieces (they're fixed at a 12px-wide flex-basis otherwise, too
+      narrow to ever show a full semicircle no matter what radius is applied
+      to them — this is a *structural* fix, not just a radius value).
+   2. The explicit border-radius override below, because theme.scss's global
+      `.v-field { border-radius: var(--pwa-radius) !important; }` and
+      Vuetify's own `.rounded-pill` utility are the same specificity — same
+      !important, one class each — so source order alone decides the winner,
+      and our own global rule was winning, silently cancelling the `rounded`
+      prop. The extra `.app-entity-list__search` ancestor class here (plus
+      the scoped-style attribute Vue adds to it) makes this selector more
+      specific than a bare `.v-field`, so it reliably wins regardless of
+      stylesheet order. */
+.app-entity-list__search :deep(.v-field) {
+  border-radius: var(--pwa-radius-pill, 9999px) !important;
+  /* Keeps Vuetify's own state-layer/ripple overlay — and the :loading bar
+     below, an absolutely-positioned bar hugging the bottom edge — clipped
+     to the pill shape instead of drawing past its curved corners. */
+  overflow: hidden;
 }
 
 /* Vuetify thickens the outline to 2px on focus/error by default — keep it at
@@ -104,26 +299,11 @@
   --v-field-border-width: 1px;
 }
 
-/* Full-width search reads well stacked on mobile, but stretched edge-to-edge
-   on desktop it fights the toolbar's icon buttons for visual weight — cap it
-   there instead. */
-@media (min-width: 768px) {
-  .app-entity-list__search {
-    max-width: 320px;
-  }
-}
-
-/* Mobile: search collapses to just the prepend icon and sits flush with the
-   filter/add icons at the right edge; focusing (or typing) grows it leftward.
-   search-group keeps flex:1 (fills the toolbar row) but packs its own
-   children (search, filter, clear) at its right edge via flex-end, so the
-   field's flex-grow consumes free space growing left instead of the group's
-   box just leaving a dead gap before the add button. */
+/* Mobile: search collapses to just the prepend icon at rest (border faded
+   out, same transition as the width change so both move together);
+   focusing grows it straight to the open width (610px, see the base rule
+   above, shared with desktop and with typing — no separate stage). */
 @media (max-width: 767px) {
-  .app-entity-list__search-group {
-    justify-content: flex-end;
-  }
-
   /* 20px (desktop, inside a full-width field) reads noticeably thinner than
      the 24px filter/add icons once it's a bare icon sitting next to them at
      rest — bump to 24px here so the stroke weight matches. */
@@ -132,30 +312,17 @@
     height: 24px;
   }
 
-  .app-entity-list__search {
-    max-width: 200px;
-    overflow: hidden;
-    transition: max-width 280ms var(--pwa-ease-out-smooth, cubic-bezier(0.22, 1, 0.36, 1)) 60ms;
-  }
-
-  /* Expanded (focused or has a value): border fades in first, box starts
-     growing 60ms later (see .app-entity-list__search transition above). */
   .app-entity-list__search :deep(.v-field__outline) {
     opacity: 1;
-    transition: opacity 120ms ease;
+    transition: opacity var(--pwa-fib-t-xl, 233ms) var(--pwa-ease-spring, cubic-bezier(0.34, 1.2, 0.64, 1));
   }
 
-  /* Collapsed (rest): bare icon, no border box around it. Shrinks back to
-     the icon first, border fades out last so it doesn't hang in empty space
-     while the field is still mid-collapse. */
   .app-entity-list__search--collapsed {
-    max-width: 44px;
-    transition: max-width 280ms var(--pwa-ease-out-smooth, cubic-bezier(0.22, 1, 0.36, 1));
+    flex-basis: 44px;
   }
 
   .app-entity-list__search--collapsed :deep(.v-field__outline) {
     opacity: 0;
-    transition: opacity 120ms ease 200ms;
   }
 }
 
@@ -169,6 +336,11 @@
   justify-content: center;
 }
 
+.app-entity-list__offline-banner {
+  flex: 0 0 auto;
+  margin: 0 0 12px;
+}
+
 .app-entity-list__table-wrap {
   flex: 1 1 0;
   min-height: 70vh;
@@ -176,7 +348,17 @@
   flex-direction: column;
   overflow: hidden;
   border-radius: var(--pwa-radius);
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  /* M3 outline-variant instead of Vuetify's generic --v-border-color — same
+     static gray already used for the mobile feed cards' border (see
+     .app-entity-list__card below), so desktop and mobile share one tone. */
+  border: 1px solid rgb(var(--v-theme-outline-variant));
+}
+
+/* M3: header row reads as a distinct tonal layer (surface-container-low)
+   above the body's plain surface, instead of Vuetify's own header
+   background — depth via tone, not a rule/shadow under the header. */
+.app-entity-list__table-wrap :deep(.v-data-table__th) {
+  background: rgb(var(--v-theme-surface-container-low));
 }
 
 /* Mobile feed items carry their own border + elevation (below) — the
@@ -283,15 +465,18 @@
   min-width: 560px;
 }
 
-.app-entity-list__feed {
-  display: block;
+.app-entity-list__feed-scroll {
   flex: 1 1 auto;
   min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.app-entity-list__feed {
+  display: block;
   padding: var(--pwa-fib-md, 13px) 0;
   border: none;
   position: relative;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
 }
 
 /* Card shape/rhythm follows the Fibonacci scale (--pwa-fib-*, theme.scss)
@@ -400,6 +585,14 @@
 
 .app-entity-list__feed-empty {
   margin: 0;
+}
+
+.app-entity-list__load-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--pwa-fib-xl, 34px);
+  padding: 1rem 0;
 }
 
 .app-entity-list__institution-link {

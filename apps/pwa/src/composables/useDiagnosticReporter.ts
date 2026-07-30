@@ -6,7 +6,7 @@
  *   setupDiagnosticReporter(app)
  */
 import type { App } from "vue";
-import { sendDiagnostic } from "../utils/api";
+import { sendDiagnostic } from "./useBffApi";
 
 const _recentErrors = new Map<string, number>();
 

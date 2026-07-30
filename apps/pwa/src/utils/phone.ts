@@ -62,3 +62,32 @@ export function formatPhone(areaCode: string, local: string): string {
   const digits = local.replace(/\D/g, "");
   return digits ? `${areaCode} ${digits}` : "";
 }
+
+// Digit-grouping for on-screen display only (never affects storage — that's
+// always the flat digit string handled above). Groups reflect each country's
+// own conventional way of writing the national number, not a single shared
+// pattern: PL 3-3-3 (e.g. 123 456 789), MX 2-4-4 (e.g. 55 1234 5678, the CDMX-
+// style split commonly used for the 10-digit national number), TH 2-3-4 (e.g.
+// 81 234 5678, a 9-digit mobile number with the domestic leading "0" dropped
+// as it always is once the +66 country code is present).
+const DIGIT_GROUPS: Partial<Record<(typeof PHONE_AREA_CODES)[number]["code"], number[]>> = {
+  "+48": [3, 3, 3],
+  "+52": [2, 4, 4],
+  "+66": [2, 3, 4],
+};
+
+/** Groups local digits for display; a custom (untyped) area code shows raw digits, ungrouped. */
+export function formatLocalDigits(areaCode: string, digits: string): string {
+  const groups = DIGIT_GROUPS[areaCode as (typeof PHONE_AREA_CODES)[number]["code"]];
+  if (!groups) return digits;
+
+  const parts: string[] = [];
+  let i = 0;
+  for (const size of groups) {
+    if (i >= digits.length) break;
+    parts.push(digits.slice(i, i + size));
+    i += size;
+  }
+  if (i < digits.length) parts.push(digits.slice(i));
+  return parts.join(" ");
+}

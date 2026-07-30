@@ -30,10 +30,25 @@ export function useFormRenderer(
 
   const isEditMode = computed(() => !!initialData.value?.id);
 
+  /**
+   * VSelect/VAutocomplete/VCombobox treat an empty *string* as a real chosen
+   * value (they synthesize a one-item selection from it), not as "nothing
+   * selected" — only `null`/`undefined` collapse their internal model to an
+   * empty array. Label-floating and dirty-state both key off that array's
+   * length, so seeding these fields with `""` left their label permanently
+   * floated even when empty, unlike a plain text field. `null` is the actual
+   * "empty" value for this trio of picker types.
+   */
+  function isPickerField(field: FormFieldDef): boolean {
+    return !field.multiple
+      && (field.type === "select" || field.type === "autocomplete" || field.type === "combobox");
+  }
+
   function defaultValueFor(field: FormFieldDef): unknown {
     if (typeof field.default === "function") return (field.default as () => unknown)();
     if (field.default !== undefined) return field.default;
-    return field.type === "chips" || field.multiple ? [] : "";
+    if (field.type === "chips" || field.multiple) return [];
+    return isPickerField(field) ? null : "";
   }
 
   function buildFormState(source?: Record<string, unknown>): Record<string, unknown> {
@@ -43,7 +58,7 @@ export function useFormRenderer(
         ? (source?.[f.nestUnder] as Record<string, unknown> | undefined)
         : source;
       const raw = container ? container[f.key] : undefined;
-      if (raw === undefined || raw === null) {
+      if (raw === undefined || raw === null || (raw === "" && isPickerField(f))) {
         next[f.key] = defaultValueFor(f);
       } else if (f.type === "chips" || f.multiple) {
         next[f.key] = Array.isArray(raw) ? [...raw] : [];
@@ -156,9 +171,13 @@ export function useFormRenderer(
     );
   }
 
+  function isFieldRequired(field: FormFieldDef): boolean {
+    return typeof field.required === "function" ? field.required(form.value) : !!field.required;
+  }
+
   function rulesFor(field: FormFieldDef): ((v: unknown) => true | string)[] {
     const rules: ((v: unknown) => true | string)[] = [];
-    if (field.required) {
+    if (isFieldRequired(field)) {
       rules.push((v: unknown) => {
         const empty = v === undefined || v === null
           || (Array.isArray(v) ? v.length === 0 : String(v).trim() === "");

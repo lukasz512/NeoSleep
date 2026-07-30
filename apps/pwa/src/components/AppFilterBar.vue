@@ -152,6 +152,15 @@ function removeChip(def: FilterDefinition, value: string) {
 </script>
 
 <style scoped>
+/* flex-shrink:0: this sits next to AppEntityList's search field, which has
+   a generous flex-basis that can push the row's total preferred width past
+   what fits — ordinary flex-shrink would then squash this button's own
+   small basis proportionally too, flattening its circle into an oval. Only
+   the search field should ever compress. */
+.app-filter-bar__badge {
+  flex-shrink: 0;
+}
+
 .app-filter-bar__badge :deep(.v-badge__badge) {
   min-width: 18px;
   height: 18px;

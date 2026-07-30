@@ -1,5 +1,5 @@
 import type { FormFieldDef, FormFieldOption } from "../../types/formField";
-import { apiFetch } from "../../utils/api";
+import { apiFetch } from "../../composables/useBffApi";
 import { useConfigStore } from "../../stores/config";
 import { useAuthStore } from "../../stores/auth";
 import { identityFields } from "./identityFields";
@@ -9,7 +9,17 @@ import { identityFields } from "./identityFields";
  * shared Identity block (prefix key overridden to "salutation" — see
  * patientForm.ts's comment, same DB-layer naming convention applies here).
  *
- * Clinic (`organization_id`) picks the practitioner's primary workplace.
+ * Clinic (`organization_id`) picks the practitioner's primary workplace. It's
+ * a `combobox` (not a plain `autocomplete`) so a rep can also type a clinic
+ * name that doesn't exist yet — see isKnownOrganization()/isCreatingNew()
+ * below: once the typed value stops matching any loaded organization, the
+ * field's label/color flip to signal "this creates a new clinic" and the
+ * `new_organization.*` fields (a trimmed-down HCO form) become visible.
+ * The host view (LeadDetailView.vue/LeadsView.vue's onContactSubmit) is
+ * responsible for actually creating that organization first via
+ * POST /api/v1/organization, then submitting the practitioner with the
+ * returned id — see isCreatingNewOrganization()'s export.
+ *
  * `primary_specialty`'s options depend on the chosen clinic: that clinic's
  * own `organization.specialties` (in stored order) are listed first, then
  * the rest of the tenant's specialty vocabulary — and the first inherited
@@ -19,7 +29,8 @@ import { identityFields } from "./identityFields";
  * `region` is hidden and kept in sync live with the selected clinic's own
  * region via the `hcpFormDerive` hook passed as FormRenderer's `derive` prop
  * — not a static open-time default, since the user can change clinics before
- * submitting.
+ * submitting. For a newly-typed clinic (no id yet), it instead follows
+ * `new_organization.region` once that field is filled in.
  */
 
 const INFLUENCE_TIER_OPTIONS = [
@@ -41,12 +52,56 @@ async function loadOrganizationOptions(): Promise<FormFieldOption[]> {
   return organizationsCache.map((o) => ({ title: o.name, value: o.id }));
 }
 
+/**
+ * Matches the combobox's current value against the loaded clinic list — by
+ * id (picked from the dropdown) or, as a safety net against accidental
+ * duplicates, by exact case-insensitive name (typed free text that happens
+ * to already exist, e.g. a lead's institution name pre-filling this field —
+ * see moveToContactsInitialData in LeadDetailView.vue/LeadsView.vue).
+ */
+function isKnownOrganization(value: unknown): { id: string; name: string; region: string } | undefined {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  return organizationsCache.find(
+    (o) => o.id === value || o.name.toLowerCase() === value.trim().toLowerCase(),
+  );
+}
+
+/**
+ * True once the rep has typed a clinic name that matches nothing on file —
+ * drives the organization_id field's label/color and the new_organization.*
+ * fields' visibility. Exported so the host view's submit handler can decide
+ * whether to create the organization first (see the file header comment).
+ */
+export function isCreatingNewOrganization(form: Record<string, unknown>): boolean {
+  const value = form.organization_id;
+  if (typeof value !== "string" || !value.trim()) return false;
+  return !isKnownOrganization(value);
+}
+
 export function hcpFormDerive(form: Record<string, unknown>): Partial<Record<string, unknown>> | void {
   const orgId = form.organization_id as string | undefined;
-  if (!orgId) return;
-  const org = organizationsCache.find((o) => o.id === orgId);
-  if (!org) return;
-  return { region: org.region };
+  const known = isKnownOrganization(orgId);
+  if (known) return { region: known.region };
+
+  const newOrg = form.new_organization as { org_region?: string } | undefined;
+  if (newOrg?.org_region) return { region: newOrg.org_region };
+}
+
+// DB CHECK constraint organization_type_check — mirrors hcoForm.ts's ORG_TYPES.
+async function loadNewOrgTypeOptions() {
+  const configStore = useConfigStore();
+  if (configStore.options.organization_types.length === 0) {
+    await configStore.loadOptions();
+  }
+  return configStore.institutionTypeItems;
+}
+
+async function loadNewOrgRegionOptions() {
+  const configStore = useConfigStore();
+  if (configStore.options.regions.length === 0) {
+    await configStore.loadOptions();
+  }
+  return configStore.regionItems;
 }
 
 async function loadSpecialtyOptionsInheritedFirst(form: Record<string, unknown>): Promise<FormFieldOption[]> {
@@ -57,7 +112,10 @@ async function loadSpecialtyOptionsInheritedFirst(form: Record<string, unknown>)
   const base = configStore.specialtyItems;
 
   const orgId = form.organization_id as string | undefined;
-  if (!orgId) return base;
+  // Skip the round-trip while the rep is still typing a not-yet-existing
+  // clinic name — dependsOn re-fires on every keystroke, and a freshly
+  // typed name is never a real organization id to look up.
+  if (!orgId || isCreatingNewOrganization(form)) return base;
 
   const res = await apiFetch(`/api/v1/organization/${orgId}`, { handleErrors: false });
   if (!res.ok) return base;
@@ -79,9 +137,67 @@ export const hcpFormFields: FormFieldDef[] = [
   ...identity,
   {
     key: "organization_id",
-    type: "autocomplete",
-    labelKey: "user.hcp.form.clinic",
+    type: "combobox",
+    labelKey: (form) => (isCreatingNewOrganization(form) ? "user.hcp.form.clinicNew" : "user.hcp.form.clinic"),
+    color: (form) => (isCreatingNewOrganization(form) ? "success" : undefined),
+    required: true,
     options: loadOrganizationOptions,
+    avatarEntityType: "hco",
+    cols: 12,
+  },
+  {
+    // Prefixed org_* — useFormRenderer's form state is a flat object keyed
+    // by bare `key` regardless of `nestUnder`, so a plain "region"/"phone"
+    // here would silently collide with the practitioner's own hidden
+    // `region` field and identityFields()' `phone` field below.
+    key: "org_type",
+    type: "select",
+    labelKey: "user.hco.form.type",
+    options: loadNewOrgTypeOptions,
+    hidden: (form) => !isCreatingNewOrganization(form),
+    nestUnder: "new_organization",
+    cols: 6,
+  },
+  {
+    key: "org_region",
+    type: "autocomplete",
+    labelKey: "user.hco.form.region",
+    options: loadNewOrgRegionOptions,
+    hidden: (form) => !isCreatingNewOrganization(form),
+    nestUnder: "new_organization",
+    cols: 6,
+  },
+  {
+    key: "org_address_line1",
+    type: "text",
+    labelKey: "user.hco.form.addressLine1",
+    hidden: (form) => !isCreatingNewOrganization(form),
+    nestUnder: "new_organization",
+    cols: 12,
+  },
+  {
+    key: "org_city",
+    type: "text",
+    labelKey: "user.hco.form.city",
+    hidden: (form) => !isCreatingNewOrganization(form),
+    nestUnder: "new_organization",
+    cols: 6,
+  },
+  {
+    key: "org_postal_code",
+    type: "text",
+    labelKey: "user.hco.form.postalCode",
+    hidden: (form) => !isCreatingNewOrganization(form),
+    nestUnder: "new_organization",
+    cols: 6,
+  },
+  {
+    key: "org_phone",
+    type: "phone",
+    labelKey: "user.hco.form.phone",
+    icon: "phone",
+    hidden: (form) => !isCreatingNewOrganization(form),
+    nestUnder: "new_organization",
     cols: 12,
   },
   {
