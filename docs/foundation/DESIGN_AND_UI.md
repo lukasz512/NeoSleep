@@ -30,6 +30,15 @@ This direction validates — rather than replaces — work already piloted on
 `FEATURE_BACKLOG.md` → Design System is mostly about extending that existing system to the
 rest of the app, not inventing a new one.
 
+## Motion & transition inspiration
+
+Sites worth revisiting when we get to page transitions, scroll animation, and micro-interactions
+(mainly relevant to `apps/web`, but the easing/restraint philosophy applies to `apps/pwa` too —
+see "Motion stays restrained" above). Not yet scoped to a stage — parking here until we pick it up.
+
+- [Shopify Editions Winter 2026](https://www.shopify.com/editions/winter2026#retail)
+- [patrickheng.com](https://patrickheng.com)
+
 ## Core principles
 
 1. **Depth via tone, not shadow.** Prefer `surface-container-*` role differences over
@@ -102,18 +111,60 @@ not a `background-color` swap, which would replace the tone instead of tinting i
   `outline` / `outline-variant` / `surface-container-*` roles, `::after` state-layer hover/press.
   Card sizing uses two consecutive Fibonacci numbers deliberately (89px tile / 55px avatar ≈
   golden ratio).
-- **Not yet applied**: buttons, dialogs, inputs, desktop data table, `apps/web`.
+- **Done**: buttons, inputs, dialogs, desktop data table (`theme.scss`):
+  - Buttons: labeled (non-icon) `.v-btn` moved to pill/stadium shape (`--pwa-radius-pill`,
+    9999px) — decision confirmed, matches the Fibonacci-scale card rounding. Icon-only buttons
+    stay circular (Vuetify's own `.v-btn--icon` default, already correct for M3).
+  - Inputs: outlined `.v-field` border now uses `outline-variant` at rest / `outline` when
+    focused, replacing Vuetify's default `currentColor`-at-opacity border — same static gray
+    as the card borders instead of an on-surface tint. **Bugfix**: the rest-state border was
+    initially near-invisible — Vuetify's own `--v-field-border-opacity` (0.38, meant to dim an
+    on-surface `currentColor`) was still applying on top of the already-light `outline-variant`
+    gray, double-dimming it. Forced to full opacity at rest since the color itself is already
+    the subtle element; hover/error still layer their own opacity bump on top unchanged.
+  - Dialogs: `.pwa-form-dialog__card` and the new shared `.pwa-confirm-dialog__card` (nested
+    discard/confirm dialogs, previously a bare `elevation="8"` VCard) both use
+    `surface-container-high` tone + `--pwa-shadow-md` as a supporting cue only.
+  - Desktop data table: `.app-entity-list__table-wrap` border moved from generic
+    `--v-border-color` to `outline-variant`; header row (`.v-data-table__th`) now sits on
+    `surface-container-low` as a distinct tonal layer instead of Vuetify's own header
+    background.
+  - Button padding: labeled `.v-btn` horizontal padding bumped (`padding-inline: 24px` default/
+    large, `16px` small) — the pill shape's rounded ends were eating into Vuetify's original
+    rectangular-button padding, cramping labels like "Cancel" / "Add patient" against the curve.
+- **Done**: `apps/web` (`website-theme.scss`) — same role vocabulary aliased onto existing
+  tokens rather than touched file-by-file: `--website-outline` / `--website-outline-variant` /
+  `--website-surface-container-*` added (light + dark), and `--website-border` (used at ~40
+  call sites across HomeHero, CareersJobCard, EventoView, FindSpecialistView, ...) now aliases
+  `--website-outline-variant` so the whole site picks up the M3 tone from one token change.
+  Buttons (`.home-btn`, `--brand-radius-btn: 9999px`) were already pill-shaped before this
+  rollout started — no change needed there. `surface-container-*` tokens are defined and
+  available but not yet retrofitted onto shadow-elevated cards (bigger per-view redesign,
+  deferred — see open items).
+- **Done**: left nav drawer (`packages/ui/AppShell.vue`, `apps/pwa/AppNavLinks.vue`) — a
+  short-lived custom glassmorphism treatment (backdrop-filter blur, animated glow, spring
+  easing) was tried and reverted per direct feedback ("no custom stuff"). Settled on plain
+  Vuetify-native theming instead: the drawer's `color="surface-container-low"` prop replaces
+  what used to be hand-rolled `--pwa-sidebar-bg` CSS vars, and nav items switched from manual
+  `RouterLink`+`isActive` bookkeeping to `VListItem :to` + `VList color="primary"`, which gives
+  Vuetify's own tonal active-state background/text for free — the "one teal accent" rule
+  applied via the framework instead of custom rgba/color-mix. Desktop and mobile also collapsed
+  from two different drawer components into one `VNavigationDrawer` (`:temporary="mobile"` +
+  `:rail="!mobile && railCollapsed"`), Vuetify's own responsive composition — `apps/web`'s
+  separate hand-rolled `MobileNavDrawer` (swipeable) is intentionally untouched, since
+  `apps/web` doesn't use Vuetify anywhere else and one drawer isn't worth pulling it in for.
 - Tracked in `FEATURE_BACKLOG.md` → Design System → "Material 3 rollout (full app)".
 
 ## Open items for the next pass
 
-- Button shape: primary actions may move to pill/stadium (matches the Fibonacci-scale card
-  rounding and the reference direction) — needs a decision before touching `AppButton`.
 - Uppercase "kicker" label utility (small, letter-spaced, `--pwa-text-secondary`) for section
   metadata — not yet defined as a reusable class.
 - Numeric-display type scale for KPI values (Stage 4 FFM dashboard, rep target tracking) —
   not yet defined.
-- Extend `surface-container-*` roles to dialogs (`.pwa-form-dialog__card`) and the desktop
-  data table, which still use the generic `--v-theme-surface` / plain shadow.
+- `apps/web`: `--website-surface-container-*` tokens exist but aren't yet used — retrofitting
+  shadow-elevated cards (job cards, feature panels, testimonials) to tonal depth is a larger,
+  per-view design pass, not a token-only change like the border rollout.
+- `AppDataTable.vue` appears unreferenced anywhere in the app (superseded by
+  `AppEntityList.vue`) — candidate for removal in a separate cleanup pass, left untouched here.
 
-_Last updated: 2026-07-19_
+_Last updated: 2026-07-20_

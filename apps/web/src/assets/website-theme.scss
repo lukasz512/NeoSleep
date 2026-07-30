@@ -43,7 +43,22 @@
   --website-bg: #ffffff;
   --website-text: var(--neosleep-charcoal-dark);
   --website-text-secondary: var(--neosleep-charcoal-medium);
-  --website-border: #e5e7eb;
+  /*
+   * M3 rollout (see docs/foundation/DESIGN_AND_UI.md): same role vocabulary
+   * as apps/pwa's packages/vuetify/src/index.ts — outline-variant for
+   * low-emphasis dividers/borders, outline for stronger emphasis (focus,
+   * active states), surface-container-* for tonal depth on elevated
+   * surfaces instead of shadow alone. --website-border now aliases
+   * outline-variant so the ~40 existing `var(--website-border)` call sites
+   * across the site (HomeHero, CareersJobCard, EventoView, ...) pick up the
+   * M3 tone automatically — no per-file changes needed for the base case.
+   */
+  --website-outline: #79747E;
+  --website-outline-variant: #e0e0e0;
+  --website-surface-container-low: #f7f7f7;
+  --website-surface-container: #f2f2f2;
+  --website-surface-container-high: #ececec;
+  --website-border: var(--website-outline-variant);
   /* Maps packages/ui's MobileNavDrawer (shared with apps/pwa) onto website
      colors — defined once here since var() references re-resolve live, no
      need to repeat in the dark-theme block below. */
@@ -250,7 +265,12 @@ html[data-theme="dark"] {
   --website-bg: #1c1c1c;
   --website-text: #f5f5f5;
   --website-text-secondary: #999999;
-  --website-border: rgba(255, 255, 255, 0.09);
+  --website-outline: #948F94;
+  --website-outline-variant: #333333;
+  --website-surface-container-low: #1a1a1a;
+  --website-surface-container: #1e1e1e;
+  --website-surface-container-high: #262626;
+  --website-border: var(--website-outline-variant);
   --website-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
   --website-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.55);
   --website-page-frame-bg: #272727;

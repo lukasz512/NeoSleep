@@ -1,18 +1,67 @@
 <template>
   <div class="auth-view">
-    <AuthChrome ref="authChromeRef" />
+    <AuthChrome ref="authChromeRef" :auto-play="false" />
 
-    <AuthCard
-      ref="authCardRef"
-      class="auth-view__card"
-      :style="cardAccentStyle"
-      :back-to="backTo"
-      :title="cardTitle"
-      :loading="isLoading"
-      :step-key="stepKey"
-    >
+    <div ref="cardSlotEl" class="auth-view__card-slot">
+      <!-- Purely decorative, behind the card (z-index below it) — three
+           semi-transparent brand-teal circles, gently pulsing (see
+           auth-view-orb-pulse) so they interweave with the animated page
+           background showing through the gaps, rather than sitting static.
+           Anchor divs own the static position/centering transform; the span
+           inside each owns the continuous per-frame magnetic transform (see
+           useMagneticPointer) — same split as AuthChrome's halo/logo, so the
+           two transforms never fight each other on one element. Smaller
+           circles float more (see script's strengths) — same "lighter things
+           move more" depth logic as the logo/badge split in AuthChrome.
+           Height is locked to the card-slot's size on first paint (see
+           orbsFrameStyle) rather than tracking it live — AuthCard animates
+           its own height on every step change (signin ↔ forgot ↔ reset), and
+           since the anchors below are positioned in % of this box, letting it
+           track that live would drag the orbs along with every step
+           transition instead of leaving them planted behind the card.
+           Each anchor pops in/out via a scale keyframe (see bigOrbPhase etc.
+           and the auth-view-orb-pop-in/-out animations below) — a separate
+           transform-only animation from the span's continuous pulse and
+           magnetic-pointer transform inside, so the three never fight over
+           the same property. -->
+      <div class="auth-view__orbs" aria-hidden="true" :style="orbsFrameStyle">
+        <div
+          class="auth-view__orb-anchor auth-view__orb-anchor--big"
+          :class="orbAnchorPhaseClass(bigOrbPhase)"
+        >
+          <span ref="bigOrbEl" class="auth-view__orb auth-view__orb--big" />
+        </div>
+        <div
+          class="auth-view__orb-anchor auth-view__orb-anchor--medium"
+          :class="orbAnchorPhaseClass(mediumOrbPhase)"
+        >
+          <span ref="mediumOrbEl" class="auth-view__orb auth-view__orb--medium" />
+        </div>
+        <div
+          class="auth-view__orb-anchor auth-view__orb-anchor--small"
+          :class="orbAnchorPhaseClass(smallOrbPhase)"
+        >
+          <span ref="smallOrbEl" class="auth-view__orb auth-view__orb--small" />
+        </div>
+      </div>
+
+      <AuthCard
+        ref="authCardRef"
+        class="auth-view__card"
+        :style="cardAccentStyle"
+        :back-to="backTo"
+        :title="cardTitle"
+        :loading="isLoading"
+        :step-key="stepKey"
+        :auto-play="false"
+      >
       <div v-if="step === 'signin'" class="auth-view__body">
         <h1 class="auth-view__title-visually-hidden">{{ t('user.login.title') }}</h1>
+        <!-- Not the semantic <h1> above (that stays screen-reader-only, same
+             wording it always had) — this is the visible brand heading, a
+             plain paragraph styled like one rather than a second landmark
+             heading on the page. -->
+        <p class="auth-view__heading">{{ t('user.login.heading') }}</p>
 
         <VAlert
           v-if="loginFlow.errorKey.value"
@@ -228,21 +277,35 @@
         <div v-else class="auth-view__validating" aria-hidden="true" />
       </div>
     </AuthCard>
+    </div>
+
+    <img
+      ref="pwaBadgeEl"
+      :src="pwaBadgeUrl"
+      :alt="t('user.login.pwaBadge')"
+      class="auth-view__pwa-badge"
+      :class="{ 'auth-view__pwa-badge--visible': badgeVisible }"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, inject, onMounted, nextTick } from "vue";
+import { ref, computed, watch, inject, onMounted, onBeforeUnmount, nextTick } from "vue";
 import type { Ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 import { brandColors } from "@brand/colors";
+import { BRAND_PWA_BADGE_URL } from "@brand/logos";
 import { createUseLoginFlow } from "../composables/useLoginFlow";
 import { createUseForgotPasswordFlow } from "../composables/useForgotPasswordFlow";
 import { createUseResetPasswordFlow } from "../composables/useResetPasswordFlow";
+import { useMagneticPointer } from "../composables/useMagneticPointer";
+import { AUTH_BACKGROUND_EXIT_KEY } from "../composables/authBackgroundExit";
 import type { ApiFetchOptions } from "@api";
 import AuthChrome from "../components/AuthChrome.vue";
 import AuthCard from "../components/AuthCard.vue";
+
+const pwaBadgeUrl = BRAND_PWA_BADGE_URL;
 
 type ApiFetchFn = (path: string, options?: ApiFetchOptions) => Promise<Response>;
 type Step = "signin" | "forgot" | "sent" | "reset";
@@ -309,10 +372,130 @@ const showResetConfirmPassword = ref(false);
 const signinForm = ref<{ validate: () => Promise<{ valid: boolean }> } | null>(null);
 const forgotForm = ref<{ validate: () => Promise<{ valid: boolean }> } | null>(null);
 const resetForm = ref<{ validate: () => Promise<{ valid: boolean }> } | null>(null);
-const authCardRef = ref<{ playExit: () => Promise<void> } | null>(null);
-const authChromeRef = ref<{ playExit: () => Promise<void> } | null>(null);
+const authCardRef = ref<{ playEnter: () => Promise<void>; playExit: () => Promise<void> } | null>(null);
+const authChromeRef = ref<{ playEnter: () => Promise<void>; playExit: () => Promise<void> } | null>(null);
 const loginEmailFieldRef = ref<{ $el?: HTMLElement } | null>(null);
 const forgotEmailFieldRef = ref<{ $el?: HTMLElement } | null>(null);
+
+// Decorative orbs behind the card — small floats the most, medium a middle
+// amount, big the least, same "lighter things move more" depth logic as the
+// logo/badge split in AuthChrome.
+const bigOrbEl = ref<HTMLElement | null>(null);
+const mediumOrbEl = ref<HTMLElement | null>(null);
+const smallOrbEl = ref<HTMLElement | null>(null);
+useMagneticPointer(bigOrbEl, { strength: 8, ease: 0.06 });
+useMagneticPointer(mediumOrbEl, { strength: 16, ease: 0.11 });
+useMagneticPointer(smallOrbEl, { strength: 26, ease: 0.18 });
+
+// The orb anchors below are positioned in % of .auth-view__orbs' own box, so
+// that box needs a stable height — but its parent (.auth-view__card-slot)
+// wraps AuthCard, which animates its own height on every step change (see
+// AuthCard.vue's viewportHeight). Left alone, the orbs box would inherit that
+// live height and drag the orbs along with each signin/forgot/reset
+// transition. Instead, measure the card-slot's box once on first paint and
+// freeze it — the observer disconnects itself after the first reading, so
+// later step transitions never touch orbsFrameHeight again.
+const cardSlotEl = ref<HTMLElement | null>(null);
+const orbsFrameHeight = ref("auto");
+const orbsFrameStyle = computed(() => ({ height: orbsFrameHeight.value }));
+let orbsResizeObserver: ResizeObserver | null = null;
+
+onMounted(() => {
+  if (!cardSlotEl.value) return;
+  orbsResizeObserver = new ResizeObserver((entries) => {
+    const height = entries[0]?.contentRect.height;
+    if (!height) return;
+    orbsFrameHeight.value = `${Math.ceil(height)}px`;
+    orbsResizeObserver?.disconnect();
+    orbsResizeObserver = null;
+  });
+  orbsResizeObserver.observe(cardSlotEl.value);
+});
+
+onBeforeUnmount(() => orbsResizeObserver?.disconnect());
+
+// Barely-there — "bardzo malutko" — unlike the logo/badge pair in AuthChrome,
+// which float noticeably more.
+const pwaBadgeEl = ref<HTMLElement | null>(null);
+useMagneticPointer(pwaBadgeEl, { strength: 4, ease: 0.14 });
+
+// Whole-screen entrance/exit choreography: orbs (big → medium → small), then
+// the card, then the logo, then the PWA badge — each one only starts once
+// the previous has visibly settled, rather than everything popping in at
+// once. playExitSequence() runs the same list in reverse (badge → logo →
+// card → orbs) on successful login, plus the shared page background (see
+// authBackgroundExit, injected from PublicLayout) — router.push only fires
+// once the whole thing has faded, see handleSignIn.
+//
+// Each orb's own "life" comes from a scale keyframe rather than a plain fade
+// (see auth-view-orb-pop-in/-out in <style>): grows from 0 past its resting
+// size to a slight overshoot before settling back — pop-out mirrors that,
+// growing a touch bigger before shrinking away to nothing.
+type OrbPhase = "hidden" | "enter" | "exit";
+const bigOrbPhase = ref<OrbPhase>("hidden");
+const mediumOrbPhase = ref<OrbPhase>("hidden");
+const smallOrbPhase = ref<OrbPhase>("hidden");
+const badgeVisible = ref(false);
+const authBackgroundExit = inject(AUTH_BACKGROUND_EXIT_KEY, undefined);
+
+function orbAnchorPhaseClass(phase: OrbPhase): Record<string, boolean> {
+  return {
+    "auth-view__orb-anchor--enter": phase === "enter",
+    "auth-view__orb-anchor--exit": phase === "exit",
+  };
+}
+
+// The gaps between each orb starting, and how long each one's own pop
+// animation takes, all come from the Fibonacci sequence (in ms) instead of
+// evenly-spaced numbers — a growing, organic rhythm rather than a metronome.
+const FIB = { orbGap1: 89, orbGap2: 144, popInDuration: 610, popOutDuration: 377 };
+const BADGE_ENTER_DELAY = 150;
+const BADGE_EXIT_DURATION = 250;
+
+const prefersReducedMotion =
+  typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+onMounted(async () => {
+  if (prefersReducedMotion) {
+    bigOrbPhase.value = "enter";
+    mediumOrbPhase.value = "enter";
+    smallOrbPhase.value = "enter";
+    badgeVisible.value = true;
+    return;
+  }
+  bigOrbPhase.value = "enter";
+  await wait(FIB.orbGap1);
+  mediumOrbPhase.value = "enter";
+  await wait(FIB.orbGap2);
+  smallOrbPhase.value = "enter";
+  await wait(FIB.popInDuration);
+  await authCardRef.value?.playEnter();
+  await authChromeRef.value?.playEnter();
+  await wait(BADGE_ENTER_DELAY);
+  badgeVisible.value = true;
+});
+
+async function playExitSequence(): Promise<void> {
+  if (prefersReducedMotion) {
+    await authBackgroundExit?.();
+    return;
+  }
+  badgeVisible.value = false;
+  await wait(BADGE_EXIT_DURATION);
+  await authChromeRef.value?.playExit();
+  await authCardRef.value?.playExit();
+  smallOrbPhase.value = "exit";
+  await wait(FIB.orbGap2);
+  mediumOrbPhase.value = "exit";
+  await wait(FIB.orbGap1);
+  bigOrbPhase.value = "exit";
+  await wait(FIB.popOutDuration);
+  await authBackgroundExit?.();
+}
 
 /** Inserts "@" at the caret in an email field — a no-op once one is already present (an email has at most one). */
 function insertAtSign(emailModel: Ref<string>, fieldRef: Ref<{ $el?: HTMLElement } | null>) {
@@ -362,13 +545,11 @@ async function handleSignIn() {
   if (!signinForm.value) return;
   const { valid } = await signinForm.value.validate();
   if (!valid) return;
-  // Retract in order — logo first, then the card collapses to its center —
-  // so the app underneath only appears once the whole auth screen is gone.
+  // Retract everything (see playExitSequence) before router.push actually
+  // navigates away, so the app underneath only appears once the whole auth
+  // screen — badge, logo, card, orbs, page background — has faded out.
   await loginFlow.submit({
-    onSuccess: async () => {
-      await authChromeRef.value?.playExit();
-      await authCardRef.value?.playExit();
-    },
+    onSuccess: playExitSequence,
   });
 }
 
@@ -417,14 +598,236 @@ const cardAccentStyle = {
   gap: 16px;
 }
 
+/* Shared positioning box for the card and the decorative orbs behind it
+   (see .auth-view__orbs) — orbs size themselves as a percentage of this, so
+   they scale with the card instead of needing separate fixed px math. */
+.auth-view__card-slot {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+}
+
 .auth-view__card {
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 420px;
   /* No background here — VCard already themes its own surface color (light
      vs dark) via --v-theme-surface; a fixed white would fight that. */
   border: 1px solid color-mix(in srgb, var(--auth-view-card-accent) 28%, transparent);
+}
+
+/* Behind the card (z-index: 0 < the card's 1), overflowing its box on
+   purpose so the three circles peek out around its edges. Height comes from
+   orbsFrameStyle (frozen on first paint, see script), not inset:0 — this box
+   must NOT track .auth-view__card-slot's live height, which animates on
+   every step change. */
+.auth-view__orbs {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* Static position/size only — the magnetic transform lives on the .auth-view__orb
+   span inside each (see script), never on the same element as this one.
+   Entrance/exit "life" comes from a scale keyframe here too (see
+   auth-view-orb-pop-in/-out below) rather than on the span: the span's own
+   auth-view-orb-pulse animation touches transform every frame too (for the
+   magnetic pointer), which would fight a keyframe placed on that element. */
+.auth-view__orb-anchor {
+  position: absolute;
+  aspect-ratio: 1;
+  transform: scale(0);
+}
+
+.auth-view__orb-anchor--big {
+  width: 150%;
+  top: 56%;
+  left: 70%;
+  transform: translate(-50%, -50%) scale(0);
+}
+
+.auth-view__orb-anchor--medium {
+  width: 78%;
+  bottom: 35%;
+  left: -17%;
+}
+
+.auth-view__orb-anchor--small {
+  width: 102%;
+  top: -11%;
+  left: -48%;
+}
+
+/* Grows past its resting size (105%) before settling back to 100% — a small
+   bounce rather than a flat fade, so the orbs read as more alive while they
+   sit there. --big carries its own centering translate (see above), so it
+   gets its own keyframes that keep that translate at every step instead of
+   one transform declaration clobbering the other. */
+.auth-view__orb-anchor--enter {
+  animation: auth-view-orb-pop-in 610ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.auth-view__orb-anchor--big.auth-view__orb-anchor--enter {
+  animation-name: auth-view-orb-pop-in-centered;
+}
+
+/* Mirrors the entrance the other way — grows to 110% first, then shrinks
+   away to nothing, instead of just fading out. */
+.auth-view__orb-anchor--exit {
+  animation: auth-view-orb-pop-out 377ms cubic-bezier(0.4, 0, 0.7, 0.4) forwards;
+}
+
+.auth-view__orb-anchor--big.auth-view__orb-anchor--exit {
+  animation-name: auth-view-orb-pop-out-centered;
+}
+
+@keyframes auth-view-orb-pop-in {
+  0% {
+    transform: scale(0);
+  }
+  65% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes auth-view-orb-pop-in-centered {
+  0% {
+    transform: translate(-50%, -50%) scale(0);
+  }
+  65% {
+    transform: translate(-50%, -50%) scale(1.05);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes auth-view-orb-pop-out {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(0);
+  }
+}
+
+@keyframes auth-view-orb-pop-out-centered {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  35% {
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-view__orb-anchor--enter {
+    animation: none;
+    transform: scale(1);
+  }
+
+  .auth-view__orb-anchor--big.auth-view__orb-anchor--enter {
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  .auth-view__orb-anchor--exit {
+    animation: none;
+    transform: scale(0);
+  }
+
+  .auth-view__orb-anchor--big.auth-view__orb-anchor--exit {
+    transform: translate(-50%, -50%) scale(0);
+  }
+}
+
+.auth-view__orb {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgb(var(--v-theme-primary));
+  animation: auth-view-orb-pulse 8s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+.auth-view__orb--big {
+  opacity: 0.42;
+}
+
+.auth-view__orb--medium {
+  /* Lighter than the other two (which stay plain rgb(var(--v-theme-primary)))
+     so the three don't read as one flat, same-toned shape. */
+  background: color-mix(in srgb, rgb(var(--v-theme-primary)) 55%, white 45%);
+  opacity: 0.5;
+  animation-delay: -1.5s;
+}
+
+.auth-view__orb--small {
+  opacity: 0.55;
+  animation-delay: -3s;
+}
+
+/* Gentle breathing, not synced 1:1 with the page background's own flow
+   animation (they'd fight for attention) — just a similar unhurried pace,
+   staggered per orb (animation-delay above) so the three drift out of phase.
+   Raised from the original 0.22–0.5 range so the orbs cover the photo/gradient
+   underneath more (see PublicLayout.vue) — capped below 0.7 so even at their
+   most opaque point, what's behind still shows through a little. */
+@keyframes auth-view-orb-pulse {
+  0% {
+    opacity: 0.34;
+  }
+  100% {
+    opacity: 0.68;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-view__orb {
+    animation: none;
+  }
+}
+
+/* Below the card now, not next to the logo (see AuthChrome) — logo, card,
+   badge, top to bottom. Magnetic transform target (see useMagneticPointer in
+   <script>) — written to directly every frame, so it stays free of any CSS
+   transition of its own. */
+.auth-view__pwa-badge {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  height: 24px;
+  width: auto;
+  object-fit: contain;
+  opacity: 0;
+  will-change: transform;
+  /* opacity only, not transform — transform is written to directly every
+     frame by the magnetic pointer above; transitioning it too would make
+     that continuous per-frame tracking lag/animate instead of following the
+     pointer 1:1. */
+  transition: opacity 0.3s ease-out;
+}
+
+.auth-view__pwa-badge--visible {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-view__pwa-badge {
+    transition: none;
+  }
 }
 
 .auth-view__body {
@@ -442,6 +845,16 @@ const cardAccentStyle = {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+.auth-view__heading {
+  margin: 0 0 20px;
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  text-align: center;
+  color: rgb(var(--v-theme-primary));
 }
 
 .auth-view__subtitle {

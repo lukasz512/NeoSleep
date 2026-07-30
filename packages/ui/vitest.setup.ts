@@ -8,7 +8,7 @@ class ResizeObserverStub {
 globalThis.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObserver;
 
 // jsdom's canvas 2D context isn't implemented (would need the native `canvas`
-// package) and logs "not implemented" noise when read — FluidCursorTrail
+// package) and logs "not implemented" noise when read — AuthDotGridBackground
 // calls getContext("2d") on mount, so stub it to return null instead.
 if (typeof HTMLCanvasElement !== "undefined") {
   HTMLCanvasElement.prototype.getContext = (() => null) as typeof HTMLCanvasElement.prototype.getContext;

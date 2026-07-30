@@ -14,6 +14,7 @@ $pwa-touch-target-desktop: 40px; // Desktop: buttons can be slightly smaller
 $pwa-font-sans: system-ui, -apple-system, sans-serif;
 $pwa-radius: 10px;
 $pwa-radius-sm: 2px; /* Small elements (e.g. loader bars) */
+$pwa-radius-pill: 9999px; /* M3 pill/stadium shape: primary buttons, status chips */
 $pwa-modal-radius: 16px; /* Modals/dialogs: slightly larger for prominence */
 $pwa-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
 $pwa-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
@@ -35,6 +36,19 @@ $pwa-fib-xl: 34px;
 $pwa-fib-xxl: 55px;
 $pwa-fib-3xl: 89px;
 
+/* Fibonacci timing scale (ms) — same sequence, temporal axis. Staggers
+   multi-stage transitions (e.g. AppEntityList's mobile search expand/collapse)
+   so delays/durations compound naturally instead of reading as arbitrary,
+   mechanical numbers. */
+$pwa-fib-t-2xs: 21ms;
+$pwa-fib-t-xs: 34ms;
+$pwa-fib-t-sm: 55ms;
+$pwa-fib-t-md: 89ms;
+$pwa-fib-t-lg: 144ms;
+$pwa-fib-t-xl: 233ms;
+$pwa-fib-t-2xl: 377ms;
+$pwa-fib-t-3xl: 987ms;
+
 :root {
   --pwa-fib-xs: #{$pwa-fib-xs};
   --pwa-fib-sm: #{$pwa-fib-sm};
@@ -43,6 +57,15 @@ $pwa-fib-3xl: 89px;
   --pwa-fib-xl: #{$pwa-fib-xl};
   --pwa-fib-xxl: #{$pwa-fib-xxl};
   --pwa-fib-3xl: #{$pwa-fib-3xl};
+  --pwa-fib-t-2xs: #{$pwa-fib-t-2xs};
+  --pwa-fib-t-xs: #{$pwa-fib-t-xs};
+  --pwa-fib-t-sm: #{$pwa-fib-t-sm};
+  --pwa-fib-t-md: #{$pwa-fib-t-md};
+  --pwa-fib-t-lg: #{$pwa-fib-t-lg};
+  --pwa-fib-t-xl: #{$pwa-fib-t-xl};
+  --pwa-fib-t-2xl: #{$pwa-fib-t-2xl};
+  --pwa-fib-t-3xl: #{$pwa-fib-t-3xl};
+  --pwa-radius-pill: #{$pwa-radius-pill};
 }
 
 :root,
@@ -63,25 +86,13 @@ $pwa-fib-3xl: 89px;
   --pwa-border: #e0e0e0;
   --pwa-text: #212121;
   --pwa-text-secondary: #666666;
-  /* Sidebar: iOS/Finder-like, slightly muted in light */
-  --pwa-sidebar-bg: #f0f0f0;
-  --pwa-sidebar-border: #e0e0e0;
+  /* App-bar logo text color (AppLogo.vue) — the drawer itself no longer
+     shows a logo, this is bar-only. */
   --pwa-sidebar-text: #1a1a1a;
-  --pwa-sidebar-text-secondary: #5c5c5c;
-  --pwa-sidebar-hover: rgba(0, 0, 0, 0.06);
-  --pwa-sidebar-active-bg: color-mix(in srgb, #{brand.$pwa-brand-primary} 12%, transparent);
-  --pwa-sidebar-active-text: #ffffff;
-  --pwa-sidebar-logo-bg: rgba(0, 0, 0, 0.06);
-  /* Maps packages/ui's MobileNavDrawer (shared with apps/web) onto the
-     sidebar palette — defined once here since var() references re-resolve
-     live against whichever [data-theme] block is active, no need to repeat
-     in the dark-theme block below. */
-  --mobile-nav-drawer-bg: var(--pwa-sidebar-bg);
-  --mobile-nav-drawer-text: var(--pwa-sidebar-text);
-  --mobile-nav-drawer-border: var(--pwa-sidebar-border);
   /* Maps packages/ui's MobileBottomNavBar/MobileBottomNavItem (shared with
-     apps/web) onto the main surface palette — same live-re-resolve reasoning
-     as --mobile-nav-drawer-* above. */
+     apps/web) onto the main surface palette — defined once here since var()
+     references re-resolve live against whichever [data-theme] block is
+     active, no need to repeat in the dark-theme block below. */
   --mobile-bottom-nav-bg: var(--pwa-bg);
   --mobile-bottom-nav-border: var(--pwa-border);
   --mobile-bottom-nav-item-color: var(--pwa-text-secondary);
@@ -90,8 +101,6 @@ $pwa-fib-3xl: 89px;
   --pwa-drawer-max-height: 70vh;
   --pwa-topbar-height: 56px;
   --pwa-content-padding-x: 16px;
-  --pwa-sidebar-gap: 16px;
-  --pwa-sidebar-margin: 1rem;
   --pwa-table-row-min-height: 52px;
   --pwa-table-header-bg: #f5f5f5;
   --pwa-table-header-text: #424242;
@@ -116,19 +125,10 @@ $pwa-fib-3xl: 89px;
   --pwa-border: #333333;
   --pwa-text: #e0e0e0;
   --pwa-text-secondary: #9e9e9e;
-  --pwa-sidebar-bg: #262626;
-  --pwa-sidebar-border: #3a3a3a;
   --pwa-sidebar-text: #f5f5f5;
-  --pwa-sidebar-text-secondary: #a0a0a0;
-  --pwa-sidebar-hover: rgba(255, 255, 255, 0.08);
-  --pwa-sidebar-active-bg: color-mix(in srgb, #{brand.$pwa-brand-primary-on-dark} 20%, transparent);
-  --pwa-sidebar-active-text: #ffffff;
-  --pwa-sidebar-logo-bg: rgba(255, 255, 255, 0.06);
   --pwa-drawer-max-height: 70vh;
   --pwa-topbar-height: 56px;
   --pwa-content-padding-x: 16px;
-  --pwa-sidebar-gap: 16px;
-  --pwa-sidebar-margin: 1rem;
   --pwa-table-row-min-height: 52px;
   --pwa-table-header-bg: #1e1e1e;
   --pwa-table-header-text: #e0e0e0;
@@ -179,6 +179,25 @@ body {
 }
 
 /*
+ * M3 spec colors for the outlined text field variant: enabled border =
+ * `outline` role, focused border = `primary`, both at full opacity (M3
+ * "Outlined text field" states — see m3.material.io/components/text-fields).
+ * Vuetify's own un-themed default doesn't actually implement this: it colors
+ * the border via `currentColor` (on-surface) at a variable opacity
+ * (~38%/87%/100% for rest/hover/focus), which reads much lighter than the
+ * spec and was nearly invisible against this app's light surfaces. Forcing
+ * `outline`/`primary` at full opacity here is the fix — not a customization
+ * away from M3, but the actual M3 default Vuetify's theme was missing.
+ */
+.v-field--variant-outlined .v-field__outline {
+  color: rgb(var(--v-theme-outline));
+  --v-field-border-opacity: 1;
+}
+.v-field--variant-outlined.v-field--focused .v-field__outline {
+  color: rgb(var(--v-theme-primary));
+}
+
+/*
  * Compact single/two-value pickers (VSelect, VCombobox — e.g. identityFields'
  * prefix, hcpForm's influence tier, PhoneField's area code) read as more
  * "chooser" than "search" at their narrow width, so Vuetify's default
@@ -205,6 +224,26 @@ body {
 .v-btn {
   transition: box-shadow 0.2s ease, background-color 0.2s ease, opacity 0.2s ease;
   transform: none !important;
+}
+
+/* M3 pill/stadium shape for labeled buttons (Fibonacci-scale rounding
+   direction confirmed in docs/foundation/DESIGN_AND_UI.md). Icon-only
+   buttons are excluded — Vuetify's own `.v-btn--icon` is already circular,
+   which is the correct M3 shape for that case, not this rule. */
+.v-btn:not(.v-btn--icon) {
+  border-radius: var(--pwa-radius-pill, 9999px) !important;
+}
+
+/* Vuetify's default horizontal padding was sized for a rectangular button —
+   on a full pill the rounded ends eat into that same padding, so labels
+   (e.g. "Cancel", "Add patient") read as pressed right up against the
+   curve. Bumped a step up per size, small kept slightly tighter than
+   default/large so compact toolbar buttons don't balloon. */
+.v-btn:not(.v-btn--icon):not(.v-btn--size-x-small):not(.v-btn--size-small) {
+  padding-inline: 24px !important;
+}
+.v-btn:not(.v-btn--icon).v-btn--size-small {
+  padding-inline: 16px !important;
 }
 
 /*
@@ -318,9 +357,26 @@ a:hover {
 .pwa-form-dialog__content {
   border-radius: var(--pwa-modal-radius, 16px) !important;
 }
+/* M3: depth via tone (surface-container-high, the highest tonal layer),
+   not Vuetify's default elevated box-shadow — --pwa-shadow-md stays only as
+   a supporting cue, per docs/foundation/DESIGN_AND_UI.md principle 1. */
 .pwa-form-dialog__card {
   border-radius: var(--pwa-modal-radius, 16px) !important;
   overflow: hidden;
+  background: rgb(var(--v-theme-surface-container-high)) !important;
+  box-shadow: var(--pwa-shadow-md) !important;
+}
+
+/* Small confirm/discard dialogs nested inside a form dialog (see the
+   .pwa-discard-dialog z-index note below) previously stayed at Vuetify's
+   default `elevation="8"` card — heavy shadow, no tone, no modal radius.
+   Shares the same tonal + radius treatment as the parent form dialog so the
+   two don't read as two different dialog systems. */
+.pwa-confirm-dialog__card {
+  border-radius: var(--pwa-modal-radius, 16px) !important;
+  overflow: hidden;
+  background: rgb(var(--v-theme-surface-container-high)) !important;
+  box-shadow: var(--pwa-shadow-md) !important;
 }
 .pwa-form-dialog__card .v-card-title {
   padding: 32px 24px !important;
@@ -330,6 +386,14 @@ a:hover {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+/* Without an explicit size the raw <svg> falls back to the browser's
+   intrinsic 300x150 default and gets clipped to nothing by the button's
+   overflow — see the identical note on .pwa-form-field-icon below. */
+.pwa-form-dialog__close-icon {
+  width: 20px;
+  height: 20px;
+  color: rgb(var(--v-theme-on-surface));
 }
 .pwa-form-dialog__card .v-card-text {
   padding: 24px !important;
