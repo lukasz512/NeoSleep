@@ -1,5 +1,5 @@
 <template>
-  <AnimatedCard ref="animatedCardRef" class="auth-card" :loading="loading">
+  <AnimatedCard ref="animatedCardRef" class="auth-card" :loading="loading" :auto-play="autoPlay">
     <div v-if="backTo || title" class="auth-card__back-row">
       <VBtn
         v-if="backTo"
@@ -36,7 +36,7 @@ import { ref, onBeforeUnmount } from "vue";
 import { useI18n } from "vue-i18n";
 import AnimatedCard from "./AnimatedCard.vue";
 
-const { backTo = null, title = null, loading = false, stepKey } = defineProps<{
+const { backTo = null, title = null, loading = false, stepKey, autoPlay = true } = defineProps<{
   /** Route path for the back arrow, rendered inside the card's top-left corner. Omit to hide it. */
   backTo?: string | null;
   /** Step title, rendered in the same row as the back arrow (not inside the slot) so the two are
@@ -46,11 +46,13 @@ const { backTo = null, title = null, loading = false, stepKey } = defineProps<{
   loading?: boolean;
   /** Changing this key crossfades the slot content and animates the card to the new content's height. */
   stepKey: string | number;
+  /** False lets a parent stage this card's entrance explicitly via playEnter() instead of it firing on mount — see AuthView. */
+  autoPlay?: boolean;
 }>();
 
 const { t } = useI18n();
 
-const animatedCardRef = ref<{ playExit: () => Promise<void> } | null>(null);
+const animatedCardRef = ref<{ playEnter: () => Promise<void>; playExit: () => Promise<void> } | null>(null);
 const viewportHeight = ref("auto");
 
 // Keeps the card's height in sync with whichever step is currently mounted —
@@ -72,6 +74,7 @@ function setStepRef(el: Element | null) {
 onBeforeUnmount(() => resizeObserver?.disconnect());
 
 defineExpose({
+  playEnter: () => animatedCardRef.value?.playEnter(),
   playExit: () => animatedCardRef.value?.playExit(),
 });
 </script>

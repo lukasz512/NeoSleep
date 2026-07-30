@@ -31,19 +31,35 @@
         <slot name="actions" />
       </div>
     </div>
-    <div v-else-if="!loading" class="view-item__empty-state">
-      <p class="view-item__empty-title">{{ notFoundLabel }}</p>
-      <AppButton
-        icon
-        variant="flat"
-        size="large"
-        :to="backRoute"
-        class="view-item__back-btn view-item__back-btn--no-border"
-        :title="backLabel"
-        :aria-label="backLabel"
-      >
-        <AppIcon name="arrow-left" class="view-item__back-icon" />
-      </AppButton>
+    <div v-else-if="!loading && loadError" class="view-item__state-wrap">
+      <AppStateView :title="t('app.errorState.title')" :subtitle="t('app.errorState.subtitle')">
+        <template #icon>
+          <AppIcon name="sad-cloud" />
+        </template>
+        <template #cta>
+          <AppButton color="primary" variant="outlined" size="large" class="view-item__state-cta" @click="$emit('retry')">
+            <template #prepend>
+              <AppIcon name="refresh" class="view-item__state-cta-icon" />
+            </template>
+            {{ t("app.errorState.refresh") }}
+          </AppButton>
+        </template>
+      </AppStateView>
+    </div>
+    <div v-else-if="!loading" class="view-item__state-wrap">
+      <AppStateView :title="notFoundLabel" :subtitle="t('app.common.notFoundSubtitle')">
+        <template #icon>
+          <AppIcon name="search" />
+        </template>
+        <template #cta>
+          <AppButton color="primary" variant="outlined" size="large" :to="backRoute" class="view-item__state-cta">
+            <template #prepend>
+              <AppIcon name="arrow-left" class="view-item__state-cta-icon" />
+            </template>
+            {{ backLabel }}
+          </AppButton>
+        </template>
+      </AppStateView>
     </div>
     <div v-else class="view-item__loading">
       <AppLoadingState />
@@ -53,10 +69,14 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
+import { useI18n } from "vue-i18n";
 import type { RouteLocationRaw } from "vue-router";
+import { AppStateView } from "@ui";
 import AppButton from "./AppButton.vue";
 import AppIcon from "./AppIcon.vue";
 import AppLoadingState from "./AppLoadingState.vue";
+
+const { t } = useI18n();
 
 defineProps<{
   /** Whether item data is loaded and present. */
@@ -71,6 +91,18 @@ defineProps<{
   title?: string;
   /** Label when item not found. */
   notFoundLabel: string;
+  /**
+   * True when the load failed for a reason other than a genuine 404 (network
+   * down, 500, ...) — renders a distinct "connection problem" + retry state
+   * instead of "not found", so a temporary outage never reads as "this
+   * record doesn't exist". See LeadDetailView.vue's loadLead() etc. for how
+   * callers set this apart from a real 404.
+   */
+  loadError?: boolean;
+}>();
+
+defineEmits<{
+  retry: [];
 }>();
 </script>
 
@@ -177,9 +209,24 @@ defineProps<{
   gap: 12px;
 }
 
-.view-item__empty-state {
-  padding: 24px;
-  text-align: center;
+/* AppStateView (from @ui) owns the icon/title/subtitle/orbs/animation for
+   both branches above — this wrapper only supplies the same full-page
+   min-height the old bespoke empty state had. */
+.view-item__state-wrap {
+  min-height: 50vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.view-item__state-cta {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.view-item__state-cta-icon {
+  width: 20px;
+  height: 20px;
 }
 
 .view-item__loading {
@@ -187,12 +234,6 @@ defineProps<{
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.view-item__empty-title {
-  margin: 0 0 16px 0;
-  font-size: 1.125rem;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
 /*

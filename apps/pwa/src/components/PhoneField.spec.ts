@@ -60,4 +60,12 @@ describe("PhoneField", () => {
     expect(source).toContain('from "./FlagIcon.vue"');
     expect(source).toContain("currentFlagCountry");
   });
+
+  it("disables return-object on the VCombobox so selecting a suggestion emits the code string, not the raw item", () => {
+    // Vuetify's VCombobox defaults to returnObject: true, which would make
+    // onAreaCodeInput receive { code, label, country } instead of "+52" on
+    // selection, collapsing areaCode to "+" and unmounting the flag icon.
+    const source = getSource();
+    expect(source).toContain(':return-object="false"');
+  });
 });

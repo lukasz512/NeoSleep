@@ -14,7 +14,10 @@
 <script setup lang="ts">
 import { onMounted, nextTick, ref } from "vue";
 
-withDefaults(defineProps<{ loading?: boolean }>(), { loading: false });
+// autoPlay=false lets a parent orchestrate this card's entrance alongside
+// other elements (see AuthView, which stages orbs → card → logo → badge)
+// instead of it firing the moment this component mounts.
+const { loading = false, autoPlay = true } = defineProps<{ loading?: boolean; autoPlay?: boolean }>();
 
 // Generic entrance/exit choreography for any card: the card itself appears
 // first, then its content follows a beat later; playExit() reverses that
@@ -36,7 +39,7 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-onMounted(async () => {
+async function playEnter(): Promise<void> {
   if (prefersReducedMotion) {
     cardVisible.value = true;
     contentVisible.value = true;
@@ -46,6 +49,11 @@ onMounted(async () => {
   cardVisible.value = true;
   await wait(CONTENT_DELAY);
   contentVisible.value = true;
+  await wait(CONTENT_DURATION);
+}
+
+onMounted(() => {
+  if (autoPlay) playEnter();
 });
 
 async function playExit(): Promise<void> {
@@ -56,7 +64,7 @@ async function playExit(): Promise<void> {
   await wait(CARD_DURATION);
 }
 
-defineExpose({ playExit });
+defineExpose({ playEnter, playExit });
 </script>
 
 <style scoped>

@@ -3,7 +3,13 @@
        so it claims the full top-of-viewport width; the drawer then registers
        below it, on the left, rather than the app-bar being squeezed to the
        right of a full-height drawer. -->
-  <VAppBar flat :border="mobile ? false : 'b'" :height="56" class="app-shell__bar">
+  <VAppBar
+    flat
+    :border="mobile ? false : 'b'"
+    :height="56"
+    class="app-shell__bar"
+    :class="{ 'app-shell__bar--visible': shellVisible }"
+  >
     <template v-if="mobile" #prepend>
       <VBtn
         icon
@@ -33,27 +39,20 @@
     </template>
   </VAppBar>
 
-  <MobileNavDrawer v-if="mobile" v-model="drawerOpenModel" :width="width" :aria-label="menuLabel">
-    <template #header>
-      <slot name="logo" :collapsed="false" location="nav" />
-    </template>
-    <slot name="nav" />
-    <template #footer>
-      <slot name="drawer-footer" />
-    </template>
-  </MobileNavDrawer>
-
   <VNavigationDrawer
-    v-else
     v-model="drawerOpenModel"
-    :rail="railCollapsed"
-    permanent
+    :permanent="!mobile"
+    :temporary="mobile"
+    :rail="!mobile && railCollapsed"
     :width="width"
     :rail-width="railWidth"
+    :aria-label="menuLabel"
+    color="surface-container-low"
     class="app-shell__nav"
+    :class="{ 'app-shell__nav--visible': contentVisible }"
   >
     <div class="app-shell__logo">
-      <slot name="logo" :collapsed="railCollapsed" location="nav" />
+      <slot name="logo" :collapsed="!mobile && railCollapsed" location="nav" />
     </div>
     <slot name="nav" />
 
@@ -65,11 +64,22 @@
     </template>
   </VNavigationDrawer>
 
-  <VMain class="app-shell__main" :class="{ 'app-shell__main--bottom-nav-space': mobile && showBottomNav }">
+  <VMain
+    class="app-shell__main"
+    :class="{
+      'app-shell__main--bottom-nav-space': mobile && showBottomNav,
+      'app-shell__main--visible': contentVisible,
+    }"
+  >
     <slot />
   </VMain>
 
-  <MobileBottomNavBar v-if="mobile && showBottomNav" :aria-label="menuLabel" class="app-shell__bottom-nav">
+  <MobileBottomNavBar
+    v-if="mobile && showBottomNav"
+    :aria-label="menuLabel"
+    class="app-shell__bottom-nav"
+    :class="{ 'app-shell__bottom-nav--visible': shellVisible }"
+  >
     <MobileBottomNavItem
       v-for="item in primaryNavItems"
       :key="item.path"
@@ -84,9 +94,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, onMounted } from "vue";
 import { useDisplay } from "vuetify";
-import MobileNavDrawer from "./MobileNavDrawer.vue";
 import MobileBottomNavBar from "./MobileBottomNavBar.vue";
 import MobileBottomNavItem from "./MobileBottomNavItem.vue";
 
@@ -101,18 +110,21 @@ const BOTTOM_NAV_ITEM_COUNT = 4;
 
 /**
  * Shared responsive app shell (packages/ui) — the structural chrome only:
- * a left nav drawer (permanent + rail-collapsible VNavigationDrawer on
- * desktop; the shared MobileNavDrawer — hamburger-triggered, swipeable,
- * same feel as apps/web's — on mobile), a VAppBar, a mobile bottom nav bar
- * (the shared MobileBottomNavBar/MobileBottomNavItem, same feel as
- * apps/web's) showing the first 4 nav items (full stop — no "more"/overflow
- * button; the hamburger in the app bar is always available as the way to
- * reach everything else), and a VMain for routed content.
+ * a single VNavigationDrawer that's permanent + rail-collapsible on desktop
+ * and Vuetify's own temporary (scrim + slide) drawer on mobile — driven by
+ * `useDisplay().mobile`, no branching between two different drawer
+ * components — a VAppBar, a mobile bottom nav bar (the shared
+ * MobileBottomNavBar/MobileBottomNavItem, same feel as apps/web's) showing
+ * the first 4 nav items (full stop — no "more"/overflow button; the
+ * hamburger in the app bar is always available as the way to reach
+ * everything else), and a VMain for routed content.
  *
  * Deliberately has no knowledge of roles, auth, theming, or branding — those
  * are app-specific concerns supplied via slots (logo, nav, app-bar-actions,
- * drawer-footer) so apps/pwa and apps/web can each plug in their own content
- * while sharing this same responsive mechanics.
+ * drawer-footer) so apps/pwa can plug in its own content. Only apps/pwa
+ * consumes AppShell today — apps/web has its own DefaultHeader, built on the
+ * separately-exported MobileNavDrawer instead, since apps/web doesn't use
+ * Vuetify anywhere else.
  */
 const props = withDefaults(
   defineProps<{
@@ -159,9 +171,73 @@ const drawerOpenModel = computed({
 });
 
 const primaryNavItems = computed(() => props.navItems.slice(0, BOTTOM_NAV_ITEM_COUNT));
+
+// One-time entrance, played whenever this shell first mounts (i.e. right
+// after the auth screen's own exit sequence, see AuthView.vue) — the bar
+// slides down from above and the mobile bottom nav slides up from below at
+// the same time, then the drawer/main content fade in a beat later rather
+// than everything appearing at once.
+const CONTENT_ENTER_DELAY = 150;
+
+const shellVisible = ref(false);
+const contentVisible = ref(false);
+
+const prefersReducedMotion =
+  typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+onMounted(async () => {
+  if (prefersReducedMotion) {
+    shellVisible.value = true;
+    contentVisible.value = true;
+    return;
+  }
+  shellVisible.value = true;
+  await wait(CONTENT_ENTER_DELAY);
+  contentVisible.value = true;
+});
 </script>
 
 <style scoped>
+/* Entrance only (see shellVisible/contentVisible in <script>) — slides down
+   from above the viewport rather than just fading, so the bar reads as
+   dropping into place. */
+.app-shell__bar {
+  opacity: 0;
+  transform: translateY(-100%);
+  transition: opacity 0.4s ease-out, transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.app-shell__bar--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Same idea, mirrored for the drawer/main content — a plain fade (no slide),
+   starting a beat after the bar/bottom-nav above so the whole shell doesn't
+   pop in as one flat block. */
+.app-shell__nav,
+.app-shell__main {
+  opacity: 0;
+  transition: opacity 0.35s ease-out;
+}
+
+.app-shell__nav--visible,
+.app-shell__main--visible {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell__bar,
+  .app-shell__nav,
+  .app-shell__main {
+    transition: none;
+  }
+}
+
 .app-shell__logo {
   flex-shrink: 0;
 }
@@ -172,9 +248,36 @@ const primaryNavItems = computed(() => props.navItems.slice(0, BOTTOM_NAV_ITEM_C
   padding: 12px;
 }
 
+/* Hamburger, title, and logo default to vertical centering (Vuetify's
+   .v-toolbar__content + .v-toolbar__prepend/__append all set
+   align-items: center, with prepend/append also stretched to the bar's full
+   height). Centering three items of very different intrinsic heights
+   (a 20px icon glyph, a 1.1rem text line, a 28px logo image) doesn't read as
+   one aligned row — each sits at its own visual center instead of sharing a
+   line.
+
+   Bottom-*flushing* the outer boxes isn't enough either: the hamburger is a
+   VBtn, which is `display: inline-grid; align-items: center` internally
+   (Vuetify's own VBtn.css) — its 14px icon glyph (3 bars × 2px + 2 gaps ×
+   4px) stays centered inside the button's own 40px box (--v-btn-height 28px
+   + 12px for a default-density icon button at size="small") regardless of
+   how the outer box is aligned, a fixed 13px inset from the button's edge.
+   So each item needs its own padding tuned to match that same 13px visual
+   inset from the shared bottom line, not one flat value copied onto every
+   box. */
+.app-shell__bar :deep(.v-toolbar__content) {
+  align-items: flex-end;
+}
+
+.app-shell__bar :deep(.v-toolbar__prepend),
+.app-shell__bar :deep(.v-toolbar__append) {
+  align-items: flex-end;
+}
+
 .app-shell__title {
   font-size: 1.1rem;
   font-weight: 600;
+  padding-bottom: 6px;
 }
 
 .app-shell__bar-logo {
@@ -203,6 +306,25 @@ const primaryNavItems = computed(() => props.navItems.slice(0, BOTTOM_NAV_ITEM_C
    (e.g. entity list feeds) renders its last rows underneath the nav bar. */
 .app-shell__main--bottom-nav-space {
   padding-bottom: calc(var(--mobile-bottom-nav-height, 64px) + env(safe-area-inset-bottom));
+}
+
+/* Entrance only (see shellVisible in <script>) — slides up from below the
+   viewport, mirroring the app bar's slide-down above, rather than fading. */
+.app-shell__bottom-nav {
+  opacity: 0;
+  transform: translateY(100%);
+  transition: opacity 0.4s ease-out, transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.app-shell__bottom-nav--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell__bottom-nav {
+    transition: none;
+  }
 }
 
 </style>

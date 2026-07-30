@@ -4,6 +4,7 @@
     max-width="680"
     content-class="pwa-form-dialog__content"
     class="form-renderer-dialog"
+    :transition="originDialogTransition"
     @update:model-value="onDialogUpdate"
   >
     <VCard class="pwa-form-dialog__card">
@@ -15,6 +16,16 @@
           :size="40"
         />
         <span>{{ formTitle }}</span>
+        <VSpacer />
+        <AppButton
+          icon
+          variant="text"
+          :title="t('app.common.close')"
+          :aria-label="t('app.common.close')"
+          @click="onCancelClick"
+        >
+          <AppIcon name="close" class="pwa-form-dialog__close-icon" />
+        </AppButton>
       </VCardTitle>
       <VCardText>
         <VAlert
@@ -51,6 +62,30 @@
                     </button>
                     <AppIcon v-else :name="f.icon" class="pwa-form-field-icon" />
                   </template>
+                  <template v-if="f.avatarEntityType" #item="{ item, props: itemProps }">
+                    <VListItem v-if="item.value" v-bind="itemProps" :title="item.title">
+                      <template #prepend>
+                        <AppAvatar :name="item.title" :entity-type="f.avatarEntityType" :size="28" />
+                      </template>
+                    </VListItem>
+                  </template>
+                  <template v-if="f.avatarEntityType" #chip="{ item, props: chipProps }">
+                    <VChip v-if="item.value" v-bind="chipProps" :text="item.title" closable>
+                      <template #prepend>
+                        <AppAvatar :name="item.title" :entity-type="f.avatarEntityType" :size="18" class="mr-1" />
+                      </template>
+                    </VChip>
+                  </template>
+                  <template v-if="hasColorOptions(f)" #item="{ item, props: itemProps }">
+                    <VListItem v-bind="itemProps" :title="undefined">
+                      <VChip :color="chipColor(item.raw.color)" variant="tonal" size="small">{{ item.title }}</VChip>
+                    </VListItem>
+                  </template>
+                  <template v-if="hasColorOptions(f)" #chip="{ item, props: chipProps }">
+                    <VChip v-bind="chipProps" :color="chipColor(item.raw.color)" variant="tonal" size="small">
+                      {{ item.title }}
+                    </VChip>
+                  </template>
                 </component>
               </div>
             </div>
@@ -71,6 +106,30 @@
                     <AppIcon name="at" class="pwa-form-field-icon" />
                   </button>
                   <AppIcon v-else :name="row[0].icon" class="pwa-form-field-icon" />
+                </template>
+                <template v-if="row[0].avatarEntityType" #item="{ item, props: itemProps }">
+                  <VListItem v-if="item.value" v-bind="itemProps" :title="item.title">
+                    <template #prepend>
+                      <AppAvatar :name="item.title" :entity-type="row[0].avatarEntityType" :size="28" />
+                    </template>
+                  </VListItem>
+                </template>
+                <template v-if="row[0].avatarEntityType" #chip="{ item, props: chipProps }">
+                  <VChip v-if="item.value" v-bind="chipProps" :text="item.title" closable>
+                    <template #prepend>
+                      <AppAvatar :name="item.title" :entity-type="row[0].avatarEntityType" :size="18" class="mr-1" />
+                    </template>
+                  </VChip>
+                </template>
+                <template v-if="hasColorOptions(row[0])" #item="{ item, props: itemProps }">
+                  <VListItem v-bind="itemProps" :title="undefined">
+                    <VChip :color="chipColor(item.raw.color)" variant="tonal" size="small">{{ item.title }}</VChip>
+                  </VListItem>
+                </template>
+                <template v-if="hasColorOptions(row[0])" #chip="{ item, props: chipProps }">
+                  <VChip v-bind="chipProps" :color="chipColor(item.raw.color)" variant="tonal" size="small">
+                    {{ item.title }}
+                  </VChip>
                 </template>
               </component>
             </div>
@@ -93,9 +152,10 @@
       max-width="360"
       content-class="pwa-form-dialog__content"
       class="pwa-discard-dialog"
+      :transition="originDialogTransition"
       persistent
     >
-      <VCard elevation="8">
+      <VCard class="pwa-confirm-dialog__card">
         <VCardText>{{ t("app.common.discardChanges") }}</VCardText>
         <VCardActions>
           <VSpacer />
@@ -115,6 +175,7 @@
 import { computed, nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { VTextField, VSelect, VAutocomplete, VCombobox, VTextarea } from "vuetify/components";
+import { originDialogTransition } from "@ui";
 import { useFormRenderer } from "../composables/useFormRenderer";
 import { scrollToFormTop } from "../utils/scrollToFormTop";
 import AppButton from "./AppButton.vue";
@@ -202,7 +263,15 @@ const formSubmitLabel = computed(() => {
 });
 
 function isFieldHidden(f: FormFieldDef): boolean {
-  return typeof f.hidden === "function" ? f.hidden() : !!f.hidden;
+  return typeof f.hidden === "function" ? f.hidden(form.value) : !!f.hidden;
+}
+
+function labelFor(f: FormFieldDef): string {
+  return t(typeof f.labelKey === "function" ? f.labelKey(form.value) : f.labelKey);
+}
+
+function colorFor(f: FormFieldDef): string | undefined {
+  return typeof f.color === "function" ? f.color(form.value) : f.color;
 }
 
 const rows = computed(() => {
@@ -262,6 +331,16 @@ function insertAtSign(f: FormFieldDef) {
   });
 }
 
+/** A 'select' field whose options carry a `color` renders its value as a colored pill (see the #chip/#item slots above) instead of plain text. */
+function hasColorOptions(f: FormFieldDef): boolean {
+  return f.type === "select" && resolvedOptions(f).some((o) => !!o.color);
+}
+
+/** "default" means a neutral tonal chip with no color prop — VChip's own gray, not a theme color name. */
+function chipColor(color?: string): string | undefined {
+  return color && color !== "default" ? color : undefined;
+}
+
 function componentFor(type: FormFieldType) {
   switch (type) {
     case "select": return VSelect;
@@ -278,7 +357,7 @@ function fieldAttrs(f: FormFieldDef): Record<string, unknown> {
   const common: Record<string, unknown> = {
     modelValue: form.value[f.key],
     "onUpdate:modelValue": (v: unknown) => { form.value[f.key] = v; },
-    label: t(f.labelKey),
+    label: labelFor(f),
     variant: "outlined",
     density: "comfortable",
     rules: rulesFor(f),
@@ -286,6 +365,7 @@ function fieldAttrs(f: FormFieldDef): Record<string, unknown> {
     persistentHint: !!f.hint,
     placeholder: f.placeholder ? t(f.placeholder) : undefined,
     disabled: !!f.immutableOnEdit && isEditMode.value,
+    color: colorFor(f),
   };
 
   switch (f.type) {
@@ -307,6 +387,7 @@ function fieldAttrs(f: FormFieldDef): Record<string, unknown> {
         itemTitle: "title",
         itemValue: "value",
         menuIcon: "",
+        chips: hasColorOptions(f),
       };
     case "combobox":
       return {

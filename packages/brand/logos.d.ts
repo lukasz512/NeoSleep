@@ -6,3 +6,5 @@ export declare const BRAND_ICON_LIGHT_URL = "/brand/logos/icon/icon_light.svg";
 export declare const BRAND_ICON_DARK_URL = "/brand/logos/icon/icon_dark.svg";
 /** Generic "installable PWA" badge shown on the login card. */
 export declare const BRAND_PWA_BADGE_URL = "/brand/logos/pwa/pwa-badge.png";
+/** Faint medical photo layered behind the auth screen's animated gradient (see PublicLayout.vue). */
+export declare const BRAND_AUTH_BACKGROUND_URL = "/brand/logos/auth/auth-bg.webp";

@@ -40,8 +40,8 @@ const localeLoaders: Record<string, () => Promise<Record<string, unknown>>> = {
   mx: async () => ({ ...(await import("@i18n/mx.json")).default, $vuetify: vuetifyLocales.mx }),
 };
 
-// Zawsze ładuj en jako fallback — Vue i18n sięga po niego gdy klucz brakuje w aktywnym locale.
-// Jeśli user ma en → ładujemy raz, bez duplikatu.
+// Always load en as fallback — Vue i18n falls back to it when a key is missing in the active locale.
+// If the user's locale is en → load it once, no duplicate.
 const [enMessages, activeMessages] = await Promise.all([
   localeLoaders["en"](),
   savedLocale !== "en" ? localeLoaders[savedLocale]() : Promise.resolve(null),

@@ -154,6 +154,24 @@ describe("useFormRenderer", () => {
     expect(rules[1]("123456789")).toBe(true);
   });
 
+  it("rulesFor evaluates a function `required` against live form state, not just a static boolean", () => {
+    const fields: FormFieldDef[] = [
+      { key: "type", type: "select", labelKey: "type" },
+      { key: "institution", type: "text", labelKey: "institution", required: (form) => form.type === "doctor" },
+    ];
+    const r = useFormRenderer(fields, ref(undefined));
+    const institutionField = fields[1];
+
+    r.form.value.type = "patient";
+    expect(r.rulesFor(institutionField)).toHaveLength(0);
+
+    r.form.value.type = "doctor";
+    const rules = r.rulesFor(institutionField);
+    expect(rules).toHaveLength(1);
+    expect(rules[0]("")).toBe("app.formRenderer.validation.required");
+    expect(rules[0]("Acme Clinic")).toBe(true);
+  });
+
   it("buildPayload converts number fields and drops blank strings to undefined", () => {
     const fields: FormFieldDef[] = [
       { key: "ahi", type: "number", labelKey: "ahi" },

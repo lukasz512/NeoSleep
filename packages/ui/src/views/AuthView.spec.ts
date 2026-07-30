@@ -185,12 +185,14 @@ describe("AuthView — sign in", () => {
 
     resolveFetch(new Response(JSON.stringify({ user: { id: "1" }, forcePasswordChange: false }), { status: 200 }));
 
-    // router.push() resolves a tick after the surrounding promise chain (guard
-    // resolution runs as its own microtask turn), so poll rather than assume
-    // one flushPromises() drains it.
+    // router.push() only fires after the full post-login exit choreography
+    // (badge → logo → card → orbs → background, see AuthView's
+    // playExitSequence) has run its course — comfortably longer than
+    // vi.waitFor's default 1000ms timeout, so it's raised here rather than
+    // assuming one flushPromises() drains it.
     await vi.waitFor(() => {
       expect(wrapper.find('input[type="email"]').attributes("disabled")).toBeUndefined();
-    });
+    }, { timeout: 3000 });
   });
 
   it("shows the invalid-credentials message on a 401 response", async () => {

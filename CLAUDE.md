@@ -117,6 +117,7 @@ pnpm i18n:prune        # Mark unused keys
 - Promote DEV → PROD via `promote-pwa-dev-to-prod.yml` / `promote-web-dev-to-prod.yml`
 
 ## What NOT to do
+- Do not write non-English text anywhere in source: code, comments, console/log output, script echoes, hardcoded strings. English only, everywhere except `packages/i18n/pl.json` and `packages/i18n/mx.json` and seed/demo data that intentionally represents PL/MX market content
 - Do not hardcode navigation items, labels or feature flags in components
 - Do not put secrets in frontend code
 - Do not skip migrations — always add a new numbered `.sql` file

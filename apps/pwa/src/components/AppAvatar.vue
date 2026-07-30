@@ -1,7 +1,7 @@
 <template>
   <VAvatar :size="size" :color="avatarUrl ? undefined : bgColor" class="app-avatar">
     <VImg v-if="avatarUrl" :src="avatarUrl" :alt="name || ''" cover />
-    <span v-else-if="initials" class="app-avatar__initials">{{ initials }}</span>
+    <span v-else-if="initials" class="app-avatar__initials" :style="{ fontSize: initialsFontSize }">{{ initials }}</span>
     <AppIcon v-else :name="iconName" class="app-avatar__icon" />
   </VAvatar>
 </template>
@@ -45,6 +45,19 @@ const initials = computed(() => (props.name?.trim() ? getInitials(props.name) : 
 // placeholder gets a stable, on-brand color instead of Vuetify's flat gray.
 const bgColor = computed(() => getAvatarColor(props.name?.trim() || props.entityType));
 const iconName = computed(() => ENTITY_ICONS[props.entityType]);
+// Ratio of two consecutive Fibonacci numbers (21/55) converges to 1/φ² ≈
+// 0.382 — small enough that two-letter initials keep breathing room inside
+// the circle instead of crowding its edge.
+const FIBONACCI_INITIALS_RATIO = 21 / 55;
+// Scales with `size` instead of a fixed rem value — a chip-sized avatar
+// (~18-24px) needs proportionally smaller text than the 40px default.
+// `size` must be numeric (px) here: percentage/keyword sizes (e.g. "100%")
+// resolve their real pixel size only via CSS, so callers relying on that
+// must also pass the equivalent numeric size for this calculation.
+const initialsFontSize = computed(() => {
+  const sizeNum = typeof props.size === "number" ? props.size : parseFloat(String(props.size)) || 40;
+  return `${Math.max(sizeNum * FIBONACCI_INITIALS_RATIO, 8)}px`;
+});
 </script>
 
 <style scoped>
@@ -55,7 +68,6 @@ const iconName = computed(() => ENTITY_ICONS[props.entityType]);
 .app-avatar__initials {
   color: #fff;
   font-weight: 600;
-  font-size: 0.875rem;
   letter-spacing: 0.02em;
 }
 

@@ -11,9 +11,10 @@ import "./assets/flags.css";
 import "@brand/transitions.css";
 import "./assets/transitions.css";
 import { setupDiagnosticReporter } from "./composables/useDiagnosticReporter";
-import { apiFetch } from "./utils/api";
+import { setupOfflineCacheSession } from "./composables/useOfflineCacheSession";
+import { apiFetch } from "./composables/useBffApi";
 import { getApiUrl } from "./constants";
-import { resolveInitialThemeMode } from "@stores";
+import { resolveInitialThemeMode, useMotionPreferenceStore } from "@stores";
 
 // Silent wake-up ping: the API can cold-start (Render free tier spins down when
 // idle), so hit the cheapest possible route as early as possible — before the
@@ -40,7 +41,10 @@ app.use(vuetify);
 app.use(router);
 app.use(i18n);
 
+useMotionPreferenceStore().startListening();
+
 setupDiagnosticReporter(app);
+setupOfflineCacheSession();
 
 app.provide("neo:apiFetch", apiFetch);
 const gaId = import.meta.env.VITE_GA_ID as string | undefined;

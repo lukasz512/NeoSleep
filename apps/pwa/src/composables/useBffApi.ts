@@ -38,6 +38,16 @@ function isAuthPath(url: string): boolean {
 }
 
 /**
+ * No caller passes its own `init.signal` today, but a request that never
+ * settles (server hangs, not just errors) would otherwise never reject
+ * either — every awaiter downstream (loadData(), the router guard's
+ * fetchSession(), ...) just hangs forever with it, with nothing to catch.
+ * A hard ceiling here guarantees every request eventually settles one way
+ * or another, so those callers' own try/catch/finally can actually run.
+ */
+const REQUEST_TIMEOUT_MS = 20_000;
+
+/**
  * Fetch wrapper: on 401 from a non-auth endpoint, clear the local auth store.
  * Also drives the global loader store so any in-flight apiFetch call is
  * reflected app-wide (AppButton reads this to disable itself while busy).
@@ -53,10 +63,17 @@ async function fetchWithAuth(
         ? input.toString()
         : (input as Request).url;
 
+  const timeoutController = new AbortController();
+  const timeoutId = setTimeout(() => timeoutController.abort(), REQUEST_TIMEOUT_MS);
+  if (init?.signal) {
+    if (init.signal.aborted) timeoutController.abort();
+    else init.signal.addEventListener("abort", () => timeoutController.abort(), { once: true });
+  }
+
   const loader = useGlobalLoaderStore();
   loader.startLoading();
   try {
-    const res = await fetch(input, init);
+    const res = await fetch(input, { ...init, signal: timeoutController.signal });
 
     if (res.status === 401 && !isAuthPath(url)) {
       _clearAuth?.();
@@ -64,6 +81,7 @@ async function fetchWithAuth(
 
     return res;
   } finally {
+    clearTimeout(timeoutId);
     loader.stopLoading();
   }
 }
