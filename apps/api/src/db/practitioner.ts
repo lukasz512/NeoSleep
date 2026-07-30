@@ -75,9 +75,10 @@ const PRAC_SORT_COLUMNS = ["first_name", "last_name", "email", "primary_specialt
 const PRAC_SELECT_COLS = `
   p.id, p.identity_id, p.organization_id, p.national_ids,
   p.primary_specialty, p.specialties, p.influence_tier,
-  p.region, p.territory_id, p.status, p.metadata,
+  p.status, p.metadata,
   p.created_at, p.updated_at,
   i.title AS salutation, i.first_name, i.last_name, i.email, i.phone, i.language, i.social_links,
+  COALESCE(i.region, '') AS region, i.territory_id,
   o.name AS institution`.trim();
 
 function isPracSortColumn(s: string): s is (typeof PRAC_SORT_COLUMNS)[number] {
@@ -122,7 +123,7 @@ export async function getPractitionerPaginated(
 
   if (filters.search?.trim()) {
     conditions.push(
-      `(LOWER(i.first_name) LIKE $${paramIndex} OR LOWER(i.last_name) LIKE $${paramIndex} OR LOWER(COALESCE(i.email,'')) LIKE $${paramIndex} OR LOWER(COALESCE(p.primary_specialty,'')) LIKE $${paramIndex} OR LOWER(COALESCE(o.name,'')) LIKE $${paramIndex} OR LOWER(p.region) LIKE $${paramIndex})`
+      `(LOWER(i.first_name) LIKE $${paramIndex} OR LOWER(i.last_name) LIKE $${paramIndex} OR LOWER(COALESCE(i.email,'')) LIKE $${paramIndex} OR LOWER(COALESCE(p.primary_specialty,'')) LIKE $${paramIndex} OR LOWER(COALESCE(o.name,'')) LIKE $${paramIndex} OR LOWER(COALESCE(i.region,'')) LIKE $${paramIndex})`
     );
     params.push(`%${filters.search.trim().toLowerCase()}%`);
     paramIndex++;
@@ -141,7 +142,7 @@ export async function getPractitionerPaginated(
   }
   const regionArr = toArray(filters.region);
   if (regionArr.length > 0) {
-    conditions.push(`p.region = ANY($${paramIndex}::text[])`);
+    conditions.push(`i.region = ANY($${paramIndex}::text[])`);
     params.push(regionArr);
     paramIndex++;
   }
@@ -215,9 +216,15 @@ export async function insertPractitioner(client: PoolClient, input: InsertPracti
         ? (await resolveOrganizationId(client, input.institution.trim(), region)).id
         : null;
 
+    // ON CONFLICT (email): if this email already belongs to an identity (e.g.
+    // the person already has a `users` account — see invitePractitioner.ts,
+    // which relies on this to link a practitioner-user's two rows to the same
+    // identity), reuse that identity_id instead of erroring. Mirrors
+    // insertStaffUser's (db/users.ts) identical upsert.
     const identityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (title, first_name, last_name, email, phone, language, social_links)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO identities (title, first_name, last_name, email, phone, language, social_links, region)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
        RETURNING id`,
       [
         trimOrNull(input.salutation),
@@ -225,26 +232,40 @@ export async function insertPractitioner(client: PoolClient, input: InsertPracti
         lastName,
         trimOrNull(input.email),
         trimOrNull(input.phone),
-        trimOrNull(input.language),
+        // identities.language is NOT NULL — listing the column explicitly (for
+        // social_links/region right after it) means the table's own DEFAULT
+        // 'en' never kicks in, so an absent input.language must be defaulted
+        // here instead, the same way inferLanguage() already does for email
+        // copy in invitePractitioner.ts.
+        trimOrNull(input.language) || "en",
         JSON.stringify(input.social_links ?? {}),
+        region || null,
       ]
     );
     const identityId = identityResult.rows[0]!.id;
 
+    // ON CONFLICT (identity_id) DO NOTHING: this identity may already have a
+    // practitioner row (e.g. invited as a partner before, or added as an HCP
+    // after). Link to the existing row instead of failing.
     const pracResult = await client.query<{ id: string }>(
-      `INSERT INTO practitioner (identity_id, organization_id, primary_specialty, influence_tier, region, status, national_ids)
-       VALUES ($1, $2, $3, $4, $5, 'active', $6)
+      `INSERT INTO practitioner (identity_id, organization_id, primary_specialty, influence_tier, status, national_ids)
+       VALUES ($1, $2, $3, $4, 'active', $5)
+       ON CONFLICT (identity_id) DO NOTHING
        RETURNING id`,
       [
         identityId,
         orgId ?? null,
         trimOrNull(input.primary_specialty),
         input.influence_tier ?? "C",
-        region,
         input.national_ids ? JSON.stringify(input.national_ids) : null,
       ]
     );
-    const pracId = pracResult.rows[0]!.id;
+    const pracId = pracResult.rows[0]
+      ? pracResult.rows[0].id
+      : (await client.query<{ id: string }>(
+          `SELECT id FROM practitioner WHERE identity_id = $1`,
+          [identityId]
+        )).rows[0]!.id;
 
     const row = await getPractitionerById(client, pracId);
     if (!row) throw new DatabaseError("insertPractitioner", new Error("Insert returned no rows"));
@@ -285,15 +306,15 @@ export async function updatePractitioner(client: PoolClient, id: string, input: 
     }
 
     await client.query(
-      `UPDATE identities SET title = $1, first_name = $2, last_name = $3, email = $4, phone = $5, language = $6, social_links = $7, updated_at = now()
-       WHERE id = $8`,
-      [salutation, firstName, lastName, email, phone, language, JSON.stringify(socialLinks ?? {}), existing.identity_id]
+      `UPDATE identities SET title = $1, first_name = $2, last_name = $3, email = $4, phone = $5, language = $6, social_links = $7, region = $8, updated_at = now()
+       WHERE id = $9`,
+      [salutation, firstName, lastName, email, phone, language, JSON.stringify(socialLinks ?? {}), region || null, existing.identity_id]
     );
 
     await client.query(
-      `UPDATE practitioner SET organization_id = $1, primary_specialty = $2, influence_tier = $3, region = $4, national_ids = $5, updated_at = now()
-       WHERE id = $6`,
-      [orgId ?? null, primarySpecialty, influenceTier, region, nationalIds ? JSON.stringify(nationalIds) : null, id]
+      `UPDATE practitioner SET organization_id = $1, primary_specialty = $2, influence_tier = $3, national_ids = $4, updated_at = now()
+       WHERE id = $5`,
+      [orgId ?? null, primarySpecialty, influenceTier, nationalIds ? JSON.stringify(nationalIds) : null, id]
     );
   } catch (err) {
     if (err instanceof AppError) throw err;

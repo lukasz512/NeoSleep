@@ -6,6 +6,7 @@
       :items="AREA_CODES"
       item-title="label"
       item-value="code"
+      :return-object="false"
       :variant="variant"
       :density="density"
       hide-details
@@ -26,7 +27,7 @@
       </template>
     </VCombobox>
     <VTextField
-      :model-value="localDigits"
+      :model-value="displayLocal"
       class="pwa-phone-field__number"
       type="tel"
       autocomplete="tel"
@@ -45,7 +46,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { useAuthStore } from "../stores/auth";
-import { parsePhone, formatPhone, countryCodeToAreaCode, PHONE_AREA_CODES } from "../utils/phone";
+import {
+  parsePhone,
+  formatPhone,
+  formatLocalDigits,
+  countryCodeToAreaCode,
+  PHONE_AREA_CODES,
+} from "../utils/phone";
 import FlagIcon from "./FlagIcon.vue";
 
 /**
@@ -100,6 +107,9 @@ watch(
 function emitCurrent() {
   emit("update:modelValue", formatPhone(areaCode.value, localDigits.value));
 }
+
+/** Grouped for display (e.g. "123 456 789"); raw digits stay ungrouped in localDigits/storage. */
+const displayLocal = computed(() => formatLocalDigits(areaCode.value, localDigits.value));
 
 function onLocalInput(v: unknown) {
   localDigits.value = String(v ?? "").replace(/\D/g, "");

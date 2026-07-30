@@ -106,3 +106,45 @@ export async function sendPasswordResetEmail(to: string, resetLink: string, reci
     throw err;
   }
 }
+
+export async function sendPartnerInviteEmail(to: string, registerLink: string, recipient: EmailRecipient): Promise<void> {
+  if (!transporter || !gmailUser) {
+    console.warn("[mailer] Gmail not configured – set GMAIL_USER, GMAIL_APP_PASSWORD in .env");
+    return;
+  }
+
+  const locale = recipient.language;
+  const greetingName = formatGreetingName(recipient, to);
+
+  const bodyHtml = `
+    <h1 style="margin:0 0 16px;font-size:20px;font-weight:bold;color:#128F83;text-align:center;">${escapeHtml(emailT(locale, "email.partnerInvite.title"))}</h1>
+    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.greeting", { name: greetingName }))}</p>
+    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.partnerInvite.body"))}</p>
+    <p style="margin:0 0 16px;font-size:13px;color:#7a827e;">${escapeHtml(emailT(locale, "email.partnerInvite.expiry"))}</p>`;
+
+  const socials = getSocialsForRegion(recipient.region);
+  const html = renderEmailLayout({
+    preheader: emailT(locale, "email.partnerInvite.title"),
+    bodyHtml,
+    cta: { text: emailT(locale, "email.partnerInvite.cta"), href: registerLink },
+    footerTagline: emailT(locale, "email.footer.tagline"),
+    footerCities: emailT(locale, "email.footer.cities"),
+    footerCopyright: emailT(locale, "email.footer.copyright", { year: String(new Date().getFullYear()) }),
+    supportLeadIn: emailT(locale, "email.footer.support"),
+    socials,
+  });
+
+  try {
+    await transporter.sendMail({
+      from: `"NeoSleep" <${gmailUser}>`,
+      to,
+      subject: emailT(locale, "email.partnerInvite.subject"),
+      html,
+      attachments: getEmailAttachments(socials),
+    });
+    console.log(`[mailer] Sent partner invite email to ${to}`);
+  } catch (err) {
+    console.error("[mailer] Failed to send partner invite email:", err);
+    throw err;
+  }
+}

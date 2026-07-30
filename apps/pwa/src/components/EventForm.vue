@@ -4,6 +4,7 @@
     max-width="680"
     content-class="pwa-form-dialog__content"
     class="event-form-dialog"
+    :transition="originDialogTransition"
     @update:model-value="onDialogUpdate"
   >
     <VCard class="pwa-form-dialog__card">
@@ -77,7 +78,22 @@
             closable-chips
             :loading="loadingHco"
             :placeholder="t('user.planner.form.fieldHcoPlaceholder')"
-          />
+          >
+            <template #item="{ item, props: itemProps }">
+              <VListItem v-if="item.value" v-bind="itemProps" :title="item.raw.name">
+                <template #prepend>
+                  <AppAvatar :name="item.raw.name" entity-type="hco" :size="28" />
+                </template>
+              </VListItem>
+            </template>
+            <template #chip="{ item, props: chipProps }">
+              <VChip v-if="item.value" v-bind="chipProps" :text="item.raw.name">
+                <template #prepend>
+                  <AppAvatar :name="item.raw.name" entity-type="hco" :size="18" class="mr-1" />
+                </template>
+              </VChip>
+            </template>
+          </VAutocomplete>
           <VAutocomplete
             v-model="form.hcpIds"
             :label="t('user.planner.form.fieldHcp')"
@@ -96,6 +112,20 @@
             <template #prepend-inner>
               <AppIcon name="nav-hcp" class="pwa-form-field-icon" />
             </template>
+            <template #item="{ item, props: itemProps }">
+              <VListItem v-if="item.value" v-bind="itemProps" :title="item.raw.name">
+                <template #prepend>
+                  <AppAvatar :name="item.raw.name" entity-type="hcp" :size="28" />
+                </template>
+              </VListItem>
+            </template>
+            <template #chip="{ item, props: chipProps }">
+              <VChip v-if="item.value" v-bind="chipProps" :text="item.raw.name">
+                <template #prepend>
+                  <AppAvatar :name="item.raw.name" entity-type="hcp" :size="18" class="mr-1" />
+                </template>
+              </VChip>
+            </template>
           </VAutocomplete>
           <VAutocomplete
             v-model="form.patientIds"
@@ -111,7 +141,22 @@
             closable-chips
             :loading="loadingPatient"
             :placeholder="t('user.planner.form.fieldPatientPlaceholder')"
-          />
+          >
+            <template #item="{ item, props: itemProps }">
+              <VListItem v-if="item.value" v-bind="itemProps" :title="item.raw.name">
+                <template #prepend>
+                  <AppAvatar :name="item.raw.name" entity-type="patient" :size="28" />
+                </template>
+              </VListItem>
+            </template>
+            <template #chip="{ item, props: chipProps }">
+              <VChip v-if="item.value" v-bind="chipProps" :text="item.raw.name">
+                <template #prepend>
+                  <AppAvatar :name="item.raw.name" entity-type="patient" :size="18" class="mr-1" />
+                </template>
+              </VChip>
+            </template>
+          </VAutocomplete>
           <VTextField
             v-if="form.type === 'f2f'"
             v-model="form.location"
@@ -168,9 +213,10 @@
       max-width="360"
       content-class="pwa-form-dialog__content"
       class="pwa-discard-dialog"
+      :transition="originDialogTransition"
       persistent
     >
-      <VCard elevation="8">
+      <VCard class="pwa-confirm-dialog__card">
         <VCardText>{{ t("app.common.discardChanges") }}</VCardText>
         <VCardActions>
           <VSpacer />
@@ -188,6 +234,7 @@
 
 <script setup lang="ts">
 import { useI18n } from "vue-i18n";
+import { originDialogTransition } from "@ui";
 import { useConfigStore } from "../stores/config";
 import { useEventForm } from "../composables/useEventForm";
 import AppButton from "./AppButton.vue";

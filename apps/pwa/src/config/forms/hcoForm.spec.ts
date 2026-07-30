@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { hcoFormFields } from "./hcoForm";
 
-function isHidden(field: { hidden?: boolean | (() => boolean) }): boolean {
-  return typeof field.hidden === "function" ? field.hidden() : !!field.hidden;
+function isHidden(field: { hidden?: boolean | ((form: Record<string, unknown>) => boolean) }): boolean {
+  return typeof field.hidden === "function" ? field.hidden({}) : !!field.hidden;
 }
 
 describe("hcoFormFields", () => {

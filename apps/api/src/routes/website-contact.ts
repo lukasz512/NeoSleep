@@ -45,15 +45,15 @@ websiteContactRouter.post(
         return;
       }
       const rows: [string, string][] = [
-        ["Imię i nazwisko", `${firstName} ${lastName}`],
-        ["Telefon", phone],
+        ["Full name", `${firstName} ${lastName}`],
+        ["Phone", phone],
         ["Email", email],
-        ["Miasto", city],
-        ["Wiadomość", message],
+        ["City", city],
+        ["Message", message],
       ];
-      if (body.notes?.trim()) rows.push(["Dodatkowe info", body.notes.trim()]);
+      if (body.notes?.trim()) rows.push(["Additional info", body.notes.trim()]);
       console.log("[contact] calling sendContactEmail (patient)");
-      await sendContactEmail(`Zapytanie od pacjenta – ${firstName} ${lastName}`, rows);
+      await sendContactEmail(`Patient inquiry – ${firstName} ${lastName}`, rows);
       console.log("[contact] sendContactEmail done");
     } else {
       const companyName = (typeof body.companyName === "string" ? body.companyName : "").trim();
@@ -63,14 +63,14 @@ websiteContactRouter.post(
         return;
       }
       const rows: [string, string][] = [
-        ["Imię i nazwisko", `${firstName} ${lastName}`],
-        ["Telefon", phone],
-        ["Firma", companyName],
-        ["NIP", taxNumber],
-        ["Miasto", city],
+        ["Full name", `${firstName} ${lastName}`],
+        ["Phone", phone],
+        ["Company", companyName],
+        ["Tax ID", taxNumber],
+        ["City", city],
       ];
       console.log("[contact] calling sendContactEmail (client)");
-      await sendContactEmail(`Zapytanie od klienta – ${firstName} ${lastName} (${companyName})`, rows);
+      await sendContactEmail(`Client inquiry – ${firstName} ${lastName} (${companyName})`, rows);
       console.log("[contact] sendContactEmail done");
     }
 

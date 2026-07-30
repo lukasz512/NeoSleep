@@ -24,6 +24,7 @@
 | Encounter / PCF flow | `planned` | create encounter, fill PCF after visit |
 | next_visit_notes on HCP | `planned` | pulled from last encounter.next_visit_notes |
 | Lead pipeline | `planned` | kanban or list, status transitions |
+| Territory admin CRUD (country→region→district→city) | `planned` | `territory` table already a self-referencing tree, needs `level` column + db/commands/queries/routes + minimal admin UI; no delete for MVP. **Wanted soon, dedicated session** — see memory `project_territory_admin_crud_needed_soon` |
 | Visit planner (weekly view) | `planned` | visit_plan table |
 | Sample management UI | `planned` | sample_batch → stock → transaction per rep |
 | Sample request flow | `planned` | rep requests → FFM approves → fulfilled |
@@ -61,8 +62,11 @@
 | SMS via Twilio | `planned` | same webhook_event queue |
 | Email from app | `planned` | nodemailer already in BFF |
 | Inbound message sync (webhook workers) | `planned` | webhook_event → conversation → message |
-| Push notifications | `planned` | push_subscription + web-push library ready |
-| Notification preferences | `planned` | app_config.notification_defaults |
+| Notification Center (bell + badge, in-app inbox) | `in_progress` | `notification`/`notification_delivery` tables, GET/PATCH routes, Dashboard-only bell with pulsing unread dot on nav — see ADR-012. Inbox is empty until real event producers are wired (see next two rows). **No tests yet** — see memory `project_test_suite_weak` for the concrete file list, deferred to a dedicated session |
+| Push notifications | `planned` | push_subscription schema fixed to match routes/push.ts (ADR-012 §1); still no real send call wired to a domain event |
+| Notification preferences | `planned` | app_config.notification_defaults exists; per-user category opt-out not built — MVP-only for now per user, revisit as needs get concrete. Non-optional categories (security, legal, operational) classified in ADR-012 |
+| First real event producer (sleep_study → pulmonologist notification) | `planned` | assign practitioner (reuse `interpreted_by`/`interpreted_at` as assign+complete) → notify; on complete → notify their manager. sleep_study has zero app code today (schema only) |
+| Marketing consent toggle (in-app) | `planned` | user-confirmed: in-app toggle first, email unsubscribe link later |
 
 ---
 
@@ -113,7 +117,8 @@
 | Animated UI tours | `planned` | lesson.type=animation_tour; step config in content_config JSONB |
 | Quiz assessments | `planned` | lesson.type=quiz; scored, pass/fail per lesson |
 | Required course enforcement | `planned` | training_course.is_required; feature gating until completion |
-| Offline-first PWA | `planned` | Service Worker + IndexedDB + Background Sync + sync_queue server table |
+| Offline read cache (HCP/HCO/lead/user lists + detail) | `done` | IndexedDB per (tenant, user), write-through on fetch, cache fallback on network failure — see ADR-013. `patient` excluded pending `/legal` sign-off |
+| Offline write queue (PCF, edits) | `planned` | Background Sync + `sync_queue` server table + idempotency keys + conflict resolution — needs its own ADR before implementation, see ADR-013 |
 
 ---
 
@@ -137,7 +142,7 @@
 
 | Feature | Status | Notes |
 |---|---|---|
-| Material 3 rollout (full app) | `planned` | Direction confirmed 2026-07-19 (monochrome tonal-layered "Luma" reference — see `docs/foundation/DESIGN_AND_UI.md`). Piloted on AppEntityList mobile feed cards: Fibonacci shape/spacing scale, `outline` / `outline-variant` / `surface-container-*` color roles (packages/vuetify/src/index.ts), tonal `::after` state-layer on hover/press instead of elevation lift. Existing teal primary stays — no new accent color. Next: extend the same roles to buttons (pill shape decision pending), dialogs, inputs, and the desktop data table, across pwa (and web). Waiting on: current pending local changes to be committed first |
+| Material 3 rollout (full app) | `in-progress` | Direction confirmed 2026-07-19 (monochrome tonal-layered "Luma" reference — see `docs/foundation/DESIGN_AND_UI.md`). Piloted on AppEntityList mobile feed cards, then extended to buttons (pill/stadium shape, decision confirmed), inputs (outline/outline-variant border roles), dialogs (surface-container-high tone) and the desktop data table (outline-variant border, surface-container-low header) — all in `theme.scss`. `apps/web` now aliases the same outline/surface-container vocabulary onto its existing `--website-border` token (~40 call sites, one change). Existing teal primary stays — no new accent color. Remaining: kicker label utility, numeric-display KPI type scale (Stage 4 FFM dashboard), retrofitting `apps/web`'s shadow-elevated cards to surface-container tone |
 
 ---
 

@@ -19,7 +19,6 @@
       :nav-items="visibleNavItems"
       :menu-label="t('layout.sidebar.expand')"
       bottom-nav-show-labels
-      class="layout-shell"
     >
       <template #logo="{ location }">
         <AppLogo v-if="location === 'bar'" :theme="theme" />
@@ -99,7 +98,14 @@
       </template>
 
       <template #nav-icon="{ item }">
-        <AppIcon :name="('nav-' + item.name) as AppIconName" />
+        <span class="layout-appbar__nav-icon-wrap">
+          <AppIcon :name="('nav-' + item.name) as AppIconName" />
+          <span
+            v-if="item.name === 'dashboard' && unreadCount > 0"
+            class="layout-appbar__nav-dot"
+            aria-hidden="true"
+          />
+        </span>
       </template>
 
       <div id="main-content" tabindex="-1" class="layout-main__inner" :class="{ 'layout-main--fading': localeTransitioning }">
@@ -118,7 +124,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRoute } from "vue-router";
 import { navTitleKey, navIconName } from "../router/routes";
 import { useI18n } from "vue-i18n";
@@ -134,6 +140,7 @@ import {
 import AppButton from "../components/AppButton.vue";
 import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
 import AppNotifications from "../components/AppNotifications.vue";
+import { useNotificationCenter } from "../composables/useNotificationCenter";
 
 const route = useRoute();
 const { t, locale } = useI18n();
@@ -149,6 +156,14 @@ const {
 } = useLayoutState();
 
 const { visibleNavItems } = useVisibleNavRoutes();
+
+// AppLayout is mounted for the whole authenticated session, so it — not
+// AppNotificationCenter.vue, which now only renders on DashboardView — owns
+// the unread-count polling lifecycle. That's what keeps the nav badge dots
+// (sidebar + bottom nav) live while the rep is on any other screen.
+const { unreadCount, startPolling, stopPolling } = useNotificationCenter();
+onMounted(startPolling);
+onUnmounted(stopPolling);
 
 const menuOpen = ref(false);
 
@@ -186,10 +201,9 @@ const moduleIcon = computed(() => {
   outline-offset: 2px;
 }
 
-.layout-shell :deep(.app-shell__nav) {
-  background: var(--pwa-sidebar-bg, #262626) !important;
-  color: var(--pwa-sidebar-text, #f5f5f5);
-}
+/* AppShell's VNavigationDrawer (`.app-shell__nav`) is themed entirely via its
+   own `color="surface-container-low"` prop (packages/ui/AppShell.vue) —
+   Vuetify's standard theme-color mechanism, no override needed here. */
 
 .layout-nav__chevron {
   width: 18px;
@@ -235,10 +249,44 @@ const moduleIcon = computed(() => {
 }
 
 .layout-appbar__icon {
-  width: 20px;
-  height: 20px;
   flex-shrink: 0;
   color: rgb(var(--v-theme-primary));
+}
+
+.layout-appbar__nav-icon-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.layout-appbar__nav-dot {
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pwa-error, #d32f2f);
+  border: 1.5px solid var(--pwa-bg, #fff);
+}
+
+.layout-appbar__nav-dot::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--pwa-error, #d32f2f);
+  animation: notif-dot-pulse 1.8s ease-out infinite;
+}
+
+@keyframes notif-dot-pulse {
+  0%   { transform: scale(1); opacity: 0.55; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .layout-appbar__nav-dot::before {
+    animation: none;
+  }
 }
 
 .layout-appbar__title {
@@ -259,7 +307,7 @@ const moduleIcon = computed(() => {
   gap: 2px;
 }
 
-.layout-shell :deep(.app-shell__nav-footer:has(.layout-nav-footer--collapsed)) {
+:deep(.app-shell__nav-footer:has(.layout-nav-footer--collapsed)) {
   padding-inline: 4px;
 }
 

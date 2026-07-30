@@ -138,11 +138,17 @@ describe("AppLayout", () => {
   });
 
   describe("top bar: logo-only on the right, hamburger + title on the left", () => {
-    it("app bar's right side renders only the logo — no role-preview select, no user menu", () => {
+    it("app bar's right side renders only the logo — no notification bell (that's DashboardView-only), no role-preview select, no user menu", () => {
       const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
       expect(appLayoutSource).not.toContain("app-bar-actions");
+      expect(appLayoutSource).not.toContain("AppNotificationCenter");
       expect(appLayoutSource).not.toContain("rolePreview");
       expect(appLayoutSource).not.toContain("VSelect");
+    });
+
+    it("the unread-notification nav dot pulse animation respects prefers-reduced-motion", () => {
+      const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
+      expect(appLayoutSource).toContain("prefers-reduced-motion");
     });
 
     it("app bar logo slot renders only for the 'bar' location — the left drawer no longer shows a logo", () => {

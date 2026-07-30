@@ -44,7 +44,7 @@ const USER_COLS = `
   u.id, u.identity_id, i.email, i.title AS salutation, i.first_name, i.last_name, i.phone,
   TRIM(COALESCE(i.first_name, '') || ' ' || COALESCE(i.last_name, '')) AS name,
   COALESCE(ur.role, 'rep') AS role,
-  u.google_sub, u.region, u.country_code, i.language, u.territory_id, u.status, u.token_version,
+  u.google_sub, i.region, i.country_code, i.language, i.territory_id, u.status, u.token_version,
   u.created_at, u.updated_at`.trim();
 
 const STAFF_AUTH_COLS = `${USER_COLS}, u.password_hash, u.force_password_change`;
@@ -142,6 +142,24 @@ export async function setUserPassword(
   } catch (err) {
     if (err instanceof AppError) throw err;
     throw new DatabaseError("setUserPassword", err);
+  }
+}
+
+/** Shallow-merges into identities.metadata JSONB — used to record clinic/invoice data collected at partner-invite acceptance. */
+export async function mergeIdentityMetadataForUser(
+  client: PoolClient,
+  userId: string,
+  patch: Record<string, unknown>
+): Promise<void> {
+  try {
+    await client.query(
+      `UPDATE identities i SET metadata = COALESCE(i.metadata, '{}'::jsonb) || $1::jsonb, updated_at = now()
+       FROM users u WHERE u.identity_id = i.id AND u.id = $2`,
+      [JSON.stringify(patch), userId]
+    );
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("mergeIdentityMetadataForUser", err);
   }
 }
 
@@ -350,7 +368,7 @@ export async function updateUser(client: PoolClient, id: string, input: UpdateUs
       await client.query(`UPDATE users SET status = $1, updated_at = now() WHERE id = $2`, [input.status, id]);
     }
     if (input.country_code !== undefined) {
-      await client.query(`UPDATE users SET country_code = $1, updated_at = now() WHERE id = $2`, [input.country_code, id]);
+      await client.query(`UPDATE identities SET country_code = $1, updated_at = now() WHERE id = $2`, [input.country_code, existing.identity_id]);
     }
     if (input.role !== undefined) {
       // Single global role per user (region IS NULL) — replace rather than upsert,

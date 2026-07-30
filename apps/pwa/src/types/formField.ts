@@ -19,7 +19,9 @@
 // prop's type via the component's instance type instead, which IS visible
 // through the default export.
 import type AppIcon from "../components/AppIcon.vue";
+import type AppAvatar from "../components/AppAvatar.vue";
 type AppIconName = InstanceType<typeof AppIcon>["$props"]["name"];
+type AppAvatarEntityType = NonNullable<InstanceType<typeof AppAvatar>["$props"]["entityType"]>;
 
 /** Supported input types the renderer knows how to draw. */
 export type FormFieldType =
@@ -51,6 +53,13 @@ export type FormFieldType =
 export interface FormFieldOption {
   title: string;
   value: unknown;
+  /**
+   * Vuetify color token (e.g. "success"/"warning", or "default" for a
+   * neutral tonal chip with no color prop). When set on any option of a
+   * 'select' field, FormRenderer renders that field's value as a colored
+   * pill instead of plain text — see FormRenderer's `hasColorOptions()`.
+   */
+  color?: string;
 }
 
 /**
@@ -65,10 +74,20 @@ export interface FormFieldDef {
   key: string;
   /** Which Vuetify input the renderer draws. */
   type: FormFieldType;
-  /** i18n key for the field label — resolved via t(), never hardcoded English. */
-  labelKey: string;
-  /** When true, the renderer adds a generic "required" rule automatically. */
-  required?: boolean;
+  /**
+   * i18n key for the field label — resolved via t(), never hardcoded English.
+   * A function variant re-resolves on every render against the live form
+   * state (same shape as `hidden`) — e.g. a clinic picker whose label swaps
+   * to "Add clinic" once the typed value stops matching an existing option.
+   */
+  labelKey: string | ((form: Record<string, unknown>) => string);
+  /**
+   * When true, the renderer adds a generic "required" rule automatically. A
+   * function variant is re-evaluated against the live form state on every
+   * render (same shape as `hidden`) — e.g. a field required only for one
+   * value of a sibling `type` select.
+   */
+  required?: boolean | ((form: Record<string, unknown>) => boolean);
   /** Extra validation rules layered on top of the built-in required check. */
   rules?: FormFieldRule[];
   /**
@@ -103,13 +122,27 @@ export interface FormFieldDef {
   /** Icon rendered in the input's #prepend-inner slot when set. */
   icon?: AppIconName;
   /**
+   * When set on an 'autocomplete'/'combobox' field whose options identify a
+   * person/org record (e.g. a practitioner or clinic picker), renders an
+   * AppAvatar next to each dropdown option and selected chip, using the
+   * option's `title` as the avatar's name seed.
+   */
+  avatarEntityType?: AppAvatarEntityType;
+  /**
    * Skip rendering this field's row, while keeping it in the field list for
    * state/validation/payload purposes (e.g. an admin-only field, or a value
    * silently inherited from another field). A function is re-evaluated
-   * whenever the form re-renders, so it can react to e.g. the current user's
-   * role — `hidden: () => useAuthStore().user?.role !== "admin"`.
+   * whenever the form re-renders and receives the live form state, so it can
+   * react to e.g. the current user's role — `hidden: () => useAuthStore().user?.role
+   * !== "admin"` — or a sibling field's value — `hidden: (form) => form.type !== "patient"`.
    */
-  hidden?: boolean | (() => boolean);
+  hidden?: boolean | ((form: Record<string, unknown>) => boolean);
+  /**
+   * Vuetify `color` prop passed straight through to the underlying input —
+   * tints the outline/label (e.g. "success" for green) once focused/active.
+   * A function variant reacts to live form state, same shape as `hidden`.
+   */
+  color?: string | ((form: Record<string, unknown>) => string | undefined);
   /**
    * Field keys whose value changes invalidate this field's cached options and
    * force a reload (e.g. a specialty picker whose options depend on the

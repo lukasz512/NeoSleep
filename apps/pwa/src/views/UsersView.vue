@@ -19,7 +19,7 @@
         </span>
       </template>
       <template #feed-card-avatar="{ item }">
-        <AppAvatar :name="(item as { name?: string }).name" entity-type="user" size="100%" />
+        <AppAvatar :name="(item as { name?: string }).name" entity-type="user" :size="55" />
       </template>
       <template #feed-card-title="{ item }">
         {{ (item as { name?: string }).name }}
@@ -82,7 +82,7 @@
       @submit="onEditSubmit"
     />
 
-    <VDialog v-model="showDeleteConfirm" max-width="360" persistent>
+    <VDialog v-model="showDeleteConfirm" max-width="360" :transition="originDialogTransition" persistent>
       <VCard>
         <VCardText>{{ t("user.users.actions.deleteConfirmText") }}</VCardText>
         <VCardActions>
@@ -101,6 +101,7 @@
 
 <script setup lang="ts">
 import { ref, computed, defineAsyncComponent } from "vue";
+import { originDialogTransition } from "@ui";
 import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
 import AppAvatar from "../components/AppAvatar.vue";
@@ -108,7 +109,7 @@ import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppListItemMenu from "../components/AppListItemMenu.vue";
 import { entityActionIcon, entityActionMenuIconClass } from "../config/entityActions";
-import { apiFetch } from "../utils/api";
+import { apiFetch } from "../composables/useBffApi";
 import { useNotifications } from "../composables/useNotifications";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import type { FilterDefinition } from "../composables/useFilters";

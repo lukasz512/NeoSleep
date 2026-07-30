@@ -117,7 +117,26 @@ export const useThemeStore = defineStore("theme", () => {
   // Universal DOM side effect — every consumer gets this for free, no per-app
   // wiring required. App-specific side effects (favicon, Vuetify) stay local.
   if (typeof document !== "undefined") {
-    watch(mode, (m) => document.documentElement.setAttribute("data-theme", m), {
+    const applyMode = (m: ThemeMode) => document.documentElement.setAttribute("data-theme", m);
+    let isFirstApply = true;
+
+    watch(mode, (m) => {
+      // Skip the crossfade for the initial pre-mount application (nothing to
+      // fade from yet) and when the browser lacks View Transitions support —
+      // packages/brand/transitions.css covers that case with a plain CSS
+      // transition instead. Also respect prefers-reduced-motion.
+      const reducedMotion =
+        typeof window !== "undefined" &&
+        typeof window.matchMedia === "function" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      if (isFirstApply || reducedMotion || typeof document.startViewTransition !== "function") {
+        isFirstApply = false;
+        applyMode(m);
+        return;
+      }
+      document.startViewTransition(() => applyMode(m));
+    }, {
       immediate: true,
       flush: "sync", // apply immediately — no flash, no waiting on the next tick
     });

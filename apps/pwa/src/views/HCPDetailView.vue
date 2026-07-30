@@ -11,19 +11,29 @@
       :derive="hcpFormDerive"
       :initial-data="hcpFormInitialData"
       title-key="user.hcp.form.title"
-      edit-title-key="user.hcp.form.title"
+      edit-title-key="user.hcp.form.editTitle"
       submit-label-key="user.hcp.form.submit"
-      edit-submit-label-key="user.hcp.form.submit"
+      edit-submit-label-key="user.hcp.form.editSubmit"
       avatar-entity-type="hcp"
       @submit="onContactSubmit"
+    />
+    <VAlert
+      v-if="isOffline"
+      type="warning"
+      variant="tonal"
+      density="compact"
+      class="view-detail__offline-banner"
+      :text="t('app.common.offlineShowingCached')"
     />
     <ItemDetailLayout
     :has-content="!!hcp"
     :loading="loading"
+    :load-error="loadFailed"
     :back-route="{ name: 'hcp' }"
     :back-label="t('user.hcp.detail.back')"
     :not-found-label="t('user.hcp.detail.notFound')"
     :title="hcp?.name"
+    @retry="loadHCP"
   >
     <template #header-actions v-if="hcp">
       <VTooltip location="bottom">
@@ -105,7 +115,7 @@
     </template>
   </ItemDetailLayout>
 
-  <VDialog v-model="showDeleteConfirm" max-width="360" persistent>
+  <VDialog v-model="showDeleteConfirm" max-width="360" :transition="originDialogTransition" persistent>
     <VCard>
       <VCardText>{{ t("user.hcp.actions.deleteConfirmText") }}</VCardText>
       <VCardActions>
@@ -124,10 +134,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
+import { originDialogTransition } from "@ui";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuthStore } from "../stores/auth";
-import { apiFetch } from "../utils/api";
+import { apiFetch } from "../composables/useBffApi";
+import { useEntityCacheStore } from "../stores/entityCache";
 import { useNotifications } from "../composables/useNotifications";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
@@ -168,8 +180,13 @@ const authStore = useAuthStore();
 const notifications = useNotifications();
 const isAdmin = computed(() => authStore.user?.role === "admin");
 
+const hcpCache = useEntityCacheStore("hcp");
 const hcp = ref<HCP | null>(null);
 const loading = ref(true);
+/** True while `hcp` is being served from the offline cache — see docs/ADR-013-offline-read-cache.md. */
+const isOffline = ref(false);
+/** True when loadHCP() failed for a reason other than a genuine 404 (network/server) — see loadHCP(). */
+const loadFailed = ref(false);
 const showEditModal = ref(false);
 const showDeleteConfirm = ref(false);
 const showEventForm = ref(false);
@@ -297,16 +314,29 @@ async function loadHCP() {
   }
   loading.value = true;
   hcp.value = null;
+  loadFailed.value = false;
   try {
     const res = await apiFetch(`/api/v1/practitioner/${id}`, { handleErrors: false });
     if (res.ok) {
       hcp.value = (await res.json()) as HCP;
+      isOffline.value = false;
+      void hcpCache.cacheOne(hcp.value as unknown as Record<string, unknown>);
     } else if (res.status !== 404) {
-      notifications.show(t("user.hcp.errorLoad"), "error");
+      // Not a genuine 404 — ItemDetailLayout renders its own "connection
+      // problem" + retry state for this (see :load-error), so no separate
+      // toast on top of it.
+      loadFailed.value = true;
     }
   } catch {
-    notifications.show(t("user.hcp.errorLoad"), "error");
-    hcp.value = null;
+    // Network failure, not a server error — fall back to the cached record if we have one.
+    const cached = await hcpCache.readOne(id);
+    if (cached) {
+      hcp.value = cached as unknown as HCP;
+      isOffline.value = true;
+    } else {
+      loadFailed.value = true;
+      hcp.value = null;
+    }
   } finally {
     loading.value = false;
   }
@@ -319,6 +349,10 @@ watch(() => route.params.id, loadHCP);
 <style scoped>
 .view-detail {
   min-height: 0;
+}
+
+.view-detail__offline-banner {
+  margin: 0 0 12px;
 }
 
 .view-item__title-wrap {

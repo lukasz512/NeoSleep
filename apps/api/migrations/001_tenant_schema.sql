@@ -1302,18 +1302,21 @@ BEGIN
     slug||'_message_sender_idx', slug);
 
   -- ===========================================================================
-  -- NOTIFICATIONS (in-app system alerts for reps)
+  -- NOTIFICATIONS (in-app inbox — bell/badge in the app-bar)
   -- Distinct from messages: notifications = system events (PCF overdue, new HCP),
   -- messages = two-way communication with contacts.
+  -- Keyed to identities (not users) so a future practitioner/patient portal can
+  -- reuse this same table without a re-migration — see ADR-012. One row per
+  -- EVENT, not per channel: read_at means "read in-app". Per-channel dispatch
+  -- (email/push/sms) is tracked in notification_delivery below, so a single
+  -- event fanned out to 3 channels still shows up once in the bell.
   -- metadata is open for future social media integration.
   -- ===========================================================================
   EXECUTE format('
     CREATE TABLE IF NOT EXISTS %I.notification (
       id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-      user_id     UUID        NOT NULL REFERENCES %I.users(id) ON DELETE CASCADE,
+      identity_id UUID        NOT NULL REFERENCES %I.identities(id) ON DELETE CASCADE,
       type        TEXT        NOT NULL,    -- "visit_reminder" | "pcf_overdue" | "new_hcp" | "system"
-      channel     TEXT        NOT NULL DEFAULT ''in_app''
-                    CHECK (channel IN (''in_app'', ''push'', ''email'', ''sms'')),
       title       TEXT        NOT NULL,
       body        TEXT,
       entity_type TEXT,                   -- "encounter" | "practitioner" | "lead"
@@ -1324,20 +1327,45 @@ BEGIN
       created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
     )', slug, slug);
 
-  EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %I.notification (user_id, read_at)',
-    slug||'_notif_user_idx', slug);
+  EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %I.notification (identity_id, read_at)',
+    slug||'_notif_identity_idx', slug);
   EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %I.notification (created_at)',
     slug||'_notif_created_idx', slug);
 
-  -- PWA push subscription endpoints per device
+  -- Per-channel delivery log for a notification event (see ADR-012).
+  -- The bell UI never reads this — it's the audit/debug trail for "did the
+  -- email/push for this event actually go out".
+  EXECUTE format('
+    CREATE TABLE IF NOT EXISTS %I.notification_delivery (
+      id                   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+      notification_id      UUID        NOT NULL REFERENCES %I.notification(id) ON DELETE CASCADE,
+      channel              TEXT        NOT NULL CHECK (channel IN (''in_app'', ''push'', ''email'', ''sms'')),
+      status               TEXT        NOT NULL DEFAULT ''pending''
+                              CHECK (status IN (''pending'', ''sent'', ''delivered'', ''failed'')),
+      provider_message_id  TEXT,
+      failed_reason        TEXT,
+      sent_at              TIMESTAMPTZ,
+      delivered_at         TIMESTAMPTZ,
+      created_at           TIMESTAMPTZ NOT NULL DEFAULT now()
+    )', slug, slug);
+
+  EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %I.notification_delivery (notification_id)',
+    slug||'_notif_delivery_notif_idx', slug);
+  EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %I.notification_delivery (channel, status)',
+    slug||'_notif_delivery_channel_idx', slug);
+
+  -- PWA push subscription endpoints per device. `keys` holds the raw Web Push
+  -- API subscription object's key pair ({p256dh, auth}) as-is — matches
+  -- routes/push.ts, which reads/writes it as one JSONB blob rather than two
+  -- separate columns.
   EXECUTE format('
     CREATE TABLE IF NOT EXISTS %I.push_subscription (
       id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id    UUID        NOT NULL REFERENCES %I.users(id) ON DELETE CASCADE,
       endpoint   TEXT        NOT NULL UNIQUE,
-      p256dh     TEXT        NOT NULL,
-      auth       TEXT        NOT NULL,
+      keys       JSONB       NOT NULL,
       user_agent TEXT,
+      last_used  TIMESTAMPTZ,
       metadata   JSONB,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()

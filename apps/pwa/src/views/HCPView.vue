@@ -15,9 +15,9 @@
       :derive="hcpFormDerive"
       :initial-data="selectedHcpFormData"
       title-key="user.hcp.form.title"
-      edit-title-key="user.hcp.form.title"
+      edit-title-key="user.hcp.form.editTitle"
       submit-label-key="user.hcp.form.submit"
-      edit-submit-label-key="user.hcp.form.submit"
+      edit-submit-label-key="user.hcp.form.editSubmit"
       avatar-entity-type="hcp"
       @submit="onEditSubmit"
     />
@@ -45,7 +45,7 @@
       </span>
     </template>
     <template #feed-card-avatar="{ item }">
-      <AppAvatar :name="(item as { name?: string }).name" entity-type="hcp" size="100%" />
+      <AppAvatar :name="(item as { name?: string }).name" entity-type="hcp" :size="55" />
     </template>
     <template #feed-card-title="{ item }">
       <span class="hcp-name-cell">
@@ -78,7 +78,7 @@ import AppAvatar from "../components/AppAvatar.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppListItemMenu from "../components/AppListItemMenu.vue";
 import { entityActionIcon, entityActionMenuIconClass } from "../config/entityActions";
-import { apiFetch } from "../utils/api";
+import { apiFetch } from "../composables/useBffApi";
 import { useNotifications } from "../composables/useNotifications";
 import GenderIcon from "../components/GenderIcon.vue";
 import { type FilterDefinition } from "../composables/useFilters";

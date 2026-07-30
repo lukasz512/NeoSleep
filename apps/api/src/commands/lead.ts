@@ -29,10 +29,20 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** Matches lead_status_check in the DB exactly — the PWA uses this same vocabulary, no translation. */
 const VALID_LEAD_STATUSES = ["new", "contacted", "qualified", "inactive", "converted"];
 
+/** Matches lead_type_check (009_partner_invite_and_documents.sql). Drives the doctor-only "Invite to collaborate" action. */
+const VALID_LEAD_TYPES = ["doctor", "hospital", "pharmacy", "patient", "other"];
+
 function normalizeLeadStatus(input: string | undefined): string | undefined {
   if (input === undefined) return undefined;
   const value = input.trim().toLowerCase();
   if (!VALID_LEAD_STATUSES.includes(value)) throw new ValidationError(`Invalid lead status: "${input}"`);
+  return value;
+}
+
+function normalizeLeadType(input: string | undefined): string | undefined {
+  if (input === undefined) return undefined;
+  const value = input.trim().toLowerCase();
+  if (!VALID_LEAD_TYPES.includes(value)) throw new ValidationError(`Invalid lead type: "${input}"`);
   return value;
 }
 
@@ -47,6 +57,7 @@ export interface CreateLeadInput {
   email?: string | null;
   phone?: string | null;
   status?: string;
+  type?: string;
   region?: string;
   source?: string | null;
   institution?: string | null;
@@ -74,8 +85,12 @@ export async function CreateLeadCommand(
   if (!firstName) throw new ValidationError("first_name is required");
   if (!lastName)  throw new ValidationError("last_name is required");
 
+  const type = normalizeLeadType(input.type) ?? "other";
   const institution = typeof input.metadata?.institution === "string" ? input.metadata.institution.trim() : "";
-  if (!institution) throw new ValidationError("institution is required");
+  // Only a doctor lead is expected to name a clinic — hospital/pharmacy leads
+  // *are* the institution, and a patient lead names a diagnosis instead
+  // (see leadForm.ts's isDoctorType()/isPatientType() gating on the frontend).
+  if (type === "doctor" && !institution) throw new ValidationError("institution is required for doctor leads");
 
   const email = input.email?.trim() ?? null;
   if (email && !EMAIL_REGEX.test(email)) throw new ValidationError("Invalid email format");
@@ -87,6 +102,7 @@ export async function CreateLeadCommand(
     email:       email || null,
     phone:       input.phone?.trim() ?? null,
     status:      normalizeLeadStatus(input.status) ?? "new",
+    type,
     region:      input.region?.trim() ?? "",
     source:      input.source?.trim() ?? null,
     institution: input.institution?.trim() || null,
@@ -119,6 +135,7 @@ export interface UpdateLeadPayload {
   email?: string | null;
   phone?: string | null;
   status?: string;
+  type?: string;
   region?: string;
   source?: string | null;
   institution?: string | null;
@@ -150,6 +167,7 @@ export async function UpdateLeadCommand(
     email:       input.email,
     phone:       input.phone,
     status:      normalizeLeadStatus(input.status),
+    type:        normalizeLeadType(input.type),
     region:      input.region,
     source:      input.source,
     institution: input.institution,
@@ -203,7 +221,12 @@ export async function ConvertLeadCommand(
   if (!convertedToId) throw new ValidationError("converted_to_id is required");
 
   const convertedToType = input.converted_to_type?.trim().toLowerCase();
-  if (convertedToType !== "practitioner" && convertedToType !== "organization" && convertedToType !== "patient") {
+  if (
+    convertedToType !== "practitioner" &&
+    convertedToType !== "organization" &&
+    convertedToType !== "patient" &&
+    convertedToType !== "user"
+  ) {
     throw new ValidationError(`Invalid converted_to_type: "${input.converted_to_type}"`);
   }
 

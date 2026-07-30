@@ -42,7 +42,7 @@
         </span>
       </template>
       <template #feed-card-avatar="{ item }">
-        <AppAvatar :name="(item as HCOListItem).name" entity-type="hco" size="100%" />
+        <AppAvatar :name="(item as HCOListItem).name" entity-type="hco" :size="55" />
       </template>
       <template #feed-card-title="{ item }">
         {{ (item as HCOListItem).name }}
@@ -80,7 +80,7 @@ import { entityActionIcon, entityActionMenuIconClass } from "../config/entityAct
 import { type FilterDefinition } from "../composables/useFilters";
 import { useAuthStore } from "../stores/auth";
 import { useConfigStore } from "../stores/config";
-import { apiFetch } from "../utils/api";
+import { apiFetch } from "../composables/useBffApi";
 import { useNotifications } from "../composables/useNotifications";
 import { hcoFormFields } from "../config/forms/hcoForm";
 

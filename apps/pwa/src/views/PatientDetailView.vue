@@ -19,9 +19,11 @@
     <ItemDetailLayout
       :has-content="!!patient"
       :loading="loading"
+      :load-error="loadFailed"
       :back-route="{ name: 'patients' }"
       :back-label="t('app.patients.detail.back')"
       :not-found-label="t('app.patients.detail.notFound')"
+      @retry="loadPatient"
     >
       <template #title v-if="patient">
         <span class="view-item__title-wrap">
@@ -121,7 +123,7 @@
       </template>
     </ItemDetailLayout>
 
-    <VDialog v-model="showDeleteConfirm" max-width="360" persistent>
+    <VDialog v-model="showDeleteConfirm" max-width="360" :transition="originDialogTransition" persistent>
       <VCard>
         <VCardText>{{ t("app.patients.actions.deleteConfirmText") }}</VCardText>
         <VCardActions>
@@ -140,10 +142,11 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
+import { originDialogTransition } from "@ui";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuthStore } from "../stores/auth";
-import { apiFetch } from "../utils/api";
+import { apiFetch } from "../composables/useBffApi";
 import { useNotifications } from "../composables/useNotifications";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
@@ -183,6 +186,8 @@ const notifications = useNotifications();
 
 const patient = ref<PatientDetail | null>(null);
 const loading = ref(true);
+/** True when loadPatient() failed for a reason other than a genuine 404 (network/server) — see loadPatient(). */
+const loadFailed = ref(false);
 const showEditModal = ref(false);
 const showEventForm = ref(false);
 const eventFormInitial = ref<{ start_at: string; end_at: string; patientIds?: string[] } | undefined>(undefined);
@@ -280,15 +285,19 @@ async function loadPatient() {
   }
   loading.value = true;
   patient.value = null;
+  loadFailed.value = false;
   try {
     const res = await apiFetch(`/api/v1/patient/${id}`, { handleErrors: false });
     if (res.ok) {
       patient.value = (await res.json()) as PatientDetail;
     } else if (res.status !== 404) {
-      notifications.show(t("app.patients.errorLoad"), "error");
+      // Not a genuine 404 — ItemDetailLayout renders its own "connection
+      // problem" + retry state for this (see :load-error), so no separate
+      // toast on top of it.
+      loadFailed.value = true;
     }
   } catch {
-    notifications.show(t("app.patients.errorLoad"), "error");
+    loadFailed.value = true;
     patient.value = null;
   } finally {
     loading.value = false;
