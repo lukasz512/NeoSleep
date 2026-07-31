@@ -1,4 +1,4 @@
-import { apiFetch } from "../composables/useBffApi";
+import { apiFetch } from "../composables/useApi";
 import { isCreatingNewOrganization } from "../config/forms/hcpForm";
 
 /**

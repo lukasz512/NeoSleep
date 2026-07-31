@@ -6,7 +6,7 @@ import { CreateLeadCommand } from "./lead.js";
 import { ValidationError } from "../errors.js";
 
 // Command-level integration test — hits the real tenant DB via withTenant(),
-// per CLAUDE.md's "No mock-only tests for BFF" rule. Needs a running
+// per CLAUDE.md's "No mock-only tests for the API server" rule. Needs a running
 // Postgres with this tenant's migrations applied (pnpm start / docker compose).
 const TENANT_SLUG = process.env.DEFAULT_TENANT_SLUG ?? "neosleep";
 

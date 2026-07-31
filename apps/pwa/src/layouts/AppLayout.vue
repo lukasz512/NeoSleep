@@ -141,6 +141,8 @@ import AppButton from "../components/AppButton.vue";
 import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
 import AppNotifications from "../components/AppNotifications.vue";
 import { useNotificationCenter } from "../composables/useNotificationCenter";
+import { onAppReady, markAppReady } from "../composables/useAppReady";
+import { usePartnerResources } from "../composables/usePartnerResources";
 
 const route = useRoute();
 const { t, locale } = useI18n();
@@ -164,6 +166,13 @@ const { visibleNavItems } = useVisibleNavRoutes();
 const { unreadCount, startPolling, stopPolling } = useNotificationCenter();
 onMounted(startPolling);
 onUnmounted(stopPolling);
+
+// Warms the OrthoApnea session + resources cache in the background as soon
+// as the app shell is up, so ResourcesView.vue doesn't pay that latency
+// itself later — see useAppReady.ts.
+const { load: loadPartnerResources } = usePartnerResources();
+onAppReady(() => void loadPartnerResources(locale.value));
+onMounted(markAppReady);
 
 const menuOpen = ref(false);
 

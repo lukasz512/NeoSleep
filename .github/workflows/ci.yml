@@ -1,6 +1,6 @@
 # Runs on every pull request: lint + typecheck across all workspaces, plus
 # test suites. apps/api needs a real Postgres for its integration tests (see
-# CLAUDE.md: "No mock-only tests for BFF") — a fresh postgres:15 service
+# CLAUDE.md: "No mock-only tests for the API server") — a fresh postgres:15 service
 # container is migrated before tests run, kept separate from the shared
 # Supabase dev/prod DB.
 #

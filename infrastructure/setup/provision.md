@@ -1,19 +1,19 @@
-# Hetzner VPS provisioning — BFF (apps/api)
+# Hetzner VPS provisioning — API server (apps/api)
 
-> **Status: not active.** The BFF currently deploys to Render (`render.yaml`,
+> **Status: not active.** The API server currently deploys to Render (`render.yaml`,
 > free tier — see `infrastructure/scripts/render-keepalive.gs` for the
 > keep-alive ping). This runbook is the scale-up path for when Render's free
 > tier stops being enough (real field pilot, need for always-on without a
 > keep-alive hack, need for background jobs, etc.) — come back to this when
 > that day arrives, don't run it in parallel with Render.
 
-Runbook to stand up a Hetzner Cloud server with PM2 processes `bff-prod` /
-`bff-uat`, SSH deploy as user `deploy`.
+Runbook to stand up a Hetzner Cloud server with PM2 processes `api-prod` /
+`api-uat`, SSH deploy as user `deploy`.
 
-Scope: **BFF only**. `apps/pwa` and `apps/web` keep deploying to GoDaddy via FTP
+Scope: **API server only**. `apps/pwa` and `apps/web` keep deploying to GoDaddy via FTP
 until a separate migration. `infrastructure/docker-compose.prod.yml` +
 `infrastructure/nginx/default.conf` are an older, unused Docker-based approach —
-this runbook uses PM2 + host nginx instead (see `infrastructure/nginx/bff-host.conf`).
+this runbook uses PM2 + host nginx instead (see `infrastructure/nginx/api-host.conf`).
 
 ## 1. Create the server
 
@@ -73,12 +73,12 @@ sudo apt-get install -y nginx certbot python3-certbot-nginx
 ## 4. Directory structure
 
 ```bash
-mkdir -p /home/deploy/apps/bff-prod /home/deploy/apps/bff-uat
+mkdir -p /home/deploy/apps/api-prod /home/deploy/apps/api-uat
 ```
 
 ## 5. Environment files (never committed, created directly on the server)
 
-Create `/home/deploy/apps/bff-prod/.env` and `/home/deploy/apps/bff-uat/.env` with:
+Create `/home/deploy/apps/api-prod/.env` and `/home/deploy/apps/api-uat/.env` with:
 
 ```
 NODE_ENV=production
@@ -99,7 +99,7 @@ DEFAULT_TENANT_SLUG=
 INITIAL_USER_PASSWORD=             # set for any seeded staff account with no password yet
 ```
 
-Lock down permissions: `chmod 600 /home/deploy/apps/bff-*/.env`.
+Lock down permissions: `chmod 600 /home/deploy/apps/api-*/.env`.
 
 ## 6. PM2
 
@@ -132,8 +132,8 @@ Wait for propagation (`dig api.neosleepcare.com`) before requesting certs.
 ## 8. nginx + TLS
 
 ```bash
-sudo cp infrastructure/nginx/bff-host.conf /etc/nginx/sites-available/bff
-sudo ln -s /etc/nginx/sites-available/bff /etc/nginx/sites-enabled/bff
+sudo cp infrastructure/nginx/api-host.conf /etc/nginx/sites-available/api
+sudo ln -s /etc/nginx/sites-available/api /etc/nginx/sites-enabled/api
 sudo rm -f /etc/nginx/sites-enabled/default
 
 sudo certbot --nginx -d api.neosleepcare.com -d api-uat.neosleepcare.com
@@ -151,7 +151,7 @@ Repo → Settings → Secrets and variables → Actions:
 
 ## 10. First real deploy
 
-Push to `dev` branch (or `workflow_dispatch` the `Deploy BFF` action) first, verify
+Push to `dev` branch (or `workflow_dispatch` the `Deploy API` action) first, verify
 `https://api-dev.neosleepcare.com/health`, then repeat for `prod`.
 
 ## 11. Update frontend env

@@ -37,7 +37,7 @@ The `audit_log` table currently lives in the same tenant PostgreSQL schema as ap
 
 ### Option A — Separate Append-Only PostgreSQL Table with Row-Level Security
 
-Move `audit_log` to a dedicated schema (`platform.audit`) with a PostgreSQL role that has `INSERT` only — no `UPDATE`, no `DELETE`. The application connects with a dedicated `audit_writer` role for audit writes, and a `audit_reader` role for audit reads. The `app_user` role used by BFF has no access to the audit schema.
+Move `audit_log` to a dedicated schema (`platform.audit`) with a PostgreSQL role that has `INSERT` only — no `UPDATE`, no `DELETE`. The application connects with a dedicated `audit_writer` role for audit writes, and a `audit_reader` role for audit reads. The `app_user` role used by the API server has no access to the audit schema.
 
 **✅ Enables:**
 - Audit log cannot be modified by the same session that wrote application data
@@ -67,7 +67,7 @@ Audit events are written to both `audit_log` (for SQL queryability) and an exter
 **❌ Closes:**
 - Adds infrastructure dependency (AWS account required)
 - Audit log is split across two systems (SQL for queries, CloudWatch for integrity)
-- Slightly more complex BFF code (dual write on every mutation)
+- Slightly more complex API server code (dual write on every mutation)
 
 **📋 Compliance:** Fully satisfies NIST SP 800-66r2, HITRUST v11 Control 09.aa, SOC 2 CC7.2. Enables HIPAA audit trail requirements for US expansion.
 

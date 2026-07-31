@@ -67,7 +67,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Dev-server proxy target for /api, /auth, /health — never used in production
 // builds (those get VITE_API_URL baked in at build time by CI, see deploy-pwa.yml).
-// Defaults to the local BFF; set VITE_DEV_API_TARGET to a remote HTTPS URL
+// Defaults to the local API server; set VITE_DEV_API_TARGET to a remote HTTPS URL
 // (e.g. the Render deploy) to test against a deployed API instead.
 const devApiTarget = process.env.VITE_DEV_API_TARGET || "http://localhost:3000";
 const devApiIsHttps = devApiTarget.startsWith("https://");

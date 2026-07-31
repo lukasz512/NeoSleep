@@ -6,7 +6,7 @@
 
 ## Authorization
 - RBAC: rep / manager / admin
-- Region scoping enforced server-side in BFF
+- Region scoping enforced server-side in the API server
 
 ## Sensitive data
 Treat medical/patient data as sensitive by default.

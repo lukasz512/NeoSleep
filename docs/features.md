@@ -165,7 +165,7 @@
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Marketing landing page | **Complete** | `apps/web/` |
-| Contact form → BFF | **Complete** | `/api/contact` → nodemailer |
+| Contact form → API | **Complete** | `/api/contact` → nodemailer |
 | SEO / sitemap | **Partial** | |
 
 ---
