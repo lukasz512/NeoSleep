@@ -7,7 +7,7 @@
 pnpm start
 ```
 
-Starts Docker Desktop (if not running), then Postgres, runs migrations, installs deps, and launches the API server + rep app (PWA) + website. See [README.md](../README.md) for details.
+Starts Docker Desktop (if not running), then Postgres, runs migrations, installs deps, and launches API + PWA + WEB. See [README.md](../README.md) for details.
 
 ## Prereqs
 - **Node 20+** (required for Vite 7, Vitest 4, ESLint 9; project has `.nvmrc` with `20`)
@@ -60,7 +60,7 @@ pnpm install
   ```
   Use a terminal where Node is running **natively** (e.g. arm64 on Apple Silicon), not under Rosetta.
 
-**Running tests for the rep app (PWA) only:**
+**Running tests for PWA only:**
 ```bash
 nvm use
 pnpm --filter @neo/pwa test -- --run
@@ -87,14 +87,14 @@ pnpm --filter @neo/api test
 
 **All at once, no Docker:**
 ```bash
-pnpm dev   # api, pwa, web concurrently
+pnpm dev   # API + PWA + WEB concurrently
 ```
 
 **One app only:**
 ```bash
-pnpm --filter @neo/pwa dev   # rep app (PWA)
-pnpm --filter @neo/web dev   # website
-pnpm --filter @neo/api dev   # API server
+pnpm --filter @neo/pwa dev   # PWA
+pnpm --filter @neo/web dev   # WEB
+pnpm --filter @neo/api dev   # API
 ```
 
 **Or from inside the app's directory:**
@@ -109,5 +109,5 @@ curl http://localhost:3000/health
 ```
 
 ## App routes (scaffold)
-- **Rep app (PWA)**: `/login`, `/dashboard` (default). Mobile-first sidebar nav (see `apps/pwa/src/router/routes.ts` for the current nav/role config).
-- **Website**: `/`, `/about`
+- **PWA**: `/login`, `/dashboard` (default). Mobile-first sidebar nav (see `apps/pwa/src/router/routes.ts` for the current nav/role config).
+- **WEB**: `/`, `/about`

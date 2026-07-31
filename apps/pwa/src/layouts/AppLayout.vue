@@ -91,7 +91,7 @@
       <template #app-bar-title>
         <Transition name="title-fade" mode="out-in">
           <div :key="moduleTitle" class="layout-appbar__title-group">
-            <AppIcon v-if="isMobile && moduleIcon" :name="moduleIcon" class="layout-appbar__icon" />
+            <AppIcon v-if="moduleIcon" :name="moduleIcon" class="layout-appbar__icon" />
             <span class="layout-appbar__title">{{ moduleTitle }}</span>
           </div>
         </Transition>
@@ -167,9 +167,15 @@ const { unreadCount, startPolling, stopPolling } = useNotificationCenter();
 onMounted(startPolling);
 onUnmounted(stopPolling);
 
-// Warms the OrthoApnea session + resources cache in the background as soon
-// as the app shell is up, so ResourcesView.vue doesn't pay that latency
-// itself later — see useAppReady.ts.
+// Silently warms the OrthoApnea session + resources cache in the background
+// as soon as the app shell is up, so ResourcesView.vue doesn't pay that
+// latency itself later — see useAppReady.ts. No toast here: the connection
+// notification lives in the router guard (router/index.ts), triggered when
+// the rep actually navigates into a partner-dependent route (`meta.partner`)
+// — that's also where a failed connection gets retried, via
+// usePartnerConnection.ts's ensurePartnerConnection(). A rep who never opens
+// Resources is never interrupted; one who does gets both a retry attempt and
+// (rate-limited) feedback if it's still down.
 const { load: loadPartnerResources } = usePartnerResources();
 onAppReady(() => void loadPartnerResources(locale.value));
 onMounted(markAppReady);

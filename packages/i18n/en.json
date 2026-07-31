@@ -280,6 +280,7 @@
   "user.resources.tabs.videos": "Videos",
   "user.resources.emptyDocuments": "No documents available yet",
   "user.resources.emptyVideos": "No videos available yet",
+  "app.partners.connectionError": "Couldn't connect to {partner}",
   "layout.sidebar.placeholder": "Sidebar (placeholder)",
   "layout.sidebar.expand": "Expand sidebar",
   "layout.sidebar.collapse": "Collapse sidebar",

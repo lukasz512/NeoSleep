@@ -283,6 +283,7 @@
   "user.resources.tabs.videos": "Videos",
   "user.resources.emptyDocuments": "Aún no hay documentos disponibles",
   "user.resources.emptyVideos": "Aún no hay videos disponibles",
+  "app.partners.connectionError": "No se pudo conectar con {partner}",
   "user.settings.menu": "Configuración de pantalla",
   "user.settings.theme": "Tema",
   "user.settings.language": "Idioma",

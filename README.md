@@ -14,11 +14,11 @@ One command starts everything:
 - Docker Desktop (if not running – launches it and waits)
 - Postgres
 - DB migrations
-- API server + rep app + website
+- API + PWA + WEB
 
-- **Rep app (PWA):** http://localhost:5173
-- **API server:** http://localhost:3000
-- **Website:** http://localhost:5174
+- **PWA:** http://localhost:5173
+- **API:** http://localhost:3000
+- **WEB:** http://localhost:5174
 
 ## Tests
 
@@ -41,9 +41,9 @@ Tests run automatically on pre-commit (Husky).
 
 | App | Path | Subdomain (target) |
 |-----|------|--------------------|
-| Rep PWA | `apps/pwa` | pwa.neosleepcare.com |
-| Website | `apps/web` | neosleepcare.com |
-| API server | `apps/api` | api.neosleepcare.com (planned — currently Render-assigned URL, see `render.yaml`) |
+| PWA | `apps/pwa` | pwa.neosleepcare.com |
+| WEB | `apps/web` | neosleepcare.com |
+| API | `apps/api` | api.neosleepcare.com (planned — currently Render-assigned URL, see `render.yaml`) |
 | Telegram bot | `apps/telegram` | — |
 
 ## Local dev (manual)
