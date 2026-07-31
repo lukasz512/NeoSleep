@@ -18,8 +18,8 @@
       </div>
 
       <div class="view-resources__window">
-        <div v-if="loading" class="view-resources__state view-resources__state--loading">
-          <AppLoadingState />
+        <div v-if="loading" class="view-resources__grid" aria-hidden="true">
+          <VSkeletonLoader v-for="n in 8" :key="n" type="card" class="view-resources__skeleton-card" />
         </div>
 
         <Transition v-else name="title-fade" mode="out-in">
@@ -88,7 +88,7 @@
                     <video controls preload="none" class="view-resources__video rounded-lg" :src="video.mediaUrl" />
                     <VTooltip location="bottom" :text="video.title" open-delay="400">
                       <template #activator="{ props: tooltipProps }">
-                        <div v-bind="tooltipProps" class="d-flex flex-column mt-2">
+                        <div v-bind="tooltipProps" class="d-flex flex-column w-100 mt-2">
                           <span class="view-resources__card-title text-body-2 font-weight-bold">{{ video.title }}</span>
                           <span v-if="video.description" class="text-caption text-medium-emphasis">{{ video.description }}</span>
                         </div>
@@ -123,7 +123,6 @@ import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { AppSegmentedTabs } from "@ui";
 import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
-import AppLoadingState from "../components/AppLoadingState.vue";
 import AppErrorState from "../components/AppErrorState.vue";
 import AppEmptyState from "../components/AppEmptyState.vue";
 import { usePartnerResources, type PartnerResourceFileType } from "../composables/usePartnerResources";
@@ -218,16 +217,6 @@ const incidentMailtoHref = computed(() => {
   justify-content: center;
 }
 
-/* Loading replaces the content area only — tabs stay put (see Core
-   principle #6, one canonical loading state: AppLoadingState, never a
-   bespoke spinner). Bottom-anchored per feedback rather than dead-centered
-   in the whole window, which read as floating awkwardly in a tall panel. */
-.view-resources__state--loading {
-  align-items: flex-end;
-  padding-bottom: 15vh;
-  min-height: 240px;
-}
-
 .view-resources__scroll-sentinel {
   position: absolute;
   height: 1px;
@@ -239,10 +228,18 @@ const incidentMailtoHref = computed(() => {
    level, not inside .view-resources__window, so the flex "keep it above the
    scroll area" approach never actually engaged. position: sticky pins it to
    whichever ancestor really is the scrolling context, so it doesn't depend
-   on correctly diagnosing that chain. */
+   on correctly diagnosing that chain.
+
+   top is --v-layout-top (Vuetify's own app-bar-height variable — VMain.css
+   sets `padding-top: var(--v-layout-top)` on itself, and custom properties
+   inherit down through this component), not 0 — AppShell's <VMain> has no
+   `scrollable` prop, so it doesn't reset that variable to 0 for its content
+   the way VMain's scrollable mode does. `top: 0` stuck this bar at the true
+   viewport top, i.e. sliding it underneath/behind the fixed app-bar instead
+   of stopping right below it. */
 .view-resources__tabs-bar {
   position: sticky;
-  top: 0;
+  top: var(--v-layout-top, 56px);
   z-index: 2;
   flex-shrink: 0;
   padding-block: 8px;
@@ -280,6 +277,15 @@ const incidentMailtoHref = computed(() => {
   gap: 16px;
 }
 
+/* Roughly matches the real card's total height (icon+title tile 116px +
+   language row ~48px with padding) so the page doesn't visibly jump once
+   real content replaces the skeleton. */
+.view-resources__skeleton-card {
+  height: 180px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
 /* M3 filled card: outline-variant border + surface-container-low tone
    (same recipe as AppEntityList.css's .app-entity-list__card) instead of
    VCard's default `outlined` variant, which draws a full-contrast
@@ -299,6 +305,12 @@ const incidentMailtoHref = computed(() => {
   /* Fixed height so every tile lines up regardless of title length: icon
      (40px + 8px margin) + a 2-line-clamped title at this line-height. */
   height: 116px;
+  /* VTooltip's activator slot wraps this in its own element, which doesn't
+     reliably preserve the VCard-driven width otherwise — without an
+     explicit 100%, the line-clamp box below sizes to its content instead of
+     the card, so text overflows the card's edge sideways instead of
+     wrapping/truncating within it. */
+  width: 100%;
 }
 
 /* Line-clamp has no Vuetify utility — this is the standard 2-line-truncate
