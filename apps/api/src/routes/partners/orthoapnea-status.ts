@@ -17,7 +17,6 @@ orthoapneaStatusRouter.get(
   "/partners/orthoapnea/status",
   requireAuth,
   asyncHandler(async (_req: Request, res: Response) => {
-    const connected = await checkConnection();
-    res.json({ connected });
+    res.json(await checkConnection());
   })
 );
