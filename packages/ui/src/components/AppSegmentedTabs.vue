@@ -1,8 +1,8 @@
 <template>
-  <div class="app-segmented-tabs position-relative d-flex pa-1 rounded-pill" role="tablist">
+  <div class="app-segmented-tabs position-relative d-flex pa-2 pa-sm-1 rounded-pill" role="tablist">
     <div
       class="app-segmented-tabs__thumb position-absolute rounded-pill bg-primary"
-      :style="{ width: `calc((100% - 8px) / ${options.length})`, transform: `translateX(${activeIndex * 100}%)` }"
+      :style="{ width: `calc((100% - var(--seg-pad) * 2) / ${options.length})`, transform: `translateX(${activeIndex * 100}%)` }"
       aria-hidden="true"
     />
     <VBtn
@@ -58,17 +58,27 @@ const activeIndex = computed(() => Math.max(0, props.options.findIndex((o) => o.
 <style scoped>
 /* Glass effect: no Vuetify utility for backdrop-filter — same vocabulary as AuthChrome.vue's pill chrome. */
 .app-segmented-tabs {
+  --seg-pad: 8px; /* matches the pa-2 utility in the template — kept in sync manually, see below */
   background: rgba(var(--v-theme-surface), 0.75);
   box-shadow: 0 1px 8px rgba(0, 0, 0, 0.12);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }
+@media (min-width: 600px) {
+  .app-segmented-tabs {
+    --seg-pad: 4px; /* matches the pa-sm-1 utility in the template */
+  }
+}
 
-/* Thumb position/slide: absolute-position coordinates and a transition timing function aren't utility-class-expressible. */
+/* Thumb position/slide: absolute-position coordinates and a transition
+   timing function aren't utility-class-expressible. Insets track --seg-pad
+   (set above from the container's own responsive padding utility classes)
+   because an absolutely positioned child's containing block is the padding
+   *edge*, not the content edge, so it doesn't inherit that inset for free. */
 .app-segmented-tabs__thumb {
-  top: 4px;
-  bottom: 4px;
-  left: 4px;
+  top: var(--seg-pad);
+  bottom: var(--seg-pad);
+  left: var(--seg-pad);
   box-shadow: 0 2px 8px rgba(var(--v-theme-primary), 0.35);
   transition: transform 420ms var(--pwa-ease-spring, cubic-bezier(0.34, 1.2, 0.64, 1));
   will-change: transform;
@@ -88,5 +98,16 @@ const activeIndex = computed(() => Math.max(0, props.options.findIndex((o) => o.
 
 .app-segmented-tabs__tab :deep(.v-btn__overlay) {
   display: none;
+}
+
+/* VBtn's "small" height (32px) reads as visually thin/cramped as a full-width
+   mobile control and falls short of the 44px touch-target minimum — no
+   Vuetify utility sets an explicit min-height. Bumped on mobile only, where
+   it's held and tapped rather than clicked with a mouse; desktop stays
+   compact by design. */
+@media (max-width: 599px) {
+  .app-segmented-tabs__tab {
+    min-height: 44px;
+  }
 }
 </style>
