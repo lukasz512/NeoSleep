@@ -1,5 +1,5 @@
 import { ref } from "vue";
-import { apiFetch } from "./useBffApi";
+import { apiFetch } from "./useApi";
 
 /**
  * Notification Center — in-app inbox (bell + badge). See ADR-012.

@@ -109,7 +109,7 @@ app.get("/health", (_req, res) => res.json({ ok: true }));
 // otherwise requireAuth 401s on a live remember-me cookie the moment the (shorter-lived) session expires.
 app.use(restoreSessionFromRememberMe);
 
-// All BFF routes are versioned under /api/v1 — auth router registers /auth/* paths separately
+// All API routes are versioned under /api/v1 — auth router registers /auth/* paths separately
 app.use("/api/v1", authRouter);
 app.use("/api/v1", leadsRouter);
 app.use("/api/v1", practitionerRouter);

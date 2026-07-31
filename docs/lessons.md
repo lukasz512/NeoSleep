@@ -38,9 +38,9 @@
 
 ## Testing
 
-### Do not mock PostgreSQL in BFF integration tests
+### Do not mock PostgreSQL in API server integration tests
 **Why:** We were burned by mocked tests passing while a prod migration failed — mock diverged from real DB schema.
-**Rule:** BFF tests must run against a real PostgreSQL instance (Docker Compose in CI).
+**Rule:** API server tests must run against a real PostgreSQL instance (Docker Compose in CI).
 
 ---
 

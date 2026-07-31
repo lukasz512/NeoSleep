@@ -21,7 +21,7 @@ type ApiFetchFn = (path: string, options?: ApiFetchOptions) => Promise<Response>
 /**
  * Auth store — session-cookie based.
  *
- * The BFF (apps/api) owns the session: it sets an httpOnly cookie on login
+ * The API server (apps/api) owns the session: it sets an httpOnly cookie on login
  * and reads it via express-session on every request. This store just mirrors
  * that server-side state in memory — it holds no token, because there is none.
  *

@@ -15,8 +15,8 @@ The write-queue half is deferred: it needs its own ADR before implementation (id
 
 ## Decision
 
-### 1. Rename `utils/api.ts` → `composables/useBffApi.ts`
-The canonical pipeline (`CLAUDE.md`, this skill) names `useBffApi.ts` as the one fetch composable. The file that actually plays that role was left at its old name (`utils/api.ts`) — naming drift from before the pipeline convention was written down. Fixed now, before building a new layer on top of it, so the new code is written against the name the docs already promise. All 22 import sites updated; no behavior change.
+### 1. Rename `utils/api.ts` → `composables/useApi.ts`
+The canonical pipeline (`CLAUDE.md`, this skill) names `useApi.ts` as the one fetch composable. The file that actually plays that role was left at its old name (`utils/api.ts`) — naming drift from before the pipeline convention was written down. Fixed now, before building a new layer on top of it, so the new code is written against the name the docs already promise. All 22 import sites updated; no behavior change.
 
 ### 2. IndexedDB wrapper, scoped per tenant + user
 New `apps/pwa/src/lib/offlineCache.ts` wraps `idb` (added as a dependency — no existing IndexedDB/Dexie/localForage usage in the repo). One IndexedDB database per `(tenant, user id)` pair (`neocrm-cache-${tenant}-${userId}`), not a single shared database. A rep switching tenants or logging out on a shared device must not see the previous session's cached HCP/lead records — DB-per-session-identity makes that a `deleteDatabase()` call rather than a query that could leak data if forgotten. Schema is versioned (`idb`'s `upgrade` callback) so future field/entity changes don't require users to manually clear their cache.

@@ -1,6 +1,6 @@
 # NeoSleep brand assets
 
-**Single source of truth** for logos, fonts, and brand visuals. Use this folder for all applications (website, rep-app, portal, etc.).
+**Single source of truth** for logos, fonts, and brand visuals. Use this folder for all applications (website, rep app, and any future apps).
 
 ## Source
 
@@ -29,16 +29,14 @@ brand/
 
 ## Usage in apps
 
-**Jedno miejsce:** wszystkie pliki są tylko w **`brand/`** (root repo). Żadnych kopii ani symlinków w aplikacjach.
+**One place:** every file lives only in **`brand/`** (repo root). No copies or symlinks in individual apps.
 
-- **Website** (`apps/web`): Vite serwuje `brand/` spod `/brand` w dev i przy `pnpm build` kopiuje do `dist/brand`. W `apps/web/public/` nie ma folderu `brand`.
-- **Rep-app** (`apps/rep-app`): To samo – plugin w `vite.config.ts` serwuje `brand/` spod `/brand` i przy buildzie kopiuje do `dist/brand`. W `apps/rep-app/public/` nie ma folderu `brand`.
+- **Website** (`apps/web`): Vite serves `brand/` at `/brand` in dev, and copies it to `dist/brand` on `pnpm build`. There is no `brand` folder under `apps/web/public/`.
+- **Rep app** (`apps/pwa`): Same approach — a plugin in `vite.config.ts` serves `brand/` at `/brand` and copies it to `dist/brand` on build. There is no `brand` folder under `apps/pwa/public/`.
 
 ## Colors
 
 Brand **primary** and **secondary** colours are not stored as image files here; they are defined in:
 
-- **Database**: `app_config` (tenant schema, seeded by `apps/api/migrations/002_tenant.sql`) holds `primary_color`, `secondary_color`, `border_radius`, etc., shared across website and rep-app.
-- **Fallback in code**: Until the app loads config from the BFF, rep-app uses `apps/rep-app/src/assets/scss/_brand-colors.scss` and website uses `apps/web/src/assets/website-theme.scss`. The colour in the logo (green) is the **secondary** brand colour; the **primary** is to be set in the brandbook and in `app_config`.
-
-See **foundation/docs/BRAND_AND_APP_CONFIG.md** for how app config and theme are wired.
+- **Database**: `app_config` (tenant schema, created in `apps/api/migrations/001_tenant_schema.sql`) holds `primary_color`, `secondary_color`, `border_radius`, etc., shared across website and rep app.
+- **Fallback in code**: Until the app loads config from the API server, the rep app uses `apps/pwa/src/assets/scss/_brand-colors.scss` and the website uses `apps/web/src/assets/website-theme.scss`. The colour in the logo (green) is the **secondary** brand colour; the **primary** is to be set in the brandbook and in `app_config`.

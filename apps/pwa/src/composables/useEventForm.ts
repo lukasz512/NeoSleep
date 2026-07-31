@@ -1,6 +1,6 @@
 import { ref, computed, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { apiFetch } from "./useBffApi";
+import { apiFetch } from "./useApi";
 import { scrollToFormTop } from "../utils/scrollToFormTop";
 import type { EventFormData, EventFormInitialData, EventSubmitPayload } from "../components/EventForm.types";
 

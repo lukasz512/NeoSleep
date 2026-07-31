@@ -149,7 +149,7 @@ import { brandColors } from "@brand/colors";
 import AppLoadingState from "../components/AppLoadingState.vue";
 import AppButton from "../components/AppButton.vue";
 import SignaturePad from "../components/SignaturePad.vue";
-import { apiFetch } from "../composables/useBffApi";
+import { apiFetch } from "../composables/useApi";
 
 /**
  * Public registration page reached via the doctor-invite email link

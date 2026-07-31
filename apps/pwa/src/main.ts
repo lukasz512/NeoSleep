@@ -12,7 +12,7 @@ import "@brand/transitions.css";
 import "./assets/transitions.css";
 import { setupDiagnosticReporter } from "./composables/useDiagnosticReporter";
 import { setupOfflineCacheSession } from "./composables/useOfflineCacheSession";
-import { apiFetch } from "./composables/useBffApi";
+import { apiFetch } from "./composables/useApi";
 import { getApiUrl } from "./constants";
 import { resolveInitialThemeMode, useMotionPreferenceStore } from "@stores";
 

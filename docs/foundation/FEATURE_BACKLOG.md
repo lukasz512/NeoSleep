@@ -11,7 +11,7 @@
 |---|---|---|
 | Supabase connection (DATABASE_URL) | `planned` | Prerequisite for everything |
 | Run migrations (000–001) | `planned` | platform + neosleep + fourseasons schemas |
-| BFF routes read from real DB | `in_progress` | practitioner, encounter, lead |
+| API routes read from real DB | `in_progress` | practitioner, encounter, lead |
 | HCP list view (filterable) | `in_progress` | rep sees their HCPs per territory |
 
 ---
@@ -60,7 +60,7 @@
 | Patient chat (website ↔ AI ↔ consultant) | `planned` | same conversation/message tables; support_ticket for AI→human escalation |
 | WhatsApp Business API integration | `planned` | webhook_event queue ready; LINE for TH market |
 | SMS via Twilio | `planned` | same webhook_event queue |
-| Email from app | `planned` | nodemailer already in BFF |
+| Email from app | `planned` | nodemailer already in API server |
 | Inbound message sync (webhook workers) | `planned` | webhook_event → conversation → message |
 | Notification Center (bell + badge, in-app inbox) | `in_progress` | `notification`/`notification_delivery` tables, GET/PATCH routes, Dashboard-only bell with pulsing unread dot on nav — see ADR-012. Inbox is empty until real event producers are wired (see next two rows). **No tests yet** — see memory `project_test_suite_weak` for the concrete file list, deferred to a dedicated session |
 | Push notifications | `planned` | push_subscription schema fixed to match routes/push.ts (ADR-012 §1); still no real send call wired to a domain event |
@@ -97,7 +97,7 @@
 | Patient registration (Google + WebAuthn + magic link) | `planned` | patient.google_sub + patient_webauthn_credentials; same modern auth as reps |
 | Patient portal (website) | `planned` | order products, view study results, chat, select dentist |
 | Purchase flow | `planned` | purchase_order + purchase_order_item + Stripe integration |
-| Supplier auto-dispatch | `planned` | on order paid → BFF calls supplier API (Biologix etc.) with shipping info |
+| Supplier auto-dispatch | `planned` | on order paid → API server calls supplier API (Biologix etc.) with shipping info |
 | Sleep study lifecycle | `planned` | sleep_study: device_shipped → results_received → interpreted by doctor |
 | Automatic results → doctor routing | `planned` | sleep_study.interpreted_by; doctor gets notification when results arrive |
 | Patient dentist selection | `planned` | patient picks from practitioner list (specialty=dentist); dentist notified |
