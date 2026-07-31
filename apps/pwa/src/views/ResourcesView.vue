@@ -19,7 +19,23 @@
 
       <div class="view-resources__window">
         <div v-if="loading" class="view-resources__grid" aria-hidden="true">
-          <VSkeletonLoader v-for="n in 8" :key="n" type="card" class="view-resources__skeleton-card" />
+          <VCard
+            v-for="n in 8"
+            :key="n"
+            variant="flat"
+            rounded="lg"
+            class="view-resources__card view-resources__card--skeleton bg-surface-container-low"
+          >
+            <div class="view-resources__card-tile d-flex flex-column pa-4">
+              <VSkeletonLoader type="avatar" color="surface-container-high" class="view-resources__skeleton-icon mb-2" />
+              <VSkeletonLoader type="text" color="surface-container-high" />
+              <VSkeletonLoader type="text" color="surface-container-high" width="60%" />
+            </div>
+            <div class="view-resources__lang-row d-flex justify-end ga-2 px-4 pb-4">
+              <VSkeletonLoader type="chip" color="surface-container-high" width="32" />
+              <VSkeletonLoader type="chip" color="surface-container-high" width="32" />
+            </div>
+          </VCard>
         </div>
 
         <Transition v-else name="title-fade" mode="out-in">
@@ -42,7 +58,7 @@
                       rounded="lg"
                       class="view-resources__card bg-surface-container-low"
                     >
-                      <VTooltip location="bottom" :text="doc.title" open-delay="400">
+                      <VTooltip location="bottom" :text="doc.title" open-delay="400" :disabled="!truncatedTitles[doc.id]">
                         <template #activator="{ props: tooltipProps }">
                           <a
                             v-bind="tooltipProps"
@@ -52,7 +68,9 @@
                             rel="noopener"
                           >
                             <AppIcon :name="fileTypeIcon(doc.fileType)" class="view-resources__card-icon mb-2" />
-                            <span class="view-resources__card-title text-body-2 font-weight-bold">{{ doc.title }}</span>
+                            <span :ref="(el) => registerTitleEl(doc.id, el as Element | null)" class="view-resources__card-title text-body-2 font-weight-bold">
+                              {{ doc.title }}
+                            </span>
                           </a>
                         </template>
                       </VTooltip>
@@ -86,10 +104,12 @@
                 <div v-for="subgroup in group.subgroups" :key="subgroup.subcategory ?? ''" class="view-resources__grid view-resources__grid--videos">
                   <VCard v-for="video in subgroup.items" :key="video.id" variant="flat" rounded="lg" class="bg-surface-container-low pa-3">
                     <video controls preload="none" class="view-resources__video rounded-lg" :src="video.mediaUrl" />
-                    <VTooltip location="bottom" :text="video.title" open-delay="400">
+                    <VTooltip location="bottom" :text="video.title" open-delay="400" :disabled="!truncatedTitles[video.id]">
                       <template #activator="{ props: tooltipProps }">
                         <div v-bind="tooltipProps" class="d-flex flex-column w-100 mt-2">
-                          <span class="view-resources__card-title text-body-2 font-weight-bold">{{ video.title }}</span>
+                          <span :ref="(el) => registerTitleEl(video.id, el as Element | null)" class="view-resources__card-title text-body-2 font-weight-bold">
+                            {{ video.title }}
+                          </span>
                           <span v-if="video.description" class="text-caption text-medium-emphasis">{{ video.description }}</span>
                         </div>
                       </template>
@@ -119,7 +139,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from "vue";
+import { ref, reactive, computed, watch, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { AppSegmentedTabs } from "@ui";
 import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
@@ -150,6 +170,21 @@ const FILE_TYPE_ICONS: Record<PartnerResourceFileType, AppIconName> = {
 };
 function fileTypeIcon(fileType: PartnerResourceFileType): AppIconName {
   return FILE_TYPE_ICONS[fileType];
+}
+
+/**
+ * Tooltip should only appear when the 2-line-clamped title is actually
+ * truncated, not on every card regardless of length — checked once per
+ * title element via its scrollHeight vs. its clamped clientHeight (the
+ * standard way to detect CSS line-clamp truncation; there's no DOM
+ * property that reports it directly). Not resize-reactive — a rare enough
+ * edge case (rotating a device, resizing a desktop window) that it isn't
+ * worth a ResizeObserver per card here.
+ */
+const truncatedTitles = reactive<Record<string, boolean>>({});
+function registerTitleEl(id: string, el: Element | null): void {
+  if (!(el instanceof HTMLElement)) return;
+  truncatedTitles[id] = el.scrollHeight > el.clientHeight + 1;
 }
 
 /**
@@ -217,10 +252,13 @@ const incidentMailtoHref = computed(() => {
   justify-content: center;
 }
 
+/* Deliberately normal-flow, not position: absolute — .view-resources has no
+   `position` of its own, so an absolutely positioned child's containing
+   block would resolve to some further, unrelated ancestor instead of
+   sitting right here, making the IntersectionObserver watching it fire at
+   the wrong moment (or never). A 1px block barely affects layout anyway. */
 .view-resources__scroll-sentinel {
-  position: absolute;
   height: 1px;
-  width: 1px;
 }
 
 /* Sticky rather than relying on being outside an internal overflow:auto
@@ -277,15 +315,6 @@ const incidentMailtoHref = computed(() => {
   gap: 16px;
 }
 
-/* Roughly matches the real card's total height (icon+title tile 116px +
-   language row ~48px with padding) so the page doesn't visibly jump once
-   real content replaces the skeleton. */
-.view-resources__skeleton-card {
-  height: 180px;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
 /* M3 filled card: outline-variant border + surface-container-low tone
    (same recipe as AppEntityList.css's .app-entity-list__card) instead of
    VCard's default `outlined` variant, which draws a full-contrast
@@ -297,6 +326,25 @@ const incidentMailtoHref = computed(() => {
 .view-resources__card:hover {
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
   transform: translateY(-2px);
+}
+
+/* Skeleton reuses the real card's classes for exact structural/dimensional
+   parity (same fixed-height tile, same lang-row spot) — this just turns the
+   hover lift back off, since it doesn't mean anything on a placeholder. */
+.view-resources__card--skeleton:hover {
+  box-shadow: none;
+  transform: none;
+}
+
+.view-resources__skeleton-icon {
+  width: 40px;
+  height: 40px;
+}
+.view-resources__skeleton-icon :deep(.v-skeleton-loader__avatar) {
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  border-radius: 8px;
 }
 
 .view-resources__card-tile {
