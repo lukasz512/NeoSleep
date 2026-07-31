@@ -1,9 +1,12 @@
-# Deploy rep-app to GoDaddy FTP
-# - prod → pwa.neosleepcare.com (path: secret GODADY_FTP_PWA_PROD)
-# - dev  → pwa.dev.neosleepcare.com (path: secret GODADY_FTP_PWA_DEV)
+# Auto-deploy rep-app to DEV on every push to dev (pwa.dev.neosleepcare.com,
+# path: secret GODADY_FTP_PWA_DEV). PROD is intentionally NOT deployed from
+# here — prod is only ever updated manually via promote-pwa-dev-to-prod.yml
+# ("Promote PWA Dev → Prod" in Actions), which builds from dev with PROD env
+# vars and ships to GODADY_FTP_PWA_PROD. Don't re-add a push:[prod] trigger
+# here without also removing the duplicate deploy logic from that file.
 #
-# NOTE: GODADY_FTP_PWA_* secrets must hold the FTP server-dir path (e.g.
-# /neosleepcare.com/pwa/prod), not the public https:// URL — see
+# NOTE: GODADY_FTP_PWA_DEV must hold the FTP server-dir path (e.g.
+# /neosleepcare.com/pwa/dev), not the public https:// URL — see
 # secrets/deploy-notes.md for the exact paths.
 #
 # TODO: migrate to SSH (appleboy/scp-action) once Hetzner VPS is provisioned.
@@ -13,7 +16,7 @@ name: Deploy NeoSleepCare App
 
 on:
   push:
-    branches: [prod, dev]
+    branches: [dev]
   workflow_dispatch:
 
 jobs:
@@ -37,31 +40,13 @@ jobs:
 
       - name: Set API URL for build
         run: |
-          if [ "${{ github.ref }}" = "refs/heads/prod" ]; then
-            echo "VITE_API_URL=${{ secrets.RENDER_API_URL_PROD }}" >> $GITHUB_ENV
-            echo "VITE_GA_ID=${{ secrets.VITE_GA_ID_PROD }}" >> $GITHUB_ENV
-          else
-            echo "VITE_API_URL=${{ secrets.RENDER_API_URL_DEV }}" >> $GITHUB_ENV
-            echo "VITE_GA_ID=${{ secrets.VITE_GA_ID_DEV }}" >> $GITHUB_ENV
-          fi
+          echo "VITE_API_URL=${{ secrets.RENDER_API_URL_DEV }}" >> $GITHUB_ENV
+          echo "VITE_GA_ID=${{ secrets.VITE_GA_ID_DEV }}" >> $GITHUB_ENV
 
       - name: Build rep-app
         run: pnpm run build:pwa
 
-      - name: Deploy to PROD (pwa.neosleepcare.com)
-        if: github.ref == 'refs/heads/prod'
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          protocol: ftp
-          local-dir: ./apps/pwa/dist/
-          server-dir: ${{ secrets.GODADY_FTP_PWA_PROD }}/
-          dangerous-clean-slate: false
-
       - name: Deploy to DEV (pwa.dev.neosleepcare.com)
-        if: github.ref == 'refs/heads/dev'
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
