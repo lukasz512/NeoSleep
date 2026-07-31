@@ -63,10 +63,13 @@ function decodeJwtExpiry(token: string): number | null {
 const FALLBACK_SESSION_TTL_MS = 30 * 60 * 1000;
 /** After a failed login, don't hammer OrthoApnea again for this long — a rep bouncing between routes while OrthoApnea is down shouldn't trigger a login attempt on every navigation. */
 const RECONNECT_COOLDOWN_MS = 15_000;
+/** After this many consecutive failed logins, checkConnection() reports `attemptsExhausted` so the frontend can switch from "retrying" to "this looks like a real outage" messaging. Still keeps retrying on the same cooldown — a doctor's reload can't fix a server-side outage, but OrthoApnea coming back on its own shouldn't require one either. */
+const MAX_CONSECUTIVE_FAILURES = 3;
 
 let session: OrthoApneaSession | null = null;
 let loginInFlight: Promise<OrthoApneaSession> | null = null;
 let lastLoginFailureAt: number | null = null;
+let consecutiveFailures = 0;
 
 function isSessionValid(s: OrthoApneaSession): boolean {
   return s.expiresAt > Date.now();
@@ -123,10 +126,12 @@ async function ensureSession(): Promise<OrthoApneaSession> {
       .then((s) => {
         session = s;
         lastLoginFailureAt = null;
+        consecutiveFailures = 0;
         return s;
       })
       .catch((err: unknown) => {
         lastLoginFailureAt = Date.now();
+        consecutiveFailures += 1;
         throw err;
       })
       .finally(() => {
@@ -134,6 +139,12 @@ async function ensureSession(): Promise<OrthoApneaSession> {
       });
   }
   return loginInFlight;
+}
+
+export interface ConnectionStatus {
+  connected: boolean;
+  /** True once MAX_CONSECUTIVE_FAILURES has been hit without a successful login in between — signals "this isn't a blip" rather than "still trying". */
+  attemptsExhausted: boolean;
 }
 
 /**
@@ -144,12 +155,12 @@ async function ensureSession(): Promise<OrthoApneaSession> {
  * orthoapnea-status.ts) — the same shape any future partner's status check
  * should follow: attempt-if-needed, never throw, just report connected.
  */
-export async function checkConnection(): Promise<boolean> {
+export async function checkConnection(): Promise<ConnectionStatus> {
   try {
     await ensureSession();
-    return true;
+    return { connected: true, attemptsExhausted: false };
   } catch {
-    return false;
+    return { connected: false, attemptsExhausted: consecutiveFailures >= MAX_CONSECUTIVE_FAILURES };
   }
 }
 
@@ -224,12 +235,136 @@ function pickLocalized(row: RawOrthoApneaResource, field: "title" | "description
   return "";
 }
 
+/**
+ * apneadock.es's own category/subcategory labels are NOT in the /api/resources
+ * JSON (that only has numeric `category`/`subcategory` fields with no name
+ * anywhere in the response) — they're baked into the Angular template as
+ * plain text. This table was built by cross-referencing captured page HTML
+ * (which has the labels) against the JSON dump (which has stable `id`s) —
+ * every id below is a confirmed match by title, not a guess. Keyed by id
+ * rather than the numeric category/subcategory fields because we never
+ * captured what those numbers mean, only which id sits under which visible
+ * heading. New resources OrthoApnea adds later won't be in this table until
+ * someone adds them — they fall back to UNKNOWN_CATEGORY rather than being
+ * hidden.
+ */
+const UNKNOWN_CATEGORY = "Otros";
+const RESOURCE_CATEGORY_BY_ID: Record<number, { category: string; subcategory?: string }> = {
+  1: { category: "Documentación de interés" },
+  2: { category: "Documentación de interés" },
+  36: { category: "Manuales" },
+  3: { category: "Protocolos" },
+  4: { category: "Protocolos" },
+  5: { category: "Protocolos" },
+  6: { category: "Protocolos" },
+  35: { category: "Protocolos" },
+  33: { category: "Protocolos" }, // "Ficha de Paciente para Supervisión Previa a Solicitud del tratamiento OrthoApnea NOA"
+  37: { category: "Protocolos" },
+  44: { category: "Protocolos" }, // "Protocolo Clínico para la Selección de Pacientes Candidatos al Uso de Dispositivos de Avance Mandibular"
+  53: { category: "Dispositivos", subcategory: "OrthoApnea" },
+  7: { category: "Dispositivos", subcategory: "OrthoApnea NOA" },
+  8: { category: "Dispositivos", subcategory: "OrthoApnea NOA" },
+  9: { category: "Dispositivos", subcategory: "OrthoApnea NOA" },
+  10: { category: "Dispositivos", subcategory: "OrthoApnea NOA" },
+  11: { category: "Dispositivos", subcategory: "OrthoApnea NOA" },
+  39: { category: "Dispositivos", subcategory: "OrthoApnea NOA" },
+  12: { category: "Dispositivos", subcategory: "OrthoApnea Classic" },
+  13: { category: "Dispositivos", subcategory: "OrthoApnea Classic" },
+  40: { category: "Dispositivos", subcategory: "OrthoApnea Classic" },
+  14: { category: "Dispositivos", subcategory: "Morning aligner" },
+  15: { category: "Dispositivos", subcategory: "Morning aligner" },
+  41: { category: "Dispositivos", subcategory: "Morning aligner" },
+  16: { category: "Dispositivos", subcategory: "Orthobrux" },
+  17: { category: "Dispositivos", subcategory: "Orthobrux" },
+  18: { category: "Dispositivos", subcategory: "Orthobrux" },
+  19: { category: "Dispositivos", subcategory: "Orthobrux" },
+  20: { category: "Dispositivos", subcategory: "Orthobrux" },
+  42: { category: "Dispositivos", subcategory: "Orthobrux" },
+  21: { category: "Recursos gráficos" },
+  22: { category: "Recursos gráficos" },
+  23: { category: "Recursos gráficos" },
+  24: { category: "Recursos gráficos" },
+  56: { category: "Recursos gráficos" },
+  57: { category: "Recursos gráficos" },
+  58: { category: "Recursos gráficos" },
+  25: { category: "Recursos gráficos", subcategory: "Branding" },
+  // "Webinar" — the Videos-tab label the whole tutorial/webinar set sits
+  // under (per direct confirmation, not the HTML cross-reference above).
+  26: { category: "Webinar" },
+  27: { category: "Webinar" },
+  28: { category: "Webinar" },
+  29: { category: "Webinar" },
+  30: { category: "Webinar" },
+  31: { category: "Webinar" },
+  32: { category: "Webinar" },
+  47: { category: "Webinar" },
+  48: { category: "Webinar" },
+  49: { category: "Webinar" },
+  50: { category: "Webinar" },
+  51: { category: "Webinar" },
+  52: { category: "Webinar" },
+  55: { category: "Webinar" },
+  59: { category: "Webinar" },
+};
+
+const LANGUAGE_SUFFIXES: LocaleSuffix[] = ["Es", "En", "De", "Fr", "Pt", "Nl"];
+
+const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "svg", "gif", "webp"]);
+const VIDEO_EXTENSIONS = new Set(["mp4", "m4v", "mov", "webm"]);
+
+/** Extension of the *default resolved* file — a resource with different file types per language would be unusual for this catalog and isn't worth modeling. */
+function detectFileType(filename: string): PartnerResourceItem["fileType"] {
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "pdf") return "pdf";
+  if (ext === "zip") return "zip";
+  if (IMAGE_EXTENSIONS.has(ext)) return "image";
+  if (VIDEO_EXTENSIONS.has(ext)) return "video";
+  return "other";
+}
+
+/** Every language this specific row actually has content in — drives the flag/language-chip row, independent of the app-locale-resolved default (pickLocalized). */
+function collectLanguageVariants(row: RawOrthoApneaResource, resourceId: number): PartnerResourceItem["languages"] {
+  return LANGUAGE_SUFFIXES.filter((suffix) => row[`url${suffix}` as keyof RawOrthoApneaResource]?.toString().trim())
+    .map((suffix) => ({
+      code: suffix.toLowerCase(),
+      mediaUrl: `/api/v1/partners/orthoapnea/resources/${resourceId}/media?lang=${suffix}`,
+    }));
+}
+
+/**
+ * The resources catalog (documents/videos) barely changes — no need to hit
+ * OrthoApnea on every request. Cached in memory with a TTL and refreshed
+ * lazily on the first request after it expires, not on a background timer
+ * (simpler, and this process may not stay warm between requests anyway on
+ * Render's free tier). If the refresh itself fails, a stale cache is served
+ * rather than surfacing an error — the catalog being an hour stale is a
+ * non-event; OrthoApnea being briefly unreachable shouldn't take the whole
+ * Resources tab down with it.
+ */
+const RESOURCES_CACHE_TTL_MS = 60 * 60 * 1000;
+let rawResourcesCache: { rows: RawOrthoApneaResource[]; fetchedAt: number } | null = null;
+
 async function fetchRawResources(): Promise<RawOrthoApneaResource[]> {
-  const res = await authedFetch(RESOURCES_PATH);
-  if (!res.ok) {
-    throw new PartnerServiceError("orthoapnea", `resources fetch failed with status ${res.status}`);
+  if (rawResourcesCache && Date.now() - rawResourcesCache.fetchedAt < RESOURCES_CACHE_TTL_MS) {
+    return rawResourcesCache.rows;
   }
-  return (await res.json()) as RawOrthoApneaResource[];
+
+  try {
+    const res = await authedFetch(RESOURCES_PATH);
+    if (!res.ok) throw new PartnerServiceError("orthoapnea", `resources fetch failed with status ${res.status}`);
+    const rows = (await res.json()) as RawOrthoApneaResource[];
+    rawResourcesCache = { rows, fetchedAt: Date.now() };
+    return rows;
+  } catch (err) {
+    if (rawResourcesCache) {
+      console.warn(
+        `[orthoapnea] resources refresh failed, serving cache from ${new Date(rawResourcesCache.fetchedAt).toISOString()}:`,
+        err
+      );
+      return rawResourcesCache.rows;
+    }
+    throw err;
+  }
 }
 
 export async function fetchResources(locale: string): Promise<PartnerResourceItem[]> {
@@ -237,16 +372,23 @@ export async function fetchResources(locale: string): Promise<PartnerResourceIte
 
   return rows
     .filter((row) => !row.deleted)
-    .map((row): PartnerResourceItem => ({
-      id: String(row.id),
-      partner: "orthoapnea",
-      kind: row.type === VIDEO_TYPE ? "video" : "document",
-      title: pickLocalized(row, "title", locale),
-      description: pickLocalized(row, "description", locale),
-      mediaUrl: `/api/v1/partners/orthoapnea/resources/${row.id}/media?locale=${locale}`,
-      category: row.category,
-      weight: row.weight,
-    }))
+    .map((row): PartnerResourceItem => {
+      const labels = RESOURCE_CATEGORY_BY_ID[row.id];
+      const defaultFilename = pickLocalized(row, "url", locale);
+      return {
+        id: String(row.id),
+        partner: "orthoapnea",
+        kind: row.type === VIDEO_TYPE ? "video" : "document",
+        title: pickLocalized(row, "title", locale),
+        description: pickLocalized(row, "description", locale),
+        mediaUrl: `/api/v1/partners/orthoapnea/resources/${row.id}/media?locale=${locale}`,
+        fileType: row.type === VIDEO_TYPE ? "video" : detectFileType(defaultFilename),
+        languages: collectLanguageVariants(row, row.id),
+        category: labels?.category ?? UNKNOWN_CATEGORY,
+        subcategory: labels?.subcategory ?? null,
+        weight: row.weight,
+      };
+    })
     .filter((item) => item.title) // no usable title in any language — not worth showing
     .sort((a, b) => a.weight - b.weight);
 }
@@ -277,10 +419,18 @@ async function tryVideoPaths(resourceId: string, filename: string): Promise<Resp
   );
 }
 
-/** Streams the underlying file for one resource. Document path confirmed (DOCUMENT_MEDIA_PATH); video path resolved via tryVideoPaths (see its comment). */
+/**
+ * Streams the underlying file for one resource. `lang`, when given, is one
+ * of OrthoApnea's own suffixes (Es/En/De/Fr/Pt/Nl — from a language chip
+ * click) and picks that exact variant; otherwise falls back through
+ * `locale` (app-locale resolution, for the default tile click). Document
+ * path confirmed (DOCUMENT_MEDIA_PATH); video path resolved via
+ * tryVideoPaths (see its comment).
+ */
 export async function fetchResourceMedia(
   resourceId: string,
-  locale: string
+  locale: string,
+  lang?: string
 ): Promise<{ body: ReadableStream<Uint8Array>; contentType: string | null }> {
   const rows = await fetchRawResources();
   const raw = rows.find((r) => String(r.id) === resourceId && !r.deleted);
@@ -288,9 +438,15 @@ export async function fetchResourceMedia(
     throw new PartnerServiceError("orthoapnea", `resource '${resourceId}' not found`);
   }
 
-  const filename = pickLocalized(raw, "url", locale);
+  const requestedSuffix = LANGUAGE_SUFFIXES.find((s) => s.toLowerCase() === lang?.toLowerCase());
+  const filename = requestedSuffix
+    ? raw[`url${requestedSuffix}` as keyof RawOrthoApneaResource]?.toString().trim()
+    : pickLocalized(raw, "url", locale);
   if (!filename) {
-    throw new PartnerServiceError("orthoapnea", `resource '${resourceId}' has no media file for locale '${locale}'`);
+    throw new PartnerServiceError(
+      "orthoapnea",
+      `resource '${resourceId}' has no media file for ${requestedSuffix ? `language '${lang}'` : `locale '${locale}'`}`
+    );
   }
 
   if (raw.type === VIDEO_TYPE) {

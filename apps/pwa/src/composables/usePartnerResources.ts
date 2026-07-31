@@ -7,6 +7,13 @@ import { apiFetch } from "./useApi";
  * triggered from useAppReady.ts and a later visit to ResourcesView.vue share
  * one cache instead of double-fetching.
  */
+export interface PartnerResourceLanguageVariant {
+  code: string;
+  mediaUrl: string;
+}
+
+export type PartnerResourceFileType = "pdf" | "zip" | "image" | "video" | "other";
+
 export interface PartnerResourceItem {
   id: string;
   partner: string;
@@ -14,8 +21,40 @@ export interface PartnerResourceItem {
   title: string;
   description: string;
   mediaUrl: string;
-  category: number;
+  fileType: PartnerResourceFileType;
+  languages: PartnerResourceLanguageVariant[];
+  category: string;
+  subcategory: string | null;
   weight: number;
+}
+
+export interface PartnerResourceSubgroup {
+  subcategory: string | null;
+  items: PartnerResourceItem[];
+}
+
+export interface PartnerResourceGroup {
+  category: string;
+  subgroups: PartnerResourceSubgroup[];
+}
+
+/** Groups already-weight-sorted items by category, then subcategory — preserves first-seen order rather than re-sorting alphabetically. */
+function groupByCategory(items: PartnerResourceItem[]): PartnerResourceGroup[] {
+  const groups: PartnerResourceGroup[] = [];
+  for (const item of items) {
+    let group = groups.find((g) => g.category === item.category);
+    if (!group) {
+      group = { category: item.category, subgroups: [] };
+      groups.push(group);
+    }
+    let subgroup = group.subgroups.find((s) => s.subcategory === item.subcategory);
+    if (!subgroup) {
+      subgroup = { subcategory: item.subcategory, items: [] };
+      group.subgroups.push(subgroup);
+    }
+    subgroup.items.push(item);
+  }
+  return groups;
 }
 
 const items = ref<PartnerResourceItem[]>([]);
@@ -25,6 +64,8 @@ const loadedForLocale = ref<string | null>(null);
 
 const documents = computed(() => items.value.filter((r) => r.kind === "document"));
 const videos = computed(() => items.value.filter((r) => r.kind === "video"));
+const documentGroups = computed(() => groupByCategory(documents.value));
+const videoGroups = computed(() => groupByCategory(videos.value));
 
 /** Re-fetches only if not already loaded for this locale — safe to call repeatedly (preload + view mount). */
 async function load(locale: string): Promise<void> {
@@ -49,5 +90,5 @@ async function load(locale: string): Promise<void> {
 }
 
 export function usePartnerResources() {
-  return { items, documents, videos, loading, loadError, load };
+  return { items, documents, videos, documentGroups, videoGroups, loading, loadError, load };
 }

@@ -98,6 +98,10 @@ $pwa-fib-t-3xl: 987ms;
   --mobile-bottom-nav-item-color: var(--pwa-text-secondary);
   --mobile-bottom-nav-item-active-color: var(--pwa-primary);
   --mobile-bottom-nav-radius: var(--pwa-radius);
+  /* Was undefined here, silently falling back to MobileBottomNavBar.vue's
+     own 64px default. 56px matches Material's compact bottom-nav spec and
+     still clears the 44px touch target (SPEC-0042) with room to spare. */
+  --mobile-bottom-nav-height: 56px;
   --pwa-drawer-max-height: 70vh;
   --pwa-topbar-height: 56px;
   --pwa-content-padding-x: 16px;

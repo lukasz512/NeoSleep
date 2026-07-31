@@ -6,15 +6,19 @@
   <VAppBar
     flat
     :border="mobile ? false : 'b'"
-    :height="56"
+    :height="mobile ? 56 : 64"
     class="app-shell__bar"
     :class="{ 'app-shell__bar--visible': shellVisible }"
   >
     <template v-if="mobile" #prepend>
+      <!-- No size prop: Vuetify's own default icon-button box (36px
+           --v-btn-height + 12px density padding = 48px) is exactly the
+           Material touch-target minimum. This button only renders on
+           mobile, so that's the size that matters here — size="small"
+           (28+12=40px) undercut it for no reason. -->
       <VBtn
         icon
         variant="text"
-        size="small"
         :aria-label="menuLabel"
         :aria-expanded="drawerOpenModel"
         @click="drawerOpenModel = !drawerOpenModel"
@@ -248,41 +252,38 @@ onMounted(async () => {
   padding: 12px;
 }
 
-/* Hamburger, title, and logo default to vertical centering (Vuetify's
-   .v-toolbar__content + .v-toolbar__prepend/__append all set
-   align-items: center, with prepend/append also stretched to the bar's full
-   height). Centering three items of very different intrinsic heights
-   (a 20px icon glyph, a 1.1rem text line, a 28px logo image) doesn't read as
-   one aligned row — each sits at its own visual center instead of sharing a
-   line.
-
-   Bottom-*flushing* the outer boxes isn't enough either: the hamburger is a
-   VBtn, which is `display: inline-grid; align-items: center` internally
-   (Vuetify's own VBtn.css) — its 14px icon glyph (3 bars × 2px + 2 gaps ×
-   4px) stays centered inside the button's own 40px box (--v-btn-height 28px
-   + 12px for a default-density icon button at size="small") regardless of
-   how the outer box is aligned, a fixed 13px inset from the button's edge.
-   So each item needs its own padding tuned to match that same 13px visual
-   inset from the shared bottom line, not one flat value copied onto every
-   box. */
-.app-shell__bar :deep(.v-toolbar__content) {
-  align-items: flex-end;
+/* --appbar-row: the one shared height every app-bar leading element (the
+   hamburger, the title's icon+text, the logo) is built to. Previously each
+   element had its own hand-tuned padding/margin to fake a shared baseline
+   under `align-items: flex-end` — fragile, and it broke again on every
+   unrelated tweak. Now every element's own box is this height, so plain
+   `align-items: center` puts all of their centers on one line by
+   construction, not by pixel-guessing. Matches Vuetify's own
+   `.v-toolbar-title` defaults (font-size 1.25rem / line-height 1.75rem),
+   so the title no longer needs to fight the framework either. */
+.app-shell__bar {
+  --appbar-row: 28px;
 }
 
+.app-shell__bar :deep(.v-toolbar__content),
 .app-shell__bar :deep(.v-toolbar__prepend),
 .app-shell__bar :deep(.v-toolbar__append) {
-  align-items: flex-end;
+  align-items: center;
 }
 
-.app-shell__title {
-  font-size: 1.1rem;
-  font-weight: 600;
-  padding-bottom: 6px;
+/* Vuetify's own 20px inline-start margin on the title assumes a bare text
+   label right after the edge/hamburger. Our title always carries its own
+   icon (.layout-appbar__title-group's 8px gap before the text), so 20px on
+   top of that reads as a big, unintentional-looking gap — 5px is enough
+   breathing room without doubling up. */
+.app-shell__bar :deep(.v-toolbar__content > .v-toolbar-title) {
+  margin-inline-start: 5px;
 }
 
 .app-shell__bar-logo {
   display: flex;
   align-items: center;
+  height: var(--appbar-row);
   margin-left: 8px;
 }
 
@@ -290,6 +291,7 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   justify-content: center;
+  height: var(--appbar-row);
   gap: 4px;
   width: 20px;
 

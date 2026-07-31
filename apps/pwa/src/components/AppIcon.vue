@@ -45,6 +45,36 @@ const ICONS = {
     paths: `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
             <polyline points="14 2 14 8 20 8" />`,
   },
+  "file-pdf": {
+    strokeWidth: 1.5,
+    paths: `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="8" y1="13" x2="16" y2="13" />
+            <line x1="8" y1="17" x2="13" y2="17" />`,
+  },
+  "file-image": {
+    strokeWidth: 1.5,
+    paths: `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <circle cx="10" cy="13" r="1.1" />
+            <path d="M7 18l3.5-4 2.5 3 2-2.5L17 18" />`,
+  },
+  "file-archive": {
+    strokeWidth: 1.5,
+    paths: `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="12" y1="9" x2="12" y2="21" />
+            <line x1="10.6" y1="11.5" x2="13.4" y2="11.5" stroke-width="1.2" />
+            <line x1="10.6" y1="14.5" x2="13.4" y2="14.5" stroke-width="1.2" />
+            <line x1="10.6" y1="17" x2="13.4" y2="17" stroke-width="1.2" />
+            <rect x="10.6" y="18" width="2.8" height="2.2" rx="0.6" fill="currentColor" stroke="none" />`,
+  },
+  "file-video": {
+    strokeWidth: 1.5,
+    paths: `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <path d="M10.5 12.5v5l4-2.5z" fill="currentColor" stroke="none" />`,
+  },
   // ── Action icons ─────────────────────────────────────────────────────────
   "plus": {
     strokeWidth: 2,

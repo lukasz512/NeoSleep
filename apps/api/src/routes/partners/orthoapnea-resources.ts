@@ -36,8 +36,9 @@ orthoapneaResourcesRouter.get(
     const id = req.params.id?.trim();
     if (!id) throw new ValidationError("Missing resource id");
     const locale = (req.query.locale as string | undefined) ?? "en";
+    const lang = req.query.lang as string | undefined;
 
-    const { body, contentType } = await fetchResourceMedia(id, locale);
+    const { body, contentType } = await fetchResourceMedia(id, locale, lang);
     if (contentType) res.setHeader("Content-Type", contentType);
     Readable.fromWeb(body as import("node:stream/web").ReadableStream<Uint8Array>).pipe(res);
   })
