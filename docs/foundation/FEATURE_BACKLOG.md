@@ -146,6 +146,15 @@
 
 ---
 
+## Web Platform Migration & Admin
+
+| Feature | Status | Notes |
+|---|---|---|
+| `apps/web` → Nuxt (SSR/SEO) | `planned` | Confirmed 2026-07-31 — better SEO + SSR for the public marketing site. `apps/pwa` stays on Vite/Vue: it's offline-first (service worker + IndexedDB read cache, see `ADR-013`), which conflicts with SSR — so it does not move. Shared components keep working across both via `packages/*` (Nuxt 3 is Vite-based under the hood, no extra bridging needed). No timeline yet. |
+| Inline content editor + `web_admin` role | `deferred` | Depends on the Nuxt migration above. Moves web copy off the static `websiteContent.ts` / `packages/i18n/*.json` files into DB, scoped per-tenant per-locale (a tenant edits its own language — e.g. an ES tenant edits `mx` content, a PL tenant edits `pl`). New `web_admin` role gates a draft/publish flow — this is medical-marketing content, so no instant-publish. Editing UX: desktop = hover-highlight text, click to enter edit mode; touch = long-press. v1 scope is text + image replacement; font editing is a later extension. Not started — `apps/web` has no admin/auth surface today, and per CLAUDE.md admin apps wait until rep app Stage 1-3 is done. |
+
+---
+
 ## Social Media & Marketing Automation
 
 | Feature | Status | Notes |
@@ -168,5 +177,5 @@
 
 ---
 
-_Last updated: 2026-07-19_
+_Last updated: 2026-07-31_
 _To add a feature: add a row, assign stage, update status as work progresses._
