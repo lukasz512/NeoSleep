@@ -100,14 +100,14 @@ const activeIndex = computed(() => Math.max(0, props.options.findIndex((o) => o.
   display: none;
 }
 
-/* VBtn's "small" height (32px) reads as visually thin/cramped as a full-width
-   mobile control and falls short of the 44px touch-target minimum — no
-   Vuetify utility sets an explicit min-height. Bumped on mobile only, where
-   it's held and tapped rather than clicked with a mouse; desktop stays
-   compact by design. */
+/* VBtn's "small" height (32px) reads as visually thin/cramped as a
+   full-width mobile control — bumped on mobile only, where it's held and
+   tapped rather than clicked with a mouse. 40px rather than the full 44px
+   touch-target minimum per feedback (44px read as too tall here); desktop
+   stays compact by design. No Vuetify utility sets an explicit min-height. */
 @media (max-width: 599px) {
   .app-segmented-tabs__tab {
-    min-height: 44px;
+    min-height: 40px;
   }
 }
 </style>

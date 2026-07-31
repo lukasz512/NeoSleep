@@ -16,29 +16,73 @@
     </div>
 
     <template v-else>
-      <AppSegmentedTabs v-model="tab" :options="tabOptions" class="view-resources__tabs" />
+      <div class="view-resources__tabs-bar d-flex align-center ga-3 py-2">
+        <AppSegmentedTabs v-model="tab" :options="tabOptions" class="view-resources__tabs" />
+        <AppSpinner v-if="loading" size="18" width="2" color="primary" />
+      </div>
 
-      <div class="view-resources__window pt-5">
-        <template v-if="tab === 'documents'">
-          <div v-if="documents.length === 0" class="view-resources__state">
-            <AppEmptyState :title="t('user.resources.emptyDocuments')" />
+      <div class="view-resources__window">
+        <Transition name="title-fade" mode="out-in">
+          <div v-if="tab === 'documents'" key="documents">
+            <div v-if="documents.length === 0" class="view-resources__state">
+              <AppEmptyState :title="t('user.resources.emptyDocuments')" />
+            </div>
+            <template v-else>
+              <section v-for="group in documentGroups" :key="group.category" class="view-resources__group">
+                <h2 class="text-body-1 font-weight-bold mb-3">{{ group.category }}</h2>
+                <div v-for="subgroup in group.subgroups" :key="subgroup.subcategory ?? ''" class="view-resources__subgroup">
+                  <h3 v-if="subgroup.subcategory" class="text-caption font-weight-bold text-medium-emphasis mb-2">
+                    {{ subgroup.subcategory }}
+                  </h3>
+                  <div class="view-resources__grid">
+                    <VCard
+                      v-for="doc in subgroup.items"
+                      :key="doc.id"
+                      variant="flat"
+                      rounded="lg"
+                      class="view-resources__card bg-surface-container-low"
+                    >
+                      <a class="view-resources__card-tile d-flex flex-column pa-4" :href="doc.mediaUrl" target="_blank" rel="noopener">
+                        <AppIcon :name="fileTypeIcon(doc.fileType)" class="view-resources__card-icon mb-2" />
+                        <span class="text-body-2 font-weight-bold">{{ doc.title }}</span>
+                      </a>
+                      <div class="view-resources__lang-row d-flex flex-wrap justify-end ga-2 px-4 pb-4">
+                        <a
+                          v-for="lang in doc.languages"
+                          :key="lang.code"
+                          class="view-resources__lang-chip text-caption font-weight-bold rounded-pill px-2 py-1"
+                          :href="lang.mediaUrl"
+                          target="_blank"
+                          rel="noopener"
+                          :aria-label="lang.code.toUpperCase()"
+                        >
+                          {{ lang.code.toUpperCase() }}
+                        </a>
+                      </div>
+                    </VCard>
+                  </div>
+                </div>
+              </section>
+            </template>
           </div>
-          <template v-else>
-            <section v-for="group in documentGroups" :key="group.category" class="view-resources__group">
-              <h2 class="text-body-1 font-weight-bold mb-3">{{ group.category }}</h2>
-              <div v-for="subgroup in group.subgroups" :key="subgroup.subcategory ?? ''" class="view-resources__subgroup">
-                <h3 v-if="subgroup.subcategory" class="text-caption font-weight-bold text-medium-emphasis mb-2">
-                  {{ subgroup.subcategory }}
-                </h3>
-                <div class="view-resources__grid">
-                  <VCard v-for="doc in subgroup.items" :key="doc.id" variant="outlined" rounded="lg" class="view-resources__card">
-                    <a class="view-resources__card-tile d-flex flex-column pa-4" :href="doc.mediaUrl" target="_blank" rel="noopener">
-                      <AppIcon :name="fileTypeIcon(doc.fileType)" class="view-resources__card-icon mb-2" />
-                      <span class="text-body-2 font-weight-bold">{{ doc.title }}</span>
-                    </a>
-                    <div class="view-resources__lang-row d-flex flex-wrap ga-2 px-4 pb-4">
+
+          <div v-else key="videos">
+            <div v-if="videos.length === 0" class="view-resources__state">
+              <AppEmptyState :title="t('user.resources.emptyVideos')" />
+            </div>
+            <template v-else>
+              <section v-for="group in videoGroups" :key="group.category" class="view-resources__group">
+                <h2 class="text-body-1 font-weight-bold mb-3">{{ group.category }}</h2>
+                <div v-for="subgroup in group.subgroups" :key="subgroup.subcategory ?? ''" class="view-resources__grid view-resources__grid--videos">
+                  <VCard v-for="video in subgroup.items" :key="video.id" variant="flat" rounded="lg" class="bg-surface-container-low pa-3">
+                    <video controls preload="none" class="view-resources__video rounded-lg" :src="video.mediaUrl" />
+                    <div class="d-flex flex-column mt-2">
+                      <span class="text-body-2 font-weight-bold">{{ video.title }}</span>
+                      <span v-if="video.description" class="text-caption text-medium-emphasis">{{ video.description }}</span>
+                    </div>
+                    <div class="view-resources__lang-row d-flex flex-wrap justify-end ga-2 mt-2">
                       <a
-                        v-for="lang in doc.languages"
+                        v-for="lang in video.languages"
                         :key="lang.code"
                         class="view-resources__lang-chip text-caption font-weight-bold rounded-pill px-2 py-1"
                         :href="lang.mediaUrl"
@@ -51,43 +95,10 @@
                     </div>
                   </VCard>
                 </div>
-              </div>
-            </section>
-          </template>
-        </template>
-
-        <template v-else>
-          <div v-if="videos.length === 0" class="view-resources__state">
-            <AppEmptyState :title="t('user.resources.emptyVideos')" />
+              </section>
+            </template>
           </div>
-          <template v-else>
-            <section v-for="group in videoGroups" :key="group.category" class="view-resources__group">
-              <h2 class="text-body-1 font-weight-bold mb-3">{{ group.category }}</h2>
-              <div v-for="subgroup in group.subgroups" :key="subgroup.subcategory ?? ''" class="view-resources__grid view-resources__grid--videos">
-                <VCard v-for="video in subgroup.items" :key="video.id" variant="outlined" rounded="lg" class="pa-3">
-                  <video controls preload="none" class="view-resources__video rounded-lg" :src="video.mediaUrl" />
-                  <div class="d-flex flex-column mt-2">
-                    <span class="text-body-2 font-weight-bold">{{ video.title }}</span>
-                    <span v-if="video.description" class="text-caption text-medium-emphasis">{{ video.description }}</span>
-                  </div>
-                  <div class="view-resources__lang-row d-flex flex-wrap ga-2 mt-2">
-                    <a
-                      v-for="lang in video.languages"
-                      :key="lang.code"
-                      class="view-resources__lang-chip text-caption font-weight-bold rounded-pill px-2 py-1"
-                      :href="lang.mediaUrl"
-                      target="_blank"
-                      rel="noopener"
-                      :aria-label="lang.code.toUpperCase()"
-                    >
-                      {{ lang.code.toUpperCase() }}
-                    </a>
-                  </div>
-                </VCard>
-              </div>
-            </section>
-          </template>
-        </template>
+        </Transition>
       </div>
     </template>
   </div>
@@ -99,6 +110,7 @@ import { useI18n } from "vue-i18n";
 import { AppSegmentedTabs } from "@ui";
 import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
 import AppLoadingState from "../components/AppLoadingState.vue";
+import AppSpinner from "../components/AppSpinner.vue";
 import AppErrorState from "../components/AppErrorState.vue";
 import AppEmptyState from "../components/AppEmptyState.vue";
 import { usePartnerResources, type PartnerResourceFileType } from "../composables/usePartnerResources";
@@ -159,9 +171,21 @@ const incidentMailtoHref = computed(() => {
   justify-content: center;
 }
 
-/* Full width on mobile, capped on larger screens where a full-width pill toggle looks stretched. */
-.view-resources__tabs {
+/* Sticky rather than relying on being outside an internal overflow:auto
+   container — AppLayout's content area turned out to scroll at the page
+   level, not inside .view-resources__window, so the flex "keep it above the
+   scroll area" approach never actually engaged. position: sticky pins it to
+   whichever ancestor really is the scrolling context, so it doesn't depend
+   on correctly diagnosing that chain. */
+.view-resources__tabs-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   flex-shrink: 0;
+  background: rgb(var(--v-theme-background));
+}
+
+.view-resources__tabs {
   width: 100%;
 }
 @media (min-width: 600px) {
@@ -174,6 +198,7 @@ const incidentMailtoHref = computed(() => {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  padding-top: 4px;
 }
 
 .view-resources__group + .view-resources__group {
@@ -191,8 +216,12 @@ const incidentMailtoHref = computed(() => {
   gap: 16px;
 }
 
-/* Hover lift/shadow transition — not utility-expressible. */
+/* M3 filled card: outline-variant border + surface-container-low tone
+   (same recipe as AppEntityList.css's .app-entity-list__card) instead of
+   VCard's default `outlined` variant, which draws a full-contrast
+   --v-border-color line — too heavy/dark for a low-emphasis grid of tiles. */
 .view-resources__card {
+  border: 1px solid rgb(var(--v-theme-outline-variant));
   transition: box-shadow 0.2s ease, transform 0.15s ease;
 }
 .view-resources__card:hover {
