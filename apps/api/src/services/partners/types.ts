@@ -10,6 +10,8 @@ export interface PartnerResourceLanguageVariant {
   mediaUrl: string;
 }
 
+export type PartnerResourceFileType = "pdf" | "zip" | "image" | "video" | "other";
+
 export interface PartnerResourceItem {
   id: string;
   partner: string;
@@ -19,6 +21,8 @@ export interface PartnerResourceItem {
   description: string;
   /** Resolved via app-locale fallback — proxy URL, never the partner's raw origin. */
   mediaUrl: string;
+  /** Derived from the resolved file's extension — drives which icon the frontend shows (pdf/zip/image icons carry real information about what a click gets you). */
+  fileType: PartnerResourceFileType;
   /** Every language this specific resource is actually available in — drives the language chip row. */
   languages: PartnerResourceLanguageVariant[];
   /** Human label, reproduced verbatim from the partner's own site — not translated by us. */

@@ -12,6 +12,8 @@ export interface PartnerResourceLanguageVariant {
   mediaUrl: string;
 }
 
+export type PartnerResourceFileType = "pdf" | "zip" | "image" | "video" | "other";
+
 export interface PartnerResourceItem {
   id: string;
   partner: string;
@@ -19,6 +21,7 @@ export interface PartnerResourceItem {
   title: string;
   description: string;
   mediaUrl: string;
+  fileType: PartnerResourceFileType;
   languages: PartnerResourceLanguageVariant[];
   category: string;
   subcategory: string | null;

@@ -1,5 +1,5 @@
 <template>
-  <div class="view-resources">
+  <div class="view-resources d-flex flex-column">
     <div v-if="loadError" class="view-resources__state">
       <AppErrorState
         :title="t('app.errorState.title')"
@@ -18,27 +18,29 @@
     <template v-else>
       <AppSegmentedTabs v-model="tab" :options="tabOptions" class="view-resources__tabs" />
 
-      <div class="view-resources__window">
+      <div class="view-resources__window pt-5">
         <template v-if="tab === 'documents'">
           <div v-if="documents.length === 0" class="view-resources__state">
             <AppEmptyState :title="t('user.resources.emptyDocuments')" />
           </div>
           <template v-else>
             <section v-for="group in documentGroups" :key="group.category" class="view-resources__group">
-              <h2 class="view-resources__category">{{ group.category }}</h2>
+              <h2 class="text-body-1 font-weight-bold mb-3">{{ group.category }}</h2>
               <div v-for="subgroup in group.subgroups" :key="subgroup.subcategory ?? ''" class="view-resources__subgroup">
-                <h3 v-if="subgroup.subcategory" class="view-resources__subcategory">{{ subgroup.subcategory }}</h3>
+                <h3 v-if="subgroup.subcategory" class="text-caption font-weight-bold text-medium-emphasis mb-2">
+                  {{ subgroup.subcategory }}
+                </h3>
                 <div class="view-resources__grid">
-                  <div v-for="doc in subgroup.items" :key="doc.id" class="view-resources__card">
-                    <a class="view-resources__card-tile" :href="doc.mediaUrl" target="_blank" rel="noopener">
-                      <AppIcon name="file" class="view-resources__card-icon" />
-                      <span class="view-resources__card-title">{{ doc.title }}</span>
+                  <VCard v-for="doc in subgroup.items" :key="doc.id" variant="outlined" rounded="lg" class="view-resources__card">
+                    <a class="view-resources__card-tile d-flex flex-column pa-4" :href="doc.mediaUrl" target="_blank" rel="noopener">
+                      <AppIcon :name="fileTypeIcon(doc.fileType)" class="view-resources__card-icon mb-2" />
+                      <span class="text-body-2 font-weight-bold">{{ doc.title }}</span>
                     </a>
-                    <div v-if="doc.languages.length > 1" class="view-resources__lang-row">
+                    <div class="view-resources__lang-row d-flex flex-wrap ga-2 px-4 pb-4">
                       <a
                         v-for="lang in doc.languages"
                         :key="lang.code"
-                        class="view-resources__lang-chip"
+                        class="view-resources__lang-chip text-caption font-weight-bold rounded-pill px-2 py-1"
                         :href="lang.mediaUrl"
                         target="_blank"
                         rel="noopener"
@@ -47,7 +49,7 @@
                         {{ lang.code.toUpperCase() }}
                       </a>
                     </div>
-                  </div>
+                  </VCard>
                 </div>
               </div>
             </section>
@@ -60,17 +62,19 @@
           </div>
           <template v-else>
             <section v-for="group in videoGroups" :key="group.category" class="view-resources__group">
-              <h2 class="view-resources__category">{{ group.category }}</h2>
+              <h2 class="text-body-1 font-weight-bold mb-3">{{ group.category }}</h2>
               <div v-for="subgroup in group.subgroups" :key="subgroup.subcategory ?? ''" class="view-resources__grid view-resources__grid--videos">
-                <div v-for="video in subgroup.items" :key="video.id" class="view-resources__video-card">
-                  <video controls preload="none" class="view-resources__video" :src="video.mediaUrl" />
-                  <span class="view-resources__card-title">{{ video.title }}</span>
-                  <span v-if="video.description" class="view-resources__card-subtitle">{{ video.description }}</span>
-                  <div v-if="video.languages.length > 1" class="view-resources__lang-row">
+                <VCard v-for="video in subgroup.items" :key="video.id" variant="outlined" rounded="lg" class="pa-3">
+                  <video controls preload="none" class="view-resources__video rounded-lg" :src="video.mediaUrl" />
+                  <div class="d-flex flex-column mt-2">
+                    <span class="text-body-2 font-weight-bold">{{ video.title }}</span>
+                    <span v-if="video.description" class="text-caption text-medium-emphasis">{{ video.description }}</span>
+                  </div>
+                  <div class="view-resources__lang-row d-flex flex-wrap ga-2 mt-2">
                     <a
                       v-for="lang in video.languages"
                       :key="lang.code"
-                      class="view-resources__lang-chip"
+                      class="view-resources__lang-chip text-caption font-weight-bold rounded-pill px-2 py-1"
                       :href="lang.mediaUrl"
                       target="_blank"
                       rel="noopener"
@@ -79,7 +83,7 @@
                       {{ lang.code.toUpperCase() }}
                     </a>
                   </div>
-                </div>
+                </VCard>
               </div>
             </section>
           </template>
@@ -93,11 +97,11 @@
 import { ref, computed, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { AppSegmentedTabs } from "@ui";
-import AppIcon from "../components/AppIcon.vue";
+import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
 import AppLoadingState from "../components/AppLoadingState.vue";
 import AppErrorState from "../components/AppErrorState.vue";
 import AppEmptyState from "../components/AppEmptyState.vue";
-import { usePartnerResources } from "../composables/usePartnerResources";
+import { usePartnerResources, type PartnerResourceFileType } from "../composables/usePartnerResources";
 import { useAuthStore } from "../stores/auth";
 import { SUPPORT_EMAIL } from "../constants";
 
@@ -113,6 +117,17 @@ const tabOptions = computed(() => [
 
 watch(locale, (l) => load(l), { immediate: true });
 
+const FILE_TYPE_ICONS: Record<PartnerResourceFileType, AppIconName> = {
+  pdf: "file-pdf",
+  zip: "file-archive",
+  image: "file-image",
+  video: "file-video",
+  other: "file",
+};
+function fileTypeIcon(fileType: PartnerResourceFileType): AppIconName {
+  return FILE_TYPE_ICONS[fileType];
+}
+
 /** Interim manual reporting — see constants.ts SUPPORT_EMAIL comment. */
 const incidentMailtoHref = computed(() => {
   const subject = "NeoSleep — OrthoApnea connection issue";
@@ -127,9 +142,11 @@ const incidentMailtoHref = computed(() => {
 </script>
 
 <style scoped>
+/* flex: 1 1 auto + min-height: 0 has no Vuetify utility equivalent — the
+   min-height:0 half specifically is the standard fix for a flex child that
+   needs to scroll internally instead of growing its parent past the
+   viewport (AppLayout's fixed-height shell). */
 .view-resources {
-  display: flex;
-  flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
 }
@@ -142,122 +159,73 @@ const incidentMailtoHref = computed(() => {
   justify-content: center;
 }
 
+/* Full width on mobile, capped on larger screens where a full-width pill toggle looks stretched. */
 .view-resources__tabs {
   flex-shrink: 0;
-  max-width: 320px;
+  width: 100%;
+}
+@media (min-width: 600px) {
+  .view-resources__tabs {
+    max-width: 320px;
+  }
 }
 
 .view-resources__window {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  padding-top: 20px;
 }
 
 .view-resources__group + .view-resources__group {
   margin-top: 28px;
 }
 
-.view-resources__category {
-  font-size: 1rem;
-  font-weight: 600;
-  margin-bottom: 12px;
-}
-
 .view-resources__subgroup + .view-resources__subgroup {
   margin-top: 16px;
 }
 
-.view-resources__subcategory {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  margin-bottom: 8px;
-}
-
+/* auto-fill/minmax responsive card grid has no Vuetify utility equivalent (VRow/VCol is a fixed 12-column grid, not content-driven auto-fill). */
 .view-resources__grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 16px;
 }
 
+/* Hover lift/shadow transition — not utility-expressible. */
 .view-resources__card {
-  display: flex;
-  flex-direction: column;
-  border-radius: var(--pwa-radius, 10px);
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  background: rgb(var(--v-theme-surface));
-  overflow: hidden;
   transition: box-shadow 0.2s ease, transform 0.15s ease;
 }
-
 .view-resources__card:hover {
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
   transform: translateY(-2px);
 }
 
 .view-resources__card-tile {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 16px;
   text-decoration: none;
   color: inherit;
 }
 
+/* "Much bigger" per feedback — file-type icons are meant to carry real information at a glance. */
 .view-resources__card-icon {
+  width: 40px;
+  height: 40px;
   color: rgb(var(--v-theme-primary));
-  margin-bottom: 4px;
-}
-
-.view-resources__card-title {
-  font-size: 0.875rem;
-  font-weight: 600;
-  line-height: 1.3;
-}
-
-.view-resources__card-subtitle {
-  font-size: 0.75rem;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-}
-
-.view-resources__lang-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 0 16px 14px;
 }
 
 .view-resources__lang-chip {
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  padding: 3px 8px;
-  border-radius: 999px;
   background: rgba(var(--v-theme-primary), 0.1);
   color: rgb(var(--v-theme-primary));
   text-decoration: none;
   transition: background 0.15s ease;
 }
-
 .view-resources__lang-chip:hover {
   background: rgba(var(--v-theme-primary), 0.18);
-}
-
-.view-resources__video-card {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 12px;
-  border-radius: var(--pwa-radius, 10px);
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  background: rgb(var(--v-theme-surface));
 }
 
 .view-resources__video {
   width: 100%;
   aspect-ratio: 16 / 9;
-  border-radius: 6px;
   background: #000;
+  display: block;
 }
 </style>

@@ -309,6 +309,19 @@ const RESOURCE_CATEGORY_BY_ID: Record<number, { category: string; subcategory?: 
 
 const LANGUAGE_SUFFIXES: LocaleSuffix[] = ["Es", "En", "De", "Fr", "Pt", "Nl"];
 
+const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "svg", "gif", "webp"]);
+const VIDEO_EXTENSIONS = new Set(["mp4", "m4v", "mov", "webm"]);
+
+/** Extension of the *default resolved* file — a resource with different file types per language would be unusual for this catalog and isn't worth modeling. */
+function detectFileType(filename: string): PartnerResourceItem["fileType"] {
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "pdf") return "pdf";
+  if (ext === "zip") return "zip";
+  if (IMAGE_EXTENSIONS.has(ext)) return "image";
+  if (VIDEO_EXTENSIONS.has(ext)) return "video";
+  return "other";
+}
+
 /** Every language this specific row actually has content in — drives the flag/language-chip row, independent of the app-locale-resolved default (pickLocalized). */
 function collectLanguageVariants(row: RawOrthoApneaResource, resourceId: number): PartnerResourceItem["languages"] {
   return LANGUAGE_SUFFIXES.filter((suffix) => row[`url${suffix}` as keyof RawOrthoApneaResource]?.toString().trim())
@@ -318,12 +331,40 @@ function collectLanguageVariants(row: RawOrthoApneaResource, resourceId: number)
     }));
 }
 
+/**
+ * The resources catalog (documents/videos) barely changes — no need to hit
+ * OrthoApnea on every request. Cached in memory with a TTL and refreshed
+ * lazily on the first request after it expires, not on a background timer
+ * (simpler, and this process may not stay warm between requests anyway on
+ * Render's free tier). If the refresh itself fails, a stale cache is served
+ * rather than surfacing an error — the catalog being an hour stale is a
+ * non-event; OrthoApnea being briefly unreachable shouldn't take the whole
+ * Resources tab down with it.
+ */
+const RESOURCES_CACHE_TTL_MS = 60 * 60 * 1000;
+let rawResourcesCache: { rows: RawOrthoApneaResource[]; fetchedAt: number } | null = null;
+
 async function fetchRawResources(): Promise<RawOrthoApneaResource[]> {
-  const res = await authedFetch(RESOURCES_PATH);
-  if (!res.ok) {
-    throw new PartnerServiceError("orthoapnea", `resources fetch failed with status ${res.status}`);
+  if (rawResourcesCache && Date.now() - rawResourcesCache.fetchedAt < RESOURCES_CACHE_TTL_MS) {
+    return rawResourcesCache.rows;
   }
-  return (await res.json()) as RawOrthoApneaResource[];
+
+  try {
+    const res = await authedFetch(RESOURCES_PATH);
+    if (!res.ok) throw new PartnerServiceError("orthoapnea", `resources fetch failed with status ${res.status}`);
+    const rows = (await res.json()) as RawOrthoApneaResource[];
+    rawResourcesCache = { rows, fetchedAt: Date.now() };
+    return rows;
+  } catch (err) {
+    if (rawResourcesCache) {
+      console.warn(
+        `[orthoapnea] resources refresh failed, serving cache from ${new Date(rawResourcesCache.fetchedAt).toISOString()}:`,
+        err
+      );
+      return rawResourcesCache.rows;
+    }
+    throw err;
+  }
 }
 
 export async function fetchResources(locale: string): Promise<PartnerResourceItem[]> {
@@ -333,6 +374,7 @@ export async function fetchResources(locale: string): Promise<PartnerResourceIte
     .filter((row) => !row.deleted)
     .map((row): PartnerResourceItem => {
       const labels = RESOURCE_CATEGORY_BY_ID[row.id];
+      const defaultFilename = pickLocalized(row, "url", locale);
       return {
         id: String(row.id),
         partner: "orthoapnea",
@@ -340,6 +382,7 @@ export async function fetchResources(locale: string): Promise<PartnerResourceIte
         title: pickLocalized(row, "title", locale),
         description: pickLocalized(row, "description", locale),
         mediaUrl: `/api/v1/partners/orthoapnea/resources/${row.id}/media?locale=${locale}`,
+        fileType: row.type === VIDEO_TYPE ? "video" : detectFileType(defaultFilename),
         languages: collectLanguageVariants(row, row.id),
         category: labels?.category ?? UNKNOWN_CATEGORY,
         subcategory: labels?.subcategory ?? null,
