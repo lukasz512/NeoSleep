@@ -49,3 +49,9 @@ services:
         sync: false
       - key: DEFAULT_TENANT_SLUG
         sync: false
+      - key: ORTHOAPNEA_BASE_URL
+        sync: false
+      - key: ORTHOAPNEA_EMAIL
+        sync: false
+      - key: ORTHOAPNEA_PASSWORD
+        sync: false

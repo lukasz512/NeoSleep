@@ -22,6 +22,7 @@ import { pushRouter } from "./routes/push.js";
 import { usersRouter } from "./routes/users.js";
 import { inviteRouter } from "./routes/invite.js";
 import { notificationRouter } from "./routes/notification.js";
+import { orthoapneaResourcesRouter } from "./routes/partners/orthoapnea-resources.js";
 import { runMigrations } from "./db.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { apiLimiter } from "./middleware/rateLimiter.js";
@@ -125,6 +126,7 @@ app.use("/api/v1", pushRouter);
 app.use("/api/v1", usersRouter);
 app.use("/api/v1", inviteRouter);
 app.use("/api/v1", notificationRouter);
+app.use("/api/v1", orthoapneaResourcesRouter);
 
 app.use(errorHandler);
 

@@ -49,3 +49,9 @@ export class ConflictError extends AppError {
     super(message, "CONFLICT", 409);
   }
 }
+
+export class PartnerServiceError extends AppError {
+  constructor(partner: string, message: string, cause?: unknown) {
+    super(`${partner}: ${message}`, "PARTNER_SERVICE_ERROR", 502, cause);
+  }
+}
