@@ -1,5 +1,9 @@
 <template>
-  <div class="app-segmented-tabs position-relative d-flex pa-2 pa-sm-1 rounded-pill" role="tablist">
+  <div
+    class="app-segmented-tabs position-relative d-flex pa-2 pa-sm-1 rounded-pill"
+    :class="{ 'app-segmented-tabs--compact': compact }"
+    role="tablist"
+  >
     <div
       class="app-segmented-tabs__thumb position-absolute rounded-pill bg-primary"
       :style="{ width: `calc((100% - var(--seg-pad) * 2) / ${options.length})`, transform: `translateX(${activeIndex * 100}%)` }"
@@ -46,6 +50,8 @@ export interface AppSegmentedTabOption {
 const props = defineProps<{
   modelValue: string;
   options: AppSegmentedTabOption[];
+  /** Shrinks the whole control (scale transform, transitions smoothly both ways) — e.g. while the caller's content scrolls, iOS-large-title-style. */
+  compact?: boolean;
 }>();
 
 defineEmits<{
@@ -68,6 +74,20 @@ const activeIndex = computed(() => Math.max(0, props.options.findIndex((o) => o.
   .app-segmented-tabs {
     --seg-pad: 4px; /* matches the pa-sm-1 utility in the template */
   }
+}
+
+/* Compact: a scale transform rather than swapping VBtn's `size` prop —
+   Vuetify's size variants are discrete CSS classes with no transition
+   between them, which would jump instead of shrinking smoothly. transform
+   is the one property here that's cheaply, smoothly animatable in both
+   directions with a single rule (no separate "un-compact" transition
+   needed). */
+.app-segmented-tabs {
+  transform-origin: top center;
+  transition: transform 280ms var(--pwa-ease-out-smooth, cubic-bezier(0.22, 1, 0.36, 1));
+}
+.app-segmented-tabs--compact {
+  transform: scale(0.88);
 }
 
 /* Thumb position/slide: absolute-position coordinates and a transition

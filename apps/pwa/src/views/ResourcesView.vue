@@ -11,18 +11,18 @@
       />
     </div>
 
-    <div v-else-if="loading && items.length === 0" class="view-resources__state">
-      <AppLoadingState />
-    </div>
-
     <template v-else>
-      <div class="view-resources__tabs-bar d-flex align-center ga-3 py-2">
-        <AppSegmentedTabs v-model="tab" :options="tabOptions" class="view-resources__tabs" />
-        <AppSpinner v-if="loading" size="18" width="2" color="primary" />
+      <div ref="scrollSentinelEl" class="view-resources__scroll-sentinel" aria-hidden="true" />
+      <div class="view-resources__tabs-bar">
+        <AppSegmentedTabs v-model="tab" :options="tabOptions" :compact="scrolled" class="view-resources__tabs" />
       </div>
 
       <div class="view-resources__window">
-        <Transition name="title-fade" mode="out-in">
+        <div v-if="loading" class="view-resources__state view-resources__state--loading">
+          <AppLoadingState />
+        </div>
+
+        <Transition v-else name="title-fade" mode="out-in">
           <div v-if="tab === 'documents'" key="documents">
             <div v-if="documents.length === 0" class="view-resources__state">
               <AppEmptyState :title="t('user.resources.emptyDocuments')" />
@@ -42,10 +42,20 @@
                       rounded="lg"
                       class="view-resources__card bg-surface-container-low"
                     >
-                      <a class="view-resources__card-tile d-flex flex-column pa-4" :href="doc.mediaUrl" target="_blank" rel="noopener">
-                        <AppIcon :name="fileTypeIcon(doc.fileType)" class="view-resources__card-icon mb-2" />
-                        <span class="text-body-2 font-weight-bold">{{ doc.title }}</span>
-                      </a>
+                      <VTooltip location="bottom" :text="doc.title" open-delay="400">
+                        <template #activator="{ props: tooltipProps }">
+                          <a
+                            v-bind="tooltipProps"
+                            class="view-resources__card-tile d-flex flex-column pa-4"
+                            :href="doc.mediaUrl"
+                            target="_blank"
+                            rel="noopener"
+                          >
+                            <AppIcon :name="fileTypeIcon(doc.fileType)" class="view-resources__card-icon mb-2" />
+                            <span class="view-resources__card-title text-body-2 font-weight-bold">{{ doc.title }}</span>
+                          </a>
+                        </template>
+                      </VTooltip>
                       <div class="view-resources__lang-row d-flex flex-wrap justify-end ga-2 px-4 pb-4">
                         <a
                           v-for="lang in doc.languages"
@@ -76,10 +86,14 @@
                 <div v-for="subgroup in group.subgroups" :key="subgroup.subcategory ?? ''" class="view-resources__grid view-resources__grid--videos">
                   <VCard v-for="video in subgroup.items" :key="video.id" variant="flat" rounded="lg" class="bg-surface-container-low pa-3">
                     <video controls preload="none" class="view-resources__video rounded-lg" :src="video.mediaUrl" />
-                    <div class="d-flex flex-column mt-2">
-                      <span class="text-body-2 font-weight-bold">{{ video.title }}</span>
-                      <span v-if="video.description" class="text-caption text-medium-emphasis">{{ video.description }}</span>
-                    </div>
+                    <VTooltip location="bottom" :text="video.title" open-delay="400">
+                      <template #activator="{ props: tooltipProps }">
+                        <div v-bind="tooltipProps" class="d-flex flex-column mt-2">
+                          <span class="view-resources__card-title text-body-2 font-weight-bold">{{ video.title }}</span>
+                          <span v-if="video.description" class="text-caption text-medium-emphasis">{{ video.description }}</span>
+                        </div>
+                      </template>
+                    </VTooltip>
                     <div class="view-resources__lang-row d-flex flex-wrap justify-end ga-2 mt-2">
                       <a
                         v-for="lang in video.languages"
@@ -105,12 +119,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { AppSegmentedTabs } from "@ui";
 import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
 import AppLoadingState from "../components/AppLoadingState.vue";
-import AppSpinner from "../components/AppSpinner.vue";
 import AppErrorState from "../components/AppErrorState.vue";
 import AppEmptyState from "../components/AppEmptyState.vue";
 import { usePartnerResources, type PartnerResourceFileType } from "../composables/usePartnerResources";
@@ -139,6 +152,40 @@ const FILE_TYPE_ICONS: Record<PartnerResourceFileType, AppIconName> = {
 function fileTypeIcon(fileType: PartnerResourceFileType): AppIconName {
   return FILE_TYPE_ICONS[fileType];
 }
+
+/**
+ * Drives AppSegmentedTabs' `compact` shrink — an IntersectionObserver on a
+ * 1px sentinel placed right before the sticky tabs bar, rather than a
+ * scroll listener on a specific element. We don't reliably know which
+ * ancestor is the actual scrolling container in AppLayout's shell (already
+ * got that wrong once for the sticky-positioning fix), so this avoids
+ * needing to — it works the same whether the page itself scrolls or some
+ * ancestor `overflow: auto` div does, since it walks up to find whichever
+ * one actually has scrollable overflow and uses that as the observer root.
+ */
+const scrollSentinelEl = ref<HTMLElement | null>(null);
+const scrolled = ref(false);
+let scrollObserver: IntersectionObserver | null = null;
+
+function findScrollParent(el: HTMLElement | null): HTMLElement | null {
+  let node = el?.parentElement ?? null;
+  while (node) {
+    const style = getComputedStyle(node);
+    if (/(auto|scroll)/.test(style.overflowY) && node.scrollHeight > node.clientHeight) return node;
+    node = node.parentElement;
+  }
+  return null;
+}
+
+onMounted(() => {
+  if (!scrollSentinelEl.value) return;
+  scrollObserver = new IntersectionObserver(
+    ([entry]) => { scrolled.value = !entry.isIntersecting; },
+    { root: findScrollParent(scrollSentinelEl.value), threshold: 0 }
+  );
+  scrollObserver.observe(scrollSentinelEl.value);
+});
+onUnmounted(() => scrollObserver?.disconnect());
 
 /** Interim manual reporting — see constants.ts SUPPORT_EMAIL comment. */
 const incidentMailtoHref = computed(() => {
@@ -171,6 +218,22 @@ const incidentMailtoHref = computed(() => {
   justify-content: center;
 }
 
+/* Loading replaces the content area only — tabs stay put (see Core
+   principle #6, one canonical loading state: AppLoadingState, never a
+   bespoke spinner). Bottom-anchored per feedback rather than dead-centered
+   in the whole window, which read as floating awkwardly in a tall panel. */
+.view-resources__state--loading {
+  align-items: flex-end;
+  padding-bottom: 15vh;
+  min-height: 240px;
+}
+
+.view-resources__scroll-sentinel {
+  position: absolute;
+  height: 1px;
+  width: 1px;
+}
+
 /* Sticky rather than relying on being outside an internal overflow:auto
    container — AppLayout's content area turned out to scroll at the page
    level, not inside .view-resources__window, so the flex "keep it above the
@@ -182,6 +245,7 @@ const incidentMailtoHref = computed(() => {
   top: 0;
   z-index: 2;
   flex-shrink: 0;
+  padding-block: 8px;
   background: rgb(var(--v-theme-background));
 }
 
@@ -232,6 +296,27 @@ const incidentMailtoHref = computed(() => {
 .view-resources__card-tile {
   text-decoration: none;
   color: inherit;
+  /* Fixed height so every tile lines up regardless of title length: icon
+     (40px + 8px margin) + a 2-line-clamped title at this line-height. */
+  height: 116px;
+}
+
+/* Line-clamp has no Vuetify utility — this is the standard 2-line-truncate
+   trick (-webkit-box is non-standard but universally supported). Full text
+   is still available via the VTooltip wrapping this tile. */
+.view-resources__card-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.3;
+}
+
+/* Reserves the same vertical space on every card whether it has 1 language
+   or 6 — a genuine max-height clip would hide real language options, so
+   this is min-height (alignment), not a hard cap. */
+.view-resources__lang-row {
+  min-height: 32px;
 }
 
 /* "Much bigger" per feedback — file-type icons are meant to carry real information at a glance. */
