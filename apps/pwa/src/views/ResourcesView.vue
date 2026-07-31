@@ -12,7 +12,6 @@
     </div>
 
     <template v-else>
-      <div ref="scrollSentinelEl" class="view-resources__scroll-sentinel" aria-hidden="true" />
       <div class="view-resources__tabs-bar">
         <AppSegmentedTabs v-model="tab" :options="tabOptions" :compact="scrolled" class="view-resources__tabs" />
       </div>
@@ -188,38 +187,30 @@ function registerTitleEl(id: string, el: Element | null): void {
 }
 
 /**
- * Drives AppSegmentedTabs' `compact` shrink — an IntersectionObserver on a
- * 1px sentinel placed right before the sticky tabs bar, rather than a
- * scroll listener on a specific element. We don't reliably know which
- * ancestor is the actual scrolling container in AppLayout's shell (already
- * got that wrong once for the sticky-positioning fix), so this avoids
- * needing to — it works the same whether the page itself scrolls or some
- * ancestor `overflow: auto` div does, since it walks up to find whichever
- * one actually has scrollable overflow and uses that as the observer root.
+ * Drives AppSegmentedTabs' `compact` shrink. Previously an
+ * IntersectionObserver watching a sentinel, on the theory that we didn't
+ * reliably know which ancestor actually scrolls — that fix (moving the
+ * sentinel out of `position: absolute`) didn't resolve it, so rather than
+ * add a third layer of guessing on top, this replaces it with the simplest
+ * thing that can possibly work: `window.scrollY` directly. The sticky-bar
+ * fix (--v-layout-top) already established that this view's content
+ * scrolls at the real page/window level, not inside some nested
+ * `overflow: auto` div — so window scroll is the direct, correct signal
+ * here, not a roundabout one.
  */
-const scrollSentinelEl = ref<HTMLElement | null>(null);
 const scrolled = ref(false);
-let scrollObserver: IntersectionObserver | null = null;
+const SCROLL_COMPACT_THRESHOLD_PX = 8;
 
-function findScrollParent(el: HTMLElement | null): HTMLElement | null {
-  let node = el?.parentElement ?? null;
-  while (node) {
-    const style = getComputedStyle(node);
-    if (/(auto|scroll)/.test(style.overflowY) && node.scrollHeight > node.clientHeight) return node;
-    node = node.parentElement;
-  }
-  return null;
+function handleWindowScroll(): void {
+  scrolled.value = window.scrollY > SCROLL_COMPACT_THRESHOLD_PX;
 }
 
 onMounted(() => {
-  if (!scrollSentinelEl.value) return;
-  scrollObserver = new IntersectionObserver(
-    ([entry]) => { scrolled.value = !entry.isIntersecting; },
-    { root: findScrollParent(scrollSentinelEl.value), threshold: 0 }
-  );
-  scrollObserver.observe(scrollSentinelEl.value);
+  window.addEventListener("scroll", handleWindowScroll, { passive: true });
 });
-onUnmounted(() => scrollObserver?.disconnect());
+onUnmounted(() => {
+  window.removeEventListener("scroll", handleWindowScroll);
+});
 
 /** Interim manual reporting — see constants.ts SUPPORT_EMAIL comment. */
 const incidentMailtoHref = computed(() => {
@@ -250,15 +241,6 @@ const incidentMailtoHref = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-/* Deliberately normal-flow, not position: absolute — .view-resources has no
-   `position` of its own, so an absolutely positioned child's containing
-   block would resolve to some further, unrelated ancestor instead of
-   sitting right here, making the IntersectionObserver watching it fire at
-   the wrong moment (or never). A 1px block barely affects layout anyway. */
-.view-resources__scroll-sentinel {
-  height: 1px;
 }
 
 /* Sticky rather than relying on being outside an internal overflow:auto

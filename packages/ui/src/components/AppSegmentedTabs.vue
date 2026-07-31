@@ -50,7 +50,7 @@ export interface AppSegmentedTabOption {
 const props = defineProps<{
   modelValue: string;
   options: AppSegmentedTabOption[];
-  /** Shrinks the whole control (scale transform, transitions smoothly both ways) — e.g. while the caller's content scrolls, iOS-large-title-style. */
+  /** Shrinks to exactly the desktop-sized control (same padding + tab height, not an approximation) — e.g. while the caller's content scrolls, iOS-large-title-style. No-op on desktop, which already renders at that size. */
   compact?: boolean;
 }>();
 
@@ -76,18 +76,20 @@ const activeIndex = computed(() => Math.max(0, props.options.findIndex((o) => o.
   }
 }
 
-/* Compact: a scale transform rather than swapping VBtn's `size` prop —
-   Vuetify's size variants are discrete CSS classes with no transition
-   between them, which would jump instead of shrinking smoothly. transform
-   is the one property here that's cheaply, smoothly animatable in both
-   directions with a single rule (no separate "un-compact" transition
-   needed). */
+/* Compact: sets the exact same padding desktop already uses (4px), not an
+   approximation like a scale transform — per feedback, "shrink to the
+   height that exists on desktop" is a literal spec, not "shrink somewhat".
+   !important is required here because Vuetify's own pa-2/pa-sm-1 utility
+   classes in the template set `padding` with !important — a plain override
+   would lose to those regardless of selector specificity. Real `padding`
+   transitions natively; no Houdini/@property needed like a custom property
+   transition would require. */
 .app-segmented-tabs {
-  transform-origin: top center;
-  transition: transform 280ms var(--pwa-ease-out-smooth, cubic-bezier(0.22, 1, 0.36, 1));
+  transition: padding 280ms var(--pwa-ease-out-smooth, cubic-bezier(0.22, 1, 0.36, 1));
 }
 .app-segmented-tabs--compact {
-  transform: scale(0.88);
+  --seg-pad: 4px;
+  padding: 4px !important;
 }
 
 /* Thumb position/slide: absolute-position coordinates and a transition
@@ -124,10 +126,16 @@ const activeIndex = computed(() => Math.max(0, props.options.findIndex((o) => o.
    full-width mobile control — bumped on mobile only, where it's held and
    tapped rather than clicked with a mouse. 40px rather than the full 44px
    touch-target minimum per feedback (44px read as too tall here); desktop
-   stays compact by design. No Vuetify utility sets an explicit min-height. */
+   stays compact by design. No Vuetify utility sets an explicit min-height.
+   Compact reverts this to VBtn's own natural (unset) height — the same
+   32px desktop already has, not a separate hand-picked number. */
 @media (max-width: 599px) {
   .app-segmented-tabs__tab {
     min-height: 40px;
+    transition: min-height 280ms var(--pwa-ease-out-smooth, cubic-bezier(0.22, 1, 0.36, 1));
+  }
+  .app-segmented-tabs--compact .app-segmented-tabs__tab {
+    min-height: 32px;
   }
 }
 </style>
