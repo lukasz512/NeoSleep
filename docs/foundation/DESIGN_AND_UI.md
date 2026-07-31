@@ -55,6 +55,60 @@ see "Motion stays restrained" above). Not yet scoped to a stage — parking here
 5. **Motion stays snappy, not bouncy.** `--pwa-ease-out-smooth` is the default for all
    navigation/state transitions. `--pwa-ease-spring` is reserved for rare, deliberate feedback
    moments (e.g. a save-success confirmation) — not general-purpose motion.
+6. **One canonical component per UI pattern — reuse it, don't reinvent it inline.** Loading,
+   notification, and tooltip are not "pick whatever's convenient for this view" decisions.
+   Every loading state is `AppLoadingState.vue` (which wraps `AppSpinner.vue` — never a bare
+   `<VProgressCircular>` or a hand-placed spinner dropped next to some other control). Every
+   toast/banner is `useNotifications()` + `AppNotifications.vue`. Every tooltip is Vuetify's
+   `VTooltip`. If an existing canonical component doesn't fit a new situation (placement,
+   size, whatever), fix or extend that component — add a prop, add a variant — rather than
+   building a one-off next to it. A second loading spinner with its own look is a regression
+   even if it "works", because the whole point is that a user (and a future reader of the
+   code) can trust one visual language for "this is loading" everywhere, not re-learn it per
+   screen. This applies retroactively too: if you spot an ad-hoc reinvention while touching a
+   view, hoist it back onto the canonical component instead of leaving it as-is.
+
+## CSS authoring convention: utility-first with Vuetify
+
+**Decision (2026-07-31):** new and refactored templates default to Vuetify utility classes
+(`d-flex`, `pa-*`, `ma-*`, `text-*`, `bg-*`, gap/flex utilities, etc.) and built-in Vuetify
+components. Hand-written `<style scoped>` CSS is a documented exception, not the default.
+
+Why: the long-term plan is to bring `apps/web` onto Vuetify (eventually Nuxt), sharing the same
+`packages/vuetify` factory both apps already have access to. Standardizing on Vuetify's own
+utility/component vocabulary now — rather than growing more BEM-style `<style scoped>` blocks —
+is what makes that migration a "point `apps/web` at the same factory" move later instead of a
+second design system to reconcile. Full `vuetify/styles` is already imported unminified in
+`packages/vuetify/src/index.ts` (not tree-shaken), so utility classes work today with no build
+change.
+
+This is not primarily about writing less CSS — a rule expressed as a utility class in the
+template is roughly the same amount of code as the equivalent scoped rule, just relocated. What
+it actually removes is the failure surface that accumulates in ~2000 lines of hand-written scoped
+CSS across `apps/pwa`: dead rules, class-name drift between components, specificity conflicts.
+That's the sense in which this serves "robust", not line count.
+
+Rules:
+1. **Default**: layout, spacing, and typography in the template use Vuetify utility classes. Don't
+   open a new `<style scoped>` block for something a utility class already expresses.
+2. **Escape hatch**: `<style scoped>` stays allowed when a rule encodes a constraint a utility
+   class can't carry (a specific layout conflict, an animation, a pseudo-element trick) — always
+   with a one-line comment explaining *why*, not *what*. `AppFilterBar.vue`'s `.app-filter-bar__badge
+   { flex-shrink: 0; }` (with its comment on the sibling flex-basis conflict) is the template for
+   this — the exception, not a pattern to copy for ordinary layout.
+3. **Components over hand-rolled equivalents**: prefer Vuetify's built-ins (`VNavigationDrawer`,
+   `VList` with `:to`/`color="primary"` for active-state, etc.) — see the nav drawer entry in
+   Rollout status below for the precedent (manual `RouterLink`+`isActive` bookkeeping replaced by
+   Vuetify's own active-state handling).
+4. **Tokens**: don't add a new `--pwa-*` custom property for something Vuetify's theme system
+   already models (spacing scale, color roles). Extend `theme.colors` in
+   `packages/vuetify/src/index.ts` instead — see the M3 color roles below for the existing
+   precedent of doing this. That way `apps/web`'s eventual Vuetify adoption inherits the same
+   tokens for free instead of needing its own `--website-*` translation layer.
+
+**Not decided yet**: retrofitting the ~40 existing `<style scoped>` components in `apps/pwa` to
+this convention. That's a separate, larger refactor call — this section only fixes the convention
+for new/touched code going forward.
 
 ## Existing tokens (`theme.scss`)
 
@@ -167,4 +221,4 @@ not a `background-color` swap, which would replace the tone instead of tinting i
 - `AppDataTable.vue` appears unreferenced anywhere in the app (superseded by
   `AppEntityList.vue`) — candidate for removal in a separate cleanup pass, left untouched here.
 
-_Last updated: 2026-07-20_
+_Last updated: 2026-07-31_
