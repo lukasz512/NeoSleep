@@ -3,6 +3,7 @@ import { routes, isRoleAllowed, appHomePath } from "./routes";
 import { useAuthStore } from "../stores/auth";
 import { useRolePreviewStore } from "../stores/rolePreview";
 import type { UserRole } from "../stores/auth";
+import { ensurePartnerConnection } from "../composables/usePartnerConnection";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -60,6 +61,13 @@ router.beforeEach(async (to, _from, next) => {
       next({ path: appHomePath });
       return;
     }
+
+    // Fire-and-forget: retries the partner connection if it's down and
+    // (rate-limited) notifies on failure — never blocks or delays the
+    // navigation itself. See usePartnerConnection.ts.
+    const partner = to.meta.partner as string | undefined;
+    if (partner) void ensurePartnerConnection(partner);
+
     next();
     return;
   }

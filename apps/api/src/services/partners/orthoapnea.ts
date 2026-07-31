@@ -17,20 +17,15 @@ import type { PartnerResourceItem } from "./types.js";
  * on OrthoApnea's cart-like session state) and we haven't captured their
  * order endpoint yet. See docs/ADR-015 discussion / project memory.
  *
- * ⚠️ UNVERIFIED: the login endpoint/payload below (LOGIN_PATH, body and
- * response field names) is a best-effort guess, not a captured request. Open
- * apneadock.es, log in with the browser devtools Network tab open, find the
- * actual login call, and correct LOGIN_PATH / the body / the token field
- * name below to match before relying on this in anything but local testing.
- * Every login attempt (success/failure) is logged via console — check those
- * logs first when testing the real endpoint.
- *
- * Resource + media paths (RESOURCES_PATH, DOCUMENT_MEDIA_PATH,
- * TUTORIAL_VIDEO_MEDIA_PATH, DOC_VIDEO_MEDIA_PATH) ARE confirmed, from
- * captured page renders.
+ * Login (LOGIN_PATH, Basic-auth scheme, JWT response) is confirmed from a
+ * captured request/response pair — see below. Resource + media paths
+ * (RESOURCES_PATH, DOCUMENT_MEDIA_PATH, TUTORIAL_VIDEO_MEDIA_PATH,
+ * DOC_VIDEO_MEDIA_PATH) are confirmed too, from captured page renders.
+ * Every login attempt (success/failure) is still logged via console —
+ * useful once order submission is built against the same session.
  */
 
-const LOGIN_PATH = "/api/auth/login";
+const LOGIN_PATH = "/api/login";
 const RESOURCES_PATH = "/api/resources";
 /** Confirmed from captured page renders — apneadock.es serves documents from exactly this path (e.g. /media/doc/OA010.pdf). */
 const DOCUMENT_MEDIA_PATH = "/media/doc";
@@ -48,23 +43,48 @@ const VIDEO_TYPE = 2;
 
 interface OrthoApneaSession {
   token: string;
-  obtainedAt: number;
+  /** From the JWT's `exp` claim (unix seconds -> ms). Falls back to a conservative 30min if the token has no exp for some reason. */
+  expiresAt: number;
 }
+
+/** JWTs are `header.payload.signature` — the payload is base64url JSON, no verification needed since we're only reading our own freshly-issued token. */
+function decodeJwtExpiry(token: string): number | null {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+    const json = Buffer.from(payload, "base64url").toString("utf-8");
+    const { exp } = JSON.parse(json) as { exp?: number };
+    return typeof exp === "number" ? exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+const FALLBACK_SESSION_TTL_MS = 30 * 60 * 1000;
+/** After a failed login, don't hammer OrthoApnea again for this long — a rep bouncing between routes while OrthoApnea is down shouldn't trigger a login attempt on every navigation. */
+const RECONNECT_COOLDOWN_MS = 15_000;
 
 let session: OrthoApneaSession | null = null;
 let loginInFlight: Promise<OrthoApneaSession> | null = null;
+let lastLoginFailureAt: number | null = null;
+
+function isSessionValid(s: OrthoApneaSession): boolean {
+  return s.expiresAt > Date.now();
+}
 
 async function login(): Promise<OrthoApneaSession> {
   if (!ORTHOAPNEA_EMAIL || !ORTHOAPNEA_PASSWORD) {
     throw new PartnerServiceError("orthoapnea", "ORTHOAPNEA_EMAIL / ORTHOAPNEA_PASSWORD not configured");
   }
 
+  // Confirmed from a captured request: POST with no body, credentials via
+  // HTTP Basic auth (not a JSON body) — matches apneadock.es's Angular client.
+  const basicAuth = Buffer.from(`${ORTHOAPNEA_EMAIL}:${ORTHOAPNEA_PASSWORD}`).toString("base64");
   let res: Response;
   try {
     res = await fetch(`${ORTHOAPNEA_BASE_URL}${LOGIN_PATH}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: ORTHOAPNEA_EMAIL, password: ORTHOAPNEA_PASSWORD }),
+      headers: { Authorization: `Basic ${basicAuth}` },
     });
   } catch (cause) {
     console.error("[orthoapnea] login request failed (network error):", cause);
@@ -75,30 +95,62 @@ async function login(): Promise<OrthoApneaSession> {
     throw new PartnerServiceError("orthoapnea", `login failed with status ${res.status}`);
   }
 
-  const data = (await res.json()) as { token?: string; accessToken?: string };
-  const token = data.token ?? data.accessToken;
-  if (!token) {
-    console.error("[orthoapnea] login response did not contain a recognizable token field:", data);
-    throw new PartnerServiceError("orthoapnea", "login response did not contain a recognizable token field");
+  const data = (await res.json()) as { token?: string };
+  if (!data.token) {
+    console.error("[orthoapnea] login response did not contain a token field:", data);
+    throw new PartnerServiceError("orthoapnea", "login response did not contain a token field");
   }
-  console.log("[orthoapnea] login succeeded, session established");
-  return { token, obtainedAt: Date.now() };
+  const expiresAt = decodeJwtExpiry(data.token) ?? Date.now() + FALLBACK_SESSION_TTL_MS;
+  console.log(`[orthoapnea] login succeeded, session valid until ${new Date(expiresAt).toISOString()}`);
+  return { token: data.token, expiresAt };
 }
 
-/** De-duped: concurrent callers during a cold start all await the same in-flight login instead of triggering N logins. */
+/**
+ * De-duped: concurrent callers during a cold start all await the same
+ * in-flight login instead of triggering N logins. Also the single place
+ * that decides "are we connected" — checkConnection() below just wraps this.
+ */
 async function ensureSession(): Promise<OrthoApneaSession> {
-  if (session) return session;
+  if (session && isSessionValid(session)) return session;
+  session = null;
+
+  if (lastLoginFailureAt && Date.now() - lastLoginFailureAt < RECONNECT_COOLDOWN_MS) {
+    throw new PartnerServiceError("orthoapnea", "connection recently failed — cooling down before retrying");
+  }
+
   if (!loginInFlight) {
     loginInFlight = login()
       .then((s) => {
         session = s;
+        lastLoginFailureAt = null;
         return s;
+      })
+      .catch((err: unknown) => {
+        lastLoginFailureAt = Date.now();
+        throw err;
       })
       .finally(() => {
         loginInFlight = null;
       });
   }
   return loginInFlight;
+}
+
+/**
+ * Cheap, non-throwing connection check — attempts a (re)connect if not
+ * already connected (a no-op if the cached token is still valid), reports
+ * success/failure rather than propagating the error. Meant to be polled on
+ * navigation into any OrthoApnea-dependent view (see routes/partners/
+ * orthoapnea-status.ts) — the same shape any future partner's status check
+ * should follow: attempt-if-needed, never throw, just report connected.
+ */
+export async function checkConnection(): Promise<boolean> {
+  try {
+    await ensureSession();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function authedFetch(path: string, init: RequestInit = {}, isRetry = false): Promise<Response> {

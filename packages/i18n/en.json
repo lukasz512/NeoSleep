@@ -280,7 +280,7 @@
   "user.resources.tabs.videos": "Videos",
   "user.resources.emptyDocuments": "No documents available yet",
   "user.resources.emptyVideos": "No videos available yet",
-  "user.resources.connectionError": "Couldn't connect to OrthoApnea — try again from the Resources tab",
+  "app.partners.connectionError": "Couldn't connect to {partner}",
   "layout.sidebar.placeholder": "Sidebar (placeholder)",
   "layout.sidebar.expand": "Expand sidebar",
   "layout.sidebar.collapse": "Collapse sidebar",

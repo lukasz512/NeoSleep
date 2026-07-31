@@ -49,7 +49,7 @@ export const routes: RouteRecordRaw[] = [
   { path: "/planner", name: "planner", component: () => import("../views/PlannerView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
   // Hidden from nav while the OrthoApnea resources module ships (not deleted — see the `hidden` filter in appNavRoutes below).
   { path: "/presentations", name: "presentations", component: () => import("../views/PresentationsView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES, hidden: true } },
-  { path: "/resources", name: "resources", component: () => import("../views/ResourcesView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
+  { path: "/resources", name: "resources", component: () => import("../views/ResourcesView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES, partner: "orthoapnea" } },
   { path: "/users", name: "users", component: () => import("../views/UsersView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin", "manager"] } },
   { path: "/users/:id", name: "user-detail", component: () => import("../views/UserDetailView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin", "manager"] } },
   { path: "/:pathMatch(.*)*", redirect: "/dashboard" },
