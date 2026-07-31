@@ -143,6 +143,7 @@ import AppNotifications from "../components/AppNotifications.vue";
 import { useNotificationCenter } from "../composables/useNotificationCenter";
 import { onAppReady, markAppReady } from "../composables/useAppReady";
 import { usePartnerResources } from "../composables/usePartnerResources";
+import { useNotifications } from "../composables/useNotifications";
 
 const route = useRoute();
 const { t, locale } = useI18n();
@@ -169,9 +170,21 @@ onUnmounted(stopPolling);
 
 // Warms the OrthoApnea session + resources cache in the background as soon
 // as the app shell is up, so ResourcesView.vue doesn't pay that latency
-// itself later — see useAppReady.ts.
-const { load: loadPartnerResources } = usePartnerResources();
-onAppReady(() => void loadPartnerResources(locale.value));
+// itself later — see useAppReady.ts. This is the only place a connection
+// failure gets a toast: a rep who never opens Resources shouldn't be
+// interrupted, but should still find out proactively rather than discover
+// it only by clicking in. ResourcesView.vue itself shows AppErrorState
+// inline instead (a toast there would be redundant with what's on screen),
+// and load() there naturally retries since it re-attempts whenever the
+// previous attempt left loadError set.
+const notifications = useNotifications();
+const { load: loadPartnerResources, loadError: partnerResourcesLoadError } = usePartnerResources();
+onAppReady(async () => {
+  await loadPartnerResources(locale.value);
+  if (partnerResourcesLoadError.value) {
+    notifications.show(t("user.resources.connectionError"), "warning");
+  }
+});
 onMounted(markAppReady);
 
 const menuOpen = ref(false);

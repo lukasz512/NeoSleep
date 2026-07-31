@@ -22,12 +22,28 @@ import type { PartnerResourceItem } from "./types.js";
  * apneadock.es, log in with the browser devtools Network tab open, find the
  * actual login call, and correct LOGIN_PATH / the body / the token field
  * name below to match before relying on this in anything but local testing.
+ * Every login attempt (success/failure) is logged via console — check those
+ * logs first when testing the real endpoint.
+ *
+ * Resource + media paths (RESOURCES_PATH, DOCUMENT_MEDIA_PATH,
+ * TUTORIAL_VIDEO_MEDIA_PATH, DOC_VIDEO_MEDIA_PATH) ARE confirmed, from
+ * captured page renders.
  */
 
 const LOGIN_PATH = "/api/auth/login";
 const RESOURCES_PATH = "/api/resources";
-/** Confirmed from a captured page render — tutorial/product videos live here. Document paths are NOT confirmed (see fetchMedia). */
-const VIDEO_MEDIA_PATH = "/media/video/tutorials";
+/** Confirmed from captured page renders — apneadock.es serves documents from exactly this path (e.g. /media/doc/OA010.pdf). */
+const DOCUMENT_MEDIA_PATH = "/media/doc";
+/**
+ * Videos are split across (at least) two folders and the JSON alone doesn't
+ * reliably say which one a given row uses — ids 56–58 ("Recursos gráficos"
+ * category) are confirmed under DOC_VIDEO_MEDIA_PATH, while the "Tutoriales"
+ * webinar-style videos are confirmed under TUTORIAL_VIDEO_MEDIA_PATH. Rather
+ * than hardcode a row → folder rule we don't actually have, tryVideoPaths()
+ * below attempts both and caches whichever one 200s per resource id.
+ */
+const TUTORIAL_VIDEO_MEDIA_PATH = "/media/video/tutorials";
+const DOC_VIDEO_MEDIA_PATH = "/media/doc/videos";
 const VIDEO_TYPE = 2;
 
 interface OrthoApneaSession {
@@ -51,17 +67,21 @@ async function login(): Promise<OrthoApneaSession> {
       body: JSON.stringify({ email: ORTHOAPNEA_EMAIL, password: ORTHOAPNEA_PASSWORD }),
     });
   } catch (cause) {
+    console.error("[orthoapnea] login request failed (network error):", cause);
     throw new PartnerServiceError("orthoapnea", "login request failed (network error)", cause);
   }
   if (!res.ok) {
+    console.error(`[orthoapnea] login failed with status ${res.status}`);
     throw new PartnerServiceError("orthoapnea", `login failed with status ${res.status}`);
   }
 
   const data = (await res.json()) as { token?: string; accessToken?: string };
   const token = data.token ?? data.accessToken;
   if (!token) {
+    console.error("[orthoapnea] login response did not contain a recognizable token field:", data);
     throw new PartnerServiceError("orthoapnea", "login response did not contain a recognizable token field");
   }
+  console.log("[orthoapnea] login succeeded, session established");
   return { token, obtainedAt: Date.now() };
 }
 
@@ -88,6 +108,7 @@ async function authedFetch(path: string, init: RequestInit = {}, isRetry = false
     headers: { ...init.headers, Authorization: `Bearer ${token}` },
   });
   if (res.status === 401 && !isRetry) {
+    console.warn(`[orthoapnea] 401 on ${path} — session likely expired, re-logging in and retrying once`);
     session = null; // force a fresh login and retry exactly once
     return authedFetch(path, init, true);
   }
@@ -104,23 +125,40 @@ interface RawOrthoApneaResource {
   titleEn?: string;
   titleDe?: string;
   titleFr?: string;
+  titlePt?: string;
+  titleNl?: string;
   descriptionEs?: string;
   descriptionEn?: string;
   descriptionDe?: string;
+  descriptionFr?: string;
+  descriptionPt?: string;
+  descriptionNl?: string;
   url?: string;
   urlEs?: string;
   urlEn?: string;
   urlDe?: string;
   urlFr?: string;
+  urlPt?: string;
+  urlNl?: string;
 }
 
-type LocaleSuffix = "Es" | "En" | "De" | "Fr";
+type LocaleSuffix = "Es" | "En" | "De" | "Fr" | "Pt" | "Nl";
 
-/** Our locale keys (en/pl/mx) don't map 1:1 to OrthoApnea's (Es/En/De/Fr) — pl and mx fall back through the closest available language. */
+/**
+ * Our locale keys (en/pl/mx, th planned per CLAUDE.md) don't map 1:1 to
+ * OrthoApnea's (Es/En/De/Fr/Pt/Nl — confirmed from a captured document list,
+ * richer than the resources-list sample we designed the first version of
+ * this file around). Each chain tries the closest language first, then
+ * falls through the rest of OrthoApnea's languages rather than giving up —
+ * showing *something* beats showing nothing for a resource that exists but
+ * not in the user's own language. Revisit if a real th-speaking partner
+ * appears and none of this fallback chain is acceptable to them.
+ */
 const LOCALE_FALLBACK: Record<string, LocaleSuffix[]> = {
-  en: ["En", "Es"],
-  mx: ["Es", "En"],
-  pl: ["En", "Es"],
+  en: ["En", "Es", "De", "Fr", "Pt", "Nl"],
+  mx: ["Es", "En", "Pt", "De", "Fr", "Nl"],
+  pl: ["En", "Es", "De", "Fr", "Pt", "Nl"],
+  th: ["En", "Es", "De", "Fr", "Pt", "Nl"],
 };
 
 /** Some rows have an empty string for a given language, not a missing key — falls through to the next language in the chain rather than accepting "". */
@@ -161,12 +199,33 @@ export async function fetchResources(locale: string): Promise<PartnerResourceIte
     .sort((a, b) => a.weight - b.weight);
 }
 
-/**
- * Streams the underlying file for one resource. Only the video path is
- * confirmed (VIDEO_MEDIA_PATH, from a captured page render) — the document
- * path below is an unverified guess (`/media/<urlXx>`). If documents 404,
- * capture the real download request from apneadock.es and fix the path here.
- */
+/** Resource id -> the video media path that actually worked, so repeat requests for the same video don't pay the two-path probe again. */
+const resolvedVideoPathCache = new Map<string, string>();
+
+async function tryVideoPaths(resourceId: string, filename: string): Promise<Response> {
+  const encoded = encodeURIComponent(filename);
+  const cached = resolvedVideoPathCache.get(resourceId);
+  const candidates = cached
+    ? [cached]
+    : [`${TUTORIAL_VIDEO_MEDIA_PATH}/${encoded}`, `${DOC_VIDEO_MEDIA_PATH}/${encoded}`];
+
+  let lastRes: Response | null = null;
+  for (const path of candidates) {
+    const res = await authedFetch(path);
+    if (res.ok && res.body) {
+      resolvedVideoPathCache.set(resourceId, path);
+      return res;
+    }
+    lastRes = res;
+  }
+  console.error(`[orthoapnea] video fetch failed for resource '${resourceId}' on all known paths: ${candidates.join(", ")}`);
+  throw new PartnerServiceError(
+    "orthoapnea",
+    `media fetch failed with status ${lastRes?.status} — tried ${candidates.join(", ")}`
+  );
+}
+
+/** Streams the underlying file for one resource. Document path confirmed (DOCUMENT_MEDIA_PATH); video path resolved via tryVideoPaths (see its comment). */
 export async function fetchResourceMedia(
   resourceId: string,
   locale: string
@@ -181,10 +240,16 @@ export async function fetchResourceMedia(
   if (!filename) {
     throw new PartnerServiceError("orthoapnea", `resource '${resourceId}' has no media file for locale '${locale}'`);
   }
-  const mediaPath = raw.type === VIDEO_TYPE ? `${VIDEO_MEDIA_PATH}/${filename}` : `/media/${filename}`;
 
+  if (raw.type === VIDEO_TYPE) {
+    const mediaRes = await tryVideoPaths(resourceId, filename);
+    return { body: mediaRes.body as ReadableStream<Uint8Array>, contentType: mediaRes.headers.get("content-type") };
+  }
+
+  const mediaPath = `${DOCUMENT_MEDIA_PATH}/${encodeURIComponent(filename)}`;
   const mediaRes = await authedFetch(mediaPath);
   if (!mediaRes.ok || !mediaRes.body) {
+    console.error(`[orthoapnea] document fetch failed with status ${mediaRes.status} for '${mediaPath}'`);
     throw new PartnerServiceError("orthoapnea", `media fetch failed with status ${mediaRes.status} for '${mediaPath}'`);
   }
   return { body: mediaRes.body, contentType: mediaRes.headers.get("content-type") };
