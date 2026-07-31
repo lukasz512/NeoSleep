@@ -34,9 +34,11 @@ defineEmits<{
 </script>
 
 <style scoped>
-/* Wordmark: same proportions as website (140×32) */
+/* Wordmark: same proportions as website (140×32). Height pinned to
+   --appbar-row (AppShell.vue) so it stays level with the hamburger and
+   title without its own tuning — 28px is the fallback outside the shell. */
 .layout-app__logo-wordmark {
-  height: 28px;
+  height: var(--appbar-row, 28px);
   width: auto;
   display: block;
   object-fit: contain;

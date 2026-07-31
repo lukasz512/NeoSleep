@@ -264,6 +264,8 @@ const moduleIcon = computed(() => {
 }
 
 .layout-appbar__icon {
+  width: var(--appbar-row, 28px);
+  height: var(--appbar-row, 28px);
   flex-shrink: 0;
   color: rgb(var(--v-theme-primary));
 }
@@ -305,9 +307,9 @@ const moduleIcon = computed(() => {
 }
 
 .layout-appbar__title {
-  font-size: 1.1rem;
+  font-size: 20px;
   font-weight: 600;
-  line-height: 20px;
+  line-height: var(--appbar-row, 28px);
 }
 
 .layout-nav-footer {
