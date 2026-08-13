@@ -9,7 +9,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "NODE_OPTIONS='--require=./vitest-crypto-polyfill.cjs' vitest run",
     "seed:demo": "tsx --env-file=../../.env ../../infrastructure/scripts/seed-demo.ts",
-    "migrate": "tsx scripts/migrate.ts"
+    "migrate": "tsx scripts/migrate.ts",
+    "sync-test-schema": "tsx scripts/sync-test-schema.ts"
   },
   "dependencies": {
     "@neo/email": "workspace:*",
