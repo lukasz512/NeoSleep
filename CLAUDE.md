@@ -118,7 +118,7 @@ pnpm i18n:prune        # Mark unused keys
 - `apps/pwa` / `apps/web`: FTP to GoDaddy (current, to be migrated to VPS)
 - `apps/api`: Render, auto-deploys on push to its tracked branch — see `render.yaml`. No GitHub Actions workflow for this; a git push is the whole deploy pipeline.
 - Environments (branch → URL): only `dev` and `prod` exist for now — UAT is removed from the project until reintroduced
-  - DEV:  `dev` → pwa.dev.neosleepcare.com (rep app) / dev.neosleepcare.com (website)
+  - DEV:  `dev` → pwa-dev.neosleepcare.com (rep app) / dev.neosleepcare.com (website)
   - PROD: `prod` → pwa.neosleepcare.com (rep app) / neosleepcare.com (website)
 - CI/CD: `.github/workflows/deploy-pwa.yml`, `deploy-web.yml`
 - Promote DEV → PROD via `promote-pwa-dev-to-prod.yml` / `promote-web-dev-to-prod.yml`
