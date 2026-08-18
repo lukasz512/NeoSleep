@@ -1,5 +1,5 @@
-# Ręczna promocja: zbuduj z gałęzi dev i wgraj na PROD (pwa.neosleepcare.com).
-# W Actions wybierz workflow "Promote PWA Dev → Prod" i kliknij "Run workflow".
+# Manual promotion: build from the dev branch and deploy to PROD (pwa.neosleepcare.com).
+# In Actions, select the "Promote PWA Dev → Prod" workflow and click "Run workflow".
 #
 # TODO: migrate to SSH (appleboy/scp-action) once Hetzner VPS is provisioned.
 # See infrastructure/setup/provision.md for the migration runbook.
