@@ -1,4 +1,4 @@
-# Auto-deploy rep-app to DEV on every push to dev (pwa.dev.neosleepcare.com,
+# Auto-deploy rep-app to DEV on every push to dev (pwa-dev.neosleepcare.com,
 # path: secret GODADY_FTP_PWA_DEV). PROD is intentionally NOT deployed from
 # here — prod is only ever updated manually via promote-pwa-dev-to-prod.yml
 # ("Promote PWA Dev → Prod" in Actions), which builds from dev with PROD env
@@ -46,7 +46,7 @@ jobs:
       - name: Build rep-app
         run: pnpm run build:pwa
 
-      - name: Deploy to DEV (pwa.dev.neosleepcare.com)
+      - name: Deploy to DEV (pwa-dev.neosleepcare.com)
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
