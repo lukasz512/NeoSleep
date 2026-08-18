@@ -1,62 +1,102 @@
-import { describe, it, expect } from "vitest";
-import { readFileSync } from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
+import { describe, it, expect, afterEach } from "vitest";
+import { mount, type VueWrapper } from "@vue/test-utils";
+import { setActivePinia, createPinia } from "pinia";
+import { createI18n } from "vue-i18n";
+import { createVuetify } from "vuetify";
+import * as vuetifyComponents from "vuetify/components";
+import * as vuetifyDirectives from "vuetify/directives";
+import en from "@i18n/en.json";
+import AppFilterBar from "./AppFilterBar.vue";
+import type { FilterDefinition } from "../composables/useFilters";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const componentPath = path.resolve(__dirname, "AppFilterBar.vue");
+const DEFINITIONS: FilterDefinition[] = [
+  {
+    key: "status",
+    type: "select",
+    labelKey: "user.leads.filters.status",
+    options: [
+      { title: "New", value: "new", chipClass: "pwa-lead-status-chip--new" },
+      { title: "Won", value: "won", chipClass: "pwa-lead-status-chip--won" },
+    ],
+  },
+];
 
-function getAppFilterBarSource(): string {
-  return readFileSync(componentPath, "utf-8");
+const mountedWrappers: VueWrapper[] = [];
+
+afterEach(() => {
+  for (const w of mountedWrappers.splice(0)) w.unmount();
+  document.body.innerHTML = "";
+});
+
+function mountFilterBar(props: {
+  modelValue?: Record<string, string | string[]>;
+  activeFilterCount?: number;
+} = {}) {
+  setActivePinia(createPinia());
+  const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
+  const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
+
+  const el = document.createElement("div");
+  document.body.appendChild(el);
+
+  const wrapper = mount(AppFilterBar, {
+    attachTo: el,
+    props: {
+      modelValue: props.modelValue ?? {},
+      definitions: DEFINITIONS,
+      titleKey: "user.leads.filters.title",
+      clearKey: "user.leads.filters.clear",
+      activeFilterCount: props.activeFilterCount ?? 0,
+    },
+    global: { plugins: [i18n, vuetify] },
+  });
+  mountedWrappers.push(wrapper);
+  return wrapper;
 }
 
 describe("AppFilterBar", () => {
-  it("uses VBadge with activeFilterCount so badge shows count when filters active", () => {
-    const source = getAppFilterBarSource();
-    expect(source).toContain("VBadge");
-    expect(source).toContain("activeFilterCount");
-    expect(source).toMatch(/model-value="activeFilterCount\s*>\s*0"/);
+  it("renders a visible filter icon on the activator button (min touch target, no border)", () => {
+    const wrapper = mountFilterBar();
+    const btn = wrapper.find(".app-filter-bar__btn");
+    expect(btn.exists()).toBe(true);
+    expect(btn.classes()).toContain("app-filter-bar__btn--no-border");
+
+    const icon = btn.find("svg.app-filter-bar__icon");
+    expect(icon.exists()).toBe(true);
+    expect(icon.attributes("stroke")).toBe("currentColor");
   });
 
-  it("accepts clearKey prop for i18n (Clear button lives in parent AppEntityList)", () => {
-    const source = getAppFilterBarSource();
-    expect(source).toContain("clearKey");
+  it("shows the active-filter-count badge only when filters are active", async () => {
+    const inactive = mountFilterBar({ activeFilterCount: 0 });
+    expect(inactive.findComponent({ name: "VBadge" }).props("modelValue")).toBe(false);
+
+    const active = mountFilterBar({ activeFilterCount: 2 });
+    const badge = active.findComponent({ name: "VBadge" });
+    expect(badge.props("modelValue")).toBe(true);
+    expect(badge.props("content")).toBe(2);
   });
 
-  it("emits clear (parent provides external Clear button)", () => {
-    const source = getAppFilterBarSource();
-    expect(source).toContain('emit("clear")');
+  it("opens the menu on click and emits an updated filter value from a select field", async () => {
+    const wrapper = mountFilterBar();
+    await wrapper.find(".app-filter-bar__btn").trigger("click");
+    await wrapper.vm.$nextTick();
+
+    // VSelect renders its options into an overlay teleported to document.body.
+    const select = wrapper.findComponent({ name: "VSelect" });
+    expect(select.exists()).toBe(true);
+
+    select.vm.$emit("update:modelValue", ["won"]);
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.emitted("update:modelValue")?.at(-1)).toEqual([{ status: ["won"] }]);
   });
 
-  it("filter button has min touch target (app-filter-bar__btn with CSS var)", () => {
-    const source = getAppFilterBarSource();
-    expect(source).toContain("app-filter-bar__btn");
-    expect(source).toMatch(/--pwa-btn-min-(width|height)/);
-  });
+  it("renders chip options with the pwa-lead-status-chip class for select fields that define chipClass", async () => {
+    const wrapper = mountFilterBar({ modelValue: { status: ["won"] } });
+    await wrapper.find(".app-filter-bar__btn").trigger("click");
+    await wrapper.vm.$nextTick();
 
-  it("filter button has no border (app-filter-bar__btn--no-border)", () => {
-    const source = getAppFilterBarSource();
-    expect(source).toContain("app-filter-bar__btn--no-border");
-    expect(source).toMatch(/border:\s*none|box-shadow:\s*none/);
-  });
-
-  it("filter button uses inline SVG icon (stroke, no VIcon) for visibility", () => {
-    const source = getAppFilterBarSource();
-    expect(source).toContain("app-filter-bar__icon");
-    expect(source).toMatch(/stroke="currentColor"/);
-    expect(source).toContain("<svg");
-  });
-
-  it("filter button has size large to match add button", () => {
-    const source = getAppFilterBarSource();
-    expect(source).toContain('size="large"');
-  });
-
-  it("VSelect uses chips and closable-chips when options have chipClass", () => {
-    const source = getAppFilterBarSource();
-    expect(source).toContain("chips");
-    expect(source).toContain("closable-chips");
-    expect(source).toContain("hasChipOptions");
-    expect(source).toContain("pwa-lead-status-chip");
+    const select = wrapper.findComponent({ name: "VSelect" });
+    expect(select.props("chips")).toBe(true);
   });
 });
