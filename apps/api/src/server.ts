@@ -57,6 +57,11 @@ function corsOrigin(origin: string | undefined, cb: (err: Error | null, allow?: 
 
 export const app: Express = express();
 
+// Registered before any other middleware (rate limiter, CORS, session) so Render's
+// health checker never gets rate-limited or blocked by an unrelated dependency —
+// a 429/5xx here makes Render think the whole instance is down.
+app.get("/health", (_req, res) => res.json({ ok: true }));
+
 // Render (and any reverse-proxy host) sits in front of this process and sets
 // X-Forwarded-For / X-Forwarded-Proto. Without this, express-rate-limit
 // refuses to trust X-Forwarded-For (ERR_ERL_UNEXPECTED_X_FORWARDED_FOR) and
@@ -104,8 +109,6 @@ app.use(
     },
   })
 );
-
-app.get("/health", (_req, res) => res.json({ ok: true }));
 
 // Silently restores the session from the remember_me cookie before any route sees the request —
 // otherwise requireAuth 401s on a live remember-me cookie the moment the (shorter-lived) session expires.
