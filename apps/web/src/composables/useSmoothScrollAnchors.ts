@@ -47,8 +47,8 @@ export function smoothScrollToTop(): void {
 }
 
 /**
- * Reaguje na kliknięcia w linki z hashem (#section) na tej samej stronie:
- * zamiast skoku przewija płynnie do sekcji. Nie obsługuje mailto:, tel:, _blank.
+ * Reacts to clicks on hash links (#section) on the same page: scrolls
+ * smoothly to the section instead of jumping. Doesn't handle mailto:, tel:, _blank.
  */
 export function useSmoothScrollAnchors(): void {
   onMounted(() => {

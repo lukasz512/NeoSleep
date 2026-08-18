@@ -170,7 +170,7 @@ function draw(now: number): void {
   for (const dot of dots) {
     // Two contributions, whichever is bigger wins: proximity is instant —
     // the moment the pointer is close, the dot grows, no waiting on the
-    // spring to catch up ("na przybliżeniu" — grow on approach). Displacement
+    // spring to catch up (grow on approach). Displacement
     // is the fallback once the pointer moves on, so a released dot still
     // fades its glow out gradually as it springs home instead of snapping off.
     let proximity = 0;

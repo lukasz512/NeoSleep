@@ -6,7 +6,7 @@
     </main>
     <footer class="layout-event__footer">
       <div class="page-container layout-event__footer-inner">
-        <RouterLink to="/" aria-label="NeoSleep – strona główna">
+        <RouterLink to="/" aria-label="NeoSleep – home page">
           <img :src="logoSrc" alt="NeoSleep" class="layout-event__logo" width="110" height="25" />
         </RouterLink>
         <div class="layout-event__footer-right">
