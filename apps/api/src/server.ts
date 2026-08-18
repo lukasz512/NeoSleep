@@ -103,8 +103,13 @@ app.use(
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
+      // PWA and API are on different origins in production (pwa.neosleepcare.com vs.
+      // the Render API host), so every authenticated call is a cross-site fetch —
+      // "lax" never gets attached to those, only to top-level navigations. "none"
+      // requires secure:true, which is already the case in production; "lax" stays
+      // for dev/CI, which run over plain HTTP through the same-origin Vite proxy.
       secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     },
   })

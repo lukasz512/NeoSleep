@@ -191,8 +191,10 @@ authRouter.post(
       const isProduction = process.env.NODE_ENV === "production";
       res.cookie(REMEMBER_ME_COOKIE, `${tokenId}.${secret}`, {
         httpOnly: true,
+        // Same cross-site reasoning as the session cookie in server.ts: PWA and API
+        // are different origins in production, so "lax" would never be sent back.
         secure: isProduction,
-        sameSite: "lax",
+        sameSite: isProduction ? "none" : "lax",
         maxAge: REMEMBER_ME_MAX_AGE_MS,
         path: "/",
       });
