@@ -11,8 +11,8 @@ export declare function useRevealGroup(targets: Ref<HTMLElement | null>[], thres
  * One-shot reveal composable — returns a boolean ref that becomes `true`
  * when the target element enters the viewport, then stops observing.
  *
- * Nie używa @vueuse/core celowo — platform/shared nie jest paczką workspace,
- * więc zewnętrzne zależności nie są rozwiązywalne przez Rollup przy buildzie.
+ * Deliberately doesn't use @vueuse/core — platform/shared isn't a workspace
+ * package, so external dependencies aren't resolvable by Rollup at build time.
  *
  * @example
  * const heroRef = ref<HTMLElement | null>(null)

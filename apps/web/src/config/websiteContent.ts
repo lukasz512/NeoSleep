@@ -293,7 +293,7 @@ export const patientTestimonials: Testimonial[] = [
 export const legalConfig = {
   companyName:  "NeoSleep",
   privacyEmail: "info@neosleepcare.com",
-  address:      "ul. Przykładowa 1, 00-001 Warszawa, Polska",
+  address:      "1 Example Street, 00-001 Warsaw, Poland",
   lastUpdated:  "2026-01-01",
 };
 
