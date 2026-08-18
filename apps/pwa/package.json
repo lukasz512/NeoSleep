@@ -30,6 +30,7 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "@vitejs/plugin-vue": "catalog:",
+    "@vue/test-utils": "catalog:",
     "eslint": "catalog:",
     "eslint-plugin-vue": "catalog:",
     "sass": "catalog:",
