@@ -44,15 +44,25 @@ zero cost for this stage of the project; revisit if volume outgrows it.
 verification adds an MX record (for bounce/complaint feedback) alongside SPF and
 DKIM TXT records. The apex `neosleepcare.com` already has an MX record for
 Microsoft 365 (human mailboxes) and an SPF record scoped to GoDaddy — adding
-Resend's own MX/SPF there would conflict. A fresh subdomain (recommended:
-`send.neosleepcare.com`) starts with no existing DNS records, gets Resend's own
-independent SPF/DKIM, and keeps transactional sending fully isolated from the
-domain's human mail (Microsoft 365) — a problem in either direction (mass
-transactional mail hurting the reputation of human mail, or vice versa) becomes
-structurally impossible instead of something to manage. Sender address becomes
-e.g. `noreply@send.neosleepcare.com` — still clearly branded, no real mailbox
-required (an ESP-verified sending address doesn't need an inbox behind it; a
-`noreply@` address doesn't receive replies by design).
+Resend's own MX/SPF there would conflict (Resend's own guidance: mail only
+delivers to the lowest-priority MX, so a second MX at the apex would either
+receive nothing or interfere with the existing Microsoft 365 mail — see
+resend.com/docs/knowledge-base/how-do-i-avoid-conflicting-with-my-mx-records).
+
+Chosen subdomain: **`mail.neosleepcare.com`**. It already exists in DNS as an
+A record only (`docs/INFRASTRUCTURE.md`, pointing at the GoDaddy origin, labeled
+"Mail" — a leftover from before the domain's mail moved to Microsoft 365) — no
+MX or SPF of its own today, so Resend's records add alongside that A record with
+no conflict; A and MX/TXT are different record types on the same hostname. Same
+isolation property as any other fresh subdomain would give: a problem in either
+direction (mass transactional mail hurting the reputation of human mail, or vice
+versa) becomes structurally impossible instead of something to manage. Sender
+address becomes e.g. `noreply@mail.neosleepcare.com` — no real mailbox required
+(an ESP-verified sending address doesn't need an inbox behind it; a `noreply@`
+address doesn't receive replies by design). Worth a quick manual check before
+adding records that the existing A record isn't still actively serving something
+(e.g. a live GoDaddy webmail page) — it wouldn't be disturbed by adding MX/TXT
+records alongside it either way, but good to know before touching that name.
 
 Migrating human mailboxes (GoDaddy/Microsoft 365 → home.pl, raised in the same
 conversation as a cost concern) is explicitly **out of scope** for this ADR — a
@@ -90,10 +100,9 @@ fails the build instead of failing silently in production again.
   that — not a concern at this stage.
 - New external dependency: Resend account, with its own DPA for GDPR purposes
   (see Compliance Impact) — added to `secrets/accounts.md`.
-- Requires one manual, one-time step outside this repo: adding the `send`
-  subdomain in Resend's dashboard and pasting the DNS records it generates into
-  Cloudflare (`docs/INFRASTRUCTURE.md`'s DNS table gets a new row once that's
-  done).
+- Requires one manual, one-time step outside this repo: adding `mail.neosleepcare.com`
+  in Resend's dashboard and pasting the DNS records it generates into Cloudflare
+  (`docs/INFRASTRUCTURE.md`'s DNS table gets updated for that row once that's done).
 
 ## Compliance Impact
 Transactional emails carry personal data (name, email address) of leads, HCPs,

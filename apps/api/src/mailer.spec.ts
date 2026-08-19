@@ -33,7 +33,7 @@ beforeEach(() => {
 async function importMailer(configured: boolean, overrides: Record<string, string | undefined> = {}) {
   vi.doMock("./env.js", () => ({
     RESEND_API_KEY: configured ? "re_test_key" : undefined,
-    RESEND_FROM_EMAIL: configured ? "noreply@send.neosleepcare.com" : undefined,
+    RESEND_FROM_EMAIL: configured ? "noreply@mail.neosleepcare.com" : undefined,
     RESEND_NOTIFY_TO: configured ? "admin@neosleepcare.com" : undefined,
     ...overrides,
   }));
@@ -76,7 +76,7 @@ describe("mailer — configured", () => {
     expect(sendMock).toHaveBeenCalledTimes(1);
     const call = sendMock.mock.calls[0]![0];
     expect(call.to).toBe("doctor@example.com");
-    expect(call.from).toContain("noreply@send.neosleepcare.com");
+    expect(call.from).toContain("noreply@mail.neosleepcare.com");
     expect(call.subject).toBeTruthy();
     expect(call.html).toContain(resetLink);
     expect(call.attachments.length).toBeGreaterThan(0);

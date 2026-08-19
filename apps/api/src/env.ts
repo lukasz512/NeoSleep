@@ -33,7 +33,7 @@ export const ORTHOAPNEA_PASSWORD: string | undefined = process.env.ORTHOAPNEA_PA
  * SMTP ports are blocked on Render's Free plan (see ADR-016), so this is not
  * just a provider swap, it's the only thing that can actually work there.
  * RESEND_FROM_EMAIL must be on a domain verified in the Resend dashboard (DNS
- * records added there) — use a dedicated subdomain (e.g. send.neosleepcare.com),
+ * records added there) — use a dedicated subdomain (mail.neosleepcare.com),
  * not the apex, so Resend's own MX/SPF/DKIM never collides with the apex
  * domain's human mail (Microsoft 365, see docs/INFRASTRUCTURE.md). No real
  * mailbox needs to exist behind that address. Optional: without both,
