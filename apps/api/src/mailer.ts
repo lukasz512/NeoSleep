@@ -1,6 +1,14 @@
-import nodemailer from "nodemailer";
-import { renderEmailLayout, escapeHtml, formatGreetingName, getEmailAttachments, getSocialsForRegion, emailT } from "@neo/email";
-import { GMAIL_USER, GMAIL_APP_PASSWORD, GMAIL_TO } from "./env.js";
+import { Resend } from "resend";
+import {
+  renderEmailLayout,
+  escapeHtml,
+  formatGreetingName,
+  getEmailAttachments,
+  getSocialsForRegion,
+  emailT,
+  type EmailAttachment,
+} from "@neo/email";
+import { RESEND_API_KEY, RESEND_FROM_EMAIL, RESEND_NOTIFY_TO } from "./env.js";
 
 /** Every personalized email needs at least these to build a proper "Hi {title} {name}," greeting,
  * and region to pick the right social links (see @neo/email's config/emailSocials.ts). */
@@ -12,21 +20,51 @@ export interface EmailRecipient {
   region?: string | null;
 }
 
-const gmailUser = GMAIL_USER;
-const gmailPass = GMAIL_APP_PASSWORD;
-const gmailTo = GMAIL_TO;
+const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
 
-const transporter =
-  gmailUser && gmailPass
-    ? nodemailer.createTransport({
-        service: "gmail",
-        auth: { user: gmailUser, pass: gmailPass },
-      })
-    : null;
+interface SendEmailArgs {
+  to: string;
+  subject: string;
+  html: string;
+  attachments: EmailAttachment[];
+}
+
+/**
+ * Shared send path for every email below — one place to hold the "is Resend
+ * configured" guard and the success/error logging, instead of six copies of
+ * the same three lines (see ADR-016). resend.emails.send() returns
+ * { data, error } rather than throwing on API-level failures, so `error` is
+ * checked explicitly and turned into a thrown Error either way — callers
+ * (e.g. auth.ts's fire-and-forget forgot-password handler) already expect a
+ * rejected promise on failure.
+ */
+async function sendEmail(logLabel: string, args: SendEmailArgs): Promise<void> {
+  if (!resend || !RESEND_FROM_EMAIL) {
+    console.warn(`[mailer] Resend not configured – set RESEND_API_KEY, RESEND_FROM_EMAIL in .env`);
+    return;
+  }
+
+  try {
+    const { error } = await resend.emails.send({
+      from: `NeoSleep <${RESEND_FROM_EMAIL}>`,
+      to: args.to,
+      subject: args.subject,
+      html: args.html,
+      attachments: args.attachments,
+    });
+    if (error) {
+      throw new Error(`${error.name}: ${error.message}`);
+    }
+    console.log(`[mailer] Sent ${logLabel} to ${args.to}`);
+  } catch (err) {
+    console.error(`[mailer] Failed to send ${logLabel}:`, err);
+    throw err;
+  }
+}
 
 export async function sendContactEmail(subject: string, rows: [string, string][]): Promise<void> {
-  if (!transporter || !gmailTo || !gmailUser) {
-    console.warn("[mailer] Gmail not configured – set GMAIL_USER, GMAIL_APP_PASSWORD, GMAIL_TO in .env");
+  if (!RESEND_NOTIFY_TO) {
+    console.warn("[mailer] Resend not configured – set RESEND_NOTIFY_TO in .env");
     return;
   }
 
@@ -34,8 +72,9 @@ export async function sendContactEmail(subject: string, rows: [string, string][]
     .map(([label, value]) => `<tr><td style="padding:4px 12px 4px 0;font-weight:600;white-space:nowrap;vertical-align:top">${escapeHtml(label)}</td><td style="padding:4px 0">${escapeHtml(value)}</td></tr>`)
     .join("");
 
-  // Internal notification (always to the fixed GMAIL_TO admin inbox), so this stays unlocalized —
-  // unlike the user-facing password reset email below, there's no per-recipient language to pick.
+  // Internal notification (always to the fixed RESEND_NOTIFY_TO admin inbox), so this stays
+  // unlocalized — unlike the user-facing password reset email below, there's no per-recipient
+  // language to pick.
   const bodyHtml = `
     <h1 style="margin:0 0 16px;font-size:19px;font-weight:bold;color:#128F83;">${escapeHtml(subject)}</h1>
     <table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;font-family:Arial,Helvetica,sans-serif;font-size:15px;">${tableRows}</table>`;
@@ -50,27 +89,15 @@ export async function sendContactEmail(subject: string, rows: [string, string][]
     socials,
   });
 
-  try {
-    await transporter.sendMail({
-      from: `"NeoSleep" <${gmailUser}>`,
-      to: gmailTo,
-      subject,
-      html,
-      attachments: getEmailAttachments(socials),
-    });
-    console.log(`[mailer] Sent: ${subject}`);
-  } catch (err) {
-    console.error("[mailer] Failed to send email:", err);
-    throw err;
-  }
+  await sendEmail("internal notification email", {
+    to: RESEND_NOTIFY_TO,
+    subject,
+    html,
+    attachments: getEmailAttachments(socials),
+  });
 }
 
 export async function sendPasswordResetEmail(to: string, resetLink: string, recipient: EmailRecipient): Promise<void> {
-  if (!transporter || !gmailUser) {
-    console.warn("[mailer] Gmail not configured – set GMAIL_USER, GMAIL_APP_PASSWORD in .env");
-    return;
-  }
-
   const locale = recipient.language;
   const greetingName = formatGreetingName(recipient, to);
 
@@ -93,27 +120,15 @@ export async function sendPasswordResetEmail(to: string, resetLink: string, reci
     socials,
   });
 
-  try {
-    await transporter.sendMail({
-      from: `"NeoSleep" <${gmailUser}>`,
-      to,
-      subject: emailT(locale, "email.passwordReset.subject"),
-      html,
-      attachments: getEmailAttachments(socials),
-    });
-    console.log(`[mailer] Sent password reset email to ${to}`);
-  } catch (err) {
-    console.error("[mailer] Failed to send password reset email:", err);
-    throw err;
-  }
+  await sendEmail("password reset email", {
+    to,
+    subject: emailT(locale, "email.passwordReset.subject"),
+    html,
+    attachments: getEmailAttachments(socials),
+  });
 }
 
 export async function sendPartnerInviteEmail(to: string, registerLink: string, recipient: EmailRecipient): Promise<void> {
-  if (!transporter || !gmailUser) {
-    console.warn("[mailer] Gmail not configured – set GMAIL_USER, GMAIL_APP_PASSWORD in .env");
-    return;
-  }
-
   const locale = recipient.language;
   const greetingName = formatGreetingName(recipient, to);
 
@@ -135,17 +150,10 @@ export async function sendPartnerInviteEmail(to: string, registerLink: string, r
     socials,
   });
 
-  try {
-    await transporter.sendMail({
-      from: `"NeoSleep" <${gmailUser}>`,
-      to,
-      subject: emailT(locale, "email.partnerInvite.subject"),
-      html,
-      attachments: getEmailAttachments(socials),
-    });
-    console.log(`[mailer] Sent partner invite email to ${to}`);
-  } catch (err) {
-    console.error("[mailer] Failed to send partner invite email:", err);
-    throw err;
-  }
+  await sendEmail("partner invite email", {
+    to,
+    subject: emailT(locale, "email.partnerInvite.subject"),
+    html,
+    attachments: getEmailAttachments(socials),
+  });
 }

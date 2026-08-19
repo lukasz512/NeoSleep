@@ -28,15 +28,19 @@ export const ORTHOAPNEA_EMAIL: string | undefined = process.env.ORTHOAPNEA_EMAIL
 export const ORTHOAPNEA_PASSWORD: string | undefined = process.env.ORTHOAPNEA_PASSWORD;
 
 /**
- * Gmail SMTP — transactional email sender (password reset, contact form
- * notifications), see mailer.ts. GMAIL_USER must be a real, authenticatable
- * Google account (a personal @gmail.com works; a @neosleepcare.com address
- * does NOT — that domain's mail is on Microsoft 365, not Google Workspace, so
- * it can't do Gmail SMTP AUTH). GMAIL_APP_PASSWORD is a Google App Password,
- * not the account password. Optional: without both, mailer.ts logs a warning
- * and silently skips sending (see ORTHOAPNEA_* above for the same pattern).
+ * Resend — transactional email sender (password reset, partner invites, contact
+ * form notifications), see mailer.ts. Sent over Resend's HTTP API, not SMTP —
+ * SMTP ports are blocked on Render's Free plan (see ADR-016), so this is not
+ * just a provider swap, it's the only thing that can actually work there.
+ * RESEND_FROM_EMAIL must be on a domain verified in the Resend dashboard (DNS
+ * records added there) — use a dedicated subdomain (e.g. send.neosleepcare.com),
+ * not the apex, so Resend's own MX/SPF/DKIM never collides with the apex
+ * domain's human mail (Microsoft 365, see docs/INFRASTRUCTURE.md). No real
+ * mailbox needs to exist behind that address. Optional: without both,
+ * mailer.ts logs a warning and silently skips sending (see ORTHOAPNEA_* above
+ * for the same pattern).
  */
-export const GMAIL_USER: string | undefined = process.env.GMAIL_USER;
-export const GMAIL_APP_PASSWORD: string | undefined = process.env.GMAIL_APP_PASSWORD;
-/** Fixed admin inbox for internal notifications (e.g. contact form). Falls back to GMAIL_USER itself. */
-export const GMAIL_TO: string | undefined = process.env.GMAIL_TO ?? GMAIL_USER;
+export const RESEND_API_KEY: string | undefined = process.env.RESEND_API_KEY;
+export const RESEND_FROM_EMAIL: string | undefined = process.env.RESEND_FROM_EMAIL;
+/** Fixed admin inbox for internal notifications (e.g. contact form). */
+export const RESEND_NOTIFY_TO: string | undefined = process.env.RESEND_NOTIFY_TO;

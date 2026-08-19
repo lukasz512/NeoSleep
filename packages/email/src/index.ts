@@ -6,6 +6,7 @@ export {
   LOGO_CID,
   LOGO_ATTACHMENT,
   type EmailLayoutOptions,
+  type EmailAttachment,
 } from "./emailTemplates.js";
 
 export { emailT } from "./emailI18n.js";

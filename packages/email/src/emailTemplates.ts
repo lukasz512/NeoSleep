@@ -1,19 +1,30 @@
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Attachment } from "nodemailer/lib/mailer/index.js";
 import type { SocialLink } from "./config/emailSocials.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+/** Provider-agnostic inline attachment — content read eagerly as a Buffer (no `path`/streaming,
+ * since these are the same handful of small local assets every time). `contentId` is what the
+ * HTML references via `cid:${contentId}`; matches Resend's Node SDK attachment shape directly so
+ * mailer.ts can pass these straight through with no transform. */
+export interface EmailAttachment {
+  filename: string;
+  content: Buffer;
+  contentId: string;
+}
+
 /** `diskFilename` must match the real file under assets/email/ — `displayFilename` is just the name
- * nodemailer reports to the recipient's mail client and can differ (kept distinct so a typo in one
- * can't silently break the other, the way LOGO_ATTACHMENT's did before this fix). */
-function assetAttachment(diskFilename: string, displayFilename: string, cid: string): Attachment {
+ * the recipient's mail client shows and can differ (kept distinct so a typo in one can't silently
+ * break the other, the way LOGO_ATTACHMENT's did before this fix). */
+function assetAttachment(diskFilename: string, displayFilename: string, contentId: string): EmailAttachment {
+  // One level above src/ (and, identically, above dist/ once built) — see packages/email/assets/email/.
+  const filePath = path.join(__dirname, "../assets/email", diskFilename);
   return {
     filename: displayFilename,
-    // One level above src/ (and, identically, above dist/ once built) — see packages/email/assets/email/.
-    path: path.join(__dirname, "../assets/email", diskFilename),
-    cid,
+    content: fs.readFileSync(filePath),
+    contentId,
   };
 }
 
@@ -27,8 +38,9 @@ function socialCid(id: string): string {
 }
 
 /** Inline-image attachments for the given (already region-resolved) social set — pass as `attachments`
- * on the sendMail() call alongside these socials, so the cid: references in the footer always resolve. */
-export function getEmailAttachments(socials: SocialLink[]): Attachment[] {
+ * on the resend.emails.send() call alongside these socials, so the cid: references in the footer
+ * always resolve. */
+export function getEmailAttachments(socials: SocialLink[]): EmailAttachment[] {
   return [LOGO_ATTACHMENT, ...socials.map((s) => assetAttachment(s.file, s.file, socialCid(s.id)))];
 }
 
