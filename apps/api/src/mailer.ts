@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import { renderEmailLayout, escapeHtml, formatGreetingName, getEmailAttachments, getSocialsForRegion, emailT } from "@neo/email";
+import { GMAIL_USER, GMAIL_APP_PASSWORD, GMAIL_TO } from "./env.js";
 
 /** Every personalized email needs at least these to build a proper "Hi {title} {name}," greeting,
  * and region to pick the right social links (see @neo/email's config/emailSocials.ts). */
@@ -11,9 +12,9 @@ export interface EmailRecipient {
   region?: string | null;
 }
 
-const gmailUser = process.env.GMAIL_USER;
-const gmailPass = process.env.GMAIL_APP_PASSWORD;
-const gmailTo = process.env.GMAIL_TO ?? gmailUser;
+const gmailUser = GMAIL_USER;
+const gmailPass = GMAIL_APP_PASSWORD;
+const gmailTo = GMAIL_TO;
 
 const transporter =
   gmailUser && gmailPass
