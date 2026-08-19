@@ -38,6 +38,10 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
       DEFAULT_TENANT_SLUG: neosleep
+      # auth-session-cookie.spec.ts forces NODE_ENV=production to test the
+      # cross-site cookie config — env.ts throws if SESSION_SECRET is unset
+      # in that branch. Fixed test-only value, not a real secret.
+      SESSION_SECRET: ci-test-session-secret-not-for-production-use
 
     steps:
       - name: Checkout
