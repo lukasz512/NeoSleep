@@ -5,7 +5,7 @@ import connectPgSimple from "connect-pg-simple";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import { requestIdMiddleware } from "./middleware/requestId.js";
-import { SESSION_SECRET, FRONTEND_URL } from "./env.js";
+import { SESSION_SECRET, FRONTEND_URLS } from "./env.js";
 import { getDb } from "./db/connection.js";
 import { authRouter, ensureInitialUserPasswords, restoreSessionFromRememberMe } from "./auth.js";
 import { leadsRouter } from "./routes/leads.js";
@@ -29,7 +29,7 @@ import { errorHandler } from "./middleware/errorHandler.js";
 import { apiLimiter } from "./middleware/rateLimiter.js";
 
 // Allow multiple origins (e.g. localhost + LAN IP for phone testing): set FRONTEND_URL="http://localhost:5173,http://192.168.1.x:5173"
-const corsOrigins = FRONTEND_URL.split(",").map((s) => s.trim()).filter(Boolean);
+const corsOrigins = FRONTEND_URLS;
 
 /** In dev, allow localhost, LAN IPs (192.168, 10.x), and link-local (169.254.x.x) on Vite ports. */
 const DEV_ORIGIN_REGEX =

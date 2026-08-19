@@ -13,6 +13,17 @@ export const SESSION_SECRET: string = readSessionSecret();
 
 export const FRONTEND_URL: string = process.env.FRONTEND_URL ?? "http://localhost:5173";
 
+/**
+ * FRONTEND_URL can be a comma-separated list (e.g. one Render BFF serving both
+ * pwa.neosleepcare.com and pwa-dev.neosleepcare.com — see server.ts's CORS
+ * config). FRONTEND_URL itself must never be interpolated directly into a
+ * redirect/link URL when it holds more than one value — that produces a
+ * literally broken URL like "https://a.com,https://b.com/reset-password".
+ * Use this array + a per-request resolver (see auth.ts's resolveFrontendOrigin)
+ * to pick exactly one origin instead.
+ */
+export const FRONTEND_URLS: string[] = FRONTEND_URL.split(",").map((s) => s.trim()).filter(Boolean);
+
 /** Supabase Storage — signed documents (GDPR consent, partner agreement PDFs). Backend-only, never sent to the frontend. */
 export const SUPABASE_URL: string | undefined = process.env.SUPABASE_URL;
 export const SUPABASE_SERVICE_KEY: string | undefined = process.env.SUPABASE_SERVICE_KEY;
