@@ -9,6 +9,7 @@ import { InvitePractitionerCommand } from "../commands/invitePractitioner.js";
 import { GetLeadListQuery, GetLeadByIdQuery } from "../queries/lead.js";
 import { ValidationError } from "../errors.js";
 import { parsePaginationParams, toFilterArray } from "./utils.js";
+import { resolveFrontendOrigin } from "../utils/frontendOrigin.js";
 
 /**
  * Lead routes — thin waiters.
@@ -181,7 +182,7 @@ leadsRouter.post(
     const slug = tenantSlugFromHost(req.hostname);
     await withTenant(slug, async (client) => {
       const ctx = buildContext(req, client, slug);
-      await InvitePractitionerCommand(ctx, id, {
+      await InvitePractitionerCommand(ctx, id, resolveFrontendOrigin(req), {
         first_name: typeof body.first_name === "string" ? body.first_name : undefined,
         last_name:  typeof body.last_name  === "string" ? body.last_name  : undefined,
         email:      typeof body.email      === "string" ? body.email      : undefined,

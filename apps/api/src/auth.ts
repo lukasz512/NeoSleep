@@ -23,8 +23,8 @@ import {
   type StaffRole,
 } from "./db.js";
 import { sendPasswordResetEmail } from "./mailer.js";
-import { FRONTEND_URLS } from "./env.js";
 import { hashToken } from "./utils/hashToken.js";
+import { DEFAULT_FRONTEND_ORIGIN, resolveFrontendOrigin } from "./utils/frontendOrigin.js";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -32,29 +32,8 @@ const GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
 
 const clientId = process.env.GOOGLE_CLIENT_ID ?? "";
 const clientSecret = process.env.GOOGLE_CLIENT_SECRET ?? "";
-/** FRONTEND_URLS[0] is the "no better match" default — one Render BFF can serve multiple
- * frontends (pwa + pwa-dev), so FRONTEND_URL/_URLS may hold more than one origin. Never
- * interpolate FRONTEND_URL (the raw, possibly comma-separated string) directly into a link
- * or redirect — see resolveFrontendOrigin() below, which picks exactly one. */
-const DEFAULT_FRONTEND_ORIGIN = FRONTEND_URLS[0] ?? "http://localhost:5173";
 /** OAuth redirect_uri: use frontend when proxied (dev) so cookie is set for frontend origin. */
 const oauthRedirectOrigin = process.env.OAUTH_REDIRECT_ORIGIN ?? DEFAULT_FRONTEND_ORIGIN;
-
-/**
- * Picks the single frontend origin a redirect/link should point back to, out of the
- * (possibly multiple) origins FRONTEND_URL allows — see server.ts's CORS config, which
- * allows the same set. Origin/Referer headers are only reliable for direct
- * fetch/XHR-initiated requests (e.g. POST /auth/forgot-password) — NOT for a browser
- * navigating back after an external redirect (e.g. Google's OAuth callback), where the
- * header reflects Google's domain or is absent. For that case, capture the origin at the
- * point it IS reliable (see /auth/google) and thread it through req.session instead of
- * calling this again at the callback.
- */
-function resolveFrontendOrigin(req: Request): string {
-  const origin = req.get("origin");
-  if (origin && FRONTEND_URLS.includes(origin)) return origin;
-  return DEFAULT_FRONTEND_ORIGIN;
-}
 
 /** Initial password set for any seeded staff account with no password yet (user must change on first login). */
 const INITIAL_USER_PASSWORD = process.env.INITIAL_USER_PASSWORD ?? "ChangeMe1!";
