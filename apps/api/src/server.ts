@@ -5,7 +5,7 @@ import connectPgSimple from "connect-pg-simple";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import { requestIdMiddleware } from "./middleware/requestId.js";
-import { SESSION_SECRET, FRONTEND_URL } from "./env.js";
+import { SESSION_SECRET, FRONTEND_URLS } from "./env.js";
 import { getDb } from "./db/connection.js";
 import { authRouter, ensureInitialUserPasswords, restoreSessionFromRememberMe } from "./auth.js";
 import { leadsRouter } from "./routes/leads.js";
@@ -22,12 +22,14 @@ import { pushRouter } from "./routes/push.js";
 import { usersRouter } from "./routes/users.js";
 import { inviteRouter } from "./routes/invite.js";
 import { notificationRouter } from "./routes/notification.js";
+import { orthoapneaResourcesRouter } from "./routes/partners/orthoapnea-resources.js";
+import { orthoapneaStatusRouter } from "./routes/partners/orthoapnea-status.js";
 import { runMigrations } from "./db.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { apiLimiter } from "./middleware/rateLimiter.js";
 
 // Allow multiple origins (e.g. localhost + LAN IP for phone testing): set FRONTEND_URL="http://localhost:5173,http://192.168.1.x:5173"
-const corsOrigins = FRONTEND_URL.split(",").map((s) => s.trim()).filter(Boolean);
+const corsOrigins = FRONTEND_URLS;
 
 /** In dev, allow localhost, LAN IPs (192.168, 10.x), and link-local (169.254.x.x) on Vite ports. */
 const DEV_ORIGIN_REGEX =
@@ -54,6 +56,11 @@ function corsOrigin(origin: string | undefined, cb: (err: Error | null, allow?: 
 }
 
 export const app: Express = express();
+
+// Registered before any other middleware (rate limiter, CORS, session) so Render's
+// health checker never gets rate-limited or blocked by an unrelated dependency —
+// a 429/5xx here makes Render think the whole instance is down.
+app.get("/health", (_req, res) => res.json({ ok: true }));
 
 // Render (and any reverse-proxy host) sits in front of this process and sets
 // X-Forwarded-For / X-Forwarded-Proto. Without this, express-rate-limit
@@ -96,20 +103,34 @@ app.use(
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
+      // PWA and API are on different origins in production (pwa.neosleepcare.com vs.
+      // the Render API host), so every authenticated call is a cross-site fetch —
+      // "lax" never gets attached to those, only to top-level navigations. "none"
+      // requires secure:true, which is already the case in production; "lax" stays
+      // for dev/CI, which run over plain HTTP through the same-origin Vite proxy.
       secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     },
   })
 );
 
-app.get("/health", (_req, res) => res.json({ ok: true }));
-
 // Silently restores the session from the remember_me cookie before any route sees the request —
 // otherwise requireAuth 401s on a live remember-me cookie the moment the (shorter-lived) session expires.
 app.use(restoreSessionFromRememberMe);
 
-// All BFF routes are versioned under /api/v1 — auth router registers /auth/* paths separately
+// Every /api/v1 response is per-session (keyed off the session cookie, not the URL). Without this,
+// a browser's heuristic HTTP cache or an intermediate proxy (common on managed/shared rep phones) can
+// serve a previously cached response — e.g. a stale GET /auth/session body from a prior user's session
+// on the same device — to a different, correctly logged-in user. "Vary: Cookie" is defense-in-depth
+// for any cache that does respect Vary.
+app.use("/api/v1", (_req, res, next) => {
+  res.set("Cache-Control", "no-store, private");
+  res.set("Vary", "Cookie");
+  next();
+});
+
+// All API routes are versioned under /api/v1 — auth router registers /auth/* paths separately
 app.use("/api/v1", authRouter);
 app.use("/api/v1", leadsRouter);
 app.use("/api/v1", practitionerRouter);
@@ -125,6 +146,8 @@ app.use("/api/v1", pushRouter);
 app.use("/api/v1", usersRouter);
 app.use("/api/v1", inviteRouter);
 app.use("/api/v1", notificationRouter);
+app.use("/api/v1", orthoapneaResourcesRouter);
+app.use("/api/v1", orthoapneaStatusRouter);
 
 app.use(errorHandler);
 

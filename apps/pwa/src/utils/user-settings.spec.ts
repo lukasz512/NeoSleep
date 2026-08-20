@@ -26,6 +26,9 @@ describe("user-settings", () => {
       vi.stubGlobal("localStorage", mockLocalStorage);
     }
     for (const k of Object.keys(storage)) delete storage[k];
+    // jsdom provides a real localStorage (the mock above is a fallback for
+    // environments without one) — clear it too, or state leaks between tests.
+    globalThis.localStorage?.clear();
     vi.resetModules();
     ({ getUserSettings, setUserSettings } = await import("./user-settings"));
   });

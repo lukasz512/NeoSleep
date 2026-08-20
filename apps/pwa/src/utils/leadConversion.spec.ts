@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const apiFetch = vi.fn();
-vi.mock("../composables/useBffApi", () => ({ apiFetch: (...args: unknown[]) => apiFetch(...args) }));
+vi.mock("../composables/useApi", () => ({ apiFetch: (...args: unknown[]) => apiFetch(...args) }));
 
 let creatingNew = false;
 vi.mock("../config/forms/hcpForm", () => ({

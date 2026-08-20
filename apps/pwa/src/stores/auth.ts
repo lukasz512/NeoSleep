@@ -1,5 +1,5 @@
 import { createAuthStore } from "@stores";
-import { apiFetch, setAuthInterceptor } from "../composables/useBffApi";
+import { apiFetch, setAuthInterceptor } from "../composables/useApi";
 
 export type { UserRole, AuthUser } from "@stores";
 

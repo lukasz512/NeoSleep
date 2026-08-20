@@ -80,7 +80,10 @@ onUnmounted(clearTimer);
   bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 9999;
+  /* Must beat the highest forced dialog/menu z-index in theme.scss (.v-menu
+     at 10002) — a submit error (e.g. from FormRenderer's .form-renderer-dialog)
+     needs to be visible while that same dialog is still open, not hidden behind it. */
+  z-index: 10010;
   pointer-events: none;
   width: min(400px, calc(100vw - 32px));
 }

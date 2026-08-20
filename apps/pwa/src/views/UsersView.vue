@@ -109,7 +109,7 @@ import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppListItemMenu from "../components/AppListItemMenu.vue";
 import { entityActionIcon, entityActionMenuIconClass } from "../config/entityActions";
-import { apiFetch } from "../composables/useBffApi";
+import { apiFetch } from "../composables/useApi";
 import { useNotifications } from "../composables/useNotifications";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import type { FilterDefinition } from "../composables/useFilters";

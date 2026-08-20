@@ -201,7 +201,7 @@
           <VAlert type="error" variant="tonal" density="comfortable" class="auth-view__result-alert">
             {{ t(forgotFlow.errorKey.value ?? 'user.forgotPassword.error.network') }}
           </VAlert>
-          <VBtn variant="text" size="small" class="auth-view__retry" @click="retryForgot">
+          <VBtn variant="outlined" color="primary" size="large" block class="auth-view__submit auth-view__retry" @click="retryForgot">
             {{ t('user.forgotPassword.tryAgain') }}
           </VBtn>
         </template>

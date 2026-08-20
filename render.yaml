@@ -35,11 +35,11 @@ services:
         sync: false
       - key: OAUTH_REDIRECT_ORIGIN
         sync: false
-      - key: GMAIL_USER
+      - key: RESEND_API_KEY
         sync: false
-      - key: GMAIL_APP_PASSWORD
+      - key: RESEND_FROM_EMAIL
         sync: false
-      - key: GMAIL_TO
+      - key: RESEND_NOTIFY_TO
         sync: false
       - key: VAPID_PUBLIC_KEY
         sync: false
@@ -48,4 +48,10 @@ services:
       - key: VAPID_SUBJECT
         sync: false
       - key: DEFAULT_TENANT_SLUG
+        sync: false
+      - key: ORTHOAPNEA_BASE_URL
+        sync: false
+      - key: ORTHOAPNEA_EMAIL
+        sync: false
+      - key: ORTHOAPNEA_PASSWORD
         sync: false

@@ -137,7 +137,7 @@ import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
 import { useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuthStore } from "../stores/auth";
-import { apiFetch } from "../composables/useBffApi";
+import { apiFetch } from "../composables/useApi";
 import { useEntityCacheStore } from "../stores/entityCache";
 import { useNotifications } from "../composables/useNotifications";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";

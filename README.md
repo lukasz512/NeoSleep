@@ -1,36 +1,29 @@
 # Neo Sleep Care Platform
 
-This repo contains the platform code + the architecture/spec foundation.
+pnpm monorepo: 2 Vue 3 + Vite apps + 1 Express API server + PostgreSQL (Supabase for MVP). See [CLAUDE.md](CLAUDE.md) for the full project brief and architecture rules.
 
 ## Getting Started
 
 **Prerequisites:** Docker Desktop installed, Node 20+
 
 ```bash
-npm run start
+pnpm start
 ```
 
 One command starts everything:
 - Docker Desktop (if not running – launches it and waits)
-- Postgres, Adminer, Directus
+- Postgres
 - DB migrations
-- BFF + rep-app
+- API + PWA + WEB
 
-- **Rep app:** http://localhost:5173
-- **BFF API:** http://localhost:3000
-- **Adminer (DB):** http://localhost:8080
+- **PWA:** http://localhost:5173
+- **API:** http://localhost:3000
+- **WEB:** http://localhost:5174
 
 ## Tests
 
 ```bash
-# All workspaces (rep-app, admin, portal, website, bff)
-npm test
-
-# Rep-app only
-cd apps/rep-app && npm run test -- --run
-
-# BFF only
-cd services/bff && npm run test
+pnpm ci      # lint + typecheck + test, across all workspaces
 ```
 
 Tests run automatically on pre-commit (Husky).
@@ -39,31 +32,28 @@ Tests run automatically on pre-commit (Husky).
 
 | Doc | Description |
 |-----|-------------|
-| [foundation/docs/ARCHITECTURE_BIBLE.md](foundation/docs/ARCHITECTURE_BIBLE.md) | Architecture overview |
+| [docs/REPO_CONVENTIONS.md](docs/REPO_CONVENTIONS.md) | Repo/naming conventions |
 | [docs/RUNBOOK_LOCAL_DEV.md](docs/RUNBOOK_LOCAL_DEV.md) | Local dev runbook, troubleshooting |
-| [foundation/specs/](foundation/specs/) | Feature specs (SPEC-xxxx) |
-| [foundation/adrs/](foundation/adrs/) | Architecture decisions |
-| [foundation/modules/](foundation/modules/) | Module docs (rep-app, BFF, etc.) |
-| [foundation/docs/DATABASE_MIGRATIONS.md](foundation/docs/DATABASE_MIGRATIONS.md) | DB migrations |
+| [docs/](docs/) | ADRs, API contract, security model, lessons learned |
+| [docs/foundation/](docs/foundation/) | Feature backlog, design/UI reference |
 
 ## Apps (monorepo)
 
 | App | Path | Subdomain (target) |
 |-----|------|--------------------|
-| Rep PWA | `apps/rep-app` | app.neosleepcare.com |
-| Admin | `apps/admin` | admin.neosleepcare.com |
-| HCP Portal | `apps/portal` | client.neosleepcare.com |
-| Website | `apps/web` | neosleepcare.com |
+| PWA | `apps/pwa` | pwa.neosleepcare.com |
+| WEB | `apps/web` | neosleepcare.com |
+| API | `apps/api` | api.neosleepcare.com (planned — currently Render-assigned URL, see `render.yaml`) |
+| Telegram bot | `apps/telegram` | — |
 
 ## Local dev (manual)
 
 - **Node 20:** `nvm use` (uses `.nvmrc`)
-- **Rep app:** `pnpm -C apps/rep-app dev` or `npm run dev --workspace=@neo/rep-app`
-- **BFF:** `pnpm -C services/bff dev`
-- **Apps without Docker:** `npm run dev` (BFF + rep-app; BFF uses mock data if Postgres unavailable)
-- **DB seed:** `npm run db:seed` (requires Docker up)
+- **Everything (no Docker):** `pnpm dev` (api, pwa, web concurrently)
+- **One app only:** `pnpm --filter @neo/pwa dev` / `@neo/web dev` / `@neo/api dev`
+- **DB seed:** `pnpm db:seed` (requires Docker up)
 - **Health:** `curl http://localhost:3000/health`
 
 ## AI-assisted workflow
 
-Write a SPEC → ask Cursor to implement + add tests + update docs → merge via CI gates.
+Write a SPEC → ask Claude Code to implement + add tests + update docs → merge via CI gates.

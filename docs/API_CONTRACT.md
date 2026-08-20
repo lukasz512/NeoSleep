@@ -1,4 +1,4 @@
-# API Contract (BFF) – v1 draft
+# API Contract – v1 draft
 
 Base: `/api`
 

@@ -173,7 +173,7 @@ import { hcpFormFields, hcpFormDerive } from "../config/forms/hcpForm";
 import { patientFormFields } from "../config/forms/patientForm";
 import { partnerInviteFormFields } from "../config/forms/partnerInviteForm";
 import { createPractitionerFromLead } from "../utils/leadConversion";
-import { apiFetch } from "../composables/useBffApi";
+import { apiFetch } from "../composables/useApi";
 import { useNotifications } from "../composables/useNotifications";
 import { type FilterDefinition } from "../composables/useFilters";
 import { useAuthStore } from "../stores/auth";

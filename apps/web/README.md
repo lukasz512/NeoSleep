@@ -1,16 +1,16 @@
 # NeoSleep Website
 
-Strona marketingowa (Vue 3 + Vite).
+Marketing site (Vue 3 + Vite).
 
-## Uruchomienie
+## Run
 
 ```bash
 pnpm dev
 ```
 
-Aplikacja startuje na **http://localhost:5174** (port w `vite.config.ts`).
+The app starts on **http://localhost:5174** (port set in `vite.config.ts`).
 
-**Uwaga:** Z roota repozytorium `pnpm dev` uruchamia równocześnie BFF, rep-app i website. Aby zobaczyć **header** (nawigacja, logo, ThemeToggle, Contact), otwórz w przeglądarce **website**: **http://localhost:5174**. Inne porty to inne aplikacje (np. rep-app bez tego headera).
+**Note:** from the repo root, `pnpm dev` starts the API server, the rep app, and the website concurrently. To see the **header** (nav, logo, ThemeToggle, Contact), open the **website** in your browser: **http://localhost:5174**. Other ports are other apps (e.g. the rep app doesn't have this header).
 
 ## Build
 

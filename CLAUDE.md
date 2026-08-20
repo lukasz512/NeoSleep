@@ -35,7 +35,7 @@ docs/             → Architecture docs, ADRs, docs/foundation/ (backlog, presen
 2. **Views vs. Data separation.** Navigation items, labels, icons, feature flags → config-driven, never hardcoded in components. White-label tenants swap data layer only.
 3. **All copy in i18n JSON.** Never hardcode user-facing strings in components. Use `$t('key')`.
 4. **TypeScript strict.** No `any`, no type assertions without justification.
-5. **No mock-only tests for BFF.** Integration tests must hit real DB (lessons learned from prod divergence).
+5. **No mock-only tests for the API server.** Integration tests must hit real DB (lessons learned from prod divergence).
 
 ## Tech Stack
 - Vue 3.5, Vite 7, Pinia 3, Vuetify 3.12, Vue Router 4.5, Vue i18n 10
@@ -51,7 +51,7 @@ docs/             → Architecture docs, ADRs, docs/foundation/ (backlog, presen
 - App router: `apps/pwa/src/router/`
 - App stores: `apps/pwa/src/stores/`
 - App composables: `apps/pwa/src/composables/`
-- API composable: `apps/pwa/src/composables/useBffApi.ts` (use this for all BFF calls)
+- API composable: `apps/pwa/src/composables/useApi.ts` (use this for all API calls)
 - App config: `apps/pwa/src/composables/useAppConfig.ts`
 - Tenant config: DB-driven, `app_config` table (tenant schema) — not a filesystem path
 
@@ -60,8 +60,8 @@ docs/             → Architecture docs, ADRs, docs/foundation/ (backlog, presen
 ### Multi-tenancy model: schema-per-tenant on Supabase
 - Each pharma company (tenant) gets its own PostgreSQL schema: `tenant_<slug>` (e.g. `tenant_acmepharma_pl`)
 - Shared `public` schema for system-level tables (`tbl_tenants`, `tbl_app_config`)
-- Supabase project: single instance for MVP. Connection string in `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` env vars (BFF only — never frontend)
-- Migrations: `apps/api/migrations/` — numbered `.sql` files, run on BFF startup via `db/migrations.ts`
+- Supabase project: single instance for MVP. Connection string in `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` env vars (API server only — never frontend)
+- Migrations: `apps/api/migrations/` — numbered `.sql` files, run on API server startup via `db/migrations.ts`
 - New tables → always add a new numbered migration, never mutate old ones
 
 ### Identity types — do NOT conflate:
@@ -100,7 +100,7 @@ Tenant schema (FHIR naming): `person`, `users`, `user_roles`, `organization`, `p
 
 ## Dev Workflow
 ```bash
-pnpm start             # Docker (Postgres) + BFF + app concurrently
+pnpm start             # Docker (Postgres) + API server + app concurrently
 pnpm build:pwa         # Build app
 pnpm build:web         # Build website
 pnpm ci                # Full CI gate: lint + typecheck + test
@@ -108,12 +108,19 @@ pnpm i18n:extract      # Extract new i18n keys from source
 pnpm i18n:prune        # Mark unused keys
 ```
 
+## Git / PR Workflow
+- Never push directly to `dev`, `prod`, or any shared branch — always branch, commit, `git push -u origin <branch>`, and give the user the GitHub "create a pull request" link GitHub prints after the push (`https://github.com/<org>/<repo>/pull/new/<branch>`).
+- **The PR itself is always created by the user, never by Claude/CI tooling on their behalf** — this holds even if `gh` is authenticated; review happens before a PR exists, not just before merge.
+- This repo enforces the above with a GitHub ruleset that rejects direct pushes (`GH013: Repository rule violations — Changes must be made through a pull request`) — expect this on `git push` and don't try to route around it (no force-push, no branch-name workaround).
+- This is an interim policy, not the final CI/CD design — a fuller flow (environments, required checks, promotion) is still to be worked out.
+
 ## Deployment
-- FTP to GoDaddy (current, to be migrated to VPS)
+- `apps/pwa` / `apps/web`: FTP to GoDaddy (current, to be migrated to VPS)
+- `apps/api`: Render, auto-deploys on push to its tracked branch — see `render.yaml`. No GitHub Actions workflow for this; a git push is the whole deploy pipeline.
 - Environments (branch → URL): only `dev` and `prod` exist for now — UAT is removed from the project until reintroduced
-  - DEV:  `dev` → pwa.dev.neosleepcare.com (rep app) / dev.neosleepcare.com (website)
+  - DEV:  `dev` → pwa-dev.neosleepcare.com (rep app) / dev.neosleepcare.com (website)
   - PROD: `prod` → pwa.neosleepcare.com (rep app) / neosleepcare.com (website)
-- CI/CD: `.github/workflows/deploy-pwa.yml`, `deploy-web.yml`, `deploy-bff.yml`
+- CI/CD: `.github/workflows/deploy-pwa.yml`, `deploy-web.yml`
 - Promote DEV → PROD via `promote-pwa-dev-to-prod.yml` / `promote-web-dev-to-prod.yml`
 
 ## What NOT to do
@@ -123,7 +130,7 @@ pnpm i18n:prune        # Mark unused keys
 - Do not skip migrations — always add a new numbered `.sql` file
 - Do not add translation keys directly in PL/ES files — always start from `en.json`
 - Do not bypass Husky hooks (`--no-verify`)
-- Do not mock PostgreSQL in BFF integration tests
+- Do not mock PostgreSQL in API server integration tests
 - Do not start portal or admin apps until rep app Stage 1-3 is done
 
 ## Git tags — milestones

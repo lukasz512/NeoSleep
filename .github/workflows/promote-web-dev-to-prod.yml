@@ -1,5 +1,5 @@
-# Ręczna promocja: zbuduj z gałęzi dev i wgraj na PROD (neosleepcare.com).
-# W Actions wybierz workflow "Promote Web Dev → Prod" i kliknij "Run workflow".
+# Manual promotion: build from the dev branch and deploy to PROD (neosleepcare.com).
+# In Actions, select the "Promote Web Dev → Prod" workflow and click "Run workflow".
 
 name: Promote Web Dev → Prod
 

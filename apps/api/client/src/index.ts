@@ -43,7 +43,10 @@ export function createApiFetch(config: ApiClientConfig) {
 
     let res: Response;
     try {
-      res = await fetchImpl(url, { ...init, credentials: "include" });
+      // Defense-in-depth alongside the server's Cache-Control: no-store — every API response is
+      // per-session, so the browser's own HTTP cache must never serve a response from one session
+      // to another (this is what previously let a device show a stale, different user's data).
+      res = await fetchImpl(url, { ...init, credentials: "include", cache: "no-store" });
     } catch (err) {
       console.error(`[api] ${method} ${path} — network error`, err);
       throw err;

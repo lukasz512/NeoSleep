@@ -38,7 +38,7 @@
           <Transition name="contact-fields" mode="out-in">
             <div :key="formType" class="view-contact__fields">
 
-              <!-- Imię + Nazwisko -->
+              <!-- First name + Last name -->
               <div class="view-contact__row">
                 <div class="view-contact__field">
                   <label for="contact-firstName">{{ t("website.contact.firstName") }}</label>
@@ -138,7 +138,7 @@
             </div>
           </Transition>
 
-          <!-- Submit (poza animacją) -->
+          <!-- Submit (outside the transition) -->
           <button type="submit" class="view-contact__submit" :disabled="status === 'loading'">
             {{ status === "loading" ? t("website.contact.sending") : t("website.contact.submit") }}
           </button>

@@ -2,7 +2,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useDebounceFn } from "@vueuse/core";
-import { apiFetch } from "./useBffApi";
+import { apiFetch } from "./useApi";
 import { useFilters, type FilterDefinition } from "./useFilters";
 import { CACHEABLE_ENTITIES, type CacheableEntity } from "../utils/offlineCache";
 import { useEntityCacheStore } from "../stores/entityCache";

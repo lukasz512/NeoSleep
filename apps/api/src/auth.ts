@@ -23,7 +23,7 @@ import {
   type StaffRole,
 } from "./db.js";
 import { sendPasswordResetEmail } from "./mailer.js";
-import { FRONTEND_URL } from "./env.js";
+import { FRONTEND_URLS } from "./env.js";
 import { hashToken } from "./utils/hashToken.js";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -32,8 +32,29 @@ const GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
 
 const clientId = process.env.GOOGLE_CLIENT_ID ?? "";
 const clientSecret = process.env.GOOGLE_CLIENT_SECRET ?? "";
+/** FRONTEND_URLS[0] is the "no better match" default — one Render BFF can serve multiple
+ * frontends (pwa + pwa-dev), so FRONTEND_URL/_URLS may hold more than one origin. Never
+ * interpolate FRONTEND_URL (the raw, possibly comma-separated string) directly into a link
+ * or redirect — see resolveFrontendOrigin() below, which picks exactly one. */
+const DEFAULT_FRONTEND_ORIGIN = FRONTEND_URLS[0] ?? "http://localhost:5173";
 /** OAuth redirect_uri: use frontend when proxied (dev) so cookie is set for frontend origin. */
-const oauthRedirectOrigin = process.env.OAUTH_REDIRECT_ORIGIN ?? FRONTEND_URL;
+const oauthRedirectOrigin = process.env.OAUTH_REDIRECT_ORIGIN ?? DEFAULT_FRONTEND_ORIGIN;
+
+/**
+ * Picks the single frontend origin a redirect/link should point back to, out of the
+ * (possibly multiple) origins FRONTEND_URL allows — see server.ts's CORS config, which
+ * allows the same set. Origin/Referer headers are only reliable for direct
+ * fetch/XHR-initiated requests (e.g. POST /auth/forgot-password) — NOT for a browser
+ * navigating back after an external redirect (e.g. Google's OAuth callback), where the
+ * header reflects Google's domain or is absent. For that case, capture the origin at the
+ * point it IS reliable (see /auth/google) and thread it through req.session instead of
+ * calling this again at the callback.
+ */
+function resolveFrontendOrigin(req: Request): string {
+  const origin = req.get("origin");
+  if (origin && FRONTEND_URLS.includes(origin)) return origin;
+  return DEFAULT_FRONTEND_ORIGIN;
+}
 
 /** Initial password set for any seeded staff account with no password yet (user must change on first login). */
 const INITIAL_USER_PASSWORD = process.env.INITIAL_USER_PASSWORD ?? "ChangeMe1!";
@@ -60,6 +81,10 @@ declare module "express-session" {
       forcePasswordChange?: boolean;
     };
     state?: string;
+    /** Captured at /auth/google (where Origin is reliable) so /auth/google/callback
+     * — reached via a browser redirect from Google, where Origin/Referer are not the
+     * original frontend's — knows which frontend origin to send the user back to. */
+    oauthFrontendOrigin?: string;
   }
 }
 
@@ -191,8 +216,10 @@ authRouter.post(
       const isProduction = process.env.NODE_ENV === "production";
       res.cookie(REMEMBER_ME_COOKIE, `${tokenId}.${secret}`, {
         httpOnly: true,
+        // Same cross-site reasoning as the session cookie in server.ts: PWA and API
+        // are different origins in production, so "lax" would never be sent back.
         secure: isProduction,
-        sameSite: "lax",
+        sameSite: isProduction ? "none" : "lax",
         maxAge: REMEMBER_ME_MAX_AGE_MS,
         path: "/",
       });
@@ -321,10 +348,12 @@ authRouter.post("/auth/forgot-password", asyncHandler(async (req: Request, res: 
     const tokenHash = hashToken(token);
     const expiresAt = new Date(Date.now() + PASSWORD_RESET_EXPIRY_MS);
     await createPasswordResetToken(client, userId, tokenHash, expiresAt);
-    const resetLink = `${FRONTEND_URL}/reset-password?token=${encodeURIComponent(token)}`;
-    // Always attempt to send — mailer.ts itself no-ops (with a console warning) if Gmail
+    // Origin is reliable here — a direct fetch from the frontend that's handling this
+    // request, not a redirect landing from elsewhere (contrast with the OAuth callback).
+    const resetLink = `${resolveFrontendOrigin(req)}/reset-password?token=${encodeURIComponent(token)}`;
+    // Always attempt to send — mailer.ts itself no-ops (with a console warning) if Resend
     // isn't configured, so this is safe locally too. The console log + devResetLink below
-    // stay regardless, so local dev works without needing real Gmail creds set up.
+    // stay regardless, so local dev works without needing real Resend creds set up.
     sendPasswordResetEmail(emailStr, resetLink, {
       title: staff.salutation,
       firstName: staff.first_name,
@@ -403,6 +432,10 @@ authRouter.get("/auth/google", (req: Request, res: Response) => {
   }
   const state = crypto.randomBytes(24).toString("hex");
   req.session.state = state;
+  // Origin is reliable here (a direct browser navigation from the frontend app) — capture
+  // it now so the callback, reached via Google's own redirect, knows where to send the
+  // user back to (see resolveFrontendOrigin's doc comment).
+  req.session.oauthFrontendOrigin = resolveFrontendOrigin(req);
   const redirectUri = `${oauthRedirectOrigin}/api/v1/auth/google/callback`;
   const params = new URLSearchParams({
     client_id: clientId,
@@ -419,15 +452,20 @@ authRouter.get("/auth/google", (req: Request, res: Response) => {
 authRouter.get("/auth/google/callback", asyncHandler(async (req: Request, res: Response) => {
   const { code, state } = req.query as { code?: string; state?: string };
   const savedState = req.session.state;
+  // Set at /auth/google, where Origin was still reliable — this request is a browser
+  // redirect landing from Google, not a same-flow fetch, so req.get("origin") here would
+  // reflect Google's domain or be absent, not the frontend that started the login.
+  const frontendOrigin = req.session.oauthFrontendOrigin ?? DEFAULT_FRONTEND_ORIGIN;
 
   if (!code || !state || state !== savedState) {
-    res.redirect(`${FRONTEND_URL}/login?error=auth_failed`);
+    res.redirect(`${frontendOrigin}/login?error=auth_failed`);
     return;
   }
   delete req.session.state;
+  delete req.session.oauthFrontendOrigin;
 
   if (!clientId || !clientSecret) {
-    res.redirect(`${FRONTEND_URL}/login?error=server_config`);
+    res.redirect(`${frontendOrigin}/login?error=server_config`);
     return;
   }
 
@@ -449,14 +487,14 @@ authRouter.get("/auth/google/callback", asyncHandler(async (req: Request, res: R
   if (!tokenRes.ok) {
     const errText = await tokenRes.text();
     console.error("Google token error:", tokenRes.status, errText);
-    res.redirect(`${FRONTEND_URL}/login?error=token_exchange`);
+    res.redirect(`${frontendOrigin}/login?error=token_exchange`);
     return;
   }
 
   const tokens = (await tokenRes.json()) as { access_token?: string };
   const accessToken = tokens.access_token;
   if (!accessToken) {
-    res.redirect(`${FRONTEND_URL}/login?error=no_token`);
+    res.redirect(`${frontendOrigin}/login?error=no_token`);
     return;
   }
 
@@ -464,7 +502,7 @@ authRouter.get("/auth/google/callback", asyncHandler(async (req: Request, res: R
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!userRes.ok) {
-    res.redirect(`${FRONTEND_URL}/login?error=userinfo`);
+    res.redirect(`${frontendOrigin}/login?error=userinfo`);
     return;
   }
 
@@ -480,7 +518,7 @@ authRouter.get("/auth/google/callback", asyncHandler(async (req: Request, res: R
     getOrCreateUserByProvider(client, "google", userInfo.sub, email, userInfo.name)
   );
   if (!dbUser) {
-    res.redirect(`${FRONTEND_URL}/login?error=account_provision_failed`);
+    res.redirect(`${frontendOrigin}/login?error=account_provision_failed`);
     return;
   }
 
@@ -495,5 +533,5 @@ authRouter.get("/auth/google/callback", asyncHandler(async (req: Request, res: R
     language: dbUser.language ?? undefined,
   };
 
-  res.redirect(`${FRONTEND_URL}/login?from=google`);
+  res.redirect(`${frontendOrigin}/login?from=google`);
 }));

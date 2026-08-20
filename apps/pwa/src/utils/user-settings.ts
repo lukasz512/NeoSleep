@@ -36,6 +36,9 @@ const DEFAULTS: AppSettings = {
 
 const _store = useLocalStorage<AppSettings>(APP_STORAGE_KEYS.settings, { ...DEFAULTS }, {
   mergeDefaults: true,
+  // Reading settings (getUserSettings) must not have the side effect of
+  // writing defaults to storage — only setUserSettings should ever persist.
+  writeDefaults: false,
 });
 
 /**

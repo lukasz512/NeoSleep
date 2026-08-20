@@ -1,6 +1,6 @@
 # Runs on every pull request: lint + typecheck across all workspaces, plus
 # test suites. apps/api needs a real Postgres for its integration tests (see
-# CLAUDE.md: "No mock-only tests for BFF") — a fresh postgres:15 service
+# CLAUDE.md: "No mock-only tests for the API server") — a fresh postgres:15 service
 # container is migrated before tests run, kept separate from the shared
 # Supabase dev/prod DB.
 #
@@ -38,6 +38,10 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
       DEFAULT_TENANT_SLUG: neosleep
+      # auth-session-cookie.spec.ts forces NODE_ENV=production to test the
+      # cross-site cookie config — env.ts throws if SESSION_SECRET is unset
+      # in that branch. Fixed test-only value, not a real secret.
+      SESSION_SECRET: ci-test-session-secret-not-for-production-use
 
     steps:
       - name: Checkout
@@ -72,6 +76,13 @@ jobs:
 
       - name: Run DB migrations
         run: pnpm --filter @neo/api migrate
+
+      # Integration tests must never write into "neosleep" (see
+      # apps/api/vitest.config.ts) — they target an isolated "test" schema
+      # instead, cloned structurally from "neosleep" since create_tenant_schema()
+      # alone is stale relative to later migrations (see sync-test-schema.ts).
+      - name: Sync isolated test tenant schema
+        run: pnpm --filter @neo/api sync-test-schema
 
       - name: Test — api (blocking)
         run: pnpm --filter @neo/api test

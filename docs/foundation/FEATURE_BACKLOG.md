@@ -11,7 +11,7 @@
 |---|---|---|
 | Supabase connection (DATABASE_URL) | `planned` | Prerequisite for everything |
 | Run migrations (000–001) | `planned` | platform + neosleep + fourseasons schemas |
-| BFF routes read from real DB | `in_progress` | practitioner, encounter, lead |
+| API routes read from real DB | `in_progress` | practitioner, encounter, lead |
 | HCP list view (filterable) | `in_progress` | rep sees their HCPs per territory |
 
 ---
@@ -60,7 +60,7 @@
 | Patient chat (website ↔ AI ↔ consultant) | `planned` | same conversation/message tables; support_ticket for AI→human escalation |
 | WhatsApp Business API integration | `planned` | webhook_event queue ready; LINE for TH market |
 | SMS via Twilio | `planned` | same webhook_event queue |
-| Email from app | `planned` | nodemailer already in BFF |
+| Email from app | `planned` | nodemailer already in API server |
 | Inbound message sync (webhook workers) | `planned` | webhook_event → conversation → message |
 | Notification Center (bell + badge, in-app inbox) | `in_progress` | `notification`/`notification_delivery` tables, GET/PATCH routes, Dashboard-only bell with pulsing unread dot on nav — see ADR-012. Inbox is empty until real event producers are wired (see next two rows). **No tests yet** — see memory `project_test_suite_weak` for the concrete file list, deferred to a dedicated session |
 | Push notifications | `planned` | push_subscription schema fixed to match routes/push.ts (ADR-012 §1); still no real send call wired to a domain event |
@@ -97,7 +97,7 @@
 | Patient registration (Google + WebAuthn + magic link) | `planned` | patient.google_sub + patient_webauthn_credentials; same modern auth as reps |
 | Patient portal (website) | `planned` | order products, view study results, chat, select dentist |
 | Purchase flow | `planned` | purchase_order + purchase_order_item + Stripe integration |
-| Supplier auto-dispatch | `planned` | on order paid → BFF calls supplier API (Biologix etc.) with shipping info |
+| Supplier auto-dispatch | `planned` | on order paid → API server calls supplier API (Biologix etc.) with shipping info |
 | Sleep study lifecycle | `planned` | sleep_study: device_shipped → results_received → interpreted by doctor |
 | Automatic results → doctor routing | `planned` | sleep_study.interpreted_by; doctor gets notification when results arrive |
 | Patient dentist selection | `planned` | patient picks from practitioner list (specialty=dentist); dentist notified |
@@ -146,6 +146,15 @@
 
 ---
 
+## Web Platform Migration & Admin
+
+| Feature | Status | Notes |
+|---|---|---|
+| `apps/web` → Nuxt (SSR/SEO) | `planned` | Confirmed 2026-07-31 — better SEO + SSR for the public marketing site. `apps/pwa` stays on Vite/Vue: it's offline-first (service worker + IndexedDB read cache, see `ADR-013`), which conflicts with SSR — so it does not move. Shared components keep working across both via `packages/*` (Nuxt 3 is Vite-based under the hood, no extra bridging needed). No timeline yet. |
+| Inline content editor + `web_admin` role | `deferred` | Depends on the Nuxt migration above. Moves web copy off the static `websiteContent.ts` / `packages/i18n/*.json` files into DB, scoped per-tenant per-locale (a tenant edits its own language — e.g. an ES tenant edits `mx` content, a PL tenant edits `pl`). New `web_admin` role gates a draft/publish flow — this is medical-marketing content, so no instant-publish. Editing UX: desktop = hover-highlight text, click to enter edit mode; touch = long-press. v1 scope is text + image replacement; font editing is a later extension. Not started — `apps/web` has no admin/auth surface today, and per CLAUDE.md admin apps wait until rep app Stage 1-3 is done. |
+
+---
+
 ## Social Media & Marketing Automation
 
 | Feature | Status | Notes |
@@ -168,5 +177,5 @@
 
 ---
 
-_Last updated: 2026-07-19_
+_Last updated: 2026-07-31_
 _To add a feature: add a row, assign stage, update status as work progresses._

@@ -1,5 +1,5 @@
 import type { FormFieldDef, FormFieldOption } from "../../types/formField";
-import { apiFetch } from "../../composables/useBffApi";
+import { apiFetch } from "../../composables/useApi";
 import { useConfigStore } from "../../stores/config";
 import { identityFields } from "./identityFields";
 

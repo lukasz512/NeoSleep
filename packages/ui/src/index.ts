@@ -20,3 +20,4 @@ export { default as AppStateView } from "./components/AppStateView.vue";
 export { default as OriginDialogTransition } from "./components/OriginDialogTransition.vue";
 export { originDialogTransition } from "./components/originDialogTransition";
 export { getDialogOrigin } from "./composables/useDialogOrigin";
+export { default as AppSegmentedTabs, type AppSegmentedTabOption } from "./components/AppSegmentedTabs.vue";

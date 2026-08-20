@@ -8,8 +8,9 @@ export { PublicLayout, AppLayout };
 const ALL_STAFF_ROLES: UserRole[] = ["rep", "doctor", "manager", "admin"];
 
 /** App starts at login; root and unknown paths send unauthenticated users to /login. */
-// Nav order: dashboard, leads, hcp, hco, patients, planner, presentations,
-// users — the mobile bottom bar (AppShell) shows exactly the first 4 of
+// Nav order: dashboard, leads, hcp, hco, patients, planner, presentations
+// (hidden — see `hidden` meta below), resources, users — the mobile bottom
+// bar (AppShell) shows exactly the first 4 of
 // whatever's visible for the current role. appNavRoutes below derives from
 // this array's order — reordering here reorders both the sidebar and the
 // bottom bar. "dashboard" is also the default post-login landing page and
@@ -46,7 +47,9 @@ export const routes: RouteRecordRaw[] = [
   { path: "/patients", name: "patients", component: () => import("../views/PatientsView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
   { path: "/patients/:id", name: "patient-detail", component: () => import("../views/PatientDetailView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
   { path: "/planner", name: "planner", component: () => import("../views/PlannerView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
-  { path: "/presentations", name: "presentations", component: () => import("../views/PresentationsView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
+  // Hidden from nav while the OrthoApnea resources module ships (not deleted — see the `hidden` filter in appNavRoutes below).
+  { path: "/presentations", name: "presentations", component: () => import("../views/PresentationsView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES, hidden: true } },
+  { path: "/resources", name: "resources", component: () => import("../views/ResourcesView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES, partner: "orthoapnea" } },
   { path: "/users", name: "users", component: () => import("../views/UsersView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin", "manager"] } },
   { path: "/users/:id", name: "user-detail", component: () => import("../views/UserDetailView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin", "manager"] } },
   { path: "/:pathMatch(.*)*", redirect: "/dashboard" },
@@ -63,8 +66,9 @@ export const appNavRoutes = routes
       r.path !== "/login" &&
       r.path !== "/dev" &&
       typeof (r as { name?: string }).name === "string" &&
-      (r.meta as { layout?: string; devOnly?: boolean } | undefined)?.layout === "app" &&
-      !(r.meta as { devOnly?: boolean } | undefined)?.devOnly,
+      (r.meta as { layout?: string; devOnly?: boolean; hidden?: boolean } | undefined)?.layout === "app" &&
+      !(r.meta as { devOnly?: boolean } | undefined)?.devOnly &&
+      !(r.meta as { hidden?: boolean } | undefined)?.hidden,
   )
   .map((r) => ({
     path: r.path,

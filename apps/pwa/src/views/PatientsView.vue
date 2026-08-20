@@ -108,7 +108,7 @@ import { entityActionIcon, entityActionMenuIconClass } from "../config/entityAct
 import { type FilterDefinition } from "../composables/useFilters";
 import { useAuthStore } from "../stores/auth";
 import { useConfigStore } from "../stores/config";
-import { apiFetch } from "../composables/useBffApi";
+import { apiFetch } from "../composables/useApi";
 import { useNotifications } from "../composables/useNotifications";
 import { patientFormFields } from "../config/forms/patientForm";
 

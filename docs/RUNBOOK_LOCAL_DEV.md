@@ -4,14 +4,14 @@
 
 ```bash
 # Prerequisites: Docker Desktop installed, Node 20+
-npm run start
+pnpm start
 ```
 
-Starts Docker Desktop (if not running), then Postgres/Adminer/Directus, runs migrations, installs deps, and launches BFF + rep-app. See [README.md](../README.md) for details.
+Starts Docker Desktop (if not running), then Postgres, runs migrations, installs deps, and launches API + PWA + WEB. See [README.md](../README.md) for details.
 
 ## Prereqs
 - **Node 20+** (required for Vite 7, Vitest 4, ESLint 9; project has `.nvmrc` with `20`)
-- **npm** (bundled with Node) or pnpm 9+
+- **pnpm 9+**
 
 **Using Node 20 in this project:**
 - Before first install or running dev/tests: `nvm use` (uses `.nvmrc`)
@@ -38,7 +38,7 @@ After that, every `cd` into a directory with `.nvmrc` will set the correct Node 
 ## Install (once, from project root)
 ```bash
 nvm use
-npm install
+pnpm install
 ```
 
 ## Troubleshooting tests
@@ -48,71 +48,66 @@ npm install
   ```bash
   nvm use
   rm -rf node_modules
-  npm install
-  cd apps/rep-app && npm run test -- --run
+  pnpm install
+  pnpm --filter @neo/pwa test -- --run
   ```
 
 **"Cannot find module @rollup/rollup-darwin-arm64" (or @esbuild/darwin-arm64)**  
 - Optional native deps were not installed for your OS/arch. From project root:
   ```bash
   rm -rf node_modules
-  npm install
+  pnpm install
   ```
   Use a terminal where Node is running **natively** (e.g. arm64 on Apple Silicon), not under Rosetta.
 
-**Running tests for rep-app only:**
+**Running tests for PWA only:**
 ```bash
 nvm use
-cd apps/rep-app && npm run test -- --run
+pnpm --filter @neo/pwa test -- --run
 ```
 
-## Testy (w core projektu)
+## Tests (across the monorepo)
 
-**Jedna komenda z roota – testy we wszystkich workspace’ach (apps + services):**
+**One command from root – tests in every workspace:**
 ```bash
-npm test
+pnpm ci      # lint + typecheck + test, across all workspaces
 ```
 
-- Uruchamia `npm run test` w każdym workspace (admin, rep-app, portal, website, bff).
-- **Auto przy commicie:** hook **Husky** (pre-commit) uruchamia `npm test` przed każdym `git commit`. Jeśli testy się nie przejdą, commit się nie wykona.
-- Po `npm install` hook jest ustawiany automatycznie (skrypt `prepare`).
-- CI na GitHubie i tak uruchamia pełne `ci` (lint + typecheck + test) przy pushu/PR.
+- **Auto on commit:** the Husky pre-commit hook runs lint + typecheck + test before every `git commit`. If tests fail, the commit is blocked.
+- The hook is installed automatically after `pnpm install` (the `prepare` script).
+- CI on GitHub runs the same full `pnpm ci` gate on push/PR.
 
-**Testy tylko w jednym workspace:**
+**Tests in one workspace only:**
 ```bash
-cd apps/rep-app && npm run test
-# albo z roota:
-npm run test --workspace=@neo/rep-app
+pnpm --filter @neo/pwa test
+pnpm --filter @neo/api test
 ```
 
 ## Start apps
 
-**Z npm (z roota):**
-- Rep app: `npm run dev --workspace=@neo/rep-app`
-- Admin: `npm run dev --workspace=@neo/admin`
-- Portal: `npm run dev --workspace=@neo/portal`
-- Website: `npm run dev --workspace=@neo/web`
-
-**Albo wejdź do katalogu appki i uruchom tam:**
+**All at once, no Docker:**
 ```bash
-cd apps/rep-app
-npm run dev
+pnpm dev   # API + PWA + WEB concurrently
 ```
 
-**Z pnpm (jeśli masz):**
-- Rep app: `pnpm -C apps/rep-app dev`
-- Admin: `pnpm -C apps/admin dev`
-- itd.
+**One app only:**
+```bash
+pnpm --filter @neo/pwa dev   # PWA
+pnpm --filter @neo/web dev   # WEB
+pnpm --filter @neo/api dev   # API
+```
 
-## Start BFF
-- npm: `npm run dev --workspace=@neo/bff` albo `cd services/bff && npm run dev`
-- pnpm: `pnpm -C services/bff dev`
+**Or from inside the app's directory:**
+```bash
+cd apps/pwa
+pnpm dev
+```
 
 ## Health check
+```bash
 curl http://localhost:3000/health
+```
 
 ## App routes (scaffold)
-- **Admin**: `/login`, `/dashboard` (default)
-- **Rep app**: `/login`, `/dashboard` (default). **Mobile first** (SPEC-0042): sidebar w stylu iOS/Finder (ikony + tekst, nagłówek „Moduły”, zaokrąglone rogi), zwijany, **toggle na dole**; moduły: Dashboard, Contacts, Accounts, Planner. Po **prawej**: awatar + imię i nazwisko; klik → menu (motyw, język). Po zmianie języka menu zamyka się (kluczowa funkcjonalność).
-- **Portal**: `/login`, `/dashboard` (default)
-- **Website**: `/`, `/about`
+- **PWA**: `/login`, `/dashboard` (default). Mobile-first sidebar nav (see `apps/pwa/src/router/routes.ts` for the current nav/role config).
+- **WEB**: `/`, `/about`

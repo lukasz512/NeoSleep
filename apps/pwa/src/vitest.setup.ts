@@ -8,6 +8,25 @@ class ResizeObserverStub {
 }
 globalThis.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObserver;
 
+// Vuetify's VOverlay location strategy reads window.visualViewport to
+// position menus/selects — absent in jsdom.
+if (typeof window !== "undefined" && !window.visualViewport) {
+  window.visualViewport = {
+    width: window.innerWidth,
+    height: window.innerHeight,
+    offsetLeft: 0,
+    offsetTop: 0,
+    pageLeft: 0,
+    pageTop: 0,
+    scale: 1,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+    onresize: null,
+    onscroll: null,
+  } as unknown as VisualViewport;
+}
+
 if (typeof window !== "undefined" && !window.matchMedia) {
   window.matchMedia = (query: string) => ({
     matches: false,

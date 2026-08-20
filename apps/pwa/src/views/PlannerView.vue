@@ -74,7 +74,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, defineAsyncComponent } from "vue";
 import { useI18n } from "vue-i18n";
-import { apiFetch } from "../composables/useBffApi";
+import { apiFetch } from "../composables/useApi";
 import { useNotifications } from "../composables/useNotifications";
 import type { EventFormInitialData } from "../components/EventForm.vue";
 import type { EventSubmitPayload } from "../components/EventForm.vue";
