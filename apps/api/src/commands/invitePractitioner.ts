@@ -20,7 +20,6 @@ import {
   insertAuditLog,
 } from "../db.js";
 import { ConflictError, NotFoundError, ValidationError } from "../errors.js";
-import { FRONTEND_URL } from "../env.js";
 import { hashToken } from "../utils/hashToken.js";
 import { sendPartnerInviteEmail } from "../mailer.js";
 import { renderSignedDocumentPdf, uploadPartnerDocument } from "../services/partnerDocuments.js";
@@ -78,6 +77,9 @@ export interface InvitePractitionerInput {
 export async function InvitePractitionerCommand(
   ctx: TenantContext,
   leadId: string,
+  /** Resolved by the route from the request (see utils/frontendOrigin.ts) — commands
+   * don't have req/res, so this can't be resolved here; the caller must pass it in. */
+  frontendOrigin: string,
   input: InvitePractitionerInput = {}
 ): Promise<void> {
   if (!leadId?.trim()) throw new ValidationError("lead id is required");
@@ -130,7 +132,7 @@ export async function InvitePractitionerCommand(
   const expiresAt = new Date(Date.now() + INVITE_EXPIRY_MS);
   await createInviteToken(ctx.client, user.id, leadId, tokenHash, expiresAt, ctx.user.id);
 
-  const registerLink = `${FRONTEND_URL}/partner-register?token=${encodeURIComponent(token)}`;
+  const registerLink = `${frontendOrigin}/partner-register?token=${encodeURIComponent(token)}`;
   await sendPartnerInviteEmail(email, registerLink, {
     title: lead.salutation,
     firstName,
