@@ -9,6 +9,7 @@ import { GetUserDocumentsQuery, GetUserDocumentDownloadUrlQuery } from "../queri
 import { ValidationError } from "../errors.js";
 import { parsePaginationParams, toFilterArray } from "./utils.js";
 import type { StaffRole } from "../db.js";
+import { resolveFrontendOrigin } from "../utils/frontendOrigin.js";
 
 /**
  * User routes — thin waiters. See routes/practitioner.ts for the pattern.
@@ -144,7 +145,7 @@ usersRouter.post(
     const slug = tenantSlugFromHost(req.hostname);
     await withTenant(slug, async (client) => {
       const ctx = buildContext(req, client, slug);
-      await ResetUserPasswordCommand(ctx, id);
+      await ResetUserPasswordCommand(ctx, id, resolveFrontendOrigin(req));
     });
 
     res.json({ success: true });

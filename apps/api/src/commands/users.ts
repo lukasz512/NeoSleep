@@ -14,7 +14,6 @@ import {
 } from "../db.js";
 import { insertAuditLog } from "../db.js";
 import { ConflictError, NotFoundError, ValidationError } from "../errors.js";
-import { FRONTEND_URL } from "../env.js";
 import { hashToken } from "../utils/hashToken.js";
 import { sendPasswordResetEmail } from "../mailer.js";
 
@@ -125,7 +124,13 @@ export async function UpdateUserCommand(
 // RESET USER PASSWORD (admin/manager triggered — emails the target user a reset link)
 // ---------------------------------------------------------------------------
 
-export async function ResetUserPasswordCommand(ctx: TenantContext, id: string): Promise<void> {
+export async function ResetUserPasswordCommand(
+  ctx: TenantContext,
+  id: string,
+  /** Resolved by the route from the request (see utils/frontendOrigin.ts) — commands
+   * don't have req/res, so this can't be resolved here; the caller must pass it in. */
+  frontendOrigin: string
+): Promise<void> {
   if (!id?.trim()) throw new ValidationError("user id is required");
 
   const user = await getUserById(ctx.client, id);
@@ -136,7 +141,7 @@ export async function ResetUserPasswordCommand(ctx: TenantContext, id: string): 
   const expiresAt = new Date(Date.now() + PASSWORD_RESET_EXPIRY_MS);
   await createPasswordResetToken(ctx.client, user.id, tokenHash, expiresAt);
 
-  const resetLink = `${FRONTEND_URL}/reset-password?token=${encodeURIComponent(token)}`;
+  const resetLink = `${frontendOrigin}/reset-password?token=${encodeURIComponent(token)}`;
   await sendPasswordResetEmail(user.email, resetLink, {
     title: user.salutation,
     firstName: user.first_name,
