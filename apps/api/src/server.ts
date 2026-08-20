@@ -114,6 +114,17 @@ app.use(
 // otherwise requireAuth 401s on a live remember-me cookie the moment the (shorter-lived) session expires.
 app.use(restoreSessionFromRememberMe);
 
+// Every /api/v1 response is per-session (keyed off the session cookie, not the URL). Without this,
+// a browser's heuristic HTTP cache or an intermediate proxy (common on managed/shared rep phones) can
+// serve a previously cached response — e.g. a stale GET /auth/session body from a prior user's session
+// on the same device — to a different, correctly logged-in user. "Vary: Cookie" is defense-in-depth
+// for any cache that does respect Vary.
+app.use("/api/v1", (_req, res, next) => {
+  res.set("Cache-Control", "no-store, private");
+  res.set("Vary", "Cookie");
+  next();
+});
+
 // All API routes are versioned under /api/v1 — auth router registers /auth/* paths separately
 app.use("/api/v1", authRouter);
 app.use("/api/v1", leadsRouter);
