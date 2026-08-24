@@ -1,5 +1,10 @@
-# Manual promotion: build from the dev branch and deploy to PROD (pwa.neosleepcare.com).
-# In Actions, select the "Promote PWA Dev → Prod" workflow and click "Run workflow".
+# Manual promotion: build from the dev branch, deploy to PROD (pwa.neosleepcare.com),
+# then fast-forward the `prod` branch to match `dev` so the git branch never
+# drifts from what's actually live. In Actions, select the "Promote PWA Dev →
+# Prod" workflow and click "Run workflow".
+#
+# The prod push needs write access to a ruleset-protected branch — see the
+# bypass note on the "Fast-forward prod branch to dev" step below.
 #
 # TODO: migrate to SSH (appleboy/scp-action) once Hetzner VPS is provisioned.
 # See infrastructure/setup/provision.md for the migration runbook.
@@ -13,11 +18,14 @@ on:
 jobs:
   promote:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout (dev)
         uses: actions/checkout@v4
         with:
           ref: dev
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -49,3 +57,15 @@ jobs:
           local-dir: ./apps/pwa/dist/
           server-dir: ${{ secrets.GODADY_FTP_PWA_PROD }}/
           dangerous-clean-slate: false
+
+      # Runs last, after a successful deploy, so `prod` only ever moves once
+      # what it points to is actually live. Fast-forward only — dev must
+      # always be ahead of or equal to prod, never behind.
+      #
+      # Requires the `prod` ruleset to let this job's actor through: either
+      # add "GitHub Actions" (or this workflow) to the ruleset's bypass list,
+      # or make sure "Include administrators" is off and check out with a
+      # PAT (secrets.PROD_PUSH_TOKEN) belonging to a bypass-listed admin
+      # instead of the default GITHUB_TOKEN.
+      - name: Fast-forward prod branch to dev
+        run: git push origin HEAD:refs/heads/prod
