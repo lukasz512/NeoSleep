@@ -1,9 +1,18 @@
+import type { AuthTokenStorage } from "@stores";
 import { createAuthStore } from "@stores";
-import { apiFetch, setAuthInterceptor } from "../composables/useApi";
+import { apiFetch, setAuthInterceptor, getAuthToken, setAuthToken, clearAuthToken } from "../composables/useApi";
 
-export type { UserRole, AuthUser } from "@stores";
+export type { UserRole, AuthUser, AuthTokenStorage } from "@stores";
 
-export const useAuthStore = createAuthStore(apiFetch);
+/** Shared with packages/ui's createUseLoginFlow (see AuthView.vue, injected as
+ *  "neo:authTokenStorage" in main.ts) — both must use the identical accessor so a
+ *  login through either call site writes to the same storage the rest of the app reads. */
+export const authTokenStorage: AuthTokenStorage = {
+  get: getAuthToken,
+  set: (token) => (token ? setAuthToken(token) : clearAuthToken()),
+};
+
+export const useAuthStore = createAuthStore(apiFetch, authTokenStorage);
 
 /**
  * Register the auth interceptor callback with the API layer.

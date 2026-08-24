@@ -302,6 +302,7 @@ import { createUseResetPasswordFlow } from "../composables/useResetPasswordFlow"
 import { useMagneticPointer } from "../composables/useMagneticPointer";
 import { AUTH_BACKGROUND_EXIT_KEY } from "../composables/authBackgroundExit";
 import type { ApiFetchOptions } from "@api";
+import type { AuthTokenStorage } from "@stores";
 import AuthChrome from "../components/AuthChrome.vue";
 import AuthCard from "../components/AuthCard.vue";
 
@@ -321,8 +322,9 @@ const route = useRoute();
 const router = useRouter();
 
 const apiFetch = inject<ApiFetchFn>("neo:apiFetch")!;
+const authTokenStorage = inject<AuthTokenStorage>("neo:authTokenStorage")!;
 
-const useLoginFlow = createUseLoginFlow(apiFetch);
+const useLoginFlow = createUseLoginFlow(apiFetch, authTokenStorage);
 const loginFlow = useLoginFlow();
 
 const useForgotPasswordFlow = createUseForgotPasswordFlow(apiFetch);

@@ -34,7 +34,7 @@ practitionerRouter.get(
     const search = typeof req.query.search === "string" ? req.query.search.trim() : undefined;
 
     const result = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return GetPractitionerListQuery(ctx, {
         search:      search || undefined,
         specialty:   toFilterArray(req.query.specialty),
@@ -62,7 +62,7 @@ practitionerRouter.get(
 
     const slug = tenantSlugFromHost(req.hostname);
     const practitioner = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return GetPractitionerByIdQuery(ctx, id);
     });
 
@@ -92,7 +92,7 @@ practitionerRouter.post(
     };
 
     const practitioner = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return CreatePractitionerCommand(ctx, {
         first_name:        typeof body.first_name === "string" ? body.first_name.trim() : "",
         last_name:         typeof body.last_name  === "string" ? body.last_name.trim()  : "",
@@ -139,7 +139,7 @@ practitionerRouter.patch(
     };
 
     const practitioner = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return UpdatePractitionerCommand(ctx, id, {
         first_name:        typeof body.first_name === "string" ? body.first_name.trim() : undefined,
         last_name:         typeof body.last_name  === "string" ? body.last_name.trim()  : undefined,
@@ -175,7 +175,7 @@ practitionerRouter.delete(
 
     const slug = tenantSlugFromHost(req.hostname);
     await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       await DeletePractitionerCommand(ctx, id);
     });
 

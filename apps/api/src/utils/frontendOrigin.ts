@@ -14,9 +14,11 @@ export const DEFAULT_FRONTEND_ORIGIN: string = FRONTEND_URLS[0] ?? "http://local
  * fetch/XHR-initiated requests (e.g. POST /auth/forgot-password) — NOT for a browser
  * navigating back after an external redirect (e.g. Google's OAuth callback), where the
  * header reflects the external site's domain or is absent. For that case, capture the
- * origin at the point it IS reliable and thread it through req.session (see auth.ts's
- * /auth/google) or an explicit parameter (see commands that build a link outside a
- * route handler, e.g. ActivatePractitionerCommand) instead of calling this again later.
+ * origin at the point it IS reliable and thread it through explicitly instead of calling
+ * this again later — e.g. auth.ts's /auth/google encodes it as a claim in the signed OAuth
+ * `state` JWT (see utils/oauthTokens.ts), since there's no server-side session to stash it
+ * in; commands that build a link outside a route handler (e.g. ActivatePractitionerCommand)
+ * take it as an explicit parameter instead.
  */
 export function resolveFrontendOrigin(req: Request): string {
   const origin = req.get("origin");

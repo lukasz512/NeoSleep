@@ -1,8 +1,9 @@
-import { Router, type Request, type Response, type NextFunction } from "express";
+import { Router, type Request, type Response } from "express";
 import crypto from "node:crypto";
 import bcrypt from "bcrypt";
 import rateLimit from "express-rate-limit";
 import { asyncHandler } from "./middleware/errorHandler.js";
+import { requireAuth } from "./middleware/requireAuth.js";
 import {
   withTenant,
   tenantSlugFromHost,
@@ -15,16 +16,13 @@ import {
   getUserIdByEmail,
   getUserById,
   getUsersWithoutPassword,
-  createRememberMeToken,
-  getRememberMeTokenById,
-  touchRememberMeToken,
-  revokeRememberMeToken,
-  revokeAllRememberMeTokensForUser,
-  type StaffRole,
+  incrementUserTokenVersion,
 } from "./db.js";
 import { sendPasswordResetEmail } from "./mailer.js";
 import { hashToken } from "./utils/hashToken.js";
 import { DEFAULT_FRONTEND_ORIGIN, resolveFrontendOrigin } from "./utils/frontendOrigin.js";
+import { signAuthToken } from "./utils/jwt.js";
+import { signOAuthState, verifyOAuthState, signExchangeCode, verifyExchangeCode } from "./utils/oauthTokens.js";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -38,34 +36,10 @@ const oauthRedirectOrigin = process.env.OAUTH_REDIRECT_ORIGIN ?? DEFAULT_FRONTEN
 /** Initial password set for any seeded staff account with no password yet (user must change on first login). */
 const INITIAL_USER_PASSWORD = process.env.INITIAL_USER_PASSWORD ?? "ChangeMe1!";
 
-const REMEMBER_ME_COOKIE = "remember_me";
-const REMEMBER_ME_MAX_AGE_DAYS = 30;
-const REMEMBER_ME_MAX_AGE_MS = REMEMBER_ME_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
 const PASSWORD_RESET_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
 const BCRYPT_ROUNDS = 10;
 
 export const authRouter: import('express').Router = Router();
-
-declare module "express-session" {
-  interface SessionData {
-    user?: {
-      id: string;
-      email: string;
-      name?: string;
-      picture?: string;
-      role: StaffRole;
-      country_code?: string;
-      region?: string;
-      language?: string;
-      forcePasswordChange?: boolean;
-    };
-    state?: string;
-    /** Captured at /auth/google (where Origin is reliable) so /auth/google/callback
-     * — reached via a browser redirect from Google, where Origin/Referer are not the
-     * original frontend's — knows which frontend origin to send the user back to. */
-    oauthFrontendOrigin?: string;
-  }
-}
 
 /** Rate limit: 10 login attempts per 15 minutes per IP. */
 const loginRateLimiter = rateLimit({
@@ -91,55 +65,6 @@ export async function ensureInitialUserPasswords(slug: string): Promise<void> {
       console.log(`[auth] Set initial password for ${user.email} in ${slug} (change required on first login).`);
     }
   });
-}
-
-// ---------------------------------------------------------------------------
-// Session: restore from remember-me cookie if no session
-// ---------------------------------------------------------------------------
-
-/**
- * Middleware: if no session but valid remember_me cookie, restore session. Cookie: `<tokenId>.<secret>`; DB stores only sha256(secret).
- * Mounted globally in server.ts (right after the session middleware, before any router) so remember-me
- * silently restores the session on ANY request, not just /auth/login and /auth/session — otherwise a request
- * to a protected route (requireAuth) 401s the moment the 7-day session cookie outlives its usefulness, even
- * though a 30-day remember-me cookie is still valid.
- */
-export async function restoreSessionFromRememberMe(
-  req: Request,
-  _res: Response,
-  next: NextFunction
-): Promise<void> {
-  if (req.session?.user) { next(); return; }
-  const cookie = req.cookies?.[REMEMBER_ME_COOKIE];
-  if (!cookie || typeof cookie !== "string") { next(); return; }
-  const [tokenId, secret] = cookie.split(".");
-  if (!tokenId || !secret) { next(); return; }
-  try {
-    const slug = tenantSlugFromHost(req.hostname);
-    await withTenant(slug, async (client) => {
-      const token = await getRememberMeTokenById(client, tokenId);
-      if (!token) return;
-      const expected = Buffer.from(token.token_hash, "hex");
-      const actual = Buffer.from(hashToken(secret), "hex");
-      if (expected.length !== actual.length || !crypto.timingSafeEqual(expected, actual)) return;
-      const user = await getUserById(client, token.user_id);
-      if (!user) return;
-      req.session.user = {
-        id: user.id,
-        email: user.email,
-        name: user.name ?? undefined,
-        role: user.role,
-        country_code: user.country_code ?? undefined,
-        region: user.region ?? undefined,
-        language: user.language ?? undefined,
-        forcePasswordChange: false,
-      };
-      await touchRememberMeToken(client, tokenId);
-    });
-  } catch {
-    // Invalid/expired remember-me — clear it silently
-  }
-  next();
 }
 
 // ---------------------------------------------------------------------------
@@ -176,99 +101,69 @@ authRouter.post(
       res.status(401).json({ error: "Invalid email or password." });
       return;
     }
-    req.session.user = {
-      id: staff.id,
-      email: staff.email,
-      name: staff.name ?? undefined,
-      role: staff.role,
-      country_code: staff.country_code ?? undefined,
-      region: staff.region ?? undefined,
-      language: staff.language ?? undefined,
-      forcePasswordChange: staff.force_password_change,
-    };
-    if (remember_me === true) {
-      const secret = crypto.randomBytes(32).toString("hex");
-      const expiresAt = new Date(Date.now() + REMEMBER_ME_MAX_AGE_MS);
-      const tokenId = await withTenant(slug, (client) =>
-        createRememberMeToken(client, staff.id, hashToken(secret), expiresAt)
-      );
-      const isProduction = process.env.NODE_ENV === "production";
-      res.cookie(REMEMBER_ME_COOKIE, `${tokenId}.${secret}`, {
-        httpOnly: true,
-        // Same cross-site reasoning as the session cookie in server.ts: PWA and API
-        // are different origins in production, so "lax" would never be sent back.
-        secure: isProduction,
-        sameSite: isProduction ? "none" : "lax",
-        maxAge: REMEMBER_ME_MAX_AGE_MS,
-        path: "/",
-      });
-    }
+    const token = signAuthToken(staff, { rememberMe: remember_me === true });
     res.status(200).json({
-      user: req.session.user,
+      token,
+      user: {
+        id: staff.id,
+        email: staff.email,
+        name: staff.name ?? undefined,
+        role: staff.role,
+        country_code: staff.country_code ?? undefined,
+        region: staff.region ?? undefined,
+        language: staff.language ?? undefined,
+        forcePasswordChange: staff.force_password_change,
+      },
       forcePasswordChange: staff.force_password_change,
     });
   })
 );
 
 // ---------------------------------------------------------------------------
-// GET /auth/session (remember-me restore happens upstream, in server.ts)
+// GET /auth/session — echoes the bearer token's claims back as { user }.
+// Intentionally does NOT re-check token_version against the DB (that's
+// buildContext's job, see TenantContext.ts) — requireAuth already validated
+// signature+expiry, which is all this endpoint needs.
 // ---------------------------------------------------------------------------
 
 authRouter.get(
   "/auth/session",
+  requireAuth,
   (req: Request, res: Response) => {
-    if (!req.session?.user) {
-      res.status(401).json({ error: "Not authenticated" });
-      return;
-    }
+    const user = req.user!;
     res.json({
       user: {
-        id: req.session.user.id,
-        email: req.session.user.email,
-        name: req.session.user.name,
-        picture: req.session.user.picture,
-        role: req.session.user.role,
-        country_code: req.session.user.country_code,
-        region: req.session.user.region,
-        language: req.session.user.language,
-        forcePasswordChange: req.session.user.forcePasswordChange ?? false,
+        id: user.sub,
+        email: user.email,
+        name: user.name,
+        picture: user.picture,
+        role: user.role,
+        country_code: user.country_code,
+        region: user.region,
+        language: user.language,
+        forcePasswordChange: user.forcePasswordChange ?? false,
       },
     });
   }
 );
 
 // ---------------------------------------------------------------------------
-// POST /auth/logout (clear session and remember_me cookie)
+// POST /auth/logout — there is no server-side session to destroy anymore
+// (the bearer token is stateless); this just gives the frontend a symmetric
+// endpoint to call before it drops the token client-side. Deliberately does
+// NOT bump token_version — that would also sign the user out of every other
+// device, which "log out this device" should not do.
 // ---------------------------------------------------------------------------
 
-authRouter.post("/auth/logout", asyncHandler(async (req: Request, res: Response) => {
-  const cookie = req.cookies?.[REMEMBER_ME_COOKIE];
-  if (typeof cookie === "string") {
-    const [tokenId] = cookie.split(".");
-    if (tokenId) {
-      const slug = tenantSlugFromHost(req.hostname);
-      await withTenant(slug, (client) => revokeRememberMeToken(client, tokenId));
-    }
-  }
-  res.clearCookie(REMEMBER_ME_COOKIE, { path: "/" });
-  req.session.destroy((err) => {
-    if (err) {
-      res.status(500).json({ error: "Logout failed" });
-      return;
-    }
-    res.status(204).end();
-  });
-}));
+authRouter.post("/auth/logout", requireAuth, (_req: Request, res: Response) => {
+  res.status(204).end();
+});
 
 // ---------------------------------------------------------------------------
 // POST /auth/change-password (authenticated; current + new password)
 // ---------------------------------------------------------------------------
 
-authRouter.post("/auth/change-password", asyncHandler(async (req: Request, res: Response) => {
-  if (!req.session?.user) {
-    res.status(401).json({ error: "Not authenticated" });
-    return;
-  }
+authRouter.post("/auth/change-password", requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const { current_password, new_password } = req.body as {
     current_password?: string;
     new_password?: string;
@@ -279,7 +174,7 @@ authRouter.post("/auth/change-password", asyncHandler(async (req: Request, res: 
     return;
   }
   const slug = tenantSlugFromHost(req.hostname);
-  const sessionUser = req.session.user;
+  const sessionUser = req.user!;
   await withTenant(slug, async (client) => {
     const staff = await getStaffUserByEmail(client, sessionUser.email);
     if (!staff?.password_hash) {
@@ -293,9 +188,11 @@ authRouter.post("/auth/change-password", asyncHandler(async (req: Request, res: 
       return;
     }
     const hash = await bcrypt.hash(newStr, BCRYPT_ROUNDS);
-    await setUserPassword(client, sessionUser.id, hash);
-    await revokeAllRememberMeTokensForUser(client, sessionUser.id);
-    sessionUser.forcePasswordChange = false;
+    await setUserPassword(client, staff.id, hash);
+    // Invalidates every outstanding token for this user, INCLUDING the one used to make
+    // this very request — a real improvement over the old cookie-session behavior, which
+    // only killed remember-me tokens on other devices, never the live session itself.
+    await incrementUserTokenVersion(client, staff.id);
     res.status(200).json({ success: true });
   });
 }));
@@ -395,13 +292,23 @@ authRouter.post("/auth/reset-password", asyncHandler(async (req: Request, res: R
     const hash = await bcrypt.hash(newStr, BCRYPT_ROUNDS);
     await setUserPassword(client, userId, hash);
     await deletePasswordResetTokenByHash(client, tokenHash);
-    await revokeAllRememberMeTokensForUser(client, userId);
+    await incrementUserTokenVersion(client, userId);
     res.status(200).json({ success: true });
   });
 }));
 
 // ---------------------------------------------------------------------------
 // Google OAuth (for portal/doctors; rep-app uses email/password only)
+//
+// No server-side session exists to stash anything in across the redirect to
+// Google and back — the CSRF `state` and the post-callback hand-off are both
+// self-contained signed JWTs (utils/oauthTokens.ts) instead. See that file's
+// doc comments for why: `state` carries the frontendOrigin claim (Origin is
+// only reliable at the point /auth/google is hit, not on the callback, which
+// is reached via Google's own redirect); the callback never puts the real
+// (7/30-day) auth token in a redirect URL — it mints a narrow, 60-second,
+// single-claim exchange code instead, and the frontend immediately exchanges
+// that for a real token via POST /auth/google/exchange.
 // ---------------------------------------------------------------------------
 
 authRouter.get("/auth/google", (req: Request, res: Response) => {
@@ -409,12 +316,7 @@ authRouter.get("/auth/google", (req: Request, res: Response) => {
     res.status(503).json({ error: "Google login not configured (GOOGLE_CLIENT_ID)" });
     return;
   }
-  const state = crypto.randomBytes(24).toString("hex");
-  req.session.state = state;
-  // Origin is reliable here (a direct browser navigation from the frontend app) — capture
-  // it now so the callback, reached via Google's own redirect, knows where to send the
-  // user back to (see resolveFrontendOrigin's doc comment).
-  req.session.oauthFrontendOrigin = resolveFrontendOrigin(req);
+  const state = signOAuthState(resolveFrontendOrigin(req));
   const redirectUri = `${oauthRedirectOrigin}/api/v1/auth/google/callback`;
   const params = new URLSearchParams({
     client_id: clientId,
@@ -430,18 +332,12 @@ authRouter.get("/auth/google", (req: Request, res: Response) => {
 
 authRouter.get("/auth/google/callback", asyncHandler(async (req: Request, res: Response) => {
   const { code, state } = req.query as { code?: string; state?: string };
-  const savedState = req.session.state;
-  // Set at /auth/google, where Origin was still reliable — this request is a browser
-  // redirect landing from Google, not a same-flow fetch, so req.get("origin") here would
-  // reflect Google's domain or be absent, not the frontend that started the login.
-  const frontendOrigin = req.session.oauthFrontendOrigin ?? DEFAULT_FRONTEND_ORIGIN;
+  const frontendOrigin = (state ? verifyOAuthState(state) : null) ?? DEFAULT_FRONTEND_ORIGIN;
 
-  if (!code || !state || state !== savedState) {
+  if (!code || !state || !verifyOAuthState(state)) {
     res.redirect(`${frontendOrigin}/login?error=auth_failed`);
     return;
   }
-  delete req.session.state;
-  delete req.session.oauthFrontendOrigin;
 
   if (!clientId || !clientSecret) {
     res.redirect(`${frontendOrigin}/login?error=server_config`);
@@ -489,7 +385,6 @@ authRouter.get("/auth/google/callback", asyncHandler(async (req: Request, res: R
     sub: string;
     email?: string;
     name?: string;
-    picture?: string;
   };
   const email = userInfo.email ?? "";
   const slug = tenantSlugFromHost(req.hostname);
@@ -501,16 +396,50 @@ authRouter.get("/auth/google/callback", asyncHandler(async (req: Request, res: R
     return;
   }
 
-  req.session.user = {
-    id: dbUser.id,
-    email: dbUser.email,
-    name: dbUser.name ?? undefined,
-    picture: userInfo.picture,
-    role: dbUser.role,
-    country_code: dbUser.country_code ?? undefined,
-    region: dbUser.region ?? undefined,
-    language: dbUser.language ?? undefined,
-  };
+  const exchangeCode = signExchangeCode(dbUser.id);
+  res.redirect(`${frontendOrigin}/auth/callback?code=${encodeURIComponent(exchangeCode)}`);
+}));
 
-  res.redirect(`${frontendOrigin}/login?from=google`);
+// ---------------------------------------------------------------------------
+// POST /auth/google/exchange — the frontend's /auth/callback view POSTs the
+// short-lived exchange code here and gets back a real auth token, same shape
+// as /auth/login's response. Re-fetches the user fresh from DB rather than
+// trusting anything carried across the redirect, so it naturally picks up
+// the current token_version.
+// ---------------------------------------------------------------------------
+
+authRouter.post("/auth/google/exchange", asyncHandler(async (req: Request, res: Response) => {
+  const { code } = req.body as { code?: string };
+  if (typeof code !== "string" || !code) {
+    res.status(400).json({ error: "Exchange code is required." });
+    return;
+  }
+  let userId: string;
+  try {
+    userId = verifyExchangeCode(code);
+  } catch {
+    res.status(401).json({ error: "Invalid or expired exchange code." });
+    return;
+  }
+  const slug = tenantSlugFromHost(req.hostname);
+  const user = await withTenant(slug, (client) => getUserById(client, userId));
+  if (!user) {
+    res.status(401).json({ error: "Account no longer exists." });
+    return;
+  }
+  const token = signAuthToken(user, { rememberMe: false });
+  res.status(200).json({
+    token,
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name ?? undefined,
+      role: user.role,
+      country_code: user.country_code ?? undefined,
+      region: user.region ?? undefined,
+      language: user.language ?? undefined,
+      forcePasswordChange: false,
+    },
+    forcePasswordChange: false,
+  });
 }));

@@ -39,7 +39,7 @@ presentationRouter.get(
     const search = typeof req.query.search === "string" ? req.query.search.trim() : undefined;
 
     const result = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return GetPresentationListQuery(ctx, {
         search: search || undefined,
         status: typeof req.query.status === "string" ? req.query.status.trim() || undefined : undefined,
@@ -66,7 +66,7 @@ presentationRouter.get(
 
     const slug = tenantSlugFromHost(req.hostname);
     const presentation = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return GetPresentationByIdQuery(ctx, id);
     });
 
@@ -90,7 +90,7 @@ presentationRouter.post(
     };
 
     const presentation = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return CreatePresentationCommand(ctx, {
         title:         typeof body.title === "string" ? body.title : "",
         file_url:      typeof body.file_url === "string" ? body.file_url : "",
@@ -125,7 +125,7 @@ presentationRouter.patch(
     };
 
     const presentation = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return UpdatePresentationCommand(ctx, id, {
         title:         typeof body.title === "string" ? body.title : undefined,
         file_url:      typeof body.file_url === "string" ? body.file_url : undefined,

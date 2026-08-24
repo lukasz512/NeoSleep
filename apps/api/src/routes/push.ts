@@ -16,6 +16,7 @@ import { Router, type Request, type Response } from "express";
 import webpush from "web-push";
 import { asyncHandler } from "../middleware/errorHandler.js";
 import { getDb } from "../db/connection.js";
+import { getOptionalUser } from "../utils/jwt.js";
 
 export const pushRouter: import('express').Router = Router();
 
@@ -60,8 +61,7 @@ pushRouter.post(
       return;
     }
 
-    const session  = req.session as { user?: { id?: string } } | undefined;
-    const userId   = session?.user?.id ?? null;
+    const userId   = getOptionalUser(req)?.sub ?? null;
     const ua       = req.headers["user-agent"]?.slice(0, 300) ?? null;
     const db       = getDb();
 

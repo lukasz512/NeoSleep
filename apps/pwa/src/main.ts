@@ -13,6 +13,7 @@ import "./assets/transitions.css";
 import { setupDiagnosticReporter } from "./composables/useDiagnosticReporter";
 import { setupOfflineCacheSession } from "./composables/useOfflineCacheSession";
 import { apiFetch } from "./composables/useApi";
+import { authTokenStorage } from "./stores/auth";
 import { getApiUrl } from "./constants";
 import { resolveInitialThemeMode, useMotionPreferenceStore } from "@stores";
 
@@ -47,6 +48,7 @@ setupDiagnosticReporter(app);
 setupOfflineCacheSession();
 
 app.provide("neo:apiFetch", apiFetch);
+app.provide("neo:authTokenStorage", authTokenStorage);
 const gaId = import.meta.env.VITE_GA_ID as string | undefined;
 if (import.meta.env.PROD && gaId) {
   app.use(createGtag({ tagId: gaId, pageTracker: { router } }));

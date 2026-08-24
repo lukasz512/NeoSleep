@@ -1,13 +1,9 @@
 import express, { type Express } from "express";
 import helmet from "helmet";
-import session from "express-session";
-import connectPgSimple from "connect-pg-simple";
-import cookieParser from "cookie-parser";
 import cors from "cors";
 import { requestIdMiddleware } from "./middleware/requestId.js";
-import { SESSION_SECRET, FRONTEND_URLS } from "./env.js";
-import { getDb } from "./db/connection.js";
-import { authRouter, ensureInitialUserPasswords, restoreSessionFromRememberMe } from "./auth.js";
+import { FRONTEND_URLS } from "./env.js";
+import { authRouter, ensureInitialUserPasswords } from "./auth.js";
 import { leadsRouter } from "./routes/leads.js";
 import { practitionerRouter } from "./routes/practitioner.js";
 import { organizationRouter } from "./routes/organization.js";
@@ -57,16 +53,14 @@ function corsOrigin(origin: string | undefined, cb: (err: Error | null, allow?: 
 
 export const app: Express = express();
 
-// Registered before any other middleware (rate limiter, CORS, session) so Render's
+// Registered before any other middleware (rate limiter, CORS, auth) so Render's
 // health checker never gets rate-limited or blocked by an unrelated dependency —
 // a 429/5xx here makes Render think the whole instance is down.
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
 // Render (and any reverse-proxy host) sits in front of this process and sets
 // X-Forwarded-For / X-Forwarded-Proto. Without this, express-rate-limit
-// refuses to trust X-Forwarded-For (ERR_ERL_UNEXPECTED_X_FORWARDED_FOR) and
-// req.secure misreports the connection as insecure behind TLS-terminating
-// proxies, which affects secure-cookie handling.
+// refuses to trust X-Forwarded-For (ERR_ERL_UNEXPECTED_X_FORWARDED_FOR).
 app.set("trust proxy", 1);
 
 app.use(requestIdMiddleware);
@@ -84,49 +78,18 @@ app.use(
     credentials: true,
   })
 );
-app.use(cookieParser());
 app.use(express.json({ limit: "50kb" }));
 app.use(apiLimiter);
-const PgSessionStore = connectPgSimple(session);
 
-app.use(
-  session({
-    store: new PgSessionStore({
-      pool: getDb(),
-      schemaName: "platform",
-      tableName: "sessions",
-      createTableIfMissing: false,
-      pruneSessionInterval: 900,
-    }),
-    secret: SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      httpOnly: true,
-      // PWA and API are on different origins in production (pwa.neosleepcare.com vs.
-      // the Render API host), so every authenticated call is a cross-site fetch —
-      // "lax" never gets attached to those, only to top-level navigations. "none"
-      // requires secure:true, which is already the case in production; "lax" stays
-      // for dev/CI, which run over plain HTTP through the same-origin Vite proxy.
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    },
-  })
-);
-
-// Silently restores the session from the remember_me cookie before any route sees the request —
-// otherwise requireAuth 401s on a live remember-me cookie the moment the (shorter-lived) session expires.
-app.use(restoreSessionFromRememberMe);
-
-// Every /api/v1 response is per-session (keyed off the session cookie, not the URL). Without this,
-// a browser's heuristic HTTP cache or an intermediate proxy (common on managed/shared rep phones) can
-// serve a previously cached response — e.g. a stale GET /auth/session body from a prior user's session
-// on the same device — to a different, correctly logged-in user. "Vary: Cookie" is defense-in-depth
-// for any cache that does respect Vary.
+// Every /api/v1 response is per-request-credential (keyed off the Authorization bearer
+// token, not the URL). Without this, a browser's heuristic HTTP cache or an intermediate
+// proxy (common on managed/shared rep phones) can serve a previously cached response — e.g.
+// a stale GET /auth/session body from a prior user's token on the same device — to a
+// different, correctly logged-in user. "Vary: Authorization" is defense-in-depth for any
+// cache that does respect Vary.
 app.use("/api/v1", (_req, res, next) => {
   res.set("Cache-Control", "no-store, private");
-  res.set("Vary", "Cookie");
+  res.set("Vary", "Authorization");
   next();
 });
 
