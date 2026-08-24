@@ -34,7 +34,7 @@ organizationRouter.get(
     const search = typeof req.query.search === "string" ? req.query.search.trim() : undefined;
 
     const result = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return GetOrganizationListQuery(ctx, {
         search: search || undefined,
         type:   typeof req.query.type   === "string" ? req.query.type.trim()   || undefined : undefined,
@@ -62,7 +62,7 @@ organizationRouter.get(
 
     const slug = tenantSlugFromHost(req.hostname);
     const organization = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return GetOrganizationByIdQuery(ctx, id);
     });
 
@@ -88,7 +88,7 @@ organizationRouter.post(
     };
 
     const organization = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return CreateOrganizationCommand(ctx, {
         name:          typeof body.name          === "string" ? body.name          : "",
         type:          typeof body.type          === "string" ? body.type          : undefined,
@@ -132,7 +132,7 @@ organizationRouter.patch(
     };
 
     const organization = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return UpdateOrganizationCommand(ctx, id, {
         name:          typeof body.name          === "string" ? body.name          : undefined,
         type:          typeof body.type          === "string" ? body.type          : undefined,
@@ -169,7 +169,7 @@ organizationRouter.delete(
 
     const slug = tenantSlugFromHost(req.hostname);
     await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       await DeleteOrganizationCommand(ctx, id);
     });
 

@@ -27,7 +27,7 @@ notificationRouter.get(
     const filter = req.query.filter === "unread" ? "unread" : "all";
 
     const result = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return GetNotificationListQuery(ctx, { filter, page, limit });
     });
     res.json(result);
@@ -43,7 +43,7 @@ notificationRouter.get(
   asyncHandler(async (req: Request, res: Response) => {
     const slug = tenantSlugFromHost(req.hostname);
     const result = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return GetUnreadNotificationCountQuery(ctx);
     });
     res.json(result);
@@ -62,7 +62,7 @@ notificationRouter.patch(
 
     const slug = tenantSlugFromHost(req.hostname);
     await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       await MarkNotificationReadCommand(ctx, id);
     });
 
@@ -79,7 +79,7 @@ notificationRouter.post(
   asyncHandler(async (req: Request, res: Response) => {
     const slug = tenantSlugFromHost(req.hostname);
     const result = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return MarkAllNotificationsReadCommand(ctx);
     });
 

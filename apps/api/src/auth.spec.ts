@@ -6,7 +6,7 @@ import { withTenant, insertStaffUser } from "./db.js";
 
 // Single-tenant stage — tenant isolation is intentionally out of scope here.
 // TODO(multi-tenant): once a second tenant schema is live, add a test proving
-// a session created under tenant A cannot read/act on tenant B's data.
+// a token issued under tenant A cannot read/act on tenant B's data.
 //
 // No audit_log assertions: insertAuditLog() (apps/api/src/db/audit-log.ts) is
 // used exclusively for FHIR-entity mutations (lead/practitioner/encounter/...)
@@ -95,28 +95,15 @@ describe("Auth routes", () => {
       expect(res.body.error).toBe("Invalid email or password.");
     });
 
-    it("200s, sets a session cookie, and returns the user on success", async () => {
+    it("200s and returns a bearer token + user on success", async () => {
       const res = await request(app)
         .post("/api/v1/auth/login")
         .set("X-Forwarded-For", freshIp())
         .send({ email, password: TEST_PASSWORD });
       expect(res.status).toBe(200);
       expect(res.body.user).toMatchObject({ email });
-      const cookies = (res.headers["set-cookie"] as unknown as string[]) ?? [];
-      expect(cookies.some((c) => c.startsWith("connect.sid="))).toBe(true);
-    });
-
-    it("also sets a separate httpOnly remember-me cookie when remember_me is true", async () => {
-      const res = await request(app)
-        .post("/api/v1/auth/login")
-        .set("X-Forwarded-For", freshIp())
-        .send({ email, password: TEST_PASSWORD, remember_me: true });
-      expect(res.status).toBe(200);
-      const cookies = (res.headers["set-cookie"] as unknown as string[]) ?? [];
-      expect(cookies.some((c) => c.startsWith("connect.sid="))).toBe(true);
-      const rememberCookie = cookies.find((c) => c.startsWith("remember_me="));
-      expect(rememberCookie).toBeTruthy();
-      expect(rememberCookie).toMatch(/HttpOnly/i);
+      expect(typeof res.body.token).toBe("string");
+      expect(res.body.token.split(".")).toHaveLength(3);
     });
 
     it("eventually 429s after repeated attempts from the same client", async () => {
@@ -137,50 +124,58 @@ describe("Auth routes", () => {
   });
 
   describe("GET /api/v1/auth/session", () => {
-    it("401s without a session", async () => {
+    it("401s without a token", async () => {
       const res = await request(app).get("/api/v1/auth/session").set("X-Forwarded-For", freshIp());
       expect(res.status).toBe(401);
       expect(res.body).toHaveProperty("error");
     });
 
-    it("200s with the user shape when a valid session cookie is presented", async () => {
-      const agent = request.agent(app);
+    it("401s with a malformed Authorization header", async () => {
+      const res = await request(app)
+        .get("/api/v1/auth/session")
+        .set("X-Forwarded-For", freshIp())
+        .set("Authorization", "Bearer not-a-real-token");
+      expect(res.status).toBe(401);
+    });
+
+    it("200s with the user shape when a valid bearer token is presented", async () => {
       const ip = freshIp();
-      const loginRes = await agent
+      const loginRes = await request(app)
         .post("/api/v1/auth/login")
         .set("X-Forwarded-For", ip)
         .send({ email, password: TEST_PASSWORD });
       expect(loginRes.status).toBe(200);
 
-      const res = await agent.get("/api/v1/auth/session").set("X-Forwarded-For", ip);
+      const res = await request(app)
+        .get("/api/v1/auth/session")
+        .set("X-Forwarded-For", ip)
+        .set("Authorization", `Bearer ${loginRes.body.token}`);
       expect(res.status).toBe(200);
       expect(res.body.user).toMatchObject({ email });
     });
   });
 
   describe("POST /api/v1/auth/logout", () => {
-    it("clears the session (subsequent /auth/session 401s), clears the remember-me cookie, and returns 204", async () => {
-      const agent = request.agent(app);
+    it("401s without a token, 204s with one (stateless — doesn't itself invalidate the token)", async () => {
+      const noTokenRes = await request(app).post("/api/v1/auth/logout").set("X-Forwarded-For", freshIp());
+      expect(noTokenRes.status).toBe(401);
+
       const ip = freshIp();
-      await agent
+      const loginRes = await request(app)
         .post("/api/v1/auth/login")
         .set("X-Forwarded-For", ip)
-        .send({ email, password: TEST_PASSWORD, remember_me: true });
+        .send({ email, password: TEST_PASSWORD });
 
-      const logoutRes = await agent.post("/api/v1/auth/logout").set("X-Forwarded-For", ip);
+      const logoutRes = await request(app)
+        .post("/api/v1/auth/logout")
+        .set("X-Forwarded-For", ip)
+        .set("Authorization", `Bearer ${loginRes.body.token}`);
       expect(logoutRes.status).toBe(204);
-      const cookies = (logoutRes.headers["set-cookie"] as unknown as string[]) ?? [];
-      const rememberCookie = cookies.find((c) => c.startsWith("remember_me="));
-      expect(rememberCookie).toBeTruthy();
-      expect(rememberCookie).toMatch(/Expires=Thu, 01 Jan 1970|Max-Age=0/);
-
-      const sessionRes = await agent.get("/api/v1/auth/session").set("X-Forwarded-For", ip);
-      expect(sessionRes.status).toBe(401);
     });
   });
 
   describe("POST /api/v1/auth/change-password", () => {
-    it("401s without a session", async () => {
+    it("401s without a token", async () => {
       const res = await request(app)
         .post("/api/v1/auth/change-password")
         .set("X-Forwarded-For", freshIp())
@@ -191,13 +186,13 @@ describe("Auth routes", () => {
     it("400s when the new password is under 8 characters", async () => {
       const changeEmail = testEmail("change-short");
       await createLoginUser(changeEmail);
-      const agent = request.agent(app);
       const ip = freshIp();
-      await agent.post("/api/v1/auth/login").set("X-Forwarded-For", ip).send({ email: changeEmail, password: TEST_PASSWORD });
+      const loginRes = await request(app).post("/api/v1/auth/login").set("X-Forwarded-For", ip).send({ email: changeEmail, password: TEST_PASSWORD });
 
-      const res = await agent
+      const res = await request(app)
         .post("/api/v1/auth/change-password")
         .set("X-Forwarded-For", ip)
+        .set("Authorization", `Bearer ${loginRes.body.token}`)
         .send({ current_password: TEST_PASSWORD, new_password: "short" });
       expect(res.status).toBe(400);
     });
@@ -205,35 +200,54 @@ describe("Auth routes", () => {
     it("401s when the current password is wrong", async () => {
       const changeEmail = testEmail("change-wrong-current");
       await createLoginUser(changeEmail);
-      const agent = request.agent(app);
       const ip = freshIp();
-      await agent.post("/api/v1/auth/login").set("X-Forwarded-For", ip).send({ email: changeEmail, password: TEST_PASSWORD });
+      const loginRes = await request(app).post("/api/v1/auth/login").set("X-Forwarded-For", ip).send({ email: changeEmail, password: TEST_PASSWORD });
 
-      const res = await agent
+      const res = await request(app)
         .post("/api/v1/auth/change-password")
         .set("X-Forwarded-For", ip)
+        .set("Authorization", `Bearer ${loginRes.body.token}`)
         .send({ current_password: "not-the-current-password", new_password: "a-new-long-password" });
       expect(res.status).toBe(401);
     });
 
-    it("200s on success and clears force_password_change", async () => {
+    it("200s on success, and invalidates every token issued before the change — including the one just used", async () => {
       const changeEmail = testEmail("change-success");
       await createLoginUser(changeEmail, { forcePasswordChange: true });
-      const agent = request.agent(app);
       const ip = freshIp();
-      const loginRes = await agent
+      const loginRes = await request(app)
         .post("/api/v1/auth/login")
         .set("X-Forwarded-For", ip)
         .send({ email: changeEmail, password: TEST_PASSWORD });
       expect(loginRes.body.forcePasswordChange).toBe(true);
+      const oldToken = loginRes.body.token as string;
 
-      const res = await agent
+      const res = await request(app)
         .post("/api/v1/auth/change-password")
         .set("X-Forwarded-For", ip)
+        .set("Authorization", `Bearer ${oldToken}`)
         .send({ current_password: TEST_PASSWORD, new_password: "brand-new-password-please" });
       expect(res.status).toBe(200);
 
-      const sessionRes = await agent.get("/api/v1/auth/session").set("X-Forwarded-For", ip);
+      // The pre-change token's signature/expiry are still valid, but its embedded
+      // tokenVersion is now stale — buildContext (via any real, DB-touching route)
+      // must reject it. /auth/session itself doesn't re-check (see auth.ts's
+      // comment), so assert against a route that does go through buildContext.
+      const staleRes = await request(app)
+        .get("/api/v1/lead")
+        .set("X-Forwarded-For", ip)
+        .set("Authorization", `Bearer ${oldToken}`);
+      expect(staleRes.status).toBe(401);
+
+      const freshLoginRes = await request(app)
+        .post("/api/v1/auth/login")
+        .set("X-Forwarded-For", freshIp())
+        .send({ email: changeEmail, password: "brand-new-password-please" });
+      expect(freshLoginRes.status).toBe(200);
+      const sessionRes = await request(app)
+        .get("/api/v1/auth/session")
+        .set("X-Forwarded-For", freshIp())
+        .set("Authorization", `Bearer ${freshLoginRes.body.token}`);
       expect(sessionRes.body.user.forcePasswordChange).toBe(false);
     });
   });

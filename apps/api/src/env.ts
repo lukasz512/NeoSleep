@@ -11,6 +11,10 @@ function readSessionSecret(): string {
 
 export const SESSION_SECRET: string = readSessionSecret();
 
+/** JWT signing secret — reuses SESSION_SECRET's value/validation on purpose (no separate
+ *  env var / Render dashboard entry needed just to rename it). */
+export const JWT_SECRET: string = SESSION_SECRET;
+
 export const FRONTEND_URL: string = process.env.FRONTEND_URL ?? "http://localhost:5173";
 
 /**
