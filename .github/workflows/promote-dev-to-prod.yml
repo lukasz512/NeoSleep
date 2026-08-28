@@ -1,0 +1,37 @@
+# Opens a pull request from dev into prod — that PR is the entire
+# promotion mechanism. It does not push, build, or deploy anything itself.
+#
+# The prod branch is protected by the requiere_PR_to_merge ruleset (no
+# direct pushes, no bypass, for anyone, admins included), so the only way
+# code reaches prod is: open this PR, review the dev/prod diff, merge it.
+# Merging triggers deploy-pwa.yml / deploy-web.yml (push: [prod]), which
+# build and ship to the PROD hosts.
+#
+# In Actions, select "Promote Dev → Prod" and click "Run workflow", then
+# go review and merge the PR it opens.
+
+name: Promote Dev → Prod
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  open-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Open dev -> prod PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --base prod \
+            --head dev \
+            --title "Promote dev to prod" \
+            --body "Automated promotion PR — review the dev/prod diff and merge to ship dev's current state to prod." \
+            || echo "No PR opened — one may already be open, or prod is already up to date with dev."
