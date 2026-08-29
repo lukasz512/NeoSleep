@@ -36,6 +36,7 @@ export async function withTenant<T>(
 ): Promise<T> {
   const slug = sanitizeSlug(tenantSlug);
   const client = await getDb().connect();
+  let hadError = false;
 
   try {
     await client.query("BEGIN");
@@ -45,19 +46,24 @@ export async function withTenant<T>(
     await client.query("COMMIT");
     return result;
   } catch (err) {
+    hadError = true;
     try {
       await client.query("ROLLBACK");
     } catch {
-      // ROLLBACK failure is non-critical — the connection will be destroyed by pg
-      // if it's in a bad state. We do NOT rethrow here so that release() still runs.
+      // ROLLBACK failure is non-critical — release(true) below destroys the
+      // connection instead of returning it to the pool. We do NOT rethrow
+      // here so that release() still runs.
     }
     if (err instanceof AppError) throw err;
     throw new DatabaseError("withTenant", err);
   } finally {
     // release() is unconditional — even if ROLLBACK threw above.
-    // Passing `true` destroys the connection instead of returning it to the pool
-    // if it was in an error state.
-    client.release();
+    // Passing `true` destroys the connection instead of returning it to the
+    // pool whenever this transaction hit an error — a connection left mid-
+    // transaction or in another bad protocol state must never be handed to
+    // a later, unrelated request, or that request starts seeing stale reads
+    // or unrelated failures instead of this one.
+    client.release(hadError);
   }
 }
 
