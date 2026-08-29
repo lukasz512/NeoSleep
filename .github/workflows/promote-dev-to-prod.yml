@@ -1,20 +1,20 @@
-# One-click promotion: opens a pull request from dev into prod and turns on
-# GitHub's auto-merge, so it merges by itself the moment CI goes green — no
-# separate trip to GitHub to review/click Merge. Merging still goes through
-# a real PR (the requiere_PR_to_merge ruleset requires one; no direct push,
-# no bypass, for anyone), it just doesn't need a second manual click.
+# One-click convenience: opens a pull request from dev into prod. That's
+# all it does — no push, no build, no auto-merge.
 #
-# Merging triggers deploy-pwa.yml / deploy-web.yml (push: [prod]), which
-# build and ship to the PROD hosts — that's the "buduje się projekt" step,
-# and it only starts once the PR has actually merged.
+# Merging is a deliberate, manual click on the PR in GitHub, done by a real
+# user. That's not laziness — a push made by a workflow's own GITHUB_TOKEN
+# never triggers other workflows (GitHub's anti-recursion rule), so an
+# auto-merge here would silently never fire deploy-pwa.yml / deploy-web.yml
+# (push: [prod]). A human clicking Merge is the one point in this chain
+# GitHub guarantees behaves normally.
 #
-# Requires "Allow auto-merge" enabled under Settings -> General -> Pull
-# Requests. If the prod ruleset ever requires human-approved reviews (not
-# just CI checks), auto-merge will sit "pending" until someone approves —
-# that's the ruleset working as intended, not a bug in this workflow.
+# The prod ruleset (requiere_PR_to_merge) requires both a PR AND the CI
+# status check to be green before the Merge button is even clickable — so
+# this can never ship a red build, automated or not.
 #
-# In Actions, select "Promote Dev → Prod", click "Run workflow", confirm —
-# that's the whole interaction from your side.
+# In Actions, select "Promote Dev → Prod", click "Run workflow", confirm,
+# then go to the PR it opens (or updates) and merge it yourself once CI
+# passes.
 
 name: Promote Dev → Prod
 
@@ -22,11 +22,11 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   pull-requests: write
 
 jobs:
-  promote:
+  open-pr:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,7 +34,6 @@ jobs:
           fetch-depth: 0
 
       - name: Open (or reuse) the dev -> prod PR
-        id: pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -48,7 +47,6 @@ jobs:
           # "must mean prod is already up to date".
           if [ -z "$(git rev-list origin/prod..origin/dev)" ]; then
             echo "Nothing to promote — prod already matches dev."
-            echo "number=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -58,7 +56,7 @@ jobs:
               --base prod \
               --head dev \
               --title "Promote dev to prod" \
-              --body "Automated promotion — auto-merges once CI is green."
+              --body "Review the dev/prod diff and merge once CI is green — that ships to PROD."
             number=$(gh pr list --base prod --head dev --state open --json number --jq '.[0].number')
           fi
 
@@ -66,10 +64,4 @@ jobs:
             echo "::error::dev is ahead of prod but no PR could be opened or found — see the gh pr create output above."
             exit 1
           fi
-          echo "number=$number" >> "$GITHUB_OUTPUT"
-
-      - name: Enable auto-merge
-        if: steps.pr.outputs.number != ''
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh pr merge "${{ steps.pr.outputs.number }}" --auto --merge
+          echo "PR #$number is open — review and merge it to promote: https://github.com/${{ github.repository }}/pull/$number"
