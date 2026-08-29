@@ -9,6 +9,7 @@ import { InvitePractitionerCommand } from "../commands/invitePractitioner.js";
 import { GetLeadListQuery, GetLeadByIdQuery } from "../queries/lead.js";
 import { ValidationError } from "../errors.js";
 import { parsePaginationParams, toFilterArray } from "./utils.js";
+import { resolveFrontendOrigin } from "../utils/frontendOrigin.js";
 
 /**
  * Lead routes — thin waiters.
@@ -35,7 +36,7 @@ leadsRouter.get(
     const search = typeof req.query.search === "string" ? req.query.search.trim() : undefined;
 
     const result = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return GetLeadListQuery(ctx, {
         search:    search || undefined,
         status:    toFilterArray(req.query.status),
@@ -62,7 +63,7 @@ leadsRouter.get(
 
     const slug = tenantSlugFromHost(req.hostname);
     const lead = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return GetLeadByIdQuery(ctx, id);
     });
 
@@ -87,7 +88,7 @@ leadsRouter.post(
     };
 
     const lead = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return CreateLeadCommand(ctx, {
         salutation:  typeof body.salutation === "string" ? body.salutation.trim() : null,
         first_name:  typeof body.first_name === "string" ? body.first_name.trim() : "",
@@ -132,7 +133,7 @@ leadsRouter.patch(
     // whenever the body carries both conversion fields.
     if (typeof body.converted_to_id === "string" && typeof body.converted_to_type === "string") {
       const lead = await withTenant(slug, async (client) => {
-        const ctx = buildContext(req, client, slug);
+        const ctx = await buildContext(req, client, slug);
         return ConvertLeadCommand(ctx, id, {
           converted_to_id:   body.converted_to_id!,
           converted_to_type: body.converted_to_type!,
@@ -145,7 +146,7 @@ leadsRouter.patch(
     }
 
     const lead = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return UpdateLeadCommand(ctx, id, {
         salutation:  typeof body.salutation === "string" ? body.salutation : undefined,
         first_name:  typeof body.first_name === "string" ? body.first_name : undefined,
@@ -180,8 +181,8 @@ leadsRouter.post(
     const body = req.body as { first_name?: string; last_name?: string; email?: string };
     const slug = tenantSlugFromHost(req.hostname);
     await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
-      await InvitePractitionerCommand(ctx, id, {
+      const ctx = await buildContext(req, client, slug);
+      await InvitePractitionerCommand(ctx, id, resolveFrontendOrigin(req), {
         first_name: typeof body.first_name === "string" ? body.first_name : undefined,
         last_name:  typeof body.last_name  === "string" ? body.last_name  : undefined,
         email:      typeof body.email      === "string" ? body.email      : undefined,
@@ -204,7 +205,7 @@ leadsRouter.delete(
 
     const slug = tenantSlugFromHost(req.hostname);
     await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       await DeleteLeadCommand(ctx, id);
     });
 

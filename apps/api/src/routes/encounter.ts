@@ -33,7 +33,7 @@ encounterRouter.get(
   asyncHandler(async (req: Request, res: Response) => {
     const slug = tenantSlugFromHost(req.hostname);
     const result = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return GetEncounterListQuery(ctx, {
         start:        typeof req.query.start       === "string" ? req.query.start.trim()       : undefined,
         end:          typeof req.query.end         === "string" ? req.query.end.trim()         : undefined,
@@ -59,7 +59,7 @@ encounterRouter.get(
 
     const slug = tenantSlugFromHost(req.hostname);
     const encounter = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return GetEncounterByIdQuery(ctx, id);
     });
 
@@ -79,7 +79,7 @@ encounterRouter.post(
     const body = req.body as Record<string, unknown>;
 
     const encounter = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return CreateEncounterCommand(ctx, {
         start_at:          typeof body.start_at          === "string" ? body.start_at.trim()          : "",
         end_at:            typeof body.end_at            === "string" ? body.end_at.trim()             : null,
@@ -116,7 +116,7 @@ encounterRouter.patch(
     const body = req.body as Record<string, unknown>;
 
     const encounter = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return UpdateEncounterCommand(ctx, id, {
         start_at:          body.start_at          !== undefined ? String(body.start_at).trim()         : undefined,
         end_at:            body.end_at            !== undefined ? (body.end_at ? String(body.end_at) : null) : undefined,

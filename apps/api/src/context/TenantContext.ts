@@ -1,7 +1,8 @@
 import type { PoolClient } from "pg";
 import type { Request } from "express";
 import { tenantSlugFromHost } from "../db.js";
-import type { StaffRole } from "../db/users.js";
+import { getUserTokenVersion, type StaffRole } from "../db/users.js";
+import { AuthError } from "../errors.js";
 
 /**
  * TenantContext — the object passed to every Command and Query.
@@ -48,18 +49,36 @@ export interface TenantContext {
  * Usage:
  *   const slug = tenantSlugFromHost(req.hostname);
  *   return withTenant(slug, async (client) => {
- *     const ctx = buildContext(req, client, slug);
+ *     const ctx = await buildContext(req, client, slug);
  *     return CreateEncounterCommand(ctx, input);
  *   });
+ *
+ * ASYNC + token_version CHECK: requireAuth/requireRole only verify the bearer token's
+ * signature+expiry (fast, no DB call, works offline-first). This is where the token gets
+ * checked against the LIVE users.token_version — a mismatch means the token was issued
+ * before a password change (see auth.ts's incrementUserTokenVersion calls) and must be
+ * rejected even though its signature/expiry are still valid. Deliberately NOT done in
+ * requireAuth/requireRole — this is the one place a tenant-scoped DB client is already
+ * open for every real command/query, so the extra check is nearly free here and free
+ * everywhere else (route guards, offline reads).
  */
-export function buildContext(req: Request, client: PoolClient, slug?: string): TenantContext {
-  const session = req.session as { user?: TenantUser };
-  if (!session.user) throw new Error("buildContext called without authenticated session");
+export async function buildContext(req: Request, client: PoolClient, slug?: string): Promise<TenantContext> {
+  if (!req.user) throw new Error("buildContext called without an authenticated request");
+
+  const liveTokenVersion = await getUserTokenVersion(client, req.user.sub);
+  if (liveTokenVersion === null || liveTokenVersion !== req.user.tokenVersion) {
+    throw new AuthError("Session has been invalidated. Please log in again.");
+  }
 
   return {
     slug:      slug ?? tenantSlugFromHost(req.hostname),
     client,
-    user:      session.user,
+    user: {
+      id:    req.user.sub,
+      email: req.user.email,
+      name:  req.user.name,
+      role:  req.user.role,
+    },
     requestId: (req.headers["x-request-id"] as string | undefined) ?? crypto.randomUUID(),
   };
 }

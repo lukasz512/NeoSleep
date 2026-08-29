@@ -1,6 +1,6 @@
 import { ref, computed } from "vue";
 import { useRouter, useRoute } from "vue-router";
-import { createAuthStore } from "@stores";
+import { createAuthStore, type AuthTokenStorage } from "@stores";
 import type { ApiFetchOptions } from "@api";
 
 type ApiFetchFn = (path: string, options?: ApiFetchOptions) => Promise<Response>;
@@ -11,8 +11,8 @@ function getRedirectPath(redirect: unknown): string {
     : "/dashboard";
 }
 
-export function createUseLoginFlow(apiFetch: ApiFetchFn) {
-  const useAuthStore = createAuthStore(apiFetch);
+export function createUseLoginFlow(apiFetch: ApiFetchFn, tokenStorage: AuthTokenStorage) {
+  const useAuthStore = createAuthStore(apiFetch, tokenStorage);
 
   return function useLoginFlow() {
     const router = useRouter();
@@ -55,12 +55,13 @@ export function createUseLoginFlow(apiFetch: ApiFetchFn) {
         }
 
         const data = (await res.json()) as {
+          token: string;
           user: { id: string; email: string; name?: string; picture?: string; role: "admin" | "ffm" | "kam" | "msl" | "rep"; forcePasswordChange?: boolean };
           forcePasswordChange: boolean;
         };
 
         const authStore = useAuthStore();
-        authStore.setAuthenticated(true, data.user);
+        authStore.setAuthenticated(true, data.user, data.token);
 
         // Let the caller play an exit transition (e.g. AnimatedCard.playExit())
         // before the route actually changes, instead of the view vanishing instantly.

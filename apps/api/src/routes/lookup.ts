@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { withTenant, tenantSlugFromHost, getConfigOptions, upsertTenantLookupItem, disableTenantLookupItem } from "../db.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
+import { requireAuth } from "../middleware/requireAuth.js";
 import { requireRole } from "../middleware/requireRole.js";
 import { ValidationError } from "../errors.js";
 
@@ -48,10 +49,8 @@ lookupRouter.get(
  */
 lookupRouter.get(
   "/lookups/:type",
+  requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const session = req.session as { user?: { role?: string } } | undefined;
-    if (!session?.user) { res.status(401).json({ error: "Authentication required" }); return; }
-
     const slug   = tenantSlugFromHost(req.hostname);
     const type   = req.params.type?.trim();
     const locale = (req.query.locale as string | undefined) ?? "en";

@@ -34,6 +34,7 @@ export const routes: RouteRecordRaw[] = [
   { path: "/login", name: "login", component: authViewComponent, meta: { layout: "public", public: true } },
   { path: "/forgot-password", name: "forgot-password", component: authViewComponent, meta: { layout: "public", public: true } },
   { path: "/reset-password", name: "reset-password", component: authViewComponent, meta: { layout: "public", public: true } },
+  { path: "/auth/callback", name: "auth-callback", component: () => import("../views/AuthCallbackView.vue"), meta: { layout: "public", public: true } },
   { path: "/change-password", name: "change-password", component: () => import("../views/ChangePasswordView.vue"), meta: { layout: "public", requiresAuth: true } },
   { path: "/partner-register", name: "partner-register", component: () => import("../views/PartnerRegistrationView.vue"), meta: { layout: "public", public: true } },
   { path: "/dev", name: "dev", component: () => import("../views/DevView.vue"), meta: { layout: "app", devOnly: true } },

@@ -3,20 +3,38 @@
  * When the API returns JSON like `{"error":"..."}` or `{"message":"..."}`, the notification shows ONLY the
  * extracted string. Never show raw JSON in the notification. See foundation/docs/OBSERVABILITY_AND_LOGGING.md.
  *
- * ## Auth interceptor
- * Auth is session-cookie based (browser sends it automatically — see credentials:
- * "include" in createApiFetch). fetchWithAuth's only job is: on a 401 from a
- * non-auth endpoint, clear the local auth store so the router guard redirects
- * to /login. Register the callback via setAuthInterceptor() — called from
- * stores/auth.ts after store creation.
+ * ## Auth
+ * Auth is bearer-JWT based (not cookies — cross-origin session cookies get silently
+ * dropped by Safari/iOS's third-party-cookie blocking, which is what this replaced). The
+ * token lives in localStorage (see APP_STORAGE_KEYS.authToken) so it survives a reload or a
+ * backgrounded PWA. fetchWithAuth attaches it as `Authorization: Bearer <token>` on every
+ * request, and on a 401 from a non-auth endpoint clears both the token and the local auth
+ * store so the router guard redirects to /login. Register the store-clear callback via
+ * setAuthInterceptor() — called from stores/auth.ts after store creation.
  */
+import { useLocalStorage } from "@vueuse/core";
 import { createApiFetch, extractErrorMessage, type ApiFetchOptions } from "@api";
 import { useGlobalLoaderStore } from "@stores";
-import { getApiUrl } from "../constants";
+import { getApiUrl, APP_STORAGE_KEYS } from "../constants";
 import { useNotifications } from "../composables/useNotifications";
 
 export type { ApiFetchOptions };
 export { extractErrorMessage };
+
+// ── Auth token storage ────────────────────────────────────────────────────────
+const authToken = useLocalStorage<string | null>(APP_STORAGE_KEYS.authToken, null);
+
+export function getAuthToken(): string | null {
+  return authToken.value;
+}
+
+export function setAuthToken(token: string): void {
+  authToken.value = token;
+}
+
+export function clearAuthToken(): void {
+  authToken.value = null;
+}
 
 // ── Auth interceptor callback ─────────────────────────────────────────────────
 // Registered lazily from stores/auth.ts to avoid circular imports.
@@ -32,6 +50,10 @@ const AUTH_PATHS = [
   "/api/v1/auth/google",
   "/api/v1/auth/logout",
 ];
+
+// Now that Authorization carries the token, `credentials: "include"` from createApiFetch
+// (apps/api/client/src/index.ts) is vestigial for this app (no cookies to send) but harmless
+// — left as-is since it's a shared package apps/web also uses.
 
 function isAuthPath(url: string): boolean {
   return AUTH_PATHS.some((p) => url.includes(p));
@@ -70,12 +92,16 @@ async function fetchWithAuth(
     else init.signal.addEventListener("abort", () => timeoutController.abort(), { once: true });
   }
 
+  const headers = new Headers(init?.headers);
+  if (authToken.value) headers.set("Authorization", `Bearer ${authToken.value}`);
+
   const loader = useGlobalLoaderStore();
   loader.startLoading();
   try {
-    const res = await fetch(input, { ...init, signal: timeoutController.signal });
+    const res = await fetch(input, { ...init, headers, signal: timeoutController.signal });
 
     if (res.status === 401 && !isAuthPath(url)) {
+      clearAuthToken();
       _clearAuth?.();
     }
 

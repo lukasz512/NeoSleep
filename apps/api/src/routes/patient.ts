@@ -34,7 +34,7 @@ patientRouter.get(
     const search = typeof req.query.search === "string" ? req.query.search.trim() : undefined;
 
     const result = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return GetPatientListQuery(ctx, {
         search:    search || undefined,
         status:    toFilterArray(req.query.status)?.[0],
@@ -61,7 +61,7 @@ patientRouter.get(
 
     const slug = tenantSlugFromHost(req.hostname);
     const patient = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return GetPatientByIdQuery(ctx, id);
     });
 
@@ -91,7 +91,7 @@ patientRouter.post(
     };
 
     const patient = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return CreatePatientCommand(ctx, {
         salutation:      typeof body.salutation      === "string" ? body.salutation.trim() || undefined : undefined,
         first_name:      typeof body.first_name      === "string" ? body.first_name.trim()  : "",
@@ -137,7 +137,7 @@ patientRouter.patch(
     };
 
     const patient = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return UpdatePatientCommand(ctx, id, {
         salutation:      body.salutation      !== undefined ? (body.salutation || undefined)   : undefined,
         first_name:      typeof body.first_name === "string" ? body.first_name.trim() || undefined : undefined,
@@ -173,7 +173,7 @@ patientRouter.delete(
 
     const slug = tenantSlugFromHost(req.hostname);
     await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       await DeletePatientCommand(ctx, id);
     });
 

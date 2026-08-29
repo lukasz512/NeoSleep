@@ -9,6 +9,7 @@ import { GetUserDocumentsQuery, GetUserDocumentDownloadUrlQuery } from "../queri
 import { ValidationError } from "../errors.js";
 import { parsePaginationParams, toFilterArray } from "./utils.js";
 import type { StaffRole } from "../db.js";
+import { resolveFrontendOrigin } from "../utils/frontendOrigin.js";
 
 /**
  * User routes — thin waiters. See routes/practitioner.ts for the pattern.
@@ -29,7 +30,7 @@ usersRouter.get(
     const search = typeof req.query.search === "string" ? req.query.search.trim() : undefined;
 
     const result = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return GetUserListQuery(ctx, {
         search: search || undefined,
         role: toFilterArray(req.query.role),
@@ -56,7 +57,7 @@ usersRouter.get(
 
     const slug = tenantSlugFromHost(req.hostname);
     const user = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return GetUserByIdQuery(ctx, id);
     });
 
@@ -79,7 +80,7 @@ usersRouter.post(
     };
 
     const user = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return CreateUserCommand(ctx, {
         salutation: typeof body.salutation === "string" ? body.salutation : null,
         first_name: typeof body.first_name === "string" ? body.first_name : "",
@@ -114,7 +115,7 @@ usersRouter.patch(
     };
 
     const user = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return UpdateUserCommand(ctx, id, {
         salutation: body.salutation !== undefined ? body.salutation : undefined,
         first_name: typeof body.first_name === "string" ? body.first_name : undefined,
@@ -143,8 +144,8 @@ usersRouter.post(
 
     const slug = tenantSlugFromHost(req.hostname);
     await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
-      await ResetUserPasswordCommand(ctx, id);
+      const ctx = await buildContext(req, client, slug);
+      await ResetUserPasswordCommand(ctx, id, resolveFrontendOrigin(req));
     });
 
     res.json({ success: true });
@@ -163,7 +164,7 @@ usersRouter.get(
 
     const slug = tenantSlugFromHost(req.hostname);
     const documents = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return GetUserDocumentsQuery(ctx, id);
     });
     res.json(documents);
@@ -183,7 +184,7 @@ usersRouter.get(
 
     const slug = tenantSlugFromHost(req.hostname);
     const url = await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       return GetUserDocumentDownloadUrlQuery(ctx, id, documentId);
     });
     res.json({ url });
@@ -202,7 +203,7 @@ usersRouter.delete(
 
     const slug = tenantSlugFromHost(req.hostname);
     await withTenant(slug, async (client) => {
-      const ctx = buildContext(req, client, slug);
+      const ctx = await buildContext(req, client, slug);
       await DeleteUserCommand(ctx, id);
     });
 

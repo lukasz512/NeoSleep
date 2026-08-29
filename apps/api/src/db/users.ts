@@ -243,6 +243,21 @@ export async function getUserIdByEmail(client: PoolClient, email: string): Promi
   }
 }
 
+/** Single-column read for TenantContext.buildContext()'s per-request token_version check —
+ *  cheaper than getUserById's full identities/user_roles join. */
+export async function getUserTokenVersion(client: PoolClient, userId: string): Promise<number | null> {
+  try {
+    const r = await client.query<{ token_version: number }>(
+      `SELECT token_version FROM users WHERE id = $1 AND deleted_at IS NULL`,
+      [userId]
+    );
+    return r.rows[0]?.token_version ?? null;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getUserTokenVersion", err);
+  }
+}
+
 export async function incrementUserTokenVersion(client: PoolClient, userId: string): Promise<void> {
   try {
     await client.query(

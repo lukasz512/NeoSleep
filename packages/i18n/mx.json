@@ -353,6 +353,8 @@
   "user.login.error.invalidCredentials": "Correo o contraseña incorrectos.",
   "user.login.error.tooManyAttempts": "Demasiados intentos. Inténtalo de nuevo más tarde.",
   "user.login.error.network": "Algo salió mal. Inténtalo de nuevo.",
+  "user.login.callback.loading": "Iniciando sesión…",
+  "user.login.callback.error": "No se pudo iniciar sesión. Inténtalo de nuevo.",
   "user.login.validation.emailRequired": "El correo electrónico es obligatorio.",
   "user.login.validation.emailInvalid": "Ingresa un correo electrónico válido.",
   "user.login.validation.passwordRequired": "La contraseña es obligatoria.",

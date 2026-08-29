@@ -353,6 +353,8 @@
   "user.login.error.invalidCredentials": "Nieprawidłowy e-mail lub hasło.",
   "user.login.error.tooManyAttempts": "Zbyt wiele prób. Spróbuj ponownie później.",
   "user.login.error.network": "Coś poszło nie tak. Spróbuj ponownie.",
+  "user.login.callback.loading": "Logowanie…",
+  "user.login.callback.error": "Logowanie nie powiodło się. Spróbuj ponownie.",
   "user.login.validation.emailRequired": "E-mail jest wymagany.",
   "user.login.validation.emailInvalid": "Podaj prawidłowy adres e-mail.",
   "user.login.validation.passwordRequired": "Hasło jest wymagane.",

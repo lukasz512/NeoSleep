@@ -353,6 +353,8 @@
   "user.login.error.invalidCredentials": "Invalid email or password.",
   "user.login.error.tooManyAttempts": "Too many attempts. Please try again later.",
   "user.login.error.network": "Something went wrong. Please try again.",
+  "user.login.callback.loading": "Signing you in…",
+  "user.login.callback.error": "Sign-in failed. Please try again.",
   "user.login.validation.emailRequired": "Email is required.",
   "user.login.validation.emailInvalid": "Enter a valid email address.",
   "user.login.validation.passwordRequired": "Password is required.",

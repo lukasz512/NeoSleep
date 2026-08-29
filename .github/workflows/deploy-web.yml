@@ -1,20 +1,21 @@
-# Auto-deploy marketing website to DEV on every push to dev
-# (dev.neosleepcare.com, path: secret GODADY_FTP_WEB_DEV). PROD is
-# intentionally NOT deployed from here — prod is only ever updated manually
-# via promote-web-dev-to-prod.yml ("Promote Web Dev → Prod" in Actions),
-# which builds from dev and ships to GODADY_FTP_WEB_PROD. Don't re-add a
-# push:[prod] trigger here without also removing the duplicate deploy logic
-# from that file.
+# Deploy marketing website to GoDaddy FTP
+# - PROD → neosleepcare.com         (secret GODADY_FTP_WEB_PROD)
+# - DEV  → dev.neosleepcare.com     (secret GODADY_FTP_WEB_DEV)
 #
-# NOTE: GODADY_FTP_WEB_DEV must hold the FTP server-dir path (e.g.
-# /neosleepcare.com/web/dev), not the public https:// URL — see
-# secrets/deploy-notes.md for the exact paths.
+# The prod branch is protected by the requiere_PR_to_merge ruleset — no
+# direct pushes, no bypass, for anyone. So a push to prod here only ever
+# happens because a "Promote Dev → Prod" PR was reviewed and merged
+# (promote-dev-to-prod.yml opens that PR; it never pushes anything itself).
+#
+# NOTE: GODADY_FTP_WEB_* secrets must hold the FTP server-dir path (e.g.
+# /public_html/neosleepcare.com/web/prod), not the public https:// URL —
+# see secrets/deploy-notes.md for the exact paths.
 
 name: Deploy NeoSleepCare Site
 
 on:
   push:
-    branches: [dev]
+    branches: [prod, dev]
   workflow_dispatch:
 
 jobs:
@@ -39,7 +40,20 @@ jobs:
       - name: Build website
         run: pnpm run build:web
 
+      - name: Deploy to PROD (neosleepcare.com)
+        if: github.ref == 'refs/heads/prod'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftp
+          local-dir: ./apps/web/dist/
+          server-dir: ${{ secrets.GODADY_FTP_WEB_PROD }}/
+          dangerous-clean-slate: false
+
       - name: Deploy to DEV (dev.neosleepcare.com)
+        if: github.ref == 'refs/heads/dev'
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
