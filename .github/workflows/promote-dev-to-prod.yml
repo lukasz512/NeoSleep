@@ -30,26 +30,43 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Open (or reuse) the dev -> prod PR
         id: pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh pr create \
-            --base prod \
-            --head dev \
-            --title "Promote dev to prod" \
-            --body "Automated promotion — auto-merges once CI is green." \
-            || echo "PR already open, or prod is already up to date with dev."
+          set -e
+          git fetch origin dev prod
+
+          # Nothing to promote is the only expected reason for zero open PRs
+          # below — check that FIRST, so a real `gh pr create` failure (e.g.
+          # missing "Allow GitHub Actions to create pull requests" repo
+          # setting) surfaces as a loud error instead of being read as
+          # "must mean prod is already up to date".
+          if [ -z "$(git rev-list origin/prod..origin/dev)" ]; then
+            echo "Nothing to promote — prod already matches dev."
+            echo "number=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           number=$(gh pr list --base prod --head dev --state open --json number --jq '.[0].number')
           if [ -z "$number" ]; then
-            echo "Nothing to promote — prod already matches dev."
-            echo "number=" >> "$GITHUB_OUTPUT"
-          else
-            echo "number=$number" >> "$GITHUB_OUTPUT"
+            gh pr create \
+              --base prod \
+              --head dev \
+              --title "Promote dev to prod" \
+              --body "Automated promotion — auto-merges once CI is green."
+            number=$(gh pr list --base prod --head dev --state open --json number --jq '.[0].number')
           fi
+
+          if [ -z "$number" ]; then
+            echo "::error::dev is ahead of prod but no PR could be opened or found — see the gh pr create output above."
+            exit 1
+          fi
+          echo "number=$number" >> "$GITHUB_OUTPUT"
 
       - name: Enable auto-merge
         if: steps.pr.outputs.number != ''
