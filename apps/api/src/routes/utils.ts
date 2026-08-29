@@ -12,7 +12,11 @@ export function parsePaginationParams(req: Request): {
 } {
   const page = Math.max(1, parseInt(String(req.query.page), 10) || DEFAULT_PAGE);
   const rawLimit = parseInt(String(req.query.limit), 10);
-  const limit = rawLimit === -1 || rawLimit <= 0 ? MAX_LIMIT : Math.min(MAX_LIMIT, Math.max(1, rawLimit));
+  const limit = Number.isNaN(rawLimit)
+    ? DEFAULT_LIMIT
+    : rawLimit === -1 || rawLimit <= 0
+      ? MAX_LIMIT
+      : Math.min(MAX_LIMIT, Math.max(1, rawLimit));
   const sortBy = typeof req.query.sortBy === "string" ? req.query.sortBy.trim() || "created_at" : "created_at";
   const sortOrder = req.query.sortOrder === "asc" ? "asc" : "desc";
   return { page, limit, sortBy, sortOrder };
