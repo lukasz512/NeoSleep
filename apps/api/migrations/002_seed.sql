@@ -450,9 +450,10 @@ WHERE email = 'lukasz.ostrowski@neosleepcare.com'
 ON CONFLICT (identity_id) DO NOTHING;
 
 -- d) Admin role in the neosleep tenant
--- user_roles UNIQUE(user_id, role, region): region IS NULL here.
--- PostgreSQL treats NULL != NULL in UNIQUE indexes, so ON CONFLICT won't catch it.
--- Use WHERE NOT EXISTS for safe idempotency.
+-- user_roles UNIQUE(user_id, role, scope): defaults to scope='global' here
+-- (see 001_tenant_schema.sql / 013_user_roles_scope.sql), so ON CONFLICT
+-- (user_id, role, scope) would work — kept as WHERE NOT EXISTS anyway to
+-- match this file's existing idempotency style.
 INSERT INTO neosleep.user_roles (user_id, role)
 SELECT u.id, 'admin'
 FROM neosleep.users u
@@ -464,5 +465,5 @@ WHERE i.email = 'lukasz.ostrowski@neosleepcare.com'
     JOIN neosleep.identities i2 ON i2.id = u2.identity_id
     WHERE i2.email = 'lukasz.ostrowski@neosleepcare.com'
       AND ur.role = 'admin'
-      AND ur.region IS NULL
+      AND ur.scope = 'global'
   );
