@@ -86,7 +86,8 @@ export async function CreateUserCommand(ctx: TenantContext, input: CreateUserInp
     input.salutation ?? null,
     input.phone ?? null,
     scope,
-    ctx.user.id
+    ctx.user.id,
+    input.country_code ?? null
   );
   if (!user) throw new ConflictError("A user with this email already exists");
 

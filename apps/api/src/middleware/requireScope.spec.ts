@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { getAllowedCountryCodes, assertScopeAccess } from "./requireScope.js";
 import type { TenantContext } from "../context/TenantContext.js";
+import type { UserRoleScope } from "../db.js";
 import { ForbiddenError } from "../errors.js";
 
-function makeCtx(roles: { role: "admin"; scope: string }[]): TenantContext {
+function makeCtx(roles: UserRoleScope[]): TenantContext {
   return {
     slug: "test",
     client: {} as TenantContext["client"],

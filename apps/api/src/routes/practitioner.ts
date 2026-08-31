@@ -84,7 +84,7 @@ practitionerRouter.post(
       email?: string; phone?: string; primary_specialty?: string;
       specialty?: string; // legacy alias
       organization_id?: string;
-      institution?: string; region?: string;
+      institution?: string; region?: string; country_code?: string;
       influence_tier?: string; language?: string;
       national_ids?: Record<string, string>;
       social_links?: Record<string, unknown>;
@@ -104,6 +104,7 @@ practitionerRouter.post(
         organization_id:   typeof body.organization_id    === "string" ? body.organization_id          : undefined,
         institution:       typeof body.institution       === "string" ? body.institution              : null,
         region:            typeof body.region            === "string" ? body.region                   : undefined,
+        country_code:      typeof body.country_code      === "string" ? body.country_code             : null,
         influence_tier:    typeof body.influence_tier    === "string" ? body.influence_tier           : undefined,
         language:          typeof body.language          === "string" ? body.language                 : null,
         national_ids:      body.national_ids ?? null,

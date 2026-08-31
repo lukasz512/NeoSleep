@@ -186,16 +186,17 @@ export async function insertStaffUser(
   salutation?: string | null,
   phone?: string | null,
   scope = "global",
-  grantedBy?: string | null
+  grantedBy?: string | null,
+  countryCode?: string | null
 ): Promise<User | null> {
   const normalizedEmail = email.trim().toLowerCase();
 
   try {
     const identityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (email, title, first_name, last_name, phone) VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO identities (email, title, first_name, last_name, phone, country_code) VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
        RETURNING id`,
-      [normalizedEmail, salutation?.trim() || null, firstName, lastName, phone ?? null]
+      [normalizedEmail, salutation?.trim() || null, firstName, lastName, phone ?? null, countryCode ?? null]
     );
     const identityId = identityResult.rows[0]!.id;
 

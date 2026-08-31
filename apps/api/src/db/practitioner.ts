@@ -227,8 +227,8 @@ export async function insertPractitioner(client: PoolClient, input: InsertPracti
     // identity), reuse that identity_id instead of erroring. Mirrors
     // insertStaffUser's (db/users.ts) identical upsert.
     const identityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (title, first_name, last_name, email, phone, language, social_links, region)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO identities (title, first_name, last_name, email, phone, language, social_links, region, country_code)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
        RETURNING id`,
       [
@@ -245,6 +245,7 @@ export async function insertPractitioner(client: PoolClient, input: InsertPracti
         trimOrNull(input.language) || "en",
         JSON.stringify(input.social_links ?? {}),
         region || null,
+        trimOrNull(input.country_code),
       ]
     );
     const identityId = identityResult.rows[0]!.id;

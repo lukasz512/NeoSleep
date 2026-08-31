@@ -80,4 +80,83 @@ describe("ActivatePractitionerCommand", () => {
       expect(sendPartnerInviteEmailMock).not.toHaveBeenCalled();
     });
   });
+
+  it("throws ConflictError when the practitioner is already active", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const practitioner = await CreatePractitionerCommand(ctx, {
+        first_name: "Already",
+        last_name: "Active",
+        email: `qa-hcp-${uniqueSuffix()}@example.com`,
+      });
+      await ActivatePractitionerCommand(ctx, practitioner.id);
+      sendPartnerInviteEmailMock.mockClear();
+
+      await expect(ActivatePractitionerCommand(ctx, practitioner.id)).rejects.toThrow(ConflictError);
+      expect(sendPartnerInviteEmailMock).not.toHaveBeenCalled();
+    });
+  }, 15000);
+
+  it("throws ValidationError when the practitioner has no email", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const practitioner = await CreatePractitionerCommand(ctx, {
+        first_name: "No",
+        last_name: "Email",
+      });
+
+      await expect(ActivatePractitionerCommand(ctx, practitioner.id)).rejects.toThrow(ValidationError);
+      expect(sendPartnerInviteEmailMock).not.toHaveBeenCalled();
+    });
+  });
+
+  // Regression test for a real bug this thread's own test-writing caught:
+  // insertPractitioner selected identities.country_code but never wrote it,
+  // so every activated doctor silently got scope='global' instead of their
+  // actual country — see db/practitioner.ts's INSERT and commands/
+  // invitePractitioner.ts's insertPractitioner call (both now pass
+  // country_code through from the originating lead).
+  it("provisions the doctor-role user scoped to the practitioner's own country_code, not global", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const email = `qa-hcp-${uniqueSuffix()}@example.com`;
+      const practitioner = await CreatePractitionerCommand(ctx, {
+        first_name: "Maria",
+        last_name: "Gonzalez",
+        email,
+        country_code: "MX",
+      });
+      expect(practitioner.country_code).toBe("MX");
+
+      await ActivatePractitionerCommand(ctx, practitioner.id);
+
+      const userId = await getUserIdByEmail(client, email);
+      expect(userId).not.toBeNull();
+      const roles = await getUserRoleScopes(client, userId!);
+      expect(roles).toContainEqual({ role: "doctor", scope: "MX" });
+    });
+  }, 15000);
+
+  it("does not re-provision a user or resend the invite when one already exists for this identity", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const email = `qa-hcp-${uniqueSuffix()}@example.com`;
+
+      // Pre-existing account for this email, unrelated to this practitioner
+      // record — mirrors a doctor who's already a live platform user before
+      // this HCP row's own training is (re-)marked finished.
+      const hash = await bcrypt.hash("irrelevant", 4);
+      await insertStaffUser(client, email, "Existing", "Doctor", "doctor", hash, false);
+
+      const practitioner = await CreatePractitionerCommand(ctx, {
+        first_name: "Existing",
+        last_name: "Doctor",
+        email,
+      });
+
+      await ActivatePractitionerCommand(ctx, practitioner.id);
+
+      expect(sendPartnerInviteEmailMock).not.toHaveBeenCalled();
+    });
+  }, 15000);
 });

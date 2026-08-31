@@ -46,6 +46,7 @@ export interface CreatePractitionerInput {
   organization_id?: string | null;
   institution?: string | null;
   region?: string;
+  country_code?: string | null;
   influence_tier?: string;
   language?: string | null;
   national_ids?: Record<string, string> | null;
@@ -85,6 +86,7 @@ export async function CreatePractitionerCommand(
     organization_id:  input.organization_id !== undefined ? input.organization_id : undefined,
     institution:      input.institution ?? null,
     region:           input.region,
+    country_code:     input.country_code ?? null,
     influence_tier:   input.influence_tier,
     language:         input.language ?? null,
     national_ids:     input.national_ids ?? null,
@@ -249,7 +251,8 @@ export async function ActivatePractitionerCommand(ctx: TenantContext, id: string
       practitioner.salutation,
       practitioner.phone,
       practitioner.country_code ?? "global",
-      ctx.user.id
+      ctx.user.id,
+      practitioner.country_code
     );
     if (user) {
       const token = crypto.randomBytes(32).toString("hex");

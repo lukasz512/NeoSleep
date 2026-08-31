@@ -27,8 +27,11 @@ import { sendLeadOfferEmail, localeForRegion } from "../mailer.js";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** Matches lead_status_check in the DB exactly — the PWA uses this same vocabulary, no translation. */
-const VALID_LEAD_STATUSES = ["new", "contacted", "qualified", "inactive", "converted"];
+/** Matches lead_status_check in the DB exactly (see 014_lead_status_pipeline.sql) — the PWA uses this same vocabulary, no translation. */
+const VALID_LEAD_STATUSES = [
+  "new", "contacted", "follow_up_needed", "meeting_scheduled", "declined", "converted",
+  "qualified", "inactive",
+];
 
 /** Matches lead_type_check (009_partner_invite_and_documents.sql). Drives the doctor-only "Invite to collaborate" action. */
 const VALID_LEAD_TYPES = ["doctor", "hospital", "pharmacy", "patient", "other"];

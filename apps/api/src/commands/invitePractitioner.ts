@@ -106,7 +106,8 @@ export async function InvitePractitionerCommand(
     lead.salutation,
     lead.phone,
     lead.country_code ?? "global",
-    ctx.user.id
+    ctx.user.id,
+    lead.country_code
   );
   if (!user) throw new ConflictError("A user with this email already exists");
 
@@ -127,6 +128,7 @@ export async function InvitePractitionerCommand(
     phone: lead.phone,
     salutation: lead.salutation,
     region: lead.region,
+    country_code: lead.country_code,
     institution: lead.institution ?? undefined,
   });
 
