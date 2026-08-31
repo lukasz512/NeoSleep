@@ -24,13 +24,14 @@
       :initial-data="eventFormInitial"
       @submit="onEventFormSubmit"
     />
+    <!-- HCOs can only be created through the lead -> invite-to-partner pipeline (see LeadDetailView.vue) -->
     <AppEntityList
       view-id="hco"
       api-endpoint="/api/v1/organization"
       :headers="tableHeaders"
       :filter-definitions="hcoFilterDefinitions"
       :i18n="hcoI18n"
-      :show-add-button="isAdmin"
+      :show-add-button="false"
       detail-route-name="hco-detail"
       :filter-param-keys="['type', 'region', 'status']"
       @add="onAddAccount"

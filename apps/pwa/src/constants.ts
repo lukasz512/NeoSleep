@@ -33,7 +33,7 @@ export { LANGUAGE_OPTIONS as REP_LANGUAGE_OPTIONS } from "@i18n/language-options
 
 /**
  * Where "report incident" CTAs (e.g. a partner integration being down) send
- * a mailto: — same inbox as the backend's own GMAIL_TO default. Interim,
+ * a mailto: — same inbox as the backend's own RESEND_NOTIFY_TO. Interim,
  * manual reporting; proper backend-side incident capture + automation is
  * tracked as a follow-up, not built yet.
  */

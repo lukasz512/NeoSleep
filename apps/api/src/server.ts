@@ -13,6 +13,8 @@ import { encounterRouter } from "./routes/encounter.js";
 import { configRouter } from "./routes/config.js";
 import { lookupRouter } from "./routes/lookup.js";
 import { websiteContactRouter } from "./routes/website-contact.js";
+import { bookingRouter } from "./routes/booking.js";
+import { publicRouter } from "./routes/public.js";
 import { patientRouter } from "./routes/patient.js";
 import { pushRouter } from "./routes/push.js";
 import { usersRouter } from "./routes/users.js";
@@ -104,6 +106,8 @@ app.use("/api/v1", encounterRouter);
 app.use("/api/v1", configRouter);
 app.use("/api/v1", lookupRouter);
 app.use("/api/v1", websiteContactRouter);
+app.use("/api/v1", bookingRouter);
+app.use("/api/v1", publicRouter);
 app.use("/api/v1", patientRouter);
 app.use("/api/v1", pushRouter);
 app.use("/api/v1", usersRouter);
@@ -147,8 +151,30 @@ process.on("uncaughtException", (err) => {
 if (typeof process.env.VITEST === "undefined") {
   const port = parseInt(process.env.PORT ?? "3000", 10);
 
+  /**
+   * Supabase's pooler can be cold (idle project waking up) on the first connection of the day,
+   * which sometimes takes longer to respond than a plain connection timeout allows. Retrying a
+   * couple of times with backoff avoids crashing the whole dev/prod boot over a transient wake-up
+   * delay — a real outage still surfaces, just after these attempts are exhausted.
+   */
+  async function runMigrationsWithRetry(attempts = 3, delayMs = 3_000): Promise<void> {
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        await runMigrations();
+        return;
+      } catch (err) {
+        if (attempt === attempts) throw err;
+        console.warn(
+          `[neocrm-api] DB connection attempt ${attempt}/${attempts} failed, retrying in ${delayMs}ms:`,
+          err instanceof Error ? err.message : err
+        );
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+
   async function start() {
-    await runMigrations();
+    await runMigrationsWithRetry();
     await ensureInitialUserPasswords(process.env.DEFAULT_TENANT_SLUG ?? "neosleep");
     server = app.listen(port, () => {
       console.log(`[neocrm-api] listening on http://localhost:${port}`);

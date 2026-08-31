@@ -83,7 +83,7 @@ WHERE i.email = 'lorena.gonzalez@neosleepcare.com'
     JOIN neosleep.identities i2 ON i2.id = u2.identity_id
     WHERE i2.email = 'lorena.gonzalez@neosleepcare.com'
       AND ur.role = 'doctor'
-      AND ur.region IS NULL
+      AND ur.scope = 'global'
   );
 
 -- ---------------------------------------------------------------------------
@@ -110,5 +110,5 @@ WHERE i.email = 'alfred.jan@neosleepcare.com'
     JOIN neosleep.identities i2 ON i2.id = u2.identity_id
     WHERE i2.email = 'alfred.jan@neosleepcare.com'
       AND ur.role = 'manager'
-      AND ur.region IS NULL
+      AND ur.scope = 'global'
   );

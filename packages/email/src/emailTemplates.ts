@@ -80,6 +80,8 @@ export interface EmailLayoutOptions {
   /** Pre-built inner HTML (already escaped where needed) — heading, paragraphs, tables, etc. */
   bodyHtml: string;
   cta?: { text: string; href: string };
+  /** Rendered below `cta`, same button style but with an outlined/lighter look — for a second action (e.g. "View the offer" + "Book a demo"). Ignored if `cta` isn't set. */
+  secondaryCta?: { text: string; href: string };
   footerTagline: string;
   footerCities: string;
   footerCopyright: string;
@@ -114,18 +116,29 @@ function renderFooter(footerTagline: string, footerCities: string, footerCopyrig
  * comments around the CTA button are deliberate: Outlook desktop ignores border-radius/padding on
  * <a> and needs the VML roundrect fallback to render a pill-shaped button at all.
  */
-export function renderEmailLayout({ preheader, bodyHtml, cta, footerTagline, footerCities, footerCopyright, supportLeadIn, socials }: EmailLayoutOptions): string {
-  const ctaHtml = cta
-    ? `
-  <tr><td align="center" style="padding:8px 32px 28px;">
+/** Solid teal for the primary action, outlined/transparent for a secondary one below it — mirrors the site's home-btn--white-outline / home-btn--white-border pairing. */
+function renderCtaButton(cta: { text: string; href: string }, variant: "primary" | "secondary"): string {
+  const isPrimary = variant === "primary";
+  const fill = isPrimary ? BRAND.primary : "transparent";
+  const textColor = isPrimary ? "#ffffff" : BRAND.primary;
+  const border = isPrimary ? "" : `border:2px solid ${BRAND.primary};`;
+  return `
     <!--[if mso]>
-    <v:roundrect href="${escapeHtml(cta.href)}" style="height:50px;v-text-anchor:middle;width:280px;" arcsize="50%" stroke="f" fillcolor="${BRAND.primary}" xmlns:v="urn:schemas-microsoft-com:vml">
-      <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:16px;font-weight:bold;">${escapeHtml(cta.text)}</center>
+    <v:roundrect href="${escapeHtml(cta.href)}" style="height:50px;v-text-anchor:middle;width:280px;" arcsize="50%" stroke="${isPrimary ? "f" : "t"}" strokecolor="${BRAND.primary}" fillcolor="${fill}" xmlns:v="urn:schemas-microsoft-com:vml">
+      <center style="color:${textColor};font-family:Arial,sans-serif;font-size:16px;font-weight:bold;">${escapeHtml(cta.text)}</center>
     </v:roundrect>
     <![endif]-->
     <!--[if !mso]><!-- -->
-    <a href="${escapeHtml(cta.href)}" target="_blank" style="background:${BRAND.primary};color:#ffffff;display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:bold;line-height:50px;text-align:center;text-decoration:none;width:280px;border-radius:9999px;">${escapeHtml(cta.text)}</a>
-    <!--<![endif]-->
+    <a href="${escapeHtml(cta.href)}" target="_blank" style="background:${fill};color:${textColor};display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:bold;line-height:${isPrimary ? "50px" : "46px"};text-align:center;text-decoration:none;width:280px;border-radius:9999px;${border}">${escapeHtml(cta.text)}</a>
+    <!--<![endif]-->`;
+}
+
+export function renderEmailLayout({ preheader, bodyHtml, cta, secondaryCta, footerTagline, footerCities, footerCopyright, supportLeadIn, socials }: EmailLayoutOptions): string {
+  const ctaHtml = cta
+    ? `
+  <tr><td align="center" style="padding:8px 32px 28px;">
+    ${renderCtaButton(cta, "primary")}
+    ${secondaryCta ? `<div style="height:12px;line-height:12px;font-size:12px;">&nbsp;</div>${renderCtaButton(secondaryCta, "secondary")}` : ""}
   </td></tr>`
     : "";
 

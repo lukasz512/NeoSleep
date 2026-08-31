@@ -39,7 +39,7 @@ docs/             → Architecture docs, ADRs, docs/foundation/ (backlog, presen
 
 ## Tech Stack
 - Vue 3.5, Vite 7, Pinia 3, Vuetify 3.12, Vue Router 4.5, Vue i18n 10
-- Express 4, PostgreSQL 15 (pg 8), express-session, bcrypt, nodemailer
+- Express 4, PostgreSQL 15 (pg 8), express-session, bcrypt, Resend (transactional email)
 - **DB hosting: Supabase** (managed PostgreSQL, schema-per-tenant, built-in auth helpers, RLS)
 - Vitest 4, ESLint 9, TypeScript 5.6, Prettier 3.2
 - pnpm 9 workspaces, Husky pre-commit hooks
@@ -70,13 +70,15 @@ FHIR R4-aligned schema. All tables use singular names, no `tbl_` prefix.
 
 | Table | Who | Auth | App |
 |---|---|---|---|
-| `users` + `person` | Internal: reps, managers, admins (pharma company employees) | Google OIDC + password | apps/pwa |
-| `practitioner` + `person` | Healthcare Professionals (doctors, specialists) | magic link (planned) | HCP portal (future) |
-| `patient` + `person` | Patients referred by HCPs | TBD (future) | TBD |
+| `users` + `identities` | Internal: reps, managers, admins (pharma company employees) | Google OIDC + password | apps/pwa |
+| `practitioner` + `identities` | Healthcare Professionals (doctors, specialists) | magic link (planned) | HCP portal (future) |
+| `patient` + `identities` | Patients referred by HCPs | TBD (future) | TBD |
 
-Platform schema: `platform.companies`, `platform.tenants`, `platform.roles`, `platform.permissions`, `platform.platform_users`, `platform.feature_flags`
+`identities` is the shared base table (TPT pattern) — `users`, `practitioner`, `patient`, `lead` all extend it via `identity_id`. Do not use `person` anywhere in this project — `identities` is the only name for this concept, in schema, code, and docs.
 
-Tenant schema (FHIR naming): `person`, `users`, `user_roles`, `organization`, `practitioner`, `patient`, `related_person`, `lead`, `encounter`, `observation`, `communication`, `presentation`, `consent`, `app_config`, `audit_log`, `push_subscription`
+Platform schema: `platform.companies`, `platform.tenants`, `platform.users`, `platform.feature_flags`, `platform.lookups`
+
+Tenant schema (actual, per `apps/api/migrations/001_tenant_schema.sql` + `003_practitioner_drop_duplicate_salutation.sql`, the latter being the current `create_tenant_schema()` definition): `identities`, `users`, `user_roles`, `territory`, `organization`, `practitioner`, `patient`, `lead`, `supplier`, `sleep_study`, `treatment_plan`, `purchase_order` + `purchase_order_item`, `product`, `presentation`, `encounter` (+ `encounter_product`, `encounter_presentation`), `visit_plan`, `consent`, `efpia_disclosure`, `audit_log`, `request_log`, `conversation` + `message` (WhatsApp/SMS/email/in-app), `notification` + `notification_delivery`, `push_subscription`, `file_attachment`, `event` + `event_attendee`, `support_ticket`, `sample_batch`/`sample_stock`/`sample_transaction`/`sample_request`, `segment`, `lookup`, `app_config`, `i18n_overrides`, `training_course`/`training_lesson`/`training_progress`, `kpi_snapshot`, `sync_queue`
 
 **OPEN QUESTION**: HCP auth strategy — magic link vs. separate OIDC. Decide before building HCP portal.
 

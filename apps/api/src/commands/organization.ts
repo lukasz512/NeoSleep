@@ -11,6 +11,7 @@ import {
 } from "../db.js";
 import { insertAuditLog } from "../db.js";
 import { ConflictError, ValidationError } from "../errors.js";
+import { geocodeAddress } from "../services/geocoding.js";
 
 /**
  * COMMANDS — Organization (HCO) domain.
@@ -95,20 +96,31 @@ export async function CreateOrganizationCommand(
   const existingId = await getOrganizationIdByName(ctx.client, name);
   if (existingId) throw new ConflictError(`An organization named "${name}" already exists`);
 
+  const address_line1 = input.address_line1?.trim() ?? null;
+  const city = input.city?.trim() ?? null;
+  const state = input.state?.trim() ?? null;
+  const postal_code = input.postal_code?.trim() ?? null;
+  const country_code = input.country_code?.trim() ?? null;
+
+  // Best-effort — never blocks the save (see services/geocoding.ts).
+  const coordinates = await geocodeAddress({ address_line1, city, state, postal_code, country_code });
+
   const insertInput: InsertOrganizationInput = {
     name,
     type,
     status,
-    address_line1: input.address_line1?.trim() ?? null,
-    city:          input.city?.trim() ?? null,
-    state:         input.state?.trim() ?? null,
-    postal_code:   input.postal_code?.trim() ?? null,
-    country_code:  input.country_code?.trim() ?? null,
+    address_line1,
+    city,
+    state,
+    postal_code,
+    country_code,
     region:        input.region?.trim() ?? "",
     phone:         input.phone?.trim() ?? null,
     email:         email || null,
     website:       input.website?.trim() ?? null,
     google_link:   input.google_link?.trim() ?? null,
+    latitude:      coordinates?.lat ?? null,
+    longitude:     coordinates?.lng ?? null,
     specialties:   input.specialties,
     metadata:      input.metadata ?? null,
   };
@@ -180,6 +192,26 @@ export async function UpdateOrganizationCommand(
     if (existingId) throw new ConflictError(`An organization named "${name}" already exists`);
   }
 
+  // Only re-geocode when an address field actually changed — an unrelated
+  // edit (e.g. phone number) shouldn't spend an API call re-resolving coordinates
+  // that haven't moved. Best-effort — never blocks the save.
+  const addressChanged =
+    input.address_line1 !== undefined ||
+    input.city !== undefined ||
+    input.state !== undefined ||
+    input.postal_code !== undefined ||
+    input.country_code !== undefined;
+
+  const coordinates = addressChanged
+    ? await geocodeAddress({
+        address_line1: input.address_line1 !== undefined ? input.address_line1 : before.address_line1,
+        city:          input.city !== undefined ? input.city : before.city,
+        state:         input.state !== undefined ? input.state : before.state,
+        postal_code:   input.postal_code !== undefined ? input.postal_code : before.postal_code,
+        country_code:  input.country_code !== undefined ? input.country_code : before.country_code,
+      })
+    : undefined;
+
   const updateInput: UpdateOrganizationInput = {
     name,
     type:          input.type !== undefined ? normalizeOrgType(input.type) : undefined,
@@ -194,6 +226,11 @@ export async function UpdateOrganizationCommand(
     email:         input.email,
     website:       input.website,
     google_link:   input.google_link,
+    // A failed/unconfigured geocode leaves the existing coordinates untouched
+    // (undefined) rather than nulling them out — a transient API hiccup on an
+    // unrelated address tweak shouldn't erase a pin that already worked.
+    latitude:      coordinates ? coordinates.lat : undefined,
+    longitude:     coordinates ? coordinates.lng : undefined,
     specialties:   input.specialties,
     metadata:      input.metadata,
   };

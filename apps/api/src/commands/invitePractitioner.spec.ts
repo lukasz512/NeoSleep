@@ -10,10 +10,10 @@ import { InvitePractitionerCommand } from "./invitePractitioner.js";
 // rule (scoped to Postgres, not third-party APIs — see ADR-016). vi.mock's
 // factory is hoisted above any top-level const, so the mock fn itself must be
 // created via vi.hoisted to be referenceable both inside the factory and below.
-const { sendPartnerInviteEmailMock } = vi.hoisted(() => ({
-  sendPartnerInviteEmailMock: vi.fn().mockResolvedValue(undefined),
+const { sendPartnerJoinThankYouEmailMock } = vi.hoisted(() => ({
+  sendPartnerJoinThankYouEmailMock: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock("../mailer.js", () => ({ sendPartnerInviteEmail: sendPartnerInviteEmailMock }));
+vi.mock("../mailer.js", () => ({ sendPartnerJoinThankYouEmail: sendPartnerJoinThankYouEmailMock }));
 
 const TENANT_SLUG = process.env.DEFAULT_TENANT_SLUG ?? "neosleep";
 
@@ -28,22 +28,25 @@ async function buildTestContext(client: Parameters<typeof CreateLeadCommand>[0][
   return {
     slug: TENANT_SLUG,
     client,
-    user: { id: user!.id, email, role: "admin" },
+    user: { id: user!.id, email, role: "admin", roles: [{ role: "admin", scope: "global" }] },
     requestId: `test-${uniqueSuffix()}`,
   };
 }
 
 beforeEach(() => {
-  sendPartnerInviteEmailMock.mockClear();
+  sendPartnerJoinThankYouEmailMock.mockClear();
 });
 
 describe("InvitePractitionerCommand", () => {
-  // Regression test for the same bug as auth-frontend-origin.spec.ts (see
-  // apps/api/src/auth.ts / utils/frontendOrigin.ts): this command used to build
-  // registerLink by interpolating the raw, possibly comma-separated FRONTEND_URL
-  // directly — commands have no req/res, so the caller (routes/leads.ts) now
-  // resolves and passes a single frontendOrigin explicitly instead.
-  it("builds the register link from the passed frontendOrigin, not a hardcoded/raw value", async () => {
+  // InvitePractitionerCommand only sends a holding "thank you" email — no
+  // registration link/token yet. The actual set-password invite is deferred
+  // to ActivatePractitionerCommand (see practitioner.ts / practitioner.spec.ts),
+  // once training/capacitation is finished.
+  // Longer timeout: several sequential DB round trips (create lead, insert
+  // staff user, insert practitioner, audit log) against the shared dev
+  // Supabase — the default 5s can be tight over a real network connection,
+  // same reasoning as practitioner.spec.ts's ActivatePractitionerCommand test.
+  it("sends a thank-you email from the inviting admin/manager's own identity", async () => {
     await withTenant(TENANT_SLUG, async (client) => {
       const ctx = await buildTestContext(client);
       const doctorEmail = `qa-invite-doctor-${uniqueSuffix()}@neosleepcare.com`;
@@ -58,11 +61,10 @@ describe("InvitePractitionerCommand", () => {
       const frontendOrigin = "https://pwa-dev.neosleepcare.com";
       await InvitePractitionerCommand(ctx, lead.id, frontendOrigin, {});
 
-      expect(sendPartnerInviteEmailMock).toHaveBeenCalledTimes(1);
-      const [to, registerLink] = sendPartnerInviteEmailMock.mock.calls[0]!;
+      expect(sendPartnerJoinThankYouEmailMock).toHaveBeenCalledTimes(1);
+      const [to, , sender] = sendPartnerJoinThankYouEmailMock.mock.calls[0]!;
       expect(to).toBe(doctorEmail);
-      expect(registerLink).toMatch(new RegExp(`^${frontendOrigin}/partner-register\\?token=`));
-      expect(registerLink).not.toContain(",");
+      expect(sender).toEqual({ name: "NeoSleep", email: ctx.user.email });
     });
-  });
+  }, 15000);
 });

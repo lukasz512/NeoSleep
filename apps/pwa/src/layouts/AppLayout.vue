@@ -113,8 +113,18 @@
           <!-- appear: this app-layout mount is only reached right after the
                auth screen's own exit sequence finishes (see AuthView.vue),
                so the first screen the user lands on — dashboard, etc. —
-               should fade in too, not pop in instantly. -->
-          <Transition name="view-fade-lift" mode="out-in" appear>
+               should fade in too, not pop in instantly. Limited to the very
+               first render via initialAppearDone: combining `appear` with
+               `mode="out-in"` while :key keeps changing (nav clicks right
+               after login) makes Vue's transition state machine drop the
+               swap, so a nav click during that ~280ms window re-renders the
+               same screen instead of navigating. -->
+          <Transition
+            name="view-fade-lift"
+            mode="out-in"
+            :appear="!initialAppearDone"
+            @after-appear="initialAppearDone = true"
+          >
             <component :is="Component" :key="route.path" />
           </Transition>
         </RouterView>
@@ -146,6 +156,10 @@ import { usePartnerResources } from "../composables/usePartnerResources";
 
 const route = useRoute();
 const { t, locale } = useI18n();
+
+// See the RouterView Transition below — appear is only meant to fire once,
+// for the very first screen after login.
+const initialAppearDone = ref(false);
 
 const {
   theme, toggleTheme,

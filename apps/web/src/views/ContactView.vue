@@ -38,87 +38,87 @@
           <Transition name="contact-fields" mode="out-in">
             <div :key="formType" class="view-contact__fields">
 
-              <!-- First name + Last name -->
-              <div class="view-contact__row">
-                <div class="view-contact__field">
-                  <label for="contact-firstName">{{ t("website.contact.firstName") }}</label>
-                  <input
-                    id="contact-firstName"
-                    ref="firstNameRef"
-                    v-model="form.firstName"
-                    type="text"
-                    required
-                    :placeholder="t('website.contact.firstNamePlaceholder')"
-                    class="view-contact__input"
-                  />
-                </div>
-                <div class="view-contact__field">
-                  <label for="contact-lastName">{{ t("website.contact.lastName") }}</label>
-                  <input
-                    id="contact-lastName"
-                    v-model="form.lastName"
-                    type="text"
-                    required
-                    :placeholder="t('website.contact.lastNamePlaceholder')"
-                    class="view-contact__input"
-                  />
-                </div>
-              </div>
-
-              <!-- Telefon + Email (tylko pacjent) -->
-              <div class="view-contact__row">
-                <div class="view-contact__field">
-                  <label for="contact-phone">{{ t("website.contact.phone") }}</label>
-                  <input
-                    id="contact-phone"
-                    v-model="form.phone"
-                    type="tel"
-                    required
-                    :placeholder="t('website.contact.phonePlaceholder')"
-                    class="view-contact__input"
-                  />
-                </div>
-                <div v-if="formType === 'patient'" class="view-contact__field">
-                  <label for="contact-email">{{ t("website.contact.email") }}</label>
-                  <input
-                    id="contact-email"
-                    v-model="form.email"
-                    type="email"
-                    required
-                    :placeholder="t('website.contact.emailPlaceholder')"
-                    class="view-contact__input"
-                  />
-                </div>
-              </div>
-
-              <!-- Miasto -->
-              <div class="view-contact__field">
-                <label for="contact-city">{{ t("website.contact.city") }}</label>
-                <input
-                  id="contact-city"
-                  v-model="form.city"
-                  type="text"
-                  required
-                  :placeholder="t('website.contact.cityPlaceholder')"
-                  class="view-contact__input"
-                />
-              </div>
-
-              <!-- Komentarz pacjenta -->
-              <div v-if="formType === 'patient'" class="view-contact__field">
-                <label for="contact-message">{{ t("website.contact.message") }}</label>
-                <textarea
-                  id="contact-message"
-                  v-model="form.message"
-                  rows="4"
-                  required
-                  :placeholder="t('website.contact.messagePlaceholder')"
-                  class="view-contact__input view-contact__textarea"
-                />
-              </div>
-
-              <!-- Pacjent: rozszerzone dane -->
               <template v-if="formType === 'patient'">
+                <!-- Imię + Nazwisko -->
+                <div class="view-contact__row">
+                  <div class="view-contact__field">
+                    <label for="contact-firstName">{{ t("website.contact.firstName") }}</label>
+                    <input
+                      id="contact-firstName"
+                      ref="firstNameRef"
+                      v-model="form.firstName"
+                      type="text"
+                      required
+                      :placeholder="t('website.contact.firstNamePlaceholder')"
+                      class="view-contact__input"
+                    />
+                  </div>
+                  <div class="view-contact__field">
+                    <label for="contact-lastName">{{ t("website.contact.lastName") }}</label>
+                    <input
+                      id="contact-lastName"
+                      v-model="form.lastName"
+                      type="text"
+                      required
+                      :placeholder="t('website.contact.lastNamePlaceholder')"
+                      class="view-contact__input"
+                    />
+                  </div>
+                </div>
+
+                <!-- Telefon + Email -->
+                <div class="view-contact__row">
+                  <div class="view-contact__field">
+                    <label for="contact-phone">{{ t("website.contact.phone") }}</label>
+                    <input
+                      id="contact-phone"
+                      v-model="form.phone"
+                      type="tel"
+                      required
+                      :placeholder="t('website.contact.phonePlaceholder')"
+                      class="view-contact__input"
+                    />
+                  </div>
+                  <div class="view-contact__field">
+                    <label for="contact-email">{{ t("website.contact.email") }}</label>
+                    <input
+                      id="contact-email"
+                      v-model="form.email"
+                      type="email"
+                      required
+                      :placeholder="t('website.contact.emailPlaceholder')"
+                      class="view-contact__input"
+                    />
+                  </div>
+                </div>
+
+                <!-- Miasto -->
+                <div class="view-contact__field">
+                  <label for="contact-city">{{ t("website.contact.city") }}</label>
+                  <input
+                    id="contact-city"
+                    v-model="form.city"
+                    type="text"
+                    required
+                    :placeholder="t('website.contact.cityPlaceholder')"
+                    class="view-contact__input"
+                  />
+                </div>
+
+                <!-- Komentarz pacjenta -->
+                <div class="view-contact__field">
+                  <label for="contact-message">{{ t("website.contact.message") }}</label>
+                  <textarea
+                    id="contact-message"
+                    v-model="form.message"
+                    rows="4"
+                    required
+                    :placeholder="t('website.contact.messagePlaceholder')"
+                    class="view-contact__input view-contact__textarea"
+                  />
+                </div>
+
+                <!-- Pacjent: rozszerzone dane -->
                 <button type="button" class="view-contact__expand-toggle" @click="showMore = !showMore">
                   <span class="view-contact__expand-icon" :class="{ 'view-contact__expand-icon--open': showMore }">›</span>
                   {{ showMore ? t("website.contact.showLess") : t("website.contact.showMore") }}
@@ -134,6 +134,9 @@
                   />
                 </div>
               </template>
+
+              <!-- Professional: same field set + validation as the "Book a demo" modal (apps/web/src/components/ProfessionalContactFields.vue) -->
+              <ProfessionalContactFields v-else v-model="professionalForm" id-prefix="contact-professional" />
 
             </div>
           </Transition>
@@ -161,6 +164,7 @@ import { reactive, ref, computed, watch, onMounted, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useSeoMeta } from "../composables/useSeoMeta";
+import ProfessionalContactFields, { emptyProfessionalContactData, type ProfessionalContactData } from "../components/ProfessionalContactFields.vue";
 
 const { t } = useI18n();
 useSeoMeta({ titleKey: "website.seo.contact.title", descriptionKey: "website.seo.contact.description", noindex: true });
@@ -209,9 +213,12 @@ const form = reactive({
   city: "",
   message: "",
   notes: "",
-  companyName: "",
-  taxNumber: "",
 });
+
+// Ref, not reactive() — v-model on ProfessionalContactFields reassigns this
+// binding wholesale on every edit, which only works on a ref (see the same
+// note in BookingModal.vue).
+const professionalForm = ref<ProfessionalContactData>(emptyProfessionalContactData());
 
 function resetForm() {
   form.firstName = "";
@@ -221,8 +228,7 @@ function resetForm() {
   form.city = "";
   form.message = "";
   form.notes = "";
-  form.companyName = "";
-  form.taxNumber = "";
+  professionalForm.value = emptyProfessionalContactData();
   showMore.value = false;
 }
 
@@ -243,12 +249,13 @@ async function onSubmit() {
           }
         : {
             type: "professional",
-            firstName: form.firstName,
-            lastName: form.lastName,
-            phone: form.phone,
-            city: form.city,
-            companyName: form.companyName,
-            taxNumber: form.taxNumber,
+            firstName: professionalForm.value.firstName,
+            lastName: professionalForm.value.lastName,
+            institution: professionalForm.value.institution,
+            phone: professionalForm.value.phone,
+            email: professionalForm.value.email,
+            city: professionalForm.value.city,
+            countryCode: professionalForm.value.countryCode,
           };
 
     const res = await fetch("https://api.web3forms.com/submit", {

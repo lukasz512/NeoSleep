@@ -1,7 +1,7 @@
 import type { PoolClient } from "pg";
 import type { Request } from "express";
 import { tenantSlugFromHost } from "../db.js";
-import { getUserTokenVersion, type StaffRole } from "../db/users.js";
+import { getUserRoleScopes, getUserTokenVersion, type StaffRole, type UserRoleScope } from "../db/users.js";
 import { AuthError } from "../errors.js";
 
 /**
@@ -33,6 +33,8 @@ export interface TenantUser {
   email: string;
   name?: string;
   role: StaffRole;
+  /** Full {role, scope} set — see middleware/requireScope.ts for how commands/queries use this for country-level data scoping. */
+  roles: UserRoleScope[];
 }
 
 export interface TenantContext {
@@ -70,6 +72,8 @@ export async function buildContext(req: Request, client: PoolClient, slug?: stri
     throw new AuthError("Session has been invalidated. Please log in again.");
   }
 
+  const roles = await getUserRoleScopes(client, req.user.sub);
+
   return {
     slug:      slug ?? tenantSlugFromHost(req.hostname),
     client,
@@ -78,6 +82,7 @@ export async function buildContext(req: Request, client: PoolClient, slug?: stri
       email: req.user.email,
       name:  req.user.name,
       role:  req.user.role,
+      roles,
     },
     requestId: (req.headers["x-request-id"] as string | undefined) ?? crypto.randomUUID(),
   };

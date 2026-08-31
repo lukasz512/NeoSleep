@@ -20,10 +20,10 @@
       @submit="onLeadEditSubmit"
     />
     <FormRenderer
-      v-model="showMoveToContactsModal"
+      v-model="showMoveToDoctorsModal"
       :fields="hcpFormFields"
       :derive="hcpFormDerive"
-      :initial-data="moveToContactsInitialData"
+      :initial-data="moveToDoctorsInitialData"
       title-key="user.hcp.form.title"
       submit-label-key="user.hcp.form.submit"
       verify-info-key="user.leads.form.verifyDataInfo"
@@ -128,10 +128,17 @@
         </VListItem>
         <VListItem
           v-if="getLeadFromItem(item).type === 'doctor' && !isConverted(getLeadFromItem(item))"
-          :title="t('user.leads.detail.moveToContacts')"
-          @click="onMoveToContacts(getLeadFromItem(item))"
+          :title="t('user.leads.detail.inviteToPartner')"
+          @click="onInvitePartner(getLeadFromItem(item))"
         >
-          <template #prepend><AppIcon :name="entityActionIcon('moveToContacts')" :class="entityActionMenuIconClass('moveToContacts')" /></template>
+          <template #prepend><AppIcon :name="entityActionIcon('inviteToPartner')" :class="entityActionMenuIconClass('inviteToPartner')" /></template>
+        </VListItem>
+        <VListItem
+          v-if="getLeadFromItem(item).type === 'doctor' && !isConverted(getLeadFromItem(item))"
+          :title="t('user.leads.detail.moveToDoctors')"
+          @click="onMoveToDoctors(getLeadFromItem(item))"
+        >
+          <template #prepend><AppIcon :name="entityActionIcon('moveToDoctors')" :class="entityActionMenuIconClass('moveToDoctors')" /></template>
         </VListItem>
         <VListItem
           v-if="getLeadFromItem(item).type === 'patient' && !isConverted(getLeadFromItem(item))"
@@ -139,13 +146,6 @@
           @click="onConvertToPatient(getLeadFromItem(item))"
         >
           <template #prepend><AppIcon :name="entityActionIcon('convertToPatient')" :class="entityActionMenuIconClass('convertToPatient')" /></template>
-        </VListItem>
-        <VListItem
-          v-if="getLeadFromItem(item).type === 'doctor' && !isConverted(getLeadFromItem(item))"
-          :title="t('user.leads.detail.inviteToPartner')"
-          @click="onInvitePartner(getLeadFromItem(item))"
-        >
-          <template #prepend><AppIcon :name="entityActionIcon('inviteToPartner')" :class="entityActionMenuIconClass('inviteToPartner')" /></template>
         </VListItem>
         <VListItem v-if="isAdmin" :title="t('user.leads.detail.edit')" @click="onEditLead(getLeadFromItem(item))">
           <template #prepend><AppIcon :name="entityActionIcon('edit')" :class="entityActionMenuIconClass('edit')" /></template>
@@ -207,7 +207,7 @@ const configStore = useConfigStore();
 const isAdmin = computed(() => authStore.user?.role === "admin");
 const showAddModal = ref(false);
 const showEditModal = ref(false);
-const showMoveToContactsModal = ref(false);
+const showMoveToDoctorsModal = ref(false);
 const showConvertToPatientModal = ref(false);
 const showInviteModal = ref(false);
 const showEventForm = ref(false);
@@ -217,7 +217,7 @@ const notifications = useNotifications();
 
 /** Stable reference — see LeadDetailView.vue's identical computed for why an
  *  inline object literal would silently reset FormRenderer's open form. */
-const moveToContactsInitialData = computed(() => (selectedLead.value ? {
+const moveToDoctorsInitialData = computed(() => (selectedLead.value ? {
   first_name: selectedLead.value.first_name,
   last_name: selectedLead.value.last_name,
   email: selectedLead.value.email ?? "",
@@ -228,14 +228,14 @@ const moveToContactsInitialData = computed(() => (selectedLead.value ? {
   organization_id: leadInstitution(selectedLead.value),
 } : undefined));
 
-/** Same stable-reference reasoning as moveToContactsInitialData above. */
+/** Same stable-reference reasoning as moveToDoctorsInitialData above. */
 const inviteInitialData = computed(() => (selectedLead.value ? {
   first_name: selectedLead.value.first_name,
   last_name: selectedLead.value.last_name,
   email: selectedLead.value.email ?? "",
 } : undefined));
 
-/** Same stable-reference reasoning as moveToContactsInitialData above. */
+/** Same stable-reference reasoning as moveToDoctorsInitialData above. */
 const convertToPatientInitialData = computed(() => (selectedLead.value ? {
   first_name: selectedLead.value.first_name,
   last_name: selectedLead.value.last_name,
@@ -250,13 +250,19 @@ const leadFilterDefs: FilterDefinition[] = [
   { key: "type", labelKey: "user.leads.filters.type", type: "select", default: "" },
 ];
 
+// 'declined' is admin-only visibility (enforced server-side too — see
+// GetLeadListQuery's hideDeclined filter) — hiding it from the filter for
+// non-admins is a UX nicety here, not the actual access control.
 const statusOptions = computed(() => [
   { title: t("user.leads.filters.all"), value: "" },
   { title: t("user.leads.filters.statusNew"), value: "new", chipClass: "pwa-lead-status-chip--new" },
   { title: t("user.leads.filters.statusContacted"), value: "contacted", chipClass: "pwa-lead-status-chip--contacted" },
-  { title: t("user.leads.filters.statusQualified"), value: "qualified", chipClass: "pwa-lead-status-chip--qualified" },
-  { title: t("user.leads.filters.statusInactive"), value: "inactive", chipClass: "pwa-lead-status-chip--inactive" },
+  { title: t("user.leads.filters.statusFollowUpNeeded"), value: "follow_up_needed", chipClass: "pwa-lead-status-chip--follow_up_needed" },
+  { title: t("user.leads.filters.statusMeetingScheduled"), value: "meeting_scheduled", chipClass: "pwa-lead-status-chip--meeting_scheduled" },
   { title: t("user.leads.filters.statusConverted"), value: "converted", chipClass: "pwa-lead-status-chip--converted" },
+  ...(isAdmin.value
+    ? [{ title: t("user.leads.filters.statusDeclined"), value: "declined", chipClass: "pwa-lead-status-chip--declined" }]
+    : []),
 ]);
 const regionOptions = computed(() => configStore.regionItems);
 
@@ -363,9 +369,9 @@ async function onEventFormSubmit(
   }
 }
 
-function onMoveToContacts(lead: Lead) {
+function onMoveToDoctors(lead: Lead) {
   selectedLead.value = lead;
-  showMoveToContactsModal.value = true;
+  showMoveToDoctorsModal.value = true;
 }
 
 function onConvertToPatient(lead: Lead) {
