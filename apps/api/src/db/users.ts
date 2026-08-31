@@ -15,8 +15,13 @@ export interface User {
   phone: string | null;
   /** Computed: first_name + ' ' + last_name */
   name: string | null;
-  // From user_roles JOIN — matches the user_roles.role CHECK constraint
+  // From user_roles JOIN — matches the user_roles.role CHECK constraint.
+  // "Primary" role/scope (earliest-granted user_roles row) — a user can hold
+  // more than one {role, scope} pair (see getUserRoleScopes); most of the app
+  // only needs the primary one, mirroring how session/UI treat role today.
   role: StaffRole;
+  /** 'global' or a country_code (e.g. 'PL') — the RBAC access scope of `role` above. */
+  scope: string;
   // From users table
   google_sub: string | null;
   region: string | null;
@@ -35,15 +40,22 @@ export interface StaffUser extends User {
   force_password_change: boolean;
 }
 
+// LATERAL + LIMIT 1 (not a plain LEFT JOIN) so a user with more than one
+// user_roles row never fans out the outer query into duplicate result rows —
+// it always returns exactly one (earliest-granted) role/scope pair here.
+// Use getUserRoleScopes() when the full set is needed (session/RBAC).
 const USER_JOIN = `
   FROM users u
   JOIN identities i ON u.identity_id = i.id
-  LEFT JOIN user_roles ur ON ur.user_id = u.id`.trim();
+  LEFT JOIN LATERAL (
+    SELECT role, scope FROM user_roles WHERE user_id = u.id ORDER BY created_at ASC LIMIT 1
+  ) ur ON true`.trim();
 
 const USER_COLS = `
   u.id, u.identity_id, i.email, i.title AS salutation, i.first_name, i.last_name, i.phone,
   TRIM(COALESCE(i.first_name, '') || ' ' || COALESCE(i.last_name, '')) AS name,
   COALESCE(ur.role, 'rep') AS role,
+  COALESCE(ur.scope, 'global') AS scope,
   u.google_sub, i.region, i.country_code, i.language, i.territory_id, u.status, u.token_version,
   u.created_at, u.updated_at`.trim();
 
@@ -87,7 +99,7 @@ export async function getOrCreateUserByProvider(
     const userId = userResult.rows[0]!.id;
 
     await client.query(
-      `INSERT INTO user_roles (user_id, role) VALUES ($1, 'rep') ON CONFLICT (user_id) DO NOTHING`,
+      `INSERT INTO user_roles (user_id, role, scope) VALUES ($1, 'rep', 'global') ON CONFLICT (user_id, role, scope) DO NOTHING`,
       [userId]
     );
 
@@ -172,7 +184,9 @@ export async function insertStaffUser(
   passwordHash: string | null,
   forcePasswordChange: boolean,
   salutation?: string | null,
-  phone?: string | null
+  phone?: string | null,
+  scope = "global",
+  grantedBy?: string | null
 ): Promise<User | null> {
   const normalizedEmail = email.trim().toLowerCase();
 
@@ -185,24 +199,37 @@ export async function insertStaffUser(
     );
     const identityId = identityResult.rows[0]!.id;
 
+    // identity_id is UNIQUE on users, so a previously soft-deleted staff user
+    // (deleted_at set) still occupies this slot and would otherwise make this
+    // email permanently unreusable. Reactivate it instead of no-op'ing — but
+    // only when the conflicting row is actually soft-deleted: if it's a live
+    // active/suspended user, the WHERE clause below leaves it untouched and
+    // this still returns no row, so the caller's "already exists" check fires.
     const userResult = await client.query<{ id: string }>(
       `INSERT INTO users (identity_id, password_hash, force_password_change, status)
        VALUES ($1, $2, $3, 'active')
-       ON CONFLICT (identity_id) DO NOTHING
+       ON CONFLICT (identity_id) DO UPDATE SET
+         password_hash = EXCLUDED.password_hash,
+         force_password_change = EXCLUDED.force_password_change,
+         status = 'active',
+         deleted_at = NULL,
+         updated_at = now()
+       WHERE users.deleted_at IS NOT NULL
        RETURNING id`,
       [identityId, passwordHash, forcePasswordChange]
     );
     if (!userResult.rows[0]) return null;
     const userId = userResult.rows[0].id;
 
-    // Plain insert, no ON CONFLICT: userId was just created above in this same
-    // transaction, so no existing user_roles row can reference it yet — and
+    // Delete-then-insert (rather than ON CONFLICT) since reactivation may need
+    // to replace roles left over from before the account was deleted, and
     // user_roles' only unique constraint is the composite (user_id, role,
-    // region), not user_id alone, so `ON CONFLICT (user_id)` doesn't match any
-    // constraint and Postgres rejects the statement outright (42P10).
+    // scope) — not user_id alone — so ON CONFLICT (user_id) has no matching
+    // constraint to target.
+    await client.query(`DELETE FROM user_roles WHERE user_id = $1`, [userId]);
     await client.query(
-      `INSERT INTO user_roles (user_id, role) VALUES ($1, $2)`,
-      [userId, role]
+      `INSERT INTO user_roles (user_id, role, scope, granted_by) VALUES ($1, $2, $3, $4)`,
+      [userId, role, scope, grantedBy ?? null]
     );
 
     const r = await client.query<User>(
@@ -213,6 +240,29 @@ export async function insertStaffUser(
   } catch (err) {
     if (err instanceof AppError) throw err;
     throw new DatabaseError("insertStaffUser", err);
+  }
+}
+
+export interface UserRoleScope {
+  role: StaffRole;
+  scope: string;
+}
+
+/**
+ * Full {role, scope} set for a user (unlike User.role/scope on USER_COLS,
+ * which only surface the earliest-granted pair). Used at login/session-
+ * refresh time to build the RBAC scope set requireScope() checks against.
+ */
+export async function getUserRoleScopes(client: PoolClient, userId: string): Promise<UserRoleScope[]> {
+  try {
+    const r = await client.query<UserRoleScope>(
+      `SELECT role, scope FROM user_roles WHERE user_id = $1 ORDER BY created_at ASC`,
+      [userId]
+    );
+    return r.rows;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getUserRoleScopes", err);
   }
 }
 
@@ -274,6 +324,8 @@ export interface GetUsersFilters {
   search?: string;
   role?: string | string[];
   status?: string | string[];
+  /** RBAC scope filter: null = unrestricted, [] = matches nothing, otherwise restrict to these country_codes. */
+  countryCodes?: string[] | null;
 }
 
 const USER_SORT_COLUMNS = ["first_name", "last_name", "email", "status", "created_at"] as const;
@@ -304,6 +356,11 @@ export async function getUsersPaginated(
   if (roleArr.length > 0) {
     conditions.push(`ur.role = ANY($${paramIndex}::text[])`);
     params.push(roleArr);
+    paramIndex++;
+  }
+  if (filters.countryCodes !== undefined && filters.countryCodes !== null) {
+    conditions.push(`i.country_code = ANY($${paramIndex}::text[])`);
+    params.push(filters.countryCodes);
     paramIndex++;
   }
   const statusArr = toArray(filters.status);
@@ -347,9 +404,16 @@ export interface UpdateUserInput {
   status?: "active" | "inactive" | "suspended";
   country_code?: string | null;
   role?: StaffRole;
+  /** 'global' or a country_code — RBAC access scope for `role`. Defaults to the existing scope, or 'global' for a brand-new role. */
+  scope?: string;
 }
 
-export async function updateUser(client: PoolClient, id: string, input: UpdateUserInput): Promise<User | null> {
+export async function updateUser(
+  client: PoolClient,
+  id: string,
+  input: UpdateUserInput,
+  grantedBy?: string | null
+): Promise<User | null> {
   const existing = await getUserById(client, id);
   if (!existing) return null;
 
@@ -385,11 +449,17 @@ export async function updateUser(client: PoolClient, id: string, input: UpdateUs
     if (input.country_code !== undefined) {
       await client.query(`UPDATE identities SET country_code = $1, updated_at = now() WHERE id = $2`, [input.country_code, existing.identity_id]);
     }
-    if (input.role !== undefined) {
-      // Single global role per user (region IS NULL) — replace rather than upsert,
-      // since UNIQUE(user_id, role, region) treats NULL region as never-equal.
-      await client.query(`DELETE FROM user_roles WHERE user_id = $1 AND region IS NULL`, [id]);
-      await client.query(`INSERT INTO user_roles (user_id, role) VALUES ($1, $2)`, [id, input.role]);
+    if (input.role !== undefined || input.scope !== undefined) {
+      // Single {role, scope} pair per user for now (no multi-role assignment
+      // UI yet) — replace rather than upsert so a role change doesn't leave
+      // a stale row behind under the old role.
+      const role = input.role ?? existing.role;
+      const scope = input.scope ?? existing.scope;
+      await client.query(`DELETE FROM user_roles WHERE user_id = $1`, [id]);
+      await client.query(
+        `INSERT INTO user_roles (user_id, role, scope, granted_by) VALUES ($1, $2, $3, $4)`,
+        [id, role, scope, grantedBy ?? null]
+      );
     }
   } catch (err) {
     if (err instanceof AppError) throw err;

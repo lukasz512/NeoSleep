@@ -37,7 +37,16 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build website
+        # VITE_API_URL points the built site at the Render API (needed for the
+        # /for-professionals booking widget) — without it, apiFetch falls back
+        # to a same-origin relative path, which 404s on the static GoDaddy host.
+        # VITE_GOOGLE_MAPS_BROWSER_API_KEY powers the /find-specialist map —
+        # an HTTP-referrer-restricted key, safe to ship in the bundle (see
+        # apps/web/src/composables/useGoogleMaps.ts).
         run: pnpm run build:web
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          VITE_GOOGLE_MAPS_BROWSER_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_BROWSER_API_KEY }}
 
       - name: Deploy to DEV (dev.neosleepcare.com)
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5

@@ -18,6 +18,7 @@ vi.mock("resend", () => ({
 }));
 
 const RECIPIENT = { title: "Dr", firstName: "Jane", lastName: "Doe", language: "en", region: "PL" };
+const SENDER = { name: "NeoSleep", email: "rep@neosleepcare.com" };
 
 beforeEach(() => {
   sendMock.mockReset();
@@ -99,7 +100,7 @@ describe("mailer — configured", () => {
     const { sendPartnerInviteEmail } = await importMailer(true);
     const registerLink = "https://pwa.neosleepcare.com/register?token=xyz789";
 
-    await sendPartnerInviteEmail("hcp@example.com", registerLink, RECIPIENT);
+    await sendPartnerInviteEmail("hcp@example.com", registerLink, RECIPIENT, SENDER);
 
     expect(sendMock).toHaveBeenCalledTimes(1);
     const call = sendMock.mock.calls[0]![0];

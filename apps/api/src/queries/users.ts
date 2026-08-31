@@ -1,5 +1,6 @@
 import type { TenantContext } from "../context/TenantContext.js";
 import { getUsersPaginated, getUserById, type GetUsersFilters, type User } from "../db.js";
+import { getAllowedCountryCodes, assertScopeAccess } from "../middleware/requireScope.js";
 
 /**
  * QUERIES — User domain.
@@ -16,6 +17,7 @@ export interface UserDto {
   email: string;
   phone: string;
   role: string;
+  scope: string;
   status: string;
   region: string | null;
   country_code: string | null;
@@ -34,6 +36,7 @@ function toDto(u: User): UserDto {
     email: u.email,
     phone: u.phone ?? "",
     role: u.role,
+    scope: u.scope,
     status: u.status,
     region: u.region,
     country_code: u.country_code,
@@ -66,6 +69,7 @@ export async function GetUserListQuery(
     search: input.search,
     role: input.role,
     status: input.status,
+    countryCodes: getAllowedCountryCodes(ctx.user.roles),
   };
 
   const page = input.page ?? 1;
@@ -79,5 +83,7 @@ export async function GetUserListQuery(
 
 export async function GetUserByIdQuery(ctx: TenantContext, id: string): Promise<UserDto | null> {
   const user = await getUserById(ctx.client, id);
-  return user ? toDto(user) : null;
+  if (!user) return null;
+  assertScopeAccess(ctx, user.country_code);
+  return toDto(user);
 }

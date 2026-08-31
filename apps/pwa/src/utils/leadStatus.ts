@@ -1,14 +1,25 @@
 // Matches lead_status_check in the DB exactly — no UI-vocabulary translation layer.
-export type LeadStatus = "new" | "contacted" | "qualified" | "inactive" | "converted";
+// 'qualified'/'inactive' are legacy — kept so old rows still render, but no
+// longer offered as choices anywhere new leads are created or edited (see
+// leadForm.ts). 'declined' is admin-only visibility (see LeadsView.vue).
+export type LeadStatus =
+  | "new" | "contacted" | "follow_up_needed" | "meeting_scheduled" | "declined" | "converted"
+  | "qualified" | "inactive";
 
-export const LEAD_STATUS_OPTIONS = ["new", "contacted", "qualified", "inactive", "converted"] as const;
+export const LEAD_STATUS_OPTIONS = [
+  "new", "contacted", "follow_up_needed", "meeting_scheduled", "declined", "converted",
+  "qualified", "inactive",
+] as const;
 
 export const LEAD_STATUS_I18N_KEYS: Record<string, string> = {
   new: "user.leads.filters.statusNew",
   contacted: "user.leads.filters.statusContacted",
+  follow_up_needed: "user.leads.filters.statusFollowUpNeeded",
+  meeting_scheduled: "user.leads.filters.statusMeetingScheduled",
+  declined: "user.leads.filters.statusDeclined",
+  converted: "user.leads.filters.statusConverted",
   qualified: "user.leads.filters.statusQualified",
   inactive: "user.leads.filters.statusInactive",
-  converted: "user.leads.filters.statusConverted",
 };
 
 function isLeadStatus(s: string): s is LeadStatus {

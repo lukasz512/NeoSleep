@@ -117,23 +117,28 @@ BEGIN
 
   -- ===========================================================================
   -- USER_ROLES
-  -- Roles scoped per user (and optionally per region).
-  -- A rep can be rep in PL and kam in MX.
+  -- Roles scoped per user, per access scope.
+  -- scope is a country_code (e.g. 'PL', 'MX') or the literal 'global' —
+  -- 'global' means the role applies across every region/country in the tenant.
+  -- A rep can be rep in PL and kam in MX (two rows, two scopes).
   -- ===========================================================================
   EXECUTE format('
     CREATE TABLE IF NOT EXISTS %I.user_roles (
       id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id    UUID        NOT NULL REFERENCES %I.users(id) ON DELETE CASCADE,
       role       TEXT        NOT NULL
-                   CHECK (role IN (''admin'', ''ffm'', ''kam'', ''msl'', ''rep'')),
-      region     TEXT,       -- null = role applies to all regions
+                   CHECK (role IN (''admin'', ''manager'', ''kam'', ''msl'', ''rep'', ''doctor'')),
+      scope      TEXT        NOT NULL DEFAULT ''global'',
+      granted_by UUID        REFERENCES %I.users(id) ON DELETE SET NULL,
       metadata   JSONB,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-      UNIQUE (user_id, role, region)
-    )', slug, slug);
+      UNIQUE (user_id, role, scope)
+    )', slug, slug, slug);
 
   EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %I.user_roles (user_id)',
     slug||'_user_roles_user_idx', slug);
+  EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %I.user_roles (role, scope)',
+    slug||'_user_roles_role_scope_idx', slug);
 
   -- ===========================================================================
   -- AUTH TOKENS
@@ -366,6 +371,8 @@ BEGIN
       email         TEXT,
       website       TEXT,
       google_link   TEXT,       -- Google Maps/Business profile URL
+      latitude      DOUBLE PRECISION,  -- geocoded from address fields, see services/geocoding.ts — null until geocoded
+      longitude     DOUBLE PRECISION,
       specialties   TEXT[]      NOT NULL DEFAULT ''{}''::TEXT[],  -- mirrors practitioner.specialties vocabulary
       status        TEXT        NOT NULL DEFAULT ''active''
                       CHECK (status IN (''pending_approval'', ''active'', ''inactive'')),
@@ -744,7 +751,8 @@ BEGIN
       identity_id       UUID        NOT NULL REFERENCES %I.identities(id) ON DELETE CASCADE,
       source            TEXT,       -- "referral" | "event" | "web" | "cold" | "congress"
       status            TEXT        NOT NULL DEFAULT ''new''
-                          CHECK (status IN (''new'', ''contacted'', ''qualified'', ''inactive'', ''converted'')),
+                          CHECK (status IN (''new'', ''contacted'', ''follow_up_needed'', ''meeting_scheduled'',
+                                             ''declined'', ''qualified'', ''inactive'', ''converted'')),
       country_code      TEXT,
       region            TEXT        NOT NULL DEFAULT '''',
       territory_id      UUID        REFERENCES %I.territory(id) ON DELETE SET NULL,

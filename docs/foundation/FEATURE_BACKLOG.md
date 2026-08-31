@@ -60,7 +60,6 @@
 | Patient chat (website ↔ AI ↔ consultant) | `planned` | same conversation/message tables; support_ticket for AI→human escalation |
 | WhatsApp Business API integration | `planned` | webhook_event queue ready; LINE for TH market |
 | SMS via Twilio | `planned` | same webhook_event queue |
-| Email from app | `planned` | nodemailer already in API server |
 | Inbound message sync (webhook workers) | `planned` | webhook_event → conversation → message |
 | Notification Center (bell + badge, in-app inbox) | `in_progress` | `notification`/`notification_delivery` tables, GET/PATCH routes, Dashboard-only bell with pulsing unread dot on nav — see ADR-012. Inbox is empty until real event producers are wired (see next two rows). **No tests yet** — see memory `project_test_suite_weak` for the concrete file list, deferred to a dedicated session |
 | Push notifications | `planned` | push_subscription schema fixed to match routes/push.ts (ADR-012 §1); still no real send call wired to a domain event |
@@ -135,6 +134,7 @@
 | Supabase → Hetzner VPS migration | `deferred` | post-MVP, when cost justifies |
 | Two Supabase projects (platform / client) | `deferred` | Option B; viable at 5+ paying clients |
 | Per-client DB isolation | `deferred` | Option C; only if contractually required |
+| Safari login/session broken on `pwa-dev.neosleepcare.com` | `deferred` | Works on Chrome, not on Safari (confirmed 2026-08-24). Not root-caused yet — prime suspect is Safari ITP blocking the cross-site session cookie between `pwa-dev.neosleepcare.com` (frontend) and the Render API origin (different origin, see `server.ts` CORS comment), which Chrome doesn't enforce as strictly. Usable on Chrome for now; revisit before relying on Safari/iOS for dev testing. |
 
 ---
 

@@ -21,11 +21,13 @@ import { identityFields } from "./identityFields";
  * matching patientForm.ts/hcpForm.ts's DB-layer naming convention).
  */
 
+// 'doctor' deliberately excluded — doctor-role users are only ever created
+// via the lead partner-invite pipeline or the HCP training-finished
+// activation flow, never through this manual "add user" form.
 const ROLE_OPTIONS = [
   { title: "user.users.role.admin", value: "admin" },
   { title: "user.users.role.manager", value: "manager" },
   { title: "user.users.role.rep", value: "rep" },
-  { title: "user.users.role.doctor", value: "doctor" },
 ];
 
 const STATUS_OPTIONS = [

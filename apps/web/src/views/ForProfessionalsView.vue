@@ -9,13 +9,13 @@
       subtitle-key="website.professionalsPage.heroSub"
     >
       <template #ctas>
-        <RouterLink :to="{ path: '/contact', query: { type: 'professional' } }" class="home-btn home-btn--white-outline">
-          {{ t("website.professionalsPage.heroCta") }}
+        <button type="button" class="home-btn home-btn--white-outline" @click="openBookingModal">
+          {{ t("website.professionalsPage.booking.trigger") }}
           <span class="home-btn__arrow" aria-hidden="true">→</span>
+        </button>
+        <RouterLink :to="{ path: '/contact', query: { type: 'professional' } }" class="home-btn home-btn--white-border">
+          {{ t("website.professionalsPage.heroCta") }}
         </RouterLink>
-        <a href="#how-to-join" class="home-btn home-btn--white-border">
-          {{ t("website.professionalsPage.heroCtaSecondary") }}
-        </a>
       </template>
     </TealBanner>
 
@@ -139,26 +139,32 @@
               {{ t("website.professionalsPage.cta.btn") }}
               <span class="home-btn__arrow" aria-hidden="true">→</span>
             </RouterLink>
-            <RouterLink :to="{ path: '/contact', query: { type: 'professional' } }" class="home-btn home-btn--white-border">
+            <button type="button" class="home-btn home-btn--white-border" @click="openBookingModal">
               {{ t("website.professionalsPage.cta.btnSecondary") }}
-            </RouterLink>
+            </button>
           </template>
         </TealBanner>
       </div>
     </div>
 
+    <BookingModal v-model="showBookingModal" :prefill="bookingPrefill" />
+
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { useRoute } from "vue-router";
 import TealBanner from "../components/TealBanner.vue";
+import BookingModal, { type BookingPrefill } from "../components/BookingModal.vue";
 import { useReveal } from "../composables/useReveal";
 import { useSeoMeta } from "../composables/useSeoMeta";
+import { apiFetch } from "../utils/api";
 
 const { t } = useI18n();
 useSeoMeta({ titleKey: "website.seo.forProfessionals.title", descriptionKey: "website.seo.forProfessionals.description" });
+const route = useRoute();
 
 const whyRef       = ref<HTMLElement | null>(null);
 const howRef       = ref<HTMLElement | null>(null);
@@ -169,6 +175,62 @@ const whyVisible       = useReveal(whyRef,       0.08);
 const howVisible       = useReveal(howRef,       0.08);
 const standardsVisible = useReveal(standardsRef, 0.12);
 const ctaVisible       = useReveal(ctaRef,       0.10);
+
+// ── Booking modal ────────────────────────────────────────────────────────
+// The "book a demo" email CTA links here with ?lead=<id> (see
+// commands/lead.ts's SendLeadOfferEmailCommand) — that id is a bearer-token-
+// style link into GET /api/v1/public/lead/:id, used only to prefill the
+// modal's form. No prefill fetch happens when the param is absent; the
+// modal still works fully self-serve.
+
+const showBookingModal = ref(false);
+const bookingPrefill = ref<BookingPrefill | null>(null);
+
+function openBookingModal() {
+  showBookingModal.value = true;
+}
+
+interface PublicLeadInfo {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  institution: string | null;
+  country_code: string | null;
+  city: string | null;
+}
+
+async function loadLeadPrefill(leadId: string) {
+  try {
+    const res = await apiFetch(`/api/v1/public/lead/${encodeURIComponent(leadId)}`);
+    if (!res.ok) return;
+    const lead = (await res.json()) as PublicLeadInfo;
+    bookingPrefill.value = {
+      id: lead.id,
+      firstName: lead.first_name,
+      lastName: lead.last_name,
+      email: lead.email,
+      phone: lead.phone,
+      institution: lead.institution ?? undefined,
+      city: lead.city ?? undefined,
+      countryCode: lead.country_code ?? undefined,
+    };
+  } catch {
+    // Prefill is a nicety — if it fails, the modal still works fully self-serve.
+  }
+}
+
+watch(
+  () => route.query.lead,
+  (leadId) => {
+    if (typeof leadId === "string" && leadId) {
+      void loadLeadPrefill(leadId);
+      showBookingModal.value = true;
+    }
+  },
+  { immediate: true }
+);
 </script>
 
 <style lang="scss">

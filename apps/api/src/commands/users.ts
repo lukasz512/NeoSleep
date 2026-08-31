@@ -13,6 +13,7 @@ import {
   type User,
 } from "../db.js";
 import { insertAuditLog } from "../db.js";
+import { assertScopeAccess } from "../middleware/requireScope.js";
 import { ConflictError, NotFoundError, ValidationError } from "../errors.js";
 import { hashToken } from "../utils/hashToken.js";
 import { sendPasswordResetEmail } from "../mailer.js";
@@ -25,7 +26,12 @@ import { sendPasswordResetEmail } from "../mailer.js";
  */
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const VALID_ROLES: StaffRole[] = ["admin", "manager", "kam", "msl", "rep", "doctor"];
+// 'doctor' deliberately excluded: doctor-role users are only ever created via
+// InvitePractitionerCommand (partner invite) or the HCP "training finished"
+// activation flow — never through manual user creation.
+const VALID_ROLES: StaffRole[] = ["admin", "manager", "kam", "msl", "rep"];
+// 'global' (cross-country access) or a two-letter ISO country_code (e.g. 'PL').
+const SCOPE_REGEX = /^(global|[A-Z]{2})$/;
 const BCRYPT_ROUNDS = 12;
 const PASSWORD_RESET_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
 
@@ -43,6 +49,8 @@ export interface CreateUserInput {
   region?: string | null;
   country_code?: string | null;
   phone?: string | null;
+  /** 'global' or a country_code — RBAC access scope for `role`. Defaults to 'global'. */
+  scope?: string;
 }
 
 export async function CreateUserCommand(ctx: TenantContext, input: CreateUserInput): Promise<User> {
@@ -56,12 +64,16 @@ export async function CreateUserCommand(ctx: TenantContext, input: CreateUserInp
   if (input.role && !VALID_ROLES.includes(input.role)) {
     throw new ValidationError(`role must be one of: ${VALID_ROLES.join(", ")}`);
   }
+  if (input.scope !== undefined && !SCOPE_REGEX.test(input.scope)) {
+    throw new ValidationError("scope must be 'global' or a two-letter country code");
+  }
 
   const existingId = await getUserIdByEmail(ctx.client, email);
   if (existingId) throw new ConflictError("A user with this email already exists");
 
   const passwordHash = input.password ? await bcrypt.hash(input.password, BCRYPT_ROUNDS) : null;
   const role = input.role ?? "rep";
+  const scope = input.scope ?? "global";
 
   const user = await insertStaffUser(
     ctx.client,
@@ -72,7 +84,9 @@ export async function CreateUserCommand(ctx: TenantContext, input: CreateUserInp
     passwordHash,
     !input.password,
     input.salutation ?? null,
-    input.phone ?? null
+    input.phone ?? null,
+    scope,
+    ctx.user.id
   );
   if (!user) throw new ConflictError("A user with this email already exists");
 
@@ -81,7 +95,7 @@ export async function CreateUserCommand(ctx: TenantContext, input: CreateUserInp
     action: "create",
     entity_type: "Person",
     entity_id: user.id,
-    entity_after: { id: user.id, email, name: user.name, role },
+    entity_after: { id: user.id, email, name: user.name, role, scope },
     request_id: ctx.requestId,
   });
 
@@ -104,8 +118,15 @@ export async function UpdateUserCommand(
   if (input.role && !VALID_ROLES.includes(input.role)) {
     throw new ValidationError(`role must be one of: ${VALID_ROLES.join(", ")}`);
   }
+  if (input.scope !== undefined && !SCOPE_REGEX.test(input.scope)) {
+    throw new ValidationError("scope must be 'global' or a two-letter country code");
+  }
 
-  const before = await updateUser(ctx.client, id, input);
+  const target = await getUserById(ctx.client, id);
+  if (!target) return null;
+  assertScopeAccess(ctx, target.country_code);
+
+  const before = await updateUser(ctx.client, id, input, ctx.user.id);
   if (!before) return null;
 
   await insertAuditLog(ctx.client, {
@@ -113,7 +134,7 @@ export async function UpdateUserCommand(
     action: "update",
     entity_type: "Person",
     entity_id: id,
-    entity_after: { status: before.status, region: before.region, role: before.role },
+    entity_after: { status: before.status, region: before.region, role: before.role, scope: before.scope },
     request_id: ctx.requestId,
   });
 
@@ -165,6 +186,10 @@ export async function ResetUserPasswordCommand(
 
 export async function DeleteUserCommand(ctx: TenantContext, id: string): Promise<void> {
   if (!id?.trim()) throw new ValidationError("user id is required");
+
+  const target = await getUserById(ctx.client, id);
+  if (!target) throw new NotFoundError("User", id);
+  assertScopeAccess(ctx, target.country_code);
 
   await softDeleteUser(ctx.client, id);
 

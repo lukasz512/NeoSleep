@@ -4,7 +4,7 @@ import { requireAuth } from "../middleware/requireAuth.js";
 import { requireRole } from "../middleware/requireRole.js";
 import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
-import { CreatePractitionerCommand, UpdatePractitionerCommand, DeletePractitionerCommand } from "../commands/practitioner.js";
+import { CreatePractitionerCommand, UpdatePractitionerCommand, DeletePractitionerCommand, ActivatePractitionerCommand } from "../commands/practitioner.js";
 import { GetPractitionerListQuery, GetPractitionerByIdQuery } from "../queries/practitioner.js";
 import { ValidationError } from "../errors.js";
 import { parsePaginationParams, toFilterArray } from "./utils.js";
@@ -164,11 +164,33 @@ practitionerRouter.patch(
 );
 
 // ---------------------------------------------------------------------------
-// DELETE /api/v1/practitioner/:id — soft delete
+// POST /api/v1/practitioner/:id/activate — "training/capacitation finished":
+// pending_approval -> active, provisions the linked doctor-role user account
+// ---------------------------------------------------------------------------
+practitionerRouter.post(
+  "/practitioner/:id/activate",
+  requireRole("admin", "manager"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id?.trim();
+    if (!id) throw new ValidationError("Missing practitioner id");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    const practitioner = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return ActivatePractitionerCommand(ctx, id);
+    });
+
+    if (!practitioner) { res.status(404).json({ error: "Practitioner not found" }); return; }
+    res.json(practitioner);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// DELETE /api/v1/practitioner/:id — soft delete (admin-only, matches frontend gating)
 // ---------------------------------------------------------------------------
 practitionerRouter.delete(
   "/practitioner/:id",
-  requireRole("admin", "manager"),
+  requireRole("admin"),
   asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id?.trim();
     if (!id) throw new ValidationError("Missing practitioner id");

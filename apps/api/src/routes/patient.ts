@@ -162,11 +162,11 @@ patientRouter.patch(
 );
 
 // ---------------------------------------------------------------------------
-// DELETE /api/v1/patient/:id — soft delete
+// DELETE /api/v1/patient/:id — soft delete (admin-only, matches frontend gating)
 // ---------------------------------------------------------------------------
 patientRouter.delete(
   "/patient/:id",
-  requireRole("admin", "manager"),
+  requireRole("admin"),
   asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id?.trim();
     if (!id) throw new ValidationError("Missing patient id");

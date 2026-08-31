@@ -11,6 +11,7 @@ import {
 } from "../db.js";
 import { insertAuditLog } from "../db.js";
 import { ValidationError } from "../errors.js";
+import { sendLeadOfferEmail, localeForRegion } from "../mailer.js";
 
 /**
  * COMMANDS — Lead domain.
@@ -254,6 +255,165 @@ export async function ConvertLeadCommand(
   });
 
   return after;
+}
+
+// ---------------------------------------------------------------------------
+// SEND OFFER EMAIL
+// ---------------------------------------------------------------------------
+
+/** Public marketing page — see apps/web/src/views/ForProfessionalsView.vue. */
+const FOR_PROFESSIONALS_URL = "https://neosleepcare.com/for-professionals";
+
+/**
+ * Sends the partnership-offer follow-up email (thank-you + CTA to book a
+ * call) to a lead after a rep's phone call, and stamps metadata.offerSentAt
+ * so the PWA can warn before a re-send. Returns null if the lead does not
+ * exist.
+ */
+export async function SendLeadOfferEmailCommand(ctx: TenantContext, id: string): Promise<Lead | null> {
+  if (!id?.trim()) throw new ValidationError("lead id is required");
+
+  const lead = await getLeadById(ctx.client, id);
+  if (!lead) return null;
+  if (!lead.email) throw new ValidationError("Lead has no email address");
+
+  await sendLeadOfferEmail(
+    lead.email,
+    { offerLink: FOR_PROFESSIONALS_URL, bookingLink: `${FOR_PROFESSIONALS_URL}?lead=${lead.id}` },
+    {
+      title: lead.salutation,
+      firstName: lead.first_name,
+      lastName: lead.last_name,
+      language: localeForRegion(lead.region),
+      region: lead.region,
+    },
+    // Doctor sees this as coming from the rep who made the call, not a faceless system
+    // sender — replies land in the rep's own inbox (see mailer.ts's EmailSender doc comment).
+    { name: ctx.user.name ?? "NeoSleep", email: ctx.user.email }
+  );
+
+  const after = await updateLead(ctx.client, id, {
+    metadata: { ...(lead.metadata ?? {}), offerSentAt: new Date().toISOString() },
+  });
+
+  await insertAuditLog(ctx.client, {
+    user_id:      ctx.user.id,
+    action:       "send-offer",
+    entity_type:  "Lead",
+    entity_id:    id,
+    entity_after: { offerSentAt: after?.metadata?.offerSentAt ?? null },
+    request_id:   ctx.requestId,
+  });
+
+  return after;
+}
+
+// ---------------------------------------------------------------------------
+// UPSERT PUBLIC LEAD (create-or-update — public booking widget, no auth)
+// ---------------------------------------------------------------------------
+
+export interface UpsertPublicLeadInput {
+  leadId?: string | null;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone?: string | null;
+  institution: string;
+  city?: string | null;
+  country_code?: string | null;
+}
+
+/** existing wins if it's already set; otherwise fills in from the new booking-form value. Returns undefined ("don't touch this column") when there's nothing to change. */
+function fillIfEmpty(existing: string | null | undefined, incoming: string | null | undefined): string | undefined {
+  if (existing) return undefined;
+  return incoming?.trim() || undefined;
+}
+
+/**
+ * Public write path — see routes/public.ts and routes/booking.ts. No
+ * TenantContext/session here (buildContext hard-throws without one); takes a
+ * raw PoolClient from withTenant() plus a requestId, the same pattern
+ * commands/invitePractitioner.ts already uses for unauthenticated writes.
+ * audit_log.user_id is null (nullable column) since there's no staff user
+ * acting — the visitor themself is the actor.
+ *
+ * Never clobbers a rep's own data on an existing lead — only fills fields
+ * that are currently empty, then stamps metadata.demoBookedAt either way.
+ */
+export async function UpsertPublicLeadCommand(
+  client: Parameters<typeof getLeadById>[0],
+  input: UpsertPublicLeadInput,
+  meta: { requestId: string }
+): Promise<Lead> {
+  const firstName = input.first_name?.trim() ?? "";
+  const lastName = input.last_name?.trim() ?? "";
+  if (!firstName) throw new ValidationError("first_name is required");
+  if (!lastName) throw new ValidationError("last_name is required");
+
+  const institution = input.institution?.trim() ?? "";
+  if (!institution) throw new ValidationError("institution is required");
+
+  const email = input.email?.trim() ?? "";
+  if (!EMAIL_REGEX.test(email)) throw new ValidationError("Invalid email format");
+
+  const existing = input.leadId?.trim() ? await getLeadById(client, input.leadId.trim()) : null;
+
+  if (existing) {
+    const existingMetadata = existing.metadata ?? {};
+    const after = await updateLead(client, existing.id, {
+      phone:       fillIfEmpty(existing.phone, input.phone),
+      institution: fillIfEmpty(existing.institution, institution),
+      metadata: {
+        ...existingMetadata,
+        institution:  (typeof existingMetadata.institution === "string" && existingMetadata.institution) || institution,
+        city:         (typeof existingMetadata.city === "string" && existingMetadata.city) || input.city?.trim() || null,
+        country_code: (typeof existingMetadata.country_code === "string" && existingMetadata.country_code) || input.country_code?.trim() || null,
+        demoBookedAt: new Date().toISOString(),
+      },
+    });
+
+    await insertAuditLog(client, {
+      user_id:      null,
+      action:       "demo-booked",
+      entity_type:  "Lead",
+      entity_id:    existing.id,
+      entity_after: { demoBookedAt: after?.metadata?.demoBookedAt ?? null },
+      request_id:   meta.requestId,
+    });
+
+    return after!;
+  }
+
+  const insertInput: InsertLeadInput = {
+    first_name: firstName,
+    last_name:  lastName,
+    email,
+    phone:      input.phone?.trim() || null,
+    status:     "new",
+    type:       "doctor",
+    region:     "",
+    source:     "website",
+    institution,
+    metadata: {
+      institution,
+      city:         input.city?.trim() || null,
+      country_code: input.country_code?.trim() || null,
+      demoBookedAt: new Date().toISOString(),
+    },
+  };
+
+  const lead = await insertLead(client, insertInput);
+
+  await insertAuditLog(client, {
+    user_id:      null,
+    action:       "create",
+    entity_type:  "Lead",
+    entity_id:    lead.id,
+    entity_after: { id: lead.id, name: lead.name, status: lead.status, source: "website" },
+    request_id:   meta.requestId,
+  });
+
+  return lead;
 }
 
 // ---------------------------------------------------------------------------

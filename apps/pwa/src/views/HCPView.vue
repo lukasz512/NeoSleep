@@ -26,13 +26,14 @@
       :initial-data="eventFormInitial"
       @submit="onEventFormSubmit"
     />
+    <!-- HCPs can only be created through the lead -> invite-to-partner pipeline (see LeadDetailView.vue) -->
     <AppEntityList
       view-id="hcp"
       api-endpoint="/api/v1/practitioner"
       :headers="tableHeaders"
       :filter-definitions="hcpFilterDefinitions"
       :i18n="hcpI18n"
-      :show-add-button="true"
+      :show-add-button="false"
       detail-route-name="hcp-detail"
       :filter-param-keys="['specialty', 'institution', 'region']"
       @add="onAddContact"

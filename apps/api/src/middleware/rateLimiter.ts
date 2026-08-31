@@ -18,6 +18,33 @@ export const inviteAcceptLimiter = rateLimit({
   message: { error: "Too many requests, please try again later" },
 });
 
+/** Applied to GET /booking/slots and POST /booking/book — public, unauthenticated; 20 requests per 15 minutes per IP. */
+export const bookingLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later" },
+});
+
+/** Applied to GET /public/lead/:id — public, unauthenticated; 30 requests per 15 minutes per IP. */
+export const publicLeadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later" },
+});
+
+/** Applied to GET /public/specialists — public, unauthenticated, read-only; 60 requests per 15 minutes per IP. */
+export const publicSpecialistsLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later" },
+});
+
 /** Applied globally — 200 requests per 15 minutes per IP. */
 export const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

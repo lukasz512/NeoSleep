@@ -57,7 +57,7 @@ async function loadOrganizationOptions(): Promise<FormFieldOption[]> {
  * id (picked from the dropdown) or, as a safety net against accidental
  * duplicates, by exact case-insensitive name (typed free text that happens
  * to already exist, e.g. a lead's institution name pre-filling this field —
- * see moveToContactsInitialData in LeadDetailView.vue/LeadsView.vue).
+ * see moveToDoctorsInitialData in LeadDetailView.vue/LeadsView.vue).
  */
 function isKnownOrganization(value: unknown): { id: string; name: string; region: string } | undefined {
   if (typeof value !== "string" || !value.trim()) return undefined;

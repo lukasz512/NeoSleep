@@ -21,7 +21,7 @@ async function buildTestContext(client: Parameters<typeof CreateLeadCommand>[0][
   return {
     slug: TENANT_SLUG,
     client,
-    user: { id: user!.id, email, role: "admin" },
+    user: { id: user!.id, email, role: "admin", roles: [{ role: "admin", scope: "global" }] },
     requestId: `test-${uniqueSuffix()}`,
   };
 }

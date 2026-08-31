@@ -134,4 +134,42 @@ describe("API server", () => {
     const res = await request(app).get("/api/v1/config/app");
     expect(res.status).toBe(200);
   });
+
+  // Booking (public, no session). What's actually under test here is that the
+  // route is reachable without auth — the outcome legitimately differs by
+  // environment: 200 where GOOGLE_CALENDAR_* is configured, 502 ("not
+  // configured", see services/googleCalendar.ts) where it isn't. Asserting a
+  // single status would make this pass or fail on whether a developer happens
+  // to have Calendar credentials in their .env.
+  it("GET /api/v1/booking/slots is public (never 401), configured or not", async () => {
+    const res = await request(app).get("/api/v1/booking/slots");
+    expect(res.status).not.toBe(401);
+    expect([200, 502]).toContain(res.status);
+    if (res.status === 200) {
+      expect(Array.isArray(res.body.slots)).toBe(true);
+    } else {
+      expect(res.body).toHaveProperty("error");
+    }
+  });
+
+  it("POST /api/v1/lead/:id/send-offer without session returns 401", async () => {
+    const res = await request(app).post("/api/v1/lead/00000000-0000-0000-0000-000000000000/send-offer");
+    expect(res.status).toBe(401);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("GET /api/v1/public/lead/:id is public and 404s for an unknown id", async () => {
+    const res = await request(app).get("/api/v1/public/lead/00000000-0000-0000-0000-000000000000");
+    expect(res.status).not.toBe(401);
+    expect(res.status).toBe(404);
+    expect(res.body).toHaveProperty("error");
+  });
+
+  it("GET /api/v1/public/specialists is public", async () => {
+    const res = await request(app).get("/api/v1/public/specialists");
+    expect(res.status).not.toBe(401);
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("specialists");
+    expect(Array.isArray(res.body.specialists)).toBe(true);
+  });
 });

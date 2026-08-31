@@ -76,7 +76,7 @@ usersRouter.post(
     const slug = tenantSlugFromHost(req.hostname);
     const body = req.body as {
       salutation?: string; first_name?: string; last_name?: string; email?: string; password?: string;
-      role?: StaffRole; region?: string; country_code?: string; phone?: string;
+      role?: StaffRole; scope?: string; region?: string; country_code?: string; phone?: string;
     };
 
     const user = await withTenant(slug, async (client) => {
@@ -88,6 +88,7 @@ usersRouter.post(
         email: typeof body.email === "string" ? body.email : "",
         password: typeof body.password === "string" ? body.password : null,
         role: body.role,
+        scope: typeof body.scope === "string" ? body.scope : undefined,
         region: typeof body.region === "string" ? body.region : null,
         country_code: typeof body.country_code === "string" ? body.country_code : null,
         phone: typeof body.phone === "string" ? body.phone : null,
@@ -111,7 +112,7 @@ usersRouter.patch(
     const slug = tenantSlugFromHost(req.hostname);
     const body = req.body as {
       salutation?: string; first_name?: string; last_name?: string; phone?: string;
-      status?: "active" | "inactive" | "suspended"; country_code?: string; role?: StaffRole;
+      status?: "active" | "inactive" | "suspended"; country_code?: string; role?: StaffRole; scope?: string;
     };
 
     const user = await withTenant(slug, async (client) => {
@@ -124,6 +125,7 @@ usersRouter.patch(
         status: body.status,
         country_code: body.country_code !== undefined ? body.country_code : undefined,
         role: body.role,
+        scope: typeof body.scope === "string" ? body.scope : undefined,
       });
     });
 
@@ -192,11 +194,12 @@ usersRouter.get(
 );
 
 // ---------------------------------------------------------------------------
-// DELETE /api/v1/users/:id — soft delete
+// DELETE /api/v1/users/:id — soft delete (admin-only — manager has full read/
+// write access elsewhere in this router but never delete, per the RBAC model)
 // ---------------------------------------------------------------------------
 usersRouter.delete(
   "/users/:id",
-  requireRole("admin", "manager"),
+  requireRole("admin"),
   asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id?.trim();
     if (!id) throw new ValidationError("Missing user id");

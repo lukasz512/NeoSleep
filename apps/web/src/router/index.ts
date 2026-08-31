@@ -32,7 +32,9 @@ const routes: RouteRecordRaw[] = [
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes,
-  scrollBehavior: () => ({ top: 0, behavior: "instant" }),
+  // A hash (e.g. /for-professionals#how-to-join) must scroll to that anchor
+  // instead of always snapping to the page top.
+  scrollBehavior: (to) => (to.hash ? { el: to.hash, behavior: "smooth" } : { top: 0, behavior: "instant" }),
 });
 
 export default router;

@@ -43,17 +43,46 @@ export const ORTHOAPNEA_EMAIL: string | undefined = process.env.ORTHOAPNEA_EMAIL
 export const ORTHOAPNEA_PASSWORD: string | undefined = process.env.ORTHOAPNEA_PASSWORD;
 
 /**
- * Resend — transactional email sender (password reset, partner invites, contact
- * form notifications), see mailer.ts. Sent over Resend's HTTP API, not SMTP —
- * SMTP ports are blocked on Render's Free plan (see ADR-016), so this is not
- * just a provider swap, it's the only thing that can actually work there.
- * RESEND_FROM_EMAIL must be on a domain verified in the Resend dashboard (DNS
- * records added there) — use a dedicated subdomain (mail.neosleepcare.com),
- * not the apex, so Resend's own MX/SPF/DKIM never collides with the apex
- * domain's human mail (Microsoft 365, see docs/INFRASTRUCTURE.md). No real
- * mailbox needs to exist behind that address. Optional: without both,
- * mailer.ts logs a warning and silently skips sending (see ORTHOAPNEA_* above
- * for the same pattern).
+ * Google Calendar — books partnership-offer calls onto a single personal Gmail
+ * calendar (not Google Workspace, so no built-in "Appointment schedule" page).
+ * OAuth2 with a long-lived refresh token, server-side only. Optional: without
+ * it the booking routes just respond 503 (see services/googleCalendar.ts).
+ */
+export const GOOGLE_CALENDAR_CLIENT_ID: string | undefined = process.env.GOOGLE_CALENDAR_CLIENT_ID;
+export const GOOGLE_CALENDAR_CLIENT_SECRET: string | undefined = process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
+export const GOOGLE_CALENDAR_REFRESH_TOKEN: string | undefined = process.env.GOOGLE_CALENDAR_REFRESH_TOKEN;
+export const GOOGLE_CALENDAR_ID: string = process.env.GOOGLE_CALENDAR_ID ?? "neosleepcare@gmail.com";
+/** Always invited alongside the lead on every booked demo call (e.g. lukasz.ostrowski@neosleepcare.com,alfred.jan@neosleepcare.com). */
+export const GOOGLE_CALENDAR_EXTRA_ATTENDEES: string[] = (process.env.GOOGLE_CALENDAR_EXTRA_ATTENDEES ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+/**
+ * Google Geocoding API — server-side only, resolves an organization's address
+ * to lat/lng for the public "find a specialist" map pins (see
+ * services/geocoding.ts). A plain API key (no OAuth), restricted in Google
+ * Cloud Console to the Geocoding API + this server's IP. Optional: without it
+ * geocoding is just skipped (organizations save fine, they simply have no pin
+ * until this is configured and re-saved/backfilled).
+ */
+export const GOOGLE_MAPS_SERVER_API_KEY: string | undefined = process.env.GOOGLE_MAPS_SERVER_API_KEY;
+
+/**
+ * Resend — transactional email sender (password reset, partner invites, lead
+ * offers, demo booking confirmations, contact form notifications), see
+ * mailer.ts. Sent over Resend's HTTP API, not SMTP — SMTP ports are blocked
+ * on Render's Free plan (see ADR-016), so this is not just a provider swap,
+ * it's the only thing that can actually work there. RESEND_FROM_EMAIL must
+ * be on a domain verified in the Resend dashboard (DNS records added there)
+ * — use a dedicated subdomain (mail.neosleepcare.com), not the apex, so
+ * Resend's own MX/SPF/DKIM never collides with the apex domain's human mail
+ * (Microsoft 365, see docs/INFRASTRUCTURE.md). No real mailbox needs to
+ * exist behind that address — individual reps/admins send "as themselves"
+ * via a Reply-To header instead (see mailer.ts's sendEmail()), not a
+ * per-person verified sending address. Optional: without both, mailer.ts
+ * logs a warning and silently skips sending (see ORTHOAPNEA_* above for the
+ * same pattern).
  */
 export const RESEND_API_KEY: string | undefined = process.env.RESEND_API_KEY;
 export const RESEND_FROM_EMAIL: string | undefined = process.env.RESEND_FROM_EMAIL;

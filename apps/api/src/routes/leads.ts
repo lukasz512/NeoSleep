@@ -4,7 +4,7 @@ import { requireAuth } from "../middleware/requireAuth.js";
 import { requireRole } from "../middleware/requireRole.js";
 import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
-import { CreateLeadCommand, UpdateLeadCommand, ConvertLeadCommand, DeleteLeadCommand } from "../commands/lead.js";
+import { CreateLeadCommand, UpdateLeadCommand, ConvertLeadCommand, DeleteLeadCommand, SendLeadOfferEmailCommand } from "../commands/lead.js";
 import { InvitePractitionerCommand } from "../commands/invitePractitioner.js";
 import { GetLeadListQuery, GetLeadByIdQuery } from "../queries/lead.js";
 import { ValidationError } from "../errors.js";
@@ -194,11 +194,32 @@ leadsRouter.post(
 );
 
 // ---------------------------------------------------------------------------
-// DELETE /api/v1/lead/:id — soft delete
+// POST /api/v1/lead/:id/send-offer — email the partnership offer + booking link
+// ---------------------------------------------------------------------------
+leadsRouter.post(
+  "/lead/:id/send-offer",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id?.trim();
+    if (!id) throw new ValidationError("Missing lead id");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    const lead = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return SendLeadOfferEmailCommand(ctx, id);
+    });
+
+    if (!lead) { res.status(404).json({ error: "Lead not found" }); return; }
+    res.json(lead);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// DELETE /api/v1/lead/:id — soft delete (admin-only, matches frontend gating)
 // ---------------------------------------------------------------------------
 leadsRouter.delete(
   "/lead/:id",
-  requireRole("admin", "manager"),
+  requireRole("admin"),
   asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id?.trim();
     if (!id) throw new ValidationError("Missing lead id");

@@ -25,6 +25,7 @@
     "vuetify": "catalog:"
   },
   "devDependencies": {
+    "@types/google.maps": "^3.65.5",
     "@vitejs/plugin-vue": "catalog:",
     "@vue/test-utils": "catalog:",
     "eslint": "catalog:",
