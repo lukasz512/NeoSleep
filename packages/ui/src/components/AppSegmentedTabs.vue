@@ -112,6 +112,24 @@ const activeIndex = computed(() => Math.max(0, props.options.findIndex((o) => o.
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   text-transform: none;
   letter-spacing: normal;
+  /* Vuetify's flex-grow-1 utility only sets flex-grow — flex-basis stays
+     auto, so a long label (e.g. "Estudios de sueño") keeps its content
+     width and steals space from neighbors instead of sharing the row
+     equally. The sliding thumb above is positioned by equal-interval math
+     (activeIndex * 100% / options.length), so any segment that isn't
+     actually equal-width reads as visually overlapping the thumb/adjacent
+     label. flex-basis: 0 forces true equal columns regardless of content;
+     min-width: 0 is required alongside it for the ellipsis rule below to
+     be able to shrink a flex child below its content size at all. */
+  flex-basis: 0;
+  min-width: 0;
+}
+
+.app-segmented-tabs__tab :deep(.v-btn__content) {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  display: block;
 }
 
 .app-segmented-tabs__tab--active {

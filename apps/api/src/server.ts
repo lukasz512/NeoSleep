@@ -22,6 +22,9 @@ import { inviteRouter } from "./routes/invite.js";
 import { notificationRouter } from "./routes/notification.js";
 import { orthoapneaResourcesRouter } from "./routes/partners/orthoapnea-resources.js";
 import { orthoapneaStatusRouter } from "./routes/partners/orthoapnea-status.js";
+import { noteRouter } from "./routes/note.js";
+import { sleepStudyRouter } from "./routes/sleepStudy.js";
+import { treatmentPlanRouter } from "./routes/treatmentPlan.js";
 import { runMigrations } from "./db.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { apiLimiter } from "./middleware/rateLimiter.js";
@@ -115,6 +118,9 @@ app.use("/api/v1", inviteRouter);
 app.use("/api/v1", notificationRouter);
 app.use("/api/v1", orthoapneaResourcesRouter);
 app.use("/api/v1", orthoapneaStatusRouter);
+app.use("/api/v1", noteRouter);
+app.use("/api/v1", sleepStudyRouter);
+app.use("/api/v1", treatmentPlanRouter);
 
 app.use(errorHandler);
 

@@ -14,6 +14,8 @@ export interface EntityListOptions {
   i18n: { errorLoad: string };
   detailRouteName?: string;
   detailRouteParam?: string;
+  /** Optional extra query params for the detail-route push (e.g. deep-linking into a specific tab). */
+  detailRouteQuery?: (item: Record<string, unknown>) => Record<string, string>;
   filterParamKeys?: string[];
   searchParamKey?: string;
   /**
@@ -138,6 +140,7 @@ export function useEntityList(opts: EntityListOptions) {
       router.push({
         name: opts.detailRouteName,
         params: { [opts.detailRouteParam ?? "id"]: String(id) },
+        query: opts.detailRouteQuery?.(item),
       });
     }
   }
