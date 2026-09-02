@@ -1,5 +1,6 @@
 import type { PoolClient } from "pg";
 import { getDb } from "./connection.js";
+import { isoDate } from "../routes/utils.js";
 
 /**
  * Full audit log row. Aligns with the audit_log table in the tenant schema (FHIR: AuditEvent).
@@ -93,4 +94,71 @@ export async function insertAuditLog(clientOrRow: PoolClient | AuditLogInsert, r
     // Non-fatal: log but never propagate so business transactions are not rolled back.
     console.error("[audit] insertAuditLog failed:", (err as Error).message);
   }
+}
+
+export interface AuditLogEntry {
+  id: string;
+  created_at: string;
+  user_id: string | null;
+  user_name: string | null;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  outcome: string;
+  entity_before: Record<string, unknown> | null;
+  entity_after: Record<string, unknown> | null;
+}
+
+type AuditLogRow = {
+  id: string;
+  created_at: Date;
+  user_id: string | null;
+  user_first_name: string | null;
+  user_last_name: string | null;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  outcome: string;
+  entity_before: Record<string, unknown> | null;
+  entity_after: Record<string, unknown> | null;
+};
+
+/**
+ * Reads audit_log rows for a set of (entity_type, entity_id) pairs — used by
+ * the patient History tab to show what happened to a patient plus their
+ * linked sleep studies / treatment plans in one timeline. Read-only, unlike
+ * insertAuditLog this DOES require a tenant-scoped client (no legacy fallback)
+ * since it's new and has no callers predating withTenant().
+ */
+export async function getAuditLogForEntities(
+  client: PoolClient,
+  entityTypes: string[],
+  entityIds: string[]
+): Promise<AuditLogEntry[]> {
+  if (entityTypes.length === 0 || entityIds.length === 0) return [];
+
+  const result = await client.query<AuditLogRow>(
+    `SELECT a.id, a.created_at, a.user_id, a.action, a.entity_type, a.entity_id, a.outcome,
+            a.entity_before, a.entity_after,
+            ui.first_name AS user_first_name, ui.last_name AS user_last_name
+     FROM audit_log a
+     LEFT JOIN users u ON a.user_id = u.id
+     LEFT JOIN identities ui ON u.identity_id = ui.id
+     WHERE a.entity_type = ANY($1) AND a.entity_id = ANY($2)
+     ORDER BY a.created_at DESC`,
+    [entityTypes, entityIds]
+  );
+
+  return result.rows.map((row) => ({
+    id: row.id,
+    created_at: isoDate(row.created_at),
+    user_id: row.user_id,
+    user_name: [row.user_first_name, row.user_last_name].filter(Boolean).join(" ").trim() || null,
+    action: row.action,
+    entity_type: row.entity_type,
+    entity_id: row.entity_id,
+    outcome: row.outcome,
+    entity_before: row.entity_before,
+    entity_after: row.entity_after,
+  }));
 }

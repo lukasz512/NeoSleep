@@ -19,3 +19,6 @@ export * from "./notification.js";
 export * from "./invite.js";
 export * from "./consent.js";
 export * from "./fileAttachment.js";
+export * from "./note.js";
+export * from "./sleepStudy.js";
+export * from "./treatmentPlan.js";

@@ -164,6 +164,17 @@ const ICONS = {
             <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
             <path d="M16 3.13a4 4 0 0 1 0 7.75" />`,
   },
+  "nav-sleep-studies": {
+    strokeWidth: 2,
+    paths: `<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+            <path d="M3 17h3l1.5-3L9 20l1.5-6 1 3h6.5" />`,
+  },
+  "nav-treatment-plans": {
+    strokeWidth: 2,
+    paths: `<path d="M21 8l-9-5-9 5 9 5 9-5z" />
+            <path d="M3 8v8l9 5 9-5V8" />
+            <line x1="12" y1="13" x2="12" y2="21" />`,
+  },
   // ── Generic UI icons ──────────────────────────────────────────────────────
   "close": {
     strokeWidth: 2,

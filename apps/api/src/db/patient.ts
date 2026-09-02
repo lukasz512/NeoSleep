@@ -6,6 +6,12 @@ function isoDate(val: Date | string | null | undefined): string {
   return val instanceof Date ? val.toISOString() : String(val);
 }
 
+/** pg returns NUMERIC columns as strings (avoids float precision loss on its end) — the
+ *  Patient/PatientRow types say `number`, but ahi_baseline needs converting to actually be one. */
+function optNum(val: string | number | null): number | null {
+  return val === null ? null : Number(val);
+}
+
 export interface Patient {
   id: string;
   identity_id: string;
@@ -101,7 +107,8 @@ type PatientRow = {
   phone: string | null;
   practitioner_id: string | null;
   diagnosis_code: Record<string, unknown> | null;
-  ahi_baseline: number | null;
+  // NUMERIC(6,2) column — pg driver returns it as a string, not a number.
+  ahi_baseline: string | null;
   cpap_device: string | null;
   medical_record: string | null;
   region: string;
@@ -132,7 +139,7 @@ function serialize(row: PatientRow): Patient & { name: string } {
     phone: row.phone,
     practitioner_id: row.practitioner_id,
     diagnosis_code: row.diagnosis_code,
-    ahi_baseline: row.ahi_baseline,
+    ahi_baseline: optNum(row.ahi_baseline),
     cpap_device: row.cpap_device,
     medical_record: row.medical_record,
     region: row.region,

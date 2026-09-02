@@ -341,6 +341,22 @@ function chipColor(color?: string): string | undefined {
   return color && color !== "default" ? color : undefined;
 }
 
+/**
+ * VCombobox (unlike VSelect/VAutocomplete) does not resolve through
+ * itemValue when the user picks an item from its dropdown — it emits the
+ * raw item object instead. Free-typed text (combobox's whole point) still
+ * comes through as a plain string, so this only fires for a dropdown pick.
+ * Without this unwrap, `{title, value}` was landing in form state — and
+ * from there into the payload — as-is (e.g. identities.title getting saved
+ * as the literal string `{"title":"Sra.","value":"Sra."}`).
+ */
+function normalizeFieldValue(f: FormFieldDef, v: unknown): unknown {
+  if (f.type === "combobox" && v && typeof v === "object" && "value" in (v as Record<string, unknown>)) {
+    return (v as { value: unknown }).value;
+  }
+  return v;
+}
+
 function componentFor(type: FormFieldType) {
   switch (type) {
     case "select": return VSelect;
@@ -356,7 +372,7 @@ function componentFor(type: FormFieldType) {
 function fieldAttrs(f: FormFieldDef): Record<string, unknown> {
   const common: Record<string, unknown> = {
     modelValue: form.value[f.key],
-    "onUpdate:modelValue": (v: unknown) => { form.value[f.key] = v; },
+    "onUpdate:modelValue": (v: unknown) => { form.value[f.key] = normalizeFieldValue(f, v); },
     label: labelFor(f),
     variant: "outlined",
     density: "comfortable",
@@ -396,6 +412,7 @@ function fieldAttrs(f: FormFieldDef): Record<string, unknown> {
         itemTitle: "title",
         itemValue: "value",
         menuIcon: "",
+        clearable: true,
       };
     case "autocomplete":
       return {
@@ -408,8 +425,6 @@ function fieldAttrs(f: FormFieldDef): Record<string, unknown> {
         chips: !!f.multiple,
         closableChips: !!f.multiple,
       };
-    case "combobox":
-      return { ...common, items: resolvedOptions(f), itemTitle: "title", itemValue: "value", clearable: true };
     case "chips":
       return { ...common, items: [], multiple: true, chips: true, closableChips: true };
     case "date":

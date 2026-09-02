@@ -6,6 +6,7 @@ import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
 import { CreatePatientCommand, UpdatePatientCommand, DeletePatientCommand } from "../commands/patient.js";
 import { GetPatientListQuery, GetPatientByIdQuery } from "../queries/patient.js";
+import { GetHistoryForPatientQuery } from "../queries/auditLog.js";
 import { ValidationError } from "../errors.js";
 import { parsePaginationParams, toFilterArray } from "./utils.js";
 
@@ -67,6 +68,26 @@ patientRouter.get(
 
     if (!patient) { res.status(404).json({ error: "Patient not found" }); return; }
     res.json(patient);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/patient/:id/history — audit trail + lead origin (History tab)
+// ---------------------------------------------------------------------------
+patientRouter.get(
+  "/patient/:id/history",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id?.trim();
+    if (!id) throw new ValidationError("Missing patient id");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    const history = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return GetHistoryForPatientQuery(ctx, id);
+    });
+
+    res.json(history);
   })
 );
 

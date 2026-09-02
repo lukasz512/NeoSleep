@@ -188,6 +188,27 @@ export async function getLeadById(client: PoolClient, id: string): Promise<Lead 
 }
 
 /**
+ * Finds the lead a patient was converted from, if any — used by the patient
+ * History tab to show "originally referred as a lead (source)". Returns null
+ * for patients created directly (never a lead).
+ */
+export async function findLeadConvertedToPatient(client: PoolClient, patientId: string): Promise<Lead | null> {
+  try {
+    const result = await client.query<LeadRow>(
+      `SELECT ${LEAD_SELECT_COLS}
+       FROM lead l JOIN identities i ON l.identity_id = i.id
+       WHERE l.converted_to_id = $1 AND l.converted_to_type = 'patient'`,
+      [patientId]
+    );
+    const row = result.rows[0];
+    return row ? attachName(row) : null;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("findLeadConvertedToPatient", err);
+  }
+}
+
+/**
  * Inserts a lead + identity record using the provided client.
  * The client must already be in a transaction (withTenant handles this).
  * No BEGIN/COMMIT here — the caller owns the transaction boundary.
