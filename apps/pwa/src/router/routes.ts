@@ -47,6 +47,9 @@ export const routes: RouteRecordRaw[] = [
   { path: "/hco/:id", name: "hco-detail", component: () => import("../views/HCODetailView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep", "manager", "admin"] } },
   { path: "/patients", name: "patients", component: () => import("../views/PatientsView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
   { path: "/patients/:id", name: "patient-detail", component: () => import("../views/PatientDetailView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
+  // Cross-patient clinical aggregates — rep excluded (sees studies/orders only inside their own patient's tabs, not this tenant-wide list).
+  { path: "/sleep-studies", name: "sleep-studies", component: () => import("../views/SleepStudiesView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["doctor", "manager", "admin"] } },
+  { path: "/treatment-plans", name: "treatment-plans", component: () => import("../views/TreatmentPlansView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["doctor", "manager", "admin"] } },
   { path: "/planner", name: "planner", component: () => import("../views/PlannerView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
   // Hidden from nav while the OrthoApnea resources module ships (not deleted — see the `hidden` filter in appNavRoutes below).
   { path: "/presentations", name: "presentations", component: () => import("../views/PresentationsView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES, hidden: true } },

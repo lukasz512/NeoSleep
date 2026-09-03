@@ -84,8 +84,8 @@ export interface GetLeadListResult {
 
 /**
  * Returns a paginated, filtered list of leads.
- * Admins see all leads including completed ones older than 24h.
- * Non-admins automatically have completed leads older than 24h hidden.
+ * Admins see all leads including completed ones older than 24h and declined leads.
+ * Non-admins automatically have completed leads older than 24h and declined leads hidden.
  */
 export async function GetLeadListQuery(
   ctx: TenantContext,
@@ -96,6 +96,7 @@ export async function GetLeadListQuery(
     status:                    input.status,
     region:                    input.region,
     hideCompletedOlderThan24h: ctx.user.role !== "admin",
+    hideDeclined:              ctx.user.role !== "admin",
   };
 
   const page      = input.page ?? 1;
@@ -120,5 +121,54 @@ export async function GetLeadByIdQuery(
 ): Promise<LeadDto | null> {
   const lead = await getLeadById(ctx.client, id);
   if (!lead) return null;
+  // 'declined' leads are admin-only visibility — treat as not-found for
+  // everyone else, same as the list query's hideDeclined filter.
+  if (lead.status === "declined" && ctx.user.role !== "admin") return null;
   return toDto(lead);
+}
+
+// ---------------------------------------------------------------------------
+// QUERY: PUBLIC LEAD INFO (unauthenticated — booking-widget prefill)
+// ---------------------------------------------------------------------------
+
+/**
+ * Deliberately narrow — only what a "book a demo" form prefill needs.
+ * Never expose status, region, assigned_to, conversion fields, or internal
+ * metadata through this public, unauthenticated query.
+ */
+export interface PublicLeadInfoDto {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  institution: string | null;
+  country_code: string | null;
+  city: string | null;
+}
+
+/**
+ * Called from `routes/public.ts` — no TenantContext/session (see
+ * commands/lead.ts's UpsertPublicLeadCommand for why: public routes take a
+ * raw PoolClient, not an authenticated ctx). Returns null if not found.
+ */
+export async function GetPublicLeadInfoQuery(
+  client: Parameters<typeof getLeadById>[0],
+  id: string
+): Promise<PublicLeadInfoDto | null> {
+  const lead = await getLeadById(client, id);
+  if (!lead) return null;
+  return {
+    id:           lead.id,
+    first_name:   lead.first_name,
+    last_name:    lead.last_name,
+    email:        lead.email ?? "",
+    phone:        lead.phone ?? "",
+    institution:  lead.institution ?? null,
+    // country_code isn't a writable column on `lead`/`identities` from this flow (see
+    // UpsertPublicLeadCommand) — it's stashed in metadata like institution/city, with the
+    // real column as a fallback in case some other flow (e.g. HCP conversion) set it.
+    country_code: (typeof lead.metadata?.country_code === "string" && lead.metadata.country_code) || lead.country_code || null,
+    city:         typeof lead.metadata?.city === "string" ? lead.metadata.city : null,
+  };
 }

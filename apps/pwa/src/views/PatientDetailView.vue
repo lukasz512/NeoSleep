@@ -82,44 +82,60 @@
         </VTooltip>
       </template>
       <template #sections v-if="patient">
-        <div class="view-item__row">
-          <dt class="view-item__label">{{ t("app.patients.detail.email") }}</dt>
-          <dd class="view-item__value">
-            <a v-if="patient.email" :href="`mailto:${patient.email}`" class="view-item__link">{{ patient.email }}</a>
-            <span v-else class="view-item__empty">—</span>
-          </dd>
-        </div>
-        <div class="view-item__row">
-          <dt class="view-item__label">{{ t("app.patients.detail.phone") }}</dt>
-          <dd class="view-item__value">
-            <a v-if="patient.phone" :href="`tel:${patient.phone}`" class="view-item__link">{{ patient.phone }}</a>
-            <span v-else class="view-item__empty">—</span>
-          </dd>
-        </div>
-        <div class="view-item__row">
-          <dt class="view-item__label">{{ t("app.patients.detail.practitioner") }}</dt>
-          <dd class="view-item__value">{{ patient.practitioner_name || "—" }}</dd>
-        </div>
-        <div class="view-item__row">
-          <dt class="view-item__label">{{ t("app.patients.detail.status") }}</dt>
-          <dd class="view-item__value">{{ statusLabel(patient.status) }}</dd>
-        </div>
-        <div class="view-item__row">
-          <dt class="view-item__label">{{ t("app.patients.detail.region") }}</dt>
-          <dd class="view-item__value">{{ patient.region || "—" }}</dd>
-        </div>
-        <div class="view-item__row">
-          <dt class="view-item__label">{{ t("app.patients.detail.ahiBaseline") }}</dt>
-          <dd class="view-item__value">{{ patient.ahi_baseline ?? "—" }}</dd>
-        </div>
-        <div class="view-item__row">
-          <dt class="view-item__label">{{ t("app.patients.detail.cpapDevice") }}</dt>
-          <dd class="view-item__value">{{ patient.cpap_device || "—" }}</dd>
-        </div>
-        <div class="view-item__row">
-          <dt class="view-item__label">{{ t("app.patients.detail.medicalRecord") }}</dt>
-          <dd class="view-item__value">{{ patient.medical_record || "—" }}</dd>
-        </div>
+        <DetailViewTabs v-model="activeTab" :tabs="patientTabs">
+          <template #details>
+            <div class="view-item__row">
+              <dt class="view-item__label">{{ t("app.patients.detail.email") }}</dt>
+              <dd class="view-item__value">
+                <a v-if="patient.email" :href="`mailto:${patient.email}`" class="view-item__link">{{ patient.email }}</a>
+                <span v-else class="view-item__empty">—</span>
+              </dd>
+            </div>
+            <div class="view-item__row">
+              <dt class="view-item__label">{{ t("app.patients.detail.phone") }}</dt>
+              <dd class="view-item__value">
+                <a v-if="patient.phone" :href="`tel:${patient.phone}`" class="view-item__link">{{ patient.phone }}</a>
+                <span v-else class="view-item__empty">—</span>
+              </dd>
+            </div>
+            <div class="view-item__row">
+              <dt class="view-item__label">{{ t("app.patients.detail.practitioner") }}</dt>
+              <dd class="view-item__value">{{ patient.practitioner_name || "—" }}</dd>
+            </div>
+            <div class="view-item__row">
+              <dt class="view-item__label">{{ t("app.patients.detail.status") }}</dt>
+              <dd class="view-item__value">{{ statusLabel(patient.status) }}</dd>
+            </div>
+            <div class="view-item__row">
+              <dt class="view-item__label">{{ t("app.patients.detail.region") }}</dt>
+              <dd class="view-item__value">{{ patient.region || "—" }}</dd>
+            </div>
+            <div class="view-item__row">
+              <dt class="view-item__label">{{ t("app.patients.detail.ahiBaseline") }}</dt>
+              <dd class="view-item__value">{{ patient.ahi_baseline ?? "—" }}</dd>
+            </div>
+            <div class="view-item__row">
+              <dt class="view-item__label">{{ t("app.patients.detail.cpapDevice") }}</dt>
+              <dd class="view-item__value">{{ patient.cpap_device || "—" }}</dd>
+            </div>
+            <div class="view-item__row">
+              <dt class="view-item__label">{{ t("app.patients.detail.medicalRecord") }}</dt>
+              <dd class="view-item__value">{{ patient.medical_record || "—" }}</dd>
+            </div>
+          </template>
+          <template #notes>
+            <PatientNotesPanel entity-type="patient" :entity-id="patient.id" />
+          </template>
+          <template #studies>
+            <PatientStudiesPanel :patient-id="patient.id" />
+          </template>
+          <template #orthoapnea>
+            <PatientOrthoApneaPanel :patient-id="patient.id" />
+          </template>
+          <template #history>
+            <PatientHistoryPanel :patient-id="patient.id" />
+          </template>
+        </DetailViewTabs>
       </template>
     </ItemDetailLayout>
 
@@ -153,6 +169,11 @@ import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppAvatar from "../components/AppAvatar.vue";
+import DetailViewTabs from "../components/DetailViewTabs.vue";
+import PatientNotesPanel from "../components/patient/PatientNotesPanel.vue";
+import PatientStudiesPanel from "../components/patient/PatientStudiesPanel.vue";
+import PatientOrthoApneaPanel from "../components/patient/PatientOrthoApneaPanel.vue";
+import PatientHistoryPanel from "../components/patient/PatientHistoryPanel.vue";
 import { patientFormFields } from "../config/forms/patientForm";
 import { entityActionIcon, entityActionBtnClass } from "../config/entityActions";
 
@@ -192,6 +213,19 @@ const showEditModal = ref(false);
 const showEventForm = ref(false);
 const eventFormInitial = ref<{ start_at: string; end_at: string; patientIds?: string[] } | undefined>(undefined);
 const showDeleteConfirm = ref(false);
+
+const patientTabs = [
+  { value: "details", labelKey: "app.patients.detail.tabs.details" },
+  { value: "notes", labelKey: "app.patients.detail.tabs.notes" },
+  { value: "studies", labelKey: "app.patients.detail.tabs.studies" },
+  { value: "orthoapnea", labelKey: "app.patients.detail.tabs.orthoapnea" },
+  { value: "history", labelKey: "app.patients.detail.tabs.history" },
+];
+/** Deep-linkable via ?tab= — see SleepStudiesView/TreatmentPlansView row clicks. */
+const activeTab = ref((route.query.tab as string) || "details");
+watch(activeTab, (tab) => {
+  router.replace({ query: { ...route.query, tab } });
+});
 
 function statusLabel(status?: string): string {
   switch (status) {
@@ -313,5 +347,10 @@ watch(() => route.params.id, loadPatient);
   display: flex;
   align-items: center;
   gap: 8px;
+  /* Extra room below the name — with the tab bar sitting directly under it
+     (unlike other detail views, which go straight into rows), the default
+     20px from .view-item__title read as cramped, especially for a long
+     name that wraps to two lines. */
+  margin-bottom: 12px;
 }
 </style>

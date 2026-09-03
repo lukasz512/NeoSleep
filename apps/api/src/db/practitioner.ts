@@ -21,6 +21,7 @@ export interface Practitioner {
   influence_tier: string;
   region: string;
   territory_id: string | null;
+  country_code: string | null;
   status: string;
   metadata: Record<string, unknown> | null;
   created_at: Date;
@@ -48,10 +49,14 @@ export interface InsertPractitionerInput {
   organization_id?: string | null;
   institution?: string | null;
   region?: string;
+  /** RBAC scope for the eventual doctor-role user (see ActivatePractitionerCommand) — not the same as `region`, see requireScope.ts. */
+  country_code?: string | null;
   influence_tier?: string;
   language?: string | null;
   national_ids?: Record<string, string> | null;
   social_links?: Record<string, unknown> | null;
+  /** Defaults to 'pending_approval' — every practitioner needs training completed (see UpdatePractitionerCommand's activation path) before going 'active' and becoming visible on the public map. */
+  status?: "pending_approval" | "active" | "inactive";
 }
 
 export interface UpdatePractitionerInput {
@@ -78,7 +83,7 @@ const PRAC_SELECT_COLS = `
   p.status, p.metadata,
   p.created_at, p.updated_at,
   i.title AS salutation, i.first_name, i.last_name, i.email, i.phone, i.language, i.social_links,
-  COALESCE(i.region, '') AS region, i.territory_id,
+  COALESCE(i.region, '') AS region, i.territory_id, i.country_code,
   o.name AS institution`.trim();
 
 function isPracSortColumn(s: string): s is (typeof PRAC_SORT_COLUMNS)[number] {
@@ -222,8 +227,8 @@ export async function insertPractitioner(client: PoolClient, input: InsertPracti
     // identity), reuse that identity_id instead of erroring. Mirrors
     // insertStaffUser's (db/users.ts) identical upsert.
     const identityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (title, first_name, last_name, email, phone, language, social_links, region)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO identities (title, first_name, last_name, email, phone, language, social_links, region, country_code)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
        RETURNING id`,
       [
@@ -240,6 +245,7 @@ export async function insertPractitioner(client: PoolClient, input: InsertPracti
         trimOrNull(input.language) || "en",
         JSON.stringify(input.social_links ?? {}),
         region || null,
+        trimOrNull(input.country_code),
       ]
     );
     const identityId = identityResult.rows[0]!.id;
@@ -249,7 +255,7 @@ export async function insertPractitioner(client: PoolClient, input: InsertPracti
     // after). Link to the existing row instead of failing.
     const pracResult = await client.query<{ id: string }>(
       `INSERT INTO practitioner (identity_id, organization_id, primary_specialty, influence_tier, status, national_ids)
-       VALUES ($1, $2, $3, $4, 'active', $5)
+       VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (identity_id) DO NOTHING
        RETURNING id`,
       [
@@ -257,6 +263,7 @@ export async function insertPractitioner(client: PoolClient, input: InsertPracti
         orgId ?? null,
         trimOrNull(input.primary_specialty),
         input.influence_tier ?? "C",
+        input.status ?? "pending_approval",
         input.national_ids ? JSON.stringify(input.national_ids) : null,
       ]
     );
@@ -322,6 +329,20 @@ export async function updatePractitioner(client: PoolClient, id: string, input: 
   }
 
   return getPractitionerById(client, id);
+}
+
+/** Sets practitioner.status directly — used by the "training finished" activation flow (see commands/practitioner.ts ActivatePractitionerCommand). */
+export async function updatePractitionerStatus(
+  client: PoolClient,
+  id: string,
+  status: "pending_approval" | "active" | "inactive"
+): Promise<void> {
+  try {
+    await client.query(`UPDATE practitioner SET status = $1, updated_at = now() WHERE id = $2`, [status, id]);
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("updatePractitionerStatus", err);
+  }
 }
 
 /**

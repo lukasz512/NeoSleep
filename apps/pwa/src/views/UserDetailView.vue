@@ -28,13 +28,13 @@
       :not-found-label="t('user.users.detail.notFound')"
       @retry="loadUser"
     >
-      <template #title v-if="user">
+      <template v-if="user" #title>
         <span class="view-item__title-wrap">
           <AppAvatar :name="user.name" entity-type="user" :size="40" />
           <h1 class="view-item__title">{{ user.name }}</h1>
         </span>
       </template>
-      <template #header-actions v-if="user">
+      <template v-if="user" #header-actions>
         <VTooltip location="bottom">
           <template #activator="{ props: tooltipProps }">
             <AppButton
@@ -47,10 +47,13 @@
               :aria-label="t('user.users.actions.resetPassword')"
               @click="onResetPassword"
             >
-              <AppIcon :name="entityActionIcon('resetPassword')" class="view-item__action-icon" />
+              <AppIcon
+                :name="entityActionIcon('resetPassword')"
+                class="view-item__action-icon"
+              />
             </AppButton>
           </template>
-          <span>{{ t('user.users.actions.resetPassword') }}</span>
+          <span>{{ t("user.users.actions.resetPassword") }}</span>
         </VTooltip>
         <VTooltip location="bottom">
           <template #activator="{ props: tooltipProps }">
@@ -60,14 +63,32 @@
               variant="flat"
               size="large"
               :loading="toggleStatusLoading"
-              :class="[entityActionBtnClass('toggleStatus'), { 'view-item__action-btn--inactive': !isActive }]"
-              :aria-label="t(isActive ? 'user.users.actions.disable' : 'user.users.actions.enable')"
+              :class="[
+                entityActionBtnClass('toggleStatus'),
+                { 'view-item__action-btn--inactive': !isActive },
+              ]"
+              :aria-label="
+                t(
+                  isActive
+                    ? 'user.users.actions.disable'
+                    : 'user.users.actions.enable',
+                )
+              "
               @click="onToggleStatus"
             >
-              <AppIcon :name="entityActionIcon('toggleStatus')" class="view-item__action-icon" />
+              <AppIcon
+                :name="entityActionIcon('toggleStatus')"
+                class="view-item__action-icon"
+              />
             </AppButton>
           </template>
-          <span>{{ t(isActive ? 'user.users.actions.disable' : 'user.users.actions.enable') }}</span>
+          <span>{{
+            t(
+              isActive
+                ? "user.users.actions.disable"
+                : "user.users.actions.enable",
+            )
+          }}</span>
         </VTooltip>
         <VTooltip location="bottom">
           <template #activator="{ props: tooltipProps }">
@@ -80,12 +101,15 @@
               :aria-label="t('user.users.detail.edit')"
               @click="onEdit"
             >
-              <AppIcon :name="entityActionIcon('edit')" class="view-item__action-icon" />
+              <AppIcon
+                :name="entityActionIcon('edit')"
+                class="view-item__action-icon"
+              />
             </AppButton>
           </template>
-          <span>{{ t('user.users.detail.edit') }}</span>
+          <span>{{ t("user.users.detail.edit") }}</span>
         </VTooltip>
-        <VTooltip location="bottom">
+        <VTooltip v-if="isAdmin" location="bottom">
           <template #activator="{ props: tooltipProps }">
             <AppButton
               v-bind="tooltipProps"
@@ -96,61 +120,102 @@
               :aria-label="t('user.users.actions.delete')"
               @click="showDeleteConfirm = true"
             >
-              <AppIcon :name="entityActionIcon('delete')" class="view-item__action-icon" />
+              <AppIcon
+                :name="entityActionIcon('delete')"
+                class="view-item__action-icon"
+              />
             </AppButton>
           </template>
-          <span>{{ t('user.users.actions.delete') }}</span>
+          <span>{{ t("user.users.actions.delete") }}</span>
         </VTooltip>
       </template>
 
-      <template #sections v-if="user">
+      <template v-if="user" #sections>
         <VTabs v-model="activeTab" density="compact" class="user-detail__tabs">
           <VTab value="details">{{ t("user.users.detail.tabs.details") }}</VTab>
-          <VTab value="documents">{{ t("user.users.detail.tabs.documents") }}</VTab>
+          <VTab value="documents">{{
+            t("user.users.detail.tabs.documents")
+          }}</VTab>
         </VTabs>
         <VWindow v-model="activeTab">
           <VWindowItem value="details">
             <div class="view-item__row">
-              <dt class="view-item__label">{{ t("user.users.detail.email") }}</dt>
+              <dt class="view-item__label">
+                {{ t("user.users.detail.email") }}
+              </dt>
               <dd class="view-item__value">
-                <a v-if="user.email" :href="`mailto:${user.email}`" class="view-item__link">{{ user.email }}</a>
+                <a
+                  v-if="user.email"
+                  :href="`mailto:${user.email}`"
+                  class="view-item__link"
+                  >{{ user.email }}</a
+                >
                 <span v-else class="view-item__empty">—</span>
               </dd>
             </div>
             <div class="view-item__row">
-              <dt class="view-item__label">{{ t("user.users.detail.role") }}</dt>
-              <dd class="view-item__value">{{ t(`user.users.role.${roleKey}`) }}</dd>
+              <dt class="view-item__label">
+                {{ t("user.users.detail.role") }}
+              </dt>
+              <dd class="view-item__value">
+                {{ t(`user.users.role.${roleKey}`) }}
+              </dd>
             </div>
             <div class="view-item__row">
-              <dt class="view-item__label">{{ t("user.users.detail.status") }}</dt>
-              <dd class="view-item__value">{{ t(`user.users.status.${user.status}`) }}</dd>
+              <dt class="view-item__label">
+                {{ t("user.users.detail.status") }}
+              </dt>
+              <dd class="view-item__value">
+                {{ t(`user.users.status.${user.status}`) }}
+              </dd>
             </div>
             <div class="view-item__row">
-              <dt class="view-item__label">{{ t("user.users.detail.region") }}</dt>
+              <dt class="view-item__label">
+                {{ t("user.users.detail.region") }}
+              </dt>
               <dd class="view-item__value">{{ user.region || "—" }}</dd>
             </div>
             <div class="view-item__row">
-              <dt class="view-item__label">{{ t("user.users.detail.phone") }}</dt>
+              <dt class="view-item__label">
+                {{ t("user.users.detail.phone") }}
+              </dt>
               <dd class="view-item__value">
-                <a v-if="user.phone" :href="`tel:${user.phone}`" class="view-item__link">{{ user.phone }}</a>
+                <a
+                  v-if="user.phone"
+                  :href="`tel:${user.phone}`"
+                  class="view-item__link"
+                  >{{ user.phone }}</a
+                >
                 <span v-else class="view-item__empty">—</span>
               </dd>
             </div>
           </VWindowItem>
           <VWindowItem value="documents">
             <AppLoadingState v-if="documentsLoading" />
-            <p v-else-if="documents.length === 0" class="user-detail__documents-empty">
+            <p
+              v-else-if="documents.length === 0"
+              class="user-detail__documents-empty"
+            >
               {{ t("user.users.documents.empty") }}
             </p>
             <ul v-else class="user-detail__documents-list">
-              <li v-for="doc in documents" :key="doc.id" class="user-detail__documents-item">
+              <li
+                v-for="doc in documents"
+                :key="doc.id"
+                class="user-detail__documents-item"
+              >
                 <span class="user-detail__documents-type">
                   {{ t(`user.users.documents.type.${doc.documentType}`) }}
                 </span>
                 <span class="user-detail__documents-date">
-                  {{ t("user.users.documents.signedAt") }} {{ new Date(doc.signedAt).toLocaleDateString() }}
+                  {{ t("user.users.documents.signedAt") }}
+                  {{ new Date(doc.signedAt).toLocaleDateString() }}
                 </span>
-                <AppButton variant="text" size="small" @click="onDownloadDocument(doc.id)">
+                <AppButton
+                  variant="text"
+                  size="small"
+                  @click="onDownloadDocument(doc.id)"
+                >
                   {{ t("user.users.documents.download") }}
                 </AppButton>
               </li>
@@ -160,7 +225,12 @@
       </template>
     </ItemDetailLayout>
 
-    <VDialog v-model="showDeleteConfirm" max-width="360" :transition="originDialogTransition" persistent>
+    <VDialog
+      v-model="showDeleteConfirm"
+      max-width="360"
+      :transition="originDialogTransition"
+      persistent
+    >
       <VCard>
         <VCardText>{{ t("user.users.actions.deleteConfirmText") }}</VCardText>
         <VCardActions>
@@ -168,7 +238,12 @@
           <AppButton variant="text" @click="showDeleteConfirm = false">
             {{ t("app.common.cancel") }}
           </AppButton>
-          <AppButton color="error" variant="text" :loading="deleteLoading" @click="onDelete">
+          <AppButton
+            color="error"
+            variant="text"
+            :loading="deleteLoading"
+            @click="onDelete"
+          >
             {{ t("user.users.actions.delete") }}
           </AppButton>
         </VCardActions>
@@ -192,9 +267,15 @@ import AppIcon from "../components/AppIcon.vue";
 import AppAvatar from "../components/AppAvatar.vue";
 import AppLoadingState from "../components/AppLoadingState.vue";
 import { userFormFields } from "../config/forms/userForm";
-import { entityActionIcon, entityActionBtnClass } from "../config/entityActions";
+import {
+  entityActionIcon,
+  entityActionBtnClass,
+} from "../config/entityActions";
+import { useAuthStore } from "../stores/auth";
 
-const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
+const FormRenderer = defineAsyncComponent(
+  () => import("../components/FormRenderer.vue"),
+);
 
 interface UserDetail {
   id: string;
@@ -212,6 +293,8 @@ const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const notifications = useNotifications();
+const authStore = useAuthStore();
+const isAdmin = computed(() => authStore.user?.role === "admin");
 
 interface UserDocument {
   id: string;
@@ -241,9 +324,15 @@ function onEdit() {
   showEditModal.value = true;
 }
 
-async function onSubmit(payload: Record<string, unknown>, done: (ok: boolean) => void) {
+async function onSubmit(
+  payload: Record<string, unknown>,
+  done: (ok: boolean) => void,
+) {
   const id = user.value?.id;
-  if (!id) { done(false); return; }
+  if (!id) {
+    done(false);
+    return;
+  }
   try {
     const res = await apiFetch(`/api/v1/users/${id}`, {
       method: "PATCH",
@@ -263,34 +352,45 @@ async function onSubmit(payload: Record<string, unknown>, done: (ok: boolean) =>
   }
 }
 
-const { loading: resetPasswordLoading, run: onResetPassword } = useAsyncAction(async () => {
-  const id = user.value?.id;
-  if (!id) return;
-  const res = await apiFetch(`/api/v1/users/${id}/reset-password`, {
-    method: "POST",
-  });
-  if (res.ok) {
-    notifications.show(t("user.users.actions.resetPasswordSuccess"), "success");
-  }
-});
+const { loading: resetPasswordLoading, run: onResetPassword } = useAsyncAction(
+  async () => {
+    const id = user.value?.id;
+    if (!id) return;
+    const res = await apiFetch(`/api/v1/users/${id}/reset-password`, {
+      method: "POST",
+    });
+    if (res.ok) {
+      notifications.show(
+        t("user.users.actions.resetPasswordSuccess"),
+        "success",
+      );
+    }
+  },
+);
 
-const { loading: toggleStatusLoading, run: onToggleStatus } = useAsyncAction(async () => {
-  const id = user.value?.id;
-  if (!id) return;
-  const nextStatus = isActive.value ? "inactive" : "active";
-  const res = await apiFetch(`/api/v1/users/${id}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status: nextStatus }),
-  });
-  if (res.ok) {
-    notifications.show(
-      t(nextStatus === "active" ? "user.users.actions.enableSuccess" : "user.users.actions.disableSuccess"),
-      "success",
-    );
-    await loadUser();
-  }
-});
+const { loading: toggleStatusLoading, run: onToggleStatus } = useAsyncAction(
+  async () => {
+    const id = user.value?.id;
+    if (!id) return;
+    const nextStatus = isActive.value ? "inactive" : "active";
+    const res = await apiFetch(`/api/v1/users/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: nextStatus }),
+    });
+    if (res.ok) {
+      notifications.show(
+        t(
+          nextStatus === "active"
+            ? "user.users.actions.enableSuccess"
+            : "user.users.actions.disableSuccess",
+        ),
+        "success",
+      );
+      await loadUser();
+    }
+  },
+);
 
 const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
   const id = user.value?.id;
@@ -308,7 +408,10 @@ const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
 
 async function loadUser() {
   const id = route.params.id as string;
-  if (!id) { loading.value = false; return; }
+  if (!id) {
+    loading.value = false;
+    return;
+  }
   loading.value = true;
   user.value = null;
   loadFailed.value = false;
@@ -321,7 +424,9 @@ async function loadUser() {
     if (res.ok) {
       user.value = (await res.json()) as UserDetail;
       isOffline.value = false;
-      void usersCache.cacheOne(user.value as unknown as Record<string, unknown>);
+      void usersCache.cacheOne(
+        user.value as unknown as Record<string, unknown>,
+      );
     } else if (res.status !== 404) {
       loadFailed.value = true;
     }
@@ -345,7 +450,9 @@ async function loadDocuments() {
   if (!id) return;
   documentsLoading.value = true;
   try {
-    const res = await apiFetch(`/api/v1/users/${id}/documents`, { handleErrors: false });
+    const res = await apiFetch(`/api/v1/users/${id}/documents`, {
+      handleErrors: false,
+    });
     if (res.ok) {
       documents.value = (await res.json()) as UserDocument[];
     } else {
@@ -361,7 +468,10 @@ async function loadDocuments() {
 async function onDownloadDocument(documentId: string) {
   const id = route.params.id as string;
   if (!id) return;
-  const res = await apiFetch(`/api/v1/users/${id}/documents/${documentId}/download`, { handleErrors: false });
+  const res = await apiFetch(
+    `/api/v1/users/${id}/documents/${documentId}/download`,
+    { handleErrors: false },
+  );
   if (res.ok) {
     const { url } = (await res.json()) as { url: string };
     window.open(url, "_blank", "noopener");
@@ -374,10 +484,13 @@ onMounted(() => {
   loadUser();
   loadDocuments();
 });
-watch(() => route.params.id, () => {
-  loadUser();
-  loadDocuments();
-});
+watch(
+  () => route.params.id,
+  () => {
+    loadUser();
+    loadDocuments();
+  },
+);
 </script>
 
 <style scoped>

@@ -100,3 +100,12 @@ export async function getFileAttachmentById(client: PoolClient, id: string): Pro
     throw new DatabaseError("getFileAttachmentById", err);
   }
 }
+
+/** Hard delete — file_attachment has no deleted_at column. Leaves the underlying storage blob in place (cheap to orphan, not worth a synchronous storage call on the request path). */
+export async function deleteFileAttachment(client: PoolClient, id: string): Promise<void> {
+  try {
+    await client.query(`DELETE FROM file_attachment WHERE id = $1`, [id]);
+  } catch (err) {
+    throw new DatabaseError("deleteFileAttachment", err);
+  }
+}

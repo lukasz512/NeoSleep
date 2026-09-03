@@ -55,3 +55,15 @@ services:
         sync: false
       - key: ORTHOAPNEA_PASSWORD
         sync: false
+      - key: GOOGLE_CALENDAR_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CALENDAR_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_CALENDAR_REFRESH_TOKEN
+        sync: false
+      - key: GOOGLE_CALENDAR_ID
+        sync: false
+      - key: GOOGLE_CALENDAR_EXTRA_ATTENDEES
+        sync: false
+      - key: GOOGLE_MAPS_SERVER_API_KEY
+        sync: false

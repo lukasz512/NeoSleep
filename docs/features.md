@@ -144,7 +144,7 @@
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Push notifications (Web Push) | **Complete** | `push_subscriptions`, `/api/push` |
-| Email (nodemailer) | **Complete** | Password reset, contact form |
+| Email (Resend) | **Complete** | Password reset, partner invites, lead offers, demo booking, contact form (see ADR-016) |
 | SMS | **Missing** | |
 | In-app notifications | **Missing** | |
 
@@ -165,7 +165,7 @@
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Marketing landing page | **Complete** | `apps/web/` |
-| Contact form → API | **Complete** | `/api/contact` → nodemailer |
+| Contact form → API | **Complete** | `/api/contact` → Resend |
 | SEO / sitemap | **Partial** | |
 
 ---

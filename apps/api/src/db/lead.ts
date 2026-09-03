@@ -35,6 +35,8 @@ export interface GetLeadsFilters {
   status?: string | string[];
   region?: string | string[];
   hideCompletedOlderThan24h?: boolean;
+  /** 'declined' leads (3 failed follow-up attempts, no meeting booked) are admin-only visibility. */
+  hideDeclined?: boolean;
 }
 
 export interface GetLeadsPaginatedResult {
@@ -131,6 +133,11 @@ export async function getLeadsPaginated(
   if (filters.hideCompletedOlderThan24h) {
     conditions.push(`(l.status IS NULL OR LOWER(l.status) != 'completed' OR COALESCE(l.updated_at, l.created_at) >= now() - interval '24 hours')`);
   }
+  if (filters.hideDeclined) {
+    // ANDed unconditionally (not merged into the status filter above) so an
+    // explicit ?status=declined from a non-admin caller can't bypass this.
+    conditions.push(`l.status != 'declined'`);
+  }
 
   const whereClause = `WHERE ${conditions.join(" AND ")}`;
   const orderCol = isLeadSortColumn(sortBy) ? sortBy : "created_at";
@@ -177,6 +184,27 @@ export async function getLeadById(client: PoolClient, id: string): Promise<Lead 
   } catch (err) {
     if (err instanceof AppError) throw err;
     throw new DatabaseError("getLeadById", err);
+  }
+}
+
+/**
+ * Finds the lead a patient was converted from, if any — used by the patient
+ * History tab to show "originally referred as a lead (source)". Returns null
+ * for patients created directly (never a lead).
+ */
+export async function findLeadConvertedToPatient(client: PoolClient, patientId: string): Promise<Lead | null> {
+  try {
+    const result = await client.query<LeadRow>(
+      `SELECT ${LEAD_SELECT_COLS}
+       FROM lead l JOIN identities i ON l.identity_id = i.id
+       WHERE l.converted_to_id = $1 AND l.converted_to_type = 'patient'`,
+      [patientId]
+    );
+    const row = result.rows[0];
+    return row ? attachName(row) : null;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("findLeadConvertedToPatient", err);
   }
 }
 

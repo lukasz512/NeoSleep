@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import bcrypt from "bcrypt";
 import { withTenant, insertStaffUser } from "../db.js";
 import type { TenantContext } from "../context/TenantContext.js";
-import { CreateUserCommand, ResetUserPasswordCommand } from "./users.js";
+import { ForbiddenError } from "../errors.js";
+import { CreateUserCommand, UpdateUserCommand, DeleteUserCommand, ResetUserPasswordCommand } from "./users.js";
 
 // mailer.ts is the external boundary (Resend) — mocked here, same pattern as
 // commands/invitePractitioner.spec.ts / leadOffer.spec.ts, per CLAUDE.md's
@@ -25,7 +26,7 @@ async function buildTestContext(client: Parameters<typeof CreateUserCommand>[0][
   return {
     slug: TENANT_SLUG,
     client,
-    user: { id: user!.id, email, role: "admin" },
+    user: { id: user!.id, email, role: "admin", roles: [{ role: "admin", scope: "global" }] },
     requestId: `test-${uniqueSuffix()}`,
   };
 }
@@ -58,4 +59,62 @@ describe("ResetUserPasswordCommand", () => {
       expect(resetLink).not.toContain(",");
     });
   });
+});
+
+describe("UpdateUserCommand / DeleteUserCommand — country-scope enforcement", () => {
+  it("a country-scoped manager can act on a user in their own country but is blocked (ForbiddenError) from one in a different country", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const adminCtx = await buildTestContext(client);
+
+      const plTarget = await CreateUserCommand(adminCtx, {
+        first_name: "PL", last_name: `Target-${uniqueSuffix()}`,
+        email: `qa-scope-pl-${uniqueSuffix()}@neosleepcare.com`,
+        role: "rep", country_code: "PL",
+      });
+      const mxTarget = await CreateUserCommand(adminCtx, {
+        first_name: "MX", last_name: `Target-${uniqueSuffix()}`,
+        email: `qa-scope-mx-${uniqueSuffix()}@neosleepcare.com`,
+        role: "rep", country_code: "MX",
+      });
+
+      const managerEmail = `qa-scope-manager-${uniqueSuffix()}@neosleepcare.com`;
+      const managerHash = await bcrypt.hash("irrelevant-not-logged-in-with", 4);
+      const manager = await insertStaffUser(
+        client, managerEmail, "QA", "Manager", "manager", managerHash, false,
+        null, null, "PL"
+      );
+      const managerCtx: TenantContext = {
+        slug: TENANT_SLUG,
+        client,
+        user: { id: manager!.id, email: managerEmail, role: "manager", roles: [{ role: "manager", scope: "PL" }] },
+        requestId: `test-${uniqueSuffix()}`,
+      };
+
+      // In-scope: same country — allowed.
+      const updated = await UpdateUserCommand(managerCtx, plTarget.id, { phone: "+48500600700" });
+      expect(updated?.phone).toBe("+48500600700");
+
+      // Out-of-scope: different country — blocked, not silently no-op'd.
+      await expect(UpdateUserCommand(managerCtx, mxTarget.id, { phone: "+52555000000" })).rejects.toThrow(ForbiddenError);
+      await expect(DeleteUserCommand(managerCtx, mxTarget.id)).rejects.toThrow(ForbiddenError);
+
+      // In-scope delete — allowed (cleans up the PL target this test created).
+      await expect(DeleteUserCommand(managerCtx, plTarget.id)).resolves.not.toThrow();
+    });
+  }, 15000);
+
+  it("a global-scoped role can act on a user in any country", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const adminCtx = await buildTestContext(client);
+
+      const mxTarget = await CreateUserCommand(adminCtx, {
+        first_name: "MX", last_name: `Target-${uniqueSuffix()}`,
+        email: `qa-scope-global-${uniqueSuffix()}@neosleepcare.com`,
+        role: "rep", country_code: "MX",
+      });
+
+      const updated = await UpdateUserCommand(adminCtx, mxTarget.id, { phone: "+52555000000" });
+      expect(updated?.phone).toBe("+52555000000");
+    });
+  }, 15000);
 });

@@ -303,6 +303,18 @@ body {
   background: rgba(var(--v-theme-primary), 0.2);
   color: rgb(var(--v-theme-primary));
 }
+.pwa-lead-status-chip--follow_up_needed {
+  background: rgba(var(--v-theme-warning), 0.2);
+  color: rgb(var(--v-theme-warning));
+}
+.pwa-lead-status-chip--meeting_scheduled {
+  background: rgba(var(--v-theme-success), 0.2);
+  color: rgb(var(--v-theme-success));
+}
+.pwa-lead-status-chip--declined {
+  background: rgba(var(--v-theme-error), 0.2);
+  color: rgb(var(--v-theme-error));
+}
 
 /* Entity-action icon colors (list-item context menus) — kept in sync with
    config/entityActions.ts and the header-action button tones in

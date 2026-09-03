@@ -1,4 +1,3 @@
-import crypto from "node:crypto";
 import bcrypt from "bcrypt";
 import type { PoolClient } from "pg";
 import { emailT } from "@neo/email";
@@ -11,7 +10,6 @@ import {
   getUserById,
   setUserPassword,
   mergeIdentityMetadataForUser,
-  createInviteToken,
   getInviteTokenByHash,
   markInviteTokenUsed,
   convertLead,
@@ -21,7 +19,7 @@ import {
 } from "../db.js";
 import { ConflictError, NotFoundError, ValidationError } from "../errors.js";
 import { hashToken } from "../utils/hashToken.js";
-import { sendPartnerInviteEmail } from "../mailer.js";
+import { sendPartnerJoinThankYouEmail } from "../mailer.js";
 import { renderSignedDocumentPdf, uploadPartnerDocument } from "../services/partnerDocuments.js";
 
 /**
@@ -48,9 +46,8 @@ import { renderSignedDocumentPdf, uploadPartnerDocument } from "../services/part
  */
 
 const BCRYPT_ROUNDS = 12;
-const INVITE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-function inferLanguage(region: string | null | undefined): string {
+export function inferLanguage(region: string | null | undefined): string {
   const r = (region || "").toUpperCase();
   if (r === "PL") return "pl";
   if (r === "MX") return "mx";
@@ -94,6 +91,10 @@ export async function InvitePractitionerCommand(
   const email = input.email?.trim() || lead.email;
   if (!email) throw new ValidationError("An email address is required");
 
+  // Doctors are per-country by definition (they practice in one market) — scope
+  // the new "doctor" role to the lead's own country_code, not 'global'. Falls
+  // back to 'global' only if the lead is missing country_code (legacy data);
+  // that's a data-quality gap upstream, not a reason to block the invite.
   const user = await insertStaffUser(
     ctx.client,
     email,
@@ -103,7 +104,10 @@ export async function InvitePractitionerCommand(
     null,
     true,
     lead.salutation,
-    lead.phone
+    lead.phone,
+    lead.country_code ?? "global",
+    ctx.user.id,
+    lead.country_code
   );
   if (!user) throw new ConflictError("A user with this email already exists");
 
@@ -124,22 +128,27 @@ export async function InvitePractitionerCommand(
     phone: lead.phone,
     salutation: lead.salutation,
     region: lead.region,
+    country_code: lead.country_code,
     institution: lead.institution ?? undefined,
   });
 
-  const token = crypto.randomBytes(32).toString("hex");
-  const tokenHash = hashToken(token);
-  const expiresAt = new Date(Date.now() + INVITE_EXPIRY_MS);
-  await createInviteToken(ctx.client, user.id, leadId, tokenHash, expiresAt, ctx.user.id);
-
-  const registerLink = `${frontendOrigin}/partner-register?token=${encodeURIComponent(token)}`;
-  await sendPartnerInviteEmail(email, registerLink, {
-    title: lead.salutation,
-    firstName,
-    lastName,
-    language: inferLanguage(lead.region),
-    region: lead.region,
-  });
+  // The actual "set your password" registration email (with its 7-day-expiry
+  // token) is deliberately NOT sent here — it's deferred to
+  // ActivatePractitionerCommand ("training/capacitation finished" — see
+  // commands/practitioner.ts), since capacitation can easily take longer
+  // than 7 days and a token minted now would expire unused. This is just a
+  // holding "thank you for joining" email.
+  await sendPartnerJoinThankYouEmail(
+    email,
+    {
+      title: lead.salutation,
+      firstName,
+      lastName,
+      language: inferLanguage(lead.region),
+      region: lead.region,
+    },
+    { name: ctx.user.name ?? "NeoSleep", email: ctx.user.email }
+  );
 
   await insertAuditLog(ctx.client, {
     user_id: ctx.user.id,

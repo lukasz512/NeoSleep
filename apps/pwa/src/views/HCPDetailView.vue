@@ -26,109 +26,157 @@
       :text="t('app.common.offlineShowingCached')"
     />
     <ItemDetailLayout
-    :has-content="!!hcp"
-    :loading="loading"
-    :load-error="loadFailed"
-    :back-route="{ name: 'hcp' }"
-    :back-label="t('user.hcp.detail.back')"
-    :not-found-label="t('user.hcp.detail.notFound')"
-    :title="hcp?.name"
-    @retry="loadHCP"
-  >
-    <template #header-actions v-if="hcp">
-      <VTooltip location="bottom">
-        <template #activator="{ props: tooltipProps }">
-          <AppButton
-            v-bind="tooltipProps"
-            icon
-            variant="flat"
-            size="large"
-            :class="entityActionBtnClass('scheduleVisit')"
-            :aria-label="t('user.detail.scheduleVisit')"
-            @click="onScheduleVisit"
-          >
-            <AppIcon :name="entityActionIcon('scheduleVisit')" class="view-item__action-icon" />
-          </AppButton>
-        </template>
-        <span>{{ t('user.detail.scheduleVisit') }}</span>
-      </VTooltip>
-      <VTooltip v-if="isAdmin" location="bottom">
-        <template #activator="{ props: tooltipProps }">
-          <AppButton
-            v-bind="tooltipProps"
-            icon
-            variant="flat"
-            size="large"
-            :class="entityActionBtnClass('edit')"
-            :aria-label="t('user.hcp.detail.edit')"
-            @click="onEdit"
-          >
-            <AppIcon :name="entityActionIcon('edit')" class="view-item__action-icon" />
-          </AppButton>
-        </template>
-        <span>{{ t('user.hcp.detail.edit') }}</span>
-      </VTooltip>
-      <VTooltip v-if="isAdmin" location="bottom">
-        <template #activator="{ props: tooltipProps }">
-          <AppButton
-            v-bind="tooltipProps"
-            icon
-            variant="flat"
-            size="large"
-            :class="entityActionBtnClass('delete')"
-            :aria-label="t('user.hcp.actions.delete')"
-            @click="showDeleteConfirm = true"
-          >
-            <AppIcon :name="entityActionIcon('delete')" class="view-item__action-icon" />
-          </AppButton>
-        </template>
-        <span>{{ t('user.hcp.actions.delete') }}</span>
-      </VTooltip>
-    </template>
-    <template #title v-if="hcp">
-      <span class="view-item__title-wrap">
-        <AppAvatar :name="hcp.name" entity-type="hcp" :size="40" />
-        <GenderIcon :gender="getGenderFromName(hcp.name)" />
-        <h1 class="view-item__title">{{ hcp.name }}</h1>
-      </span>
-    </template>
-    <template #sections v-if="hcp">
-      <div class="view-item__row">
-        <dt class="view-item__label">{{ t("user.hcp.detail.email") }}</dt>
-        <dd class="view-item__value">
-          <a v-if="hcp.email" :href="`mailto:${hcp.email}`" class="view-item__link">{{ hcp.email }}</a>
-          <span v-else class="view-item__empty">—</span>
-        </dd>
-      </div>
-      <div class="view-item__row">
-        <dt class="view-item__label">{{ t("user.hcp.detail.specialty") }}</dt>
-        <dd class="view-item__value">{{ hcp.specialty || "—" }}</dd>
-      </div>
-      <div class="view-item__row">
-        <dt class="view-item__label">{{ t("user.hcp.detail.institution") }}</dt>
-        <dd class="view-item__value">{{ hcp.institution || "—" }}</dd>
-      </div>
-      <div class="view-item__row">
-        <dt class="view-item__label">{{ t("user.hcp.detail.region") }}</dt>
-        <dd class="view-item__value">{{ hcp.region || "—" }}</dd>
-      </div>
-    </template>
-  </ItemDetailLayout>
+      :has-content="!!hcp"
+      :loading="loading"
+      :load-error="loadFailed"
+      :back-route="{ name: 'hcp' }"
+      :back-label="t('user.hcp.detail.back')"
+      :not-found-label="t('user.hcp.detail.notFound')"
+      :title="hcp?.name"
+      @retry="loadHCP"
+    >
+      <template v-if="hcp" #header-actions>
+        <VTooltip
+          v-if="canActivate && hcp.status === 'pending_approval'"
+          location="bottom"
+        >
+          <template #activator="{ props: tooltipProps }">
+            <AppButton
+              v-bind="tooltipProps"
+              icon
+              variant="flat"
+              size="large"
+              :loading="activateLoading"
+              :class="entityActionBtnClass('activatePractitioner')"
+              :aria-label="t('user.hcp.detail.activate')"
+              @click="onActivate"
+            >
+              <AppIcon
+                :name="entityActionIcon('activatePractitioner')"
+                class="view-item__action-icon"
+              />
+            </AppButton>
+          </template>
+          <span>{{ t("user.hcp.detail.activate") }}</span>
+        </VTooltip>
+        <VTooltip location="bottom">
+          <template #activator="{ props: tooltipProps }">
+            <AppButton
+              v-bind="tooltipProps"
+              icon
+              variant="flat"
+              size="large"
+              :class="entityActionBtnClass('scheduleVisit')"
+              :aria-label="t('user.detail.scheduleVisit')"
+              @click="onScheduleVisit"
+            >
+              <AppIcon
+                :name="entityActionIcon('scheduleVisit')"
+                class="view-item__action-icon"
+              />
+            </AppButton>
+          </template>
+          <span>{{ t("user.detail.scheduleVisit") }}</span>
+        </VTooltip>
+        <VTooltip v-if="isAdmin" location="bottom">
+          <template #activator="{ props: tooltipProps }">
+            <AppButton
+              v-bind="tooltipProps"
+              icon
+              variant="flat"
+              size="large"
+              :class="entityActionBtnClass('edit')"
+              :aria-label="t('user.hcp.detail.edit')"
+              @click="onEdit"
+            >
+              <AppIcon
+                :name="entityActionIcon('edit')"
+                class="view-item__action-icon"
+              />
+            </AppButton>
+          </template>
+          <span>{{ t("user.hcp.detail.edit") }}</span>
+        </VTooltip>
+        <VTooltip v-if="isAdmin" location="bottom">
+          <template #activator="{ props: tooltipProps }">
+            <AppButton
+              v-bind="tooltipProps"
+              icon
+              variant="flat"
+              size="large"
+              :class="entityActionBtnClass('delete')"
+              :aria-label="t('user.hcp.actions.delete')"
+              @click="showDeleteConfirm = true"
+            >
+              <AppIcon
+                :name="entityActionIcon('delete')"
+                class="view-item__action-icon"
+              />
+            </AppButton>
+          </template>
+          <span>{{ t("user.hcp.actions.delete") }}</span>
+        </VTooltip>
+      </template>
+      <template v-if="hcp" #title>
+        <span class="view-item__title-wrap">
+          <AppAvatar :name="hcp.name" entity-type="hcp" :size="40" />
+          <h1 class="view-item__title">{{ hcp.name }}</h1>
+        </span>
+      </template>
+      <template v-if="hcp" #sections>
+        <div class="view-item__row">
+          <dt class="view-item__label">{{ t("user.hcp.detail.email") }}</dt>
+          <dd class="view-item__value">
+            <a
+              v-if="hcp.email"
+              :href="`mailto:${hcp.email}`"
+              class="view-item__link"
+              >{{ hcp.email }}</a
+            >
+            <span v-else class="view-item__empty">—</span>
+          </dd>
+        </div>
+        <div class="view-item__row">
+          <dt class="view-item__label">{{ t("user.hcp.detail.specialty") }}</dt>
+          <dd class="view-item__value">{{ hcp.specialty || "—" }}</dd>
+        </div>
+        <div class="view-item__row">
+          <dt class="view-item__label">
+            {{ t("user.hcp.detail.institution") }}
+          </dt>
+          <dd class="view-item__value">{{ hcp.institution || "—" }}</dd>
+        </div>
+        <div class="view-item__row">
+          <dt class="view-item__label">{{ t("user.hcp.detail.region") }}</dt>
+          <dd class="view-item__value">{{ hcp.region || "—" }}</dd>
+        </div>
+      </template>
+    </ItemDetailLayout>
 
-  <VDialog v-model="showDeleteConfirm" max-width="360" :transition="originDialogTransition" persistent>
-    <VCard>
-      <VCardText>{{ t("user.hcp.actions.deleteConfirmText") }}</VCardText>
-      <VCardActions>
-        <VSpacer />
-        <AppButton variant="text" @click="showDeleteConfirm = false">
-          {{ t("app.common.cancel") }}
-        </AppButton>
-        <AppButton color="error" variant="text" :loading="deleteLoading" @click="onDelete">
-          {{ t("user.hcp.actions.delete") }}
-        </AppButton>
-      </VCardActions>
-    </VCard>
-  </VDialog>
+    <VDialog
+      v-model="showDeleteConfirm"
+      max-width="360"
+      :transition="originDialogTransition"
+      persistent
+    >
+      <VCard>
+        <VCardText>{{ t("user.hcp.actions.deleteConfirmText") }}</VCardText>
+        <VCardActions>
+          <VSpacer />
+          <AppButton variant="text" @click="showDeleteConfirm = false">
+            {{ t("app.common.cancel") }}
+          </AppButton>
+          <AppButton
+            color="error"
+            variant="text"
+            :loading="deleteLoading"
+            @click="onDelete"
+          >
+            {{ t("user.hcp.actions.delete") }}
+          </AppButton>
+        </VCardActions>
+      </VCard>
+    </VDialog>
   </div>
 </template>
 
@@ -146,13 +194,18 @@ import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppAvatar from "../components/AppAvatar.vue";
-import GenderIcon from "../components/GenderIcon.vue";
-import { getGenderFromName } from "../utils/genderFromName";
 import { hcpFormFields, hcpFormDerive } from "../config/forms/hcpForm";
-import { entityActionIcon, entityActionBtnClass } from "../config/entityActions";
+import {
+  entityActionIcon,
+  entityActionBtnClass,
+} from "../config/entityActions";
 
-const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
-const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
+const FormRenderer = defineAsyncComponent(
+  () => import("../components/FormRenderer.vue"),
+);
+const EventForm = defineAsyncComponent(
+  () => import("../components/EventForm.vue"),
+);
 
 interface HCP {
   id: string;
@@ -171,6 +224,7 @@ interface HCP {
   language?: string | null;
   national_ids?: Record<string, string> | null;
   social_links?: Record<string, unknown> | null;
+  status?: string;
 }
 
 const { t } = useI18n();
@@ -179,6 +233,9 @@ const router = useRouter();
 const authStore = useAuthStore();
 const notifications = useNotifications();
 const isAdmin = computed(() => authStore.user?.role === "admin");
+const canActivate = computed(
+  () => authStore.user?.role === "admin" || authStore.user?.role === "manager",
+);
 
 const hcpCache = useEntityCacheStore("hcp");
 const hcp = ref<HCP | null>(null);
@@ -190,7 +247,9 @@ const loadFailed = ref(false);
 const showEditModal = ref(false);
 const showDeleteConfirm = ref(false);
 const showEventForm = ref(false);
-const eventFormInitial = ref<{ start_at: string; end_at: string; hcpIds?: string[] } | undefined>(undefined);
+const eventFormInitial = ref<
+  { start_at: string; end_at: string; hcpIds?: string[] } | undefined
+>(undefined);
 
 /**
  * Must stay a computed (stable reference until `hcp.value` itself changes),
@@ -202,21 +261,26 @@ const eventFormInitial = ref<{ start_at: string; end_at: string; hcpIds?: string
  * trigger. See LeadDetailView/HCODetailView/PatientDetailView, which pass
  * their entity ref directly for the same reason.
  */
-const hcpFormInitialData = computed(() => (hcp.value ? {
-  id: hcp.value.id,
-  salutation: hcp.value.salutation ?? "",
-  first_name: hcp.value.first_name ?? "",
-  last_name: hcp.value.last_name ?? "",
-  email: hcp.value.email ?? "",
-  phone: hcp.value.phone ?? "",
-  primary_specialty: hcp.value.primary_specialty ?? hcp.value.specialty ?? "",
-  organization_id: hcp.value.organization_id ?? "",
-  region: hcp.value.region ?? "",
-  influence_tier: hcp.value.influence_tier ?? "A",
-  language: hcp.value.language ?? "",
-  national_ids: hcp.value.national_ids ?? null,
-  social_links: hcp.value.social_links ?? null,
-} : undefined));
+const hcpFormInitialData = computed(() =>
+  hcp.value
+    ? {
+        id: hcp.value.id,
+        salutation: hcp.value.salutation ?? "",
+        first_name: hcp.value.first_name ?? "",
+        last_name: hcp.value.last_name ?? "",
+        email: hcp.value.email ?? "",
+        phone: hcp.value.phone ?? "",
+        primary_specialty:
+          hcp.value.primary_specialty ?? hcp.value.specialty ?? "",
+        organization_id: hcp.value.organization_id ?? "",
+        region: hcp.value.region ?? "",
+        influence_tier: hcp.value.influence_tier ?? "A",
+        language: hcp.value.language ?? "",
+        national_ids: hcp.value.national_ids ?? null,
+        social_links: hcp.value.social_links ?? null,
+      }
+    : undefined,
+);
 
 function onScheduleVisit() {
   const d = new Date();
@@ -270,9 +334,30 @@ function onEdit() {
   showEditModal.value = true;
 }
 
-async function onContactSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
+const { loading: activateLoading, run: onActivate } = useAsyncAction(
+  async () => {
+    const id = hcp.value?.id;
+    if (!id) return;
+    const res = await apiFetch(`/api/v1/practitioner/${id}/activate`, {
+      method: "POST",
+    });
+    if (res.ok) {
+      notifications.show(t("user.hcp.detail.activateSuccess"), "success");
+      await loadHCP();
+      window.dispatchEvent(new Event("entity-list-refresh"));
+    }
+  },
+);
+
+async function onContactSubmit(
+  data: Record<string, unknown>,
+  done: (ok: boolean) => void,
+) {
   const id = hcp.value?.id;
-  if (!id) { done(false); return; }
+  if (!id) {
+    done(false);
+    return;
+  }
   try {
     const res = await apiFetch(`/api/v1/practitioner/${id}`, {
       method: "PATCH",
@@ -316,7 +401,9 @@ async function loadHCP() {
   hcp.value = null;
   loadFailed.value = false;
   try {
-    const res = await apiFetch(`/api/v1/practitioner/${id}`, { handleErrors: false });
+    const res = await apiFetch(`/api/v1/practitioner/${id}`, {
+      handleErrors: false,
+    });
     if (res.ok) {
       hcp.value = (await res.json()) as HCP;
       isOffline.value = false;

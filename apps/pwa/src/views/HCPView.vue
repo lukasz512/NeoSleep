@@ -26,13 +26,14 @@
       :initial-data="eventFormInitial"
       @submit="onEventFormSubmit"
     />
+    <!-- HCPs can only be created through the lead -> invite-to-partner pipeline (see LeadDetailView.vue) -->
     <AppEntityList
       view-id="hcp"
       api-endpoint="/api/v1/practitioner"
       :headers="tableHeaders"
       :filter-definitions="hcpFilterDefinitions"
       :i18n="hcpI18n"
-      :show-add-button="true"
+      :show-add-button="false"
       detail-route-name="hcp-detail"
       :filter-param-keys="['specialty', 'institution', 'region']"
       @add="onAddContact"
@@ -40,7 +41,6 @@
     <template #item.name="{ item }">
       <span class="hcp-name-cell">
         <AppAvatar :name="(item as { name?: string }).name" entity-type="hcp" :size="32" />
-        <GenderIcon :gender="getGenderFromName((item as { name?: string }).name)" />
         {{ (item as { name?: string }).name }}
       </span>
     </template>
@@ -49,7 +49,6 @@
     </template>
     <template #feed-card-title="{ item }">
       <span class="hcp-name-cell">
-        <GenderIcon :gender="getGenderFromName((item as { name?: string }).name)" />
         {{ (item as { name?: string }).name }}
       </span>
     </template>
@@ -80,11 +79,9 @@ import AppListItemMenu from "../components/AppListItemMenu.vue";
 import { entityActionIcon, entityActionMenuIconClass } from "../config/entityActions";
 import { apiFetch } from "../composables/useApi";
 import { useNotifications } from "../composables/useNotifications";
-import GenderIcon from "../components/GenderIcon.vue";
 import { type FilterDefinition } from "../composables/useFilters";
 import { useAuthStore } from "../stores/auth";
 import { useConfigStore } from "../stores/config";
-import { getGenderFromName } from "../utils/genderFromName";
 import { hcpFormFields, hcpFormDerive } from "../config/forms/hcpForm";
 
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
@@ -166,7 +163,6 @@ const tableHeaders = computed(() => [
   { title: t("user.hcp.table.name"), key: "name", sortable: true },
   { title: t("user.hcp.table.specialty"), key: "specialty", sortable: true },
   { title: t("user.hcp.table.institution"), key: "institution", sortable: true },
-  { title: t("user.hcp.table.region"), key: "region", sortable: true },
 ]);
 
 const hcpI18n = computed(() => ({

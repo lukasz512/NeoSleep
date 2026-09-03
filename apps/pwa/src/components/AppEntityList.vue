@@ -283,6 +283,8 @@ const props = withDefaults(
     showAddButton?: boolean;
     detailRouteName?: string;
     detailRouteParam?: string;
+    /** Optional extra query params for the detail-route push (e.g. deep-linking into a specific tab). */
+    detailRouteQuery?: (item: Record<string, unknown>) => Record<string, string>;
     filterParamKeys?: string[];
     searchParamKey?: string;
     sortColumns?: string[];
@@ -326,6 +328,7 @@ const {
   i18n: props.i18n,
   detailRouteName: props.detailRouteName,
   detailRouteParam: props.detailRouteParam,
+  detailRouteQuery: props.detailRouteQuery,
   filterParamKeys: props.filterParamKeys,
   searchParamKey: props.searchParamKey,
   cacheable: props.cacheable,

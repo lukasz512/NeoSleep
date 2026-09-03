@@ -66,7 +66,11 @@ export const leadFormFields: FormFieldDef[] = [
       { title: "user.leads.filters.typePatient", value: "patient" },
       { title: "user.leads.filters.typeOther", value: "other" },
     ],
-    default: "other",
+    // Leads are doctor-only by definition now (see moveToDoctors/inviteToPartner's
+    // type === 'doctor' gate in LeadDetailView.vue/LeadsView.vue) — was
+    // defaulting to 'other', which silently hid both those actions on every
+    // newly created lead until a rep manually switched the dropdown.
+    default: "doctor",
     cols: 12,
   },
   {
@@ -76,8 +80,9 @@ export const leadFormFields: FormFieldDef[] = [
     options: [
       { title: "user.leads.filters.statusNew", value: "new" },
       { title: "user.leads.filters.statusContacted", value: "contacted" },
-      { title: "user.leads.filters.statusQualified", value: "qualified" },
-      { title: "user.leads.filters.statusInactive", value: "inactive" },
+      { title: "user.leads.filters.statusFollowUpNeeded", value: "follow_up_needed" },
+      { title: "user.leads.filters.statusMeetingScheduled", value: "meeting_scheduled" },
+      { title: "user.leads.filters.statusDeclined", value: "declined" },
     ],
     default: "new",
     hidden: true,

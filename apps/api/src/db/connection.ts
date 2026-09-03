@@ -18,8 +18,11 @@ let db: Pool | null = null;
  *                     background jobs, migrations, and admin queries.
  * - min: 2          → keep 2 connections alive even when idle (warm pool = faster cold starts).
  * - idleTimeoutMillis: 30_000  → release a connection after 30s of inactivity.
- * - connectionTimeoutMillis: 5_000 → if no connection is available in 5s, fail fast instead of
- *                     queueing forever (prevents request pile-up under load).
+ * - connectionTimeoutMillis: 15_000 → if no connection is available in 15s, fail fast instead of
+ *                     queueing forever (prevents request pile-up under load). Supabase's pooler
+ *                     can take several seconds to wake up after being idle, so this is longer
+ *                     than the usual "fail fast" default — see runMigrationsWithRetry() in
+ *                     server.ts for the retry that covers cold starts on top of this.
  * - statement_timeout: 30_000 → kill any query running longer than 30s (runaway queries).
  * - application_name → visible in pg_stat_activity — identifies this pool in DB monitoring.
  */
@@ -34,7 +37,7 @@ export function getDb(): Pool {
     max: 25,
     min: 2,
     idleTimeoutMillis: 30_000,
-    connectionTimeoutMillis: 5_000,
+    connectionTimeoutMillis: 15_000,
     statement_timeout: 30_000,
     application_name: "neocrm-api",
   });

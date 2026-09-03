@@ -18,6 +18,9 @@ export interface Organization {
   email: string | null;
   website: string | null;
   google_link: string | null;
+  /** Geocoded from the address fields — see services/geocoding.ts. Null until geocoded (unconfigured key, geocode failure, or no address yet). */
+  latitude: number | null;
+  longitude: number | null;
   specialties: string[];
   status: string;
   metadata: Record<string, unknown> | null;
@@ -45,6 +48,9 @@ export interface InsertOrganizationInput {
   email?: string | null;
   website?: string | null;
   google_link?: string | null;
+  /** Set by the command layer after geocoding the address fields above — not user input. */
+  latitude?: number | null;
+  longitude?: number | null;
   specialties?: string[];
   status?: string;
   metadata?: Record<string, unknown> | null;
@@ -63,6 +69,9 @@ export interface UpdateOrganizationInput {
   email?: string | null;
   website?: string | null;
   google_link?: string | null;
+  /** Set by the command layer after geocoding the address fields above — not user input. */
+  latitude?: number | null;
+  longitude?: number | null;
   specialties?: string[];
   status?: string;
   metadata?: Record<string, unknown> | null;
@@ -77,7 +86,7 @@ function isOrgSortColumn(s: string): s is (typeof ORG_SORT_COLUMNS)[number] {
 const ORG_SELECT_COLS = `
   id, name, type, identifiers, address_line1, city, state, postal_code,
   country_code, region, territory_id, phone, email, website, google_link,
-  specialties, status, metadata, created_at, updated_at`.trim();
+  latitude, longitude, specialties, status, metadata, created_at, updated_at`.trim();
 
 export async function getOrganizationPaginated(
   client: PoolClient,
@@ -199,8 +208,8 @@ export async function insertOrganization(client: PoolClient, input: InsertOrgani
   try {
     const result = await client.query<{ id: string }>(
       `INSERT INTO organization
-         (name, type, address_line1, city, state, postal_code, country_code, region, phone, email, website, google_link, specialties, status, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+         (name, type, address_line1, city, state, postal_code, country_code, region, phone, email, website, google_link, latitude, longitude, specialties, status, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
        RETURNING id`,
       [
         name,
@@ -215,6 +224,8 @@ export async function insertOrganization(client: PoolClient, input: InsertOrgani
         trimOrNull(input.email),
         trimOrNull(input.website),
         trimOrNull(input.google_link),
+        input.latitude ?? null,
+        input.longitude ?? null,
         input.specialties ?? [],
         trimOrEmpty(input.status) || "active",
         input.metadata ? JSON.stringify(input.metadata) : null,
@@ -292,6 +303,14 @@ export async function updateOrganization(client: PoolClient, id: string, input: 
       params.push(trimOrNull(input.google_link));
       sets.push(`google_link = $${idx++}`);
     }
+    if (input.latitude !== undefined) {
+      params.push(input.latitude);
+      sets.push(`latitude = $${idx++}`);
+    }
+    if (input.longitude !== undefined) {
+      params.push(input.longitude);
+      sets.push(`longitude = $${idx++}`);
+    }
     if (input.specialties !== undefined) {
       params.push(input.specialties ?? []);
       sets.push(`specialties = $${idx++}`);
@@ -326,5 +345,98 @@ export async function softDeleteOrganization(client: PoolClient, id: string): Pr
   } catch (err) {
     if (err instanceof AppError) throw err;
     throw new DatabaseError("softDeleteOrganization", err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// PUBLIC SPECIALIST SEARCH (unauthenticated — "find a specialist" map)
+// ---------------------------------------------------------------------------
+
+export interface PublicSpecialistPractitioner {
+  id: string;
+  name: string;
+  specialties: string[];
+}
+
+export interface PublicSpecialistRow {
+  id: string;
+  name: string;
+  address_line1: string | null;
+  city: string | null;
+  state: string | null;
+  country_code: string | null;
+  phone: string | null;
+  website: string | null;
+  google_link: string | null;
+  specialties: string[];
+  latitude: number;
+  longitude: number;
+  practitioners: PublicSpecialistPractitioner[];
+}
+
+/**
+ * Only `active` organizations that have been geocoded (latitude/longitude
+ * not null) — never exposes pending_approval/inactive records or ones
+ * without a pin yet. `search`, if given, matches the organization's own
+ * name/city/specialties OR an affiliated practitioner's name/specialty — a
+ * doctor's name should surface the clinic they work at.
+ *
+ * Affiliation is the union of `practitioner.organization_id` (primary
+ * workplace) and the `practitioner_organization` junction table (full
+ * multi-clinic list) — see the header comment on that column in
+ * 001_tenant_schema.sql.
+ */
+export async function getPublicSpecialists(
+  client: PoolClient,
+  { search, limit }: { search?: string; limit: number }
+): Promise<PublicSpecialistRow[]> {
+  const pattern = search?.trim() ? `%${search.trim().toLowerCase()}%` : null;
+
+  try {
+    const result = await client.query<PublicSpecialistRow>(
+      `WITH org_practitioners AS (
+         SELECT DISTINCT p.id AS practitioner_id, p.organization_id, i.first_name, i.last_name, p.specialties
+         FROM practitioner p
+         JOIN identities i ON i.id = p.identity_id
+         WHERE p.deleted_at IS NULL AND p.status = 'active' AND p.organization_id IS NOT NULL
+         UNION
+         SELECT DISTINCT p.id AS practitioner_id, po.organization_id, i.first_name, i.last_name, p.specialties
+         FROM practitioner_organization po
+         JOIN practitioner p ON p.id = po.practitioner_id
+         JOIN identities i ON i.id = p.identity_id
+         WHERE p.deleted_at IS NULL AND p.status = 'active'
+       )
+       SELECT
+         o.id, o.name, o.address_line1, o.city, o.state, o.country_code,
+         o.phone, o.website, o.google_link, o.specialties, o.latitude, o.longitude,
+         COALESCE(
+           (SELECT json_agg(json_build_object('id', op.practitioner_id, 'name', op.first_name || ' ' || op.last_name, 'specialties', op.specialties))
+            FROM org_practitioners op WHERE op.organization_id = o.id),
+           '[]'
+         ) AS practitioners
+       FROM organization o
+       WHERE o.deleted_at IS NULL
+         AND o.status = 'active'
+         AND o.latitude IS NOT NULL
+         AND o.longitude IS NOT NULL
+         AND ($1::text IS NULL OR (
+           LOWER(o.name) LIKE $1 OR
+           LOWER(COALESCE(o.city, '')) LIKE $1 OR
+           EXISTS (SELECT 1 FROM unnest(o.specialties) s WHERE LOWER(s) LIKE $1) OR
+           EXISTS (
+             SELECT 1 FROM org_practitioners op
+             WHERE op.organization_id = o.id
+               AND (LOWER(op.first_name || ' ' || op.last_name) LIKE $1
+                 OR EXISTS (SELECT 1 FROM unnest(op.specialties) ps WHERE LOWER(ps) LIKE $1))
+           )
+         ))
+       ORDER BY o.name ASC
+       LIMIT $2`,
+      [pattern, limit]
+    );
+    return result.rows;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getPublicSpecialists", err);
   }
 }

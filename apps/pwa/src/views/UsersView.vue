@@ -54,7 +54,7 @@
           <VListItem :title="t('user.users.actions.edit')" @click="onEditUser(item as UserListItem)">
             <template #prepend><AppIcon :name="entityActionIcon('edit')" :class="entityActionMenuIconClass('edit')" /></template>
           </VListItem>
-          <VListItem :title="t('user.users.actions.delete')" @click="onDeleteClick(item as UserListItem)">
+          <VListItem v-if="isAdmin" :title="t('user.users.actions.delete')" @click="onDeleteClick(item as UserListItem)">
             <template #prepend><AppIcon :name="entityActionIcon('delete')" :class="entityActionMenuIconClass('delete')" /></template>
           </VListItem>
         </AppListItemMenu>
@@ -114,6 +114,7 @@ import { useNotifications } from "../composables/useNotifications";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import type { FilterDefinition } from "../composables/useFilters";
 import { userFormFields } from "../config/forms/userForm";
+import { useAuthStore } from "../stores/auth";
 
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
 
@@ -126,6 +127,8 @@ interface UserListItem {
 
 const { t } = useI18n();
 const notifications = useNotifications();
+const authStore = useAuthStore();
+const isAdmin = computed(() => authStore.user?.role === "admin");
 
 const showForm = ref(false);
 const showEditModal = ref(false);

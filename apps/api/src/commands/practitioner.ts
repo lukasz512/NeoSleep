@@ -1,16 +1,25 @@
+import crypto from "node:crypto";
 import type { TenantContext } from "../context/TenantContext.js";
 import {
   insertPractitioner,
   updatePractitioner,
+  updatePractitionerStatus,
   getPractitionerById,
   softDeletePractitioner,
+  getUserIdByEmail,
+  insertStaffUser,
+  createInviteToken,
   type InsertPractitionerInput,
   type UpdatePractitionerInput,
   type Practitioner,
 } from "../db.js";
 import { insertAuditLog } from "../db.js";
-import { ValidationError } from "../errors.js";
+import { ValidationError, ConflictError } from "../errors.js";
 import { ConvertLeadCommand } from "./lead.js";
+import { inferLanguage } from "./invitePractitioner.js";
+import { sendPartnerInviteEmail } from "../mailer.js";
+import { FRONTEND_URL } from "../env.js";
+import { hashToken } from "../utils/hashToken.js";
 
 /**
  * COMMANDS — Practitioner domain.
@@ -37,11 +46,12 @@ export interface CreatePractitionerInput {
   organization_id?: string | null;
   institution?: string | null;
   region?: string;
+  country_code?: string | null;
   influence_tier?: string;
   language?: string | null;
   national_ids?: Record<string, string> | null;
   social_links?: Record<string, unknown> | null;
-  /** When set, this practitioner is being created from a lead ("move to contacts") —
+  /** When set, this practitioner is being created from a lead ("move to doctors") —
    *  the lead is atomically marked converted in the same transaction. */
   lead_id?: string | null;
 }
@@ -76,6 +86,7 @@ export async function CreatePractitionerCommand(
     organization_id:  input.organization_id !== undefined ? input.organization_id : undefined,
     institution:      input.institution ?? null,
     region:           input.region,
+    country_code:     input.country_code ?? null,
     influence_tier:   input.influence_tier,
     language:         input.language ?? null,
     national_ids:     input.national_ids ?? null,
@@ -202,4 +213,79 @@ export async function DeletePractitionerCommand(ctx: TenantContext, id: string):
     entity_id:  id,
     request_id: ctx.requestId,
   });
+}
+
+// ---------------------------------------------------------------------------
+// ACTIVATE PRACTITIONER ("training/capacitation finished")
+// pending_approval -> active, and provisions the linked doctor-role user
+// account if this identity doesn't already have one (partner-invited
+// practitioners already do, via InvitePractitionerCommand).
+// ---------------------------------------------------------------------------
+
+const INVITE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days — see invitePractitioner.ts's own constant/comment for why this is minted here, not at invite time.
+
+export async function ActivatePractitionerCommand(ctx: TenantContext, id: string): Promise<Practitioner | null> {
+  if (!id?.trim()) throw new ValidationError("practitioner id is required");
+
+  const practitioner = await getPractitionerById(ctx.client, id);
+  if (!practitioner) return null;
+  if (practitioner.status === "active") throw new ConflictError("Practitioner is already active");
+  if (!practitioner.email) throw new ValidationError("Practitioner must have an email address before activation");
+
+  await updatePractitionerStatus(ctx.client, id, "active");
+
+  // Only provision a login + send the "set your password" invite when this
+  // identity has no users account yet — a practitioner re-activated after
+  // already being a live platform user (e.g. re-training) must not get a
+  // second registration email overwriting their existing password flow.
+  const existingUserId = await getUserIdByEmail(ctx.client, practitioner.email);
+  if (!existingUserId) {
+    const user = await insertStaffUser(
+      ctx.client,
+      practitioner.email,
+      practitioner.first_name,
+      practitioner.last_name,
+      "doctor",
+      null,
+      true,
+      practitioner.salutation,
+      practitioner.phone,
+      practitioner.country_code ?? "global",
+      ctx.user.id,
+      practitioner.country_code
+    );
+    if (user) {
+      const token = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + INVITE_EXPIRY_MS);
+      await createInviteToken(ctx.client, user.id, null, hashToken(token), expiresAt, ctx.user.id);
+
+      const registerLink = `${FRONTEND_URL}/partner-register?token=${encodeURIComponent(token)}`;
+      await sendPartnerInviteEmail(
+        practitioner.email,
+        registerLink,
+        {
+          title: practitioner.salutation,
+          firstName: practitioner.first_name,
+          lastName: practitioner.last_name,
+          language: inferLanguage(practitioner.region),
+          region: practitioner.region,
+        },
+        { name: ctx.user.name ?? "NeoSleep", email: ctx.user.email }
+      );
+    }
+  }
+
+  const after = await getPractitionerById(ctx.client, id);
+
+  await insertAuditLog(ctx.client, {
+    user_id:       ctx.user.id,
+    action:        "activate",
+    entity_type:   "Practitioner",
+    entity_id:     id,
+    entity_before: { status: practitioner.status },
+    entity_after:  { status: after?.status ?? "active" },
+    request_id:    ctx.requestId,
+  });
+
+  return after;
 }

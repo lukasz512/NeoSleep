@@ -1,9 +1,12 @@
+import type { PoolClient } from "pg";
 import type { TenantContext } from "../context/TenantContext.js";
 import {
   getOrganizationPaginated,
   getOrganizationById,
+  getPublicSpecialists,
   type GetOrganizationFilters,
   type Organization,
+  type PublicSpecialistRow,
 } from "../db.js";
 
 /**
@@ -122,4 +125,20 @@ export async function GetOrganizationByIdQuery(
   const organization = await getOrganizationById(ctx.client, id);
   if (!organization) return null;
   return toDto(organization);
+}
+
+// ---------------------------------------------------------------------------
+// QUERY: PUBLIC SPECIALIST SEARCH (unauthenticated — "find a specialist" map)
+// ---------------------------------------------------------------------------
+
+const PUBLIC_SPECIALISTS_LIMIT = 100;
+
+/**
+ * Called from routes/public.ts — no TenantContext/session (same reasoning as
+ * GetPublicLeadInfoQuery above: public routes take a raw PoolClient, not an
+ * authenticated ctx). The DB row is already a narrow, public-safe shape —
+ * see getPublicSpecialists in db/organization.ts.
+ */
+export async function GetPublicSpecialistsQuery(client: PoolClient, search?: string): Promise<PublicSpecialistRow[]> {
+  return getPublicSpecialists(client, { search, limit: PUBLIC_SPECIALISTS_LIMIT });
 }
