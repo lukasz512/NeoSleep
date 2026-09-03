@@ -82,7 +82,7 @@ import { useNotifications } from "../composables/useNotifications";
 import { type FilterDefinition } from "../composables/useFilters";
 import { useAuthStore } from "../stores/auth";
 import { useConfigStore } from "../stores/config";
-import { hcpFormFields, hcpFormDerive } from "../config/forms/hcpForm";
+import { hcpFormFields, hcpFormDerive, resolveOrganizationIdForSubmit } from "../config/forms/hcpForm";
 
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
@@ -184,10 +184,15 @@ function onAddContact() {
 
 async function onContactSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
   try {
+    const organizationId = await resolveOrganizationIdForSubmit(data);
+    if (organizationId === undefined) {
+      done(false);
+      return;
+    }
     const res = await apiFetch("/api/v1/practitioner", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
+      body: JSON.stringify({ ...data, organization_id: organizationId, new_organization: undefined }),
     });
     if (res.ok) {
       notifications.show(t("user.hcp.form.success"), "success");
@@ -210,10 +215,15 @@ async function onEditSubmit(data: Record<string, unknown>, done: (ok: boolean) =
   const id = selectedHcp.value?.id;
   if (!id) { done(false); return; }
   try {
+    const organizationId = await resolveOrganizationIdForSubmit(data);
+    if (organizationId === undefined) {
+      done(false);
+      return;
+    }
     const res = await apiFetch(`/api/v1/practitioner/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
+      body: JSON.stringify({ ...data, organization_id: organizationId, new_organization: undefined }),
     });
     if (res.ok) {
       notifications.show(t("user.hcp.form.editSuccess"), "success");

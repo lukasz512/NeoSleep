@@ -194,7 +194,7 @@ import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppAvatar from "../components/AppAvatar.vue";
-import { hcpFormFields, hcpFormDerive } from "../config/forms/hcpForm";
+import { hcpFormFields, hcpFormDerive, resolveOrganizationIdForSubmit } from "../config/forms/hcpForm";
 import {
   entityActionIcon,
   entityActionBtnClass,
@@ -359,10 +359,15 @@ async function onContactSubmit(
     return;
   }
   try {
+    const organizationId = await resolveOrganizationIdForSubmit(data);
+    if (organizationId === undefined) {
+      done(false);
+      return;
+    }
     const res = await apiFetch(`/api/v1/practitioner/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
+      body: JSON.stringify({ ...data, organization_id: organizationId, new_organization: undefined }),
     });
     if (res.ok) {
       notifications.show(t("user.hcp.form.editSuccess"), "success");
