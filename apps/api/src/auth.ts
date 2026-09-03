@@ -175,17 +175,19 @@ authRouter.post("/auth/change-password", requireAuth, asyncHandler(async (req: R
   }
   const slug = tenantSlugFromHost(req.hostname);
   const sessionUser = req.user!;
-  await withTenant(slug, async (client) => {
+  // withTenant returns a {status, body} pair instead of calling res.json() itself —
+  // it commits the transaction *after* the callback returns, so responding from inside
+  // it would race the client's next request against our own COMMIT (see project memory:
+  // project_auth_spec_flaky_test.md for the flake class this causes).
+  const result = await withTenant(slug, async (client) => {
     const staff = await getStaffUserByEmail(client, sessionUser.email);
     if (!staff?.password_hash) {
-      res.status(400).json({ error: "Password login not set for this account." });
-      return;
+      return { status: 400, body: { error: "Password login not set for this account." } } as const;
     }
     const currentStr = typeof current_password === "string" ? current_password : "";
     const match = await bcrypt.compare(currentStr, staff.password_hash);
     if (!match) {
-      res.status(401).json({ error: "Current password is incorrect." });
-      return;
+      return { status: 401, body: { error: "Current password is incorrect." } } as const;
     }
     const hash = await bcrypt.hash(newStr, BCRYPT_ROUNDS);
     await setUserPassword(client, staff.id, hash);
@@ -193,8 +195,9 @@ authRouter.post("/auth/change-password", requireAuth, asyncHandler(async (req: R
     // this very request — a real improvement over the old cookie-session behavior, which
     // only killed remember-me tokens on other devices, never the live session itself.
     await incrementUserTokenVersion(client, staff.id);
-    res.status(200).json({ success: true });
+    return { status: 200, body: { success: true } } as const;
   });
+  res.status(result.status).json(result.body);
 }));
 
 // ---------------------------------------------------------------------------
@@ -209,16 +212,16 @@ authRouter.post("/auth/forgot-password", asyncHandler(async (req: Request, res: 
     return;
   }
   const slug = tenantSlugFromHost(req.hostname);
-  await withTenant(slug, async (client) => {
+  // Respond only after withTenant's COMMIT — see the change-password handler above for why.
+  const result = await withTenant(slug, async (client) => {
+    const genericBody = { message: "If an account exists, you will receive an email." } as const;
     const userId = await getUserIdByEmail(client, emailStr);
     if (!userId) {
-      res.status(200).json({ message: "If an account exists, you will receive an email." });
-      return;
+      return genericBody;
     }
     const staff = await getStaffUserByEmail(client, emailStr);
     if (!staff?.password_hash) {
-      res.status(200).json({ message: "If an account exists, you will receive an email." });
-      return;
+      return genericBody;
     }
     const token = crypto.randomBytes(32).toString("hex");
     const tokenHash = hashToken(token);
@@ -242,11 +245,12 @@ authRouter.post("/auth/forgot-password", asyncHandler(async (req: Request, res: 
     if (process.env.NODE_ENV !== "production") {
       console.log("[auth] Password reset link for", emailStr, ":", resetLink);
     }
-    res.status(200).json({
-      message: "If an account exists, you will receive an email.",
+    return {
+      ...genericBody,
       devResetLink: process.env.NODE_ENV !== "production" ? resetLink : undefined,
-    });
+    };
   });
+  res.status(200).json(result);
 }));
 
 // ---------------------------------------------------------------------------
@@ -283,18 +287,19 @@ authRouter.post("/auth/reset-password", asyncHandler(async (req: Request, res: R
   }
   const tokenHash = hashToken(tokenStr);
   const slug = tenantSlugFromHost(req.hostname);
-  await withTenant(slug, async (client) => {
+  // Respond only after withTenant's COMMIT — see the change-password handler above for why.
+  const result = await withTenant(slug, async (client) => {
     const userId = await getPasswordResetUserIdByHash(client, tokenHash);
     if (!userId) {
-      res.status(400).json({ error: "Invalid or expired reset link. Request a new one." });
-      return;
+      return { status: 400, body: { error: "Invalid or expired reset link. Request a new one." } } as const;
     }
     const hash = await bcrypt.hash(newStr, BCRYPT_ROUNDS);
     await setUserPassword(client, userId, hash);
     await deletePasswordResetTokenByHash(client, tokenHash);
     await incrementUserTokenVersion(client, userId);
-    res.status(200).json({ success: true });
+    return { status: 200, body: { success: true } } as const;
   });
+  res.status(result.status).json(result.body);
 }));
 
 // ---------------------------------------------------------------------------
