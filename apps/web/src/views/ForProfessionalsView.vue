@@ -9,13 +9,10 @@
       subtitle-key="website.professionalsPage.heroSub"
     >
       <template #ctas>
-        <button type="button" class="home-btn home-btn--white-outline" @click="openBookingModal">
+        <button type="button" class="home-btn home-btn--white-border" @click="openBookingModal">
           {{ t("website.professionalsPage.booking.trigger") }}
           <span class="home-btn__arrow" aria-hidden="true">→</span>
         </button>
-        <RouterLink :to="{ path: '/contact', query: { type: 'professional' } }" class="home-btn home-btn--white-border">
-          {{ t("website.professionalsPage.heroCta") }}
-        </RouterLink>
       </template>
     </TealBanner>
 
@@ -135,10 +132,6 @@
       <div class="page-container">
         <TealBanner variant="cta" line1-key="website.professionalsPage.cta.heading" subtitle-key="website.professionalsPage.cta.sub">
           <template #ctas>
-            <RouterLink :to="{ path: '/contact', query: { type: 'professional' } }" class="home-btn home-btn--white-outline">
-              {{ t("website.professionalsPage.cta.btn") }}
-              <span class="home-btn__arrow" aria-hidden="true">→</span>
-            </RouterLink>
             <button type="button" class="home-btn home-btn--white-border" @click="openBookingModal">
               {{ t("website.professionalsPage.cta.btnSecondary") }}
             </button>
