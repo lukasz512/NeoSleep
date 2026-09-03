@@ -274,10 +274,12 @@ onMounted(async () => {
 /* Vuetify's own 20px inline-start margin on the title assumes a bare text
    label right after the edge/hamburger. Our title always carries its own
    icon (.layout-appbar__title-group's 8px gap before the text), so 20px on
-   top of that reads as a big, unintentional-looking gap — 5px is enough
-   breathing room without doubling up. */
+   top of that reads as a big, unintentional-looking gap. On desktop there's
+   no hamburger at all (prepend only renders on mobile), so the title sits
+   right after the drawer edge — needs a bit more room than mobile to not
+   look flush against it. */
 .app-shell__bar :deep(.v-toolbar__content > .v-toolbar-title) {
-  margin-inline-start: 5px;
+  margin-inline-start: 16px;
 }
 
 .app-shell__bar-logo {
