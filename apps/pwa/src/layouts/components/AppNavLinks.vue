@@ -1,5 +1,5 @@
 <template>
-  <nav class="layout-app__nav" aria-label="App sections">
+  <nav class="layout-app__nav" :class="{ 'layout-app__nav--expanded': !collapsed }" aria-label="App sections">
     <VList class="layout-app__nav-list" density="compact" bg-color="transparent" color="primary">
       <VTooltip
         v-for="item in visibleNavRoutes"
@@ -63,6 +63,13 @@ const { unreadCount } = useNotificationCenter();
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+/* Rail (collapsed) mode is width-constrained (56px), so it keeps the tight
+   default spacing — this extra breathing room only applies when the sidebar
+   is fully expanded. */
+.layout-app__nav--expanded {
+  padding: 12px 8px 0;
 }
 
 .layout-app__nav-list :deep(.v-list-item) {

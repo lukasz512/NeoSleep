@@ -14,7 +14,7 @@ const isDev = import.meta.env.DEV;
 
 /**
  * Auth guard: app starts at login; protected routes require valid session (API).
- * - Root "/" redirects to /login (route config); authenticated users are redirected from /login to /dashboard.
+ * - Root "/" redirects to /login (route config); authenticated users are redirected from /login to /patients.
  * - requiresAuth: ensure session is checked (fetchSession), then allow or redirect to /login?redirect=.
  */
 router.beforeEach(async (to, _from, next) => {
@@ -34,7 +34,7 @@ router.beforeEach(async (to, _from, next) => {
     if (to.path === "/login" || to.path === "/forgot-password") {
       if (!auth.sessionChecked) await auth.fetchSession();
       if (auth.isAuthenticated) {
-        const redirect = typeof to.query.redirect === "string" && to.query.redirect ? to.query.redirect : "/dashboard";
+        const redirect = typeof to.query.redirect === "string" && to.query.redirect ? to.query.redirect : "/patients";
         next({ path: redirect, query: {} });
         return;
       }
