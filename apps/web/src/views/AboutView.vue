@@ -7,6 +7,9 @@
       line1-key="website.about.heroTagline1"
       line2-key="website.about.heroTagline2"
       subtitle-key="website.about.heroSub"
+      image-src="/images/about-hero-texture.jpg"
+      image-position="top"
+      photo-subtle
     >
       <template #ctas>
         <RouterLink :to="{ path: '/contact', query: { type: 'patient' } }" class="home-btn home-btn--white-outline">
@@ -32,7 +35,7 @@
             <p class="ab-mission__text">{{ t("website.about.mission.body") }}</p>
           </div>
           <div class="ab-mission__media">
-            <img src="/images/mission.jpg" alt="" class="ab-mission__img" width="600" height="400" loading="lazy" />
+            <img src="/images/mission.webp" alt="" class="ab-mission__img" width="600" height="400" loading="lazy" />
           </div>
         </div>
       </div>
@@ -98,17 +101,10 @@
     <section ref="statsRef" class="ab-stats home-reveal" :class="{ 'home-reveal--visible': statsVisible }">
       <div class="page-container">
         <div class="ab-stats__row">
-          <div class="ab-stat">
-            <span class="ab-stat__number">{{ t("website.about.stats.studies") }}</span>
-            <span class="ab-stat__label">{{ t("website.about.stats.studiesLabel") }}</span>
-          </div>
-          <div class="ab-stat">
-            <span class="ab-stat__number">{{ t("website.about.stats.satisfaction") }}</span>
-            <span class="ab-stat__label">{{ t("website.about.stats.satisfactionLabel") }}</span>
-          </div>
-          <div class="ab-stat">
-            <span class="ab-stat__number">{{ t("website.about.stats.professionals") }}</span>
-            <span class="ab-stat__label">{{ t("website.about.stats.specialistsLabel") }}</span>
+          <div v-for="stat in displayStats" :key="stat.labelKey" class="ab-stat">
+            <span class="ab-stat__number">{{ stat.value }}</span>
+            <span class="ab-stat__label">{{ t(stat.labelKey) }}</span>
+            <span class="ab-stat__tooltip">{{ t("website.stats.sourcePrefix") }} {{ stat.source }}</span>
           </div>
         </div>
       </div>
@@ -138,6 +134,18 @@
             <h3 class="ab-step__title">{{ t("website.about.approach.step3.title") }}</h3>
             <p class="ab-step__desc">{{ t("website.about.approach.step3.desc") }}</p>
           </div>
+          <div class="ab-step__connector" aria-hidden="true"></div>
+          <div class="ab-step">
+            <span class="ab-step__num">{{ t("website.about.approach.step4.num") }}</span>
+            <h3 class="ab-step__title">{{ t("website.about.approach.step4.title") }}</h3>
+            <p class="ab-step__desc">{{ t("website.about.approach.step4.desc") }}</p>
+          </div>
+          <div class="ab-step__connector" aria-hidden="true"></div>
+          <div class="ab-step">
+            <span class="ab-step__num">{{ t("website.about.approach.step5.num") }}</span>
+            <h3 class="ab-step__title">{{ t("website.about.approach.step5.title") }}</h3>
+            <p class="ab-step__desc">{{ t("website.about.approach.step5.desc") }}</p>
+          </div>
         </div>
       </div>
     </section>
@@ -160,9 +168,8 @@
               <Flag code="mx" :size="16" />
             </div>
             <p class="ab-office-card__country">{{ t("website.about.offices.cdmx.country") }}</p>
-            <address class="ab-office-card__address">{{ t("website.about.offices.cdmx.address") }}</address>
             <a
-              href="https://maps.google.com/?q=Liverpool+39+06600+Ciudad+de+Mexico"
+              href="https://maps.google.com/?q=Mexico+City,+Mexico"
               target="_blank"
               rel="noopener noreferrer"
               class="ab-office-card__map-link"
@@ -182,9 +189,8 @@
               <Flag code="pl" :size="16" />
             </div>
             <p class="ab-office-card__country">{{ t("website.about.offices.warsaw.country") }}</p>
-            <address class="ab-office-card__address">{{ t("website.about.offices.warsaw.address") }}</address>
             <a
-              href="https://maps.google.com/?q=Sielecka+26+00-738+Warszawa+Poland"
+              href="https://maps.google.com/?q=Warsaw,+Poland"
               target="_blank"
               rel="noopener noreferrer"
               class="ab-office-card__map-link"
@@ -213,6 +219,25 @@
       </div>
     </section>
 
+    <!-- ── Partners ───────────────────────────────────────────────────── -->
+    <section ref="partnersRef" class="home-section ab-partners home-reveal" :class="{ 'home-reveal--visible': partnersVisible }">
+      <div class="page-container">
+        <p class="home-eyebrow">{{ t("website.about.partners.eyebrow") }}</p>
+        <h2 class="home-heading">{{ t("website.about.partners.heading") }}</h2>
+        <div class="ab-partners__logos">
+          <a href="https://www.orthoapnea.com/" target="_blank" rel="noopener noreferrer" class="ab-partners__logo-link" aria-label="OrthoApnea">
+            <img src="/images/patrocinadores/orthoapnea.svg" alt="OrthoApnea" class="ab-partners__logo ab-partners__logo--lg" />
+          </a>
+          <a href="https://www.biologix.com.br/es/" target="_blank" rel="noopener noreferrer" class="ab-partners__logo-link" aria-label="Biologix">
+            <img src="/images/patrocinadores/biologix.png" alt="Biologix" class="ab-partners__logo" />
+          </a>
+          <!-- TODO: Itamar Medical logo pending asset at
+               apps/web/public/images/patrocinadores/itamar-medical.png -->
+
+        </div>
+      </div>
+    </section>
+
     <!-- ── CTA ────────────────────────────────────────────────────────── -->
     <div ref="ctaRef" class="ab-cta-wrap home-reveal" :class="{ 'home-reveal--visible': ctaVisible }">
       <div class="page-container">
@@ -234,14 +259,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, computed } from "vue";
 import { useI18n } from "vue-i18n";
 import TealBanner from "../components/TealBanner.vue";
 import { useReveal } from "../composables/useReveal";
+import { useCountUp } from "../composables/useCountUp";
 import { useSeoMeta } from "../composables/useSeoMeta";
+import { aboutStatsByLocale } from "../config/websiteContent";
 import Flag from "../components/Flag.vue";
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 useSeoMeta({ titleKey: "website.seo.about.title", descriptionKey: "website.seo.about.description" });
 
 const missionRef  = ref<HTMLElement | null>(null);
@@ -249,14 +276,36 @@ const valuesRef   = ref<HTMLElement | null>(null);
 const statsRef    = ref<HTMLElement | null>(null);
 const officesRef  = ref<HTMLElement | null>(null);
 const approachRef = ref<HTMLElement | null>(null);
+const partnersRef = ref<HTMLElement | null>(null);
 const ctaRef      = ref<HTMLElement | null>(null);
 
-const missionVisible  = useReveal(missionRef,  0.10);
-const valuesVisible   = useReveal(valuesRef,   0.08);
-const statsVisible    = useReveal(statsRef,    0.15);
-const officesVisible  = useReveal(officesRef,  0.08);
-const approachVisible = useReveal(approachRef, 0.08);
-const ctaVisible      = useReveal(ctaRef,      0.10);
+const missionVisible   = useReveal(missionRef,   0.10);
+const valuesVisible    = useReveal(valuesRef,    0.08);
+const statsVisible     = useReveal(statsRef,     0.15);
+const officesVisible   = useReveal(officesRef,   0.08);
+const approachVisible  = useReveal(approachRef,  0.08);
+const partnersVisible  = useReveal(partnersRef,  0.08);
+const ctaVisible       = useReveal(ctaRef,       0.10);
+
+// ── Stats (same figures as the homepage) ─────────────────────────────────
+const currentStats = computed(() => aboutStatsByLocale[locale.value] ?? aboutStatsByLocale.en);
+
+const countUps = aboutStatsByLocale.en.map((_, i) =>
+  useCountUp({
+    target: currentStats.value[i]!.target,
+    suffix: currentStats.value[i]!.suffix,
+    duration: 2800,
+    startWhen: statsVisible,
+  })
+);
+
+const displayStats = computed(() =>
+  currentStats.value.map((s, i) => ({
+    labelKey: s.labelKey,
+    source: s.source,
+    value: countUps[i]!.displayValue.value,
+  }))
+);
 </script>
 
 <style lang="scss" src="./AboutView.scss" />

@@ -1,5 +1,5 @@
 <template>
-  <component :is="tag" class="tb" :class="[`tb--${variant}`, { 'tb--photo': !!imageSrc }]">
+  <component :is="tag" class="tb" :class="[`tb--${variant}`, { 'tb--photo': !!imageSrc, 'tb--photo-subtle': photoSubtle }]">
     <img v-if="imageSrc" :src="imageSrc" alt="" class="tb__photo" :class="{ 'tb__photo--loaded': photoLoaded }" :style="imagePosition ? { objectPosition: imagePosition } : {}" aria-hidden="true" @load="photoLoaded = true" />
     <div class="tb__wash" aria-hidden="true" />
     <div class="tb__inner" :class="{ 'page-container': variant === 'hero' }">
@@ -28,6 +28,8 @@ interface Props {
   subtitleKey: string;
   imageSrc?: string;
   imagePosition?: string;
+  /** Faint decorative texture instead of a full-strength photo+wash background — no dark overlay, glow circles stay visible. */
+  photoSubtle?: boolean;
   variant?: "hero" | "cta";
 }
 
@@ -62,6 +64,10 @@ const headingTag = computed(() => (props.variant === "hero" ? "h1" : "h2"));
 
     &--loaded {
       opacity: 1;
+
+      .tb--photo-subtle & {
+        opacity: 0.1;
+      }
     }
   }
 
@@ -74,13 +80,14 @@ const headingTag = computed(() => (props.variant === "hero" ? "h1" : "h2"));
     z-index: 1;
     border-radius: inherit;
 
-    .tb--photo & {
+    .tb--photo:not(.tb--photo-subtle) & {
       display: block;
     }
   }
 
-  // ── decorative glow circles (without photo only) ───────────────────────────
-  .tb:not(.tb--photo) {
+  // ── decorative glow circles (without a full-strength photo) ────────────────
+  .tb:not(.tb--photo),
+  .tb--photo-subtle {
     &::before {
       content: "";
       position: absolute;
