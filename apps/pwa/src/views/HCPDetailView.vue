@@ -120,7 +120,6 @@
       <template v-if="hcp" #title>
         <span class="view-item__title-wrap">
           <AppAvatar :name="hcp.name" entity-type="hcp" :size="40" />
-          <GenderIcon :gender="getGenderFromName(hcp.name)" />
           <h1 class="view-item__title">{{ hcp.name }}</h1>
         </span>
       </template>
@@ -195,8 +194,6 @@ import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppAvatar from "../components/AppAvatar.vue";
-import GenderIcon from "../components/GenderIcon.vue";
-import { getGenderFromName } from "../utils/genderFromName";
 import { hcpFormFields, hcpFormDerive } from "../config/forms/hcpForm";
 import {
   entityActionIcon,
