@@ -3,7 +3,7 @@ import bcrypt from "bcrypt";
 import { withTenant, insertStaffUser, getUserIdByEmail, getUserRoleScopes } from "../db.js";
 import type { TenantContext } from "../context/TenantContext.js";
 import { ConflictError, ValidationError } from "../errors.js";
-import { CreatePractitionerCommand, ActivatePractitionerCommand } from "./practitioner.js";
+import { CreatePractitionerCommand, ActivatePractitionerCommand, UpdatePractitionerCommand } from "./practitioner.js";
 
 // mailer.ts is the external boundary (Resend, see ADR-016) — mocked here, same
 // pattern as commands/leadOffer.spec.ts. Only sendPartnerInviteEmail is used by
@@ -157,6 +157,33 @@ describe("ActivatePractitionerCommand", () => {
       await ActivatePractitionerCommand(ctx, practitioner.id);
 
       expect(sendPartnerInviteEmailMock).not.toHaveBeenCalled();
+    });
+  }, 15000);
+});
+
+describe("UpdatePractitionerCommand", () => {
+  // Regression test: editing a practitioner's email to one already used by
+  // another identity used to bubble up as an opaque DatabaseError/503
+  // ("duplicate key value violates unique constraint identities_email_key")
+  // instead of a clean, user-facing conflict — see errors.ts's DatabaseError.
+  it("throws ConflictError, not a raw DatabaseError, when the new email is already taken by another identity", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const takenEmail = `qa-hcp-${uniqueSuffix()}@example.com`;
+      await CreatePractitionerCommand(ctx, {
+        first_name: "Existing",
+        last_name: "Owner",
+        email: takenEmail,
+      });
+      const practitioner = await CreatePractitionerCommand(ctx, {
+        first_name: "Being",
+        last_name: "Edited",
+        email: `qa-hcp-${uniqueSuffix()}@example.com`,
+      });
+
+      await expect(
+        UpdatePractitionerCommand(ctx, practitioner.id, { email: takenEmail })
+      ).rejects.toThrow(ConflictError);
     });
   }, 15000);
 });

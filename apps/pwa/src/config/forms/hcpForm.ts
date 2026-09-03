@@ -44,11 +44,35 @@ const INFLUENCE_TIER_OPTIONS = [
  *  so selecting a clinic doesn't need a second network round-trip for region. */
 let organizationsCache: { id: string; name: string; region: string }[] = [];
 
-async function loadOrganizationOptions(): Promise<FormFieldOption[]> {
+/**
+ * The bulk `?limit=-1` fetch below is still capped at the API's page-size
+ * ceiling (see MAX_LIMIT in apps/api/src/routes/utils.ts) and sorted by
+ * most-recently-created, so a clinic older than that cutoff can be missing
+ * from it entirely — VCombobox then has nothing to match this HCP's already-
+ * saved organization_id against, and (per its own fallback behavior for an
+ * unmatched value) renders the raw id as if it were free-typed text. Worse,
+ * isKnownOrganization() below would then read that raw id as an unknown
+ * clinic *name*, flipping the field into "creating a new clinic" mode for a
+ * clinic that already exists. Fetching that one record directly whenever the
+ * bulk list doesn't already contain it keeps both the display and the
+ * known/unknown check correct regardless of how many clinics exist.
+ */
+async function loadOrganizationOptions(form?: Record<string, unknown>): Promise<FormFieldOption[]> {
   const res = await apiFetch("/api/v1/organization?limit=-1", { handleErrors: false });
-  if (!res.ok) return [];
-  const json = (await res.json()) as { items?: { id: string; name: string; region?: string }[] };
+  const json = res.ok
+    ? ((await res.json()) as { items?: { id: string; name: string; region?: string }[] })
+    : { items: [] };
   organizationsCache = (json.items ?? []).map((o) => ({ id: o.id, name: o.name, region: o.region ?? "" }));
+
+  const currentId = typeof form?.organization_id === "string" ? form.organization_id.trim() : "";
+  if (currentId && !organizationsCache.some((o) => o.id === currentId)) {
+    const orgRes = await apiFetch(`/api/v1/organization/${currentId}`, { handleErrors: false });
+    if (orgRes.ok) {
+      const org = (await orgRes.json()) as { id: string; name: string; region?: string };
+      organizationsCache = [...organizationsCache, { id: org.id, name: org.name, region: org.region ?? "" }];
+    }
+  }
+
   return organizationsCache.map((o) => ({ title: o.name, value: o.id }));
 }
 
@@ -76,6 +100,43 @@ export function isCreatingNewOrganization(form: Record<string, unknown>): boolea
   const value = form.organization_id;
   if (typeof value !== "string" || !value.trim()) return false;
   return !isKnownOrganization(value);
+}
+
+/**
+ * Resolves the combobox's raw organization_id value into a real organization
+ * UUID for a practitioner create/update payload. If the rep typed a clinic
+ * name matching nothing on file (isCreatingNewOrganization), creates that
+ * organization first via POST /api/v1/organization using the new_organization.*
+ * sub-fields, then returns its id — the backend's organization_id column is a
+ * UUID FK and would otherwise reject the raw typed name outright (see
+ * updatePractitioner/insertPractitioner in apps/api/src/db/practitioner.ts,
+ * which use organization_id as-is with no name resolution of their own).
+ * Returns undefined if the organization creation call failed, signaling the
+ * caller to abort the submit the same way a failed apiFetch normally would.
+ */
+export async function resolveOrganizationIdForSubmit(
+  data: Record<string, unknown>,
+): Promise<string | null | undefined> {
+  if (!isCreatingNewOrganization(data)) {
+    return (data.organization_id as string | null | undefined) ?? null;
+  }
+  const newOrg = (data.new_organization ?? {}) as Record<string, unknown>;
+  const res = await apiFetch("/api/v1/organization", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: data.organization_id,
+      type: newOrg.org_type,
+      region: newOrg.org_region,
+      address_line1: newOrg.org_address_line1,
+      city: newOrg.org_city,
+      postal_code: newOrg.org_postal_code,
+      phone: newOrg.org_phone,
+    }),
+  });
+  if (!res.ok) return undefined;
+  const organization = (await res.json()) as { id: string };
+  return organization.id;
 }
 
 export function hcpFormDerive(form: Record<string, unknown>): Partial<Record<string, unknown>> | void {
