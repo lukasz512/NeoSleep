@@ -40,12 +40,12 @@
     >
     <template #item.name="{ item }">
       <span class="hcp-name-cell">
-        <AppAvatar :name="(item as HCPListItem).name" :first-name="(item as HCPListItem).first_name" :last-name="(item as HCPListItem).last_name" entity-type="hcp" :size="32" />
+        <AppAvatar :name="(item as { name?: string }).name" entity-type="hcp" :size="32" />
         {{ (item as { name?: string }).name }}
       </span>
     </template>
     <template #feed-card-avatar="{ item }">
-      <AppAvatar :name="(item as HCPListItem).name" :first-name="(item as HCPListItem).first_name" :last-name="(item as HCPListItem).last_name" entity-type="hcp" :size="55" />
+      <AppAvatar :name="(item as { name?: string }).name" entity-type="hcp" :size="55" />
     </template>
     <template #feed-card-title="{ item }">
       <span class="hcp-name-cell">
