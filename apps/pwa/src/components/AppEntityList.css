@@ -615,3 +615,9 @@
 .app-entity-list__cell-empty {
   color: rgba(var(--v-theme-on-surface), var(--v-disabled-opacity));
 }
+
+.app-entity-list__table-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}

@@ -58,6 +58,10 @@ const PREFIX_OPTIONS = [
   { title: "app.identity.form.prefixSra", value: "Sra." },
 ];
 
+/** Raw prefix values only — utils/initials.ts strips these before deriving
+ *  avatar initials from a full "Dra. Lorena González" identity name. */
+export const SALUTATION_PREFIXES: readonly string[] = PREFIX_OPTIONS.map((o) => o.value);
+
 export function identityFields(): FormFieldDef[] {
   return [
     {

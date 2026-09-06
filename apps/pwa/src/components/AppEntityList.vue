@@ -158,7 +158,7 @@
         <VDataTableServer
           v-show="!mobile"
           v-model:options="tableOptions"
-          :headers="headers"
+          :headers="tableHeaders"
           :items="items"
           :items-length="total"
           :item-value="itemValue"
@@ -169,6 +169,11 @@
         >
           <template v-for="(_, name) in $slots" :key="name" #[name]="slotData">
             <slot :name="name" v-bind="slotData" />
+          </template>
+          <template v-if="$slots['feed-card-actions']" #item.actions="{ item }">
+            <div class="app-entity-list__table-actions" @click.stop>
+              <slot name="feed-card-actions" :item="item" />
+            </div>
           </template>
         </VDataTableServer>
         <div v-show="mobile" ref="feedScrollRef" class="app-entity-list__feed-scroll" @scroll="onFeedScroll">
@@ -240,7 +245,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, useSlots } from "vue";
 import { useDisplay } from "vuetify";
 import { useI18n } from "vue-i18n";
 import { useIntersectionObserver } from "@vueuse/core";
@@ -311,6 +316,17 @@ defineEmits<{ add: [] }>();
 
 const { t } = useI18n();
 const { mobile } = useDisplay();
+const slots = useSlots();
+
+/* The mobile card feed's kebab menu (`feed-card-actions`) has no desktop
+   equivalent unless a header column exists for it to render into — Vuetify's
+   VDataTableServer only produces a column per `headers` entry, it doesn't
+   infer one from a slot. Appending this synthetic column (only when the
+   caller actually supplies that slot) is what makes the same menu content
+   show up on both layouts instead of just the mobile one. */
+const tableHeaders = computed<AppEntityListHeader[]>(() =>
+  slots["feed-card-actions"] ? [...props.headers, { title: "", key: "actions", sortable: false }] : props.headers,
+);
 
 
 

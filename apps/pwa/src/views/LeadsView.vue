@@ -67,13 +67,13 @@
     >
     <template #item.name="{ item }">
       <span class="leads-name-cell">
-        <AppAvatar :name="getLeadFromItem(item).name" entity-type="lead" :size="32" />
+        <AppAvatar :name="getLeadFromItem(item).name" :first-name="getLeadFromItem(item).first_name" :last-name="getLeadFromItem(item).last_name" entity-type="lead" :size="32" />
         <GenderIcon :gender="getGenderFromName(getLeadFromItem(item).name)" />
         {{ getLeadFromItem(item).name }}
       </span>
     </template>
     <template #feed-card-avatar="{ item }">
-      <AppAvatar :name="getLeadFromItem(item).name" entity-type="lead" :size="55" />
+      <AppAvatar :name="getLeadFromItem(item).name" :first-name="getLeadFromItem(item).first_name" :last-name="getLeadFromItem(item).last_name" entity-type="lead" :size="55" />
     </template>
     <template #feed-card-title="{ item }">
       <span class="leads-name-cell">

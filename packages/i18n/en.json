@@ -1162,5 +1162,9 @@
   "user.hcp.form.linkedin": "LinkedIn",
   "user.hcp.form.instagram": "Instagram",
   "user.hcp.form.facebook": "Facebook",
-  "user.hcp.form.googleLink": "Google link"
+  "user.hcp.form.googleLink": "Google link",
+  "user.hco.detail.delete": "Delete clinic",
+  "user.hco.detail.deleteConfirmText": "Delete this clinic? This can't be undone from here.",
+  "user.hco.detail.deleteSuccess": "Clinic deleted",
+  "app.formRenderer.unresolvedOption": "Unknown"
 }

@@ -27,7 +27,7 @@
     >
       <template #title v-if="patient">
         <span class="view-item__title-wrap">
-          <AppAvatar :name="patient.name" entity-type="patient" :size="40" />
+          <AppAvatar :name="patient.name" :first-name="patient.first_name" :last-name="patient.last_name" entity-type="patient" :size="40" />
           <h1 class="view-item__title">{{ patient.name }}</h1>
         </span>
       </template>

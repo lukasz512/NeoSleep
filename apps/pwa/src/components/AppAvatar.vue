@@ -9,7 +9,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import AppIcon, { type AppIconName } from "./AppIcon.vue";
-import { getInitials } from "../utils/initials";
+import { getInitials, getInitialsFromParts } from "../utils/initials";
 import { getAvatarColor } from "../utils/avatarColor";
 
 /**
@@ -33,6 +33,16 @@ const ENTITY_ICONS: Record<AppAvatarEntityType, AppIconName> = {
 const props = withDefaults(
   defineProps<{
     name?: string | null;
+    /**
+     * When both are given, initials come straight from these instead of
+     * being guessed out of `name` — the only way to get it right for a
+     * multi-word first or last name (e.g. "Lorena Alejandra González
+     * Pimentel": splitting the *display* name can't tell where the given
+     * name(s) end and the surname(s) begin, but the identity record itself
+     * already knows). `name` is still used for the color seed/alt text.
+     */
+    firstName?: string | null;
+    lastName?: string | null;
     avatarUrl?: string | null;
     entityType?: AppAvatarEntityType;
     size?: number | string;
@@ -40,7 +50,12 @@ const props = withDefaults(
   { entityType: "user", size: 40 },
 );
 
-const initials = computed(() => (props.name?.trim() ? getInitials(props.name) : ""));
+const initials = computed(() => {
+  if (props.firstName?.trim() && props.lastName?.trim()) {
+    return getInitialsFromParts(props.firstName, props.lastName);
+  }
+  return props.name?.trim() ? getInitials(props.name) : "";
+});
 // Falls back to the entity-type string as the color seed so even a nameless
 // placeholder gets a stable, on-brand color instead of Vuetify's flat gray.
 const bgColor = computed(() => getAvatarColor(props.name?.trim() || props.entityType));

@@ -1,6 +1,6 @@
 import type { PoolClient } from "pg";
 import { toArray, trimOrNull, trimOrEmpty } from "./helpers.js";
-import { AppError, DatabaseError, ValidationError } from "../errors.js";
+import { AppError, ConflictError, DatabaseError, ValidationError } from "../errors.js";
 
 export interface Practitioner {
   id: string;
@@ -310,6 +310,21 @@ export async function updatePractitioner(client: PoolClient, id: string, input: 
     } else {
       const institutionInput = input.institution !== undefined ? trimOrNull(input.institution) : (existing.institution ?? null);
       orgId = institutionInput ? (await resolveOrganizationId(client, institutionInput, region)).id : null;
+    }
+
+    // Pre-check rather than letting the UPDATE hit identities_email_key —
+    // a plain UPDATE has no ON CONFLICT clause to fall back to like
+    // insertPractitioner's upsert above, so a collision here would otherwise
+    // surface as an opaque 23505 (see getOrganizationIdByName for the same
+    // pre-check pattern against organization_name_unique_idx).
+    if (email && email !== existing.email) {
+      const conflict = await client.query<{ id: string }>(
+        `SELECT id FROM identities WHERE email = $1 AND id != $2 LIMIT 1`,
+        [email, existing.identity_id]
+      );
+      if (conflict.rows[0]) {
+        throw new ConflictError(`Email "${email}" is already in use by another contact.`);
+      }
     }
 
     await client.query(
