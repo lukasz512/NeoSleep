@@ -1162,5 +1162,9 @@
   "user.hcp.form.linkedin": "LinkedIn",
   "user.hcp.form.instagram": "Instagram",
   "user.hcp.form.facebook": "Facebook",
-  "user.hcp.form.googleLink": "Link Google"
+  "user.hcp.form.googleLink": "Link Google",
+  "user.hco.detail.delete": "Usuń klinikę",
+  "user.hco.detail.deleteConfirmText": "Usunąć tę klinikę? Tej operacji nie można cofnąć z tego miejsca.",
+  "user.hco.detail.deleteSuccess": "Klinika usunięta",
+  "app.formRenderer.unresolvedOption": "Nieznane"
 }

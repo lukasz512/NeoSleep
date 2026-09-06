@@ -38,12 +38,12 @@
     >
       <template #item.name="{ item }">
         <span class="patients-name-cell">
-          <AppAvatar :name="(item as { name?: string }).name" entity-type="patient" :size="32" />
+          <AppAvatar :name="(item as PatientListItem).name" :first-name="(item as PatientListItem).first_name" :last-name="(item as PatientListItem).last_name" entity-type="patient" :size="32" />
           {{ (item as { name?: string }).name }}
         </span>
       </template>
       <template #feed-card-avatar="{ item }">
-        <AppAvatar :name="(item as { name?: string }).name" entity-type="patient" :size="55" />
+        <AppAvatar :name="(item as PatientListItem).name" :first-name="(item as PatientListItem).first_name" :last-name="(item as PatientListItem).last_name" entity-type="patient" :size="55" />
       </template>
       <template #feed-card-title="{ item }">
         {{ (item as { name?: string }).name }}
@@ -118,6 +118,8 @@ const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue
 interface PatientListItem {
   id: string;
   name?: string;
+  first_name?: string;
+  last_name?: string;
   email?: string | null;
   phone?: string | null;
   practitioner_id?: string | null;

@@ -119,7 +119,7 @@
       </template>
       <template v-if="hcp" #title>
         <span class="view-item__title-wrap">
-          <AppAvatar :name="hcp.name" entity-type="hcp" :size="40" />
+          <AppAvatar :name="hcp.name" :first-name="hcp.first_name" :last-name="hcp.last_name" entity-type="hcp" :size="40" />
           <h1 class="view-item__title">{{ hcp.name }}</h1>
         </span>
       </template>

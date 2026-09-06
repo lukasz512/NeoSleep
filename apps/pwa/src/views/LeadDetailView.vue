@@ -67,7 +67,7 @@
       <!-- Name inline with back arrow -->
       <template v-if="lead" #header-title>
         <span class="view-detail__header-name-wrap">
-          <AppAvatar :name="lead.name" entity-type="lead" :size="32" />
+          <AppAvatar :name="lead.name" :first-name="lead.first_name" :last-name="lead.last_name" entity-type="lead" :size="32" />
           <h1 class="view-detail__header-name">{{ lead.name }}</h1>
         </span>
       </template>

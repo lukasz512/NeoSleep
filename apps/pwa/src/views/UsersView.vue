@@ -14,12 +14,12 @@
     >
       <template #item.name="{ item }">
         <span class="users-name-cell">
-          <AppAvatar :name="(item as { name?: string }).name" entity-type="user" :size="32" />
+          <AppAvatar :name="(item as UserListItem).name" :first-name="(item as UserListItem).first_name" :last-name="(item as UserListItem).last_name" entity-type="user" :size="32" />
           {{ (item as { name?: string }).name }}
         </span>
       </template>
       <template #feed-card-avatar="{ item }">
-        <AppAvatar :name="(item as { name?: string }).name" entity-type="user" :size="55" />
+        <AppAvatar :name="(item as UserListItem).name" :first-name="(item as UserListItem).first_name" :last-name="(item as UserListItem).last_name" entity-type="user" :size="55" />
       </template>
       <template #feed-card-title="{ item }">
         {{ (item as { name?: string }).name }}
@@ -121,6 +121,8 @@ const FormRenderer = defineAsyncComponent(() => import("../components/FormRender
 interface UserListItem {
   id: string;
   name?: string;
+  first_name?: string | null;
+  last_name?: string | null;
   role?: string;
   status?: string;
 }

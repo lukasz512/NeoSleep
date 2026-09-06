@@ -72,6 +72,22 @@
         </template>
         <span>{{ t('user.hco.detail.edit') }}</span>
       </VTooltip>
+      <VTooltip v-if="isAdmin" location="bottom">
+        <template #activator="{ props: tooltipProps }">
+          <AppButton
+            v-bind="tooltipProps"
+            icon
+            variant="flat"
+            size="large"
+            :class="entityActionBtnClass('delete')"
+            :aria-label="t('user.hco.detail.delete')"
+            @click="showDeleteConfirm = true"
+          >
+            <AppIcon :name="entityActionIcon('delete')" class="view-item__action-icon" />
+          </AppButton>
+        </template>
+        <span>{{ t('user.hco.detail.delete') }}</span>
+      </VTooltip>
     </template>
     <template #sections v-if="hco">
       <div class="view-item__row">
@@ -129,17 +145,34 @@
       </div>
     </template>
   </ItemDetailLayout>
+
+  <VDialog v-model="showDeleteConfirm" max-width="360" :transition="originDialogTransition" persistent>
+    <VCard>
+      <VCardText>{{ t("user.hco.detail.deleteConfirmText") }}</VCardText>
+      <VCardActions>
+        <VSpacer />
+        <AppButton variant="text" @click="showDeleteConfirm = false">
+          {{ t("app.common.cancel") }}
+        </AppButton>
+        <AppButton color="error" variant="text" :loading="deleteLoading" @click="onDelete">
+          {{ t("user.hco.detail.delete") }}
+        </AppButton>
+      </VCardActions>
+    </VCard>
+  </VDialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
-import { useRoute } from "vue-router";
+import { originDialogTransition } from "@ui";
+import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuthStore } from "../stores/auth";
 import { apiFetch } from "../composables/useApi";
 import { useEntityCacheStore } from "../stores/entityCache";
 import { useNotifications } from "../composables/useNotifications";
+import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import AppButton from "../components/AppButton.vue";
 import AppAvatar from "../components/AppAvatar.vue";
@@ -173,6 +206,7 @@ interface HCO {
 
 const { t } = useI18n();
 const route = useRoute();
+const router = useRouter();
 const notifications = useNotifications();
 
 const hcoCache = useEntityCacheStore("hco");
@@ -183,6 +217,7 @@ const isOffline = ref(false);
 /** True when loadHCO() failed for a reason other than a genuine 404 (network/server) — see loadHCO(). */
 const loadFailed = ref(false);
 const showEditModal = ref(false);
+const showDeleteConfirm = ref(false);
 const showEventForm = ref(false);
 const eventFormInitial = ref<{ start_at: string; end_at: string; hcoIds?: string[] } | undefined>(undefined);
 
@@ -237,6 +272,20 @@ async function onEventFormSubmit(
 function onEdit() {
   showEditModal.value = true;
 }
+
+const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
+  const id = hco.value?.id;
+  if (!id) return;
+  const res = await apiFetch(`/api/v1/organization/${id}`, {
+    method: "DELETE",
+  });
+  if (res.ok) {
+    showDeleteConfirm.value = false;
+    notifications.show(t("user.hco.detail.deleteSuccess"), "success");
+    window.dispatchEvent(new Event("entity-list-refresh"));
+    router.push({ name: "hco" });
+  }
+});
 
 async function onAccountSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
   const id = hco.value?.id;

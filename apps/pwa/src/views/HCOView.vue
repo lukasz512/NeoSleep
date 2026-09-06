@@ -24,14 +24,13 @@
       :initial-data="eventFormInitial"
       @submit="onEventFormSubmit"
     />
-    <!-- HCOs can only be created through the lead -> invite-to-partner pipeline (see LeadDetailView.vue) -->
     <AppEntityList
       view-id="hco"
       api-endpoint="/api/v1/organization"
       :headers="tableHeaders"
       :filter-definitions="hcoFilterDefinitions"
       :i18n="hcoI18n"
-      :show-add-button="false"
+      :show-add-button="isAdmin"
       detail-route-name="hco-detail"
       :filter-param-keys="['type', 'region', 'status']"
       @add="onAddAccount"
@@ -64,17 +63,37 @@
           <VListItem v-if="isAdmin" :title="t('user.hco.detail.edit')" @click="onEditAccount(item as HCOListItem)">
             <template #prepend><AppIcon :name="entityActionIcon('edit')" :class="entityActionMenuIconClass('edit')" /></template>
           </VListItem>
+          <VListItem v-if="isAdmin" :title="t('user.hco.detail.delete')" @click="onDeleteClick(item as HCOListItem)">
+            <template #prepend><AppIcon :name="entityActionIcon('delete')" :class="entityActionMenuIconClass('delete')" /></template>
+          </VListItem>
         </AppListItemMenu>
       </template>
     </AppEntityList>
+
+    <VDialog v-model="showDeleteConfirm" max-width="360" :transition="originDialogTransition" persistent>
+      <VCard>
+        <VCardText>{{ t("user.hco.detail.deleteConfirmText") }}</VCardText>
+        <VCardActions>
+          <VSpacer />
+          <AppButton variant="text" @click="showDeleteConfirm = false">
+            {{ t("app.common.cancel") }}
+          </AppButton>
+          <AppButton color="error" variant="text" :loading="deleteLoading" @click="onDelete">
+            {{ t("user.hco.detail.delete") }}
+          </AppButton>
+        </VCardActions>
+      </VCard>
+    </VDialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, defineAsyncComponent } from "vue";
+import { originDialogTransition } from "@ui";
 import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
 import AppAvatar from "../components/AppAvatar.vue";
+import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppListItemMenu from "../components/AppListItemMenu.vue";
 import { entityActionIcon, entityActionMenuIconClass } from "../config/entityActions";
@@ -83,6 +102,7 @@ import { useAuthStore } from "../stores/auth";
 import { useConfigStore } from "../stores/config";
 import { apiFetch } from "../composables/useApi";
 import { useNotifications } from "../composables/useNotifications";
+import { useAsyncAction } from "../composables/useAsyncAction";
 import { hcoFormFields } from "../config/forms/hcoForm";
 
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
@@ -112,8 +132,10 @@ const notifications = useNotifications();
 const isAdmin = computed(() => authStore.user?.role === "admin");
 const showAddModal = ref(false);
 const showEditModal = ref(false);
+const showDeleteConfirm = ref(false);
 const showEventForm = ref(false);
 const selectedHco = ref<HCOListItem | null>(null);
+const deletingHcoId = ref<string | null>(null);
 const eventFormInitial = ref<{ start_at: string; end_at: string; hcoIds?: string[] } | undefined>(undefined);
 
 const hcoFilterDefs: FilterDefinition[] = [
@@ -212,6 +234,25 @@ function onEditAccount(hco: HCOListItem) {
   selectedHco.value = hco;
   showEditModal.value = true;
 }
+
+function onDeleteClick(hco: HCOListItem) {
+  deletingHcoId.value = hco.id;
+  showDeleteConfirm.value = true;
+}
+
+const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
+  const id = deletingHcoId.value;
+  if (!id) return;
+  const res = await apiFetch(`/api/v1/organization/${id}`, {
+    method: "DELETE",
+  });
+  if (res.ok) {
+    showDeleteConfirm.value = false;
+    deletingHcoId.value = null;
+    notifications.show(t("user.hco.detail.deleteSuccess"), "success");
+    window.dispatchEvent(new Event("entity-list-refresh"));
+  }
+});
 
 async function onEditSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
   const id = selectedHco.value?.id;
