@@ -60,7 +60,7 @@
       :headers="tableHeaders"
       :filter-definitions="leadFilterDefinitions"
       :i18n="leadsI18n"
-      :show-add-button="isAdmin"
+      :show-add-button="canAdd"
       detail-route-name="lead-detail"
       :filter-param-keys="['status', 'region', 'type']"
       @add="onAddLead"
@@ -206,6 +206,7 @@ const { t } = useI18n();
 const authStore = useAuthStore();
 const configStore = useConfigStore();
 const isAdmin = computed(() => authStore.user?.role === "admin");
+const canAdd = computed(() => authStore.user?.role === "admin" || authStore.user?.role === "manager");
 const showAddModal = ref(false);
 const showEditModal = ref(false);
 const showMoveToDoctorsModal = ref(false);
