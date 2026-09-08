@@ -2,7 +2,7 @@ import type { PoolClient } from "pg";
 import { AppError, DatabaseError } from "../errors.js";
 import { isoDate } from "../routes/utils.js";
 
-export const NOTE_ENTITY_TYPES = ["patient", "practitioner", "organization", "lead"] as const;
+export const NOTE_ENTITY_TYPES = ["patient", "practitioner", "organization", "lead", "treatment_plan"] as const;
 export type NoteEntityType = (typeof NOTE_ENTITY_TYPES)[number];
 
 export interface Note {

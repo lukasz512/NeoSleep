@@ -1,5 +1,12 @@
 import type { TenantContext } from "../context/TenantContext.js";
-import { insertTreatmentPlan, updateTreatmentPlan, getTreatmentPlanById, getSleepStudyById, type TreatmentPlan } from "../db.js";
+import {
+  insertTreatmentPlan,
+  updateTreatmentPlan,
+  getTreatmentPlanById,
+  getSleepStudyById,
+  softDeleteTreatmentPlan,
+  type TreatmentPlan,
+} from "../db.js";
 import { insertAuditLog } from "../db.js";
 import { ValidationError } from "../errors.js";
 import {
@@ -91,4 +98,25 @@ export async function UpdateTreatmentPlanCommand(
   });
 
   return after;
+}
+
+/**
+ * Admin-only soft delete (see requireRole("admin") on the DELETE route) —
+ * hides the plan from every list view (getTreatmentPlansPaginated/
+ * getTreatmentPlanById both filter deleted_at IS NULL) without touching its
+ * partner_link/partner_transaction rows, so a failed OrthoApnea order's full
+ * request/response history stays intact and queryable even once hidden.
+ */
+export async function DeleteTreatmentPlanCommand(ctx: TenantContext, id: string): Promise<void> {
+  if (!id?.trim()) throw new ValidationError("treatment plan id is required");
+
+  await softDeleteTreatmentPlan(ctx.client, id);
+
+  await insertAuditLog(ctx.client, {
+    user_id: ctx.user.id,
+    action: "delete",
+    entity_type: "TreatmentPlan",
+    entity_id: id,
+    request_id: ctx.requestId,
+  });
 }

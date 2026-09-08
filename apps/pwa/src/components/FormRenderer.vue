@@ -185,6 +185,7 @@ import AppIcon from "./AppIcon.vue";
 import AppAvatar, { type AppAvatarEntityType } from "./AppAvatar.vue";
 import AppSpinner from "./AppSpinner.vue";
 import PhoneField from "./PhoneField.vue";
+import EmailField from "./EmailField.vue";
 import type { FormFieldDef, FormFieldType } from "../types/formField";
 
 /**
@@ -395,6 +396,7 @@ function componentFor(type: FormFieldType) {
     case "combobox": return VCombobox;
     case "textarea": return VTextarea;
     case "phone": return PhoneField;
+    case "email": return EmailField;
     default: return VTextField;
   }
 }
@@ -416,7 +418,8 @@ function fieldAttrs(f: FormFieldDef): Record<string, unknown> {
 
   switch (f.type) {
     case "email":
-      return { ...common, type: "email", autocomplete: "email" };
+      // EmailField owns type/autocomplete/icon/insert-@ internally now.
+      return common;
     case "phone":
       return common;
     case "textarea":

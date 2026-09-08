@@ -28,7 +28,7 @@
     <ul v-else class="patient-notes-panel__list">
       <li v-for="note in notes" :key="note.id" class="patient-notes-panel__item">
         <div class="patient-notes-panel__item-header">
-          <span class="patient-notes-panel__author">{{ note.author_name || "—" }}</span>
+          <EntityLink class="patient-notes-panel__author" :to="userDetailLink(authStore.user?.role, note.author_id)" :label="note.author_name" />
           <span class="patient-notes-panel__date">{{ new Date(note.created_at).toLocaleString() }}</span>
           <AppButton
             v-if="canDelete(note)"
@@ -72,6 +72,8 @@ import AppEmptyState from "../AppEmptyState.vue";
 import { useAuthStore } from "../../stores/auth";
 import { useAsyncAction } from "../../composables/useAsyncAction";
 import { useNotes, type NoteItem } from "../../composables/useNotes";
+import EntityLink from "../EntityLink.vue";
+import { userDetailLink } from "../../utils/entityLinks";
 
 /**
  * Generic — entity-type/entity-id props (not patient-specific) so this panel

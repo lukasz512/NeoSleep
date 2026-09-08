@@ -81,6 +81,10 @@ const ICONS = {
     paths: `<line x1="12" y1="5" x2="12" y2="19" />
             <line x1="5" y1="12" x2="19" y2="12" />`,
   },
+  "minus": {
+    strokeWidth: 2,
+    paths: `<line x1="5" y1="12" x2="19" y2="12" />`,
+  },
   "refresh": {
     strokeWidth: 2,
     paths: `<path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
@@ -136,8 +140,7 @@ const ICONS = {
   "nav-patients": {
     strokeWidth: 2,
     paths: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-            <circle cx="12" cy="7" r="4" />
-            <path d="M8 13h8" />`,
+            <circle cx="12" cy="7" r="4" />`,
   },
   "nav-planner": {
     strokeWidth: 2,
@@ -166,14 +169,18 @@ const ICONS = {
   },
   "nav-sleep-studies": {
     strokeWidth: 2,
-    paths: `<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-            <path d="M3 17h3l1.5-3L9 20l1.5-6 1 3h6.5" />`,
+    paths: `<path d="M22 12h-4l-3 9L9 3l-3 9H2" />`,
   },
   "nav-treatment-plans": {
     strokeWidth: 2,
     paths: `<path d="M21 8l-9-5-9 5 9 5 9-5z" />
             <path d="M3 8v8l9 5 9-5V8" />
             <line x1="12" y1="13" x2="12" y2="21" />`,
+  },
+  "nav-territories": {
+    strokeWidth: 2,
+    paths: `<path d="M12 21s7-6.5 7-12a7 7 0 0 0-14 0c0 5.5 7 12 7 12z" />
+            <circle cx="12" cy="9" r="2.5" />`,
   },
   // ── Generic UI icons ──────────────────────────────────────────────────────
   "close": {
@@ -191,6 +198,10 @@ const ICONS = {
   "arrow-left": {
     strokeWidth: 2,
     paths: `<path d="M19 12H5M12 19l-7-7 7-7" />`,
+  },
+  "arrow-right": {
+    strokeWidth: 2,
+    paths: `<path d="M5 12h14M12 5l7 7-7 7" />`,
   },
   "chevron-left": {
     strokeWidth: 2,
@@ -320,6 +331,12 @@ const ICONS = {
     strokeWidth: 1.75,
     paths: `<circle cx="12" cy="12" r="4" />
             <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94" />`,
+  },
+  "info-circle": {
+    strokeWidth: 1.6,
+    paths: `<circle cx="12" cy="12" r="9" />
+            <line x1="12" y1="11" x2="12" y2="16" />
+            <circle cx="12" cy="7.5" r="0.6" fill="currentColor" stroke="none" />`,
   },
   "bell": {
     strokeWidth: 1.6,

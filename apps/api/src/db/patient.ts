@@ -1,5 +1,6 @@
 import type { PoolClient } from "pg";
 import { AppError, DatabaseError } from "../errors.js";
+import { formatDisplayName } from "../utils/personName.js";
 
 function isoDate(val: Date | string | null | undefined): string {
   if (!val) return "";
@@ -28,6 +29,7 @@ export interface Patient {
   cpap_device: string | null;
   medical_record: string | null;
   region: string;
+  territory_id: string | null;
   status: string;
   metadata: Record<string, unknown> | null;
   created_at: string;
@@ -56,6 +58,7 @@ export interface PatientInsert {
   medical_record?: string;
   status?: string;
   region?: string;
+  territory_id?: string | null;
   metadata?: Record<string, unknown>;
 }
 
@@ -72,11 +75,12 @@ export interface PatientUpdate {
   medical_record?: string;
   status?: string;
   region?: string;
+  territory_id?: string | null;
   metadata?: Record<string, unknown>;
 }
 
 function buildName(p: { salutation: string | null; first_name: string; last_name: string }): string {
-  return [p.salutation, p.first_name, p.last_name].filter(Boolean).join(" ");
+  return formatDisplayName(p);
 }
 
 const PATIENT_SELECT_COLS = `
@@ -84,7 +88,7 @@ const PATIENT_SELECT_COLS = `
   p.cpap_device, p.medical_record, p.status, p.metadata,
   p.created_at, p.updated_at,
   i.title AS salutation, i.first_name, i.last_name, i.email, i.phone,
-  COALESCE(i.region, '') AS region,
+  COALESCE(i.region, '') AS region, i.territory_id,
   pi.first_name AS practitioner_first_name, pi.last_name AS practitioner_last_name`.trim();
 
 // Shared FROM/JOIN fragment for the two read queries below — resolves the
@@ -112,6 +116,7 @@ type PatientRow = {
   cpap_device: string | null;
   medical_record: string | null;
   region: string;
+  territory_id: string | null;
   status: string;
   metadata: Record<string, unknown> | null;
   created_at: Date;
@@ -143,6 +148,7 @@ function serialize(row: PatientRow): Patient & { name: string } {
     cpap_device: row.cpap_device,
     medical_record: row.medical_record,
     region: row.region,
+    territory_id: row.territory_id,
     status: row.status,
     metadata: row.metadata,
     created_at: isoDate(row.created_at),
@@ -234,8 +240,8 @@ export async function getPatientById(client: PoolClient, id: string): Promise<(P
 export async function insertPatient(client: PoolClient, data: PatientInsert): Promise<Patient & { name: string }> {
   try {
     const identityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (title, first_name, last_name, email, phone, region)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO identities (title, first_name, last_name, email, phone, region, territory_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id`,
       [
         data.salutation ?? null,
@@ -244,6 +250,7 @@ export async function insertPatient(client: PoolClient, data: PatientInsert): Pr
         data.email ?? null,
         data.phone ?? null,
         data.region ?? null,
+        data.territory_id ?? null,
       ]
     );
     const identityId = identityResult.rows[0]!.id;
@@ -300,6 +307,7 @@ export async function updatePatient(
       email: "email",
       phone: "phone",
       region: "region",
+      territory_id: "territory_id",
     };
     for (const [field, column] of Object.entries(identityFieldToColumn) as [keyof PatientUpdate, string][]) {
       if (data[field] !== undefined) {

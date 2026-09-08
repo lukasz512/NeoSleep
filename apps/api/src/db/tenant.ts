@@ -74,3 +74,24 @@ export async function withTenant<T>(
 export function tenantSlugFromHost(_hostname: string): string {
   return process.env.DEFAULT_TENANT_SLUG ?? "neosleep";
 }
+
+/**
+ * All tenant slugs currently marked 'active' in the platform schema —
+ * queried directly against the pool (no tenant search_path to set, this IS
+ * the platform-level lookup). Used by machine-to-machine job routes that
+ * must run their work for every tenant rather than assuming a single one
+ * (see routes/partners/orthoapnea-treatments.ts's sync-statuses job — that
+ * route used to rely on tenantSlugFromHost(), which is a single-tenant stub
+ * and silently only ever synced one tenant).
+ */
+export async function getActiveTenantSlugs(): Promise<string[]> {
+  try {
+    const { rows } = await getDb().query<{ slug: string }>(
+      `SELECT slug FROM platform.tenants WHERE status = 'active' ORDER BY slug`
+    );
+    return rows.map((r) => r.slug);
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getActiveTenantSlugs", err);
+  }
+}

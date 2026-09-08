@@ -1,6 +1,7 @@
 import type { PoolClient } from "pg";
 import { toArray, trimOrNull, trimOrEmpty } from "./helpers.js";
 import { AppError, DatabaseError, ValidationError } from "../errors.js";
+import { formatDisplayName } from "../utils/personName.js";
 
 export interface Lead {
   id: string;
@@ -89,8 +90,8 @@ const LEAD_SELECT_COLS = `
   i.title AS salutation, i.first_name, i.last_name, i.email, i.phone,
   COALESCE(i.region, '') AS region, i.country_code`.trim();
 
-function buildName(row: { first_name: string; last_name: string }): string {
-  return `${row.first_name} ${row.last_name}`.trim();
+function buildName(row: { salutation: string | null; first_name: string; last_name: string }): string {
+  return formatDisplayName(row);
 }
 
 type LeadRow = Omit<Lead, "name"> & { first_name: string; last_name: string };

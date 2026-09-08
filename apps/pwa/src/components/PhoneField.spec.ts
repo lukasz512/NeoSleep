@@ -19,7 +19,7 @@ describe("PhoneField", () => {
   it("defaults the area code from the logged-in user's own country", () => {
     const source = getSource();
     expect(source).toContain("useAuthStore()");
-    expect(source).toContain("countryCodeToAreaCode(authStore.user?.country_code)");
+    expect(source).toContain("countryCodeToAreaCode(props.defaultCountryCode ?? authStore.user?.country_code)");
   });
 
   it("parses/formats through the shared utils/phone helpers rather than reimplementing the logic", () => {

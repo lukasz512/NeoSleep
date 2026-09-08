@@ -289,7 +289,7 @@
                 <dd class="view-detail__value">
                   <RouterLink
                     v-if="leadInstitution(lead)"
-                    :to="hcoLink(leadInstitution(lead))"
+                    :to="hcoListLink(leadInstitution(lead))"
                     class="view-detail__link view-detail__institution-link"
                   >
                     <AppIcon
@@ -393,6 +393,7 @@ import {
   leadStatusI18nKey,
   leadInstitution,
 } from "../utils/leadStatus";
+import { hcoListLink } from "../utils/entityLinks";
 import { leadFormFields } from "../config/forms/leadForm";
 import { hcpFormFields, hcpFormDerive } from "../config/forms/hcpForm";
 import { partnerInviteFormFields } from "../config/forms/partnerInviteForm";
@@ -647,9 +648,6 @@ async function onConvertToPatientSubmit(
   }
 }
 
-function hcoLink(institutionName: string) {
-  return { path: "/hco", query: { institution: institutionName } };
-}
 
 function onEdit() {
   showEditModal.value = true;

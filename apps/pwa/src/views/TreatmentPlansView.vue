@@ -32,7 +32,10 @@
         </VChip>
       </template>
       <template #item.dentist_name="{ item }">
-        {{ (item as { dentist_name?: string | null }).dentist_name || "—" }}
+        <EntityLink
+          :to="(item as TreatmentPlanRow).dentist_id ? { name: 'hcp-detail', params: { id: (item as TreatmentPlanRow).dentist_id } } : null"
+          :label="(item as TreatmentPlanRow).dentist_name"
+        />
       </template>
     </AppEntityList>
   </div>
@@ -42,7 +45,13 @@
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
+import EntityLink from "../components/EntityLink.vue";
 import type { FilterDefinition } from "../composables/useFilters";
+
+interface TreatmentPlanRow {
+  dentist_id?: string | null;
+  dentist_name?: string | null;
+}
 
 const { t } = useI18n();
 

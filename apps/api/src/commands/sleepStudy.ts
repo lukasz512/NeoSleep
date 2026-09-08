@@ -2,7 +2,7 @@ import type { TenantContext } from "../context/TenantContext.js";
 import { insertSleepStudy, updateSleepStudy, deleteSleepStudy, getSleepStudyById, updatePatient, type SleepStudy } from "../db.js";
 import { insertAuditLog } from "../db.js";
 import { ValidationError, NotFoundError } from "../errors.js";
-import { SLEEP_STUDY_STATUSES, type SleepStudyInsert, type SleepStudyUpdate } from "../db/sleepStudy.js";
+import { SLEEP_STUDY_STATUSES, SLEEP_STUDY_TYPES, type SleepStudyInsert, type SleepStudyUpdate } from "../db/sleepStudy.js";
 
 /**
  * COMMANDS — Sleep study domain.
@@ -21,6 +21,12 @@ function assertValidStatus(status: string | undefined): void {
   }
 }
 
+function assertValidType(studyType: string | undefined): void {
+  if (studyType !== undefined && !SLEEP_STUDY_TYPES.includes(studyType as (typeof SLEEP_STUDY_TYPES)[number])) {
+    throw new ValidationError(`Invalid study_type '${studyType}' — expected one of ${SLEEP_STUDY_TYPES.join(", ")}`);
+  }
+}
+
 export interface CreateSleepStudyInput extends Omit<SleepStudyInsert, "patient_id"> {
   patient_id: string;
 }
@@ -31,6 +37,7 @@ export async function CreateSleepStudyCommand(
 ): Promise<SleepStudy> {
   if (!input.patient_id?.trim()) throw new ValidationError("patient_id is required");
   assertValidStatus(input.status);
+  assertValidType(input.study_type);
 
   const study = await insertSleepStudy(ctx.client, input);
 
@@ -55,6 +62,7 @@ export async function UpdateSleepStudyCommand(
 ): Promise<SleepStudy | null> {
   if (!id?.trim()) throw new ValidationError("sleep study id is required");
   assertValidStatus(input.status);
+  assertValidType(input.study_type);
 
   const before = await getSleepStudyById(ctx.client, id);
   if (!before) return null;

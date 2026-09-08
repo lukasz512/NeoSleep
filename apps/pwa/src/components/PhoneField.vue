@@ -77,6 +77,11 @@ const props = withDefaults(
     rules?: ((v: unknown) => true | string)[];
     variant?: string;
     density?: string;
+    /** Overrides the logged-in rep's own country_code as the default area
+     * code — for fields about someone else (e.g. the patient's alternative
+     * shipping address), the area code should default to THEIR country, not
+     * whoever is filling in the form. */
+    defaultCountryCode?: string | null;
   }>(),
   { modelValue: "" },
 );
@@ -87,7 +92,11 @@ const AREA_CODES = PHONE_AREA_CODES.map((c) => ({ code: c.code, label: c.code, c
 
 const authStore = useAuthStore();
 
-const initial = parsePhone(props.modelValue, countryCodeToAreaCode(authStore.user?.country_code));
+function fallbackAreaCode(): string {
+  return countryCodeToAreaCode(props.defaultCountryCode ?? authStore.user?.country_code);
+}
+
+const initial = parsePhone(props.modelValue, fallbackAreaCode());
 const areaCode = ref(initial.areaCode);
 const localDigits = ref(initial.local);
 
@@ -98,7 +107,7 @@ watch(
   () => props.modelValue,
   (v) => {
     if (v === formatPhone(areaCode.value, localDigits.value)) return;
-    const parsed = parsePhone(v, countryCodeToAreaCode(authStore.user?.country_code));
+    const parsed = parsePhone(v, fallbackAreaCode());
     areaCode.value = parsed.areaCode;
     localDigits.value = parsed.local;
   },

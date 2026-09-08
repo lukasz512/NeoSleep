@@ -16,7 +16,12 @@ import { PHONE_MIN_DIGITS, phoneDigitCount } from "../../utils/phone";
 // — kept in sync manually since the two runtimes don't share code.
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function emailFormatRule(v: unknown): true | string {
+/** Exported for the one other place outside FormRenderer that needs the same
+ * email format check (OrthoApneaOrderWizard's alternative-address sub-form —
+ * a bespoke multi-step form, not FormRenderer-driven, so it can't go through
+ * rulesFor()'s automatic i18n-key translation and must translate the
+ * returned key itself). Returns the raw i18n key on failure, same as before. */
+export function emailFormatRule(v: unknown): true | string {
   const s = String(v ?? "").trim();
   if (!s) return true;
   return EMAIL_REGEX.test(s) || "app.identity.form.validation.emailInvalid";

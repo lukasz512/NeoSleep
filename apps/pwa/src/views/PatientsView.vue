@@ -111,6 +111,7 @@ import { useConfigStore } from "../stores/config";
 import { apiFetch } from "../composables/useApi";
 import { useNotifications } from "../composables/useNotifications";
 import { patientFormFields } from "../config/forms/patientForm";
+import { patientStatusColor, patientStatusLabel } from "../utils/patientStatus";
 
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
@@ -185,22 +186,9 @@ const patientsI18n = computed(() => ({
   errorLoad:                    "app.patients.errorLoad",
 }));
 
-function statusColor(status?: string): string {
-  switch (status) {
-    case "active":     return "success";
-    case "follow_up":  return "warning";
-    case "discharged": return "default";
-    default:           return "default";
-  }
-}
-
+const statusColor = patientStatusColor;
 function statusLabel(status?: string): string {
-  switch (status) {
-    case "active":     return t("app.patients.filters.statusActive");
-    case "follow_up":  return t("app.patients.filters.statusFollowUp");
-    case "discharged": return t("app.patients.filters.statusDischarged");
-    default:           return status ?? "";
-  }
+  return patientStatusLabel(t, status);
 }
 
 function onAddPatient() {
