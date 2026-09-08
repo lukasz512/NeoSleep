@@ -31,7 +31,7 @@
       :headers="tableHeaders"
       :filter-definitions="patientFilterDefinitions"
       :i18n="patientsI18n"
-      :show-add-button="isAdmin"
+      :show-add-button="canAdd"
       detail-route-name="patient-detail"
       :filter-param-keys="['status', 'region']"
       @add="onAddPatient"
@@ -137,6 +137,7 @@ const authStore = useAuthStore();
 const configStore = useConfigStore();
 const notifications = useNotifications();
 const isAdmin = computed(() => authStore.user?.role === "admin");
+const canAdd = computed(() => authStore.user?.role === "admin" || authStore.user?.role === "manager");
 const showAddModal = ref(false);
 const showEditModal = ref(false);
 const showEventForm = ref(false);

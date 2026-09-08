@@ -42,6 +42,17 @@ jobs:
       # cross-site cookie config — env.ts throws if SESSION_SECRET is unset
       # in that branch. Fixed test-only value, not a real secret.
       SESSION_SECRET: ci-test-session-secret-not-for-production-use
+      # orthoapnea-order.spec.ts / routes/partners/orthoapnea-treatments.spec.ts
+      # mock the OrthoApnea HTTP boundary (fetch) entirely — never a real
+      # request — but still need these non-empty so services/partners/
+      # orthoapnea.ts's login() doesn't short-circuit with "not configured".
+      # Setting this at the job level (not apps/api/vitest.config.ts's own
+      # `test.env`) because that alone was confirmed NOT to reach these
+      # values in CI (still failed with them unset) even though it worked
+      # identically locally — kept vitest.config.ts's copy too as a working
+      # default for local runs, but this is the one CI actually depends on.
+      ORTHOAPNEA_EMAIL: qa-orthoapnea@neosleepcare.com
+      ORTHOAPNEA_PASSWORD: test-only-not-a-real-credential
 
     steps:
       - name: Checkout

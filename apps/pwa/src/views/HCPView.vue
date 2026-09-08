@@ -26,14 +26,14 @@
       :initial-data="eventFormInitial"
       @submit="onEventFormSubmit"
     />
-    <!-- HCPs can only be created through the lead -> invite-to-partner pipeline (see LeadDetailView.vue) -->
+    <!-- Reps still add HCPs only through the lead -> invite-to-partner / move-to-doctors pipeline (see LeadDetailView.vue) -->
     <AppEntityList
       view-id="hcp"
       api-endpoint="/api/v1/practitioner"
       :headers="tableHeaders"
       :filter-definitions="hcpFilterDefinitions"
       :i18n="hcpI18n"
-      :show-add-button="false"
+      :show-add-button="canAdd"
       detail-route-name="hcp-detail"
       :filter-param-keys="['specialty', 'institution', 'region']"
       @add="onAddContact"
@@ -109,6 +109,7 @@ const { t } = useI18n();
 const authStore = useAuthStore();
 const configStore = useConfigStore();
 const isAdmin = computed(() => authStore.user?.role === "admin");
+const canAdd = computed(() => authStore.user?.role === "admin" || authStore.user?.role === "manager");
 const showAddModal = ref(false);
 const showEditModal = ref(false);
 const showEventForm = ref(false);

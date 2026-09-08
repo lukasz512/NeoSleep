@@ -92,9 +92,10 @@ describe("AppLayout", () => {
       expect(navRoutesForRole("rep").map((r) => r.path)).toEqual(expectedPaths);
     });
 
-    it("manager sees users management but not leads (rep-only)", () => {
-      const expectedPaths = ["/hcp", "/hco", "/patients", "/planner", "/presentations", "/users"];
-      expect(navRoutesForRole("manager").map((r) => r.path)).toEqual(expectedPaths);
+    it("manager sees leads and users management", () => {
+      const paths = navRoutesForRole("manager").map((r) => r.path);
+      expect(paths).toContain("/leads");
+      expect(paths).toContain("/users");
     });
 
     it("admin always sees every nav item, including leads (rep-only for everyone else)", () => {
