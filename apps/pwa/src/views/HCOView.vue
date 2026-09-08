@@ -30,7 +30,7 @@
       :headers="tableHeaders"
       :filter-definitions="hcoFilterDefinitions"
       :i18n="hcoI18n"
-      :show-add-button="isAdmin"
+      :show-add-button="canAdd"
       detail-route-name="hco-detail"
       :filter-param-keys="['type', 'region', 'status']"
       @add="onAddAccount"
@@ -130,6 +130,7 @@ const authStore = useAuthStore();
 const configStore = useConfigStore();
 const notifications = useNotifications();
 const isAdmin = computed(() => authStore.user?.role === "admin");
+const canAdd = computed(() => authStore.user?.role === "admin" || authStore.user?.role === "manager");
 const showAddModal = ref(false);
 const showEditModal = ref(false);
 const showDeleteConfirm = ref(false);
