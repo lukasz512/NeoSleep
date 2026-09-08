@@ -13,6 +13,10 @@ export const SLEEP_STUDY_STATUSES = [
 ] as const;
 export type SleepStudyStatus = (typeof SLEEP_STUDY_STATUSES)[number];
 
+// DB CHECK constraint sleep_study_type_check — see migrations/021_sleep_study_type.sql.
+export const SLEEP_STUDY_TYPES = ["polysomnography", "other"] as const;
+export type SleepStudyType = (typeof SLEEP_STUDY_TYPES)[number];
+
 export interface SleepStudy {
   id: string;
   patient_id: string;
@@ -38,6 +42,7 @@ export interface SleepStudy {
   oa_indicated: boolean | null;
   cpap_indicated: boolean | null;
   status: string;
+  study_type: string;
   notes: string | null;
   metadata: Record<string, unknown> | null;
   created_at: string;
@@ -72,6 +77,7 @@ export interface SleepStudyInsert {
   oa_indicated?: boolean;
   cpap_indicated?: boolean;
   status?: string;
+  study_type?: string;
   notes?: string;
   metadata?: Record<string, unknown>;
 }
@@ -105,6 +111,7 @@ type SleepStudyRow = {
   oa_indicated: boolean | null;
   cpap_indicated: boolean | null;
   status: string;
+  study_type: string;
   notes: string | null;
   metadata: Record<string, unknown> | null;
   created_at: Date;
@@ -116,7 +123,7 @@ const SLEEP_STUDY_SELECT_COLS = `
   s.device_serial, s.device_shipped_at, s.device_delivered_at, s.device_returned_at,
   s.study_date, s.results_received_at, s.raw_results, s.ahi_score, s.spo2_nadir, s.odi,
   s.interpreted_by, s.interpreted_at, s.interpretation, s.diagnosis_code,
-  s.oa_indicated, s.cpap_indicated, s.status, s.notes, s.metadata,
+  s.oa_indicated, s.cpap_indicated, s.status, s.study_type, s.notes, s.metadata,
   s.created_at, s.updated_at,
   pi.first_name AS patient_first_name, pi.last_name AS patient_last_name,
   ii.first_name AS interpreted_by_first_name, ii.last_name AS interpreted_by_last_name`.trim();
@@ -160,6 +167,7 @@ function serialize(row: SleepStudyRow): SleepStudy {
     oa_indicated: row.oa_indicated,
     cpap_indicated: row.cpap_indicated,
     status: row.status,
+    study_type: row.study_type,
     notes: row.notes,
     metadata: row.metadata,
     created_at: isoDate(row.created_at),
@@ -243,8 +251,8 @@ export async function insertSleepStudy(client: PoolClient, data: SleepStudyInser
          device_shipped_at, device_delivered_at, device_returned_at, study_date,
          results_received_at, raw_results, ahi_score, spo2_nadir, odi,
          interpreted_by, interpreted_at, interpretation, diagnosis_code,
-         oa_indicated, cpap_indicated, status, notes, metadata
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+         oa_indicated, cpap_indicated, status, notes, metadata, study_type
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
        RETURNING id`,
       [
         data.patient_id,
@@ -269,6 +277,7 @@ export async function insertSleepStudy(client: PoolClient, data: SleepStudyInser
         data.status ?? "ordered",
         data.notes ?? null,
         data.metadata ? JSON.stringify(data.metadata) : null,
+        data.study_type ?? "polysomnography",
       ]
     );
     const row = await getSleepStudyById(client, result.rows[0]!.id);
@@ -302,6 +311,7 @@ const SLEEP_STUDY_UPDATE_FIELDS: (keyof SleepStudyUpdate)[] = [
   "status",
   "notes",
   "metadata",
+  "study_type",
 ];
 
 const JSON_FIELDS = new Set(["raw_results", "diagnosis_code", "metadata"]);

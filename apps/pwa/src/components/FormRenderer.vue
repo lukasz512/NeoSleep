@@ -70,9 +70,10 @@
                     </VListItem>
                   </template>
                   <template v-if="f.avatarEntityType" #chip="{ item, props: chipProps }">
-                    <VChip v-if="item.value" v-bind="chipProps" :text="item.title" closable>
+                    <VChip v-if="item.value" v-bind="chipProps" :text="resolvedChipTitle(f, item)" closable>
                       <template #prepend>
-                        <AppAvatar :name="item.title" :entity-type="f.avatarEntityType" :size="18" class="mr-1" />
+                        <AppSpinner v-if="chipIsLoading(f)" :size="14" :width="2" class="mr-1" />
+                        <AppAvatar v-else :name="resolvedChipTitle(f, item)" :entity-type="f.avatarEntityType" :size="18" class="mr-1" />
                       </template>
                     </VChip>
                   </template>
@@ -115,9 +116,10 @@
                   </VListItem>
                 </template>
                 <template v-if="row[0].avatarEntityType" #chip="{ item, props: chipProps }">
-                  <VChip v-if="item.value" v-bind="chipProps" :text="item.title" closable>
+                  <VChip v-if="item.value" v-bind="chipProps" :text="resolvedChipTitle(row[0], item)" closable>
                     <template #prepend>
-                      <AppAvatar :name="item.title" :entity-type="row[0].avatarEntityType" :size="18" class="mr-1" />
+                      <AppSpinner v-if="chipIsLoading(row[0])" :size="14" :width="2" class="mr-1" />
+                      <AppAvatar v-else :name="resolvedChipTitle(row[0], item)" :entity-type="row[0].avatarEntityType" :size="18" class="mr-1" />
                     </template>
                   </VChip>
                 </template>
@@ -181,7 +183,9 @@ import { scrollToFormTop } from "../utils/scrollToFormTop";
 import AppButton from "./AppButton.vue";
 import AppIcon from "./AppIcon.vue";
 import AppAvatar, { type AppAvatarEntityType } from "./AppAvatar.vue";
+import AppSpinner from "./AppSpinner.vue";
 import PhoneField from "./PhoneField.vue";
+import EmailField from "./EmailField.vue";
 import type { FormFieldDef, FormFieldType } from "../types/formField";
 
 /**
@@ -342,6 +346,33 @@ function chipColor(color?: string): string | undefined {
 }
 
 /**
+ * VCombobox resolves modelValue → selected item once, the first time that
+ * value is seen — for an async-loaded field, that first pass almost always
+ * happens before its `items` fetch has resolved, so it synthesizes a
+ * fallback item whose title is just the raw stored value. Because that
+ * resolution isn't re-run once `items` actually arrives (confirmed: the
+ * chip stays wrong even after the fetch completes, and even across
+ * closing/reopening the same dialog instance), `item.title` here can't be
+ * trusted at all — this looks it up independently from `resolvedOptions`
+ * by id every time, instead of ever trusting Vuetify's own (possibly
+ * stale) title for the item. Falls back to a placeholder only for a value
+ * that's genuinely absent from options (e.g. a soft-deleted clinic).
+ * Returns "" while the options fetch is still in flight — see
+ * chipIsLoading(), which swaps in a spinner for this same window — a raw
+ * id must never be shown to the user, not even briefly.
+ */
+function resolvedChipTitle(f: FormFieldDef, item: { title: string; value: unknown }): string {
+  if (loadingOptions.value[f.key]) return "";
+  const match = resolvedOptions(f).find((o) => o.value === item.value);
+  return match ? match.title : t("app.formRenderer.unresolvedOption");
+}
+
+/** Whether this chip's own name/title is still unresolved because its field's async options haven't loaded yet. */
+function chipIsLoading(f: FormFieldDef): boolean {
+  return !!loadingOptions.value[f.key];
+}
+
+/**
  * VCombobox (unlike VSelect/VAutocomplete) does not resolve through
  * itemValue when the user picks an item from its dropdown — it emits the
  * raw item object instead. Free-typed text (combobox's whole point) still
@@ -365,6 +396,7 @@ function componentFor(type: FormFieldType) {
     case "combobox": return VCombobox;
     case "textarea": return VTextarea;
     case "phone": return PhoneField;
+    case "email": return EmailField;
     default: return VTextField;
   }
 }
@@ -386,7 +418,8 @@ function fieldAttrs(f: FormFieldDef): Record<string, unknown> {
 
   switch (f.type) {
     case "email":
-      return { ...common, type: "email", autocomplete: "email" };
+      // EmailField owns type/autocomplete/icon/insert-@ internally now.
+      return common;
     case "phone":
       return common;
     case "textarea":
@@ -411,6 +444,7 @@ function fieldAttrs(f: FormFieldDef): Record<string, unknown> {
         items: resolvedOptions(f),
         itemTitle: "title",
         itemValue: "value",
+        loading: !!loadingOptions.value[f.key],
         menuIcon: "",
         clearable: true,
       };

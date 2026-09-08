@@ -1,5 +1,16 @@
-import { describe, it, expect } from "vitest";
-import { hcpFormFields, hcpFormDerive, isCreatingNewOrganization } from "./hcpForm";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const apiFetch = vi.fn();
+vi.mock("../../composables/useApi", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../composables/useApi")>()),
+  apiFetch: (...args: unknown[]) => apiFetch(...args),
+}));
+
+import { hcpFormFields, hcpFormDerive, isCreatingNewOrganization, resolveOrganizationIdForSubmit } from "./hcpForm";
+
+function jsonResponse(ok: boolean, body: unknown) {
+  return { ok, json: async () => body } as Response;
+}
 
 describe("hcpFormFields", () => {
   it("leads with the shared Identity block, prefix key renamed to 'salutation'", () => {
@@ -117,5 +128,49 @@ describe("hcpFormFields", () => {
       organization_id: "Brand New Clinic",
       new_organization: {},
     })).toBeUndefined();
+  });
+});
+
+describe("resolveOrganizationIdForSubmit", () => {
+  beforeEach(() => {
+    apiFetch.mockReset();
+  });
+
+  // Regression test: HCPView.vue/HCPDetailView.vue used to send the
+  // combobox's raw typed clinic name straight through as organization_id
+  // (a UUID FK column), crashing the backend with Postgres error 22P02
+  // "invalid input syntax for type uuid" — see apps/api/src/db/practitioner.ts's
+  // insertPractitioner/updatePractitioner, which trust organization_id as-is.
+  // This is the same "create org first" resolution createPractitionerFromLead
+  // (leadConversion.ts) already did for the lead-conversion form — now shared.
+
+  it("returns null without calling apiFetch when no clinic is selected (not 'creating new')", async () => {
+    const result = await resolveOrganizationIdForSubmit({});
+    expect(result).toBeNull();
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it("creates the organization first and returns its real id when the typed clinic matches nothing on file", async () => {
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, { id: "org-new-1" }));
+
+    const result = await resolveOrganizationIdForSubmit({
+      organization_id: "Brand New Clinic",
+      new_organization: { org_type: "clinic", org_region: "PL", org_city: "Warsaw" },
+    });
+
+    expect(result).toBe("org-new-1");
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+    const [url, init] = apiFetch.mock.calls[0]!;
+    expect(url).toBe("/api/v1/organization");
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body).toMatchObject({ name: "Brand New Clinic", type: "clinic", region: "PL", city: "Warsaw" });
+  });
+
+  it("returns undefined without ever building a payload when organization creation fails", async () => {
+    apiFetch.mockResolvedValueOnce(jsonResponse(false, { error: "duplicate name" }));
+
+    const result = await resolveOrganizationIdForSubmit({ organization_id: "Brand New Clinic" });
+
+    expect(result).toBeUndefined();
   });
 });

@@ -31,10 +31,18 @@
         <img
           :src="config.imageSrc"
           alt=""
-          class="home-hero__img"
+          class="home-hero__img home-hero__img--first"
           width="600"
           height="400"
           fetchpriority="high"
+        />
+        <img
+          :src="config.imageSrcAfter"
+          alt=""
+          class="home-hero__img"
+          :class="{ 'home-hero__img--active': showImageAfter }"
+          width="600"
+          height="400"
         />
         <div class="home-hero__scan-line" aria-hidden="true" />
       </div>
@@ -44,10 +52,21 @@
 </template>
 
 <script setup lang="ts">
+import { onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { heroConfig as config } from "../config/websiteContent";
 
 const { t } = useI18n();
+
+const showImageAfter = ref(false);
+let switchTimer: ReturnType<typeof setTimeout> | undefined;
+
+onMounted(() => {
+  switchTimer = setTimeout(() => {
+    showImageAfter.value = true;
+  }, config.imageSwitchDelayMs);
+});
+onBeforeUnmount(() => clearTimeout(switchTimer));
 </script>
 
 <style lang="scss" scoped>
@@ -240,10 +259,22 @@ $ease-sharp: cubic-bezier(0.16, 1, 0.3, 1);
   object-position: center;
   border-radius: inherit;
   z-index: 1;
-  animation: hero-img-in 1.1s $ease-sharp 0.1s both;
+  opacity: 0;
+  transition: opacity 1s ease;
 
-  [data-theme="dark"] & {
-    animation-name: hero-img-in-dark;
+  &--active {
+    opacity: 1;
+  }
+
+  &--first {
+    /* Always stays fully opaque underneath — the second image fades in on
+       top of it, so the crossfade never dips through the container's
+       background color. */
+    animation: hero-img-in 1.1s $ease-sharp 0.1s both;
+
+    [data-theme="dark"] & {
+      animation-name: hero-img-in-dark;
+    }
   }
 }
 

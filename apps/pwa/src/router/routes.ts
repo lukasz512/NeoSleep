@@ -56,6 +56,9 @@ export const routes: RouteRecordRaw[] = [
   { path: "/resources", name: "resources", component: () => import("../views/ResourcesView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES, partner: "orthoapnea" } },
   { path: "/users", name: "users", component: () => import("../views/UsersView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin", "manager"] } },
   { path: "/users/:id", name: "user-detail", component: () => import("../views/UserDetailView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin", "manager"] } },
+  // Geographic hierarchy (country > region > city > village > district) data entry — admin-only,
+  // narrow reference-data CRUD inside the existing app, not a separate portal/admin deployment.
+  { path: "/territories", name: "territories", component: () => import("../views/TerritoriesView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin"] } },
   { path: "/:pathMatch(.*)*", redirect: "/dashboard" },
 ];
 

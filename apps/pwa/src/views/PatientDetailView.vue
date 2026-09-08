@@ -27,7 +27,7 @@
     >
       <template #title v-if="patient">
         <span class="view-item__title-wrap">
-          <AppAvatar :name="patient.name" entity-type="patient" :size="40" />
+          <AppAvatar :name="patient.name" :first-name="patient.first_name" :last-name="patient.last_name" entity-type="patient" :size="40" />
           <h1 class="view-item__title">{{ patient.name }}</h1>
         </span>
       </template>
@@ -100,15 +100,24 @@
             </div>
             <div class="view-item__row">
               <dt class="view-item__label">{{ t("app.patients.detail.practitioner") }}</dt>
-              <dd class="view-item__value">{{ patient.practitioner_name || "—" }}</dd>
+              <dd class="view-item__value">
+                <EntityLink
+                  :to="patient.practitioner_id ? { name: 'hcp-detail', params: { id: patient.practitioner_id } } : null"
+                  :label="patient.practitioner_name"
+                />
+              </dd>
             </div>
             <div class="view-item__row">
               <dt class="view-item__label">{{ t("app.patients.detail.status") }}</dt>
-              <dd class="view-item__value">{{ statusLabel(patient.status) }}</dd>
+              <dd class="view-item__value">
+                <VChip :color="patientStatusColor(patient.status)" size="small" variant="tonal">
+                  {{ patientStatusLabel(t, patient.status) }}
+                </VChip>
+              </dd>
             </div>
             <div class="view-item__row">
               <dt class="view-item__label">{{ t("app.patients.detail.region") }}</dt>
-              <dd class="view-item__value">{{ patient.region || "—" }}</dd>
+              <dd class="view-item__value">{{ regionBreadcrumb }}</dd>
             </div>
             <div class="view-item__row">
               <dt class="view-item__label">{{ t("app.patients.detail.ahiBaseline") }}</dt>
@@ -170,12 +179,14 @@ import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppAvatar from "../components/AppAvatar.vue";
 import DetailViewTabs from "../components/DetailViewTabs.vue";
+import EntityLink from "../components/EntityLink.vue";
 import PatientNotesPanel from "../components/patient/PatientNotesPanel.vue";
 import PatientStudiesPanel from "../components/patient/PatientStudiesPanel.vue";
 import PatientOrthoApneaPanel from "../components/patient/PatientOrthoApneaPanel.vue";
 import PatientHistoryPanel from "../components/patient/PatientHistoryPanel.vue";
 import { patientFormFields } from "../config/forms/patientForm";
 import { entityActionIcon, entityActionBtnClass } from "../config/entityActions";
+import { patientStatusColor, patientStatusLabel } from "../utils/patientStatus";
 
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
@@ -195,6 +206,11 @@ interface PatientDetail {
   practitioner_name?: string | null;
   status?: string;
   region?: string;
+  territory_id?: string | null;
+  /** Root-first ancestor chain ("mx" → "cdmx" → "polanco") — null until a
+   *  territory is assigned, or if territory_id points at a since-deleted
+   *  node (see GetPatientByIdQuery in queries/patient.ts). */
+  territory_path?: { id: string; name: string; code: string | null; kind: string }[] | null;
   ahi_baseline?: number | null;
   cpap_device?: string | null;
   medical_record?: string | null;
@@ -206,6 +222,19 @@ const router = useRouter();
 const notifications = useNotifications();
 
 const patient = ref<PatientDetail | null>(null);
+
+/** territory_path (when set) as "mx/cdmx/polanco" — each ancestor's own short
+ *  `code`, root-first, lowercased. Falls back to the flat identities.region
+ *  text for patients with no territory assigned yet (the common case until
+ *  this gets populated — see PatientDetailView's Region row). */
+const regionBreadcrumb = computed(() => {
+  const path = patient.value?.territory_path;
+  if (path && path.length > 0) {
+    return path.map((node) => (node.code || node.name).toLowerCase()).join("/");
+  }
+  return patient.value?.region || "—";
+});
+
 const loading = ref(true);
 /** True when loadPatient() failed for a reason other than a genuine 404 (network/server) — see loadPatient(). */
 const loadFailed = ref(false);
@@ -226,15 +255,6 @@ const activeTab = ref((route.query.tab as string) || "details");
 watch(activeTab, (tab) => {
   router.replace({ query: { ...route.query, tab } });
 });
-
-function statusLabel(status?: string): string {
-  switch (status) {
-    case "active":     return t("app.patients.filters.statusActive");
-    case "follow_up":  return t("app.patients.filters.statusFollowUp");
-    case "discharged": return t("app.patients.filters.statusDischarged");
-    default:           return status || "—";
-  }
-}
 
 function onEdit() {
   showEditModal.value = true;

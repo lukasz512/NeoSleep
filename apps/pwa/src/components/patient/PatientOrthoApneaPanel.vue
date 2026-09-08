@@ -1,30 +1,44 @@
 <template>
   <div class="patient-orthoapnea-panel">
-    <FormRenderer
-      v-model="showAddModal"
-      :fields="treatmentPlanFormFields"
-      title-key="app.treatmentPlans.form.title"
-      submit-label-key="app.treatmentPlans.form.submit"
-      @submit="onAddSubmit"
+    <OrthoApneaOrderWizard
+      v-if="latestSleepStudyId"
+      v-model="showOrderWizard"
+      :patient-id="props.patientId"
+      :sleep-study-id="latestSleepStudyId"
+      :draft-plan="resumeDraftPlan"
+      @submitted="onWizardSubmitted"
     />
-    <FormRenderer
-      v-model="showEditModal"
-      :fields="treatmentPlanFormFields"
-      :initial-data="selectedPlan ?? undefined"
-      title-key="app.treatmentPlans.form.title"
-      edit-title-key="app.treatmentPlans.form.editTitle"
-      submit-label-key="app.treatmentPlans.form.submit"
-      edit-submit-label-key="app.treatmentPlans.form.editSubmit"
-      @submit="onEditSubmit"
+
+    <OrthoApneaTransactionLog
+      v-if="transactionLogPlanId"
+      v-model="showTransactionLog"
+      :treatment-plan-id="transactionLogPlanId"
     />
+
+    <!-- Admin-only "delete" — actually a soft hide (deleted_at, migration
+         019), not a real DELETE: the local record and its partner_link/
+         partner_transaction audit trail (migration 018) survive untouched,
+         only the list view filters it out. Mainly for hiding failed/
+         abandoned OrthoApnea orders. -->
+    <VDialog v-model="showDeleteConfirm" max-width="380" persistent>
+      <VCard>
+        <VCardTitle>{{ t("app.treatmentPlans.deleteConfirmTitle") }}</VCardTitle>
+        <VCardText>{{ t("app.treatmentPlans.deleteConfirmText") }}</VCardText>
+        <VCardActions>
+          <VSpacer />
+          <AppButton variant="text" @click="showDeleteConfirm = false">{{ t("app.common.cancel") }}</AppButton>
+          <AppButton color="error" :loading="deleting" @click="confirmDelete">{{ t("app.treatmentPlans.delete") }}</AppButton>
+        </VCardActions>
+      </VCard>
+    </VDialog>
 
     <div class="patient-orthoapnea-panel__toolbar">
       <VTooltip :disabled="!!latestSleepStudyId" location="top">
         <template #activator="{ props: tooltipProps }">
           <span v-bind="tooltipProps">
-            <AppButton color="primary" variant="tonal" :disabled="!latestSleepStudyId" @click="showAddModal = true">
+            <AppButton color="primary" :disabled="!latestSleepStudyId" @click="startNewOrder">
               <template #prepend><AppIcon name="plus" /></template>
-              {{ t("app.treatmentPlans.form.title") }}
+              {{ t("app.orthoApneaOrder.title") }}
             </AppButton>
           </span>
         </template>
@@ -43,25 +57,57 @@
     />
     <AppEmptyState v-else-if="plans.length === 0" :title="t('app.treatmentPlans.emptyTitle')" :subtitle="t('app.treatmentPlans.emptySubtitle')" />
     <ul v-else class="patient-orthoapnea-panel__list">
-      <li v-for="plan in plans" :key="plan.id" class="patient-orthoapnea-panel__item" @click="onEdit(plan)">
-        <div class="patient-orthoapnea-panel__item-header">
+      <li
+        v-for="plan in plans"
+        :key="plan.id"
+        class="patient-orthoapnea-panel__item"
+        :class="{ 'patient-orthoapnea-panel__item--static': !isDraft(plan) }"
+      >
+        <div class="patient-orthoapnea-panel__item-header" @click="isDraft(plan) && onEdit(plan)">
           <span class="patient-orthoapnea-panel__dentist">{{ plan.dentist_name || "—" }}</span>
-          <VChip :color="statusColor(plan.status)" size="small" variant="tonal">{{ statusLabel(plan.status) }}</VChip>
+          <VChip v-if="isDraft(plan)" color="warning" size="small" variant="tonal">{{ t("app.orthoApneaOrder.draftBadge") }}</VChip>
+          <VChip v-else :color="statusColor(plan.status)" size="small" variant="tonal">{{ statusLabel(plan.status) }}</VChip>
+          <VSpacer />
+          <AppButton
+            v-if="isAdmin"
+            icon
+            variant="text"
+            size="small"
+            :aria-label="t('app.orthoApneaOrder.transactionLog.openButton')"
+            @click.stop="openTransactionLog(plan.id)"
+          >
+            <VIcon icon="mdi-information-outline" size="20" />
+          </AppButton>
+          <AppButton
+            v-if="isAdmin"
+            icon
+            variant="text"
+            size="small"
+            color="error"
+            :aria-label="t('app.treatmentPlans.delete')"
+            @click.stop="requestDelete(plan.id)"
+          >
+            <AppIcon name="trash" />
+          </AppButton>
         </div>
-        <div class="patient-orthoapnea-panel__meta">
+        <div class="patient-orthoapnea-panel__meta" @click="isDraft(plan) && onEdit(plan)">
           <span v-if="plan.scan_ordered_at">{{ t("app.treatmentPlans.table.scanOrdered") }}: {{ new Date(plan.scan_ordered_at).toLocaleDateString() }}</span>
           <span v-if="plan.appliance_delivered_at">{{ t("app.treatmentPlans.table.applianceDelivered") }}: {{ new Date(plan.appliance_delivered_at).toLocaleDateString() }}</span>
         </div>
         <a v-if="plan.scan_file_url" :href="plan.scan_file_url" target="_blank" rel="noopener" class="patient-orthoapnea-panel__scan-link" @click.stop>
           {{ t("app.treatmentPlans.form.scanFileUrl") }}
         </a>
+        <AppButton variant="text" size="small" @click.stop="toggleComments(plan.id)">
+          {{ expandedCommentsId === plan.id ? t("app.orthoApneaOrder.hideComments") : t("app.orthoApneaOrder.showComments") }}
+        </AppButton>
+        <OrthoApneaOrderComments v-if="expandedCommentsId === plan.id" :treatment-plan-id="plan.id" />
       </li>
     </ul>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import AppButton from "../AppButton.vue";
 import AppIcon from "../AppIcon.vue";
@@ -70,9 +116,10 @@ import AppErrorState from "../AppErrorState.vue";
 import AppEmptyState from "../AppEmptyState.vue";
 import { apiFetch } from "../../composables/useApi";
 import { useNotifications } from "../../composables/useNotifications";
-import { treatmentPlanFormFields } from "../../config/forms/treatmentPlanForm";
-
-const FormRenderer = defineAsyncComponent(() => import("../FormRenderer.vue"));
+import { useAuthStore } from "../../stores/auth";
+import OrthoApneaOrderWizard, { type OrthoApneaDraftPlan } from "./OrthoApneaOrderWizard.vue";
+import OrthoApneaOrderComments from "./OrthoApneaOrderComments.vue";
+import OrthoApneaTransactionLog from "./OrthoApneaTransactionLog.vue";
 
 const props = defineProps<{ patientId: string }>();
 
@@ -88,6 +135,15 @@ interface TreatmentPlanItem {
   appliance_delivered_at: string | null;
   notes: string | null;
   status: string;
+  metadata: Record<string, unknown> | null;
+}
+
+/** A draft is a treatment_plan we've saved locally with a wizard snapshot
+ * but never actually sent to OrthoApnea — see OrthoApneaOrderWizard's own
+ * persistDraft() for how it gets there, and onConfirm() for how the
+ * `orthoapneaDraft` marker gets cleared once a real order goes out. */
+function isDraft(plan: TreatmentPlanItem): boolean {
+  return !!plan.metadata?.orthoapneaDraft;
 }
 
 interface SleepStudyRef {
@@ -97,14 +153,69 @@ interface SleepStudyRef {
 
 const { t } = useI18n();
 const notifications = useNotifications();
+const authStore = useAuthStore();
+const isAdmin = computed(() => authStore.user?.role === "admin");
 
 const plans = ref<TreatmentPlanItem[]>([]);
 const loading = ref(false);
 const loaded = ref(false);
 const loadError = ref(false);
-const showAddModal = ref(false);
-const showEditModal = ref(false);
-const selectedPlan = ref<TreatmentPlanItem | null>(null);
+const showOrderWizard = ref(false);
+const showTransactionLog = ref(false);
+const transactionLogPlanId = ref<string | null>(null);
+const showDeleteConfirm = ref(false);
+const deleting = ref(false);
+const deleteTargetPlanId = ref<string | null>(null);
+const expandedCommentsId = ref<string | null>(null);
+const resumeDraftPlan = ref<OrthoApneaDraftPlan | null>(null);
+
+function startNewOrder() {
+  resumeDraftPlan.value = null;
+  showOrderWizard.value = true;
+}
+
+function onWizardSubmitted() {
+  resumeDraftPlan.value = null;
+  loadPlans();
+}
+
+function toggleComments(planId: string) {
+  expandedCommentsId.value = expandedCommentsId.value === planId ? null : planId;
+}
+
+/** Admin-only — opens OrthoApneaTransactionLog.vue for this order (see ADR-017). */
+function openTransactionLog(planId: string) {
+  transactionLogPlanId.value = planId;
+  showTransactionLog.value = true;
+}
+
+/** Admin-only — soft-hides the order (deleted_at, migration 019); its
+ * partner_link/partner_transaction history is untouched. */
+function requestDelete(planId: string) {
+  deleteTargetPlanId.value = planId;
+  showDeleteConfirm.value = true;
+}
+
+async function confirmDelete() {
+  const id = deleteTargetPlanId.value;
+  if (!id) return;
+  deleting.value = true;
+  try {
+    const res = await apiFetch(`/api/v1/treatment-plan/${id}`, { method: "DELETE", handleErrors: false });
+    if (res.ok) {
+      notifications.show(t("app.treatmentPlans.deleteSuccess"), "success");
+      showDeleteConfirm.value = false;
+      deleteTargetPlanId.value = null;
+      await loadPlans();
+    } else {
+      notifications.show(t("app.treatmentPlans.deleteError"), "error");
+    }
+  } catch {
+    notifications.show(t("app.treatmentPlans.deleteError"), "error");
+  } finally {
+    deleting.value = false;
+  }
+}
 /** The most recent sleep study for this patient — new OrthoApnea plans link to it (treatment_plan.sleep_study_id is required). */
 const latestSleepStudyId = ref<string | null>(null);
 
@@ -150,55 +261,12 @@ function statusLabel(status: string): string {
   return t(key);
 }
 
-async function onAddSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
-  if (!latestSleepStudyId.value) { done(false); return; }
-  try {
-    const res = await apiFetch("/api/v1/treatment-plan", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...data,
-        patient_id: props.patientId,
-        sleep_study_id: latestSleepStudyId.value,
-        type: "dental_appliance",
-      }),
-    });
-    if (res.ok) {
-      notifications.show(t("app.treatmentPlans.form.success"), "success");
-      await loadPlans();
-      done(true);
-    } else {
-      done(false);
-    }
-  } catch {
-    done(false);
-  }
-}
-
+/** Only drafts are clickable — resumes the wizard where it was left off. A
+ * submitted plan has no editing UI anymore (see the removed Add/Edit NOA
+ * plan FormRenderer form — unused, dropped entirely). */
 function onEdit(plan: TreatmentPlanItem) {
-  selectedPlan.value = plan;
-  showEditModal.value = true;
-}
-
-async function onEditSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
-  const id = selectedPlan.value?.id;
-  if (!id) { done(false); return; }
-  try {
-    const res = await apiFetch(`/api/v1/treatment-plan/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    if (res.ok) {
-      notifications.show(t("app.treatmentPlans.form.editSuccess"), "success");
-      await loadPlans();
-      done(true);
-    } else {
-      done(false);
-    }
-  } catch {
-    done(false);
-  }
+  resumeDraftPlan.value = { id: plan.id, metadata: plan.metadata };
+  showOrderWizard.value = true;
 }
 
 onMounted(loadPlans);
@@ -230,6 +298,15 @@ watch(() => props.patientId, loadPlans);
 }
 .patient-orthoapnea-panel__item:hover {
   background: rgba(var(--v-theme-on-surface), 0.04);
+}
+
+/* Submitted plans have no click-to-edit anymore (the old Add/Edit NOA plan
+   form was removed entirely — unused). Only drafts stay clickable. */
+.patient-orthoapnea-panel__item--static {
+  cursor: default;
+}
+.patient-orthoapnea-panel__item--static:hover {
+  background: transparent;
 }
 
 .patient-orthoapnea-panel__item-header {

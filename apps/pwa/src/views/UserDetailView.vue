@@ -30,7 +30,7 @@
     >
       <template v-if="user" #title>
         <span class="view-item__title-wrap">
-          <AppAvatar :name="user.name" entity-type="user" :size="40" />
+          <AppAvatar :name="user.name" :first-name="user.first_name" :last-name="user.last_name" entity-type="user" :size="40" />
           <h1 class="view-item__title">{{ user.name }}</h1>
         </span>
       </template>

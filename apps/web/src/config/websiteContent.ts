@@ -78,6 +78,14 @@ export const homeStatsByLocale: Record<string, StatConfig[]> = {
   ],
 };
 
+/** Same figures as the homepage, minus the cardio-risk stat — used on the About page. */
+export const aboutStatsByLocale: Record<string, StatConfig[]> = Object.fromEntries(
+  Object.entries(homeStatsByLocale).map(([key, stats]) => [
+    key,
+    stats.filter((s) => s.labelKey !== "website.stats.cardioRiskLabel"),
+  ])
+);
+
 export const solutionCards: SolutionCard[] = [
   {
     id: "therapy",
@@ -119,7 +127,9 @@ export const patientFeatures: FeatureItem[] = [
 ];
 
 export const heroConfig = {
-  imageSrc: "/images/hero.jpeg",
+  imageSrc:            "/images/hero.jpeg",
+  imageSrcAfter:       "/images/hero2.jpg",
+  imageSwitchDelayMs:  5000,
   ctaPrimary:   { href: "#for-patients", labelKey: "website.hero.ctaFindSpecialist" },
   ctaSecondary: { href: "#solutions",    labelKey: "website.hero.ctaLearnMore"   },
 };

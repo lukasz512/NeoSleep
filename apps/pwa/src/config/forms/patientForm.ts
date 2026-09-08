@@ -2,6 +2,7 @@ import type { FormFieldDef, FormFieldOption } from "../../types/formField";
 import { apiFetch } from "../../composables/useApi";
 import { useConfigStore } from "../../stores/config";
 import { identityFields } from "./identityFields";
+import { loadTerritoryOptions } from "./territoryOptions";
 
 /**
  * Patient entity config for the generic FormRenderer. Reuses the shared
@@ -30,11 +31,33 @@ async function loadRegionOptions() {
   return configStore.regionItems;
 }
 
-async function loadPractitionerOptions(): Promise<FormFieldOption[]> {
+/**
+ * The bulk `?limit=-1` fetch below is still capped at the API's page-size
+ * ceiling (see MAX_LIMIT in apps/api/src/routes/utils.ts) and sorted by
+ * most-recently-created, so an HCP older than that cutoff can be missing
+ * from it entirely — the picker then has nothing to match this patient's
+ * already-saved practitioner_id against and falls back to showing the raw
+ * id. Fetching that one record directly whenever the bulk list doesn't
+ * already contain it keeps the display correct regardless of how many HCPs
+ * exist (see the identical fix for organization_id in hcpForm.ts).
+ */
+async function loadPractitionerOptions(form?: Record<string, unknown>): Promise<FormFieldOption[]> {
   const res = await apiFetch("/api/v1/practitioner?limit=-1", { handleErrors: false });
-  if (!res.ok) return [];
-  const json = (await res.json()) as { items?: { id: string; name: string }[] };
-  return (json.items ?? []).map((p) => ({ title: p.name, value: p.id }));
+  const json = res.ok
+    ? ((await res.json()) as { items?: { id: string; name: string }[] })
+    : { items: [] };
+  const options = (json.items ?? []).map((p) => ({ title: p.name, value: p.id }));
+
+  const currentId = typeof form?.practitioner_id === "string" ? form.practitioner_id.trim() : "";
+  if (currentId && !options.some((o) => o.value === currentId)) {
+    const hcpRes = await apiFetch(`/api/v1/practitioner/${currentId}`, { handleErrors: false });
+    if (hcpRes.ok) {
+      const hcp = (await hcpRes.json()) as { id: string; name: string };
+      options.push({ title: hcp.name, value: hcp.id });
+    }
+  }
+
+  return options;
 }
 
 const identity = identityFields();
@@ -71,6 +94,16 @@ export const patientFormFields: FormFieldDef[] = [
     type: "autocomplete",
     labelKey: "app.patients.form.region",
     options: loadRegionOptions,
+    cols: 6,
+  },
+  {
+    key: "territory_id",
+    type: "autocomplete",
+    labelKey: "app.patients.form.territory",
+    hint: "app.patients.form.territoryHint",
+    default: null,
+    options: loadTerritoryOptions,
+    icon: "nav-territories",
     cols: 6,
   },
   {

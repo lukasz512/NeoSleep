@@ -67,13 +67,13 @@
     >
     <template #item.name="{ item }">
       <span class="leads-name-cell">
-        <AppAvatar :name="getLeadFromItem(item).name" entity-type="lead" :size="32" />
+        <AppAvatar :name="getLeadFromItem(item).name" :first-name="getLeadFromItem(item).first_name" :last-name="getLeadFromItem(item).last_name" entity-type="lead" :size="32" />
         <GenderIcon :gender="getGenderFromName(getLeadFromItem(item).name)" />
         {{ getLeadFromItem(item).name }}
       </span>
     </template>
     <template #feed-card-avatar="{ item }">
-      <AppAvatar :name="getLeadFromItem(item).name" entity-type="lead" :size="55" />
+      <AppAvatar :name="getLeadFromItem(item).name" :first-name="getLeadFromItem(item).first_name" :last-name="getLeadFromItem(item).last_name" entity-type="lead" :size="55" />
     </template>
     <template #feed-card-title="{ item }">
       <span class="leads-name-cell">
@@ -112,7 +112,7 @@
     <template #item.institution="{ item }">
       <RouterLink
         v-if="leadInstitution(getLeadFromItem(item))"
-        :to="hcoLink(leadInstitution(getLeadFromItem(item)))"
+        :to="hcoListLink(leadInstitution(getLeadFromItem(item)))"
         class="app-entity-list__institution-link"
         @click.stop
       >
@@ -180,6 +180,7 @@ import { useAuthStore } from "../stores/auth";
 import { useConfigStore } from "../stores/config";
 import { getGenderFromName } from "../utils/genderFromName";
 import { leadStatusClass, leadStatusI18nKey, leadInstitution } from "../utils/leadStatus";
+import { hcoListLink } from "../utils/entityLinks";
 
 export interface Lead {
   id: string;
@@ -475,9 +476,6 @@ function getLeadFromItem(item: unknown): Lead {
   return (o?.raw ?? item) as Lead;
 }
 
-function hcoLink(institutionName: string) {
-  return { path: "/hco", query: { institution: institutionName } };
-}
 
 function onAddLead() {
   showAddModal.value = true;

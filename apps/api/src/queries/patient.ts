@@ -2,8 +2,10 @@ import type { TenantContext } from "../context/TenantContext.js";
 import {
   getPatientsPaginated,
   getPatientById,
+  getTerritoryPath,
   type GetPatientsFilters,
   type Patient,
+  type TerritoryPathNode,
 } from "../db.js";
 
 /**
@@ -31,13 +33,20 @@ export interface PatientDto {
   cpap_device: string | null;
   medical_record: string | null;
   region: string;
+  territory_id: string | null;
+  /** Root-first breadcrumb ("mx"/"cdmx"/"polanco") — only populated on the
+   *  single-record GetPatientByIdQuery (one extra query, fine for a detail
+   *  view); the paginated list query omits it to avoid N+1. Null when
+   *  territory_id is unset or points at a deleted/unknown node — the
+   *  frontend falls back to the flat `region` text in that case. */
+  territory_path: TerritoryPathNode[] | null;
   status: string;
   metadata: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }
 
-function toDto(p: Patient & { name: string }): PatientDto {
+function toDto(p: Patient & { name: string }, territoryPath: TerritoryPathNode[] | null = null): PatientDto {
   return {
     id:              p.id,
     name:            p.name,
@@ -53,6 +62,8 @@ function toDto(p: Patient & { name: string }): PatientDto {
     cpap_device:     p.cpap_device ?? null,
     medical_record:  p.medical_record ?? null,
     region:          p.region,
+    territory_id:    p.territory_id ?? null,
+    territory_path:  territoryPath && territoryPath.length > 0 ? territoryPath : null,
     status:          p.status,
     metadata:        p.metadata ?? null,
     created_at:      p.created_at,
@@ -95,7 +106,7 @@ export async function GetPatientListQuery(
   const sortOrder = input.sortOrder ?? "desc";
 
   const { rows, total } = await getPatientsPaginated(ctx.client, filters, page, limit, sortBy, sortOrder);
-  return { items: rows.map(toDto), total };
+  return { items: rows.map((row) => toDto(row)), total };
 }
 
 // ---------------------------------------------------------------------------
@@ -108,5 +119,6 @@ export async function GetPatientByIdQuery(
 ): Promise<PatientDto | null> {
   const patient = await getPatientById(ctx.client, id);
   if (!patient) return null;
-  return toDto(patient);
+  const territoryPath = patient.territory_id ? await getTerritoryPath(ctx.client, patient.territory_id) : null;
+  return toDto(patient, territoryPath);
 }

@@ -43,6 +43,16 @@ export const ORTHOAPNEA_EMAIL: string | undefined = process.env.ORTHOAPNEA_EMAIL
 export const ORTHOAPNEA_PASSWORD: string | undefined = process.env.ORTHOAPNEA_PASSWORD;
 
 /**
+ * Shared secret for machine-to-machine job endpoints (e.g. the partner
+ * status-sync job — see middleware/requireInternalJobSecret.ts) that an
+ * external scheduler (Render Cron Job / GitHub Actions schedule) calls
+ * instead of a logged-in user. Optional: without it, those endpoints reject
+ * every request rather than falling back to no auth at all — same
+ * fail-closed shape used everywhere else a secret gates a feature.
+ */
+export const INTERNAL_JOB_SECRET: string | undefined = process.env.INTERNAL_JOB_SECRET;
+
+/**
  * Google Calendar — books partnership-offer calls onto a single personal Gmail
  * calendar (not Google Workspace, so no built-in "Appointment schedule" page).
  * OAuth2 with a long-lived refresh token, server-side only. Optional: without

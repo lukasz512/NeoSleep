@@ -1,10 +1,12 @@
 <template>
   <div class="detail-view-tabs">
-    <AppSegmentedTabs
-      :model-value="modelValue"
-      :options="options"
-      @update:model-value="(v: string) => $emit('update:modelValue', v)"
-    />
+    <div class="detail-view-tabs__tabs-wrap">
+      <AppSegmentedTabs
+        :model-value="modelValue"
+        :options="options"
+        @update:model-value="(v: string) => $emit('update:modelValue', v)"
+      />
+    </div>
     <VWindow :model-value="modelValue" class="detail-view-tabs__window">
       <VWindowItem v-for="tab in tabs" :key="tab.value" :value="tab.value">
         <slot :name="tab.value" />
@@ -49,6 +51,18 @@ const options = computed(() => props.tabs.map((tab) => ({ value: tab.value, labe
 </script>
 
 <style scoped>
+/* Full-width is correct on mobile (the tab bar spans the narrow viewport
+   either way) — desktop is where an unconstrained 100%-wide pill bar reads
+   as stretched-too-thin across a much wider content column. Capped, not
+   changed, on AppSegmentedTabs itself: that's a shared component (also used
+   full-width in ResourcesView.vue), so the cap lives on this wrapper instead. */
+@media (min-width: 600px) {
+  .detail-view-tabs__tabs-wrap {
+    max-width: 600px;
+    margin: 0 auto;
+  }
+}
+
 .detail-view-tabs__window {
   margin-top: 28px;
 }

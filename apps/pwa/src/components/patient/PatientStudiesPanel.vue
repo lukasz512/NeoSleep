@@ -39,6 +39,7 @@
       <li v-for="study in studies" :key="study.id" class="patient-studies-panel__item" @click="onEdit(study)">
         <div class="patient-studies-panel__item-header">
           <span class="patient-studies-panel__date">{{ study.study_date ? new Date(study.study_date).toLocaleDateString() : "—" }}</span>
+          <VChip color="info" size="small" variant="tonal">{{ studyTypeLabel(study.study_type) }}</VChip>
           <VChip :color="statusColor(study.status)" size="small" variant="tonal">{{ statusLabel(study.status) }}</VChip>
           <AppButton
             v-if="isAdmin"
@@ -138,6 +139,7 @@ export interface SleepStudyItem {
   id: string;
   study_date: string | null;
   status: string;
+  study_type: string;
   ahi_score: number | null;
   spo2_nadir: number | null;
   odi: number | null;
@@ -283,6 +285,10 @@ function statusColor(status: string): string {
 function statusLabel(status: string): string {
   const key = `app.sleepStudies.status.${status.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase())}`;
   return t(key);
+}
+
+function studyTypeLabel(studyType: string): string {
+  return t(`app.sleepStudies.type.${studyType.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase())}`);
 }
 
 async function onAddSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {

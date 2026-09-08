@@ -19,9 +19,18 @@ const STATUS_OPTIONS: FormFieldOption[] = [
   { title: "app.sleepStudies.status.cancelled", value: "cancelled" },
 ];
 
+// DB CHECK constraint sleep_study_type_check — see migrations/021_sleep_study_type.sql.
+// Only 'other' exists as an alternative to the default today — extend here
+// (and the CHECK constraint) if/when a second real study type is added.
+const TYPE_OPTIONS: FormFieldOption[] = [
+  { title: "app.sleepStudies.type.polysomnography", value: "polysomnography" },
+  { title: "app.sleepStudies.type.other", value: "other" },
+];
+
 export const sleepStudyFormFields: FormFieldDef[] = [
   { key: "study_date", type: "date", labelKey: "app.sleepStudies.form.studyDate", cols: 6 },
   { key: "status", type: "select", labelKey: "app.sleepStudies.form.status", options: STATUS_OPTIONS, default: "ordered", cols: 6 },
+  { key: "study_type", type: "select", labelKey: "app.sleepStudies.form.studyType", options: TYPE_OPTIONS, default: "polysomnography", cols: 6 },
   { key: "device_serial", type: "text", labelKey: "app.sleepStudies.form.deviceSerial", cols: 6 },
   { key: "ahi_score", type: "number", labelKey: "app.sleepStudies.form.ahiScore", cols: 6 },
   { key: "spo2_nadir", type: "number", labelKey: "app.sleepStudies.form.spo2Nadir", cols: 6 },
