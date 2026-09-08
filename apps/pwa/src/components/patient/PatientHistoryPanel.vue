@@ -29,7 +29,13 @@
         <span class="patient-history-panel__summary">
           {{ t(`app.patients.detail.history.action.${entry.action}`) }}
           <strong>{{ entry.entity_type }}</strong>
-          <span v-if="entry.user_name"> — {{ entry.user_name }}</span>
+          <template v-if="entry.user_name">
+            —
+            <EntityLink :to="userDetailLink(authStore.user?.role, entry.user_id)" :label="entry.user_name" />
+          </template>
+          <span v-if="changedFieldsSummary(entry)" class="patient-history-panel__diff">
+            {{ t("app.patients.detail.history.changedFields", { fields: changedFieldsSummary(entry) }) }}
+          </span>
         </span>
       </li>
     </ul>
@@ -43,17 +49,23 @@ import { AppStateView } from "@ui";
 import AppLoadingState from "../AppLoadingState.vue";
 import AppErrorState from "../AppErrorState.vue";
 import AppIcon from "../AppIcon.vue";
+import EntityLink from "../EntityLink.vue";
 import { apiFetch } from "../../composables/useApi";
+import { useAuthStore } from "../../stores/auth";
+import { userDetailLink } from "../../utils/entityLinks";
 
 const props = defineProps<{ patientId: string }>();
 
 interface HistoryEntry {
   id: string;
   created_at: string;
+  user_id: string | null;
   user_name: string | null;
   action: string;
   entity_type: string;
   entity_id: string | null;
+  entity_before: Record<string, unknown> | null;
+  entity_after: Record<string, unknown> | null;
 }
 
 interface PatientHistory {
@@ -62,6 +74,7 @@ interface PatientHistory {
 }
 
 const { t } = useI18n();
+const authStore = useAuthStore();
 
 const history = ref<PatientHistory | null>(null);
 const loading = ref(false);
@@ -69,6 +82,23 @@ const loaded = ref(false);
 const loadError = ref(false);
 
 const entries = computed(() => history.value?.entries ?? []);
+
+/**
+ * Simple top-level key-list diff (not recursive) between entity_before/
+ * entity_after — audit_log already stores both JSONB snapshots, but until
+ * now nothing in the UI surfaced them (this panel showed only the action
+ * verb + entity type). Returns null for create/delete entries (one side is
+ * always null there) since "changed: ..." doesn't apply.
+ */
+function changedFieldsSummary(entry: HistoryEntry): string | null {
+  const before = entry.entity_before;
+  const after = entry.entity_after;
+  if (!before || !after) return null;
+
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+  const changed = [...keys].filter((k) => JSON.stringify(before[k]) !== JSON.stringify(after[k]));
+  return changed.length > 0 ? changed.join(", ") : null;
+}
 
 async function loadHistory() {
   loading.value = true;
@@ -116,6 +146,13 @@ watch(() => props.patientId, loadHistory);
 }
 
 .patient-history-panel__date {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+.patient-history-panel__diff {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.8125rem;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 </style>

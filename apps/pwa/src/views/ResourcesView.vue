@@ -152,11 +152,12 @@ const { t, locale } = useI18n();
 const { items, documents, videos, documentGroups, videoGroups, loading, loadError, load } = usePartnerResources();
 const authStore = useAuthStore();
 
-const tab = ref<"documents" | "videos">("documents");
-const tabOptions = computed(() => [
-  { value: "documents", label: t("user.resources.tabs.documents") },
-  { value: "videos", label: t("user.resources.tabs.videos") },
-]);
+// Documents tab hidden per product decision — only Webinars (the renamed
+// Videos tab) is shown. Data is still fetched as before (usePartnerResources
+// keeps returning documents too); this is a UI-only filter, not a backend
+// change, so nothing here regresses if Documents comes back later.
+const tab = ref<"documents" | "videos">("videos");
+const tabOptions = computed(() => [{ value: "videos", label: t("user.resources.tabs.videos") }]);
 
 watch(locale, (l) => load(l), { immediate: true });
 

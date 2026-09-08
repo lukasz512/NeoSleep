@@ -1,9 +1,10 @@
 import { Router, type Router as RouterType, type Request, type Response } from "express";
 import { asyncHandler } from "../middleware/errorHandler.js";
 import { requireAuth } from "../middleware/requireAuth.js";
+import { requireRole } from "../middleware/requireRole.js";
 import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
-import { CreateTreatmentPlanCommand, UpdateTreatmentPlanCommand } from "../commands/treatmentPlan.js";
+import { CreateTreatmentPlanCommand, UpdateTreatmentPlanCommand, DeleteTreatmentPlanCommand } from "../commands/treatmentPlan.js";
 import { GetTreatmentPlanListQuery, GetTreatmentPlanByIdQuery } from "../queries/treatmentPlan.js";
 import { ValidationError } from "../errors.js";
 import { parsePaginationParams } from "./utils.js";
@@ -170,5 +171,29 @@ treatmentPlanRouter.patch(
 
     if (!plan) { res.status(404).json({ error: "Treatment plan not found" }); return; }
     res.json(plan);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// DELETE /api/v1/treatment-plan/:id — soft delete (admin-only, matches
+// frontend gating). Mainly used to hide a failed/abandoned OrthoApnea order
+// — the underlying partner_link/partner_transaction rows (migration 018)
+// are untouched, so the request/response history stays intact and
+// queryable via the transaction-log route even after hiding.
+// ---------------------------------------------------------------------------
+treatmentPlanRouter.delete(
+  "/treatment-plan/:id",
+  requireRole("admin"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id?.trim();
+    if (!id) throw new ValidationError("Missing treatment plan id");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      await DeleteTreatmentPlanCommand(ctx, id);
+    });
+
+    res.json({ success: true });
   })
 );

@@ -25,7 +25,13 @@ describe("patientFormFields", () => {
   it("carries the full existing field set (no fields dropped in the migration)", () => {
     expect(patientFormFields.map((f) => f.key)).toEqual([
       "salutation", "first_name", "last_name", "email", "phone",
-      "practitioner_id", "status", "region", "ahi_baseline", "cpap_device", "medical_record",
+      "practitioner_id", "status", "region", "territory_id", "ahi_baseline", "cpap_device", "medical_record",
     ]);
+  });
+
+  it("territory_id is an autocomplete with an async loader", () => {
+    const territory = patientFormFields.find((f) => f.key === "territory_id")!;
+    expect(territory.type).toBe("autocomplete");
+    expect(typeof territory.options).toBe("function");
   });
 });

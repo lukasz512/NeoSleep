@@ -48,6 +48,7 @@ interface SleepStudyBody {
   oa_indicated?: unknown;
   cpap_indicated?: unknown;
   status?: unknown;
+  study_type?: unknown;
   notes?: unknown;
   metadata?: unknown;
 }
@@ -86,6 +87,7 @@ function parseBody(body: SleepStudyBody) {
     oa_indicated: bool(body.oa_indicated),
     cpap_indicated: bool(body.cpap_indicated),
     status: str(body.status),
+    study_type: str(body.study_type),
     notes: str(body.notes),
     metadata: obj(body.metadata),
   };
