@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import bcrypt from "bcrypt";
 import { withTenant, insertStaffUser, getAuditLogForEntities } from "../../db.js";
 import { getNotificationsPaginated } from "../../db/notification.js";
@@ -13,7 +13,12 @@ import { CreateTreatmentPlanCommand } from "../../commands/treatmentPlan.js";
 import { getTreatmentPlanById } from "../../db/treatmentPlan.js";
 import { SyncOrthoApneaTreatmentStatusesCommand } from "../../commands/orthoapneaSync.js";
 import { PartnerServiceError, ConflictError } from "../../errors.js";
-import { ensureOrthoApneaPatient, createOrthoApneaTreatment, addOrthoApneaComment } from "./orthoapnea.js";
+import {
+  ensureOrthoApneaPatient,
+  createOrthoApneaTreatment,
+  addOrthoApneaComment,
+  __resetOrthoApneaStateForTests,
+} from "./orthoapnea.js";
 
 // Loaded via fs rather than a static JSON import — avoids the composite
 // TS project needing this fixture path added to its file list.
@@ -133,6 +138,17 @@ async function query<T extends Record<string, unknown>>(sql: string, params: unk
  * because of its "scan everything" access pattern.
  */
 const createdPartnerLinkIds: string[] = [];
+
+// orthoapnea.ts caches session/cooldown state at module scope (correct for a
+// real process, one live session) — this file statically imports that module
+// once for all its tests, so without a reset a login failure in one test
+// (there are several by design — testing the failure paths) leaves later
+// tests inside the 15s RECONNECT_COOLDOWN_MS window short-circuited with
+// "connection recently failed — cooling down" instead of exercising their
+// own mocked scenario. See __resetOrthoApneaStateForTests's own doc comment.
+beforeEach(() => {
+  __resetOrthoApneaStateForTests();
+});
 
 afterEach(async () => {
   vi.unstubAllGlobals();

@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import bcrypt from "bcrypt";
 import { app } from "../../server.js";
@@ -10,7 +10,7 @@ import type { TenantContext } from "../../context/TenantContext.js";
 import { CreatePatientCommand } from "../../commands/patient.js";
 import { CreateSleepStudyCommand } from "../../commands/sleepStudy.js";
 import { CreateTreatmentPlanCommand } from "../../commands/treatmentPlan.js";
-import { createOrthoApneaTreatment } from "../../services/partners/orthoapnea.js";
+import { createOrthoApneaTreatment, __resetOrthoApneaStateForTests } from "../../services/partners/orthoapnea.js";
 import { signAuthToken } from "../../utils/jwt.js";
 
 // Loaded via fs rather than a static JSON import — see orthoapnea-order.spec.ts's own comment.
@@ -63,6 +63,12 @@ async function buildTestContext(client: Parameters<typeof CreatePatientCommand>[
 }
 
 const createdPartnerLinkIds: string[] = [];
+
+// See orthoapnea-order.spec.ts's identical beforeEach for why — this file
+// statically imports the same module-scoped session/cooldown state.
+beforeEach(() => {
+  __resetOrthoApneaStateForTests();
+});
 
 afterEach(async () => {
   vi.unstubAllGlobals();

@@ -157,6 +157,26 @@ async function ensureSession(): Promise<OrthoApneaSession> {
   return loginInFlight;
 }
 
+/**
+ * Test-only: clears the module-level session/cooldown state. session,
+ * lastLoginFailureAt etc. are deliberately process-wide singletons in
+ * production (one real Node process talks to OrthoApnea through one cached
+ * session/circuit-breaker) — but that same singleton leaks across test
+ * cases within a single spec file that statically imports this module once,
+ * since vitest doesn't reset module state between `it()` blocks on its own.
+ * orthoapnea.spec.ts avoids this by dynamically re-importing the module
+ * (with vi.resetModules()) per test; orthoapnea-order.spec.ts's tests are
+ * DB-integration tests that can't cheaply do that (the DB-touching command
+ * functions are imported statically alongside this), so they call this
+ * instead. Not imported or called anywhere in production code.
+ */
+export function __resetOrthoApneaStateForTests(): void {
+  session = null;
+  loginInFlight = null;
+  lastLoginFailureAt = null;
+  consecutiveFailures = 0;
+}
+
 export interface ConnectionStatus {
   connected: boolean;
   /** True once MAX_CONSECUTIVE_FAILURES has been hit without a successful login in between — signals "this isn't a blip" rather than "still trying". */
