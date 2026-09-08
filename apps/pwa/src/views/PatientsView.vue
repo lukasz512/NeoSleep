@@ -88,7 +88,7 @@
           <VListItem :title="t('user.detail.scheduleVisit')" @click="onScheduleVisit(item as PatientListItem)">
             <template #prepend><AppIcon :name="entityActionIcon('scheduleVisit')" :class="entityActionMenuIconClass('scheduleVisit')" /></template>
           </VListItem>
-          <VListItem v-if="isAdmin" :title="t('app.patients.detail.edit')" @click="onEditPatient(item as PatientListItem)">
+          <VListItem v-if="canEditPatients" :title="t('app.patients.detail.edit')" @click="onEditPatient(item as PatientListItem)">
             <template #prepend><AppIcon :name="entityActionIcon('edit')" :class="entityActionMenuIconClass('edit')" /></template>
           </VListItem>
         </AppListItemMenu>
@@ -107,6 +107,7 @@ import AppListItemMenu from "../components/AppListItemMenu.vue";
 import { entityActionIcon, entityActionMenuIconClass } from "../config/entityActions";
 import { type FilterDefinition } from "../composables/useFilters";
 import { useAuthStore } from "../stores/auth";
+import { usePermissions } from "../composables/usePermissions";
 import { useConfigStore } from "../stores/config";
 import { apiFetch } from "../composables/useApi";
 import { useNotifications } from "../composables/useNotifications";
@@ -133,11 +134,13 @@ interface PatientListItem {
 }
 
 const { t } = useI18n();
-const authStore = useAuthStore();
 const configStore = useConfigStore();
 const notifications = useNotifications();
-const isAdmin = computed(() => authStore.user?.role === "admin");
+const authStore = useAuthStore();
+// Direct add is its own, narrower admin/manager-only shortcut — everyone
+// else still adds patients through the lead pipeline.
 const canAdd = computed(() => authStore.user?.role === "admin" || authStore.user?.role === "manager");
+const { canEditPatients } = usePermissions();
 const showAddModal = ref(false);
 const showEditModal = ref(false);
 const showEventForm = ref(false);

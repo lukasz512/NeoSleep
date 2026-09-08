@@ -55,6 +55,7 @@ describe("InvitePractitionerCommand", () => {
         last_name: "Doctor",
         type: "doctor",
         email: doctorEmail,
+        phone: "600100200",
         metadata: { institution: "Acme Clinic" },
       });
 

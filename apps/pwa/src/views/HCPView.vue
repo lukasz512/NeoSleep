@@ -60,7 +60,7 @@
         <VListItem :title="t('user.detail.scheduleVisit')" @click="onScheduleVisit(item as HCPListItem)">
           <template #prepend><AppIcon :name="entityActionIcon('scheduleVisit')" :class="entityActionMenuIconClass('scheduleVisit')" /></template>
         </VListItem>
-        <VListItem v-if="isAdmin" :title="t('user.hcp.detail.edit')" @click="onEditContact(item as HCPListItem)">
+        <VListItem v-if="canEditPractitioners" :title="t('user.hcp.detail.edit')" @click="onEditContact(item as HCPListItem)">
           <template #prepend><AppIcon :name="entityActionIcon('edit')" :class="entityActionMenuIconClass('edit')" /></template>
         </VListItem>
       </AppListItemMenu>
@@ -81,6 +81,7 @@ import { apiFetch } from "../composables/useApi";
 import { useNotifications } from "../composables/useNotifications";
 import { type FilterDefinition } from "../composables/useFilters";
 import { useAuthStore } from "../stores/auth";
+import { usePermissions } from "../composables/usePermissions";
 import { useConfigStore } from "../stores/config";
 import { hcpFormFields, hcpFormDerive, resolveOrganizationIdForSubmit } from "../config/forms/hcpForm";
 
@@ -106,10 +107,12 @@ interface HCPListItem {
 }
 
 const { t } = useI18n();
-const authStore = useAuthStore();
 const configStore = useConfigStore();
-const isAdmin = computed(() => authStore.user?.role === "admin");
+const authStore = useAuthStore();
+// Direct add is its own, narrower admin/manager-only path — reps/kam/msl still
+// add HCPs only through the lead pipeline (see the AppEntityList comment above).
 const canAdd = computed(() => authStore.user?.role === "admin" || authStore.user?.role === "manager");
+const { canEditPractitioners } = usePermissions();
 const showAddModal = ref(false);
 const showEditModal = ref(false);
 const showEventForm = ref(false);

@@ -39,7 +39,7 @@ describe("GetHistoryForPatientQuery — audit field redaction", () => {
   it("strips fields not on the Patient allow-list, keeping only id/status/region", async () => {
     await withTenant(TENANT_SLUG, async (client) => {
       const ctx = await buildTestContext(client);
-      const patient = await CreatePatientCommand(ctx, { first_name: "Test", last_name: `Patient-${uniqueSuffix()}` });
+      const patient = await CreatePatientCommand(ctx, { first_name: "Test", last_name: `Patient-${uniqueSuffix()}`, email: `qa-patient-${uniqueSuffix()}@example.com`, phone: "600100200" });
 
       // Simulates a future command widening what it writes to entity_after —
       // inserted directly (bypassing CreatePatientCommand/UpdatePatientCommand,
@@ -68,7 +68,7 @@ describe("GetHistoryForPatientQuery — audit field redaction", () => {
   it("strips ALL fields for an unrecognized entity_type — fail safe, not fail open", async () => {
     await withTenant(TENANT_SLUG, async (client) => {
       const ctx = await buildTestContext(client);
-      const patient = await CreatePatientCommand(ctx, { first_name: "Test", last_name: `Patient-${uniqueSuffix()}` });
+      const patient = await CreatePatientCommand(ctx, { first_name: "Test", last_name: `Patient-${uniqueSuffix()}`, email: `qa-patient-${uniqueSuffix()}@example.com`, phone: "600100200" });
 
       await insertAuditLog(client, {
         user_id: ctx.user.id,
@@ -89,7 +89,7 @@ describe("GetHistoryForPatientQuery — audit field redaction", () => {
   it("returns null (not an empty object) when the only fields present are all filtered out", async () => {
     await withTenant(TENANT_SLUG, async (client) => {
       const ctx = await buildTestContext(client);
-      const patient = await CreatePatientCommand(ctx, { first_name: "Test", last_name: `Patient-${uniqueSuffix()}` });
+      const patient = await CreatePatientCommand(ctx, { first_name: "Test", last_name: `Patient-${uniqueSuffix()}`, email: `qa-patient-${uniqueSuffix()}@example.com`, phone: "600100200" });
 
       await insertAuditLog(client, {
         user_id: ctx.user.id,

@@ -94,7 +94,7 @@ describe("GET /api/v1/partners/orthoapnea/treatments/:treatmentPlanId/transactio
   it("200s with an empty history for a treatment_plan never submitted to OrthoApnea", async () => {
     const plan = await withTenant(TENANT_SLUG, async (client) => {
       const ctx = await buildTestContext(client);
-      const patient = await CreatePatientCommand(ctx, { first_name: "Test", last_name: `Patient-${uniqueSuffix()}` });
+      const patient = await CreatePatientCommand(ctx, { first_name: "Test", last_name: `Patient-${uniqueSuffix()}`, email: `qa-patient-${uniqueSuffix()}@example.com`, phone: "600100200" });
       const study = await CreateSleepStudyCommand(ctx, { patient_id: patient.id });
       return CreateTreatmentPlanCommand(ctx, { patient_id: patient.id, sleep_study_id: study.id, type: "dental_appliance" });
     });
@@ -110,7 +110,7 @@ describe("GET /api/v1/partners/orthoapnea/treatments/:treatmentPlanId/transactio
   it("200s with the link and every partner_transaction row, newest first, for a submitted order", async () => {
     const plan = await withTenant(TENANT_SLUG, async (client) => {
       const ctx = await buildTestContext(client);
-      const patient = await CreatePatientCommand(ctx, { first_name: "Test", last_name: `Patient-${uniqueSuffix()}` });
+      const patient = await CreatePatientCommand(ctx, { first_name: "Test", last_name: `Patient-${uniqueSuffix()}`, email: `qa-patient-${uniqueSuffix()}@example.com`, phone: "600100200" });
       const study = await CreateSleepStudyCommand(ctx, { patient_id: patient.id });
       return CreateTreatmentPlanCommand(ctx, { patient_id: patient.id, sleep_study_id: study.id, type: "dental_appliance" });
     });

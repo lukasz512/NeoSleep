@@ -88,7 +88,12 @@ export async function CreateOrganizationCommand(
   if (!name) throw new ValidationError("name is required");
 
   const email = input.email?.trim() ?? "";
-  if (email && !EMAIL_REGEX.test(email)) throw new ValidationError("Invalid email format");
+  if (!email) throw new ValidationError("email is required");
+  if (!EMAIL_REGEX.test(email)) throw new ValidationError("Invalid email format");
+
+  const phone = input.phone?.trim() ?? "";
+  if (!phone) throw new ValidationError("phone is required");
+  if (phone.replace(/\D/g, "").length < 9) throw new ValidationError("Phone must contain at least 9 digits");
 
   const type = normalizeOrgType(input.type);
   const status = normalizeOrgStatus(input.status);
@@ -115,8 +120,8 @@ export async function CreateOrganizationCommand(
     postal_code,
     country_code,
     region:        input.region?.trim() ?? "",
-    phone:         input.phone?.trim() ?? null,
-    email:         email || null,
+    phone,
+    email,
     website:       input.website?.trim() ?? null,
     google_link:   input.google_link?.trim() ?? null,
     latitude:      coordinates?.lat ?? null,
@@ -178,8 +183,17 @@ export async function UpdateOrganizationCommand(
 ): Promise<Organization | null> {
   if (!id?.trim()) throw new ValidationError("organization id is required");
 
-  const email = input.email?.trim();
-  if (email && !EMAIL_REGEX.test(email)) throw new ValidationError("Invalid email format");
+  if (input.email !== undefined) {
+    const email = input.email?.trim() ?? "";
+    if (!email) throw new ValidationError("email cannot be blank");
+    if (!EMAIL_REGEX.test(email)) throw new ValidationError("Invalid email format");
+  }
+
+  if (input.phone !== undefined) {
+    const phone = input.phone?.trim() ?? "";
+    if (!phone) throw new ValidationError("phone cannot be blank");
+    if (phone.replace(/\D/g, "").length < 9) throw new ValidationError("Phone must contain at least 9 digits");
+  }
 
   const before = await getOrganizationById(ctx.client, id);
   if (!before) return null;

@@ -56,8 +56,13 @@ export async function CreatePatientCommand(
   if (!firstName) throw new ValidationError("first_name is required");
   if (!lastName)  throw new ValidationError("last_name is required");
 
-  const email = input.email?.trim();
-  if (email && !EMAIL_REGEX.test(email)) throw new ValidationError("Invalid email format");
+  const email = input.email?.trim() ?? "";
+  if (!email) throw new ValidationError("email is required");
+  if (!EMAIL_REGEX.test(email)) throw new ValidationError("Invalid email format");
+
+  const phone = input.phone?.trim() ?? "";
+  if (!phone) throw new ValidationError("phone is required");
+  if (phone.replace(/\D/g, "").length < 9) throw new ValidationError("Phone must contain at least 9 digits");
 
   // Support legacy hcp_id → practitioner_id
   const practitionerId = input.practitioner_id?.trim() || input.hcp_id?.trim() || undefined;
@@ -66,8 +71,8 @@ export async function CreatePatientCommand(
     salutation:     input.salutation?.trim() || undefined,
     first_name:     firstName,
     last_name:      lastName,
-    email:          email || undefined,
-    phone:          input.phone?.trim() || undefined,
+    email,
+    phone,
     practitioner_id: practitionerId,
     diagnosis_code: input.diagnosis_code,
     ahi_baseline:   input.ahi_baseline,
@@ -135,8 +140,17 @@ export async function UpdatePatientCommand(
 ): Promise<(Patient & { name: string }) | null> {
   if (!id?.trim()) throw new ValidationError("patient id is required");
 
-  const email = input.email?.trim();
-  if (email && !EMAIL_REGEX.test(email)) throw new ValidationError("Invalid email format");
+  if (input.email !== undefined) {
+    const email = input.email?.trim() ?? "";
+    if (!email) throw new ValidationError("email cannot be blank");
+    if (!EMAIL_REGEX.test(email)) throw new ValidationError("Invalid email format");
+  }
+
+  if (input.phone !== undefined) {
+    const phone = input.phone?.trim() ?? "";
+    if (!phone) throw new ValidationError("phone cannot be blank");
+    if (phone.replace(/\D/g, "").length < 9) throw new ValidationError("Phone must contain at least 9 digits");
+  }
 
   const before = await getPatientById(ctx.client, id);
   if (!before) return null;
