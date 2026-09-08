@@ -183,7 +183,7 @@ export async function getTreatmentPlansPaginated(
   const col = allowed.includes(sortBy) ? sortBy : "created_at";
   const dir = sortOrder === "asc" ? "ASC" : "DESC";
 
-  const conditions: string[] = [];
+  const conditions: string[] = ["t.deleted_at IS NULL"];
   const params: unknown[] = [];
 
   if (filters.patient_id?.trim()) {
@@ -232,7 +232,7 @@ export async function getTreatmentPlansPaginated(
 export async function getTreatmentPlanById(client: PoolClient, id: string): Promise<TreatmentPlan | null> {
   try {
     const result = await client.query<TreatmentPlanRow>(
-      `SELECT ${TREATMENT_PLAN_SELECT_COLS} ${TREATMENT_PLAN_JOIN} WHERE t.id = $1`,
+      `SELECT ${TREATMENT_PLAN_SELECT_COLS} ${TREATMENT_PLAN_JOIN} WHERE t.id = $1 AND t.deleted_at IS NULL`,
       [id]
     );
     if (!result.rows[0]) return null;
@@ -337,4 +337,22 @@ export async function updateTreatmentPlan(
   }
 
   return getTreatmentPlanById(client, id);
+}
+
+/**
+ * Soft-deletes a treatment_plan by setting deleted_at (migration 019) — same
+ * convention as softDeletePatient (db/patient.ts). Used to let an admin hide
+ * a failed/abandoned OrthoApnea order from the patient's list without
+ * destroying the local record or its partner_transaction audit trail
+ * (partner_link/partner_transaction, migration 018, are keyed by
+ * treatment_plan_id and are left untouched — the history stays queryable
+ * even after the plan itself is hidden).
+ */
+export async function softDeleteTreatmentPlan(client: PoolClient, id: string): Promise<void> {
+  try {
+    await client.query(`UPDATE treatment_plan SET deleted_at = now() WHERE id = $1`, [id]);
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("softDeleteTreatmentPlan", err);
+  }
 }

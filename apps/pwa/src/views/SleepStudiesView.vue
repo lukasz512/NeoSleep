@@ -18,6 +18,11 @@
       <template #feed-card-title="{ item }">
         {{ (item as { patient_name?: string }).patient_name || "—" }}
       </template>
+      <template #item.study_type="{ item }">
+        <VChip color="info" size="small" variant="tonal">
+          {{ studyTypeLabel((item as { study_type?: string }).study_type) }}
+        </VChip>
+      </template>
       <template #item.status="{ item }">
         <VChip :color="statusColor((item as { status?: string }).status)" size="small" variant="tonal">
           {{ statusLabel((item as { status?: string }).status) }}
@@ -35,7 +40,10 @@
         {{ (item as { ahi_score?: number | null }).ahi_score ?? "—" }}
       </template>
       <template #item.interpreted_by_name="{ item }">
-        {{ (item as { interpreted_by_name?: string | null }).interpreted_by_name || "—" }}
+        <EntityLink
+          :to="(item as SleepStudyRow).interpreted_by ? { name: 'hcp-detail', params: { id: (item as SleepStudyRow).interpreted_by } } : null"
+          :label="(item as SleepStudyRow).interpreted_by_name"
+        />
       </template>
     </AppEntityList>
   </div>
@@ -45,7 +53,13 @@
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
+import EntityLink from "../components/EntityLink.vue";
 import type { FilterDefinition } from "../composables/useFilters";
+
+interface SleepStudyRow {
+  interpreted_by?: string | null;
+  interpreted_by_name?: string | null;
+}
 
 const { t } = useI18n();
 
@@ -78,8 +92,13 @@ function statusLabel(status?: string): string {
   return status ? t(`app.sleepStudies.status.${statusKey(status)}`) : "—";
 }
 
+function studyTypeLabel(studyType?: string): string {
+  return studyType ? t(`app.sleepStudies.type.${statusKey(studyType)}`) : "—";
+}
+
 const tableHeaders = computed(() => [
   { title: t("app.sleepStudies.table.patient"), key: "patient_name", sortable: false },
+  { title: t("app.sleepStudies.table.studyType"), key: "study_type", sortable: false },
   { title: t("app.sleepStudies.table.status"), key: "status", sortable: true },
   { title: t("app.sleepStudies.table.studyDate"), key: "study_date", sortable: true },
   { title: t("app.sleepStudies.table.ahiScore"), key: "ahi_score", sortable: false },

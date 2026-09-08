@@ -40,6 +40,7 @@ export interface CreatePatientInput {
   medical_record?: string;
   status?: string;
   region?: string;
+  territory_id?: string | null;
   metadata?: Record<string, unknown>;
   /** When set, this patient is being created from a lead ("move to contacts") —
    *  the lead is atomically marked converted in the same transaction. */
@@ -74,6 +75,7 @@ export async function CreatePatientCommand(
     medical_record: input.medical_record?.trim() || undefined,
     status:         input.status || "active",
     region:         input.region || "",
+    territory_id:   input.territory_id,
     metadata:       input.metadata,
   };
 
@@ -119,6 +121,7 @@ export interface UpdatePatientPayload {
   medical_record?: string;
   status?: string;
   region?: string;
+  territory_id?: string | null;
   metadata?: Record<string, unknown>;
 }
 
@@ -158,6 +161,7 @@ export async function UpdatePatientCommand(
     medical_record: input.medical_record !== undefined ? input.medical_record : undefined,
     status:         input.status,
     region:         input.region,
+    territory_id:   input.territory_id,
     metadata:       input.metadata,
   };
 

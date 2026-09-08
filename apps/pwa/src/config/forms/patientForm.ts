@@ -2,6 +2,7 @@ import type { FormFieldDef, FormFieldOption } from "../../types/formField";
 import { apiFetch } from "../../composables/useApi";
 import { useConfigStore } from "../../stores/config";
 import { identityFields } from "./identityFields";
+import { loadTerritoryOptions } from "./territoryOptions";
 
 /**
  * Patient entity config for the generic FormRenderer. Reuses the shared
@@ -93,6 +94,16 @@ export const patientFormFields: FormFieldDef[] = [
     type: "autocomplete",
     labelKey: "app.patients.form.region",
     options: loadRegionOptions,
+    cols: 6,
+  },
+  {
+    key: "territory_id",
+    type: "autocomplete",
+    labelKey: "app.patients.form.territory",
+    hint: "app.patients.form.territoryHint",
+    default: null,
+    options: loadTerritoryOptions,
+    icon: "nav-territories",
     cols: 6,
   },
   {

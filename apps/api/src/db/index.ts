@@ -22,3 +22,5 @@ export * from "./fileAttachment.js";
 export * from "./note.js";
 export * from "./sleepStudy.js";
 export * from "./treatmentPlan.js";
+export * from "./partnerLink.js";
+export * from "./territory.js";

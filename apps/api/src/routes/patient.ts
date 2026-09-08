@@ -104,7 +104,7 @@ patientRouter.post(
       email?: string; phone?: string;
       practitioner_id?: string;
       hcp_id?: string; // legacy alias
-      status?: string; region?: string;
+      status?: string; region?: string; territory_id?: string | null;
       ahi_baseline?: number; cpap_device?: string; medical_record?: string;
       diagnosis_code?: Record<string, unknown>;
       metadata?: Record<string, unknown>;
@@ -123,6 +123,7 @@ patientRouter.post(
         hcp_id:          typeof body.hcp_id          === "string" ? body.hcp_id.trim() || undefined : undefined,
         status:          typeof body.status          === "string" ? body.status              : undefined,
         region:          typeof body.region          === "string" ? body.region              : undefined,
+        territory_id:    body.territory_id === null ? null : typeof body.territory_id === "string" ? body.territory_id || null : undefined,
         ahi_baseline:    typeof body.ahi_baseline    === "number" ? body.ahi_baseline        : undefined,
         cpap_device:     typeof body.cpap_device     === "string" ? body.cpap_device.trim() || undefined : undefined,
         medical_record:  typeof body.medical_record  === "string" ? body.medical_record.trim() || undefined : undefined,
@@ -151,7 +152,7 @@ patientRouter.patch(
       salutation?: string; first_name?: string; last_name?: string;
       email?: string; phone?: string;
       practitioner_id?: string; hcp_id?: string;
-      status?: string; region?: string;
+      status?: string; region?: string; territory_id?: string | null;
       ahi_baseline?: number; cpap_device?: string; medical_record?: string;
       diagnosis_code?: Record<string, unknown>;
       metadata?: Record<string, unknown>;
@@ -169,6 +170,7 @@ patientRouter.patch(
         hcp_id:          body.hcp_id           !== undefined ? body.hcp_id            : undefined,
         status:          typeof body.status    === "string"  ? body.status            : undefined,
         region:          typeof body.region    === "string"  ? body.region            : undefined,
+        territory_id:    body.territory_id === null ? null : typeof body.territory_id === "string" ? body.territory_id || null : undefined,
         ahi_baseline:    typeof body.ahi_baseline === "number" ? body.ahi_baseline    : undefined,
         cpap_device:     body.cpap_device      !== undefined ? body.cpap_device       : undefined,
         medical_record:  body.medical_record   !== undefined ? body.medical_record    : undefined,

@@ -90,6 +90,16 @@ const { unreadCount } = useNotificationCenter();
   flex-shrink: 0;
 }
 
+/* Inactive items read as grey/secondary; the active item alone gets the full
+   primary-color treatment (VList's own color="primary" prop already handles
+   that part) — this only needs to dim everything else. Targets icon/text
+   color specifically rather than the whole VListItem's opacity, so hover/
+   ripple feedback on an inactive item still renders at full strength. */
+.layout-app__nav-list :deep(.v-list-item:not(.v-list-item--active) .layout-app__nav-icon),
+.layout-app__nav-list :deep(.v-list-item:not(.v-list-item--active) .layout-app__nav-text) {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
 .layout-app__nav-icon-wrap {
   position: relative;
   display: inline-flex;

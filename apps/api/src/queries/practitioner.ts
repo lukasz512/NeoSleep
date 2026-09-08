@@ -5,6 +5,7 @@ import {
   type GetPractitionerFilters,
   type Practitioner,
 } from "../db.js";
+import { formatDisplayName } from "../utils/personName.js";
 
 /**
  * QUERIES — Practitioner domain.
@@ -40,7 +41,7 @@ export interface PractitionerDto {
 }
 
 function toDto(p: Practitioner): PractitionerDto {
-  const name = `${p.salutation ? p.salutation + " " : ""}${p.first_name} ${p.last_name}`.trim();
+  const name = formatDisplayName(p);
   return {
     id:                p.id,
     name,

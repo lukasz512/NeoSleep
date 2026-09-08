@@ -112,7 +112,7 @@
     <template #item.institution="{ item }">
       <RouterLink
         v-if="leadInstitution(getLeadFromItem(item))"
-        :to="hcoLink(leadInstitution(getLeadFromItem(item)))"
+        :to="hcoListLink(leadInstitution(getLeadFromItem(item)))"
         class="app-entity-list__institution-link"
         @click.stop
       >
@@ -180,6 +180,7 @@ import { useAuthStore } from "../stores/auth";
 import { useConfigStore } from "../stores/config";
 import { getGenderFromName } from "../utils/genderFromName";
 import { leadStatusClass, leadStatusI18nKey, leadInstitution } from "../utils/leadStatus";
+import { hcoListLink } from "../utils/entityLinks";
 
 export interface Lead {
   id: string;
@@ -475,9 +476,6 @@ function getLeadFromItem(item: unknown): Lead {
   return (o?.raw ?? item) as Lead;
 }
 
-function hcoLink(institutionName: string) {
-  return { path: "/hco", query: { institution: institutionName } };
-}
 
 function onAddLead() {
   showAddModal.value = true;
