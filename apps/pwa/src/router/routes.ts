@@ -5,7 +5,7 @@ import type { UserRole } from "../stores/auth";
 
 export { PublicLayout, AppLayout };
 
-const ALL_STAFF_ROLES: UserRole[] = ["rep", "doctor", "manager", "admin"];
+const ALL_STAFF_ROLES: UserRole[] = ["rep", "doctor", "manager", "admin", "kam", "msl"];
 
 /** App starts at login; root and unknown paths send unauthenticated users to /login. */
 // Nav order: dashboard, leads, hcp, hco, patients, planner, presentations
@@ -39,12 +39,12 @@ export const routes: RouteRecordRaw[] = [
   { path: "/partner-register", name: "partner-register", component: () => import("../views/PartnerRegistrationView.vue"), meta: { layout: "public", public: true } },
   { path: "/dev", name: "dev", component: () => import("../views/DevView.vue"), meta: { layout: "app", devOnly: true } },
   { path: "/dashboard", name: "dashboard", component: () => import("../views/DashboardView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
-  { path: "/leads", name: "leads", component: () => import("../views/LeadsView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep", "manager", "admin"] } },
-  { path: "/leads/:id", name: "lead-detail", component: () => import("../views/LeadDetailView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep", "manager", "admin"] } },
-  { path: "/hcp", name: "hcp", component: () => import("../views/HCPView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep", "manager", "admin"] } },
-  { path: "/hcp/:id", name: "hcp-detail", component: () => import("../views/HCPDetailView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep", "manager", "admin"] } },
-  { path: "/hco", name: "hco", component: () => import("../views/HCOView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep", "manager", "admin"] } },
-  { path: "/hco/:id", name: "hco-detail", component: () => import("../views/HCODetailView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep", "manager", "admin"] } },
+  { path: "/leads", name: "leads", component: () => import("../views/LeadsView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep", "kam", "msl", "manager", "admin"] } },
+  { path: "/leads/:id", name: "lead-detail", component: () => import("../views/LeadDetailView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep", "kam", "msl", "manager", "admin"] } },
+  { path: "/hcp", name: "hcp", component: () => import("../views/HCPView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep", "kam", "msl", "manager", "admin"] } },
+  { path: "/hcp/:id", name: "hcp-detail", component: () => import("../views/HCPDetailView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep", "kam", "msl", "manager", "admin"] } },
+  { path: "/hco", name: "hco", component: () => import("../views/HCOView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep", "kam", "msl", "manager", "admin"] } },
+  { path: "/hco/:id", name: "hco-detail", component: () => import("../views/HCODetailView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep", "kam", "msl", "manager", "admin"] } },
   { path: "/patients", name: "patients", component: () => import("../views/PatientsView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
   { path: "/patients/:id", name: "patient-detail", component: () => import("../views/PatientDetailView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
   // Cross-patient clinical aggregates — rep excluded (sees studies/orders only inside their own patient's tabs, not this tenant-wide list).

@@ -76,7 +76,7 @@ practitionerRouter.get(
 // ---------------------------------------------------------------------------
 practitionerRouter.post(
   "/practitioner",
-  requireAuth,
+  requireRole("admin", "manager", "kam", "msl", "rep"),
   asyncHandler(async (req: Request, res: Response) => {
     const slug = tenantSlugFromHost(req.hostname);
     const body = req.body as {
@@ -122,7 +122,7 @@ practitionerRouter.post(
 // ---------------------------------------------------------------------------
 practitionerRouter.patch(
   "/practitioner/:id",
-  requireAuth,
+  requireRole("admin", "manager", "kam", "msl", "rep"),
   asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id?.trim();
     if (!id) throw new ValidationError("Missing practitioner id");

@@ -35,6 +35,8 @@ async function createTestPatient(ctx: TenantContext) {
   return CreatePatientCommand(ctx, {
     first_name: "Test",
     last_name: `Patient-${uniqueSuffix()}`,
+    email: `qa-patient-${uniqueSuffix()}@example.com`,
+    phone: "600100200",
   });
 }
 

@@ -78,7 +78,7 @@
           </template>
           <span>{{ t("user.detail.scheduleVisit") }}</span>
         </VTooltip>
-        <VTooltip v-if="isAdmin" location="bottom">
+        <VTooltip v-if="canEditPractitioners" location="bottom">
           <template #activator="{ props: tooltipProps }">
             <AppButton
               v-bind="tooltipProps"
@@ -186,6 +186,7 @@ import { originDialogTransition } from "@ui";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuthStore } from "../stores/auth";
+import { usePermissions } from "../composables/usePermissions";
 import { apiFetch } from "../composables/useApi";
 import { useEntityCacheStore } from "../stores/entityCache";
 import { useNotifications } from "../composables/useNotifications";
@@ -232,7 +233,7 @@ const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 const notifications = useNotifications();
-const isAdmin = computed(() => authStore.user?.role === "admin");
+const { canEditPractitioners, isAdmin } = usePermissions();
 const canActivate = computed(
   () => authStore.user?.role === "admin" || authStore.user?.role === "manager",
 );

@@ -56,7 +56,7 @@
         </template>
         <span>{{ t('user.detail.scheduleVisit') }}</span>
       </VTooltip>
-      <VTooltip v-if="isAdmin" location="bottom">
+      <VTooltip v-if="canEditOrganizations" location="bottom">
         <template #activator="{ props: tooltipProps }">
           <AppButton
             v-bind="tooltipProps"
@@ -164,11 +164,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
+import { ref, onMounted, watch, defineAsyncComponent } from "vue";
 import { originDialogTransition } from "@ui";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { useAuthStore } from "../stores/auth";
+import { usePermissions } from "../composables/usePermissions";
 import { apiFetch } from "../composables/useApi";
 import { useEntityCacheStore } from "../stores/entityCache";
 import { useNotifications } from "../composables/useNotifications";
@@ -183,8 +183,7 @@ import { entityActionIcon, entityActionBtnClass } from "../config/entityActions"
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
 
-const authStore = useAuthStore();
-const isAdmin = computed(() => authStore.user?.role === "admin");
+const { canEditOrganizations, isAdmin } = usePermissions();
 
 interface HCO {
   id: string;

@@ -98,6 +98,8 @@ async function setupPatient(overrides: Partial<Parameters<typeof CreatePatientCo
     const patient = await CreatePatientCommand(ctx, {
       first_name: "Test",
       last_name: `Patient-${uniqueSuffix()}`,
+      email: `qa-patient-${uniqueSuffix()}@example.com`,
+      phone: "600100200",
       ...overrides,
     });
     return { ctx, patient };
@@ -108,7 +110,7 @@ async function setupPatient(overrides: Partial<Parameters<typeof CreatePatientCo
 async function setupPatientAndPlan(planOverrides: Partial<Parameters<typeof CreateTreatmentPlanCommand>[1]> = {}) {
   return withTenant(TENANT_SLUG, async (client) => {
     const ctx = await buildTestContext(client);
-    const patient = await CreatePatientCommand(ctx, { first_name: "Test", last_name: `Patient-${uniqueSuffix()}` });
+    const patient = await CreatePatientCommand(ctx, { first_name: "Test", last_name: `Patient-${uniqueSuffix()}`, email: `qa-patient-${uniqueSuffix()}@example.com`, phone: "600100200" });
     const study = await CreateSleepStudyCommand(ctx, { patient_id: patient.id });
     const plan = await CreateTreatmentPlanCommand(ctx, {
       patient_id: patient.id,
@@ -406,10 +408,12 @@ describe("SyncOrthoApneaTreatmentStatusesCommand", () => {
   it("notifies the patient and dentist and writes an audit_log entry when the partner status changes", async () => {
     const { ctx, patient, plan, dentist } = await withTenant(TENANT_SLUG, async (client) => {
       const ctx = await buildTestContext(client);
-      const patient = await CreatePatientCommand(ctx, { first_name: "Test", last_name: `Patient-${uniqueSuffix()}` });
+      const patient = await CreatePatientCommand(ctx, { first_name: "Test", last_name: `Patient-${uniqueSuffix()}`, email: `qa-patient-${uniqueSuffix()}@example.com`, phone: "600100200" });
       const dentist = await CreatePractitionerCommand(ctx, {
         first_name: "Test",
         last_name: `Dentist-${uniqueSuffix()}`,
+        email: `qa-dentist-${uniqueSuffix()}@example.com`,
+        phone: "600100200",
       });
       const study = await CreateSleepStudyCommand(ctx, { patient_id: patient.id });
       const plan = await CreateTreatmentPlanCommand(ctx, {

@@ -29,7 +29,7 @@ export const leadsRouter: RouterType = Router();
 // ---------------------------------------------------------------------------
 leadsRouter.get(
   "/lead",
-  requireAuth,
+  requireRole("admin", "manager", "kam", "msl", "rep"),
   asyncHandler(async (req: Request, res: Response) => {
     const slug = tenantSlugFromHost(req.hostname);
     const { page, limit, sortBy, sortOrder } = parsePaginationParams(req);
@@ -56,7 +56,7 @@ leadsRouter.get(
 // ---------------------------------------------------------------------------
 leadsRouter.get(
   "/lead/:id",
-  requireAuth,
+  requireRole("admin", "manager", "kam", "msl", "rep"),
   asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id?.trim();
     if (!id) throw new ValidationError("Missing lead id");
@@ -77,7 +77,7 @@ leadsRouter.get(
 // ---------------------------------------------------------------------------
 leadsRouter.post(
   "/lead",
-  requireAuth,
+  requireRole("admin", "manager", "kam", "msl", "rep"),
   asyncHandler(async (req: Request, res: Response) => {
     const slug = tenantSlugFromHost(req.hostname);
     const body = req.body as {
@@ -114,7 +114,7 @@ leadsRouter.post(
 // ---------------------------------------------------------------------------
 leadsRouter.patch(
   "/lead/:id",
-  requireAuth,
+  requireRole("admin", "manager", "kam", "msl", "rep"),
   asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id?.trim();
     if (!id) throw new ValidationError("Missing lead id");

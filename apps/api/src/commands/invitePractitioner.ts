@@ -90,6 +90,7 @@ export async function InvitePractitionerCommand(
   const lastName = input.last_name?.trim() || lead.last_name;
   const email = input.email?.trim() || lead.email;
   if (!email) throw new ValidationError("An email address is required");
+  if (!lead.phone) throw new ValidationError("A phone number is required — add it to the lead before inviting");
 
   // Doctors are per-country by definition (they practice in one market) — scope
   // the new "doctor" role to the lead's own country_code, not 'global'. Falls
