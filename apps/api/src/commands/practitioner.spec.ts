@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import bcrypt from "bcrypt";
-import { withTenant, insertStaffUser, getUserIdByEmail, getUserRoleScopes } from "../db.js";
+import { withTenant, insertStaffUser, insertPractitioner, getUserIdByEmail, getUserRoleScopes } from "../db.js";
 import type { TenantContext } from "../context/TenantContext.js";
 import { ConflictError, ValidationError } from "../errors.js";
 import { CreatePractitionerCommand, ActivatePractitionerCommand, UpdatePractitionerCommand } from "./practitioner.js";
@@ -58,6 +58,7 @@ describe("ActivatePractitionerCommand", () => {
         first_name: "Jan",
         last_name: "Nowak",
         email: practitionerEmail,
+        phone: "600100200",
       });
 
       const result = await ActivatePractitionerCommand(ctx, practitioner.id);
@@ -88,6 +89,7 @@ describe("ActivatePractitionerCommand", () => {
         first_name: "Already",
         last_name: "Active",
         email: `qa-hcp-${uniqueSuffix()}@example.com`,
+        phone: "600100200",
       });
       await ActivatePractitionerCommand(ctx, practitioner.id);
       sendPartnerInviteEmailMock.mockClear();
@@ -100,7 +102,12 @@ describe("ActivatePractitionerCommand", () => {
   it("throws ValidationError when the practitioner has no email", async () => {
     await withTenant(TENANT_SLUG, async (client) => {
       const ctx = await buildTestContext(client);
-      const practitioner = await CreatePractitionerCommand(ctx, {
+      // CreatePractitionerCommand now requires email/phone (HCO/HCP/Patient
+      // data-quality refactor), so a no-email row can no longer be produced
+      // through the command — insert directly to simulate legacy data that
+      // predates that requirement, which ActivatePractitionerCommand's own
+      // defensive check still has to guard against.
+      const practitioner = await insertPractitioner(client, {
         first_name: "No",
         last_name: "Email",
       });
@@ -124,6 +131,7 @@ describe("ActivatePractitionerCommand", () => {
         first_name: "Maria",
         last_name: "Gonzalez",
         email,
+        phone: "600100200",
         country_code: "MX",
       });
       expect(practitioner.country_code).toBe("MX");
@@ -152,6 +160,7 @@ describe("ActivatePractitionerCommand", () => {
         first_name: "Existing",
         last_name: "Doctor",
         email,
+        phone: "600100200",
       });
 
       await ActivatePractitionerCommand(ctx, practitioner.id);
@@ -174,11 +183,13 @@ describe("UpdatePractitionerCommand", () => {
         first_name: "Existing",
         last_name: "Owner",
         email: takenEmail,
+        phone: "600100200",
       });
       const practitioner = await CreatePractitionerCommand(ctx, {
         first_name: "Being",
         last_name: "Edited",
         email: `qa-hcp-${uniqueSuffix()}@example.com`,
+        phone: "600100200",
       });
 
       await expect(

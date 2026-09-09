@@ -48,7 +48,7 @@
           </template>
           <span>{{ t('user.detail.scheduleVisit') }}</span>
         </VTooltip>
-        <VTooltip v-if="isAdmin" location="bottom">
+        <VTooltip v-if="canEditPatients" location="bottom">
           <template #activator="{ props: tooltipProps }">
             <AppButton
               v-bind="tooltipProps"
@@ -170,7 +170,7 @@ import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
 import { originDialogTransition } from "@ui";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { useAuthStore } from "../stores/auth";
+import { usePermissions } from "../composables/usePermissions";
 import { apiFetch } from "../composables/useApi";
 import { useNotifications } from "../composables/useNotifications";
 import { useAsyncAction } from "../composables/useAsyncAction";
@@ -191,8 +191,7 @@ import { patientStatusColor, patientStatusLabel } from "../utils/patientStatus";
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
 
-const authStore = useAuthStore();
-const isAdmin = computed(() => authStore.user?.role === "admin");
+const { canEditPatients, isAdmin } = usePermissions();
 
 interface PatientDetail {
   id: string;

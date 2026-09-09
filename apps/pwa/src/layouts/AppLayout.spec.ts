@@ -92,18 +92,23 @@ describe("AppLayout", () => {
       expect(navRoutesForRole("rep").map((r) => r.path)).toEqual(expectedPaths);
     });
 
-    it("manager sees leads and users management", () => {
-      const paths = navRoutesForRole("manager").map((r) => r.path);
-      expect(paths).toContain("/leads");
-      expect(paths).toContain("/users");
+    it("manager sees users management and leads (manager can manage the whole sales+contacts pipeline)", () => {
+      const expectedPaths = ["/leads", "/hcp", "/hco", "/patients", "/planner", "/presentations", "/users"];
+      expect(navRoutesForRole("manager").map((r) => r.path)).toEqual(expectedPaths);
     });
 
-    it("admin always sees every nav item, including leads (rep-only for everyone else)", () => {
+    it("kam and msl see leads, hcp, hco, patients, planner, presentations but not users (same field-force access as rep)", () => {
+      const expectedPaths = ["/leads", "/hcp", "/hco", "/patients", "/planner", "/presentations"];
+      expect(navRoutesForRole("kam").map((r) => r.path)).toEqual(expectedPaths);
+      expect(navRoutesForRole("msl").map((r) => r.path)).toEqual(expectedPaths);
+    });
+
+    it("admin always sees every nav item, including leads", () => {
       const expectedPaths = ["/leads", "/hcp", "/hco", "/patients", "/planner", "/presentations", "/users"];
       expect(navRoutesForRole("admin").map((r) => r.path)).toEqual(expectedPaths);
     });
 
-    it("doctor sees only patients, planner, presentations", () => {
+    it("doctor sees only patients, planner, presentations — never leads, hcp, or hco", () => {
       const expectedPaths = ["/patients", "/planner", "/presentations"];
       expect(navRoutesForRole("doctor").map((r) => r.path)).toEqual(expectedPaths);
     });

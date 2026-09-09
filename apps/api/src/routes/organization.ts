@@ -76,7 +76,7 @@ organizationRouter.get(
 // ---------------------------------------------------------------------------
 organizationRouter.post(
   "/organization",
-  requireAuth,
+  requireRole("admin", "manager", "kam", "msl", "rep"),
   asyncHandler(async (req: Request, res: Response) => {
     const slug = tenantSlugFromHost(req.hostname);
     const body = req.body as {
@@ -117,7 +117,7 @@ organizationRouter.post(
 // ---------------------------------------------------------------------------
 organizationRouter.patch(
   "/organization/:id",
-  requireAuth,
+  requireRole("admin", "manager", "kam", "msl", "rep"),
   asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id?.trim();
     if (!id) throw new ValidationError("Missing organization id");

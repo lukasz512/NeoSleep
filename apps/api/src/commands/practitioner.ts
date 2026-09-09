@@ -66,20 +66,19 @@ export async function CreatePractitionerCommand(
   if (!lastName)  throw new ValidationError("last_name is required");
 
   const email = input.email?.trim() ?? "";
-  if (email && !EMAIL_REGEX.test(email)) throw new ValidationError("Invalid email format");
+  if (!email) throw new ValidationError("email is required");
+  if (!EMAIL_REGEX.test(email)) throw new ValidationError("Invalid email format");
 
   const phone = input.phone?.trim() ?? "";
-  if (phone) {
-    const digitsOnly = phone.replace(/\D/g, "");
-    if (digitsOnly.length < 9) throw new ValidationError("Phone must contain at least 9 digits");
-  }
+  if (!phone) throw new ValidationError("phone is required");
+  if (phone.replace(/\D/g, "").length < 9) throw new ValidationError("Phone must contain at least 9 digits");
 
   const insertInput: InsertPractitionerInput = {
     first_name:       firstName,
     last_name:        lastName,
     salutation:       input.salutation ?? null,
-    email:            email || null,
-    phone:            phone || null,
+    email,
+    phone,
     primary_specialty: input.primary_specialty ?? input.specialty ?? null,
     // Preserve the undefined/null distinction: undefined => fall back to
     // resolving `institution` by name (see insertPractitioner); null/id => use directly.
@@ -153,13 +152,16 @@ export async function UpdatePractitionerCommand(
 ): Promise<Practitioner | null> {
   if (!id?.trim()) throw new ValidationError("practitioner id is required");
 
-  const email = input.email?.trim();
-  if (email && !EMAIL_REGEX.test(email)) throw new ValidationError("Invalid email format");
+  if (input.email !== undefined) {
+    const email = input.email?.trim() ?? "";
+    if (!email) throw new ValidationError("email cannot be blank");
+    if (!EMAIL_REGEX.test(email)) throw new ValidationError("Invalid email format");
+  }
 
-  const phone = input.phone?.trim();
-  if (phone) {
-    const digitsOnly = phone.replace(/\D/g, "");
-    if (digitsOnly.length < 9) throw new ValidationError("Phone must contain at least 9 digits");
+  if (input.phone !== undefined) {
+    const phone = input.phone?.trim() ?? "";
+    if (!phone) throw new ValidationError("phone cannot be blank");
+    if (phone.replace(/\D/g, "").length < 9) throw new ValidationError("Phone must contain at least 9 digits");
   }
 
   const before = await getPractitionerById(ctx.client, id);

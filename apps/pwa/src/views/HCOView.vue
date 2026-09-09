@@ -30,7 +30,7 @@
       :headers="tableHeaders"
       :filter-definitions="hcoFilterDefinitions"
       :i18n="hcoI18n"
-      :show-add-button="canAdd"
+      :show-add-button="canEditOrganizations"
       detail-route-name="hco-detail"
       :filter-param-keys="['type', 'region', 'status']"
       @add="onAddAccount"
@@ -60,7 +60,7 @@
           <VListItem :title="t('user.detail.scheduleVisit')" @click="onScheduleVisit(item as HCOListItem)">
             <template #prepend><AppIcon :name="entityActionIcon('scheduleVisit')" :class="entityActionMenuIconClass('scheduleVisit')" /></template>
           </VListItem>
-          <VListItem v-if="isAdmin" :title="t('user.hco.detail.edit')" @click="onEditAccount(item as HCOListItem)">
+          <VListItem v-if="canEditOrganizations" :title="t('user.hco.detail.edit')" @click="onEditAccount(item as HCOListItem)">
             <template #prepend><AppIcon :name="entityActionIcon('edit')" :class="entityActionMenuIconClass('edit')" /></template>
           </VListItem>
           <VListItem v-if="isAdmin" :title="t('user.hco.detail.delete')" @click="onDeleteClick(item as HCOListItem)">
@@ -98,7 +98,7 @@ import AppIcon from "../components/AppIcon.vue";
 import AppListItemMenu from "../components/AppListItemMenu.vue";
 import { entityActionIcon, entityActionMenuIconClass } from "../config/entityActions";
 import { type FilterDefinition } from "../composables/useFilters";
-import { useAuthStore } from "../stores/auth";
+import { usePermissions } from "../composables/usePermissions";
 import { useConfigStore } from "../stores/config";
 import { apiFetch } from "../composables/useApi";
 import { useNotifications } from "../composables/useNotifications";
@@ -126,11 +126,9 @@ interface HCOListItem {
 }
 
 const { t } = useI18n();
-const authStore = useAuthStore();
 const configStore = useConfigStore();
 const notifications = useNotifications();
-const isAdmin = computed(() => authStore.user?.role === "admin");
-const canAdd = computed(() => authStore.user?.role === "admin" || authStore.user?.role === "manager");
+const { canEditOrganizations, isAdmin } = usePermissions();
 const showAddModal = ref(false);
 const showEditModal = ref(false);
 const showDeleteConfirm = ref(false);
