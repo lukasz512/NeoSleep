@@ -85,7 +85,6 @@ export async function getTenantLookup(
 
 /**
  * Returns the three option groups used by the app's filter dropdowns.
- * Replaces the legacy getConfigOptions() from config-options.ts.
  *
  * - specialties      → platform.lookups type='specialty'  (with tenant overrides)
  * - organization_types → platform.lookups type='organization_type' (with tenant overrides)

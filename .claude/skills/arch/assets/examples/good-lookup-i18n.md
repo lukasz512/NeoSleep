@@ -1,5 +1,7 @@
 # Pattern: Lookup — FHIR Codes + i18n
 
+> **Caveat (2026-09)**: the real `lookup` table columns today are `type, key, locale, value, sort_order, global_id, enabled, metadata, created_at` (verified against `apps/api/migrations/001_tenant_schema.sql`) — there is no `fhir_code`/`fhir_system`/`labels` column yet. This file describes a proposed future shape for FHIR/EHR certification, not the current schema. Don't write code assuming these columns exist.
+
 > **Why this matters**: Lookup values power every dropdown, chip, and filter in the app.
 > To win FHIR certification and connect to US EHRs (Epic, Cerner), each value needs a FHIR code alongside it.
 > Translations stay in `en.json` — exactly as they already are.

@@ -28,7 +28,7 @@ Arch passes a structured task block. Use this exact format:
 ## DBA Task: [task type]
 
 **Context**: [1-2 sentences explaining why this task exists — the business or architectural reason]
-**Priority**: [blocking / pre-UAT / this-sprint / backlog]
+**Priority**: [blocking / pre-push / this-sprint / backlog]
 **References**: [link to entity spec, ADR, or drift report that triggered this]
 
 ### Task Type
@@ -157,6 +157,6 @@ DBA does NOT make architectural decisions. DBA implements the schema arch specif
 | Priority | DBA response target |
 |---|---|
 | blocking | Same session |
-| pre-UAT | Within current working context |
+| pre-push | Within current working context |
 | this-sprint | Next invocation |
 | backlog | Tracked in tech debt, no SLA |

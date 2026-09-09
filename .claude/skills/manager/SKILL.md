@@ -185,11 +185,11 @@ Navigation items and available views are **config-driven** — the role determin
 | My Term | NeoCRM Term |
 |---|---|
 | Field rep / representative | `rep` (role in `users`) |
-| Territory | `territories` (geographic hierarchy) |
-| Call plan / cycle plan | `pcf_templates` + planned visit schedule |
-| Double visit | Manager field visit with the rep — an `interaction` with manager present |
+| Territory | `territory` (geographic hierarchy) |
+| Call plan / cycle plan | `visit_plan` + planned schedule |
+| Double visit | Manager field visit with the rep — an `encounter` with manager present |
 | HCP potential | Mix of visit frequency target + referral history |
 | Coverage rate | % of territory HCPs visited in current cycle |
-| PCF quality | Content review of `pcf_records` fields |
+| PCF quality | Content review of the visit-report fields on `encounter` (a dedicated PCF/observation table doesn't exist yet) |
 | Product detailing | Presenting a product to an HCP — recorded in PCF |
 | KOL | Key Opinion Leader — top HCPs who influence peers |

@@ -86,7 +86,6 @@ function onToggle() {
   @include nav.label;
 }
 
-// ── Theme icon states ─────────────────────────────────────────────────────────
 .nav-theme__ti {
   position: absolute;
   inset: 0;
@@ -107,7 +106,6 @@ function onToggle() {
   transform: rotate(0deg) scale(1);
 }
 
-// ── Spin animation ────────────────────────────────────────────────────────────
 .nav-theme--spinning {
   animation: nav-theme-spin 0.45s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 

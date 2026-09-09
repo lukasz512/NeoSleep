@@ -23,8 +23,8 @@ const SLOT_MINUTES = 30;
 const BUSINESS_START_HOUR = 10;
 const BUSINESS_END_HOUR = 20;
 const TIMEZONE = "Europe/Warsaw"; // CET/CEST
-const MIN_LEAD_TIME_DAYS = 1; // earliest bookable slot is 1 calendar day from now
-const MAX_BOOKING_HORIZON_MONTHS = 2; // latest bookable slot is 2 months from now
+const MIN_LEAD_TIME_DAYS = 1;
+const MAX_BOOKING_HORIZON_MONTHS = 2;
 const DEFAULT_WINDOW_DAYS = 30;
 
 export interface Slot {

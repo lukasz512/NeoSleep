@@ -140,7 +140,6 @@ const { isDark } = useTheme();
 const mobileOpen = ref(false);
 const navItems = getHeaderNavItems();
 
-// ── Search ────────────────────────────────────────────────────────────────
 const searchQuery = ref("");
 const searchInputRef = ref<HTMLInputElement | null>(null);
 
@@ -166,7 +165,6 @@ watch(mobileOpen, (open) => {
   if (!open) searchQuery.value = "";
 });
 
-// ── Scroll-hide on mobile ─────────────────────────────────────────────────
 const headerHidden = ref(false);
 let lastScrollY = 0;
 

@@ -143,7 +143,7 @@ Always state: **Severity + file:line + business impact + fix**.
 ```
 □ GDPR Art.9 data (patient health, diagnosis) encrypted at rest?
 □ Every mutation on personal data writes audit_log entry?
-□ audit_log: actor_id, action, resource_type, resource_id, agent_who, entity_type, timestamp, ip_address?
+□ audit_log: real `AuditLogInsert` fields present — user_id, action, entity_type, entity_id, user_ip? (see apps/api/src/db/audit-log.ts — no `agent_who`/`resource_type`/`actor_id`, those names don't exist)
 □ Soft delete on personal data tables — no hard DELETE?
 □ Erasure path exists (anonymize without breaking FK integrity)?
 □ Consent recorded before health data collected?

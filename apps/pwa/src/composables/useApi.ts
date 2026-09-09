@@ -21,7 +21,6 @@ import { useNotifications } from "../composables/useNotifications";
 export type { ApiFetchOptions };
 export { extractErrorMessage };
 
-// ── Auth token storage ────────────────────────────────────────────────────────
 const authToken = useLocalStorage<string | null>(APP_STORAGE_KEYS.authToken, null);
 
 export function getAuthToken(): string | null {
@@ -36,7 +35,6 @@ export function clearAuthToken(): void {
   authToken.value = null;
 }
 
-// ── Auth interceptor callback ─────────────────────────────────────────────────
 // Registered lazily from stores/auth.ts to avoid circular imports.
 let _clearAuth: (() => void) | null = null;
 
@@ -112,8 +110,6 @@ async function fetchWithAuth(
   }
 }
 
-// ── Diagnostics helpers ───────────────────────────────────────────────────────
-
 export async function sendDiagnostic(
   message: string,
   stack: string,
@@ -150,8 +146,6 @@ async function sendErrorLog(path: string, status: number, message: string) {
     });
   } catch { /* ignore */ }
 }
-
-// ── Public apiFetch instance ──────────────────────────────────────────────────
 
 export const apiFetch = createApiFetch({
   getApiBase: getApiUrl,

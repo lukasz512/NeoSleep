@@ -169,7 +169,6 @@ const howVisible       = useReveal(howRef,       0.08);
 const standardsVisible = useReveal(standardsRef, 0.12);
 const ctaVisible       = useReveal(ctaRef,       0.10);
 
-// ── Booking modal ────────────────────────────────────────────────────────
 // The "book a demo" email CTA links here with ?lead=<id> (see
 // commands/lead.ts's SendLeadOfferEmailCommand) — that id is a bearer-token-
 // style link into GET /api/v1/public/lead/:id, used only to prefill the

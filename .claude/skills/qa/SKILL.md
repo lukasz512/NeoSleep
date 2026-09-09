@@ -41,14 +41,20 @@ Run this before every git push. Output: GO / NO-GO.
 □ pnpm test — all tests green?
 □ pnpm typecheck — 0 TypeScript errors?
 □ pnpm lint — 0 lint errors?
+□ pnpm depcruise — 0 import-boundary errors? (new frontend→apps/api/src reach-around, or route/command importing `pg` directly)
 □ i18n parity — all keys present in EN + PL + MX?
 □ No hardcoded user-facing strings in changed files?
 □ Tenant isolation test exists for any new entity with personal data?
 □ Auth test exists for any new route (401 on no session)?
+□ Login flow tested (session/OIDC happy path + bad-credentials path) if auth code changed?
+□ Password reset flow tested (request + completion) if touched?
+□ External API/dependency health checked (Resend, Supabase, partner feeds) if the PR touches them?
 □ Audit log written on any new mutation endpoint (with resourceType set)?
-□ New lookup value → fhir_code + fhir_system set? (or fhir_system = 'urn:neosleep:lookup' for custom)
-□ New person-type entity → uses person_id FK (not identity_id)?
-□ Any Identity / IdentityInput type reference → should be Person / PersonInput
+□ New lookup value → has `type`, `key`, `locale`, `value` set per the real `lookup` schema (no `fhir_code`/`fhir_system` columns exist)?
+□ New identity-type entity → uses identity_id FK (never person_id — `person` is not a real table, see CLAUDE.md)?
+□ Touches auth/audit/access-control? → cross-check against /certification's ISO 27001 control list, not just functional correctness
+□ Docs updated for this change? (docs/, ADR, or API_CONTRACT.md — "no doc change needed" must be stated explicitly, never silently skipped)
+□ No assertion-free or tautological tests added (see "No Empty Tests" below)?
 ```
 
 Output format:
@@ -58,6 +64,7 @@ Output format:
 ### Test Suite
 [PASS/FAIL] pnpm test — X passed, Y failed
 [PASS/FAIL] pnpm typecheck — N errors
+[PASS/FAIL] pnpm depcruise — N import-boundary errors
 
 ### i18n
 [PASS/FAIL] Parity — N missing keys
@@ -95,7 +102,7 @@ console.log(missing.length + ' missing in PL:', missing.slice(0,10));
 **Tenant-editable labels** — labels that pharma clients might want to customize per tenant should live in `app_config` or `i18n_override`, not hardcoded in en.json. Flag any key that is:
 - A product or brand name (`NeoSleep`, drug names)
 - A role label (`Representative`, `Manager`) — these vary per pharma company
-- A form field label on the PCF — these are tenant-configured via `pcf_template`
+- A form field label on any tenant-configurable form — PCF/form-template config doesn't exist yet as a table; if it ships, its labels belong in `app_config`/`i18n_override`, not hardcoded
 
 **Hardcoded string scan** — find user-facing strings bypassing i18n:
 ```bash
@@ -142,9 +149,22 @@ it('GET /api/x — tenant A cannot read tenant B records', async () => {
 | Test | Why | Blocks push |
 |---|---|---|
 | `401` on no session | Auth bypass = security vuln | Yes |
+| Login (happy path + bad credentials) | Auth flow itself, not just its absence, must be covered | Yes, if auth code changed |
+| Password reset (request + completion) | Security-sensitive account-recovery path | Yes, if touched |
 | Tenant isolation | GDPR isolation requirement | Yes |
 | Audit log on mutation | SOC 2 CC7.2, pharma compliance | Yes |
 | Soft delete: record not returned | GDPR erasure must work | Yes |
+| External API / dependency health (Resend, Supabase, partner feeds) | A silently-down dependency ships as a working feature and fails in prod | Yes, if the PR touches that dependency |
+
+### No Empty Tests
+
+A test that always passes is worse than no test — it hides missing coverage behind a green checkmark. Flag and reject in `/qa gate`:
+- Assertion-free tests (`it('works', () => { doThing() })` with no `expect`)
+- Tautological assertions (`expect(true).toBe(true)`, `expect(result).toBeDefined()` when the real risk is a *wrong* value, not an *absent* one)
+- Mock-only assertions that check a mock was called but never check the resulting behavior/output
+- Snapshot tests with no accompanying behavioral assertion
+
+Every test must fail for a real reason if the code regresses. If you can delete the implementation and the test still passes, it's not a test.
 
 ---
 
@@ -173,7 +193,7 @@ it('GET /api/x — tenant A cannot read tenant B records', async () => {
 
 ## FHIR Test Checklist
 
-Add these when any FHIR route or schema change ships:
+> **Not yet applicable** — no `/fhir/r4/*` route exists in `apps/api/src` today (verified 2026-09). This is the target checklist for ADR-009's Phase 2 (REST API), not something to apply to current PRs. Keep it here as the ready-made spec for when that work starts; don't treat any item as a current requirement until then.
 
 ```
 □ GET /fhir/r4/metadata returns 200 with resourceType: 'CapabilityStatement'
@@ -181,13 +201,11 @@ Add these when any FHIR route or schema change ships:
 □ CapabilityStatement.rest[0].resource list matches actually-implemented endpoints
 □ Error on FHIR route with Accept: application/fhir+json → resourceType: 'OperationOutcome'
 □ Error on non-FHIR route → { error: { code, message } } (not OperationOutcome)
-□ person.national_ids is array of FhirIdentifier[], not flat object
+□ identities.national_ids is array of FhirIdentifier[], not flat object
 □ Every FHIR list endpoint returns Bundle (not []) with total and entry[]
 □ FHIR resource has meta.versionId and meta.lastUpdated
 □ GET /fhir/r4/[Resource]/:id from Tenant A returns 404 for Tenant B's resource (isolation)
-□ Lookup with fhir_code set → CodeableConcept serialized correctly in FHIR resource
-□ audit_log entry has agent_who set (not null) after any write operation
-□ related_person CHECK constraint: cannot have both patient_id and hco_id set
+□ audit_log entry has entity_type + entity_id set (real AuditLogInsert fields — see apps/api/src/db/audit-log.ts) after any write operation
 ```
 
 ---

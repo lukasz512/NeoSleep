@@ -420,9 +420,6 @@ const authStore = useAuthStore();
 const notifications = useNotifications();
 const isAdmin = computed(() => authStore.user?.role === "admin");
 
-// ---------------------------------------------------------------------------
-// Core state
-// ---------------------------------------------------------------------------
 const leadCache = useEntityCacheStore("leads");
 const lead = ref<Lead | null>(null);
 const loading = ref(true);

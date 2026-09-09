@@ -97,7 +97,6 @@
       </div>
     </section>
 
-    <!-- ── Stats ─────────────────────────────────────────────────────── -->
     <section ref="statsRef" class="ab-stats home-reveal" :class="{ 'home-reveal--visible': statsVisible }">
       <div class="page-container">
         <div class="ab-stats__row">
@@ -287,7 +286,7 @@ const approachVisible  = useReveal(approachRef,  0.08);
 const partnersVisible  = useReveal(partnersRef,  0.08);
 const ctaVisible       = useReveal(ctaRef,       0.10);
 
-// ── Stats (same figures as the homepage) ─────────────────────────────────
+// Same figures as the homepage — keep both in sync if they ever change.
 const currentStats = computed(() => aboutStatsByLocale[locale.value] ?? aboutStatsByLocale.en);
 
 const countUps = aboutStatsByLocale.en.map((_, i) =>

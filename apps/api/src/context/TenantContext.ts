@@ -40,7 +40,7 @@ export interface TenantUser {
 export interface TenantContext {
   slug: string;          // tenant schema name: "neosleep_pl"
   client: PoolClient;    // already has SET LOCAL search_path in effect
-  user: TenantUser;      // who is executing the command
+  user: TenantUser;
   requestId: string;     // correlation ID for distributed tracing / audit
 }
 

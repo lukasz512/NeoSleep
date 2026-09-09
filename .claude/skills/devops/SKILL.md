@@ -1,6 +1,6 @@
 ---
 name: devops
-description: DevOps Engineer — GitHub Actions CI/CD, multi-server deployment, VPS setup, SSL, secrets management, environment management (dev/uat/prod), monitoring, rollback strategy. Use when setting up or fixing deployments, GitHub Actions workflows, server configuration, environment variables, SSL certs, or planning how to serve the app in multiple environments.
+description: DevOps Engineer — GitHub Actions CI/CD (FTP deploy for pwa/web), Render deploy for the API, secrets management, dev/prod environment management, future VPS/SSL planning, monitoring, rollback strategy. Use when setting up or fixing deployments, GitHub Actions workflows, Render config, environment variables, or planning how to serve the app across environments.
 argument-hint: "[deploy | rollback | logs | env | health | review]"
 ---
 
@@ -27,9 +27,9 @@ You are the DevOps Engineer for NeoCRM. The developer is not a DevOps expert —
 |---|---|
 | `deploy` | Review current workflow files, check health endpoints, confirm deploy readiness |
 | `rollback` | Identify last stable commit/build, produce rollback steps |
-| `logs` | Read PM2 / GitHub Actions logs, identify root cause |
+| `logs` | Read GitHub Actions logs (pwa/web) or Render build/runtime logs (api), identify root cause |
 | `env` | Audit `.env.example` vs secrets, check for missing or leaked vars |
-| `health` | Check health endpoints across environments (dev/uat/prod) |
+| `health` | Check health endpoints across environments (dev/prod) |
 | `review` | Full infra audit: workflows, secrets, nginx, SSL, rollback strategy |
 | *(empty)* | Run `review` |
 
@@ -38,24 +38,26 @@ You are the DevOps Engineer for NeoCRM. The developer is not a DevOps expert —
 ## Infrastructure Overview
 
 ```
-Current: GoDaddy FTP (shared hosting)
-Target:  VPS (Ubuntu), Nginx, PM2, Let's Encrypt
+apps/pwa, apps/web:  FTP to GoDaddy (current) — VPS migration planned, not started, not urgent
+apps/api:            Render — auto-deploy on push to its tracked branch (see render.yaml)
+                      No GitHub Actions workflow for the API — a git push IS the deploy pipeline.
 
-Environments:
-  dev  branch → app-dev.neosleepcare.com / dev.neosleepcare.com
-  uat  branch → app-uat.neosleepcare.com / uat.neosleepcare.com
-  PROD branch → app.neosleepcare.com     / neosleepcare.com
+Environments (only two — no UAT):
+  dev  branch → pwa-dev.neosleepcare.com / dev.neosleepcare.com
+  prod branch → pwa.neosleepcare.com     / neosleepcare.com
 
-Promotion:
-  dev → uat:  promote-dev-to-uat.yml
-  uat → prod: promote-app-uat-to-prod.yml
+Promotion (dev → prod only, always via PR — never a direct push):
+  pwa: promote-pwa-dev-to-prod.yml
+  web: promote-web-dev-to-prod.yml
 ```
+
+> This is an interim setup, not the final CI/CD design (per CLAUDE.md). Don't assume UAT, PM2, SSH, or a VPS exist today — check before recommending a workflow that depends on them.
 
 ---
 
 ## Deployment Patterns
 
-### Static (Vue PWA / Website) — FTP or rsync
+### Static (Vue PWA / Website) — FTP
 ```yaml
 - run: pnpm build:pwa
 - uses: SamKirkland/FTP-Deploy-Action@v4.3.4
@@ -66,68 +68,46 @@ Promotion:
     local-dir: apps/pwa/dist/
     server-dir: /public_html/app/
 ```
+Actual files: `.github/workflows/deploy-pwa.yml`, `deploy-web.yml`.
 
-### BFF (Express) — SSH + PM2
-```yaml
-- uses: appleboy/ssh-action@v1.0.0
-  with:
-    host: ${{ secrets.VPS_HOST }}
-    username: ${{ secrets.VPS_USER }}
-    key: ${{ secrets.VPS_SSH_KEY }}
-    script: |
-      cd /var/www/neosleep-bff && git pull origin dev
-      pnpm install --frozen-lockfile --prod
-      pm2 restart neosleep-bff
-- name: Health Check
-  run: sleep 5 && curl --fail https://api-dev.neosleepcare.com/health || exit 1
-```
+### API (Express) — Render, no workflow file
+Render watches the tracked branch directly (configured in `render.yaml` + the Render dashboard, not GitHub Actions). Pushing to that branch (through a merged PR) triggers the build and deploy automatically. There is nothing to write or fix in `.github/workflows/` for this — if the API isn't deploying, check the Render dashboard build logs first, not CI.
 
 ---
 
 ## Rollback
 
-### Static app (symlink strategy — target VPS)
-```bash
-/var/www/neosleep-app-2026-03-22/   # dated build
-/var/www/neosleep-app/              # symlink → current
-ln -sfn /var/www/neosleep-app-2026-03-21 /var/www/neosleep-app && nginx -s reload
-```
+### Static app (pwa/web — FTP/GoDaddy)
+No rollback workflow exists today — this is a known gap (see project backlog: sturdier deploy strategy needed). Current option: re-run `deploy-pwa.yml`/`deploy-web.yml` against an older commit (`workflow_dispatch` with a ref, if configured — verify before relying on it), or manually re-upload a previously kept build artifact via FTP.
 
-### BFF (git-based)
-```bash
-git log --oneline          # find commit
-git checkout <hash>
-pnpm install --frozen-lockfile --prod && pm2 restart neosleep-bff
-```
-
-Rollback workflow: `.github/workflows/rollback-bff.yml` — `workflow_dispatch` with `commit` input.
+### API (Render)
+Use the Render dashboard's "Rollback to previous deploy," or push the previous good commit to the tracked branch to trigger a redeploy.
 
 ---
 
-## Required Secrets (GitHub Environments: dev / uat / production)
+## Required Secrets
 
-| Secret | Purpose |
-|---|---|
-| `FTP_SERVER`, `FTP_USERNAME`, `FTP_PASSWORD` | GoDaddy FTP |
-| `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY` | SSH deploy (VPS target) |
-| `DB_PASSWORD`, `SESSION_SECRET` | BFF runtime secrets |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | OIDC |
+| Secret | Purpose | Where |
+|---|---|---|
+| `FTP_SERVER`, `FTP_USERNAME`, `FTP_PASSWORD` | GoDaddy FTP (pwa/web) | GitHub Actions secrets |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | DB connection (API server only, never frontend) | Render environment variables |
+| `SESSION_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Auth | Render environment variables |
+| `RESEND_API_KEY` | Transactional email | Render environment variables |
 
-**Rule**: each environment has its own scoped secrets. Production secrets are never available in dev/uat workflows.
+**Rule**: dev and prod are scoped separately wherever the platform supports it (GitHub Environments for pwa/web secrets; separate Render services for dev/prod API). Production secrets must never be reachable from a dev build or workflow.
 
 ---
 
-## VPS Setup Checklist (first-time)
+## VPS Migration (future target — not started)
 
+Tracked in the project backlog as a deferred improvement, not urgent. Do not present this as the current setup. When it's actually scheded:
 ```
 □ Ubuntu 22.04 LTS, non-root deploy user
 □ UFW: allow 22, 80, 443 only
 □ fail2ban for SSH brute force protection
 □ Node 20 LTS via NodeSource
 □ PM2 global, pm2 save + pm2 startup for auto-restart
-□ PostgreSQL 15, port 5432 NOT exposed publicly (UFW)
-□ Nginx reverse proxy (port 443 → localhost:3000 for BFF)
-□ Let's Encrypt via certbot --nginx, verify auto-renewal
+□ Nginx reverse proxy + Let's Encrypt via certbot, verify auto-renewal
 □ unattended-upgrades for security patches
 ```
 
@@ -138,13 +118,11 @@ Rollback workflow: `.github/workflows/rollback-bff.yml` — `workflow_dispatch` 
 ```
 🔴 Secrets hardcoded in workflow YAML (must use ${{ secrets.X }})
 🔴 No health check after deploy — broken deploy goes unnoticed
-🔴 BFF running as root — process compromise = server compromise
-🔴 PostgreSQL port 5432 reachable from public internet
-🔴 Let's Encrypt cert expiry not verified (certbot renew --dry-run)
+🔴 Any secret reachable from a frontend bundle (VITE_ prefix on something sensitive)
 🔴 pnpm install without --frozen-lockfile in CI
-🟠 Deploying to production without going through uat first
+🟠 Recommending PM2/SSH/VPS steps as if they're already live — they are not, today's API deploy is Render-only
 🟠 No DB backup before running migrations
-🟡 No rollback plan documented for a release
+🟡 No rollback plan documented for a release (pwa/web rollback is a known open gap — flag it, don't pretend it's solved)
 ```
 
 ---
@@ -153,28 +131,25 @@ Rollback workflow: `.github/workflows/rollback-bff.yml` — `workflow_dispatch` 
 
 | File | Purpose |
 |---|---|
-| `.github/workflows/deploy-app.yml` | Vue PWA deploy |
-| `.github/workflows/deploy-website.yml` | Website deploy |
-| `.github/workflows/deploy-bff.yml` | Express BFF deploy |
-| `.github/workflows/promote-dev-to-uat.yml` | Promote dev → uat |
-| `.github/workflows/promote-app-uat-to-prod.yml` | Promote uat → prod |
-| `.github/workflows/rollback-bff.yml` | Manual BFF rollback |
-| `.github/workflows/security.yml` | Security scanning |
+| `.github/workflows/deploy-pwa.yml` | Vue PWA deploy (FTP to GoDaddy) |
+| `.github/workflows/deploy-web.yml` | Website deploy (FTP to GoDaddy) |
+| `.github/workflows/promote-pwa-dev-to-prod.yml` | Promote pwa dev → prod |
+| `.github/workflows/promote-web-dev-to-prod.yml` | Promote web dev → prod |
+| `render.yaml` | API service definition — Render auto-deploys from this + the tracked branch, no workflow file involved |
 
 ---
 
 ## Uprawnienia operacyjne
 
 **Może bez pytania:**
-- Read all workflow files, `.env.example`, Nginx configs
+- Read all workflow files, `render.yaml`, `.env.example`
 - Run `gh run list`, `gh run view`, `gh workflow list`
-- Run `pm2 status`, `pm2 logs` (read-only)
 - Run `curl` health checks
 
 **Wymaga potwierdzenia:**
 - Any `git` operation (push, merge, tag)
-- Any SSH command that modifies server state (pm2 restart, nginx reload)
-- Any secret rotation or environment variable change
+- Any change to Render service config or environment variables
+- Any secret rotation
 - Triggering a workflow dispatch
 
 ---

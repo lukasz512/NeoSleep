@@ -6,5 +6,19 @@
       "Bash(pnpm --filter website build *)",
       "Bash(pnpm add *)"
     ]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/quality-gate.sh",
+            "timeout": 300,
+            "statusMessage": "Running mandatory quality gate (lint, typecheck, test, depcruise, docs check)..."
+          }
+        ]
+      }
+    ]
   }
 }

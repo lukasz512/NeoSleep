@@ -4,8 +4,6 @@
  * Replace static arrays with CMS/API fetch without touching any component.
  */
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
 export type FooterSectionId = "product" | "company" | "resources" | "connect";
 
 export interface FooterSocial {
@@ -36,8 +34,6 @@ export interface WebsiteNavItem {
   footerSection?: FooterSectionId;
 }
 
-// ── Footer brand ──────────────────────────────────────────────────────────────
-
 export const footerBrandConfig: FooterBrandConfig = {
   logoUrl: "/brand/logos/logo/logo_dark.svg",
   name: "NeoSleep",
@@ -57,8 +53,6 @@ export const footerSections: FooterSectionConfig[] = [
   { id: "resources", headingKey: "website.footer.resources" },
   { id: "connect",   headingKey: "website.footer.connect"   },
 ];
-
-// ── Nav items (header + footer) ───────────────────────────────────────────────
 
 export const websiteNavItems: WebsiteNavItem[] = [
   // Header
@@ -100,8 +94,6 @@ export function getFooterNavItemsBySection(): Map<FooterSectionId, WebsiteNavIte
   }
   return bySection;
 }
-
-// ── Mobile bottom nav ─────────────────────────────────────────────────────────
 
 export const MOBILE_NAV_LINKS = [
   { id: "home",    to: "/",        labelKey: "website.nav.home"    },

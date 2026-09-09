@@ -3,7 +3,6 @@ import { loadTerritoryOptions } from "./territoryOptions";
 
 /**
  * Territory (geographic hierarchy) entity config for the generic FormRenderer.
- * Used by TerritoriesView.vue (admin-only — see routes/territory.ts).
  *
  * `code` is a short per-level slug (e.g. "mx", "cdmx", "polanco") — the
  * breadcrumb shown on PatientDetailView.vue's "Región" row joins each
