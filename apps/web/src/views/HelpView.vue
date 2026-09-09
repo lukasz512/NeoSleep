@@ -149,7 +149,6 @@ function toggleCategory(id: HelpCategory['id']): void {
     padding-bottom: 5rem;
   }
 
-  // ── Hero ──────────────────────────────────────────────────────────────────────
   .help-hero {
     text-align: center;
     margin-bottom: 4rem;
@@ -218,7 +217,6 @@ function toggleCategory(id: HelpCategory['id']): void {
     }
   }
 
-  // ── Category cards ────────────────────────────────────────────────────────────
   .help-cats {
     margin-bottom: 4rem;
   }
@@ -291,7 +289,6 @@ function toggleCategory(id: HelpCategory['id']): void {
     margin: 0;
   }
 
-  // ── FAQ ───────────────────────────────────────────────────────────────────────
   .help-faq__title {
     font-size: clamp(1.25rem, 3vw, 1.75rem);
     font-weight: 700;
@@ -406,7 +403,6 @@ function toggleCategory(id: HelpCategory['id']): void {
     color: var(--website-text-secondary);
   }
 
-  // ── CTA ───────────────────────────────────────────────────────────────────────
   .help-cta {
     margin-top: 5rem;
   }

@@ -31,7 +31,7 @@ Arch delegates to QA when:
 ## QA Task: [task type]
 
 **Context**: [1-2 sentences — what was built and why we need tests now]
-**Priority**: [blocking | pre-UAT | this-sprint]
+**Priority**: [blocking | pre-push | this-sprint]
 **References**: [entity spec, release gate, drift report, or ADR]
 
 ### Task Type
@@ -60,7 +60,7 @@ Changed files:
 - [list of changed routes, DB functions, composables]
 Existing test files: [list of .spec.ts files that exist]
 Known gaps: [list from release gate report]
-Must pass before: [UAT | PROD]
+Must pass before: [push to dev]
 
 #### Tenant Isolation Audit (if task type = tenant-isolation-audit)
 Tables to verify: [list]
@@ -116,14 +116,15 @@ File: `[path].integration.spec.ts`
 
 > Source: OWASP OTG-IDENT-005 — Cross-Tenant Access Control Testing
 > Rule: Every entity with personal or encounter data must have this test. Non-negotiable.
+> **Isolation is per company-tenant schema (e.g. `neosleep` vs `fourseasons`), not per country/region.** PL and MX both live inside the single `neosleep` schema — testing `neosleep_pl` against `neosleep_mx` proves nothing, they're the same schema. Use two distinct tenant slugs for these tests.
 
 File: `[entity].isolation.spec.ts`
 
 | # | Test | Setup | Request | Expected |
 |---|---|---|---|---|
-| T-01 | Tenant A cannot read Tenant B records | Create record in neosleep_pl | GET /api/[entity]/:id with neosleep_mx session | 404 |
-| T-02 | Tenant A list does not include Tenant B records | Seed both tenants | GET /api/[entity] with neosleep_pl session | List contains only pl records |
-| T-03 | Tenant A cannot mutate Tenant B records | Create record in neosleep_pl | PATCH /api/[entity]/:id with neosleep_mx session | 404 |
+| T-01 | Tenant A cannot read Tenant B records | Create record in `neosleep` schema | GET /api/[entity]/:id with `fourseasons` session | 404 |
+| T-02 | Tenant A list does not include Tenant B records | Seed both tenant schemas | GET /api/[entity] with `neosleep` session | List contains only `neosleep` records |
+| T-03 | Tenant A cannot mutate Tenant B records | Create record in `neosleep` schema | PATCH /api/[entity]/:id with `fourseasons` session | 404 |
 
 ---
 
@@ -160,7 +161,7 @@ Edge cases:         [n] tests in [file]
 
 Total:              [n] tests
 
-CI gate: pnpm test must pass all of the above before UAT merge.
+CI gate: pnpm test must pass all of the above before push to dev — dev→prod is a separate later promotion PR, not gated by this contract.
 \`\`\`
 ```
 
@@ -189,7 +190,7 @@ For the API boundary between `apps/pwa` (consumer) and `apps/api` (provider), **
 3. If `apps/api` changes a response shape that `apps/pwa` depends on → CI fails immediately, before deploy
 
 **When to add Pact tests:**
-- Any API endpoint that Alfred's tenant (`neosleep_mx`) or the rep PWA depends on for critical data flows
+- Any API endpoint that Alfred (MX region contact, `neosleep` tenant) or the rep PWA depends on for critical data flows
 - Before any endpoint declared in `docs/API_CONTRACT.md` ships to production
 
 **Pact task format** — arch passes to qa:

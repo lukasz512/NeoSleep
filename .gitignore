@@ -46,3 +46,4 @@ secrets/
 .claude/worktrees/
 .claude/projects/
 .claude/settings.local.json
+.claude/local/

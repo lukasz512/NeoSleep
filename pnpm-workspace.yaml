@@ -3,7 +3,7 @@ packages:
   - "apps/api/client"
   - "packages/*"
 
-# Wspólne wersje dla wszystkich aplikacji Vue – jedna aktualizacja podnosi wersje wszędzie.
+# Shared versions for all Vue apps — one update bumps the version everywhere.
 catalog:
   vue: ^3.5.30
   vue-router: ^4.5.0

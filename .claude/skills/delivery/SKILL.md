@@ -95,10 +95,11 @@ Run after `/qa gate` and `/audit gate` pass.
 ### Stage completion
 [PASS/FAIL] All stage goals met: [list]
 [PASS/FAIL] No known Critical/High bugs open
-[PASS/FAIL] UAT sign-off from Łukasz
+[PASS/FAIL] Docs updated for this change? (docs/, ADR, or API_CONTRACT.md — explicit "n/a" if none needed)
+[PASS/FAIL] Łukasz sign-off before PR to dev
 
 ### Verdict
-✅ GO — promote to next environment
+✅ GO — open PR to dev (dev→prod promotion is a separate later PR Łukasz runs on GitHub, not gated here)
 ❌ NO-GO — gaps: [list]
 ```
 
@@ -135,7 +136,7 @@ Run after `/qa gate` and `/audit gate` pass.
 - Generate standup, sprint plan, gate report (Łukasz approves before sending)
 
 **Wymaga potwierdzenia:**
-- Promoting environments (uat → prod)
+- Promoting environments (dev → prod)
 - Closing or opening GitHub issues
 - Any scope change to current sprint
 

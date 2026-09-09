@@ -12,7 +12,7 @@ export * from "./patient.js";
 export * from "./audit-log.js";
 export * from "./diagnostic.js";
 export * from "./config.js";
-export * from "./lookup.js";      // replaces config-options.js
+export * from "./lookup.js";
 export * from "./tenant.js";
 export * from "./i18n.js";
 export * from "./notification.js";

@@ -1,6 +1,7 @@
 # Example: Pre-Release Architecture Gate
 
 > Output of `/arch release-gate`. GO/NO-GO with all gaps recorded — never silently skipped.
+> **Historical example** (dated 2026-03-22) — written when a UAT stage still existed. UAT has since been removed (only dev/prod remain); read "UAT" below as "dev" and treat the pattern (scope table → per-specialist gate results → gaps → decision) as the reusable part, not the specific environment names.
 
 ---
 

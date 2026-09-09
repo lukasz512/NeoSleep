@@ -1,8 +1,9 @@
 # Entity Spec — Three Variants
 
+> **Caveat (2026-09)**: `packages/shared/src/types/` has no `types/` folder and no `BaseEntity`/`Person` types exist — that convention was never actually built. The real TPT base table is `identities`, never `person`. Before reusing this template, check `apps/api/client/src/index.ts` for existing exported shapes rather than assuming this type hierarchy exists.
+
 > Every entity is one of three shapes. Pick the variant, fill the blanks.
-> All types extend `BaseEntity` or `Person` from `packages/shared/src/types/`.
-> Pipeline is always: DB → `apps/api/db/` → route → `packages/shared` types → composable → view → i18n.
+> Pipeline is always: DB → `apps/api/src/db/` → route → composable → view → i18n.
 
 ---
 

@@ -44,15 +44,11 @@ export interface AuthTokenStorage {
  */
 export function createAuthStore(apiFetch: ApiFetchFn, tokenStorage: AuthTokenStorage) {
   return defineStore("auth", () => {
-    // ── State ───────────────────────────────────────────────────────────────
     const user = ref<AuthUser | null>(null);
     const sessionChecked = ref(false);
 
-    // ── Computed ────────────────────────────────────────────────────────────
     const isAuthenticated = computed(() => !!user.value);
     const displayName = computed(() => user.value?.name ?? user.value?.email ?? null);
-
-    // ── Actions ─────────────────────────────────────────────────────────────
 
     /** On app mount: restore user from the stored bearer token after a page reload. */
     async function fetchSession(): Promise<boolean> {

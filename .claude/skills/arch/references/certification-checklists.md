@@ -123,7 +123,7 @@ Change Management
 
 ## Pre-Release Architecture Gate
 
-Run this before every release to UAT or PROD:
+Run this before every push to dev, and again before promoting dev → prod:
 
 ```
 □ All new tables passed New Table Checklist

@@ -177,8 +177,7 @@ authRouter.post("/auth/change-password", requireAuth, asyncHandler(async (req: R
   const sessionUser = req.user!;
   // withTenant returns a {status, body} pair instead of calling res.json() itself —
   // it commits the transaction *after* the callback returns, so responding from inside
-  // it would race the client's next request against our own COMMIT (see project memory:
-  // project_auth_spec_flaky_test.md for the flake class this causes).
+  // it would race the client's next request against our own COMMIT.
   const result = await withTenant(slug, async (client) => {
     const staff = await getStaffUserByEmail(client, sessionUser.email);
     if (!staff?.password_hash) {

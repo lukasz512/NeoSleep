@@ -19,7 +19,6 @@ export function useLayoutState() {
   const configStore = useConfigStore();
   const vuetifyTheme = useTheme();
 
-  // ── Theme ──────────────────────────────────────────────────────────────────
   // All resolution/persistence lives in the shared store (packages/stores/theme.ts)
   // — including data-theme on <html>. Only the Vuetify-specific side effect
   // (pwa only, not shared) lives here.
@@ -40,7 +39,6 @@ export function useLayoutState() {
     themeStore.toggleMode();
   }
 
-  // ── Sidebar ────────────────────────────────────────────────────────────────
   const sidebarCollapsed = ref(SIDEBAR_DEFAULT_COLLAPSED);
 
   function toggleSidebar() {
@@ -48,7 +46,6 @@ export function useLayoutState() {
     setUserSettings({ sidebarCollapsed: sidebarCollapsed.value });
   }
 
-  // ── Mobile ─────────────────────────────────────────────────────────────────
   const isMobile = ref(false);
   const mobileDrawerOpen = ref(false);
 
@@ -60,7 +57,6 @@ export function useLayoutState() {
     }
   }, 150);
 
-  // ── User info ──────────────────────────────────────────────────────────────
   const userDisplayName = computed(
     () => authStore.displayName ?? authStore.user?.email ?? t("user.user.placeholderName"),
   );
@@ -78,7 +74,6 @@ export function useLayoutState() {
 
   const userInitials = computed(() => getInitials(userDisplayName.value));
 
-  // ── Locale ────────────────────────────────────────────────────────────────
   const localeTransitioning = ref(false);
 
   async function setLocale(lang: "en" | "pl" | "mx") {
@@ -91,14 +86,12 @@ export function useLayoutState() {
     localeTransitioning.value = false;
   }
 
-  // ── Auth ──────────────────────────────────────────────────────────────────
   async function onLogout() {
     mobileDrawerOpen.value = false;
     await authStore.logout();
     router.push("/login");
   }
 
-  // ── Accessibility ─────────────────────────────────────────────────────────
   function focusMainContent() {
     const el = document.getElementById("main-content");
     if (el) {
@@ -107,7 +100,6 @@ export function useLayoutState() {
     }
   }
 
-  // ── Lifecycle ─────────────────────────────────────────────────────────────
   onMounted(async () => {
     const settings = getUserSettings();
     if (typeof settings.sidebarCollapsed === "boolean") {
@@ -115,11 +107,10 @@ export function useLayoutState() {
     }
     const [cfg] = await Promise.all([configStore.load(), configStore.loadOptions(), configStore.loadI18nOverrides()]);
     configStore.applyToDom(cfg);
-    // NOTE: configStore.load() already feeds cfg.color_scheme into the theme
-    // store's tenant-default tier — no setTheme() call here. Calling it would
-    // override the user's own explicit choice on every mount, which was the
-    // pre-existing bug this migration fixes (personal theme preference never
-    // actually persisted across reloads).
+    // configStore.load() already feeds cfg.color_scheme into the theme store's
+    // tenant-default tier — no setTheme() call here. Calling it would override
+    // the user's own explicit choice on every mount, so a personal theme
+    // preference would never actually persist across reloads.
     updateMobile();
     window.addEventListener("resize", updateMobile);
   });
