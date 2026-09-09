@@ -39,6 +39,23 @@ rather than assumed:
    platform's most sensitive code; the risk profile of writing it unattended
    overnight is categorically different from a human writing it live, even with
    an identical test suite behind it.
+
+   **Update, 2026-09-10, after the first real validation run**: the worker
+   correctly blocked its first real ticket (an HCO-view "doctors" tab, which
+   needs `practitioner` data) — but this domain is a medical CRM, and almost
+   any patient/HCP-facing feature touches `identities`/`patient`/`practitioner`
+   in some way. An unconditional block on that whole surface would leave the
+   worker able to handle only a narrow slice of realistic tickets. Refined the
+   rule in `SKILL.md` (not loosened): migrations, `auth.ts`, `consent`,
+   `audit_log`, and any **new or modified** backend code touching
+   `identities`/`patient`/`practitioner` remain always blocked, no exception —
+   but a ticket that only needs to *display* that data through an
+   **already-existing, already-merged backend route/query, used exactly as-is**
+   may now proceed as FE-only work. Ambiguous cases (not clearly covered by an
+   existing read path) still default to blocked. This still requires a human
+   to have written and reviewed every line of backend code that ever touches
+   this data — the worker is never the first author of it, only ever a
+   consumer of an already-reviewed read path.
 4. **Linear trigger state is a new status, `Ready for Worker`**, kept separate
    from normal sprint statuses so manually-planned work isn't accidentally
    swept into the nightly run.

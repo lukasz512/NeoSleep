@@ -36,8 +36,35 @@ Query Linear for tickets in `Ready for Worker`. If `$ARGUMENTS` names a specific
 Move the selected ticket to `Worker: In Progress`.
 
 ### 4. Compliance-sensitive scope check — before any implementation
-If the ticket's description makes it reasonably clear that implementing it requires touching **migrations**, `auth.ts`, or `identities`/`consent`/`audit_log`/`patient`/`practitioner` code, stop here regardless of how simple the rest looks:
-- Comment on the ticket: "Deferred — requires a human session (touches compliance-sensitive code: [name the specific area])."
+
+Two categories, judged before writing a single line:
+
+**Always blocked, no exception, ever** — if implementing the ticket requires
+any of these, stop regardless of how simple the rest looks:
+- Any change to a migration file (`apps/api/migrations/`).
+- Any change to `auth.ts`.
+- Any change — read or write — to `consent` or `audit_log` backend code.
+- Any **new or modified** backend route, query function, or DB access code
+  that touches `identities`, `patient`, or `practitioner` — this includes a
+  brand-new read-only endpoint or query parameter, not just writes. Backend
+  code in this zone only ever gets written by a human, full stop.
+
+**Allowed — the worker may proceed** — a ticket that only needs to *display*
+`identities`/`patient`/`practitioner` data by calling an **already-existing,
+already-merged backend route or query exactly as it exists today** (including
+passing query parameters that route already supports), building new FE-only
+code (views/components/composables) around that existing read. No new backend
+file, no new backend function, no modified backend function — only reuse,
+verbatim, of what's already there.
+
+If it's ambiguous which category a ticket falls into — e.g. you're not certain
+whether a suitable existing endpoint/query already covers what's being asked —
+treat it as **blocked**. Guessing wrong in the permissive direction is exactly
+the failure mode this rule exists to prevent; only proceed when reuse of an
+existing read path is unambiguous.
+
+On block:
+- Comment on the ticket: "Deferred — requires a human session (touches compliance-sensitive code: [name the specific area, and whether it's the always-blocked category or an ambiguous-reuse case])."
 - Move the ticket to `Blocked`.
 - End the turn with a clean working tree (nothing to revert yet at this point).
 
