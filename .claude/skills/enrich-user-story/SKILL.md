@@ -1,6 +1,6 @@
 ---
 name: enrich-user-story
-description: Feature Enrichment Gate — takes a raw idea or change from Łukasz and checks it from the user, business, and market-trend angles before any planning or documentation starts. Use when Łukasz drops a new feature idea, a change request, or anything not yet shaped as a user story with acceptance criteria — before routing to /product or /arch.
+description: Feature Enrichment Gate — takes a raw idea or change from Łukasz and checks it from five angles (user, client/tenant, patient, NeoCRM platform, compliance) before any planning or documentation starts. Use when Łukasz drops a new feature idea, a change request, or anything not yet shaped as a user story with acceptance criteria — before routing to /product or /arch.
 argument-hint: "[raw idea or change description | quick | redo]"
 ---
 
@@ -33,15 +33,17 @@ State the classification explicitly and why, in one sentence. If genuinely unsur
 
 ---
 
-## Step 2 — Three-Lens Pass (Feature only)
+## Step 2 — Five-Lens Pass (Feature only)
 
-This is the enrichment arch's own `assess` mode later builds on — arch owns Compliance/Platform/DX, you own these three:
+This is the enrichment arch's own `assess` mode later builds on for its own three lenses (Compliance/Platform/DX) — these five are earlier, lighter gut-checks at intake, not a substitute for arch's deeper pass:
 
 | Lens | Questions to answer or ask |
 |---|---|
 | 👤 **User** | Who is this for (rep / KAM / FFM / MSL / HCP)? What job does it do for them? How do they work around its absence today? |
-| 💼 **CEO / Business** | Does this move the first tenant (or an existing one) closer to renewal/expansion, or is it internal nice-to-have? If genuinely unclear, don't guess — flag for `/ceo`'s build-vs-defer lens rather than duplicating it here. |
-| 📈 **Market** | Is there a Veeva Vault CRM / IQVIA Orchestrated Customer Engagement pattern this maps to or should deliberately differ from (per `/product`'s competitor notes)? Anything B2C/patient-facing here belongs to `/marketing`, not this skill. |
+| 🏢 **Client** | The pharma company (tenant) paying for the license — not Łukasz's business, theirs. Does this help their retention, ROI, or their own compliance reporting? A tenant admin's priorities are not automatically the same as the rep using the app day to day. |
+| 🩺 **Patient** | Does this have any downstream effect — even indirect — on patient safety or clinical outcome? This is a medical-grade platform; a feature that looks purely operational (e.g. visit scheduling) can still touch patient care indirectly. If genuinely none, say so plainly rather than skipping the row. |
+| 🚀 **NeoCRM / Platform** | Does this help sell to *future* clients too (white-label scalability), or is it a one-off built for the current tenant only? If unclear whether it's worth generalizing now vs. later, flag for `/ceo`'s build-vs-defer lens rather than deciding here. |
+| ⚖️ **Compliance** | Early GDPR/HIPAA/LFPDPPP radar only — does anything here smell like it needs a real legal/compliance review? Flag it; `/legal` and `/certification` do the actual analysis, this is just "should we even ask them." |
 
 Don't answer questions you can't answer confidently — surface them as Open Questions (Step 4) instead of guessing. Same convention as `/arch`: ask, don't assume.
 
@@ -73,8 +75,10 @@ List anything that must be answered before `/product` or `/arch` can proceed. Do
 
 ### Stakeholder Notes
 - 👤 User: [1-2 lines]
-- 💼 CEO/Business: [1-2 lines, or "→ escalate to /ceo"]
-- 📈 Market: [1-2 lines, or "n/a"]
+- 🏢 Client: [1-2 lines]
+- 🩺 Patient: [1-2 lines, or "no downstream patient effect"]
+- 🚀 NeoCRM/Platform: [1-2 lines, or "→ escalate to /ceo"]
+- ⚖️ Compliance: [1-2 lines, or "no early flags"]
 
 ### Medical-Industry Trend Check
 - [finding — source] (or "n/a — internal/infra change")
