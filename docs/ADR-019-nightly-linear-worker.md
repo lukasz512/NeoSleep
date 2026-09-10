@@ -60,6 +60,18 @@ rather than assumed:
    from normal sprint statuses so manually-planned work isn't accidentally
    swept into the nightly run.
 
+   **Update, 2026-09-10, second validation run**: the worker re-verified from
+   scratch (not trusting the prior block as stale) and correctly blocked the
+   same ticket again — no reusable read path for "practitioners of this HCO"
+   exists yet. Łukasz wanted this specific ticket unblocked without a general
+   loosening. Added a **per-ticket override**: the Linear label
+   `worker:backend-approved`, valid only combined with a comment from Łukasz
+   describing the exact backend change approved — the worker implements only
+   what that comment literally covers, nothing more. This still never applies
+   to migrations/`auth.ts`/`consent`/`audit_log` (no override path for those,
+   by design — not to be extended later without revisiting this ADR), and
+   Step 7's self-check/`.spec.ts` requirement is unaffected by the override.
+
 **Test database in the cloud environment.** The existing weekly health-report
 routine's cloud environment has no Postgres and explicitly skips DB-dependent
 checks for that reason. This worker cannot skip them — CLAUDE.md is explicit
