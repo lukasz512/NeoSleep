@@ -134,6 +134,35 @@ reviewed from three angles before adopting it:
   like any other service account, attributed clearly as
   "nightly Linear worker — test schema only, zero access to personal data."
 
+**Update, 2026-09-10, provisioned and verified.** `test` schema created via
+`pnpm --filter @neo/api migrate && sync-test-schema` (not by calling
+`create_tenant_schema('test')` directly — that function alone is stale
+relative to later migrations, per `sync-test-schema.ts`'s own comment, and
+failed with a broken FK on first attempt, confirming exactly that gap).
+Restricted role `linear_worker_test` created and empirically verified against
+the real instance: connects only via Supabase's session pooler (the direct
+`db.<ref>.supabase.co` host is IPv6-only and unreachable from this sandbox —
+same class of issue as the earlier Docker-in-cloud finding, network
+assumptions here need testing, not guessing), gets `permission denied for
+schema neosleep` on the canary read (isolation confirmed real, not assumed),
+and has working read/write/create on `test`.
+
+One consequence discovered during verification, not anticipated when this
+design was proposed: the restricted role **cannot** run
+`pnpm --filter @neo/api migrate` (needs write access to
+`public.schema_migrations`) or `sync-test-schema` (`pg_dump`/`LOCK TABLE`
+needs read access to `neosleep`) — both fail with `permission denied` under
+this role, which is the isolation working as intended, not a bug. Consequence:
+the worker's own nightly run **cannot refresh `test`'s structure** — that has
+to be done by a human-supervised session (the same `migrate`/
+`sync-test-schema` commands, run with normal full credentials) whenever a
+migration actually changes the schema. `test` can drift stale between
+migrations and the next manual refresh; a worker run hitting that will see it
+as a test failure and should report it as an environment-staleness note, not
+attempt a code fix. This is a real operational tradeoff versus CI's always-
+fresh ephemeral container, accepted in exchange for not needing Docker or
+broadening the restricted role's grants.
+
 **quality-gate.sh is not the enforcement mechanism for this worker.** The Stop
 hook only inspects `git status --porcelain` (uncommitted changes) — an agent
 that commits everything before ending its turn would sail past it having run
