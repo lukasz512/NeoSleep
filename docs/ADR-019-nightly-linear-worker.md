@@ -88,6 +88,52 @@ RemoteTrigger cloud environment actually supporting Docker, which has to be
 confirmed by the first manual validation run before the nightly cron is
 enabled.
 
+**Update, 2026-09-10, Docker-in-cloud confirmed non-viable.** Third real
+validation run surfaced two independent failures: the environment's Docker
+daemon isn't running by default, and once started manually, pulling
+`postgres:15` from Docker Hub is blocked by the sandbox's network policy
+(403 on `production.cloudfront.docker.com`). Separately, Łukasz confirmed he
+hasn't used Docker anywhere in this project in a long time — there's no
+appetite to fix a Docker dependency he doesn't otherwise want. This project
+also has only **one Supabase Postgres instance** (CLAUDE.md: "single instance
+for MVP") — no separate dev/test/prod DB projects to fall back to.
+
+Replaced Docker-in-cloud with: a **permanent dedicated `test` schema inside
+that same Supabase instance**, provisioned the same way any real tenant schema
+is (`create_tenant_schema()`), reached by the worker through a **separate,
+restricted Postgres role** whose grants are limited to that one schema — no
+`GRANT` of any kind on `neosleep`, `fourseasons`, or `platform`. This was
+reviewed from three angles before adopting it:
+
+- **`/arch`**: reuses the existing schema-per-tenant mechanism as-is (`test` is
+  just another schema, provisioned the same way) — no new tooling, no new
+  script, no second paid Supabase project (which would also contradict the
+  existing "single instance for MVP" decision for no real isolation gain over
+  a role-scoped schema in the same instance).
+- **`/audit`** — verdict **PASS with required mitigations**, not an open
+  concern: the role must be freshly created with explicit `GRANT`s scoped to
+  `test` only (including `ALTER DEFAULT PRIVILEGES` so future migrated tables
+  stay covered) and zero grants anywhere else; the restricted role's
+  connection string must be the *only* `DATABASE_URL` ever present in this
+  worker's cloud environment — the real Supabase service credential must never
+  be reachable there at all, so even a fully compromised or prompt-injected
+  session has no elevated credential to reach for. The worker skill (Step 7)
+  now runs an explicit **canary check** every single run — confirm the
+  restricted role gets a permission error reading `neosleep.patient` — turning
+  "assumed isolated" into something verified on every run, not just at setup
+  time.
+- **`/legal`**: co-locating a schema with zero real personal data in the same
+  physical instance as patient/HCP data does not by itself create a GDPR/
+  LFPDPPP concern — GDPR governs personal data, not infrastructure topology —
+  **provided** the schema genuinely never receives real data, which is exactly
+  what the role-based isolation (verified by the canary check above) is
+  responsible for holding true. Fixture data in `test` must be synthetic from
+  day one and stay that way — never derived from real patient/HCP records,
+  even "anonymized" ones. The worker's restricted DB credential is a new
+  non-human service identity and should be tracked in `secrets/accounts.md`
+  like any other service account, attributed clearly as
+  "nightly Linear worker — test schema only, zero access to personal data."
+
 **quality-gate.sh is not the enforcement mechanism for this worker.** The Stop
 hook only inspects `git status --porcelain` (uncommitted changes) — an agent
 that commits everything before ending its turn would sail past it having run
@@ -115,6 +161,11 @@ automated routine in this repo — branch + push only, with the GitHub
   attached individually, same as the existing routine's Slack/Drive access).
 - Closes: nothing existing changes — the weekly health-report routine and its
   skill are untouched.
+- New manual, one-time infrastructure step: provisioning the `test` schema
+  (via `create_tenant_schema()`, slug `test`) and a restricted Postgres role
+  scoped to it in the existing Supabase project, then setting that role's
+  connection string as `DATABASE_URL` in this routine's environment variables
+  (never in a committed file). See the 2026-09-10 update above.
 - Not addressed by this ADR: `quality-gate.sh`'s `127.0.0.1:5432` reachability
   check is already stale for ordinary local development (this repo has no
   docker-compose file; local dev connects directly to a remote Supabase
@@ -132,6 +183,18 @@ automated routine in this repo — branch + push only, with the GitHub
   the hook's behavior changes further before then.
 
 ## Compliance Impact
+The worker's dedicated `test` schema (same Supabase instance, restricted
+Postgres role) must hold **only synthetic/fixture data, never real patient or
+HCP records** — including never seeding it from an "anonymized" export of real
+data. Co-locating a schema with zero real personal data alongside real
+tenant schemas in the same instance does not by itself raise a GDPR/LFPDPPP
+concern, but that conclusion holds only as long as the isolation is genuinely
+enforced — the Step 7 canary check exists specifically to keep that an
+engineering fact, not an assumption. The restricted role is effectively a new
+non-human service identity with its own DB credential; it should be recorded
+in `secrets/accounts.md` like any other service account, attributed as
+"nightly Linear worker — test schema only, zero access to personal data."
+
 Linear ticket content (including any attached screenshots/mockups) enters a
 cloud agent's context when the worker reads it. Tickets must never contain real
 patient or HCP data — synthetic mockups only, same rule that already applies to
