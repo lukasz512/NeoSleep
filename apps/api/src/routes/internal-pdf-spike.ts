@@ -4,13 +4,11 @@ import { requireInternalJobSecret } from "../middleware/requireInternalJobSecret
 import { renderHtmlToPdf } from "../services/documentRenderer.js";
 
 /**
- * TEMPORARY diagnostic route — not the PDF generator itself (that's
- * services/documentRenderer.ts, the one shared renderHtmlToPdf() every
- * document type calls). This route only checks whether headless Chrome
- * runs reliably on Render's free-tier single-process service, before the
- * real document-generation pipeline is built on top of that assumption
- * (see docs/stories/partner-registration-legal-documents.md, sequencing
- * step 1).
+ * TEMPORARY spike route — verifies headless Chrome (puppeteer-core +
+ * @sparticuz/chromium, see services/documentRenderer.ts) runs reliably on
+ * Render's free-tier single-process service before the real
+ * document-generation pipeline is built against that assumption (see
+ * docs/stories/partner-registration-legal-documents.md, sequencing step 1).
  *
  * Hit this a few times against the dev deploy and watch Render's dashboard
  * memory graph, not just this endpoint's own numbers — the first call pays
@@ -20,10 +18,10 @@ import { renderHtmlToPdf } from "../services/documentRenderer.js";
  * Delete this file + its registration in server.ts once memory/stability is
  * confirmed — it is not part of the permanent API surface.
  */
-export const internalPdfRenderCheckRouter: RouterType = Router();
+export const internalPdfSpikeRouter: RouterType = Router();
 
-internalPdfRenderCheckRouter.get(
-  "/internal/pdf-render-check",
+internalPdfSpikeRouter.get(
+  "/internal/pdf-spike",
   requireInternalJobSecret,
   asyncHandler(async (_req: Request, res: Response) => {
     const before = process.memoryUsage();
@@ -33,7 +31,7 @@ internalPdfRenderCheckRouter.get(
         body { font-family: sans-serif; padding: 40px; }
         h1 { color: #409183; }
       </style></head><body>
-        <h1>NeoSleep PDF render check</h1>
+        <h1>NeoSleep PDF render spike</h1>
         <p>Generated at ${new Date().toISOString()}</p>
       </body></html>`
     );
@@ -45,7 +43,7 @@ internalPdfRenderCheckRouter.get(
       pdfBytes: pdf.length,
       memoryUsageMb: { before: mbOf(before), after: mbOf(after) },
     };
-    console.log("[pdf-render-check]", JSON.stringify(result));
+    console.log("[pdf-spike]", JSON.stringify(result));
     res.json(result);
   })
 );
