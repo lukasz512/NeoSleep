@@ -23,6 +23,7 @@ import { notificationRouter } from "./routes/notification.js";
 import { orthoapneaResourcesRouter } from "./routes/partners/orthoapnea-resources.js";
 import { orthoapneaStatusRouter } from "./routes/partners/orthoapnea-status.js";
 import { orthoapneaTreatmentsRouter } from "./routes/partners/orthoapnea-treatments.js";
+import { internalPdfSpikeRouter } from "./routes/internal-pdf-spike.js"; // TEMPORARY — delete with the route file once the Render Puppeteer spike is verified
 import { noteRouter } from "./routes/note.js";
 import { sleepStudyRouter } from "./routes/sleepStudy.js";
 import { treatmentPlanRouter } from "./routes/treatmentPlan.js";
@@ -121,6 +122,7 @@ app.use("/api/v1", notificationRouter);
 app.use("/api/v1", orthoapneaResourcesRouter);
 app.use("/api/v1", orthoapneaStatusRouter);
 app.use("/api/v1", orthoapneaTreatmentsRouter);
+app.use("/api/v1", internalPdfSpikeRouter); // TEMPORARY — see import comment above
 app.use("/api/v1", noteRouter);
 app.use("/api/v1", sleepStudyRouter);
 app.use("/api/v1", treatmentPlanRouter);
