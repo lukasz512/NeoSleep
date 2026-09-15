@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
 import { createPinia } from "pinia";
 import { createI18n } from "vue-i18n";
@@ -41,7 +41,7 @@ describe("DefaultLayout", () => {
     expect(wrapper.find(".layout-default__main").exists()).toBe(true);
   });
 
-  it("nav has expected links (Solutions, For Dentists, For Patients, About, Contact) and Get Started CTA", () => {
+  it("nav has expected links (Solutions, For Specialists, For Patients, About, Contact)", () => {
     const wrapper = mount(DefaultLayout, {
       global: {
         plugins: [i18n, router, createPinia()],
@@ -52,63 +52,57 @@ describe("DefaultLayout", () => {
     expect(navLinks.length).toBeGreaterThanOrEqual(5);
     const text = wrapper.find(".site-header__nav").text();
     expect(text).toContain("Solutions");
-    expect(text).toContain("For Dentists");
+    expect(text).toContain("For Specialists");
     expect(text).toContain("For Patients");
     expect(text).toContain("About");
     expect(text).toContain("Contact");
-    expect(wrapper.find(".site-header__cta").text()).toContain("Get Started");
   });
 });
 
 describe("HomeView", () => {
   it("renders hero title and subtitle", () => {
-    const wrapper = mount(HomeView, { global: { plugins: [i18n] } });
-    expect(wrapper.find(".view-home__hero-title").exists()).toBe(true);
-    expect(wrapper.find(".view-home__hero-subtitle").exists()).toBe(true);
-    expect(wrapper.text()).toContain("Better Sleep. Better Life.");
+    const wrapper = mount(HomeView, { global: { plugins: [i18n, router] } });
+    expect(wrapper.find(".home-hero__title").exists()).toBe(true);
+    expect(wrapper.find(".home-hero__subtitle").exists()).toBe(true);
+    // Line1/line2 are separate <span> elements (stacked visually via flex-column) with
+    // no whitespace between them in the DOM, so .text() joins them without a space.
+    expect(wrapper.text()).toContain("Better Sleep.");
+    expect(wrapper.text()).toContain("Better Life.");
   });
 
   it("renders stats section with four stats", () => {
-    const wrapper = mount(HomeView, { global: { plugins: [i18n] } });
-    const stats = wrapper.findAll(".view-home__stat");
+    const wrapper = mount(HomeView, { global: { plugins: [i18n, router] } });
+    const stats = wrapper.findAll(".home-stat");
     expect(stats.length).toBe(4);
   });
 
   it("renders at least one CTA button in hero", () => {
-    const wrapper = mount(HomeView, { global: { plugins: [i18n] } });
-    const ctas = wrapper.findAll(".view-home__btn");
+    const wrapper = mount(HomeView, { global: { plugins: [i18n, router] } });
+    const ctas = wrapper.findAll(".home-btn");
     expect(ctas.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("hero primary CTA links to contact with type=patient", () => {
-    const wrapper = mount(HomeView, { global: { plugins: [i18n] } });
-    const primaryCta = wrapper.find(".view-home__hero-ctas .view-home__btn--primary");
+  // The hero primary CTA is a same-page anchor to #for-patients (smooth-scrolled by
+  // useSmoothScrollAnchors, wired up at the App level — not exercised by mounting
+  // HomeView alone), not a router-pushed /contact link — so this only asserts the
+  // link target and label, which is what actually matters at this mount level.
+  it("hero primary CTA points to the for-patients section", () => {
+    const wrapper = mount(HomeView, { global: { plugins: [i18n, router] } });
+    const primaryCta = wrapper.find(".home-hero__ctas .home-btn--primary");
     expect(primaryCta.exists()).toBe(true);
-    expect(primaryCta.attributes("href")).toBe("/contact?type=patient");
-    expect(primaryCta.text()).toMatch(/Find a Dentist/i);
-  });
-
-  it("clicking hero Find a Dentist CTA navigates to contact via router (no full reload)", async () => {
-    const pushSpy = vi.spyOn(router, "push");
-    const wrapper = mount(HomeView, {
-      global: { plugins: [i18n, router] },
-    });
-    const primaryCta = wrapper.find(".view-home__hero-ctas .view-home__btn--primary");
-    await primaryCta.trigger("click");
-    expect(pushSpy).toHaveBeenCalledWith({ path: "/contact", query: { type: "patient" } });
-    pushSpy.mockRestore();
-    wrapper.unmount();
+    expect(primaryCta.attributes("href")).toBe("#for-patients");
+    expect(primaryCta.text()).toMatch(/Find a Specialist/i);
   });
 
   it("renders solutions, for-professionals, and for-patients sections", () => {
-    const wrapper = mount(HomeView, { global: { plugins: [i18n] } });
+    const wrapper = mount(HomeView, { global: { plugins: [i18n, router] } });
     expect(wrapper.find("#solutions").exists()).toBe(true);
     expect(wrapper.find("#for-professionals").exists()).toBe(true);
     expect(wrapper.find("#for-patients").exists()).toBe(true);
   });
 
   it("renders hero image and section images", () => {
-    const wrapper = mount(HomeView, { global: { plugins: [i18n] } });
+    const wrapper = mount(HomeView, { global: { plugins: [i18n, router] } });
     const imgs = wrapper.findAll("img");
     expect(imgs.length).toBeGreaterThanOrEqual(1);
     const srcs = imgs.map((i) => i.attributes("src"));
