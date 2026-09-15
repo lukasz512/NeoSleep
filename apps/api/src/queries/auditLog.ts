@@ -64,11 +64,16 @@ export async function GetHistoryForPatientQuery(ctx: TenantContext, patientId: s
   // Sleep studies and treatment plans linked to this patient — no pagination
   // limit needed here since a patient realistically has a handful of each,
   // not thousands.
-  const [studies, plans, lead] = await Promise.all([
-    getSleepStudiesPaginated(ctx.client, { patient_id: patientId }, 1, 500),
-    getTreatmentPlansPaginated(ctx.client, { patient_id: patientId }, 1, 500),
-    findLeadConvertedToPatient(ctx.client, patientId),
-  ]);
+  //
+  // Sequential, not Promise.all: ctx.client is a single PoolClient (SET LOCAL
+  // search_path is in effect for this transaction), and pg only ever runs one
+  // query at a time per connection anyway — concurrent calls just queue behind
+  // each other internally. That queuing is deprecated as of pg 8.x and is
+  // removed in pg 9.0, so firing them via Promise.all was relying on behavior
+  // about to disappear for zero actual concurrency benefit.
+  const studies = await getSleepStudiesPaginated(ctx.client, { patient_id: patientId }, 1, 500);
+  const plans = await getTreatmentPlansPaginated(ctx.client, { patient_id: patientId }, 1, 500);
+  const lead = await findLeadConvertedToPatient(ctx.client, patientId);
 
   const entityTypes = ["Patient", "SleepStudy", "TreatmentPlan"];
   const entityIds = [patientId, ...studies.rows.map((s) => s.id), ...plans.rows.map((p) => p.id)];

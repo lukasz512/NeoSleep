@@ -7,7 +7,7 @@
     "build": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "NODE_OPTIONS='--require=./vitest-crypto-polyfill.cjs' sh -c 'if [ -f ../../.env ]; then set -a; . ../../.env; set +a; fi; vitest run'",
+    "test": "NODE_OPTIONS='--require=./vitest-crypto-polyfill.cjs' sh -c 'if [ -f ../../.env ]; then set -a; . ../../.env; set +a; fi; vitest run \"$@\"' --",
     "seed:demo": "tsx --env-file=../../.env ../../infrastructure/scripts/seed-demo.ts",
     "migrate": "tsx scripts/migrate.ts",
     "sync-test-schema": "tsx scripts/sync-test-schema.ts"
