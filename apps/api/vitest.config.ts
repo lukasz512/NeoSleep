@@ -1,33 +1,4 @@
 import { defineConfig } from "vitest/config";
-import { existsSync, readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
-
-// `dev`/`seed:demo` load the repo-root .env via `tsx --env-file=../../.env`,
-// but `test` runs plain `vitest run` with no such loader — so DATABASE_URL
-// and friends are simply unset for a local `pnpm --filter @neo/api test`
-// unless the shell already exports them. CI is unaffected: it never has a
-// .env file and always sets these directly as job-level env vars (see
-// .github/workflows/ci.yml), which win over anything read here.
-function loadRootEnvFileFallback(): void {
-  const envPath = join(dirname(fileURLToPath(import.meta.url)), "..", "..", ".env");
-  if (!existsSync(envPath)) return;
-  for (const line of readFileSync(envPath, "utf8").split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const eq = trimmed.indexOf("=");
-    if (eq === -1) continue;
-    const key = trimmed.slice(0, eq).trim();
-    if (key in process.env) continue;
-    let value = trimmed.slice(eq + 1).trim();
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-      value = value.slice(1, -1);
-    }
-    process.env[key] = value;
-  }
-}
-
-loadRootEnvFileFallback();
 
 export default defineConfig({
   test: {

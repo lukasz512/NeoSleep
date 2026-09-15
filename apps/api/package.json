@@ -7,7 +7,7 @@
     "build": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "NODE_OPTIONS='--require=./vitest-crypto-polyfill.cjs' vitest run",
+    "test": "NODE_OPTIONS='--require=./vitest-crypto-polyfill.cjs' sh -c 'if [ -f ../../.env ]; then set -a; . ../../.env; set +a; fi; vitest run'",
     "seed:demo": "tsx --env-file=../../.env ../../infrastructure/scripts/seed-demo.ts",
     "migrate": "tsx scripts/migrate.ts",
     "sync-test-schema": "tsx scripts/sync-test-schema.ts"
@@ -38,10 +38,10 @@
     "@types/pg": "^8.23.1",
     "@types/supertest": "^6.0.2",
     "@types/web-push": "catalog:",
-    "eslint": "^9.0.0",
+    "eslint": "catalog:",
     "supertest": "^7.0.0",
-    "tsx": "^4.23.13",
-    "typescript": "^5.6.0",
-    "vitest": "^4.0.0"
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }
