@@ -68,16 +68,18 @@ export async function getNotificationsPaginated(
     const where = conditions.join(" AND ");
     const offset = (page - 1) * limit;
 
-    const [{ rows }, { rows: countRows }] = await Promise.all([
-      client.query<Notification>(
-        `SELECT ${NOTIFICATION_COLS} FROM notification WHERE ${where} ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
-        [identityId, limit, offset]
-      ),
-      client.query<{ count: string }>(
-        `SELECT COUNT(*) FROM notification WHERE ${where}`,
-        [identityId]
-      ),
-    ]);
+    // Sequential, not Promise.all: `client` is a single PoolClient, and pg
+    // only ever runs one query at a time per connection — concurrent calls
+    // just queue behind each other internally, which pg 9.0 removes. See the
+    // same note in queries/auditLog.ts.
+    const { rows } = await client.query<Notification>(
+      `SELECT ${NOTIFICATION_COLS} FROM notification WHERE ${where} ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+      [identityId, limit, offset]
+    );
+    const { rows: countRows } = await client.query<{ count: string }>(
+      `SELECT COUNT(*) FROM notification WHERE ${where}`,
+      [identityId]
+    );
 
     return { rows, total: Number(countRows[0]?.count ?? 0) };
   } catch (err) {
