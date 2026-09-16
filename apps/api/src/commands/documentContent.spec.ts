@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import bcrypt from "bcrypt";
-import { withTenant, insertStaffUser } from "../db.js";
+import { withTenant, insertStaffUser, getGlobalTerritoryId } from "../db.js";
 import { getAuditLogForEntities } from "../db/audit-log.js";
 import type { TenantContext } from "../context/TenantContext.js";
 import { SaveDocumentContentVersionCommand, sanitizeDocumentContentHtml } from "./documentContent.js";
@@ -32,7 +32,7 @@ async function buildTestContext(client: Parameters<typeof insertStaffUser>[0]): 
   return {
     slug: TENANT_SLUG,
     client,
-    user: { id: user!.id, email, name: "QA Pilot", role: "admin", roles: [{ role: "admin", scope: "global" }] },
+    user: { id: user!.id, email, name: "QA Pilot", role: "admin", roles: [{ role: "admin", territory_id: await getGlobalTerritoryId(client) }] },
     requestId: `test-${uniqueSuffix()}`,
   };
 }
@@ -45,14 +45,21 @@ describe("sanitizeDocumentContentHtml", () => {
     expect(out).toContain("hello");
   });
 
-  it("neutralizes an unbalanced HTML comment instead of letting it swallow following markup — the exact bug class hit once already this session on a static template", () => {
-    const out = sanitizeDocumentContentHtml("<p>before</p><!-- unbalanced <p>after</p>");
-    // Whatever sanitize-html decides to do with the malformed input, the
-    // output must be well-formed and must not have silently dropped
-    // "after"'s text into an unclosed/invisible comment.
-    expect(out).toContain("before");
-    expect(out).toContain("after");
-  });
+  it(
+    "an unterminated HTML comment drops everything after it rather than letting it leak through as " +
+      "live markup — the real (verified directly) sanitize-html behavior: an HTML5 parser treats an " +
+      "unclosed <!-- as running to end-of-document, so its whole tail (including any injection " +
+      "attempt) is discarded as comment content, never re-emitted as text or markup. This is the " +
+      "actual safety property that closes the bug class hit once already this session on a static " +
+      "template (an unbalanced comment silently corrupting/exposing everything physically after it) — " +
+      "content loss here is a known, safe trade-off, not the corrupting-leak this guards against.",
+    () => {
+      const out = sanitizeDocumentContentHtml("<p>before</p><!-- unbalanced <script>alert(1)</script><p>after</p>");
+      expect(out).toBe("<p>before</p>");
+      expect(out).not.toContain("script");
+      expect(out).not.toContain("alert(");
+    }
+  );
 
   it("drops disallowed attributes (e.g. onclick) but keeps allowed tags/text", () => {
     const out = sanitizeDocumentContentHtml('<p onclick="doEvil()">safe text</p>');

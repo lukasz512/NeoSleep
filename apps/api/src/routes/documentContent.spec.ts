@@ -30,14 +30,16 @@ async function insertTestUser(
 }
 
 function tokenFor(user: { id: string; email: string }, role: StaffRole): string {
-  return signAuthToken({ id: user.id, email: user.email, role, token_version: 0 }, { rememberMe: false });
+  return signAuthToken({ id: user.id, email: user.email, role, token_version: 0 });
 }
 
 function tokenForNonexistentUser(role: StaffRole): string {
-  return signAuthToken(
-    { id: crypto.randomUUID(), email: `qa-doc-content-route-${uniqueSuffix()}@neosleepcare.com`, role, token_version: 0 },
-    { rememberMe: false }
-  );
+  return signAuthToken({
+    id: crypto.randomUUID(),
+    email: `qa-doc-content-route-${uniqueSuffix()}@neosleepcare.com`,
+    role,
+    token_version: 0,
+  });
 }
 
 describe("GET /api/v1/document-content", () => {
