@@ -116,6 +116,14 @@ pnpm i18n:prune        # Mark unused keys
 - This repo enforces the above with a GitHub ruleset that rejects direct pushes (`GH013: Repository rule violations — Changes must be made through a pull request`) — expect this on `git push` and don't try to route around it (no force-push, no branch-name workaround).
 - This is an interim policy, not the final CI/CD design — a fuller flow (environments, required checks, promotion) is still to be worked out.
 
+### Linear traceability
+- Every non-trivial task (per `/enrich-user-story`'s trivial/feature split) gets a Linear ticket before a worktree/branch is created for it. Trivial fixes don't need one.
+- Name the worktree/branch so the Linear ticket ID leads: `EnterWorktree(name: "<ticket-id>-<kebab-slug>")` (e.g. `eng-123-territory-admin-crud`). `EnterWorktree` prefixes `worktree-`, so the ID stays visible in the resulting branch (`worktree-eng-123-territory-admin-crud`) — this mirrors the nightly worker's own `worker/<ticket-id>-<slug>` pattern (`.claude/skills/linear-worker/SKILL.md`), same "ticket ID always leads" rule for human-initiated and automated work alike.
+- As soon as that worktree/branch exists, comment on the Linear ticket with the branch name so the ticket shows "work started, on branch X" before any PR exists — do this before implementation starts, not as an afterthought.
+- When handing the user the PR link after a push, prefer a pre-filled compare URL over the bare one GitHub prints — `https://github.com/<org>/<repo>/compare/dev...<branch>?quick_pull=1&title=<encoded-title>&body=<encoded-body>` — with the Linear ticket ID/title in `title` and a `Fixes <TICKET-ID>` line (or a plain Linear link) in `body`, so Linear can auto-link/auto-close on merge if its GitHub integration is connected. This still only pre-fills GitHub's form; the user clicks "Create" themselves, same as always.
+- Confirmed 2026-09-16: Linear's GitHub integration is connected for this repo/org — a branch name containing the ticket ID auto-links to the ticket, and a PR title/body with `Fixes <TICKET-ID>` (or `Closes`/`Resolves`) auto-transitions the ticket on merge. No extra tooling needed for the linking itself — the convention above only needs to actually produce ticket-ID-bearing branch names and PR bodies.
+- Full rationale: `docs/stories/linear-task-traceability.md`.
+
 ## Deployment
 - `apps/pwa` / `apps/web`: FTP to GoDaddy (current, to be migrated to VPS)
 - `apps/api`: Render, auto-deploys on push to its tracked branch — see `render.yaml`. No GitHub Actions workflow for this; a git push is the whole deploy pipeline.
