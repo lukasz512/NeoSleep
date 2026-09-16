@@ -49,14 +49,6 @@ async function loadInstitutionTypeOptions() {
   return configStore.institutionTypeItems;
 }
 
-async function loadRegionOptions() {
-  const configStore = useConfigStore();
-  if (configStore.options.regions.length === 0) {
-    await configStore.loadOptions();
-  }
-  return configStore.regionItems;
-}
-
 /** Base specialty vocabulary plus any already picked on this org (edit mode),
  *  so previously-saved values are never dropped from the chips list. */
 async function loadSpecialtyOptions(form: Record<string, unknown>): Promise<FormFieldOption[]> {
@@ -81,7 +73,6 @@ export const hcoFormFields: FormFieldDef[] = [
     multiple: true,
     cols: 12,
   },
-  { key: "region", type: "autocomplete", labelKey: "user.hco.form.region", options: loadRegionOptions, cols: 6 },
   {
     key: "territory_id",
     type: "autocomplete",
@@ -90,7 +81,7 @@ export const hcoFormFields: FormFieldDef[] = [
     default: null,
     options: loadTerritoryOptions,
     icon: "nav-territories",
-    cols: 6,
+    cols: 12,
   },
   { key: "address_line1", type: "text", labelKey: "user.hco.form.addressLine1", cols: 12 },
   { key: "postal_code", type: "text", labelKey: "user.hco.form.postalCode", cols: 6 },
