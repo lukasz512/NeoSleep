@@ -370,11 +370,28 @@ export async function updatePractitioner(client: PoolClient, id: string, input: 
   return getPractitionerById(client, id);
 }
 
-/** Sets practitioner.status directly — used by the "training finished" activation flow (see commands/practitioner.ts ActivatePractitionerCommand). */
+/**
+ * practitioner and users are separate TPT-pattern tables both hanging off
+ * the same identities row (see CLAUDE.md) — this is how
+ * AcceptPractitionerInviteCommand, which only ever has the users.id it's
+ * acting on, finds the matching practitioner row to flip its status. Null
+ * is a legitimate result for a non-practitioner user (e.g. staff), not an
+ * error.
+ */
+export async function getPractitionerIdByIdentityId(client: PoolClient, identityId: string): Promise<string | null> {
+  try {
+    const r = await client.query<{ id: string }>(`SELECT id FROM practitioner WHERE identity_id = $1`, [identityId]);
+    return r.rows[0]?.id ?? null;
+  } catch (err) {
+    throw new DatabaseError("getPractitionerIdByIdentityId", err);
+  }
+}
+
+/** Sets practitioner.status directly — used by ActivatePractitionerCommand (pending_approval/invited transitions) and AcceptPractitionerInviteCommand (the invited -> active transition, once the doctor actually completes registration — see commands/practitioner.ts and commands/invitePractitioner.ts). */
 export async function updatePractitionerStatus(
   client: PoolClient,
   id: string,
-  status: "pending_approval" | "active" | "inactive"
+  status: "pending_approval" | "invited" | "active" | "inactive"
 ): Promise<void> {
   try {
     await client.query(`UPDATE practitioner SET status = $1, updated_at = now() WHERE id = $2`, [status, id]);

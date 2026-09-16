@@ -13,6 +13,8 @@ import {
   mergeIdentityMetadataForUser,
   getInviteTokenByHash,
   markInviteTokenUsed,
+  getPractitionerIdByIdentityId,
+  updatePractitionerStatus,
   convertLead,
   insertConsent,
   insertFileAttachment,
@@ -241,6 +243,20 @@ export async function AcceptPractitionerInviteCommand(
   const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS);
   await setUserPassword(client, user.id, passwordHash, false);
   await updateUser(client, user.id, { status: "active" });
+
+  // 1b. This is the real "doctor accepted" moment — practitioner.status
+  // only becomes "active" here, not when staff clicked Activate/Resend
+  // (see ActivatePractitionerCommand in commands/practitioner.ts and
+  // docs/stories/practitioner-invite-resend.md). practitioner and users
+  // are separate tables off the same identity, so look it up by identity_id
+  // rather than assuming user.id === practitioner.id. Null is expected for
+  // a users row that was never linked to a practitioner (shouldn't happen
+  // on this invite path, but this command has no other reason to assume
+  // it always is one) — skip rather than throw.
+  const practitionerId = await getPractitionerIdByIdentityId(client, user.identity_id);
+  if (practitionerId) {
+    await updatePractitionerStatus(client, practitionerId, "active");
+  }
 
   // 2. Clinic / invoice data — no dedicated columns, lives in identities.metadata.
   await mergeIdentityMetadataForUser(client, user.id, {

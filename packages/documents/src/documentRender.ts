@@ -65,9 +65,10 @@ function getContactLines(locale: string | null | undefined): readonly string[] {
  * unconfirmed facts flagged in apps/web/src/config/websiteContent.ts's
  * legalConfig — keep both in sync by hand until there's a real source of
  * truth to import from (see that file's own comment for why this can't
- * just be a shared import today). `mx`'s "AJ Management" name was
- * mentioned by Łukasz but is deliberately kept as a placeholder per his
- * instruction, pending full legal details (RFC, registered domicile).
+ * just be a shared import today). `mx` confirmed by Łukasz 2026-09-17:
+ * "AJ Management" is a trade name — the actual responsable is a persona
+ * física (individual), Alfredjan de Jesús Díaz Urdaneta, RFC
+ * DIUA8208043U7 (13-char individual-format RFC, not a corporate one).
  */
 const LEGAL_ENTITY: Record<"en" | "pl" | "mx", { companyName: string; legalEntityName: string }> = {
   en: { companyName: "NeoSleep", legalEntityName: "[PLACEHOLDER: registered legal entity name]" },
@@ -77,7 +78,7 @@ const LEGAL_ENTITY: Record<"en" | "pl" | "mx", { companyName: string; legalEntit
   },
   mx: {
     companyName: "NeoSleep",
-    legalEntityName: "[PLACEHOLDER: razón social registrada — AJ Management, pendiente de confirmación completa]",
+    legalEntityName: "AJ Management — Alfredjan de Jesús Díaz Urdaneta (RFC: DIUA8208043U7)",
   },
 };
 
