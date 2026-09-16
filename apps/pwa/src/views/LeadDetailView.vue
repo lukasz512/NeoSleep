@@ -381,6 +381,7 @@ import { useAuthStore } from "../stores/auth";
 import { apiFetch } from "../composables/useApi";
 import { useEntityCacheStore } from "../stores/entityCache";
 import { useNotifications } from "../composables/useNotifications";
+import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import AppButton from "../components/AppButton.vue";
@@ -418,6 +419,7 @@ const router = useRouter();
 
 const authStore = useAuthStore();
 const notifications = useNotifications();
+const { submit } = useEntitySubmit();
 const isAdmin = computed(() => authStore.user?.role === "admin");
 
 const leadCache = useEntityCacheStore("leads");
@@ -515,34 +517,31 @@ async function onEventFormSubmit(
   payload: import("../components/EventForm.vue").EventSubmitPayload,
   done: (ok: boolean) => void,
 ) {
-  try {
-    const res = await apiFetch("/api/v1/encounter", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: payload.title,
-        start_at: payload.start_at,
-        end_at: payload.end_at,
-        type: payload.type,
-        status: payload.status,
-        location: payload.location,
-        video_link: payload.video_link,
-        notes: payload.notes,
-        region: payload.region,
-        attendees: payload.attendees,
-      }),
-    });
-    if (res.ok) {
-      notifications.show(t("user.planner.form.success"), "success");
-      done(true);
-    } else {
-      notifications.show(t("user.planner.form.errorSave"), "error");
-      done(false);
-    }
-  } catch {
-    notifications.show(t("user.planner.form.errorSave"), "error");
-    done(false);
-  }
+  await submit(
+    {
+      request: () =>
+        apiFetch("/api/v1/encounter", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: payload.title,
+            start_at: payload.start_at,
+            end_at: payload.end_at,
+            type: payload.type,
+            status: payload.status,
+            location: payload.location,
+            video_link: payload.video_link,
+            notes: payload.notes,
+            region: payload.region,
+            attendees: payload.attendees,
+          }),
+        }),
+      successMessage: t("user.planner.form.success"),
+      errorMessage: t("user.planner.form.errorSave"),
+      refresh: false,
+    },
+    done,
+  );
 }
 
 function onMoveToDoctors() {
@@ -562,23 +561,20 @@ async function onInviteSubmit(
     done(false);
     return;
   }
-  try {
-    const res = await apiFetch(`/api/v1/lead/${leadId}/invite`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    if (res.ok) {
-      notifications.show(t("user.leads.form.inviteSuccess"), "success");
-      await loadLead();
-      window.dispatchEvent(new Event("entity-list-refresh"));
-      done(true);
-    } else {
-      done(false);
-    }
-  } catch {
-    done(false);
-  }
+  await submit(
+    {
+      request: () =>
+        apiFetch(`/api/v1/lead/${leadId}/invite`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        }),
+      successMessage: t("user.leads.form.inviteSuccess"),
+      errorMessage: t("user.leads.form.inviteError"),
+      onSuccess: () => loadLead(),
+    },
+    done,
+  );
 }
 
 async function onContactSubmit(
@@ -595,19 +591,15 @@ async function onContactSubmit(
   // no separate PATCH needed here anymore. createPractitionerFromLead()
   // additionally creates the clinic first when the rep typed a new one
   // (see hcpForm.ts's isCreatingNewOrganization()).
-  try {
-    const ok = await createPractitionerFromLead(data, leadId);
-    if (ok) {
-      notifications.show(t("user.hcp.form.contactCreated"), "success");
-      await loadLead();
-      window.dispatchEvent(new Event("entity-list-refresh"));
-      done(true);
-    } else {
-      done(false);
-    }
-  } catch {
-    done(false);
-  }
+  await submit(
+    {
+      request: async () => ({ ok: await createPractitionerFromLead(data, leadId) }),
+      successMessage: t("user.hcp.form.contactCreated"),
+      errorMessage: t("user.hcp.form.contactError"),
+      onSuccess: () => loadLead(),
+    },
+    done,
+  );
 }
 
 function onConvertToPatient() {
@@ -626,23 +618,20 @@ async function onConvertToPatientSubmit(
   // Conversion (status -> converted, converted_to_id/type/at) happens
   // atomically server-side via ConvertLeadCommand when lead_id is present —
   // same pattern as onContactSubmit's Lead->Practitioner conversion above.
-  try {
-    const res = await apiFetch("/api/v1/patient", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...data, lead_id: leadId }),
-    });
-    if (res.ok) {
-      notifications.show(t("app.patients.form.success"), "success");
-      await loadLead();
-      window.dispatchEvent(new Event("entity-list-refresh"));
-      done(true);
-    } else {
-      done(false);
-    }
-  } catch {
-    done(false);
-  }
+  await submit(
+    {
+      request: () =>
+        apiFetch("/api/v1/patient", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...data, lead_id: leadId }),
+        }),
+      successMessage: t("app.patients.form.success"),
+      errorMessage: t("app.patients.form.errorSave"),
+      onSuccess: () => loadLead(),
+    },
+    done,
+  );
 }
 
 
@@ -659,23 +648,20 @@ async function onLeadSubmit(
     done(false);
     return;
   }
-  try {
-    const res = await apiFetch(`/api/v1/lead/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    if (res.ok) {
-      notifications.show(t("user.leads.form.editSuccess"), "success");
-      await loadLead();
-      window.dispatchEvent(new Event("entity-list-refresh"));
-      done(true);
-    } else {
-      done(false);
-    }
-  } catch {
-    done(false);
-  }
+  await submit(
+    {
+      request: () =>
+        apiFetch(`/api/v1/lead/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        }),
+      successMessage: t("user.leads.form.editSuccess"),
+      errorMessage: t("user.leads.form.errorSave"),
+      onSuccess: () => loadLead(),
+    },
+    done,
+  );
 }
 
 const offerSentAtLabel = computed(() => {

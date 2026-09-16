@@ -8,6 +8,7 @@ import {
   softDeletePractitioner,
   getUserIdByEmail,
   insertStaffUser,
+  getCountryTerritoryId,
   createInviteToken,
   type InsertPractitionerInput,
   type UpdatePractitionerInput,
@@ -46,6 +47,7 @@ export interface CreatePractitionerInput {
   organization_id?: string | null;
   institution?: string | null;
   region?: string;
+  territory_id?: string | null;
   country_code?: string | null;
   influence_tier?: string;
   language?: string | null;
@@ -85,6 +87,7 @@ export async function CreatePractitionerCommand(
     organization_id:  input.organization_id !== undefined ? input.organization_id : undefined,
     institution:      input.institution ?? null,
     region:           input.region,
+    territory_id:     input.territory_id ?? null,
     country_code:     input.country_code ?? null,
     influence_tier:   input.influence_tier,
     language:         input.language ?? null,
@@ -136,6 +139,7 @@ export interface UpdatePractitionerPayload {
   organization_id?: string | null;
   institution?: string | null;
   region?: string;
+  territory_id?: string | null;
   influence_tier?: string;
   language?: string | null;
   national_ids?: Record<string, string> | null;
@@ -177,6 +181,7 @@ export async function UpdatePractitionerCommand(
     organization_id:  input.organization_id,
     institution:      input.institution,
     region:           input.region,
+    territory_id:     input.territory_id,
     influence_tier:   input.influence_tier,
     language:         input.language,
     national_ids:     input.national_ids,
@@ -242,6 +247,14 @@ export async function ActivatePractitionerCommand(ctx: TenantContext, id: string
   // second registration email overwriting their existing password flow.
   const existingUserId = await getUserIdByEmail(ctx.client, practitioner.email);
   if (!existingUserId) {
+    // Scope the new doctor-role login to their own practice's country when
+    // known — falls back to insertStaffUser's own 'global' default (via
+    // undefined) when the country hasn't been seeded into the territory
+    // hierarchy yet, same fail-open reasoning migration 022 used for
+    // unmapped legacy scope values.
+    const scopeTerritoryId = practitioner.country_code
+      ? await getCountryTerritoryId(ctx.client, practitioner.country_code)
+      : undefined;
     const user = await insertStaffUser(
       ctx.client,
       practitioner.email,
@@ -252,7 +265,7 @@ export async function ActivatePractitionerCommand(ctx: TenantContext, id: string
       true,
       practitioner.salutation,
       practitioner.phone,
-      practitioner.country_code ?? "global",
+      scopeTerritoryId ?? undefined,
       ctx.user.id,
       practitioner.country_code
     );

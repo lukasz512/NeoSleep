@@ -5,6 +5,7 @@ import {
   type GetLeadsFilters,
   type Lead,
 } from "../db.js";
+import { getAllowedScopePaths, assertTerritoryAccessByTerritoryId } from "../middleware/requireScope.js";
 
 /**
  * QUERIES — Lead domain.
@@ -28,6 +29,8 @@ export interface LeadDto {
   status: string;
   country_code: string | null;
   region: string;
+  territory_id: string | null;
+  territory_name: string | null;
   source: string | null;
   institution: string | null;
   assigned_to: string | null;
@@ -51,6 +54,8 @@ function toDto(l: Lead): LeadDto {
     status:         l.status,
     country_code:   l.country_code ?? null,
     region:         l.region,
+    territory_id:   l.territory_id ?? null,
+    territory_name: l.territory_name ?? null,
     source:         l.source ?? null,
     institution:    l.institution ?? null,
     assigned_to:    l.assigned_to ?? null,
@@ -97,6 +102,7 @@ export async function GetLeadListQuery(
     region:                    input.region,
     hideCompletedOlderThan24h: ctx.user.role !== "admin",
     hideDeclined:              ctx.user.role !== "admin",
+    scopePaths:                await getAllowedScopePaths(ctx.client, ctx.user.roles),
   };
 
   const page      = input.page ?? 1;
@@ -124,6 +130,7 @@ export async function GetLeadByIdQuery(
   // 'declined' leads are admin-only visibility — treat as not-found for
   // everyone else, same as the list query's hideDeclined filter.
   if (lead.status === "declined" && ctx.user.role !== "admin") return null;
+  await assertTerritoryAccessByTerritoryId(ctx, lead.territory_id);
   return toDto(lead);
 }
 

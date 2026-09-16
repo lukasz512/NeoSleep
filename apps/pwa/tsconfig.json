@@ -3,7 +3,7 @@
   "compilerOptions": {
     "composite": true,
     "emitDeclarationOnly": true,
-    "types": ["vitest/globals", "node", "vite/client"],
+    "types": ["vitest/globals", "node", "vite/client", "google.maps"],
     "baseUrl": ".",
     "paths": {
       "@i18n/*":    ["../../packages/i18n/*"],

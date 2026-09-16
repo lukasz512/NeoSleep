@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import bcrypt from "bcrypt";
-import { withTenant, insertStaffUser } from "../db.js";
+import { withTenant, insertStaffUser, getGlobalTerritoryId } from "../db.js";
 import type { TenantContext } from "../context/TenantContext.js";
 import { CreatePatientCommand } from "./patient.js";
 import { CreateNoteCommand, DeleteNoteCommand } from "./note.js";
@@ -26,7 +26,7 @@ async function buildTestContext(
   return {
     slug: TENANT_SLUG,
     client,
-    user: { id: user!.id, email, role, roles: [{ role, scope: "global" }] },
+    user: { id: user!.id, email, role, roles: [{ role, territory_id: await getGlobalTerritoryId(client) }] },
     requestId: `test-${uniqueSuffix()}`,
   };
 }

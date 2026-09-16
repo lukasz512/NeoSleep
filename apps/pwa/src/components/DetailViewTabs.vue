@@ -59,7 +59,6 @@ const options = computed(() => props.tabs.map((tab) => ({ value: tab.value, labe
 @media (min-width: 600px) {
   .detail-view-tabs__tabs-wrap {
     max-width: 600px;
-    margin: 0 auto;
   }
 }
 

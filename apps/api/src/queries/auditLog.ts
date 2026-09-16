@@ -45,6 +45,8 @@ const AUDIT_FIELD_ALLOWLIST: Record<string, readonly string[]> = {
   Patient: ["id", "status", "region"],
   SleepStudy: ["patient_id", "status"],
   TreatmentPlan: ["patient_id", "type", "status"],
+  Practitioner: ["id", "primary_specialty", "region", "status"],
+  Organization: ["id", "name", "type", "status", "region"],
 };
 
 function redactAuditFields(
@@ -94,4 +96,34 @@ export async function GetHistoryForPatientQuery(ctx: TenantContext, patientId: s
     })),
     lead_source: lead ? { source: lead.source, converted_at: lead.converted_at ? lead.converted_at.toISOString() : null } : null,
   };
+}
+
+export interface EntityHistoryDto {
+  entries: PatientHistoryEntryDto[];
+}
+
+function toEntries(rows: Awaited<ReturnType<typeof getAuditLogForEntities>>): PatientHistoryEntryDto[] {
+  return rows.map((r) => ({
+    id: r.id,
+    created_at: r.created_at,
+    user_id: r.user_id,
+    user_name: r.user_name,
+    action: r.action,
+    entity_type: r.entity_type,
+    entity_id: r.entity_id,
+    entity_before: redactAuditFields(r.entity_type, r.entity_before),
+    entity_after: redactAuditFields(r.entity_type, r.entity_after),
+  }));
+}
+
+/** No sleep-study/treatment-plan/lead-conversion composition like the Patient
+ *  timeline above — a practitioner's own audit_log rows are the whole story. */
+export async function GetHistoryForPractitionerQuery(ctx: TenantContext, practitionerId: string): Promise<EntityHistoryDto> {
+  const rows = await getAuditLogForEntities(ctx.client, ["Practitioner"], [practitionerId]);
+  return { entries: toEntries(rows) };
+}
+
+export async function GetHistoryForOrganizationQuery(ctx: TenantContext, organizationId: string): Promise<EntityHistoryDto> {
+  const rows = await getAuditLogForEntities(ctx.client, ["Organization"], [organizationId]);
+  return { entries: toEntries(rows) };
 }

@@ -10,6 +10,7 @@
           variant="outlined"
           class="app-error-state__refresh"
           :loading="loading"
+          ignore-global-loading
           :aria-label="refreshLabel"
           @click="$emit('refresh')"
         >

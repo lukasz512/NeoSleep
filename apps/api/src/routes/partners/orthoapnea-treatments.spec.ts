@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import bcrypt from "bcrypt";
 import { app } from "../../server.js";
-import { withTenant, insertStaffUser } from "../../db.js";
+import { withTenant, insertStaffUser, getGlobalTerritoryId } from "../../db.js";
 import { getPartnerLink } from "../../db/partnerLink.js";
 import type { TenantContext } from "../../context/TenantContext.js";
 import { CreatePatientCommand } from "../../commands/patient.js";
@@ -44,10 +44,12 @@ function fakeJwt(expiresInSeconds: number): string {
 }
 
 function tokenFor(role: "admin" | "rep"): string {
-  return signAuthToken(
-    { id: crypto.randomUUID(), email: `qa-txn-log-${uniqueSuffix()}@neosleepcare.com`, role, token_version: 0 },
-    { rememberMe: false }
-  );
+  return signAuthToken({
+    id: crypto.randomUUID(),
+    email: `qa-txn-log-${uniqueSuffix()}@neosleepcare.com`,
+    role,
+    token_version: 0,
+  });
 }
 
 async function buildTestContext(client: Parameters<typeof CreatePatientCommand>[0]["client"]): Promise<TenantContext> {
@@ -57,7 +59,7 @@ async function buildTestContext(client: Parameters<typeof CreatePatientCommand>[
   return {
     slug: TENANT_SLUG,
     client,
-    user: { id: user!.id, email, role: "admin", roles: [{ role: "admin", scope: "global" }] },
+    user: { id: user!.id, email, role: "admin", roles: [{ role: "admin", territory_id: await getGlobalTerritoryId(client) }] },
     requestId: `test-${uniqueSuffix()}`,
   };
 }

@@ -45,7 +45,14 @@ export async function withTenant<T>(
   try {
     await client.query("BEGIN");
     // SET LOCAL reverts when the transaction ends — no session-level contamination.
-    await client.query(`SET LOCAL search_path TO "${slug}", public`);
+    // `extensions` (Supabase's convention for installed extensions — pgcrypto,
+    // uuid-ossp, ltree) is appended last, after the tenant schema and public,
+    // so it never shadows a real table — it only resolves extension-provided
+    // types/operators/functions (e.g. ltree's `<@`) that aren't reachable
+    // otherwise: unlike a column DEFAULT (resolved once, at CREATE TABLE time),
+    // a type/operator referenced directly in a query is re-resolved against
+    // search_path on every call.
+    await client.query(`SET LOCAL search_path TO "${slug}", public, extensions`);
     const result = await fn(client);
     await client.query("COMMIT");
     client.release();

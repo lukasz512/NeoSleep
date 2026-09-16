@@ -14,6 +14,10 @@ export interface Organization {
   country_code: string | null;
   region: string;
   territory_id: string | null;
+  // Immediate assigned territory node's own name — see the identical field on
+  // Practitioner (db/practitioner.ts) for why this is the flat name, not the
+  // full ancestor path (that's the single-record detail query's job).
+  territory_name: string | null;
   phone: string | null;
   email: string | null;
   website: string | null;
@@ -33,6 +37,8 @@ export interface GetOrganizationFilters {
   type?: string;
   region?: string;
   status?: string;
+  /** RBAC territory scope (migration 022) — see GetPatientsFilters.scopePaths for the contract. */
+  scopePaths?: string[] | null;
 }
 
 export interface InsertOrganizationInput {
@@ -44,6 +50,7 @@ export interface InsertOrganizationInput {
   postal_code?: string | null;
   country_code?: string | null;
   region?: string;
+  territory_id?: string | null;
   phone?: string | null;
   email?: string | null;
   website?: string | null;
@@ -65,6 +72,7 @@ export interface UpdateOrganizationInput {
   postal_code?: string | null;
   country_code?: string | null;
   region?: string;
+  territory_id?: string | null;
   phone?: string | null;
   email?: string | null;
   website?: string | null;
@@ -84,9 +92,9 @@ function isOrgSortColumn(s: string): s is (typeof ORG_SORT_COLUMNS)[number] {
 }
 
 const ORG_SELECT_COLS = `
-  id, name, type, identifiers, address_line1, city, state, postal_code,
-  country_code, region, territory_id, phone, email, website, google_link,
-  latitude, longitude, specialties, status, metadata, created_at, updated_at`.trim();
+  o.id, o.name, o.type, o.identifiers, o.address_line1, o.city, o.state, o.postal_code,
+  o.country_code, o.region, o.territory_id, t.name AS territory_name, o.phone, o.email, o.website, o.google_link,
+  o.latitude, o.longitude, o.specialties, o.status, o.metadata, o.created_at, o.updated_at`.trim();
 
 export async function getOrganizationPaginated(
   client: PoolClient,
@@ -96,41 +104,47 @@ export async function getOrganizationPaginated(
   sortBy: string,
   sortOrder: "asc" | "desc"
 ): Promise<{ rows: Organization[]; total: number }> {
-  const conditions: string[] = ["deleted_at IS NULL"];
+  const conditions: string[] = ["o.deleted_at IS NULL"];
   const params: unknown[] = [];
   let paramIndex = 1;
 
   if (filters.search?.trim()) {
     conditions.push(
-      `(LOWER(name) LIKE $${paramIndex} OR LOWER(COALESCE(type,'')) LIKE $${paramIndex} OR LOWER(COALESCE(region,'')) LIKE $${paramIndex} OR LOWER(status) LIKE $${paramIndex})`
+      `(LOWER(o.name) LIKE $${paramIndex} OR LOWER(COALESCE(o.type,'')) LIKE $${paramIndex} OR LOWER(COALESCE(o.region,'')) LIKE $${paramIndex} OR LOWER(o.status) LIKE $${paramIndex})`
     );
     params.push(`%${filters.search.trim().toLowerCase()}%`);
     paramIndex++;
   }
   if (filters.type?.trim()) {
-    conditions.push(`type = $${paramIndex}`);
+    conditions.push(`o.type = $${paramIndex}`);
     params.push(filters.type.trim());
     paramIndex++;
   }
   if (filters.region?.trim()) {
-    conditions.push(`region = $${paramIndex}`);
+    conditions.push(`o.region = $${paramIndex}`);
     params.push(filters.region.trim());
     paramIndex++;
   }
   if (filters.status?.trim()) {
-    conditions.push(`status = $${paramIndex}`);
+    conditions.push(`o.status = $${paramIndex}`);
     params.push(filters.status.trim());
+    paramIndex++;
+  }
+  if (filters.scopePaths !== undefined && filters.scopePaths !== null) {
+    conditions.push(`(o.territory_id IS NULL OR t.path <@ ANY($${paramIndex}::extensions.ltree[]))`);
+    params.push(filters.scopePaths);
     paramIndex++;
   }
 
   const whereClause = `WHERE ${conditions.join(" AND ")}`;
   const orderCol = isOrgSortColumn(sortBy) ? sortBy : "created_at";
   const orderDir = sortOrder === "asc" ? "ASC" : "DESC";
-  const safeOrder = orderCol === "created_at" ? "created_at" : `"${orderCol}"`;
+  const safeOrder = orderCol === "created_at" ? "o.created_at" : `o."${orderCol}"`;
+  const orgJoin = `FROM organization o LEFT JOIN territory t ON o.territory_id = t.id`;
 
   try {
     const countResult = await client.query<{ count: string }>(
-      `SELECT COUNT(*) AS count FROM organization ${whereClause}`,
+      `SELECT COUNT(*) AS count ${orgJoin} ${whereClause}`,
       params
     );
     const total = Number(countResult.rows[0]?.count ?? 0);
@@ -139,7 +153,7 @@ export async function getOrganizationPaginated(
     params.push(limit, offset);
     const dataResult = await client.query<Organization>(
       `SELECT ${ORG_SELECT_COLS}
-       FROM organization ${whereClause} ORDER BY ${safeOrder} ${orderDir} LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+       ${orgJoin} ${whereClause} ORDER BY ${safeOrder} ${orderDir} LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
       params
     );
     return { rows: dataResult.rows, total };
@@ -152,7 +166,7 @@ export async function getOrganizationPaginated(
 export async function getOrganizationById(client: PoolClient, id: string): Promise<Organization | null> {
   try {
     const result = await client.query<Organization>(
-      `SELECT ${ORG_SELECT_COLS} FROM organization WHERE id = $1 AND deleted_at IS NULL`,
+      `SELECT ${ORG_SELECT_COLS} FROM organization o LEFT JOIN territory t ON o.territory_id = t.id WHERE o.id = $1 AND o.deleted_at IS NULL`,
       [id]
     );
     return result.rows[0] ?? null;
@@ -208,8 +222,8 @@ export async function insertOrganization(client: PoolClient, input: InsertOrgani
   try {
     const result = await client.query<{ id: string }>(
       `INSERT INTO organization
-         (name, type, address_line1, city, state, postal_code, country_code, region, phone, email, website, google_link, latitude, longitude, specialties, status, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+         (name, type, address_line1, city, state, postal_code, country_code, region, territory_id, phone, email, website, google_link, latitude, longitude, specialties, status, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
        RETURNING id`,
       [
         name,
@@ -220,6 +234,7 @@ export async function insertOrganization(client: PoolClient, input: InsertOrgani
         trimOrNull(input.postal_code),
         trimOrNull(input.country_code),
         trimOrEmpty(input.region),
+        input.territory_id ?? null,
         trimOrNull(input.phone),
         trimOrNull(input.email),
         trimOrNull(input.website),
@@ -286,6 +301,10 @@ export async function updateOrganization(client: PoolClient, id: string, input: 
     if (input.region !== undefined) {
       params.push(trimOrEmpty(input.region));
       sets.push(`region = $${idx++}`);
+    }
+    if (input.territory_id !== undefined) {
+      params.push(input.territory_id);
+      sets.push(`territory_id = $${idx++}`);
     }
     if (input.phone !== undefined) {
       params.push(trimOrNull(input.phone));

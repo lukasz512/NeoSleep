@@ -1,6 +1,7 @@
 import type { FormFieldDef, FormFieldOption } from "../../types/formField";
 import { apiFetch } from "../../composables/useApi";
 import { useConfigStore } from "../../stores/config";
+import { useAuthStore } from "../../stores/auth";
 import { identityFields } from "./identityFields";
 import { loadTerritoryOptions } from "./territoryOptions";
 
@@ -106,6 +107,18 @@ export const patientFormFields: FormFieldDef[] = [
     icon: "nav-territories",
     cols: 6,
   },
+  // Always hidden, defaulted to the creating user's own country — same
+  // pattern as hcoForm.ts's country_code field. Distinct from `region`
+  // above (identities.region is a separate business/geography attribute,
+  // see migration 013's comment) — this is what RBAC country-scoping
+  // (middleware/requireScope.ts) actually filters on.
+  {
+    key: "country_code",
+    type: "text",
+    labelKey: "app.patients.form.countryCode",
+    hidden: true,
+    default: () => useAuthStore().user?.country_code ?? "",
+  },
   {
     key: "ahi_baseline",
     type: "number",
@@ -113,9 +126,14 @@ export const patientFormFields: FormFieldDef[] = [
     cols: 6,
   },
   {
+    // TEXT column presented as a yes/no switch (see FormFieldDef.trueValue/
+    // falseValue) — a rep just needs to record whether the patient has CPAP,
+    // not the specific device model.
     key: "cpap_device",
-    type: "text",
+    type: "boolean",
     labelKey: "app.patients.form.cpapDevice",
+    trueValue: "CPAP",
+    falseValue: "",
     cols: 6,
   },
   {

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import bcrypt from "bcrypt";
-import { withTenant, insertStaffUser, getAuditLogForEntities } from "../../db.js";
+import { withTenant, insertStaffUser, getGlobalTerritoryId, getAuditLogForEntities } from "../../db.js";
 import { getNotificationsPaginated } from "../../db/notification.js";
 import { getPartnerLink } from "../../db/partnerLink.js";
 import type { TenantContext } from "../../context/TenantContext.js";
@@ -86,7 +86,7 @@ async function buildTestContext(client: Parameters<typeof CreatePatientCommand>[
   return {
     slug: TENANT_SLUG,
     client,
-    user: { id: user!.id, email, role: "admin", roles: [{ role: "admin", scope: "global" }] },
+    user: { id: user!.id, email, role: "admin", roles: [{ role: "admin", territory_id: await getGlobalTerritoryId(client) }] },
     requestId: `test-${uniqueSuffix()}`,
   };
 }

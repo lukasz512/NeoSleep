@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import request from "supertest";
 import bcrypt from "bcrypt";
 import { app } from "../server.js";
-import { withTenant, insertStaffUser } from "../db.js";
+import { withTenant, insertStaffUser, getGlobalTerritoryId } from "../db.js";
 import type { TenantContext } from "../context/TenantContext.js";
 import { CreateTerritoryCommand } from "../commands/territory.js";
 import { signAuthToken } from "../utils/jwt.js";
@@ -42,14 +42,16 @@ async function insertTestUser(
 }
 
 function tokenFor(user: { id: string; email: string }, role: "admin" | "rep"): string {
-  return signAuthToken({ id: user.id, email: user.email, role, token_version: 0 }, { rememberMe: false });
+  return signAuthToken({ id: user.id, email: user.email, role, token_version: 0 });
 }
 
 function tokenForNonexistentUser(role: "admin" | "rep"): string {
-  return signAuthToken(
-    { id: crypto.randomUUID(), email: `qa-territory-route-${uniqueSuffix()}@neosleepcare.com`, role, token_version: 0 },
-    { rememberMe: false }
-  );
+  return signAuthToken({
+    id: crypto.randomUUID(),
+    email: `qa-territory-route-${uniqueSuffix()}@neosleepcare.com`,
+    role,
+    token_version: 0,
+  });
 }
 
 async function buildTestContext(client: Parameters<typeof CreateTerritoryCommand>[0]["client"]): Promise<TenantContext> {
@@ -57,7 +59,7 @@ async function buildTestContext(client: Parameters<typeof CreateTerritoryCommand
   return {
     slug: TENANT_SLUG,
     client,
-    user: { id: user.id, email: user.email, role: "admin", roles: [{ role: "admin", scope: "global" }] },
+    user: { id: user.id, email: user.email, role: "admin", roles: [{ role: "admin", territory_id: await getGlobalTerritoryId(client) }] },
     requestId: `test-${uniqueSuffix()}`,
   };
 }

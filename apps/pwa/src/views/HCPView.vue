@@ -44,6 +44,18 @@
         {{ (item as { name?: string }).name }}
       </span>
     </template>
+    <template #item.specialty="{ item }">
+      {{ specialtyLabel((item as HCPListItem).specialty) }}
+    </template>
+    <template #item.institution="{ item }">
+      <EntityLink
+        :to="(item as HCPListItem).organization_id ? { name: 'hco-detail', params: { id: (item as HCPListItem).organization_id } } : null"
+        :label="(item as HCPListItem).institution"
+      />
+    </template>
+    <template #item.region="{ item }">
+      {{ (item as HCPListItem).territory_name || (item as HCPListItem).region || "—" }}
+    </template>
     <template #feed-card-avatar="{ item }">
       <AppAvatar :name="(item as HCPListItem).name" :first-name="(item as HCPListItem).first_name" :last-name="(item as HCPListItem).last_name" entity-type="hcp" :size="55" />
     </template>
@@ -53,7 +65,7 @@
       </span>
     </template>
     <template #feed-card-meta="{ item }">
-      {{ (item as { specialty?: string }).specialty }}
+      {{ specialtyLabel((item as HCPListItem).specialty) }}
     </template>
     <template #feed-card-actions="{ item }">
       <AppListItemMenu :aria-label="t('app.common.moreActions')">
@@ -75,10 +87,11 @@ import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
 import AppAvatar from "../components/AppAvatar.vue";
 import AppIcon from "../components/AppIcon.vue";
+import EntityLink from "../components/EntityLink.vue";
 import AppListItemMenu from "../components/AppListItemMenu.vue";
 import { entityActionIcon, entityActionMenuIconClass } from "../config/entityActions";
 import { apiFetch } from "../composables/useApi";
-import { useNotifications } from "../composables/useNotifications";
+import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { type FilterDefinition } from "../composables/useFilters";
 import { useAuthStore } from "../stores/auth";
 import { usePermissions } from "../composables/usePermissions";
@@ -99,7 +112,9 @@ interface HCPListItem {
   primary_specialty?: string;
   specialty?: string;
   organization_id?: string | null;
+  institution?: string;
   region?: string;
+  territory_name?: string | null;
   influence_tier?: string;
   language?: string | null;
   national_ids?: Record<string, string> | null;
@@ -118,7 +133,7 @@ const showEditModal = ref(false);
 const showEventForm = ref(false);
 const selectedHcp = ref<HCPListItem | null>(null);
 const eventFormInitial = ref<{ start_at: string; end_at: string; hcpIds?: string[] } | undefined>(undefined);
-const notifications = useNotifications();
+const { submit } = useEntitySubmit();
 
 /** Stable reference — see HCPDetailView.vue's identical computed for why an
  *  inline object literal would silently reset FormRenderer's open form. */
@@ -167,7 +182,17 @@ const tableHeaders = computed(() => [
   { title: t("user.hcp.table.name"), key: "name", sortable: true },
   { title: t("user.hcp.table.specialty"), key: "specialty", sortable: true },
   { title: t("user.hcp.table.institution"), key: "institution", sortable: true },
+  { title: t("user.hcp.table.region"), key: "region", sortable: true },
 ]);
+
+/** Resolves a specialty code (`hcp.specialty`) to its translated label via the
+ *  same key→label vocabulary the filter dropdown already uses — previously
+ *  only the filter went through this lookup, the table/card rendered the raw
+ *  code. */
+function specialtyLabel(code?: string): string {
+  if (!code) return "—";
+  return configStore.specialtyItems.find((o) => o.value === code)?.title ?? code;
+}
 
 const hcpI18n = computed(() => ({
   searchPlaceholder: "user.hcp.searchPlaceholder",
@@ -187,27 +212,22 @@ function onAddContact() {
 }
 
 async function onContactSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
-  try {
-    const organizationId = await resolveOrganizationIdForSubmit(data);
-    if (organizationId === undefined) {
-      done(false);
-      return;
-    }
-    const res = await apiFetch("/api/v1/practitioner", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...data, organization_id: organizationId, new_organization: undefined }),
-    });
-    if (res.ok) {
-      notifications.show(t("user.hcp.form.success"), "success");
-      window.dispatchEvent(new Event("entity-list-refresh"));
-      done(true);
-    } else {
-      done(false);
-    }
-  } catch {
-    done(false);
-  }
+  await submit(
+    {
+      request: async () => {
+        const organizationId = await resolveOrganizationIdForSubmit(data);
+        if (organizationId === undefined) return { ok: false };
+        return apiFetch("/api/v1/practitioner", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...data, organization_id: organizationId, new_organization: undefined }),
+        });
+      },
+      successMessage: t("user.hcp.form.success"),
+      errorMessage: t("user.hcp.form.errorSave"),
+    },
+    done,
+  );
 }
 
 function onEditContact(hcp: HCPListItem) {
@@ -218,27 +238,22 @@ function onEditContact(hcp: HCPListItem) {
 async function onEditSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
   const id = selectedHcp.value?.id;
   if (!id) { done(false); return; }
-  try {
-    const organizationId = await resolveOrganizationIdForSubmit(data);
-    if (organizationId === undefined) {
-      done(false);
-      return;
-    }
-    const res = await apiFetch(`/api/v1/practitioner/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...data, organization_id: organizationId, new_organization: undefined }),
-    });
-    if (res.ok) {
-      notifications.show(t("user.hcp.form.editSuccess"), "success");
-      window.dispatchEvent(new Event("entity-list-refresh"));
-      done(true);
-    } else {
-      done(false);
-    }
-  } catch {
-    done(false);
-  }
+  await submit(
+    {
+      request: async () => {
+        const organizationId = await resolveOrganizationIdForSubmit(data);
+        if (organizationId === undefined) return { ok: false };
+        return apiFetch(`/api/v1/practitioner/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...data, organization_id: organizationId, new_organization: undefined }),
+        });
+      },
+      successMessage: t("user.hcp.form.editSuccess"),
+      errorMessage: t("user.hcp.form.errorSave"),
+    },
+    done,
+  );
 }
 
 function onScheduleVisit(hcp: HCPListItem) {
@@ -257,23 +272,20 @@ async function onEventFormSubmit(
   payload: import("../components/EventForm.vue").EventSubmitPayload,
   done: (ok: boolean) => void,
 ) {
-  try {
-    const res = await apiFetch("/api/v1/encounter", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: payload.title, start_at: payload.start_at, end_at: payload.end_at, type: payload.type, status: payload.status, location: payload.location, video_link: payload.video_link, notes: payload.notes, region: payload.region, attendees: payload.attendees }),
-    });
-    if (res.ok) {
-      notifications.show(t("user.planner.form.success"), "success");
-      done(true);
-    } else {
-      notifications.show(t("user.planner.form.errorSave"), "error");
-      done(false);
-    }
-  } catch {
-    notifications.show(t("user.planner.form.errorSave"), "error");
-    done(false);
-  }
+  await submit(
+    {
+      request: () =>
+        apiFetch("/api/v1/encounter", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: payload.title, start_at: payload.start_at, end_at: payload.end_at, type: payload.type, status: payload.status, location: payload.location, video_link: payload.video_link, notes: payload.notes, region: payload.region, attendees: payload.attendees }),
+        }),
+      successMessage: t("user.planner.form.success"),
+      errorMessage: t("user.planner.form.errorSave"),
+      refresh: false,
+    },
+    done,
+  );
 }
 </script>
 
