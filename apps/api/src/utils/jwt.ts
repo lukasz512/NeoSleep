@@ -5,9 +5,22 @@ import type { StaffRole } from "../db/users.js";
 
 const ALGORITHM = "HS256";
 
-/** No "remember me" mirrors today's session cookie maxAge; checked mirrors the old remember-me window. */
-const DEFAULT_EXPIRY = "7d";
-const REMEMBER_ME_EXPIRY = "30d";
+/** Short on purpose (ADR-020): the access token carries no server-side revocation check
+ *  (requireAuth stays DB-free — see its own doc comment), so its blast radius if stolen
+ *  is bounded by how soon it expires, not by a revocation list. Session longevity now
+ *  lives entirely in the refresh token (see refreshTokenExpiryDate below), which IS
+ *  revocable because every use is checked against remember_me_tokens in the DB. */
+const ACCESS_TOKEN_EXPIRY = "15m";
+
+/** Refresh token DB-row lifetime — mirrors the old access-token expiry windows (today's
+ *  session-cookie-era maxAge / remember-me window), just moved to the token that's
+ *  actually capable of being revoked. */
+const REFRESH_TOKEN_DEFAULT_MS = 7 * 24 * 60 * 60 * 1000;
+const REFRESH_TOKEN_REMEMBER_ME_MS = 30 * 24 * 60 * 60 * 1000;
+
+export function refreshTokenExpiryDate(rememberMe: boolean): Date {
+  return new Date(Date.now() + (rememberMe ? REFRESH_TOKEN_REMEMBER_ME_MS : REFRESH_TOKEN_DEFAULT_MS));
+}
 
 export interface AuthTokenPayload {
   sub: string;
@@ -42,7 +55,9 @@ export interface SignableUser {
   token_version: number;
 }
 
-export function signAuthToken(user: SignableUser, opts: { rememberMe: boolean }): string {
+/** Always ACCESS_TOKEN_EXPIRY regardless of remember-me — see refreshTokenExpiryDate()
+ *  for where "remember me" now actually applies. */
+export function signAuthToken(user: SignableUser): string {
   const payload = {
     sub: user.id,
     email: user.email,
@@ -57,7 +72,7 @@ export function signAuthToken(user: SignableUser, opts: { rememberMe: boolean })
   };
   return jwt.sign(payload, JWT_SECRET, {
     algorithm: ALGORITHM,
-    expiresIn: opts.rememberMe ? REMEMBER_ME_EXPIRY : DEFAULT_EXPIRY,
+    expiresIn: ACCESS_TOKEN_EXPIRY,
   });
 }
 

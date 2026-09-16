@@ -41,6 +41,11 @@ export interface CreatePatientInput {
   status?: string;
   region?: string;
   territory_id?: string | null;
+  /** RBAC scope (see middleware/requireScope.ts) — the PWA's patientForm.ts
+   *  defaults this to the creating user's own country_code (hidden field,
+   *  same pattern as hcoForm.ts), so it's populated without a visible
+   *  required field for the common case. */
+  country_code?: string | null;
   metadata?: Record<string, unknown>;
   /** When set, this patient is being created from a lead ("move to contacts") —
    *  the lead is atomically marked converted in the same transaction. */
@@ -81,6 +86,7 @@ export async function CreatePatientCommand(
     status:         input.status || "active",
     region:         input.region || "",
     territory_id:   input.territory_id,
+    country_code:   input.country_code?.trim() || null,
     metadata:       input.metadata,
   };
 
@@ -127,6 +133,7 @@ export interface UpdatePatientPayload {
   status?: string;
   region?: string;
   territory_id?: string | null;
+  country_code?: string | null;
   metadata?: Record<string, unknown>;
 }
 
@@ -176,6 +183,7 @@ export async function UpdatePatientCommand(
     status:         input.status,
     region:         input.region,
     territory_id:   input.territory_id,
+    country_code:   input.country_code,
     metadata:       input.metadata,
   };
 

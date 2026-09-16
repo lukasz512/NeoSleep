@@ -41,10 +41,11 @@ onMounted(async () => {
     }
     const data = (await res.json()) as {
       token: string;
+      refresh_token: string;
       user: AuthUser;
       forcePasswordChange: boolean;
     };
-    authStore.setAuthenticated(true, data.user, data.token);
+    authStore.setAuthenticated(true, data.user, data.token, data.refresh_token);
     await router.push(data.forcePasswordChange ? "/change-password" : "/dashboard");
   } catch {
     errored.value = true;

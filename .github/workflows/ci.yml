@@ -108,3 +108,28 @@ jobs:
       - name: Test — web (informational — pre-existing failures being triaged, not yet a merge gate)
         run: pnpm --filter @neo/web test
         continue-on-error: true
+
+      # apps/pwa/e2e/ (Playwright, ADR-020) — real browser engines only for the
+      # auth behaviors jsdom/Postgres-integration tests genuinely can't cover
+      # (reload/JS-realm teardown, bfcache, multi-context storage). New,
+      # scoped coverage — blocking from day one, not inheriting the informational
+      # status of the legacy `pnpm --filter @neo/pwa test` step above.
+      - name: Install Playwright browsers
+        run: pnpm --filter @neo/pwa exec playwright install --with-deps chromium firefox webkit
+
+      # apps/api's dev script (which Playwright's webServer starts) reads
+      # ../../.env via tsx --env-file — that file doesn't exist in CI (the
+      # job's `env:` block sets real env vars instead), so write one from
+      # those same already-known values.
+      - name: Write .env for E2E dev servers
+        run: |
+          cat > .env <<EOF
+          DATABASE_URL=${DATABASE_URL}
+          DEFAULT_TENANT_SLUG=${DEFAULT_TENANT_SLUG}
+          SESSION_SECRET=${SESSION_SECRET}
+          ORTHOAPNEA_EMAIL=${ORTHOAPNEA_EMAIL}
+          ORTHOAPNEA_PASSWORD=${ORTHOAPNEA_PASSWORD}
+          EOF
+
+      - name: Test — pwa e2e (blocking)
+        run: pnpm --filter @neo/pwa test:e2e

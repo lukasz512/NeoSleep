@@ -7,7 +7,10 @@ import { navRoutesForRole } from "../router/routes";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const APP_MODULE_ROUTES = ["dashboard", "leads", "planner", "hcp", "hco", "patients", "presentations", "users"] as const;
+const APP_MODULE_ROUTES = [
+  "dashboard", "leads", "planner", "hcp", "hco", "patients", "presentations", "users",
+  "sleep-studies", "treatment-plans", "resources", "territories",
+] as const;
 
 /** Combined source of AppLayout.vue and all layout components (for markup/CSS assertions). */
 function getLayoutSource(): string {
@@ -87,29 +90,39 @@ describe("AppLayout", () => {
       expect(navLinksSource).toContain("layout-app__nav-icon");
     });
 
-    it("rep sees every core module (leads, hcp, hco, patients, planner, presentations) but not users; dashboard is never in the nav", () => {
-      const expectedPaths = ["/leads", "/hcp", "/hco", "/patients", "/planner", "/presentations"];
+    // /presentations is meta.hidden (see routes.ts) — excluded from appNavRoutes entirely,
+    // superseded by /resources. /dashboard IS a real appNavRoutes entry (ALL_STAFF_ROLES,
+    // not filtered out) — every role sees it first, contrary to this describe block's
+    // original (stale) title claiming otherwise.
+    it("rep sees every core module (leads, hcp, hco, patients, planner, resources) but not users, sleep-studies, treatment-plans, or territories", () => {
+      const expectedPaths = ["/dashboard", "/leads", "/hcp", "/hco", "/patients", "/planner", "/resources"];
       expect(navRoutesForRole("rep").map((r) => r.path)).toEqual(expectedPaths);
     });
 
-    it("manager sees users management and leads (manager can manage the whole sales+contacts pipeline)", () => {
-      const expectedPaths = ["/leads", "/hcp", "/hco", "/patients", "/planner", "/presentations", "/users"];
+    it("manager sees users management, leads, and the clinical aggregates (sleep-studies/treatment-plans) — everything except territories", () => {
+      const expectedPaths = [
+        "/dashboard", "/leads", "/hcp", "/hco", "/patients",
+        "/sleep-studies", "/treatment-plans", "/planner", "/resources", "/users",
+      ];
       expect(navRoutesForRole("manager").map((r) => r.path)).toEqual(expectedPaths);
     });
 
-    it("kam and msl see leads, hcp, hco, patients, planner, presentations but not users (same field-force access as rep)", () => {
-      const expectedPaths = ["/leads", "/hcp", "/hco", "/patients", "/planner", "/presentations"];
+    it("kam and msl see leads, hcp, hco, patients, planner, resources but not users (same field-force access as rep)", () => {
+      const expectedPaths = ["/dashboard", "/leads", "/hcp", "/hco", "/patients", "/planner", "/resources"];
       expect(navRoutesForRole("kam").map((r) => r.path)).toEqual(expectedPaths);
       expect(navRoutesForRole("msl").map((r) => r.path)).toEqual(expectedPaths);
     });
 
-    it("admin always sees every nav item, including leads", () => {
-      const expectedPaths = ["/leads", "/hcp", "/hco", "/patients", "/planner", "/presentations", "/users"];
+    it("admin always sees every nav item, including leads and territories (isRoleAllowed bypasses role restrictions for admin)", () => {
+      const expectedPaths = [
+        "/dashboard", "/leads", "/hcp", "/hco", "/patients", "/sleep-studies",
+        "/treatment-plans", "/planner", "/resources", "/users", "/territories",
+      ];
       expect(navRoutesForRole("admin").map((r) => r.path)).toEqual(expectedPaths);
     });
 
-    it("doctor sees only patients, planner, presentations — never leads, hcp, or hco", () => {
-      const expectedPaths = ["/patients", "/planner", "/presentations"];
+    it("doctor sees dashboard, patients, the clinical aggregates, planner, and resources — never leads, hcp, hco, or users", () => {
+      const expectedPaths = ["/dashboard", "/patients", "/sleep-studies", "/treatment-plans", "/planner", "/resources"];
       expect(navRoutesForRole("doctor").map((r) => r.path)).toEqual(expectedPaths);
     });
   });
@@ -147,7 +160,11 @@ describe("AppLayout", () => {
     it("app bar's right side renders only the logo — no notification bell (that's DashboardView-only), no role-preview select, no user menu", () => {
       const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
       expect(appLayoutSource).not.toContain("app-bar-actions");
-      expect(appLayoutSource).not.toContain("AppNotificationCenter");
+      // Component usage/import, not the explanatory code comment that legitimately
+      // names AppNotificationCenter.vue (why polling moved out of it) — a bare
+      // substring check would false-positive on that comment.
+      expect(appLayoutSource).not.toMatch(/<AppNotificationCenter\b/);
+      expect(appLayoutSource).not.toMatch(/import\s+AppNotificationCenter\b/);
       expect(appLayoutSource).not.toContain("rolePreview");
       expect(appLayoutSource).not.toContain("VSelect");
     });

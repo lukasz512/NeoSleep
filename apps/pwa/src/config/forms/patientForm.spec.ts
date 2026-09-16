@@ -25,8 +25,17 @@ describe("patientFormFields", () => {
   it("carries the full existing field set (no fields dropped in the migration)", () => {
     expect(patientFormFields.map((f) => f.key)).toEqual([
       "salutation", "first_name", "last_name", "email", "phone",
-      "practitioner_id", "status", "region", "territory_id", "ahi_baseline", "cpap_device", "medical_record",
+      "practitioner_id", "status", "region", "territory_id", "country_code", "ahi_baseline", "cpap_device", "medical_record",
     ]);
+  });
+
+  // ADR-020's region-scoping fix (middleware/requireScope.ts) needs country_code
+  // populated on every patient — hidden, defaulted from the creating user's own
+  // country, same pattern as hcoForm.ts's country_code field.
+  it("country_code is always hidden with a function default", () => {
+    const countryCode = patientFormFields.find((f) => f.key === "country_code")!;
+    expect(countryCode.hidden).toBe(true);
+    expect(typeof countryCode.default).toBe("function");
   });
 
   it("territory_id is an autocomplete with an async loader", () => {

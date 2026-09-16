@@ -1,6 +1,7 @@
 import type { FormFieldDef, FormFieldOption } from "../../types/formField";
 import { apiFetch } from "../../composables/useApi";
 import { useConfigStore } from "../../stores/config";
+import { useAuthStore } from "../../stores/auth";
 import { identityFields } from "./identityFields";
 import { loadTerritoryOptions } from "./territoryOptions";
 
@@ -105,6 +106,18 @@ export const patientFormFields: FormFieldDef[] = [
     options: loadTerritoryOptions,
     icon: "nav-territories",
     cols: 6,
+  },
+  // Always hidden, defaulted to the creating user's own country — same
+  // pattern as hcoForm.ts's country_code field. Distinct from `region`
+  // above (identities.region is a separate business/geography attribute,
+  // see migration 013's comment) — this is what RBAC country-scoping
+  // (middleware/requireScope.ts) actually filters on.
+  {
+    key: "country_code",
+    type: "text",
+    labelKey: "app.patients.form.countryCode",
+    hidden: true,
+    default: () => useAuthStore().user?.country_code ?? "",
   },
   {
     key: "ahi_baseline",

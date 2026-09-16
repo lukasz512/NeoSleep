@@ -46,34 +46,31 @@ describe("Bearer-token auth (no cookies)", () => {
     expect(res.headers["set-cookie"]).toBeUndefined();
   });
 
-  it("token expiry is ~7 days without remember_me", async () => {
+  // ADR-020: the access token itself no longer varies with remember_me — it's always
+  // short-lived. remember_me now governs the refresh token's DB-row lifetime instead
+  // (see auth-refresh.spec.ts for that behavior — it isn't observable from the JWT
+  // returned here, since the refresh token is an opaque value, not a JWT).
+  it("access token expiry is always ~15 minutes, regardless of remember_me", async () => {
     const email = testEmail("expiry-default");
     await createLoginUser(email);
 
-    const res = await request(app)
+    const defaultRes = await request(app)
       .post("/api/v1/auth/login")
       .set("X-Forwarded-For", "10.40.0.2")
       .send({ email, password: TEST_PASSWORD });
+    const { iat: iat1, exp: exp1 } = decodeJwt(defaultRes.body.token);
+    const minutes1 = (exp1 - iat1) / 60;
+    expect(minutes1).toBeGreaterThan(14.5);
+    expect(minutes1).toBeLessThan(15.5);
 
-    const { iat, exp } = decodeJwt(res.body.token);
-    const days = (exp - iat) / (60 * 60 * 24);
-    expect(days).toBeGreaterThan(6.9);
-    expect(days).toBeLessThan(7.1);
-  });
-
-  it("token expiry is ~30 days with remember_me: true", async () => {
-    const email = testEmail("expiry-remember");
-    await createLoginUser(email);
-
-    const res = await request(app)
+    const rememberRes = await request(app)
       .post("/api/v1/auth/login")
       .set("X-Forwarded-For", "10.40.0.3")
       .send({ email, password: TEST_PASSWORD, remember_me: true });
-
-    const { iat, exp } = decodeJwt(res.body.token);
-    const days = (exp - iat) / (60 * 60 * 24);
-    expect(days).toBeGreaterThan(29.9);
-    expect(days).toBeLessThan(30.1);
+    const { iat: iat2, exp: exp2 } = decodeJwt(rememberRes.body.token);
+    const minutes2 = (exp2 - iat2) / 60;
+    expect(minutes2).toBeGreaterThan(14.5);
+    expect(minutes2).toBeLessThan(15.5);
   });
 
   it("protected routes ignore any cookie and require the Authorization header instead", async () => {

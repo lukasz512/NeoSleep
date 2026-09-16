@@ -68,6 +68,8 @@ export interface PatientInsert {
   status?: string;
   region?: string;
   territory_id?: string | null;
+  /** RBAC scope (see middleware/requireScope.ts) — distinct from `region` above, see migration 013's comment. */
+  country_code?: string | null;
   metadata?: Record<string, unknown>;
 }
 
@@ -85,6 +87,7 @@ export interface PatientUpdate {
   status?: string;
   region?: string;
   territory_id?: string | null;
+  country_code?: string | null;
   metadata?: Record<string, unknown>;
 }
 
@@ -273,8 +276,8 @@ export async function getPatientById(client: PoolClient, id: string): Promise<(P
 export async function insertPatient(client: PoolClient, data: PatientInsert): Promise<Patient & { name: string }> {
   try {
     const identityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (title, first_name, last_name, email, phone, region, territory_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO identities (title, first_name, last_name, email, phone, region, territory_id, country_code)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id`,
       [
         data.salutation ?? null,
@@ -284,6 +287,7 @@ export async function insertPatient(client: PoolClient, data: PatientInsert): Pr
         data.phone ?? null,
         data.region ?? null,
         data.territory_id ?? null,
+        data.country_code ?? null,
       ]
     );
     const identityId = identityResult.rows[0]!.id;
@@ -341,6 +345,7 @@ export async function updatePatient(
       phone: "phone",
       region: "region",
       territory_id: "territory_id",
+      country_code: "country_code",
     };
     for (const [field, column] of Object.entries(identityFieldToColumn) as [keyof PatientUpdate, string][]) {
       if (data[field] !== undefined) {

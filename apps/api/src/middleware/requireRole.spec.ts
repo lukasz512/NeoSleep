@@ -5,10 +5,7 @@ import { AuthError, ForbiddenError } from "../errors.js";
 import { signAuthToken } from "../utils/jwt.js";
 
 function tokenFor(role: string): string {
-  return signAuthToken(
-    { id: "u1", email: "qa@neosleepcare.com", role: role as never, token_version: 0 },
-    { rememberMe: false },
-  );
+  return signAuthToken({ id: "u1", email: "qa@neosleepcare.com", role: role as never, token_version: 0 });
 }
 
 function makeReq(role?: string): Request {
