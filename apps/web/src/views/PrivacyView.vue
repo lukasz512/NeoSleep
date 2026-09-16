@@ -38,6 +38,7 @@ const entityConfig = computed(() => legalConfig[locale.value as 'en' | 'pl' | 'm
 
 const interpolationParams = computed(() => ({
   company: entityConfig.value.companyName,
+  registryDetails: entityConfig.value.registryDetails ?? '',
   legalEntityName: entityConfig.value.legalEntityName,
   email: entityConfig.value.privacyEmail,
   address: entityConfig.value.address,

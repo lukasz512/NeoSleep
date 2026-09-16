@@ -307,14 +307,20 @@ export const patientTestimonials: Testimonial[] = [
  * discloses must differ per locale too, not just the surrounding prose.
  *
  * `[PLACEHOLDER]`-marked fields are NOT real business facts — they must be
- * replaced with NeoSleep's actual registered legal entity name / address /
- * DPO status before this policy is fit to publish. A privacy policy citing
- * a fabricated company registration is itself a compliance defect, so
- * nothing here was invented; see docs/stories/partner-registration-legal-documents.md's
- * privacy-policy section for what's still needed from Łukasz.
- * `mx.address` is real (the office address already used in the patient
- * informed-consent document), but `mx.legalEntityName` (the formal
- * "responsable" entity name under LFPDPPP) is still unconfirmed.
+ * replaced with confirmed registered details before this policy is fit to
+ * publish. A privacy policy citing a fabricated company registration is
+ * itself a compliance defect, so nothing here was invented; see
+ * docs/stories/partner-registration-legal-documents.md's privacy-policy
+ * section for status.
+ *
+ * `pl` confirmed by Łukasz 2026-09-16: Ostrowski Investment sp. z o.o.
+ * (KRS/NIP/REGON below). `mx`'s registered entity is "AJ Management" per
+ * Łukasz — name only so far, not yet confirmed with full legal
+ * details (RFC, registered address matching the entity rather than just
+ * the office) — Łukasz asked to keep MX as a placeholder until he sends
+ * those. `mx.address` (the office) is real (already used in the patient
+ * informed-consent document) but is not necessarily the same as the
+ * formal registered domicile of the "AJ Management" entity.
  */
 export interface LegalEntityConfig {
   companyName: string;
@@ -323,6 +329,8 @@ export interface LegalEntityConfig {
   address: string;
   authorityName: string;
   authorityUrl: string;
+  /** PL-specific registry identifiers (KRS/NIP/REGON) — undefined for locales where they don't apply. */
+  registryDetails?: string;
 }
 
 export const legalConfig: Record<"en" | "pl" | "mx", LegalEntityConfig> & { lastUpdated: string } = {
@@ -337,15 +345,19 @@ export const legalConfig: Record<"en" | "pl" | "mx", LegalEntityConfig> & { last
   },
   pl: {
     companyName: "NeoSleep",
-    legalEntityName: "[PLACEHOLDER: pełna nazwa zarejestrowanej spółki]",
+    legalEntityName: "Ostrowski Investment spółka z ograniczoną odpowiedzialnością",
     privacyEmail: "info@neosleepcare.com",
-    address: "[PLACEHOLDER: zarejestrowany adres siedziby]",
+    address: "Łąkowa 3, 77-127 Nakla, Polska",
     authorityName: "Prezes Urzędu Ochrony Danych Osobowych (UODO)",
     authorityUrl: "https://uodo.gov.pl",
+    registryDetails: "KRS 0001166320, NIP 8421798790, REGON 541401786",
   },
   mx: {
     companyName: "NeoSleep",
-    legalEntityName: "[PLACEHOLDER: razón social registrada]",
+    // Name confirmed by Łukasz ("AJ Management") but kept as an explicit
+    // placeholder per his instruction — full legal details (RFC, formal
+    // registered domicile) still pending before this is fit to publish.
+    legalEntityName: "[PLACEHOLDER: razón social registrada — AJ Management, pendiente de confirmación completa]",
     privacyEmail: "lorena.gonzalez@neosleepcare.com",
     address: "WTC, Calle Montecito 38, Col. Nápoles, Piso 26, Oficina 8, Ciudad de México",
     authorityName: "Instituto Nacional de Transparencia, Acceso a la Información y Protección de Datos Personales (INAI)",

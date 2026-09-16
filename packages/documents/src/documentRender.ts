@@ -36,12 +36,11 @@ const BRAND = {
  * a single shared line the way brand colors/logo safely can.
  *
  * `mx` is real (the office already used in the patient informed-consent
- * document). `pl` has no confirmed real office yet — its lines are
- * explicit [PLACEHOLDER] markers, not invented facts; see
- * docs/stories/partner-registration-legal-documents.md's privacy-policy
- * section for what's needed from Łukasz. `en` (used when no
- * jurisdiction-specific office applies) falls back to the general company
- * email only, not a fabricated address.
+ * document). `pl` confirmed by Łukasz 2026-09-16 — Ostrowski Investment
+ * sp. z o.o.'s registered address (Łąkowa 3, 77-127 Nakla) — no dedicated
+ * PL phone/email exists yet, so the shared company inbox is used. `en`
+ * (used when no jurisdiction-specific office applies) falls back to the
+ * general company email only, not a fabricated address.
  */
 const CONTACT_LINES: Record<"en" | "pl" | "mx", readonly string[]> = {
   mx: [
@@ -49,7 +48,7 @@ const CONTACT_LINES: Record<"en" | "pl" | "mx", readonly string[]> = {
     "+52 55 4910 0921 · lorena.gonzalez@neosleepcare.com",
     "WTC, Calle Montecito 38, Col. Nápoles, Piso 26, Oficina 8, Ciudad de México",
   ],
-  pl: ["NeoSleep", "info@neosleepcare.com", "[PLACEHOLDER: zarejestrowany adres siedziby]"],
+  pl: ["NeoSleep", "info@neosleepcare.com", "Łąkowa 3, 77-127 Nakla, Polska"],
   en: ["NeoSleep", "info@neosleepcare.com"],
 };
 
@@ -66,12 +65,20 @@ function getContactLines(locale: string | null | undefined): readonly string[] {
  * unconfirmed facts flagged in apps/web/src/config/websiteContent.ts's
  * legalConfig — keep both in sync by hand until there's a real source of
  * truth to import from (see that file's own comment for why this can't
- * just be a shared import today).
+ * just be a shared import today). `mx`'s "AJ Management" name was
+ * mentioned by Łukasz but is deliberately kept as a placeholder per his
+ * instruction, pending full legal details (RFC, registered domicile).
  */
 const LEGAL_ENTITY: Record<"en" | "pl" | "mx", { companyName: string; legalEntityName: string }> = {
   en: { companyName: "NeoSleep", legalEntityName: "[PLACEHOLDER: registered legal entity name]" },
-  pl: { companyName: "NeoSleep", legalEntityName: "[PLACEHOLDER: pełna nazwa zarejestrowanej spółki]" },
-  mx: { companyName: "NeoSleep", legalEntityName: "[PLACEHOLDER: razón social registrada]" },
+  pl: {
+    companyName: "NeoSleep",
+    legalEntityName: "Ostrowski Investment spółka z ograniczoną odpowiedzialnością (KRS 0001166320, NIP 8421798790)",
+  },
+  mx: {
+    companyName: "NeoSleep",
+    legalEntityName: "[PLACEHOLDER: razón social registrada — AJ Management, pendiente de confirmación completa]",
+  },
 };
 
 function getLegalEntityParams(locale: string | null | undefined): Record<string, string> {
