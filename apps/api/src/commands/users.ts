@@ -15,7 +15,7 @@ import {
 } from "../db.js";
 import { insertAuditLog } from "../db.js";
 import { assertTerritoryAccess } from "../middleware/requireScope.js";
-import { ConflictError, NotFoundError, ValidationError } from "../errors.js";
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../errors.js";
 import { hashToken } from "../utils/hashToken.js";
 import { sendPasswordResetEmail } from "../mailer.js";
 
@@ -29,7 +29,10 @@ import { sendPasswordResetEmail } from "../mailer.js";
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // 'doctor' deliberately excluded: doctor-role users are only ever created via
 // InvitePractitionerCommand (partner invite) or the HCP "training finished"
-// activation flow — never through manual user creation.
+// activation flow — never through manual user creation, and never set as a
+// *new* value on CreateUserCommand/UpdateUserCommand (see below). An
+// existing doctor user's unchanged role is allowed to round-trip through
+// UpdateUserCommand — this list only gates role being newly assigned.
 const VALID_ROLES: StaffRole[] = ["admin", "manager", "kam", "msl", "rep"];
 const BCRYPT_ROUNDS = 12;
 
@@ -73,6 +76,9 @@ export async function CreateUserCommand(ctx: TenantContext, input: CreateUserInp
   if (!email || !EMAIL_REGEX.test(email)) throw new ValidationError("A valid email is required");
   if (input.role && !VALID_ROLES.includes(input.role)) {
     throw new ValidationError(`role must be one of: ${VALID_ROLES.join(", ")}`);
+  }
+  if (input.role && input.role !== "rep" && ctx.user.role !== "admin") {
+    throw new ForbiddenError("Only admin can set a user's role");
   }
   if (input.territory_id) await assertValidScopeKind(ctx, input.territory_id);
 
@@ -123,14 +129,25 @@ export async function UpdateUserCommand(
   if (input.status && !["active", "inactive", "suspended"].includes(input.status)) {
     throw new ValidationError("Invalid status");
   }
-  if (input.role && !VALID_ROLES.includes(input.role)) {
-    throw new ValidationError(`role must be one of: ${VALID_ROLES.join(", ")}`);
-  }
   if (input.territory_id) await assertValidScopeKind(ctx, input.territory_id);
 
   const target = await getUserById(ctx.client, id);
   if (!target) return null;
   await assertTerritoryAccess(ctx, target.country_code);
+
+  // Only validate/authorize `role` when it's actually changing — an
+  // unchanged doctor/kam/msl value must round-trip through an edit of
+  // unrelated fields (territory, status, ...) without failing VALID_ROLES,
+  // which deliberately excludes 'doctor' (ADR-014: doctor accounts are only
+  // ever provisioned via InvitePractitionerCommand's GDPR-consent flow).
+  if (input.role !== undefined && input.role !== target.role) {
+    if (ctx.user.role !== "admin") {
+      throw new ForbiddenError("Only admin can change a user's role");
+    }
+    if (!VALID_ROLES.includes(input.role)) {
+      throw new ValidationError(`role must be one of: ${VALID_ROLES.join(", ")}`);
+    }
+  }
 
   const before = await updateUser(ctx.client, id, input, ctx.user.id);
   if (!before) return null;
