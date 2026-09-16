@@ -44,10 +44,12 @@ function fakeJwt(expiresInSeconds: number): string {
 }
 
 function tokenFor(role: "admin" | "rep"): string {
-  return signAuthToken(
-    { id: crypto.randomUUID(), email: `qa-txn-log-${uniqueSuffix()}@neosleepcare.com`, role, token_version: 0 },
-    { rememberMe: false }
-  );
+  return signAuthToken({
+    id: crypto.randomUUID(),
+    email: `qa-txn-log-${uniqueSuffix()}@neosleepcare.com`,
+    role,
+    token_version: 0,
+  });
 }
 
 async function buildTestContext(client: Parameters<typeof CreatePatientCommand>[0]["client"]): Promise<TenantContext> {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import jwt from "jsonwebtoken";
-import { signAuthToken, verifyAuthToken, getBearerToken, getOptionalUser } from "./jwt.js";
+import { signAuthToken, verifyAuthToken, getBearerToken, getOptionalUser, refreshTokenExpiryDate } from "./jwt.js";
 import { JWT_SECRET } from "../env.js";
 import type { Request } from "express";
 
@@ -21,7 +21,7 @@ function reqWithAuthHeader(header?: string): Request {
 
 describe("signAuthToken / verifyAuthToken", () => {
   it("round-trips the payload", () => {
-    const token = signAuthToken(BASE_USER, { rememberMe: false });
+    const token = signAuthToken(BASE_USER);
     const decoded = verifyAuthToken(token);
     expect(decoded.sub).toBe(BASE_USER.id);
     expect(decoded.email).toBe(BASE_USER.email);
@@ -29,20 +29,14 @@ describe("signAuthToken / verifyAuthToken", () => {
     expect(decoded.tokenVersion).toBe(0);
   });
 
-  it("expires in ~7 days without remember me", () => {
-    const token = signAuthToken(BASE_USER, { rememberMe: false });
+  // ADR-020: the access token is always short-lived — session longevity now lives
+  // entirely in the refresh token (see refreshTokenExpiryDate below), not here.
+  it("expires in ~15 minutes regardless of remember-me", () => {
+    const token = signAuthToken(BASE_USER);
     const decoded = verifyAuthToken(token);
-    const deltaDays = (decoded.exp - decoded.iat) / (60 * 60 * 24);
-    expect(deltaDays).toBeGreaterThan(6.9);
-    expect(deltaDays).toBeLessThan(7.1);
-  });
-
-  it("expires in ~30 days with remember me", () => {
-    const token = signAuthToken(BASE_USER, { rememberMe: true });
-    const decoded = verifyAuthToken(token);
-    const deltaDays = (decoded.exp - decoded.iat) / (60 * 60 * 24);
-    expect(deltaDays).toBeGreaterThan(29.9);
-    expect(deltaDays).toBeLessThan(30.1);
+    const deltaMinutes = (decoded.exp - decoded.iat) / 60;
+    expect(deltaMinutes).toBeGreaterThan(14.5);
+    expect(deltaMinutes).toBeLessThan(15.5);
   });
 
   it("rejects an expired token", () => {
@@ -90,7 +84,7 @@ describe("getBearerToken", () => {
 
 describe("getOptionalUser", () => {
   it("returns the decoded payload for a valid token", () => {
-    const token = signAuthToken(BASE_USER, { rememberMe: false });
+    const token = signAuthToken(BASE_USER);
     const user = getOptionalUser(reqWithAuthHeader(`Bearer ${token}`));
     expect(user?.sub).toBe(BASE_USER.id);
   });
@@ -98,5 +92,21 @@ describe("getOptionalUser", () => {
   it("returns null (never throws) for a missing or invalid token", () => {
     expect(getOptionalUser(reqWithAuthHeader())).toBeNull();
     expect(getOptionalUser(reqWithAuthHeader("Bearer not-a-real-token"))).toBeNull();
+  });
+});
+
+describe("refreshTokenExpiryDate", () => {
+  it("is ~7 days out without remember-me", () => {
+    const expiry = refreshTokenExpiryDate(false);
+    const deltaDays = (expiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+    expect(deltaDays).toBeGreaterThan(6.9);
+    expect(deltaDays).toBeLessThan(7.1);
+  });
+
+  it("is ~30 days out with remember-me", () => {
+    const expiry = refreshTokenExpiryDate(true);
+    const deltaDays = (expiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+    expect(deltaDays).toBeGreaterThan(29.9);
+    expect(deltaDays).toBeLessThan(30.1);
   });
 });

@@ -5,6 +5,7 @@ import {
   type GetLeadsFilters,
   type Lead,
 } from "../db.js";
+import { getAllowedCountryCodes, assertScopeAccess } from "../middleware/requireScope.js";
 
 /**
  * QUERIES — Lead domain.
@@ -97,6 +98,7 @@ export async function GetLeadListQuery(
     region:                    input.region,
     hideCompletedOlderThan24h: ctx.user.role !== "admin",
     hideDeclined:              ctx.user.role !== "admin",
+    countryCodes:              getAllowedCountryCodes(ctx.user.roles),
   };
 
   const page      = input.page ?? 1;
@@ -124,6 +126,7 @@ export async function GetLeadByIdQuery(
   // 'declined' leads are admin-only visibility — treat as not-found for
   // everyone else, same as the list query's hideDeclined filter.
   if (lead.status === "declined" && ctx.user.role !== "admin") return null;
+  assertScopeAccess(ctx, lead.country_code);
   return toDto(lead);
 }
 

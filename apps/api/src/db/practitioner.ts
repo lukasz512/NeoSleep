@@ -35,6 +35,8 @@ export interface GetPractitionerFilters {
   specialty?: string | string[];
   institution?: string | string[];
   region?: string | string[];
+  /** RBAC scope filter (see middleware/requireScope.ts): null = unrestricted, [] = matches nothing, otherwise restrict to these country_codes. */
+  countryCodes?: string[] | null;
 }
 
 export interface InsertPractitionerInput {
@@ -149,6 +151,11 @@ export async function getPractitionerPaginated(
   if (regionArr.length > 0) {
     conditions.push(`i.region = ANY($${paramIndex}::text[])`);
     params.push(regionArr);
+    paramIndex++;
+  }
+  if (filters.countryCodes !== undefined && filters.countryCodes !== null) {
+    conditions.push(`i.country_code = ANY($${paramIndex}::text[])`);
+    params.push(filters.countryCodes);
     paramIndex++;
   }
 

@@ -37,19 +37,24 @@ describe("leadFormFields", () => {
     expect(typeof diagnosis.default).toBe("function");
   });
 
-  it("status and region are hidden (silently defaulted, not shown as controls)", () => {
+  it("status, region, and country_code are hidden (silently defaulted, not shown as controls)", () => {
     const status = leadFormFields.find((f) => f.key === "status")!;
     const region = leadFormFields.find((f) => f.key === "region")!;
+    const countryCode = leadFormFields.find((f) => f.key === "country_code")!;
     expect(isHidden(status)).toBe(true);
     expect(isHidden(region)).toBe(true);
+    expect(isHidden(countryCode)).toBe(true);
     expect(status.default).toBe("new");
     expect(typeof region.default).toBe("function");
+    // ADR-020's region-scoping fix (middleware/requireScope.ts) needs this
+    // populated on every lead — same hidden-default pattern as region above.
+    expect(typeof countryCode.default).toBe("function");
   });
 
-  it("exposes only Identity + institution + diagnosis + hidden status/region/type — nothing else", () => {
+  it("exposes only Identity + institution + diagnosis + hidden status/region/country_code/type — nothing else", () => {
     expect(leadFormFields.map((f) => f.key)).toEqual([
       "salutation", "first_name", "last_name", "email", "phone",
-      "institution", "diagnosis", "type", "status", "region",
+      "institution", "diagnosis", "type", "status", "region", "country_code",
     ]);
   });
 });

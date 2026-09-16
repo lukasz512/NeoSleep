@@ -7,6 +7,7 @@ import {
   type Patient,
   type TerritoryPathNode,
 } from "../db.js";
+import { getAllowedCountryCodes, assertScopeAccess } from "../middleware/requireScope.js";
 
 /**
  * QUERIES — Patient domain.
@@ -98,6 +99,7 @@ export async function GetPatientListQuery(
     search: input.search,
     status: input.status,
     region: input.region,
+    countryCodes: getAllowedCountryCodes(ctx.user.roles),
   };
 
   const page      = input.page ?? 1;
@@ -119,6 +121,7 @@ export async function GetPatientByIdQuery(
 ): Promise<PatientDto | null> {
   const patient = await getPatientById(ctx.client, id);
   if (!patient) return null;
+  assertScopeAccess(ctx, patient.country_code);
   const territoryPath = patient.territory_id ? await getTerritoryPath(ctx.client, patient.territory_id) : null;
   return toDto(patient, territoryPath);
 }
