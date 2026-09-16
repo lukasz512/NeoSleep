@@ -33,6 +33,15 @@ async function seedTerritory(): Promise<void> {
   const client = new Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
   try {
+    // The `||` operator on ltree values is resolved via search_path just
+    // like a function call would be, even when both operands are already
+    // schema-qualified as extensions.ltree — same class of issue db/tenant.ts's
+    // withTenant() already works around, but this script opens its own plain
+    // pg.Client rather than going through withTenant(). Supabase's database-
+    // level default search_path happens to include `extensions` already,
+    // masking this locally; a fresh CI Postgres (postgres:15 service
+    // container) does not, so this failed there without it.
+    await client.query("SET search_path TO public, extensions");
     await client.query("BEGIN");
     let { rows } = await client.query<{ id: string }>(`SELECT id FROM test.territory WHERE kind = 'global' LIMIT 1`);
     let globalId = rows[0]?.id;
