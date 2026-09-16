@@ -67,3 +67,22 @@ export async function markInviteTokenUsed(client: PoolClient, id: string): Promi
     throw new DatabaseError("markInviteTokenUsed", err);
   }
 }
+
+/**
+ * Invalidates every still-unexpired, unused invite token for a user —
+ * called right before minting a fresh one on resend, so at most one live
+ * token ever exists per user (see ActivatePractitionerCommand). Not the
+ * same as "used" in the accepted sense, but reuses used_at rather than a
+ * separate revoked_at column: getInviteTokenByHash's WHERE used_at IS NULL
+ * already treats either case identically (a stopped-being-valid token).
+ */
+export async function invalidateUnusedInviteTokensForUser(client: PoolClient, userId: string): Promise<void> {
+  try {
+    await client.query(
+      `UPDATE invite_tokens SET used_at = now() WHERE user_id = $1 AND used_at IS NULL AND expires_at > now()`,
+      [userId]
+    );
+  } catch (err) {
+    throw new DatabaseError("invalidateUnusedInviteTokensForUser", err);
+  }
+}

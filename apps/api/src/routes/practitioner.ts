@@ -190,7 +190,11 @@ practitionerRouter.patch(
 
 // ---------------------------------------------------------------------------
 // POST /api/v1/practitioner/:id/activate — "training/capacitation finished":
-// pending_approval -> active, provisions the linked doctor-role user account
+// pending_approval|invited -> invited, provisions the linked doctor-role user
+// account (or reuses one already provisioned) and sends/resends the "set
+// your password" invite email. This IS the resend action too — see
+// ActivatePractitionerCommand's own doc comment and
+// docs/stories/practitioner-invite-resend.md.
 // ---------------------------------------------------------------------------
 practitionerRouter.post(
   "/practitioner/:id/activate",

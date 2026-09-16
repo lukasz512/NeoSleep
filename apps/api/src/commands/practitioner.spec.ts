@@ -1,6 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import bcrypt from "bcrypt";
-import { withTenant, insertStaffUser, getGlobalTerritoryId, getCountryTerritoryId, insertPractitioner, getUserIdByEmail, getUserRoleScopes } from "../db.js";
+import {
+  withTenant,
+  insertStaffUser,
+  getGlobalTerritoryId,
+  getCountryTerritoryId,
+  insertPractitioner,
+  getUserIdByEmail,
+  getUserRoleScopes,
+  getInviteTokenByHash,
+  updatePractitionerStatus,
+} from "../db.js";
+import { hashToken } from "../utils/hashToken.js";
 import type { TenantContext } from "../context/TenantContext.js";
 import { ConflictError, ValidationError } from "../errors.js";
 import { CreatePractitionerCommand, ActivatePractitionerCommand, UpdatePractitionerCommand } from "./practitioner.js";
@@ -63,13 +74,45 @@ describe("ActivatePractitionerCommand", () => {
 
       const result = await ActivatePractitionerCommand(ctx, practitioner.id);
 
-      expect(result?.status).toBe("active");
+      // Not "active" — that now only happens once the doctor actually
+      // completes registration via AcceptPractitionerInviteCommand (see
+      // docs/stories/practitioner-invite-resend.md). Activate/Resend only
+      // ever gets the practitioner as far as "invited".
+      expect(result?.status).toBe("invited");
       expect(sendPartnerInviteEmailMock).toHaveBeenCalledTimes(1);
       const [to, , , sender] = sendPartnerInviteEmailMock.mock.calls[0]!;
       expect(to).toBe(practitionerEmail);
       expect(sender).toEqual({ name: "NeoSleep", email: ctx.user.email });
     });
   }, 15000);
+
+  it("resend (calling Activate again while still 'invited') mints a fresh token, invalidates the previous one, and sends another email", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const practitionerEmail = `qa-hcp-${uniqueSuffix()}@example.com`;
+      const practitioner = await CreatePractitionerCommand(ctx, {
+        first_name: "Resend",
+        last_name: "Case",
+        email: practitionerEmail,
+        phone: "600100200",
+      });
+
+      const first = await ActivatePractitionerCommand(ctx, practitioner.id);
+      expect(first?.status).toBe("invited");
+      const second = await ActivatePractitionerCommand(ctx, practitioner.id);
+      expect(second?.status).toBe("invited");
+
+      expect(sendPartnerInviteEmailMock).toHaveBeenCalledTimes(2);
+      const firstToken = new URL(sendPartnerInviteEmailMock.mock.calls[0]![1] as string).searchParams.get("token")!;
+      const secondToken = new URL(sendPartnerInviteEmailMock.mock.calls[1]![1] as string).searchParams.get("token")!;
+      expect(secondToken).not.toBe(firstToken);
+
+      // The first email's link must no longer work — resend invalidates it,
+      // not just leaves it to expire 7 days later alongside a second valid one.
+      expect(await getInviteTokenByHash(client, hashToken(firstToken))).toBeNull();
+      expect(await getInviteTokenByHash(client, hashToken(secondToken))).not.toBeNull();
+    });
+  }, 20000);
 
   it("returns null for a non-existent practitioner and never calls the mailer", async () => {
     await withTenant(TENANT_SLUG, async (client) => {
@@ -82,7 +125,7 @@ describe("ActivatePractitionerCommand", () => {
     });
   });
 
-  it("throws ConflictError when the practitioner is already active", async () => {
+  it("throws ConflictError when the practitioner is already active (doctor actually completed registration)", async () => {
     await withTenant(TENANT_SLUG, async (client) => {
       const ctx = await buildTestContext(client);
       const practitioner = await CreatePractitionerCommand(ctx, {
@@ -91,8 +134,30 @@ describe("ActivatePractitionerCommand", () => {
         email: `qa-hcp-${uniqueSuffix()}@example.com`,
         phone: "600100200",
       });
-      await ActivatePractitionerCommand(ctx, practitioner.id);
+      // Simulate the doctor having actually finished registration (the real
+      // trigger is AcceptPractitionerInviteCommand, exercised end-to-end in
+      // invitePractitioner.spec.ts — forcing the status directly here keeps
+      // this test focused on ActivatePractitionerCommand's own guard, same
+      // "insert directly to reach a state the command flow itself can't
+      // produce" precedent as the no-email test below).
+      await updatePractitionerStatus(client, practitioner.id, "active");
       sendPartnerInviteEmailMock.mockClear();
+
+      await expect(ActivatePractitionerCommand(ctx, practitioner.id)).rejects.toThrow(ConflictError);
+      expect(sendPartnerInviteEmailMock).not.toHaveBeenCalled();
+    });
+  }, 15000);
+
+  it("throws ConflictError when the practitioner has been manually deactivated", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const practitioner = await CreatePractitionerCommand(ctx, {
+        first_name: "Manually",
+        last_name: "Deactivated",
+        email: `qa-hcp-${uniqueSuffix()}@example.com`,
+        phone: "600100200",
+      });
+      await updatePractitionerStatus(client, practitioner.id, "inactive");
 
       await expect(ActivatePractitionerCommand(ctx, practitioner.id)).rejects.toThrow(ConflictError);
       expect(sendPartnerInviteEmailMock).not.toHaveBeenCalled();
@@ -146,16 +211,21 @@ describe("ActivatePractitionerCommand", () => {
     });
   }, 15000);
 
-  it("does not re-provision a user or resend the invite when one already exists for this identity", async () => {
+  it("reuses an existing users account (does not re-provision a duplicate) but still sends the invite, since the practitioner itself isn't active/inactive yet", async () => {
     await withTenant(TENANT_SLUG, async (client) => {
       const ctx = await buildTestContext(client);
       const email = `qa-hcp-${uniqueSuffix()}@example.com`;
 
       // Pre-existing account for this email, unrelated to this practitioner
-      // record — mirrors a doctor who's already a live platform user before
-      // this HCP row's own training is (re-)marked finished.
+      // record — mirrors a doctor who already has a login (e.g. from a
+      // different practitioner record sharing the same email) before this
+      // HCP row is activated. insertStaffUser would throw a unique-email
+      // conflict if the command incorrectly tried to create a second one —
+      // that's the real regression this test guards against now, not
+      // whether an email gets sent (it should: this practitioner's own
+      // status is still "pending_approval", so nothing blocks it).
       const hash = await bcrypt.hash("irrelevant", 4);
-      await insertStaffUser(client, email, "Existing", "Doctor", "doctor", hash, false);
+      const existingUser = await insertStaffUser(client, email, "Existing", "Doctor", "doctor", hash, false);
 
       const practitioner = await CreatePractitionerCommand(ctx, {
         first_name: "Existing",
@@ -164,9 +234,11 @@ describe("ActivatePractitionerCommand", () => {
         phone: "600100200",
       });
 
-      await ActivatePractitionerCommand(ctx, practitioner.id);
+      const result = await ActivatePractitionerCommand(ctx, practitioner.id);
 
-      expect(sendPartnerInviteEmailMock).not.toHaveBeenCalled();
+      expect(result?.status).toBe("invited");
+      expect(sendPartnerInviteEmailMock).toHaveBeenCalledTimes(1);
+      expect(await getUserIdByEmail(client, email)).toBe(existingUser!.id);
     });
   }, 15000);
 });
