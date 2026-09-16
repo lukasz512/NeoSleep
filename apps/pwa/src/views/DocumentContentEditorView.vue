@@ -97,6 +97,7 @@
                 </span>
                 <span class="doc-editor__history-by">{{ t("user.document-content.editor.history.by", { name: v.created_by_name }) }}</span>
                 <span class="doc-editor__history-date">{{ formatDate(v.created_at) }}</span>
+                <span v-if="v.change_note" class="doc-editor__history-note">{{ v.change_note }}</span>
               </li>
             </ul>
             <p v-else class="doc-editor__history-empty">{{ t("user.document-content.editor.history.empty") }}</p>
@@ -132,6 +133,7 @@ interface DocumentContentVersion {
   is_current: boolean;
   created_by_name: string;
   created_at: string;
+  change_note: string | null;
 }
 
 const { t, locale: appLocale } = useI18n();
@@ -380,6 +382,12 @@ async function onSave(): Promise<void> {
 
 .doc-editor__history-by,
 .doc-editor__history-date {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+.doc-editor__history-note {
+  margin-top: 2px;
+  font-style: italic;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 

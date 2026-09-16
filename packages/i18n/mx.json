@@ -1352,7 +1352,7 @@
   "app.treatmentPlans.deleteError": "No se pudo ocultar la solicitud",
   "app.orthoApneaOrder.validation.mrMpOutOfRange": "La máxima retrusión y protrusión deben estar entre -20 y 20 mm.",
   "user.document-content.title": "Documentos",
-  "user.document-content.subtitle": "Edita el texto de los documentos legales y clínicos generados",
+  "user.document-content-detail.title": "Documento",
   "user.document-content.errorLoad": "No se pudieron cargar los documentos",
   "user.document-content.table.document": "Documento",
   "user.document-content.table.locale": "Idioma",
