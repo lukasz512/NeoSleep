@@ -16,12 +16,24 @@ export interface DocumentManifestEntry {
   locales: readonly Locale[];
   /** Human-readable label for the admin picker UI. */
   label: string;
+  /**
+   * True only for the test-fixture entry below. isKnownDocument() still
+   * validates against it (so integration tests can exercise the real
+   * save/read command+route path end-to-end without touching a real
+   * document's rows — platform.document_content_version isn't
+   * tenant-isolated the way the rest of this test DB is, see
+   * apps/api/src/commands/documentContent.spec.ts's own comment), but a
+   * hidden entry must never appear in the real admin picker list — see
+   * GetDocumentContentIndexQuery's own filter.
+   */
+  hidden?: boolean;
 }
 
 export const DOCUMENT_MANIFEST: readonly DocumentManifestEntry[] = [
   { templateKey: "informedConsent", locales: ["en", "pl", "mx"], label: "Patient Informed Consent (MAD)" },
   { templateKey: "gdprConsent.pl", locales: ["pl"], label: "Doctor Data Protection Consent — Poland (GDPR)" },
   { templateKey: "gdprConsent.mx", locales: ["mx"], label: "Doctor Data Protection Consent — Mexico (LFPDPPP)" },
+  { templateKey: "__test", locales: ["en", "pl", "mx"], label: "TEST FIXTURE — never shown, never real content", hidden: true },
 ];
 
 export function isKnownDocument(templateKey: string, locale: string): boolean {

@@ -65,4 +65,16 @@ describe("renderDocumentHtml", () => {
     expect(html).toContain("Administrator: Ostrowski Investment spółka z ograniczoną odpowiedzialnością");
     expect(html).toContain("(NeoSleep)");
   });
+
+  it(
+    "SAFETY-CRITICAL: throws instead of silently splicing into the wrong occurrence when a template " +
+      "mentions the literal {{content}} string more than once — the exact mistake already made once " +
+      "(a doc comment naming the token literally) and caught only by manual PDF inspection, not by " +
+      "any automated check, before this guard existed",
+    () => {
+      expect(() => renderDocumentHtml("__test_fixture_duplicate_content", "en", "<p>real content</p>")).toThrow(
+        /expected exactly one/
+      );
+    }
+  );
 });

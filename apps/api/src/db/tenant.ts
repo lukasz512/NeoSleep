@@ -64,6 +64,42 @@ export async function withTenant<T>(
 }
 
 /**
+ * Executes fn inside a transaction against the shared `platform` schema —
+ * no SET LOCAL search_path (platform tables are always accessed fully
+ * schema-qualified, e.g. `platform.document_content_version`, never added
+ * to any connection's search_path — see db/lookup.ts's platform.lookups
+ * reads for the existing read-side precedent, and db/diagnostic.ts's
+ * getDb().query() for the existing single-statement write precedent).
+ * This is the multi-statement equivalent of those: a genuine transaction
+ * (BEGIN/COMMIT/ROLLBACK) for callers that need more than one platform-schema
+ * statement to succeed or fail together — e.g. document_content_version's
+ * "flip the old is_current row to false, then insert the new current row"
+ * (apps/api/src/db/documentContent.ts). Mirrors withTenant()'s own
+ * release-vs-destroy-on-rollback-failure discipline for the same reason
+ * documented there.
+ */
+export async function withPlatform<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
+  const client = await getDb().connect();
+  try {
+    await client.query("BEGIN");
+    const result = await fn(client);
+    await client.query("COMMIT");
+    client.release();
+    return result;
+  } catch (err) {
+    let rollbackFailed = false;
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      rollbackFailed = true;
+    }
+    client.release(rollbackFailed);
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("withPlatform", err);
+  }
+}
+
+/**
  * Tenant is chosen at login via a picker, not by subdomain (ADR-002) — there is
  * no hostname convention this can reliably parse. Any 3-label host (Render's
  * own <service>.onrender.com, or a future api.neosleepcare.com) would otherwise

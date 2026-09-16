@@ -105,29 +105,43 @@ export function fillContentParams(contentHtml: string, params: Record<string, st
 }
 
 let cachedLogoSvg: string | null = null;
+let cachedIconSvg: string | null = null;
+
+function loadBrandSvg(filename: string): string {
+  const raw = fs.readFileSync(path.join(ASSETS_DIR, filename), "utf-8");
+  // Strip the XML declaration (invalid outside a standalone XML document —
+  // browsers can choke on it mid-page) and any exporter-generated <!--
+  // comments --> inside the SVG (e.g. "Generator: Adobe Illustrator...")
+  // before this gets string-inlined into an HTML template: an un-stripped
+  // inner comment can prematurely close whatever outer HTML comment this
+  // token happens to be substituted inside of, silently corrupting the
+  // rest of the document. Trim() removes the blank line stripping the XML
+  // declaration leaves behind.
+  return raw
+    .replace(/<\?xml[^>]*\?>/, "")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .trim();
+}
 
 function getBrandLogoSvg(): string {
-  if (cachedLogoSvg === null) {
-    const raw = fs.readFileSync(path.join(ASSETS_DIR, "logo_light.svg"), "utf-8");
-    // Strip the XML declaration (invalid outside a standalone XML document —
-    // browsers can choke on it mid-page) and any exporter-generated <!--
-    // comments --> inside the SVG (e.g. "Generator: Adobe Illustrator...")
-    // before this gets string-inlined into an HTML template: an un-stripped
-    // inner comment can prematurely close whatever outer HTML comment this
-    // token happens to be substituted inside of, silently corrupting the
-    // rest of the document. Trim() removes the blank line stripping the XML
-    // declaration leaves behind.
-    cachedLogoSvg = raw
-      .replace(/<\?xml[^>]*\?>/, "")
-      .replace(/<!--[\s\S]*?-->/g, "")
-      .trim();
-  }
+  if (cachedLogoSvg === null) cachedLogoSvg = loadBrandSvg("logo_light.svg");
   return cachedLogoSvg;
+}
+
+/** The compact icon-only mark (no wordmark) — used where space is narrow, e.g. the footer's third column, where the full logo_light.svg wordmark is too wide and overlaps neighboring content. */
+function getBrandIconSvg(): string {
+  if (cachedIconSvg === null) cachedIconSvg = loadBrandSvg("icon_light.svg");
+  return cachedIconSvg;
 }
 
 /** Same cached SVG as getBrandLogoSvg(), with an explicit height forced onto the <svg> root so it scales correctly wherever it's inlined (the source file has a viewBox but no width/height attributes, which browsers size inconsistently by default). */
 function getBrandLogoSvgAtHeight(heightPx: number): string {
   return getBrandLogoSvg().replace("<svg ", `<svg style="height:${heightPx}px;width:auto;display:block;" `);
+}
+
+/** Same purpose as getBrandLogoSvgAtHeight, for the icon-only mark. */
+function getBrandIconSvgAtHeight(heightPx: number): string {
+  return getBrandIconSvg().replace("<svg ", `<svg style="height:${heightPx}px;width:auto;display:block;" `);
 }
 
 function loadTemplate(name: string): string {
@@ -196,19 +210,39 @@ export function renderDocumentHtml(templateName: string, locale: string | null |
   const html = fillStaticTokens(loadTemplate(templateName), locale);
   if (contentHtml === undefined) return html;
   const filledContent = fillContentParams(contentHtml, getLegalEntityParams(locale));
+  // Guards the exact mistake this splice is designed to prevent: a template
+  // author mentioning the literal "{{content}}" string a second time (e.g.
+  // in a doc comment describing the slot) would make String.replace()
+  // silently fill the FIRST occurrence it finds — which may not be the real
+  // slot — and leave the actual .doc-content div showing raw "{{content}}"
+  // text. Caught exactly this way once already; fail loudly instead of
+  // silently mis-splicing.
+  const occurrences = html.split("{{content}}").length - 1;
+  if (occurrences !== 1) {
+    throw new Error(
+      `renderDocumentHtml: expected exactly one "{{content}}" slot in template "${templateName}", found ${occurrences}`
+    );
+  }
   return html.replace("{{content}}", filledContent);
 }
 
 /** Muted gray for the footer specifically — distinct from BRAND.secondary (used for body labels/borders, too dark to read as a footer-quiet tone). Puppeteer's footerTemplate renders in its own isolated frame with no access to the main page's stylesheet/CSS variables, so this has to be a literal inline value, not var(--secondary). */
 const FOOTER_TEXT_COLOR = "#8A8A89";
 
+/** Thin separator line above the footer — deliberately lighter than FOOTER_TEXT_COLOR (that's tuned for readable small text, this just needs to be a faint rule). Same isolated-frame constraint as FOOTER_TEXT_COLOR applies (literal value, not a CSS var). */
+const FOOTER_BORDER_COLOR = "#DADADA";
+
 /**
  * Puppeteer page.pdf()'s footerTemplate option is the only reliable way to
  * repeat a footer on every page (CSS repeated-per-page footers aren't
  * consistent across browsers, see the informedConsent template's own header
- * comment) — this builds that footer HTML. Two-column layout: contact block
- * on the left (~2/3 width), small logo + doc-ref/page count on the right
- * (~1/3 width). "documents.common.page" carries just the localized word
+ * comment) — this builds that footer HTML. Three-column layout (~2:9:1,
+ * confirmed by Łukasz 2026-09-16): doc-ref code + page count on the left
+ * (narrow), the contact block right-aligned in the middle (wide), the
+ * icon-only brand mark (not the full wordmark — too wide for this column,
+ * see getBrandIconSvg) on the right, sized to span the contact block's own
+ * 3-line height.
+ * "documents.common.page" carries just the localized word
  * ("Page"/"Página"/"Strona"); pageNumber/totalPages are Puppeteer's own
  * placeholder classes, filled in by Chrome itself.
  */
@@ -217,12 +251,10 @@ export function renderDocumentFooterHtml(docRefCode: string, locale: string | nu
   const contactLinesHtml = getContactLines(locale)
     .map((line) => `<div>${line}</div>`)
     .join("");
-  return `<div style="display:flex;justify-content:space-between;align-items:flex-start;width:100%;box-sizing:border-box;padding:0 15mm;font-family:Arial,sans-serif;font-size:7.5pt;color:${FOOTER_TEXT_COLOR};line-height:1.5;">
-    <div style="width:66%;">${contactLinesHtml}</div>
-    <div style="width:34%;text-align:right;">
-      <div style="display:flex;justify-content:flex-end;margin-bottom:2px;">${getBrandLogoSvgAtHeight(10)}</div>
-      <div>${docRefCode} · ${pageWord} <span class="pageNumber"></span> / <span class="totalPages"></span></div>
-    </div>
+  return `<div style="display:flex;justify-content:space-between;align-items:center;width:100%;box-sizing:border-box;padding:6px 15mm 0;border-top:1px solid ${FOOTER_BORDER_COLOR};font-family:Arial,sans-serif;font-size:7.5pt;color:${FOOTER_TEXT_COLOR};line-height:1.5;">
+    <div style="width:16.66%;">${docRefCode} · ${pageWord} <span class="pageNumber"></span> / <span class="totalPages"></span></div>
+    <div style="width:75%;text-align:right;">${contactLinesHtml}</div>
+    <div style="width:8.33%;display:flex;justify-content:flex-end;align-items:center;">${getBrandIconSvgAtHeight(32)}</div>
   </div>`;
 }
 
