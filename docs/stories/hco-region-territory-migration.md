@@ -15,12 +15,19 @@
 
 ### Acceptance Criteria
 - [x] `apps/api/migrations/026_organization_territory_backfill.sql` added, run against dev DB, verified idempotent (0 organizations with a real `region` value and no `territory_id` afterward, in both `neosleep` and `fourseasons` schemas).
-- [x] `apps/pwa/src/config/forms/hcoForm.ts`: `region` field and its now-unused `loadRegionOptions()` loader removed; `territory_id` widened from `cols: 6` to `cols: 12` (it no longer shares a row with `region`).
+- [x] `apps/pwa/src/config/forms/hcoForm.ts`: `region` field and its now-unused `loadRegionOptions()` loader removed.
 - [x] `apps/pwa/src/config/forms/hcoForm.spec.ts` updated to match (new field-order assertion, new explicit "no region field" test).
 - [x] `pnpm --filter @neo/pwa lint/typecheck/test` and `pnpm depcruise` all clean (pre-existing warnings only).
 
+### Follow-up round (same day, after local testing on this branch)
+Łukasz tested this branch on localhost and asked for three more adjustments to the same edit form, plus flagged a real mobile-layout gap:
+- [x] `territory_id`'s `hint` text (`app.patients.form.territoryHint`) removed — it read as a leftover, out-of-context description once `region` was gone.
+- [x] Field pairing changed to match his explicit layout ask: `type`+`specialties` now share a row (`cols: 6` each, `specialties` was `12`), and `state`+`territory_id` now share a row (`territory_id` moved next to `state`, both `cols: 6`).
+- [x] **Mobile responsive gap, app-wide, not HCO-specific**: `FormRenderer.vue`'s paired (`cols: 6`) fields used a hardcoded flex ratio (`rowItemStyle()`) with no breakpoint — on a narrow screen they'd just squeeze side by side instead of stacking. Fixed once, shared: `rowItemStyle()` now sets a `--pwa-form-col` custom property instead of `flex` directly (an inline `style.flex` would otherwise always beat a stylesheet media query regardless of specificity); `theme.scss`'s new `.pwa-form-row-item.pwa-form-col` rule stacks to full width below 600px (same breakpoint `HCODetailView.vue`'s own two-column layout already uses) and only applies the cols ratio at/above it. Deliberately scoped to a new `pwa-form-col` class so `EventForm.vue`'s unrelated use of the same base `.pwa-form-row-item` class (no inline ratio, always was `flex: 1 1 180px`) is untouched.
+- [x] Unblocked by fixing an unrelated pre-existing test flake found via `quality-gate.sh`: `HCPDetailView.spec.ts` never awaited the `FormRenderer` async component's dynamic import (triggered merely by mounting the view, since `<FormRenderer>` is unconditional in the template even with the modal closed) — the import could still be in flight when the test file's environment was torn down, throwing an unhandled `EnvironmentTeardownError` that failed the whole `pnpm test` run despite all 252 assertions passing. Fixed with `await vi.dynamicImportSettled()` after mount. Confirmed unrelated to this branch's own changes (never touched `PhoneField.vue`/`FlagIcon.vue`/this spec file before) and re-ran the suite 3x clean after the fix to rule out a lucky pass on what was a real race condition.
+
 ### Open Questions (tracked separately, not answered here)
-- [ ] Platform-wide `region` retirement (`identities` — users/practitioner/patient/lead — and `encounter`) — its own backlog ticket, needs an ADR given the compliance-sensitive surface it touches.
+- [ ] Platform-wide `region` retirement (`identities` — users/practitioner/patient/lead — and `encounter`) — its own backlog ticket (NEO-31), needs an ADR given the compliance-sensitive surface it touches.
 
 ### Hand-off
 -> None required for this scope. The platform-wide follow-up should reuse this migration's backfill technique (match by `territory.code`) and follow an expand-contract sequence (backfill → switch consumers → deprecate → drop, each its own step) rather than a single combined migration.

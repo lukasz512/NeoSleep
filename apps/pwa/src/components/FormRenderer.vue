@@ -44,7 +44,7 @@
         <VForm ref="formRef" @submit.prevent="onSubmit">
           <template v-for="(row, ri) in rows" :key="ri">
             <div v-if="row.length > 1" class="pwa-form-row mb-3">
-              <div v-for="f in row" :key="f.key" class="pwa-form-row-item" :style="rowItemStyle(f)">
+              <div v-for="f in row" :key="f.key" class="pwa-form-row-item pwa-form-col" :style="rowItemStyle(f)">
                 <component
                   :is="componentFor(f.type)"
                   :ref="(el: unknown) => setFieldEl(f.key, el)"
@@ -299,13 +299,18 @@ const rows = computed(() => {
 });
 
 /**
- * flex-grow ratio, not a literal percentage — flex-basis 0% makes flexbox
- * split the row's free space by the cols ratio directly (6/6 → 50/50,
- * 2/10 → ~17/83), independent of the row's actual pixel width or gap.
+ * Sets --pwa-form-col rather than `flex` directly — theme.scss's
+ * .pwa-form-row-item reads it to build the flex-grow ratio (6/6 → 50/50,
+ * 2/10 → ~17/83, independent of the row's actual pixel width or gap) above
+ * its mobile breakpoint, and ignores it below that breakpoint to stack every
+ * paired field to full width instead. An inline `style.flex` would win over
+ * that media query regardless of specificity (inline always beats a
+ * stylesheet rule short of `!important`), so the ratio has to travel as a
+ * plain custom property instead.
  */
 function rowItemStyle(f: FormFieldDef): Record<string, string> {
   const cols = f.cols ?? 6;
-  return { flex: `${cols} 1 0%`, minWidth: cols <= 2 ? "72px" : "0" };
+  return { "--pwa-form-col": String(cols), minWidth: cols <= 2 ? "72px" : "0" };
 }
 
 const fieldEls: Record<string, unknown> = {};
