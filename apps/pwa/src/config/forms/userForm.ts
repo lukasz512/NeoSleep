@@ -1,6 +1,13 @@
 import type { FormFieldDef } from "../../types/formField";
 import { useConfigStore } from "../../stores/config";
 import { identityFields } from "./identityFields";
+import { loadScopeTerritoryOptions } from "./territoryOptions";
+
+// A user's own RBAC access scope (territory_id field below) is coarse — a
+// country, or everywhere — see requireScope.ts. Not the same field as
+// `region` (that's the person's own location, identities.region, same
+// concept as Patient/HCP's own region — purely descriptive, no
+// access-control meaning).
 
 /**
  * Staff user entity config for the generic FormRenderer (apps/pwa/src/
@@ -63,6 +70,16 @@ export const userFormFields: FormFieldDef[] = [
     type: "autocomplete",
     labelKey: "user.users.form.fieldRegion",
     options: loadRegionOptions,
+    cols: 6,
+  },
+  {
+    key: "territory_id",
+    type: "autocomplete",
+    labelKey: "user.users.form.fieldTerritory",
+    hint: "user.users.form.fieldTerritoryHint",
+    default: null,
+    options: loadScopeTerritoryOptions,
+    icon: "nav-territories",
     cols: 6,
   },
   {

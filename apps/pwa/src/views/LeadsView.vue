@@ -174,7 +174,7 @@ import { patientFormFields } from "../config/forms/patientForm";
 import { partnerInviteFormFields } from "../config/forms/partnerInviteForm";
 import { createPractitionerFromLead } from "../utils/leadConversion";
 import { apiFetch } from "../composables/useApi";
-import { useNotifications } from "../composables/useNotifications";
+import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { type FilterDefinition } from "../composables/useFilters";
 import { useAuthStore } from "../stores/auth";
 import { useConfigStore } from "../stores/config";
@@ -215,7 +215,7 @@ const showInviteModal = ref(false);
 const showEventForm = ref(false);
 const selectedLead = ref<Lead | null>(null);
 const eventFormInitial = ref<{ start_at: string; end_at: string } | undefined>(undefined);
-const notifications = useNotifications();
+const { submit } = useEntitySubmit();
 
 /** Stable reference — see LeadDetailView.vue's identical computed for why an
  *  inline object literal would silently reset FormRenderer's open form. */
@@ -352,23 +352,20 @@ async function onEventFormSubmit(
   payload: import("../components/EventForm.vue").EventSubmitPayload,
   done: (ok: boolean) => void,
 ) {
-  try {
-    const res = await apiFetch("/api/v1/encounter", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: payload.title, start_at: payload.start_at, end_at: payload.end_at, type: payload.type, status: payload.status, location: payload.location, video_link: payload.video_link, notes: payload.notes, region: payload.region, attendees: payload.attendees }),
-    });
-    if (res.ok) {
-      notifications.show(t("user.planner.form.success"), "success");
-      done(true);
-    } else {
-      notifications.show(t("user.planner.form.errorSave"), "error");
-      done(false);
-    }
-  } catch {
-    notifications.show(t("user.planner.form.errorSave"), "error");
-    done(false);
-  }
+  await submit(
+    {
+      request: () =>
+        apiFetch("/api/v1/encounter", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: payload.title, start_at: payload.start_at, end_at: payload.end_at, type: payload.type, status: payload.status, location: payload.location, video_link: payload.video_link, notes: payload.notes, region: payload.region, attendees: payload.attendees }),
+        }),
+      successMessage: t("user.planner.form.success"),
+      errorMessage: t("user.planner.form.errorSave"),
+      refresh: false,
+    },
+    done,
+  );
 }
 
 function onMoveToDoctors(lead: Lead) {
@@ -384,22 +381,19 @@ function onConvertToPatient(lead: Lead) {
 async function onConvertToPatientSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
   const leadId = selectedLead.value?.id;
   if (!leadId) { done(false); return; }
-  try {
-    const res = await apiFetch("/api/v1/patient", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...data, lead_id: leadId }),
-    });
-    if (res.ok) {
-      notifications.show(t("app.patients.form.success"), "success");
-      window.dispatchEvent(new Event("entity-list-refresh"));
-      done(true);
-    } else {
-      done(false);
-    }
-  } catch {
-    done(false);
-  }
+  await submit(
+    {
+      request: () =>
+        apiFetch("/api/v1/patient", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...data, lead_id: leadId }),
+        }),
+      successMessage: t("app.patients.form.success"),
+      errorMessage: t("app.patients.form.errorSave"),
+    },
+    done,
+  );
 }
 
 function onInvitePartner(lead: Lead) {
@@ -410,39 +404,32 @@ function onInvitePartner(lead: Lead) {
 async function onInviteSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
   const leadId = selectedLead.value?.id;
   if (!leadId) { done(false); return; }
-  try {
-    const res = await apiFetch(`/api/v1/lead/${leadId}/invite`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    if (res.ok) {
-      notifications.show(t("user.leads.form.inviteSuccess"), "success");
-      window.dispatchEvent(new Event("entity-list-refresh"));
-      done(true);
-    } else {
-      done(false);
-    }
-  } catch {
-    done(false);
-  }
+  await submit(
+    {
+      request: () =>
+        apiFetch(`/api/v1/lead/${leadId}/invite`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        }),
+      successMessage: t("user.leads.form.inviteSuccess"),
+      errorMessage: t("user.leads.form.inviteError"),
+    },
+    done,
+  );
 }
 
 async function onContactSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
   const leadId = selectedLead.value?.id;
   if (!leadId) { done(false); return; }
-  try {
-    const ok = await createPractitionerFromLead(data, leadId);
-    if (ok) {
-      notifications.show(t("user.hcp.form.contactCreated"), "success");
-      window.dispatchEvent(new Event("entity-list-refresh"));
-      done(true);
-    } else {
-      done(false);
-    }
-  } catch {
-    done(false);
-  }
+  await submit(
+    {
+      request: async () => ({ ok: await createPractitionerFromLead(data, leadId) }),
+      successMessage: t("user.hcp.form.contactCreated"),
+      errorMessage: t("user.hcp.form.contactError"),
+    },
+    done,
+  );
 }
 
 function onEditLead(lead: Lead) {
@@ -453,22 +440,19 @@ function onEditLead(lead: Lead) {
 async function onLeadEditSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
   const id = selectedLead.value?.id;
   if (!id) { done(false); return; }
-  try {
-    const res = await apiFetch(`/api/v1/lead/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    if (res.ok) {
-      notifications.show(t("user.leads.form.editSuccess"), "success");
-      window.dispatchEvent(new Event("entity-list-refresh"));
-      done(true);
-    } else {
-      done(false);
-    }
-  } catch {
-    done(false);
-  }
+  await submit(
+    {
+      request: () =>
+        apiFetch(`/api/v1/lead/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        }),
+      successMessage: t("user.leads.form.editSuccess"),
+      errorMessage: t("user.leads.form.errorSave"),
+    },
+    done,
+  );
 }
 
 /** Unwrap Vuetify's internal item wrapper (VDataTable provides `{ raw: T }` via slot). */
@@ -483,22 +467,19 @@ function onAddLead() {
 }
 
 async function onLeadSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
-  try {
-    const res = await apiFetch("/api/v1/lead", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    if (res.ok) {
-      notifications.show(t("user.leads.form.success"), "success");
-      window.dispatchEvent(new Event("entity-list-refresh"));
-      done(true);
-    } else {
-      done(false);
-    }
-  } catch {
-    done(false);
-  }
+  await submit(
+    {
+      request: () =>
+        apiFetch("/api/v1/lead", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        }),
+      successMessage: t("user.leads.form.success"),
+      errorMessage: t("user.leads.form.errorSave"),
+    },
+    done,
+  );
 }
 </script>
 

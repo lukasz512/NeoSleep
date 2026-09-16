@@ -7,13 +7,14 @@ import {
   softDeleteUser,
   getUserIdByEmail,
   getUserById,
+  getTerritoryById,
   createPasswordResetToken,
   type UpdateUserInput,
   type StaffRole,
   type User,
 } from "../db.js";
 import { insertAuditLog } from "../db.js";
-import { assertScopeAccess } from "../middleware/requireScope.js";
+import { assertTerritoryAccess } from "../middleware/requireScope.js";
 import { ConflictError, NotFoundError, ValidationError } from "../errors.js";
 import { hashToken } from "../utils/hashToken.js";
 import { sendPasswordResetEmail } from "../mailer.js";
@@ -30,9 +31,17 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // InvitePractitionerCommand (partner invite) or the HCP "training finished"
 // activation flow — never through manual user creation.
 const VALID_ROLES: StaffRole[] = ["admin", "manager", "kam", "msl", "rep"];
-// 'global' (cross-country access) or a two-letter ISO country_code (e.g. 'PL').
-const SCOPE_REGEX = /^(global|[A-Z]{2})$/;
 const BCRYPT_ROUNDS = 12;
+
+/** A user's own RBAC scope must be a country or the global root (migration
+ *  022) — never an arbitrary deeper node (a city/district) the way Patient/
+ *  HCP/HCO's own territory_id can be. Throws ValidationError if not. */
+async function assertValidScopeKind(ctx: TenantContext, territoryId: string): Promise<void> {
+  const territory = await getTerritoryById(ctx.client, territoryId);
+  if (!territory || !["country", "global"].includes(territory.kind)) {
+    throw new ValidationError("territory_id must reference a country or the global scope");
+  }
+}
 const PASSWORD_RESET_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
 
 // ---------------------------------------------------------------------------
@@ -49,8 +58,9 @@ export interface CreateUserInput {
   region?: string | null;
   country_code?: string | null;
   phone?: string | null;
-  /** 'global' or a country_code — RBAC access scope for `role`. Defaults to 'global'. */
-  scope?: string;
+  /** RBAC access scope for `role` — a territory id (country or global root,
+   *  migration 022). Defaults to insertStaffUser's own 'global' default. */
+  territory_id?: string | null;
 }
 
 export async function CreateUserCommand(ctx: TenantContext, input: CreateUserInput): Promise<User> {
@@ -64,16 +74,13 @@ export async function CreateUserCommand(ctx: TenantContext, input: CreateUserInp
   if (input.role && !VALID_ROLES.includes(input.role)) {
     throw new ValidationError(`role must be one of: ${VALID_ROLES.join(", ")}`);
   }
-  if (input.scope !== undefined && !SCOPE_REGEX.test(input.scope)) {
-    throw new ValidationError("scope must be 'global' or a two-letter country code");
-  }
+  if (input.territory_id) await assertValidScopeKind(ctx, input.territory_id);
 
   const existingId = await getUserIdByEmail(ctx.client, email);
   if (existingId) throw new ConflictError("A user with this email already exists");
 
   const passwordHash = input.password ? await bcrypt.hash(input.password, BCRYPT_ROUNDS) : null;
   const role = input.role ?? "rep";
-  const scope = input.scope ?? "global";
 
   const user = await insertStaffUser(
     ctx.client,
@@ -85,7 +92,7 @@ export async function CreateUserCommand(ctx: TenantContext, input: CreateUserInp
     !input.password,
     input.salutation ?? null,
     input.phone ?? null,
-    scope,
+    input.territory_id ?? undefined,
     ctx.user.id,
     input.country_code ?? null
   );
@@ -96,7 +103,7 @@ export async function CreateUserCommand(ctx: TenantContext, input: CreateUserInp
     action: "create",
     entity_type: "Person",
     entity_id: user.id,
-    entity_after: { id: user.id, email, name: user.name, role, scope },
+    entity_after: { id: user.id, email, name: user.name, role, territory_id: user.scope_territory_id },
     request_id: ctx.requestId,
   });
 
@@ -119,13 +126,11 @@ export async function UpdateUserCommand(
   if (input.role && !VALID_ROLES.includes(input.role)) {
     throw new ValidationError(`role must be one of: ${VALID_ROLES.join(", ")}`);
   }
-  if (input.scope !== undefined && !SCOPE_REGEX.test(input.scope)) {
-    throw new ValidationError("scope must be 'global' or a two-letter country code");
-  }
+  if (input.territory_id) await assertValidScopeKind(ctx, input.territory_id);
 
   const target = await getUserById(ctx.client, id);
   if (!target) return null;
-  assertScopeAccess(ctx, target.country_code);
+  await assertTerritoryAccess(ctx, target.country_code);
 
   const before = await updateUser(ctx.client, id, input, ctx.user.id);
   if (!before) return null;
@@ -135,7 +140,7 @@ export async function UpdateUserCommand(
     action: "update",
     entity_type: "Person",
     entity_id: id,
-    entity_after: { status: before.status, region: before.region, role: before.role, scope: before.scope },
+    entity_after: { status: before.status, region: before.region, role: before.role, territory_id: before.scope_territory_id },
     request_id: ctx.requestId,
   });
 
@@ -190,7 +195,7 @@ export async function DeleteUserCommand(ctx: TenantContext, id: string): Promise
 
   const target = await getUserById(ctx.client, id);
   if (!target) throw new NotFoundError("User", id);
-  assertScopeAccess(ctx, target.country_code);
+  await assertTerritoryAccess(ctx, target.country_code);
 
   await softDeleteUser(ctx.client, id);
 

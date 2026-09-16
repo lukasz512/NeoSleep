@@ -4,10 +4,13 @@ import {
   getOrganizationPaginated,
   getOrganizationById,
   getPublicSpecialists,
+  getTerritoryPath,
   type GetOrganizationFilters,
   type Organization,
   type PublicSpecialistRow,
+  type TerritoryPathNode,
 } from "../db.js";
+import { getAllowedScopePaths, assertTerritoryAccessByTerritoryId } from "../middleware/requireScope.js";
 
 /**
  * QUERIES — Organization (HCO) domain.
@@ -32,10 +35,18 @@ export interface OrganizationDto {
   country_code: string;
   region: string;
   territory_id: string | null;
+  territory_name: string | null;
+  /** Root-first ancestor chain — only populated on the single-record
+   *  GetOrganizationByIdQuery (mirrors queries/patient.ts's territory_path). */
+  territory_path: TerritoryPathNode[] | null;
   phone: string;
   email: string;
   website: string;
   google_link: string;
+  /** Geocoded from the address fields (see services/geocoding.ts) — null
+   *  until geocoded. Powers HCODetailView's location map. */
+  latitude: number | null;
+  longitude: number | null;
   specialties: string[];
   status: string;
   metadata: Record<string, unknown> | null;
@@ -43,7 +54,7 @@ export interface OrganizationDto {
   updated_at: string;
 }
 
-function toDto(o: Organization): OrganizationDto {
+function toDto(o: Organization, territoryPath: TerritoryPathNode[] | null = null): OrganizationDto {
   return {
     id:            o.id,
     name:          o.name,
@@ -56,10 +67,14 @@ function toDto(o: Organization): OrganizationDto {
     country_code:  o.country_code ?? "",
     region:        o.region ?? "",
     territory_id:  o.territory_id ?? null,
+    territory_name: o.territory_name ?? null,
+    territory_path: territoryPath && territoryPath.length > 0 ? territoryPath : null,
     phone:         o.phone ?? "",
     email:         o.email ?? "",
     website:       o.website ?? "",
     google_link:   o.google_link ?? "",
+    latitude:      o.latitude ?? null,
+    longitude:     o.longitude ?? null,
     specialties:   o.specialties ?? [],
     status:        o.status,
     metadata:      o.metadata ?? null,
@@ -100,6 +115,7 @@ export async function GetOrganizationListQuery(
     type:   input.type,
     region: input.region,
     status: input.status,
+    scopePaths: await getAllowedScopePaths(ctx.client, ctx.user.roles),
   };
 
   const page      = input.page ?? 1;
@@ -108,7 +124,7 @@ export async function GetOrganizationListQuery(
   const sortOrder = input.sortOrder ?? "desc";
 
   const { rows, total } = await getOrganizationPaginated(ctx.client, filters, page, limit, sortBy, sortOrder);
-  return { items: rows.map(toDto), total };
+  return { items: rows.map((row) => toDto(row)), total };
 }
 
 // ---------------------------------------------------------------------------
@@ -124,7 +140,9 @@ export async function GetOrganizationByIdQuery(
 ): Promise<OrganizationDto | null> {
   const organization = await getOrganizationById(ctx.client, id);
   if (!organization) return null;
-  return toDto(organization);
+  await assertTerritoryAccessByTerritoryId(ctx, organization.territory_id);
+  const territoryPath = organization.territory_id ? await getTerritoryPath(ctx.client, organization.territory_id) : null;
+  return toDto(organization, territoryPath);
 }
 
 // ---------------------------------------------------------------------------

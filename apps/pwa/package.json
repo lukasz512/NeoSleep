@@ -28,6 +28,7 @@
     "vuetify": "catalog:"
   },
   "devDependencies": {
+    "@types/google.maps": "^3.65.5",
     "@types/node": "catalog:",
     "@vitejs/plugin-vue": "catalog:",
     "@vue/test-utils": "catalog:",

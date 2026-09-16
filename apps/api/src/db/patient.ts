@@ -30,6 +30,7 @@ export interface Patient {
   medical_record: string | null;
   region: string;
   territory_id: string | null;
+  territory_name: string | null;
   status: string;
   metadata: Record<string, unknown> | null;
   created_at: string;
@@ -43,6 +44,14 @@ export interface GetPatientsFilters {
   search?: string;
   status?: string;
   region?: string;
+  practitioner_id?: string;
+  /** RBAC territory scope (migration 022, requireScope.ts): undefined/null =
+   *  unrestricted, [] = matches nothing, otherwise restrict to patients whose
+   *  own territory falls inside one of these ltree paths. A patient with no
+   *  territory_id assigned yet stays visible regardless — see this file's
+   *  own note on the "unassigned = visible" rollout-safety fallback (zero
+   *  patients have territory_id populated as of this writing). */
+  scopePaths?: string[] | null;
 }
 
 export interface PatientInsert {
@@ -88,18 +97,22 @@ const PATIENT_SELECT_COLS = `
   p.cpap_device, p.medical_record, p.status, p.metadata,
   p.created_at, p.updated_at,
   i.title AS salutation, i.first_name, i.last_name, i.email, i.phone,
-  COALESCE(i.region, '') AS region, i.territory_id,
-  pi.first_name AS practitioner_first_name, pi.last_name AS practitioner_last_name`.trim();
+  COALESCE(i.region, '') AS region, i.territory_id, t.name AS territory_name,
+  pi.title AS practitioner_salutation, pi.first_name AS practitioner_first_name, pi.last_name AS practitioner_last_name`.trim();
 
 // Shared FROM/JOIN fragment for the two read queries below — resolves the
 // assigned practitioner's display name via practitioner + identities, mirroring
 // how practitioner.ts's own list/detail queries LEFT JOIN organization for
 // "institution" (same resolved-display-name need, same no-deleted_at-filter shape).
+// territory: immediate assigned node's own name only (not the full ancestor
+// path — that's getTerritoryPath's job, used by the single-record detail
+// query only, same no-N+1-on-the-list-query reasoning as practitioner/organization).
 const PATIENT_JOIN = `
   FROM patient p
   JOIN identities i ON p.identity_id = i.id
   LEFT JOIN practitioner pr ON p.practitioner_id = pr.id
-  LEFT JOIN identities pi ON pr.identity_id = pi.id`.trim();
+  LEFT JOIN identities pi ON pr.identity_id = pi.id
+  LEFT JOIN territory t ON i.territory_id = t.id`.trim();
 
 type PatientRow = {
   id: string;
@@ -117,20 +130,27 @@ type PatientRow = {
   medical_record: string | null;
   region: string;
   territory_id: string | null;
+  territory_name: string | null;
   status: string;
   metadata: Record<string, unknown> | null;
   created_at: Date;
   updated_at: Date;
+  practitioner_salutation: string | null;
   practitioner_first_name: string | null;
   practitioner_last_name: string | null;
 };
 
 function buildPractitionerName(row: {
+  practitioner_salutation: string | null;
   practitioner_first_name: string | null;
   practitioner_last_name: string | null;
 }): string | null {
-  const name = [row.practitioner_first_name, row.practitioner_last_name].filter(Boolean).join(" ").trim();
-  return name || null;
+  if (!row.practitioner_first_name && !row.practitioner_last_name) return null;
+  return formatDisplayName({
+    salutation: row.practitioner_salutation,
+    first_name: row.practitioner_first_name ?? "",
+    last_name: row.practitioner_last_name ?? "",
+  });
 }
 
 function serialize(row: PatientRow): Patient & { name: string } {
@@ -149,6 +169,7 @@ function serialize(row: PatientRow): Patient & { name: string } {
     medical_record: row.medical_record,
     region: row.region,
     territory_id: row.territory_id,
+    territory_name: row.territory_name,
     status: row.status,
     metadata: row.metadata,
     created_at: isoDate(row.created_at),
@@ -189,12 +210,24 @@ export async function getPatientsPaginated(
     params.push(filters.region.trim());
     conditions.push(`i.region = $${params.length}`);
   }
+  if (filters.practitioner_id?.trim()) {
+    params.push(filters.practitioner_id.trim());
+    conditions.push(`p.practitioner_id = $${params.length}`);
+  }
+  if (filters.scopePaths !== undefined && filters.scopePaths !== null) {
+    params.push(filters.scopePaths);
+    conditions.push(`(i.territory_id IS NULL OR t.path <@ ANY($${params.length}::extensions.ltree[]))`);
+  }
 
   const where = `WHERE ${conditions.join(" AND ")}`;
 
   try {
     const countResult = await client.query<{ count: string }>(
-      `SELECT COUNT(*) AS count FROM patient p JOIN identities i ON p.identity_id = i.id ${where}`,
+      `SELECT COUNT(*) AS count
+       FROM patient p
+       JOIN identities i ON p.identity_id = i.id
+       LEFT JOIN territory t ON i.territory_id = t.id
+       ${where}`,
       params
     );
     const total = parseInt(countResult.rows[0]?.count ?? "0", 10);

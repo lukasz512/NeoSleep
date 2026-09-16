@@ -40,6 +40,7 @@ patientRouter.get(
         search:    search || undefined,
         status:    toFilterArray(req.query.status)?.[0],
         region:    toFilterArray(req.query.region)?.[0],
+        practitioner_id: typeof req.query.practitioner_id === "string" ? req.query.practitioner_id.trim() || undefined : undefined,
         page,
         limit,
         sortBy,

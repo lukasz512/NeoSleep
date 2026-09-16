@@ -64,6 +64,7 @@ export interface CreateOrganizationInput {
   postal_code?: string | null;
   country_code?: string | null;
   region?: string;
+  territory_id?: string | null;
   phone?: string | null;
   email?: string | null;
   website?: string | null;
@@ -120,6 +121,7 @@ export async function CreateOrganizationCommand(
     postal_code,
     country_code,
     region:        input.region?.trim() ?? "",
+    territory_id:  input.territory_id ?? null,
     phone,
     email,
     website:       input.website?.trim() ?? null,
@@ -164,6 +166,7 @@ export interface UpdateOrganizationPayload {
   postal_code?: string | null;
   country_code?: string | null;
   region?: string;
+  territory_id?: string | null;
   phone?: string | null;
   email?: string | null;
   website?: string | null;
@@ -236,6 +239,7 @@ export async function UpdateOrganizationCommand(
     postal_code:   input.postal_code,
     country_code:  input.country_code,
     region:        input.region,
+    territory_id:  input.territory_id,
     phone:         input.phone,
     email:         input.email,
     website:       input.website,

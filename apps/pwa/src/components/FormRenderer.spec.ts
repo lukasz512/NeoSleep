@@ -46,7 +46,7 @@ describe("FormRenderer", () => {
     // dynamic), so string-based resolution silently renders nothing. Real
     // imports sidestep that per-file auto-import detection entirely.
     const source = getSource();
-    expect(source).toContain('import { VTextField, VSelect, VAutocomplete, VCombobox, VTextarea } from "vuetify/components"');
+    expect(source).toContain('import { VTextField, VSelect, VAutocomplete, VCombobox, VTextarea, VSwitch } from "vuetify/components"');
     expect(source).not.toMatch(/case "select":\s*return "VSelect"/);
     expect(source).not.toMatch(/default:\s*return "VTextField"/);
   });
@@ -72,5 +72,27 @@ describe("FormRenderer", () => {
   it("shows the verify-info banner only when verifyInfoKey is set", () => {
     const source = getSource();
     expect(source).toMatch(/v-if="verifyInfoKey"/);
+  });
+
+  it("disables every field while the form is submitting, not just immutableOnEdit fields", () => {
+    const source = getSource();
+    const disabledExprs = [...source.matchAll(/disabled:\s*(submitting\.value \|\| \([^)]*\))/g)];
+    expect(disabledExprs.length).toBe(2);
+    for (const [, expr] of disabledExprs) {
+      expect(expr).toContain("submitting.value");
+      expect(expr).toContain("immutableOnEdit");
+    }
+  });
+
+  it("only resets the form on a closed->open transition, not on every initialData change while open", () => {
+    // A post-save refetch (e.g. a detail view reloading after done()) can
+    // change initialData while modelValue is still nominally true for one
+    // tick. Watching initialData too — or not checking the previous
+    // modelValue — re-blanks the form and flashes every required field's
+    // validation red. Watching modelValue alone, gated on the wasOpen
+    // transition, can't fire from that refetch at all.
+    const source = getSource();
+    expect(source).toMatch(/watch\(\s*\(\) => props\.modelValue,\s*\(open, wasOpen\) => \{\s*if \(open && !wasOpen\) \{/);
+    expect(source).not.toMatch(/watch\(\s*\(\) => \[props\.modelValue, props\.initialData\]/);
   });
 });

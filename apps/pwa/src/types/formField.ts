@@ -35,7 +35,8 @@ export type FormFieldType =
   | "combobox"
   | "chips"
   | "combobox"
-  | "date";
+  | "date"
+  | "boolean";
 
 /**
  * One selectable option for 'select'/'autocomplete'/'combobox' fields.
@@ -177,4 +178,13 @@ export interface FormFieldDef {
    * visible field whose `cols` completes it to 12.
    */
   cols?: 2 | 6 | 10 | 12;
+  /**
+   * 'boolean' fields only — the value stored in form state (and submitted)
+   * when the switch is on/off. Default `true`/`false`, a real boolean. Set
+   * these to override for a field backed by a non-boolean column being given
+   * a boolean UI (e.g. patientForm's `cpap_device`, a TEXT column presented
+   * as a yes/no switch — `trueValue: "CPAP"`, `falseValue: ""`).
+   */
+  trueValue?: unknown;
+  falseValue?: unknown;
 }

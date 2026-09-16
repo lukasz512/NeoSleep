@@ -356,3 +356,17 @@ export async function softDeleteTreatmentPlan(client: PoolClient, id: string): P
     throw new DatabaseError("softDeleteTreatmentPlan", err);
   }
 }
+
+/**
+ * Reverses softDeleteTreatmentPlan — e.g. a plan hidden as "abandoned" turns out
+ * to have gone through after all (order completed directly with the partner)
+ * and needs to become the record of that order rather than starting a duplicate.
+ */
+export async function restoreTreatmentPlan(client: PoolClient, id: string): Promise<void> {
+  try {
+    await client.query(`UPDATE treatment_plan SET deleted_at = NULL WHERE id = $1`, [id]);
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("restoreTreatmentPlan", err);
+  }
+}

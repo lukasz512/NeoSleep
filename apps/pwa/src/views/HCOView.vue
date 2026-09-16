@@ -37,12 +37,18 @@
     >
       <template #item.name="{ item }">
         <span class="hco-name-cell">
-          <AppAvatar :name="(item as HCOListItem).name" entity-type="hco" :size="32" />
+          <AppAvatar entity-type="hco" :size="32" />
           {{ (item as HCOListItem).name }}
         </span>
       </template>
-      <template #feed-card-avatar="{ item }">
-        <AppAvatar :name="(item as HCOListItem).name" entity-type="hco" :size="55" />
+      <template #item.type="{ item }">
+        {{ hcoTypeLabel((item as HCOListItem).type) }}
+      </template>
+      <template #item.region="{ item }">
+        {{ (item as HCOListItem).territory_name || (item as HCOListItem).region || "—" }}
+      </template>
+      <template #feed-card-avatar>
+        <AppAvatar entity-type="hco" :size="55" />
       </template>
       <template #feed-card-title="{ item }">
         {{ (item as HCOListItem).name }}
@@ -102,8 +108,10 @@ import { usePermissions } from "../composables/usePermissions";
 import { useConfigStore } from "../stores/config";
 import { apiFetch } from "../composables/useApi";
 import { useNotifications } from "../composables/useNotifications";
+import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import { hcoFormFields } from "../config/forms/hcoForm";
+import { hcoTypeLabel as hcoTypeLabelFor, hcoStatusLabel as hcoStatusLabelFor, hcoStatusColor } from "../utils/hcoLabels";
 
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
@@ -113,6 +121,7 @@ interface HCOListItem {
   name?: string;
   type?: string;
   region?: string;
+  territory_name?: string | null;
   status?: string;
   address_line1?: string;
   city?: string;
@@ -128,6 +137,7 @@ interface HCOListItem {
 const { t } = useI18n();
 const configStore = useConfigStore();
 const notifications = useNotifications();
+const { submit } = useEntitySubmit();
 const { canEditOrganizations, isAdmin } = usePermissions();
 const showAddModal = ref(false);
 const showEditModal = ref(false);
@@ -174,7 +184,6 @@ const tableHeaders = computed(() => [
   { title: t("user.hco.table.name"), key: "name", sortable: true },
   { title: t("user.hco.table.type"), key: "type", sortable: true },
   { title: t("user.hco.table.region"), key: "region", sortable: true },
-  { title: t("user.hco.table.status"), key: "status", sortable: true },
 ]);
 
 const hcoI18n = computed(() => ({
@@ -191,19 +200,11 @@ const hcoI18n = computed(() => ({
 }));
 
 function hcoTypeLabel(type?: string): string {
-  return typeOptions.value.find((o) => o.value === type)?.title ?? (type ?? "");
+  return hcoTypeLabelFor(t, type);
 }
 
 function hcoStatusLabel(status?: string): string {
-  return statusOptions.value.find((o) => o.value === status)?.title ?? (status ?? "");
-}
-
-function hcoStatusColor(status?: string): string {
-  switch (status) {
-    case "active":           return "success";
-    case "pending_approval": return "warning";
-    default:                 return "default";
-  }
+  return hcoStatusLabelFor(t, status);
 }
 
 function onAddAccount() {
@@ -211,22 +212,19 @@ function onAddAccount() {
 }
 
 async function onAccountSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
-  try {
-    const res = await apiFetch("/api/v1/organization", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    if (res.ok) {
-      notifications.show(t("user.hco.form.success"), "success");
-      window.dispatchEvent(new Event("entity-list-refresh"));
-      done(true);
-    } else {
-      done(false);
-    }
-  } catch {
-    done(false);
-  }
+  await submit(
+    {
+      request: () =>
+        apiFetch("/api/v1/organization", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        }),
+      successMessage: t("user.hco.form.success"),
+      errorMessage: t("user.hco.form.errorSave"),
+    },
+    done,
+  );
 }
 
 function onEditAccount(hco: HCOListItem) {
@@ -256,22 +254,19 @@ const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
 async function onEditSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
   const id = selectedHco.value?.id;
   if (!id) { done(false); return; }
-  try {
-    const res = await apiFetch(`/api/v1/organization/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    if (res.ok) {
-      notifications.show(t("user.hco.form.editSuccess"), "success");
-      window.dispatchEvent(new Event("entity-list-refresh"));
-      done(true);
-    } else {
-      done(false);
-    }
-  } catch {
-    done(false);
-  }
+  await submit(
+    {
+      request: () =>
+        apiFetch(`/api/v1/organization/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        }),
+      successMessage: t("user.hco.form.editSuccess"),
+      errorMessage: t("user.hco.form.errorSave"),
+    },
+    done,
+  );
 }
 
 function onScheduleVisit(hco: HCOListItem) {
@@ -290,23 +285,20 @@ async function onEventFormSubmit(
   payload: import("../components/EventForm.vue").EventSubmitPayload,
   done: (ok: boolean) => void,
 ) {
-  try {
-    const res = await apiFetch("/api/v1/encounter", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: payload.title, start_at: payload.start_at, end_at: payload.end_at, type: payload.type, status: payload.status, location: payload.location, video_link: payload.video_link, notes: payload.notes, region: payload.region, attendees: payload.attendees }),
-    });
-    if (res.ok) {
-      notifications.show(t("user.planner.form.success"), "success");
-      done(true);
-    } else {
-      notifications.show(t("user.planner.form.errorSave"), "error");
-      done(false);
-    }
-  } catch {
-    notifications.show(t("user.planner.form.errorSave"), "error");
-    done(false);
-  }
+  await submit(
+    {
+      request: () =>
+        apiFetch("/api/v1/encounter", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: payload.title, start_at: payload.start_at, end_at: payload.end_at, type: payload.type, status: payload.status, location: payload.location, video_link: payload.video_link, notes: payload.notes, region: payload.region, attendees: payload.attendees }),
+        }),
+      successMessage: t("user.planner.form.success"),
+      errorMessage: t("user.planner.form.errorSave"),
+      refresh: false,
+    },
+    done,
+  );
 }
 </script>
 

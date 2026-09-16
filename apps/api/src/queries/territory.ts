@@ -42,7 +42,7 @@ function toDto(t: Territory): TerritoryDto {
 export interface GetTerritoryListInput {
   search?: string;
   country_code?: string;
-  kind?: string;
+  kind?: string | string[];
   parent_id?: string | null;
   page?: number;
   limit?: number;

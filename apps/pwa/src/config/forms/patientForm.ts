@@ -113,9 +113,14 @@ export const patientFormFields: FormFieldDef[] = [
     cols: 6,
   },
   {
+    // TEXT column presented as a yes/no switch (see FormFieldDef.trueValue/
+    // falseValue) — a rep just needs to record whether the patient has CPAP,
+    // not the specific device model.
     key: "cpap_device",
-    type: "text",
+    type: "boolean",
     labelKey: "app.patients.form.cpapDevice",
+    trueValue: "CPAP",
+    falseValue: "",
     cols: 6,
   },
   {

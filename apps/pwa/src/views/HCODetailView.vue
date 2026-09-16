@@ -35,7 +35,7 @@
   >
     <template #title v-if="hco">
       <span class="view-item__title-wrap">
-        <AppAvatar :name="hco.name" entity-type="hco" :size="40" />
+        <AppAvatar entity-type="hco" :size="40" />
         <h1 class="view-item__title">{{ hco.name }}</h1>
       </span>
     </template>
@@ -90,59 +90,78 @@
       </VTooltip>
     </template>
     <template #sections v-if="hco">
-      <div class="view-item__row">
-        <dt class="view-item__label">{{ t("user.hco.detail.type") }}</dt>
-        <dd class="view-item__value">{{ hco.type || "—" }}</dd>
-      </div>
-      <div class="view-item__row">
-        <dt class="view-item__label">{{ t("user.hco.detail.region") }}</dt>
-        <dd class="view-item__value">{{ hco.region || "—" }}</dd>
-      </div>
-      <div class="view-item__row">
-        <dt class="view-item__label">{{ t("user.hco.detail.status") }}</dt>
-        <dd class="view-item__value">{{ hco.status || "—" }}</dd>
-      </div>
-      <div class="view-item__row">
-        <dt class="view-item__label">{{ t("user.hco.detail.phone") }}</dt>
-        <dd class="view-item__value">
-          <a v-if="hco.phone" :href="`tel:${hco.phone}`" class="view-item__link">{{ hco.phone }}</a>
-          <span v-else class="view-item__empty">—</span>
-        </dd>
-      </div>
-      <div class="view-item__row">
-        <dt class="view-item__label">{{ t("user.hco.detail.email") }}</dt>
-        <dd class="view-item__value">
-          <a v-if="hco.email" :href="`mailto:${hco.email}`" class="view-item__link">{{ hco.email }}</a>
-          <span v-else class="view-item__empty">—</span>
-        </dd>
-      </div>
-      <div class="view-item__row">
-        <dt class="view-item__label">{{ t("user.hco.detail.website") }}</dt>
-        <dd class="view-item__value">
-          <a v-if="hco.website" :href="hco.website" target="_blank" rel="noopener noreferrer" class="view-item__link">{{ hco.website }}</a>
-          <span v-else class="view-item__empty">—</span>
-        </dd>
-      </div>
-      <div class="view-item__row">
-        <dt class="view-item__label">{{ t("user.hco.detail.addressLine1") }}</dt>
-        <dd class="view-item__value">{{ hco.address_line1 || "—" }}</dd>
-      </div>
-      <div class="view-item__row">
-        <dt class="view-item__label">{{ t("user.hco.detail.city") }}</dt>
-        <dd class="view-item__value">{{ hco.city || "—" }}</dd>
-      </div>
-      <div class="view-item__row">
-        <dt class="view-item__label">{{ t("user.hco.detail.state") }}</dt>
-        <dd class="view-item__value">{{ hco.state || "—" }}</dd>
-      </div>
-      <div class="view-item__row">
-        <dt class="view-item__label">{{ t("user.hco.detail.postalCode") }}</dt>
-        <dd class="view-item__value">{{ hco.postal_code || "—" }}</dd>
-      </div>
-      <div class="view-item__row">
-        <dt class="view-item__label">{{ t("user.hco.detail.countryCode") }}</dt>
-        <dd class="view-item__value">{{ hco.country_code || "—" }}</dd>
-      </div>
+      <DetailViewTabs v-model="activeTab" :tabs="hcoTabs">
+        <template #details>
+          <div class="hco-details-layout">
+            <div class="hco-details-layout__main">
+              <div class="view-item__row">
+                <dt class="view-item__label">{{ t("user.hco.detail.type") }}</dt>
+                <dd class="view-item__value">{{ hcoTypeLabel(hco.type) }}</dd>
+              </div>
+              <div class="view-item__row">
+                <dt class="view-item__label">{{ t("user.hco.detail.region") }}</dt>
+                <dd class="view-item__value">{{ territoryLabel }}</dd>
+              </div>
+              <div class="view-item__row">
+                <dt class="view-item__label">{{ t("user.hco.detail.status") }}</dt>
+                <dd class="view-item__value">{{ hcoStatusLabel(hco.status) }}</dd>
+              </div>
+
+              <div class="hco-contact-cards">
+                <a v-if="hco.phone" :href="`tel:${hco.phone}`" class="hco-contact-cards__item" :aria-label="t('user.hco.detail.phone')">
+                  <AppIcon name="phone" />
+                </a>
+                <a v-if="hco.email" :href="`mailto:${hco.email}`" class="hco-contact-cards__item" :aria-label="t('user.hco.detail.email')">
+                  <AppIcon name="mail" />
+                </a>
+                <a v-if="hco.website" :href="hco.website" target="_blank" rel="noopener noreferrer" class="hco-contact-cards__item" :aria-label="t('user.hco.detail.website')">
+                  <AppIcon name="globe" />
+                </a>
+                <a v-if="hco.google_link" :href="hco.google_link" target="_blank" rel="noopener noreferrer" class="hco-contact-cards__item" :aria-label="t('user.hco.detail.googleLink')">
+                  <AppIcon name="map-pin" />
+                </a>
+              </div>
+            </div>
+
+            <div class="hco-details-layout__aside">
+              <div class="view-item__row">
+                <dt class="view-item__label">{{ t("user.hco.detail.addressLine1") }}</dt>
+                <dd class="view-item__value">{{ hco.address_line1 || "—" }}</dd>
+              </div>
+              <div class="view-item__row">
+                <dt class="view-item__label">{{ t("user.hco.detail.city") }}</dt>
+                <dd class="view-item__value">{{ hco.city || "—" }}</dd>
+              </div>
+              <div class="view-item__row">
+                <dt class="view-item__label">{{ t("user.hco.detail.state") }}</dt>
+                <dd class="view-item__value">{{ hco.state || "—" }}</dd>
+              </div>
+              <div class="view-item__row">
+                <dt class="view-item__label">{{ t("user.hco.detail.postalCode") }}</dt>
+                <dd class="view-item__value">{{ hco.postal_code || "—" }}</dd>
+              </div>
+              <div class="view-item__row">
+                <dt class="view-item__label">{{ t("user.hco.detail.countryCode") }}</dt>
+                <dd class="view-item__value">{{ hco.country_code || "—" }}</dd>
+              </div>
+              <HCOLocationMap v-if="hco.latitude && hco.longitude" :latitude="hco.latitude" :longitude="hco.longitude" :name="hco.name" />
+            </div>
+          </div>
+        </template>
+        <template #notes>
+          <PatientNotesPanel entity-type="organization" :entity-id="hco.id" />
+        </template>
+        <template #relatedDoctors>
+          <RelatedEntityPanel
+            :endpoint="`/api/v1/practitioner?organization_id=${hco.id}&limit=-1`"
+            detail-route-name="hcp-detail"
+            :empty-label="t('user.hco.detail.relatedDoctorsEmpty')"
+          />
+        </template>
+        <template #history>
+          <EntityHistoryPanel :endpoint="`/api/v1/organization/${hco.id}/history`" />
+        </template>
+      </DetailViewTabs>
     </template>
   </ItemDetailLayout>
 
@@ -164,7 +183,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch, defineAsyncComponent } from "vue";
+import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
 import { originDialogTransition } from "@ui";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
@@ -172,13 +191,20 @@ import { usePermissions } from "../composables/usePermissions";
 import { apiFetch } from "../composables/useApi";
 import { useEntityCacheStore } from "../stores/entityCache";
 import { useNotifications } from "../composables/useNotifications";
+import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import AppButton from "../components/AppButton.vue";
 import AppAvatar from "../components/AppAvatar.vue";
 import AppIcon from "../components/AppIcon.vue";
+import DetailViewTabs from "../components/DetailViewTabs.vue";
+import EntityHistoryPanel from "../components/EntityHistoryPanel.vue";
+import RelatedEntityPanel from "../components/RelatedEntityPanel.vue";
+import HCOLocationMap from "../components/HCOLocationMap.vue";
+import PatientNotesPanel from "../components/patient/PatientNotesPanel.vue";
 import { hcoFormFields } from "../config/forms/hcoForm";
 import { entityActionIcon, entityActionBtnClass } from "../config/entityActions";
+import { hcoTypeLabel as hcoTypeLabelFor, hcoStatusLabel as hcoStatusLabelFor } from "../utils/hcoLabels";
 
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
@@ -190,6 +216,9 @@ interface HCO {
   name: string;
   type?: string;
   region?: string;
+  territory_id?: string | null;
+  territory_name?: string | null;
+  territory_path?: { id: string; name: string; code: string | null; kind: string }[] | null;
   status?: string;
   address_line1?: string;
   city?: string;
@@ -200,6 +229,8 @@ interface HCO {
   email?: string;
   website?: string;
   google_link?: string;
+  latitude?: number | null;
+  longitude?: number | null;
   specialties?: string[];
 }
 
@@ -207,6 +238,34 @@ const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const notifications = useNotifications();
+const { submit } = useEntitySubmit();
+
+const hcoTabs = [
+  { value: "details", labelKey: "user.hco.detail.tabs.details" },
+  { value: "notes", labelKey: "user.hco.detail.tabs.notes" },
+  { value: "relatedDoctors", labelKey: "user.hco.detail.tabs.relatedDoctors" },
+  { value: "history", labelKey: "user.hco.detail.tabs.history" },
+];
+const activeTab = ref((route.query.tab as string) || "details");
+watch(activeTab, (tab) => {
+  router.replace({ query: { ...route.query, tab } });
+});
+
+function hcoTypeLabel(type?: string): string {
+  return hcoTypeLabelFor(t, type);
+}
+function hcoStatusLabel(status?: string): string {
+  return hcoStatusLabelFor(t, status);
+}
+
+/** Same territory_path-with-region-fallback pattern as PatientDetailView's regionBreadcrumb. */
+const territoryLabel = computed(() => {
+  const path = hco.value?.territory_path;
+  if (path && path.length > 0) {
+    return path.map((node) => (node.code || node.name).toLowerCase()).join("/");
+  }
+  return hco.value?.territory_name || hco.value?.region || "—";
+});
 
 const hcoCache = useEntityCacheStore("hco");
 const hco = ref<HCO | null>(null);
@@ -238,34 +297,31 @@ async function onEventFormSubmit(
   payload: import("../components/EventForm.vue").EventSubmitPayload,
   done: (ok: boolean) => void,
 ) {
-  try {
-    const res = await apiFetch("/api/v1/encounter", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: payload.title,
-        start_at: payload.start_at,
-        end_at: payload.end_at,
-        type: payload.type,
-        status: payload.status,
-        location: payload.location,
-        video_link: payload.video_link,
-        notes: payload.notes,
-        region: payload.region,
-        attendees: payload.attendees,
-      }),
-    });
-    if (res.ok) {
-      notifications.show(t("user.planner.form.success"), "success");
-      done(true);
-    } else {
-      notifications.show(t("user.planner.form.errorSave"), "error");
-      done(false);
-    }
-  } catch {
-    notifications.show(t("user.planner.form.errorSave"), "error");
-    done(false);
-  }
+  await submit(
+    {
+      request: () =>
+        apiFetch("/api/v1/encounter", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: payload.title,
+            start_at: payload.start_at,
+            end_at: payload.end_at,
+            type: payload.type,
+            status: payload.status,
+            location: payload.location,
+            video_link: payload.video_link,
+            notes: payload.notes,
+            region: payload.region,
+            attendees: payload.attendees,
+          }),
+        }),
+      successMessage: t("user.planner.form.success"),
+      errorMessage: t("user.planner.form.errorSave"),
+      refresh: false,
+    },
+    done,
+  );
 }
 
 function onEdit() {
@@ -289,23 +345,20 @@ const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
 async function onAccountSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
   const id = hco.value?.id;
   if (!id) { done(false); return; }
-  try {
-    const res = await apiFetch(`/api/v1/organization/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    if (res.ok) {
-      notifications.show(t("user.hco.form.editSuccess"), "success");
-      await loadHCO();
-      window.dispatchEvent(new Event("entity-list-refresh"));
-      done(true);
-    } else {
-      done(false);
-    }
-  } catch {
-    done(false);
-  }
+  await submit(
+    {
+      request: () =>
+        apiFetch(`/api/v1/organization/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        }),
+      successMessage: t("user.hco.form.editSuccess"),
+      errorMessage: t("user.hco.form.errorSave"),
+      onSuccess: () => loadHCO(),
+    },
+    done,
+  );
 }
 
 async function loadHCO() {
@@ -357,5 +410,50 @@ watch(() => route.params.id, loadHCO);
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.hco-details-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+/* Address + map move to their own right-hand column once there's room for
+   both side by side — narrower than that, the map (with a real minimum
+   useful size) would otherwise squeeze the main details column too thin. */
+@media (min-width: 600px) {
+  .hco-details-layout {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+  .hco-details-layout__main {
+    flex: 1 1 55%;
+    min-width: 0;
+  }
+  .hco-details-layout__aside {
+    flex: 1 1 45%;
+    min-width: 0;
+  }
+}
+
+.hco-contact-cards {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.hco-contact-cards__item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--pwa-radius);
+  background: rgba(var(--v-theme-primary), 0.08);
+  color: rgb(var(--v-theme-primary));
+  transition: background-color 120ms ease;
+}
+.hco-contact-cards__item:hover {
+  background: rgba(var(--v-theme-primary), 0.16);
 }
 </style>

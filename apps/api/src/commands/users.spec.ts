@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import bcrypt from "bcrypt";
-import { withTenant, insertStaffUser } from "../db.js";
+import { withTenant, insertStaffUser, getGlobalTerritoryId, getCountryTerritoryId } from "../db.js";
 import type { TenantContext } from "../context/TenantContext.js";
 import { ForbiddenError } from "../errors.js";
 import { CreateUserCommand, UpdateUserCommand, DeleteUserCommand, ResetUserPasswordCommand } from "./users.js";
@@ -26,7 +26,7 @@ async function buildTestContext(client: Parameters<typeof CreateUserCommand>[0][
   return {
     slug: TENANT_SLUG,
     client,
-    user: { id: user!.id, email, role: "admin", roles: [{ role: "admin", scope: "global" }] },
+    user: { id: user!.id, email, role: "admin", roles: [{ role: "admin", territory_id: await getGlobalTerritoryId(client) }] },
     requestId: `test-${uniqueSuffix()}`,
   };
 }
@@ -77,16 +77,19 @@ describe("UpdateUserCommand / DeleteUserCommand — country-scope enforcement", 
         role: "rep", country_code: "MX",
       });
 
+      const plTerritoryId = await getCountryTerritoryId(client, "PL");
+      if (!plTerritoryId) throw new Error("PL territory not seeded — check migrations/002_seed.sql");
+
       const managerEmail = `qa-scope-manager-${uniqueSuffix()}@neosleepcare.com`;
       const managerHash = await bcrypt.hash("irrelevant-not-logged-in-with", 4);
       const manager = await insertStaffUser(
         client, managerEmail, "QA", "Manager", "manager", managerHash, false,
-        null, null, "PL"
+        null, null, plTerritoryId
       );
       const managerCtx: TenantContext = {
         slug: TENANT_SLUG,
         client,
-        user: { id: manager!.id, email: managerEmail, role: "manager", roles: [{ role: "manager", scope: "PL" }] },
+        user: { id: manager!.id, email: managerEmail, role: "manager", roles: [{ role: "manager", territory_id: plTerritoryId }] },
         requestId: `test-${uniqueSuffix()}`,
       };
 

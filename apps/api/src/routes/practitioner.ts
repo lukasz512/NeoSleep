@@ -6,6 +6,7 @@ import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
 import { CreatePractitionerCommand, UpdatePractitionerCommand, DeletePractitionerCommand, ActivatePractitionerCommand } from "../commands/practitioner.js";
 import { GetPractitionerListQuery, GetPractitionerByIdQuery } from "../queries/practitioner.js";
+import { GetHistoryForPractitionerQuery } from "../queries/auditLog.js";
 import { ValidationError } from "../errors.js";
 import { parsePaginationParams, toFilterArray } from "./utils.js";
 
@@ -40,6 +41,7 @@ practitionerRouter.get(
         specialty:   toFilterArray(req.query.specialty),
         institution: toFilterArray(req.query.institution),
         region:      toFilterArray(req.query.region),
+        organization_id: typeof req.query.organization_id === "string" ? req.query.organization_id.trim() || undefined : undefined,
         page,
         limit,
         sortBy,
@@ -72,6 +74,26 @@ practitionerRouter.get(
 );
 
 // ---------------------------------------------------------------------------
+// GET /api/v1/practitioner/:id/history — audit trail (History tab)
+// ---------------------------------------------------------------------------
+practitionerRouter.get(
+  "/practitioner/:id/history",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id?.trim();
+    if (!id) throw new ValidationError("Missing practitioner id");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    const history = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return GetHistoryForPractitionerQuery(ctx, id);
+    });
+
+    res.json(history);
+  })
+);
+
+// ---------------------------------------------------------------------------
 // POST /api/v1/practitioner — create practitioner
 // ---------------------------------------------------------------------------
 practitionerRouter.post(
@@ -84,7 +106,7 @@ practitionerRouter.post(
       email?: string; phone?: string; primary_specialty?: string;
       specialty?: string; // legacy alias
       organization_id?: string;
-      institution?: string; region?: string; country_code?: string;
+      institution?: string; region?: string; territory_id?: string | null; country_code?: string;
       influence_tier?: string; language?: string;
       national_ids?: Record<string, string>;
       social_links?: Record<string, unknown>;
@@ -104,6 +126,7 @@ practitionerRouter.post(
         organization_id:   typeof body.organization_id    === "string" ? body.organization_id          : undefined,
         institution:       typeof body.institution       === "string" ? body.institution              : null,
         region:            typeof body.region            === "string" ? body.region                   : undefined,
+        territory_id:      typeof body.territory_id === "string" ? body.territory_id : null,
         country_code:      typeof body.country_code      === "string" ? body.country_code             : null,
         influence_tier:    typeof body.influence_tier    === "string" ? body.influence_tier           : undefined,
         language:          typeof body.language          === "string" ? body.language                 : null,
@@ -133,7 +156,7 @@ practitionerRouter.patch(
       email?: string; phone?: string; primary_specialty?: string;
       specialty?: string; // legacy alias
       organization_id?: string;
-      institution?: string; region?: string;
+      institution?: string; region?: string; territory_id?: string | null;
       influence_tier?: string; language?: string;
       national_ids?: Record<string, string>;
       social_links?: Record<string, unknown>;
@@ -152,6 +175,7 @@ practitionerRouter.patch(
         organization_id:   typeof body.organization_id    === "string" ? body.organization_id   : undefined,
         institution:       typeof body.institution       === "string" ? body.institution       : undefined,
         region:            typeof body.region            === "string" ? body.region            : undefined,
+        territory_id:      body.territory_id !== undefined ? body.territory_id : undefined,
         influence_tier:    typeof body.influence_tier    === "string" ? body.influence_tier    : undefined,
         language:          typeof body.language          === "string" ? body.language          : undefined,
         national_ids:      body.national_ids !== undefined ? body.national_ids : undefined,

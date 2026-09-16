@@ -2,10 +2,13 @@ import type { TenantContext } from "../context/TenantContext.js";
 import {
   getPractitionerPaginated,
   getPractitionerById,
+  getTerritoryPath,
   type GetPractitionerFilters,
   type Practitioner,
+  type TerritoryPathNode,
 } from "../db.js";
 import { formatDisplayName } from "../utils/personName.js";
+import { getAllowedScopePaths, assertTerritoryAccessByTerritoryId } from "../middleware/requireScope.js";
 
 /**
  * QUERIES — Practitioner domain.
@@ -31,6 +34,12 @@ export interface PractitionerDto {
   organization_id: string | null;
   institution: string;
   region: string;
+  territory_id: string | null;
+  territory_name: string | null;
+  /** Root-first ancestor chain — only populated on the single-record
+   *  GetPractitionerByIdQuery (mirrors queries/patient.ts's own territory_path,
+   *  same no-N+1-on-the-list-query reasoning). */
+  territory_path: TerritoryPathNode[] | null;
   influence_tier: string;
   status: string;
   language: string | null;
@@ -40,7 +49,7 @@ export interface PractitionerDto {
   updated_at: string;
 }
 
-function toDto(p: Practitioner): PractitionerDto {
+function toDto(p: Practitioner, territoryPath: TerritoryPathNode[] | null = null): PractitionerDto {
   const name = formatDisplayName(p);
   return {
     id:                p.id,
@@ -55,6 +64,9 @@ function toDto(p: Practitioner): PractitionerDto {
     organization_id:   p.organization_id ?? null,
     institution:       p.institution ?? "",
     region:            p.region,
+    territory_id:      p.territory_id ?? null,
+    territory_name:    p.territory_name ?? null,
+    territory_path:    territoryPath && territoryPath.length > 0 ? territoryPath : null,
     influence_tier:    p.influence_tier ?? "C",
     status:            p.status ?? "active",
     language:          p.language ?? null,
@@ -74,6 +86,7 @@ export interface GetPractitionerListInput {
   specialty?: string | string[];
   institution?: string | string[];
   region?: string | string[];
+  organization_id?: string;
   page?: number;
   limit?: number;
   sortBy?: string;
@@ -94,6 +107,8 @@ export async function GetPractitionerListQuery(
     specialty:   input.specialty,
     institution: input.institution,
     region:      input.region,
+    organization_id: input.organization_id,
+    scopePaths: await getAllowedScopePaths(ctx.client, ctx.user.roles),
   };
 
   const page      = input.page ?? 1;
@@ -102,7 +117,7 @@ export async function GetPractitionerListQuery(
   const sortOrder = input.sortOrder ?? "desc";
 
   const { rows, total } = await getPractitionerPaginated(ctx.client, filters, page, limit, sortBy, sortOrder);
-  return { items: rows.map(toDto), total };
+  return { items: rows.map((row) => toDto(row)), total };
 }
 
 // ---------------------------------------------------------------------------
@@ -115,5 +130,7 @@ export async function GetPractitionerByIdQuery(
 ): Promise<PractitionerDto | null> {
   const practitioner = await getPractitionerById(ctx.client, id);
   if (!practitioner) return null;
-  return toDto(practitioner);
+  await assertTerritoryAccessByTerritoryId(ctx, practitioner.territory_id);
+  const territoryPath = practitioner.territory_id ? await getTerritoryPath(ctx.client, practitioner.territory_id) : null;
+  return toDto(practitioner, territoryPath);
 }
