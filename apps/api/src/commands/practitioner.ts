@@ -145,6 +145,8 @@ export interface UpdatePractitionerPayload {
   language?: string | null;
   national_ids?: Record<string, string> | null;
   social_links?: Record<string, unknown> | null;
+  /** Admin-only manual override — see UpdatePractitionerCommand's own check and apps/pwa/src/config/forms/hcpForm.ts's STATUS_OPTIONS for the full rationale. */
+  status?: "pending_approval" | "invited" | "active" | "inactive";
 }
 
 /**
@@ -169,6 +171,16 @@ export async function UpdatePractitionerCommand(
     if (phone.replace(/\D/g, "").length < 9) throw new ValidationError("Phone must contain at least 9 digits");
   }
 
+  // Manual status override is an admin-only recovery tool (see
+  // UpdatePractitionerPayload's own doc comment) — the frontend already
+  // hides the field for manager/rep/etc, but the route must not trust that
+  // alone (same reasoning as every other server-side RBAC check in this
+  // codebase — a hidden form field is a UI nicety, not an authorization
+  // boundary).
+  if (input.status !== undefined && ctx.user.role !== "admin") {
+    throw new ValidationError("Only an admin can change a practitioner's status directly");
+  }
+
   const before = await getPractitionerById(ctx.client, id);
   if (!before) return null;
 
@@ -187,6 +199,7 @@ export async function UpdatePractitionerCommand(
     language:         input.language,
     national_ids:     input.national_ids,
     social_links:     input.social_links,
+    status:           input.status,
   };
 
   const after = await updatePractitioner(ctx.client, id, updateInput);

@@ -10,6 +10,7 @@ import {
   getUserRoleScopes,
   getInviteTokenByHash,
   updatePractitionerStatus,
+  getPractitionerById,
 } from "../db.js";
 import { hashToken } from "../utils/hashToken.js";
 import type { TenantContext } from "../context/TenantContext.js";
@@ -268,6 +269,63 @@ describe("UpdatePractitionerCommand", () => {
       await expect(
         UpdatePractitionerCommand(ctx, practitioner.id, { email: takenEmail })
       ).rejects.toThrow(ConflictError);
+    });
+  }, 15000);
+
+  // Admin-only manual status override — the recovery tool for a
+  // practitioner stuck in a state the normal Activate/Resend/Accept flow
+  // can't get them out of (see docs/stories/practitioner-invite-resend.md
+  // and apps/pwa/src/config/forms/hcpForm.ts's STATUS_OPTIONS).
+  it("lets an admin directly override status (e.g. resetting a stuck 'active' test record back to pending_approval)", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const practitioner = await CreatePractitionerCommand(ctx, {
+        first_name: "Stuck",
+        last_name: "Active",
+        email: `qa-hcp-${uniqueSuffix()}@example.com`,
+        phone: "600100200",
+      });
+      await updatePractitionerStatus(client, practitioner.id, "active");
+
+      const after = await UpdatePractitionerCommand(ctx, practitioner.id, { status: "pending_approval" });
+
+      expect(after?.status).toBe("pending_approval");
+    });
+  }, 15000);
+
+  it("rejects a status override attempt from a non-admin (manager) role", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const adminCtx = await buildTestContext(client);
+      const practitioner = await CreatePractitionerCommand(adminCtx, {
+        first_name: "Guarded",
+        last_name: "ByRole",
+        email: `qa-hcp-${uniqueSuffix()}@example.com`,
+        phone: "600100200",
+      });
+
+      const managerEmail = `qa-practitioner-cmd-mgr-${uniqueSuffix()}@neosleepcare.com`;
+      const managerHash = await bcrypt.hash("irrelevant", 4);
+      const managerUser = await insertStaffUser(client, managerEmail, "QA", "Manager", "manager", managerHash, false);
+      const managerCtx: TenantContext = {
+        slug: TENANT_SLUG,
+        client,
+        user: {
+          id: managerUser!.id,
+          email: managerEmail,
+          role: "manager",
+          roles: [{ role: "manager", territory_id: await getGlobalTerritoryId(client) }],
+        },
+        requestId: `test-${uniqueSuffix()}`,
+      };
+
+      await expect(
+        UpdatePractitionerCommand(managerCtx, practitioner.id, { status: "active" })
+      ).rejects.toThrow(ValidationError);
+
+      // Not silently ignored either — the whole request must be rejected,
+      // not "succeed but drop the status field".
+      const unchanged = await getPractitionerById(client, practitioner.id);
+      expect(unchanged?.status).toBe("pending_approval");
     });
   }, 15000);
 });

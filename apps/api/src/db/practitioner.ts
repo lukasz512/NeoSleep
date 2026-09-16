@@ -63,8 +63,8 @@ export interface InsertPractitionerInput {
   language?: string | null;
   national_ids?: Record<string, string> | null;
   social_links?: Record<string, unknown> | null;
-  /** Defaults to 'pending_approval' — every practitioner needs training completed (see UpdatePractitionerCommand's activation path) before going 'active' and becoming visible on the public map. */
-  status?: "pending_approval" | "active" | "inactive";
+  /** Defaults to 'pending_approval' — every practitioner needs training completed (see ActivatePractitionerCommand) before going 'active' and becoming visible on the public map. */
+  status?: "pending_approval" | "invited" | "active" | "inactive";
 }
 
 export interface UpdatePractitionerInput {
@@ -82,6 +82,18 @@ export interface UpdatePractitionerInput {
   language?: string | null;
   national_ids?: Record<string, string> | null;
   social_links?: Record<string, unknown> | null;
+  /**
+   * Admin-only manual override (see apps/pwa/src/config/forms/hcpForm.ts's
+   * STATUS_OPTIONS for the full rationale) — a recovery tool for a
+   * practitioner stuck in a state the normal Activate/Resend/Accept flow
+   * can't get them out of (e.g. one that reached "active" under the
+   * pre-025_practitioner_invited_status.sql bug with no real account
+   * behind it). Ordinary status transitions still go through
+   * updatePractitionerStatus() (ActivatePractitionerCommand,
+   * AcceptPractitionerInviteCommand) — this is the one path that lets a
+   * human directly override it instead.
+   */
+  status?: "pending_approval" | "invited" | "active" | "inactive";
 }
 
 const PRAC_SORT_COLUMNS = ["first_name", "last_name", "email", "primary_specialty", "region", "influence_tier", "created_at"] as const;
@@ -327,6 +339,7 @@ export async function updatePractitioner(client: PoolClient, id: string, input: 
     const influenceTier = input.influence_tier ?? existing.influence_tier;
     const nationalIds = input.national_ids !== undefined ? input.national_ids : existing.national_ids;
     const socialLinks = input.social_links !== undefined ? input.social_links : existing.social_links;
+    const status = input.status ?? existing.status;
 
     let orgId: string | null;
     if (input.organization_id !== undefined) {
@@ -358,9 +371,9 @@ export async function updatePractitioner(client: PoolClient, id: string, input: 
     );
 
     await client.query(
-      `UPDATE practitioner SET organization_id = $1, primary_specialty = $2, influence_tier = $3, national_ids = $4, updated_at = now()
-       WHERE id = $5`,
-      [orgId ?? null, primarySpecialty, influenceTier, nationalIds ? JSON.stringify(nationalIds) : null, id]
+      `UPDATE practitioner SET organization_id = $1, primary_specialty = $2, influence_tier = $3, national_ids = $4, status = $5, updated_at = now()
+       WHERE id = $6`,
+      [orgId ?? null, primarySpecialty, influenceTier, nationalIds ? JSON.stringify(nationalIds) : null, status, id]
     );
   } catch (err) {
     if (err instanceof AppError) throw err;
