@@ -351,6 +351,23 @@ const ICONS = {
     paths: `<path d="M12 3.5c-2.9 0-5 2.3-5 5.2 0 3.7-.9 5.7-1.8 6.8a1 1 0 0 0 .8 1.6h12a1 1 0 0 0 .8-1.6c-.9-1.1-1.8-3.1-1.8-6.8 0-2.9-2.1-5.2-5-5.2z" />
             <path d="M9.5 20a2.5 2.5 0 0 0 5 0" />`,
   },
+  "check-circle": {
+    strokeWidth: 1.6,
+    paths: `<circle cx="12" cy="12" r="9" />
+            <path d="M8 12.5l2.5 2.5L16 9.5" />`,
+  },
+  "alert-triangle": {
+    strokeWidth: 1.6,
+    paths: `<path d="M12 3.5L21.5 20h-19z" stroke-linejoin="round" />
+            <line x1="12" y1="9.5" x2="12" y2="14" />
+            <circle cx="12" cy="17" r="0.6" fill="currentColor" stroke="none" />`,
+  },
+  "alert-circle": {
+    strokeWidth: 1.6,
+    paths: `<circle cx="12" cy="12" r="9" />
+            <line x1="12" y1="7.5" x2="12" y2="13" />
+            <circle cx="12" cy="16.5" r="0.6" fill="currentColor" stroke="none" />`,
+  },
 } as const;
 </script>
 
