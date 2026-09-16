@@ -175,6 +175,38 @@ remains an unchanged backstop for ordinary interactive sessions.
 automated routine in this repo — branch + push only, with the GitHub
 "create a pull request" URL left as a Linear comment for Łukasz to act on.
 
+**Update, 2026-09-16: before/after screenshots, best-effort.** Łukasz wanted
+visual confidence on what a UI ticket actually changed without checking out
+the branch himself (see `docs/stories/worker-before-after-screenshots.md` for
+the full enrichment pass). Step 9 now optionally captures a before/after
+screenshot pair for tickets with a self-contained visual change — same class
+as an isolated single Vue SFC or style file, not a full authenticated page —
+committed to the worker's own branch under
+`docs/worker-screenshots/<linear-ticket-id>/`, attached to the Linear
+completion comment, and referenced via `raw.githubusercontent.com` in a
+pre-filled GitHub compare URL (`?quick_pull=1&title=&body=`) so the images
+render the moment Łukasz opens the PR form — he still clicks "Create" himself,
+so this doesn't touch the "never opens a PR" rule above.
+
+Investigation before building this found **no headless-browser or
+screenshot-capable dependency anywhere in this monorepo** — no Playwright,
+Puppeteer, canvas, `sharp`, `@vitest/browser`, no CI precedent. Adding one as
+a new devDependency for this would repeat the exact Docker-in-cloud mistake
+this same ADR already reversed above: unwanted infra Łukasz doesn't want to
+maintain, for a capability that turns out to already exist elsewhere — a
+prior worker validation run rendered an isolated `AppIcon.vue` fix to
+`preview.html`/`preview.png` successfully inside its own cloud sandbox, which
+means that rendering capability belongs to the RemoteTrigger cloud runtime
+itself, not this repo. Step 9 therefore references it generically ("whatever
+image-rendering capability the environment already provides") rather than
+naming a specific tool this repo would need to install and maintain.
+
+This capture only ever runs after Step 7's self-check has already passed —
+it is strictly best-effort, never a new gate: a missing or failed render is
+never a self-check failure, never triggers `Blocked`, and never blocks ticket
+completion. The synthetic-data-only rule from Compliance Impact below applies
+here too, extended to this new visual surface, not just DB rows.
+
 ## Consequences
 - Enables: tickets written during the day can turn into a reviewable branch by
   morning without Łukasz driving the implementation session himself.
@@ -210,6 +242,11 @@ automated routine in this repo — branch + push only, with the GitHub
   exports its own `DATABASE_URL` and runs the test suite directly. Worth a
   reread of this ADR once that other change actually merges to `dev`, in case
   the hook's behavior changes further before then.
+- New path, `docs/worker-screenshots/<linear-ticket-id>/`: before/after PNGs
+  from the 2026-09-16 update above. These become permanent git history once a
+  worker branch carrying them merges to `dev` — an accepted trade-off, not an
+  oversight (see `docs/stories/worker-before-after-screenshots.md`'s resolved
+  Open Questions for the alternative considered and why it wasn't chosen).
 
 ## Compliance Impact
 The worker's dedicated `test` schema (same Supabase instance, restricted

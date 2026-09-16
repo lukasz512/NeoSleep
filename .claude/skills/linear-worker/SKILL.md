@@ -130,10 +130,23 @@ This is the one policy Łukasz was explicit about: no self-fix loop, no second a
 - End the turn. A clean tree means the Stop hook exits 0 immediately — you are not fighting it.
 
 ### 9. On success — commit, branch, push
-- Commit with a clear message. Include a co-authorship trailer identifying this as agent work, same convention as any Claude-authored commit in this repo, so `git blame` is never ambiguous about human vs. agent authorship.
+
+**Screenshots (best-effort, never blocking):** you reach this point only after Step 7 has already passed — nothing here is ever a self-check failure, never triggers `Blocked`, and never gets a retry. Skip any of the following silently if it doesn't apply; don't mention a skip in the completion comment.
+- **Judge applicability yourself** — no new Linear label for this. Does the diff include a self-contained visual change (a single Vue SFC or style file) that can be rendered in isolation, the same class of change as the `AppIcon.vue` fix from an earlier validation run? If the change spans multiple interacting components, needs live app/auth/routing state, or is backend-only/non-visual, there's nothing to do here — move straight to the commit bullet below.
+- **No "before" for a brand-new file.** If the changed visual file didn't exist at `git HEAD`, skip the pair for that file — there's no meaningful before state.
+- **Sourcing**: "before" = `git show HEAD:<path>` (HEAD is still unmodified at this point in the procedure — nothing has been committed yet); "after" = the current working tree file, post-edit.
+- **Render technique**: use whatever image-rendering/screenshot capability this cloud environment already provides at the runtime level — the same one that produced `preview.html`/`preview.png` for the `AppIcon.vue` validation. This is **not** a repo dependency — do not add Playwright, Puppeteer, Chromium, or any other headless-browser package to any `package.json` for this. That would repeat the Docker-in-cloud mistake ADR-019 already tried and reversed for this same worker (see its 2026-09-10 update): unwanted infra Łukasz doesn't want to maintain, for a capability the environment already provides another way.
+- **Output paths**: `docs/worker-screenshots/<linear-ticket-id>/before.png` and `.../after.png`. Any scratch render harness (e.g. a temporary `preview.html`) is not committed — only the two PNGs land in the repo.
+- **Synthetic-data guardrail, actively confirmed, not assumed**: the render must show only fixture/placeholder props or content, never anything resembling a real patient/HCP record — same rule as the `test` schema (ADR-019's Compliance Impact section), extended here to a new visual surface.
+- **Graceful skip**: no rendering capability this run, the change isn't isolatable, or the render fails for any reason — skip silently and continue with the rest of this step unchanged.
+
+- Commit with a clear message (screenshot PNGs, if produced, are included in this same commit). Include a co-authorship trailer identifying this as agent work, same convention as any Claude-authored commit in this repo, so `git blame` is never ambiguous about human vs. agent authorship.
 - Branch name: `worker/<linear-ticket-id>-<kebab-slug-of-title>`, created from `dev` (this repo's default branch — confirm via `git remote show origin` if unsure, never assume `main`).
 - `git push -u origin worker/<...>`. Never push to `dev` or `prod`. **Never open a pull request** — this is a hard rule, not a preference (see CLAUDE.md's PR-only workflow).
-- Comment on the Linear ticket with the exact GitHub "create a pull request" URL git prints after push (`https://github.com/lukasz512/NeoSleep/pull/new/worker/<...>`).
+- **If screenshots were produced**, attach both PNGs to the ticket via whatever Linear MCP attachment capability this session exposes, on the same completion comment. If no attachment capability is available in this session, fall back to putting the two `raw.githubusercontent.com` links directly in the comment text instead — same "note it, don't block on it" fallback this file already uses for unreadable ticket attachments (see the Ticket Contract's "Fields read" bullet).
+- Comment on the Linear ticket with a pre-filled GitHub PR URL instead of the plain link git prints — construct:
+  `https://github.com/lukasz512/NeoSleep/compare/dev...worker/<...>?quick_pull=1&title=<url-encoded-title>&body=<url-encoded-body>`
+  `title` is the ticket title (or a short summary); `body` is a short one/two-line summary of the change, plus — only when screenshots were produced — two markdown image lines pointing at the `raw.githubusercontent.com` URLs for `before.png`/`after.png` on the pushed branch, so they render inline the moment the PR form opens. Both `title` and `body` must be percent-encoded (spaces, `%0A` for newlines, and markdown's `! [ ] ( )` all need encoding). This still only pre-fills GitHub's own "new PR" form — Łukasz clicks "Create" himself, same as always; it does not open a pull request on your behalf.
 - Move the ticket to `Needs Review`.
 
 ---
