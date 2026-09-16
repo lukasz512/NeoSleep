@@ -480,6 +480,20 @@ a:hover {
   min-width: 0;
 }
 
+/* .pwa-form-col: opt-in for FormRenderer.vue's cols-ratio rows (--pwa-form-col
+   set inline per field, see rowItemStyle()). Below 600px — the same
+   breakpoint HCODetailView.vue's own two-column layout switches at — every
+   paired field stacks to full width instead of splitting the row; the ratio
+   only applies once there's enough room for a real side-by-side pair. */
+.pwa-form-row-item.pwa-form-col {
+  flex: 1 1 100%;
+}
+@media (min-width: 600px) {
+  .pwa-form-row-item.pwa-form-col {
+    flex: var(--pwa-form-col, 1) 1 0%;
+  }
+}
+
 /*
  * AppIcon renders a bare <svg> with no intrinsic size — every other consumer
  * supplies its own sizing class, but FormRenderer's field-icon slot (icon

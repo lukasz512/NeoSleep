@@ -56,6 +56,15 @@ async function mountHCPDetail(status: string, role: "admin" | "rep" = "admin"): 
   mountedWrappers.push(wrapper);
   await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(1));
   await wrapper.vm.$nextTick();
+  // HCPDetailView's template unconditionally contains <FormRenderer>, a
+  // defineAsyncComponent — merely mounting this view kicks off its dynamic
+  // import (and PhoneField's own nested scoped-CSS chunk within it) even
+  // though the edit modal itself is never opened by these tests. Without
+  // waiting for that import to settle here, it can still be in flight when
+  // this test file's environment is torn down, throwing an unhandled
+  // "EnvironmentTeardownError" rejection that fails the whole run despite
+  // every assertion passing (confirmed via quality-gate.sh, 2026-09-17).
+  await vi.dynamicImportSettled();
   return wrapper;
 }
 
