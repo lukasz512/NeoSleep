@@ -13,6 +13,7 @@
     "sync-test-schema": "tsx scripts/sync-test-schema.ts"
   },
   "dependencies": {
+    "@neo/documents": "workspace:*",
     "@neo/email": "workspace:*",
     "@sparticuz/chromium": "143.0.4",
     "@supabase/supabase-js": "^2.116.0",
