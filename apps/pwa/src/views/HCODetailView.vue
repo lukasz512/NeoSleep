@@ -34,9 +34,19 @@
     @retry="loadHCO"
   >
     <template #title v-if="hco">
-      <span class="view-item__title-wrap">
-        <AppAvatar entity-type="hco" :size="40" />
-        <h1 class="view-item__title">{{ hco.name }}</h1>
+      <span class="view-item__title-wrap hco-title-row">
+        <span class="view-item__title-wrap">
+          <AppAvatar entity-type="hco" :size="40" />
+          <h1 class="view-item__title">{{ hco.name }}</h1>
+        </span>
+        <span class="hco-title-row__badges">
+          <VChip :color="hcoTypeColor(hco.type)" size="large" variant="tonal">
+            {{ hcoTypeLabel(hco.type) }}
+          </VChip>
+          <VChip :color="hcoStatusColor(hco.status)" size="large" variant="tonal">
+            {{ hcoStatusLabel(hco.status) }}
+          </VChip>
+        </span>
       </span>
     </template>
     <template #header-actions v-if="hco">
@@ -95,31 +105,51 @@
           <div class="hco-details-layout">
             <div class="hco-details-layout__main">
               <div class="view-item__row">
-                <dt class="view-item__label">{{ t("user.hco.detail.type") }}</dt>
-                <dd class="view-item__value">{{ hcoTypeLabel(hco.type) }}</dd>
-              </div>
-              <div class="view-item__row">
                 <dt class="view-item__label">{{ t("user.hco.detail.region") }}</dt>
                 <dd class="view-item__value">{{ territoryLabel }}</dd>
               </div>
-              <div class="view-item__row">
-                <dt class="view-item__label">{{ t("user.hco.detail.status") }}</dt>
-                <dd class="view-item__value">{{ hcoStatusLabel(hco.status) }}</dd>
+              <div v-if="hco.specialties?.length" class="view-item__row">
+                <dt class="view-item__label">{{ t("user.hco.detail.specialties") }}</dt>
+                <dd class="view-item__value hco-specialties">
+                  <VChip v-for="code in hco.specialties" :key="code" size="small" variant="outlined">
+                    {{ specialtyLabel(code) }}
+                  </VChip>
+                </dd>
               </div>
 
               <div class="hco-contact-cards">
-                <a v-if="hco.phone" :href="`tel:${hco.phone}`" class="hco-contact-cards__item" :aria-label="t('user.hco.detail.phone')">
-                  <AppIcon name="phone" />
-                </a>
-                <a v-if="hco.email" :href="`mailto:${hco.email}`" class="hco-contact-cards__item" :aria-label="t('user.hco.detail.email')">
-                  <AppIcon name="mail" />
-                </a>
-                <a v-if="hco.website" :href="hco.website" target="_blank" rel="noopener noreferrer" class="hco-contact-cards__item" :aria-label="t('user.hco.detail.website')">
-                  <AppIcon name="globe" />
-                </a>
-                <a v-if="hco.google_link" :href="hco.google_link" target="_blank" rel="noopener noreferrer" class="hco-contact-cards__item" :aria-label="t('user.hco.detail.googleLink')">
-                  <AppIcon name="map-pin" />
-                </a>
+                <VTooltip v-if="hco.phone" location="bottom">
+                  <template #activator="{ props: tooltipProps }">
+                    <a v-bind="tooltipProps" :href="`tel:${hco.phone}`" class="hco-contact-cards__item" :aria-label="t('user.hco.detail.phone')">
+                      <AppIcon name="phone" />
+                    </a>
+                  </template>
+                  <span>{{ hco.phone }}</span>
+                </VTooltip>
+                <VTooltip v-if="hco.email" location="bottom">
+                  <template #activator="{ props: tooltipProps }">
+                    <a v-bind="tooltipProps" :href="`mailto:${hco.email}`" class="hco-contact-cards__item" :aria-label="t('user.hco.detail.email')">
+                      <AppIcon name="mail" />
+                    </a>
+                  </template>
+                  <span>{{ hco.email }}</span>
+                </VTooltip>
+                <VTooltip v-if="hco.website" location="bottom">
+                  <template #activator="{ props: tooltipProps }">
+                    <a v-bind="tooltipProps" :href="hco.website" target="_blank" rel="noopener noreferrer" class="hco-contact-cards__item" :aria-label="t('user.hco.detail.website')">
+                      <AppIcon name="globe" />
+                    </a>
+                  </template>
+                  <span>{{ hco.website }}</span>
+                </VTooltip>
+                <VTooltip v-if="hco.google_link" location="bottom">
+                  <template #activator="{ props: tooltipProps }">
+                    <a v-bind="tooltipProps" :href="hco.google_link" target="_blank" rel="noopener noreferrer" class="hco-contact-cards__item" :aria-label="t('user.hco.detail.googleLink')">
+                      <AppIcon name="map-pin" />
+                    </a>
+                  </template>
+                  <span>{{ hco.google_link }}</span>
+                </VTooltip>
               </div>
             </div>
 
@@ -190,6 +220,7 @@ import { useI18n } from "vue-i18n";
 import { usePermissions } from "../composables/usePermissions";
 import { apiFetch } from "../composables/useApi";
 import { useEntityCacheStore } from "../stores/entityCache";
+import { useConfigStore } from "../stores/config";
 import { useNotifications } from "../composables/useNotifications";
 import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { useAsyncAction } from "../composables/useAsyncAction";
@@ -204,7 +235,12 @@ import HCOLocationMap from "../components/HCOLocationMap.vue";
 import PatientNotesPanel from "../components/patient/PatientNotesPanel.vue";
 import { hcoFormFields } from "../config/forms/hcoForm";
 import { entityActionIcon, entityActionBtnClass } from "../config/entityActions";
-import { hcoTypeLabel as hcoTypeLabelFor, hcoStatusLabel as hcoStatusLabelFor } from "../utils/hcoLabels";
+import {
+  hcoTypeLabel as hcoTypeLabelFor,
+  hcoStatusLabel as hcoStatusLabelFor,
+  hcoTypeColor,
+  hcoStatusColor,
+} from "../utils/hcoLabels";
 
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
@@ -239,6 +275,7 @@ const route = useRoute();
 const router = useRouter();
 const notifications = useNotifications();
 const { submit } = useEntitySubmit();
+const configStore = useConfigStore();
 
 const hcoTabs = [
   { value: "details", labelKey: "user.hco.detail.tabs.details" },
@@ -256,6 +293,9 @@ function hcoTypeLabel(type?: string): string {
 }
 function hcoStatusLabel(status?: string): string {
   return hcoStatusLabelFor(t, status);
+}
+function specialtyLabel(code: string): string {
+  return configStore.specialtyItems.find((o) => o.value === code)?.title ?? code;
 }
 
 /** Same territory_path-with-region-fallback pattern as PatientDetailView's regionBreadcrumb. */
@@ -410,6 +450,25 @@ watch(() => route.params.id, loadHCO);
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.hco-title-row {
+  width: 100%;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.hco-title-row__badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hco-specialties {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .hco-details-layout {

@@ -34,3 +34,12 @@ export function hcoStatusColor(status?: string): string {
     default:                 return "default";
   }
 }
+
+export function hcoTypeColor(type?: string): string {
+  switch (type) {
+    case "hospital": return "primary";
+    case "clinic":   return "info";
+    case "pharmacy": return "secondary";
+    default:         return "default";
+  }
+}

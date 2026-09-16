@@ -1270,6 +1270,7 @@
   "user.hco.filters.statusPendingApproval": "Oczekuje na zatwierdzenie",
   "user.hco.detail.type": "Typ",
   "user.hco.detail.region": "Terytorium",
+  "user.hco.detail.specialties": "Specjalizacje",
   "user.hco.detail.tabs.details": "Szczegóły",
   "user.hco.detail.tabs.notes": "Notatki",
   "user.hco.detail.tabs.relatedDoctors": "Lekarze",
