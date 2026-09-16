@@ -1,5 +1,5 @@
 import type { PoolClient } from "pg";
-import { trimOrNull, trimOrEmpty } from "./helpers.js";
+import { trimOrNull, trimOrEmpty, toArray } from "./helpers.js";
 import { AppError, DatabaseError, ValidationError } from "../errors.js";
 
 export interface Territory {
@@ -9,6 +9,11 @@ export interface Territory {
   country_code: string;
   parent_id: string | null;
   kind: string;
+  /** Materialized path (Postgres ltree, migration 022) — UUID ancestor chain
+   *  with hyphens replaced by underscores (ltree labels can't contain '-').
+   *  Root-first, dot-separated. Used for `<@` containment checks (is a
+   *  candidate node inside a user's assigned scope) — see requireScope.ts. */
+  path: string;
   metadata: Record<string, unknown> | null;
   created_at: Date;
   updated_at: Date;
@@ -17,7 +22,7 @@ export interface Territory {
 export interface GetTerritoryFilters {
   search?: string;
   country_code?: string;
-  kind?: string;
+  kind?: string | string[];
   parent_id?: string | null;
 }
 
@@ -40,7 +45,7 @@ export interface UpdateTerritoryInput {
 }
 
 const TERRITORY_SELECT_COLS = `
-  id, name, code, country_code, parent_id, kind, metadata, created_at, updated_at`.trim();
+  id, name, code, country_code, parent_id, kind, path::text AS path, metadata, created_at, updated_at`.trim();
 
 export async function getTerritoryPaginated(
   client: PoolClient,
@@ -61,9 +66,10 @@ export async function getTerritoryPaginated(
     conditions.push(`country_code = $${idx++}`);
     params.push(filters.country_code.trim());
   }
-  if (filters.kind?.trim()) {
-    conditions.push(`kind = $${idx++}`);
-    params.push(filters.kind.trim());
+  const kindArr = toArray(filters.kind);
+  if (kindArr.length > 0) {
+    conditions.push(`kind = ANY($${idx++}::text[])`);
+    params.push(kindArr);
   }
   if (filters.parent_id !== undefined) {
     if (filters.parent_id === null) {
@@ -93,6 +99,53 @@ export async function getTerritoryPaginated(
   } catch (err) {
     if (err instanceof AppError) throw err;
     throw new DatabaseError("getTerritoryPaginated", err);
+  }
+}
+
+/**
+ * Raw ltree path text for one territory node — used by requireScope.ts to
+ * fetch a user's own scope path once per request, then pass it as a bind
+ * param into each scoped list/detail query's `WHERE candidate.territory_id
+ * IS NULL OR t.path <@ $n::ltree` condition (one containment check per
+ * query, not one per candidate row).
+ */
+export async function getTerritoryPathText(client: PoolClient, id: string): Promise<string | null> {
+  try {
+    const r = await client.query<{ path: string }>(`SELECT path::text AS path FROM territory WHERE id = $1`, [id]);
+    return r.rows[0]?.path ?? null;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getTerritoryPathText", err);
+  }
+}
+
+/**
+ * The tenant's one reserved 'global' root node (migration 022) — the default
+ * RBAC scope for a brand-new user (sees every country). Throws rather than
+ * returning null: every tenant schema gets this row from migration 022, a
+ * missing one means that migration hasn't run against this schema, which no
+ * code path should silently tolerate.
+ */
+export async function getGlobalTerritoryId(client: PoolClient): Promise<string> {
+  const r = await client.query<{ id: string }>(`SELECT id FROM territory WHERE kind = 'global' LIMIT 1`);
+  const id = r.rows[0]?.id;
+  if (!id) throw new DatabaseError("getGlobalTerritoryId", new Error("No 'global' territory root — has migration 022 run?"));
+  return id;
+}
+
+/** Looks up the country-level territory node for a two-letter code (e.g. "MX") —
+ *  used to resolve a country_code into a real RBAC scope territory_id. Null
+ *  if that country hasn't been seeded into the hierarchy yet. */
+export async function getCountryTerritoryId(client: PoolClient, countryCode: string): Promise<string | null> {
+  try {
+    const r = await client.query<{ id: string }>(
+      `SELECT id FROM territory WHERE kind = 'country' AND country_code = $1 LIMIT 1`,
+      [countryCode]
+    );
+    return r.rows[0]?.id ?? null;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getCountryTerritoryId", err);
   }
 }
 
@@ -154,6 +207,33 @@ export async function getTerritoryPath(client: PoolClient, id: string): Promise<
 }
 
 /**
+ * Recomputes `path` (ltree) for one node and every one of its descendants,
+ * seeded from its *current* parent's already-correct path — call after
+ * inserting a node, or after changing a node's parent_id (moving a subtree).
+ * No trigger involved (this codebase computes derived columns in application
+ * code, e.g. `updated_at = now()` set explicitly per query, not via DB
+ * triggers) — one explicit call site per write path that can affect path,
+ * same as every other derived value here.
+ */
+async function recomputeTerritorySubtreePath(client: PoolClient, rootId: string): Promise<void> {
+  await client.query(
+    `WITH RECURSIVE tree(id, computed_path) AS (
+       SELECT t.id,
+         (COALESCE((SELECT path FROM territory WHERE id = t.parent_id), ''::extensions.ltree)
+           || replace(t.id::text, '-', '_'))::extensions.ltree
+       FROM territory t WHERE t.id = $1
+       UNION ALL
+       SELECT t.id, (tr.computed_path || replace(t.id::text, '-', '_'))::extensions.ltree
+       FROM territory t
+       JOIN tree tr ON t.parent_id = tr.id
+     )
+     UPDATE territory t SET path = tree.computed_path
+     FROM tree WHERE t.id = tree.id`,
+    [rootId]
+  );
+}
+
+/**
  * Inserts a territory node using the provided client.
  * The client must already be in a transaction (withTenant handles this).
  */
@@ -176,6 +256,7 @@ export async function insertTerritory(client: PoolClient, input: InsertTerritory
       ]
     );
     const id = result.rows[0]!.id;
+    await recomputeTerritorySubtreePath(client, id);
 
     const territory = await getTerritoryById(client, id);
     if (!territory) throw new DatabaseError("insertTerritory", new Error("Insert returned no rows"));
@@ -230,6 +311,10 @@ export async function updateTerritory(
 
     params.push(id);
     await client.query(`UPDATE territory SET ${sets.join(", ")} WHERE id = $${idx}`, params);
+
+    if (input.parent_id !== undefined) {
+      await recomputeTerritorySubtreePath(client, id);
+    }
   } catch (err) {
     if (err instanceof AppError) throw err;
     throw new DatabaseError("updateTerritory", err);

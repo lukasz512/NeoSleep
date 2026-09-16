@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import bcrypt from "bcrypt";
-import { withTenant, insertStaffUser, insertPractitioner, getUserIdByEmail, getUserRoleScopes } from "../db.js";
+import { withTenant, insertStaffUser, getGlobalTerritoryId, getCountryTerritoryId, insertPractitioner, getUserIdByEmail, getUserRoleScopes } from "../db.js";
 import type { TenantContext } from "../context/TenantContext.js";
 import { ConflictError, ValidationError } from "../errors.js";
 import { CreatePractitionerCommand, ActivatePractitionerCommand, UpdatePractitionerCommand } from "./practitioner.js";
@@ -32,7 +32,7 @@ async function buildTestContext(client: Parameters<typeof CreatePractitionerComm
   return {
     slug: TENANT_SLUG,
     client,
-    user: { id: user!.id, email, role: "admin", roles: [{ role: "admin", scope: "global" }] },
+    user: { id: user!.id, email, role: "admin", roles: [{ role: "admin", territory_id: await getGlobalTerritoryId(client) }] },
     requestId: `test-${uniqueSuffix()}`,
   };
 }
@@ -141,7 +141,8 @@ describe("ActivatePractitionerCommand", () => {
       const userId = await getUserIdByEmail(client, email);
       expect(userId).not.toBeNull();
       const roles = await getUserRoleScopes(client, userId!);
-      expect(roles).toContainEqual({ role: "doctor", scope: "MX" });
+      const mxTerritoryId = await getCountryTerritoryId(client, "MX");
+      expect(roles).toContainEqual({ role: "doctor", territory_id: mxTerritoryId });
     });
   }, 15000);
 

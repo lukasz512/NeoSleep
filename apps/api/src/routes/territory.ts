@@ -7,7 +7,7 @@ import { buildContext } from "../context/TenantContext.js";
 import { CreateTerritoryCommand, UpdateTerritoryCommand, DeleteTerritoryCommand } from "../commands/territory.js";
 import { GetTerritoryListQuery, GetTerritoryByIdQuery, GetTerritoryPathQuery } from "../queries/territory.js";
 import { ValidationError } from "../errors.js";
-import { parsePaginationParams } from "./utils.js";
+import { parsePaginationParams, toFilterArray } from "./utils.js";
 
 /**
  * Territory routes — the geographic hierarchy (country > region > city >
@@ -51,7 +51,7 @@ territoryRouter.get(
     const { page, limit } = parsePaginationParams(req);
     const search = typeof req.query.search === "string" ? req.query.search.trim() : undefined;
     const countryCode = typeof req.query.country_code === "string" ? req.query.country_code.trim() : undefined;
-    const kind = typeof req.query.kind === "string" ? req.query.kind.trim() : undefined;
+    const kind = toFilterArray(req.query.kind);
     const parentId =
       req.query.parent_id === "null" ? null
       : typeof req.query.parent_id === "string" ? req.query.parent_id.trim()
@@ -62,7 +62,7 @@ territoryRouter.get(
       return GetTerritoryListQuery(ctx, {
         search: search || undefined,
         country_code: countryCode || undefined,
-        kind: kind || undefined,
+        kind,
         parent_id: parentId,
         page,
         limit,

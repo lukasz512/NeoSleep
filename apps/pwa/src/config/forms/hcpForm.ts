@@ -3,6 +3,7 @@ import { apiFetch } from "../../composables/useApi";
 import { useConfigStore } from "../../stores/config";
 import { useAuthStore } from "../../stores/auth";
 import { identityFields } from "./identityFields";
+import { loadTerritoryOptions } from "./territoryOptions";
 
 /**
  * Practitioner (HCP) entity config for the generic FormRenderer. Reuses the
@@ -283,6 +284,16 @@ export const hcpFormFields: FormFieldDef[] = [
     type: "text",
     labelKey: "user.hcp.form.region",
     hidden: true,
+  },
+  {
+    key: "territory_id",
+    type: "autocomplete",
+    labelKey: "user.hcp.form.territory",
+    hint: "app.patients.form.territoryHint",
+    default: null,
+    options: loadTerritoryOptions,
+    icon: "nav-territories",
+    cols: 6,
   },
   {
     key: "language",

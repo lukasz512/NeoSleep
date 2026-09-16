@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import bcrypt from "bcrypt";
-import { withTenant, insertStaffUser } from "../db.js";
+import { withTenant, insertStaffUser, getGlobalTerritoryId } from "../db.js";
 import type { TenantContext } from "../context/TenantContext.js";
 import { CreatePatientCommand } from "./patient.js";
 import { GetPatientByIdQuery } from "../queries/patient.js";
@@ -23,7 +23,7 @@ async function buildTestContext(client: Parameters<typeof CreatePatientCommand>[
   return {
     slug: TENANT_SLUG,
     client,
-    user: { id: user!.id, email, role: "admin", roles: [{ role: "admin", scope: "global" }] },
+    user: { id: user!.id, email, role: "admin", roles: [{ role: "admin", territory_id: await getGlobalTerritoryId(client) }] },
     requestId: `test-${uniqueSuffix()}`,
   };
 }

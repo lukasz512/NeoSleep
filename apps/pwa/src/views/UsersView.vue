@@ -111,6 +111,7 @@ import AppListItemMenu from "../components/AppListItemMenu.vue";
 import { entityActionIcon, entityActionMenuIconClass } from "../config/entityActions";
 import { apiFetch } from "../composables/useApi";
 import { useNotifications } from "../composables/useNotifications";
+import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import type { FilterDefinition } from "../composables/useFilters";
 import { userFormFields } from "../config/forms/userForm";
@@ -129,6 +130,7 @@ interface UserListItem {
 
 const { t } = useI18n();
 const notifications = useNotifications();
+const { submit } = useEntitySubmit();
 const authStore = useAuthStore();
 const isAdmin = computed(() => authStore.user?.role === "admin");
 
@@ -199,22 +201,19 @@ function onEditUser(user: UserListItem) {
 async function onEditSubmit(payload: Record<string, unknown>, done: (ok: boolean) => void) {
   const id = selectedUser.value?.id;
   if (!id) { done(false); return; }
-  try {
-    const res = await apiFetch(`/api/v1/users/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (res.ok) {
-      notifications.show(t("user.users.form.editSuccess"), "success");
-      window.dispatchEvent(new Event("entity-list-refresh"));
-      done(true);
-    } else {
-      done(false);
-    }
-  } catch {
-    done(false);
-  }
+  await submit(
+    {
+      request: () =>
+        apiFetch(`/api/v1/users/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }),
+      successMessage: t("user.users.form.editSuccess"),
+      errorMessage: t("user.users.form.errorSave"),
+    },
+    done,
+  );
 }
 
 const { run: onResetPassword } = useAsyncAction(async (user: UserListItem) => {
@@ -285,22 +284,19 @@ const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
 });
 
 async function onSubmit(payload: Record<string, unknown>, done: (ok: boolean) => void) {
-  try {
-    const res = await apiFetch("/api/v1/users", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (res.ok) {
-      notifications.show(t("user.users.form.success"), "success");
-      window.dispatchEvent(new Event("entity-list-refresh"));
-      done(true);
-    } else {
-      done(false);
-    }
-  } catch {
-    done(false);
-  }
+  await submit(
+    {
+      request: () =>
+        apiFetch("/api/v1/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }),
+      successMessage: t("user.users.form.success"),
+      errorMessage: t("user.users.form.errorSave"),
+    },
+    done,
+  );
 }
 </script>
 

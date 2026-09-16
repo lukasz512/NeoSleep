@@ -5,6 +5,7 @@ import {
   getTreatmentPlanById,
   getSleepStudyById,
   softDeleteTreatmentPlan,
+  restoreTreatmentPlan,
   type TreatmentPlan,
 } from "../db.js";
 import { insertAuditLog } from "../db.js";
@@ -119,4 +120,28 @@ export async function DeleteTreatmentPlanCommand(ctx: TenantContext, id: string)
     entity_id: id,
     request_id: ctx.requestId,
   });
+}
+
+/**
+ * Admin-only undo for DeleteTreatmentPlanCommand — e.g. a plan hidden as
+ * abandoned turns out to have gone through with the partner after all, and
+ * needs to keep being the one record of that order rather than being
+ * abandoned in place while a second plan gets created for the same order.
+ */
+export async function RestoreTreatmentPlanCommand(ctx: TenantContext, id: string): Promise<TreatmentPlan | null> {
+  if (!id?.trim()) throw new ValidationError("treatment plan id is required");
+
+  await restoreTreatmentPlan(ctx.client, id);
+  const restored = await getTreatmentPlanById(ctx.client, id);
+  if (!restored) return null;
+
+  await insertAuditLog(ctx.client, {
+    user_id: ctx.user.id,
+    action: "restore",
+    entity_type: "TreatmentPlan",
+    entity_id: id,
+    request_id: ctx.requestId,
+  });
+
+  return restored;
 }

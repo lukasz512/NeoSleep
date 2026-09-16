@@ -5,6 +5,7 @@ import type { TenantContext } from "../context/TenantContext.js";
 import {
   getLeadById,
   insertStaffUser,
+  getCountryTerritoryId,
   insertPractitioner,
   updateUser,
   getUserById,
@@ -93,9 +94,14 @@ export async function InvitePractitionerCommand(
   if (!lead.phone) throw new ValidationError("A phone number is required — add it to the lead before inviting");
 
   // Doctors are per-country by definition (they practice in one market) — scope
-  // the new "doctor" role to the lead's own country_code, not 'global'. Falls
-  // back to 'global' only if the lead is missing country_code (legacy data);
-  // that's a data-quality gap upstream, not a reason to block the invite.
+  // the new "doctor" role to the lead's own country_code, not global. Falls
+  // back to insertStaffUser's own 'global' default only if the lead is
+  // missing country_code (legacy data) or that country isn't seeded into the
+  // territory hierarchy yet — a data-quality gap upstream, not a reason to
+  // block the invite.
+  const scopeTerritoryId = lead.country_code
+    ? await getCountryTerritoryId(ctx.client, lead.country_code)
+    : undefined;
   const user = await insertStaffUser(
     ctx.client,
     email,
@@ -106,7 +112,7 @@ export async function InvitePractitionerCommand(
     true,
     lead.salutation,
     lead.phone,
-    lead.country_code ?? "global",
+    scopeTerritoryId ?? undefined,
     ctx.user.id,
     lead.country_code
   );

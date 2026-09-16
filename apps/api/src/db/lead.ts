@@ -23,6 +23,8 @@ export interface Lead {
   converted_to_type: string | null;
   converted_at: Date | null;
   region: string;
+  territory_id: string | null;
+  territory_name: string | null;
   assigned_to: string | null;
   metadata: Record<string, unknown> | null;
   created_at: Date;
@@ -38,8 +40,9 @@ export interface GetLeadsFilters {
   hideCompletedOlderThan24h?: boolean;
   /** 'declined' leads (3 failed follow-up attempts, no meeting booked) are admin-only visibility. */
   hideDeclined?: boolean;
-  /** RBAC scope filter (see middleware/requireScope.ts): null = unrestricted, [] = matches nothing, otherwise restrict to these country_codes. */
-  countryCodes?: string[] | null;
+  /** RBAC territory scope (migration 022, requireScope.ts) — same shape/rollout-
+   *  safety fallback as GetPatientsFilters.scopePaths in db/patient.ts. */
+  scopePaths?: string[] | null;
 }
 
 export interface GetLeadsPaginatedResult {
@@ -58,6 +61,7 @@ export interface InsertLeadInput {
   region?: string;
   /** RBAC scope (see middleware/requireScope.ts) — distinct from `region` above, see migration 013's comment. */
   country_code?: string | null;
+  territory_id?: string | null;
   source?: string | null;
   institution?: string | null;
   assigned_to?: string | null;
@@ -74,6 +78,7 @@ export interface UpdateLeadInput {
   type?: string;
   region?: string;
   country_code?: string | null;
+  territory_id?: string | null;
   source?: string | null;
   institution?: string | null;
   assigned_to?: string | null;
@@ -93,7 +98,14 @@ const LEAD_SELECT_COLS = `
   l.converted_to_id, l.converted_to_type, l.converted_at,
   l.assigned_to, l.metadata, l.created_at, l.updated_at,
   i.title AS salutation, i.first_name, i.last_name, i.email, i.phone,
-  COALESCE(i.region, '') AS region, i.country_code`.trim();
+  COALESCE(i.region, '') AS region, i.country_code, i.territory_id, t.name AS territory_name`.trim();
+
+// territory: immediate assigned node's own name only — same no-N+1-on-the-
+// list-query reasoning as db/patient.ts's PATIENT_JOIN.
+const LEAD_JOIN = `
+  FROM lead l
+  JOIN identities i ON l.identity_id = i.id
+  LEFT JOIN territory t ON i.territory_id = t.id`.trim();
 
 function buildName(row: { salutation: string | null; first_name: string; last_name: string }): string {
   return formatDisplayName(row);
@@ -136,9 +148,9 @@ export async function getLeadsPaginated(
     params.push(regionArr);
     paramIndex++;
   }
-  if (filters.countryCodes !== undefined && filters.countryCodes !== null) {
-    conditions.push(`i.country_code = ANY($${paramIndex}::text[])`);
-    params.push(filters.countryCodes);
+  if (filters.scopePaths !== undefined && filters.scopePaths !== null) {
+    conditions.push(`(i.territory_id IS NULL OR t.path <@ ANY($${paramIndex}::extensions.ltree[]))`);
+    params.push(filters.scopePaths);
     paramIndex++;
   }
   if (filters.hideCompletedOlderThan24h) {
@@ -162,7 +174,7 @@ export async function getLeadsPaginated(
 
   try {
     const countResult = await client.query<{ count: string }>(
-      `SELECT COUNT(*) AS count FROM lead l JOIN identities i ON l.identity_id = i.id ${whereClause}`,
+      `SELECT COUNT(*) AS count ${LEAD_JOIN} ${whereClause}`,
       params
     );
     const total = Number(countResult.rows[0]?.count ?? 0);
@@ -171,7 +183,7 @@ export async function getLeadsPaginated(
     params.push(limit, offset);
     const dataResult = await client.query<LeadRow>(
       `SELECT ${LEAD_SELECT_COLS}
-       FROM lead l JOIN identities i ON l.identity_id = i.id
+       ${LEAD_JOIN}
        ${whereClause} ORDER BY ${safeOrder} ${orderDir} LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
       params
     );
@@ -186,7 +198,7 @@ export async function getLeadById(client: PoolClient, id: string): Promise<Lead 
   try {
     const result = await client.query<LeadRow>(
       `SELECT ${LEAD_SELECT_COLS}
-       FROM lead l JOIN identities i ON l.identity_id = i.id
+       ${LEAD_JOIN}
        WHERE l.id = $1 AND l.deleted_at IS NULL`,
       [id]
     );
@@ -207,7 +219,7 @@ export async function findLeadConvertedToPatient(client: PoolClient, patientId: 
   try {
     const result = await client.query<LeadRow>(
       `SELECT ${LEAD_SELECT_COLS}
-       FROM lead l JOIN identities i ON l.identity_id = i.id
+       ${LEAD_JOIN}
        WHERE l.converted_to_id = $1 AND l.converted_to_type = 'patient'`,
       [patientId]
     );
@@ -231,12 +243,12 @@ export async function insertLead(client: PoolClient, input: InsertLeadInput): Pr
 
   try {
     const identityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (title, first_name, last_name, email, phone, region, country_code)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO identities (title, first_name, last_name, email, phone, region, country_code, territory_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id`,
       [
         trimOrNull(input.salutation), firstName, lastName, trimOrNull(input.email), trimOrNull(input.phone),
-        trimOrEmpty(input.region) || null, trimOrNull(input.country_code),
+        trimOrEmpty(input.region) || null, trimOrNull(input.country_code), input.territory_id ?? null,
       ]
     );
     const identityId = identityResult.rows[0]!.id;
@@ -307,6 +319,10 @@ export async function updateLead(client: PoolClient, id: string, input: UpdateLe
     if (input.country_code !== undefined) {
       identityParams.push(trimOrNull(input.country_code));
       identitySets.push(`country_code = $${iidx++}`);
+    }
+    if (input.territory_id !== undefined) {
+      identityParams.push(input.territory_id ?? null);
+      identitySets.push(`territory_id = $${iidx++}`);
     }
     identityParams.push(lead.identity_id);
     await client.query(

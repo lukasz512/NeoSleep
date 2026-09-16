@@ -48,17 +48,14 @@
       <template #feed-card-title="{ item }">
         {{ (item as { name?: string }).name }}
       </template>
-      <template #item.contact="{ item }">
-        <span v-if="(item as { email?: string; phone?: string }).email || (item as { email?: string; phone?: string }).phone">
-          {{ (item as { email?: string; phone?: string }).email || (item as { email?: string; phone?: string }).phone }}
-        </span>
-        <span v-else class="app-entity-list__cell-empty">—</span>
-      </template>
       <template #item.practitioner_name="{ item }">
         <span v-if="(item as { practitioner_name?: string }).practitioner_name">
           {{ (item as { practitioner_name?: string }).practitioner_name }}
         </span>
         <span v-else class="app-entity-list__cell-empty">—</span>
+      </template>
+      <template #item.region="{ item }">
+        {{ (item as PatientListItem).territory_name || (item as PatientListItem).region || "—" }}
       </template>
       <template #item.status="{ item }">
         <VChip
@@ -110,7 +107,7 @@ import { useAuthStore } from "../stores/auth";
 import { usePermissions } from "../composables/usePermissions";
 import { useConfigStore } from "../stores/config";
 import { apiFetch } from "../composables/useApi";
-import { useNotifications } from "../composables/useNotifications";
+import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { patientFormFields } from "../config/forms/patientForm";
 import { patientStatusColor, patientStatusLabel } from "../utils/patientStatus";
 
@@ -128,6 +125,7 @@ interface PatientListItem {
   practitioner_name?: string | null;
   status?: string;
   region?: string;
+  territory_name?: string | null;
   ahi_baseline?: number | null;
   cpap_device?: string | null;
   medical_record?: string | null;
@@ -135,7 +133,7 @@ interface PatientListItem {
 
 const { t } = useI18n();
 const configStore = useConfigStore();
-const notifications = useNotifications();
+const { submit } = useEntitySubmit();
 const authStore = useAuthStore();
 // Direct add is its own, narrower admin/manager-only shortcut — everyone
 // else still adds patients through the lead pipeline.
@@ -171,10 +169,9 @@ const patientFilterDefinitions = computed<FilterDefinition[]>(() => [
 
 const tableHeaders = computed(() => [
   { title: t("app.patients.table.name"),             key: "name",              sortable: true },
-  { title: t("app.patients.table.contact"),          key: "contact",           sortable: false },
   { title: t("app.patients.table.practitioner"),     key: "practitioner_name", sortable: false },
-  { title: t("app.patients.table.status"),           key: "status",            sortable: true },
   { title: t("app.patients.table.region"),           key: "region",            sortable: true },
+  { title: t("app.patients.table.status"),           key: "status",            sortable: true },
 ]);
 
 const patientsI18n = computed(() => ({
@@ -200,22 +197,19 @@ function onAddPatient() {
 }
 
 async function onPatientSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
-  try {
-    const res = await apiFetch("/api/v1/patient", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    if (res.ok) {
-      notifications.show(t("app.patients.form.success"), "success");
-      window.dispatchEvent(new Event("entity-list-refresh"));
-      done(true);
-    } else {
-      done(false);
-    }
-  } catch {
-    done(false);
-  }
+  await submit(
+    {
+      request: () =>
+        apiFetch("/api/v1/patient", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        }),
+      successMessage: t("app.patients.form.success"),
+      errorMessage: t("app.patients.form.errorSave"),
+    },
+    done,
+  );
 }
 
 function onEditPatient(patient: PatientListItem) {
@@ -226,22 +220,19 @@ function onEditPatient(patient: PatientListItem) {
 async function onEditSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
   const id = selectedPatient.value?.id;
   if (!id) { done(false); return; }
-  try {
-    const res = await apiFetch(`/api/v1/patient/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    if (res.ok) {
-      notifications.show(t("app.patients.form.editSuccess"), "success");
-      window.dispatchEvent(new Event("entity-list-refresh"));
-      done(true);
-    } else {
-      done(false);
-    }
-  } catch {
-    done(false);
-  }
+  await submit(
+    {
+      request: () =>
+        apiFetch(`/api/v1/patient/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        }),
+      successMessage: t("app.patients.form.editSuccess"),
+      errorMessage: t("app.patients.form.errorSave"),
+    },
+    done,
+  );
 }
 
 function onScheduleVisit(patient: PatientListItem) {
@@ -260,23 +251,20 @@ async function onEventFormSubmit(
   payload: import("../components/EventForm.vue").EventSubmitPayload,
   done: (ok: boolean) => void,
 ) {
-  try {
-    const res = await apiFetch("/api/v1/encounter", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: payload.title, start_at: payload.start_at, end_at: payload.end_at, type: payload.type, status: payload.status, location: payload.location, video_link: payload.video_link, notes: payload.notes, region: payload.region, attendees: payload.attendees }),
-    });
-    if (res.ok) {
-      notifications.show(t("user.planner.form.success"), "success");
-      done(true);
-    } else {
-      notifications.show(t("user.planner.form.errorSave"), "error");
-      done(false);
-    }
-  } catch {
-    notifications.show(t("user.planner.form.errorSave"), "error");
-    done(false);
-  }
+  await submit(
+    {
+      request: () =>
+        apiFetch("/api/v1/encounter", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: payload.title, start_at: payload.start_at, end_at: payload.end_at, type: payload.type, status: payload.status, location: payload.location, video_link: payload.video_link, notes: payload.notes, region: payload.region, attendees: payload.attendees }),
+        }),
+      successMessage: t("user.planner.form.success"),
+      errorMessage: t("user.planner.form.errorSave"),
+      refresh: false,
+    },
+    done,
+  );
 }
 </script>
 

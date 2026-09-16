@@ -2,6 +2,7 @@ import type { FormFieldDef, FormFieldOption } from "../../types/formField";
 import { useConfigStore } from "../../stores/config";
 import { useAuthStore } from "../../stores/auth";
 import { emailField } from "./identityFields";
+import { loadTerritoryOptions } from "./territoryOptions";
 import { PHONE_MIN_DIGITS, phoneDigitCount } from "../../utils/phone";
 
 /**
@@ -73,6 +74,16 @@ export const hcoFormFields: FormFieldDef[] = [
   { key: "name", type: "text", labelKey: "user.hco.form.name", required: true, cols: 12 },
   { key: "type", type: "select", labelKey: "user.hco.form.type", options: loadInstitutionTypeOptions, cols: 6 },
   { key: "region", type: "autocomplete", labelKey: "user.hco.form.region", options: loadRegionOptions, cols: 6 },
+  {
+    key: "territory_id",
+    type: "autocomplete",
+    labelKey: "user.hco.form.territory",
+    hint: "app.patients.form.territoryHint",
+    default: null,
+    options: loadTerritoryOptions,
+    icon: "nav-territories",
+    cols: 6,
+  },
   { key: "address_line1", type: "text", labelKey: "user.hco.form.addressLine1", cols: 12 },
   { key: "postal_code", type: "text", labelKey: "user.hco.form.postalCode", cols: 6 },
   { key: "city", type: "text", labelKey: "user.hco.form.city", cols: 6 },

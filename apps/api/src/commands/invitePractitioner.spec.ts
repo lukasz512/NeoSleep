@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import bcrypt from "bcrypt";
-import { withTenant, insertStaffUser } from "../db.js";
+import { withTenant, insertStaffUser, getGlobalTerritoryId } from "../db.js";
 import type { TenantContext } from "../context/TenantContext.js";
 import { CreateLeadCommand } from "./lead.js";
 import { InvitePractitionerCommand } from "./invitePractitioner.js";
@@ -28,7 +28,7 @@ async function buildTestContext(client: Parameters<typeof CreateLeadCommand>[0][
   return {
     slug: TENANT_SLUG,
     client,
-    user: { id: user!.id, email, role: "admin", roles: [{ role: "admin", scope: "global" }] },
+    user: { id: user!.id, email, role: "admin", roles: [{ role: "admin", territory_id: await getGlobalTerritoryId(client) }] },
     requestId: `test-${uniqueSuffix()}`,
   };
 }

@@ -21,6 +21,10 @@ export interface Practitioner {
   influence_tier: string;
   region: string;
   territory_id: string | null;
+  // Immediate assigned territory node's own name (not the full ancestor
+  // path — see queries/territory.ts's getTerritoryPath for that, used by the
+  // single-record detail query only, to avoid an extra query per list row).
+  territory_name: string | null;
   country_code: string | null;
   status: string;
   metadata: Record<string, unknown> | null;
@@ -35,8 +39,9 @@ export interface GetPractitionerFilters {
   specialty?: string | string[];
   institution?: string | string[];
   region?: string | string[];
-  /** RBAC scope filter (see middleware/requireScope.ts): null = unrestricted, [] = matches nothing, otherwise restrict to these country_codes. */
-  countryCodes?: string[] | null;
+  organization_id?: string;
+  /** RBAC territory scope (migration 022) — see GetPatientsFilters.scopePaths for the contract. */
+  scopePaths?: string[] | null;
 }
 
 export interface InsertPractitionerInput {
@@ -51,6 +56,7 @@ export interface InsertPractitionerInput {
   organization_id?: string | null;
   institution?: string | null;
   region?: string;
+  territory_id?: string | null;
   /** RBAC scope for the eventual doctor-role user (see ActivatePractitionerCommand) — not the same as `region`, see requireScope.ts. */
   country_code?: string | null;
   influence_tier?: string;
@@ -71,6 +77,7 @@ export interface UpdatePractitionerInput {
   organization_id?: string | null;
   institution?: string | null;
   region?: string;
+  territory_id?: string | null;
   influence_tier?: string;
   language?: string | null;
   national_ids?: Record<string, string> | null;
@@ -85,7 +92,7 @@ const PRAC_SELECT_COLS = `
   p.status, p.metadata,
   p.created_at, p.updated_at,
   i.title AS salutation, i.first_name, i.last_name, i.email, i.phone, i.language, i.social_links,
-  COALESCE(i.region, '') AS region, i.territory_id, i.country_code,
+  COALESCE(i.region, '') AS region, i.territory_id, t.name AS territory_name, i.country_code,
   o.name AS institution`.trim();
 
 function isPracSortColumn(s: string): s is (typeof PRAC_SORT_COLUMNS)[number] {
@@ -153,9 +160,14 @@ export async function getPractitionerPaginated(
     params.push(regionArr);
     paramIndex++;
   }
-  if (filters.countryCodes !== undefined && filters.countryCodes !== null) {
-    conditions.push(`i.country_code = ANY($${paramIndex}::text[])`);
-    params.push(filters.countryCodes);
+  if (filters.organization_id?.trim()) {
+    conditions.push(`p.organization_id = $${paramIndex}`);
+    params.push(filters.organization_id.trim());
+    paramIndex++;
+  }
+  if (filters.scopePaths !== undefined && filters.scopePaths !== null) {
+    conditions.push(`(i.territory_id IS NULL OR t.path <@ ANY($${paramIndex}::extensions.ltree[]))`);
+    params.push(filters.scopePaths);
     paramIndex++;
   }
 
@@ -170,6 +182,7 @@ export async function getPractitionerPaginated(
        FROM practitioner p
        JOIN identities i ON p.identity_id = i.id
        LEFT JOIN organization o ON p.organization_id = o.id
+       LEFT JOIN territory t ON i.territory_id = t.id
        ${whereClause}`,
       params
     );
@@ -182,6 +195,7 @@ export async function getPractitionerPaginated(
        FROM practitioner p
        JOIN identities i ON p.identity_id = i.id
        LEFT JOIN organization o ON p.organization_id = o.id
+       LEFT JOIN territory t ON i.territory_id = t.id
        ${whereClause} ORDER BY ${safeOrder} ${orderDir} LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
       params
     );
@@ -199,6 +213,7 @@ export async function getPractitionerById(client: PoolClient, id: string): Promi
        FROM practitioner p
        JOIN identities i ON p.identity_id = i.id
        LEFT JOIN organization o ON p.organization_id = o.id
+       LEFT JOIN territory t ON i.territory_id = t.id
        WHERE p.id = $1 AND p.deleted_at IS NULL`,
       [id]
     );
@@ -234,8 +249,8 @@ export async function insertPractitioner(client: PoolClient, input: InsertPracti
     // identity), reuse that identity_id instead of erroring. Mirrors
     // insertStaffUser's (db/users.ts) identical upsert.
     const identityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (title, first_name, last_name, email, phone, language, social_links, region, country_code)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `INSERT INTO identities (title, first_name, last_name, email, phone, language, social_links, region, territory_id, country_code)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
        RETURNING id`,
       [
@@ -252,6 +267,7 @@ export async function insertPractitioner(client: PoolClient, input: InsertPracti
         trimOrNull(input.language) || "en",
         JSON.stringify(input.social_links ?? {}),
         region || null,
+        input.territory_id ?? null,
         trimOrNull(input.country_code),
       ]
     );
@@ -307,6 +323,7 @@ export async function updatePractitioner(client: PoolClient, id: string, input: 
     const language = input.language !== undefined ? trimOrNull(input.language) : existing.language;
     const primarySpecialty = input.primary_specialty !== undefined ? trimOrNull(input.primary_specialty) : existing.primary_specialty;
     const region = input.region ?? existing.region ?? "";
+    const territoryId = input.territory_id !== undefined ? input.territory_id : existing.territory_id;
     const influenceTier = input.influence_tier ?? existing.influence_tier;
     const nationalIds = input.national_ids !== undefined ? input.national_ids : existing.national_ids;
     const socialLinks = input.social_links !== undefined ? input.social_links : existing.social_links;
@@ -335,9 +352,9 @@ export async function updatePractitioner(client: PoolClient, id: string, input: 
     }
 
     await client.query(
-      `UPDATE identities SET title = $1, first_name = $2, last_name = $3, email = $4, phone = $5, language = $6, social_links = $7, region = $8, updated_at = now()
-       WHERE id = $9`,
-      [salutation, firstName, lastName, email, phone, language, JSON.stringify(socialLinks ?? {}), region || null, existing.identity_id]
+      `UPDATE identities SET title = $1, first_name = $2, last_name = $3, email = $4, phone = $5, language = $6, social_links = $7, region = $8, territory_id = $9, updated_at = now()
+       WHERE id = $10`,
+      [salutation, firstName, lastName, email, phone, language, JSON.stringify(socialLinks ?? {}), region || null, territoryId, existing.identity_id]
     );
 
     await client.query(
