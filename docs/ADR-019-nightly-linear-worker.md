@@ -28,6 +28,20 @@ rather than assumed:
 
 1. **One ticket per night**, not a higher cap or unbounded — the safest starting
    volume; increase later once quality is proven over several nights.
+
+   **Update, 2026-09-16: cadence bumped from nightly to hourly** (`RemoteTrigger`
+   `cron_expression` changed from `7 3 * * *` to `7 * * * *`). Łukasz asked for
+   every 30 minutes for faster reaction to newly-queued tickets; the Routines
+   API enforces a 1-hour minimum interval between runs, so hourly is the
+   closest available. This changes only how *often* the queue is checked, not
+   the per-run cap — still exactly one ticket per run (Ticket Contract in
+   `SKILL.md` is unchanged), and an empty queue still exits cleanly with no
+   branch/comment (`SKILL.md` Step 2). Worth noting honestly: this was done on
+   request, not because the "quality proven over several nights" bar above was
+   clearly met — today's runs (2026-09-16) hit environment failures (unreachable
+   `DATABASE_URL`, incomplete `pnpm install` in the cloud sandbox — see Linear
+   NEO-9), not a code-quality signal either way. Revisit actual throughput
+   safety once a ticket has cleanly gone all the way through on this cadence.
 2. **On any quality-gate failure: leave a note on the ticket and stop for the
    night — no self-fix loop.** An unattended agent retrying against its own
    failing tests risks progressively worse diffs with nobody watching; a clean
@@ -208,8 +222,9 @@ completion. The synthetic-data-only rule from Compliance Impact below applies
 here too, extended to this new visual surface, not just DB rows.
 
 ## Consequences
-- Enables: tickets written during the day can turn into a reviewable branch by
-  morning without Łukasz driving the implementation session himself.
+- Enables: tickets written during the day can turn into a reviewable branch
+  within about an hour (see 2026-09-16 cadence update above) without Łukasz
+  driving the implementation session himself.
 - New branch namespace: `worker/<linear-ticket-id>-<slug>`, distinguishing
   agent-initiated branches from human ones at a glance.
 - New Linear statuses required: `Ready for Worker` (trigger), `Worker: In
