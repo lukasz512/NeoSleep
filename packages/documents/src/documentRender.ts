@@ -26,14 +26,58 @@ const BRAND = {
 } as const;
 
 /**
- * NeoSleep's current contact line, used both in the Puppeteer footerTemplate
- * (see renderDocumentFooterHtml below) and as the {{brand:contactLine}}
- * token for a template's in-page "screen only" preview footer. Only one
- * office exists today (Mexico); reused for every locale until a Poland
- * contact exists to swap in per-jurisdiction.
+ * NeoSleep's contact details per jurisdiction, used both in the Puppeteer
+ * footerTemplate (see renderDocumentFooterHtml below) and as the
+ * {{brand:contactLine}} token for a template's in-page "screen only"
+ * preview footer. Keyed by the same locale a document is rendered with —
+ * showing the Mexico office's address on a Poland-jurisdiction GDPR
+ * document (or vice versa) would be actively misleading on a legal
+ * document, not just cosmetically wrong, so this must never fall back to
+ * a single shared line the way brand colors/logo safely can.
+ *
+ * `mx` is real (the office already used in the patient informed-consent
+ * document). `pl` has no confirmed real office yet — its lines are
+ * explicit [PLACEHOLDER] markers, not invented facts; see
+ * docs/stories/partner-registration-legal-documents.md's privacy-policy
+ * section for what's needed from Łukasz. `en` (used when no
+ * jurisdiction-specific office applies) falls back to the general company
+ * email only, not a fabricated address.
  */
-const NEOSLEEP_CONTACT_LINE =
-  "NeoSleep · Lorena González · +52 55 4910 0921 · lorena.gonzalez@neosleepcare.com · WTC, Calle Montecito 38, Col. Nápoles, Piso 26, Oficina 8, Ciudad de México";
+const CONTACT_LINES: Record<"en" | "pl" | "mx", readonly string[]> = {
+  mx: [
+    "NeoSleep · Lorena González",
+    "+52 55 4910 0921 · lorena.gonzalez@neosleepcare.com",
+    "WTC, Calle Montecito 38, Col. Nápoles, Piso 26, Oficina 8, Ciudad de México",
+  ],
+  pl: ["NeoSleep", "info@neosleepcare.com", "[PLACEHOLDER: zarejestrowany adres siedziby]"],
+  en: ["NeoSleep", "info@neosleepcare.com"],
+};
+
+function getContactLines(locale: string | null | undefined): readonly string[] {
+  return CONTACT_LINES[normalizeLocale(locale)];
+}
+
+/**
+ * Legal-entity identity per jurisdiction, interpolated into i18n strings
+ * via documentT()'s {legalEntityName}/{company} params (not a {{brand:...}}
+ * token — those are for content baked directly into the template, this is
+ * standard vue-i18n-style $t(key, params) interpolation, same mechanism
+ * apps/web's PrivacyView.vue uses). `[PLACEHOLDER]` entries are the same
+ * unconfirmed facts flagged in apps/web/src/config/websiteContent.ts's
+ * legalConfig — keep both in sync by hand until there's a real source of
+ * truth to import from (see that file's own comment for why this can't
+ * just be a shared import today).
+ */
+const LEGAL_ENTITY: Record<"en" | "pl" | "mx", { companyName: string; legalEntityName: string }> = {
+  en: { companyName: "NeoSleep", legalEntityName: "[PLACEHOLDER: registered legal entity name]" },
+  pl: { companyName: "NeoSleep", legalEntityName: "[PLACEHOLDER: pełna nazwa zarejestrowanej spółki]" },
+  mx: { companyName: "NeoSleep", legalEntityName: "[PLACEHOLDER: razón social registrada]" },
+};
+
+function getLegalEntityParams(locale: string | null | undefined): Record<string, string> {
+  const entity = LEGAL_ENTITY[normalizeLocale(locale)];
+  return { company: entity.companyName, legalEntityName: entity.legalEntityName };
+}
 
 let cachedLogoSvg: string | null = null;
 
@@ -92,10 +136,11 @@ function fillStaticTokens(html: string, locale: string | null | undefined): stri
     .replaceAll("{{brand:primary}}", BRAND.primary)
     .replaceAll("{{brand:secondary}}", BRAND.secondary)
     .replaceAll("{{brand:logo}}", getBrandLogoSvg())
-    .replaceAll("{{brand:contactLine}}", NEOSLEEP_CONTACT_LINE);
+    .replaceAll("{{brand:contactLine}}", getContactLines(locale).join(" · "));
 
+  const params = getLegalEntityParams(locale);
   const i18nTokenPattern = /\{\{(documents\.[a-zA-Z0-9_.]+)\}\}/g;
-  filled = filled.replace(i18nTokenPattern, (_match, key: string) => documentT(locale, key));
+  filled = filled.replace(i18nTokenPattern, (_match, key: string) => documentT(locale, key, params));
   return filled;
 }
 
@@ -124,12 +169,11 @@ const FOOTER_TEXT_COLOR = "#8A8A89";
  */
 export function renderDocumentFooterHtml(docRefCode: string, locale: string | null | undefined): string {
   const pageWord = documentT(locale, "documents.common.page");
+  const contactLinesHtml = getContactLines(locale)
+    .map((line) => `<div>${line}</div>`)
+    .join("");
   return `<div style="display:flex;justify-content:space-between;align-items:flex-start;width:100%;box-sizing:border-box;padding:0 15mm;font-family:Arial,sans-serif;font-size:7.5pt;color:${FOOTER_TEXT_COLOR};line-height:1.5;">
-    <div style="width:66%;">
-      <div>NeoSleep · Lorena González</div>
-      <div>+52 55 4910 0921 · lorena.gonzalez@neosleepcare.com</div>
-      <div>WTC, Calle Montecito 38, Col. Nápoles, Piso 26, Oficina 8, Ciudad de México</div>
-    </div>
+    <div style="width:66%;">${contactLinesHtml}</div>
     <div style="width:34%;text-align:right;">
       <div style="display:flex;justify-content:flex-end;margin-bottom:2px;">${getBrandLogoSvgAtHeight(10)}</div>
       <div>${docRefCode} · ${pageWord} <span class="pageNumber"></span> / <span class="totalPages"></span></div>

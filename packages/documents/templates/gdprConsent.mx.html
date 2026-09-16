@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<!--
+  Plantilla — Consentimiento para el Tratamiento de Datos Personales
+  (LFPDPPP), variante MX
+  =========================================================================
+  See templates/informedConsent.html's own header comment for the full
+  substitution-pipeline explanation and the "no literal double-curly-brace
+  token syntax in comments" rule.
+
+  This is the Mexico/LFPDPPP-grounded variant of the doctor data-protection
+  consent — legally distinct from templates/gdprConsent.pl.html (GDPR/
+  Poland), not a translation of it. Selected by jurisdiction (region),
+  never by UI locale — see inferJurisdiction() in
+  apps/api/src/commands/invitePractitioner.ts.
+
+  Static prose: filled by @neo/documents' renderDocumentHtml via
+  documents.gdprConsentMx.* i18n keys (Spanish only — this variant is
+  Mexico-specific).
+
+  Per-instance dynamic fields (filled by apps/api via Puppeteer DOM
+  manipulation, data-field attribute, NOT string substitution):
+    data-field doctor_name    — the signing doctor's name
+    data-field clinic_name    — their organization/clinic name (blank if
+                                 not yet on file — see docs/stories/
+                                 partner-registration-legal-documents.md's
+                                 "blank org data" decision)
+    data-field date           — signing date
+  Signature: data-field signature, left empty in v1 (no e-signature yet).
+-->
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>{{documents.gdprConsentMx.title}} — LFPDPPP (NeoSleep)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: {{brand:primary}};
+    --secondary: {{brand:secondary}};
+    --text: #1a1a1a;
+    --font: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  @page { size: A4; margin: 18mm 14mm 14mm; }
+  body {
+    font-family: var(--font);
+    font-weight: 300;
+    color: var(--text);
+    font-size: 9.5pt;
+    line-height: 1.42;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 28px 24px 20px;
+    background: #fff;
+  }
+  header.doc-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--secondary);
+    padding-bottom: 6px;
+    margin-bottom: 16px;
+  }
+  header.doc-header .logo { height: 24px; width: auto; display: block; }
+  header.doc-header .logo svg { height: 24px; width: auto; display: block; }
+  header.doc-header .doc-label { font-size: 8pt; font-weight: 400; color: var(--secondary); }
+  h1 { color: var(--primary); font-size: 14pt; font-weight: 500; margin: 0 0 2px; line-height: 1.3; }
+  h2 { color: var(--secondary); font-size: 11pt; font-weight: 400; margin: 0 0 14px; line-height: 1.3; }
+  p { margin: 0 0 9px; text-align: justify; text-justify: inter-word; }
+  .field-row { margin: 0 0 6px; }
+  .field-row .field-label { font-weight: 600; color: var(--secondary); }
+  .field-row .field-value { color: var(--text); }
+  .sig-label { font-weight: 600; color: var(--secondary); margin: 18px 0 6px; }
+  .signature-box { border: 1px solid var(--secondary); height: 90px; width: 260px; padding: 8px; }
+  .disclaimer { font-style: italic; font-size: 8pt; font-weight: 400; color: var(--secondary); margin-top: 18px; text-align: left; }
+  .screen-only.contact-footer { font-size: 8pt; color: var(--secondary); border-top: 1px solid #ccc; padding-top: 8px; margin-top: 24px; }
+  .screen-only.contact-footer .doc-ref { text-align: right; margin-top: 2px; }
+  @media print { body { padding: 0; max-width: none; } .screen-only { display: none; } }
+</style>
+</head>
+<body>
+
+  <header class="doc-header">
+    <span class="logo">{{brand:logo}}</span>
+    <span class="doc-label">{{documents.gdprConsentMx.title}}</span>
+  </header>
+
+  <h1>{{documents.gdprConsentMx.title}}</h1>
+  <h2>{{documents.gdprConsentMx.subtitle}}</h2>
+
+  <p>{{documents.gdprConsentMx.p1}}</p>
+  <p>{{documents.gdprConsentMx.p2}}</p>
+  <p>{{documents.gdprConsentMx.p3}}</p>
+  <p>{{documents.gdprConsentMx.p4}}</p>
+  <p>{{documents.gdprConsentMx.p5}}</p>
+
+  <div class="field-row">
+    <span class="field-label">{{documents.gdprConsentMx.fieldDoctorName}} </span
+    ><span class="field-value" data-field="doctor_name"></span>
+  </div>
+  <div class="field-row">
+    <span class="field-label">{{documents.gdprConsentMx.fieldClinicName}} </span
+    ><span class="field-value" data-field="clinic_name"></span>
+  </div>
+  <div class="field-row">
+    <span class="field-label">{{documents.gdprConsentMx.fieldDate}} </span
+    ><span class="field-value" data-field="date"></span>
+  </div>
+
+  <div class="sig-label">{{documents.gdprConsentMx.signatureLabel}}</div>
+  <div id="signature" class="signature-box" data-field="signature"></div>
+
+  <p class="disclaimer">{{documents.gdprConsentMx.disclaimer}}</p>
+
+  <div class="contact-footer screen-only">
+    <div>{{brand:contactLine}}</div>
+    <div class="doc-ref">NSL-LFPDPPP-MX v1</div>
+  </div>
+
+</body>
+</html>

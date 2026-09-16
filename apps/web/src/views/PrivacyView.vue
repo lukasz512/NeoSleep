@@ -5,13 +5,13 @@
         <p class="privacy-doc__eyebrow">{{ t('website.privacy.eyebrow') }}</p>
         <h1 class="privacy-doc__title">{{ t('website.privacy.title') }}</h1>
         <p class="privacy-doc__meta">{{ t('website.privacy.updated', { date: formattedDate }) }}</p>
-        <p class="privacy-doc__intro">{{ t('website.privacy.intro', { company: config.companyName }) }}</p>
+        <p class="privacy-doc__intro">{{ t('website.privacy.intro', { company: entityConfig.companyName }) }}</p>
       </header>
 
       <div class="privacy-doc__sections">
         <section v-for="key in SECTIONS" :key="key" class="privacy-section">
           <h2 class="privacy-section__title">{{ t(`website.privacy.${key}.title`) }}</h2>
-          <p class="privacy-section__body">{{ t(`website.privacy.${key}.body`, { company: config.companyName, email: config.privacyEmail }) }}</p>
+          <p class="privacy-section__body">{{ t(`website.privacy.${key}.body`, interpolationParams) }}</p>
         </section>
       </div>
     </div>
@@ -21,17 +21,32 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { legalConfig as config } from '../config/websiteContent';
+import { legalConfig } from '../config/websiteContent';
 import { useSeoMeta } from '../composables/useSeoMeta';
 
 const { t, locale } = useI18n();
 
 useSeoMeta({ titleKey: 'website.seo.privacy.title', descriptionKey: 'website.seo.privacy.description', noindex: true });
 
-const SECTIONS = ['s1', 's2', 's3', 's4', 's5', 's6', 's7', 's8'] as const;
+// GDPR-grounded content for pl, LFPDPPP-grounded content for mx — genuinely
+// different legal identity/authority per jurisdiction, not just a
+// translation, so the interpolated params must follow the site's locale,
+// not one shared config. en falls back to a generic EU-leaning default.
+const SECTIONS = ['s1', 's2', 's3', 's4', 's5', 's6', 's7', 's8', 's9'] as const;
+
+const entityConfig = computed(() => legalConfig[locale.value as 'en' | 'pl' | 'mx'] ?? legalConfig.en);
+
+const interpolationParams = computed(() => ({
+  company: entityConfig.value.companyName,
+  legalEntityName: entityConfig.value.legalEntityName,
+  email: entityConfig.value.privacyEmail,
+  address: entityConfig.value.address,
+  authorityName: entityConfig.value.authorityName,
+  authorityUrl: entityConfig.value.authorityUrl,
+}));
 
 const formattedDate = computed(() =>
-  new Date(config.lastUpdated).toLocaleDateString(locale.value, { year: 'numeric', month: 'long' })
+  new Date(legalConfig.lastUpdated).toLocaleDateString(locale.value, { year: 'numeric', month: 'long' })
 );
 </script>
 

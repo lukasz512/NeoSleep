@@ -300,11 +300,57 @@ export const patientTestimonials: Testimonial[] = [
 // LEGAL
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const legalConfig = {
-  companyName:  "NeoSleep",
-  privacyEmail: "info@neosleepcare.com",
-  address:      "1 Example Street, 00-001 Warsaw, Poland",
-  lastUpdated:  "2026-01-01",
+/**
+ * Per-jurisdiction legal identity — the privacy policy now shows a real
+ * GDPR-grounded variant for PL and a real LFPDPPP-grounded variant for MX
+ * (not one blended generic text), so the controller/responsable identity it
+ * discloses must differ per locale too, not just the surrounding prose.
+ *
+ * `[PLACEHOLDER]`-marked fields are NOT real business facts — they must be
+ * replaced with NeoSleep's actual registered legal entity name / address /
+ * DPO status before this policy is fit to publish. A privacy policy citing
+ * a fabricated company registration is itself a compliance defect, so
+ * nothing here was invented; see docs/stories/partner-registration-legal-documents.md's
+ * privacy-policy section for what's still needed from Łukasz.
+ * `mx.address` is real (the office address already used in the patient
+ * informed-consent document), but `mx.legalEntityName` (the formal
+ * "responsable" entity name under LFPDPPP) is still unconfirmed.
+ */
+export interface LegalEntityConfig {
+  companyName: string;
+  legalEntityName: string;
+  privacyEmail: string;
+  address: string;
+  authorityName: string;
+  authorityUrl: string;
+}
+
+export const legalConfig: Record<"en" | "pl" | "mx", LegalEntityConfig> & { lastUpdated: string } = {
+  lastUpdated: "2026-09-16",
+  en: {
+    companyName: "NeoSleep",
+    legalEntityName: "[PLACEHOLDER: registered legal entity name]",
+    privacyEmail: "info@neosleepcare.com",
+    address: "[PLACEHOLDER: registered company address]",
+    authorityName: "your national data protection authority",
+    authorityUrl: "",
+  },
+  pl: {
+    companyName: "NeoSleep",
+    legalEntityName: "[PLACEHOLDER: pełna nazwa zarejestrowanej spółki]",
+    privacyEmail: "info@neosleepcare.com",
+    address: "[PLACEHOLDER: zarejestrowany adres siedziby]",
+    authorityName: "Prezes Urzędu Ochrony Danych Osobowych (UODO)",
+    authorityUrl: "https://uodo.gov.pl",
+  },
+  mx: {
+    companyName: "NeoSleep",
+    legalEntityName: "[PLACEHOLDER: razón social registrada]",
+    privacyEmail: "lorena.gonzalez@neosleepcare.com",
+    address: "WTC, Calle Montecito 38, Col. Nápoles, Piso 26, Oficina 8, Ciudad de México",
+    authorityName: "Instituto Nacional de Transparencia, Acceso a la Información y Protección de Datos Personales (INAI)",
+    authorityUrl: "https://home.inai.org.mx",
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
