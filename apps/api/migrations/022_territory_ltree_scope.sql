@@ -63,6 +63,10 @@
 -- Idempotent: safe to re-run.
 -- =============================================================================
 
+-- Supabase provisions an `extensions` schema by default; a plain Postgres
+-- instance (e.g. CI's ephemeral DB) does not — CREATE EXTENSION ... SCHEMA
+-- requires the target schema to already exist, it won't create one itself.
+CREATE SCHEMA IF NOT EXISTS extensions;
 CREATE EXTENSION IF NOT EXISTS ltree SCHEMA extensions;
 
 DO $$
