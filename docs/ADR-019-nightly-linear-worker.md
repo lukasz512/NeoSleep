@@ -47,6 +47,27 @@ rather than assumed:
    failing tests risks progressively worse diffs with nobody watching; a clean
    failure with a clear note is strictly safer than a desperate autonomous fix
    attempt.
+
+   **Update, 2026-09-16, after NEO-6's 6-pass history**: this policy is
+   unchanged and not being loosened, but its *placement* was costing real
+   effort. Pass 5 hit a DB-canary hang and pass 6 hit a `git push` GitHub App
+   permission failure — both environment-wide, neither ticket-specific — but
+   both were only discovered at the very end of a run, after Enrich+Implement
+   had already spent 15-30 minutes. Added `SKILL.md` Step 2.5: an environment
+   pre-flight (DB reachability/isolation reusing the fast-probe fix already
+   added the same day for the canary hang, plus a new non-destructive
+   `git push --dry-run` check) that runs *before* Claim. On failure, the
+   selected ticket is left untouched in `Ready for Worker` (not moved to
+   `Blocked` — it was never actually worked) and the run ends with a comment
+   explaining the environment problem. Separately, NEO-6 passes 2 and 3 also
+   burned two extra cycles because a plain "try again" comment doesn't
+   satisfy Step 4's override mechanism — a human describing what they want in
+   their own words isn't the same as the exact required format. Step 4 now
+   requires the block comment to include a ready-to-paste approval template
+   whenever exactly one unambiguous scoped fix is identifiable, rather than
+   only describing the mechanism. Neither change touches Step 4's compliance
+   gate or this item's no-retry policy — both are strictly about failing
+   faster and communicating more clearly on the way to the same blocks.
 3. **Compliance-sensitive code is always deferred to a human session**,
    regardless of what the Linear ticket's label says: migrations, `auth.ts`,
    `identities`/`consent`/`audit_log`/`patient`/`practitioner`. This is the
