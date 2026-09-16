@@ -174,3 +174,18 @@ describe("resolveOrganizationIdForSubmit", () => {
     expect(result).toBeUndefined();
   });
 });
+
+describe("status field (docs/stories/practitioner-invite-resend.md — admin-only manual override)", () => {
+  it("is hidden via a function (admin-gated), not a static boolean, same convention as hcoForm.ts's own status field", () => {
+    const status = hcpFormFields.find((f) => f.key === "status")!;
+    expect(status).toBeDefined();
+    expect(typeof status.hidden).toBe("function");
+    expect(status.default).toBe("pending_approval");
+  });
+
+  it("offers pending_approval/invited/active/inactive — the full practitioner.status enum, not a restricted subset", () => {
+    const status = hcpFormFields.find((f) => f.key === "status")!;
+    const values = (status.options as { value: string }[]).map((o) => o.value);
+    expect(values).toEqual(["pending_approval", "invited", "active", "inactive"]);
+  });
+});

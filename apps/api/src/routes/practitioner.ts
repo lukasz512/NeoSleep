@@ -160,6 +160,7 @@ practitionerRouter.patch(
       influence_tier?: string; language?: string;
       national_ids?: Record<string, string>;
       social_links?: Record<string, unknown>;
+      status?: "pending_approval" | "invited" | "active" | "inactive";
     };
 
     const practitioner = await withTenant(slug, async (client) => {
@@ -180,6 +181,7 @@ practitionerRouter.patch(
         language:          typeof body.language          === "string" ? body.language          : undefined,
         national_ids:      body.national_ids !== undefined ? body.national_ids : undefined,
         social_links:      body.social_links !== undefined ? body.social_links : undefined,
+        status:            body.status !== undefined ? body.status : undefined,
       });
     });
 

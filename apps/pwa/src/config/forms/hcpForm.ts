@@ -34,6 +34,26 @@ import { loadTerritoryOptions } from "./territoryOptions";
  * `new_organization.region` once that field is filled in.
  */
 
+// Matches the practitioner.status DB CHECK constraint (migrations/
+// 003_practitioner_drop_duplicate_salutation.sql, widened by migrations/
+// 025_practitioner_invited_status.sql) — same fully-unrestricted-enum
+// convention as hcoForm.ts's own STATUS_OPTIONS. Admin-only recovery tool:
+// "active" is normally only ever set by AcceptPractitionerInviteCommand,
+// the moment a doctor actually completes registration with a real
+// password — hand-setting it here produces a doctor who looks active but
+// has no real account. Included anyway so a practitioner already stuck at
+// "active" (e.g. from before docs/stories/practitioner-invite-resend.md's
+// fix landed) can be manually reset back to pending_approval/invited —
+// either of which correctly re-exposes the Activate/Resend button, which
+// mints a real token and sends a real email regardless of what the status
+// said going in.
+const STATUS_OPTIONS = [
+  { title: "user.hcp.filters.statusPendingApproval", value: "pending_approval" },
+  { title: "user.hcp.filters.statusInvited", value: "invited" },
+  { title: "user.hcp.filters.statusActive", value: "active" },
+  { title: "user.hcp.filters.statusInactive", value: "inactive" },
+];
+
 const INFLUENCE_TIER_OPTIONS = [
   { title: "A", value: "A" },
   { title: "B", value: "B" },
@@ -341,5 +361,14 @@ export const hcpFormFields: FormFieldDef[] = [
     icon: "map-pin",
     nestUnder: "social_links",
     cols: 6,
+  },
+  {
+    key: "status",
+    type: "select",
+    labelKey: "user.hcp.form.status",
+    options: STATUS_OPTIONS,
+    default: "pending_approval",
+    hidden: () => useAuthStore().user?.role !== "admin",
+    cols: 12,
   },
 ];

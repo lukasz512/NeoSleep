@@ -345,6 +345,7 @@ const hcpFormInitialData = computed(() =>
         language: hcp.value.language ?? "",
         national_ids: hcp.value.national_ids ?? null,
         social_links: hcp.value.social_links ?? null,
+        status: hcp.value.status ?? "pending_approval",
       }
     : undefined,
 );
