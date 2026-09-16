@@ -33,6 +33,7 @@ const CURRENT_VERSION = {
   is_current: true,
   created_by_name: "Łukasz",
   created_at: "2026-09-15T10:00:00.000Z",
+  change_note: "Clarified the data retention period",
 };
 
 const HISTORY = [
@@ -46,6 +47,7 @@ const HISTORY = [
     is_current: false,
     created_by_name: "Łukasz",
     created_at: "2026-09-01T10:00:00.000Z",
+    change_note: null,
   },
 ];
 
@@ -89,6 +91,7 @@ describe("DocumentContentEditorView", () => {
     await wrapper.vm.$nextTick();
     expect(wrapper.text()).toContain("Current version: 2");
     expect(wrapper.text()).toContain("Łukasz");
+    expect(wrapper.text()).toContain("Clarified the data retention period");
   });
 
   it("wraps a literal {name} token from the loaded content as a protected chip in the editor", async () => {

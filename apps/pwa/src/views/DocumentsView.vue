@@ -2,7 +2,6 @@
   <div class="view-documents">
     <div class="view-documents__header">
       <h1 class="view-documents__title">{{ t("user.document-content.title") }}</h1>
-      <p class="view-documents__subtitle">{{ t("user.document-content.subtitle") }}</p>
     </div>
 
     <AppLoadingState v-if="loading" />
@@ -137,12 +136,6 @@ function openEditor(doc: DocumentContentIndexEntry): void {
   font-size: 1.375rem;
   font-weight: 600;
   margin: 0 0 4px;
-}
-
-.view-documents__subtitle {
-  margin: 0;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-size: 0.875rem;
 }
 
 .view-documents__table {

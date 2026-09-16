@@ -1352,7 +1352,7 @@
   "app.treatmentPlans.deleteError": "Nie udało się ukryć zamówienia",
   "app.orthoApneaOrder.validation.mrMpOutOfRange": "Maksymalna retruzja i protruzja muszą mieścić się w zakresie od -20 do 20 mm.",
   "user.document-content.title": "Dokumenty",
-  "user.document-content.subtitle": "Edytuj treść generowanych dokumentów prawnych i medycznych",
+  "user.document-content-detail.title": "Dokument",
   "user.document-content.errorLoad": "Nie udało się wczytać dokumentów",
   "user.document-content.table.document": "Dokument",
   "user.document-content.table.locale": "Język",
