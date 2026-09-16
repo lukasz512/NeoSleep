@@ -9,7 +9,8 @@ const ALL_STAFF_ROLES: UserRole[] = ["rep", "doctor", "manager", "admin", "kam",
 
 /** App starts at login; root and unknown paths send unauthenticated users to /login. */
 // Nav order: dashboard, leads, hcp, hco, patients, planner, presentations
-// (hidden — see `hidden` meta below), resources, users — the mobile bottom
+// (hidden — see `hidden` meta below), resources, users, documents,
+// territories — the mobile bottom
 // bar (AppShell) shows exactly the first 4 of
 // whatever's visible for the current role. appNavRoutes below derives from
 // this array's order — reordering here reorders both the sidebar and the
@@ -56,6 +57,18 @@ export const routes: RouteRecordRaw[] = [
   { path: "/resources", name: "resources", component: () => import("../views/ResourcesView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES, partner: "orthoapnea" } },
   { path: "/users", name: "users", component: () => import("../views/UsersView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin", "manager"] } },
   { path: "/users/:id", name: "user-detail", component: () => import("../views/UserDetailView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin", "manager"] } },
+  // Admin/manager-only WYSIWYG editor for generated-document body content
+  // (GDPR/informed-consent prose) — see docs/stories/document-content-editor.md.
+  // Documents are identified by a (templateKey, locale) pair, not a single id.
+  // Route names deliberately avoid the bare "documents" name — App.spec.ts's
+  // "pwa app has only rep view routes (no portal-only views)" test already
+  // reserves that exact name for a future, separate HCP/patient-portal
+  // "my documents" view (a doctor/patient seeing their OWN signed PDFs) —
+  // a genuinely different feature from this admin/manager content editor.
+  // The URL path stays the clean "/documents" (paths aren't what that test
+  // reserves, only route `name`s), only the internal name differs.
+  { path: "/documents", name: "document-content", component: () => import("../views/DocumentsView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin", "manager"] } },
+  { path: "/documents/:templateKey/:locale", name: "document-content-detail", component: () => import("../views/DocumentContentEditorView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin", "manager"] } },
   // Geographic hierarchy (country > region > city > village > district) data entry — admin-only,
   // narrow reference-data CRUD inside the existing app, not a separate portal/admin deployment.
   { path: "/territories", name: "territories", component: () => import("../views/TerritoriesView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin"] } },
@@ -111,6 +124,7 @@ const detailRouteParents: Record<string, string> = {
   "hco-detail": "hco",
   "patient-detail": "patients",
   "user-detail": "users",
+  "document-content-detail": "document-content",
 };
 
 /**

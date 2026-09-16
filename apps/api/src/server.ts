@@ -18,12 +18,12 @@ import { publicRouter } from "./routes/public.js";
 import { patientRouter } from "./routes/patient.js";
 import { pushRouter } from "./routes/push.js";
 import { usersRouter } from "./routes/users.js";
+import { documentContentRouter } from "./routes/documentContent.js";
 import { inviteRouter } from "./routes/invite.js";
 import { notificationRouter } from "./routes/notification.js";
 import { orthoapneaResourcesRouter } from "./routes/partners/orthoapnea-resources.js";
 import { orthoapneaStatusRouter } from "./routes/partners/orthoapnea-status.js";
 import { orthoapneaTreatmentsRouter } from "./routes/partners/orthoapnea-treatments.js";
-import { internalPdfSpikeRouter } from "./routes/internal-pdf-spike.js"; // TEMPORARY — delete with the route file once the Render Puppeteer spike is verified
 import { noteRouter } from "./routes/note.js";
 import { sleepStudyRouter } from "./routes/sleepStudy.js";
 import { treatmentPlanRouter } from "./routes/treatmentPlan.js";
@@ -117,12 +117,12 @@ app.use("/api/v1", publicRouter);
 app.use("/api/v1", patientRouter);
 app.use("/api/v1", pushRouter);
 app.use("/api/v1", usersRouter);
+app.use("/api/v1", documentContentRouter);
 app.use("/api/v1", inviteRouter);
 app.use("/api/v1", notificationRouter);
 app.use("/api/v1", orthoapneaResourcesRouter);
 app.use("/api/v1", orthoapneaStatusRouter);
 app.use("/api/v1", orthoapneaTreatmentsRouter);
-app.use("/api/v1", internalPdfSpikeRouter); // TEMPORARY — see import comment above
 app.use("/api/v1", noteRouter);
 app.use("/api/v1", sleepStudyRouter);
 app.use("/api/v1", treatmentPlanRouter);

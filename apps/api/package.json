@@ -14,6 +14,7 @@
     "seed:e2e-user": "tsx --env-file=../../.env scripts/seed-e2e-user.ts"
   },
   "dependencies": {
+    "@neo/documents": "workspace:*",
     "@neo/email": "workspace:*",
     "@sparticuz/chromium": "143.0.4",
     "@supabase/supabase-js": "^2.116.0",
@@ -29,6 +30,7 @@
     "pg": "^8.23.0",
     "puppeteer-core": "24.34.0",
     "resend": "^6.28.0",
+    "sanitize-html": "^2.17.7",
     "web-push": "catalog:"
   },
   "devDependencies": {
@@ -39,6 +41,7 @@
     "@types/multer": "^2.2.0",
     "@types/node": "catalog:",
     "@types/pg": "^8.23.1",
+    "@types/sanitize-html": "^2.16.1",
     "@types/supertest": "^6.0.2",
     "@types/web-push": "catalog:",
     "eslint": "catalog:",

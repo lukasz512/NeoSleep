@@ -99,10 +99,10 @@ describe("AppLayout", () => {
       expect(navRoutesForRole("rep").map((r) => r.path)).toEqual(expectedPaths);
     });
 
-    it("manager sees users management, leads, and the clinical aggregates (sleep-studies/treatment-plans) — everything except territories", () => {
+    it("manager sees users management, leads, the clinical aggregates (sleep-studies/treatment-plans), and documents — everything except territories", () => {
       const expectedPaths = [
         "/dashboard", "/leads", "/hcp", "/hco", "/patients",
-        "/sleep-studies", "/treatment-plans", "/planner", "/resources", "/users",
+        "/sleep-studies", "/treatment-plans", "/planner", "/resources", "/users", "/documents",
       ];
       expect(navRoutesForRole("manager").map((r) => r.path)).toEqual(expectedPaths);
     });
@@ -113,10 +113,10 @@ describe("AppLayout", () => {
       expect(navRoutesForRole("msl").map((r) => r.path)).toEqual(expectedPaths);
     });
 
-    it("admin always sees every nav item, including leads and territories (isRoleAllowed bypasses role restrictions for admin)", () => {
+    it("admin always sees every nav item, including leads, documents, and territories (isRoleAllowed bypasses role restrictions for admin)", () => {
       const expectedPaths = [
         "/dashboard", "/leads", "/hcp", "/hco", "/patients", "/sleep-studies",
-        "/treatment-plans", "/planner", "/resources", "/users", "/territories",
+        "/treatment-plans", "/planner", "/resources", "/users", "/documents", "/territories",
       ];
       expect(navRoutesForRole("admin").map((r) => r.path)).toEqual(expectedPaths);
     });

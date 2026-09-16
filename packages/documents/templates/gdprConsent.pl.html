@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<!--
+  Plantilla — Zgoda na przetwarzanie danych osobowych (RODO), PL variant
+  =========================================================================
+  See templates/informedConsent.html's own header comment for the full
+  substitution-pipeline explanation and the "no literal double-curly-brace
+  token syntax in comments" rule (the reason it's a rule is explained
+  there — do not remove that constraint by copy-pasting a token literally
+  into this comment either).
+
+  This is the Poland/GDPR-grounded variant of the doctor data-protection
+  consent — legally distinct from templates/gdprConsent.mx.html (LFPDPPP),
+  not a translation of it. Selected by jurisdiction (region), never by UI
+  locale — see inferJurisdiction() in apps/api/src/commands/invitePractitioner.ts.
+
+  Title/subtitle/field labels: filled by @neo/documents' renderDocumentHtml
+  via documents.gdprConsentPl.* i18n keys (English/Polish only — this
+  variant is Poland-specific, so no mx.json translation is needed for it).
+
+  Body prose (the content slot, .doc-content div, below): admin-editable via the
+  Documents tab (docs/stories/document-content-editor.md) — sourced from
+  platform.document_content_version at render time, not a static i18n key.
+  May contain a literal {legalEntityName} token (see fillContentParams in
+  documentRender.ts), rendered as a protected chip in the editor.
+
+  Per-instance dynamic fields (filled by apps/api via Puppeteer DOM
+  manipulation, data-field attribute, NOT string substitution):
+    data-field doctor_name    — the signing doctor's name
+    data-field clinic_name    — their organization/clinic name (blank if
+                                 not yet on file — see docs/stories/
+                                 partner-registration-legal-documents.md's
+                                 "blank org data" decision)
+    data-field date           — signing date
+  Signature: data-field signature, left empty in v1 (no e-signature yet).
+-->
+<html lang="pl">
+<head>
+<meta charset="UTF-8" />
+<title>{{documents.gdprConsentPl.title}} — RODO (NeoSleep)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: {{brand:primary}};
+    --secondary: {{brand:secondary}};
+    --text: #1a1a1a;
+    --font: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  @page { size: A4; margin: 18mm 14mm 14mm; }
+  body {
+    font-family: var(--font);
+    font-weight: 300;
+    color: var(--text);
+    font-size: 9.5pt;
+    line-height: 1.42;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 28px 24px 20px;
+    background: #fff;
+  }
+  header.doc-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 0.5px solid rgba(71, 71, 71, 0.35);
+    padding-bottom: 6px;
+    margin-bottom: 16px;
+  }
+  header.doc-header .logo { height: 24px; width: auto; display: block; }
+  header.doc-header .logo svg { height: 24px; width: auto; display: block; }
+  header.doc-header .doc-label { font-size: 8pt; font-weight: 400; color: var(--secondary); }
+  h1 { color: var(--primary); font-size: 14pt; font-weight: 500; margin: 0 0 2px; line-height: 1.3; }
+  h2 { color: var(--secondary); font-size: 11pt; font-weight: 400; margin: 0 0 14px; line-height: 1.3; }
+  p { margin: 0 0 9px; text-align: justify; text-justify: inter-word; }
+  .field-row { margin: 0 0 6px; }
+  .field-row .field-label { font-weight: 600; color: var(--secondary); }
+  .field-row .field-value { color: var(--text); }
+  .sig-label { font-weight: 600; color: var(--secondary); margin: 18px 0 6px; }
+  .signature-box { border: 1px solid var(--secondary); height: 90px; width: 260px; padding: 8px; }
+  .screen-only.contact-footer { font-size: 8pt; color: var(--secondary); border-top: 1px solid #ccc; padding-top: 8px; margin-top: 24px; }
+  .screen-only.contact-footer .doc-ref { text-align: right; margin-top: 2px; }
+  @media print { body { padding: 0; max-width: none; } .screen-only { display: none; } }
+</style>
+</head>
+<body>
+
+  <header class="doc-header">
+    <span class="logo">{{brand:logo}}</span>
+    <span class="doc-label">{{documents.gdprConsentPl.title}}</span>
+  </header>
+
+  <h1>{{documents.gdprConsentPl.title}}</h1>
+  <h2>{{documents.gdprConsentPl.subtitle}}</h2>
+
+  <div class="doc-content">{{content}}</div>
+
+  <div class="field-row">
+    <span class="field-label">{{documents.gdprConsentPl.fieldDoctorName}} </span
+    ><span class="field-value" data-field="doctor_name"></span>
+  </div>
+  <div class="field-row">
+    <span class="field-label">{{documents.gdprConsentPl.fieldClinicName}} </span
+    ><span class="field-value" data-field="clinic_name"></span>
+  </div>
+  <div class="field-row">
+    <span class="field-label">{{documents.gdprConsentPl.fieldDate}} </span
+    ><span class="field-value" data-field="date"></span>
+  </div>
+
+  <div class="sig-label">{{documents.gdprConsentPl.signatureLabel}}</div>
+  <div id="signature" class="signature-box" data-field="signature"></div>
+
+  <div class="contact-footer screen-only">
+    <div>{{brand:contactLine}}</div>
+    <div class="doc-ref">NSL-GDPR-PL v1</div>
+  </div>
+
+</body>
+</html>

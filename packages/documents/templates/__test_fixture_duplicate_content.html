@@ -1,0 +1,13 @@
+<!-- Test-only fixture, exercised by documentRender.spec.ts. Deliberately
+     mentions "{{content}}" twice — once here in this comment (mimicking the
+     exact real-world mistake already made once in informedConsent.html/
+     gdprConsent.*.html: a template author naming the token literally inside
+     a doc comment instead of describing it in prose) and once in the real
+     slot below. Exists to prove renderDocumentHtml's occurrence-count guard
+     catches this rather than silently splicing into the wrong occurrence. -->
+<html>
+<head><title>Duplicate content token fixture</title></head>
+<body>
+  <div class="doc-content">{{content}}</div>
+</body>
+</html>
