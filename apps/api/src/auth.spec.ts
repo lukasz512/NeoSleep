@@ -95,7 +95,7 @@ describe("Auth routes", () => {
       expect(res.body.error).toBe("Invalid email or password.");
     });
 
-    it("200s and returns a bearer token + user on success", async () => {
+    it("200s and returns an access token + refresh token + user on success", async () => {
       const res = await request(app)
         .post("/api/v1/auth/login")
         .set("X-Forwarded-For", freshIp())
@@ -104,6 +104,10 @@ describe("Auth routes", () => {
       expect(res.body.user).toMatchObject({ email });
       expect(typeof res.body.token).toBe("string");
       expect(res.body.token.split(".")).toHaveLength(3);
+      // Opaque, not a JWT (ADR-020) — nothing to decode, just a random value.
+      expect(typeof res.body.refresh_token).toBe("string");
+      expect(res.body.refresh_token.length).toBeGreaterThanOrEqual(32);
+      expect(res.body.refresh_token.split(".")).toHaveLength(1);
     });
 
     it("eventually 429s after repeated attempts from the same client", async () => {
@@ -156,7 +160,7 @@ describe("Auth routes", () => {
   });
 
   describe("POST /api/v1/auth/logout", () => {
-    it("401s without a token, 204s with one (stateless — doesn't itself invalidate the token)", async () => {
+    it("401s without a token, 204s with one, and revokes the presented refresh token (ADR-020)", async () => {
       const noTokenRes = await request(app).post("/api/v1/auth/logout").set("X-Forwarded-For", freshIp());
       expect(noTokenRes.status).toBe(401);
 
@@ -169,8 +173,17 @@ describe("Auth routes", () => {
       const logoutRes = await request(app)
         .post("/api/v1/auth/logout")
         .set("X-Forwarded-For", ip)
-        .set("Authorization", `Bearer ${loginRes.body.token}`);
+        .set("Authorization", `Bearer ${loginRes.body.token}`)
+        .send({ refresh_token: loginRes.body.refresh_token });
       expect(logoutRes.status).toBe(204);
+
+      // The refresh token presented at logout must be dead afterward. Rotation,
+      // reuse-detection, and multi-device independence are covered in auth-refresh.spec.ts.
+      const refreshAfterLogout = await request(app)
+        .post("/api/v1/auth/refresh")
+        .set("X-Forwarded-For", ip)
+        .send({ refresh_token: loginRes.body.refresh_token });
+      expect(refreshAfterLogout.status).toBe(401);
     });
   });
 

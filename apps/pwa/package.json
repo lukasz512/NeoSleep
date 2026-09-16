@@ -8,7 +8,8 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "NODE_OPTIONS='--require=./vitest-crypto-polyfill.cjs' vitest run"
+    "test": "NODE_OPTIONS='--require=./vitest-crypto-polyfill.cjs' vitest run",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@neo/api-client": "workspace:*",
@@ -28,6 +29,7 @@
     "vuetify": "catalog:"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/node": "catalog:",
     "@vitejs/plugin-vue": "catalog:",
     "@vue/test-utils": "catalog:",

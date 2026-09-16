@@ -30,6 +30,7 @@ export interface Patient {
   medical_record: string | null;
   region: string;
   territory_id: string | null;
+  country_code: string | null;
   status: string;
   metadata: Record<string, unknown> | null;
   created_at: string;
@@ -43,6 +44,8 @@ export interface GetPatientsFilters {
   search?: string;
   status?: string;
   region?: string;
+  /** RBAC scope filter (see middleware/requireScope.ts): null = unrestricted, [] = matches nothing, otherwise restrict to these country_codes. */
+  countryCodes?: string[] | null;
 }
 
 export interface PatientInsert {
@@ -59,6 +62,8 @@ export interface PatientInsert {
   status?: string;
   region?: string;
   territory_id?: string | null;
+  /** RBAC scope (see middleware/requireScope.ts) — distinct from `region` above, see migration 013's comment. */
+  country_code?: string | null;
   metadata?: Record<string, unknown>;
 }
 
@@ -76,6 +81,7 @@ export interface PatientUpdate {
   status?: string;
   region?: string;
   territory_id?: string | null;
+  country_code?: string | null;
   metadata?: Record<string, unknown>;
 }
 
@@ -88,7 +94,7 @@ const PATIENT_SELECT_COLS = `
   p.cpap_device, p.medical_record, p.status, p.metadata,
   p.created_at, p.updated_at,
   i.title AS salutation, i.first_name, i.last_name, i.email, i.phone,
-  COALESCE(i.region, '') AS region, i.territory_id,
+  COALESCE(i.region, '') AS region, i.territory_id, i.country_code,
   pi.first_name AS practitioner_first_name, pi.last_name AS practitioner_last_name`.trim();
 
 // Shared FROM/JOIN fragment for the two read queries below — resolves the
@@ -117,6 +123,7 @@ type PatientRow = {
   medical_record: string | null;
   region: string;
   territory_id: string | null;
+  country_code: string | null;
   status: string;
   metadata: Record<string, unknown> | null;
   created_at: Date;
@@ -149,6 +156,7 @@ function serialize(row: PatientRow): Patient & { name: string } {
     medical_record: row.medical_record,
     region: row.region,
     territory_id: row.territory_id,
+    country_code: row.country_code,
     status: row.status,
     metadata: row.metadata,
     created_at: isoDate(row.created_at),
@@ -188,6 +196,10 @@ export async function getPatientsPaginated(
   if (filters.region?.trim()) {
     params.push(filters.region.trim());
     conditions.push(`i.region = $${params.length}`);
+  }
+  if (filters.countryCodes !== undefined && filters.countryCodes !== null) {
+    params.push(filters.countryCodes);
+    conditions.push(`i.country_code = ANY($${params.length}::text[])`);
   }
 
   const where = `WHERE ${conditions.join(" AND ")}`;
@@ -240,8 +252,8 @@ export async function getPatientById(client: PoolClient, id: string): Promise<(P
 export async function insertPatient(client: PoolClient, data: PatientInsert): Promise<Patient & { name: string }> {
   try {
     const identityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (title, first_name, last_name, email, phone, region, territory_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO identities (title, first_name, last_name, email, phone, region, territory_id, country_code)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id`,
       [
         data.salutation ?? null,
@@ -251,6 +263,7 @@ export async function insertPatient(client: PoolClient, data: PatientInsert): Pr
         data.phone ?? null,
         data.region ?? null,
         data.territory_id ?? null,
+        data.country_code ?? null,
       ]
     );
     const identityId = identityResult.rows[0]!.id;
@@ -308,6 +321,7 @@ export async function updatePatient(
       phone: "phone",
       region: "region",
       territory_id: "territory_id",
+      country_code: "country_code",
     };
     for (const [field, column] of Object.entries(identityFieldToColumn) as [keyof PatientUpdate, string][]) {
       if (data[field] !== undefined) {
