@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import bcrypt from "bcrypt";
-import { withTenant, insertStaffUser, getGlobalTerritoryId, getPractitionerById } from "../db.js";
+import { withTenant, insertStaffUser, getGlobalTerritoryId, getPractitionerById, insertOrganization } from "../db.js";
 import type { TenantContext } from "../context/TenantContext.js";
 import { CreateLeadCommand } from "./lead.js";
 import { InvitePractitionerCommand } from "./invitePractitioner.js";
-import { AcceptPractitionerInviteCommand } from "./invitePractitioner.js";
+import { AcceptPractitionerInviteCommand, ValidateInviteTokenQuery } from "./invitePractitioner.js";
 import { CreatePractitionerCommand, ActivatePractitionerCommand } from "./practitioner.js";
 
 // mailer.ts is the external boundary (Resend) — mocked here, same as
@@ -142,6 +142,8 @@ describe("AcceptPractitionerInviteCommand", () => {
           token,
           password: "correct-horse-battery-staple",
           clinicName: "Accept Flow Clinic",
+          clinicEmail: "clinic@example.com",
+          clinicPhone: "600100200",
           taxId: "1234567890",
           billingAddress: "Some street 1, 00-000 City",
           gdprAccepted: true,
@@ -153,6 +155,81 @@ describe("AcceptPractitionerInviteCommand", () => {
 
       const after = await getPractitionerById(client, practitionerId);
       expect(after?.status).toBe("active");
+    });
+  }, 20000);
+});
+
+describe("ValidateInviteTokenQuery", () => {
+  // Mirrors the "no institution passed" path activateAndCaptureToken already exercises above:
+  // CreatePractitionerCommand with no institution never calls resolveOrganizationId, so
+  // practitioner.organization_id stays null and there's nothing to pre-fill from — the
+  // common case until the HCO-creation flow is wired to this invite path (see
+  // docs/stories/partner-registration-legal-documents.md, 2026-09-16 addendum).
+  it("returns null clinic-detail fields when the practitioner has no linked organization", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const email = `qa-prefill-none-${uniqueSuffix()}@example.com`;
+      const practitioner = await CreatePractitionerCommand(ctx, {
+        first_name: "No",
+        last_name: "Org",
+        email,
+        phone: "600100200",
+      });
+      await ActivatePractitionerCommand(ctx, practitioner.id);
+      const registerLink = sendPartnerInviteEmailMock.mock.calls.at(-1)![1] as string;
+      const token = new URL(registerLink).searchParams.get("token")!;
+
+      const preview = await ValidateInviteTokenQuery(client, token);
+
+      expect(preview?.email).toBe(email);
+      expect(preview?.clinicName).toBeNull();
+      expect(preview?.clinicEmail).toBeNull();
+      expect(preview?.clinicPhone).toBeNull();
+      expect(preview?.clinicAddress).toBeNull();
+      expect(preview?.taxId).toBeNull();
+    });
+  }, 20000);
+
+  it("pre-fills clinic-detail fields from a linked organization, flattening its address and reading its tax ID", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const org = await insertOrganization(client, {
+        name: `QA Prefill Clinic ${uniqueSuffix()}`,
+        email: "clinic@example.com",
+        phone: "600999888",
+        address_line1: "Some street 1",
+        city: "Warsaw",
+        state: "Mazowieckie",
+        postal_code: "00-000",
+        region: "PL",
+      });
+      // No writer exists yet for organization.identifiers anywhere in the app (see the
+      // story addendum referenced above) — set directly so extractTaxId() has real
+      // data to read, exercising the one code path nothing else in the app reaches today.
+      await client.query(`UPDATE organization SET identifiers = $1 WHERE id = $2`, [
+        JSON.stringify({ nip: "1234567890" }),
+        org.id,
+      ]);
+
+      const email = `qa-prefill-org-${uniqueSuffix()}@example.com`;
+      const practitioner = await CreatePractitionerCommand(ctx, {
+        first_name: "Has",
+        last_name: "Org",
+        email,
+        phone: "600100200",
+        organization_id: org.id,
+      });
+      await ActivatePractitionerCommand(ctx, practitioner.id);
+      const registerLink = sendPartnerInviteEmailMock.mock.calls.at(-1)![1] as string;
+      const token = new URL(registerLink).searchParams.get("token")!;
+
+      const preview = await ValidateInviteTokenQuery(client, token);
+
+      expect(preview?.clinicName).toBe(org.name);
+      expect(preview?.clinicEmail).toBe("clinic@example.com");
+      expect(preview?.clinicPhone).toBe("600999888");
+      expect(preview?.clinicAddress).toBe("Some street 1, Warsaw, Mazowieckie, 00-000");
+      expect(preview?.taxId).toBe("1234567890");
     });
   }, 20000);
 });
