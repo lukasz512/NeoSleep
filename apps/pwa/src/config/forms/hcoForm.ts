@@ -73,6 +73,14 @@ async function loadSpecialtyOptions(form: Record<string, unknown>): Promise<Form
 export const hcoFormFields: FormFieldDef[] = [
   { key: "name", type: "text", labelKey: "user.hco.form.name", required: true, cols: 12 },
   { key: "type", type: "select", labelKey: "user.hco.form.type", options: loadInstitutionTypeOptions, cols: 6 },
+  {
+    key: "specialties",
+    type: "autocomplete",
+    labelKey: "user.hco.form.specialties",
+    options: loadSpecialtyOptions,
+    multiple: true,
+    cols: 12,
+  },
   { key: "region", type: "autocomplete", labelKey: "user.hco.form.region", options: loadRegionOptions, cols: 6 },
   {
     key: "territory_id",
@@ -118,14 +126,6 @@ export const hcoFormFields: FormFieldDef[] = [
     labelKey: "user.hco.form.googleLink",
     icon: "map-pin",
     rules: [websiteRule],
-    cols: 12,
-  },
-  {
-    key: "specialties",
-    type: "autocomplete",
-    labelKey: "user.hco.form.specialties",
-    options: loadSpecialtyOptions,
-    multiple: true,
     cols: 12,
   },
   {

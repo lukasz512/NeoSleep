@@ -1231,6 +1231,7 @@
   "user.hco.filters.statusPendingApproval": "Pendiente de aprobación",
   "user.hco.detail.type": "Tipo",
   "user.hco.detail.region": "Territorio",
+  "user.hco.detail.specialties": "Especialidades",
   "user.hco.detail.tabs.details": "Detalles",
   "user.hco.detail.tabs.notes": "Notas",
   "user.hco.detail.tabs.relatedDoctors": "Médicos",
