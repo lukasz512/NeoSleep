@@ -25,13 +25,13 @@ n/a — internal admin tooling, not a clinical/PCF/HCP-engagement design questio
 - [ ] 100% test coverage for the new backend command/query/route and the frontend editor logic.
 - [ ] A dedicated refactor pass happens after the first working version lands — not skipped, not bundled silently into the first PR.
 
-### Open Questions
-- [ ] **Role name**: Łukasz said "admin i manager" — CLAUDE.md's role list is `admin`, `ffm`, `kam`, `msl`, `rep` (no literal "manager"). Does "manager" mean `ffm` (Field Force Manager) specifically, or something not yet modeled? This blocks correct RBAC gating.
-- [ ] **Versioning**: does saving an edit create a new version (traceable — a prior signed PDF's content can be tied to the version active when it was signed), or is it a single mutable row per template+locale (simpler, but loses that traceability)? Given compliance sensitivity, versioning looks like the safer default, but this is an `/arch` decision, not one to assume.
-- [ ] **Granularity of "content"**: per-paragraph i18n-style keys (matches today's architecture, e.g. edit `documents.gdprConsentPl.p1` individually) or one continuous whole-document rich-text edit surface per template+locale? A "simple WYSIWYG" reads more like the latter; per-paragraph keeps the current brand/i18n substitution mechanism unchanged. Needs Łukasz's steer.
-- [ ] **Scope**: does this cover all three template families (patient informed consent + doctor GDPR consent + collaboration agreement) from day one, or start narrower? Patient consent language is the most clinically sensitive of the three.
-- [ ] **Storage migration**: does DB-driven storage retire the static i18n JSON/HTML template content entirely, or do the static files become a one-time seed (first deploy loads DB rows from current content, DB becomes source of truth after)? Affects whether the existing i18n CI-parity gate (en/pl/mx key-set check) still applies, and how, once content can live in a DB the CI runner doesn't have access to.
-- [ ] **WYSIWYG technology**: no rich-text-editor dependency currently exists in the repo (to confirm during `/arch`/Plan research) — needs picking (or a minimal contenteditable-based component), per Łukasz's "reuse what we have" preference this should be checked before adding a new library.
+### Open Questions — RESOLVED (answers from Łukasz, 2026-09-16)
+- [x] **Role name**: confirmed as `admin` + `manager` — and confirmed against the live DB (not just CLAUDE.md, which turned out to be stale): `user_roles.role`'s real CHECK constraint is `admin/manager/kam/msl/rep/doctor` (migration 004/013 — `ffm` was renamed to `manager`, `doctor` was added as a real role). `requireRole("admin", "manager")` is already an established pattern in `apps/api/src/routes/users.ts`'s document endpoints — reuse verbatim, no new role-name guessing needed.
+- [x] **Versioning**: yes — every save creates a new version; a signed PDF stays traceable to the exact content version active when it was generated.
+- [x] **Granularity**: one continuous whole-document WYSIWYG edit surface per template+locale (not per-paragraph i18n-style fields) — closer to "simple WYSIWYG," less clicking between fields.
+- [x] **Scope**: all three template families from day one (patient informed consent, doctor GDPR consent, collaboration agreement) — Łukasz: "potem dojdzie jeszcze więcej dokumentów" (more document types will be added later), so design for an extensible set of document types, not a fixed enum of exactly three.
+- [ ] **Storage migration**: still open — does DB-driven storage retire the static i18n JSON/HTML template content entirely, or do the static files become a one-time seed? Affects the i18n CI-parity gate's relevance to this content going forward. To resolve during Plan Mode research.
+- [ ] **WYSIWYG technology**: still open — confirm no rich-text-editor dependency currently exists in the repo, then pick one (or a minimal contenteditable-based component) during Plan Mode research, per "reuse what we have."
 
 ### Hand-off
 → `/arch assess` — data model (versioning), storage-migration strategy from static files to DB, WYSIWYG technology choice
