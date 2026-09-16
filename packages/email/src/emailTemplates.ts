@@ -5,14 +5,14 @@ import type { SocialLink } from "./config/emailSocials.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-/** Provider-agnostic inline attachment — content read eagerly as a Buffer (no `path`/streaming,
- * since these are the same handful of small local assets every time). `contentId` is what the
- * HTML references via `cid:${contentId}`; matches Resend's Node SDK attachment shape directly so
- * mailer.ts can pass these straight through with no transform. */
+/** Provider-agnostic attachment — content read/generated eagerly as a Buffer (no `path`/streaming).
+ * `contentId` is what the HTML references via `cid:${contentId}` for an inline image like the logo;
+ * omit it for a regular (non-inline) attachment, e.g. a signed PDF — matches Resend's Node SDK
+ * attachment shape directly so mailer.ts can pass these straight through with no transform. */
 export interface EmailAttachment {
   filename: string;
   content: Buffer;
-  contentId: string;
+  contentId?: string;
 }
 
 /** `diskFilename` must match the real file under assets/email/ — `displayFilename` is just the name

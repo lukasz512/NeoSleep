@@ -15,6 +15,7 @@ export interface InviteToken {
 }
 
 export interface InviteTokenWithIdentity extends InviteToken {
+  identity_id: string;
   email: string;
   first_name: string | null;
   last_name: string | null;
@@ -47,7 +48,7 @@ export async function getInviteTokenByHash(
 ): Promise<InviteTokenWithIdentity | null> {
   try {
     const r = await client.query<InviteTokenWithIdentity>(
-      `SELECT it.id, it.user_id, it.lead_id, i.email, i.first_name, i.last_name
+      `SELECT it.id, it.user_id, it.lead_id, u.identity_id, i.email, i.first_name, i.last_name
        FROM invite_tokens it
        JOIN users u ON u.id = it.user_id
        JOIN identities i ON i.id = u.identity_id

@@ -8,7 +8,7 @@ import {
   emailT,
   type EmailAttachment,
 } from "@neo/email";
-import { RESEND_API_KEY, RESEND_FROM_EMAIL, RESEND_NOTIFY_TO } from "./env.js";
+import { RESEND_API_KEY, RESEND_FROM_EMAIL, RESEND_NOTIFY_TO, PARTNER_DOCS_CC_EMAIL } from "./env.js";
 
 /** Every personalized email needs at least these to build a proper "Hi {title} {name}," greeting,
  * and region to pick the right social links (see @neo/email's config/emailSocials.ts). */
@@ -55,6 +55,8 @@ interface SendEmailArgs {
   fromName?: string;
   /** Set so replies land in a real inbox (the rep's) instead of the noreply@ sending address. */
   replyTo?: string;
+  /** Fixed extra recipient(s), e.g. an internal compliance inbox — see PARTNER_DOCS_CC_EMAIL. */
+  cc?: string | string[];
 }
 
 /**
@@ -80,6 +82,7 @@ async function sendEmail(logLabel: string, args: SendEmailArgs): Promise<void> {
       html: args.html,
       attachments: args.attachments,
       ...(args.replyTo ? { replyTo: args.replyTo } : {}),
+      ...(args.cc ? { cc: args.cc } : {}),
     });
     if (error) {
       throw new Error(`${error.name}: ${error.message}`);
@@ -262,6 +265,7 @@ export async function sendPartnerInviteEmail(
     <h1 style="margin:0 0 16px;font-size:20px;font-weight:bold;color:#128F83;text-align:center;">${escapeHtml(emailT(locale, "email.partnerInvite.title"))}</h1>
     <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.greeting", { name: greetingName }))}</p>
     <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.partnerInvite.body"))}</p>
+    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.partnerInvite.deviceNote"))}</p>
     <p style="margin:0 0 16px;font-size:13px;color:#7a827e;">${escapeHtml(emailT(locale, "email.partnerInvite.expiry"))}</p>`;
 
   const socials = getSocialsForRegion(recipient.region);
@@ -319,5 +323,52 @@ export async function sendPartnerJoinThankYouEmail(to: string, recipient: EmailR
     attachments: getEmailAttachments(socials),
     fromName: sender.name,
     replyTo: sender.email,
+  });
+}
+
+/** One signed document ready to attach — plain PDF bytes, not yet an EmailAttachment
+ * (no inline contentId, unlike the logo/social icons the layout also attaches). */
+export interface SignedDocumentAttachment {
+  filename: string;
+  content: Buffer;
+}
+
+/**
+ * Sent right after AcceptPractitionerInviteCommand's transaction commits (never from inside
+ * it — a failure here must not roll back a signature that already succeeded). Ccs a fixed
+ * internal compliance inbox when PARTNER_DOCS_CC_EMAIL is set (interim single-tenant-MVP env
+ * var — see docs/stories/partner-registration-legal-documents.md, 2026-09-16 addendum, on why
+ * this isn't per-tenant config yet).
+ */
+export async function sendSignedDocumentsEmail(
+  to: string,
+  recipient: EmailRecipient,
+  documents: SignedDocumentAttachment[]
+): Promise<void> {
+  const locale = recipient.language;
+  const greetingName = formatGreetingName(recipient, to);
+
+  const bodyHtml = `
+    <h1 style="margin:0 0 16px;font-size:20px;font-weight:bold;color:#128F83;text-align:center;">${escapeHtml(emailT(locale, "email.signedDocuments.title"))}</h1>
+    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.greeting", { name: greetingName }))}</p>
+    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.signedDocuments.body"))}</p>`;
+
+  const socials = getSocialsForRegion(recipient.region);
+  const html = renderEmailLayout({
+    preheader: emailT(locale, "email.signedDocuments.title"),
+    bodyHtml,
+    footerTagline: emailT(locale, "email.footer.tagline"),
+    footerCities: emailT(locale, "email.footer.cities"),
+    footerCopyright: emailT(locale, "email.footer.copyright", { year: String(new Date().getFullYear()) }),
+    supportLeadIn: emailT(locale, "email.footer.support"),
+    socials,
+  });
+
+  await sendEmail("signed documents email", {
+    to,
+    subject: emailT(locale, "email.signedDocuments.subject"),
+    html,
+    attachments: [...getEmailAttachments(socials), ...documents.map((d) => ({ filename: d.filename, content: d.content }))],
+    ...(PARTNER_DOCS_CC_EMAIL ? { cc: PARTNER_DOCS_CC_EMAIL } : {}),
   });
 }
