@@ -3,13 +3,22 @@
  * When the API returns JSON like `{"error":"..."}` or `{"message":"..."}`, the notification shows ONLY the
  * extracted string. Never show raw JSON in the notification. See foundation/docs/OBSERVABILITY_AND_LOGGING.md.
  *
- * ## Auth
- * Auth is bearer-JWT based (not cookies — cross-origin session cookies get silently
- * dropped by Safari/iOS's third-party-cookie blocking, which is what this replaced). The
- * token lives in localStorage (see APP_STORAGE_KEYS.authToken) so it survives a reload or a
- * backgrounded PWA. fetchWithAuth attaches it as `Authorization: Bearer <token>` on every
- * request, and on a 401 from a non-auth endpoint clears both the token and the local auth
- * store so the router guard redirects to /login. Register the store-clear callback via
+ * ## Auth (ADR-020 — see docs/ADR-020-auth-token-rotation-no-cookies.md)
+ * Two tokens, zero cookies anywhere (not just as a preference — cross-origin cookies
+ * between this app's domain and the API's are what silently broke Safari/iOS sessions
+ * before; see auth-token.spec.ts on the API side for the regression guard).
+ *
+ * - Access token: short-lived (15m), held only in the `accessToken` module variable
+ *   below — never persisted, gone on reload by design. Sent as `Authorization: Bearer`.
+ * - Refresh token: longer-lived (7d/30d), persisted in localStorage (APP_STORAGE_KEYS.refreshToken)
+ *   so a reload doesn't force a re-login. Rotated on every use — see refreshAccessToken().
+ *
+ * fetchWithAuth attaches the access token to every request; on a 401 from a non-auth
+ * endpoint it tries exactly one silent refresh (concurrent 401s share the same in-flight
+ * refresh call via refreshPromise, so a burst of requests on boot never races two refresh
+ * calls against the same rotating token — the second would look like token reuse and kill
+ * the session). Only if that also fails does it clear both tokens and notify the auth store
+ * so the router guard redirects to /login. Register the store-clear callback via
  * setAuthInterceptor() — called from stores/auth.ts after store creation.
  */
 import { useLocalStorage } from "@vueuse/core";
@@ -21,22 +30,29 @@ import { useNotifications } from "../composables/useNotifications";
 export type { ApiFetchOptions };
 export { extractErrorMessage };
 
-// ── Auth token storage ────────────────────────────────────────────────────────
-const authToken = useLocalStorage<string | null>(APP_STORAGE_KEYS.authToken, null);
+let accessToken: string | null = null;
+const refreshToken = useLocalStorage<string | null>(APP_STORAGE_KEYS.refreshToken, null);
 
 export function getAuthToken(): string | null {
-  return authToken.value;
+  return accessToken;
 }
 
 export function setAuthToken(token: string): void {
-  authToken.value = token;
+  accessToken = token;
 }
 
 export function clearAuthToken(): void {
-  authToken.value = null;
+  accessToken = null;
 }
 
-// ── Auth interceptor callback ─────────────────────────────────────────────────
+export function getRefreshToken(): string | null {
+  return refreshToken.value;
+}
+
+export function setRefreshToken(token: string | null): void {
+  refreshToken.value = token;
+}
+
 // Registered lazily from stores/auth.ts to avoid circular imports.
 let _clearAuth: (() => void) | null = null;
 
@@ -44,19 +60,55 @@ export function setAuthInterceptor(opts: { clearAuth: () => void }): void {
   _clearAuth = opts.clearAuth;
 }
 
-/** Auth endpoints are excluded so a 401 from /auth/login itself doesn't clear the store mid-login. */
+/** Auth endpoints are excluded so a 401 from one of these itself doesn't trigger a refresh
+ *  attempt or clear the store mid-flow. */
 const AUTH_PATHS = [
   "/api/v1/auth/login",
   "/api/v1/auth/google",
   "/api/v1/auth/logout",
+  "/api/v1/auth/refresh",
 ];
-
-// Now that Authorization carries the token, `credentials: "include"` from createApiFetch
-// (apps/api/client/src/index.ts) is vestigial for this app (no cookies to send) but harmless
-// — left as-is since it's a shared package apps/web also uses.
 
 function isAuthPath(url: string): boolean {
   return AUTH_PATHS.some((p) => url.includes(p));
+}
+
+/** At most one refresh in flight at a time — see the module doc comment above for why a
+ *  second concurrent call would be fatal (rotation makes it look like token reuse). Every
+ *  caller that 401s while a refresh is already running just awaits the same promise. */
+let refreshPromise: Promise<boolean> | null = null;
+
+async function refreshAccessToken(): Promise<boolean> {
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = (async () => {
+    const current = refreshToken.value;
+    if (!current) return false;
+    try {
+      const res = await fetch(`${getApiUrl()}/api/v1/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: current }),
+      });
+      if (!res.ok) {
+        accessToken = null;
+        refreshToken.value = null;
+        return false;
+      }
+      const data = (await res.json()) as { token: string; refresh_token: string };
+      accessToken = data.token;
+      refreshToken.value = data.refresh_token;
+      return true;
+    } catch {
+      // Network error, not an auth rejection — leave the refresh token alone so the
+      // next request can simply try again rather than forcing a real re-login.
+      return false;
+    }
+  })();
+  try {
+    return await refreshPromise;
+  } finally {
+    refreshPromise = null;
+  }
 }
 
 /**
@@ -70,9 +122,10 @@ function isAuthPath(url: string): boolean {
 const REQUEST_TIMEOUT_MS = 20_000;
 
 /**
- * Fetch wrapper: on 401 from a non-auth endpoint, clear the local auth store.
- * Also drives the global loader store so any in-flight apiFetch call is
- * reflected app-wide (AppButton reads this to disable itself while busy).
+ * Fetch wrapper: on a 401 from a non-auth endpoint, tries one silent token refresh
+ * and retries the request before giving up and clearing the local auth store. Also
+ * drives the global loader store so any in-flight apiFetch call is reflected
+ * app-wide (AppButton reads this to disable itself while busy).
  */
 async function fetchWithAuth(
   input: RequestInfo | URL,
@@ -92,17 +145,27 @@ async function fetchWithAuth(
     else init.signal.addEventListener("abort", () => timeoutController.abort(), { once: true });
   }
 
-  const headers = new Headers(init?.headers);
-  if (authToken.value) headers.set("Authorization", `Bearer ${authToken.value}`);
+  function buildHeaders(): Headers {
+    const headers = new Headers(init?.headers);
+    if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
+    return headers;
+  }
 
   const loader = useGlobalLoaderStore();
   loader.startLoading();
   try {
-    const res = await fetch(input, { ...init, headers, signal: timeoutController.signal });
+    let res = await fetch(input, { ...init, headers: buildHeaders(), signal: timeoutController.signal });
 
     if (res.status === 401 && !isAuthPath(url)) {
-      clearAuthToken();
-      _clearAuth?.();
+      const refreshed = await refreshAccessToken();
+      if (refreshed) {
+        res = await fetch(input, { ...init, headers: buildHeaders(), signal: timeoutController.signal });
+      }
+      if (res.status === 401) {
+        clearAuthToken();
+        refreshToken.value = null;
+        _clearAuth?.();
+      }
     }
 
     return res;
@@ -111,8 +174,6 @@ async function fetchWithAuth(
     loader.stopLoading();
   }
 }
-
-// ── Diagnostics helpers ───────────────────────────────────────────────────────
 
 export async function sendDiagnostic(
   message: string,
@@ -150,8 +211,6 @@ async function sendErrorLog(path: string, status: number, message: string) {
     });
   } catch { /* ignore */ }
 }
-
-// ── Public apiFetch instance ──────────────────────────────────────────────────
 
 export const apiFetch = createApiFetch({
   getApiBase: getApiUrl,

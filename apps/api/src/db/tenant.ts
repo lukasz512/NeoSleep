@@ -29,8 +29,7 @@ function sanitizeSlug(slug: string): string {
  * so the connection is clean and safe to return to the pool — destroying it here
  * too was needlessly forcing a fresh connection to Supabase's pooler on every
  * ordinary business-logic error (e.g. a routine 401), which measurably stalls the
- * very next withTenant() call (see project memory: project_auth_spec_flaky_test.md
- * for the original flake this over-eager destroy was meant to prevent).
+ * very next withTenant() call.
  *
  * SLUG INJECTION PROTECTION:
  * sanitizeSlug() enforces a strict allowlist of characters before the slug

@@ -244,18 +244,18 @@ VPS / Cloud Server
 | File | Trigger | Tasks |
 |------|---------|-------|
 | `ci.yml` | PR to any branch | Lint → typecheck → test → build |
-| `deploy-app.yml` | Push to `dev` /`uat` / `prod` | Build → FTP deploy → health check |
-| `deploy-web.yml` | Push to `dev` /`uat` / `prod` | Build → FTP deploy |
-| `deploy-api.yml` | Push to `dev` /`uat` / `prod` | Build → deploy → restart |
-| `promote-dev-to-uat.yml` | Manual | Merge dev → uat |
+| `deploy-pwa.yml` | Push to `dev` / `prod` | Build → FTP deploy → health check |
+| `deploy-web.yml` | Push to `dev` / `prod` | Build → FTP deploy |
+| `promote-pwa-dev-to-prod.yml` | Manual | Merge dev → prod (pwa) |
+| `promote-web-dev-to-prod.yml` | Manual | Merge dev → prod (web) |
 | `security.yml` | Weekly + push to main | npm audit, SAST scan |
-| `rollback-api.yml` | Manual | Rollback API to previous version |
 
-### Branch → Environment mapping
+API (`apps/api`) has no GitHub Actions deploy workflow — Render auto-deploys on push to its tracked branch, see `render.yaml`.
+
+### Branch → Environment mapping (only two environments — no UAT)
 
 ```
 dev branch   → app-dev.neosleepcare.com / dev.neosleepcare.com
-uat branch   → app-uat.neosleepcare.com / uat.neosleepcare.com
 prod branch  → app.neosleepcare.com / neosleepcare.com
 ```
 

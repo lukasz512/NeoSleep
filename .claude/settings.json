@@ -6,5 +6,43 @@
       "Bash(pnpm --filter website build *)",
       "Bash(pnpm add *)"
     ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/session-start-worktree-check.sh",
+            "timeout": 10,
+            "statusMessage": "Checking worktree status..."
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/prompt-submit-planning-check.sh",
+            "timeout": 10,
+            "statusMessage": "Checking planning gate..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/quality-gate.sh",
+            "timeout": 300,
+            "statusMessage": "Running mandatory quality gate (lint, typecheck, test, depcruise, docs check)..."
+          }
+        ]
+      }
+    ]
   }
 }

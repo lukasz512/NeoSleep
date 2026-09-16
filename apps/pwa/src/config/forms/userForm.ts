@@ -4,8 +4,7 @@ import { identityFields } from "./identityFields";
 
 /**
  * Staff user entity config for the generic FormRenderer (apps/pwa/src/
- * components/FormRenderer.vue + useFormRenderer.ts). Used by UsersView.vue
- * (admin/manager user management — see routes/users.ts on the API side).
+ * components/FormRenderer.vue + useFormRenderer.ts).
  *
  * No password field here: new accounts are created without a password —
  * ensureInitialUserPasswords() (apps/api/src/auth.ts) sets one on next

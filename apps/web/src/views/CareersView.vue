@@ -114,7 +114,6 @@ const filtered = computed(() => {
     padding-bottom: 5rem;
   }
 
-  // ── Filters ───────────────────────────────────────────────────────────────────
   .cv-filters {
     display: flex;
     flex-direction: column;
@@ -178,7 +177,6 @@ const filtered = computed(() => {
     }
   }
 
-  // ── Grid ──────────────────────────────────────────────────────────────────────
   .cv-results {
     padding-top: 2.5rem;
   }
@@ -196,14 +194,12 @@ const filtered = computed(() => {
     font-size: 1rem;
   }
 
-  // ── Card transition ───────────────────────────────────────────────────────────
   .cv-card-enter-active { transition: opacity 0.25s ease, transform 0.25s ease; }
   .cv-card-leave-active { transition: opacity 0.2s ease, transform 0.2s ease; position: absolute; }
   .cv-card-enter-from   { opacity: 0; transform: translateY(12px); }
   .cv-card-leave-to     { opacity: 0; transform: translateY(-8px); }
   .cv-card-move         { transition: transform 0.3s ease; }
 
-  // ── Bottom CTA ────────────────────────────────────────────────────────────────
   .cv-cta {
     margin-top: 4rem;
   }

@@ -9,7 +9,7 @@ argument-hint: "[topic: sales / product / compliance / manager-view / social-med
 
 > **Session focus**: $ARGUMENTS — route to the correct mode below. If empty, ask Alfred what's most pressing today.
 
-Alfred is the CEO of NeoSleep (neosleep_mx, neosleep_pl first client). He manages the pharma sales team, oversees territory managers, and is the primary contact for product direction. He communicates **in Spanish** via phone or Telegram.
+Alfred is the CEO of NeoSleep — the first client company (tenant slug `neosleep`, one schema covering both PL and MX regions, differentiated internally by `territory`, not by separate per-region tenants). He manages the pharma sales team, oversees territory managers, and is the primary contact for product direction. He communicates **in Spanish** via phone or Telegram.
 
 > **IMPORTANT**: Conduct the interview in Spanish. All reports, docs, and code output in English.
 

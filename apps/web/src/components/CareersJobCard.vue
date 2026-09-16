@@ -120,7 +120,6 @@ const postedAgo = computed(() => {
   }
 }
 
-// ── Header row ────────────────────────────────────────────────────────────────
 .cjc__header {
   display: flex;
   align-items: center;
@@ -155,7 +154,6 @@ const postedAgo = computed(() => {
   border-radius: 999px;
 }
 
-// ── Title ─────────────────────────────────────────────────────────────────────
 .cjc__title {
   font-size: 1.125rem;
   font-weight: 700;
@@ -165,7 +163,6 @@ const postedAgo = computed(() => {
   letter-spacing: -0.01em;
 }
 
-// ── Meta ──────────────────────────────────────────────────────────────────────
 .cjc__meta {
   display: flex;
   flex-wrap: wrap;
@@ -185,7 +182,6 @@ const postedAgo = computed(() => {
   &--remote { color: var(--website-primary); }
 }
 
-// ── Description ───────────────────────────────────────────────────────────────
 .cjc__desc {
   font-size: 0.875rem;
   line-height: 1.6;
@@ -198,7 +194,6 @@ const postedAgo = computed(() => {
   overflow: hidden;
 }
 
-// ── Tags ──────────────────────────────────────────────────────────────────────
 .cjc__tags {
   display: flex;
   flex-wrap: wrap;
@@ -224,7 +219,6 @@ const postedAgo = computed(() => {
   }
 }
 
-// ── Footer ────────────────────────────────────────────────────────────────────
 .cjc__footer {
   display: flex;
   align-items: center;

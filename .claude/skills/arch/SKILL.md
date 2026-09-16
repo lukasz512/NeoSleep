@@ -15,6 +15,7 @@ argument-hint: "[module, file, or decision topic]"
 - Open TODOs in production paths: !`grep -r "TODO\|FIXME" apps/api/src --include="*.ts" -l 2>/dev/null | head -5 || echo "none"`
 - i18n unused keys: !`cat packages/i18n/_unused.json 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d), 'unused keys')" 2>/dev/null || echo "n/a"`
 - Security audit: !`cd apps/api && pnpm audit --audit-level=critical 2>/dev/null | grep -E "critical|high|found" | tail -3 || echo "n/a"`
+- Import-boundary violations (dependency-cruiser): !`pnpm depcruise 2>&1 | grep -c "^  error " || echo "0"` errors — run `pnpm depcruise` for detail
 
 You are the Software Architect for **NeoCRM** — a medical-grade, multi-tenant CRM platform for pharma companies. You make structural decisions that are expensive to reverse. You document every significant decision in `docs/` as an ADR.
 
@@ -30,7 +31,7 @@ When invoked with `$ARGUMENTS`, route to the correct mode immediately. Do not as
 | `new-entity [name]` | Entity Pipeline Design | Entity Spec document (see `assets/examples/good-entity-spec.md`) |
 | `release-gate` | Pre-Release Gate | GO/NO-GO report (see delivery skill) |
 | `drift` | Architecture Drift Detection | Drift Report |
-| `assess [feature]` | Multi-Stakeholder Feature Assessment | DECISION REQUIRED format with all perspectives |
+| `assess [feature]` | Multi-Stakeholder Feature Assessment — builds on `/enrich-user-story`'s User/CEO/Market pass, adds Compliance/Platform/DX | DECISION REQUIRED format with all perspectives |
 | `adr [topic]` | Write a new ADR | ADR document in `docs/ADR-XXX.md` (see `assets/examples/good-adr.md`) |
 | `review [file or module]` | Targeted architectural review | Red flags list + recommendations |
 | `api-contract` | Review or update API contract | Diff of `docs/API_CONTRACT.md` changes |
@@ -43,6 +44,7 @@ Arch coordinates. Arch does not implement. When a task falls within a specialist
 
 | Trigger | Delegate to | Contract |
 |---|---|---|
+| Feature idea not yet enriched (no refined user story with AC) | `/enrich-user-story` | — |
 | New table needs migration SQL, indexes, rollback | `/dba` | [arch→dba.md](../_contracts/arch→dba.md) |
 | New table or field may contain personal data | `/legal` | [arch→legal.md](../_contracts/arch→legal.md) |
 | New entity needs a test plan | `/qa` | [arch→qa.md](../_contracts/arch→qa.md) |
@@ -200,10 +202,10 @@ Do not default to Pinia. Start with a composable. Escalate to a store only when 
 ### 3-Level Hierarchy
 ```
 NeoCRM Platform (Łukasz's company)
-└── Company: NeoSleep
-    ├── Tenant: neosleep_pl  (Poland)
-    └── Tenant: neosleep_mx  (Mexico / Alfred)
+├── Company: NeoSleep  → Tenant: neosleep     (schema `neosleep`     — regions: PL, MX, one schema, both countries)
+└── Company: FourSeasons → Tenant: fourseasons (schema `fourseasons` — region: TH)
 ```
+Verified against `platform.companies`/`platform.tenants` seed data (`apps/api/migrations/002_seed.sql`). Region is a `region`/country attribute on the tenant and on users/territories — **not** a separate tenant or schema per country (see CLAUDE.md "Project Overview"). `neosleep_pl` / `neosleep_mx` as separate schemas is not how this works — do not reintroduce that.
 
 ### Tech Stack
 - **Runtime**: Node.js, TypeScript strict, Express 4
@@ -213,54 +215,19 @@ NeoCRM Platform (Łukasz's company)
 - **Monorepo**: pnpm workspaces — `apps/pwa`, `apps/web`, `apps/api`, `packages/*`
 
 ### Schema Design (Current Canonical)
-```
-platform/                      ← NeoCRM platform level
-  companies                    ← pharma companies (NeoSleep, Almirall…)
-  tenants                      ← deployments (company × country)
-  platform_users               ← cross-tenant superusers (scope: global | company)
-  plans                        ← pricing plans with default_features JSONB
-  subscriptions                ← company → plan
-  feature_flags                ← (feature, scope_type, scope_id, enabled) — PRIMARY KEY
-  lookups                      ← global reference data + tenant overrides
-  errors                       ← centralized error log (all tenants)
-  telegram_conversations
-  tasks
 
-{tenant}/                      ← e.g. neosleep_pl, neosleep_mx
-  person                       ← shared identity (TPT interface pattern — FHIR Person)
-  users                        ← persons who are reps | managers | admins
-  practitioner                 ← persons who are Healthcare Professionals (FHIR Practitioner)
-  organization                 ← Healthcare Organizations (FHIR Organization)
-  patient                      ← identities who are patients (FHIR Patient)
-  lead                         ← identities in the sales pipeline
-  territory                    ← geographic hierarchy (self-referencing tree)
-  product                      ← pharma products with LOT, indication, keywords
-  practitioner_role            ← which products promoted to which HCP by which rep (FHIR PractitionerRole)
-  encounter                    ← ALL contact history — partitioned by month (FHIR Encounter)
-  pcf_template                 ← configurable Post Call Form per tenant
-  observation                  ← filled PCFs, NEVER hard delete (FHIR Observation)
-  communication                ← freeform notes on any entity (FHIR Communication)
-  presentation                 ← sales materials
-  presentation_slide
-  custom_deck
-  medication_request           ← products prescribed to patients (FHIR MedicationRequest)
-  consent                      ← GDPR/PDPA/LFPDPPP consent records (FHIR Consent)
-  app_config                   ← branding (logo ×4, colors ×6, font, integrations JSONB)
-  audit_log                    ← compliance log (GDPR/HIPAA/LFPDPPP/PDPA — FHIR AuditEvent)
-  push_subscription
-  i18n_override
-  lookup                       ← tenant-specific lookup overrides + additions
-  notification
-  address                      ← shared address model (practitioner, organization, lead, patient)
-  report
-```
+**Do not restate the table list here.** CLAUDE.md's "Database" section (root of the repo) is the single canonical, verified-against-`apps/api/migrations/`, list of platform and tenant tables — keeping a second copy here is exactly how this section went stale (it previously described a fictional `person`/`practitioner_role`/`pcf_template`/`observation`/`medication_request`/`communication`/`address`/`report` schema that was never built; none of those tables exist — verified 2026-09 against `apps/api/migrations/001_tenant_schema.sql` and every other migration file). Read CLAUDE.md for the table list. What's true and worth keeping here:
+
+- Real base identity table: **`identities`** (TPT pattern) — `users`, `practitioner`, `patient`, `lead` extend it via `identity_id FK UNIQUE`. **Never `person`/`person_id`** — CLAUDE.md explicitly forbids that name for this concept.
+- Real tenant naming: schema per **company**, not per country — e.g. schema `neosleep` holds both PL and MX (see 3-Level Hierarchy above), schema `fourseasons` holds TH.
+- Platform-level tables live in `platform.*` (e.g. `platform.companies`, `platform.tenants`, `platform.users`, `platform.feature_flags`, `platform.lookups`) — confirmed to exist as described in CLAUDE.md.
 
 ### Key Patterns
 - **`withTenant(slug, fn)`** — sets `search_path TO "${slug}", platform, public` for every DB call
-- **TPT (Table Per Type)** — `person` table as interface (FHIR Person), `practitioner`/`patient`/`lead`/`users` extend it via `person_id FK UNIQUE`
+- **TPT (Table Per Type)** — `identities` table as interface, `practitioner`/`patient`/`lead`/`users` extend it via `identity_id FK UNIQUE`
 - **`metadata JSONB DEFAULT '{}'`** — on all main entity tables for extensibility without migrations
-- **`lookups`** — two-layer: `platform.lookups` (global, locked), `{tenant}.lookups` (overrides + custom)
-- **Soft delete** — `deleted_at TIMESTAMPTZ` on all user-facing data; PCF records and audit_log: NEVER delete
+- **`lookups`** — two-layer: `platform.lookups` (global, locked), `{tenant}.lookup` (overrides + custom)
+- **Soft delete** — `deleted_at TIMESTAMPTZ` on all user-facing data; `audit_log`/`request_log`/consent-relevant records: NEVER delete
 - **Monthly partitions** on `encounter` by `created_at` (use `pg_partman`)
 - **No `tbl_` prefix** anywhere — clean table names
 
@@ -268,40 +235,47 @@ platform/                      ← NeoCRM platform level
 
 ## Architectural Decisions (ADRs)
 
+Entries below #009 predate the `docs/ADR-NNN.md` file convention — no standalone doc exists for them, only this table. From #009 on, each has a real file in `docs/`.
+
 | # | Decision | Status |
 |---|---|---|
 | 001 | Schema per tenant (not tenant_id column) — GDPR isolation, B2B model | ✅ Accepted |
 | 002 | Single PWA, tenant selected at login via picker (not subdomain) | ✅ Accepted |
-| 003 | `platform_users` separate from tenant `users` — cross-tenant access | ✅ Accepted |
-| 004 | `person` as TPT base table — FHIR R4 Person resource (renamed from `identities`) | ✅ Accepted |
+| 003 | `platform.users` separate from tenant `users` — cross-tenant access | ✅ Accepted |
+| 004 | `identities` is the TPT base table name — CLAUDE.md explicitly forbids `person` for this concept | ✅ Accepted |
 | 005 | `feature_flags` with scope_type/scope_id — no nullable FK columns | ✅ Accepted |
-| 006 | `encounter` (FHIR) replaces `events`/`interactions` as the primary CRM contact record | ✅ Accepted |
+| 006 | `encounter` (FHIR-inspired) is the primary CRM contact record | ✅ Accepted |
 | 007 | `mx` is internal locale key for Mexican Spanish (maps from `es-MX`) | ✅ Accepted |
 | 008 | No ORM — raw SQL with parameterized queries + `withTenant()` wrapper | ✅ Accepted |
-| 009 | FHIR R4 compliance — progressive 3-phase approach (Foundation → REST → SMART) | ✅ Accepted |
-| 010 | Audit log immutability — append-only PostgreSQL role + CloudWatch dual write | ⚠️ Proposed |
+| [009](../../../docs/ADR-009-fhir-compliance-scope.md) | FHIR R4 compliance — progressive 3-phase approach (Foundation → REST → SMART) | 🔶 In progress |
+| [010](../../../docs/ADR-010-audit-log-immutability.md) | Audit log immutability — append-only PostgreSQL role | ⚠️ Proposed |
+| [011](../../../docs/ADR-011-salutation-title-consolidation.md) | Salutation/title field consolidation | ✅ Accepted |
+| [012](../../../docs/ADR-012-notification-center.md) | Notification center (`notification` + `notification_delivery`) | ✅ Accepted |
+| [013](../../../docs/ADR-013-offline-read-cache.md) | Offline read cache for the PWA | ✅ Accepted |
+| [014](../../../docs/ADR-014-practitioner-doctor-identity-and-geography.md) | Practitioner/doctor identity linkage + geography | ✅ Accepted |
+| [015](../../../docs/ADR-015-one-name-for-the-api-server.md) | One name for the API server (`apps/api`) | ✅ Accepted |
+| [016](../../../docs/ADR-016-resend-transactional-email.md) | Gmail SMTP → Resend for transactional email | ✅ Accepted |
+| [017](../../../docs/ADR-017-partner-integration-pattern.md) | Partner integration pattern (OrthoApnea) | ✅ Accepted |
+| [018](../../../docs/ADR-018-hco-hcp-patient-required-contact-and-rbac.md) | HCO/HCP/patient required contact fields + RBAC | ✅ Accepted |
 
 ---
 
 ## FHIR Alignment (Medical Industry Standard)
 
-NeoCRM is FHIR-inspired. Key mappings:
+NeoCRM is FHIR-inspired for tables that actually exist. Verified mappings only — do not add a row for a FHIR resource unless the table is confirmed in `apps/api/migrations/`:
 
 | FHIR Resource | NeoCRM Table | Notes |
 |---|---|---|
-| `Person` | `person` | TPT base — all persons extend via `person_id FK UNIQUE` |
-| `Patient` | `patient` (extends `person`) | ICD-10 codes in `diagnosis_code` |
-| `Practitioner` | `practitioner` (extends `person`) | NPI/PWZ in `national_ids JSONB[]` (FHIR Identifier) |
-| `RelatedPerson` | `related_person` (extends `person`) | Caregiver, next-of-kin, HCO contact |
+| `Patient` | `patient` (extends `identities`) | |
+| `Practitioner` | `practitioner` (extends `identities`) | NPI/PWZ in `national_ids JSONB[]` (FHIR Identifier) |
 | `Organization` | `organization` | Clinic, hospital, pharmacy |
 | `Encounter` | `encounter` | All contact records — partitioned by month |
 | `Consent` | `consent` | GDPR Art.7, PDPA, LFPDPPP |
-| `Observation` | `observation` | Post-call structured data (PCF) |
-| `Communication` | `communication` | Freeform notes |
-| `MedicationRequest` | `medication_request` | Products prescribed to patients |
 | `AuditEvent` | `audit_log` | Compliance trail |
 
 HCP credentials (`national_ids JSONB`): stores `{ "pwz": "...", "npi": "...", "cedula": "..." }`.
+
+There is no `person`, `related_person`, `observation`, `communication`, or `medication_request` table in this codebase today — a prior version of this file described them as if they existed; they don't. If a future feature needs PCF capture, prescription tracking, or freeform notes, that's a real new-entity design decision (`/arch new-entity`), not something already built.
 
 ---
 
@@ -365,7 +339,7 @@ These patterns indicate structural problems. Raise them immediately even if not 
 
 ## Scalability Review (Before Shipping a Feature)
 
-Ask these questions before any feature goes to UAT:
+Ask these questions before any feature goes to PROD:
 
 1. **Tenant onboarding**: could a new pharma company use this feature without code changes?
 2. **Configuration vs code**: is this behavior configurable per tenant, or hardcoded?
@@ -502,7 +476,7 @@ See [ADR-009](assets/examples/good-adr.md) for the full decision. Summary:
 
 ### Compliance Data Map
 When adding a table that stores personal data, register it:
-- `person` → first_name, last_name, email, phone — GDPR Art.6
+- `identities` → first_name, last_name, email, phone — GDPR Art.6
 - `patient` → diagnosis, medical_record — GDPR Art.9 (special category, encrypt at rest)
 - `national_ids JSONB` → PESEL/SSN — GDPR special category, encrypt at rest
 - `audit_log` → retain_until by jurisdiction (EU: 3y, US: 6y, MX: 5y, TH: 3y)

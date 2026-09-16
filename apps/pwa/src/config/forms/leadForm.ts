@@ -94,4 +94,13 @@ export const leadFormFields: FormFieldDef[] = [
     default: () => useAuthStore().user?.region ?? "",
     hidden: true,
   },
+  // RBAC scope (middleware/requireScope.ts on the API side) — distinct from
+  // `region` above (see migration 013's comment), same hidden-default pattern.
+  {
+    key: "country_code",
+    type: "text",
+    labelKey: "user.leads.form.countryCode",
+    default: () => useAuthStore().user?.country_code ?? "",
+    hidden: true,
+  },
 ];

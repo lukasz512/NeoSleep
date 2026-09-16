@@ -77,18 +77,20 @@ psql $DATABASE_URL -c "
 - `id UUID PRIMARY KEY DEFAULT gen_random_uuid()` — no serial/integer PKs
 - `created_at TIMESTAMPTZ NOT NULL DEFAULT now()`, `updated_at TIMESTAMPTZ NOT NULL DEFAULT now()`
 - `deleted_at TIMESTAMPTZ` — soft delete on all user-facing tables
-- **Never**: `audit_log`, `observation`, `consent` — no `deleted_at`, NEVER hard delete
+- **Never**: `audit_log`, `request_log`, `consent`, `efpia_disclosure` — no `deleted_at`, NEVER hard delete
 - `metadata JSONB NOT NULL DEFAULT '{}'` — on all main entity tables
 - No `tbl_` prefix, no plural table names
 - Every FK column → index required
 
 ### FHIR / Naming Rules (enforce on every review)
 
-- TPT person entities: FK column is **`person_id`** not `identity_id` — table is `person` not `identities`
-- New person-type entity → extends `person` via `person_id UUID NOT NULL UNIQUE REFERENCES person(id) ON DELETE CASCADE`
-- `related_person` is the canonical table for caregivers, next-of-kin, and HCO contacts (secretaries) — do NOT add them to `hcp`
-- `lookup` rows must have `fhir_code`, `fhir_system`, and `labels JSONB` — never add a lookup-only option without these
-- `audit_log` inserts must include `agent_who` (user display) and `entity_type` (FHIR AuditEvent code)
+> Verified against `apps/api/migrations/001_tenant_schema.sql` 2026-09 — a prior version of this section described `person`/`person_id`/`related_person`/lookup `fhir_code` columns that were never actually built. Corrected below; don't reintroduce the old names.
+
+- TPT identity entities: FK column is **`identity_id`** — table is **`identities`**, never `person`/`person_id`
+- New identity-type entity → extends `identities` via `identity_id UUID NOT NULL UNIQUE REFERENCES identities(id) ON DELETE CASCADE`
+- There is no `related_person` table. Caregiver/next-of-kin/HCO-contact modeling doesn't exist yet — that's a real `/arch new-entity` decision, not an existing convention to follow
+- `lookup` columns are `type, key, locale, value, sort_order, global_id, enabled, metadata, created_at` — no `fhir_code`/`fhir_system`/`labels` columns exist
+- `audit_log` inserts go through `insertAuditLog(clientOrRow, row?)` in `apps/api/src/db/audit-log.ts`. Real `AuditLogInsert` fields: `user_id, action, entity_type, entity_id, outcome, entity_before, entity_after, legal_basis, jurisdiction, retain_until, user_ip, user_agent, request_id, metadata` — no `agent_who`
 
 ---
 
@@ -167,12 +169,12 @@ For `query` mode — show result + EXPLAIN ANALYZE summary (actual rows vs estim
 
 | File | Purpose |
 |---|---|
-| [assets/examples/good-entity-spec.md](assets/examples/good-entity-spec.md) | Three entity variants — Person/TPT, Org, Simple — DB schema, indexes, FK patterns, soft delete |
+| [assets/examples/good-entity-spec.md](assets/examples/good-entity-spec.md) | Three entity variants — identities/TPT, Org, Simple — DB schema, indexes, FK patterns, soft delete |
 
 ## Key Arch Examples (read before any schema decision)
 
 | File | Purpose |
 |---|---|
-| [arch/good-fhir-alignment.md](../arch/assets/examples/good-fhir-alignment.md) | Every DB table → FHIR R4 resource mapping. `person` rename, `related_person`, `location`, consent |
+| [arch/good-fhir-alignment.md](../arch/assets/examples/good-fhir-alignment.md) | Every DB table → FHIR R4 resource mapping — verified list only, see the caveat at the top of that file |
 | [arch/good-schema-patterns.md](../arch/assets/examples/good-schema-patterns.md) | Non-retrofittable patterns: `erased_at`, encryption, `version`, `retain_until`, indexes |
 | [arch/good-lookup-i18n.md](../arch/assets/examples/good-lookup-i18n.md) | `lookup.fhir_code/system/labels` — CodeableConcept serialization, AuditEvent agent structure |

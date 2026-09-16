@@ -18,46 +18,48 @@ export interface AuthUser {
 
 type ApiFetchFn = (path: string, options?: ApiFetchOptions) => Promise<Response>;
 
-/** Reads/writes the bearer token client-side storage (localStorage — see apps/pwa's
- *  useApi.ts). Threaded in rather than imported directly so this package stays
- *  browser-storage-agnostic. */
+/** Reads/writes the two auth tokens (ADR-020) — access token (short-lived, memory-only)
+ *  and refresh token (longer-lived, persisted). Threaded in rather than imported directly
+ *  so this package stays browser-storage-agnostic; see apps/pwa's useApi.ts for the real
+ *  implementation. */
 export interface AuthTokenStorage {
-  get(): string | null;
-  set(token: string | null): void;
+  getAccessToken(): string | null;
+  setAccessToken(token: string | null): void;
+  getRefreshToken(): string | null;
+  setRefreshToken(token: string | null): void;
 }
 
 /**
- * Auth store — bearer-JWT based.
+ * Auth store — rotating refresh token, zero cookies (ADR-020).
  *
- * The API server (apps/api) issues a signed JWT on login; this store keeps a copy in
- * `tokenStorage` (localStorage on the pwa) and mirrors the decoded user in memory. Every
- * apiFetch call attaches the token as `Authorization: Bearer <token>` (see apps/pwa's
- * useApi.ts) — there is no cookie involved, which is the whole point: a cross-origin
- * SameSite cookie between the pwa and API domains gets silently dropped by Safari/iOS's
+ * The API server (apps/api) issues a short-lived access token plus a refresh token on
+ * login. This store keeps the user's decoded identity in memory and delegates the two
+ * tokens to `tokenStorage`. Every apiFetch call attaches the access token as
+ * `Authorization: Bearer <token>` and silently refreshes it on expiry (see apps/pwa's
+ * useApi.ts) — there is no cookie involved, which is deliberate: a cross-origin SameSite
+ * cookie between the pwa and API domains gets silently dropped by Safari/iOS's
  * third-party-cookie blocking, which used to leave users looking logged-in with no real
  * session data on iPhone.
  *
  * Lifecycle:
- *   Login   → POST /auth/login  → { token, user, forcePasswordChange } → token persisted
- *   Reload  → fetchSession() calls GET /auth/session (Authorization header from storage) to rehydrate `user`
- *   Logout  → POST /auth/logout (no server-side state to destroy) → clearAuth() drops the token
+ *   Login   → POST /auth/login  → { token, refresh_token, user, forcePasswordChange } → both tokens persisted
+ *   Reload  → fetchSession() calls GET /auth/session; a missing/expired access token is
+ *             silently re-derived from the refresh token by apiFetch itself, not here
+ *   Logout  → POST /auth/logout (revokes the refresh token server-side) → clearAuth() drops both tokens
  */
 export function createAuthStore(apiFetch: ApiFetchFn, tokenStorage: AuthTokenStorage) {
   return defineStore("auth", () => {
-    // ── State ───────────────────────────────────────────────────────────────
     const user = ref<AuthUser | null>(null);
     const sessionChecked = ref(false);
 
-    // ── Computed ────────────────────────────────────────────────────────────
     const isAuthenticated = computed(() => !!user.value);
     const displayName = computed(() => user.value?.name ?? user.value?.email ?? null);
 
-    // ── Actions ─────────────────────────────────────────────────────────────
-
-    /** On app mount: restore user from the stored bearer token after a page reload. */
+    /** On app mount: the access token is gone (memory-only), but a stored refresh token
+     *  means apiFetch's own 401 handling will silently re-derive one — see useApi.ts. */
     async function fetchSession(): Promise<boolean> {
       try {
-        if (!tokenStorage.get()) {
+        if (!tokenStorage.getRefreshToken()) {
           user.value = null;
           return false;
         }
@@ -78,7 +80,12 @@ export function createAuthStore(apiFetch: ApiFetchFn, tokenStorage: AuthTokenSto
 
     async function logout(): Promise<void> {
       try {
-        await apiFetch("/api/v1/auth/logout", { method: "POST", handleErrors: false });
+        await apiFetch("/api/v1/auth/logout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refresh_token: tokenStorage.getRefreshToken() }),
+          handleErrors: false,
+        });
       } catch { /* ignore network errors on logout */ }
       clearAuth();
     }
@@ -86,15 +93,17 @@ export function createAuthStore(apiFetch: ApiFetchFn, tokenStorage: AuthTokenSto
     function clearAuth(): void {
       user.value = null;
       sessionChecked.value = true;
-      tokenStorage.set(null);
+      tokenStorage.setAccessToken(null);
+      tokenStorage.setRefreshToken(null);
     }
 
-    /** Used after a successful login/OAuth-exchange response to set the authenticated user and token directly. */
-    function setAuthenticated(value: boolean, userData?: AuthUser | null, token?: string): void {
+    /** Used after a successful login/OAuth-exchange response to set the authenticated user and both tokens directly. */
+    function setAuthenticated(value: boolean, userData?: AuthUser | null, token?: string, refreshToken?: string): void {
       sessionChecked.value = true;
       if (!value) { clearAuth(); return; }
       user.value = userData ?? null;
-      if (token) tokenStorage.set(token);
+      if (token) tokenStorage.setAccessToken(token);
+      if (refreshToken) tokenStorage.setRefreshToken(refreshToken);
     }
 
     return {

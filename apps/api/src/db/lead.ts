@@ -38,6 +38,8 @@ export interface GetLeadsFilters {
   hideCompletedOlderThan24h?: boolean;
   /** 'declined' leads (3 failed follow-up attempts, no meeting booked) are admin-only visibility. */
   hideDeclined?: boolean;
+  /** RBAC scope filter (see middleware/requireScope.ts): null = unrestricted, [] = matches nothing, otherwise restrict to these country_codes. */
+  countryCodes?: string[] | null;
 }
 
 export interface GetLeadsPaginatedResult {
@@ -54,6 +56,8 @@ export interface InsertLeadInput {
   status?: string;
   type?: string;
   region?: string;
+  /** RBAC scope (see middleware/requireScope.ts) — distinct from `region` above, see migration 013's comment. */
+  country_code?: string | null;
   source?: string | null;
   institution?: string | null;
   assigned_to?: string | null;
@@ -69,6 +73,7 @@ export interface UpdateLeadInput {
   status?: string;
   type?: string;
   region?: string;
+  country_code?: string | null;
   source?: string | null;
   institution?: string | null;
   assigned_to?: string | null;
@@ -129,6 +134,11 @@ export async function getLeadsPaginated(
   if (regionArr.length > 0) {
     conditions.push(`i.region = ANY($${paramIndex}::text[])`);
     params.push(regionArr);
+    paramIndex++;
+  }
+  if (filters.countryCodes !== undefined && filters.countryCodes !== null) {
+    conditions.push(`i.country_code = ANY($${paramIndex}::text[])`);
+    params.push(filters.countryCodes);
     paramIndex++;
   }
   if (filters.hideCompletedOlderThan24h) {
@@ -221,10 +231,13 @@ export async function insertLead(client: PoolClient, input: InsertLeadInput): Pr
 
   try {
     const identityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (title, first_name, last_name, email, phone, region)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO identities (title, first_name, last_name, email, phone, region, country_code)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id`,
-      [trimOrNull(input.salutation), firstName, lastName, trimOrNull(input.email), trimOrNull(input.phone), trimOrEmpty(input.region) || null]
+      [
+        trimOrNull(input.salutation), firstName, lastName, trimOrNull(input.email), trimOrNull(input.phone),
+        trimOrEmpty(input.region) || null, trimOrNull(input.country_code),
+      ]
     );
     const identityId = identityResult.rows[0]!.id;
 
@@ -290,6 +303,10 @@ export async function updateLead(client: PoolClient, id: string, input: UpdateLe
     if (input.region !== undefined) {
       identityParams.push(trimOrEmpty(input.region) || null);
       identitySets.push(`region = $${iidx++}`);
+    }
+    if (input.country_code !== undefined) {
+      identityParams.push(trimOrNull(input.country_code));
+      identitySets.push(`country_code = $${iidx++}`);
     }
     identityParams.push(lead.identity_id);
     await client.query(

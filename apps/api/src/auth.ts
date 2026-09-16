@@ -17,11 +17,16 @@ import {
   getUserById,
   getUsersWithoutPassword,
   incrementUserTokenVersion,
+  insertRememberMeToken,
+  getRememberMeTokenByHash,
+  rotateRememberMeToken,
+  revokeRememberMeToken,
+  revokeAllRememberMeTokensForUser,
 } from "./db.js";
 import { sendPasswordResetEmail } from "./mailer.js";
 import { hashToken } from "./utils/hashToken.js";
 import { DEFAULT_FRONTEND_ORIGIN, resolveFrontendOrigin } from "./utils/frontendOrigin.js";
-import { signAuthToken } from "./utils/jwt.js";
+import { signAuthToken, refreshTokenExpiryDate } from "./utils/jwt.js";
 import { signOAuthState, verifyOAuthState, signExchangeCode, verifyExchangeCode } from "./utils/oauthTokens.js";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -42,13 +47,41 @@ const BCRYPT_ROUNDS = 10;
 export const authRouter: import('express').Router = Router();
 
 /** Rate limit: 10 login attempts per 15 minutes per IP. */
+/** Overridable only for the PWA's Playwright E2E suite (playwright.config.ts sets
+ *  LOGIN_RATE_LIMIT_MAX on its API webServer) — a realistic multi-browser run makes
+ *  10+ real login calls in minutes, which is normal E2E traffic, not the credential-
+ *  stuffing pattern this limiter exists to catch. Unset anywhere else, so production
+ *  and every other environment keep the real limit of 10. */
 const loginRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: Number(process.env.LOGIN_RATE_LIMIT_MAX) || 10,
   message: { error: "Too many login attempts. Try again in 15 minutes." },
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+/**
+ * Mints a fresh refresh token, hashes it, and stores it — the raw value is
+ * returned once and never persisted (only its sha256 hash lives in the DB,
+ * same convention as password_reset_tokens). Must be called with the
+ * tenant-scoped client from an open withTenant() transaction (ADR-020).
+ */
+async function issueRefreshToken(
+  client: Parameters<typeof insertRememberMeToken>[0],
+  userId: string,
+  rememberMe: boolean,
+  req: Request
+): Promise<string> {
+  const rawToken = crypto.randomBytes(32).toString("hex");
+  await insertRememberMeToken(client, {
+    userId,
+    tokenHash: hashToken(rawToken),
+    expiresAt: refreshTokenExpiryDate(rememberMe),
+    userAgent: req.headers["user-agent"],
+    ipAddress: req.ip,
+  });
+  return rawToken;
+}
 
 /**
  * Set an initial password for any seeded staff account that was never given one
@@ -91,31 +124,41 @@ authRouter.post(
       return;
     }
     const slug = tenantSlugFromHost(req.hostname);
-    const staff = await withTenant(slug, (client) => getStaffUserByEmail(client, emailStr));
-    if (!staff?.password_hash) {
-      res.status(401).json({ error: "Invalid email or password." });
-      return;
-    }
-    const match = await bcrypt.compare(passwordStr, staff.password_hash);
-    if (!match) {
-      res.status(401).json({ error: "Invalid email or password." });
-      return;
-    }
-    const token = signAuthToken(staff, { rememberMe: remember_me === true });
-    res.status(200).json({
-      token,
-      user: {
-        id: staff.id,
-        email: staff.email,
-        name: staff.name ?? undefined,
-        role: staff.role,
-        country_code: staff.country_code ?? undefined,
-        region: staff.region ?? undefined,
-        language: staff.language ?? undefined,
-        forcePasswordChange: staff.force_password_change,
-      },
-      forcePasswordChange: staff.force_password_change,
+    // Runs entirely inside one withTenant() transaction — issuing the refresh token
+    // needs the same tenant-scoped client that verified the password, and per the
+    // change-password handler's own note below, responding only after COMMIT avoids
+    // racing the client's next request against our own transaction.
+    const result = await withTenant(slug, async (client) => {
+      const staff = await getStaffUserByEmail(client, emailStr);
+      if (!staff?.password_hash) {
+        return { status: 401, body: { error: "Invalid email or password." } } as const;
+      }
+      const match = await bcrypt.compare(passwordStr, staff.password_hash);
+      if (!match) {
+        return { status: 401, body: { error: "Invalid email or password." } } as const;
+      }
+      const token = signAuthToken(staff);
+      const refreshToken = await issueRefreshToken(client, staff.id, remember_me === true, req);
+      return {
+        status: 200,
+        body: {
+          token,
+          refresh_token: refreshToken,
+          user: {
+            id: staff.id,
+            email: staff.email,
+            name: staff.name ?? undefined,
+            role: staff.role,
+            country_code: staff.country_code ?? undefined,
+            region: staff.region ?? undefined,
+            language: staff.language ?? undefined,
+            forcePasswordChange: staff.force_password_change,
+          },
+          forcePasswordChange: staff.force_password_change,
+        },
+      } as const;
     });
+    res.status(result.status).json(result.body);
   })
 );
 
@@ -148,16 +191,95 @@ authRouter.get(
 );
 
 // ---------------------------------------------------------------------------
-// POST /auth/logout — there is no server-side session to destroy anymore
-// (the bearer token is stateless); this just gives the frontend a symmetric
-// endpoint to call before it drops the token client-side. Deliberately does
-// NOT bump token_version — that would also sign the user out of every other
-// device, which "log out this device" should not do.
+// POST /auth/refresh — exchange a refresh token for a new access token,
+// rotating the refresh token in the same call (ADR-020). No cookies: the
+// refresh token travels in the request body, same as everything else in
+// this router — see auth-token.spec.ts for why cookies are off the table.
+//
+// A refresh token that's already revoked (either logged-out, or already
+// rotated away by an earlier /auth/refresh call) is treated as a theft
+// signal, not a routine error: every token for that user is revoked, forcing
+// a real re-login on every device. A legitimate client never presents an
+// already-rotated token — it always holds the newest one — so this only
+// fires when a token has been copied and two parties raced to use it.
 // ---------------------------------------------------------------------------
 
-authRouter.post("/auth/logout", requireAuth, (_req: Request, res: Response) => {
+authRouter.post("/auth/refresh", asyncHandler(async (req: Request, res: Response) => {
+  const { refresh_token } = req.body as { refresh_token?: string };
+  const refreshStr = typeof refresh_token === "string" ? refresh_token : "";
+  if (!refreshStr) {
+    res.status(401).json({ error: "Refresh token is required." });
+    return;
+  }
+  const tokenHash = hashToken(refreshStr);
+  const slug = tenantSlugFromHost(req.hostname);
+  const result = await withTenant(slug, async (client) => {
+    const row = await getRememberMeTokenByHash(client, tokenHash);
+    if (!row) {
+      return { status: 401, body: { error: "Invalid refresh token." } } as const;
+    }
+    if (row.revoked_at) {
+      // Two different reasons a token can be revoked, and only one is theft:
+      // replaced_by_id set means it was ROTATED away — a legitimate client never
+      // re-presents that, so seeing it again means it was copied. replaced_by_id
+      // NULL means a plain dead end (logout, or an earlier theft response) — just
+      // a dead token, not a new signal, and must NOT cascade into revoking this
+      // user's other, still-legitimate sessions.
+      if (row.replaced_by_id) {
+        await revokeAllRememberMeTokensForUser(client, row.user_id);
+        return { status: 401, body: { error: "This session is no longer valid. Please log in again." } } as const;
+      }
+      return { status: 401, body: { error: "Session has been logged out." } } as const;
+    }
+    if (row.expires_at.getTime() < Date.now()) {
+      return { status: 401, body: { error: "Session expired. Please log in again." } } as const;
+    }
+    const user = await getUserById(client, row.user_id);
+    if (!user) {
+      return { status: 401, body: { error: "Account no longer exists." } } as const;
+    }
+    const token = signAuthToken(user);
+    const rawRefresh = crypto.randomBytes(32).toString("hex");
+    // Preserves the original remember-me/default window across rotations
+    // instead of resetting it — a 30-day "remember me" session should still
+    // be ~30 days from now after its 10th silent refresh, not reset to 7.
+    const originalWindowMs = row.expires_at.getTime() - row.created_at.getTime();
+    const newExpiresAt = new Date(Date.now() + originalWindowMs);
+    await rotateRememberMeToken(client, row.id, {
+      userId: user.id,
+      tokenHash: hashToken(rawRefresh),
+      expiresAt: newExpiresAt,
+      userAgent: req.headers["user-agent"],
+      ipAddress: req.ip,
+    });
+    return { status: 200, body: { token, refresh_token: rawRefresh } } as const;
+  });
+  res.status(result.status).json(result.body);
+}));
+
+// ---------------------------------------------------------------------------
+// POST /auth/logout — revokes only the one refresh token presented, i.e.
+// only the current device/session. Other devices for the same user are
+// untouched (contrast with change-password below, which revokes all of
+// them) — see ADR-020. requireAuth still guards this (an access token is
+// needed to reach it), but a token that's already expired can't stop the
+// frontend from dropping its local tokens regardless.
+// ---------------------------------------------------------------------------
+
+authRouter.post("/auth/logout", requireAuth, asyncHandler(async (req: Request, res: Response) => {
+  const { refresh_token } = req.body as { refresh_token?: string };
+  if (typeof refresh_token === "string" && refresh_token) {
+    const tokenHash = hashToken(refresh_token);
+    const slug = tenantSlugFromHost(req.hostname);
+    await withTenant(slug, async (client) => {
+      const row = await getRememberMeTokenByHash(client, tokenHash);
+      if (row && !row.revoked_at) {
+        await revokeRememberMeToken(client, row.id);
+      }
+    });
+  }
   res.status(204).end();
-});
+}));
 
 // ---------------------------------------------------------------------------
 // POST /auth/change-password (authenticated; current + new password)
@@ -177,8 +299,7 @@ authRouter.post("/auth/change-password", requireAuth, asyncHandler(async (req: R
   const sessionUser = req.user!;
   // withTenant returns a {status, body} pair instead of calling res.json() itself —
   // it commits the transaction *after* the callback returns, so responding from inside
-  // it would race the client's next request against our own COMMIT (see project memory:
-  // project_auth_spec_flaky_test.md for the flake class this causes).
+  // it would race the client's next request against our own COMMIT.
   const result = await withTenant(slug, async (client) => {
     const staff = await getStaffUserByEmail(client, sessionUser.email);
     if (!staff?.password_hash) {
@@ -191,10 +312,12 @@ authRouter.post("/auth/change-password", requireAuth, asyncHandler(async (req: R
     }
     const hash = await bcrypt.hash(newStr, BCRYPT_ROUNDS);
     await setUserPassword(client, staff.id, hash);
-    // Invalidates every outstanding token for this user, INCLUDING the one used to make
-    // this very request — a real improvement over the old cookie-session behavior, which
-    // only killed remember-me tokens on other devices, never the live session itself.
+    // Invalidates every outstanding access token for this user, INCLUDING the one used to
+    // make this very request (token_version-based, unchanged). Refresh tokens aren't
+    // covered by token_version — revoke them explicitly too, so every device is fully
+    // signed out, not just left able to silently refresh back in (ADR-020).
     await incrementUserTokenVersion(client, staff.id);
+    await revokeAllRememberMeTokensForUser(client, staff.id);
     return { status: 200, body: { success: true } } as const;
   });
   res.status(result.status).json(result.body);
@@ -297,6 +420,7 @@ authRouter.post("/auth/reset-password", asyncHandler(async (req: Request, res: R
     await setUserPassword(client, userId, hash);
     await deletePasswordResetTokenByHash(client, tokenHash);
     await incrementUserTokenVersion(client, userId);
+    await revokeAllRememberMeTokensForUser(client, userId);
     return { status: 200, body: { success: true } } as const;
   });
   res.status(result.status).json(result.body);
@@ -427,24 +551,31 @@ authRouter.post("/auth/google/exchange", asyncHandler(async (req: Request, res: 
     return;
   }
   const slug = tenantSlugFromHost(req.hostname);
-  const user = await withTenant(slug, (client) => getUserById(client, userId));
-  if (!user) {
-    res.status(401).json({ error: "Account no longer exists." });
-    return;
-  }
-  const token = signAuthToken(user, { rememberMe: false });
-  res.status(200).json({
-    token,
-    user: {
-      id: user.id,
-      email: user.email,
-      name: user.name ?? undefined,
-      role: user.role,
-      country_code: user.country_code ?? undefined,
-      region: user.region ?? undefined,
-      language: user.language ?? undefined,
-      forcePasswordChange: false,
-    },
-    forcePasswordChange: false,
+  const result = await withTenant(slug, async (client) => {
+    const user = await getUserById(client, userId);
+    if (!user) {
+      return { status: 401, body: { error: "Account no longer exists." } } as const;
+    }
+    const token = signAuthToken(user);
+    const refreshToken = await issueRefreshToken(client, user.id, false, req);
+    return {
+      status: 200,
+      body: {
+        token,
+        refresh_token: refreshToken,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name ?? undefined,
+          role: user.role,
+          country_code: user.country_code ?? undefined,
+          region: user.region ?? undefined,
+          language: user.language ?? undefined,
+          forcePasswordChange: false,
+        },
+        forcePasswordChange: false,
+      },
+    } as const;
   });
+  res.status(result.status).json(result.body);
 }));

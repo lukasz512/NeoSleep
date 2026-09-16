@@ -1,7 +1,6 @@
 <template>
   <div class="view-find-specialist">
 
-    <!-- ── Search Hero ────────────────────────────────────────────────────── -->
     <section class="fs-hero home-section page-container">
       <p class="home-eyebrow">{{ t("website.findSpecialist.eyebrow") }}</p>
       <h1 class="fs-hero__tagline">
@@ -35,7 +34,6 @@
       </form>
     </section>
 
-    <!-- ── Map ───────────────────────────────────────────────────────────── -->
     <div class="fs-map-outer page-container">
       <div class="fs-map-wrap" :class="{ 'fs-map-wrap--loading': isPending }">
         <span v-if="isPending" class="fs-sr-only" role="status">{{ t("website.findSpecialist.loading") }}</span>
@@ -47,7 +45,6 @@
       </div>
     </div>
 
-    <!-- ── Specialist directory ──────────────────────────────────────────── -->
     <section class="home-section fs-results page-container">
       <h2 class="home-heading">{{ t("website.findSpecialist.nearbyTitle") }}</h2>
       <p class="fs-results__note">{{ t("website.findSpecialist.networkNote") }}</p>
@@ -104,7 +101,6 @@
       </div>
     </section>
 
-    <!-- ── CTA ────────────────────────────────────────────────────────────── -->
     <div
       ref="ctaRef"
       class="fs-cta-wrap home-reveal"
@@ -188,7 +184,6 @@ function escapeHtml(str: string): string {
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-// ── Map ──────────────────────────────────────────────────────────────────
 const mapContainer = ref<HTMLElement | null>(null);
 const mapLoading = ref(true);
 const mapError = ref(false);
@@ -256,7 +251,6 @@ function focusSpecialist(id: string) {
   selectedId.value = id;
 }
 
-// ── Search ───────────────────────────────────────────────────────────────
 // The specialists fetch and the Maps SDK load are independent failure modes
 // (a slow/broken API vs. a bad Maps key) — run them concurrently so one
 // failing doesn't block the other from ever being attempted, and each
@@ -323,7 +317,6 @@ const ctaVisible = useReveal(ctaRef, 0.10);
 
 <style lang="scss">
 @layer components {
-  /* ── Search Hero ─────────────────────────────────────────────────────── */
   .fs-hero {
     text-align: center;
   }
@@ -351,7 +344,6 @@ const ctaVisible = useReveal(ctaRef, 0.10);
     margin: 0 auto;
   }
 
-  /* ── Search form ─────────────────────────────────────────────────────── */
   .fs-search {
     display: flex;
     gap: 0.75rem;
@@ -422,7 +414,6 @@ const ctaVisible = useReveal(ctaRef, 0.10);
     animation: fs-border-pulse 1.2s ease-in-out infinite;
   }
 
-  /* ── Map ─────────────────────────────────────────────────────────────── */
   .fs-map-outer {
     margin-top: 1.5rem;
   }
@@ -517,7 +508,6 @@ const ctaVisible = useReveal(ctaRef, 0.10);
     color: #5f6b66;
   }
 
-  /* ── Specialist directory ────────────────────────────────────────────── */
   .fs-results {
     text-align: left;
   }
@@ -684,7 +674,6 @@ const ctaVisible = useReveal(ctaRef, 0.10);
     &:hover { text-decoration: underline; }
   }
 
-  /* ── CTA ─────────────────────────────────────────────────────────────── */
   .fs-cta-wrap {
     padding-bottom: 2.5rem;
   }

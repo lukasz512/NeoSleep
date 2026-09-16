@@ -63,6 +63,10 @@ export interface CreateLeadInput {
   status?: string;
   type?: string;
   region?: string;
+  /** RBAC scope (see middleware/requireScope.ts) — the PWA's leadForm.ts
+   *  defaults this to the creating user's own country_code (hidden field,
+   *  same pattern as hcoForm.ts/patientForm.ts). */
+  country_code?: string | null;
   source?: string | null;
   institution?: string | null;
   assigned_to?: string | null;
@@ -108,6 +112,7 @@ export async function CreateLeadCommand(
     status:      normalizeLeadStatus(input.status) ?? "new",
     type,
     region:      input.region?.trim() ?? "",
+    country_code: input.country_code?.trim() || null,
     source:      input.source?.trim() ?? null,
     institution: input.institution?.trim() || null,
     assigned_to: input.assigned_to?.trim() ?? null,
@@ -141,6 +146,7 @@ export interface UpdateLeadPayload {
   status?: string;
   type?: string;
   region?: string;
+  country_code?: string | null;
   source?: string | null;
   institution?: string | null;
   assigned_to?: string | null;
@@ -173,6 +179,7 @@ export async function UpdateLeadCommand(
     status:      normalizeLeadStatus(input.status),
     type:        normalizeLeadType(input.type),
     region:      input.region,
+    country_code: input.country_code,
     source:      input.source,
     institution: input.institution,
     assigned_to: input.assigned_to,

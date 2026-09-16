@@ -42,14 +42,12 @@ const headingTag = computed(() => (props.variant === "hero" ? "h1" : "h2"));
 
 <style lang="scss">
 @layer components {
-  // ── shell ──────────────────────────────────────────────────────────────────
   .tb {
     position: relative;
     overflow: hidden;
     background: linear-gradient(135deg, var(--neosleep-very-dark-teal) 0%, var(--neosleep-darker-teal) 100%);
   }
 
-  // ── photo + color wash ─────────────────────────────────────────────────────
   .tb__photo {
     position: absolute;
     inset: 0;
@@ -85,7 +83,6 @@ const headingTag = computed(() => (props.variant === "hero" ? "h1" : "h2"));
     }
   }
 
-  // ── decorative glow circles (without a full-strength photo) ────────────────
   .tb:not(.tb--photo),
   .tb--photo-subtle {
     &::before {
@@ -115,14 +112,12 @@ const headingTag = computed(() => (props.variant === "hero" ? "h1" : "h2"));
     }
   }
 
-  // ── inner ──────────────────────────────────────────────────────────────────
   .tb__inner {
     position: relative;
     z-index: 2;
     text-align: center;
   }
 
-  // ── hero variant ───────────────────────────────────────────────────────────
   .tb--hero {
     min-height: 480px;
     display: flex;
@@ -135,13 +130,11 @@ const headingTag = computed(() => (props.variant === "hero" ? "h1" : "h2"));
     }
   }
 
-  // ── cta variant ────────────────────────────────────────────────────────────
   .tb--cta {
     border-radius: var(--website-card-radius);
     padding: 4rem 2.5rem;
   }
 
-  // ── typography ─────────────────────────────────────────────────────────────
   .tb__eyebrow {
     font-size: 0.8125rem;
     font-weight: 700;

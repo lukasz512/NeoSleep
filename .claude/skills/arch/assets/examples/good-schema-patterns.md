@@ -1,5 +1,7 @@
 # Pattern: Schema Decisions That Can't Be Retrofitted
 
+> **Caveat (2026-09)**: examples below use `person` as the base-table name — the real table is **`identities`** (CLAUDE.md forbids `person`). Treat every table/column name here as illustrative of the *pattern*, verify the actual name against `apps/api/migrations/` before applying it.
+
 > These columns cost nothing before the first row. They cost a lot after.
 > Add all of them unconditionally on every relevant table.
 

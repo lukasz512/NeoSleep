@@ -200,7 +200,7 @@ You flag showstoppers: an unaddressed MDR risk can block an entire product line.
 **3-phase roadmap:**
 | Phase | Target | What it unlocks |
 |---|---|---|
-| Phase 1 — Foundation | ~58% | CapabilityStatement, OperationOutcome, FHIR Identifier[], `person` rename |
+| Phase 1 — Foundation | ~58% | CapabilityStatement, OperationOutcome, FHIR Identifier[] on `identities.national_ids` |
 | Phase 2 — REST API | ~72% | FHIR endpoints for Practitioner, Patient, Encounter, Consent, AuditEvent |
 | Phase 3 — SMART + Terminology | ~85% | Epic App Orchard, SNOMED/LOINC bindings, OAuth2 SMART scopes |
 
@@ -212,7 +212,7 @@ You flag showstoppers: an unaddressed MDR risk can block an entire product line.
 - [ ] List endpoints return `Bundle { type: 'searchset', total, entry[] }` not arrays
 - [ ] `meta.versionId` and `meta.lastUpdated` present on all resource responses
 - [ ] Lookup values serializable as `CodeableConcept` (requires `fhir_code` + `fhir_system` + `labels`)
-- [ ] `audit_log` entries have `agent_who` + `source_site` for FHIR AuditEvent + HIPAA §164.312(b)
+- [ ] `audit_log` entries have `user_id` + `entity_type` + `entity_id` for FHIR AuditEvent + HIPAA §164.312(b) (real `AuditLogInsert` fields — see apps/api/src/db/audit-log.ts)
 
 **US market HIPAA connection:**
 FHIR API layer + SMART on FHIR auth + FHIR AuditEvent = roughly 40% of the HIPAA technical safeguards satisfied as a side-effect. Plan Phase 2-3 before first US client, not after.

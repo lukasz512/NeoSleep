@@ -31,7 +31,7 @@ Arch delegates to legal when:
 ## Legal Task: [task type]
 
 **Context**: [1-2 sentences — what feature/entity triggered this review]
-**Priority**: [blocking | pre-UAT | advisory]
+**Priority**: [blocking | pre-push | advisory]
 **Jurisdictions in scope**: [EU (GDPR) | MX (LFPDPPP) | US (HIPAA) | all]
 **References**: [entity spec, ADR, or migration file]
 
@@ -144,7 +144,7 @@ These apply to every entity. Legal does not need to be consulted for these — a
 |---|---|
 | `audit_log`: NEVER delete | GDPR Art.5(2), HIPAA §164.312(b) |
 | `consent`: NEVER delete | GDPR Art.7(1) — consent record is proof of lawful processing |
-| `observation` (PCF): NEVER delete | Clinical record integrity, HIPAA |
+| `request_log`, `efpia_disclosure`: NEVER delete | Compliance/audit trail integrity, HIPAA |
 | `patient.diagnosis_code`: special category → encrypt at rest | GDPR Art.9 |
 | `national_ids JSONB` (PESEL, SSN, cedula): special category → encrypt at rest | GDPR Art.9, LFPDPPP Art.16 |
 | No personal data in URL params | GDPR — URLs end up in server logs |

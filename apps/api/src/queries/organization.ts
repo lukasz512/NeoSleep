@@ -8,6 +8,7 @@ import {
   type Organization,
   type PublicSpecialistRow,
 } from "../db.js";
+import { getAllowedCountryCodes, assertScopeAccess } from "../middleware/requireScope.js";
 
 /**
  * QUERIES — Organization (HCO) domain.
@@ -100,6 +101,7 @@ export async function GetOrganizationListQuery(
     type:   input.type,
     region: input.region,
     status: input.status,
+    countryCodes: getAllowedCountryCodes(ctx.user.roles),
   };
 
   const page      = input.page ?? 1;
@@ -124,6 +126,7 @@ export async function GetOrganizationByIdQuery(
 ): Promise<OrganizationDto | null> {
   const organization = await getOrganizationById(ctx.client, id);
   if (!organization) return null;
+  assertScopeAccess(ctx, organization.country_code);
   return toDto(organization);
 }
 

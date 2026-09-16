@@ -1,7 +1,9 @@
 # Pattern: FHIR R4 Alignment
 
+> **Caveat (2026-09)**: this file predates a correction — the real TPT base table is **`identities`**, not `person` (CLAUDE.md forbids the `person` name). Several rows below describe tables (`related_person`, `observation`, `medication_request`, `communication`) that don't exist in `apps/api/migrations/` — treat those as future-design sketches, not current schema. Verify any table name here against the migrations before relying on it.
+
 > Entity names, table shapes, and type codes follow FHIR R4 where a resource exists.
-> Where FHIR has no resource (lead), extend `person` via TPT and document the deviation in an ADR.
+> Where FHIR has no resource (lead), extend `identities` via TPT and document the deviation in an ADR.
 
 ---
 

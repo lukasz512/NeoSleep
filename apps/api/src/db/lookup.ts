@@ -85,7 +85,6 @@ export async function getTenantLookup(
 
 /**
  * Returns the three option groups used by the app's filter dropdowns.
- * Replaces the legacy getConfigOptions() from config-options.ts.
  *
  * - specialties      → platform.lookups type='specialty'  (with tenant overrides)
  * - organization_types → platform.lookups type='organization_type' (with tenant overrides)
@@ -94,18 +93,23 @@ export async function getTenantLookup(
  * Requires a PoolClient with search_path set to the tenant schema.
  */
 export async function getConfigOptions(client: PoolClient, locale = "en"): Promise<ConfigOptions> {
-  const [specialties, organization_types, regions] = await Promise.all([
-    getTenantLookup(client, "specialty", locale),
-    getTenantLookup(client, "organization_type", locale),
-    // Regions are tenant-only — query tenant.lookup directly, no platform layer
-    client.query<LookupItem>(
+  // Sequential, not Promise.all: `client` is a single PoolClient, and pg only
+  // ever runs one query at a time per connection — concurrent calls just
+  // queue behind each other internally, which pg 9.0 removes. See the same
+  // note in queries/auditLog.ts.
+  const specialties = await getTenantLookup(client, "specialty", locale);
+  const organization_types = await getTenantLookup(client, "organization_type", locale);
+  // Regions are tenant-only — query tenant.lookup directly, no platform layer
+  const regions = await client
+    .query<LookupItem>(
       `SELECT key, value, $1 AS locale, sort_order, false AS locked, true AS custom
        FROM lookup
        WHERE type = 'region' AND locale = $1 AND enabled = true
        ORDER BY sort_order, value`,
       [locale]
-    ).then((r) => r.rows).catch((err) => { throw new DatabaseError("getConfigOptions:region", err); }),
-  ]);
+    )
+    .then((r) => r.rows)
+    .catch((err) => { throw new DatabaseError("getConfigOptions:region", err); });
 
   return { specialties, organization_types, regions };
 }

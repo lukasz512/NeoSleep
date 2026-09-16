@@ -78,7 +78,6 @@ const stats = computed(() => [
     /* responsive: @container main (max-width: 640px) → padding 3.5rem 0 3rem — in website-responsive.scss */
   }
 
-  // ── Decorative background ────────────────────────────────────────────────────
   .ch__bg {
     position: absolute;
     inset: 0;
@@ -114,7 +113,6 @@ const stats = computed(() => [
     mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 40%, transparent 100%);
   }
 
-  // ── Content ───────────────────────────────────────────────────────────────────
   .ch__inner {
     position: relative;
     z-index: 1;
@@ -176,7 +174,6 @@ const stats = computed(() => [
     margin: 0 0 2.5rem;
   }
 
-  // ── Search ────────────────────────────────────────────────────────────────────
   .ch__search-wrap {
     position: relative;
     width: 100%;
@@ -232,7 +229,6 @@ const stats = computed(() => [
     pointer-events: none;
   }
 
-  // ── Stats ─────────────────────────────────────────────────────────────────────
   .ch__stats {
     display: flex;
     gap: 2.5rem;

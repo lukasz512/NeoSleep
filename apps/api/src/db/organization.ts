@@ -33,6 +33,8 @@ export interface GetOrganizationFilters {
   type?: string;
   region?: string;
   status?: string;
+  /** RBAC scope filter (see middleware/requireScope.ts): null = unrestricted, [] = matches nothing, otherwise restrict to these country_codes. */
+  countryCodes?: string[] | null;
 }
 
 export interface InsertOrganizationInput {
@@ -120,6 +122,11 @@ export async function getOrganizationPaginated(
   if (filters.status?.trim()) {
     conditions.push(`status = $${paramIndex}`);
     params.push(filters.status.trim());
+    paramIndex++;
+  }
+  if (filters.countryCodes !== undefined && filters.countryCodes !== null) {
+    conditions.push(`country_code = ANY($${paramIndex}::text[])`);
+    params.push(filters.countryCodes);
     paramIndex++;
   }
 

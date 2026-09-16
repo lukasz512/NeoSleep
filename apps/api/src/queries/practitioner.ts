@@ -6,6 +6,7 @@ import {
   type Practitioner,
 } from "../db.js";
 import { formatDisplayName } from "../utils/personName.js";
+import { getAllowedCountryCodes, assertScopeAccess } from "../middleware/requireScope.js";
 
 /**
  * QUERIES — Practitioner domain.
@@ -94,6 +95,7 @@ export async function GetPractitionerListQuery(
     specialty:   input.specialty,
     institution: input.institution,
     region:      input.region,
+    countryCodes: getAllowedCountryCodes(ctx.user.roles),
   };
 
   const page      = input.page ?? 1;
@@ -115,5 +117,6 @@ export async function GetPractitionerByIdQuery(
 ): Promise<PractitionerDto | null> {
   const practitioner = await getPractitionerById(ctx.client, id);
   if (!practitioner) return null;
+  assertScopeAccess(ctx, practitioner.country_code);
   return toDto(practitioner);
 }

@@ -1,6 +1,14 @@
 import type { AuthTokenStorage } from "@stores";
 import { createAuthStore } from "@stores";
-import { apiFetch, setAuthInterceptor, getAuthToken, setAuthToken, clearAuthToken } from "../composables/useApi";
+import {
+  apiFetch,
+  setAuthInterceptor,
+  getAuthToken,
+  setAuthToken,
+  clearAuthToken,
+  getRefreshToken,
+  setRefreshToken,
+} from "../composables/useApi";
 
 export type { UserRole, AuthUser, AuthTokenStorage } from "@stores";
 
@@ -8,8 +16,10 @@ export type { UserRole, AuthUser, AuthTokenStorage } from "@stores";
  *  "neo:authTokenStorage" in main.ts) — both must use the identical accessor so a
  *  login through either call site writes to the same storage the rest of the app reads. */
 export const authTokenStorage: AuthTokenStorage = {
-  get: getAuthToken,
-  set: (token) => (token ? setAuthToken(token) : clearAuthToken()),
+  getAccessToken: getAuthToken,
+  setAccessToken: (token) => (token ? setAuthToken(token) : clearAuthToken()),
+  getRefreshToken,
+  setRefreshToken,
 };
 
 export const useAuthStore = createAuthStore(apiFetch, authTokenStorage);

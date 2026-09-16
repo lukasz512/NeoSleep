@@ -56,12 +56,13 @@ export function createUseLoginFlow(apiFetch: ApiFetchFn, tokenStorage: AuthToken
 
         const data = (await res.json()) as {
           token: string;
+          refresh_token: string;
           user: { id: string; email: string; name?: string; picture?: string; role: "admin" | "manager" | "kam" | "msl" | "rep" | "doctor"; forcePasswordChange?: boolean };
           forcePasswordChange: boolean;
         };
 
         const authStore = useAuthStore();
-        authStore.setAuthenticated(true, data.user, data.token);
+        authStore.setAuthenticated(true, data.user, data.token, data.refresh_token);
 
         // Let the caller play an exit transition (e.g. AnimatedCard.playExit())
         // before the route actually changes, instead of the view vanishing instantly.

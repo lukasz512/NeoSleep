@@ -127,7 +127,7 @@ function eventColor(type: "f2f" | "video", status: "scheduled" | "completed" | "
   if (status === "completed") return "#4CAF50";
   if (status === "no_show")   return "#FF7043";
   // scheduled
-  if (type === "video")  return "#F59E0B"; // amber – warm yellow
+  if (type === "video")  return "#F59E0B";
   return "#128F83"; // primary teal – F2F
 }
 
