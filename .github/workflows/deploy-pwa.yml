@@ -1,6 +1,6 @@
 # Deploy rep-app to GoDaddy FTP
 # - prod → pwa.neosleepcare.com (path: secret GODADY_FTP_PWA_PROD)
-# - dev  → pwa.dev.neosleepcare.com (path: secret GODADY_FTP_PWA_DEV)
+# - dev  → pwa-dev.neosleepcare.com (path: secret GODADY_FTP_PWA_DEV)
 #
 # The prod branch is protected by the requiere_PR_to_merge ruleset — no
 # direct pushes, no bypass, for anyone. So a push to prod here only ever
@@ -65,7 +65,7 @@ jobs:
           server-dir: ${{ secrets.GODADY_FTP_PWA_PROD }}/
           dangerous-clean-slate: false
 
-      - name: Deploy to DEV (pwa.dev.neosleepcare.com)
+      - name: Deploy to DEV (pwa-dev.neosleepcare.com)
         if: github.ref == 'refs/heads/dev'
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
