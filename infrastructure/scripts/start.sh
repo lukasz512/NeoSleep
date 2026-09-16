@@ -41,12 +41,15 @@ echo "Installing dependencies..."
 pnpm install --reporter=silent 2>/dev/null || npm install --silent
 
 # ─── 4. Build compiled packages (not raw .ts like packages/stores/ui) ────────
-# @neo/email is a real compiled package (apps/api is plain Node without a
-# bundler, unlike the Vite apps/pwa and apps/web, so it can't import raw .ts)
-# — without this step `tsx --watch` in apps/api fails on startup with
-# ERR_MODULE_NOT_FOUND because node_modules/@neo/email/dist doesn't exist yet.
+# @neo/email and @neo/documents are real compiled packages (apps/api is
+# plain Node without a bundler, unlike the Vite apps/pwa and apps/web, so it
+# can't import raw .ts) — without this step `tsx --watch` in apps/api fails
+# on startup with ERR_MODULE_NOT_FOUND because node_modules/@neo/email/dist
+# (or @neo/documents/dist) doesn't exist yet.
 echo "Building @neo/email..."
 pnpm --filter @neo/email build
+echo "Building @neo/documents..."
+pnpm --filter @neo/documents build
 
 # ─── 5. Start services (API + app + website + telegram) ──────────────────────
 # DB migrations run automatically on API startup (apps/api/src/db/migrations.ts)
