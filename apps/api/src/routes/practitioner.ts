@@ -7,6 +7,7 @@ import { buildContext } from "../context/TenantContext.js";
 import { CreatePractitionerCommand, UpdatePractitionerCommand, DeletePractitionerCommand, ActivatePractitionerCommand } from "../commands/practitioner.js";
 import { GetPractitionerListQuery, GetPractitionerByIdQuery } from "../queries/practitioner.js";
 import { GetHistoryForPractitionerQuery } from "../queries/auditLog.js";
+import { GetPractitionerDocumentsQuery, GetPractitionerDocumentDownloadUrlQuery } from "../queries/entityDocuments.js";
 import { ValidationError } from "../errors.js";
 import { parsePaginationParams, toFilterArray } from "./utils.js";
 
@@ -90,6 +91,45 @@ practitionerRouter.get(
     });
 
     res.json(history);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/practitioner/:id/documents — Documents tab
+// ---------------------------------------------------------------------------
+practitionerRouter.get(
+  "/practitioner/:id/documents",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id?.trim();
+    if (!id) throw new ValidationError("Missing practitioner id");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    const documents = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return GetPractitionerDocumentsQuery(ctx, id);
+    });
+    res.json(documents);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/practitioner/:id/documents/:documentId/download — short-lived signed URL
+// ---------------------------------------------------------------------------
+practitionerRouter.get(
+  "/practitioner/:id/documents/:documentId/download",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id?.trim();
+    const documentId = req.params.documentId?.trim();
+    if (!id || !documentId) throw new ValidationError("Missing practitioner id or document id");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    const url = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return GetPractitionerDocumentDownloadUrlQuery(ctx, id, documentId);
+    });
+    res.json({ url });
   })
 );
 

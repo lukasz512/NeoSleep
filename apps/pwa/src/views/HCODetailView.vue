@@ -158,6 +158,9 @@
             :empty-label="t('user.hco.detail.relatedDoctorsEmpty')"
           />
         </template>
+        <template #documents>
+          <EntityDocumentsPanel :endpoint="`/api/v1/organization/${hco.id}/documents`" />
+        </template>
         <template #history>
           <EntityHistoryPanel :endpoint="`/api/v1/organization/${hco.id}/history`" />
         </template>
@@ -200,6 +203,7 @@ import AppIcon from "../components/AppIcon.vue";
 import DetailViewTabs from "../components/DetailViewTabs.vue";
 import EntityHistoryPanel from "../components/EntityHistoryPanel.vue";
 import RelatedEntityPanel from "../components/RelatedEntityPanel.vue";
+import EntityDocumentsPanel from "../components/EntityDocumentsPanel.vue";
 import HCOLocationMap from "../components/HCOLocationMap.vue";
 import PatientNotesPanel from "../components/patient/PatientNotesPanel.vue";
 import { hcoFormFields } from "../config/forms/hcoForm";
@@ -244,6 +248,7 @@ const hcoTabs = [
   { value: "details", labelKey: "user.hco.detail.tabs.details" },
   { value: "notes", labelKey: "user.hco.detail.tabs.notes" },
   { value: "relatedDoctors", labelKey: "user.hco.detail.tabs.relatedDoctors" },
+  { value: "documents", labelKey: "user.hco.detail.tabs.documents" },
   { value: "history", labelKey: "user.hco.detail.tabs.history" },
 ];
 const activeTab = ref((route.query.tab as string) || "details");

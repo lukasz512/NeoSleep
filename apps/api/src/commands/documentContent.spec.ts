@@ -3,7 +3,7 @@ import bcrypt from "bcrypt";
 import { withTenant, insertStaffUser, getGlobalTerritoryId } from "../db.js";
 import { getAuditLogForEntities } from "../db/audit-log.js";
 import type { TenantContext } from "../context/TenantContext.js";
-import { SaveDocumentContentVersionCommand, sanitizeDocumentContentHtml } from "./documentContent.js";
+import { SaveDocumentContentVersionCommand, SetDocumentTemplateEntityTypesCommand, sanitizeDocumentContentHtml } from "./documentContent.js";
 import { ValidationError } from "../errors.js";
 
 /**
@@ -136,6 +136,61 @@ describe("SaveDocumentContentVersionCommand", () => {
       const auditRows = await getAuditLogForEntities(client, ["DocumentContentVersion"], [version.id]);
       expect(auditRows.length).toBeGreaterThan(0);
       expect(auditRows[0].action).toBe("update");
+    });
+  });
+});
+
+describe("SetDocumentTemplateEntityTypesCommand", () => {
+  it("rejects an empty templateKey", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      await expect(SetDocumentTemplateEntityTypesCommand(ctx, "", ["patient"])).rejects.toThrow(ValidationError);
+    });
+  });
+
+  it("rejects a templateKey not in the manifest", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      await expect(
+        SetDocumentTemplateEntityTypesCommand(ctx, `unknown-${uniqueSuffix()}`, ["patient"])
+      ).rejects.toThrow(ValidationError);
+    });
+  });
+
+  it("rejects an invalid entity type (e.g. the UI-shorthand \"hcp\")", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      await expect(SetDocumentTemplateEntityTypesCommand(ctx, "__test", ["hcp"])).rejects.toThrow(ValidationError);
+    });
+  });
+
+  it("saves, de-duplicates, and writes an audit_log entry", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const result = await SetDocumentTemplateEntityTypesCommand(ctx, "__test", ["practitioner", "patient", "practitioner"]);
+
+      expect(result.sort()).toEqual(["patient", "practitioner"]);
+
+      // No entity_id to query by here (see the command's own comment: a
+      // template_key is never a UUID, and insertAuditLog silently nulls out
+      // any non-UUID entity_id) — look the row up via entity_type +
+      // entity_after's template_key instead.
+      const { rows: auditRows } = await client.query<{ action: string; entity_after: { template_key: string } }>(
+        `SELECT action, entity_after FROM audit_log
+         WHERE entity_type = 'DocumentTemplateEntityType' AND entity_after->>'template_key' = '__test'
+         ORDER BY created_at DESC LIMIT 1`
+      );
+      expect(auditRows.length).toBeGreaterThan(0);
+      expect(auditRows[0].action).toBe("update");
+    });
+  });
+
+  it("a second call fully replaces the first assignment", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      await SetDocumentTemplateEntityTypesCommand(ctx, "__test", ["practitioner", "organization"]);
+      const result = await SetDocumentTemplateEntityTypesCommand(ctx, "__test", ["lead"]);
+      expect(result).toEqual(["lead"]);
     });
   });
 });

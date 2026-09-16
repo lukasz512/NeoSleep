@@ -7,6 +7,7 @@ import { buildContext } from "../context/TenantContext.js";
 import { CreateOrganizationCommand, UpdateOrganizationCommand, DeleteOrganizationCommand } from "../commands/organization.js";
 import { GetOrganizationListQuery, GetOrganizationByIdQuery } from "../queries/organization.js";
 import { GetHistoryForOrganizationQuery } from "../queries/auditLog.js";
+import { GetOrganizationDocumentsQuery, GetOrganizationDocumentDownloadUrlQuery } from "../queries/entityDocuments.js";
 import { ValidationError } from "../errors.js";
 import { parsePaginationParams } from "./utils.js";
 
@@ -89,6 +90,45 @@ organizationRouter.get(
     });
 
     res.json(history);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/organization/:id/documents — Documents tab
+// ---------------------------------------------------------------------------
+organizationRouter.get(
+  "/organization/:id/documents",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id?.trim();
+    if (!id) throw new ValidationError("Missing organization id");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    const documents = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return GetOrganizationDocumentsQuery(ctx, id);
+    });
+    res.json(documents);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/organization/:id/documents/:documentId/download — short-lived signed URL
+// ---------------------------------------------------------------------------
+organizationRouter.get(
+  "/organization/:id/documents/:documentId/download",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id?.trim();
+    const documentId = req.params.documentId?.trim();
+    if (!id || !documentId) throw new ValidationError("Missing organization id or document id");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    const url = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return GetOrganizationDocumentDownloadUrlQuery(ctx, id, documentId);
+    });
+    res.json({ url });
   })
 );
 

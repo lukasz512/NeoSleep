@@ -141,6 +141,9 @@
           <template #orthoapnea>
             <PatientOrthoApneaPanel :patient-id="patient.id" />
           </template>
+          <template #documents>
+            <EntityDocumentsPanel :endpoint="`/api/v1/patient/${patient.id}/documents`" />
+          </template>
           <template #history>
             <EntityHistoryPanel :endpoint="`/api/v1/patient/${patient.id}/history`" />
           </template>
@@ -185,6 +188,7 @@ import PatientNotesPanel from "../components/patient/PatientNotesPanel.vue";
 import PatientStudiesPanel from "../components/patient/PatientStudiesPanel.vue";
 import PatientOrthoApneaPanel from "../components/patient/PatientOrthoApneaPanel.vue";
 import EntityHistoryPanel from "../components/EntityHistoryPanel.vue";
+import EntityDocumentsPanel from "../components/EntityDocumentsPanel.vue";
 import { patientFormFields } from "../config/forms/patientForm";
 import { entityActionIcon, entityActionBtnClass } from "../config/entityActions";
 import { patientStatusColor, patientStatusLabel } from "../utils/patientStatus";
@@ -249,6 +253,7 @@ const patientTabs = [
   { value: "notes", labelKey: "app.patients.detail.tabs.notes" },
   { value: "studies", labelKey: "app.patients.detail.tabs.studies" },
   { value: "orthoapnea", labelKey: "app.patients.detail.tabs.orthoapnea" },
+  { value: "documents", labelKey: "app.patients.detail.tabs.documents" },
   { value: "history", labelKey: "app.patients.detail.tabs.history" },
 ];
 /** Deep-linkable via ?tab= — see SleepStudiesView/TreatmentPlansView row clicks. */

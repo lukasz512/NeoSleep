@@ -3,12 +3,13 @@ import { asyncHandler } from "../middleware/errorHandler.js";
 import { requireRole } from "../middleware/requireRole.js";
 import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
-import { SaveDocumentContentVersionCommand } from "../commands/documentContent.js";
+import { SaveDocumentContentVersionCommand, SetDocumentTemplateEntityTypesCommand } from "../commands/documentContent.js";
 import {
   GetDocumentContentIndexQuery,
   GetCurrentDocumentContentQuery,
   ListDocumentContentVersionsQuery,
   GetDocumentContentVersionByIdQuery,
+  GetDocumentTemplateEntityTypesQuery,
 } from "../queries/documentContent.js";
 import { ValidationError } from "../errors.js";
 
@@ -33,6 +34,47 @@ documentContentRouter.get(
     const result = await withTenant(slug, async (client) => {
       await buildContext(req, client, slug);
       return GetDocumentContentIndexQuery();
+    });
+    res.json(result);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// "Permissions" tab — which entity types a template applies to. Registered
+// BEFORE the generic GET/:templateKey/:locale route below: Express matches
+// routes in registration order, and ":locale" is a wildcard param that would
+// otherwise also match a request for "…/__test/entity-types" (locale="entity-types"),
+// silently routing it into GetCurrentDocumentContentQuery instead — this bit
+// once already, caught by the route-level integration test.
+// ---------------------------------------------------------------------------
+documentContentRouter.get(
+  "/document-content/:templateKey/entity-types",
+  requireRole("admin", "manager"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { templateKey } = req.params;
+    const slug = tenantSlugFromHost(req.hostname);
+    const result = await withTenant(slug, async (client) => {
+      await buildContext(req, client, slug);
+      return GetDocumentTemplateEntityTypesQuery(templateKey);
+    });
+    res.json(result);
+  })
+);
+
+documentContentRouter.put(
+  "/document-content/:templateKey/entity-types",
+  requireRole("admin", "manager"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { templateKey } = req.params;
+    const entityTypes = Array.isArray(req.body?.entityTypes)
+      ? req.body.entityTypes.filter((v: unknown): v is string => typeof v === "string")
+      : undefined;
+    if (!entityTypes) throw new ValidationError("entityTypes must be an array of strings");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    const result = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return SetDocumentTemplateEntityTypesCommand(ctx, templateKey, entityTypes);
     });
     res.json(result);
   })

@@ -77,14 +77,18 @@ describe("DocumentContentEditorView", () => {
     notify.mockReset();
   });
 
-  it("loads the current version and its history using the route's templateKey/locale", async () => {
+  it("loads the current version, its history, and its entity-type assignment using the route's templateKey/locale", async () => {
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, CURRENT_VERSION));
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, HISTORY));
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, []));
     const { wrapper } = await mountEditor();
 
-    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(3));
     expect(apiFetch).toHaveBeenNthCalledWith(1, "/api/v1/document-content/gdprConsent.pl/pl", { handleErrors: false });
     expect(apiFetch).toHaveBeenNthCalledWith(2, "/api/v1/document-content/gdprConsent.pl/pl/versions", {
+      handleErrors: false,
+    });
+    expect(apiFetch).toHaveBeenNthCalledWith(3, "/api/v1/document-content/gdprConsent.pl/entity-types", {
       handleErrors: false,
     });
 
@@ -97,8 +101,9 @@ describe("DocumentContentEditorView", () => {
   it("wraps a literal {name} token from the loaded content as a protected chip in the editor", async () => {
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, CURRENT_VERSION));
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, HISTORY));
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, []));
     const { wrapper } = await mountEditor();
-    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(3));
     await wrapper.vm.$nextTick();
 
     const chip = wrapper.find("span[data-protected-token]");
@@ -109,9 +114,10 @@ describe("DocumentContentEditorView", () => {
   it("treats a 404 (no saved content yet) as an editable-but-empty first version, not an error", async () => {
     apiFetch.mockResolvedValueOnce(jsonResponse(false, 404, { error: "not found" }));
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, []));
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, []));
     const { wrapper } = await mountEditor();
 
-    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(3));
     await wrapper.vm.$nextTick();
 
     expect(wrapper.text()).not.toContain("Document not found");
@@ -122,8 +128,9 @@ describe("DocumentContentEditorView", () => {
   it("saves the editor's content (with the protected token serialized back to plain {name} text) and refreshes the version", async () => {
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, CURRENT_VERSION));
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, HISTORY));
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, []));
     const { wrapper } = await mountEditor();
-    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(3));
     await wrapper.vm.$nextTick();
 
     const saveResponse = { ...CURRENT_VERSION, id: "v-3", version_number: 3 };
@@ -134,13 +141,36 @@ describe("DocumentContentEditorView", () => {
     const saveButton = wrapper.findAll("button").find((b) => b.text().includes("Save new version"));
     await saveButton?.trigger("click");
 
-    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(4));
-    const saveCall = apiFetch.mock.calls[2];
+    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(5));
+    const saveCall = apiFetch.mock.calls[3];
     expect(saveCall[0]).toBe("/api/v1/document-content/gdprConsent.pl/pl");
     const body = JSON.parse((saveCall[1] as RequestInit).body as string) as { contentHtml: string };
     expect(body.contentHtml).toContain("{legalEntityName}");
     expect(body.contentHtml).not.toContain("data-protected-token");
 
     expect(notify).toHaveBeenCalledWith("New version saved", "success");
+  });
+
+  it("Permissions tab: loads the current entity-type assignment and saves a new one", async () => {
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, CURRENT_VERSION));
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, HISTORY));
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, ["practitioner"]));
+    const { wrapper } = await mountEditor();
+    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(3));
+    await wrapper.vm.$nextTick();
+
+    const permissionsTab = wrapper.findAll("button, [role='tab']").find((b) => b.text() === "Permissions");
+    await permissionsTab?.trigger("click");
+    await wrapper.vm.$nextTick();
+
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, ["practitioner", "patient"]));
+    const saveButton = wrapper.findAll("button").find((b) => b.text() === "Save");
+    await saveButton?.trigger("click");
+
+    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(4));
+    const putCall = apiFetch.mock.calls[3];
+    expect(putCall[0]).toBe("/api/v1/document-content/gdprConsent.pl/entity-types");
+    expect((putCall[1] as RequestInit).method).toBe("PUT");
+    expect(notify).toHaveBeenCalledWith("Saved", "success");
   });
 });

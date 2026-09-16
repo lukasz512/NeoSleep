@@ -16,107 +16,134 @@
     </template>
 
     <template #body>
-      <div class="doc-editor">
-        <p class="doc-editor__meta">
-          {{ localeLabel }}
-          <template v-if="currentVersionNumber !== null">
-            · {{ t("user.document-content.editor.currentVersion", { version: currentVersionNumber }) }}
-          </template>
-        </p>
+      <DetailViewTabs v-model="activeTab" :tabs="editorTabs">
+        <template #editor>
+          <div class="doc-editor">
+            <p class="doc-editor__meta">
+              {{ localeLabel }}
+              <template v-if="currentVersionNumber !== null">
+                · {{ t("user.document-content.editor.currentVersion", { version: currentVersionNumber }) }}
+              </template>
+            </p>
 
-        <p v-if="currentVersionNumber === null" class="doc-editor__no-content-hint">
-          {{ t("user.document-content.editor.noContentYet") }}
-        </p>
+            <p v-if="currentVersionNumber === null" class="doc-editor__no-content-hint">
+              {{ t("user.document-content.editor.noContentYet") }}
+            </p>
 
-        <div class="doc-editor__layout">
-          <div class="doc-editor__main">
-            <p class="doc-editor__token-hint">{{ t("user.document-content.editor.protectedTokenHint") }}</p>
+            <div class="doc-editor__layout">
+              <div class="doc-editor__main">
+                <p class="doc-editor__token-hint">{{ t("user.document-content.editor.protectedTokenHint") }}</p>
 
-            <div class="doc-editor__toolbar">
-              <button
-                type="button"
-                class="doc-editor__toolbar-btn"
-                :class="{ 'doc-editor__toolbar-btn--active': editor?.isActive('bold') }"
-                :aria-label="t('user.document-content.editor.toolbar.bold')"
-                @click="editor?.chain().focus().toggleBold().run()"
-              >
-                <strong>B</strong>
-              </button>
-              <button
-                type="button"
-                class="doc-editor__toolbar-btn"
-                :class="{ 'doc-editor__toolbar-btn--active': editor?.isActive('italic') }"
-                :aria-label="t('user.document-content.editor.toolbar.italic')"
-                @click="editor?.chain().focus().toggleItalic().run()"
-              >
-                <em>I</em>
-              </button>
-              <button
-                type="button"
-                class="doc-editor__toolbar-btn"
-                :class="{ 'doc-editor__toolbar-btn--active': editor?.isActive('underline') }"
-                :aria-label="t('user.document-content.editor.toolbar.underline')"
-                @click="editor?.chain().focus().toggleUnderline().run()"
-              >
-                <u>U</u>
-              </button>
-              <button
-                type="button"
-                class="doc-editor__toolbar-btn"
-                :class="{ 'doc-editor__toolbar-btn--active': editor?.isActive('bulletList') }"
-                :aria-label="t('user.document-content.editor.toolbar.bulletList')"
-                @click="editor?.chain().focus().toggleBulletList().run()"
-              >
-                •≡
-              </button>
+                <div class="doc-editor__toolbar">
+                  <button
+                    type="button"
+                    class="doc-editor__toolbar-btn"
+                    :class="{ 'doc-editor__toolbar-btn--active': editor?.isActive('bold') }"
+                    :aria-label="t('user.document-content.editor.toolbar.bold')"
+                    @click="editor?.chain().focus().toggleBold().run()"
+                  >
+                    <strong>B</strong>
+                  </button>
+                  <button
+                    type="button"
+                    class="doc-editor__toolbar-btn"
+                    :class="{ 'doc-editor__toolbar-btn--active': editor?.isActive('italic') }"
+                    :aria-label="t('user.document-content.editor.toolbar.italic')"
+                    @click="editor?.chain().focus().toggleItalic().run()"
+                  >
+                    <em>I</em>
+                  </button>
+                  <button
+                    type="button"
+                    class="doc-editor__toolbar-btn"
+                    :class="{ 'doc-editor__toolbar-btn--active': editor?.isActive('underline') }"
+                    :aria-label="t('user.document-content.editor.toolbar.underline')"
+                    @click="editor?.chain().focus().toggleUnderline().run()"
+                  >
+                    <u>U</u>
+                  </button>
+                  <button
+                    type="button"
+                    class="doc-editor__toolbar-btn"
+                    :class="{ 'doc-editor__toolbar-btn--active': editor?.isActive('bulletList') }"
+                    :aria-label="t('user.document-content.editor.toolbar.bulletList')"
+                    @click="editor?.chain().focus().toggleBulletList().run()"
+                  >
+                    •≡
+                  </button>
+                </div>
+
+                <EditorContent :editor="editor" class="doc-editor__content" />
+
+                <VTextField
+                  v-model="changeNote"
+                  :label="t('user.document-content.editor.changeNoteLabel')"
+                  :placeholder="t('user.document-content.editor.changeNotePlaceholder')"
+                  variant="outlined"
+                  density="comfortable"
+                  class="doc-editor__change-note"
+                />
+
+                <AppButton color="primary" :loading="saving" @click="onSave">
+                  {{ t("user.document-content.editor.save") }}
+                </AppButton>
+              </div>
+
+              <aside class="doc-editor__history">
+                <h2 class="doc-editor__history-title">{{ t("user.document-content.editor.history.title") }}</h2>
+                <ul v-if="history.length > 0" class="doc-editor__history-list">
+                  <li v-for="v in history" :key="v.id" class="doc-editor__history-item">
+                    <span class="doc-editor__history-version">
+                      v{{ v.version_number }}
+                      <span v-if="v.is_current" class="doc-editor__history-badge">{{ t("user.document-content.editor.history.current") }}</span>
+                    </span>
+                    <span class="doc-editor__history-by">{{ t("user.document-content.editor.history.by", { name: v.created_by_name }) }}</span>
+                    <span class="doc-editor__history-date">{{ formatDate(v.created_at) }}</span>
+                    <span v-if="v.change_note" class="doc-editor__history-note">{{ v.change_note }}</span>
+                  </li>
+                </ul>
+                <p v-else class="doc-editor__history-empty">{{ t("user.document-content.editor.history.empty") }}</p>
+              </aside>
             </div>
+          </div>
+        </template>
 
-            <EditorContent :editor="editor" class="doc-editor__content" />
-
-            <VTextField
-              v-model="changeNote"
-              :label="t('user.document-content.editor.changeNoteLabel')"
-              :placeholder="t('user.document-content.editor.changeNotePlaceholder')"
+        <template #permissions>
+          <div class="doc-editor__permissions">
+            <p class="doc-editor__permissions-hint">{{ t("user.document-content.permissions.hint") }}</p>
+            <VAutocomplete
+              v-model="selectedEntityTypes"
+              :items="entityTypeOptions"
+              item-title="title"
+              item-value="value"
+              :label="t('user.document-content.permissions.label')"
+              multiple
+              chips
+              closable-chips
               variant="outlined"
               density="comfortable"
-              class="doc-editor__change-note"
+              class="doc-editor__permissions-field"
             />
-
-            <AppButton color="primary" :loading="saving" @click="onSave">
-              {{ t("user.document-content.editor.save") }}
+            <AppButton color="primary" :loading="savingPermissions" @click="onSavePermissions">
+              {{ t("user.document-content.permissions.save") }}
             </AppButton>
           </div>
-
-          <aside class="doc-editor__history">
-            <h2 class="doc-editor__history-title">{{ t("user.document-content.editor.history.title") }}</h2>
-            <ul v-if="history.length > 0" class="doc-editor__history-list">
-              <li v-for="v in history" :key="v.id" class="doc-editor__history-item">
-                <span class="doc-editor__history-version">
-                  v{{ v.version_number }}
-                  <span v-if="v.is_current" class="doc-editor__history-badge">{{ t("user.document-content.editor.history.current") }}</span>
-                </span>
-                <span class="doc-editor__history-by">{{ t("user.document-content.editor.history.by", { name: v.created_by_name }) }}</span>
-                <span class="doc-editor__history-date">{{ formatDate(v.created_at) }}</span>
-                <span v-if="v.change_note" class="doc-editor__history-note">{{ v.change_note }}</span>
-              </li>
-            </ul>
-            <p v-else class="doc-editor__history-empty">{{ t("user.document-content.editor.history.empty") }}</p>
-          </aside>
-        </div>
-      </div>
+        </template>
+      </DetailViewTabs>
     </template>
   </ItemDetailLayout>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from "vue";
+import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { useEditor, EditorContent } from "@tiptap/vue-3";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
-import { VTextField } from "vuetify/components";
+import { VTextField, VAutocomplete } from "vuetify/components";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
+import DetailViewTabs, { type DetailViewTab } from "../components/DetailViewTabs.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppButton from "../components/AppButton.vue";
 import ProtectedToken, { htmlToEditorHtml, editorHtmlToPlainHtml } from "../components/documents/protectedTokenExtension";
@@ -138,6 +165,7 @@ interface DocumentContentVersion {
 
 const { t, locale: appLocale } = useI18n();
 const route = useRoute();
+const router = useRouter();
 const notifications = useNotifications();
 
 const templateKey = computed(() => route.params.templateKey as string);
@@ -150,6 +178,22 @@ const currentVersionNumber = ref<number | null>(null);
 const history = ref<DocumentContentVersion[]>([]);
 const changeNote = ref("");
 const saving = ref(false);
+
+const editorTabs: DetailViewTab[] = [
+  { value: "editor", labelKey: "user.document-content.tabs.editor" },
+  { value: "permissions", labelKey: "user.document-content.tabs.permissions" },
+];
+const activeTab = ref((route.query.tab as string) || "editor");
+watch(activeTab, (tab) => {
+  router.replace({ query: { ...route.query, tab } });
+});
+
+const ENTITY_TYPES = ["lead", "patient", "practitioner", "organization"] as const;
+const entityTypeOptions = computed(() =>
+  ENTITY_TYPES.map((value) => ({ value, title: t(`user.document-content.permissions.entityTypes.${value}`) }))
+);
+const selectedEntityTypes = ref<string[]>([]);
+const savingPermissions = ref(false);
 
 const editor = useEditor({
   extensions: [StarterKit, Underline, ProtectedToken],
@@ -179,6 +223,12 @@ async function loadHistory(): Promise<void> {
   if (res.ok) history.value = (await res.json()) as DocumentContentVersion[];
 }
 
+/** Entity-type assignment is keyed by templateKey alone (not templateKey+locale — see ADR-021: assignment is a template-level property). */
+async function loadEntityTypes(): Promise<void> {
+  const res = await apiFetch(`/api/v1/document-content/${templateKey.value}/entity-types`, { handleErrors: false });
+  if (res.ok) selectedEntityTypes.value = (await res.json()) as string[];
+}
+
 async function load(): Promise<void> {
   loading.value = true;
   loadError.value = false;
@@ -205,6 +255,7 @@ async function load(): Promise<void> {
       loadError.value = true;
     }
     await loadHistory();
+    await loadEntityTypes();
   } catch {
     loadError.value = true;
   } finally {
@@ -238,6 +289,28 @@ async function onSave(): Promise<void> {
     notifications.show(t("user.document-content.editor.saveError"), "error");
   } finally {
     saving.value = false;
+  }
+}
+
+async function onSavePermissions(): Promise<void> {
+  if (savingPermissions.value) return;
+  savingPermissions.value = true;
+  try {
+    const res = await apiFetch(`/api/v1/document-content/${templateKey.value}/entity-types`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entityTypes: selectedEntityTypes.value }),
+    });
+    if (res.ok) {
+      selectedEntityTypes.value = (await res.json()) as string[];
+      notifications.show(t("user.document-content.permissions.saveSuccess"), "success");
+    } else {
+      notifications.show(t("user.document-content.permissions.saveError"), "error");
+    }
+  } catch {
+    notifications.show(t("user.document-content.permissions.saveError"), "error");
+  } finally {
+    savingPermissions.value = false;
   }
 }
 </script>
@@ -395,5 +468,19 @@ async function onSave(): Promise<void> {
   margin: 0;
   font-size: 0.8125rem;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+.doc-editor__permissions {
+  max-width: 480px;
+}
+
+.doc-editor__permissions-hint {
+  margin: 0 0 16px;
+  font-size: 0.8125rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+.doc-editor__permissions-field {
+  margin-bottom: 12px;
 }
 </style>

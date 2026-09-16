@@ -7,6 +7,7 @@ import { buildContext } from "../context/TenantContext.js";
 import { CreatePatientCommand, UpdatePatientCommand, DeletePatientCommand } from "../commands/patient.js";
 import { GetPatientListQuery, GetPatientByIdQuery } from "../queries/patient.js";
 import { GetHistoryForPatientQuery } from "../queries/auditLog.js";
+import { GetPatientDocumentsQuery, GetPatientDocumentDownloadUrlQuery } from "../queries/entityDocuments.js";
 import { ValidationError } from "../errors.js";
 import { parsePaginationParams, toFilterArray } from "./utils.js";
 
@@ -89,6 +90,45 @@ patientRouter.get(
     });
 
     res.json(history);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/patient/:id/documents — Documents tab
+// ---------------------------------------------------------------------------
+patientRouter.get(
+  "/patient/:id/documents",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id?.trim();
+    if (!id) throw new ValidationError("Missing patient id");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    const documents = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return GetPatientDocumentsQuery(ctx, id);
+    });
+    res.json(documents);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/patient/:id/documents/:documentId/download — short-lived signed URL
+// ---------------------------------------------------------------------------
+patientRouter.get(
+  "/patient/:id/documents/:documentId/download",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id?.trim();
+    const documentId = req.params.documentId?.trim();
+    if (!id || !documentId) throw new ValidationError("Missing patient id or document id");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    const url = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return GetPatientDocumentDownloadUrlQuery(ctx, id, documentId);
+    });
+    res.json({ url });
   })
 );
 

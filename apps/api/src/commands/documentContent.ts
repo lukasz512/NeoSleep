@@ -3,7 +3,12 @@ import type { TenantContext } from "../context/TenantContext.js";
 import { insertAuditLog } from "../db.js";
 import { withPlatform } from "../db/tenant.js";
 import { insertDocumentContentVersion, type DocumentContentVersionRow } from "../db/documentContent.js";
-import { isKnownDocument, SUPPORTED_LOCALES } from "@neo/documents";
+import {
+  setEntityTypesForTemplate,
+  DOCUMENT_TEMPLATE_ENTITY_TYPES,
+  type DocumentTemplateEntityType,
+} from "../db/documentTemplateEntityType.js";
+import { isKnownDocument, DOCUMENT_MANIFEST, SUPPORTED_LOCALES } from "@neo/documents";
 import { ValidationError } from "../errors.js";
 
 /**
@@ -95,4 +100,55 @@ export async function SaveDocumentContentVersionCommand(
   });
 
   return version;
+}
+
+/**
+ * "Permissions" tab — which entity types (lead/patient/practitioner/
+ * organization) a template applies to. Full-replace semantics (matches
+ * db/documentTemplateEntityType.ts's delete-then-insert), same two-separate-
+ * transactions trade-off as SaveDocumentContentVersionCommand above: the
+ * platform-schema write and the audit_log write are not atomic together.
+ */
+export async function SetDocumentTemplateEntityTypesCommand(
+  ctx: TenantContext,
+  templateKey: string,
+  entityTypes: string[]
+): Promise<string[]> {
+  const key = templateKey?.trim();
+  if (!key) throw new ValidationError("templateKey is required");
+  // No !entry.hidden filter: matches isKnownDocument()'s own validation scope
+  // (SaveDocumentContentVersionCommand's manifest check above) — "hidden"
+  // only means "excluded from the real admin picker list"
+  // (GetDocumentContentIndexQuery), not "an invalid template key." The
+  // hidden "__test" fixture must stay assignable so this command's own test
+  // suite can exercise it without touching a real document.
+  if (!DOCUMENT_MANIFEST.some((entry) => entry.templateKey === key)) {
+    throw new ValidationError(`Unknown document template: "${key}"`);
+  }
+
+  const unique = [...new Set(entityTypes)];
+  for (const entityType of unique) {
+    if (!DOCUMENT_TEMPLATE_ENTITY_TYPES.includes(entityType as DocumentTemplateEntityType)) {
+      throw new ValidationError(`Invalid entity type: "${entityType}"`);
+    }
+  }
+
+  await withPlatform((platformClient) => setEntityTypesForTemplate(platformClient, key, unique, ctx.user.id));
+
+  // No entity_id here (unlike SaveDocumentContentVersionCommand's version.id):
+  // document_template_entity_type has no synthetic row id, only the
+  // (template_key, entity_type) composite key, and template_key is never a
+  // UUID — insertAuditLog silently nulls out any non-UUID entity_id
+  // (db/audit-log.ts's own isValidEntityUuid check), so passing the
+  // templateKey there would just as silently produce an unqueryable-by-id
+  // row. template_key is recoverable from entity_after instead.
+  await insertAuditLog(ctx.client, {
+    user_id: ctx.user.id,
+    action: "update",
+    entity_type: "DocumentTemplateEntityType",
+    entity_after: { template_key: key, entity_types: unique },
+    request_id: ctx.requestId,
+  });
+
+  return unique;
 }

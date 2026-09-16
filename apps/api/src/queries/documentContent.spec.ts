@@ -1,11 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { withPlatform } from "../db/tenant.js";
 import { insertDocumentContentVersion } from "../db/documentContent.js";
+import { setEntityTypesForTemplate } from "../db/documentTemplateEntityType.js";
 import {
   GetDocumentContentIndexQuery,
   GetCurrentDocumentContentQuery,
   ListDocumentContentVersionsQuery,
   GetDocumentContentVersionByIdQuery,
+  GetDocumentTemplateEntityTypesQuery,
 } from "./documentContent.js";
 import { NotFoundError } from "../errors.js";
 
@@ -86,5 +88,22 @@ describe("ListDocumentContentVersionsQuery / GetDocumentContentVersionByIdQuery"
     await expect(
       GetDocumentContentVersionByIdQuery("00000000-0000-0000-0000-000000000000")
     ).rejects.toThrow(NotFoundError);
+  });
+});
+
+describe("GetDocumentTemplateEntityTypesQuery", () => {
+  it("returns an empty array, not an error, for a template with no assignment yet", async () => {
+    const result = await GetDocumentTemplateEntityTypesQuery(`qa-query-entity-type-nonexistent-${uniqueSuffix()}`);
+    expect(result).toEqual([]);
+  });
+
+  it("returns the currently assigned entity types", async () => {
+    const templateKey = `qa-query-entity-type-fixture-${uniqueSuffix()}`;
+    await withPlatform((client) =>
+      setEntityTypesForTemplate(client, templateKey, ["practitioner", "patient"], "00000000-0000-0000-0000-000000000000")
+    );
+
+    const result = await GetDocumentTemplateEntityTypesQuery(templateKey);
+    expect(result.sort()).toEqual(["patient", "practitioner"]);
   });
 });

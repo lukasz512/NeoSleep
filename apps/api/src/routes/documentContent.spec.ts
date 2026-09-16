@@ -162,3 +162,59 @@ describe("POST /api/v1/document-content/:templateKey/:locale and the get/list en
     expect(res.status).toBe(404);
   });
 });
+
+describe("GET/PUT /api/v1/document-content/:templateKey/entity-types (admin+manager only)", () => {
+  it("401s with no token", async () => {
+    const res = await request(app).get("/api/v1/document-content/__test/entity-types");
+    expect(res.status).toBe(401);
+  });
+
+  it("403s a get from a rep", async () => {
+    const res = await request(app)
+      .get("/api/v1/document-content/__test/entity-types")
+      .set("Authorization", `Bearer ${tokenForNonexistentUser("rep")}`);
+    expect(res.status).toBe(403);
+  });
+
+  it("403s a put from a rep", async () => {
+    const res = await request(app)
+      .put("/api/v1/document-content/__test/entity-types")
+      .set("Authorization", `Bearer ${tokenForNonexistentUser("rep")}`)
+      .send({ entityTypes: ["patient"] });
+    expect(res.status).toBe(403);
+  });
+
+  it("400s a put with a non-array entityTypes", async () => {
+    const manager = await withTenant(TENANT_SLUG, (client) => insertTestUser(client, "manager"));
+    const res = await request(app)
+      .put("/api/v1/document-content/__test/entity-types")
+      .set("Authorization", `Bearer ${tokenFor(manager, "manager")}`)
+      .send({ entityTypes: "patient" });
+    expect(res.status).toBe(400);
+  });
+
+  it("400s a put for an unknown templateKey", async () => {
+    const manager = await withTenant(TENANT_SLUG, (client) => insertTestUser(client, "manager"));
+    const res = await request(app)
+      .put(`/api/v1/document-content/unknown-${uniqueSuffix()}/entity-types`)
+      .set("Authorization", `Bearer ${tokenFor(manager, "manager")}`)
+      .send({ entityTypes: ["patient"] });
+    expect(res.status).toBe(400);
+  });
+
+  it("full round trip: put (manager) -> get returns the saved assignment", async () => {
+    const manager = await withTenant(TENANT_SLUG, (client) => insertTestUser(client, "manager"));
+    const auth = `Bearer ${tokenFor(manager, "manager")}`;
+
+    const put = await request(app)
+      .put("/api/v1/document-content/__test/entity-types")
+      .set("Authorization", auth)
+      .send({ entityTypes: ["practitioner", "organization"] });
+    expect(put.status).toBe(200);
+    expect((put.body as string[]).sort()).toEqual(["organization", "practitioner"]);
+
+    const get = await request(app).get("/api/v1/document-content/__test/entity-types").set("Authorization", auth);
+    expect(get.status).toBe(200);
+    expect((get.body as string[]).sort()).toEqual(["organization", "practitioner"]);
+  });
+});
