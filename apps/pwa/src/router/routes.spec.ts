@@ -39,4 +39,15 @@ describe("navRoutesForRole", () => {
   it("unauthenticated (no role) sees nothing restricted", () => {
     expect(navRoutesForRole(null)).toEqual([]);
   });
+
+  it("rep/kam/msl/doctor do not see /documents — admin/manager only, same as /users", () => {
+    for (const role of ["rep", "kam", "msl", "doctor"] as const) {
+      expect(navRoutesForRole(role).some((r) => r.path === "/documents")).toBe(false);
+    }
+  });
+
+  it("manager and admin see /documents", () => {
+    expect(navRoutesForRole("manager").some((r) => r.path === "/documents")).toBe(true);
+    expect(navRoutesForRole("admin").some((r) => r.path === "/documents")).toBe(true);
+  });
 });
