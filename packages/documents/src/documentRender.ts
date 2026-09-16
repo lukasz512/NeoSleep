@@ -56,6 +56,11 @@ function getBrandLogoSvg(): string {
   return cachedLogoSvg;
 }
 
+/** Same cached SVG as getBrandLogoSvg(), with an explicit height forced onto the <svg> root so it scales correctly wherever it's inlined (the source file has a viewBox but no width/height attributes, which browsers size inconsistently by default). */
+function getBrandLogoSvgAtHeight(heightPx: number): string {
+  return getBrandLogoSvg().replace("<svg ", `<svg style="height:${heightPx}px;width:auto;display:block;" `);
+}
+
 function loadTemplate(name: string): string {
   return fs.readFileSync(path.join(TEMPLATES_DIR, `${name}.html`), "utf-8");
 }
@@ -104,19 +109,31 @@ export function renderDocumentHtml(templateName: string, locale: string | null |
   return fillStaticTokens(loadTemplate(templateName), locale);
 }
 
+/** Muted gray for the footer specifically — distinct from BRAND.secondary (used for body labels/borders, too dark to read as a footer-quiet tone). Puppeteer's footerTemplate renders in its own isolated frame with no access to the main page's stylesheet/CSS variables, so this has to be a literal inline value, not var(--secondary). */
+const FOOTER_TEXT_COLOR = "#8A8A89";
+
 /**
  * Puppeteer page.pdf()'s footerTemplate option is the only reliable way to
  * repeat a footer on every page (CSS repeated-per-page footers aren't
  * consistent across browsers, see the informedConsent template's own header
- * comment) — this builds that footer HTML. "documents.common.page" carries
- * just the localized word ("Page"/"Página"/"Strona"); pageNumber/totalPages
- * are Puppeteer's own placeholder classes, filled in by Chrome itself.
+ * comment) — this builds that footer HTML. Two-column layout: contact block
+ * on the left (~2/3 width), small logo + doc-ref/page count on the right
+ * (~1/3 width). "documents.common.page" carries just the localized word
+ * ("Page"/"Página"/"Strona"); pageNumber/totalPages are Puppeteer's own
+ * placeholder classes, filled in by Chrome itself.
  */
 export function renderDocumentFooterHtml(docRefCode: string, locale: string | null | undefined): string {
   const pageWord = documentT(locale, "documents.common.page");
-  return `<div style="font-size:8px;color:${BRAND.secondary};width:100%;padding:0 15mm;font-family:Arial,sans-serif;">
-    <div>${NEOSLEEP_CONTACT_LINE}</div>
-    <div style="text-align:right;">${docRefCode} · ${pageWord} <span class="pageNumber"></span> / <span class="totalPages"></span></div>
+  return `<div style="display:flex;justify-content:space-between;align-items:flex-start;width:100%;box-sizing:border-box;padding:0 15mm;font-family:Arial,sans-serif;font-size:7.5pt;color:${FOOTER_TEXT_COLOR};line-height:1.5;">
+    <div style="width:66%;">
+      <div>NeoSleep · Lorena González</div>
+      <div>+52 55 4910 0921 · lorena.gonzalez@neosleepcare.com</div>
+      <div>WTC, Calle Montecito 38, Col. Nápoles, Piso 26, Oficina 8, Ciudad de México</div>
+    </div>
+    <div style="width:34%;text-align:right;">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:2px;">${getBrandLogoSvgAtHeight(10)}</div>
+      <div>${docRefCode} · ${pageWord} <span class="pageNumber"></span> / <span class="totalPages"></span></div>
+    </div>
   </div>`;
 }
 
