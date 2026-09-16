@@ -38,7 +38,7 @@ const ICONS = {
     paths: `<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" pathLength="1" />
             <circle cx="8.5" cy="14" r="0.8" pathLength="1" />
             <circle cx="15.5" cy="14" r="0.8" pathLength="1" />
-            <path d="M9 17.5 Q12 19.5 15 17.5" pathLength="1" />`,
+            <path d="M9 16 Q12 18 15 16" pathLength="1" />`,
   },
   "file": {
     strokeWidth: 1.5,
