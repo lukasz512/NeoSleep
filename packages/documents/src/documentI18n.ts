@@ -9,8 +9,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // syntax, and works identically from src/ (dev) and dist/ (prod, same depth).
 const I18N_DIR = path.join(__dirname, "../../i18n");
 
-type Locale = "en" | "pl" | "mx";
-const SUPPORTED_LOCALES: readonly Locale[] = ["en", "pl", "mx"];
+export type Locale = "en" | "pl" | "mx";
+export const SUPPORTED_LOCALES: readonly Locale[] = ["en", "pl", "mx"];
 const DEFAULT_LOCALE: Locale = "en";
 
 const cache = new Map<Locale, Record<string, string>>();

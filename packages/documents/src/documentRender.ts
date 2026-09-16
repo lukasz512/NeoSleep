@@ -86,6 +86,24 @@ function getLegalEntityParams(locale: string | null | undefined): Record<string,
   return { company: entity.companyName, legalEntityName: entity.legalEntityName };
 }
 
+/**
+ * Applies the same {name}-style param interpolation documentT() uses
+ * internally, but directly to a plain content string instead of an i18n-key
+ * lookup — this is what lets admin-editable document content (see
+ * docs/stories/document-content-editor.md) keep using the exact same
+ * {legalEntityName}/{company} substitution the static i18n prose already
+ * relied on, without the admin-authored text ever needing to be an i18n key
+ * itself. A no-op for content that doesn't contain any of the given params'
+ * {name} placeholders.
+ */
+export function fillContentParams(contentHtml: string, params: Record<string, string>): string {
+  let filled = contentHtml;
+  for (const [name, value] of Object.entries(params)) {
+    filled = filled.replaceAll(`{${name}}`, value);
+  }
+  return filled;
+}
+
 let cachedLogoSvg: string | null = null;
 
 function getBrandLogoSvg(): string {
@@ -156,9 +174,29 @@ function fillStaticTokens(html: string, locale: string | null | undefined): stri
  * brand tokens and locale-specific static prose are filled in; data-field
  * attributes (per-instance dynamic values) are left untouched for the
  * caller to fill via Puppeteer DOM manipulation before calling page.pdf().
+ *
+ * `contentHtml`, when given, is the admin-edited body content fetched from
+ * platform.document_content_version (see docs/stories/document-content-editor.md)
+ * — apps/api's job is exactly "fetch the current version's content_html,
+ * pass it here," nothing more; this package stays fully DB-free.
+ *
+ * SAFETY-CRITICAL ORDERING: contentHtml is admin-authored, not
+ * NeoSleep-authored-and-trusted like everything fillStaticTokens fills in
+ * above (see that function's own comment on why plain string substitution
+ * is safe for those, specifically because nothing there is external input).
+ * contentHtml must therefore never be re-scanned by fillStaticTokens' own
+ * {{documents.*}}/{{brand:*}} regex passes — if it were, an admin typing a
+ * literal "{{brand:primary}}" or "{{documents.foo.bar}}" string into the
+ * editor would get silently resolved/corrupted. So: fillStaticTokens runs
+ * FIRST (as if contentHtml didn't exist), fillContentParams runs on
+ * contentHtml SEPARATELY, and the {{content}} splice is a single literal,
+ * non-regex .replace() done LAST, after both passes are already finished.
  */
-export function renderDocumentHtml(templateName: string, locale: string | null | undefined): string {
-  return fillStaticTokens(loadTemplate(templateName), locale);
+export function renderDocumentHtml(templateName: string, locale: string | null | undefined, contentHtml?: string): string {
+  const html = fillStaticTokens(loadTemplate(templateName), locale);
+  if (contentHtml === undefined) return html;
+  const filledContent = fillContentParams(contentHtml, getLegalEntityParams(locale));
+  return html.replace("{{content}}", filledContent);
 }
 
 /** Muted gray for the footer specifically — distinct from BRAND.secondary (used for body labels/borders, too dark to read as a footer-quiet tone). Puppeteer's footerTemplate renders in its own isolated frame with no access to the main page's stylesheet/CSS variables, so this has to be a literal inline value, not var(--secondary). */
