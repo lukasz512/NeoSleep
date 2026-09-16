@@ -916,6 +916,8 @@
   "user.users.role.manager": "Manager",
   "user.users.role.rep": "Rep",
   "user.users.role.doctor": "Doctor",
+  "user.users.role.kam": "KAM",
+  "user.users.role.msl": "MSL",
   "user.users.status.active": "Active",
   "user.users.status.inactive": "Inactive",
   "user.users.status.suspended": "Suspended",

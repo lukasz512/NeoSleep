@@ -1,5 +1,6 @@
 import type { FormFieldDef } from "../../types/formField";
 import { useConfigStore } from "../../stores/config";
+import { useAuthStore } from "../../stores/auth";
 import { identityFields } from "./identityFields";
 import { loadScopeTerritoryOptions } from "./territoryOptions";
 
@@ -27,12 +28,27 @@ import { loadScopeTerritoryOptions } from "./territoryOptions";
  * matching patientForm.ts/hcpForm.ts's DB-layer naming convention).
  */
 
-// 'doctor' deliberately excluded — doctor-role users are only ever created
-// via the lead partner-invite pipeline or the HCP training-finished
-// activation flow, never through this manual "add user" form.
+// 'doctor' is listed so an existing doctor user (created via the partner-
+// invite pipeline, ADR-014) always renders/selects with a real i18n label
+// ("Doctor") here instead of Vuetify falling back to the raw stored string —
+// but the backend (commands/users.ts VALID_ROLES) still refuses to assign
+// 'doctor' as a *new* value on any other user through this form; that stays
+// exclusive to the partner-invite/HCP-training-finished flows.
+//
+// A STATIC array on purpose, not an async loader: the "edit" FormRenderer
+// instance in UsersView.vue is a single persistent dialog reused for every
+// user opened, and useFormRenderer's async-options cache loads a function-
+// based `options` loader once and never re-runs it for a later record — a
+// dynamic per-record loader here previously left 'doctor' missing for every
+// edit after the first. Static options are re-resolved (via t()) on every
+// render instead, so this has no such staleness problem. Legacy 'kam'/'msl'
+// rows aren't listed (no live rows hold them, per product decision) and
+// would still show as a raw value if one is ever found — a known, accepted
+// gap, not this bug.
 const ROLE_OPTIONS = [
   { title: "user.users.role.admin", value: "admin" },
   { title: "user.users.role.manager", value: "manager" },
+  { title: "user.users.role.doctor", value: "doctor" },
   { title: "user.users.role.rep", value: "rep" },
 ];
 
@@ -63,6 +79,11 @@ export const userFormFields: FormFieldDef[] = [
     options: ROLE_OPTIONS,
     default: "rep",
     required: true,
+    // Only admin can change (or set, on create) a user's role — mirrors
+    // hcoForm.ts's own admin-only 'status' field. The backend
+    // (commands/users.ts) is the real enforcement boundary; this only keeps
+    // a non-admin from seeing a control they can't use.
+    hidden: () => useAuthStore().user?.role !== "admin",
     cols: 6,
   },
   {
