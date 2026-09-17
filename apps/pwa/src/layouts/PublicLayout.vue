@@ -14,6 +14,17 @@
       <div class="layout-public__bg-gradient" aria-hidden="true" />
     </div>
     <main id="main-content" class="layout-public__main" role="main">
+      <!-- Covers the gap while the router's first navigation is still
+           resolving (see initialNavPending below) — RouterView renders
+           nothing until then, since the beforeEach guard awaits
+           auth.fetchSession() before calling next() (see router/index.ts).
+           Without this, the page shows only the background above with
+           nothing on top of it. Fades out (leave-only; no `appear`, so it
+           just shows instantly on first paint) once the real route — and
+           AuthView's own orb pop-in — takes over. -->
+      <Transition name="auth-loading-orbs-fade">
+        <AuthLoadingOrbs v-if="initialNavPending" key="loading" />
+      </Transition>
       <RouterView v-slot="{ Component }">
         <!-- No :key="route.path" here (unlike AppLayout): /login,
              /forgot-password and /reset-password intentionally share one
@@ -32,12 +43,25 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted, onBeforeUnmount, nextTick, provide } from "vue";
+import { useRouter } from "vue-router";
 import { useThemeStore } from "@stores";
 import { brandColors } from "@brand/colors";
 import { BRAND_AUTH_BACKGROUND_URL } from "@brand/logos";
-import { AUTH_BACKGROUND_EXIT_KEY } from "@ui";
+import { AUTH_BACKGROUND_EXIT_KEY, AuthLoadingOrbs } from "@ui";
 
 const authBackgroundUrl = BRAND_AUTH_BACKGROUND_URL;
+
+// router.isReady() resolves exactly once, right after the app's first
+// navigation (including the beforeEach guard's awaited fetchSession() call)
+// settles — never again on later in-app navigation, since sessionChecked
+// only gates that very first call (see stores/auth.ts). That makes it the
+// right signal for "is the initial route still resolving," without needing
+// to reach into the auth store directly.
+const router = useRouter();
+const initialNavPending = ref(true);
+router.isReady().then(() => {
+  initialNavPending.value = false;
+});
 
 // Fades the background (photo + gradient, see .layout-public__bg) in on
 // mount and exposes playExit so AuthView can fade it back out as part of its
@@ -254,5 +278,22 @@ onBeforeUnmount(() => {
   display: block;
   height: 100%;
   outline: none;
+}
+
+/* Leave-only: AuthLoadingOrbs shows instantly on first paint (no `appear`
+   prop, so Transition skips animating it in) and just fades out once
+   initialNavPending flips to false and the real route mounts underneath. */
+.auth-loading-orbs-fade-leave-active {
+  transition: opacity 0.2s ease-out;
+}
+
+.auth-loading-orbs-fade-leave-to {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-loading-orbs-fade-leave-active {
+    transition: none;
+  }
 }
 </style>
