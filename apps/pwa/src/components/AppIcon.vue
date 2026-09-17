@@ -34,11 +34,11 @@ const ICONS = {
             <line x1="8" y1="12" x2="16" y2="12" stroke-width="2" pathLength="1" />`,
   },
   "sad-cloud": {
-    strokeWidth: 1.25,
-    paths: `<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" pathLength="1" />
-            <circle cx="8.5" cy="14" r="0.8" pathLength="1" />
-            <circle cx="15.5" cy="14" r="0.8" pathLength="1" />
-            <path d="M9 16 Q12 18 15 16" pathLength="1" />`,
+    strokeWidth: 1.8,
+    paths: `<path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" pathLength="1" />
+            <path d="M7.4 10.6L9.2 12.4M7.4 12.4L9.2 10.6" stroke-width="1.3" pathLength="1" />
+            <path d="M14.8 10.6L16.6 12.4M14.8 12.4L16.6 10.6" stroke-width="1.3" pathLength="1" />
+            <path d="M8 17 Q12 14 16 17" stroke-width="1.3" pathLength="1" />`,
   },
   "file": {
     strokeWidth: 1.5,
