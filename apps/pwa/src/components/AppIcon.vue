@@ -149,8 +149,10 @@ const ICONS = {
   },
   "hco-pharmacy": {
     strokeWidth: 2,
+    // Dividing line spans exactly the pre-rotation rect's own y-bounds (8..16),
+    // flush with its top/bottom edge, so it never overshoots the pill outline.
     paths: `<rect x="2" y="8" width="20" height="8" rx="4" transform="rotate(45 12 12)" />
-            <line x1="12" y1="6.34" x2="12" y2="17.66" transform="rotate(45 12 12)" />`,
+            <line x1="12" y1="8" x2="12" y2="16" transform="rotate(45 12 12)" />`,
   },
   "hco-practice": {
     strokeWidth: 2,
