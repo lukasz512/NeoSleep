@@ -172,6 +172,46 @@ const ICONS = {
     paths: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
             <circle cx="12" cy="7" r="4" />`,
   },
+  // ── HCP specialty icons (practitioner list mobile card, NEO-19) ────────────
+  // Keyed by the `specialty` lookup's seeded codes (apps/api/migrations/002_seed.sql).
+  // A tenant-added or unseeded code falls back to "nav-hcp" — see hcpLabels.ts.
+  "specialty-dentist": {
+    strokeWidth: 1.6,
+    paths: `<path d="M12 4C10 4 9 5 7.5 5S5 4 4 4C2.5 4 2 5.5 2.3 8c.3 2.5 1.2 4.5 2 7 .5 1.8 1 3.5 1.8 4.6.4.5.9.9 1.4.9.9 0 1.2-1.1 1.5-3 .2-1.3.5-2.3 1-2.3s.8 1 1 2.3c.3 1.9.6 3 1.5 3 .5 0 1-.4 1.4-.9.8-1.1 1.3-2.8 1.8-4.6.8-2.5 1.7-4.5 2-7C21.7 5.5 21 4 19.6 4c-1 0-1.9 1-3.1 1S14 4 12 4z" stroke-linejoin="round" />`,
+  },
+  "specialty-ent": {
+    strokeWidth: 1.6,
+    paths: `<path d="M9 12c0-3.3 2.2-5.5 5-5.5a4.5 4.5 0 0 1 4.5 4.5c0 2.2-1.3 3.2-1.3 5.2a3.2 3.2 0 0 1-6.4 0" />
+            <path d="M9 12v1" />`,
+  },
+  "specialty-gp": {
+    strokeWidth: 1.6,
+    paths: `<path d="M6 3v6a4 4 0 0 0 8 0V3" />
+            <path d="M10 13v3a5 5 0 0 0 10 0v-2" />
+            <circle cx="20" cy="12" r="2" />`,
+  },
+  "specialty-neurologist": {
+    strokeWidth: 1.6,
+    paths: `<path d="M9 4a3 3 0 0 0-3 3 3 3 0 0 0-2 5 3 3 0 0 0 2 5h2a3 3 0 0 0 3-3V7a3 3 0 0 0-2-3z" />
+            <path d="M15 4a3 3 0 0 1 3 3 3 3 0 0 1 2 5 3 3 0 0 1-2 5h-2a3 3 0 0 1-3-3V7a3 3 0 0 1 2-3z" />`,
+  },
+  "specialty-psychiatrist": {
+    strokeWidth: 1.6,
+    paths: `<path d="M9 21v-3.5c-2-1-3-3-3-5.5a6 6 0 0 1 12 0c0 1.2-.3 2.2-.8 3.1" />
+            <path d="M15 21v-2" />
+            <path d="M11 9a2 2 0 1 1 2 2" />`,
+  },
+  "specialty-cardiologist": {
+    strokeWidth: 1.6,
+    paths: `<path d="M20.8 8.6a5.5 5.5 0 0 0-9.8-3.4 5.5 5.5 0 0 0-9.8 3.4c0 5 9.8 10.4 9.8 10.4s9.8-5.4 9.8-10.4z" stroke-linejoin="round" />
+            <polyline points="3 12 7 12 9 8 12 16 14 12 21 12" />`,
+  },
+  "specialty-pulmonologist": {
+    strokeWidth: 1.6,
+    paths: `<path d="M12 3v7" />
+            <path d="M12 10c-1-3-3-4-5-4-2 0-3 2-3 5 0 4 1 7 3 8 1.5 1 2.5 0 3-2l1-3" />
+            <path d="M12 10c1-3 3-4 5-4 2 0 3 2 3 5 0 4-1 7-3 8-1.5 1-2.5 0-3-2l-1-3" />`,
+  },
   "nav-planner": {
     strokeWidth: 2,
     paths: `<rect x="3" y="4" width="18" height="18" rx="2" ry="2" />

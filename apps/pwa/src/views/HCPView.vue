@@ -65,7 +65,15 @@
       </span>
     </template>
     <template #feed-card-meta="{ item }">
-      {{ specialtyLabel((item as HCPListItem).specialty) }}
+      {{ hcpCardMeta(item as HCPListItem) }}
+    </template>
+    <template #feed-card-status="{ item }">
+      <VChip size="x-small" variant="tonal" color="primary" class="hcp-specialty-chip">
+        <template #prepend>
+          <AppIcon :name="practitionerSpecialtyIcon((item as HCPListItem).specialty)" class="hcp-specialty-chip__icon" />
+        </template>
+        {{ specialtyLabel((item as HCPListItem).specialty) }}
+      </VChip>
     </template>
     <template #feed-card-actions="{ item }">
       <AppListItemMenu :aria-label="t('app.common.moreActions')">
@@ -97,6 +105,7 @@ import { useAuthStore } from "../stores/auth";
 import { usePermissions } from "../composables/usePermissions";
 import { useConfigStore } from "../stores/config";
 import { hcpFormFields, hcpFormDerive, resolveOrganizationIdForSubmit } from "../config/forms/hcpForm";
+import { practitionerSpecialtyIcon } from "../utils/hcpLabels";
 
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
@@ -192,6 +201,13 @@ const tableHeaders = computed(() => [
 function specialtyLabel(code?: string): string {
   if (!code) return "—";
   return configStore.specialtyItems.find((o) => o.value === code)?.title ?? code;
+}
+
+/** Mobile card's second line — institution (plain text, unlike the desktop
+ *  table's clickable EntityLink — NEO-19) and territory, same data the
+ *  desktop table already shows in separate columns. */
+function hcpCardMeta(hcp: HCPListItem): string {
+  return [hcp.institution, hcp.territory_name || hcp.region].filter(Boolean).join(" · ") || "—";
 }
 
 const hcpI18n = computed(() => ({
@@ -296,4 +312,8 @@ async function onEventFormSubmit(
   gap: 6px;
 }
 
+.hcp-specialty-chip__icon {
+  width: 14px;
+  height: 14px;
+}
 </style>

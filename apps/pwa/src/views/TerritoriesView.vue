@@ -25,7 +25,7 @@
         {{ (item as TerritoryListItem).name }}
       </template>
       <template #feed-card-meta="{ item }">
-        {{ t(`user.territories.form.kind${kindPascal((item as TerritoryListItem).kind)}`) }} — {{ (item as TerritoryListItem).country_code }}
+        {{ territoryCardMeta(item as TerritoryListItem) }}
       </template>
       <template #feed-card-actions="{ item }">
         <AppListItemMenu :aria-label="t('app.common.moreActions')">
@@ -130,6 +130,14 @@ const territoriesI18n = computed(() => ({
 
 function kindPascal(kind: string): string {
   return kind.charAt(0).toUpperCase() + kind.slice(1);
+}
+
+/** Mobile card's second line — same kind/country_code/code the desktop
+ *  table already shows in separate columns (NEO-19). */
+function territoryCardMeta(territory: TerritoryListItem): string {
+  const parts = [t(`user.territories.form.kind${kindPascal(territory.kind)}`), territory.country_code];
+  if (territory.code) parts.push(territory.code);
+  return parts.filter(Boolean).join(" — ");
 }
 
 function onAdd() {

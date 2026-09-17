@@ -98,7 +98,12 @@
       {{ typeLabel(getLeadFromItem(item).type) }}
     </template>
     <template #feed-card-meta="{ item }">
-      <span v-if="leadSecondaryLine(getLeadFromItem(item))">
+      <span v-if="leadSecondaryLine(getLeadFromItem(item))" class="leads-feed-meta">
+        <AppIcon
+          v-if="!getLeadFromItem(item).specialty && leadInstitution(getLeadFromItem(item))"
+          name="nav-hco"
+          class="app-entity-list__institution-icon"
+        />
         {{ leadSecondaryLine(getLeadFromItem(item)) }}
       </span>
     </template>
