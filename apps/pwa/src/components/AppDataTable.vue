@@ -86,7 +86,9 @@ function formatMeta(item: object): string {
 .app-data-table__table-wrap {
   overflow-x: auto;
   border-radius: var(--pwa-radius);
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  /* --pwa-table-border (theme.scss) — same dedicated table-border token used
+     by AppEntityList.vue, so the two table components no longer disagree. */
+  border: 1px solid var(--pwa-table-border);
 }
 
 .app-data-table__table {

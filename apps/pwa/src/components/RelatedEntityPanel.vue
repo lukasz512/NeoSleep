@@ -91,7 +91,10 @@ watch(() => props.endpoint, load);
   justify-content: space-between;
   gap: 12px;
   padding: 10px 0;
-  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  /* --pwa-table-border (theme.scss) — same dedicated table-border token used
+     by AppEntityList.vue/AppDataTable.vue, so this related-record list's
+     divider reads as the same "table" surface as the rest of the app. */
+  border-bottom: 1px solid var(--pwa-table-border);
   font-size: 0.9375rem;
 }
 

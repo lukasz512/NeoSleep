@@ -299,6 +299,18 @@
   --v-field-border-width: 1px;
 }
 
+/* Inactive (unfocused) border: theme.scss's global outlined-field rule
+   colors every text field with the M3 `outline` role (a purplish gray,
+   #79747E light / #948F94 dark) — visibly different from the plain gray
+   (--pwa-table-border) used on the tables right below this search bar. The
+   :not(.v-field--focused) guard keeps this scoped to the rest state only, at
+   higher specificity than the focused-state color rule in theme.scss so the
+   two never race on stylesheet order. Focus keeps the primary-color border
+   from that same global rule, unchanged. */
+.app-entity-list__search :deep(.v-field--variant-outlined:not(.v-field--focused) .v-field__outline) {
+  color: var(--pwa-table-border);
+}
+
 /* Mobile: search collapses to just the prepend icon at rest (border faded
    out, same transition as the width change so both move together);
    focusing grows it straight to the open width (610px, see the base rule
@@ -348,10 +360,12 @@
   flex-direction: column;
   overflow: hidden;
   border-radius: var(--pwa-radius);
-  /* M3 outline-variant instead of Vuetify's generic --v-border-color — same
-     static gray already used for the mobile feed cards' border (see
-     .app-entity-list__card below), so desktop and mobile share one tone. */
-  border: 1px solid rgb(var(--v-theme-outline-variant));
+  /* --pwa-table-border (theme.scss) instead of an M3 role token — the same
+     dedicated border token every table/search surface now shares, so the
+     search field's border (below) and this wrap always agree, in both
+     themes. Also the same static gray used for the mobile feed cards' border
+     (see .app-entity-list__card below), so desktop and mobile share one tone. */
+  border: 1px solid var(--pwa-table-border);
 }
 
 /* M3: header row reads as a distinct tonal layer (surface-container-low)
@@ -359,6 +373,19 @@
    background — depth via tone, not a rule/shadow under the header. */
 .app-entity-list__table-wrap :deep(.v-data-table__th) {
   background: rgb(var(--v-theme-surface-container-low));
+}
+
+/* Pagination footer: previously fully unstyled (Vuetify's raw default
+   markup) — a plain divider + quieter, smaller text so it reads as part of
+   this deliberately-styled table instead of a leftover default glued under
+   it. --pwa-table-border keeps the divider the same tone as the wrap's own
+   border above it. */
+.app-entity-list__table-wrap :deep(.v-data-table-footer) {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--pwa-table-border);
+  padding: 8px 16px;
+  font-size: 0.8125rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
 /* Mobile feed items carry their own border + elevation (below) — the
@@ -486,11 +513,12 @@
   position: relative;
   margin-bottom: var(--pwa-fib-md, 13px);
   border-radius: var(--pwa-fib-lg, 21px);
-  /* M3 outline-variant + surface-container-low (packages/vuetify theme
-     colors) instead of Vuetify's generic --v-border-color/surface — a
-     low-emphasis divider around a faintly tonal card, the M3 "filled card"
-     look, rather than a plain outline on the page background. */
-  border: 1px solid rgb(var(--v-theme-outline-variant));
+  /* --pwa-table-border (same token as .app-entity-list__table-wrap above) +
+     surface-container-low (packages/vuetify theme colors) instead of
+     Vuetify's generic --v-border-color/surface — a low-emphasis divider
+     around a faintly tonal card, the M3 "filled card" look, rather than a
+     plain outline on the page background. */
+  border: 1px solid var(--pwa-table-border);
   background: rgb(var(--v-theme-surface-container-low));
   overflow: hidden;
   transition: opacity 0.2s ease, background-color 0.2s ease;
