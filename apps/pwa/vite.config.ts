@@ -109,6 +109,12 @@ export default defineConfig(mergeConfig(sharedViteConfig(__dirname), {
   appType: "spa",
   server: {
     host: true,
+    // Vite's DNS-rebinding protection rejects any Host header not in this
+    // list — only relaxed when launched by infrastructure/scripts/sandbox.sh
+    // (VITE_SANDBOX_MODE=1), which exposes this dev server through a
+    // *.trycloudflare.com tunnel URL. A plain `pnpm dev` gets Vite's default
+    // (no external host allowed).
+    allowedHosts: process.env.VITE_SANDBOX_MODE ? [".trycloudflare.com"] : undefined,
     proxy: {
       "/api":    { target: devApiTarget, changeOrigin: true, secure: devApiIsHttps },
       "/auth":   { target: devApiTarget, changeOrigin: true, secure: devApiIsHttps },

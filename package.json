@@ -29,6 +29,8 @@
     "prepare": "husky || true",
     "start": "./infrastructure/scripts/start.sh",
     "worker:test": "./infrastructure/scripts/worker-test.sh",
+    "sandbox": "./infrastructure/scripts/sandbox.sh up",
+    "sandbox:down": "./infrastructure/scripts/sandbox.sh down",
     "dev": "pnpm exec concurrently --names api,pwa,web -c blue,green,magenta \"pnpm --filter @neo/api dev\" \"pnpm --filter @neo/pwa dev\" \"pnpm --filter @neo/web dev\"",
     "db:seed": "pnpm --filter @neo/api seed:demo"
   },

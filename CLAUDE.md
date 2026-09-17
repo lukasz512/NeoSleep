@@ -108,7 +108,10 @@ pnpm build:web         # Build website
 pnpm ci                # Full CI gate: lint + typecheck + test
 pnpm i18n:extract      # Extract new i18n keys from source
 pnpm i18n:prune        # Mark unused keys
+pnpm sandbox           # Start api+pwa+web in THIS worktree, tunnel pwa+web via Cloudflare Tunnel, print live URLs
+pnpm sandbox:down      # Stop it
 ```
+Run `pnpm sandbox` from inside a worktree once UI-touching work is ready to look at, and give Łukasz the printed links — a live sandbox to click through, not just a diff to read, before he opens a PR. Google login doesn't work through the tunnel (rotating URL can't match the pre-registered OAuth redirect) — use email/password to test.
 
 ## Git / PR Workflow
 - Never push directly to `dev`, `prod`, or any shared branch — always branch, commit, `git push -u origin <branch>`, and give the user the GitHub "create a pull request" link GitHub prints after the push (`https://github.com/<org>/<repo>/pull/new/<branch>`).

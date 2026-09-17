@@ -25,6 +25,9 @@ export default defineConfig(mergeConfig(sharedViteConfig(__dirname), {
   plugins: [vue()],
   server: {
     port: 5174,
+    // See apps/pwa/vite.config.ts's identical comment: only relaxed when
+    // launched by infrastructure/scripts/sandbox.sh.
+    allowedHosts: process.env.VITE_SANDBOX_MODE ? [".trycloudflare.com"] : undefined,
     proxy: {
       "/api": { target: process.env.VITE_API_URL ?? "http://localhost:3000", changeOrigin: true },
     },
