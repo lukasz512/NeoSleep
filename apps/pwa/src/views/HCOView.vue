@@ -37,7 +37,7 @@
     >
       <template #item.name="{ item }">
         <span class="hco-name-cell">
-          <AppAvatar entity-type="hco" :size="32" />
+          <AppAvatar entity-type="hco" :org-type="(item as HCOListItem).type" :size="32" />
           {{ (item as HCOListItem).name }}
         </span>
       </template>
@@ -47,8 +47,8 @@
       <template #item.region="{ item }">
         {{ (item as HCOListItem).territory_name || (item as HCOListItem).region || "—" }}
       </template>
-      <template #feed-card-avatar>
-        <AppAvatar entity-type="hco" :size="55" />
+      <template #feed-card-avatar="{ item }">
+        <AppAvatar entity-type="hco" :org-type="(item as HCOListItem).type" :size="55" />
       </template>
       <template #feed-card-title="{ item }">
         {{ (item as HCOListItem).name }}
