@@ -11,6 +11,7 @@ import { computed } from "vue";
 import AppIcon, { type AppIconName } from "./AppIcon.vue";
 import { getInitials, getInitialsFromParts } from "../utils/initials";
 import { getAvatarColor } from "../utils/avatarColor";
+import { hcoTypeIcon } from "../utils/hcoLabels";
 
 /**
  * Placeholder identity photo, shared by HCP/HCO/patient/lead/user lists,
@@ -45,6 +46,8 @@ const props = withDefaults(
     lastName?: string | null;
     avatarUrl?: string | null;
     entityType?: AppAvatarEntityType;
+    /** Only meaningful when entityType is "hco" — organization.type (clinic/hospital/pharmacy/practice/other), selects the type-specific icon. */
+    orgType?: string | null;
     size?: number | string;
   }>(),
   { entityType: "user", size: 40 },
@@ -59,7 +62,9 @@ const initials = computed(() => {
 // Falls back to the entity-type string as the color seed so even a nameless
 // placeholder gets a stable, on-brand color instead of Vuetify's flat gray.
 const bgColor = computed(() => getAvatarColor(props.name?.trim() || props.entityType));
-const iconName = computed(() => ENTITY_ICONS[props.entityType]);
+const iconName = computed(() =>
+  props.entityType === "hco" ? hcoTypeIcon(props.orgType ?? undefined) : ENTITY_ICONS[props.entityType],
+);
 // Ratio of two consecutive Fibonacci numbers (21/55) converges to 1/φ² ≈
 // 0.382 — small enough that two-letter initials keep breathing room inside
 // the circle instead of crowding its edge.

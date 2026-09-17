@@ -36,7 +36,7 @@
     <template #title v-if="hco">
       <span class="view-item__title-wrap hco-title-row">
         <span class="view-item__title-wrap">
-          <AppAvatar entity-type="hco" :size="40" />
+          <AppAvatar entity-type="hco" :org-type="hco.type" :size="40" />
           <h1 class="view-item__title">{{ hco.name }}</h1>
         </span>
         <span class="hco-title-row__badges">

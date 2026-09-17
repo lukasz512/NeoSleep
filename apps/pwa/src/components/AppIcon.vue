@@ -137,6 +137,36 @@ const ICONS = {
             <line x1="12" y1="9" x2="12" y2="15" />
             <line x1="9" y1="12" x2="15" y2="12" />`,
   },
+  // ── HCO type-specific avatar icons (hospital/pharmacy/practice/other) ──────
+  // "clinic" keeps the "nav-hco" icon above (unchanged, matches the ticket).
+  "hco-hospital": {
+    strokeWidth: 2,
+    paths: `<rect x="3" y="4" width="18" height="17" />
+            <line x1="7" y1="4" x2="7" y2="21" />
+            <line x1="17" y1="4" x2="17" y2="21" />
+            <line x1="12" y1="8" x2="12" y2="14" />
+            <line x1="9" y1="11" x2="15" y2="11" />`,
+  },
+  "hco-pharmacy": {
+    strokeWidth: 2,
+    paths: `<rect x="2" y="8" width="20" height="8" rx="4" transform="rotate(45 12 12)" />
+            <line x1="12" y1="6.34" x2="12" y2="17.66" transform="rotate(45 12 12)" />`,
+  },
+  "hco-practice": {
+    strokeWidth: 2,
+    paths: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+            <line x1="12" y1="16.5" x2="12" y2="19.5" stroke-width="1.4" />
+            <line x1="10.5" y1="18" x2="13.5" y2="18" stroke-width="1.4" />`,
+  },
+  "hco-other": {
+    strokeWidth: 2,
+    paths: `<path d="M4 10l1-5h14l1 5" />
+            <path d="M4 10a2 2 0 0 0 4 0 2 2 0 0 0 4 0 2 2 0 0 0 4 0 2 2 0 0 0 4 0" />
+            <path d="M5 10v11h14V10" />
+            <line x1="10" y1="21" x2="10" y2="15" />
+            <line x1="14" y1="21" x2="14" y2="15" />`,
+  },
   "nav-patients": {
     strokeWidth: 2,
     paths: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
