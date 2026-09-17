@@ -63,18 +63,6 @@
              heading on the page. -->
         <p class="auth-view__heading">{{ t('user.login.heading') }}</p>
 
-        <VAlert
-          v-if="loginFlow.errorKey.value"
-          type="error"
-          variant="tonal"
-          density="compact"
-          class="auth-view__alert"
-          closable
-          @click:close="loginFlow.errorKey.value = null"
-        >
-          {{ t(loginFlow.errorKey.value) }}
-        </VAlert>
-
         <VForm ref="signinForm" class="auth-view__form" @submit.prevent="handleSignIn">
           <VTextField
             ref="loginEmailFieldRef"
@@ -323,9 +311,20 @@ const router = useRouter();
 
 const apiFetch = inject<ApiFetchFn>("neo:apiFetch")!;
 const authTokenStorage = inject<AuthTokenStorage>("neo:authTokenStorage")!;
+// Routes a login error onto the host app's own native toast hub (e.g.
+// apps/pwa's AppNotifications, bottom-right on desktop / bottom-center on
+// mobile) instead of an inline VAlert — same injection pattern as apiFetch/
+// authTokenStorage above, since packages/ui has no dependency on any single
+// app's notification system.
+const notify = inject<(key: string) => void>("neo:notify")!;
 
 const useLoginFlow = createUseLoginFlow(apiFetch, authTokenStorage);
 const loginFlow = useLoginFlow();
+watch(loginFlow.errorKey, (key) => {
+  if (!key) return;
+  notify(key);
+  loginFlow.errorKey.value = null;
+});
 
 const useForgotPasswordFlow = createUseForgotPasswordFlow(apiFetch);
 const forgotFlow = useForgotPasswordFlow();

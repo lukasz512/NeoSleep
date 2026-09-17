@@ -14,6 +14,7 @@ import { setupDiagnosticReporter } from "./composables/useDiagnosticReporter";
 import { setupOfflineCacheSession } from "./composables/useOfflineCacheSession";
 import { apiFetch } from "./composables/useApi";
 import { authTokenStorage } from "./stores/auth";
+import { useNotifications } from "./composables/useNotifications";
 import { getApiUrl } from "./constants";
 import { resolveInitialThemeMode, useMotionPreferenceStore } from "@stores";
 
@@ -49,6 +50,11 @@ setupOfflineCacheSession();
 
 app.provide("neo:apiFetch", apiFetch);
 app.provide("neo:authTokenStorage", authTokenStorage);
+// packages/ui's AuthView shows the login-form error via this instead of its
+// own inline alert, so it lands on the same native toast hub (bottom-right
+// desktop / bottom-center mobile) as everywhere else in the app — see
+// AuthView.vue and useNotifications.ts.
+app.provide("neo:notify", (key: string) => useNotifications().show(key, "error", key));
 const gaId = import.meta.env.VITE_GA_ID as string | undefined;
 if (import.meta.env.PROD && gaId) {
   app.use(createGtag({ tagId: gaId, pageTracker: { router } }));

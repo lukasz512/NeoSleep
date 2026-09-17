@@ -15,7 +15,8 @@ let nextId = 1;
 
 /**
  * Global toast/snackbar hub. Use from any component to show transient status
- * messages. The app must render AppNotifications.vue once (see AppLayout.vue).
+ * messages. The app must render AppNotifications.vue once (see App.vue, above
+ * the public/authenticated layout switch, so it's available on both).
  * Not to be confused with useNotificationCenter.ts, the unrelated backend-backed
  * bell/inbox (ADR-012).
  */
