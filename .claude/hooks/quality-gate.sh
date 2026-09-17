@@ -30,7 +30,12 @@ if [ -f "$OVERRIDE_FILE" ]; then
   fi
 fi
 
-CHANGED="$(git status --porcelain -- apps packages docs 2>/dev/null | awk '{ $1=""; print substr($0,2) }')"
+# --untracked-files=all: plain `git status --porcelain` collapses a wholly-untracked
+# directory (e.g. a brand-new docs/stories/ with nothing in it tracked yet) into one
+# `?? docs/stories/` line instead of listing the files inside it — which made the
+# FEATURE_SHAPE check below blind to a just-added docs/stories/*.md until some other
+# file in that directory was already tracked. `all` recurses and lists each file.
+CHANGED="$(git status --porcelain --untracked-files=all -- apps packages docs 2>/dev/null | awk '{ $1=""; print substr($0,2) }')"
 SRC_CHANGED="$(printf '%s\n' "$CHANGED" | grep -E '^(apps|packages)/[^/]+/src/' || true)"
 
 if [ -z "$SRC_CHANGED" ]; then
@@ -38,12 +43,19 @@ if [ -z "$SRC_CHANGED" ]; then
 fi
 
 FAILS=()
-mkdir -p /tmp/neocrm-gate
+# Hashed by REPO_ROOT (distinct per worktree — this repo runs several concurrent
+# Claude sessions in separate .claude/worktrees/* checkouts) so two sessions'
+# Stop hooks running at the same time don't overwrite each other's log files
+# — confirmed this actually happened: a check here once reported a stale
+# failure from a *different* worktree's run because both wrote to the same
+# shared /tmp/neocrm-gate/test.log.
+GATE_TMPDIR="/tmp/neocrm-gate-$(printf '%s' "$REPO_ROOT" | shasum | cut -c1-12)"
+mkdir -p "$GATE_TMPDIR"
 
 run_check() {
   local name="$1"; shift
-  if ! "$@" >"/tmp/neocrm-gate/$name.log" 2>&1; then
-    FAILS+=("pnpm $name failed — see /tmp/neocrm-gate/$name.log for the last run's output")
+  if ! "$@" >"$GATE_TMPDIR/$name.log" 2>&1; then
+    FAILS+=("pnpm $name failed — see $GATE_TMPDIR/$name.log for the last run's output")
   fi
 }
 
