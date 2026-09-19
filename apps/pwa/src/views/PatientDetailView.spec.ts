@@ -79,3 +79,26 @@ describe("PatientDetailView — Documents tab", () => {
     await flushPromises();
   });
 });
+
+describe("PatientDetailView — Historia Endo tab", () => {
+  it("lists 'Historia Endo' among the tabs and wires its panels to the patient's endo-intake/stop-bang endpoints", async () => {
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, PATIENT));
+    const { wrapper } = await mountPatientDetail();
+
+    await vi.waitFor(() => expect(wrapper.text()).toContain("Jan Kowalski"));
+
+    const endoIntakeTab = wrapper.findAll('[role="tab"]').find((t) => t.text() === "Historia Endo");
+    expect(endoIntakeTab?.exists()).toBe(true);
+
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, null)); // GET endo-intake
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, [])); // GET stop-bang
+    await endoIntakeTab?.trigger("click");
+
+    await vi.waitFor(() =>
+      expect(apiFetch).toHaveBeenCalledWith("/api/v1/patient/patient-1/endo-intake", { handleErrors: false })
+    );
+    expect(apiFetch).toHaveBeenCalledWith("/api/v1/patient/patient-1/stop-bang", { handleErrors: false });
+
+    await flushPromises();
+  });
+});

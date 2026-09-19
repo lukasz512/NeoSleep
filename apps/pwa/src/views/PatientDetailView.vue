@@ -144,6 +144,11 @@
           <template #documents>
             <EntityDocumentsPanel :endpoint="`/api/v1/patient/${patient.id}/documents`" />
           </template>
+          <template #endoIntake>
+            <PatientEndoIntakePanel :patient-id="patient.id" />
+            <VDivider class="endo-intake-divider" />
+            <PatientStopBangPanel :patient-id="patient.id" />
+          </template>
           <template #history>
             <EntityHistoryPanel :endpoint="`/api/v1/patient/${patient.id}/history`" />
           </template>
@@ -189,6 +194,8 @@ import PatientStudiesPanel from "../components/patient/PatientStudiesPanel.vue";
 import PatientOrthoApneaPanel from "../components/patient/PatientOrthoApneaPanel.vue";
 import EntityHistoryPanel from "../components/EntityHistoryPanel.vue";
 import EntityDocumentsPanel from "../components/EntityDocumentsPanel.vue";
+import PatientEndoIntakePanel from "../components/patient/PatientEndoIntakePanel.vue";
+import PatientStopBangPanel from "../components/patient/PatientStopBangPanel.vue";
 import { patientFormFields } from "../config/forms/patientForm";
 import { entityActionIcon, entityActionBtnClass } from "../config/entityActions";
 import { patientStatusColor, patientStatusLabel } from "../utils/patientStatus";
@@ -254,6 +261,7 @@ const patientTabs = [
   { value: "studies", labelKey: "app.patients.detail.tabs.studies" },
   { value: "orthoapnea", labelKey: "app.patients.detail.tabs.orthoapnea" },
   { value: "documents", labelKey: "app.patients.detail.tabs.documents" },
+  { value: "endoIntake", labelKey: "app.patients.detail.tabs.endoIntake" },
   { value: "history", labelKey: "app.patients.detail.tabs.history" },
 ];
 /** Deep-linkable via ?tab= — see SleepStudiesView/TreatmentPlansView row clicks. */
@@ -372,5 +380,9 @@ watch(() => route.params.id, loadPatient);
      20px from .view-item__title read as cramped, especially for a long
      name that wraps to two lines. */
   margin-bottom: 12px;
+}
+
+.endo-intake-divider {
+  margin: 28px 0;
 }
 </style>
