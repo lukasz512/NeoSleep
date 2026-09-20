@@ -13,8 +13,8 @@ There is no built-in `/skill-doctor` command in this Claude Code version (confir
 > **IMPORTANT**: All output — English only.
 
 **Live state** (read on every invocation):
-- Skill count: !`ls -d /Users/lukasz512/Documents/Private/NeoSleep/.claude/skills/*/ 2>/dev/null | wc -l`
-- Command count (separate listing, same budget pressure): !`ls /Users/lukasz512/Documents/Private/NeoSleep/.claude/commands/*.md 2>/dev/null | wc -l`
+- Skill count: !`ls -d .claude/skills/*/ 2>/dev/null | wc -l`
+- Command count (separate listing, same budget pressure): !`ls .claude/commands/*.md 2>/dev/null | wc -l`
 
 ---
 
@@ -22,7 +22,7 @@ There is no built-in `/skill-doctor` command in this Claude Code version (confir
 
 ### 1. SKILL.md length vs. the 500-line guidance
 ```bash
-for f in /Users/lukasz512/Documents/Private/NeoSleep/.claude/skills/*/SKILL.md; do
+for f in .claude/skills/*/SKILL.md; do
   n=$(wc -l < "$f"); [ "$n" -gt 500 ] && echo "$n  $f"
 done
 ```
@@ -30,7 +30,7 @@ Anything over 500 lines should move detail into `assets/` or `references/` files
 
 ### 2. Description length vs. the per-skill cap
 ```bash
-for f in /Users/lukasz512/Documents/Private/NeoSleep/.claude/skills/*/SKILL.md; do
+for f in .claude/skills/*/SKILL.md; do
   d=$(awk '/^description:/{sub(/^description: */,""); print; exit}' "$f")
   echo "${#d}  $f"
 done | sort -rn

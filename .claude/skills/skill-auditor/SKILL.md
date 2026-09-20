@@ -13,8 +13,8 @@ You evaluate and refactor the skill files themselves — the prompts that define
 > **IMPORTANT**: All output — English only.
 
 **Live state** (read on every invocation):
-- Skill count: !`ls -d /Users/lukasz512/Documents/Private/NeoSleep/.claude/skills/*/ 2>/dev/null | wc -l`
-- Skills changed since last commit: !`git -C /Users/lukasz512/Documents/Private/NeoSleep diff --name-only HEAD -- .claude/skills 2>/dev/null || echo "none"`
+- Skill count: !`ls -d .claude/skills/*/ 2>/dev/null | wc -l`
+- Skills changed since last commit: !`git diff --name-only HEAD -- .claude/skills 2>/dev/null || echo "none"`
 
 ---
 

@@ -13,10 +13,10 @@ You are the Senior Full-Stack Developer on NeoCRM. You write clean, minimal, wor
 > **IMPORTANT**: All code, comments, docs — English only.
 
 **Live state** (read on every invocation):
-- TypeScript errors: !`cd /Users/lukasz512/Documents/Private/NeoSleep && pnpm typecheck 2>&1 | grep -c "error TS" || echo "0"`
-- Failing tests: !`cd /Users/lukasz512/Documents/Private/NeoSleep && pnpm test --reporter=dot 2>&1 | tail -5 || echo "n/a"`
-- Outdated packages: !`cd /Users/lukasz512/Documents/Private/NeoSleep && pnpm outdated 2>/dev/null | grep -c "^" || echo "0"` packages outdated
-- Import-boundary violations (dependency-cruiser): !`cd /Users/lukasz512/Documents/Private/NeoSleep && pnpm depcruise 2>&1 | grep -c "^  error " || echo "0"` errors, !`cd /Users/lukasz512/Documents/Private/NeoSleep && pnpm depcruise 2>&1 | grep -c "^  warn " || echo "0"` warnings (circular deps, orphans)
+- TypeScript errors: !`pnpm typecheck 2>&1 | grep -c "error TS" || echo "0"`
+- Failing tests: !`pnpm test --reporter=dot 2>&1 | tail -5 || echo "n/a"`
+- Outdated packages: !`pnpm outdated 2>/dev/null | grep -c "^" || echo "0"` packages outdated
+- Import-boundary violations (dependency-cruiser): !`pnpm depcruise 2>&1 | grep -c "^  error " || echo "0"` errors, !`pnpm depcruise 2>&1 | grep -c "^  warn " || echo "0"` warnings (circular deps, orphans)
 
 ---
 

@@ -13,7 +13,7 @@ You are the mandatory first stop for any new feature idea or change on NeoCRM â€
 > **IMPORTANT**: All output â€” English only.
 
 **Live state** (read on every invocation):
-- Current stage: !`grep -A2 "Current Focus" /Users/lukasz512/Documents/Private/NeoSleep/CLAUDE.md 2>/dev/null | tail -2 || echo "check CLAUDE.md"`
+- Current stage: !`grep -A2 "Current Focus" CLAUDE.md 2>/dev/null | tail -2 || echo "check CLAUDE.md"`
 - Current branch: !`git branch --show-current 2>/dev/null`
 
 ---
