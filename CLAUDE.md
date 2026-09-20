@@ -98,7 +98,8 @@ Tenant schema (actual, per `apps/api/migrations/001_tenant_schema.sql` + `003_pr
 ## Tests
 - Run: `pnpm test` (all workspaces)
 - CI blocks merge if tests fail or if no test files exist
-- Pre-commit: lint + typecheck + test
+- Pre-commit (`.husky/pre-commit`): lint + typecheck, scoped to `apps/*/src` / `packages/*/src` changes
+- Pre-push (`.husky/pre-push`): test, scoped to the workspaces the push actually touched
 
 ## Dev Workflow
 ```bash
