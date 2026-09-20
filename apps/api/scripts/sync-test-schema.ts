@@ -3,13 +3,16 @@
  * vitest.config.ts) as an exact structural clone of "neosleep" — schema only,
  * no data.
  *
- * create_tenant_schema() (migrations/001_tenant_schema.sql) alone is not
- * enough: several later migrations (004, 005, 006, 008, 009, 010, 011, 012)
- * alter tenant schemas outside that function, looping only over schemas
- * already registered in platform.tenants — so a schema provisioned by
- * calling create_tenant_schema() directly ends up structurally stale
- * (missing identities.region, lead.institution, etc.). Cloning the live
- * "neosleep" schema sidesteps that gap.
+ * Historical note: this script exists because create_tenant_schema()
+ * (migrations/001_tenant_schema.sql) used to be stale relative to later
+ * migrations that altered tenant schemas outside that function — a schema
+ * provisioned by calling it directly ended up missing columns added since.
+ * That's fixed as of 027_sync_create_tenant_schema.sql (see its header for
+ * the full story, and scripts/check-tenant-schema-parity.ts, which now
+ * guards against it drifting again). This script still clones "neosleep"
+ * directly rather than switching to `SELECT create_tenant_schema('test')`
+ * — kept as the isolated test schema's own independent provisioning path,
+ * deliberately separate from the function the parity check validates.
  *
  * Run after migrations change the schema — locally, and as a CI step right
  * after `pnpm --filter @neo/api migrate`:

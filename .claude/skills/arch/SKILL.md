@@ -463,16 +463,23 @@ See [ADR-009](assets/examples/good-adr.md) for the full decision. Summary:
 
 ---
 
-### New Tenant Onboarding (future: POST /platform/tenants)
+### New Tenant Onboarding
+Already built at the DB layer: `onboard_new_client()` (migrations/000_platform.sql),
+documented there as "Called by BFF endpoint POST /api/admin/clients" — that route doesn't
+exist yet, this is the future integration point for it.
 ```
-1. INSERT into platform.tenants
-2. CREATE SCHEMA "{slug}"
-3. Run all tenant migrations against new schema
-4. Seed platform.lookups overrides (empty)
-5. Seed app_config with company branding defaults
-6. Create platform_user record for company admin
-7. Copy plan's default_features into feature_flags
+1. INSERT into platform.companies
+2. INSERT into platform.tenants
+3. Calls create_tenant_schema(slug) — creates every tenant table, index, constraint
+4. Seed default feature_flags (all off; enabled per contract)
+5. Seed a blank app_config row
 ```
+`create_tenant_schema()` (migrations/001, most recently redefined in
+027_sync_create_tenant_schema.sql) is regenerated from the live "neosleep" schema whenever
+a migration changes tenant tables — see 027's header for the exact approach — and
+`apps/api/scripts/check-tenant-schema-parity.ts` fails CI if a future migration forgets
+to do that, so **do not** let this function go stale again (it drifted silently for years
+before 027 fixed it — see that migration's header for the full story).
 
 ### Compliance Data Map
 When adding a table that stores personal data, register it:
