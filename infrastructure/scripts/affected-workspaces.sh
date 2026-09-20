@@ -6,4 +6,8 @@
 # is computed.
 set -euo pipefail
 
-sed -E 's#^(apps/[^/]+|packages/[^/]+)/.*#\1#' | grep -E '^(apps|packages)/' | sort -u
+# grep exits 1 when nothing matches (the normal "no apps/packages files
+# changed" case) — under pipefail that would kill this whole script, so its
+# failure is swallowed here; sort still runs (on empty input) and this
+# script itself always exits 0.
+sed -E 's#^(apps/[^/]+|packages/[^/]+)/.*#\1#' | { grep -E '^(apps|packages)/' || true; } | sort -u
