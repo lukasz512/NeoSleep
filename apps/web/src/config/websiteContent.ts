@@ -314,13 +314,17 @@ export const patientTestimonials: Testimonial[] = [
  * section for status.
  *
  * `pl` confirmed by Łukasz 2026-09-16: Ostrowski Investment sp. z o.o.
- * (KRS/NIP/REGON below). `mx`'s registered entity is "AJ Management" per
- * Łukasz — name only so far, not yet confirmed with full legal
- * details (RFC, registered address matching the entity rather than just
- * the office) — Łukasz asked to keep MX as a placeholder until he sends
- * those. `mx.address` (the office) is real (already used in the patient
- * informed-consent document) but is not necessarily the same as the
- * formal registered domicile of the "AJ Management" entity.
+ * (KRS/NIP/REGON below). `mx` confirmed by Łukasz 2026-09-16: "AJ
+ * Management" is a trade name — the actual responsable is a persona física
+ * (individual/sole proprietor), Alfredjan de Jesús Díaz Urdaneta, RFC
+ * DIUA8208043U7 (a 13-character RFC — the individual format, not the
+ * 12-character persona moral/corporate one, consistent with there being no
+ * separate registered company). `mx.address` here is that person's
+ * registered domicile (as given, for the LFPDPPP-required responsable
+ * disclosure) — distinct from CONTACT_LINES.mx in
+ * packages/documents/src/documentRender.ts, which is the real, separate
+ * WTC office address already used as the practical contact point on
+ * generated documents (Lorena González) and stays unchanged.
  */
 export interface LegalEntityConfig {
   companyName: string;
@@ -354,14 +358,12 @@ export const legalConfig: Record<"en" | "pl" | "mx", LegalEntityConfig> & { last
   },
   mx: {
     companyName: "NeoSleep",
-    // Name confirmed by Łukasz ("AJ Management") but kept as an explicit
-    // placeholder per his instruction — full legal details (RFC, formal
-    // registered domicile) still pending before this is fit to publish.
-    legalEntityName: "[PLACEHOLDER: razón social registrada — AJ Management, pendiente de confirmación completa]",
-    privacyEmail: "lorena.gonzalez@neosleepcare.com",
-    address: "WTC, Calle Montecito 38, Col. Nápoles, Piso 26, Oficina 8, Ciudad de México",
+    legalEntityName: "AJ Management — Alfredjan de Jesús Díaz Urdaneta",
+    privacyEmail: "planetalfred@hotmail.com",
+    address: "Veracruz 14, int. 2, Col. Roma Norte, delegación Cuauhtémoc, 06700 Ciudad de México, México",
     authorityName: "Instituto Nacional de Transparencia, Acceso a la Información y Protección de Datos Personales (INAI)",
     authorityUrl: "https://home.inai.org.mx",
+    registryDetails: "RFC: DIUA8208043U7",
   },
 };
 

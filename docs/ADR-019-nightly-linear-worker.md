@@ -28,11 +28,46 @@ rather than assumed:
 
 1. **One ticket per night**, not a higher cap or unbounded — the safest starting
    volume; increase later once quality is proven over several nights.
+
+   **Update, 2026-09-16: cadence bumped from nightly to hourly** (`RemoteTrigger`
+   `cron_expression` changed from `7 3 * * *` to `7 * * * *`). Łukasz asked for
+   every 30 minutes for faster reaction to newly-queued tickets; the Routines
+   API enforces a 1-hour minimum interval between runs, so hourly is the
+   closest available. This changes only how *often* the queue is checked, not
+   the per-run cap — still exactly one ticket per run (Ticket Contract in
+   `SKILL.md` is unchanged), and an empty queue still exits cleanly with no
+   branch/comment (`SKILL.md` Step 2). Worth noting honestly: this was done on
+   request, not because the "quality proven over several nights" bar above was
+   clearly met — today's runs (2026-09-16) hit environment failures (unreachable
+   `DATABASE_URL`, incomplete `pnpm install` in the cloud sandbox — see Linear
+   NEO-9), not a code-quality signal either way. Revisit actual throughput
+   safety once a ticket has cleanly gone all the way through on this cadence.
 2. **On any quality-gate failure: leave a note on the ticket and stop for the
    night — no self-fix loop.** An unattended agent retrying against its own
    failing tests risks progressively worse diffs with nobody watching; a clean
    failure with a clear note is strictly safer than a desperate autonomous fix
    attempt.
+
+   **Update, 2026-09-16, after NEO-6's 6-pass history**: this policy is
+   unchanged and not being loosened, but its *placement* was costing real
+   effort. Pass 5 hit a DB-canary hang and pass 6 hit a `git push` GitHub App
+   permission failure — both environment-wide, neither ticket-specific — but
+   both were only discovered at the very end of a run, after Enrich+Implement
+   had already spent 15-30 minutes. Added `SKILL.md` Step 2.5: an environment
+   pre-flight (DB reachability/isolation reusing the fast-probe fix already
+   added the same day for the canary hang, plus a new non-destructive
+   `git push --dry-run` check) that runs *before* Claim. On failure, the
+   selected ticket is left untouched in `Ready for Worker` (not moved to
+   `Blocked` — it was never actually worked) and the run ends with a comment
+   explaining the environment problem. Separately, NEO-6 passes 2 and 3 also
+   burned two extra cycles because a plain "try again" comment doesn't
+   satisfy Step 4's override mechanism — a human describing what they want in
+   their own words isn't the same as the exact required format. Step 4 now
+   requires the block comment to include a ready-to-paste approval template
+   whenever exactly one unambiguous scoped fix is identifiable, rather than
+   only describing the mechanism. Neither change touches Step 4's compliance
+   gate or this item's no-retry policy — both are strictly about failing
+   faster and communicating more clearly on the way to the same blocks.
 3. **Compliance-sensitive code is always deferred to a human session**,
    regardless of what the Linear ticket's label says: migrations, `auth.ts`,
    `identities`/`consent`/`audit_log`/`patient`/`practitioner`. This is the
@@ -163,6 +198,10 @@ attempt a code fix. This is a real operational tradeoff versus CI's always-
 fresh ephemeral container, accepted in exchange for not needing Docker or
 broadening the restricted role's grants.
 
+**Update, 2026-09-16: raw TCP to Postgres confirmed unavailable inside the actual RemoteTrigger cloud sandbox — the 2026-09-10 verification above almost certainly ran from a session with normal network access, not from inside an unattended cloud run, and that gap is exactly what surfaced today.** Three real nightly-worker runs today all hung on the isolation canary check (`psql` never returning, not even a fast connection-refused); a targeted raw-TCP probe with no `psql`/`pg` involved at all — `timeout 8 bash -c 'exec 3<>/dev/tcp/<supabase-host>/5432 && echo CONNECTED'` — also timed out with zero response. Checking this sandbox's own agent-proxy status confirmed why: it proxies HTTP/HTTPS egress only; there is no path for raw TCP on an arbitrary port, Postgres included. This is the same category of "sandbox network policy blocks it" finding as the Docker-in-cloud reversal earlier in this ADR — except this time it affects the *replacement* design, not just the original one. No Network Access allowlist configuration fixes this — allowlisting controls which HTTP(S) hosts are reachable through the proxy, not whether non-HTTP protocols are proxied at all.
+
+**Decision**: the worker's Step 7 self-check now runs a fast (~8s) reachability probe first. When DB is unreachable — expected for every unattended cloud run until/unless this sandbox constraint changes — it skips the isolation canary and the `@neo/api` DB-backed test suite entirely (still runs lint, typecheck, `@neo/ui` tests, and depcruise), and says so explicitly in its Linear completion comment rather than silently proceeding as if verified. This was discussed directly with Łukasz and reasoned through against medical-grade practice, not assumed: a worker-pushed branch is pre-review, pre-CI, pre-merge — `.github/workflows/ci.yml` already runs the full suite against a real ephemeral Postgres container on every push, so the actual compliance-grade gate before anything reaches `dev` is unaffected; the worker's own self-check was always a fast local subset of that gate, not a replacement for it, the same relationship any developer's local pre-commit checks have to CI. This holds specifically *because* Step 4 already excludes the worker from ever touching migrations/`auth.ts`/`consent`/`audit_log`/`identities`/`patient`/`practitioner` — exactly the code where an unverified DB assumption would be most dangerous — so the tickets this worker can even attempt are already the lower-risk category where this trade-off is acceptable. If this sandbox constraint is ever lifted (or Step 7's probe should ever connect successfully in some future cloud environment), the full canary-and-test flow resumes automatically — nothing about that path was removed, only made conditional.
+
 **quality-gate.sh is not the enforcement mechanism for this worker.** The Stop
 hook only inspects `git status --porcelain` (uncommitted changes) — an agent
 that commits everything before ending its turn would sail past it having run
@@ -207,25 +246,32 @@ never a self-check failure, never triggers `Blocked`, and never blocks ticket
 completion. The synthetic-data-only rule from Compliance Impact below applies
 here too, extended to this new visual surface, not just DB rows.
 
-**Update, 2026-09-20: push preflight, mandatory hoisting line, conditional
-double-implementation pass, backward consistency check, completion artifact.**
-Łukasz was dissatisfied specifically with this worker's output — text-only
-completion comments with no visual, no repeatable local verification path,
-and no forced check on whether a change should be platform-generic or
-tenant-specific given the white-label model (full enrichment:
-`docs/stories/linear-worker-pipeline-hardening.md`). Five changes, all in
-`SKILL.md`, not here:
+**Update, 2026-09-20: mandatory hoisting line, conditional double-implementation
+pass, backward consistency check, completion artifact — plus a duplicate
+push-preflight found and removed during merge.** Łukasz was dissatisfied
+specifically with this worker's output — text-only completion comments with
+no visual, no repeatable local verification path, and no forced check on
+whether a change should be platform-generic or tenant-specific given the
+white-label model (full enrichment:
+`docs/stories/linear-worker-pipeline-hardening.md`). Four changes landed in
+`SKILL.md`; a fifth was built, then discovered redundant and removed:
 
-- **Step 3.5, push-access preflight.** The worker's GitHub App push access
-  has failed with a 403 before (see the memory correction below), and until
-  now that failure was only ever discovered at Step 9 — after a full
-  implementation and self-check cycle had already been spent. A `git push
-  --dry-run` against the real branch name (computable immediately after
-  Claim, since the title is already known) now catches this in seconds.
-  **This does not fix the underlying access gap** — that requires Łukasz to
-  visit https://github.com/apps/claude/installations/select_target himself,
-  a human/org-admin action nothing in this worker can perform. The preflight
-  only makes the failure cheap to detect instead of expensive.
+- **Push-access preflight — built, then found already done.** This work
+  started from a `dev` checkout that predated the 2026-09-16 Step 2.5 update
+  above, and independently built a near-identical `git push --dry-run` check
+  as a new "Step 3.5" (after Claim). Merging this branch back into `dev`
+  surfaced the duplication — Step 2.5's item 3 already does this, positioned
+  better (before Claim, so a failing environment never even burns a Claim on
+  a ticket that was never actually worked). Step 3.5 was deleted rather than
+  kept as a second, worse-positioned copy; the one genuinely new piece of
+  it — the specific GitHub App install URL
+  (https://github.com/apps/claude/installations/select_target) — was folded
+  into Step 2.5's item 3 error message instead. Worth stating plainly since
+  this ADR is a record, not a highlight reel: this only came to light at
+  merge time, not during design — a sign that a step this close to another
+  team's recent, adjacent work (both touching `linear-worker/SKILL.md`
+  within days of each other) deserved a `git fetch`/diff check against `dev`
+  before building, not just before merging.
 - **Mandatory platform-vs-client line, Step 5.** Every `feature`-classified
   ticket's story doc now states explicitly whether the change is
   platform-generic (hoistable to any white-label tenant) or specific to the
@@ -266,12 +312,15 @@ tenant-specific given the white-label model (full enrichment:
 **Memory correction, same date**: a project memory previously claimed NEO-25
 had already added a push-access preflight. It hadn't — NEO-25's actual merge
 (`917c745`) added the `DATABASE_URL`/environment preflight described in the
-2026-09-10 updates above, unrelated to GitHub push access. Step 3.5 above is
-the first real push-access preflight this worker has had.
+2026-09-10 updates above, unrelated to GitHub push access. The real push
+preflight is Step 2.5's item 3 above, added 2026-09-16 — a separate, later
+piece of work than NEO-25, and (per the point above) one this session didn't
+know about until merge time.
 
 ## Consequences
-- Enables: tickets written during the day can turn into a reviewable branch by
-  morning without Łukasz driving the implementation session himself.
+- Enables: tickets written during the day can turn into a reviewable branch
+  within about an hour (see 2026-09-16 cadence update above) without Łukasz
+  driving the implementation session himself.
 - New branch namespace: `worker/<linear-ticket-id>-<slug>`, distinguishing
   agent-initiated branches from human ones at a glance.
 - New Linear statuses required: `Ready for Worker` (trigger), `Worker: In

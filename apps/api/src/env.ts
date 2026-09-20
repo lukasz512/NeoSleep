@@ -98,3 +98,8 @@ export const RESEND_API_KEY: string | undefined = process.env.RESEND_API_KEY;
 export const RESEND_FROM_EMAIL: string | undefined = process.env.RESEND_FROM_EMAIL;
 /** Fixed admin inbox for internal notifications (e.g. contact form). */
 export const RESEND_NOTIFY_TO: string | undefined = process.env.RESEND_NOTIFY_TO;
+/** Fixed compliance inbox cc'd on every signed partner-registration document email (interim
+ * single-tenant-MVP env var, not per-tenant `app_config` — see
+ * docs/stories/partner-registration-legal-documents.md, 2026-09-16 addendum). Optional: unset
+ * just means no cc, same degrade-gracefully shape as the other Resend vars above. */
+export const PARTNER_DOCS_CC_EMAIL: string | undefined = process.env.PARTNER_DOCS_CC_EMAIL;

@@ -36,7 +36,7 @@
     >
       <template v-if="hcp" #header-actions>
         <VTooltip
-          v-if="canActivate && hcp.status === 'pending_approval'"
+          v-if="canActivate && (hcp.status === 'pending_approval' || hcp.status === 'invited')"
           location="bottom"
         >
           <template #activator="{ props: tooltipProps }">
@@ -47,7 +47,7 @@
               size="large"
               :loading="activateLoading"
               :class="entityActionBtnClass('activatePractitioner')"
-              :aria-label="t('user.hcp.detail.activate')"
+              :aria-label="t(activateLabelKey)"
               @click="onActivate"
             >
               <AppIcon
@@ -56,7 +56,7 @@
               />
             </AppButton>
           </template>
-          <span>{{ t("user.hcp.detail.activate") }}</span>
+          <span>{{ t(activateLabelKey) }}</span>
         </VTooltip>
         <VTooltip location="bottom">
           <template #activator="{ props: tooltipProps }">
@@ -120,6 +120,9 @@
         <span class="view-item__title-wrap">
           <AppAvatar :name="hcp.name" :first-name="hcp.first_name" :last-name="hcp.last_name" entity-type="hcp" :size="40" />
           <h1 class="view-item__title">{{ hcp.name }}</h1>
+          <span v-if="hcp.status === 'invited'" class="hcp-detail__status-badge">
+            {{ t("user.hcp.detail.statusInvited") }}
+          </span>
         </span>
       </template>
       <template v-if="hcp" #sections>
@@ -300,6 +303,10 @@ const territoryLabel = computed(() => {
 const canActivate = computed(
   () => authStore.user?.role === "admin" || authStore.user?.role === "manager",
 );
+/** Same button/action either way (ActivatePractitionerCommand IS the resend — see docs/stories/practitioner-invite-resend.md); only the label changes once an invite has already gone out once. */
+const activateLabelKey = computed(() =>
+  hcp.value?.status === "invited" ? "user.hcp.detail.resendInvite" : "user.hcp.detail.activate",
+);
 
 const hcpCache = useEntityCacheStore("hcp");
 const hcp = ref<HCP | null>(null);
@@ -343,6 +350,7 @@ const hcpFormInitialData = computed(() =>
         language: hcp.value.language ?? "",
         national_ids: hcp.value.national_ids ?? null,
         social_links: hcp.value.social_links ?? null,
+        status: hcp.value.status ?? "pending_approval",
       }
     : undefined,
 );
@@ -400,11 +408,15 @@ const { loading: activateLoading, run: onActivate } = useAsyncAction(
   async () => {
     const id = hcp.value?.id;
     if (!id) return;
+    const isResend = hcp.value?.status === "invited";
     const res = await apiFetch(`/api/v1/practitioner/${id}/activate`, {
       method: "POST",
     });
     if (res.ok) {
-      notifications.show(t("user.hcp.detail.activateSuccess"), "success");
+      notifications.show(
+        t(isResend ? "user.hcp.detail.resendInviteSuccess" : "user.hcp.detail.activateSuccess"),
+        "success",
+      );
       await loadHCP();
       window.dispatchEvent(new Event("entity-list-refresh"));
     }
@@ -508,5 +520,16 @@ watch(() => route.params.id, loadHCP);
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.hcp-detail__status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: rgba(var(--v-theme-warning), 0.12);
+  color: rgb(var(--v-theme-warning));
 }
 </style>

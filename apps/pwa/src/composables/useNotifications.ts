@@ -14,8 +14,10 @@ const notifications = ref<Notification[]>([]);
 let nextId = 1;
 
 /**
- * Global notification hub. Use from any component to show toast-style messages.
- * The app must render AppNotificationHub once (e.g. in App.vue or AppLayout).
+ * Global toast/snackbar hub. Use from any component to show transient status
+ * messages. The app must render AppNotifications.vue once (see AppLayout.vue).
+ * Not to be confused with useNotificationCenter.ts, the unrelated backend-backed
+ * bell/inbox (ADR-012).
  */
 export function useNotifications() {
   const current = computed(() => notifications.value[0] ?? null);

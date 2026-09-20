@@ -106,10 +106,17 @@ defineExpose({
 
 /* Same 280ms/easing as view-fade-lift (packages/brand/transitions.css), so
    the card's height settles in lockstep with the content fading/lifting
-   through it — one motion, not two animations racing each other. */
+   through it — one motion, not two animations racing each other.
+   overflow-y: auto (not hidden) is deliberate: if the ResizeObserver-driven
+   height ever under-measures a step's true content (e.g. content that grows
+   after the initial measurement in a way the observer doesn't catch in time),
+   `hidden` would silently clip the rest of the step out of reach with no way
+   to scroll to it — `auto` degrades to an internal scrollbar in that case
+   instead of eating content, at no visual cost when the measurement is right. */
 .auth-card__viewport {
   position: relative;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   transition: height 280ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 

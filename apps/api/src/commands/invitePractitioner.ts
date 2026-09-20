@@ -13,11 +13,16 @@ import {
   mergeIdentityMetadataForUser,
   getInviteTokenByHash,
   markInviteTokenUsed,
+  getPractitionerIdByIdentityId,
+  getPractitionerById,
+  getOrganizationById,
+  updatePractitionerStatus,
   convertLead,
   insertConsent,
   insertFileAttachment,
   insertAuditLog,
 } from "../db.js";
+import type { Organization } from "../db/organization.js";
 import { ConflictError, NotFoundError, ValidationError } from "../errors.js";
 import { hashToken } from "../utils/hashToken.js";
 import { sendPartnerJoinThankYouEmail } from "../mailer.js";
@@ -59,6 +64,21 @@ function inferJurisdiction(region: string | null | undefined): string {
   const r = (region || "").toUpperCase();
   if (r === "MX") return "MX";
   return "EU";
+}
+
+/** Best-effort single display line from Organization's structured address columns — the
+ * invite form still collects/edits clinic address as one free-text field (see
+ * AcceptInviteInput.billingAddress), so a pre-filled value needs flattening. */
+function formatOrganizationAddress(org: Pick<Organization, "address_line1" | "city" | "state" | "postal_code">): string | null {
+  const parts = [org.address_line1, org.city, org.state, org.postal_code].map((p) => p?.trim()).filter(Boolean);
+  return parts.length ? parts.join(", ") : null;
+}
+
+/** organization.identifiers is a free-form {nip, regon, rfc, ...} bag (see 001_tenant_schema.sql) —
+ * no writer in the app populates it today, so this is almost always null; kept narrow to the two
+ * tax-ID shapes this tenant's markets actually use (PL NIP, MX RFC). */
+function extractTaxId(identifiers: Record<string, string> | null): string | null {
+  return identifiers?.nip || identifiers?.rfc || null;
 }
 
 // ---------------------------------------------------------------------------
@@ -175,6 +195,14 @@ export interface InvitePreview {
   email: string;
   firstName: string | null;
   lastName: string | null;
+  /** Pre-fill for the registration form's clinic-details review step — all nullable, since it
+   * depends on a rep/KAM having already created a proper HCO record linked to this practitioner
+   * (practitioner.organization_id). Absent that, the invitee sees empty, still-editable fields. */
+  clinicName: string | null;
+  clinicEmail: string | null;
+  clinicPhone: string | null;
+  clinicAddress: string | null;
+  taxId: string | null;
 }
 
 export async function ValidateInviteTokenQuery(client: PoolClient, token: string): Promise<InvitePreview | null> {
@@ -182,7 +210,26 @@ export async function ValidateInviteTokenQuery(client: PoolClient, token: string
   if (!tokenStr) return null;
   const invite = await getInviteTokenByHash(client, hashToken(tokenStr));
   if (!invite) return null;
-  return { email: invite.email, firstName: invite.first_name, lastName: invite.last_name };
+
+  let organization: Organization | null = null;
+  const practitionerId = await getPractitionerIdByIdentityId(client, invite.identity_id);
+  if (practitionerId) {
+    const practitioner = await getPractitionerById(client, practitionerId);
+    if (practitioner?.organization_id) {
+      organization = await getOrganizationById(client, practitioner.organization_id);
+    }
+  }
+
+  return {
+    email: invite.email,
+    firstName: invite.first_name,
+    lastName: invite.last_name,
+    clinicName: organization?.name ?? null,
+    clinicEmail: organization?.email ?? null,
+    clinicPhone: organization?.phone ?? null,
+    clinicAddress: organization ? formatOrganizationAddress(organization) : null,
+    taxId: organization ? extractTaxId(organization.identifiers) : null,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -193,6 +240,8 @@ export interface AcceptInviteInput {
   token: string;
   password: string;
   clinicName: string;
+  clinicEmail: string;
+  clinicPhone: string;
   taxId: string;
   billingAddress: string;
   gdprAccepted: boolean;
@@ -207,17 +256,33 @@ export interface AcceptInviteRequestMeta {
   userAgent: string | null;
 }
 
+/** One signed PDF ready to email, alongside what's already been uploaded to storage. */
+export interface SignedDocumentResult {
+  type: "gdpr" | "partner_agreement";
+  filename: string;
+  bytes: Uint8Array;
+}
+
+export interface AcceptInviteResult {
+  userId: string;
+  email: string;
+  locale: string;
+  documents: SignedDocumentResult[];
+}
+
 const SIGNATURE_DATA_URL_RE = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/;
 
 export async function AcceptPractitionerInviteCommand(
   client: PoolClient,
   input: AcceptInviteInput,
   meta: AcceptInviteRequestMeta
-): Promise<void> {
+): Promise<AcceptInviteResult> {
   const tokenStr = input.token?.trim();
   if (!tokenStr) throw new ValidationError("Invitation token is required");
   if (!input.password || input.password.length < 8) throw new ValidationError("Password must be at least 8 characters");
   if (!input.clinicName?.trim()) throw new ValidationError("Clinic name is required");
+  if (!input.clinicEmail?.trim()) throw new ValidationError("Clinic email is required");
+  if (!input.clinicPhone?.trim()) throw new ValidationError("Clinic phone is required");
   if (!input.taxId?.trim()) throw new ValidationError("Tax ID is required");
   if (!input.billingAddress?.trim()) throw new ValidationError("Billing address is required");
   if (!input.gdprAccepted) throw new ValidationError("GDPR consent is required");
@@ -242,12 +307,68 @@ export async function AcceptPractitionerInviteCommand(
   await setUserPassword(client, user.id, passwordHash, false);
   await updateUser(client, user.id, { status: "active" });
 
+  // 1b. This is the real "doctor accepted" moment — practitioner.status
+  // only becomes "active" here, not when staff clicked Activate/Resend
+  // (see ActivatePractitionerCommand in commands/practitioner.ts and
+  // docs/stories/practitioner-invite-resend.md). practitioner and users
+  // are separate tables off the same identity, so look it up by identity_id
+  // rather than assuming user.id === practitioner.id. Null is expected for
+  // a users row that was never linked to a practitioner (shouldn't happen
+  // on this invite path, but this command has no other reason to assume
+  // it always is one) — skip rather than throw.
+  const practitionerId = await getPractitionerIdByIdentityId(client, user.identity_id);
+  if (practitionerId) {
+    await updatePractitionerStatus(client, practitionerId, "active");
+  }
+
   // 2. Clinic / invoice data — no dedicated columns, lives in identities.metadata.
-  await mergeIdentityMetadataForUser(client, user.id, {
+  // If a linked organization record already had these fields (pre-filled for review on the
+  // form), log what the doctor actually changed — this is data reviewed right before a legal
+  // signature, so a "what did they correct" trail matters. Deliberately NOT written back to the
+  // shared `organization` row here (see docs/stories/partner-registration-legal-documents.md,
+  // 2026-09-16 addendum) — that's a separate follow-up, not this slice.
+  const organization = practitionerId
+    ? await (async () => {
+        const practitioner = await getPractitionerById(client, practitionerId);
+        return practitioner?.organization_id ? getOrganizationById(client, practitioner.organization_id) : null;
+      })()
+    : null;
+
+  const submittedClinicDetails = {
     clinic_name: input.clinicName.trim(),
+    clinic_email: input.clinicEmail.trim(),
+    clinic_phone: input.clinicPhone.trim(),
     tax_id: input.taxId.trim(),
     billing_address: input.billingAddress.trim(),
-  });
+  };
+
+  if (organization) {
+    const before = {
+      clinic_name: organization.name,
+      clinic_email: organization.email,
+      clinic_phone: organization.phone,
+      tax_id: extractTaxId(organization.identifiers),
+      billing_address: formatOrganizationAddress(organization),
+    };
+    const changed = (Object.keys(submittedClinicDetails) as (keyof typeof submittedClinicDetails)[]).some(
+      (key) => (before[key] ?? "") !== submittedClinicDetails[key]
+    );
+    if (changed) {
+      await insertAuditLog(client, {
+        user_id: user.id,
+        action: "edit_clinic_details",
+        entity_type: "Organization",
+        entity_id: organization.id,
+        entity_before: before,
+        entity_after: submittedClinicDetails,
+        user_ip: meta.ip,
+        user_agent: meta.userAgent,
+        request_id: meta.requestId,
+      });
+    }
+  }
+
+  await mergeIdentityMetadataForUser(client, user.id, submittedClinicDetails);
 
   // 3. Signed documents — GDPR consent + partner agreement, each a standalone
   // PDF embedding the drawn signature. `signature_method: 'drawn'` is kept in
@@ -258,6 +379,8 @@ export async function AcceptPractitionerInviteCommand(
     { type: "partner_agreement", titleKey: "documents.partnerAgreement.title", bodyKey: "documents.partnerAgreement.body" },
   ];
 
+  const signedDocuments: SignedDocumentResult[] = [];
+
   for (const doc of documents) {
     const pdfBytes = await renderSignedDocumentPdf({
       title: emailT(locale, doc.titleKey),
@@ -266,6 +389,7 @@ export async function AcceptPractitionerInviteCommand(
       signedAt,
       signatureDataUrl: input.signatureDataUrl,
     });
+    signedDocuments.push({ type: doc.type, filename: `${doc.type}.pdf`, bytes: pdfBytes });
     const path = `partner/${user.id}/${doc.type}-${signedAt.getTime()}.pdf`;
     const uploaded = await uploadPartnerDocument(path, pdfBytes, "application/pdf");
 
@@ -321,4 +445,6 @@ export async function AcceptPractitionerInviteCommand(
     user_agent: meta.userAgent,
     request_id: meta.requestId,
   });
+
+  return { userId: user.id, email: invite.email, locale, documents: signedDocuments };
 }

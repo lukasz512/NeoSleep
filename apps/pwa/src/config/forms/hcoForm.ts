@@ -49,14 +49,6 @@ async function loadInstitutionTypeOptions() {
   return configStore.institutionTypeItems;
 }
 
-async function loadRegionOptions() {
-  const configStore = useConfigStore();
-  if (configStore.options.regions.length === 0) {
-    await configStore.loadOptions();
-  }
-  return configStore.regionItems;
-}
-
 /** Base specialty vocabulary plus any already picked on this org (edit mode),
  *  so previously-saved values are never dropped from the chips list. */
 async function loadSpecialtyOptions(form: Record<string, unknown>): Promise<FormFieldOption[]> {
@@ -73,21 +65,27 @@ async function loadSpecialtyOptions(form: Record<string, unknown>): Promise<Form
 export const hcoFormFields: FormFieldDef[] = [
   { key: "name", type: "text", labelKey: "user.hco.form.name", required: true, cols: 12 },
   { key: "type", type: "select", labelKey: "user.hco.form.type", options: loadInstitutionTypeOptions, cols: 6 },
-  { key: "region", type: "autocomplete", labelKey: "user.hco.form.region", options: loadRegionOptions, cols: 6 },
   {
-    key: "territory_id",
+    key: "specialties",
     type: "autocomplete",
-    labelKey: "user.hco.form.territory",
-    hint: "app.patients.form.territoryHint",
-    default: null,
-    options: loadTerritoryOptions,
-    icon: "nav-territories",
+    labelKey: "user.hco.form.specialties",
+    options: loadSpecialtyOptions,
+    multiple: true,
     cols: 6,
   },
   { key: "address_line1", type: "text", labelKey: "user.hco.form.addressLine1", cols: 12 },
   { key: "postal_code", type: "text", labelKey: "user.hco.form.postalCode", cols: 6 },
   { key: "city", type: "text", labelKey: "user.hco.form.city", cols: 6 },
   { key: "state", type: "text", labelKey: "user.hco.form.state", cols: 6 },
+  {
+    key: "territory_id",
+    type: "autocomplete",
+    labelKey: "user.hco.form.territory",
+    default: null,
+    options: loadTerritoryOptions,
+    icon: "nav-territories",
+    cols: 6,
+  },
   {
     key: "country_code",
     type: "text",
@@ -118,14 +116,6 @@ export const hcoFormFields: FormFieldDef[] = [
     labelKey: "user.hco.form.googleLink",
     icon: "map-pin",
     rules: [websiteRule],
-    cols: 12,
-  },
-  {
-    key: "specialties",
-    type: "autocomplete",
-    labelKey: "user.hco.form.specialties",
-    options: loadSpecialtyOptions,
-    multiple: true,
     cols: 12,
   },
   {
