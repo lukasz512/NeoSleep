@@ -207,6 +207,68 @@ never a self-check failure, never triggers `Blocked`, and never blocks ticket
 completion. The synthetic-data-only rule from Compliance Impact below applies
 here too, extended to this new visual surface, not just DB rows.
 
+**Update, 2026-09-20: push preflight, mandatory hoisting line, conditional
+double-implementation pass, backward consistency check, completion artifact.**
+Łukasz was dissatisfied specifically with this worker's output — text-only
+completion comments with no visual, no repeatable local verification path,
+and no forced check on whether a change should be platform-generic or
+tenant-specific given the white-label model (full enrichment:
+`docs/stories/linear-worker-pipeline-hardening.md`). Five changes, all in
+`SKILL.md`, not here:
+
+- **Step 3.5, push-access preflight.** The worker's GitHub App push access
+  has failed with a 403 before (see the memory correction below), and until
+  now that failure was only ever discovered at Step 9 — after a full
+  implementation and self-check cycle had already been spent. A `git push
+  --dry-run` against the real branch name (computable immediately after
+  Claim, since the title is already known) now catches this in seconds.
+  **This does not fix the underlying access gap** — that requires Łukasz to
+  visit https://github.com/apps/claude/installations/select_target himself,
+  a human/org-admin action nothing in this worker can perform. The preflight
+  only makes the failure cheap to detect instead of expensive.
+- **Mandatory platform-vs-client line, Step 5.** Every `feature`-classified
+  ticket's story doc now states explicitly whether the change is
+  platform-generic (hoistable to any white-label tenant) or specific to the
+  current tenant — sharpening the existing 🚀 NeoCRM/Platform lens into a
+  literal, non-skippable statement instead of optional prose.
+- **Conditional double-implementation pass, Step 6.5.** Only when arch's new
+  `_contracts/arch→linear-worker.md` ambiguity assessment (invoked from
+  Step 5) returns `ambiguous` — most tickets don't trigger this. Two
+  independent implementation attempts, compared against an explicit rubric
+  (AC-to-test coverage, diff simplicity, CLAUDE.md convention adherence), the
+  worker keeps the more coherent one and records both summaries in the
+  completion comment. This is a genuine autonomy expansion (the worker
+  self-adjudicates, since it has no way to pause for a live human review
+  overnight) — Łukasz confirmed this explicitly rather than it being assumed.
+  `_contracts/arch→linear-worker.md` is a new escalation *direction*: every
+  other contract in `_contracts/` has a specialist reporting back to arch,
+  never arch flagging ambiguity to an implementer — worth knowing if this
+  pattern gets reused elsewhere later.
+- **Step 7.5, Backward Consistency Check.** Runs on every ticket (not a
+  periodic release gate — Łukasz's explicit choice over the lighter
+  alternative): a name-collision grep against existing migrations/routes, a
+  check that no `Accepted` ADR is contradicted, and a Test Coverage Map
+  (every Acceptance Criterion mapped to the test that verifies it — an AC
+  with zero mapped tests fails this step, same stop-don't-fix policy as any
+  other self-check failure).
+- **Mandatory completion Artifact, Step 9.** Three fixed sections (What
+  changed / Run it locally / Verify it) — the first genuinely visual,
+  intentionally condensed rather than another wall of text; the second names
+  the new `.vscode/tasks.json` "Start NeoCRM Dev Stack" task (no `.vscode/`
+  setup existed in this repo before this change); the third is the Test
+  Coverage Map rendered as a QA checklist. Attached to the ticket via
+  `save_issue`'s `links`, backed by a marker file
+  (`.claude/local/artifacts/<ticket-id>.json`) that `quality-gate.sh` now
+  also enforces for interactive sessions — one convention, two enforcement
+  paths, so a human-driven session and this worker produce the same shape of
+  completion package.
+
+**Memory correction, same date**: a project memory previously claimed NEO-25
+had already added a push-access preflight. It hadn't — NEO-25's actual merge
+(`917c745`) added the `DATABASE_URL`/environment preflight described in the
+2026-09-10 updates above, unrelated to GitHub push access. Step 3.5 above is
+the first real push-access preflight this worker has had.
+
 ## Consequences
 - Enables: tickets written during the day can turn into a reviewable branch by
   morning without Łukasz driving the implementation session himself.

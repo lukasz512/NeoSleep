@@ -10,6 +10,13 @@
 # feature-shaped changes need a saved /enrich-user-story output. Partner-API integrations
 # (OrthoApnea etc.) are explicitly NOT gated here yet.
 #
+# 2026-09-20: added a visual-artifact check (Łukasz was getting Linear tickets with nothing
+# but text — "AI slop" — and wanted a forced visual summary he can actually look at). Same
+# self-reported pattern as the docs/stories check below: this script can't call the Artifact
+# tool or the Linear MCP itself (it's a shell script, not Claude), so it can only verify that
+# a marker file was written recording that an artifact was published and attached. See the
+# ARTIFACT MARKER block for what Claude is expected to do when this fires.
+#
 # Caveat: this checks the CURRENT WORKING TREE STATE (git status), not strictly "what this
 # one turn changed" — if the tree already had unrelated uncommitted changes before this
 # session started, they're included in what gets checked. Known limitation, not a bug.
@@ -125,6 +132,50 @@ if [ -n "$FEATURE_SHAPE" ]; then
   STORY_FILE="$(printf '%s\n' "$CHANGED" | grep -E '^docs/stories/.*\.md$' || true)"
   if [ -z "$STORY_FILE" ]; then
     FAILS+=("Diff looks feature-shaped (new view/route/migration: $(printf '%s' "$FEATURE_SHAPE" | tr '\n' ' ')) but no docs/stories/*.md was added. Run /enrich-user-story first and save its 'Refined User Story' output there.")
+  fi
+
+  # --- ARTIFACT MARKER -----------------------------------------------------------------
+  # A feature-shaped diff almost always maps to a Linear ticket (referenced in the story
+  # doc and/or recent commit messages). If any such ticket is found, require proof that a
+  # visual Artifact was published and attached to it: a marker file at
+  # .claude/local/artifacts/<TICKET-ID>.json (gitignored — .claude/local/ — so this is a
+  # per-machine, per-session discipline check, not repo state).
+  #
+  # 2026-09-20: schema hardened (docs/stories/linear-worker-pipeline-hardening.md) beyond
+  # "does the file exist" — it must also self-report a hoisting decision, the artifact's
+  # section coverage, and a test coverage map. Same trust tier as the docs/stories check:
+  # this verifies shape/presence, not content quality — no different than everything else
+  # in this hook. What Claude is expected to do when this fires:
+  #   1. Build a visual Artifact with three sections — "What changed" (condensed: masthead
+  #      + status + at most 1-2 diagrams, not a wall of text — see artifact-design +
+  #      artifact-diagramming skills), "Run it locally" (name the ".vscode/tasks.json"
+  #      "Start NeoCRM Dev Stack" task), "Verify it" (a QA checklist mirroring the
+  #      Acceptance Criteria 1:1).
+  #   2. Publish it, then attach it to the ticket via save_issue's `links` param so it's
+  #      visible ON the Linear issue itself.
+  #   3. Write the marker: mkdir -p .claude/local/artifacts && write
+  #      .claude/local/artifacts/<TICKET-ID>.json with:
+  #      { "url": "<artifact url>",
+  #        "hoisting": "platform" | "client:<slug>" | "n/a — infra/tooling",
+  #        "sections": ["summary", "run-locally", "qa-checklist"],
+  #        "testCoverageMap": [ { "ac": "<short AC text>", "tests": ["<file> › <test name>"] } ] }
+  TICKET_REFS="$( { [ -n "$STORY_FILE" ] && cat $STORY_FILE 2>/dev/null; git log --format=%B -n 20 2>/dev/null; } \
+    | grep -oE '\b[A-Z]{2,10}-[0-9]+\b' | sort -u || true)"
+  if [ -n "$TICKET_REFS" ]; then
+    while IFS= read -r ticket; do
+      [ -z "$ticket" ] && continue
+      MARKER=".claude/local/artifacts/${ticket}.json"
+      if [ ! -f "$MARKER" ]; then
+        FAILS+=("Diff references Linear ticket ${ticket} but no visual artifact has been attached to it yet (missing $MARKER). Publish an Artifact (What changed / Run it locally / Verify it), attach it to ${ticket} via save_issue's links param, and record the marker file before ending this turn.")
+      else
+        jq -e '.hoisting != null and .hoisting != ""' "$MARKER" >/dev/null 2>&1 \
+          || FAILS+=("$MARKER exists but is missing a non-empty 'hoisting' field — state explicitly whether ${ticket} is platform-generic or tenant-specific (and whether it could be hoisted) before ending this turn.")
+        jq -e '(.sections // []) | index("summary") != null and index("run-locally") != null and index("qa-checklist") != null' "$MARKER" >/dev/null 2>&1 \
+          || FAILS+=("$MARKER exists but its 'sections' array doesn't cover all three required sections (summary, run-locally, qa-checklist) — the artifact for ${ticket} must have all three.")
+        jq -e '(.testCoverageMap // []) | length > 0' "$MARKER" >/dev/null 2>&1 \
+          || FAILS+=("$MARKER exists but 'testCoverageMap' is empty — map each Acceptance Criterion for ${ticket} to the test(s) that verify it before ending this turn.")
+      fi
+    done <<< "$TICKET_REFS"
   fi
 fi
 

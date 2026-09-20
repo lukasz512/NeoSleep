@@ -36,6 +36,19 @@ Query Linear for tickets in `Ready for Worker`. If `$ARGUMENTS` names a specific
 ### 3. Claim
 Move the selected ticket to `Worker: In Progress`.
 
+### 3.5. Push-access preflight — before any real work starts
+
+Compute the real branch name now — `worker/<linear-ticket-id>-<kebab-slug-of-title>`, same convention Step 9 uses, and the title is already known from Step 2. Run a dry-run push against it: `git push --dry-run origin HEAD:refs/heads/worker/<ticket-id>-<slug>`.
+
+This exists because the worker's GitHub App access has failed with a 403 before (unresolved as of 2026-09-17, per docs/ADR-019-nightly-linear-worker.md's 2026-09-20 update) and, before this step existed, that failure was only ever discovered at Step 9 — after a full implementation and self-check cycle had already been spent. A dry-run push costs seconds and catches the same failure before any of that work happens.
+
+On a 403/permission-style failure:
+- Comment on the ticket: "Blocked — GitHub App has no push access to this repo. This needs a human to visit https://github.com/apps/claude/installations/select_target and grant/confirm access; it is not something this run can fix itself. No implementation was attempted."
+- Move the ticket to `Blocked`.
+- End the turn. Nothing has been implemented yet, so there is nothing to revert.
+
+On success, proceed to Step 4 as normal — the dry-run does not create the branch or push anything real.
+
 ### 4. Compliance-sensitive scope check — before any implementation
 
 Two categories, judged before writing a single line:
@@ -103,8 +116,23 @@ Run `/enrich-user-story` against the ticket's title + description. If it surface
 
 If classified `trivial` or `feature` with no blocking open questions, proceed. For `feature`, save the Refined User Story to `docs/stories/` as the skill normally requires.
 
+**Platform vs. client line (mandatory, `feature`-classified tickets only).** Add one explicit line to the saved story doc, under the 🚀 NeoCRM/Platform stakeholder note: is this change generalizable to any white-label tenant (`platform`), or specific to the current tenant (`client:<slug>`, name it)? This is not a new lens — it sharpens the lens that already exists there into a literal, non-skippable statement instead of optional prose, since this platform is white-label and a change that quietly bakes in one tenant's assumptions is easy to miss otherwise. This value is what the completion Artifact's marker file records as `hoisting`.
+
+**Ambiguity check.** If the ticket's implementation isn't an obvious single path — a new entity/schema shape, more than one reasonable UI pattern, a data-modeling choice with real trade-offs — invoke `/arch assess [feature]` yourself and follow [_contracts/arch→linear-worker.md](../_contracts/arch→linear-worker.md). Arch's verdict (`single-path` or `ambiguous`) is what Step 6.5 below keys off. If arch itself is unsure, treat it as `ambiguous` — same safe-default posture arch already applies to itself ("ask, don't assume"). Skip this check entirely for straightforward tickets (a new field, a UI tweak, a bug fix) — invoking arch on every ticket regardless of need would just slow down the obvious cases for no benefit.
+
 ### 6. Implement
 Implement the change directly, following every rule in CLAUDE.md unconditionally — TypeScript strict, i18n keys added to `en.json` first, no hardcoded navigation/labels/feature flags, no secrets in frontend code, numbered migration files never mutated. There is no relaxed mode for unattended work; if anything, be more conservative than a human would be about scope creep — implement only what the ticket asks.
+
+### 6.5. Conditional double-implementation pass — only when Step 5 flagged `ambiguous`
+
+Skip this step entirely for every `single-path` ticket — it exists specifically to spend extra effort where the ticket doesn't have one clearly-correct approach, not as a blanket doubling of cost.
+
+1. Implement **Attempt A** (Step 6 above), then capture it — commit it to a throwaway local branch (`worker/<ticket>-attempt-a`) or save its diff to a temp file. Do not push this branch.
+2. `git reset --hard` back to the pre-implementation commit.
+3. Implement **Attempt B** independently, following the same ticket and the same `/arch` guidance, but without re-reading Attempt A's specific code. (Caveat, stated plainly rather than papered over: true independence between the two attempts is limited within one continuous context — this reduces but doesn't eliminate the value of a second pass.)
+4. Compare both against an explicit rubric: how many Acceptance Criteria have real test coverage, diff simplicity (file/line count — smaller is better *unless* it under-delivers on the ticket), and adherence to CLAUDE.md's naming/i18n/architecture conventions. State a winner with a one-to-two-sentence rationale.
+5. Keep the winning attempt as the real working tree state; discard the losing branch — but keep a one-paragraph summary of what it did differently and why it lost, for the completion comment (Step 9).
+6. Proceed to Step 7 self-check against the winning attempt only.
 
 ### 7. Self-check — run in full before touching git commit
 
@@ -120,6 +148,14 @@ Do **not** rely on the repo's Stop hook (`quality-gate.sh`) to catch problems fo
 7. `pnpm depcruise`
 8. Confirm a file under `docs/` changed in your diff (the Refined User Story from Step 5 satisfies this for feature-classified tickets; trivial tickets don't need one, matching the enrichment skill's own rule).
 9. Confirm any file matching `identities|patient|practitioner|consent|auth\.ts|/context/|audit-log\.ts` that you touched has an accompanying `.spec.ts` change (you shouldn't have touched these at all per Step 4, but re-check — this is the actual quality-gate.sh regex, reproduced here for parity).
+
+### 7.5. Backward Consistency Check — runs on every ticket, treated as part of self-check
+
+This is separate from Step 7's risk-touched-only spec check above — it runs regardless of what area the ticket touched, and a failure here is a Step 8 stop condition exactly like any other self-check failure (no separate handling to invent).
+
+1. **Name-collision check.** Grep existing migrations (`apps/api/migrations/`) and routes (`apps/*/src/routes/`) for any new table/route name this ticket introduces. A collision means either this ticket duplicates something that already exists, or a naming clash is about to ship — either way, stop and report it rather than guessing which one it is.
+2. **ADR-conflict check.** Grep `docs/ADR-*.md` for keywords or table names this ticket touches; read any hits. State explicitly, in the completion comment, whether a conflict with an existing `Accepted` ADR was found — "reviewed, no conflict" is an acceptable and expected answer most of the time, but it must be stated, not silently skipped.
+3. **Test Coverage Map.** Build a table mapping every Acceptance Criterion from the story doc (Step 5) to the specific test file/test name that verifies it. Any AC with zero mapped tests fails this step — an implementation without a test proving its own acceptance criterion isn't done, it's unverified. This table is also what ships in the completion Artifact's "Verify it" section and the marker file's `testCoverageMap` field (Step 9).
 
 ### 8. On any self-check failure — stop, don't fix, don't retry
 This is the one policy Łukasz was explicit about: no self-fix loop, no second attempt.
@@ -140,13 +176,31 @@ This is the one policy Łukasz was explicit about: no self-fix loop, no second a
 - **Synthetic-data guardrail, actively confirmed, not assumed**: the render must show only fixture/placeholder props or content, never anything resembling a real patient/HCP record — same rule as the `test` schema (ADR-019's Compliance Impact section), extended here to a new visual surface.
 - **Graceful skip**: no rendering capability this run, the change isn't isolatable, or the render fails for any reason — skip silently and continue with the rest of this step unchanged.
 
+- **If screenshots were produced**, attach both PNGs to the ticket via whatever Linear MCP attachment capability this session exposes, on the same completion comment. If no attachment capability is available in this session, fall back to putting the two `raw.githubusercontent.com` links directly in the comment text instead — same "note it, don't block on it" fallback this file already uses for unreadable ticket attachments (see the Ticket Contract's "Fields read" bullet).
+
+**Completion Artifact (mandatory, not best-effort — `feature`-classified tickets).** Build and publish a visual Artifact with exactly three sections, following the `artifact-design`/`artifact-diagramming` skills for craft but keeping it condensed — ask "what's actually essential here" before publishing, not a wall of detail:
+1. **What changed** — masthead + status pills + at most 1-2 diagrams/mockups sized to the actual change.
+2. **Run it locally** — one line: the `.vscode/tasks.json` "Start NeoCRM Dev Stack" task, or `pnpm start` from a terminal.
+3. **Verify it** — the Test Coverage Map's Acceptance Criteria, rendered as a numbered QA checklist of concrete actions (open X, click Y, expect Z).
+
+Attach it to the ticket via `save_issue`'s `links` param. Then write `.claude/local/artifacts/<ticket-id>.json`:
+```json
+{
+  "url": "<artifact url>",
+  "hoisting": "platform | client:<slug>",
+  "sections": ["summary", "run-locally", "qa-checklist"],
+  "testCoverageMap": [ { "ac": "<short AC text>", "tests": ["<file> › <test name>"] } ]
+}
+```
+This is the same marker schema `quality-gate.sh` enforces for interactive sessions — one convention, two enforcement paths.
+
 - Commit with a clear message (screenshot PNGs, if produced, are included in this same commit). Include a co-authorship trailer identifying this as agent work, same convention as any Claude-authored commit in this repo, so `git blame` is never ambiguous about human vs. agent authorship.
 - Branch name: `worker/<linear-ticket-id>-<kebab-slug-of-title>`, created from `dev` (this repo's default branch — confirm via `git remote show origin` if unsure, never assume `main`).
 - `git push -u origin worker/<...>`. Never push to `dev` or `prod`. **Never open a pull request** — this is a hard rule, not a preference (see CLAUDE.md's PR-only workflow).
-- **If screenshots were produced**, attach both PNGs to the ticket via whatever Linear MCP attachment capability this session exposes, on the same completion comment. If no attachment capability is available in this session, fall back to putting the two `raw.githubusercontent.com` links directly in the comment text instead — same "note it, don't block on it" fallback this file already uses for unreadable ticket attachments (see the Ticket Contract's "Fields read" bullet).
 - Comment on the Linear ticket with a pre-filled GitHub PR URL instead of the plain link git prints — construct:
   `https://github.com/lukasz512/NeoSleep/compare/dev...worker/<...>?quick_pull=1&title=<url-encoded-title>&body=<url-encoded-body>`
   `title` is the ticket title (or a short summary); `body` is a short one/two-line summary of the change, plus — only when screenshots were produced — two markdown image lines pointing at the `raw.githubusercontent.com` URLs for `before.png`/`after.png` on the pushed branch, so they render inline the moment the PR form opens. Both `title` and `body` must be percent-encoded (spaces, `%0A` for newlines, and markdown's `! [ ] ( )` all need encoding). This still only pre-fills GitHub's own "new PR" form — Łukasz clicks "Create" himself, same as always; it does not open a pull request on your behalf.
+- **If Step 6.5's double-implementation pass ran**, include both attempts' one-paragraph summaries and the stated rationale for the winner in this same completion comment.
 - Move the ticket to `Needs Review`.
 
 ---
@@ -164,6 +218,8 @@ This is the one policy Łukasz was explicit about: no self-fix loop, no second a
 | Trigger | Delegate to |
 |---|---|
 | Ticket needs compliance-sensitive changes | Defer to a human session — do not implement, see Step 4 |
-| Self-check fails | `Blocked` + comment, see Step 8 — never a fix attempt within this run |
+| GitHub App push access fails (403) | `Blocked` + comment pointing at https://github.com/apps/claude/installations/select_target, see Step 3.5 — this is a human/org-admin action, never a code fix |
+| Ticket implementation isn't an obvious single path | `/arch assess [feature]`, see Step 5's ambiguity check and [_contracts/arch→linear-worker.md](../_contracts/arch→linear-worker.md) |
+| Self-check fails (including Step 7.5's backward consistency check) | `Blocked` + comment, see Step 8 — never a fix attempt within this run |
 | `quality-gate.sh`'s hardcoded `127.0.0.1:5432` check being stale for normal local dev (no docker-compose exists in this repo; local dev uses remote Supabase) | Known pre-existing issue, out of scope for this skill — flag to `/devops` separately if it becomes a real blocker for human sessions too |
 | Scheduling / enabling / disabling the nightly cron | The `RemoteTrigger` routine configuration, not this skill — this skill only defines *what* a single run does |
