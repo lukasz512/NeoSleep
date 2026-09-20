@@ -87,6 +87,7 @@ import { apiFetch } from "../composables/useApi";
 import { useNotifications } from "../composables/useNotifications";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import { territoryFormFields } from "../config/forms/territoryForm";
+import { kindPascal, territoryCardMeta as territoryCardMetaFormatter } from "../utils/mobileCardMeta";
 
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
 
@@ -128,16 +129,10 @@ const territoriesI18n = computed(() => ({
   errorLoad: "user.territories.errorLoad",
 }));
 
-function kindPascal(kind: string): string {
-  return kind.charAt(0).toUpperCase() + kind.slice(1);
-}
-
 /** Mobile card's second line — same kind/country_code/code the desktop
  *  table already shows in separate columns (NEO-19). */
 function territoryCardMeta(territory: TerritoryListItem): string {
-  const parts = [t(`user.territories.form.kind${kindPascal(territory.kind)}`), territory.country_code];
-  if (territory.code) parts.push(territory.code);
-  return parts.filter(Boolean).join(" — ");
+  return territoryCardMetaFormatter(territory, t);
 }
 
 function onAdd() {

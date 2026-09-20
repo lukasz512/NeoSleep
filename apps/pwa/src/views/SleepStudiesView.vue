@@ -58,6 +58,7 @@ import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
 import EntityLink from "../components/EntityLink.vue";
 import type { FilterDefinition } from "../composables/useFilters";
+import { sleepStudyCardMeta as sleepStudyCardMetaFormatter } from "../utils/mobileCardMeta";
 
 interface SleepStudyRow {
   study_type?: string;
@@ -106,9 +107,7 @@ function studyTypeLabel(studyType?: string): string {
  *  the desktop table already shows in separate columns (status is shown via
  *  the chip already, not repeated here — NEO-19). */
 function sleepStudyCardMeta(study: SleepStudyRow): string {
-  const date = study.study_date ? new Date(study.study_date).toLocaleDateString() : undefined;
-  const ahi = study.ahi_score != null ? `${t("app.sleepStudies.table.ahiScore")} ${study.ahi_score}` : undefined;
-  return [studyTypeLabel(study.study_type), date, ahi, study.interpreted_by_name].filter(Boolean).join(" · ") || "—";
+  return sleepStudyCardMetaFormatter(study, studyTypeLabel, t);
 }
 
 const tableHeaders = computed(() => [

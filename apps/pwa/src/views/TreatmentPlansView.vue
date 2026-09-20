@@ -50,6 +50,7 @@ import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
 import EntityLink from "../components/EntityLink.vue";
 import type { FilterDefinition } from "../composables/useFilters";
+import { treatmentPlanCardMeta as treatmentPlanCardMetaFormatter } from "../utils/mobileCardMeta";
 
 interface TreatmentPlanRow {
   type?: string;
@@ -104,7 +105,7 @@ function typeLabel(type?: string): string {
  *  already shows in separate columns (status is shown via the chip already,
  *  not repeated here — NEO-19). */
 function treatmentPlanCardMeta(plan: TreatmentPlanRow): string {
-  return [typeLabel(plan.type), plan.dentist_name].filter(Boolean).join(" · ") || "—";
+  return treatmentPlanCardMetaFormatter(plan, typeLabel);
 }
 
 /** Only dental_appliance plans have their own tab today — everything else lands on Details. */

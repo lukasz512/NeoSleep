@@ -106,6 +106,7 @@ import { usePermissions } from "../composables/usePermissions";
 import { useConfigStore } from "../stores/config";
 import { hcpFormFields, hcpFormDerive, resolveOrganizationIdForSubmit } from "../config/forms/hcpForm";
 import { practitionerSpecialtyIcon } from "../utils/hcpLabels";
+import { hcpCardMeta } from "../utils/mobileCardMeta";
 
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
@@ -201,13 +202,6 @@ const tableHeaders = computed(() => [
 function specialtyLabel(code?: string): string {
   if (!code) return "—";
   return configStore.specialtyItems.find((o) => o.value === code)?.title ?? code;
-}
-
-/** Mobile card's second line — institution (plain text, unlike the desktop
- *  table's clickable EntityLink — NEO-19) and territory, same data the
- *  desktop table already shows in separate columns. */
-function hcpCardMeta(hcp: HCPListItem): string {
-  return [hcp.institution, hcp.territory_name || hcp.region].filter(Boolean).join(" · ") || "—";
 }
 
 const hcpI18n = computed(() => ({
