@@ -25,13 +25,13 @@
       :not-found-label="t('app.patients.detail.notFound')"
       @retry="loadPatient"
     >
-      <template #title v-if="patient">
+      <template v-if="patient" #title>
         <span class="view-item__title-wrap">
           <AppAvatar :name="patient.name" :first-name="patient.first_name" :last-name="patient.last_name" entity-type="patient" :size="40" />
           <h1 class="view-item__title">{{ patient.name }}</h1>
         </span>
       </template>
-      <template #header-actions v-if="patient">
+      <template v-if="patient" #header-actions>
         <VTooltip location="bottom">
           <template #activator="{ props: tooltipProps }">
             <AppButton
@@ -81,7 +81,7 @@
           <span>{{ t('app.patients.actions.delete') }}</span>
         </VTooltip>
       </template>
-      <template #sections v-if="patient">
+      <template v-if="patient" #sections>
         <DetailViewTabs v-model="activeTab" :tabs="patientTabs">
           <template #details>
             <div class="view-item__row">
