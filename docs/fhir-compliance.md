@@ -8,12 +8,15 @@
 
 ## Overall Score
 
-| Phase | Target | Current Status |
+**Corrected 2026-09-20** — the previous version of this table showed Phase 1 as "🔶 In progress" at "~58%" and a "~35%" baseline. Verified against the live schema (`apps/api/migrations/001_tenant_schema.sql` + `003_practitioner_drop_duplicate_salutation.sql`, current through migration 026) and the API source tree: none of the Phase 1 checklist items below are actually done — no `apps/api/src/routes/fhir.ts`, no `packages/shared/src/types/identifier.ts`, no Identifier[] migration. Those percentages did not correspond to any code in the repo and have been removed rather than replaced with a new guess.
+
+| Phase | Target (when complete) | Current Status |
 |---|---|---|
-| Phase 1 — Foundation | ~58% | 🔶 In progress |
+| Phase 1 — Foundation | ~58% | ⬜ Not started |
 | Phase 2 — REST API Layer | ~72% | ⬜ Not started |
 | Phase 3 — SMART + Terminology | ~85% | ⬜ Not started |
-| **Baseline (pre-Phase 1)** | — | **~35%** |
+
+No FHIR alignment work has started in code as of this correction. Target percentages are the ADR-009 planning estimates for each phase's completion, not a measured score of current progress.
 
 ---
 
@@ -55,7 +58,7 @@
 | `IDENTIFIER_SYSTEMS` constants (NPI, PWZ, PESEL, CEDULA, RFC) | ⬜ | `packages/shared/src/types/identifier.ts` |
 | `Identifier.find()` helper | ⬜ | `packages/shared/src/types/identifier.ts` |
 | `Identifier.set()` helper | ⬜ | `packages/shared/src/types/identifier.ts` |
-| SQL migration: JSONB object → JSONB array | ⬜ | `apps/api/migrations/004_fhir_identifiers.sql` |
+| SQL migration: JSONB object → JSONB array | ⬜ | `apps/api/migrations/0XX_fhir_identifiers.sql` — next available number at implementation time; migrations already run through 026, `004` is taken |
 | DB functions updated to use `Identifier.find/set` | ⬜ | `apps/api/src/db/practitioner.ts`, `patient.ts`, `lead.ts` |
 | `pg_dump` backup taken before migration | ⬜ | — |
 
@@ -129,12 +132,13 @@
 
 ---
 
-### Resource: MedicationRequest (maps from `medication_request`)
+### Resource: MedicationRequest
+
+**Corrected 2026-09-20:** no `medication_request` table exists in the schema — verified against `apps/api/migrations/001_tenant_schema.sql` / `003_practitioner_drop_duplicate_salutation.sql`. There is no direct source table for this resource today; `product` + `purchase_order_item` cover product/order data but don't carry prescription-shaped fields (dosage, frequency, prescriber intent). Needs an ADR before Phase 2 work starts on this resource — either add a table or document that MedicationRequest is out of scope for now.
 
 | Endpoint | Status | Notes |
 |---|---|---|
-| `GET /fhir/r4/MedicationRequest/:id` | ⬜ | — |
-| `encounter_id FK` present | ⬜ | Links to FHIR Encounter — required for full resource |
+| `GET /fhir/r4/MedicationRequest/:id` | ⬜ | Blocked — no source table |
 | Declared in CapabilityStatement | ⬜ | — |
 
 ---
@@ -168,22 +172,24 @@
 
 Current DB-to-FHIR mapping. Every resource must either have a table or a documented deviation.
 
+**Corrected 2026-09-20:** the previous version of this table listed `observation`, `hcp_role`, `location`, `communication`, and `medication_request` as existing tables with "Shape aligned ✅" / "Partial ⚠️" coverage. None of these tables exist — verified against `apps/api/migrations/001_tenant_schema.sql` / `003_practitioner_drop_duplicate_salutation.sql` (schema current through migration 026). Corrected below to the real table names, or marked "Not implemented" where no table exists at all.
+
 | FHIR R4 Resource | DB Table | Coverage | Gap |
 |---|---|---|---|
 | `Person` | `identities` | Base shape ✅ | No FHIR REST endpoint |
 | `Practitioner` | `practitioner` | Fields aligned ✅ | Identifier[] pending |
-| `Organization` | `organization` | Fields aligned ✅ | No FHIR REST endpoint |
+| `Organization` | `organization` | Fields aligned ✅ (has `latitude`/`longitude`, no separate address table) | No FHIR REST endpoint |
 | `Patient` | `patient` | Fields aligned ✅ | Identifier[] pending |
 | `RelatedPerson` | — | ❌ Not implemented | ADR required if needed |
-| `PractitionerRole` | `hcp_role` | Partial ⚠️ | `location_id`, `period` fields to add |
-| `Location` | `location` | Partial ⚠️ |  |
+| `PractitionerRole` | — | ❌ Not implemented — no `hcp_role` table exists | Role/specialty currently lives on `practitioner` directly and on `user_roles`/`territory` for internal staff; ADR required before modeling as a separate FHIR resource |
+| `Location` | — | ❌ Not implemented — no standalone `location` table | Closest data is `organization.latitude/longitude` and `encounter.checkin_location` (JSONB, GPS capture only, not a FHIR Location resource) |
 | `Encounter` | `encounter` | Shape aligned ✅ | No FHIR REST endpoint |
-| `Observation` | `observation` | Shape aligned ✅ | `pcf_template_id` FK — non-standard extension |
+| `Observation` | — | ❌ Not implemented — no `observation` table | `sleep_study` holds the closest clinical-measurement data today, shape not FHIR-aligned; ADR required |
 | `Consent` | `consent` | Shape aligned ✅ | `provision_purpose[]`, `proof JSONB` added |
-| `Communication` | `communication` | Shape aligned ✅ | — |
-| `MedicationRequest` | `medication_request` | Partial ⚠️ | `encounter_id` FK to add |
+| `Communication` | `conversation` + `message` | Partial ⚠️ — real table names differ from FHIR resource name | Field-level alignment not yet reviewed |
+| `MedicationRequest` | — | ❌ Not implemented — no `medication_request` table | See Phase 2 section below; `product` + `purchase_order_item` don't carry prescription-shaped fields |
 | `AuditEvent` | `audit_log` | Fields aligned ✅ | No FHIR REST endpoint |
-| `Address` | `address` | FHIR datatype ✅ | — |
+| `Address` | — | ❌ No dedicated `address` table | Address fields live inline on `organization`; FHIR `Address` datatype alignment not yet reviewed |
 | `Identifier` | `national_ids JSONB` | Object format ⚠️ | Migration to Identifier[] pending |
 | `EpisodeOfCare` | `lead` | Custom extension ⚠️ | ADR: closest match, no direct resource |
 
@@ -208,4 +214,4 @@ Current DB-to-FHIR mapping. Every resource must either have a table or a documen
 | `.claude/skills/arch/assets/examples/good-fhir-alignment.md` | Full schema-to-FHIR resource map |
 | `apps/api/src/routes/fhir.ts` | CapabilityStatement route (to create) |
 | `packages/shared/src/types/identifier.ts` | FHIR Identifier type + constants (to create) |
-| `apps/api/migrations/004_fhir_identifiers.sql` | `national_ids` migration (to create) |
+| `apps/api/migrations/0XX_fhir_identifiers.sql` | `national_ids` migration (to create — next available number; `004` is already taken) |
