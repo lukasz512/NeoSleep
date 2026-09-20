@@ -35,7 +35,8 @@ afterEach(() => {
 async function mountAuthView(
   apiFetch: ReturnType<typeof vi.fn>,
   loginPath = "/login",
-): Promise<{ wrapper: VueWrapper; router: Router }> {
+  notify: ReturnType<typeof vi.fn> = vi.fn(),
+): Promise<{ wrapper: VueWrapper; router: Router; notify: ReturnType<typeof vi.fn> }> {
   setActivePinia(createPinia());
   const router = createTestRouter();
   await router.push(loginPath);
@@ -51,12 +52,12 @@ async function mountAuthView(
     attachTo: el,
     global: {
       plugins: [i18n, vuetify, router],
-      provide: { "neo:apiFetch": apiFetch },
+      provide: { "neo:apiFetch": apiFetch, "neo:notify": notify },
     },
   });
   mountedWrappers.push(wrapper);
   await flushPromises();
-  return { wrapper, router };
+  return { wrapper, router, notify };
 }
 
 async function fillAndSubmit(
@@ -195,40 +196,67 @@ describe("AuthView — sign in", () => {
     }, { timeout: 3000 });
   });
 
-  it("shows the invalid-credentials message on a 401 response", async () => {
+  it("shows the invalid-credentials message via the native notification on a 401 response, not an inline alert", async () => {
     apiFetch.mockResolvedValue(new Response(JSON.stringify({ error: "Invalid email or password." }), { status: 401 }));
-    const { wrapper } = await mountAuthView(apiFetch);
+    const { wrapper, notify } = await mountAuthView(apiFetch);
 
     await fillAndSubmit(wrapper, "rep@neosleepcare.com", "wrongpassword");
 
-    expect(wrapper.text()).toContain(en["user.login.error.invalidCredentials"]);
+    expect(notify).toHaveBeenCalledWith(
+      en["user.login.error.invalidCredentials"],
+      "error",
+      "user.login.error.invalidCredentials",
+    );
+    expect(wrapper.find(".auth-view__alert").exists()).toBe(false);
   });
 
-  it("shows the too-many-attempts message on a 429 response", async () => {
+  it("shows the too-many-attempts message via the native notification on a 429 response", async () => {
     apiFetch.mockResolvedValue(new Response(JSON.stringify({ error: "Too many login attempts." }), { status: 429 }));
-    const { wrapper } = await mountAuthView(apiFetch);
+    const { wrapper, notify } = await mountAuthView(apiFetch);
 
     await fillAndSubmit(wrapper, "rep@neosleepcare.com", "correcthorse");
 
-    expect(wrapper.text()).toContain(en["user.login.error.tooManyAttempts"]);
+    expect(notify).toHaveBeenCalledWith(
+      en["user.login.error.tooManyAttempts"],
+      "error",
+      "user.login.error.tooManyAttempts",
+    );
   });
 
-  it("shows a generic network error message on a non-ok, non-401/429 response", async () => {
+  it("shows a generic network error message via the native notification on a non-ok, non-401/429 response", async () => {
     apiFetch.mockResolvedValue(new Response(JSON.stringify({ error: "Server error." }), { status: 500 }));
-    const { wrapper } = await mountAuthView(apiFetch);
+    const { wrapper, notify } = await mountAuthView(apiFetch);
 
     await fillAndSubmit(wrapper, "rep@neosleepcare.com", "correcthorse");
 
-    expect(wrapper.text()).toContain(en["user.login.error.network"]);
+    expect(notify).toHaveBeenCalledWith(
+      en["user.login.error.network"],
+      "error",
+      "user.login.error.network",
+    );
   });
 
-  it("shows a generic network error message when the request throws", async () => {
+  it("shows a generic network error message via the native notification when the request throws", async () => {
     apiFetch.mockRejectedValue(new TypeError("Failed to fetch"));
-    const { wrapper } = await mountAuthView(apiFetch);
+    const { wrapper, notify } = await mountAuthView(apiFetch);
 
     await fillAndSubmit(wrapper, "rep@neosleepcare.com", "correcthorse");
 
-    expect(wrapper.text()).toContain(en["user.login.error.network"]);
+    expect(notify).toHaveBeenCalledWith(
+      en["user.login.error.network"],
+      "error",
+      "user.login.error.network",
+    );
+  });
+
+  it("fires a fresh notification for a second consecutive failure with the same error key", async () => {
+    apiFetch.mockResolvedValue(new Response(JSON.stringify({ error: "Invalid email or password." }), { status: 401 }));
+    const { wrapper, notify } = await mountAuthView(apiFetch);
+
+    await fillAndSubmit(wrapper, "rep@neosleepcare.com", "wrongpassword");
+    await fillAndSubmit(wrapper, "rep@neosleepcare.com", "stillwrong");
+
+    expect(notify).toHaveBeenCalledTimes(2);
   });
 
   it("redirects to /dashboard on success when there is no redirect query param", async () => {

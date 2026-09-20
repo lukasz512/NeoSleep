@@ -1,8 +1,12 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import { createRouter, createMemoryHistory } from "vue-router";
 import { routes } from "./router/routes";
 
 const router = createRouter({ history: createMemoryHistory(), routes });
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 describe("Pwa app", () => {
   it("router has login and dashboard routes", () => {
@@ -32,5 +36,24 @@ describe("Pwa app", () => {
     for (const name of portalOnly) {
       expect(names).not.toContain(name);
     }
+  });
+});
+
+describe("Notification host mount point (NEO-10)", () => {
+  it("App.vue mounts AppNotifications above the layout switch, so it covers both PublicLayout (/login) and AppLayout", () => {
+    const appSource = readFileSync(path.resolve(__dirname, "App.vue"), "utf-8");
+    expect(appSource).toContain('import AppNotifications from "./components/AppNotifications.vue"');
+    expect(appSource).toMatch(/<AppNotifications\s*\/>\s*<component :is="layoutComponent" \/>/);
+  });
+
+  it("AppLayout no longer mounts its own AppNotifications instance (would double-render the toast host)", () => {
+    const layoutSource = readFileSync(path.resolve(__dirname, "layouts/AppLayout.vue"), "utf-8");
+    expect(layoutSource).not.toContain("AppNotifications");
+  });
+
+  it("main.ts provides neo:notify (bound to useNotifications().show) so packages/ui views can show a native toast without depending on apps/pwa directly", () => {
+    const mainSource = readFileSync(path.resolve(__dirname, "main.ts"), "utf-8");
+    expect(mainSource).toContain('import { useNotifications } from "./composables/useNotifications"');
+    expect(mainSource).toContain('app.provide("neo:notify", useNotifications().show)');
   });
 });
