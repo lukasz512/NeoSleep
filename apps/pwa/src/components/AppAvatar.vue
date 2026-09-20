@@ -17,8 +17,12 @@ import { hcoTypeIcon } from "../utils/hcoLabels";
  * Placeholder identity photo, shared by HCP/HCO/patient/lead/user lists,
  * detail headers, and FormRenderer's edit/add dialog. Falls back in order:
  * real photo (avatarUrl) -> initials on a brand-derived color -> a generic
- * icon for the entity type (used when there's no name yet, e.g. a fresh
- * "add" form).
+ * icon for the entity type. An *identity* (hcp/patient/lead/user - a person)
+ * follows that full chain; a *place* (hco - a clinic/org, not a person)
+ * always gets its entity icon instead, regardless of name - "Dra. Laura
+ * Cuicas" as a clinic name is not a person to initial. This is enforced here
+ * so every caller gets it right for free, rather than each call site having
+ * to remember to withhold `name` for place types.
  */
 export type AppAvatarEntityType = "hcp" | "hco" | "patient" | "lead" | "user" | "event";
 
@@ -54,6 +58,7 @@ const props = withDefaults(
 );
 
 const initials = computed(() => {
+  if (props.entityType === "hco") return "";
   if (props.firstName?.trim() && props.lastName?.trim()) {
     return getInitialsFromParts(props.firstName, props.lastName);
   }

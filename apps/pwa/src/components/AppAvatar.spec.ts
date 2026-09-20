@@ -17,7 +17,7 @@ afterEach(() => {
   for (const w of mountedWrappers.splice(0)) w.unmount();
 });
 
-function mountAvatar(props: { entityType: AppAvatarEntityType; orgType?: string }) {
+function mountAvatar(props: { entityType: AppAvatarEntityType; orgType?: string; name?: string }) {
   const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
   const wrapper = mount(AppAvatar, { props, global: { plugins: [vuetify] } });
   mountedWrappers.push(wrapper);
@@ -43,5 +43,18 @@ describe("AppAvatar (hco entity type)", () => {
 
   it("ignores orgType for non-hco entity types", () => {
     expect(mountAvatar({ entityType: "hcp", orgType: "hospital" }).findComponent(AppIcon).props("name")).toBe("nav-hcp");
+  });
+
+  it("renders the icon, not letter initials, even when a name is passed", () => {
+    const wrapper = mountAvatar({ entityType: "hco", name: "Clinica Dra. Laura Cuicas" });
+    expect(wrapper.find(".app-avatar__initials").exists()).toBe(false);
+    expect(wrapper.findComponent(AppIcon).props("name")).toBe("nav-hco");
+  });
+});
+
+describe("AppAvatar (non-hco entity types)", () => {
+  it("still renders initials from a name, unaffected by the hco fix", () => {
+    const wrapper = mountAvatar({ entityType: "hcp", name: "Jan Kowalski" });
+    expect(wrapper.find(".app-avatar__initials").text()).toBe("JK");
   });
 });
