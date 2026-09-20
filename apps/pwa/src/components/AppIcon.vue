@@ -34,11 +34,11 @@ const ICONS = {
             <line x1="8" y1="12" x2="16" y2="12" stroke-width="2" pathLength="1" />`,
   },
   "sad-cloud": {
-    strokeWidth: 1.25,
-    paths: `<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" pathLength="1" />
-            <circle cx="8.5" cy="14" r="0.8" pathLength="1" />
-            <circle cx="15.5" cy="14" r="0.8" pathLength="1" />
-            <path d="M9 17.5 Q12 19.5 15 17.5" pathLength="1" />`,
+    strokeWidth: 1.8,
+    paths: `<path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" pathLength="1" />
+            <path d="M7.4 10.6L9.2 12.4M7.4 12.4L9.2 10.6" stroke-width="1.3" pathLength="1" />
+            <path d="M14.8 10.6L16.6 12.4M14.8 12.4L16.6 10.6" stroke-width="1.3" pathLength="1" />
+            <path d="M8 17 Q12 14 16 17" stroke-width="1.3" pathLength="1" />`,
   },
   "file": {
     strokeWidth: 1.5,
@@ -137,6 +137,36 @@ const ICONS = {
             <line x1="12" y1="9" x2="12" y2="15" />
             <line x1="9" y1="12" x2="15" y2="12" />`,
   },
+  // ── HCO type-specific avatar icons (hospital/pharmacy/practice/other) ──────
+  // "clinic" keeps the "nav-hco" icon above (unchanged, matches the ticket).
+  "hco-hospital": {
+    strokeWidth: 2,
+    paths: `<rect x="3" y="4" width="18" height="17" />
+            <line x1="7" y1="4" x2="7" y2="21" />
+            <line x1="17" y1="4" x2="17" y2="21" />
+            <line x1="12" y1="8" x2="12" y2="14" />
+            <line x1="9" y1="11" x2="15" y2="11" />`,
+  },
+  "hco-pharmacy": {
+    strokeWidth: 2,
+    paths: `<rect x="2" y="8" width="20" height="8" rx="4" transform="rotate(45 12 12)" />
+            <line x1="12" y1="6.34" x2="12" y2="17.66" transform="rotate(45 12 12)" />`,
+  },
+  "hco-practice": {
+    strokeWidth: 2,
+    paths: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+            <line x1="12" y1="16.5" x2="12" y2="19.5" stroke-width="1.4" />
+            <line x1="10.5" y1="18" x2="13.5" y2="18" stroke-width="1.4" />`,
+  },
+  "hco-other": {
+    strokeWidth: 2,
+    paths: `<path d="M4 10l1-5h14l1 5" />
+            <path d="M4 10a2 2 0 0 0 4 0 2 2 0 0 0 4 0 2 2 0 0 0 4 0 2 2 0 0 0 4 0" />
+            <path d="M5 10v11h14V10" />
+            <line x1="10" y1="21" x2="10" y2="15" />
+            <line x1="14" y1="21" x2="14" y2="15" />`,
+  },
   "nav-patients": {
     strokeWidth: 2,
     paths: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
@@ -181,6 +211,14 @@ const ICONS = {
     strokeWidth: 2,
     paths: `<path d="M12 21s7-6.5 7-12a7 7 0 0 0-14 0c0 5.5 7 12 7 12z" />
             <circle cx="12" cy="9" r="2.5" />`,
+  },
+  "nav-document-content": {
+    strokeWidth: 2,
+    paths: `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="8" y1="13" x2="16" y2="13" />
+            <line x1="8" y1="17" x2="16" y2="17" />
+            <line x1="8" y1="9" x2="10" y2="9" />`,
   },
   // ── Generic UI icons ──────────────────────────────────────────────────────
   "close": {
@@ -342,6 +380,23 @@ const ICONS = {
     strokeWidth: 1.6,
     paths: `<path d="M12 3.5c-2.9 0-5 2.3-5 5.2 0 3.7-.9 5.7-1.8 6.8a1 1 0 0 0 .8 1.6h12a1 1 0 0 0 .8-1.6c-.9-1.1-1.8-3.1-1.8-6.8 0-2.9-2.1-5.2-5-5.2z" />
             <path d="M9.5 20a2.5 2.5 0 0 0 5 0" />`,
+  },
+  "check-circle": {
+    strokeWidth: 1.6,
+    paths: `<circle cx="12" cy="12" r="9" />
+            <path d="M8 12.5l2.5 2.5L16 9.5" />`,
+  },
+  "alert-triangle": {
+    strokeWidth: 1.6,
+    paths: `<path d="M12 3.5L21.5 20h-19z" stroke-linejoin="round" />
+            <line x1="12" y1="9.5" x2="12" y2="14" />
+            <circle cx="12" cy="17" r="0.6" fill="currentColor" stroke="none" />`,
+  },
+  "alert-circle": {
+    strokeWidth: 1.6,
+    paths: `<circle cx="12" cy="12" r="9" />
+            <line x1="12" y1="7.5" x2="12" y2="13" />
+            <circle cx="12" cy="16.5" r="0.6" fill="currentColor" stroke="none" />`,
   },
 } as const;
 </script>

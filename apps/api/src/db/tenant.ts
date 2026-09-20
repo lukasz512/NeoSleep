@@ -45,7 +45,14 @@ export async function withTenant<T>(
   try {
     await client.query("BEGIN");
     // SET LOCAL reverts when the transaction ends — no session-level contamination.
-    await client.query(`SET LOCAL search_path TO "${slug}", public`);
+    // `extensions` (Supabase's convention for installed extensions — pgcrypto,
+    // uuid-ossp, ltree) is appended last, after the tenant schema and public,
+    // so it never shadows a real table — it only resolves extension-provided
+    // types/operators/functions (e.g. ltree's `<@`) that aren't reachable
+    // otherwise: unlike a column DEFAULT (resolved once, at CREATE TABLE time),
+    // a type/operator referenced directly in a query is re-resolved against
+    // search_path on every call.
+    await client.query(`SET LOCAL search_path TO "${slug}", public, extensions`);
     const result = await fn(client);
     await client.query("COMMIT");
     client.release();
@@ -60,6 +67,42 @@ export async function withTenant<T>(
     client.release(rollbackFailed);
     if (err instanceof AppError) throw err;
     throw new DatabaseError("withTenant", err);
+  }
+}
+
+/**
+ * Executes fn inside a transaction against the shared `platform` schema —
+ * no SET LOCAL search_path (platform tables are always accessed fully
+ * schema-qualified, e.g. `platform.document_content_version`, never added
+ * to any connection's search_path — see db/lookup.ts's platform.lookups
+ * reads for the existing read-side precedent, and db/diagnostic.ts's
+ * getDb().query() for the existing single-statement write precedent).
+ * This is the multi-statement equivalent of those: a genuine transaction
+ * (BEGIN/COMMIT/ROLLBACK) for callers that need more than one platform-schema
+ * statement to succeed or fail together — e.g. document_content_version's
+ * "flip the old is_current row to false, then insert the new current row"
+ * (apps/api/src/db/documentContent.ts). Mirrors withTenant()'s own
+ * release-vs-destroy-on-rollback-failure discipline for the same reason
+ * documented there.
+ */
+export async function withPlatform<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
+  const client = await getDb().connect();
+  try {
+    await client.query("BEGIN");
+    const result = await fn(client);
+    await client.query("COMMIT");
+    client.release();
+    return result;
+  } catch (err) {
+    let rollbackFailed = false;
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      rollbackFailed = true;
+    }
+    client.release(rollbackFailed);
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("withPlatform", err);
   }
 }
 

@@ -32,12 +32,11 @@
       :back-route="{ name: 'hcp' }"
       :back-label="t('user.hcp.detail.back')"
       :not-found-label="t('user.hcp.detail.notFound')"
-      :title="hcp?.name"
       @retry="loadHCP"
     >
       <template v-if="hcp" #header-actions>
         <VTooltip
-          v-if="canActivate && hcp.status === 'pending_approval'"
+          v-if="canActivate && (hcp.status === 'pending_approval' || hcp.status === 'invited')"
           location="bottom"
         >
           <template #activator="{ props: tooltipProps }">
@@ -48,7 +47,7 @@
               size="large"
               :loading="activateLoading"
               :class="entityActionBtnClass('activatePractitioner')"
-              :aria-label="t('user.hcp.detail.activate')"
+              :aria-label="t(activateLabelKey)"
               @click="onActivate"
             >
               <AppIcon
@@ -57,7 +56,7 @@
               />
             </AppButton>
           </template>
-          <span>{{ t("user.hcp.detail.activate") }}</span>
+          <span>{{ t(activateLabelKey) }}</span>
         </VTooltip>
         <VTooltip location="bottom">
           <template #activator="{ props: tooltipProps }">
@@ -121,35 +120,63 @@
         <span class="view-item__title-wrap">
           <AppAvatar :name="hcp.name" :first-name="hcp.first_name" :last-name="hcp.last_name" entity-type="hcp" :size="40" />
           <h1 class="view-item__title">{{ hcp.name }}</h1>
+          <span v-if="hcp.status === 'invited'" class="hcp-detail__status-badge">
+            {{ t("user.hcp.detail.statusInvited") }}
+          </span>
         </span>
       </template>
       <template v-if="hcp" #sections>
-        <div class="view-item__row">
-          <dt class="view-item__label">{{ t("user.hcp.detail.email") }}</dt>
-          <dd class="view-item__value">
-            <a
-              v-if="hcp.email"
-              :href="`mailto:${hcp.email}`"
-              class="view-item__link"
-              >{{ hcp.email }}</a
-            >
-            <span v-else class="view-item__empty">—</span>
-          </dd>
-        </div>
-        <div class="view-item__row">
-          <dt class="view-item__label">{{ t("user.hcp.detail.specialty") }}</dt>
-          <dd class="view-item__value">{{ hcp.specialty || "—" }}</dd>
-        </div>
-        <div class="view-item__row">
-          <dt class="view-item__label">
-            {{ t("user.hcp.detail.institution") }}
-          </dt>
-          <dd class="view-item__value">{{ hcp.institution || "—" }}</dd>
-        </div>
-        <div class="view-item__row">
-          <dt class="view-item__label">{{ t("user.hcp.detail.region") }}</dt>
-          <dd class="view-item__value">{{ hcp.region || "—" }}</dd>
-        </div>
+        <DetailViewTabs v-model="activeTab" :tabs="hcpTabs">
+          <template #details>
+            <div class="view-item__row">
+              <dt class="view-item__label view-item__label--icon"><AppIcon name="mail" />{{ t("user.hcp.detail.email") }}</dt>
+              <dd class="view-item__value">
+                <a v-if="hcp.email" :href="`mailto:${hcp.email}`" class="view-item__link">{{ hcp.email }}</a>
+                <span v-else class="view-item__empty">—</span>
+              </dd>
+            </div>
+            <div class="view-item__row">
+              <dt class="view-item__label view-item__label--icon"><AppIcon name="phone" />{{ t("user.hcp.detail.phone") }}</dt>
+              <dd class="view-item__value">
+                <a v-if="hcp.phone" :href="`tel:${hcp.phone}`" class="view-item__link">{{ hcp.phone }}</a>
+                <span v-else class="view-item__empty">—</span>
+              </dd>
+            </div>
+            <div class="view-item__row">
+              <dt class="view-item__label">{{ t("user.hcp.detail.specialty") }}</dt>
+              <dd class="view-item__value">{{ specialtyLabel(hcp.specialty) }}</dd>
+            </div>
+            <div class="view-item__row">
+              <dt class="view-item__label">{{ t("user.hcp.detail.institution") }}</dt>
+              <dd class="view-item__value">
+                <EntityLink
+                  :to="hcp.organization_id ? { name: 'hco-detail', params: { id: hcp.organization_id } } : null"
+                  :label="hcp.institution"
+                />
+              </dd>
+            </div>
+            <div class="view-item__row">
+              <dt class="view-item__label">{{ t("user.hcp.detail.region") }}</dt>
+              <dd class="view-item__value">{{ territoryLabel }}</dd>
+            </div>
+          </template>
+          <template #notes>
+            <PatientNotesPanel entity-type="practitioner" :entity-id="hcp.id" />
+          </template>
+          <template #relatedPatients>
+            <RelatedEntityPanel
+              :endpoint="`/api/v1/patient?practitioner_id=${hcp.id}&limit=-1`"
+              detail-route-name="patient-detail"
+              :empty-label="t('user.hcp.detail.relatedPatientsEmpty')"
+            />
+          </template>
+          <template #documents>
+            <EntityDocumentsPanel :endpoint="`/api/v1/practitioner/${hcp.id}/documents`" />
+          </template>
+          <template #history>
+            <EntityHistoryPanel :endpoint="`/api/v1/practitioner/${hcp.id}/history`" />
+          </template>
+        </DetailViewTabs>
       </template>
     </ItemDetailLayout>
 
@@ -190,11 +217,19 @@ import { usePermissions } from "../composables/usePermissions";
 import { apiFetch } from "../composables/useApi";
 import { useEntityCacheStore } from "../stores/entityCache";
 import { useNotifications } from "../composables/useNotifications";
+import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppAvatar from "../components/AppAvatar.vue";
+import DetailViewTabs from "../components/DetailViewTabs.vue";
+import EntityLink from "../components/EntityLink.vue";
+import EntityHistoryPanel from "../components/EntityHistoryPanel.vue";
+import RelatedEntityPanel from "../components/RelatedEntityPanel.vue";
+import EntityDocumentsPanel from "../components/EntityDocumentsPanel.vue";
+import PatientNotesPanel from "../components/patient/PatientNotesPanel.vue";
+import { useConfigStore } from "../stores/config";
 import { hcpFormFields, hcpFormDerive, resolveOrganizationIdForSubmit } from "../config/forms/hcpForm";
 import {
   entityActionIcon,
@@ -221,6 +256,9 @@ interface HCP {
   organization_id?: string | null;
   institution?: string;
   region?: string;
+  territory_id?: string | null;
+  territory_name?: string | null;
+  territory_path?: { id: string; name: string; code: string | null; kind: string }[] | null;
   influence_tier?: string;
   language?: string | null;
   national_ids?: Record<string, string> | null;
@@ -233,9 +271,41 @@ const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 const notifications = useNotifications();
+const { submit } = useEntitySubmit();
+const configStore = useConfigStore();
 const { canEditPractitioners, isAdmin } = usePermissions();
+
+const hcpTabs = [
+  { value: "details", labelKey: "user.hcp.detail.tabs.details" },
+  { value: "notes", labelKey: "user.hcp.detail.tabs.notes" },
+  { value: "relatedPatients", labelKey: "user.hcp.detail.tabs.relatedPatients" },
+  { value: "documents", labelKey: "user.hcp.detail.tabs.documents" },
+  { value: "history", labelKey: "user.hcp.detail.tabs.history" },
+];
+const activeTab = ref((route.query.tab as string) || "details");
+watch(activeTab, (tab) => {
+  router.replace({ query: { ...route.query, tab } });
+});
+
+function specialtyLabel(code?: string): string {
+  if (!code) return "—";
+  return configStore.specialtyItems.find((o) => o.value === code)?.title ?? code;
+}
+
+/** Same territory_path-with-region-fallback pattern as PatientDetailView's regionBreadcrumb. */
+const territoryLabel = computed(() => {
+  const path = hcp.value?.territory_path;
+  if (path && path.length > 0) {
+    return path.map((node) => (node.code || node.name).toLowerCase()).join("/");
+  }
+  return hcp.value?.territory_name || hcp.value?.region || "—";
+});
 const canActivate = computed(
   () => authStore.user?.role === "admin" || authStore.user?.role === "manager",
+);
+/** Same button/action either way (ActivatePractitionerCommand IS the resend — see docs/stories/practitioner-invite-resend.md); only the label changes once an invite has already gone out once. */
+const activateLabelKey = computed(() =>
+  hcp.value?.status === "invited" ? "user.hcp.detail.resendInvite" : "user.hcp.detail.activate",
 );
 
 const hcpCache = useEntityCacheStore("hcp");
@@ -275,10 +345,12 @@ const hcpFormInitialData = computed(() =>
           hcp.value.primary_specialty ?? hcp.value.specialty ?? "",
         organization_id: hcp.value.organization_id ?? "",
         region: hcp.value.region ?? "",
+        territory_id: hcp.value.territory_id ?? "",
         influence_tier: hcp.value.influence_tier ?? "A",
         language: hcp.value.language ?? "",
         national_ids: hcp.value.national_ids ?? null,
         social_links: hcp.value.social_links ?? null,
+        status: hcp.value.status ?? "pending_approval",
       }
     : undefined,
 );
@@ -301,34 +373,31 @@ async function onEventFormSubmit(
   payload: import("../components/EventForm.vue").EventSubmitPayload,
   done: (ok: boolean) => void,
 ) {
-  try {
-    const res = await apiFetch("/api/v1/encounter", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: payload.title,
-        start_at: payload.start_at,
-        end_at: payload.end_at,
-        type: payload.type,
-        status: payload.status,
-        location: payload.location,
-        video_link: payload.video_link,
-        notes: payload.notes,
-        region: payload.region,
-        attendees: payload.attendees,
-      }),
-    });
-    if (res.ok) {
-      notifications.show(t("user.planner.form.success"), "success");
-      done(true);
-    } else {
-      notifications.show(t("user.planner.form.errorSave"), "error");
-      done(false);
-    }
-  } catch {
-    notifications.show(t("user.planner.form.errorSave"), "error");
-    done(false);
-  }
+  await submit(
+    {
+      request: () =>
+        apiFetch("/api/v1/encounter", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: payload.title,
+            start_at: payload.start_at,
+            end_at: payload.end_at,
+            type: payload.type,
+            status: payload.status,
+            location: payload.location,
+            video_link: payload.video_link,
+            notes: payload.notes,
+            region: payload.region,
+            attendees: payload.attendees,
+          }),
+        }),
+      successMessage: t("user.planner.form.success"),
+      errorMessage: t("user.planner.form.errorSave"),
+      refresh: false,
+    },
+    done,
+  );
 }
 
 function onEdit() {
@@ -339,11 +408,15 @@ const { loading: activateLoading, run: onActivate } = useAsyncAction(
   async () => {
     const id = hcp.value?.id;
     if (!id) return;
+    const isResend = hcp.value?.status === "invited";
     const res = await apiFetch(`/api/v1/practitioner/${id}/activate`, {
       method: "POST",
     });
     if (res.ok) {
-      notifications.show(t("user.hcp.detail.activateSuccess"), "success");
+      notifications.show(
+        t(isResend ? "user.hcp.detail.resendInviteSuccess" : "user.hcp.detail.activateSuccess"),
+        "success",
+      );
       await loadHCP();
       window.dispatchEvent(new Event("entity-list-refresh"));
     }
@@ -359,28 +432,23 @@ async function onContactSubmit(
     done(false);
     return;
   }
-  try {
-    const organizationId = await resolveOrganizationIdForSubmit(data);
-    if (organizationId === undefined) {
-      done(false);
-      return;
-    }
-    const res = await apiFetch(`/api/v1/practitioner/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...data, organization_id: organizationId, new_organization: undefined }),
-    });
-    if (res.ok) {
-      notifications.show(t("user.hcp.form.editSuccess"), "success");
-      await loadHCP();
-      window.dispatchEvent(new Event("entity-list-refresh"));
-      done(true);
-    } else {
-      done(false);
-    }
-  } catch {
-    done(false);
-  }
+  await submit(
+    {
+      request: async () => {
+        const organizationId = await resolveOrganizationIdForSubmit(data);
+        if (organizationId === undefined) return { ok: false };
+        return apiFetch(`/api/v1/practitioner/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...data, organization_id: organizationId, new_organization: undefined }),
+        });
+      },
+      successMessage: t("user.hcp.form.editSuccess"),
+      errorMessage: t("user.hcp.form.errorSave"),
+      onSuccess: () => loadHCP(),
+    },
+    done,
+  );
 }
 
 const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
@@ -452,5 +520,16 @@ watch(() => route.params.id, loadHCP);
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.hcp-detail__status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: rgba(var(--v-theme-warning), 0.12);
+  color: rgb(var(--v-theme-warning));
 }
 </style>

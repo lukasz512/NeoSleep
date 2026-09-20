@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<!--
+  Plantilla de generación — Consentimiento Informado DAM (NeoSleep)
+  =================================================================
+  IMPORTANT — do not write literal double-curly-brace token syntax inside
+  this comment (spell it out in prose instead, as done below). This
+  template is filled by dependency-free string replacement (see
+  documentRender.ts's fillStaticTokens) — a token mention that only exists
+  here for documentation purposes gets replaced exactly like a real one,
+  which previously broke this file: a brand-logo token written literally in
+  this comment got replaced with the actual inlined SVG markup, whose own
+  internal exporter comment then prematurely closed THIS outer comment,
+  turning everything after it into live, rendered HTML.
+
+  Two separate substitution passes fill this template, in order:
+
+  1. @neo/documents' renderDocumentHtml(templateName, locale, contentHtml) —
+     BEFORE this HTML ever reaches a browser. Plain string replacement
+     (safe: every value here is our own authored, trusted content, never
+     user input):
+       the brand-primary, brand-secondary, brand-logo, and brand-contactLine
+       tokens — brand tokens, same for every render.
+       the documents.informedConsent.* tokens — title/subtitle/field labels/
+         manufacturer-checkbox labels, sourced from
+         packages/i18n/{en,pl,mx}.json via documentT() — structural copy,
+         not the consent body itself.
+       the content slot (.doc-content div below) — the consent body
+         prose, sourced from platform.document_content_version at render
+         time and admin-editable via the Documents tab (see
+         docs/stories/document-content-editor.md). Sanitized HTML only
+         (p/br/strong/em/u/ul/ol/li, no attributes — see
+         apps/api/src/commands/documentContent.ts). May contain a literal
+         {legalEntityName}-style token, filled by fillContentParams.
+         NOTE: the manufacturer-choices checkbox block below is
+         deliberately NOT part of this content — it's structure (real
+         <input> elements), not prose — and sits directly after the content
+         block rather than mid-paragraph as in the original static layout,
+         so the whole consent body can be one contiguous edit surface.
+
+  2. apps/api's services/documentRenderer.ts — INSIDE the real Chrome DOM,
+     via page.evaluate(), once this already-localized HTML is loaded. Fills
+     the per-instance dynamic fields marked with a data-field attribute:
+       data-field nombre_paciente   — patient's name
+       data-field nombre_medico     — treating doctor's name
+       data-field lugar             — place, entered by staff at
+                                       generation time
+       data-field fecha             — date
+     via element.textContent (auto-escaping — safer than a string
+     substitution here, since these values come from real patient/doctor
+     records, not our own authored copy). This pass also toggles the
+     manufacturer checkboxes' checked state the same way.
+
+  Firma: the signature-box element further down (data-field firma_paciente)
+  is left empty on purpose — v1 is PDF-generation only, no e-signature yet
+  (a canvas/image signature is future work). When that lands, insert the
+  resulting image into that box (or draw directly on a canvas with the same
+  id) via the same DOM-manipulation pass described above.
+
+  Paginación / pie de página repetido en cada hoja:
+  This HTML does NOT repeat the footer on every page via CSS (not reliable
+  across browsers/PDF renderers). apps/api must pass
+  @neo/documents' renderDocumentFooterHtml("NSL-CI-DAM v1", locale) as
+  Puppeteer's page.pdf({ displayHeaderFooter: true, footerTemplate, ... })
+  option — see documentRenderer.ts's RenderHtmlToPdfOptions.footerTemplate.
+
+  The .screen-only.contact-footer block below is only for on-screen/editing
+  preview (hidden under @media print via the "screen-only" class) — it
+  mirrors the real Puppeteer footer's content via the brand-contactLine
+  token so the two never drift out of sync.
+-->
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>{{documents.informedConsent.title}} — DAM (NeoSleep)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: {{brand:primary}};
+    --secondary: {{brand:secondary}};
+    --text: #1a1a1a;
+    /* Poppins: geométrica y redonda (la "O" es un círculo, como en el logo).
+       Si algún día no carga la fuente web, cae de vuelta al stack del sistema. */
+    --font: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  @page { size: A4; margin: 18mm 14mm 14mm; }
+
+  body {
+    font-family: var(--font);
+    font-weight: 300;
+    color: var(--text);
+    font-size: 9.5pt;
+    line-height: 1.42;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 28px 24px 20px;
+    background: #fff;
+  }
+
+  header.doc-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 0.5px solid rgba(71, 71, 71, 0.35);
+    padding-bottom: 6px;
+    margin-bottom: 16px;
+  }
+  header.doc-header .logo { height: 24px; width: auto; display: block; }
+  header.doc-header .logo svg { height: 24px; width: auto; display: block; }
+  header.doc-header .doc-label { font-size: 8pt; font-weight: 400; color: var(--secondary); }
+
+  h1 {
+    color: var(--primary);
+    font-size: 14pt;
+    font-weight: 500;
+    margin: 0 0 2px;
+    line-height: 1.3;
+  }
+
+  h2 {
+    color: var(--secondary);
+    font-size: 11pt;
+    font-weight: 400;
+    margin: 0 0 14px;
+    line-height: 1.3;
+  }
+
+  p { margin: 0 0 7px; text-align: justify; text-justify: inter-word; }
+  /* sanitize-html strips every attribute from admin-edited content (see
+     apps/api/src/commands/documentContent.ts's SANITIZE_OPTIONS) — these
+     selectors target structurally within .doc-content instead of a class
+     that would never survive a save, so styling holds regardless of what
+     the admin edits/reorders. */
+  .doc-content > p:first-child { font-style: italic; }
+
+  .contact-line {
+    font-size: 8pt;
+    color: var(--secondary);
+    margin: 0 0 14px;
+  }
+
+  .doc-content ul {
+    margin: 0 0 10px;
+    padding-left: 1.1em;
+    list-style: none;
+  }
+  .doc-content li { position: relative; margin-bottom: 4px; }
+  .doc-content li::before {
+    content: "•";
+    color: var(--primary);
+    font-size: 7pt;
+    position: absolute;
+    left: -1.1em;
+    top: 0.15em;
+  }
+
+  .doc-content strong { color: var(--primary); font-weight: 600; }
+
+  .manufacturer-choices { margin: 6px 0 14px 8px; }
+  .manufacturer-choices label { margin-right: 20px; white-space: nowrap; }
+  .manufacturer-choices input[type="checkbox"] { accent-color: var(--primary); margin-right: 4px; }
+  .manufacturer-choices input[type="text"] {
+    border: none; border-bottom: 1px solid var(--secondary);
+    font-family: var(--font); font-size: 10.5pt; width: 180px;
+  }
+
+  .field-row { margin: 0 0 6px; }
+  .field-row .field-label { font-weight: 600; color: var(--secondary); }
+  .field-row .field-value { color: var(--text); }
+
+  .sig-label { font-weight: 600; color: var(--secondary); margin: 18px 0 6px; }
+  .signature-box {
+    border: 1px solid var(--secondary);
+    height: 90px;
+    width: 260px;
+    padding: 8px;
+  }
+
+  .screen-only.contact-footer {
+    font-size: 8pt;
+    color: var(--secondary);
+    border-top: 1px solid #ccc;
+    padding-top: 8px;
+    margin-top: 24px;
+  }
+  .screen-only.contact-footer .doc-ref {
+    text-align: right;
+    margin-top: 2px;
+  }
+
+  @media print {
+    body { padding: 0; max-width: none; }
+    .screen-only { display: none; }
+  }
+</style>
+</head>
+<body>
+
+  <header class="doc-header">
+    <span class="logo">{{brand:logo}}</span>
+    <span class="doc-label">{{documents.informedConsent.title}}</span>
+  </header>
+
+  <h1>{{documents.informedConsent.title}}</h1>
+  <h2>{{documents.informedConsent.subtitle}}</h2>
+
+  <div class="doc-content">{{content}}</div>
+
+  <div class="manufacturer-choices">
+    <label><input type="checkbox" name="fabricante" value="OrthoApnea" checked /> {{documents.informedConsent.manufacturerOrthoApnea}}</label>
+    <label><input type="checkbox" name="fabricante" value="Biologix" checked /> {{documents.informedConsent.manufacturerBiologix}}</label>
+    <label>
+      <input type="checkbox" name="fabricante" value="otro" />
+      {{documents.informedConsent.manufacturerOther}} <input type="text" name="fabricante_otro" />
+    </label>
+  </div>
+
+  <div class="field-row">
+    <span class="field-label">{{documents.informedConsent.fieldPatientName}} </span
+    ><span class="field-value" data-field="nombre_paciente"></span>
+  </div>
+  <div class="field-row">
+    <span class="field-label">{{documents.informedConsent.fieldPractitioner}} </span
+    ><span class="field-value" data-field="nombre_medico"></span>
+  </div>
+  <div class="field-row">
+    <span class="field-label">{{documents.informedConsent.fieldPlace}} </span
+    ><span class="field-value" data-field="lugar"></span>
+    <span class="field-label" style="margin-left:24px;">{{documents.informedConsent.fieldDate}} </span
+    ><span class="field-value" data-field="fecha"></span>
+  </div>
+
+  <div class="sig-label">{{documents.informedConsent.signatureLabel}}</div>
+  <div id="firma-paciente" class="signature-box" data-field="firma_paciente"></div>
+
+  <div class="contact-footer screen-only">
+    <div>{{brand:contactLine}}</div>
+    <div class="doc-ref">NSL-CI-DAM v1</div>
+  </div>
+
+</body>
+</html>

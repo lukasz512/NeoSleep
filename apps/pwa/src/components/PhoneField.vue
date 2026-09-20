@@ -9,6 +9,7 @@
       :return-object="false"
       :variant="variant"
       :density="density"
+      :disabled="disabled"
       hide-details
       hide-no-data
       menu-icon=""
@@ -38,6 +39,7 @@
       :rules="rules"
       :variant="variant"
       :density="density"
+      :disabled="disabled"
       @update:model-value="onLocalInput"
     />
   </div>
@@ -82,6 +84,7 @@ const props = withDefaults(
      * shipping address), the area code should default to THEIR country, not
      * whoever is filling in the form. */
     defaultCountryCode?: string | null;
+    disabled?: boolean;
   }>(),
   { modelValue: "" },
 );

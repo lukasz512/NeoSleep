@@ -52,7 +52,63 @@ Not yet scoped/estimated: this touches `apps/web` (separate FTP/GoDaddy deploy, 
 ### Architecture flag for /arch
 The existing PDF pipeline (`apps/api/src/services/partnerDocuments.ts`) draws PDFs programmatically with `pdf-lib`. The newly-provided template is an HTML document meant to be rendered via headless-Chrome `page.pdf()` (Puppeteer/Playwright), which is a different rendering approach entirely (HTML/CSS template → PDF, vs. programmatic drawing). Reconciling these — replace `pdf-lib` with an HTML-rendering pipeline reused across all three documents, or keep `pdf-lib` and port the template's content/design into it — is a cross-cutting architecture decision (new dependency, rendering pipeline, template storage location) and needs `/arch` before implementation.
 
+**RESOLVED (2026-09-16)**: decision made to replace `pdf-lib` with `puppeteer-core` + `@sparticuz/chromium` (matched Chromium 143 build, no postinstall-download step — avoids pnpm 9's default build-script block), behind a single seam `apps/api/src/services/documentRenderer.ts`. The Render free-tier memory risk this raised was spiked directly against the live `neosleep-bff` dev deploy before committing to the approach: cold start (first render, browser launch) ~19s / RSS 143→201MB; warm renders ~1-3s with RSS flat at ~202MB across 5 sequential calls and a burst of 4 concurrent ones (the seam's built-in max-2-concurrent-renders queue engaged correctly under the burst, visibly slowing the 3rd/4th call rather than spiking memory). No growth, no crashes — confirmed workable on the current free-tier single-process service. The temporary verification route (`internal-pdf-spike.ts` — "spike" used deliberately as the standard XP/Scrum term for this kind of throwaway technical-risk check) has been deleted now that it's answered; `documentRenderer.ts` is the permanent piece going forward.
+
+### Decision (2026-09-16): doctor contact info on generated documents comes from HCP, not manual entry
+Łukasz confirmed: wherever a document shows the treating doctor's name/phone/email (e.g. the patient informed-consent's "Especialista / médico tratante" field), that contact info must be sourced from the practitioner (HCP) record already in the CRM, not typed in ad hoc at generation time. A future (explicitly deferred, TODO) enhancement lets the user override with a different email/phone at generation time — not needed for v1. Relevant when building `GenerateInformedConsentDocumentCommand` (patient doc) and the practitioner-side document generation — pull `phone`/`email` from the practitioner/identity record alongside the name already planned.
+
 ### Hand-off
 → `/legal` — for the compliance-sensitive document content questions above (especially governing law/jurisdiction and liability/counsel-review status)
 → `/arch assess` — for the Documents-tab route + switching the data source from self-entered metadata to existing organization/practitioner records (cross-cutting DB read change)
 → `/dev` — for implementation once document content and architecture are settled
+
+---
+
+## Addendum (2026-09-16): review/edit UX for pre-filled clinic data, phone verification, post-sign email delivery, scroll bug still open
+
+**Raw input (Łukasz, translated from Polish)**: The registration form should show only 2 password fields, then a phone number to confirm, then the clinic and its details for review (email, phone, address, Tax ID, clinic name — open to more if relevant) — this is for the doctor signing the agreement to check and correct anything wrong. Unsure whether these should be plain inputs or read-only fields with an edit-via-modal action, to avoid an accidental change slipping through while still allowing an intentional one — asked for a recommendation, not dictating the modal. Separately: the invite email should mention documents need an e-signature and recommend a phone or, better, a tablet with a stylus. After signing, the generated PDF should also be emailed to the practitioner and cc'd to alfred.jan@neosleepcare.com. The form still can't be scrolled, which blocks reaching the signature pad entirely. Asked whether document generation is genuinely not implemented yet or just queued elsewhere.
+
+**Grounded current-state findings** (code investigation, 2026-09-16 — supersedes assumption):
+1. **Scroll bug — still open.** `PublicLayout.vue`'s outer shell and `.partner-registration`'s own scroll container are both already set up correctly (the latter has a comment explaining it was added deliberately for this form). The likely actual culprit is `packages/ui/src/components/AuthCard.vue` (`.auth-card__viewport { overflow: hidden }`, height driven by a `ResizeObserver` measuring the mounted step) — a mismatch between observed and actual rendered height would clip content before the outer container ever sees real overflow to scroll to. Needs on-device confirmation before fixing blind, per this story's own existing acceptance criterion.
+2. **Document generation is implemented, not a stub** — `partnerDocuments.ts` builds real pdf-lib PDFs and uploads them to Supabase Storage, retrievable via signed URL. What's *not* done: (a) it doesn't use the puppeteer/HTML-template pipeline decided on below/earlier this same day (spiked in isolation via `documentRenderer.ts`, not wired into this flow yet); (b) content isn't jurisdiction-aware — uses generic `documents.gdprConsent.*` even though localized `gdprConsentPl`/`gdprConsentMx` keys already exist unused in en.json; (c) the signature-block labels ("Podpisano przez:", "Data:") are hardcoded Polish regardless of the signer's locale. So "not well generated" is fair on localization/pipeline grounds, not on "doesn't work."
+3. **No email is sent anywhere in this flow today.** `AcceptPractitionerInviteCommand` doesn't call the mailer after signing. Both the "send signed PDF to practitioner + cc alfred.jan@neosleepcare.com" ask and the e-signature-device email note are net-new, not extensions of an existing recipient list.
+4. **Current form still matches the screenshot** — clinicName/taxId/billingAddress are still free inputs; the original story's resolution (strip to password+confirm+signature, pull clinic data from existing HCO/HCP records) hasn't been implemented yet. Today's request refines rather than reverses that decision: show the pulled-from-existing-records data for review (read-only by default) with a deliberate, hard-to-misfire edit path — this *is* that not-yet-built piece, now with the review/edit-safety detail added.
+
+### Stakeholder Notes — new slices only
+
+**A. Clinic-detail review/edit UX + phone verification**
+- 👤 User: the doctor is reviewing data a rep entered on their behalf before signing a binding document, often on a phone, in their first real interaction with the platform — needs confidence the data's right and confidence they can't fat-finger a change mid-flow.
+- 🏢 Client: fewer disputes over "the signed agreement had the wrong clinic name/tax ID"; a corrected-but-tracked field matters for the tenant's own compliance story.
+- 🩺 Patient: no downstream effect — onboarding paperwork, not treatment.
+- 🚀 Platform: read-only-with-guarded-edit is a reusable pattern for any future pre-filled-data review step (HCP portal, other tenants) — worth a shared component, not one-off.
+- ⚖️ Compliance: any edit made here, before a legal signature, should be audit-logged (who changed what field, old/new value) — same standard as other consent-adjacent flows in this codebase.
+
+**B. Post-signing document email delivery**
+- 👤 User: doctor gets a copy for their own records without asking support.
+- 🏢 Client: flag — `alfred.jan@neosleepcare.com` is a NeoSleep-internal address, not tenant-specific. Hardcoding it in shared/white-label code would leak NeoSleep's own operational email into what CLAUDE.md rule 2 (Views vs Data separation) says should be config-driven, once a second tenant exists. Fine as an interim env var for the current single-tenant MVP — same precedent as the linear-worker's interim `DATABASE_URL` storage — flagged as temporary, not the final shape.
+- 🩺 Patient: none.
+- 🚀 Platform: needs to become tenant-configurable (`app_config`) before a second tenant partner-onboards — defer that build until it's actually needed.
+- ⚖️ Compliance: emailing a signed PDF with tax-ID + personal data via a plain attachment (Resend) — sanity-check retention/DPA coverage; flag to `/legal`, but don't block MVP on it since Resend is already the approved provider for other personal-data-bearing email (password reset, lead offers).
+
+### Acceptance Criteria (additive to the existing ones above)
+- [ ] Phone number is one of the pre-filled, reviewable clinic-detail fields (no retype-confirm, no OTP — a single field is sufficient per Łukasz's 2026-09-16 answer).
+- [ ] Clinic details (name, email, phone, address, Tax ID) are pre-filled from the existing organization/practitioner record — not re-typed — shown read-only by default.
+- [ ] A single "Edit details" button opens one modal containing the full clinic-details group; the edit only commits on explicit confirm inside the modal, never live-as-you-type on the read-only view.
+- [ ] Any pre-sign edit to clinic details is written to `audit_log` with old/new value + `identity_id`.
+- [ ] Invite email copy gains an i18n-driven note recommending a phone, or preferably a tablet with a stylus, for the signature step (en.json first, then pl/mx).
+- [ ] On successful signing, the signed PDF(s) are emailed to the practitioner's registered email via `mailer.ts`/`@neo/email`, cc'ing a configurable compliance address (interim: env var, defaulting to alfred.jan@neosleepcare.com).
+- [ ] Email delivery failure doesn't roll back or block the signing transaction; failure is logged.
+- [ ] Scroll bug fixed against a confirmed on-device repro (root cause likely `AuthCard.vue`'s ResizeObserver-driven viewport, per finding above) — not a guessed fix shipped blind.
+
+### Open Questions — RESOLVED (answers from Łukasz, 2026-09-16)
+- [x] Phone "confirmation": a single phone-number field is enough for now — no retype-confirm, no OTP/SMS. Just capture it as one of the reviewable clinic-detail fields.
+- [x] Review/edit interaction pattern: single "Edit details" button opens one modal containing the whole clinic-details group (name/email/phone/address/Tax ID); fields stay read-only outside the modal, save only commits on explicit confirm inside it.
+- [x] PDF pipeline for this slice: ship on the current pdf-lib pipeline now (mail delivery + cc unblocked immediately); jurisdiction-aware content and the puppeteer/HTML pipeline swap stay a separate follow-up, not a blocker here.
+- [ ] Any clinic fields worth showing beyond name/email/phone/address/Tax ID? Left open by Łukasz.
+- [ ] Confirm `alfred.jan@neosleepcare.com` as an interim env var (not per-tenant config yet) — assumed yes given single-tenant MVP state elsewhere in this project.
+
+### Hand-off
+→ `/ux` — review/edit interaction pattern, phone-verification UX
+→ `/legal` — signed-PDF-by-email data retention sanity check
+→ `/arch assess` — audit log on pre-sign edits; jurisdiction-aware PDF content reusing existing unused i18n keys; whether to adopt the puppeteer pipeline now or ship this slice on pdf-lib first
+→ `/dev feat` — scroll-bug repro+fix, form UX, email delivery, once the above are settled

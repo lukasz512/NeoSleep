@@ -131,14 +131,8 @@
       </template>
 
       <template v-if="user" #sections>
-        <VTabs v-model="activeTab" density="compact" class="user-detail__tabs">
-          <VTab value="details">{{ t("user.users.detail.tabs.details") }}</VTab>
-          <VTab value="documents">{{
-            t("user.users.detail.tabs.documents")
-          }}</VTab>
-        </VTabs>
-        <VWindow v-model="activeTab">
-          <VWindowItem value="details">
+        <DetailViewTabs v-model="activeTab" :tabs="userTabs">
+          <template #details>
             <div class="view-item__row">
               <dt class="view-item__label">
                 {{ t("user.users.detail.email") }}
@@ -177,6 +171,12 @@
             </div>
             <div class="view-item__row">
               <dt class="view-item__label">
+                {{ t("user.users.detail.territory") }}
+              </dt>
+              <dd class="view-item__value">{{ user.territory_name || "—" }}</dd>
+            </div>
+            <div class="view-item__row">
+              <dt class="view-item__label">
                 {{ t("user.users.detail.phone") }}
               </dt>
               <dd class="view-item__value">
@@ -189,8 +189,8 @@
                 <span v-else class="view-item__empty">—</span>
               </dd>
             </div>
-          </VWindowItem>
-          <VWindowItem value="documents">
+          </template>
+          <template #documents>
             <AppLoadingState v-if="documentsLoading" />
             <p
               v-else-if="documents.length === 0"
@@ -220,8 +220,8 @@
                 </AppButton>
               </li>
             </ul>
-          </VWindowItem>
-        </VWindow>
+          </template>
+        </DetailViewTabs>
       </template>
     </ItemDetailLayout>
 
@@ -260,8 +260,10 @@ import { useI18n } from "vue-i18n";
 import { apiFetch } from "../composables/useApi";
 import { useEntityCacheStore } from "../stores/entityCache";
 import { useNotifications } from "../composables/useNotifications";
+import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
+import DetailViewTabs from "../components/DetailViewTabs.vue";
 import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppAvatar from "../components/AppAvatar.vue";
@@ -286,6 +288,8 @@ interface UserDetail {
   role: string;
   status: string;
   region: string | null;
+  territory_id: string | null;
+  territory_name: string | null;
   phone?: string | null;
 }
 
@@ -293,6 +297,7 @@ const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const notifications = useNotifications();
+const { submit } = useEntitySubmit();
 const authStore = useAuthStore();
 const isAdmin = computed(() => authStore.user?.role === "admin");
 
@@ -313,7 +318,15 @@ const isOffline = ref(false);
 const loadFailed = ref(false);
 const showEditModal = ref(false);
 const showDeleteConfirm = ref(false);
-const activeTab = ref<"details" | "documents">("details");
+const userTabs = [
+  { value: "details", labelKey: "user.users.detail.tabs.details" },
+  { value: "documents", labelKey: "user.users.detail.tabs.documents" },
+];
+/** Deep-linkable via ?tab= — same pattern as Patient/HCP/HCO detail views. */
+const activeTab = ref((route.query.tab as string) || "details");
+watch(activeTab, (tab) => {
+  router.replace({ query: { ...route.query, tab } });
+});
 const documents = ref<UserDocument[]>([]);
 const documentsLoading = ref(false);
 
@@ -333,23 +346,20 @@ async function onSubmit(
     done(false);
     return;
   }
-  try {
-    const res = await apiFetch(`/api/v1/users/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (res.ok) {
-      notifications.show(t("user.users.form.editSuccess"), "success");
-      await loadUser();
-      window.dispatchEvent(new Event("entity-list-refresh"));
-      done(true);
-    } else {
-      done(false);
-    }
-  } catch {
-    done(false);
-  }
+  await submit(
+    {
+      request: () =>
+        apiFetch(`/api/v1/users/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }),
+      successMessage: t("user.users.form.editSuccess"),
+      errorMessage: t("user.users.form.errorSave"),
+      onSuccess: () => loadUser(),
+    },
+    done,
+  );
 }
 
 const { loading: resetPasswordLoading, run: onResetPassword } = useAsyncAction(
@@ -502,10 +512,6 @@ watch(
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.user-detail__tabs {
-  margin-bottom: 16px;
 }
 
 .user-detail__documents-empty {

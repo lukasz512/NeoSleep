@@ -20,8 +20,15 @@ export interface User {
   // more than one {role, scope} pair (see getUserRoleScopes); most of the app
   // only needs the primary one, mirroring how session/UI treat role today.
   role: StaffRole;
-  /** 'global' or a country_code (e.g. 'PL') — the RBAC access scope of `role` above. */
-  scope: string;
+  /** RBAC access scope of `role` above — a territory node (migration 022):
+   *  either a country, or the reserved 'global' root meaning "every country
+   *  in the tenant". Null only for a user with zero user_roles rows (a stale
+   *  pre-migration session kept alive server-side) — every real staff user
+   *  always has >=1; treat null as fail-secure (matches all previous scope
+   *  logic's own documented behavior), never as "unrestricted". */
+  scope_territory_id: string | null;
+  scope_territory_name: string | null;
+  scope_territory_kind: string | null;
   // From users table
   google_sub: string | null;
   region: string | null;
@@ -48,14 +55,15 @@ const USER_JOIN = `
   FROM users u
   JOIN identities i ON u.identity_id = i.id
   LEFT JOIN LATERAL (
-    SELECT role, scope FROM user_roles WHERE user_id = u.id ORDER BY created_at ASC LIMIT 1
-  ) ur ON true`.trim();
+    SELECT role, territory_id FROM user_roles WHERE user_id = u.id ORDER BY created_at ASC LIMIT 1
+  ) ur ON true
+  LEFT JOIN territory st ON ur.territory_id = st.id`.trim();
 
 const USER_COLS = `
   u.id, u.identity_id, i.email, i.title AS salutation, i.first_name, i.last_name, i.phone,
   TRIM(COALESCE(i.first_name, '') || ' ' || COALESCE(i.last_name, '')) AS name,
   COALESCE(ur.role, 'rep') AS role,
-  COALESCE(ur.scope, 'global') AS scope,
+  ur.territory_id AS scope_territory_id, st.name AS scope_territory_name, st.kind AS scope_territory_kind,
   u.google_sub, i.region, i.country_code, i.language, i.territory_id, u.status, u.token_version,
   u.created_at, u.updated_at`.trim();
 
@@ -99,7 +107,9 @@ export async function getOrCreateUserByProvider(
     const userId = userResult.rows[0]!.id;
 
     await client.query(
-      `INSERT INTO user_roles (user_id, role, scope) VALUES ($1, 'rep', 'global') ON CONFLICT (user_id, role, scope) DO NOTHING`,
+      `INSERT INTO user_roles (user_id, role, territory_id)
+       VALUES ($1, 'rep', (SELECT id FROM territory WHERE kind = 'global' LIMIT 1))
+       ON CONFLICT (user_id, role, territory_id) DO NOTHING`,
       [userId]
     );
 
@@ -185,7 +195,7 @@ export async function insertStaffUser(
   forcePasswordChange: boolean,
   salutation?: string | null,
   phone?: string | null,
-  scope = "global",
+  scopeTerritoryId?: string | null,
   grantedBy?: string | null,
   countryCode?: string | null
 ): Promise<User | null> {
@@ -229,8 +239,9 @@ export async function insertStaffUser(
     // constraint to target.
     await client.query(`DELETE FROM user_roles WHERE user_id = $1`, [userId]);
     await client.query(
-      `INSERT INTO user_roles (user_id, role, scope, granted_by) VALUES ($1, $2, $3, $4)`,
-      [userId, role, scope, grantedBy ?? null]
+      `INSERT INTO user_roles (user_id, role, territory_id, granted_by)
+       VALUES ($1, $2, COALESCE($3, (SELECT id FROM territory WHERE kind = 'global' LIMIT 1)), $4)`,
+      [userId, role, scopeTerritoryId ?? null, grantedBy ?? null]
     );
 
     const r = await client.query<User>(
@@ -246,18 +257,19 @@ export async function insertStaffUser(
 
 export interface UserRoleScope {
   role: StaffRole;
-  scope: string;
+  territory_id: string;
 }
 
 /**
- * Full {role, scope} set for a user (unlike User.role/scope on USER_COLS,
- * which only surface the earliest-granted pair). Used at login/session-
- * refresh time to build the RBAC scope set requireScope() checks against.
+ * Full {role, scope} set for a user (unlike User.role/scope_territory_id on
+ * USER_COLS, which only surface the earliest-granted pair). Used at login/
+ * session-refresh time to build the RBAC scope set requireScope() checks
+ * against.
  */
 export async function getUserRoleScopes(client: PoolClient, userId: string): Promise<UserRoleScope[]> {
   try {
     const r = await client.query<UserRoleScope>(
-      `SELECT role, scope FROM user_roles WHERE user_id = $1 ORDER BY created_at ASC`,
+      `SELECT role, territory_id FROM user_roles WHERE user_id = $1 ORDER BY created_at ASC`,
       [userId]
     );
     return r.rows;
@@ -325,8 +337,11 @@ export interface GetUsersFilters {
   search?: string;
   role?: string | string[];
   status?: string | string[];
-  /** RBAC scope filter: null = unrestricted, [] = matches nothing, otherwise restrict to these country_codes. */
-  countryCodes?: string[] | null;
+  /** RBAC scope filter (ltree paths, migration 022): undefined/null =
+   *  unrestricted, [] = matches nothing, otherwise restrict to users whose
+   *  own identities.country_code resolves to a territory inside one of
+   *  these paths. */
+  scopePaths?: string[] | null;
 }
 
 const USER_SORT_COLUMNS = ["first_name", "last_name", "email", "status", "created_at"] as const;
@@ -359,9 +374,11 @@ export async function getUsersPaginated(
     params.push(roleArr);
     paramIndex++;
   }
-  if (filters.countryCodes !== undefined && filters.countryCodes !== null) {
-    conditions.push(`i.country_code = ANY($${paramIndex}::text[])`);
-    params.push(filters.countryCodes);
+  if (filters.scopePaths !== undefined && filters.scopePaths !== null) {
+    conditions.push(
+      `i.country_code IN (SELECT country_code FROM territory WHERE kind = 'country' AND path <@ ANY($${paramIndex}::extensions.ltree[]))`
+    );
+    params.push(filters.scopePaths);
     paramIndex++;
   }
   const statusArr = toArray(filters.status);
@@ -405,8 +422,9 @@ export interface UpdateUserInput {
   status?: "active" | "inactive" | "suspended";
   country_code?: string | null;
   role?: StaffRole;
-  /** 'global' or a country_code — RBAC access scope for `role`. Defaults to the existing scope, or 'global' for a brand-new role. */
-  scope?: string;
+  /** RBAC access scope for `role` — a territory id (country or global root).
+   *  Defaults to the existing scope, or the global root for a brand-new role. */
+  territory_id?: string;
 }
 
 export async function updateUser(
@@ -450,16 +468,17 @@ export async function updateUser(
     if (input.country_code !== undefined) {
       await client.query(`UPDATE identities SET country_code = $1, updated_at = now() WHERE id = $2`, [input.country_code, existing.identity_id]);
     }
-    if (input.role !== undefined || input.scope !== undefined) {
+    if (input.role !== undefined || input.territory_id !== undefined) {
       // Single {role, scope} pair per user for now (no multi-role assignment
       // UI yet) — replace rather than upsert so a role change doesn't leave
       // a stale row behind under the old role.
       const role = input.role ?? existing.role;
-      const scope = input.scope ?? existing.scope;
+      const territoryId = input.territory_id ?? existing.scope_territory_id;
       await client.query(`DELETE FROM user_roles WHERE user_id = $1`, [id]);
       await client.query(
-        `INSERT INTO user_roles (user_id, role, scope, granted_by) VALUES ($1, $2, $3, $4)`,
-        [id, role, scope, grantedBy ?? null]
+        `INSERT INTO user_roles (user_id, role, territory_id, granted_by)
+         VALUES ($1, $2, COALESCE($3, (SELECT id FROM territory WHERE kind = 'global' LIMIT 1)), $4)`,
+        [id, role, territoryId, grantedBy ?? null]
       );
     }
   } catch (err) {

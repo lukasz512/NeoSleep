@@ -44,7 +44,7 @@
         <VForm ref="formRef" @submit.prevent="onSubmit">
           <template v-for="(row, ri) in rows" :key="ri">
             <div v-if="row.length > 1" class="pwa-form-row mb-3">
-              <div v-for="f in row" :key="f.key" class="pwa-form-row-item" :style="rowItemStyle(f)">
+              <div v-for="f in row" :key="f.key" class="pwa-form-row-item pwa-form-col" :style="rowItemStyle(f)">
                 <component
                   :is="componentFor(f.type)"
                   :ref="(el: unknown) => setFieldEl(f.key, el)"
@@ -176,7 +176,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { VTextField, VSelect, VAutocomplete, VCombobox, VTextarea } from "vuetify/components";
+import { VTextField, VSelect, VAutocomplete, VCombobox, VTextarea, VSwitch } from "vuetify/components";
 import { originDialogTransition } from "@ui";
 import { useFormRenderer } from "../composables/useFormRenderer";
 import { scrollToFormTop } from "../utils/scrollToFormTop";
@@ -299,13 +299,18 @@ const rows = computed(() => {
 });
 
 /**
- * flex-grow ratio, not a literal percentage — flex-basis 0% makes flexbox
- * split the row's free space by the cols ratio directly (6/6 → 50/50,
- * 2/10 → ~17/83), independent of the row's actual pixel width or gap.
+ * Sets --pwa-form-col rather than `flex` directly — theme.scss's
+ * .pwa-form-row-item reads it to build the flex-grow ratio (6/6 → 50/50,
+ * 2/10 → ~17/83, independent of the row's actual pixel width or gap) above
+ * its mobile breakpoint, and ignores it below that breakpoint to stack every
+ * paired field to full width instead. An inline `style.flex` would win over
+ * that media query regardless of specificity (inline always beats a
+ * stylesheet rule short of `!important`), so the ratio has to travel as a
+ * plain custom property instead.
  */
 function rowItemStyle(f: FormFieldDef): Record<string, string> {
   const cols = f.cols ?? 6;
-  return { flex: `${cols} 1 0%`, minWidth: cols <= 2 ? "72px" : "0" };
+  return { "--pwa-form-col": String(cols), minWidth: cols <= 2 ? "72px" : "0" };
 }
 
 const fieldEls: Record<string, unknown> = {};
@@ -397,6 +402,7 @@ function componentFor(type: FormFieldType) {
     case "textarea": return VTextarea;
     case "phone": return PhoneField;
     case "email": return EmailField;
+    case "boolean": return VSwitch;
     default: return VTextField;
   }
 }
@@ -412,7 +418,7 @@ function fieldAttrs(f: FormFieldDef): Record<string, unknown> {
     hint: f.hint ? t(f.hint) : undefined,
     persistentHint: !!f.hint,
     placeholder: f.placeholder ? t(f.placeholder) : undefined,
-    disabled: !!f.immutableOnEdit && isEditMode.value,
+    disabled: submitting.value || (!!f.immutableOnEdit && isEditMode.value),
     color: colorFor(f),
   };
 
@@ -463,6 +469,20 @@ function fieldAttrs(f: FormFieldDef): Record<string, unknown> {
       return { ...common, items: [], multiple: true, chips: true, closableChips: true };
     case "date":
       return { ...common, type: "date" };
+    case "boolean":
+      // Its own prop set, not spread from `common` — outlined-field props
+      // (variant/rules/placeholder) don't apply to a switch.
+      return {
+        modelValue: !!form.value[f.key],
+        "onUpdate:modelValue": (v: boolean) => {
+          form.value[f.key] = v ? (f.trueValue ?? true) : (f.falseValue ?? false);
+        },
+        label: labelFor(f),
+        color: "primary",
+        density: "comfortable",
+        hideDetails: true,
+        disabled: submitting.value || (!!f.immutableOnEdit && isEditMode.value),
+      };
     case "text":
     default:
       return { ...common, autocomplete: "off" };
@@ -506,10 +526,17 @@ async function onSubmit() {
   }
 }
 
+// Only the closed->open transition resets the form — deliberately NOT also
+// watching initialData while already open. Every caller sets its selected/
+// editing ref before flipping modelValue true, so initialData is already
+// correct by then; re-triggering on a later initialData change (e.g. a
+// detail view's post-save refetch, which runs after done() while the dialog
+// is still technically open for one tick) used to blank the form and flash
+// every required field red, since resetForm() re-seeds `form` from nothing.
 watch(
-  () => [props.modelValue, props.initialData] as const,
-  ([open]) => {
-    if (open) {
+  () => props.modelValue,
+  (open, wasOpen) => {
+    if (open && !wasOpen) {
       resetForm();
       loadAllAsyncOptions();
     }

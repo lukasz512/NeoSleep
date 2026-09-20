@@ -6,6 +6,7 @@
         variant="flat"
         size="large"
         :to="backRoute"
+        ignore-global-loading
         class="view-item__back-btn view-item__back-btn--no-border"
         :title="backLabel"
         :aria-label="backLabel"
@@ -37,7 +38,7 @@
           <AppIcon name="sad-cloud" />
         </template>
         <template #cta>
-          <AppButton color="primary" variant="outlined" size="large" class="view-item__state-cta" @click="$emit('retry')">
+          <AppButton color="primary" variant="outlined" size="large" ignore-global-loading class="view-item__state-cta" @click="$emit('retry')">
             <template #prepend>
               <AppIcon name="refresh" class="view-item__state-cta-icon" />
             </template>
@@ -52,7 +53,7 @@
           <AppIcon name="search" />
         </template>
         <template #cta>
-          <AppButton color="primary" variant="outlined" size="large" :to="backRoute" class="view-item__state-cta">
+          <AppButton color="primary" variant="outlined" size="large" :to="backRoute" ignore-global-loading class="view-item__state-cta">
             <template #prepend>
               <AppIcon name="arrow-left" class="view-item__state-cta-icon" />
             </template>
@@ -183,6 +184,20 @@ defineEmits<{
   font-size: 0.875rem;
   font-weight: 500;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+/* Icon-led label variant (contact rows: email/phone/website/…) — the icon
+   mirrors the same one FormRenderer's field.icon shows on the equivalent
+   edit-form field, so the read view and the edit view agree visually. */
+.view-item__card :deep(.view-item__label--icon) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.view-item__card :deep(.view-item__label--icon .app-icon) {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
 }
 
 .view-item__card :deep(.view-item__value) {

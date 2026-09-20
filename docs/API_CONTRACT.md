@@ -13,7 +13,7 @@ Base: `/api`
 ## App config (theme / branding)
 - `GET /api/config/app` – app-wide theme and branding (primary_color, secondary_color, border_radius, logo_url). Shared by website and rep-app. Source: `app_config`. See foundation/docs/BRAND_AND_APP_CONFIG.md.
 
-## CRM data (Notion-backed v1)
+## CRM data
 - `GET /api/leads?query=&region=` – list
 - `GET /api/leads/:id` – details
 - `GET /api/hcp?query=` – list

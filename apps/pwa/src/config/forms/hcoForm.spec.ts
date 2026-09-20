@@ -47,11 +47,18 @@ describe("hcoFormFields", () => {
     expect(googleLink.required).toBeFalsy();
   });
 
-  it("cols:6 fields are (type,region), (postal_code,city), state — country_code/status never carry cols:6", () => {
+  it("cols:6 fields pair up as (type,specialties), (postal_code,city), (state,territory_id) — country_code/status never carry cols:6", () => {
     // Deliberately does not call the admin-gated `status.hidden()` function
     // (would require an active Pinia instance) — `cols` alone already proves
     // status/country_code can't land in a cols:6 pairing regardless of hidden state.
     const sixCol = hcoFormFields.filter((f) => f.cols === 6).map((f) => f.key);
-    expect(sixCol).toEqual(["type", "region", "postal_code", "city", "state"]);
+    expect(sixCol).toEqual(["type", "specialties", "postal_code", "city", "state", "territory_id"]);
+  });
+
+  it("has no region field, and territory_id has no hint text (NEO-6)", () => {
+    expect(hcoFormFields.find((f) => f.key === "region")).toBeUndefined();
+    const territory = hcoFormFields.find((f) => f.key === "territory_id")!;
+    expect(territory.cols).toBe(6);
+    expect(territory.hint).toBeUndefined();
   });
 });

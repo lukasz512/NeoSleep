@@ -43,6 +43,19 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "mcp__claude_ai_Linear__save_issue",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/linear-ticket-created-title-reminder.sh",
+            "timeout": 10,
+            "statusMessage": "Checking for new Linear ticket..."
+          }
+        ]
+      }
     ]
   }
 }

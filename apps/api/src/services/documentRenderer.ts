@@ -79,6 +79,22 @@ export interface RenderHtmlToPdfOptions {
   marginBottom?: string;
   marginLeft?: string;
   marginRight?: string;
+  /**
+   * Per-instance dynamic values (a specific patient's name, a specific
+   * doctor's clinic, ...) keyed by the template's `data-field="key"`
+   * attribute — see e.g. packages/documents/templates/informedConsent.html's
+   * own header comment, which has always documented this as "filled via
+   * page.evaluate() + element.textContent inside the real Chrome DOM," not
+   * string substitution on the HTML before it gets here. This is the first
+   * real implementation of that documented step (nothing called
+   * renderHtmlToPdf in production before this). Applied via
+   * element.textContent (auto-escaping, safer than a string .replace() on
+   * raw HTML) to every matching `[data-field="key"]` element right after
+   * page.setContent, before page.pdf() runs. Callers never get a Puppeteer
+   * Page handle directly — this file's own header comment requires every
+   * generator to go through renderHtmlToPdf() only.
+   */
+  dataFields?: Record<string, string>;
 }
 
 export async function renderHtmlToPdf(html: string, options: RenderHtmlToPdfOptions = {}): Promise<Uint8Array> {
@@ -88,6 +104,14 @@ export async function renderHtmlToPdf(html: string, options: RenderHtmlToPdfOpti
     const page = await browser.newPage();
     try {
       await page.setContent(html, { waitUntil: "networkidle0" });
+      if (options.dataFields) {
+        await page.evaluate((fields) => {
+          for (const [key, value] of Object.entries(fields)) {
+            const el = document.querySelector(`[data-field="${key}"]`);
+            if (el) el.textContent = value;
+          }
+        }, options.dataFields);
+      }
       const displayHeaderFooter = Boolean(options.headerTemplate || options.footerTemplate);
       return await page.pdf({
         format: "A4",

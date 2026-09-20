@@ -7,7 +7,7 @@ import {
   type Patient,
   type TerritoryPathNode,
 } from "../db.js";
-import { getAllowedCountryCodes, assertScopeAccess } from "../middleware/requireScope.js";
+import { getAllowedScopePaths, assertTerritoryAccessByTerritoryId } from "../middleware/requireScope.js";
 
 /**
  * QUERIES — Patient domain.
@@ -35,6 +35,7 @@ export interface PatientDto {
   medical_record: string | null;
   region: string;
   territory_id: string | null;
+  territory_name: string | null;
   /** Root-first breadcrumb ("mx"/"cdmx"/"polanco") — only populated on the
    *  single-record GetPatientByIdQuery (one extra query, fine for a detail
    *  view); the paginated list query omits it to avoid N+1. Null when
@@ -64,6 +65,7 @@ function toDto(p: Patient & { name: string }, territoryPath: TerritoryPathNode[]
     medical_record:  p.medical_record ?? null,
     region:          p.region,
     territory_id:    p.territory_id ?? null,
+    territory_name:  p.territory_name ?? null,
     territory_path:  territoryPath && territoryPath.length > 0 ? territoryPath : null,
     status:          p.status,
     metadata:        p.metadata ?? null,
@@ -80,6 +82,7 @@ export interface GetPatientListInput {
   search?: string;
   status?: string;
   region?: string;
+  practitioner_id?: string;
   page?: number;
   limit?: number;
   sortBy?: string;
@@ -99,7 +102,8 @@ export async function GetPatientListQuery(
     search: input.search,
     status: input.status,
     region: input.region,
-    countryCodes: getAllowedCountryCodes(ctx.user.roles),
+    practitioner_id: input.practitioner_id,
+    scopePaths: await getAllowedScopePaths(ctx.client, ctx.user.roles),
   };
 
   const page      = input.page ?? 1;
@@ -121,7 +125,7 @@ export async function GetPatientByIdQuery(
 ): Promise<PatientDto | null> {
   const patient = await getPatientById(ctx.client, id);
   if (!patient) return null;
-  assertScopeAccess(ctx, patient.country_code);
+  await assertTerritoryAccessByTerritoryId(ctx, patient.territory_id);
   const territoryPath = patient.territory_id ? await getTerritoryPath(ctx.client, patient.territory_id) : null;
   return toDto(patient, territoryPath);
 }

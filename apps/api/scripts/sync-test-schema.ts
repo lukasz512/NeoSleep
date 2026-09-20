@@ -37,10 +37,13 @@ async function run(): Promise<void> {
   );
   // Strip psql meta-commands (e.g. \restrict / \unrestrict, added by newer
   // pg_dump versions) — they aren't valid SQL when run through a plain `pg`
-  // client instead of piping into psql.
+  // client instead of piping into psql. Also strip `SET transaction_timeout`
+  // — a pg_dump preamble line as of PG17+ clients, rejected outright by an
+  // older (e.g. 15) server as an unrecognized configuration parameter.
+  // Reproduced locally: pg_dump 18 dumping against a postgres:15 target.
   const sql = dump
     .split("\n")
-    .filter((line) => !line.startsWith("\\"))
+    .filter((line) => !line.startsWith("\\") && !line.startsWith("SET transaction_timeout"))
     .join("\n");
   const cloned = sql.split(SOURCE_SCHEMA).join(TARGET_SCHEMA);
 

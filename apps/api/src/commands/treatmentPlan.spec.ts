@@ -1,10 +1,11 @@
 import { describe, it, expect } from "vitest";
 import bcrypt from "bcrypt";
-import { withTenant, insertStaffUser } from "../db.js";
+import { withTenant, insertStaffUser, getGlobalTerritoryId } from "../db.js";
 import type { TenantContext } from "../context/TenantContext.js";
 import { CreatePatientCommand } from "./patient.js";
 import { CreateSleepStudyCommand } from "./sleepStudy.js";
-import { CreateTreatmentPlanCommand } from "./treatmentPlan.js";
+import { CreateTreatmentPlanCommand, DeleteTreatmentPlanCommand, RestoreTreatmentPlanCommand, UpdateTreatmentPlanCommand } from "./treatmentPlan.js";
+import { getTreatmentPlanById } from "../db.js";
 import { ValidationError } from "../errors.js";
 
 // Command-level integration test — hits the real tenant DB via withTenant(),
@@ -23,7 +24,7 @@ async function buildTestContext(client: Parameters<typeof CreatePatientCommand>[
   return {
     slug: TENANT_SLUG,
     client,
-    user: { id: user!.id, email, role: "admin", roles: [{ role: "admin", scope: "global" }] },
+    user: { id: user!.id, email, role: "admin", roles: [{ role: "admin", territory_id: await getGlobalTerritoryId(client) }] },
     requestId: `test-${uniqueSuffix()}`,
   };
 }
@@ -74,6 +75,41 @@ describe("CreateTreatmentPlanCommand", () => {
       expect(plan.status).toBe("initiated");
       expect(plan.patient_id).toBe(patient.id);
       expect(plan.sleep_study_id).toBe(study.id);
+    });
+  });
+});
+
+describe("RestoreTreatmentPlanCommand", () => {
+  it("undoes DeleteTreatmentPlanCommand and lets it be updated again", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const patient = await createTestPatient(ctx);
+      const study = await CreateSleepStudyCommand(ctx, { patient_id: patient.id });
+      const plan = await CreateTreatmentPlanCommand(ctx, {
+        patient_id: patient.id,
+        sleep_study_id: study.id,
+        type: "dental_appliance",
+      });
+
+      await DeleteTreatmentPlanCommand(ctx, plan.id);
+      expect(await getTreatmentPlanById(client, plan.id)).toBeNull();
+
+      const restored = await RestoreTreatmentPlanCommand(ctx, plan.id);
+      expect(restored?.id).toBe(plan.id);
+      expect(await getTreatmentPlanById(client, plan.id)).not.toBeNull();
+
+      const updated = await UpdateTreatmentPlanCommand(ctx, plan.id, { status: "in_progress" });
+      expect(updated?.status).toBe("in_progress");
+    });
+  });
+
+  it("returns null for a plan that was never created", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+
+      const restored = await RestoreTreatmentPlanCommand(ctx, "00000000-0000-0000-0000-000000000000");
+
+      expect(restored).toBeNull();
     });
   });
 });

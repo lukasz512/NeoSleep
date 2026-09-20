@@ -23,8 +23,12 @@ packages/*/src/**/*.d.ts
 apps/*/tsconfig.tsbuildinfo
 packages/*/tsconfig.tsbuildinfo
 
-# Editor-local config (not shared with the team)
-.vscode/
+# Editor-local config (not shared with the team) — tasks.json is the one exception:
+# it's the shared "1-click" dev-stack launcher every completion Artifact references
+# (docs/stories/linear-worker-pipeline-hardening.md), so it has to actually be
+# versioned for anyone (including the worker's own environment) to use it.
+.vscode/*
+!.vscode/tasks.json
 
 # Secrets and keys (never commit)
 *.pem

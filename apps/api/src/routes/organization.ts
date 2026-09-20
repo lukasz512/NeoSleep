@@ -6,6 +6,8 @@ import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
 import { CreateOrganizationCommand, UpdateOrganizationCommand, DeleteOrganizationCommand } from "../commands/organization.js";
 import { GetOrganizationListQuery, GetOrganizationByIdQuery } from "../queries/organization.js";
+import { GetHistoryForOrganizationQuery } from "../queries/auditLog.js";
+import { GetOrganizationDocumentsQuery, GetOrganizationDocumentDownloadUrlQuery } from "../queries/entityDocuments.js";
 import { ValidationError } from "../errors.js";
 import { parsePaginationParams } from "./utils.js";
 
@@ -72,6 +74,65 @@ organizationRouter.get(
 );
 
 // ---------------------------------------------------------------------------
+// GET /api/v1/organization/:id/history — audit trail (History tab)
+// ---------------------------------------------------------------------------
+organizationRouter.get(
+  "/organization/:id/history",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id?.trim();
+    if (!id) throw new ValidationError("Missing organization id");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    const history = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return GetHistoryForOrganizationQuery(ctx, id);
+    });
+
+    res.json(history);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/organization/:id/documents — Documents tab
+// ---------------------------------------------------------------------------
+organizationRouter.get(
+  "/organization/:id/documents",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id?.trim();
+    if (!id) throw new ValidationError("Missing organization id");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    const documents = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return GetOrganizationDocumentsQuery(ctx, id);
+    });
+    res.json(documents);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/organization/:id/documents/:documentId/download — short-lived signed URL
+// ---------------------------------------------------------------------------
+organizationRouter.get(
+  "/organization/:id/documents/:documentId/download",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id?.trim();
+    const documentId = req.params.documentId?.trim();
+    if (!id || !documentId) throw new ValidationError("Missing organization id or document id");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    const url = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return GetOrganizationDocumentDownloadUrlQuery(ctx, id, documentId);
+    });
+    res.json({ url });
+  })
+);
+
+// ---------------------------------------------------------------------------
 // POST /api/v1/organization — create organization
 // ---------------------------------------------------------------------------
 organizationRouter.post(
@@ -82,7 +143,7 @@ organizationRouter.post(
     const body = req.body as {
       name?: string; type?: string; status?: string;
       address_line1?: string; city?: string; state?: string; postal_code?: string;
-      country_code?: string; region?: string; phone?: string; email?: string; website?: string;
+      country_code?: string; region?: string; territory_id?: string | null; phone?: string; email?: string; website?: string;
       google_link?: string; specialties?: string[];
       metadata?: Record<string, unknown>;
     };
@@ -99,6 +160,7 @@ organizationRouter.post(
         postal_code:   typeof body.postal_code   === "string" ? body.postal_code   : null,
         country_code:  typeof body.country_code  === "string" ? body.country_code  : null,
         region:        typeof body.region        === "string" ? body.region        : undefined,
+        territory_id:  body.territory_id !== undefined ? body.territory_id : null,
         phone:         typeof body.phone         === "string" ? body.phone         : null,
         email:         typeof body.email         === "string" ? body.email         : null,
         website:       typeof body.website       === "string" ? body.website       : null,
@@ -126,7 +188,7 @@ organizationRouter.patch(
     const body = req.body as {
       name?: string; type?: string; status?: string;
       address_line1?: string; city?: string; state?: string; postal_code?: string;
-      country_code?: string; region?: string; phone?: string; email?: string; website?: string;
+      country_code?: string; region?: string; territory_id?: string | null; phone?: string; email?: string; website?: string;
       google_link?: string; specialties?: string[];
       metadata?: Record<string, unknown>;
     };
@@ -143,6 +205,7 @@ organizationRouter.patch(
         postal_code:   body.postal_code          !== undefined ? body.postal_code   : undefined,
         country_code:  body.country_code         !== undefined ? body.country_code  : undefined,
         region:        typeof body.region        === "string" ? body.region        : undefined,
+        territory_id:  body.territory_id !== undefined ? body.territory_id : undefined,
         phone:         body.phone                !== undefined ? body.phone         : undefined,
         email:         body.email                !== undefined ? body.email        : undefined,
         website:       body.website              !== undefined ? body.website      : undefined,

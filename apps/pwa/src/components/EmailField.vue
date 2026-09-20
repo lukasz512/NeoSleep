@@ -11,10 +11,11 @@
     :rules="rules"
     :variant="variant"
     :density="density"
+    :disabled="disabled"
     @update:model-value="onInput"
   >
     <template #prepend-inner>
-      <button type="button" class="pwa-email-at-btn" :aria-label="t('app.identity.form.emailInsertAt')" @mousedown.prevent="insertAtSign">
+      <button type="button" class="pwa-email-at-btn" :disabled="disabled" :aria-label="t('app.identity.form.emailInsertAt')" @mousedown.prevent="insertAtSign">
         <AppIcon name="at" class="pwa-form-field-icon" />
       </button>
     </template>
@@ -47,6 +48,7 @@ const props = withDefaults(
     rules?: ((v: unknown) => true | string)[];
     variant?: string;
     density?: string;
+    disabled?: boolean;
   }>(),
   { modelValue: "" }
 );
@@ -62,6 +64,7 @@ const fieldRef = ref<{ $el?: HTMLElement } | null>(null);
 
 /** A no-op once "@" is already present (an email has at most one). */
 function insertAtSign() {
+  if (props.disabled) return;
   const current = props.modelValue ?? "";
   if (current.includes("@")) return;
   const inputEl = fieldRef.value?.$el?.querySelector("input") ?? undefined;

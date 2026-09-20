@@ -300,11 +300,71 @@ export const patientTestimonials: Testimonial[] = [
 // LEGAL
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const legalConfig = {
-  companyName:  "NeoSleep",
-  privacyEmail: "info@neosleepcare.com",
-  address:      "1 Example Street, 00-001 Warsaw, Poland",
-  lastUpdated:  "2026-01-01",
+/**
+ * Per-jurisdiction legal identity — the privacy policy now shows a real
+ * GDPR-grounded variant for PL and a real LFPDPPP-grounded variant for MX
+ * (not one blended generic text), so the controller/responsable identity it
+ * discloses must differ per locale too, not just the surrounding prose.
+ *
+ * `[PLACEHOLDER]`-marked fields are NOT real business facts — they must be
+ * replaced with confirmed registered details before this policy is fit to
+ * publish. A privacy policy citing a fabricated company registration is
+ * itself a compliance defect, so nothing here was invented; see
+ * docs/stories/partner-registration-legal-documents.md's privacy-policy
+ * section for status.
+ *
+ * `pl` confirmed by Łukasz 2026-09-16: Ostrowski Investment sp. z o.o.
+ * (KRS/NIP/REGON below). `mx` confirmed by Łukasz 2026-09-16: "AJ
+ * Management" is a trade name — the actual responsable is a persona física
+ * (individual/sole proprietor), Alfredjan de Jesús Díaz Urdaneta, RFC
+ * DIUA8208043U7 (a 13-character RFC — the individual format, not the
+ * 12-character persona moral/corporate one, consistent with there being no
+ * separate registered company). `mx.address` here is that person's
+ * registered domicile (as given, for the LFPDPPP-required responsable
+ * disclosure) — distinct from CONTACT_LINES.mx in
+ * packages/documents/src/documentRender.ts, which is the real, separate
+ * WTC office address already used as the practical contact point on
+ * generated documents (Lorena González) and stays unchanged.
+ */
+export interface LegalEntityConfig {
+  companyName: string;
+  legalEntityName: string;
+  privacyEmail: string;
+  address: string;
+  authorityName: string;
+  authorityUrl: string;
+  /** PL-specific registry identifiers (KRS/NIP/REGON) — undefined for locales where they don't apply. */
+  registryDetails?: string;
+}
+
+export const legalConfig: Record<"en" | "pl" | "mx", LegalEntityConfig> & { lastUpdated: string } = {
+  lastUpdated: "2026-09-16",
+  en: {
+    companyName: "NeoSleep",
+    legalEntityName: "[PLACEHOLDER: registered legal entity name]",
+    privacyEmail: "info@neosleepcare.com",
+    address: "[PLACEHOLDER: registered company address]",
+    authorityName: "your national data protection authority",
+    authorityUrl: "",
+  },
+  pl: {
+    companyName: "NeoSleep",
+    legalEntityName: "Ostrowski Investment spółka z ograniczoną odpowiedzialnością",
+    privacyEmail: "info@neosleepcare.com",
+    address: "Łąkowa 3, 77-127 Nakla, Polska",
+    authorityName: "Prezes Urzędu Ochrony Danych Osobowych (UODO)",
+    authorityUrl: "https://uodo.gov.pl",
+    registryDetails: "KRS 0001166320, NIP 8421798790, REGON 541401786",
+  },
+  mx: {
+    companyName: "NeoSleep",
+    legalEntityName: "AJ Management — Alfredjan de Jesús Díaz Urdaneta",
+    privacyEmail: "planetalfred@hotmail.com",
+    address: "Veracruz 14, int. 2, Col. Roma Norte, delegación Cuauhtémoc, 06700 Ciudad de México, México",
+    authorityName: "Instituto Nacional de Transparencia, Acceso a la Información y Protección de Datos Personales (INAI)",
+    authorityUrl: "https://home.inai.org.mx",
+    registryDetails: "RFC: DIUA8208043U7",
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

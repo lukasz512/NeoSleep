@@ -125,7 +125,7 @@
             </div>
             <div class="view-item__row">
               <dt class="view-item__label">{{ t("app.patients.detail.cpapDevice") }}</dt>
-              <dd class="view-item__value">{{ patient.cpap_device || "—" }}</dd>
+              <dd class="view-item__value">{{ patient.cpap_device ? t("app.common.yes") : t("app.common.no") }}</dd>
             </div>
             <div class="view-item__row">
               <dt class="view-item__label">{{ t("app.patients.detail.medicalRecord") }}</dt>
@@ -141,8 +141,16 @@
           <template #orthoapnea>
             <PatientOrthoApneaPanel :patient-id="patient.id" />
           </template>
+          <template #documents>
+            <EntityDocumentsPanel :endpoint="`/api/v1/patient/${patient.id}/documents`" />
+          </template>
+          <template #endoIntake>
+            <PatientEndoIntakePanel :patient-id="patient.id" />
+            <VDivider class="endo-intake-divider" />
+            <PatientStopBangPanel :patient-id="patient.id" />
+          </template>
           <template #history>
-            <PatientHistoryPanel :patient-id="patient.id" />
+            <EntityHistoryPanel :endpoint="`/api/v1/patient/${patient.id}/history`" />
           </template>
         </DetailViewTabs>
       </template>
@@ -173,6 +181,7 @@ import { useI18n } from "vue-i18n";
 import { usePermissions } from "../composables/usePermissions";
 import { apiFetch } from "../composables/useApi";
 import { useNotifications } from "../composables/useNotifications";
+import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import AppButton from "../components/AppButton.vue";
@@ -183,7 +192,10 @@ import EntityLink from "../components/EntityLink.vue";
 import PatientNotesPanel from "../components/patient/PatientNotesPanel.vue";
 import PatientStudiesPanel from "../components/patient/PatientStudiesPanel.vue";
 import PatientOrthoApneaPanel from "../components/patient/PatientOrthoApneaPanel.vue";
-import PatientHistoryPanel from "../components/patient/PatientHistoryPanel.vue";
+import EntityHistoryPanel from "../components/EntityHistoryPanel.vue";
+import EntityDocumentsPanel from "../components/EntityDocumentsPanel.vue";
+import PatientEndoIntakePanel from "../components/patient/PatientEndoIntakePanel.vue";
+import PatientStopBangPanel from "../components/patient/PatientStopBangPanel.vue";
 import { patientFormFields } from "../config/forms/patientForm";
 import { entityActionIcon, entityActionBtnClass } from "../config/entityActions";
 import { patientStatusColor, patientStatusLabel } from "../utils/patientStatus";
@@ -219,6 +231,7 @@ const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const notifications = useNotifications();
+const { submit } = useEntitySubmit();
 
 const patient = ref<PatientDetail | null>(null);
 
@@ -247,6 +260,8 @@ const patientTabs = [
   { value: "notes", labelKey: "app.patients.detail.tabs.notes" },
   { value: "studies", labelKey: "app.patients.detail.tabs.studies" },
   { value: "orthoapnea", labelKey: "app.patients.detail.tabs.orthoapnea" },
+  { value: "documents", labelKey: "app.patients.detail.tabs.documents" },
+  { value: "endoIntake", labelKey: "app.patients.detail.tabs.endoIntake" },
   { value: "history", labelKey: "app.patients.detail.tabs.history" },
 ];
 /** Deep-linkable via ?tab= — see SleepStudiesView/TreatmentPlansView row clicks. */
@@ -275,45 +290,39 @@ async function onEventFormSubmit(
   payload: import("../components/EventForm.vue").EventSubmitPayload,
   done: (ok: boolean) => void,
 ) {
-  try {
-    const res = await apiFetch("/api/v1/encounter", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: payload.title, start_at: payload.start_at, end_at: payload.end_at, type: payload.type, status: payload.status, location: payload.location, video_link: payload.video_link, notes: payload.notes, region: payload.region, attendees: payload.attendees }),
-    });
-    if (res.ok) {
-      notifications.show(t("user.planner.form.success"), "success");
-      done(true);
-    } else {
-      notifications.show(t("user.planner.form.errorSave"), "error");
-      done(false);
-    }
-  } catch {
-    notifications.show(t("user.planner.form.errorSave"), "error");
-    done(false);
-  }
+  await submit(
+    {
+      request: () =>
+        apiFetch("/api/v1/encounter", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: payload.title, start_at: payload.start_at, end_at: payload.end_at, type: payload.type, status: payload.status, location: payload.location, video_link: payload.video_link, notes: payload.notes, region: payload.region, attendees: payload.attendees }),
+        }),
+      successMessage: t("user.planner.form.success"),
+      errorMessage: t("user.planner.form.errorSave"),
+      refresh: false,
+    },
+    done,
+  );
 }
 
 async function onPatientSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
   const id = patient.value?.id;
   if (!id) { done(false); return; }
-  try {
-    const res = await apiFetch(`/api/v1/patient/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    if (res.ok) {
-      notifications.show(t("app.patients.form.editSuccess"), "success");
-      await loadPatient();
-      window.dispatchEvent(new Event("entity-list-refresh"));
-      done(true);
-    } else {
-      done(false);
-    }
-  } catch {
-    done(false);
-  }
+  await submit(
+    {
+      request: () =>
+        apiFetch(`/api/v1/patient/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        }),
+      successMessage: t("app.patients.form.editSuccess"),
+      errorMessage: t("app.patients.form.errorSave"),
+      onSuccess: () => loadPatient(),
+    },
+    done,
+  );
 }
 
 const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
@@ -371,5 +380,9 @@ watch(() => route.params.id, loadPatient);
      20px from .view-item__title read as cramped, especially for a long
      name that wraps to two lines. */
   margin-bottom: 12px;
+}
+
+.endo-intake-divider {
+  margin: 28px 0;
 }
 </style>

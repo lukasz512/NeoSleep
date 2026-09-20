@@ -24,7 +24,7 @@
 | Encounter / PCF flow | `planned` | create encounter, fill PCF after visit |
 | next_visit_notes on HCP | `planned` | pulled from last encounter.next_visit_notes |
 | Lead pipeline | `planned` | kanban or list, status transitions |
-| Territory admin CRUD (country→region→district→city) | `planned` | `territory` table already a self-referencing tree, needs `level` column + db/commands/queries/routes + minimal admin UI; no delete for MVP. **Wanted soon, dedicated session** — see memory `project_territory_admin_crud_needed_soon` |
+| Territory admin CRUD (country→region→district→city) | `in_progress` | Built 2026-09-08 on `feat/hco-hcp-patient-validation-rbac` (PR pending). Migrated further to an `ltree`-based unified territory/RBAC-scope model (`022_territory_ltree_scope.sql`, `023_territory_country_kind_fix.sql`, `024_territory_path_default.sql`) — `requireScope.ts` now enforces it on patient/practitioner/organization list+by-id queries. As of 2026-09-16: `pnpm -r lint`, `pnpm -r typecheck`, and `pnpm -r test` (api 201/201, pwa known baseline) all pass clean on this branch. Still open: real `territory_id` backfill onto existing Patient/HCP/HCO/Lead records (none populated yet), Lead entity not yet scope-enforced, manual territory-admin drill-down UI (see `docs/stories/territory-admin-drilldown-and-geo-model.md`). See memory `project_territory_admin_crud_needed_soon`. |
 | Visit planner (weekly view) | `planned` | visit_plan table |
 | Sample management UI | `planned` | sample_batch → stock → transaction per rep |
 | Sample request flow | `planned` | rep requests → FFM approves → fulfilled |

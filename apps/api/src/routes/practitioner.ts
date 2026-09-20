@@ -6,6 +6,8 @@ import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
 import { CreatePractitionerCommand, UpdatePractitionerCommand, DeletePractitionerCommand, ActivatePractitionerCommand } from "../commands/practitioner.js";
 import { GetPractitionerListQuery, GetPractitionerByIdQuery } from "../queries/practitioner.js";
+import { GetHistoryForPractitionerQuery } from "../queries/auditLog.js";
+import { GetPractitionerDocumentsQuery, GetPractitionerDocumentDownloadUrlQuery } from "../queries/entityDocuments.js";
 import { ValidationError } from "../errors.js";
 import { parsePaginationParams, toFilterArray } from "./utils.js";
 
@@ -40,6 +42,7 @@ practitionerRouter.get(
         specialty:   toFilterArray(req.query.specialty),
         institution: toFilterArray(req.query.institution),
         region:      toFilterArray(req.query.region),
+        organization_id: typeof req.query.organization_id === "string" ? req.query.organization_id.trim() || undefined : undefined,
         page,
         limit,
         sortBy,
@@ -72,6 +75,65 @@ practitionerRouter.get(
 );
 
 // ---------------------------------------------------------------------------
+// GET /api/v1/practitioner/:id/history — audit trail (History tab)
+// ---------------------------------------------------------------------------
+practitionerRouter.get(
+  "/practitioner/:id/history",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id?.trim();
+    if (!id) throw new ValidationError("Missing practitioner id");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    const history = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return GetHistoryForPractitionerQuery(ctx, id);
+    });
+
+    res.json(history);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/practitioner/:id/documents — Documents tab
+// ---------------------------------------------------------------------------
+practitionerRouter.get(
+  "/practitioner/:id/documents",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id?.trim();
+    if (!id) throw new ValidationError("Missing practitioner id");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    const documents = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return GetPractitionerDocumentsQuery(ctx, id);
+    });
+    res.json(documents);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/practitioner/:id/documents/:documentId/download — short-lived signed URL
+// ---------------------------------------------------------------------------
+practitionerRouter.get(
+  "/practitioner/:id/documents/:documentId/download",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id?.trim();
+    const documentId = req.params.documentId?.trim();
+    if (!id || !documentId) throw new ValidationError("Missing practitioner id or document id");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    const url = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return GetPractitionerDocumentDownloadUrlQuery(ctx, id, documentId);
+    });
+    res.json({ url });
+  })
+);
+
+// ---------------------------------------------------------------------------
 // POST /api/v1/practitioner — create practitioner
 // ---------------------------------------------------------------------------
 practitionerRouter.post(
@@ -84,7 +146,7 @@ practitionerRouter.post(
       email?: string; phone?: string; primary_specialty?: string;
       specialty?: string; // legacy alias
       organization_id?: string;
-      institution?: string; region?: string; country_code?: string;
+      institution?: string; region?: string; territory_id?: string | null; country_code?: string;
       influence_tier?: string; language?: string;
       national_ids?: Record<string, string>;
       social_links?: Record<string, unknown>;
@@ -104,6 +166,7 @@ practitionerRouter.post(
         organization_id:   typeof body.organization_id    === "string" ? body.organization_id          : undefined,
         institution:       typeof body.institution       === "string" ? body.institution              : null,
         region:            typeof body.region            === "string" ? body.region                   : undefined,
+        territory_id:      typeof body.territory_id === "string" ? body.territory_id : null,
         country_code:      typeof body.country_code      === "string" ? body.country_code             : null,
         influence_tier:    typeof body.influence_tier    === "string" ? body.influence_tier           : undefined,
         language:          typeof body.language          === "string" ? body.language                 : null,
@@ -133,10 +196,11 @@ practitionerRouter.patch(
       email?: string; phone?: string; primary_specialty?: string;
       specialty?: string; // legacy alias
       organization_id?: string;
-      institution?: string; region?: string;
+      institution?: string; region?: string; territory_id?: string | null;
       influence_tier?: string; language?: string;
       national_ids?: Record<string, string>;
       social_links?: Record<string, unknown>;
+      status?: "pending_approval" | "invited" | "active" | "inactive";
     };
 
     const practitioner = await withTenant(slug, async (client) => {
@@ -152,10 +216,12 @@ practitionerRouter.patch(
         organization_id:   typeof body.organization_id    === "string" ? body.organization_id   : undefined,
         institution:       typeof body.institution       === "string" ? body.institution       : undefined,
         region:            typeof body.region            === "string" ? body.region            : undefined,
+        territory_id:      body.territory_id !== undefined ? body.territory_id : undefined,
         influence_tier:    typeof body.influence_tier    === "string" ? body.influence_tier    : undefined,
         language:          typeof body.language          === "string" ? body.language          : undefined,
         national_ids:      body.national_ids !== undefined ? body.national_ids : undefined,
         social_links:      body.social_links !== undefined ? body.social_links : undefined,
+        status:            body.status !== undefined ? body.status : undefined,
       });
     });
 
@@ -166,7 +232,11 @@ practitionerRouter.patch(
 
 // ---------------------------------------------------------------------------
 // POST /api/v1/practitioner/:id/activate — "training/capacitation finished":
-// pending_approval -> active, provisions the linked doctor-role user account
+// pending_approval|invited -> invited, provisions the linked doctor-role user
+// account (or reuses one already provisioned) and sends/resends the "set
+// your password" invite email. This IS the resend action too — see
+// ActivatePractitionerCommand's own doc comment and
+// docs/stories/practitioner-invite-resend.md.
 // ---------------------------------------------------------------------------
 practitionerRouter.post(
   "/practitioner/:id/activate",

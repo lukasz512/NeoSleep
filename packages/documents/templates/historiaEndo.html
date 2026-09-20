@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<!--
+  Plantilla de generación — Historia Endo (NeoSleep)
+  ====================================================
+  IMPORTANT — do not write literal double-curly-brace token syntax inside
+  this comment (spell it out in prose instead). Same reasoning as
+  informedConsent.html's own header comment: this template is filled by
+  dependency-free string replacement (documentRender.ts's fillStaticTokens),
+  and a token mention that only exists here for documentation would get
+  replaced exactly like a real one.
+
+  Two separate substitution passes fill this template, in order — same
+  split as informedConsent.html:
+
+  1. @neo/documents' renderDocumentHtml(templateName, locale, contentHtml) —
+     BEFORE this HTML ever reaches a browser. Plain string replacement:
+       brand-primary / brand-secondary / brand-logo / brand-contactLine —
+         same for every render.
+       documents.historiaEndo.* tokens — title/section headers/question
+         labels, sourced from packages/i18n/{en,mx}.json via documentT().
+       the content slot (.doc-content div) — the root-canal informed-consent
+         body, sourced from platform.document_content_version at render
+         time, admin-editable via the Documents "Editor" tab (see
+         docs/stories/document-content-editor.md).
+
+  2. apps/api's services/documentRenderer.ts's renderHtmlToPdf({dataFields}) —
+     INSIDE the real Chrome DOM, via page.evaluate() + element.textContent
+     (auto-escaping — these are real patient/doctor/clinic record values,
+     not our own authored copy). Fills:
+       data-field nombre_paciente     — patient's name
+       data-field nombre_medico       — treating doctor's name
+       data-field nombre_clinica      — clinic/organization name
+       data-field fecha               — date, entered by staff at generation time
+       data-field q_<column>          — one per endo_intake checklist
+                                          column, rendered as "Sí"/"No"/blank
+                                          (blank = not yet answered)
+       data-field diente              — free-text tooth reference (optional)
+     This pass also fills the medical_history_other free-text value.
+
+  Signatures (data-field firma_paciente / firma_doctor) are left empty on
+  purpose — v1 is print-and-sign-on-paper only, per
+  docs/stories/historia-endo-clinical-intake-and-printable-pdf.md's resolved
+  scope (canvas/e-signature is explicitly deferred, same as
+  informedConsent.html's own firma_paciente box).
+
+  Fields NeoSleep's system does not capture (pain history, radiographic
+  findings, odontogram, diagnosis/prognosis/treatment, vital signs) are
+  rendered as blank, fillable-on-paper rows — this template does not
+  attempt to digitize those; see the story's own acceptance criteria.
+-->
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>{{documents.historiaEndo.title}} (NeoSleep)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: {{brand:primary}};
+    --secondary: {{brand:secondary}};
+    --text: #1a1a1a;
+    --font: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  @page { size: A4; margin: 18mm 14mm 14mm; }
+  body {
+    font-family: var(--font);
+    font-weight: 300;
+    color: var(--text);
+    font-size: 9.5pt;
+    line-height: 1.42;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 28px 24px 20px;
+    background: #fff;
+  }
+  header.doc-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 0.5px solid rgba(71, 71, 71, 0.35);
+    padding-bottom: 6px;
+    margin-bottom: 16px;
+  }
+  header.doc-header .logo { height: 24px; width: auto; display: block; }
+  header.doc-header .logo svg { height: 24px; width: auto; display: block; }
+  header.doc-header .doc-label { font-size: 8pt; font-weight: 400; color: var(--secondary); }
+
+  h1 { color: var(--primary); font-size: 14pt; font-weight: 500; margin: 0 0 2px; line-height: 1.3; }
+  h2 { color: var(--secondary); font-size: 11pt; font-weight: 400; margin: 0 0 14px; line-height: 1.3; }
+  h3 { color: var(--primary); font-size: 10pt; font-weight: 600; margin: 16px 0 6px; }
+
+  p { margin: 0 0 7px; text-align: justify; text-justify: inter-word; }
+  .doc-content > p:first-child { font-style: italic; }
+  .doc-content ul { margin: 0 0 10px; padding-left: 1.1em; list-style: none; }
+  .doc-content li { position: relative; margin-bottom: 4px; }
+  .doc-content li::before { content: "•"; color: var(--primary); font-size: 7pt; position: absolute; left: -1.1em; top: 0.15em; }
+  .doc-content strong { color: var(--primary); font-weight: 600; }
+
+  .field-row { margin: 0 0 6px; }
+  .field-row .field-label { font-weight: 600; color: var(--secondary); }
+  .field-row .field-value { color: var(--text); }
+
+  table.checklist { width: 100%; border-collapse: collapse; margin: 0 0 10px; }
+  table.checklist td { padding: 3px 6px 3px 0; border-bottom: 1px solid #eee; font-size: 9pt; }
+  table.checklist td.q-answer { text-align: right; font-weight: 600; color: var(--primary); width: 60px; }
+  .blank-section { border: 1px solid #ddd; border-radius: 4px; padding: 10px; min-height: 60px; margin: 0 0 10px; color: var(--secondary); font-size: 8.5pt; }
+
+  .sig-row { display: flex; gap: 24px; margin-top: 18px; }
+  .sig-label { font-weight: 600; color: var(--secondary); margin: 0 0 6px; }
+  .signature-box { border: 1px solid var(--secondary); height: 70px; width: 100%; padding: 8px; }
+
+  .screen-only.contact-footer { font-size: 8pt; color: var(--secondary); border-top: 1px solid #ccc; padding-top: 8px; margin-top: 24px; }
+  .screen-only.contact-footer .doc-ref { text-align: right; margin-top: 2px; }
+  @media print {
+    body { padding: 0; max-width: none; }
+    .screen-only { display: none; }
+  }
+</style>
+</head>
+<body>
+
+  <header class="doc-header">
+    <span class="logo">{{brand:logo}}</span>
+    <span class="doc-label">{{documents.historiaEndo.title}}</span>
+  </header>
+
+  <h1>{{documents.historiaEndo.title}}</h1>
+  <h2>{{documents.historiaEndo.subtitle}}</h2>
+
+  <div class="field-row">
+    <span class="field-label">{{documents.historiaEndo.fieldPatientName}} </span
+    ><span class="field-value" data-field="nombre_paciente"></span>
+  </div>
+  <div class="field-row">
+    <span class="field-label">{{documents.historiaEndo.fieldPractitioner}} </span
+    ><span class="field-value" data-field="nombre_medico"></span>
+    <span class="field-label" style="margin-left:24px;">{{documents.historiaEndo.fieldClinic}} </span
+    ><span class="field-value" data-field="nombre_clinica"></span>
+  </div>
+  <div class="field-row">
+    <span class="field-label">{{documents.historiaEndo.fieldDate}} </span
+    ><span class="field-value" data-field="fecha"></span>
+    <span class="field-label" style="margin-left:24px;">{{documents.historiaEndo.fieldTooth}} </span
+    ><span class="field-value" data-field="diente"></span>
+  </div>
+
+  <h3>{{documents.historiaEndo.sectionMedicalHistory}}</h3>
+  <table class="checklist">
+    <tr><td>{{documents.historiaEndo.q.anemia}}</td><td class="q-answer" data-field="q_has_anemia"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.diabetes}}</td><td class="q-answer" data-field="q_has_diabetes"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.smoking}}</td><td class="q-answer" data-field="q_has_smoking"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.endocrineDisorder}}</td><td class="q-answer" data-field="q_has_endocrine_disorder"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.sinusitis}}</td><td class="q-answer" data-field="q_has_sinusitis"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.alcoholism}}</td><td class="q-answer" data-field="q_has_alcoholism"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.hypertension}}</td><td class="q-answer" data-field="q_has_hypertension"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.hepatitis}}</td><td class="q-answer" data-field="q_has_hepatitis"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.cancer}}</td><td class="q-answer" data-field="q_has_cancer"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.addictions}}</td><td class="q-answer" data-field="q_has_addictions"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.heartDisease}}</td><td class="q-answer" data-field="q_has_heart_disease"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.kidneyDisease}}</td><td class="q-answer" data-field="q_has_kidney_disease"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.hiv}}</td><td class="q-answer" data-field="q_has_hiv"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.neurologicalDisorder}}</td><td class="q-answer" data-field="q_has_neurological_disorder"></td></tr>
+  </table>
+  <div class="field-row">
+    <span class="field-label">{{documents.historiaEndo.q.other}} </span
+    ><span class="field-value" data-field="medical_history_other"></span>
+  </div>
+
+  <h3>{{documents.historiaEndo.sectionOralExam}}</h3>
+  <table class="checklist">
+    <tr><td>{{documents.historiaEndo.q.bruxism}}</td><td class="q-answer" data-field="q_has_bruxism"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.narrowPalate}}</td><td class="q-answer" data-field="q_has_narrow_palate"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.geographicTongue}}</td><td class="q-answer" data-field="q_has_geographic_tongue"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.xerostomia}}</td><td class="q-answer" data-field="q_has_xerostomia"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.skeletalClass}}</td><td class="q-answer" data-field="q_skeletal_class"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.mouthBreather}}</td><td class="q-answer" data-field="q_is_mouth_breather"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.missingTeeth}}</td><td class="q-answer" data-field="q_has_missing_teeth"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.periodontalDisease}}</td><td class="q-answer" data-field="q_has_periodontal_disease"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.tmjFinding}}</td><td class="q-answer" data-field="q_has_tmj_finding"></td></tr>
+  </table>
+
+  <h3>{{documents.historiaEndo.sectionNotCaptured}}</h3>
+  <p style="font-size:8pt;color:var(--secondary);margin:0 0 6px;">{{documents.historiaEndo.sectionNotCapturedHint}}</p>
+  <div class="blank-section"></div>
+
+  <h3>{{documents.historiaEndo.sectionConsent}}</h3>
+  <div class="doc-content">{{content}}</div>
+
+  <div class="sig-row">
+    <div style="flex:1;">
+      <div class="sig-label">{{documents.historiaEndo.signatureLabelPatient}}</div>
+      <div class="signature-box" data-field="firma_paciente"></div>
+    </div>
+    <div style="flex:1;">
+      <div class="sig-label">{{documents.historiaEndo.signatureLabelDoctor}}</div>
+      <div class="signature-box" data-field="firma_doctor"></div>
+    </div>
+  </div>
+
+  <div class="contact-footer screen-only">
+    <div>{{brand:contactLine}}</div>
+    <div class="doc-ref">NSL-HE v1</div>
+  </div>
+
+</body>
+</html>

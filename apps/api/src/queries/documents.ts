@@ -16,7 +16,8 @@ export interface DocumentDto {
   signedAt: string;
 }
 
-function toDto(a: FileAttachment): DocumentDto {
+/** Exported for reuse by queries/entityDocuments.ts (practitioner/organization/patient Documents tabs). */
+export function toDto(a: FileAttachment): DocumentDto {
   return {
     id: a.id,
     documentType: (a.metadata?.document_type as string | undefined) ?? null,
