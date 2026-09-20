@@ -65,7 +65,15 @@
       </span>
     </template>
     <template #feed-card-meta="{ item }">
-      {{ specialtyLabel((item as HCPListItem).specialty) }}
+      {{ hcpCardMeta(item as HCPListItem) }}
+    </template>
+    <template #feed-card-status="{ item }">
+      <VChip size="x-small" variant="tonal" color="primary" class="hcp-specialty-chip">
+        <template #prepend>
+          <AppIcon :name="practitionerSpecialtyIcon((item as HCPListItem).specialty)" class="hcp-specialty-chip__icon" />
+        </template>
+        {{ specialtyLabel((item as HCPListItem).specialty) }}
+      </VChip>
     </template>
     <template #feed-card-actions="{ item }">
       <AppListItemMenu :aria-label="t('app.common.moreActions')">
@@ -97,6 +105,8 @@ import { useAuthStore } from "../stores/auth";
 import { usePermissions } from "../composables/usePermissions";
 import { useConfigStore } from "../stores/config";
 import { hcpFormFields, hcpFormDerive, resolveOrganizationIdForSubmit } from "../config/forms/hcpForm";
+import { practitionerSpecialtyIcon } from "../utils/hcpLabels";
+import { hcpCardMeta } from "../utils/mobileCardMeta";
 
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
@@ -296,4 +306,8 @@ async function onEventFormSubmit(
   gap: 6px;
 }
 
+.hcp-specialty-chip__icon {
+  width: 14px;
+  height: 14px;
+}
 </style>

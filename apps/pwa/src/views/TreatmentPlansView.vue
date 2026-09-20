@@ -31,6 +31,9 @@
           {{ statusLabel((item as { status?: string }).status) }}
         </VChip>
       </template>
+      <template #feed-card-meta="{ item }">
+        {{ treatmentPlanCardMeta(item as TreatmentPlanRow) }}
+      </template>
       <template #item.dentist_name="{ item }">
         <EntityLink
           :to="(item as TreatmentPlanRow).dentist_id ? { name: 'hcp-detail', params: { id: (item as TreatmentPlanRow).dentist_id } } : null"
@@ -47,8 +50,10 @@ import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
 import EntityLink from "../components/EntityLink.vue";
 import type { FilterDefinition } from "../composables/useFilters";
+import { treatmentPlanCardMeta as treatmentPlanCardMetaFormatter } from "../utils/mobileCardMeta";
 
 interface TreatmentPlanRow {
+  type?: string;
   dentist_id?: string | null;
   dentist_name?: string | null;
 }
@@ -94,6 +99,13 @@ function statusLabel(status?: string): string {
 
 function typeLabel(type?: string): string {
   return type ? t(`app.treatmentPlans.type.${camelKey(type)}`) : "—";
+}
+
+/** Mobile card's second line — type + dentist, same data the desktop table
+ *  already shows in separate columns (status is shown via the chip already,
+ *  not repeated here — NEO-19). */
+function treatmentPlanCardMeta(plan: TreatmentPlanRow): string {
+  return treatmentPlanCardMetaFormatter(plan, typeLabel);
 }
 
 /** Only dental_appliance plans have their own tab today — everything else lands on Details. */

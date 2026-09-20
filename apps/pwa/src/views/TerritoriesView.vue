@@ -25,7 +25,7 @@
         {{ (item as TerritoryListItem).name }}
       </template>
       <template #feed-card-meta="{ item }">
-        {{ t(`user.territories.form.kind${kindPascal((item as TerritoryListItem).kind)}`) }} — {{ (item as TerritoryListItem).country_code }}
+        {{ territoryCardMeta(item as TerritoryListItem) }}
       </template>
       <template #feed-card-actions="{ item }">
         <AppListItemMenu :aria-label="t('app.common.moreActions')">
@@ -87,6 +87,7 @@ import { apiFetch } from "../composables/useApi";
 import { useNotifications } from "../composables/useNotifications";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import { territoryFormFields } from "../config/forms/territoryForm";
+import { kindPascal, territoryCardMeta as territoryCardMetaFormatter } from "../utils/mobileCardMeta";
 
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
 
@@ -128,8 +129,10 @@ const territoriesI18n = computed(() => ({
   errorLoad: "user.territories.errorLoad",
 }));
 
-function kindPascal(kind: string): string {
-  return kind.charAt(0).toUpperCase() + kind.slice(1);
+/** Mobile card's second line — same kind/country_code/code the desktop
+ *  table already shows in separate columns (NEO-19). */
+function territoryCardMeta(territory: TerritoryListItem): string {
+  return territoryCardMetaFormatter(territory, t);
 }
 
 function onAdd() {

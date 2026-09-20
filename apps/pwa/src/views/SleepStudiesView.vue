@@ -33,6 +33,9 @@
           {{ statusLabel((item as { status?: string }).status) }}
         </VChip>
       </template>
+      <template #feed-card-meta="{ item }">
+        {{ sleepStudyCardMeta(item as SleepStudyRow) }}
+      </template>
       <template #item.study_date="{ item }">
         {{ (item as { study_date?: string }).study_date ? new Date((item as { study_date?: string }).study_date!).toLocaleDateString() : "—" }}
       </template>
@@ -55,8 +58,12 @@ import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
 import EntityLink from "../components/EntityLink.vue";
 import type { FilterDefinition } from "../composables/useFilters";
+import { sleepStudyCardMeta as sleepStudyCardMetaFormatter } from "../utils/mobileCardMeta";
 
 interface SleepStudyRow {
+  study_type?: string;
+  study_date?: string;
+  ahi_score?: number | null;
   interpreted_by?: string | null;
   interpreted_by_name?: string | null;
 }
@@ -94,6 +101,13 @@ function statusLabel(status?: string): string {
 
 function studyTypeLabel(studyType?: string): string {
   return studyType ? t(`app.sleepStudies.type.${statusKey(studyType)}`) : "—";
+}
+
+/** Mobile card's second line — same study type/date/AHI/interpreted-by data
+ *  the desktop table already shows in separate columns (status is shown via
+ *  the chip already, not repeated here — NEO-19). */
+function sleepStudyCardMeta(study: SleepStudyRow): string {
+  return sleepStudyCardMetaFormatter(study, studyTypeLabel, t);
 }
 
 const tableHeaders = computed(() => [
