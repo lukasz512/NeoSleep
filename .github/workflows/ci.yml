@@ -86,6 +86,9 @@ jobs:
       - name: Lint (all workspaces)
         run: pnpm -r lint
 
+      - name: i18n key parity (en/pl/mx)
+        run: pnpm i18n:parity
+
       - name: Typecheck (all workspaces)
         run: pnpm -r typecheck
 
