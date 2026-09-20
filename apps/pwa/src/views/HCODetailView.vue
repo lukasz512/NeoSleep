@@ -33,7 +33,7 @@
     :not-found-label="t('user.hco.detail.notFound')"
     @retry="loadHCO"
   >
-    <template #title v-if="hco">
+    <template v-if="hco" #title>
       <span class="view-item__title-wrap hco-title-row">
         <span class="view-item__title-wrap">
           <AppAvatar entity-type="hco" :org-type="hco.type" :size="40" />
@@ -49,7 +49,7 @@
         </span>
       </span>
     </template>
-    <template #header-actions v-if="hco">
+    <template v-if="hco" #header-actions>
       <VTooltip location="bottom">
         <template #activator="{ props: tooltipProps }">
           <AppButton
@@ -99,7 +99,7 @@
         <span>{{ t('user.hco.detail.delete') }}</span>
       </VTooltip>
     </template>
-    <template #sections v-if="hco">
+    <template v-if="hco" #sections>
       <DetailViewTabs v-model="activeTab" :tabs="hcoTabs">
         <template #details>
           <div class="hco-details-layout">
