@@ -93,7 +93,7 @@ if [ -n "$DB_HOST" ] && node -e "
   # vitest config choking on a Vuetify CSS import) would otherwise permanently block
   # every future turn regardless of what's being worked on, which defeats the point of
   # a per-change gate.
-  AFFECTED_DIRS="$(printf '%s\n' "$SRC_CHANGED" | sed -E 's#^(apps/[^/]+|packages/[^/]+)/.*#\1#' | sort -u)"
+  AFFECTED_DIRS="$(printf '%s\n' "$SRC_CHANGED" | "$REPO_ROOT/infrastructure/scripts/affected-workspaces.sh")"
   FILTER_ARGS=()
   while IFS= read -r dir; do
     [ -n "$dir" ] && FILTER_ARGS+=(--filter "./$dir")

@@ -1,0 +1,53 @@
+#!/usr/bin/env sh
+# Blocks a push if the affected workspaces' tests fail. Scope is derived the
+# same way .claude/hooks/quality-gate.sh does (via affected-workspaces.sh) —
+# only the apps/* or packages/* workspaces this push actually touches, not a
+# blanket `pnpm -r test`, so a pre-existing unrelated failure elsewhere
+# doesn't block every push regardless of what changed.
+set -eu
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+ALL_CHANGED=""
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ -z "$local_sha" ] && continue
+  if [ "$local_sha" = "0000000000000000000000000000000000000000" ]; then
+    continue # deleting the remote ref — nothing to check
+  fi
+  if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+    # New branch on the remote — diff against the merge-base with origin/dev
+    # (fall back to comparing against the root commit if that's unavailable,
+    # e.g. no network / origin/dev not fetched yet).
+    base="$(git merge-base "$local_sha" origin/dev 2>/dev/null || true)"
+    if [ -z "$base" ]; then
+      base="$(git rev-list --max-parents=0 "$local_sha" | tail -1)"
+    fi
+    range="$base..$local_sha"
+  else
+    range="$remote_sha..$local_sha"
+  fi
+  ALL_CHANGED="$ALL_CHANGED
+$(git diff --name-only "$range" -- apps packages 2>/dev/null || true)"
+done
+
+AFFECTED_DIRS="$(printf '%s\n' "$ALL_CHANGED" | "$REPO_ROOT/infrastructure/scripts/affected-workspaces.sh")"
+
+if [ -z "$AFFECTED_DIRS" ]; then
+  exit 0
+fi
+
+echo "pre-push: running tests for affected workspaces..."
+echo "$AFFECTED_DIRS"
+
+FILTER_ARGS=""
+while IFS= read -r dir; do
+  [ -n "$dir" ] && FILTER_ARGS="$FILTER_ARGS --filter ./$dir"
+done <<EOF
+$AFFECTED_DIRS
+EOF
+
+# shellcheck disable=SC2086
+if ! pnpm $FILTER_ARGS test; then
+  echo "pre-push: tests failed — fix the failures above, or push with --no-verify if you really must skip this." >&2
+  exit 1
+fi

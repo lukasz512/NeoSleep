@@ -1,0 +1,32 @@
+#!/usr/bin/env sh
+# Blocks a commit that touches apps/*/src or packages/*/src if lint or
+# typecheck fails. Mirrors .claude/hooks/quality-gate.sh's src-only scoping,
+# but this hook gates a plain `git commit` too — quality-gate.sh only runs
+# inside Claude Code sessions.
+set -eu
+
+STAGED="$(git diff --cached --name-only --diff-filter=ACMR)"
+SRC_CHANGED="$(printf '%s\n' "$STAGED" | grep -E '^(apps|packages)/[^/]+/src/' || true)"
+
+if [ -z "$SRC_CHANGED" ]; then
+  exit 0
+fi
+
+echo "pre-commit: apps/*/src or packages/*/src changed — running lint + typecheck..."
+
+# apps/api plain-Node (unbundled) imports the compiled dist/ output of these
+# packages, not their raw .ts — same prerequisite CI and infrastructure/scripts/
+# start.sh both build first, otherwise `tsc -b` fails on unrelated
+# ERR_MODULE_NOT_FOUND-style errors regardless of what this commit touched.
+pnpm --filter @neo/email build >/dev/null
+pnpm --filter @neo/documents build >/dev/null
+
+if ! pnpm lint; then
+  echo "pre-commit: lint failed — fix the errors above, or commit with --no-verify if you really must skip this." >&2
+  exit 1
+fi
+
+if ! pnpm typecheck; then
+  echo "pre-commit: typecheck failed — fix the errors above, or commit with --no-verify if you really must skip this." >&2
+  exit 1
+fi
