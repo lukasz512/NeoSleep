@@ -17,6 +17,16 @@
 # a marker file was written recording that an artifact was published and attached. See the
 # ARTIFACT MARKER block for what Claude is expected to do when this fires.
 #
+# 2026-09-20 (same day, NEO-9): the marker's presence didn't guarantee the artifact actually
+# showed the change — NEO-9's first artifact had three text sections but no before/after
+# visual, which is exactly the "AI slop" the check above was meant to stop. Two fixes: (1)
+# VISUAL_SHAPE below widens the trigger beyond FEATURE_SHAPE's views/routes/migrations-only
+# regex — a layout/component-only Vue diff (no new view or route) previously skipped the
+# artifact gate entirely, which is how NEO-9 (a layouts/ + packages/ui/ change) slipped
+# through the first time; (2) the marker now also requires a non-empty `visualComparison`
+# field whenever Vue/style files changed, so "I wrote three sections" no longer satisfies
+# the gate without an actual before/after shown somewhere.
+#
 # Caveat: this checks the CURRENT WORKING TREE STATE (git status), not strictly "what this
 # one turn changed" — if the tree already had unrelated uncommitted changes before this
 # session started, they're included in what gets checked. Known limitation, not a bug.
@@ -133,11 +143,22 @@ if [ -n "$FEATURE_SHAPE" ]; then
   if [ -z "$STORY_FILE" ]; then
     FAILS+=("Diff looks feature-shaped (new view/route/migration: $(printf '%s' "$FEATURE_SHAPE" | tr '\n' ' ')) but no docs/stories/*.md was added. Run /enrich-user-story first and save its 'Refined User Story' output there.")
   fi
+fi
 
+# Any Vue/style change — not just FEATURE_SHAPE's views/routes/migrations regex. A
+# layout/component-only diff (e.g. apps/*/src/layouts/, packages/*/src/components/) is
+# exactly as "visual" as a new view, but FEATURE_SHAPE alone missed it (confirmed gap:
+# NEO-9 touched only layouts/ + packages/ui/, so the artifact gate below never fired on
+# the first pass of that ticket). This variable exists purely to decide whether a
+# before/after visual comparison should be required in the artifact marker below — it does
+# NOT require a docs/stories entry the way FEATURE_SHAPE does.
+VISUAL_SHAPE="$(printf '%s\n' "$SRC_CHANGED" | grep -E '\.(vue|css)$' || true)"
+
+if [ -n "$FEATURE_SHAPE" ] || [ -n "$VISUAL_SHAPE" ]; then
   # --- ARTIFACT MARKER -----------------------------------------------------------------
-  # A feature-shaped diff almost always maps to a Linear ticket (referenced in the story
-  # doc and/or recent commit messages). If any such ticket is found, require proof that a
-  # visual Artifact was published and attached to it: a marker file at
+  # A feature- or visual-shaped diff almost always maps to a Linear ticket (referenced in
+  # the story doc and/or recent commit messages). If any such ticket is found, require
+  # proof that a visual Artifact was published and attached to it: a marker file at
   # .claude/local/artifacts/<TICKET-ID>.json (gitignored — .claude/local/ — so this is a
   # per-machine, per-session discipline check, not repo state).
   #
@@ -151,15 +172,26 @@ if [ -n "$FEATURE_SHAPE" ]; then
   #      artifact-diagramming skills), "Run it locally" (name the ".vscode/tasks.json"
   #      "Start NeoCRM Dev Stack" task), "Verify it" (a QA checklist mirroring the
   #      Acceptance Criteria 1:1).
-  #   2. Publish it, then attach it to the ticket via save_issue's `links` param so it's
+  #   2. When VISUAL_SHAPE is non-empty (any .vue/.css file changed): "What changed" must
+  #      also show an actual before/after — either the two PNGs from Step 9's screenshot
+  #      convention (docs/worker-screenshots/<ticket>/{before,after}.png) if a real render
+  #      was possible, or, when no live-app/DB access was available, a hand-built HTML/CSS
+  #      mockup reproducing the real component's colors/spacing/layout, clearly labeled as
+  #      a mockup rather than a live screenshot. A wall of prose describing the change is
+  #      not a substitute — this is the exact "AI slop" gap that prompted this check.
+  #   3. Publish it, then attach it to the ticket via save_issue's `links` param so it's
   #      visible ON the Linear issue itself.
-  #   3. Write the marker: mkdir -p .claude/local/artifacts && write
+  #   4. Write the marker: mkdir -p .claude/local/artifacts && write
   #      .claude/local/artifacts/<TICKET-ID>.json with:
   #      { "url": "<artifact url>",
   #        "hoisting": "platform" | "client:<slug>" | "n/a — infra/tooling",
   #        "sections": ["summary", "run-locally", "qa-checklist"],
-  #        "testCoverageMap": [ { "ac": "<short AC text>", "tests": ["<file> › <test name>"] } ] }
-  TICKET_REFS="$( { [ -n "$STORY_FILE" ] && cat $STORY_FILE 2>/dev/null; git log --format=%B -n 20 2>/dev/null; } \
+  #        "testCoverageMap": [ { "ac": "<short AC text>", "tests": ["<file> › <test name>"] } ],
+  #        "visualComparison": "<omit entirely when VISUAL_SHAPE is empty; otherwise a short
+  #          description of what before/after evidence exists and where, e.g. 'mockup
+  #          embedded in artifact What changed section' or 'docs/worker-screenshots/NEO-9/
+  #          before.png + after.png'>" }
+  TICKET_REFS="$( { [ -n "${STORY_FILE:-}" ] && cat $STORY_FILE 2>/dev/null; git log --format=%B -n 20 2>/dev/null; } \
     | grep -oE '\b[A-Z]{2,10}-[0-9]+\b' | sort -u || true)"
   if [ -n "$TICKET_REFS" ]; then
     while IFS= read -r ticket; do
@@ -174,6 +206,10 @@ if [ -n "$FEATURE_SHAPE" ]; then
           || FAILS+=("$MARKER exists but its 'sections' array doesn't cover all three required sections (summary, run-locally, qa-checklist) — the artifact for ${ticket} must have all three.")
         jq -e '(.testCoverageMap // []) | length > 0' "$MARKER" >/dev/null 2>&1 \
           || FAILS+=("$MARKER exists but 'testCoverageMap' is empty — map each Acceptance Criterion for ${ticket} to the test(s) that verify it before ending this turn.")
+        if [ -n "$VISUAL_SHAPE" ]; then
+          jq -e '.visualComparison != null and .visualComparison != ""' "$MARKER" >/dev/null 2>&1 \
+            || FAILS+=("$MARKER exists but this diff changes Vue/CSS files ($(printf '%s' "$VISUAL_SHAPE" | tr '\n' ' ')) and the marker has no non-empty 'visualComparison' field — the artifact for ${ticket} must show an actual before/after (real screenshots or a labeled mockup), not just text sections.")
+        fi
       fi
     done <<< "$TICKET_REFS"
   fi

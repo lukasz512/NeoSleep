@@ -29,7 +29,7 @@
       </template>
 
       <template #drawer-footer>
-        <div v-if="!isMobile" class="layout-nav-footer" :class="{ 'layout-nav-footer--collapsed': sidebarCollapsed }">
+        <div class="layout-nav-footer" :class="{ 'layout-nav-footer--collapsed': !isMobile && sidebarCollapsed }">
           <VMenu
             v-model="menuOpen"
             location="end top"
@@ -47,7 +47,7 @@
                 <VAvatar size="32" color="primary">
                   <span class="text-caption font-weight-bold">{{ user.initials }}</span>
                 </VAvatar>
-                <div v-if="!sidebarCollapsed" class="layout-user-info">
+                <div v-if="isMobile || !sidebarCollapsed" class="layout-user-info">
                   <span class="layout-user-name">{{ user.displayName }}</span>
                   <span class="layout-user-role">{{ user.role }}</span>
                 </div>
@@ -57,6 +57,7 @@
             <AppUserMenuPanel
               :theme="theme"
               :locale="(locale as string)"
+              :drawer="isMobile"
               @toggle-theme="toggleTheme"
               @change-locale="(lang) => setLocale(lang as 'en' | 'pl' | 'mx')"
               @logout="onLogout"
@@ -65,6 +66,7 @@
           </VMenu>
 
           <AppButton
+            v-if="!isMobile"
             icon
             variant="text"
             size="small"
@@ -76,16 +78,6 @@
             <AppIcon :name="sidebarCollapsed ? 'chevron-right' : 'chevron-left'" class="layout-nav__chevron" />
           </AppButton>
         </div>
-        <AppUserMenuPanel
-          v-else
-          :theme="theme"
-          :locale="(locale as string)"
-          drawer
-          @toggle-theme="toggleTheme"
-          @change-locale="(lang) => setLocale(lang as 'en' | 'pl' | 'mx')"
-          @logout="onLogout"
-          @close="mobileDrawerOpen = false"
-        />
       </template>
 
       <template #app-bar-title>
@@ -344,9 +336,10 @@ const moduleIcon = computed(() => {
 }
 
 .layout-collapse-btn {
-  width: 24px;
-  height: 24px;
-  min-width: 24px;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  margin-inline-end: 8px;
 }
 
 .layout-user-btn {
@@ -354,8 +347,21 @@ const moduleIcon = computed(() => {
   min-width: 0;
   justify-content: flex-start;
   padding-inline: 8px;
+  margin-block: 6px;
   text-transform: none;
   letter-spacing: normal;
+  transition: transform 0.15s ease-out;
+}
+
+.layout-user-btn:hover,
+.layout-user-btn:focus-visible {
+  transform: scale(1.03);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .layout-user-btn {
+    transition: none;
+  }
 }
 
 .layout-nav-footer--collapsed .layout-user-btn {
