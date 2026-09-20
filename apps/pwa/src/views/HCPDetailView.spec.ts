@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mount, type VueWrapper } from "@vue/test-utils";
+import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
 import { setActivePinia, createPinia } from "pinia";
 import { createI18n } from "vue-i18n";
 import { createVuetify } from "vuetify";
 import * as vuetifyComponents from "vuetify/components";
 import * as vuetifyDirectives from "vuetify/directives";
-import { createRouter, createMemoryHistory, type Router } from "vue-router";
+import { createRouter, createMemoryHistory } from "vue-router";
 import en from "@i18n/en.json";
 import { routes } from "../router/routes";
 import { useAuthStore } from "../stores/auth";
@@ -16,10 +16,27 @@ vi.mock("../composables/useApi", async (importOriginal) => ({
   apiFetch: (...args: unknown[]) => apiFetch(...args),
 }));
 
+const notify = vi.fn();
+vi.mock("../composables/useNotifications", () => ({ useNotifications: () => ({ show: notify }) }));
+
+// Sidesteps the "idb" (IndexedDB) offline-cache layer entirely — jsdom has no
+// IndexedDB, and loadHCP() fires this fire-and-forget on every successful
+// load (see docs/ADR-013-offline-read-cache.md). Not under test here.
+vi.mock("../stores/entityCache", () => ({
+  useEntityCacheStore: () => ({ cacheOne: vi.fn(), readOne: vi.fn().mockResolvedValue(null) }),
+}));
+
+// HCPDetailView renders FormRenderer/EventForm via defineAsyncComponent —
+// pre-importing them here (module scope, before any mount/unmount) resolves
+// their whole nested chunk graph (FormRenderer -> PhoneField -> FlagIcon,
+// etc.) up front, instead of racing that dynamic import against this test's
+// own afterEach() unmount.
+import "../components/FormRenderer.vue";
+import "../components/EventForm.vue";
 import HCPDetailView from "./HCPDetailView.vue";
 
-function jsonResponse(ok: boolean, body: unknown) {
-  return { ok, status: ok ? 200 : 404, json: async () => body } as Response;
+function jsonResponse(ok: boolean, status: number, body: unknown) {
+  return { ok, status, json: async () => body } as Response;
 }
 
 function hcpFixture(status: string) {
@@ -37,11 +54,12 @@ const mountedWrappers: VueWrapper[] = [];
 afterEach(() => {
   for (const w of mountedWrappers.splice(0)) w.unmount();
   apiFetch.mockReset();
+  notify.mockReset();
 });
 
 async function mountHCPDetail(status: string, role: "admin" | "rep" = "admin"): Promise<VueWrapper> {
   setActivePinia(createPinia());
-  apiFetch.mockResolvedValueOnce(jsonResponse(true, hcpFixture(status)));
+  apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, hcpFixture(status)));
 
   const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
   const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
@@ -56,17 +74,38 @@ async function mountHCPDetail(status: string, role: "admin" | "rep" = "admin"): 
   mountedWrappers.push(wrapper);
   await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(1));
   await wrapper.vm.$nextTick();
-  // HCPDetailView's template unconditionally contains <FormRenderer>, a
-  // defineAsyncComponent — merely mounting this view kicks off its dynamic
-  // import (and PhoneField's own nested scoped-CSS chunk within it) even
-  // though the edit modal itself is never opened by these tests. Without
-  // waiting for that import to settle here, it can still be in flight when
-  // this test file's environment is torn down, throwing an unhandled
-  // "EnvironmentTeardownError" rejection that fails the whole run despite
-  // every assertion passing (confirmed via quality-gate.sh, 2026-09-17).
-  await vi.dynamicImportSettled();
+  // FormRenderer/EventForm are async components (defineAsyncComponent) that
+  // start loading their chunk as soon as this view mounts, regardless of
+  // their own v-model visibility. Without waiting for that import to settle
+  // here, it can still be in flight when this test file's environment is
+  // torn down, producing a benign but noisy "environment was torn down"
+  // unhandled rejection. flushPromises() (not a bespoke `vi` API — this repo
+  // doesn't define one) is enough because the chunk graph was already
+  // pre-imported at module scope above, so there's no real dynamic import
+  // left in flight, just its already-resolved promise microtasks to drain.
+  await flushPromises();
   return wrapper;
 }
+
+describe("HCPDetailView — Documents tab", () => {
+  it("lists 'Documents' among the tabs and wires it to the practitioner's /documents endpoint", async () => {
+    const wrapper = await mountHCPDetail("active");
+
+    expect(wrapper.text()).toContain("Dr. Andrzej Testerski");
+
+    const documentsTab = wrapper.findAll('[role="tab"]').find((t) => t.text() === "Documents");
+    expect(documentsTab?.exists()).toBe(true);
+
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, []));
+    await documentsTab?.trigger("click");
+
+    await vi.waitFor(() =>
+      expect(apiFetch).toHaveBeenCalledWith("/api/v1/practitioner/hcp-1/documents", { handleErrors: false })
+    );
+
+    await flushPromises();
+  });
+});
 
 describe("HCPDetailView — invite/resend status handling", () => {
   beforeEach(() => {
@@ -111,8 +150,8 @@ describe("HCPDetailView — invite/resend status handling", () => {
 
   it("resending posts to the activate endpoint and shows the resend-specific success message", async () => {
     const wrapper = await mountHCPDetail("invited");
-    apiFetch.mockResolvedValueOnce(jsonResponse(true, {}));
-    apiFetch.mockResolvedValueOnce(jsonResponse(true, hcpFixture("invited")));
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, {}));
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, hcpFixture("invited")));
 
     const button = wrapper.findAll("button").find((b) => b.attributes("aria-label") === "Resend invite");
     expect(button).toBeTruthy();

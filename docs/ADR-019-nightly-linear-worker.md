@@ -246,6 +246,77 @@ never a self-check failure, never triggers `Blocked`, and never blocks ticket
 completion. The synthetic-data-only rule from Compliance Impact below applies
 here too, extended to this new visual surface, not just DB rows.
 
+**Update, 2026-09-20: mandatory hoisting line, conditional double-implementation
+pass, backward consistency check, completion artifact — plus a duplicate
+push-preflight found and removed during merge.** Łukasz was dissatisfied
+specifically with this worker's output — text-only completion comments with
+no visual, no repeatable local verification path, and no forced check on
+whether a change should be platform-generic or tenant-specific given the
+white-label model (full enrichment:
+`docs/stories/linear-worker-pipeline-hardening.md`). Four changes landed in
+`SKILL.md`; a fifth was built, then discovered redundant and removed:
+
+- **Push-access preflight — built, then found already done.** This work
+  started from a `dev` checkout that predated the 2026-09-16 Step 2.5 update
+  above, and independently built a near-identical `git push --dry-run` check
+  as a new "Step 3.5" (after Claim). Merging this branch back into `dev`
+  surfaced the duplication — Step 2.5's item 3 already does this, positioned
+  better (before Claim, so a failing environment never even burns a Claim on
+  a ticket that was never actually worked). Step 3.5 was deleted rather than
+  kept as a second, worse-positioned copy; the one genuinely new piece of
+  it — the specific GitHub App install URL
+  (https://github.com/apps/claude/installations/select_target) — was folded
+  into Step 2.5's item 3 error message instead. Worth stating plainly since
+  this ADR is a record, not a highlight reel: this only came to light at
+  merge time, not during design — a sign that a step this close to another
+  team's recent, adjacent work (both touching `linear-worker/SKILL.md`
+  within days of each other) deserved a `git fetch`/diff check against `dev`
+  before building, not just before merging.
+- **Mandatory platform-vs-client line, Step 5.** Every `feature`-classified
+  ticket's story doc now states explicitly whether the change is
+  platform-generic (hoistable to any white-label tenant) or specific to the
+  current tenant — sharpening the existing 🚀 NeoCRM/Platform lens into a
+  literal, non-skippable statement instead of optional prose.
+- **Conditional double-implementation pass, Step 6.5.** Only when arch's new
+  `_contracts/arch→linear-worker.md` ambiguity assessment (invoked from
+  Step 5) returns `ambiguous` — most tickets don't trigger this. Two
+  independent implementation attempts, compared against an explicit rubric
+  (AC-to-test coverage, diff simplicity, CLAUDE.md convention adherence), the
+  worker keeps the more coherent one and records both summaries in the
+  completion comment. This is a genuine autonomy expansion (the worker
+  self-adjudicates, since it has no way to pause for a live human review
+  overnight) — Łukasz confirmed this explicitly rather than it being assumed.
+  `_contracts/arch→linear-worker.md` is a new escalation *direction*: every
+  other contract in `_contracts/` has a specialist reporting back to arch,
+  never arch flagging ambiguity to an implementer — worth knowing if this
+  pattern gets reused elsewhere later.
+- **Step 7.5, Backward Consistency Check.** Runs on every ticket (not a
+  periodic release gate — Łukasz's explicit choice over the lighter
+  alternative): a name-collision grep against existing migrations/routes, a
+  check that no `Accepted` ADR is contradicted, and a Test Coverage Map
+  (every Acceptance Criterion mapped to the test that verifies it — an AC
+  with zero mapped tests fails this step, same stop-don't-fix policy as any
+  other self-check failure).
+- **Mandatory completion Artifact, Step 9.** Three fixed sections (What
+  changed / Run it locally / Verify it) — the first genuinely visual,
+  intentionally condensed rather than another wall of text; the second names
+  the new `.vscode/tasks.json` "Start NeoCRM Dev Stack" task (no `.vscode/`
+  setup existed in this repo before this change); the third is the Test
+  Coverage Map rendered as a QA checklist. Attached to the ticket via
+  `save_issue`'s `links`, backed by a marker file
+  (`.claude/local/artifacts/<ticket-id>.json`) that `quality-gate.sh` now
+  also enforces for interactive sessions — one convention, two enforcement
+  paths, so a human-driven session and this worker produce the same shape of
+  completion package.
+
+**Memory correction, same date**: a project memory previously claimed NEO-25
+had already added a push-access preflight. It hadn't — NEO-25's actual merge
+(`917c745`) added the `DATABASE_URL`/environment preflight described in the
+2026-09-10 updates above, unrelated to GitHub push access. The real push
+preflight is Step 2.5's item 3 above, added 2026-09-16 — a separate, later
+piece of work than NEO-25, and (per the point above) one this session didn't
+know about until merge time.
+
 ## Consequences
 - Enables: tickets written during the day can turn into a reviewable branch
   within about an hour (see 2026-09-16 cadence update above) without Łukasz

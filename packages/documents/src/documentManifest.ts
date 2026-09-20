@@ -33,6 +33,8 @@ export const DOCUMENT_MANIFEST: readonly DocumentManifestEntry[] = [
   { templateKey: "informedConsent", locales: ["en", "pl", "mx"], label: "Patient Informed Consent (MAD)" },
   { templateKey: "gdprConsent.pl", locales: ["pl"], label: "Doctor Data Protection Consent — Poland (GDPR)" },
   { templateKey: "gdprConsent.mx", locales: ["mx"], label: "Doctor Data Protection Consent — Mexico (LFPDPPP)" },
+  { templateKey: "historiaEndo", locales: ["en", "mx"], label: "Historia Endo — Root Canal Informed Consent" },
+  { templateKey: "stopBang", locales: ["en", "mx"], label: "STOP-Bang OSA Screening" },
   { templateKey: "__test", locales: ["en", "pl", "mx"], label: "TEST FIXTURE — never shown, never real content", hidden: true },
 ];
 

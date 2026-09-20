@@ -170,6 +170,9 @@
               :empty-label="t('user.hcp.detail.relatedPatientsEmpty')"
             />
           </template>
+          <template #documents>
+            <EntityDocumentsPanel :endpoint="`/api/v1/practitioner/${hcp.id}/documents`" />
+          </template>
           <template #history>
             <EntityHistoryPanel :endpoint="`/api/v1/practitioner/${hcp.id}/history`" />
           </template>
@@ -224,6 +227,7 @@ import DetailViewTabs from "../components/DetailViewTabs.vue";
 import EntityLink from "../components/EntityLink.vue";
 import EntityHistoryPanel from "../components/EntityHistoryPanel.vue";
 import RelatedEntityPanel from "../components/RelatedEntityPanel.vue";
+import EntityDocumentsPanel from "../components/EntityDocumentsPanel.vue";
 import PatientNotesPanel from "../components/patient/PatientNotesPanel.vue";
 import { useConfigStore } from "../stores/config";
 import { hcpFormFields, hcpFormDerive, resolveOrganizationIdForSubmit } from "../config/forms/hcpForm";
@@ -275,6 +279,7 @@ const hcpTabs = [
   { value: "details", labelKey: "user.hcp.detail.tabs.details" },
   { value: "notes", labelKey: "user.hcp.detail.tabs.notes" },
   { value: "relatedPatients", labelKey: "user.hcp.detail.tabs.relatedPatients" },
+  { value: "documents", labelKey: "user.hcp.detail.tabs.documents" },
   { value: "history", labelKey: "user.hcp.detail.tabs.history" },
 ];
 const activeTab = ref((route.query.tab as string) || "details");

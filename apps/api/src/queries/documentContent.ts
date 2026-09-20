@@ -6,6 +6,7 @@ import {
   type DocumentContentVersionRow,
   type ListDocumentContentVersionsOptions,
 } from "../db/documentContent.js";
+import { getEntityTypesForTemplate } from "../db/documentTemplateEntityType.js";
 import { DOCUMENT_MANIFEST } from "@neo/documents";
 import { NotFoundError } from "../errors.js";
 
@@ -73,4 +74,9 @@ export async function GetDocumentContentVersionByIdQuery(id: string): Promise<Do
   const version = await withPlatform((client) => getDocumentContentVersionById(client, id));
   if (!version) throw new NotFoundError("Document content version", id);
   return version;
+}
+
+/** Permissions tab — current entity-type assignment for a template. Empty array if never assigned, not an error. */
+export async function GetDocumentTemplateEntityTypesQuery(templateKey: string): Promise<string[]> {
+  return withPlatform((client) => getEntityTypesForTemplate(client, templateKey));
 }

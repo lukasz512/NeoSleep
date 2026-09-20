@@ -237,6 +237,31 @@ export async function getPractitionerById(client: PoolClient, id: string): Promi
 }
 
 /**
+ * The practitioner's linked doctor-role users row, if any (ADR-014 identity
+ * linkage: practitioner and users(doctor) share identity_id). Used by
+ * queries/entityDocuments.ts to also surface the doctor's signed GDPR
+ * consent/partner-agreement documents — those are written with
+ * entity_type="user" (see commands/invitePractitioner.ts), not
+ * entity_type="practitioner", since they're generated during the doctor's
+ * account-activation flow, before the practitioner Documents tab existed.
+ */
+export async function getLinkedUserIdForPractitioner(client: PoolClient, practitionerId: string): Promise<string | null> {
+  try {
+    const result = await client.query<{ id: string }>(
+      `SELECT u.id
+       FROM users u
+       JOIN practitioner p ON p.identity_id = u.identity_id
+       WHERE p.id = $1 AND u.deleted_at IS NULL`,
+      [practitionerId]
+    );
+    return result.rows[0]?.id ?? null;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getLinkedUserIdForPractitioner", err);
+  }
+}
+
+/**
  * Inserts a practitioner + identity record using the provided client.
  * The client must already be in a transaction (withTenant handles this).
  * No BEGIN/COMMIT here — the caller owns the transaction boundary.
