@@ -30,48 +30,12 @@
 
       <template #drawer-footer>
         <div class="layout-nav-footer" :class="{ 'layout-nav-footer--collapsed': !isMobile && sidebarCollapsed }">
-          <!-- Phone/tablet (isMobile, same <768px breakpoint AppShell/useLayoutState
-               already use everywhere else): a real slide-up sheet instead of an
-               anchored popup — VBottomSheet ships with Vuetify core (already globally
-               registered via createNeoVuetify's plain createVuetify() call, see
-               packages/vuetify/src/index.ts), so this needed no new dependency. Fixes
-               the anchored VMenu's icons overflowing the drawer width on narrow
-               viewports, and gives swipe/backdrop-dismiss for free. -->
-          <VBottomSheet v-if="isMobile" v-model="menuOpen">
-            <template #activator="{ props: menuProps }">
-              <AppButton
-                v-bind="menuProps"
-                variant="text"
-                class="layout-user-btn"
-                :title="t('user.user.menu')"
-                :aria-label="t('user.user.menu')"
-              >
-                <VAvatar size="32" color="primary">
-                  <span class="text-caption font-weight-bold">{{ user.initials }}</span>
-                </VAvatar>
-                <div class="layout-user-info">
-                  <span class="layout-user-name">{{ user.displayName }}</span>
-                  <span class="layout-user-role">{{ user.role }}</span>
-                </div>
-              </AppButton>
-            </template>
-
-            <AppUserMenuPanel
-              :theme="theme"
-              :locale="(locale as string)"
-              drawer
-              @toggle-theme="toggleTheme"
-              @change-locale="(lang) => setLocale(lang as 'en' | 'pl' | 'mx')"
-              @logout="onLogout"
-              @close="menuOpen = false"
-            />
-          </VBottomSheet>
-
-          <!-- Desktop: anchored popup, opened straight above the avatar (location
-               "top", not "end top") with an explicit offset for breathing room —
-               "end top" anchored to the side and read as misplaced. -->
+          <!-- Reverted round 2's VBottomSheet split (2026-09-21) — looked worse in
+               practice than the anchored popup it replaced (overlapped the bottom
+               nav awkwardly on live pwa-dev). Back to one VMenu for both
+               breakpoints; kept only the location="top"/offset="12" positioning
+               fix, which was never the part that was complained about. -->
           <VMenu
-            v-else
             v-model="menuOpen"
             location="top"
             offset="12"
@@ -89,7 +53,7 @@
                 <VAvatar size="32" color="primary">
                   <span class="text-caption font-weight-bold">{{ user.initials }}</span>
                 </VAvatar>
-                <div v-if="!sidebarCollapsed" class="layout-user-info">
+                <div v-if="isMobile || !sidebarCollapsed" class="layout-user-info">
                   <span class="layout-user-name">{{ user.displayName }}</span>
                   <span class="layout-user-role">{{ user.role }}</span>
                 </div>
@@ -99,6 +63,7 @@
             <AppUserMenuPanel
               :theme="theme"
               :locale="(locale as string)"
+              :drawer="isMobile"
               @toggle-theme="toggleTheme"
               @change-locale="(lang) => setLocale(lang as 'en' | 'pl' | 'mx')"
               @logout="onLogout"
@@ -398,6 +363,11 @@ const moduleIcon = computed(() => {
   margin-inline-end: 0;
 }
 
+/* Static sizing only — no hover/focus size change. Two attempts at an animated
+   "grow on hover" (transform: scale, then padding-block) both read as broken in
+   practice (ugly scaling, then a visible slide/overflow jump) — dropped entirely.
+   Hover/focus feedback now comes from Vuetify's own built-in text-button overlay
+   (AppButton variant="text"), not custom CSS. */
 .layout-user-btn {
   flex: 1 1 auto;
   min-width: 0;
@@ -408,18 +378,6 @@ const moduleIcon = computed(() => {
   margin-block-end: 12px;
   text-transform: none;
   letter-spacing: normal;
-  transition: padding-block 0.15s ease-out;
-}
-
-.layout-user-btn:hover,
-.layout-user-btn:focus-visible {
-  padding-block: 12px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .layout-user-btn {
-    transition: none;
-  }
 }
 
 .layout-nav-footer--collapsed .layout-user-btn {

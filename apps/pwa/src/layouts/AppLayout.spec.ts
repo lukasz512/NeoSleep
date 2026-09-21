@@ -209,22 +209,21 @@ describe("AppLayout", () => {
 
   // NEO-9: drawer-footer account menu — mobile parity, spacing/sizing, visibility above the bottom nav.
   describe("NEO-9 — drawer-footer account menu", () => {
-    it("mobile opens the account menu in a VBottomSheet (real slide-up sheet), desktop keeps an anchored VMenu", () => {
+    it("has a single drawer-footer template shared by desktop and mobile — no VBottomSheet split, no always-expanded inline branch", () => {
       const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
       const footerStart = appLayoutSource.indexOf("#drawer-footer");
       const footerEnd = appLayoutSource.indexOf("#app-bar-title", footerStart);
       const footerBlock = appLayoutSource.slice(footerStart, footerEnd);
-      // No old always-expanded inline mobile branch left over.
       expect(footerBlock).not.toMatch(/<AppUserMenuPanel[^>]*\bv-else\b/);
-      // Two AppUserMenuPanel usages: one inside VBottomSheet (mobile), one inside VMenu (desktop).
-      expect(footerBlock.match(/<AppUserMenuPanel\b/g)).toHaveLength(2);
-      expect(footerBlock).toMatch(/<VBottomSheet\s+v-if="isMobile"[\s\S]*<AppUserMenuPanel[\s\S]*<\/VBottomSheet>/);
-      expect(footerBlock).toMatch(/<VMenu\s+v-else[\s\S]*<AppUserMenuPanel[\s\S]*<\/VMenu>/);
+      expect(footerBlock).not.toContain("<VBottomSheet");
+      // Exactly one AppUserMenuPanel usage, wrapped by the one shared VMenu.
+      expect(footerBlock.match(/<AppUserMenuPanel\b/g)).toHaveLength(1);
+      expect(footerBlock).toMatch(/<VMenu[\s\S]*<AppUserMenuPanel[\s\S]*<\/VMenu>/);
     });
 
-    it("desktop menu opens above the avatar with breathing room (location=\"top\", not the side-anchored \"end top\")", () => {
+    it("menu opens above the avatar with breathing room (location=\"top\", not the side-anchored \"end top\")", () => {
       const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
-      expect(appLayoutSource).toMatch(/<VMenu\s+v-else[\s\S]*?location="top"[\s\S]*?offset="12"/);
+      expect(appLayoutSource).toMatch(/<VMenu[\s\S]*?location="top"[\s\S]*?offset="12"/);
       expect(appLayoutSource).not.toContain('location="end top"');
     });
 
@@ -241,14 +240,13 @@ describe("AppLayout", () => {
       expect(appLayoutSource).toMatch(/<AppButton\s+v-if="!isMobile"[\s\S]*?class="layout-collapse-btn"/);
     });
 
-    it("avatar/user button grows via padding on hover/focus (not transform: scale) and has extra bottom margin at rest", () => {
+    it("avatar/user button has extra bottom margin at rest and no custom hover/focus size animation (two prior attempts both looked broken live)", () => {
       const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
       const rule = appLayoutSource.match(/(?<!--collapsed )\.layout-user-btn\s*\{[\s\S]*?\}/)?.[0] ?? "";
-      expect(rule).toMatch(/padding-block:\s*6px/);
       expect(rule).toMatch(/margin-block-end:\s*12px/);
-      const hoverRule = appLayoutSource.match(/\.layout-user-btn:hover,\s*\n\.layout-user-btn:focus-visible\s*\{[\s\S]*?\}/)?.[0] ?? "";
-      expect(hoverRule).toMatch(/padding-block:\s*12px/);
-      expect(hoverRule).not.toMatch(/transform:\s*scale/);
+      expect(rule).not.toMatch(/transition/);
+      expect(appLayoutSource).not.toMatch(/\.layout-user-btn:hover/);
+      expect(appLayoutSource).not.toMatch(/\.layout-user-btn[\s\S]{0,400}transform:\s*scale/);
     });
 
     it("collapsed rail stacks the avatar above the chevron (column, not row) so both stay visible in the narrow rail width", () => {
