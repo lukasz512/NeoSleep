@@ -79,9 +79,14 @@ test.describe("logout is per-device", () => {
     await login(pageB);
 
     // Logout in A: open the user menu (AppLayout.vue's .layout-user-btn), then
-    // click "Log out" (AppUserMenuPanel.vue, i18n key user.settings.logOut).
+    // click the logout icon button (AppUserMenuPanel.vue, i18n key
+    // user.settings.logOut). NEO-9 made this an icon-only VBtn wrapped in a
+    // VTooltip — the tooltip's own overlay also contains the text "Log out"
+    // but stays hidden until hovered, so getByText matched that instead of
+    // the button and failed with "element is not visible". The button's
+    // accessible name (its aria-label) is the only reliable way to target it.
     await pageA.locator(".layout-user-btn").click();
-    await pageA.getByText("Log out").click();
+    await pageA.getByRole("button", { name: "Log out" }).click();
     await pageA.waitForURL("**/login");
 
     // B must still be able to reload and stay authenticated.
