@@ -16,6 +16,7 @@
     "typecheck": "tsc -b",
     "i18n:extract": "node infrastructure/scripts/i18n/extract.mjs",
     "i18n:unused": "node infrastructure/scripts/i18n/unused.mjs",
+    "i18n:parity": "node infrastructure/scripts/i18n/parity.mjs",
     "i18n:prune": "node infrastructure/scripts/i18n/prune.mjs",
     "build:web": "pnpm --filter @neo/web build",
     "build:pwa": "pnpm --filter @neo/pwa build",
