@@ -7,12 +7,31 @@ Chrome-Claude live-capture rounds, plus what's still an unconfirmed approximatio
 this before touching wizard layout/validation again — it exists specifically so that
 knowledge doesn't have to be re-derived from chat history on every pass.
 
-User-facing branding: the product is always called **"NOA"** in the PWA, never
-"OrthoApnea" — reps order NOA; OrthoApnea is the manufacturer/partner, an implementation
-detail. Exception: the admin-only transaction log (`OrthoApneaTransactionLog.vue`) still
-says "OrthoApnea" — it's a technical debugging view about the actual partner API, where
-naming the real partner is useful, not brand-facing copy. Code identifiers, routes, DB
-tables, and ADRs also keep the "orthoapnea" name — only i18n *values* changed.
+User-facing branding (**updated 2026-09-21, NEO-16**): the product is now called
+**"Device"** (EN) / **"Urządzenie"** (PL) / **"Dispositivo"** (MX) generically in the PWA
+— this supersedes the earlier "always NOA, never OrthoApnea" rule below. Reps were seeing
+"NOA", "DAM", and an untranslated "DAN" inconsistently across the patient-detail tab,
+order wizard, and admin transaction log; Łukasz confirmed (NEO-16) he wants the generic
+locale-native word everywhere instead of the "NOA" brand name, including in the admin
+transaction log. The informed-consent legal document text ("DAM" / Dispositivo de Avance
+Mandibular, precise clinical/legal terminology) and the OrthoApnea-product-matching logic
+in `useOrthoApneaOrderWizard.ts` (`p.nameEs.toUpperCase() === "NOA"`, which matches the
+real partner API's product name, not display copy) were explicitly left unchanged. Code
+identifiers, routes, DB tables, and ADRs also keep the "orthoapnea" name — only i18n
+*values* changed.
+
+<details>
+<summary>Historical context (pre-2026-09-21): why it was "NOA" in the first place</summary>
+
+The product used to be called **"NOA"** in the PWA, never "OrthoApnea" — reps ordered NOA;
+OrthoApnea was the manufacturer/partner, an implementation detail. The admin-only
+transaction log (`OrthoApneaTransactionLog.vue`) was documented as an exception that
+still said "OrthoApnea" for technical-debugging clarity, though by the time NEO-16 was
+worked the actual i18n values there already said "NOA", not "OrthoApnea" — this doc had
+drifted from the code. NEO-16 replaces this whole branding scheme with the generic
+"device" wording above.
+
+</details>
 
 ## Confirmed validation rules (from a live OA screenshot)
 
