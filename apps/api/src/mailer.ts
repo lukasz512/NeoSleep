@@ -20,14 +20,12 @@ export interface EmailRecipient {
   region?: string | null;
 }
 
-/** The rep/admin a personal-outreach email is "from" — e.g. a lead-offer or partner-invite
- * email should look like it came from the rep who actually triggered it, not a faceless
- * "NeoSleep" system sender. Resend's verified sending address stays the same either way (it
- * has to, for SPF/DKIM/DMARC alignment — see ADR-016 on why that's a dedicated subdomain, not
- * a per-person mailbox); what changes is the display name and the Reply-To header, so a doctor
- * hitting "reply" lands in the rep's own real inbox (e.g. alfred.jan@neosleepcare.com on
- * Microsoft 365), not a noreply@ black hole. This needs no new mailbox to be provisioned per
- * rep — it reuses whatever real address the rep already logs in with. */
+/** The rep/admin a personal-outreach email is "from" — the display name always reads
+ * "NeoSleep" (consistent brand sender across lead-offer, partner-invite, and thank-you
+ * emails), but Reply-To is still set to the rep's own address, so a doctor hitting "reply"
+ * lands in the rep's real inbox (e.g. alfred.jan@neosleepcare.com on Microsoft 365), not a
+ * noreply@ black hole. This needs no new mailbox to be provisioned per rep — it reuses
+ * whatever real address the rep already logs in with. */
 export interface EmailSender {
   name: string;
   email: string;
@@ -51,8 +49,6 @@ interface SendEmailArgs {
   subject: string;
   html: string;
   attachments: EmailAttachment[];
-  /** Overrides the "NeoSleep" display name — e.g. the rep's own name for personal outreach. */
-  fromName?: string;
   /** Set so replies land in a real inbox (the rep's) instead of the noreply@ sending address. */
   replyTo?: string;
   /** Fixed extra recipient(s), e.g. an internal compliance inbox — see PARTNER_DOCS_CC_EMAIL. */
@@ -76,7 +72,7 @@ async function sendEmail(logLabel: string, args: SendEmailArgs): Promise<string 
 
   try {
     const { data, error } = await resend.emails.send({
-      from: `${args.fromName ?? "NeoSleep"} <${RESEND_FROM_EMAIL}>`,
+      from: `NeoSleep <${RESEND_FROM_EMAIL}>`,
       to: args.to,
       subject: args.subject,
       html: args.html,
@@ -201,7 +197,6 @@ export async function sendLeadOfferEmail(
     subject: emailT(locale, "email.leadOffer.subject"),
     html,
     attachments: getEmailAttachments(socials),
-    fromName: sender.name,
     replyTo: sender.email,
   });
 }
@@ -286,7 +281,6 @@ export async function sendPartnerInviteEmail(
     subject: emailT(locale, "email.partnerInvite.subject"),
     html,
     attachments: getEmailAttachments(socials),
-    fromName: sender.name,
     replyTo: sender.email,
   });
 }
@@ -322,7 +316,6 @@ export async function sendPartnerJoinThankYouEmail(to: string, recipient: EmailR
     subject: emailT(locale, "email.partnerJoinThankYou.subject"),
     html,
     attachments: getEmailAttachments(socials),
-    fromName: sender.name,
     replyTo: sender.email,
   });
 }
