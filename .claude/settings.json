@@ -4,7 +4,13 @@
       "Bash(python3 -c *)",
       "Bash(pnpm --filter website exec vue-tsc *)",
       "Bash(pnpm --filter website build *)",
-      "Bash(pnpm add *)"
+      "Bash(pnpm add *)",
+      "Artifact",
+      "Bash(mkdir -p .claude/local/artifacts*)",
+      "Bash(ls .claude/local/artifacts*)",
+      "Bash(cat .claude/local/*)",
+      "Bash(head)",
+      "Bash(wc -l)"
     ]
   },
   "hooks": {
