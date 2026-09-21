@@ -23,22 +23,40 @@
         <AppIcon name="file" />
       </template>
     </AppStateView>
-    <ul v-else class="entity-history-panel__list">
-      <li v-for="entry in entries" :key="entry.id" class="entity-history-panel__item">
-        <span class="entity-history-panel__date">{{ new Date(entry.created_at).toLocaleString() }}</span>
-        <span class="entity-history-panel__summary">
-          {{ t(`app.history.action.${entry.action}`) }}
-          <strong>{{ entry.entity_type }}</strong>
-          <template v-if="entry.user_name">
-            —
-            <EntityLink :to="userDetailLink(authStore.user?.role, entry.user_id)" :label="entry.user_name" />
-          </template>
-          <span v-if="changedFieldsSummary(entry)" class="entity-history-panel__diff">
-            {{ t("app.history.changedFields", { fields: changedFieldsSummary(entry) }) }}
+    <VTimeline
+      v-else
+      side="end"
+      truncate-line="both"
+      density="compact"
+      line-thickness="2"
+      class="entity-history-panel__timeline"
+    >
+      <VTimelineItem
+        v-for="entry in entries"
+        :key="entry.id"
+        :dot-color="historyActionColor(entry.action)"
+        size="small"
+        fill-dot
+      >
+        <template #icon>
+          <AppIcon :name="historyActionIcon(entry.action)" class="entity-history-panel__dot-icon" />
+        </template>
+        <div class="entity-history-panel__item">
+          <span class="entity-history-panel__date">{{ new Date(entry.created_at).toLocaleString() }}</span>
+          <span class="entity-history-panel__summary">
+            {{ t(`app.history.action.${entry.action}`) }}
+            <strong>{{ historyEntityTypeLabel(t, entry.entity_type) }}</strong>
+            <template v-if="entry.user_name">
+              —
+              <EntityLink :to="userDetailLink(authStore.user?.role, entry.user_id)" :label="entry.user_name" />
+            </template>
+            <span v-if="changedFieldsSummary(entry)" class="entity-history-panel__diff">
+              {{ t("app.history.changedFields", { fields: changedFieldsSummary(entry) }) }}
+            </span>
           </span>
-        </span>
-      </li>
-    </ul>
+        </div>
+      </VTimelineItem>
+    </VTimeline>
   </div>
 </template>
 
@@ -53,6 +71,7 @@ import EntityLink from "./EntityLink.vue";
 import { apiFetch } from "../composables/useApi";
 import { useAuthStore } from "../stores/auth";
 import { userDetailLink } from "../utils/entityLinks";
+import { historyActionIcon, historyActionColor, historyEntityTypeLabel } from "../utils/historyLabels";
 
 /**
  * Generic history/audit-trail panel — entity-type-agnostic on purpose (props:
@@ -141,25 +160,29 @@ watch(() => props.endpoint, loadHistory);
   margin-bottom: 16px;
 }
 
-.entity-history-panel__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.entity-history-panel__timeline {
+  padding-top: 4px;
+}
+
+/* Fixed white, not a theme token — the dot itself is always a saturated
+   action color (success/info/error/warning/secondary) in both light and
+   dark mode, so a light icon reads clearly against any of them. */
+.entity-history-panel__dot-icon {
+  color: #fff;
+  width: 14px;
+  height: 14px;
 }
 
 .entity-history-panel__item {
-  display: grid;
-  grid-template-columns: 180px 1fr;
-  gap: 12px;
-  padding: 8px 0;
-  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 12px;
   font-size: 0.875rem;
 }
 
 .entity-history-panel__date {
+  font-size: 0.75rem;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
