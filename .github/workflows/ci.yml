@@ -95,10 +95,20 @@ jobs:
       - name: Run DB migrations
         run: pnpm --filter @neo/api migrate
 
+      # Regression guard for the exact drift 027_sync_create_tenant_schema.sql
+      # fixed: create_tenant_schema() had gone stale relative to later
+      # migrations for years (see that migration's header) — this fails fast
+      # if a future migration touches a tenant table without also updating
+      # the function, instead of drifting silently again.
+      - name: Check create_tenant_schema() parity
+        run: pnpm --filter @neo/api check-tenant-schema-parity
+
       # Integration tests must never write into "neosleep" (see
       # apps/api/vitest.config.ts) — they target an isolated "test" schema
-      # instead, cloned structurally from "neosleep" since create_tenant_schema()
-      # alone is stale relative to later migrations (see sync-test-schema.ts).
+      # instead. Still cloned via sync-test-schema.ts rather than calling
+      # create_tenant_schema('test') directly, even though that function is
+      # accurate again as of 027 — keeps the isolated test schema on its own
+      # independent path from the function the parity check above validates.
       - name: Sync isolated test tenant schema
         run: pnpm --filter @neo/api sync-test-schema
 
