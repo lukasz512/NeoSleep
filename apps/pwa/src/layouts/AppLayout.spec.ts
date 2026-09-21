@@ -209,15 +209,23 @@ describe("AppLayout", () => {
 
   // NEO-9: drawer-footer account menu — mobile parity, spacing/sizing, visibility above the bottom nav.
   describe("NEO-9 — drawer-footer account menu", () => {
-    it("has a single drawer-footer template shared by desktop and mobile — no separate always-expanded mobile branch", () => {
+    it("mobile opens the account menu in a VBottomSheet (real slide-up sheet), desktop keeps an anchored VMenu", () => {
       const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
       const footerStart = appLayoutSource.indexOf("#drawer-footer");
       const footerEnd = appLayoutSource.indexOf("#app-bar-title", footerStart);
       const footerBlock = appLayoutSource.slice(footerStart, footerEnd);
+      // No old always-expanded inline mobile branch left over.
       expect(footerBlock).not.toMatch(/<AppUserMenuPanel[^>]*\bv-else\b/);
-      // Exactly one AppUserMenuPanel usage, wrapped by VMenu on both breakpoints.
-      expect(footerBlock.match(/<AppUserMenuPanel\b/g)).toHaveLength(1);
-      expect(footerBlock).toMatch(/<VMenu[\s\S]*<AppUserMenuPanel[\s\S]*<\/VMenu>/);
+      // Two AppUserMenuPanel usages: one inside VBottomSheet (mobile), one inside VMenu (desktop).
+      expect(footerBlock.match(/<AppUserMenuPanel\b/g)).toHaveLength(2);
+      expect(footerBlock).toMatch(/<VBottomSheet\s+v-if="isMobile"[\s\S]*<AppUserMenuPanel[\s\S]*<\/VBottomSheet>/);
+      expect(footerBlock).toMatch(/<VMenu\s+v-else[\s\S]*<AppUserMenuPanel[\s\S]*<\/VMenu>/);
+    });
+
+    it("desktop menu opens above the avatar with breathing room (location=\"top\", not the side-anchored \"end top\")", () => {
+      const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
+      expect(appLayoutSource).toMatch(/<VMenu\s+v-else[\s\S]*?location="top"[\s\S]*?offset="12"/);
+      expect(appLayoutSource).not.toContain('location="end top"');
     });
 
     it("collapse chevron button is 32px with right-edge margin (was 24px, flush to the edge)", () => {
@@ -233,11 +241,23 @@ describe("AppLayout", () => {
       expect(appLayoutSource).toMatch(/<AppButton\s+v-if="!isMobile"[\s\S]*?class="layout-collapse-btn"/);
     });
 
-    it("avatar/user button has hover and focus-visible sizing rules with block margin", () => {
+    it("avatar/user button grows via padding on hover/focus (not transform: scale) and has extra bottom margin at rest", () => {
       const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
-      const rule = appLayoutSource.match(/\.layout-user-btn\s*\{[\s\S]*?\}/)?.[0] ?? "";
-      expect(rule).toMatch(/margin-block:\s*6px/);
-      expect(appLayoutSource).toMatch(/\.layout-user-btn:hover,\s*\n\.layout-user-btn:focus-visible\s*\{[\s\S]*?transform:\s*scale/);
+      const rule = appLayoutSource.match(/(?<!--collapsed )\.layout-user-btn\s*\{[\s\S]*?\}/)?.[0] ?? "";
+      expect(rule).toMatch(/padding-block:\s*6px/);
+      expect(rule).toMatch(/margin-block-end:\s*12px/);
+      const hoverRule = appLayoutSource.match(/\.layout-user-btn:hover,\s*\n\.layout-user-btn:focus-visible\s*\{[\s\S]*?\}/)?.[0] ?? "";
+      expect(hoverRule).toMatch(/padding-block:\s*12px/);
+      expect(hoverRule).not.toMatch(/transform:\s*scale/);
+    });
+
+    it("collapsed rail stacks the avatar above the chevron (column, not row) so both stay visible in the narrow rail width", () => {
+      const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
+      const rule = appLayoutSource.match(/\.layout-nav-footer--collapsed\s*\{[\s\S]*?\}/)?.[0] ?? "";
+      expect(rule).toMatch(/flex-direction:\s*column/);
+      const chevronRule = appLayoutSource.match(/\.layout-nav-footer--collapsed \.layout-collapse-btn\s*\{[\s\S]*?\}/)?.[0] ?? "";
+      expect(chevronRule).toMatch(/width:\s*24px/);
+      expect(chevronRule).toMatch(/margin-inline-end:\s*0/);
     });
 
     it("mobile drawer footer gets bottom-nav clearance from AppShell (visible above the bottom nav, not hidden behind it)", () => {

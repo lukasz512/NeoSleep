@@ -30,9 +30,51 @@
 
       <template #drawer-footer>
         <div class="layout-nav-footer" :class="{ 'layout-nav-footer--collapsed': !isMobile && sidebarCollapsed }">
+          <!-- Phone/tablet (isMobile, same <768px breakpoint AppShell/useLayoutState
+               already use everywhere else): a real slide-up sheet instead of an
+               anchored popup — VBottomSheet ships with Vuetify core (already globally
+               registered via createNeoVuetify's plain createVuetify() call, see
+               packages/vuetify/src/index.ts), so this needed no new dependency. Fixes
+               the anchored VMenu's icons overflowing the drawer width on narrow
+               viewports, and gives swipe/backdrop-dismiss for free. -->
+          <VBottomSheet v-if="isMobile" v-model="menuOpen">
+            <template #activator="{ props: menuProps }">
+              <AppButton
+                v-bind="menuProps"
+                variant="text"
+                class="layout-user-btn"
+                :title="t('user.user.menu')"
+                :aria-label="t('user.user.menu')"
+              >
+                <VAvatar size="32" color="primary">
+                  <span class="text-caption font-weight-bold">{{ user.initials }}</span>
+                </VAvatar>
+                <div class="layout-user-info">
+                  <span class="layout-user-name">{{ user.displayName }}</span>
+                  <span class="layout-user-role">{{ user.role }}</span>
+                </div>
+              </AppButton>
+            </template>
+
+            <AppUserMenuPanel
+              :theme="theme"
+              :locale="(locale as string)"
+              drawer
+              @toggle-theme="toggleTheme"
+              @change-locale="(lang) => setLocale(lang as 'en' | 'pl' | 'mx')"
+              @logout="onLogout"
+              @close="menuOpen = false"
+            />
+          </VBottomSheet>
+
+          <!-- Desktop: anchored popup, opened straight above the avatar (location
+               "top", not "end top") with an explicit offset for breathing room —
+               "end top" anchored to the side and read as misplaced. -->
           <VMenu
+            v-else
             v-model="menuOpen"
-            location="end top"
+            location="top"
+            offset="12"
             :close-on-content-click="false"
             min-width="220"
           >
@@ -47,7 +89,7 @@
                 <VAvatar size="32" color="primary">
                   <span class="text-caption font-weight-bold">{{ user.initials }}</span>
                 </VAvatar>
-                <div v-if="isMobile || !sidebarCollapsed" class="layout-user-info">
+                <div v-if="!sidebarCollapsed" class="layout-user-info">
                   <span class="layout-user-name">{{ user.displayName }}</span>
                   <span class="layout-user-role">{{ user.role }}</span>
                 </div>
@@ -57,7 +99,6 @@
             <AppUserMenuPanel
               :theme="theme"
               :locale="(locale as string)"
-              :drawer="isMobile"
               @toggle-theme="toggleTheme"
               @change-locale="(lang) => setLocale(lang as 'en' | 'pl' | 'mx')"
               @logout="onLogout"
@@ -325,10 +366,15 @@ const moduleIcon = computed(() => {
   gap: 4px;
 }
 
+/* Column, not row: the rail is only ~64px wide (AppLayout passes rail-width="64"
+   to AppShell) minus this footer's own padding, leaving no horizontal room for a
+   32px avatar circle next to a 32px chevron button side by side — that overflow is
+   exactly why the chevron became invisible (clipped) once it was sized up for the
+   expanded row below. Stacking removes the horizontal constraint entirely. */
 .layout-nav-footer--collapsed {
-  flex-direction: row;
+  flex-direction: column;
   justify-content: center;
-  gap: 2px;
+  gap: 6px;
 }
 
 :deep(.app-shell__nav-footer:has(.layout-nav-footer--collapsed)) {
@@ -342,20 +388,32 @@ const moduleIcon = computed(() => {
   margin-inline-end: 8px;
 }
 
+/* The extra size/right-margin above only makes sense in the expanded row, where
+   there's space for it — in the collapsed rail it's back to its original compact
+   size with no inline margin (nothing to its right to space away from). */
+.layout-nav-footer--collapsed .layout-collapse-btn {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  margin-inline-end: 0;
+}
+
 .layout-user-btn {
   flex: 1 1 auto;
   min-width: 0;
   justify-content: flex-start;
+  padding-block: 6px;
   padding-inline: 8px;
-  margin-block: 6px;
+  margin-block-start: 6px;
+  margin-block-end: 12px;
   text-transform: none;
   letter-spacing: normal;
-  transition: transform 0.15s ease-out;
+  transition: padding-block 0.15s ease-out;
 }
 
 .layout-user-btn:hover,
 .layout-user-btn:focus-visible {
-  transform: scale(1.03);
+  padding-block: 12px;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -253,6 +253,11 @@ onMounted(async () => {
   display: flex;
   justify-content: center;
   padding: 12px;
+  /* Explicit border, not just the <VDivider /> above this element — the
+     divider's own default opacity read as effectively invisible against
+     surface-container-low in both themes (reported on live pwa-dev). This
+     guarantees contrast regardless of Vuetify's own divider defaults. */
+  border-top: 1px solid rgba(var(--v-border-color), 0.28);
 }
 
 /* Mirrors .app-shell__main--bottom-nav-space below: the mobile temporary
