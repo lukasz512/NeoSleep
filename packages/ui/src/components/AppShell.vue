@@ -62,7 +62,6 @@
     <slot name="nav" />
 
     <template #append>
-      <VDivider />
       <div
         class="app-shell__nav-footer"
         :class="{ 'app-shell__nav-footer--bottom-nav-space': mobile && showBottomNav }"
@@ -250,15 +249,14 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
+/* No divider/border above this footer — removed per explicit feedback ("ta linia
+   nad userem ma znikac"). Round 2 had gone the opposite way (adding an explicit
+   border-top because the default VDivider read as invisible) on a misreading of
+   the original ask; this corrects that. */
 .app-shell__nav-footer {
   display: flex;
   justify-content: center;
   padding: 12px;
-  /* Explicit border, not just the <VDivider /> above this element — the
-     divider's own default opacity read as effectively invisible against
-     surface-container-low in both themes (reported on live pwa-dev). This
-     guarantees contrast regardless of Vuetify's own divider defaults. */
-  border-top: 1px solid rgba(var(--v-border-color), 0.28);
 }
 
 /* Mirrors .app-shell__main--bottom-nav-space below: the mobile temporary
