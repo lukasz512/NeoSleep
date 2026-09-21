@@ -79,6 +79,19 @@ describe("AppLayout", () => {
       const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
       expect(appLayoutSource).toContain('@navigate="mobileDrawerOpen = false"');
     });
+
+    // NEO-44: without an explicit color, VAppBar (flat, no color) renders
+    // transparent and shows through to the app's root "background" color —
+    // the same fallback VMain uses — so in dark mode the top bar and the
+    // body below it become visually indistinguishable.
+    it("app bar has an explicit surface color so it doesn't blend into the body background in dark mode", () => {
+      const appShellSource = readFileSync(
+        path.resolve(__dirname, "../../../../packages/ui/src/components/AppShell.vue"),
+        "utf-8",
+      );
+      const barBlock = appShellSource.match(/<VAppBar\b[\s\S]*?>/)?.[0] ?? "";
+      expect(barBlock).toMatch(/color="surface-container-low"/);
+    });
   });
 
   describe("sidebar nav icons and role-based visibility", () => {

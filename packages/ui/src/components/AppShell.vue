@@ -5,6 +5,7 @@
        right of a full-height drawer. -->
   <VAppBar
     flat
+    color="surface-container-low"
     :border="mobile ? false : 'b'"
     :height="mobile ? 56 : 64"
     class="app-shell__bar"
