@@ -141,16 +141,20 @@ const ICONS = {
   // "clinic" keeps the "nav-hco" icon above (unchanged, matches the ticket).
   "hco-hospital": {
     strokeWidth: 2,
+    // Building outline + a single centered cross — dropped the two window
+    // divider lines from the original design (Łukasz's pick from 3
+    // minimalist candidates, 2026-09-21): four internal lines plus the cross
+    // read as busy at 40px avatar scale.
     paths: `<rect x="3" y="4" width="18" height="17" />
-            <line x1="7" y1="4" x2="7" y2="21" />
-            <line x1="17" y1="4" x2="17" y2="21" />
-            <line x1="12" y1="8" x2="12" y2="14" />
-            <line x1="9" y1="11" x2="15" y2="11" />`,
+            <line x1="12" y1="7" x2="12" y2="17" />
+            <line x1="7" y1="12" x2="17" y2="12" />`,
   },
   "hco-pharmacy": {
     strokeWidth: 2,
+    // Dividing line spans exactly the pre-rotation rect's own y-bounds (8..16),
+    // flush with its top/bottom edge, so it never overshoots the pill outline.
     paths: `<rect x="2" y="8" width="20" height="8" rx="4" transform="rotate(45 12 12)" />
-            <line x1="12" y1="6.34" x2="12" y2="17.66" transform="rotate(45 12 12)" />`,
+            <line x1="12" y1="8" x2="12" y2="16" transform="rotate(45 12 12)" />`,
   },
   "hco-practice": {
     strokeWidth: 2,

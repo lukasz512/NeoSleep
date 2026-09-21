@@ -29,3 +29,18 @@ n/a — internal UI/icon change, not a clinical workflow or HCP-engagement patte
 
 ### Hand-off
 → `/dev feat hco-type-avatar-icons` — scope is clear, small, self-contained (frontend-only icon/avatar change), no schema or cross-cutting architecture impact.
+
+---
+
+## Addendum (2026-09-21): revision after review — pill overshoot fixed, hospital icon redesigned, view-level test added
+
+**Raw input**: Two rounds of feedback from Łukasz. 2026-09-17: "pharmacy icon fine, but the dividing bar through the middle shouldn't stick out past the outline (pic 1); hospital icon isn't quite right, make it more minimalist." 2026-09-20: "need to redo this task from scratch — missing tests, artifact here." A nightly worker run on 2026-09-21 investigated and correctly declined to blindly redo the feature (already merged, working) or blindly merge a since-gone-stale fix branch — it flagged the real gaps instead: the pharmacy fix was never actually merged, the hospital icon choice was never recorded, and no Completion Artifact had ever been produced/attached for this ticket (the artifact-requirement gate was added 2026-09-20, after this ticket's original implementation).
+
+**What was actually missing, resolved this pass:**
+1. `hco-pharmacy`'s dividing line ran 1.66 units past the pill's own outline on each end (`y1=6.34/y2=17.66` vs. the rect's own `y=8..16` bounds) — shortened to match the rect exactly.
+2. `hco-hospital` had 4 internal lines (cross + 2 window dividers) that read as busy at 40px avatar scale — Łukasz picked "cross only" from 3 minimalist candidates shown in the Completion Artifact.
+3. No test exercised the icon selection through a real view, only through `hcoTypeIcon()`/`AppAvatar` in isolation — added a case to `HCODetailView.spec.ts` asserting the detail header avatar renders the correct icon for a non-clinic org type.
+4. Completion Artifact built and attached to the ticket via `save_issue`'s `links` param (previously only shared as a chat link, never actually visible on the Linear issue) + local marker written per `quality-gate.sh`'s schema.
+
+### Hand-off
+→ Done — both icon fixes shipped, test added, artifact attached to NEO-18.
