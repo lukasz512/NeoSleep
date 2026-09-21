@@ -207,6 +207,51 @@ describe("AppLayout", () => {
     });
   });
 
+  // NEO-9: drawer-footer account menu — mobile parity, spacing/sizing, visibility above the bottom nav.
+  describe("NEO-9 — drawer-footer account menu", () => {
+    it("has a single drawer-footer template shared by desktop and mobile — no separate always-expanded mobile branch", () => {
+      const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
+      const footerStart = appLayoutSource.indexOf("#drawer-footer");
+      const footerEnd = appLayoutSource.indexOf("#app-bar-title", footerStart);
+      const footerBlock = appLayoutSource.slice(footerStart, footerEnd);
+      expect(footerBlock).not.toMatch(/<AppUserMenuPanel[^>]*\bv-else\b/);
+      // Exactly one AppUserMenuPanel usage, wrapped by VMenu on both breakpoints.
+      expect(footerBlock.match(/<AppUserMenuPanel\b/g)).toHaveLength(1);
+      expect(footerBlock).toMatch(/<VMenu[\s\S]*<AppUserMenuPanel[\s\S]*<\/VMenu>/);
+    });
+
+    it("collapse chevron button is 32px with right-edge margin (was 24px, flush to the edge)", () => {
+      const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
+      const rule = appLayoutSource.match(/\.layout-collapse-btn\s*\{[\s\S]*?\}/)?.[0] ?? "";
+      expect(rule).toMatch(/width:\s*32px/);
+      expect(rule).toMatch(/height:\s*32px/);
+      expect(rule).toMatch(/margin-inline-end:\s*8px/);
+    });
+
+    it("collapse chevron only renders on desktop (mobile has no rail-collapse concept)", () => {
+      const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
+      expect(appLayoutSource).toMatch(/<AppButton\s+v-if="!isMobile"[\s\S]*?class="layout-collapse-btn"/);
+    });
+
+    it("avatar/user button has hover and focus-visible sizing rules with block margin", () => {
+      const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
+      const rule = appLayoutSource.match(/\.layout-user-btn\s*\{[\s\S]*?\}/)?.[0] ?? "";
+      expect(rule).toMatch(/margin-block:\s*6px/);
+      expect(appLayoutSource).toMatch(/\.layout-user-btn:hover,\s*\n\.layout-user-btn:focus-visible\s*\{[\s\S]*?transform:\s*scale/);
+    });
+
+    it("mobile drawer footer gets bottom-nav clearance from AppShell (visible above the bottom nav, not hidden behind it)", () => {
+      const appShellSource = readFileSync(
+        path.resolve(__dirname, "../../../../packages/ui/src/components/AppShell.vue"),
+        "utf-8",
+      );
+      expect(appShellSource).toContain("app-shell__nav-footer--bottom-nav-space");
+      expect(appShellSource).toMatch(/'app-shell__nav-footer--bottom-nav-space':\s*mobile\s*&&\s*showBottomNav/);
+      const rule = appShellSource.match(/\.app-shell__nav-footer--bottom-nav-space\s*\{[\s\S]*?\}/)?.[0] ?? "";
+      expect(rule).toMatch(/padding-bottom:\s*calc\(var\(--mobile-bottom-nav-height/);
+    });
+  });
+
   describe("view transitions", () => {
     it("RouterView uses Transition with view-fade-lift for smooth view changes", () => {
       const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");

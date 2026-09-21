@@ -62,7 +62,10 @@
 
     <template #append>
       <VDivider />
-      <div class="app-shell__nav-footer">
+      <div
+        class="app-shell__nav-footer"
+        :class="{ 'app-shell__nav-footer--bottom-nav-space': mobile && showBottomNav }"
+      >
         <slot name="drawer-footer" />
       </div>
     </template>
@@ -250,6 +253,15 @@ onMounted(async () => {
   display: flex;
   justify-content: center;
   padding: 12px;
+}
+
+/* Mirrors .app-shell__main--bottom-nav-space below: the mobile temporary
+   drawer's footer sits at the same fixed screen position as MobileBottomNavBar
+   (position: fixed, z-index: 9998, above the drawer's own stacking), so
+   without this the footer content (account menu, logout) renders visually
+   underneath the bottom nav and becomes unreachable. */
+.app-shell__nav-footer--bottom-nav-space {
+  padding-bottom: calc(var(--mobile-bottom-nav-height, 64px) + env(safe-area-inset-bottom));
 }
 
 /* --appbar-row: the one shared height every app-bar leading element (the

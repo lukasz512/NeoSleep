@@ -1,60 +1,76 @@
 <template>
   <div :key="locale" :class="menuClass" role="menu">
-    <div class="layout-app__user-menu-section">
-      <p class="layout-app__user-menu-label">{{ t("user.settings.theme") }}</p>
-      <AppButton
-        variant="text"
-        block
-        density="comfortable"
-        class="layout-app__user-menu-item layout-app__user-menu-item--vuetify"
-        :title="theme === 'light' ? t('user.settings.theme.switchToDark') : t('user.settings.theme.switchToLight')"
-        @click="$emit('toggle-theme'); $emit('close')"
-      >
-        <span class="layout-app__theme-icon" aria-hidden="true">
+    <VTooltip :text="themeTooltip" location="bottom">
+      <template #activator="{ props: tooltipProps }">
+        <VBtn
+          v-bind="tooltipProps"
+          icon
+          size="48"
+          variant="tonal"
+          :color="theme === 'light' ? 'warning' : 'info'"
+          class="layout-app__user-menu-icon-btn"
+          :aria-label="themeTooltip"
+          @click="$emit('toggle-theme'); $emit('close')"
+        >
           <AppIcon :name="theme === 'light' ? 'sun' : 'moon'" class="layout-app__menu-icon" />
-        </span>
-        {{ theme === "light" ? t("user.settings.theme.light") : t("user.settings.theme.dark") }}
-      </AppButton>
-    </div>
-    <div class="layout-app__user-menu-section">
-      <p class="layout-app__user-menu-label">{{ t("user.settings.language") }}</p>
-      <VSelect
-        :model-value="locale"
-        :items="languageSelectItems"
-        item-title="title"
-        item-value="id"
-        density="compact"
-        hide-details
-        variant="outlined"
-        class="layout-app__user-menu-select"
-        :aria-label="t('user.settings.language')"
-        @update:model-value="onLocaleChange"
-      />
-    </div>
-    <div class="layout-app__user-menu-section">
-      <AppButton
-        variant="text"
-        block
-        density="comfortable"
-        class="layout-app__user-menu-item layout-app__user-menu-item--vuetify"
-        :title="t('user.settings.logOut')"
-        :aria-label="t('user.settings.logOut')"
-        @click="$emit('logout'); $emit('close')"
-      >
-        <span class="layout-app__theme-icon" aria-hidden="true">
+        </VBtn>
+      </template>
+    </VTooltip>
+
+    <VMenu location="end top">
+      <template #activator="{ props: menuProps }">
+        <VTooltip :text="t('user.settings.language')" location="bottom">
+          <template #activator="{ props: tooltipProps }">
+            <VBtn
+              v-bind="mergeProps(menuProps, tooltipProps)"
+              icon
+              size="48"
+              variant="tonal"
+              color="primary"
+              class="layout-app__user-menu-icon-btn"
+              :aria-label="t('user.settings.language')"
+            >
+              <AppIcon name="globe" class="layout-app__menu-icon" />
+            </VBtn>
+          </template>
+        </VTooltip>
+      </template>
+
+      <VList density="compact">
+        <VListItem
+          v-for="lang in languageSelectItems"
+          :key="lang.id"
+          :active="lang.id === locale"
+          @click="onLocaleChange(lang.id)"
+        >
+          <VListItemTitle>{{ lang.title }}</VListItemTitle>
+        </VListItem>
+      </VList>
+    </VMenu>
+
+    <VTooltip :text="t('user.settings.logOut')" location="bottom">
+      <template #activator="{ props: tooltipProps }">
+        <VBtn
+          v-bind="tooltipProps"
+          icon
+          size="48"
+          variant="tonal"
+          color="error"
+          class="layout-app__user-menu-icon-btn"
+          :aria-label="t('user.settings.logOut')"
+          @click="$emit('logout'); $emit('close')"
+        >
           <AppIcon name="logout" class="layout-app__menu-icon" />
-        </span>
-        {{ t("user.settings.logOut") }}
-      </AppButton>
-    </div>
+        </VBtn>
+      </template>
+    </VTooltip>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, mergeProps } from "vue";
 import { useI18n } from "vue-i18n";
 import { LANGUAGE_OPTIONS } from "@i18n/language-options";
-import AppButton from "../../components/AppButton.vue";
 import AppIcon from "../../components/AppIcon.vue";
 
 const props = defineProps<{
@@ -84,6 +100,13 @@ const languageSelectItems = computed(() =>
   }))
 );
 
+const themeTooltip = computed(() =>
+  t("user.settings.theme.tooltip", {
+    current: t(props.theme === "light" ? "user.settings.theme.light" : "user.settings.theme.dark"),
+    next: t(props.theme === "light" ? "user.settings.theme.dark" : "user.settings.theme.light"),
+  })
+);
+
 function onLocaleChange(value: string) {
   emit("change-locale", value);
   emit("close");
@@ -93,54 +116,22 @@ function onLocaleChange(value: string) {
 <style scoped>
 .layout-app__user-menu,
 .layout-app__mobile-drawer-user-menu {
-  min-width: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
   padding: 12px;
   background: var(--pwa-bg, #fff);
   border: 1px solid var(--pwa-border, #e0e0e0);
   border-radius: var(--pwa-radius);
 }
 
-.layout-app__user-menu-section {
-  margin-bottom: 12px;
-}
-
-.layout-app__user-menu-section:last-child {
-  margin-bottom: 0;
-}
-
-.layout-app__user-menu-label {
-  margin: 0 0 6px 0;
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: var(--pwa-text-secondary, #666);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-/* VBtn as menu item: text variant, left-aligned content, icon + text */
-.layout-app__user-menu-item--vuetify {
-  justify-content: flex-start;
-  text-transform: none;
-  letter-spacing: normal;
-}
-
-.layout-app__user-menu-item .layout-app__theme-icon {
-  width: 18px;
-  height: 18px;
-  margin-inline-end: 8px;
-}
-
-/* VSelect: compact in menu, use theme variables */
-.layout-app__user-menu-select {
-  font-size: 0.875rem;
-}
-
-.layout-app__user-menu-select :deep(.v-field) {
-  border-radius: var(--pwa-radius);
+.layout-app__user-menu-icon-btn {
+  flex-shrink: 0;
 }
 
 .layout-app__menu-icon {
-  width: 100%;
-  height: 100%;
+  width: 24px;
+  height: 24px;
 }
 </style>
