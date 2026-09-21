@@ -3,9 +3,12 @@ import {
   getPractitionerPaginated,
   getPractitionerById,
   getTerritoryPath,
+  getOrganizationAffiliations,
+  getUserPrimaryOrganizationId,
   type GetPractitionerFilters,
   type Practitioner,
   type TerritoryPathNode,
+  type OrganizationAffiliation,
 } from "../db.js";
 import { formatDisplayName } from "../utils/personName.js";
 import { getAllowedScopePaths, assertTerritoryAccessByTerritoryId } from "../middleware/requireScope.js";
@@ -47,9 +50,21 @@ export interface PractitionerDto {
   social_links: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
+  /** Only populated on the single-record GetPractitionerByIdQuery (same
+   *  no-N+1-on-the-list-query reasoning as territory_path above). */
+  organizations: OrganizationAffiliation[] | null;
+  /** The CALLING rep's own primary clinic for this practitioner
+   *  (practitioner_assignment.primary_org_id) — null for admin/manager, who
+   *  have no personal assignment row by design. See docs/stories/pwa-medico-view.md. */
+  my_primary_organization_id: string | null;
 }
 
-function toDto(p: Practitioner, territoryPath: TerritoryPathNode[] | null = null): PractitionerDto {
+function toDto(
+  p: Practitioner,
+  territoryPath: TerritoryPathNode[] | null = null,
+  organizations: OrganizationAffiliation[] | null = null,
+  myPrimaryOrganizationId: string | null = null
+): PractitionerDto {
   const name = formatDisplayName(p);
   return {
     id:                p.id,
@@ -74,6 +89,8 @@ function toDto(p: Practitioner, territoryPath: TerritoryPathNode[] | null = null
     social_links:      p.social_links ?? null,
     created_at:        p.created_at instanceof Date ? p.created_at.toISOString() : String(p.created_at),
     updated_at:        p.updated_at instanceof Date ? p.updated_at.toISOString() : String(p.updated_at),
+    organizations:     organizations,
+    my_primary_organization_id: myPrimaryOrganizationId,
   };
 }
 
@@ -132,5 +149,11 @@ export async function GetPractitionerByIdQuery(
   if (!practitioner) return null;
   await assertTerritoryAccessByTerritoryId(ctx, practitioner.territory_id);
   const territoryPath = practitioner.territory_id ? await getTerritoryPath(ctx.client, practitioner.territory_id) : null;
-  return toDto(practitioner, territoryPath);
+  const organizations = await getOrganizationAffiliations(ctx.client, id);
+  // Only a rep has a personal practitioner_assignment row by design — see
+  // PractitionerDto.my_primary_organization_id's own doc comment.
+  const myPrimaryOrganizationId = ctx.user.role === "rep"
+    ? await getUserPrimaryOrganizationId(ctx.client, id, ctx.user.id)
+    : null;
+  return toDto(practitioner, territoryPath, organizations, myPrimaryOrganizationId);
 }

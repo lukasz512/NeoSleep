@@ -7,6 +7,7 @@ export * from "./tokens.js";
 export * from "./encounter.js";
 export * from "./practitioner.js";
 export * from "./organization.js";
+export * from "./practitionerOrganization.js";
 export * from "./presentation.js";
 export * from "./patient.js";
 export * from "./audit-log.js";
