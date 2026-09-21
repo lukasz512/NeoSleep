@@ -10,7 +10,7 @@
       hide-details
     />
     <div class="oa-comments__notify">
-      <VCheckbox v-model="notifyOrthoApnea" :label="t('app.orthoApneaOrder.comments.notifyOrthoApnea')" hide-details density="compact" />
+      <VCheckbox v-model="notifyOrthoApnea" :label="t('app.orthoApneaOrder.comments.notifyOrthoApnea')" color="primary" hide-details density="compact" />
     </div>
     <VAlert v-if="notifyOrthoApnea" type="warning" variant="tonal" density="comfortable" class="mb-2">
       {{ t("app.orthoApneaOrder.comments.notifyWarning") }}
