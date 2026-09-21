@@ -299,6 +299,21 @@
   --v-field-border-width: 1px;
 }
 
+/* At rest, this field's own outlined-variant border (theme.scss's global
+   `.v-field--variant-outlined .v-field__outline` rule, `--v-theme-outline`)
+   read as a different gray from the table border right below it
+   (`--pwa-table-border`, used by .app-entity-list__table-wrap and every
+   other table/list border in the app) — search and table visually
+   disagreed despite sitting in the same toolbar. Pin this field's resting
+   border to the same token. `:not(.v-field--focused)` keeps the focused
+   state on the global rule's own `--v-theme-primary` color untouched (the
+   ticket only asked about the *inactive* border) — without it, this
+   selector and the global focused-state rule tie on specificity and the
+   winner would depend on source order alone. */
+.app-entity-list__search :deep(.v-field:not(.v-field--focused) .v-field__outline) {
+  color: var(--pwa-table-border);
+}
+
 /* Mobile: search collapses to just the prepend icon at rest (border faded
    out, same transition as the width change so both move together);
    focusing grows it straight to the open width (610px, see the base rule
@@ -348,10 +363,12 @@
   flex-direction: column;
   overflow: hidden;
   border-radius: var(--pwa-radius);
-  /* M3 outline-variant instead of Vuetify's generic --v-border-color — same
-     static gray already used for the mobile feed cards' border (see
-     .app-entity-list__card below), so desktop and mobile share one tone. */
-  border: 1px solid rgb(var(--v-theme-outline-variant));
+  /* --pwa-table-border (theme.scss): the one border color every table/list
+     surface in the app shares (AppDataTable, RelatedEntityPanel, and the
+     search field above) — was M3 outline-variant here specifically, a
+     close but not identical gray that made this table read as a slightly
+     different tone from the rest. */
+  border: 1px solid var(--pwa-table-border);
 }
 
 /* M3: header row reads as a distinct tonal layer (surface-container-low)
@@ -359,6 +376,31 @@
    background — depth via tone, not a rule/shadow under the header. */
 .app-entity-list__table-wrap :deep(.v-data-table__th) {
   background: rgb(var(--v-theme-surface-container-low));
+}
+
+/* VDataTableServer's default pagination footer (rows-per-page, page count,
+   prev/next) rendered fully unstyled — no border separating it from the
+   rows above, full-emphasis body text on the row count/page controls. A
+   thin --pwa-table-border top edge frames it against the table body the
+   same way the table's own outer border does, and de-emphasizing the text
+   (medium-emphasis on-surface, same tone used for the row-count/meta text
+   elsewhere in this file) reads as a quieter, data-dense footer rather than
+   another row of primary content — closer to the clinical-record tables
+   this is meant to match than Vuetify's generic default. */
+.app-entity-list__table-wrap :deep(.v-data-table-footer) {
+  border-top: 1px solid var(--pwa-table-border);
+  padding: 8px 16px;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 0.8125rem;
+}
+
+/* The footer's "rows per page" control is itself an outlined VSelect
+   (Vuetify's own VDataTableFooter), so it inherits the same
+   --v-theme-outline border theme.scss's global rule gives every outlined
+   field — one more spot where the table's border color and this footer's
+   own control disagreed. */
+.app-entity-list__table-wrap :deep(.v-data-table-footer .v-select .v-field__outline) {
+  color: var(--pwa-table-border);
 }
 
 /* Mobile feed items carry their own border + elevation (below) — the
