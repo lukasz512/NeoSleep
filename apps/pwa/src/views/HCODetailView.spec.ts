@@ -30,6 +30,8 @@ vi.mock("../stores/entityCache", () => ({
 import "../components/FormRenderer.vue";
 import "../components/EventForm.vue";
 import HCODetailView from "./HCODetailView.vue";
+import AppAvatar from "../components/AppAvatar.vue";
+import AppIcon from "../components/AppIcon.vue";
 
 function jsonResponse(ok: boolean, status: number, body: unknown) {
   return { ok, status, json: async () => body } as Response;
@@ -82,6 +84,26 @@ describe("HCODetailView — Documents tab", () => {
 
     // See HCPDetailView.spec.ts's own comment: flushes FormRenderer/EventForm's
     // in-flight dynamic import before afterEach() unmounts.
+    await flushPromises();
+  });
+});
+
+describe("HCODetailView — avatar icon per org type (NEO-18)", () => {
+  // hcoTypeIcon()/AppAvatar's own prop logic already have unit coverage
+  // (hcoLabels.spec.ts, AppAvatar.spec.ts) — this closes the one gap flagged
+  // when NEO-18 was reopened: nothing exercised the real view's
+  // `:org-type="hco.type"` binding end to end, only the helper in isolation.
+  it("renders the hospital-specific icon in the detail header avatar for a hospital organization", async () => {
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, { ...HCO, type: "hospital" }));
+    const { wrapper } = await mountHCODetail();
+
+    await vi.waitFor(() => expect(wrapper.text()).toContain("Acme Clinic"));
+
+    // Scoped through AppAvatar, not a bare findComponent(AppIcon) — the detail
+    // header also renders a back-nav AppIcon ("arrow-left"), and a plain
+    // findComponent grabs the first match in the tree, not the avatar's own.
+    expect(wrapper.findComponent(AppAvatar).findComponent(AppIcon).props("name")).toBe("hco-hospital");
+
     await flushPromises();
   });
 });
