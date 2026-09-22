@@ -69,3 +69,10 @@ Full suite runs: `apps/api` 13+10 new tests passing (`pnpm test -- src/commands/
 
 ### Hand-off
 → Plan mode — scope touches new backend routes/queries/commands (`apps/api/src/routes/practitioner.ts`, `apps/api/src/queries/practitioner.ts`, new `apps/api/src/commands/practitionerOrganization.ts`), a restructured detail view (`HCPDetailView.vue`), new i18n keys, and new integration + component tests — more than 2-3 files and includes an API-contract design decision, per CLAUDE.md's Plan-mode threshold.
+
+### Follow-up (2026-09-22, after PR #149 merged to dev)
+Łukasz tested on the real pwa-dev deploy and found existing practitioners with a legacy `organization_id` (the old single-clinic field) showed a confusing empty "Clinics" panel — the new feature had no way to know about a clinic relationship that already existed via the old field, since nothing backfilled `practitioner_organization` for pre-existing data.
+
+Fixed with `apps/api/migrations/028_practitioner_organization_backfill.sql` — backfills one `practitioner_organization` row per practitioner with a non-null `organization_id`, marked primary unless the practitioner already has one (idempotent, `ON CONFLICT DO NOTHING`). Verified live against the real shared dev DB (4 practitioners backfilled, each correctly marked primary) before also adding `apps/api/migrations/028_practitioner_organization_backfill.spec.ts` (4 tests: backfills correctly, idempotent, doesn't overwrite an existing primary, no-ops for a practitioner with no legacy clinic — exercises the migration's inner SQL directly since the automated-test "test" tenant schema isn't registered in `platform.tenants`, so the migration file's own multi-tenant loop would no-op against it).
+
+RBAC question also raised and resolved in the same conversation: confirmed rep keeps full visibility + management, no change from the original design.
