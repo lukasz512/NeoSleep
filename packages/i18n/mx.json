@@ -1388,6 +1388,7 @@
   "user.hcp.detail.region": "Territorio",
   "user.hcp.detail.phone": "Teléfono",
   "user.hcp.detail.tabs.details": "Detalles",
+  "user.hcp.detail.tabs.affiliations": "Afiliaciones",
   "user.hcp.detail.tabs.notes": "Notas",
   "user.hcp.detail.tabs.relatedPatients": "Pacientes",
   "user.hcp.detail.tabs.documents": "Documentos",

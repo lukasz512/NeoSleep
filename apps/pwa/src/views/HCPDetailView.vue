@@ -128,50 +128,45 @@
       <template v-if="hcp" #sections>
         <DetailViewTabs v-model="activeTab" :tabs="hcpTabs">
           <template #details>
-            <VRow>
-              <VCol cols="12" md="6">
-                <div class="view-item__row">
-                  <dt class="view-item__label view-item__label--icon"><AppIcon name="mail" />{{ t("user.hcp.detail.email") }}</dt>
-                  <dd class="view-item__value">
-                    <a v-if="hcp.email" :href="`mailto:${hcp.email}`" class="view-item__link">{{ hcp.email }}</a>
-                    <span v-else class="view-item__empty">—</span>
-                  </dd>
-                </div>
-                <div class="view-item__row">
-                  <dt class="view-item__label view-item__label--icon"><AppIcon name="phone" />{{ t("user.hcp.detail.phone") }}</dt>
-                  <dd class="view-item__value">
-                    <a v-if="hcp.phone" :href="`tel:${hcp.phone}`" class="view-item__link">{{ hcp.phone }}</a>
-                    <span v-else class="view-item__empty">—</span>
-                  </dd>
-                </div>
-                <div class="view-item__row">
-                  <dt class="view-item__label">{{ t("user.hcp.detail.specialty") }}</dt>
-                  <dd class="view-item__value">{{ specialtyLabel(hcp.specialty) }}</dd>
-                </div>
-                <div class="view-item__row">
-                  <dt class="view-item__label">{{ t("user.hcp.detail.institution") }}</dt>
-                  <dd class="view-item__value">
-                    <EntityLink
-                      :to="hcp.organization_id ? { name: 'hco-detail', params: { id: hcp.organization_id } } : null"
-                      :label="hcp.institution"
-                    />
-                  </dd>
-                </div>
-                <div class="view-item__row">
-                  <dt class="view-item__label">{{ t("user.hcp.detail.region") }}</dt>
-                  <dd class="view-item__value">{{ territoryLabel }}</dd>
-                </div>
-              </VCol>
-              <VCol cols="12" md="6">
-                <h2 class="hcp-detail__clinics-title">{{ t("user.hcp.detail.clinics.title") }}</h2>
-                <PractitionerClinicsPanel
-                  :practitioner-id="hcp.id"
-                  :organizations="hcp.organizations ?? []"
-                  :my-primary-organization-id="hcp.my_primary_organization_id ?? null"
-                  @changed="loadHCP"
+            <div class="view-item__row">
+              <dt class="view-item__label view-item__label--icon"><AppIcon name="mail" />{{ t("user.hcp.detail.email") }}</dt>
+              <dd class="view-item__value">
+                <a v-if="hcp.email" :href="`mailto:${hcp.email}`" class="view-item__link">{{ hcp.email }}</a>
+                <span v-else class="view-item__empty">—</span>
+              </dd>
+            </div>
+            <div class="view-item__row">
+              <dt class="view-item__label view-item__label--icon"><AppIcon name="phone" />{{ t("user.hcp.detail.phone") }}</dt>
+              <dd class="view-item__value">
+                <a v-if="hcp.phone" :href="`tel:${hcp.phone}`" class="view-item__link">{{ hcp.phone }}</a>
+                <span v-else class="view-item__empty">—</span>
+              </dd>
+            </div>
+            <div class="view-item__row">
+              <dt class="view-item__label">{{ t("user.hcp.detail.specialty") }}</dt>
+              <dd class="view-item__value">{{ specialtyLabel(hcp.specialty) }}</dd>
+            </div>
+            <div class="view-item__row">
+              <dt class="view-item__label">{{ t("user.hcp.detail.institution") }}</dt>
+              <dd class="view-item__value">
+                <EntityLink
+                  :to="hcp.organization_id ? { name: 'hco-detail', params: { id: hcp.organization_id } } : null"
+                  :label="hcp.institution"
                 />
-              </VCol>
-            </VRow>
+              </dd>
+            </div>
+            <div class="view-item__row">
+              <dt class="view-item__label">{{ t("user.hcp.detail.region") }}</dt>
+              <dd class="view-item__value">{{ territoryLabel }}</dd>
+            </div>
+          </template>
+          <template #affiliations>
+            <PractitionerClinicsPanel
+              :practitioner-id="hcp.id"
+              :organizations="hcp.organizations ?? []"
+              :my-primary-organization-id="hcp.my_primary_organization_id ?? null"
+              @changed="loadHCP"
+            />
           </template>
           <template #notes>
             <PatientNotesPanel entity-type="practitioner" :entity-id="hcp.id" />
@@ -294,6 +289,7 @@ const { canEditPractitioners, isAdmin } = usePermissions();
 
 const hcpTabs = [
   { value: "details", labelKey: "user.hcp.detail.tabs.details" },
+  { value: "affiliations", labelKey: "user.hcp.detail.tabs.affiliations" },
   { value: "notes", labelKey: "user.hcp.detail.tabs.notes" },
   { value: "relatedPatients", labelKey: "user.hcp.detail.tabs.relatedPatients" },
   { value: "documents", labelKey: "user.hcp.detail.tabs.documents" },
@@ -537,12 +533,6 @@ watch(() => route.params.id, loadHCP);
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.hcp-detail__clinics-title {
-  font-size: 0.9375rem;
-  font-weight: 600;
-  margin: 0 0 16px;
 }
 
 .hcp-detail__status-badge {

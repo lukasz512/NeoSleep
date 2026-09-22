@@ -661,6 +661,7 @@
   "user.hcp.detail.region": "Territory",
   "user.hcp.detail.phone": "Phone",
   "user.hcp.detail.tabs.details": "Details",
+  "user.hcp.detail.tabs.affiliations": "Affiliations",
   "user.hcp.detail.tabs.notes": "Notes",
   "user.hcp.detail.tabs.relatedPatients": "Patients",
   "user.hcp.detail.tabs.documents": "Documents",

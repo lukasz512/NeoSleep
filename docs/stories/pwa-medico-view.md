@@ -33,7 +33,7 @@
 - i18n: all new labels start in `packages/i18n/en.json` (`user.hcp.detail.clinics.*` namespace) before `pl.json`/`mx.json`, per CLAUDE.md.
 
 ### Acceptance Criteria
-- [x] HCP detail "Details" tab renders as two columns (`col6x2`): left = existing identity fields (email, phone, specialty, region/territory), right = clinic panel.
+- [x] ~~HCP detail "Details" tab renders as two columns (`col6x2`)~~ — superseded (see Follow-up 2026-09-22 #2): the clinic panel now lives in its own "Affiliations" tab, Details stays single-column as before.
 - [x] Right column lists all clinics the practitioner is affiliated with (name, type, address, city), each showing whether it's the practitioner's global primary.
 - [x] Admin/manager can add a new clinic affiliation (select an existing `organization`) and remove one (with a confirm dialog, consistent with the existing delete-confirm pattern in this view).
 - [x] Rep can add/remove affiliations too (per RBAC decision #2) — same UI, same permission level as admin/manager for affiliation CRUD.
@@ -49,7 +49,7 @@
 ### Test Coverage Map
 | Acceptance Criterion | Test(s) | How verified |
 |---|---|---|
-| col6x2 layout (AC1) | `apps/pwa/src/views/HCPDetailView.spec.ts` › "renders the col6x2 layout — identity fields left, PractitionerClinicsPanel right" | Automated component test |
+| Affiliations tab, not first (AC1, superseded) | `apps/pwa/src/views/HCPDetailView.spec.ts` › "lists 'Affiliations' among the tabs, not the initially active one, and shows the clinic panel once switched to" | Automated component test |
 | Affiliation list with type/address/global-primary flag (AC2) | `apps/api/src/commands/practitionerOrganization.spec.ts` › `LinkPractitionerOrganizationCommand` "links a practitioner to a clinic and returns the updated affiliation list"; `apps/pwa/src/components/practitioner/PractitionerClinicsPanel.spec.ts` › "renders each affiliation's name, type chip, and address" | Automated integration + component tests |
 | Admin/manager/rep add + remove affiliation (AC3, AC4) | `apps/api/src/routes/practitionerOrganization.spec.ts` › POST/DELETE round trips + kam/msl 403 cases; `apps/api/src/commands/practitionerOrganization.spec.ts` › duplicate-link `ConflictError`, missing-link `NotFoundError`; `PractitionerClinicsPanel.spec.ts` › add flow, remove-with-confirm flow | Automated integration + component tests |
 | Admin/manager set global primary, unsets previous (AC5) | `commands/practitionerOrganization.spec.ts` › "admin sets the global primary and it unsets any previous global primary", "manager sets the global primary too"; `PractitionerClinicsPanel.spec.ts` › "admin can toggle the global primary star" | Automated integration + component tests |
@@ -76,3 +76,6 @@ Full suite runs: `apps/api` 13+10 new tests passing (`pnpm test -- src/commands/
 Fixed with `apps/api/migrations/028_practitioner_organization_backfill.sql` — backfills one `practitioner_organization` row per practitioner with a non-null `organization_id`, marked primary unless the practitioner already has one (idempotent, `ON CONFLICT DO NOTHING`). Verified live against the real shared dev DB (4 practitioners backfilled, each correctly marked primary) before also adding `apps/api/migrations/028_practitioner_organization_backfill.spec.ts` (4 tests: backfills correctly, idempotent, doesn't overwrite an existing primary, no-ops for a practitioner with no legacy clinic — exercises the migration's inner SQL directly since the automated-test "test" tenant schema isn't registered in `platform.tenants`, so the migration file's own multi-tenant loop would no-op against it).
 
 RBAC question also raised and resolved in the same conversation: confirmed rep keeps full visibility + management, no change from the original design.
+
+### Follow-up 2026-09-22 #2 — Affiliations moved to its own tab
+After seeing it live, Łukasz asked for the clinic panel to move out of the Details tab's col6x2 split into its own tab ("this is a good tool, but it shouldn't be the first view") — Details stays single-column as it originally was, and a new "Affiliations" tab (second position, right after Details) hosts `PractitionerClinicsPanel` instead. No change to the panel itself, its RBAC, or the backend — purely a host-location change in `HCPDetailView.vue`, plus a new `user.hcp.detail.tabs.affiliations` i18n key (en/pl/mx). Test updated to match: switching to the Affiliations tab (not initial render) is what now surfaces the clinic panel, mirroring the existing Documents/History lazy-tab pattern.

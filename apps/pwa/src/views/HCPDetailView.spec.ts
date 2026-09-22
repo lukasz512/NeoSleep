@@ -96,14 +96,22 @@ async function mountHCPDetail(status: string, role: "admin" | "rep" = "admin"): 
   return wrapper;
 }
 
-describe("HCPDetailView — Details tab clinics panel (NEO-17)", () => {
-  it("renders the col6x2 layout — identity fields left, PractitionerClinicsPanel right, fed from the fetched practitioner", async () => {
+describe("HCPDetailView — Affiliations tab (NEO-17)", () => {
+  it("lists 'Affiliations' among the tabs, not the initially active one, and shows the clinic panel once switched to", async () => {
     const wrapper = await mountHCPDetail("active");
 
-    expect(wrapper.find(".hcp-detail__clinics-title").exists()).toBe(true);
-    // The clinic loaded via hcpFixture's `organizations` array should be
-    // visible on the Details tab (the initially active tab) without needing
-    // to switch tabs first, unlike Documents/History/Notes (lazy panels).
+    // Details (unchanged, single column) is still the initially active tab —
+    // the clinics panel must not appear before the Affiliations tab is picked.
+    expect(wrapper.text()).not.toContain("QA Clinic");
+
+    const affiliationsTab = wrapper.findAll('[role="tab"]').find((t) => t.text() === "Affiliations");
+    expect(affiliationsTab?.exists()).toBe(true);
+    await affiliationsTab?.trigger("click");
+    await flushPromises();
+
+    // The clinic loaded via hcpFixture's `organizations` array should now be
+    // visible, fed straight from the already-fetched practitioner (no
+    // separate list-fetch needed for this data, unlike Documents/History).
     expect(wrapper.text()).toContain("QA Clinic");
   });
 });

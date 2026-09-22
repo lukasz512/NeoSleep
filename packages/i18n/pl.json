@@ -1427,6 +1427,7 @@
   "user.hcp.detail.region": "Terytorium",
   "user.hcp.detail.phone": "Telefon",
   "user.hcp.detail.tabs.details": "Szczegóły",
+  "user.hcp.detail.tabs.affiliations": "Afiliacje",
   "user.hcp.detail.tabs.notes": "Notatki",
   "user.hcp.detail.tabs.relatedPatients": "Pacjenci",
   "user.hcp.detail.tabs.documents": "Dokumenty",
