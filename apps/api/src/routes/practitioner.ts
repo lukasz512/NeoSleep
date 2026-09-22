@@ -5,6 +5,11 @@ import { requireRole } from "../middleware/requireRole.js";
 import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
 import { CreatePractitionerCommand, UpdatePractitionerCommand, DeletePractitionerCommand, ActivatePractitionerCommand } from "../commands/practitioner.js";
+import {
+  LinkPractitionerOrganizationCommand,
+  UnlinkPractitionerOrganizationCommand,
+  SetPractitionerOrganizationPrimaryCommand,
+} from "../commands/practitionerOrganization.js";
 import { GetPractitionerListQuery, GetPractitionerByIdQuery } from "../queries/practitioner.js";
 import { GetHistoryForPractitionerQuery } from "../queries/auditLog.js";
 import { GetPractitionerDocumentsQuery, GetPractitionerDocumentDownloadUrlQuery } from "../queries/entityDocuments.js";
@@ -130,6 +135,75 @@ practitionerRouter.get(
       return GetPractitionerDocumentDownloadUrlQuery(ctx, id, documentId);
     });
     res.json({ url });
+  })
+);
+
+// ---------------------------------------------------------------------------
+// POST /api/v1/practitioner/:id/organizations — link a clinic affiliation
+// DELETE /api/v1/practitioner/:id/organizations/:orgId — unlink
+// PATCH /api/v1/practitioner/:id/organizations/:orgId/primary — set primary
+//   (dual-scoped: admin/manager set the global default, rep sets their own —
+//   see commands/practitionerOrganization.ts's file doc comment)
+//
+// Narrower RBAC than the rest of this router (admin/manager/rep only, no
+// kam/msl) — deliberate, matches the ticket text and Łukasz's RBAC
+// confirmation; see docs/stories/pwa-medico-view.md.
+// ---------------------------------------------------------------------------
+practitionerRouter.post(
+  "/practitioner/:id/organizations",
+  requireRole("admin", "manager", "rep"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id?.trim();
+    if (!id) throw new ValidationError("Missing practitioner id");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    const body = req.body as { organization_id?: string; role?: string };
+
+    const organizations = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return LinkPractitionerOrganizationCommand(ctx, id, {
+        organization_id: typeof body.organization_id === "string" ? body.organization_id : "",
+        role:             typeof body.role === "string" ? body.role : null,
+      });
+    });
+
+    res.status(201).json({ organizations });
+  })
+);
+
+practitionerRouter.delete(
+  "/practitioner/:id/organizations/:orgId",
+  requireRole("admin", "manager", "rep"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id?.trim();
+    const orgId = req.params.orgId?.trim();
+    if (!id || !orgId) throw new ValidationError("Missing practitioner id or organization id");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    const organizations = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return UnlinkPractitionerOrganizationCommand(ctx, id, orgId);
+    });
+
+    res.json({ organizations });
+  })
+);
+
+practitionerRouter.patch(
+  "/practitioner/:id/organizations/:orgId/primary",
+  requireRole("admin", "manager", "rep"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id?.trim();
+    const orgId = req.params.orgId?.trim();
+    if (!id || !orgId) throw new ValidationError("Missing practitioner id or organization id");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    const result = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return SetPractitionerOrganizationPrimaryCommand(ctx, id, orgId);
+    });
+
+    res.json(result);
   })
 );
 

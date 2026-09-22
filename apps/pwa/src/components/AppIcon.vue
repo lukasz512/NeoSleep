@@ -447,6 +447,15 @@ const ICONS = {
             <line x1="12" y1="7.5" x2="12" y2="13" />
             <circle cx="12" cy="16.5" r="0.6" fill="currentColor" stroke="none" />`,
   },
+  // ── Primary-clinic toggle (practitioner affiliations panel, NEO-17) ────────
+  "star": {
+    strokeWidth: 1.5,
+    paths: `<path d="M12 2.5l2.9 6.3 6.9.8-5.1 4.8 1.4 6.9L12 17.7l-6.1 3.6 1.4-6.9-5.1-4.8 6.9-.8z" fill="currentColor" stroke-linejoin="round" />`,
+  },
+  "star-outline": {
+    strokeWidth: 1.5,
+    paths: `<path d="M12 2.5l2.9 6.3 6.9.8-5.1 4.8 1.4 6.9L12 17.7l-6.1 3.6 1.4-6.9-5.1-4.8 6.9-.8z" stroke-linejoin="round" />`,
+  },
 } as const;
 </script>
 

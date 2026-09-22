@@ -47,6 +47,10 @@ function hcpFixture(status: string) {
     last_name: "Testerski",
     email: "andrzej@example.com",
     status,
+    organizations: [
+      { id: "aff-1", organization_id: "org-1", name: "QA Clinic", type: "clinic", address_line1: "Main St 1", city: "Warsaw", role: null, is_primary: true },
+    ],
+    my_primary_organization_id: null,
   };
 }
 
@@ -59,6 +63,11 @@ afterEach(() => {
 
 async function mountHCPDetail(status: string, role: "admin" | "rep" = "admin"): Promise<VueWrapper> {
   setActivePinia(createPinia());
+  // Default fallback for any call this test doesn't explicitly queue a
+  // response for — notably PractitionerClinicsPanel's own organization-
+  // options fetch, which fires on mount (Details is the initially active,
+  // eagerly-rendered tab) for every role this view is tested with.
+  apiFetch.mockResolvedValue(jsonResponse(true, 200, { items: [] }));
   apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, hcpFixture(status)));
 
   const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
@@ -86,6 +95,18 @@ async function mountHCPDetail(status: string, role: "admin" | "rep" = "admin"): 
   await flushPromises();
   return wrapper;
 }
+
+describe("HCPDetailView — Details tab clinics panel (NEO-17)", () => {
+  it("renders the col6x2 layout — identity fields left, PractitionerClinicsPanel right, fed from the fetched practitioner", async () => {
+    const wrapper = await mountHCPDetail("active");
+
+    expect(wrapper.find(".hcp-detail__clinics-title").exists()).toBe(true);
+    // The clinic loaded via hcpFixture's `organizations` array should be
+    // visible on the Details tab (the initially active tab) without needing
+    // to switch tabs first, unlike Documents/History/Notes (lazy panels).
+    expect(wrapper.text()).toContain("QA Clinic");
+  });
+});
 
 describe("HCPDetailView — Documents tab", () => {
   it("lists 'Documents' among the tabs and wires it to the practitioner's /documents endpoint", async () => {
