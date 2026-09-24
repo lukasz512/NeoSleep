@@ -119,6 +119,7 @@
             <VCheckbox
               v-model="loginFlow.rememberMe.value"
               :label="t('user.login.rememberMe')"
+              color="primary"
               density="compact"
               hide-details
               class="auth-view__remember"

@@ -86,7 +86,7 @@
             </dl>
           </div>
 
-          <VCheckbox v-model="gdprAccepted" density="compact" :rules="[ruleGdprRequired]">
+          <VCheckbox v-model="gdprAccepted" color="primary" density="compact" :rules="[ruleGdprRequired]">
             <template #label>
               <span>
                 {{ t('user.partnerRegistration.form.gdprLabel') }} —
@@ -94,7 +94,7 @@
               </span>
             </template>
           </VCheckbox>
-          <VCheckbox v-model="agreementAccepted" density="compact" :rules="[ruleAgreementRequired]">
+          <VCheckbox v-model="agreementAccepted" color="primary" density="compact" :rules="[ruleAgreementRequired]">
             <template #label>
               <span>
                 {{ t('user.partnerRegistration.form.agreementLabel') }} —

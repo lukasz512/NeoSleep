@@ -113,6 +113,19 @@ describe("AuthView — sign in", () => {
     expect(wrapper.find(".auth-card__back").exists()).toBe(false);
   });
 
+  it("renders the 'Remember me' checkbox in the app's primary brand color, not Vuetify's unthemed default", async () => {
+    const { wrapper } = await mountAuthView(apiFetch);
+
+    // VSelectionControl only applies the `color` prop's `text-<color>` class
+    // once checked (textColorClasses is `model.value ? props.color :
+    // props.baseColor`) — an unchecked box carries no color class either
+    // way, so this must check the box to actually exercise the prop.
+    const checkboxInput = wrapper.find('input[type="checkbox"]');
+    await checkboxInput.setValue(true);
+    const wrapperEl = checkboxInput.element.closest(".v-selection-control")!.querySelector(".v-selection-control__wrapper")!;
+    expect(Array.from(wrapperEl.classList)).toContain("text-primary");
+  });
+
   it("password field starts masked and toggles visible on the show/hide icon", async () => {
     const { wrapper } = await mountAuthView(apiFetch);
 
