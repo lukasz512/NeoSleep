@@ -1,3 +1,5 @@
+import fs from "fs";
+import { createRequire } from "module";
 import path from "path";
 import { fileURLToPath } from "url";
 import { defineConfig, mergeConfig } from "vite";
@@ -65,6 +67,16 @@ function neoPwaPlugin(opts: NeoPwaOptions): ReturnType<typeof VitePWA> {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// Every public Vuetify component entry (vuetify/components/VBtn, …), read
+// from the package's own components/index.js re-export list rather than a
+// glob — the lib/components folder also ships unfinished internals (e.g.
+// VOverflowBtn, commented out of that index) that fail to pre-bundle.
+function vuetifyComponentEntries(): string[] {
+  const vuetifyRoot = path.dirname(createRequire(import.meta.url).resolve("vuetify/package.json"));
+  const index = fs.readFileSync(path.join(vuetifyRoot, "lib/components/index.js"), "utf8");
+  return [...index.matchAll(/^export \* from "\.\/(\w+)\/index\.js";/gm)].map((m) => `vuetify/components/${m[1]}`);
+}
+
 // Dev-server proxy target for /api, /auth, /health — never used in production
 // builds (those get VITE_API_URL baked in at build time by CI, see deploy-pwa.yml).
 // Defaults to the local API server; set VITE_DEV_API_TARGET to a remote HTTPS URL
@@ -105,6 +117,16 @@ export default defineConfig(mergeConfig(sharedViteConfig(__dirname), {
         },
       },
     },
+  },
+  // vite-plugin-vuetify's autoImport injects per-component imports
+  // (vuetify/components/VBtn, …) during transform, which Vite's startup
+  // dependency scanner never sees. On a cold cache (every CI run) Vite then
+  // discovers them on the first page load and force-reloads the page
+  // ("optimized dependencies changed. reloading") — mid-test for Playwright,
+  // wiping a half-filled login form or bouncing an authenticated /login to
+  // /patients. Pre-bundling them up front removes that late reload.
+  optimizeDeps: {
+    include: vuetifyComponentEntries(),
   },
   appType: "spa",
   server: {
