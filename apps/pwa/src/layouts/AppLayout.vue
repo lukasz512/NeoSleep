@@ -106,7 +106,12 @@
         </span>
       </template>
 
-      <div id="main-content" tabindex="-1" class="layout-main__inner" :class="{ 'layout-main--fading': localeTransitioning }">
+      <div
+        id="main-content"
+        tabindex="-1"
+        class="layout-main__inner"
+        :class="{ 'layout-main--fading': localeTransitioning, 'layout-main__inner--mobile': isMobile }"
+      >
         <RouterView v-slot="{ Component }">
           <!-- appear: this app-layout mount is only reached right after the
                auth screen's own exit sequence finishes (see AuthView.vue),
@@ -127,15 +132,18 @@
           </Transition>
         </RouterView>
       </div>
+      <!-- Mobile: after the content, not fixed — .layout-main__inner--mobile is
+           at least one screen tall, so this only shows once you scroll to the
+           very bottom instead of sitting over every screen. -->
+      <p v-if="appVersionLabel && isMobile" class="layout-app-version layout-app-version--end-of-page">
+        {{ appVersionLabel }}
+      </p>
     </AppShell>
 
-    <!-- Same label as under the login badge (useAppVersionLabel). Fixed to the
-         viewport corner, clear of the mobile bottom nav; never takes clicks. -->
-    <p
-      v-if="appVersionLabel"
-      class="layout-app-version"
-      :class="{ 'layout-app-version--bottom-nav-space': isMobile }"
-    >
+    <!-- Same label as under the login badge (useAppVersionLabel). Desktop:
+         fixed to the viewport corner, never takes clicks. Mobile: rendered
+         after the content instead (see below). -->
+    <p v-if="appVersionLabel && !isMobile" class="layout-app-version">
       {{ appVersionLabel }}
     </p>
   </VApp>
@@ -466,8 +474,18 @@ const moduleIcon = computed(() => {
   user-select: none;
 }
 
-/* Sits just above MobileBottomNavBar (fixed, see AppShell) instead of under it. */
-.layout-app-version--bottom-nav-space {
-  bottom: calc(var(--mobile-bottom-nav-height, 64px) + env(safe-area-inset-bottom) + 4px);
+/* Mobile: in the page flow, below the content. */
+.layout-app-version--end-of-page {
+  position: static;
+  padding: 4px 16px 8px;
+  text-align: right;
+}
+
+/* At least one full visible screen (viewport minus app bar and bottom nav),
+   so the end-of-page version line starts just below the fold. */
+.layout-main__inner--mobile {
+  min-height: calc(
+    100dvh - var(--v-layout-top, 0px) - var(--mobile-bottom-nav-height, 64px) - env(safe-area-inset-bottom)
+  );
 }
 </style>
