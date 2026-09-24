@@ -151,18 +151,12 @@ defineEmits<{
   display: block;
 }
 
-/* No card chrome (border/radius/background) at any width — the detail content sits
-   directly on the page. Mobile keeps the inner padding as spacing; desktop
-   (>= MOBILE_BREAKPOINT, constants.ts) drops it so content is flush with the
-   back-button row above. */
+/* Borderless on purpose — the card keeps its padding/radius/surface for spacing,
+   but draws no outline. */
 .view-item__card {
   padding: 24px;
-}
-
-@media (min-width: 768px) {
-  .view-item__card {
-    padding: 0;
-  }
+  border-radius: var(--pwa-radius);
+  background: rgba(var(--v-theme-surface), 1);
 }
 
 .view-item__title {
