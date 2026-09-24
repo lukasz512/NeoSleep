@@ -6,7 +6,7 @@ import {
   type DocumentContentVersionRow,
   type ListDocumentContentVersionsOptions,
 } from "../db/documentContent.js";
-import { getEntityTypesForTemplate } from "../db/documentTemplateEntityType.js";
+import { getEntityTypesForTemplate, getPatientChecklistConfig } from "../db/documentTemplateEntityType.js";
 import { DOCUMENT_MANIFEST } from "@neo/documents";
 import { NotFoundError } from "../errors.js";
 
@@ -79,4 +79,12 @@ export async function GetDocumentContentVersionByIdQuery(id: string): Promise<Do
 /** Permissions tab — current entity-type assignment for a template. Empty array if never assigned, not an error. */
 export async function GetDocumentTemplateEntityTypesQuery(templateKey: string): Promise<string[]> {
   return withPlatform((client) => getEntityTypesForTemplate(client, templateKey));
+}
+
+/** Null when the template isn't assigned to patients. */
+export async function GetPatientChecklistConfigQuery(
+  templateKey: string
+): Promise<{ fillMode: string | null; sortOrder: number | null } | null> {
+  const config = await withPlatform((client) => getPatientChecklistConfig(client, templateKey));
+  return config ? { fillMode: config.fill_mode, sortOrder: config.sort_order } : null;
 }
