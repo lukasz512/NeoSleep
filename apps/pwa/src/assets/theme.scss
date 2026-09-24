@@ -15,7 +15,7 @@ $pwa-font-sans: system-ui, -apple-system, sans-serif;
 $pwa-radius: 10px;
 $pwa-radius-sm: 2px; /* Small elements (e.g. loader bars) */
 $pwa-radius-pill: 9999px; /* M3 pill/stadium shape: primary buttons, status chips */
-$pwa-modal-radius: 16px; /* Modals/dialogs: slightly larger for prominence */
+$pwa-modal-radius: 28px; /* Modals/dialogs: M3 extra-large shape (28dp) */
 $pwa-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
 $pwa-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
 
@@ -407,14 +407,66 @@ a:hover {
   background: rgb(var(--v-theme-surface-container-high)) !important;
   box-shadow: var(--pwa-shadow-md) !important;
 }
-/* Dialog headers (title, avatar, close X) are owned by AppDialogHeader.vue's
-   scoped styles — not styled here. A global rule on .v-card-title loses to
-   Vuetify's lazily-injected component CSS, which is what broke the header. */
-.pwa-form-dialog__card .v-card-text {
-  padding: 24px !important;
+/*
+ * M3 dialog spacing (m3.material.io/components/dialogs/specs), one system for
+ * every dialog card: 24dp container padding on all sides, 16dp between the
+ * header (AppDialogHeader.vue, which owns its own 24dp top/side padding) and
+ * the content, 24dp between content and actions, 8dp between action buttons.
+ * Tokens so AppDialogHeader.vue and these rules can't drift apart.
+ *
+ * !important on purpose: Vuetify injects .v-card-text/.v-card-actions CSS
+ * lazily, *after* this file — without it, equal-specificity rules here lose
+ * the cascade (the exact bug that broke the dialog header). Measured by
+ * apps/pwa/e2e/dialog-header.spec.ts in real browsers.
+ */
+:root {
+  --pwa-dialog-pad: 24px;
+  --pwa-dialog-header-gap: 16px;
+  --pwa-dialog-actions-gap: 24px;
+  --pwa-dialog-button-gap: 8px;
+  --pwa-dialog-field-gap: 16px;
 }
-.pwa-form-dialog__card .v-card-actions {
-  padding: 24px 24px 32px !important;
+:is(.pwa-form-dialog__card, .pwa-confirm-dialog__card) > .v-card-text {
+  padding: var(--pwa-dialog-pad) var(--pwa-dialog-pad) 0 !important;
+}
+:is(.pwa-form-dialog__card, .pwa-confirm-dialog__card) > .app-dialog-header + .v-card-text {
+  padding-top: var(--pwa-dialog-header-gap) !important;
+}
+:is(.pwa-form-dialog__card, .pwa-confirm-dialog__card) > .v-card-actions {
+  min-height: 0 !important;
+  gap: var(--pwa-dialog-button-gap) !important;
+  padding: var(--pwa-dialog-actions-gap) var(--pwa-dialog-pad) var(--pwa-dialog-pad) !important;
+}
+/* M3 text fields: 16dp between fields. Vuetify reserves an always-present
+   ~22px error-message line under every input, which on top of the old mb-3
+   row margin made fields sit ~34px apart and padded the last field away from
+   the actions. The line now only takes space while it actually shows a
+   message (error or persistent hint) — same as Vuetify's hide-details="auto",
+   but in one place instead of on every field of every dialog. */
+.pwa-form-dialog__card .v-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pwa-dialog-field-gap);
+}
+.pwa-form-dialog__card .v-form > * {
+  margin-bottom: 0 !important;
+}
+.pwa-form-dialog__card .v-input__details:not(:has(.v-messages__message)) {
+  display: none;
+}
+/* M3 label-large, sentence case — Vuetify's default uppercase buttons are
+   Material 2. Scoped to dialogs for now; the rest of the app is unchanged. */
+:is(.pwa-form-dialog__card, .pwa-confirm-dialog__card) > .v-card-actions .v-btn {
+  text-transform: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: 0.00625em;
+}
+/* M3 text button: 12dp side padding. The app-wide 24px (sized for the pill
+   ends of filled buttons, see "Button padding" in DESIGN_AND_UI.md) pushed
+   Cancel/Save visually ~56px apart despite the 8dp gap. */
+:is(.pwa-form-dialog__card, .pwa-confirm-dialog__card) > .v-card-actions .v-btn--variant-text {
+  padding-inline: 12px !important;
 }
 
 /*

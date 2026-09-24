@@ -8,7 +8,7 @@
         :size="40"
         class="app-dialog-header__avatar"
       />
-      <h2 class="app-dialog-header__title text-h6" data-testid="app-dialog-header-title">{{ title }}</h2>
+      <h2 class="app-dialog-header__title" data-testid="app-dialog-header-title">{{ title }}</h2>
     </div>
     <AppButton
       v-if="closable"
@@ -65,12 +65,14 @@ const { t } = useI18n();
 </script>
 
 <style scoped>
+/* M3 dialog spec: 24dp top/side padding (--pwa-dialog-pad, shared with the
+   content/actions rules in theme.scss); the 16dp gap to the content below is
+   the content's own padding-top, so no bottom padding here. */
 .app-dialog-header {
   display: flex;
   align-items: center;
   gap: 16px;
-  min-height: 48px;
-  padding: 24px 16px 8px 24px;
+  padding: var(--pwa-dialog-pad, 24px) var(--pwa-dialog-pad, 24px) 0;
 }
 
 .app-dialog-header__lead {
@@ -85,16 +87,24 @@ const { t } = useI18n();
   flex: none;
 }
 
+/* M3 headline-small (24/32, regular) — the dialog headline role. */
 .app-dialog-header__title {
   min-width: 0;
   margin: 0;
+  font-size: 1.5rem;
+  font-weight: 400;
+  line-height: 2rem;
+  letter-spacing: 0;
   overflow-wrap: anywhere;
   color: rgb(var(--v-theme-on-surface));
 }
 
+/* The 48px touch target stays, but negative margins let the icon itself
+   (not the invisible hit area) line up with the 24dp content edge, and keep
+   the button from making the row taller than the avatar/headline. */
 .app-dialog-header__close {
   flex: none;
-  margin-left: auto;
+  margin: -8px -12px -8px auto;
 }
 
 /* Without an explicit size the raw <svg> falls back to the browser's

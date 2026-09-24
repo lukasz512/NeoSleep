@@ -133,15 +133,14 @@ defineEmits<{
   margin-left: auto;
 }
 
-/* Borderless and page-coloured, so it is not a visible card — no inline
-   padding (NEO-55): its content (avatar, name, tabs, fields) starts on the
-   same page gutter as lists and the "← Module" header above it
-   (AppLayout's --layout-card-inset). Bordered cards inside views keep their
-   own inner padding; their border is what sits on the gutter. */
+/* Not a visual card on purpose — no surface, no border, no inset padding: the
+   entity content sits directly on the page background (same color as the rest
+   of the view), aligned with the header row above it — i.e. on the same page
+   gutter as lists and the "← Module" header (AppLayout's --layout-card-inset,
+   NEO-55). */
 .view-item__card {
-  padding: 0 0 24px;
-  border-radius: var(--pwa-radius);
-  background: rgba(var(--v-theme-surface), 1);
+  background: transparent;
+  border: none;
 }
 
 .view-item__title {

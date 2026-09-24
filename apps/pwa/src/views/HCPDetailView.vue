@@ -199,7 +199,7 @@
       :transition="originDialogTransition"
       persistent
     >
-      <VCard>
+      <VCard class="pwa-confirm-dialog__card">
         <VCardText>{{ t("user.hcp.actions.deleteConfirmText") }}</VCardText>
         <VCardActions>
           <VSpacer />

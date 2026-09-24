@@ -53,10 +53,10 @@
         {{ (item as { name?: string }).name }}
       </template>
       <template #item.practitioner_name="{ item }">
-        <EntityLink :to="hcpDetailLink((item as PatientListItem).practitioner_id)" entity-type="hcp" :label="(item as PatientListItem).practitioner_name" />
+        <EntityLink :to="hcpDetailLink((item as PatientListItem).practitioner_id)" entity-type="hcp" :label="(item as PatientListItem).practitioner_name" :avatar-size="32" />
       </template>
-      <template #item.region="{ item }">
-        {{ (item as PatientListItem).territory_name || (item as PatientListItem).region || "—" }}
+      <template #item.intake_forms="{ item }">
+        <PatientIntakeForms :forms="(item as PatientListItem).intake_forms ?? []" />
       </template>
       <template #item.status="{ item }">
         <VChip
@@ -102,6 +102,8 @@ import { ref, computed, defineAsyncComponent } from "vue";
 import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
 import AppAvatar from "../components/AppAvatar.vue";
+import PatientIntakeForms from "../components/patient/PatientIntakeForms.vue";
+import type { PatientIntakeFormStatus } from "../types/patientIntakeForm";
 import EntityLink from "../components/EntityLink.vue";
 import { hcpDetailLink } from "../utils/entityLinks";
 import { personAvatarProps } from "../utils/personAvatarProps";
@@ -132,6 +134,7 @@ interface PatientListItem {
   status?: string;
   region?: string;
   territory_name?: string | null;
+  intake_forms?: PatientIntakeFormStatus[];
   ahi_baseline?: number | null;
   cpap_device?: string | null;
   medical_record?: string | null;
@@ -176,7 +179,7 @@ const patientFilterDefinitions = computed<FilterDefinition[]>(() => [
 const tableHeaders = computed(() => [
   { title: t("app.patients.table.name"),             key: "name",              sortable: true },
   { title: t("app.patients.table.practitioner"),     key: "practitioner_name", sortable: false },
-  { title: t("app.patients.table.region"),           key: "region",            sortable: true },
+  { title: t("app.patients.table.forms"),            key: "intake_forms",      sortable: false },
   { title: t("app.patients.table.status"),           key: "status",            sortable: true },
 ]);
 

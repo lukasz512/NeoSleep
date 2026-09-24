@@ -195,7 +195,7 @@
   </ItemDetailLayout>
 
   <VDialog v-model="showDeleteConfirm" max-width="360" :transition="originDialogTransition" persistent>
-    <VCard>
+    <VCard class="pwa-confirm-dialog__card">
       <VCardText>{{ t("user.hco.detail.deleteConfirmText") }}</VCardText>
       <VCardActions>
         <VSpacer />

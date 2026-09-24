@@ -21,7 +21,7 @@
          only the list view filters it out. Mainly for hiding failed/
          abandoned OrthoApnea orders. -->
     <VDialog v-model="showDeleteConfirm" max-width="380" persistent>
-      <VCard>
+      <VCard class="pwa-confirm-dialog__card">
         <AppDialogHeader :title="t('app.treatmentPlans.deleteConfirmTitle')" :closable="false" />
         <VCardText>{{ t("app.treatmentPlans.deleteConfirmText") }}</VCardText>
         <VCardActions>
