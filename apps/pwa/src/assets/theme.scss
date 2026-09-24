@@ -168,6 +168,19 @@ body {
   font-family: var(--pwa-font-sans) !important;
 }
 
+/*
+ * VDataTable/VDataTableServer render their own <VDivider> between the rows
+ * and the pagination footer, colored from inherited on-surface text at
+ * --v-border-opacity — a different tone from --pwa-table-border, so the
+ * footer read as a second box stacked under the table. This divider is the
+ * one separator line: tables must not add their own footer border-top on
+ * top of it (that doubled it into a thick line).
+ */
+.v-data-table > .v-divider {
+  border-color: var(--pwa-table-border);
+  opacity: 1;
+}
+
 /* Inputs: match app design (border-radius, transitions, touch targets) */
 .v-field {
   border-radius: var(--pwa-radius) !important;

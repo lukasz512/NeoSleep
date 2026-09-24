@@ -379,16 +379,15 @@
 }
 
 /* VDataTableServer's default pagination footer (rows-per-page, page count,
-   prev/next) rendered fully unstyled — no border separating it from the
-   rows above, full-emphasis body text on the row count/page controls. A
-   thin --pwa-table-border top edge frames it against the table body the
-   same way the table's own outer border does, and de-emphasizing the text
+   prev/next) rendered with full-emphasis body text on the row count/page
+   controls. The separator above it is Vuetify's own <VDivider>, recolored
+   globally in theme.scss — no border-top here, or the two stack into a
+   double line. De-emphasizing the text
    (medium-emphasis on-surface, same tone used for the row-count/meta text
    elsewhere in this file) reads as a quieter, data-dense footer rather than
    another row of primary content — closer to the clinical-record tables
    this is meant to match than Vuetify's generic default. */
 .app-entity-list__table-wrap :deep(.v-data-table-footer) {
-  border-top: 1px solid var(--pwa-table-border);
   padding: 8px 16px;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   font-size: 0.8125rem;
