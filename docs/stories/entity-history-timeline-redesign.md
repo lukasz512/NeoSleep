@@ -30,3 +30,25 @@ n/a — internal change (rep-facing audit/history UI polish, not an HCP-engageme
 
 ### Hand-off
 → `/dev feat entity-history-timeline-redesign` — scope is clear, small, and self-contained (one shared component + one new util + icon/i18n additions).
+
+---
+
+## Second pass (2026-09-24): medical-grade + UX
+
+Łukasz liked the first timeline and asked for a second pass aiming at "medical grade and UX max". Scope he picked (clarifying round, 2026-09-24): auditability, humanized sentences, WCAG 2.2 AA, clinical-event emphasis; day grouping, expandable details, polished states/motion. **Frontend only** — no endpoint, allowlist or migration changes.
+
+### Acceptance Criteria
+- [x] Every entry reads as one grammatical sentence per entity type × action, in EN/PL/MX (e.g. "Sleep study status changed to Device shipped" / "Zmieniono status badania snu na: Urządzenie wysłane"). Polish uses impersonal verb forms, so no guessing the author's gender.
+- [x] Stored codes (status, type, specialty) render as translated labels, never raw DB values; empty values say "Not set"; record identifiers (`id`, `patient_id`) are never shown as "changes".
+- [x] Entries are grouped under day headings (Today / Yesterday / full localized date), newest first; each row shows the local time.
+- [x] Each entry expands into an audit panel: exact timestamp with seconds and time zone, author (or "System"), record type + short record id, short audit-entry id, and a before/after table of every allowlisted field.
+- [x] Sleep study and treatment plan entries are marked clinical: a tinted card plus a text "Clinical" badge, so the emphasis never relies on color alone.
+- [x] "Viewed" entries are visually quieter so they don't drown out real changes.
+- [x] A11y: semantic `<section>`/`<h3>`/`<ol>` structure; decorative icons `aria-hidden`; inline diffs carry a screen-reader sentence ("Status changed from A to B"); the toggle is a real `<button>` with `aria-expanded`/`aria-controls`, a ≥24px target (WCAG 2.5.8) and a visible focus ring; the diff is a real `<table>` with a caption and header scopes.
+- [x] Loading shows a skeleton with `role="status"` and a screen-reader label; entry fade-in, the skeleton pulse and the details transition all run only under `prefers-reduced-motion: no-preference`.
+- [x] Dates go through `Intl` with the real BCP 47 tag (`mx` → `es-MX` via the new `intlLocale()` in `@i18n/language-options`).
+
+### Deliberately not done (need a decision first)
+- **CSV/PDF export of history**: exporting audit data off a rep device is a GDPR question (who may export, and whether the export itself must be audited, which needs a backend write). Left out until decided.
+- **Merging runs of small edits into one entry**: for an audit trail every write should stay a distinct, individually referenceable entry, so this was skipped on purpose.
+- **Region labels**: region codes (e.g. `PL-MZ`) are shown as stored. Humanizing them needs the territory lookup, and the History endpoint doesn't return it.

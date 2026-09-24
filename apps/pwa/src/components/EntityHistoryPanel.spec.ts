@@ -82,23 +82,111 @@ describe("EntityHistoryPanel", () => {
     );
     const wrapper = mountPanel();
 
-    await vi.waitFor(() => expect(wrapper.findAll(".v-timeline-item")).toHaveLength(2));
+    await vi.waitFor(() => expect(wrapper.findAll("[data-test='history-entry']")).toHaveLength(2));
 
-    // A real vertical line connecting the entries, not a bare list.
-    expect(wrapper.find(".v-timeline").exists()).toBe(true);
+    // Semantic ordered lists, one per day, each introduced by a day heading.
+    expect(wrapper.findAll("ol li[data-test='history-entry']")).toHaveLength(2);
+    expect(wrapper.findAll("h3")).toHaveLength(2);
 
-    // Each entry gets its own colored dot (keyed by action) with an icon inside.
-    const dots = wrapper.findAll(".v-timeline-divider__inner-dot");
+    // Each entry gets its own colored dot (keyed by action) with a decorative icon inside.
+    const dots = wrapper.findAll(".entity-history-panel__dot");
     expect(dots).toHaveLength(2);
     expect(dots[0].classes()).toContain("bg-success"); // create
     expect(dots[1].classes()).toContain("bg-info"); // update
+    expect(dots[0].attributes("aria-hidden")).toBe("true");
     expect(wrapper.findAll(".entity-history-panel__dot-icon")).toHaveLength(2);
 
-    // entity_type is humanized via i18n, not the raw model name.
-    expect(wrapper.text()).toContain("Sleep Study");
+    // Plain-language sentences, never raw model names or DB codes.
+    expect(wrapper.text()).toContain("Patient record created");
     expect(wrapper.text()).not.toContain("SleepStudy");
+  });
 
-    // Existing before → after diff summary is preserved.
-    expect(wrapper.text()).toContain("status: pending → done");
+  it("names the new status in the headline and emphasizes clinical entries", async () => {
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, { entries: [statusChangeEntry], lead_source: null }));
+    const wrapper = mountPanel();
+
+    await vi.waitFor(() => expect(wrapper.text()).toContain("Sleep study status changed to Device shipped"));
+    const entry = wrapper.get("[data-test='history-entry']");
+    expect(entry.classes()).toContain("entity-history-panel__entry--clinical");
+    expect(entry.text()).toContain("Clinical");
+    // The headline already states the only change — no duplicate inline diff.
+    expect(entry.find("[data-test='history-changes']").exists()).toBe(false);
+  });
+
+  it("shows inline field changes with a screen-reader sentence when the headline doesn't cover them", async () => {
+    apiFetch.mockResolvedValueOnce(
+      jsonResponse(true, {
+        entries: [
+          {
+            ...statusChangeEntry,
+            entity_type: "Organization",
+            entity_before: { name: "Clinic A", status: "active" },
+            entity_after: { name: "Clinic B", status: "inactive" },
+          },
+        ],
+        lead_source: null,
+      })
+    );
+    const wrapper = mountPanel();
+
+    await vi.waitFor(() => expect(wrapper.find("[data-test='history-changes']").exists()).toBe(true));
+    const changes = wrapper.get("[data-test='history-changes']");
+    expect(changes.findAll("li")).toHaveLength(2);
+    expect(changes.text()).toContain("Name changed from Clinic A to Clinic B");
+  });
+
+  it("expands an audit details panel with exact timestamp, author, references and a before/after table", async () => {
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, { entries: [statusChangeEntry], lead_source: null }));
+    const wrapper = mountPanel();
+
+    await vi.waitFor(() => expect(wrapper.find("[data-test='history-toggle']").exists()).toBe(true));
+    const toggle = wrapper.get("[data-test='history-toggle']");
+    expect(toggle.attributes("aria-expanded")).toBe("false");
+    expect(wrapper.find("[data-test='history-details']").exists()).toBe(false);
+
+    await toggle.trigger("click");
+
+    expect(toggle.attributes("aria-expanded")).toBe("true");
+    const details = wrapper.get("[data-test='history-details']");
+    expect(toggle.attributes("aria-controls")).toBe(details.attributes("id"));
+    expect(details.get("time").attributes("datetime")).toBe(statusChangeEntry.created_at);
+    expect(details.text()).toContain("Ann Rep");
+    expect(details.text()).toContain("Audit reference");
+    expect(details.text()).toContain("audit-00"); // short audit entry id
+    const rows = details.findAll("tbody tr");
+    expect(rows).toHaveLength(1);
+    expect(rows[0].text()).toContain("Ordered");
+    expect(rows[0].text()).toContain("Device shipped");
+  });
+
+  it("attributes entries without a user to the system", async () => {
+    apiFetch.mockResolvedValueOnce(
+      jsonResponse(true, { entries: [{ ...statusChangeEntry, user_id: null, user_name: null }], lead_source: null })
+    );
+    const wrapper = mountPanel();
+
+    await vi.waitFor(() => expect(wrapper.get(".entity-history-panel__meta").text()).toContain("System"));
+  });
+
+  it("shows an accessible skeleton while the first load is in flight", async () => {
+    apiFetch.mockReturnValueOnce(new Promise(() => {}));
+    const wrapper = mountPanel();
+
+    await vi.waitFor(() => expect(wrapper.find("[data-test='history-skeleton']").exists()).toBe(true));
+    const skeleton = wrapper.get("[data-test='history-skeleton']");
+    expect(skeleton.attributes("role")).toBe("status");
+    expect(skeleton.text()).toContain("Loading history…");
   });
 });
+
+const statusChangeEntry = {
+  id: "audit-0001-0000-0000-000000000000",
+  created_at: "2026-09-02T10:00:00.000Z",
+  user_id: "u1",
+  user_name: "Ann Rep",
+  action: "update",
+  entity_type: "SleepStudy",
+  entity_id: "s1",
+  entity_before: { status: "ordered" },
+  entity_after: { status: "device_shipped" },
+};
