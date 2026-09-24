@@ -50,7 +50,9 @@ defineEmits<{
   align-items: center;
   color: var(--pwa-sidebar-text, #f5f5f5);
   text-decoration: none;
-  padding: 8px 4px;
+  /* No inline padding: the wordmark's left edge is placed by AppShell's
+     --app-shell-bar-start-inset (aligned with the side-menu icons). */
+  padding: 8px 0;
   -webkit-tap-highlight-color: transparent;
 
   &:hover,

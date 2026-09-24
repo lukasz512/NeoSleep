@@ -251,6 +251,32 @@ describe("AppLayout", () => {
       expect(layout).toContain(":more-title=\"t('layout.nav.moreModules')\"");
     });
 
+    // Logo ↔ side-menu icons and avatar ↔ page-header icons must line up by
+    // construction: the bar's edge insets are computed from the same tokens
+    // that place the icons, never hand-tuned numbers of their own.
+    it("app bar edge insets are derived from the nav/card tokens the icons use", () => {
+      const layout = readLayout();
+      expect(layout).toMatch(
+        /--app-shell-bar-start-inset:\s*calc\(\s*var\(--layout-nav-inset\)\s*\+\s*var\(--layout-nav-item-inset\)\s*\+\s*var\(--layout-icon-ink-inset\)/,
+      );
+      expect(layout).toMatch(
+        /--app-shell-bar-end-inset:\s*calc\(\s*var\(--layout-card-inset\)\s*\+\s*var\(--layout-action-icon-inset\)/,
+      );
+      expect(layout).toMatch(/\.layout-main__inner\s*\{\s*padding:\s*var\(--layout-card-inset\)/);
+
+      const navLinks = readFileSync(path.resolve(__dirname, "components/AppNavLinks.vue"), "utf-8");
+      expect(navLinks).toContain("var(--layout-nav-inset");
+      expect(navLinks).toContain("var(--layout-nav-item-inset");
+
+      const shell = readShell();
+      expect(shell).toContain("padding-inline-start: var(--app-shell-bar-start-inset");
+      expect(shell).toContain("padding-inline-end: var(--app-shell-bar-end-inset");
+
+      // The logo link itself adds no inline offset on top of the shell inset.
+      const logo = readFileSync(path.resolve(__dirname, "components/AppLogo.vue"), "utf-8");
+      expect(logo).toMatch(/\.layout-app__bar-logo-link\s*\{[\s\S]*?padding:\s*8px 0;/);
+    });
+
     it("collapse chevron button is 32px with right-edge margin", () => {
       const rule = readLayout().match(/\.layout-collapse-btn\s*\{[\s\S]*?\}/)?.[0] ?? "";
       expect(rule).toMatch(/width:\s*32px/);

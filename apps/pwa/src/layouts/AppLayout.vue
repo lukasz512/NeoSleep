@@ -1,5 +1,5 @@
 <template>
-  <VApp>
+  <VApp class="layout-root" :class="{ 'layout-root--desktop': !isMobile }">
     <a
       href="#main-content"
       class="layout-skip-link"
@@ -276,6 +276,42 @@ const moduleIcon = computed(() => {
 </script>
 
 <style scoped>
+/* Shell edge tokens (NEO-55). The chrome's outer edges are derived from the
+   content they must line up with, not tuned separately:
+   - the logo's left edge = the side-menu icons' left edge;
+   - the avatar's right edge = the page-header action icons' right edge
+     (filter, edit, …).
+   AppNavLinks and .layout-main__inner consume the insets below, AppShell
+   consumes the two --app-shell-bar-* results. Change an inset here and the
+   logo/avatar follow. */
+.layout-root {
+  /* Side menu: list padding + nav item padding → icon box left edge. */
+  --layout-nav-inset: 8px;
+  --layout-nav-item-inset: 10px;
+  /* Content card padding, and the icon's inset inside a size="large" (56px)
+     icon button holding a 24px icon: (56 − 24) / 2. */
+  --layout-card-inset: 16px;
+  --layout-action-icon-inset: 16px;
+  /* AppIcon glyphs are stroked ~1px inside their box; the logo and the
+     avatar circle have no such inset, so they sit 1px further in to match
+     the icons' visible ink rather than their boxes. */
+  --layout-icon-ink-inset: 1px;
+  /* Account button's own end padding (its hover pill), subtracted so the
+     avatar circle itself — not the pill — lands on the edge. */
+  --layout-user-btn-pad-end: 6px;
+
+  --app-shell-bar-end-inset: calc(
+    var(--layout-card-inset) + var(--layout-action-icon-inset) + var(--layout-icon-ink-inset)
+      - var(--layout-user-btn-pad-end)
+  );
+}
+
+.layout-root--desktop {
+  --app-shell-bar-start-inset: calc(
+    var(--layout-nav-inset) + var(--layout-nav-item-inset) + var(--layout-icon-ink-inset)
+  );
+}
+
 .layout-skip-link {
   position: absolute;
   top: 0;
@@ -425,17 +461,24 @@ const moduleIcon = computed(() => {
 .layout-user-btn {
   height: auto !important;
   min-height: 44px;
-  padding-block: 4px;
-  padding-inline: 12px 6px;
-  margin-inline-end: 8px;
   text-transform: none;
   letter-spacing: normal;
   border-radius: 999px;
 }
 
-.layout-user-btn--compact {
+/* theme.scss gives every non-icon button `padding-inline: 24px !important`
+   (pill CTA look) via `.v-btn:not(.v-btn--icon):not(…):not(…)`. Left alone,
+   that 24px — not the shell's end token — decides where the avatar lands,
+   18px short of the header icons; hence !important and a selector scoped
+   through .layout-root that outranks it. */
+.layout-root .layout-user-btn.v-btn:not(.v-btn--icon) {
+  padding-block: 4px;
+  padding-inline: 12px var(--layout-user-btn-pad-end) !important;
+}
+
+.layout-root .layout-user-btn--compact.v-btn:not(.v-btn--icon) {
   min-width: 0;
-  padding-inline: 6px;
+  padding-inline: var(--layout-user-btn-pad-end) !important;
 }
 
 .layout-user-info {
@@ -515,7 +558,7 @@ const moduleIcon = computed(() => {
 }
 
 .layout-main__inner {
-  padding: 16px;
+  padding: var(--layout-card-inset);
   min-height: 100%;
   box-sizing: border-box;
   display: flex;

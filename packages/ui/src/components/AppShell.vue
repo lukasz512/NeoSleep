@@ -26,7 +26,9 @@
     </VAppBarTitle>
 
     <template #append>
-      <slot name="app-bar-actions" :mobile="mobile" />
+      <div class="app-shell__bar-end">
+        <slot name="app-bar-actions" :mobile="mobile" />
+      </div>
     </template>
   </VAppBar>
 
@@ -337,11 +339,30 @@ onMounted(() => {
   margin-inline-start: 8px;
 }
 
+/* The bar's two outer edges are set by the app, so its leading/trailing
+   content can line up with the app's own content below (apps/pwa: logo with
+   the side-menu icons, avatar with the page-header icons — see AppLayout's
+   shell edge tokens). Vuetify's own prepend/append margins are zeroed so
+   these insets are the only offset from the viewport edge. */
+.app-shell__bar :deep(.v-toolbar__prepend) {
+  margin-inline-start: 0;
+}
+
+.app-shell__bar :deep(.v-toolbar__append) {
+  margin-inline-end: 0;
+}
+
 .app-shell__bar-start {
   display: flex;
   align-items: center;
   min-height: var(--appbar-row);
-  padding-inline-start: 8px;
+  padding-inline-start: var(--app-shell-bar-start-inset, 8px);
+}
+
+.app-shell__bar-end {
+  display: flex;
+  align-items: center;
+  padding-inline-end: var(--app-shell-bar-end-inset, 8px);
 }
 
 /* Back arrow + title read as one "← Patients" label on mobile. */
