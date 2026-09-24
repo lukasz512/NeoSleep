@@ -7,6 +7,10 @@ import {
   type Patient,
   type TerritoryPathNode,
 } from "../db.js";
+import { withPlatform } from "../db/tenant.js";
+import { getTemplateKeysForEntityType } from "../db/documentTemplateEntityType.js";
+import { getPatientFormCompletion } from "../db/patientFormCompletion.js";
+import { DOCUMENT_MANIFEST } from "@neo/documents";
 import { getAllowedScopePaths, assertTerritoryAccessByTerritoryId } from "../middleware/requireScope.js";
 
 /**
@@ -47,6 +51,14 @@ export interface PatientDto {
   created_at: string;
   updated_at: string;
 }
+
+/** One entry per document template assigned to patients, in DOCUMENT_MANIFEST order (NEO-54). */
+export interface PatientIntakeFormStatus {
+  key: string;
+  done: boolean;
+}
+
+export type PatientListItemDto = PatientDto & { intake_forms: PatientIntakeFormStatus[] };
 
 function toDto(p: Patient & { name: string }, territoryPath: TerritoryPathNode[] | null = null): PatientDto {
   return {
@@ -90,7 +102,7 @@ export interface GetPatientListInput {
 }
 
 export interface GetPatientListResult {
-  items: PatientDto[];
+  items: PatientListItemDto[];
   total: number;
 }
 
@@ -112,7 +124,27 @@ export async function GetPatientListQuery(
   const sortOrder = input.sortOrder ?? "desc";
 
   const { rows, total } = await getPatientsPaginated(ctx.client, filters, page, limit, sortBy, sortOrder);
-  return { items: rows.map((row) => toDto(row)), total };
+
+  const formKeys = await getPatientIntakeFormKeys();
+  const completion = await getPatientFormCompletion(ctx.client, rows.map((row) => row.id), formKeys);
+  const items = rows.map((row) => {
+    const done = completion.get(row.id);
+    return {
+      ...toDto(row),
+      intake_forms: formKeys.map((key) => ({ key, done: done?.has(key) ?? false })),
+    };
+  });
+  return { items, total };
+}
+
+/**
+ * Templates an admin assigned to "patient" (Documents → Permissions tab),
+ * ordered by DOCUMENT_MANIFEST so the dots and tooltip list always come out
+ * in the same order. Hidden (test-fixture) and unknown keys are dropped.
+ */
+async function getPatientIntakeFormKeys(): Promise<string[]> {
+  const assigned = new Set(await withPlatform((client) => getTemplateKeysForEntityType(client, "patient")));
+  return DOCUMENT_MANIFEST.filter((entry) => !entry.hidden && assigned.has(entry.templateKey)).map((entry) => entry.templateKey);
 }
 
 // ---------------------------------------------------------------------------
