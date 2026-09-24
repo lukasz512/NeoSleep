@@ -199,6 +199,12 @@ whether it's a table cell, a mobile card line, a detail panel or a note author. 
   - Dialogs: `.pwa-form-dialog__card` and the new shared `.pwa-confirm-dialog__card` (nested
     discard/confirm dialogs, previously a bare `elevation="8"` VCard) both use
     `surface-container-high` tone + `--pwa-shadow-md` as a supporting cue only.
+  - Dialog headers: every titled dialog uses `AppDialogHeader.vue` — optional avatar, 16px gap,
+    title, close X pinned right (`closable=false` only for confirm dialogs). Never a hand-built
+    `VCardTitle`: Vuetify injects its component CSS after `theme.scss`, so a global flex rule on
+    a card title silently loses (`display: block`) and the X wraps under the avatar. Guarded by
+    `AppDialogHeader.spec.ts` (no `VCardTitle` in any dialog file) and
+    `apps/pwa/e2e/dialog-header.spec.ts` (real-browser layout on Chromium/Firefox/WebKit).
   - Desktop data table: `.app-entity-list__table-wrap` border moved from generic
     `--v-border-color` to `outline-variant`; header row (`.v-data-table__th`) now sits on
     `surface-container-low` as a distinct tonal layer instead of Vuetify's own header

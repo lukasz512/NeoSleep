@@ -25,7 +25,7 @@
          while the router is still resolving the session (see backdropBusy). -->
     <AuthOrbs ref="orbsRef" :busy="backdropBusy" :anchor="orbsAnchor" :instant="orbsInstant" />
     <main id="main-content" class="layout-public__main" role="main">
-      <RouterView v-slot="{ Component }">
+      <RouterView v-slot="{ Component, route: viewRoute }">
         <!-- No :key="route.path" here (unlike AppLayout): /login,
              /forgot-password and /reset-password intentionally share one
              component instance (see routes.ts) so its card/chrome never
@@ -33,8 +33,11 @@
              every one of those navigations and defeat that. Vue already
              remounts on its own when the component itself actually changes
              (e.g. → ChangePasswordView), so no key is needed either way. -->
+        <!-- An app route never renders here: while App.vue holds this layout
+             for the exit (see exitToApp), the app view must not show through
+             the dissolving backdrop — AppLayout renders it once the swap happens. -->
         <Transition name="view-fade-lift" mode="out-in">
-          <component :is="Component" />
+          <component :is="Component" v-if="viewRoute.meta.layout !== 'app'" />
         </Transition>
       </RouterView>
     </main>
@@ -49,7 +52,7 @@ import { brandColors } from "@brand/colors";
 import { BRAND_AUTH_BACKGROUND_URL } from "@brand/logos";
 import { AuthOrbs, AUTH_BACKDROP_KEY, type AuthBackdrop } from "@ui";
 import { useAuthStore } from "../stores/auth";
-import { bootedWithSplash, whenSplashLifts } from "../boot/bootSplash";
+import { bootedWithSplash, whenSplashLifts, whenSplashGone } from "../boot/bootSplash";
 
 const authBackgroundUrl = BRAND_AUTH_BACKGROUND_URL;
 
@@ -150,6 +153,23 @@ const backdrop: AuthBackdrop = {
 };
 
 provide(AUTH_BACKDROP_KEY, backdrop);
+
+/**
+ * Called by App.vue right before it swaps this layout for AppLayout. After a
+ * sign-in the exit has already played (AuthView runs playExitSequence before
+ * router.push); on a page refresh with a live session it hasn't — the session
+ * check just resolves and the app route arrives. Play the same exit here then,
+ * once the boot splash is fully gone, so a refresh ends exactly like a login
+ * instead of the backdrop cutting straight to a bare page.
+ */
+async function exitToApp(): Promise<void> {
+  if (backdropExited) return;
+  await whenSplashGone();
+  if (backdropExited) return;
+  await backdrop.playExit();
+}
+
+defineExpose({ exitToApp });
 
 // A post-login exit normally ends with App.vue swapping this layout out for
 // AppLayout. When the next route is public too (forced password change), this

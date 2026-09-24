@@ -43,7 +43,7 @@ describe("Notification host mount point (NEO-10)", () => {
   it("App.vue mounts AppNotifications above the layout switch, so it covers both PublicLayout (/login) and AppLayout", () => {
     const appSource = readFileSync(path.resolve(__dirname, "App.vue"), "utf-8");
     expect(appSource).toContain('import AppNotifications from "./components/AppNotifications.vue"');
-    expect(appSource).toMatch(/<AppNotifications\s*\/>\s*<component :is="layoutComponent" \/>/);
+    expect(appSource).toMatch(/<AppNotifications\s*\/>\s*<component :is="layoutComponent"[^>]*\/>/);
   });
 
   it("AppLayout no longer mounts its own AppNotifications instance (would double-render the toast host)", () => {

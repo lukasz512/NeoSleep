@@ -19,6 +19,12 @@ const lifting = new Promise<void>((resolve) => {
   if (!initiallyPresent) resolve();
 });
 
+let resolveGone: () => void = () => {};
+const gone = new Promise<void>((resolve) => {
+  resolveGone = resolve;
+  if (!initiallyPresent) resolve();
+});
+
 /** True when the page booted with the static HTML splash (see splash.ts) still covering it. */
 export function bootedWithSplash(): boolean {
   return initiallyPresent;
@@ -31,6 +37,15 @@ export function bootedWithSplash(): boolean {
  */
 export function whenSplashLifts(): Promise<void> {
   return lifting;
+}
+
+/**
+ * Resolves once the splash has fully faded and been removed (immediately if
+ * there never was one) — the backdrop's exit waits for this, so it never plays
+ * half-hidden underneath the fading splash.
+ */
+export function whenSplashGone(): Promise<void> {
+  return gone;
 }
 
 /** The splash's own finite intro (orbs pop in, background reveal) — its infinite breathing is ignored. */
@@ -80,6 +95,7 @@ export function dismissBootSplash(): void {
     window.setTimeout(() => {
       el.remove();
       document.getElementById(`${BOOT_SPLASH_ID}-style`)?.remove();
+      resolveGone();
     }, FADE_OUT_MS);
   });
 }

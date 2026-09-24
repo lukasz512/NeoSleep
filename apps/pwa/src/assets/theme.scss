@@ -407,23 +407,9 @@ a:hover {
   background: rgb(var(--v-theme-surface-container-high)) !important;
   box-shadow: var(--pwa-shadow-md) !important;
 }
-.pwa-form-dialog__card .v-card-title {
-  padding: 32px 24px !important;
-}
-/* AppAvatar preview next to the title, opt-in via FormRenderer's avatarEntityType prop. */
-.pwa-form-dialog__title-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-/* Without an explicit size the raw <svg> falls back to the browser's
-   intrinsic 300x150 default and gets clipped to nothing by the button's
-   overflow — see the identical note on .pwa-form-field-icon below. */
-.pwa-form-dialog__close-icon {
-  width: 20px;
-  height: 20px;
-  color: rgb(var(--v-theme-on-surface));
-}
+/* Dialog headers (title, avatar, close X) are owned by AppDialogHeader.vue's
+   scoped styles — not styled here. A global rule on .v-card-title loses to
+   Vuetify's lazily-injected component CSS, which is what broke the header. */
 .pwa-form-dialog__card .v-card-text {
   padding: 24px !important;
 }

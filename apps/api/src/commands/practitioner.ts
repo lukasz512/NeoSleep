@@ -11,6 +11,7 @@ import {
   getCountryTerritoryId,
   createInviteToken,
   invalidateUnusedInviteTokensForUser,
+  updateUser,
   type InsertPractitionerInput,
   type UpdatePractitionerInput,
   type Practitioner,
@@ -293,6 +294,10 @@ export async function ActivatePractitionerCommand(ctx: TenantContext, id: string
       practitioner.country_code
     );
     userId = user?.id ?? null;
+    // Same as InvitePractitionerCommand's lead path: the login stays
+    // 'inactive' until the doctor accepts the invite (AcceptPractitionerInviteCommand
+    // sets 'active'), so it can't be used before the documents are signed.
+    if (userId) await updateUser(ctx.client, userId, { status: "inactive" });
   }
 
   if (userId) {
