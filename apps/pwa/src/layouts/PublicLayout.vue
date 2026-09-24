@@ -1,6 +1,6 @@
 <template>
   <div class="layout-public" :style="gradientAccentStyle">
-    <!-- Fades in as a single unit on mount (see bgVisible below) and
+    <!-- Spreads out from under the orbs as a single unit on mount (see bgVisible below) and
          dissolves again as part of the backdrop's playExit — the two layers
          inside keep their own tuned opacities (see .layout-public__bg-image/
          -gradient) untouched; this wrapper's opacity just multiplies on top,
@@ -49,7 +49,7 @@ import { brandColors } from "@brand/colors";
 import { BRAND_AUTH_BACKGROUND_URL } from "@brand/logos";
 import { AuthOrbs, AUTH_BACKDROP_KEY, type AuthBackdrop } from "@ui";
 import { useAuthStore } from "../stores/auth";
-import { bootedWithSplash } from "../boot/bootSplash";
+import { bootedWithSplash, whenSplashLifts } from "../boot/bootSplash";
 
 const authBackgroundUrl = BRAND_AUTH_BACKGROUND_URL;
 
@@ -76,13 +76,29 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Intro (mirrors the exit): plain ground, the orbs pop in (AuthOrbs), then the
+// background spreads out from underneath them — see .layout-public__bg. The
+// boot splash plays the identical intro in pure CSS before JS runs; taking over
+// from it, all of this has already happened.
+const BG_REVEAL_DELAY = 250;
+const BG_REVEAL_DURATION = 1100;
+
+let resolveBgRevealed: () => void = () => {};
+const bgRevealed = new Promise<void>((resolve) => {
+  resolveBgRevealed = resolve;
+});
+
 onMounted(async () => {
-  if (prefersReducedMotion) {
+  if (takingOverFromSplash || prefersReducedMotion) {
     bgVisible.value = true;
+    resolveBgRevealed();
     return;
   }
   await nextTick();
+  await wait(BG_REVEAL_DELAY);
   bgVisible.value = true;
+  await wait(BG_REVEAL_DURATION);
+  resolveBgRevealed();
 });
 
 async function dissolveBackground(): Promise<void> {
@@ -123,7 +139,10 @@ const backdrop: AuthBackdrop = {
   registerAnchor(el) {
     orbsAnchor.value = el;
   },
-  whenEntered: () => orbsRef.value?.whenEntered() ?? Promise.resolve(),
+  // The card zooms out of the orbs only once the whole intro has played —
+  // orbs in, background revealed, boot splash (if any) lifting off.
+  whenEntered: () =>
+    Promise.all([orbsRef.value?.whenEntered(), bgRevealed, whenSplashLifts()]).then(() => undefined),
   async playExit() {
     backdropExited = true;
     await Promise.all([orbsRef.value?.playExit(), dissolveBackground()]);
@@ -213,16 +232,24 @@ onBeforeUnmount(() => {
    dissolveBackground (see script), so entrance/exit is one transition here
    rather than duplicated across the image and gradient's own already-tuned
    opacities. */
+/* Entrance: spreads out from underneath the orbs — a circle growing from the
+   orb cluster's center (--layout-public-orbs-y, same geometry as AuthOrbs'
+   default frame and the boot splash) — instead of a flat fade-in. */
 .layout-public__bg {
+  --layout-public-orbs-y: calc(max(16px, env(safe-area-inset-top)) + clamp(24px, 10vh, 96px) + 115px + 220px);
   position: absolute;
   inset: 0;
   z-index: 0;
   opacity: 0;
-  transition: opacity 0.6s ease-out;
+  clip-path: circle(0px at 50% var(--layout-public-orbs-y));
+  transition:
+    clip-path 1.1s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.4s ease-out;
 }
 
 .layout-public__bg--visible {
   opacity: 1;
+  clip-path: circle(150vmax at 50% var(--layout-public-orbs-y));
 }
 
 /* "Rozpływa się" — melts rather than cuts: fades while swelling slightly and
@@ -243,6 +270,7 @@ onBeforeUnmount(() => {
   .layout-public__bg--dissolving {
     transform: none;
     filter: none;
+    clip-path: none;
     transition: none;
   }
 }

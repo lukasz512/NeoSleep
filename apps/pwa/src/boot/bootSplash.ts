@@ -13,9 +13,33 @@ const STYLES_TIMEOUT_MS = 10_000;
 
 let stylesReady: Promise<void> = Promise.resolve();
 
+let resolveLifting: () => void = () => {};
+const lifting = new Promise<void>((resolve) => {
+  resolveLifting = resolve;
+  if (!initiallyPresent) resolve();
+});
+
 /** True when the page booted with the static HTML splash (see splash.ts) still covering it. */
 export function bootedWithSplash(): boolean {
   return initiallyPresent;
+}
+
+/**
+ * Resolves the moment the splash starts fading off (immediately if there never
+ * was one) — the auth view stages its card entrance after this, so the card
+ * doesn't zoom in unseen underneath the splash.
+ */
+export function whenSplashLifts(): Promise<void> {
+  return lifting;
+}
+
+/** The splash's own finite intro (orbs pop in, background reveal) — its infinite breathing is ignored. */
+function introFinished(el: HTMLElement): Promise<void> {
+  if (typeof el.getAnimations !== "function") return Promise.resolve();
+  const finite = el
+    .getAnimations({ subtree: true })
+    .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity);
+  return Promise.all(finite.map((animation) => animation.finished.catch(() => undefined))).then(() => undefined);
 }
 
 /**
@@ -41,12 +65,17 @@ export function activateDeferredStyles(): void {
   stylesReady = Promise.race([Promise.all(loads).then(() => undefined), timeout]);
 }
 
-/** Fades the static splash out and removes it once styles are ready — idempotent, safe to call from any layout. */
+/**
+ * Fades the static splash out and removes it — once styles are ready and its
+ * intro has played out, so the intro is never cut short by a fast load.
+ * Idempotent, safe to call from any layout.
+ */
 export function dismissBootSplash(): void {
   const el = typeof document !== "undefined" ? document.getElementById(BOOT_SPLASH_ID) : null;
   if (!el || el.dataset.leaving) return;
   el.dataset.leaving = "true";
-  void stylesReady.then(() => {
+  void Promise.all([stylesReady, introFinished(el)]).then(() => {
+    resolveLifting();
     el.classList.add("boot-splash--leaving");
     window.setTimeout(() => {
       el.remove();

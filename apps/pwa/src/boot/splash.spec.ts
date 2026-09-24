@@ -66,6 +66,26 @@ describe("bootSplash runtime hand-off", () => {
     expect(document.getElementById(BOOT_SPLASH_ID)).toBeNull();
   });
 
+  it("signals the card entrance only once the splash starts lifting", async () => {
+    vi.useFakeTimers();
+    document.body.innerHTML = `<div id="${BOOT_SPLASH_ID}"></div>`;
+    const { dismissBootSplash, whenSplashLifts } = await import("./bootSplash");
+
+    let lifted = false;
+    void whenSplashLifts().then(() => (lifted = true));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(lifted).toBe(false);
+
+    dismissBootSplash();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(lifted).toBe(true);
+  });
+
+  it("does not hold the card back when the page booted without a splash", async () => {
+    const { whenSplashLifts } = await import("./bootSplash");
+    await expect(whenSplashLifts()).resolves.toBeUndefined();
+  });
+
   it("never hangs on a stylesheet that never loads", async () => {
     vi.useFakeTimers();
     document.head.innerHTML = `<link rel="preload" as="style" href="/a.css" ${DEFERRED_CSS_ATTR}>`;

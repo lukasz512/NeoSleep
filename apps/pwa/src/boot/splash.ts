@@ -30,6 +30,8 @@ const css = `
   --bs-ground: #ffffff;
   --bs-tint: #e8f5f4;
   --bs-mint: #b8edcc;
+  /* Vertical center of the orb cluster — the background reveal grows out of it. */
+  --bs-orbs-y: calc(max(16px, env(safe-area-inset-top)) + clamp(24px, 10vh, 96px) + 115px + 220px);
   position: fixed;
   inset: 0;
   z-index: 2147483000;
@@ -41,6 +43,19 @@ const css = `
   transition: opacity 0.45s ease-out;
 }
 #${BOOT_SPLASH_ID}.boot-splash--leaving { opacity: 0; pointer-events: none; }
+/* Intro, mirroring the post-login exit: plain ground first, the orbs pop in,
+   then the photo + gradient spread out from underneath them (a circle
+   growing from the orb cluster's center). The splash only lifts once this has
+   played out (dismissBootSplash in bootSplash.ts). */
+.boot-splash__bg {
+  position: absolute; inset: 0;
+  animation: boot-splash-reveal 1.1s cubic-bezier(0.22, 1, 0.36, 1) 0.25s both;
+}
+@keyframes boot-splash-reveal {
+  from { clip-path: circle(0px at 50% var(--bs-orbs-y)); opacity: 0; }
+  35% { opacity: 1; }
+  to { clip-path: circle(150vmax at 50% var(--bs-orbs-y)); opacity: 1; }
+}
 .boot-splash__image {
   position: absolute; inset: 0;
   background: url("${BRAND_AUTH_BACKGROUND_URL}") right center / cover no-repeat;
@@ -67,15 +82,23 @@ const css = `
   border-radius: 50%;
   background: var(--bs-primary);
   opacity: 0.5;
-  animation: boot-splash-breath 1.5s ease-in-out infinite;
+  /* Pop-in (transform) and breathing (the separate scale property) compose
+     instead of fighting over one property. Same Fibonacci stagger as AuthOrbs. */
+  transform: scale(0);
+  animation: boot-splash-pop 610ms cubic-bezier(0.34, 1.56, 0.64, 1) both, boot-splash-breath 1.5s ease-in-out infinite;
 }
 .boot-splash__orb--big { width: 150%; top: 56%; left: 70%; translate: -50% -50%; }
 .boot-splash__orb--medium {
   width: 78%; bottom: 35%; left: -17%;
   background: color-mix(in srgb, var(--bs-primary) 55%, white 45%);
-  animation-duration: 1.3s; animation-delay: -0.45s;
+  animation-duration: 610ms, 1.3s; animation-delay: 89ms, -0.45s;
 }
-.boot-splash__orb--small { width: 102%; top: -11%; left: -48%; animation-duration: 1.1s; animation-delay: -0.75s; }
+.boot-splash__orb--small { width: 102%; top: -11%; left: -48%; animation-duration: 610ms, 1.1s; animation-delay: 233ms, -0.75s; }
+@keyframes boot-splash-pop {
+  from { transform: scale(0); }
+  65% { transform: scale(1.05); }
+  to { transform: scale(1); }
+}
 /* Busy pace (the page is loading by definition) — same range AuthOrbs uses
    while busy, so the hand-over to the JS-driven loop doesn't change rhythm. */
 @keyframes boot-splash-breath {
@@ -97,15 +120,18 @@ const css = `
   opacity: 0.7;
 }
 @media (prefers-reduced-motion: reduce) {
-  .boot-splash__orb { animation: none; }
+  .boot-splash__orb { animation: none; transform: none; }
+  .boot-splash__bg { animation: none; }
   #${BOOT_SPLASH_ID} { transition: none; }
 }
 `;
 
 const markup = `
 <div id="${BOOT_SPLASH_ID}" aria-hidden="true">
-  <div class="boot-splash__image"></div>
-  <div class="boot-splash__gradient"></div>
+  <div class="boot-splash__bg">
+    <div class="boot-splash__image"></div>
+    <div class="boot-splash__gradient"></div>
+  </div>
   <div class="boot-splash__frame">
     <span class="boot-splash__orb boot-splash__orb--big"></span>
     <span class="boot-splash__orb boot-splash__orb--medium"></span>
