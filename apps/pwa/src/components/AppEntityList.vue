@@ -4,59 +4,49 @@
       v-if="!isTrulyEmpty && !loadError && !isInitialLoading"
       :class="['app-entity-list__toolbar', { 'app-entity-list__toolbar--hidden': mobile && toolbarHiddenByScroll }]"
     >
-      <div
-        :class="['app-entity-list__search-group', { 'app-entity-list__search-group--active': hasActiveFiltersOrSearch }]"
-      >
-        <VTooltip :disabled="!searchCollapsed" location="bottom">
-          <template #activator="{ props: searchTooltipProps }">
-            <VTextField
-              ref="searchFieldRef"
-              v-bind="searchTooltipProps"
-              v-model="searchQuery"
-              type="search"
-              :class="['app-entity-list__search', { 'app-entity-list__search--collapsed': searchCollapsed }]"
-              :placeholder="t(i18n.searchPlaceholder)"
-              :aria-label="t(i18n.searchPlaceholder)"
-              autocomplete="off"
-              density="comfortable"
-              variant="outlined"
-              rounded="pill"
-              hide-details
-              :clearable="false"
-              :loading="loading ? 'primary' : false"
-              @focus="isSearchFocused = true"
-              @blur="isSearchFocused = false"
-            >
-              <template #prepend-inner>
-                <AppIcon name="search" class="app-entity-list__search-icon" />
-              </template>
-              <template #append-inner>
-                <div :class="['app-entity-list__search-clear-wrap', { 'app-entity-list__search-clear-wrap--hidden': !searchQuery.trim() }]">
-                  <VTooltip :disabled="!searchQuery.trim()" location="bottom">
-                    <template #activator="{ props: tooltipProps }">
-                      <AppButton
-                        v-bind="tooltipProps"
-                        icon
-                        variant="flat"
-                        size="small"
-                        :loading="clearingSearch"
-                        ignore-global-loading
-                        :tabindex="searchQuery.trim() ? 0 : -1"
-                        class="app-entity-list__search-clear"
-                        :aria-label="t(i18n.filtersClear)"
-                        @click="onSearchClearClick"
-                      >
-                        <AppIcon name="close" class="app-entity-list__icon" />
-                      </AppButton>
-                    </template>
-                    <span>{{ t(i18n.filtersClear) }}</span>
-                  </VTooltip>
-                </div>
-              </template>
-            </VTextField>
+      <div class="app-entity-list__search-group">
+        <VTextField
+          ref="searchFieldRef"
+          v-model="searchQuery"
+          type="search"
+          class="app-entity-list__search"
+          :placeholder="t(i18n.searchPlaceholder)"
+          :aria-label="t(i18n.searchPlaceholder)"
+          autocomplete="off"
+          density="comfortable"
+          variant="outlined"
+          rounded="pill"
+          hide-details
+          :clearable="false"
+          :loading="loading ? 'primary' : false"
+        >
+          <template #prepend-inner>
+            <AppIcon name="search" class="app-entity-list__search-icon" />
           </template>
-          <span>{{ t(i18n.searchPlaceholder) }}</span>
-        </VTooltip>
+          <template #append-inner>
+            <div :class="['app-entity-list__search-clear-wrap', { 'app-entity-list__search-clear-wrap--hidden': !searchQuery.trim() }]">
+              <VTooltip :disabled="!searchQuery.trim()" location="bottom">
+                <template #activator="{ props: tooltipProps }">
+                  <AppButton
+                    v-bind="tooltipProps"
+                    icon
+                    variant="flat"
+                    size="small"
+                    :loading="clearingSearch"
+                    ignore-global-loading
+                    :tabindex="searchQuery.trim() ? 0 : -1"
+                    class="app-entity-list__search-clear"
+                    :aria-label="t(i18n.filtersClear)"
+                    @click="onSearchClearClick"
+                  >
+                    <AppIcon name="close" class="app-entity-list__icon" />
+                  </AppButton>
+                </template>
+                <span>{{ t(i18n.filtersClear) }}</span>
+              </VTooltip>
+            </div>
+          </template>
+        </VTextField>
         <AppFilterBar
           :model-value="filterState"
           :definitions="props.filterDefinitions"
@@ -378,11 +368,6 @@ function onFeedScroll(e: Event) {
   }
   lastScrollTop = scrollTop;
 }
-
-const isSearchFocused = ref(false);
-const searchCollapsed = computed(
-  () => mobile.value && !isSearchFocused.value && !searchQuery.value.trim(),
-);
 
 const searchFieldRef = ref<{ focus: () => void } | null>(null);
 function onSearchClearClick() {
