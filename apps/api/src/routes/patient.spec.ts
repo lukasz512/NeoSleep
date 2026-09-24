@@ -49,6 +49,21 @@ describe("/api/v1/patient/:id/clinical-records", () => {
     expect([read.status, link.status]).toEqual([403, 403]);
   });
 
+  it.each(["rep", "kam", "msl", "manager"] as const)("403s %s on patient documents and sleep studies (health data), but still gives the latest sleep-study id for device orders", async (role) => {
+    const { auth, patientId } = await authAndPatient(role);
+    const docs = await request(app).get(`/api/v1/patient/${patientId}/documents`).set("Authorization", auth);
+    const studies = await request(app).get(`/api/v1/sleep-study?patient_id=${patientId}`).set("Authorization", auth);
+    const ref = await request(app).get(`/api/v1/patient/${patientId}/sleep-study-ref`).set("Authorization", auth);
+    expect([docs.status, studies.status, ref.status]).toEqual([403, 403, 200]);
+    expect(ref.body).toEqual({ id: null });
+  });
+
+  it("doctor reads the patient's documents (territory-checked)", async () => {
+    const { auth, patientId } = await authAndPatient("doctor");
+    const docs = await request(app).get(`/api/v1/patient/${patientId}/documents`).set("Authorization", auth);
+    expect(docs.status).toBe(200);
+  });
+
   it("400s for an unknown questionnaire kind", async () => {
     const { auth, patientId } = await authAndPatient();
     const res = await request(app).post(`/api/v1/patient/${patientId}/clinical-records/bogus`).set("Authorization", auth).send({});

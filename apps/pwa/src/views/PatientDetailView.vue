@@ -190,6 +190,8 @@ import PatientOrthoApneaPanel from "../components/patient/PatientOrthoApneaPanel
 import EntityHistoryPanel from "../components/EntityHistoryPanel.vue";
 import EntityDocumentsPanel from "../components/EntityDocumentsPanel.vue";
 import { patientFormFields } from "../config/forms/patientForm";
+import { CLINICAL_ROLES } from "../config/questionnaires";
+import { useAuthStore } from "../stores/auth";
 import { entityActionIcon, entityActionBtnClass } from "../config/entityActions";
 import { patientStatusColor, patientStatusLabel } from "../utils/patientStatus";
 
@@ -197,6 +199,7 @@ const FormRenderer = defineAsyncComponent(() => import("../components/FormRender
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
 
 const { canEditPatients, isAdmin } = usePermissions();
+const authStore = useAuthStore();
 
 interface PatientDetail {
   id: string;
@@ -248,14 +251,18 @@ const showEventForm = ref(false);
 const eventFormInitial = ref<{ start_at: string; end_at: string; patientIds?: string[] } | undefined>(undefined);
 const showDeleteConfirm = ref(false);
 
-const patientTabs = [
+const ALL_PATIENT_TABS = [
   { value: "details", labelKey: "app.patients.detail.tabs.details" },
   { value: "notes", labelKey: "app.patients.detail.tabs.notes" },
-  { value: "studies", labelKey: "app.patients.detail.tabs.studies" },
+  { value: "studies", labelKey: "app.patients.detail.tabs.studies", clinical: true },
   { value: "orthoapnea", labelKey: "app.patients.detail.tabs.orthoapnea" },
-  { value: "documents", labelKey: "app.patients.detail.tabs.documents" },
+  { value: "documents", labelKey: "app.patients.detail.tabs.documents", clinical: true },
   { value: "history", labelKey: "app.patients.detail.tabs.history" },
 ];
+/** Studies and Documents hold health data — shown to admin/doctor only (the API enforces the same). */
+const patientTabs = computed(() =>
+  ALL_PATIENT_TABS.filter((tab) => !tab.clinical || CLINICAL_ROLES.includes(authStore.user?.role ?? ""))
+);
 /** Deep-linkable via ?tab= — see SleepStudiesView/TreatmentPlansView row clicks. */
 const activeTab = ref((route.query.tab as string) || "details");
 watch(activeTab, (tab) => {

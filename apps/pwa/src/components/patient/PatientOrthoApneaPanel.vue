@@ -148,11 +148,6 @@ function isDraft(plan: TreatmentPlanItem): boolean {
   return !!plan.metadata?.orthoapneaDraft;
 }
 
-interface SleepStudyRef {
-  id: string;
-  created_at: string;
-}
-
 const { t } = useI18n();
 const notifications = useNotifications();
 const authStore = useAuthStore();
@@ -227,7 +222,8 @@ async function loadPlans() {
   try {
     const [plansRes, studiesRes] = await Promise.all([
       apiFetch(`/api/v1/treatment-plan?patient_id=${props.patientId}&type=dental_appliance&limit=-1`, { handleErrors: false }),
-      apiFetch(`/api/v1/sleep-study?patient_id=${props.patientId}&limit=1&sortBy=created_at&sortOrder=desc`, { handleErrors: false }),
+      // Id only — sleep-study contents are admin/doctor-only health data.
+      apiFetch(`/api/v1/patient/${props.patientId}/sleep-study-ref`, { handleErrors: false }),
     ]);
     if (plansRes.ok) {
       const data = (await plansRes.json()) as { items: TreatmentPlanItem[] };
@@ -236,8 +232,8 @@ async function loadPlans() {
       loadError.value = true;
     }
     if (studiesRes.ok) {
-      const data = (await studiesRes.json()) as { items: SleepStudyRef[] };
-      latestSleepStudyId.value = data.items[0]?.id ?? null;
+      const data = (await studiesRes.json()) as { id: string | null };
+      latestSleepStudyId.value = data.id;
     }
   } catch {
     loadError.value = true;

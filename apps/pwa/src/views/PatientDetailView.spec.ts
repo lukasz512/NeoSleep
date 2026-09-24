@@ -45,10 +45,10 @@ afterEach(() => {
   notify.mockReset();
 });
 
-async function mountPatientDetail(): Promise<{ wrapper: VueWrapper; router: Router }> {
+async function mountPatientDetail(role = "doctor"): Promise<{ wrapper: VueWrapper; router: Router }> {
   setActivePinia(createPinia());
-  // Clinical questionnaires (health data) load for admin/doctor only.
-  useAuthStore().user = { id: "u-1", email: "doc@clinic.test", name: "Dra. Test", role: "doctor" } as ReturnType<typeof useAuthStore>["user"];
+  // Studies / Documents (health data) are admin/doctor only.
+  useAuthStore().user = { id: "u-1", email: "doc@clinic.test", name: "Test", role } as ReturnType<typeof useAuthStore>["user"];
   const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
   const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
   const router = createRouter({ history: createMemoryHistory(), routes });
@@ -59,6 +59,20 @@ async function mountPatientDetail(): Promise<{ wrapper: VueWrapper; router: Rout
   mountedWrappers.push(wrapper);
   return { wrapper, router };
 }
+
+describe("PatientDetailView — health-data tabs", () => {
+  it("a rep doesn't see Studies or Documents (admin/doctor only), but keeps the other tabs", async () => {
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, PATIENT));
+    const { wrapper } = await mountPatientDetail("rep");
+    await vi.waitFor(() => expect(wrapper.text()).toContain("Jan Kowalski"));
+
+    const tabs = wrapper.findAll('[role="tab"]').map((t) => t.text());
+    expect(tabs).not.toContain("Studies");
+    expect(tabs).not.toContain("Documents");
+    expect(tabs).toContain("Notes");
+    await flushPromises();
+  });
+});
 
 describe("PatientDetailView — Documents tab", () => {
   it("lists 'Documents' among the tabs and wires it to the patient's /documents endpoint", async () => {

@@ -2,6 +2,7 @@ import { Router, type Router as RouterType, type Request, type Response } from "
 import { asyncHandler } from "../middleware/errorHandler.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { requireRole } from "../middleware/requireRole.js";
+import { requireClinicalRole } from "../middleware/requireClinicalRole.js";
 import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
 import { CreatePatientCommand, UpdatePatientCommand, DeletePatientCommand } from "../commands/patient.js";
@@ -15,6 +16,7 @@ import {
 } from "../commands/clinicalRecords.js";
 import { isClinicalRecordKind, type ClinicalRecordKind } from "../commands/clinicalRecordFields.js";
 import { ListClinicalRecordsQuery } from "../queries/clinicalRecords.js";
+import { GetLatestSleepStudyRefQuery } from "../queries/sleepStudy.js";
 import { CreateQuestionnaireRequestCommand, CancelQuestionnaireRequestCommand } from "../commands/questionnaireRequest.js";
 import { resolveFrontendOrigin } from "../utils/frontendOrigin.js";
 import { ValidationError } from "../errors.js";
@@ -103,11 +105,31 @@ patientRouter.get(
 );
 
 // ---------------------------------------------------------------------------
+// GET /api/v1/patient/:id/sleep-study-ref — latest sleep study id only (any
+// staff role; device orders need it, no clinical fields)
+// ---------------------------------------------------------------------------
+patientRouter.get(
+  "/patient/:id/sleep-study-ref",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id?.trim();
+    if (!id) throw new ValidationError("Missing patient id");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    const ref = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return GetLatestSleepStudyRefQuery(ctx, id);
+    });
+    res.json(ref);
+  })
+);
+
+// ---------------------------------------------------------------------------
 // GET /api/v1/patient/:id/documents — Documents tab
 // ---------------------------------------------------------------------------
 patientRouter.get(
   "/patient/:id/documents",
-  requireAuth,
+  requireClinicalRole,
   asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id?.trim();
     if (!id) throw new ValidationError("Missing patient id");
@@ -126,7 +148,7 @@ patientRouter.get(
 // ---------------------------------------------------------------------------
 patientRouter.get(
   "/patient/:id/documents/:documentId/download",
-  requireAuth,
+  requireClinicalRole,
   asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id?.trim();
     const documentId = req.params.documentId?.trim();
@@ -145,14 +167,6 @@ patientRouter.get(
 // Clinical questionnaires (Estudios) — medical history, oral exam, STOP-Bang.
 // Migration 030 / ADR-023; replaces the 026 /endo-intake + /stop-bang routes.
 // ---------------------------------------------------------------------------
-/**
- * Clinical questionnaires are GDPR Art.9 health data — readable and
- * writable only by treating clinicians and admins (Łukasz, 2026-09-25),
- * not by the commercial field force (rep / KAM / MSL / manager), even
- * inside their own territory.
- */
-const requireClinicalRole = requireRole("admin", "doctor");
-
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** 400 for a malformed id instead of letting Postgres reject it as a 500 "invalid input syntax for type uuid". */
