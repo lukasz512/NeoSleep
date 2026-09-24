@@ -8,25 +8,12 @@
     @update:model-value="onDialogUpdate"
   >
     <VCard class="pwa-form-dialog__card">
-      <VCardTitle class="mx-2 mt-2 text-h6 pwa-form-dialog__title-row">
-        <AppAvatar
-          v-if="avatarEntityType"
-          :name="avatarName"
-          :entity-type="avatarEntityType"
-          :size="40"
-        />
-        <span>{{ formTitle }}</span>
-        <VSpacer />
-        <AppButton
-          icon
-          variant="text"
-          :title="t('app.common.close')"
-          :aria-label="t('app.common.close')"
-          @click="onCancelClick"
-        >
-          <AppIcon name="close" class="pwa-form-dialog__close-icon" />
-        </AppButton>
-      </VCardTitle>
+      <AppDialogHeader
+        :title="formTitle"
+        :avatar-entity-type="avatarEntityType"
+        :avatar-name="avatarName"
+        @close="onCancelClick"
+      />
       <VCardText>
         <VAlert
           v-if="verifyInfoKey"
@@ -184,6 +171,7 @@ import AppButton from "./AppButton.vue";
 import AppIcon from "./AppIcon.vue";
 import AppAvatar, { type AppAvatarEntityType } from "./AppAvatar.vue";
 import AppSpinner from "./AppSpinner.vue";
+import AppDialogHeader from "./AppDialogHeader.vue";
 import PhoneField from "./PhoneField.vue";
 import EmailField from "./EmailField.vue";
 import type { FormFieldDef, FormFieldType } from "../types/formField";
@@ -222,7 +210,7 @@ const props = withDefaults(
     derive?: (form: Record<string, unknown>) => Partial<Record<string, unknown>> | void;
     /** i18n key for an info banner shown above the form (e.g. "verify this data"). */
     verifyInfoKey?: string;
-    /** Shows an AppAvatar next to the dialog title, live-previewing first/last name — opt-in, only for identity-based forms (hcp/lead/patient/user). */
+    /** Shows an AppAvatar in the dialog header, live-previewing first/last name — opt-in, only for identity-based forms (hcp/lead/patient/user). */
     avatarEntityType?: AppAvatarEntityType;
   }>(),
   { modelValue: false },

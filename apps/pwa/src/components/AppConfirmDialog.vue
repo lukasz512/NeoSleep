@@ -8,7 +8,7 @@
     @update:model-value="(v) => emit('update:modelValue', v)"
   >
     <VCard class="pwa-confirm-dialog__card">
-      <VCardTitle v-if="title">{{ title }}</VCardTitle>
+      <AppDialogHeader v-if="title" :title="title" :closable="false" />
       <VCardText>{{ text }}</VCardText>
       <VCardActions>
         <VSpacer />
@@ -36,6 +36,7 @@
  */
 import { originDialogTransition } from "@ui";
 import AppButton from "./AppButton.vue";
+import AppDialogHeader from "./AppDialogHeader.vue";
 
 withDefaults(
   defineProps<{
