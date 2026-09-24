@@ -43,8 +43,8 @@
     <!-- Inverted on purpose (NEO-53): the login page sits on a teal photo, not
          a plain surface, so light mode shows the WHITE wordmark (BrandLogo's
          "dark" asset) and dark mode the dark-ink one — same scheme as the PWA
-         badge under the card (NEO-12). The halo flips with it, so it always
-         contrasts with the logo instead of matching it. -->
+         badge under the card (NEO-12). The halo stays a dark shadow in both
+         themes and crossfades slowly between the two on toggle. -->
     <div
       ref="haloMagnetEl"
       class="auth-chrome__halo"
@@ -216,25 +216,56 @@ defineExpose({ playEnter, playExit });
 }
 
 /* Soft blurred halo behind the logo — the dot field is busy enough that it
-   needs a bit of contrast lift to stay legible. Always the opposite of the
-   logo (see template): a soft deep-teal shadow behind the white wordmark in
-   light mode, a white glow behind the dark wordmark in dark mode. First in
-   the DOM (see template) so it paints behind its sibling without needing an
-   explicit z-index; absolutely positioned so it takes no space in the flex
-   layout. Own (very light) magnetic transform — "leciutko" — so it isn't a
-   dead, static backdrop either. */
+   needs a bit of contrast lift to stay legible. A dark shadow in both themes:
+   deep teal behind the white wordmark in light mode, near-black in dark mode.
+   First in the DOM (see template) so it paints behind its sibling without
+   needing an explicit z-index; absolutely positioned so it takes no space in
+   the flex layout. Own (very light) magnetic transform — "leciutko" — so it
+   isn't a dead, static backdrop either. */
 .auth-chrome__halo {
   position: absolute;
   inset: -30px -70px;
-  /* brandColors.primaryDark (#082A27) */
-  background: radial-gradient(ellipse, rgba(8, 42, 39, 0.32) 0%, rgba(8, 42, 39, 0) 72%);
   filter: blur(26px);
   pointer-events: none;
   will-change: transform;
 }
 
-.auth-chrome__halo--dark-mode {
-  background: radial-gradient(ellipse, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0) 72%);
+/* One layer per theme, crossfaded via opacity — a radial-gradient background
+   itself can't be transitioned, so swapping it directly would snap instantly
+   on theme toggle. Deliberately slower than the rest of the UI so the shadow
+   visibly "sinks" into the new theme. */
+.auth-chrome__halo::before,
+.auth-chrome__halo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transition: opacity 1.2s ease-in-out;
+}
+
+.auth-chrome__halo::before {
+  /* brandColors.primaryDark (#082A27) */
+  background: radial-gradient(ellipse, rgba(8, 42, 39, 0.32) 0%, rgba(8, 42, 39, 0) 72%);
+  opacity: 1;
+}
+
+.auth-chrome__halo::after {
+  background: radial-gradient(ellipse, rgba(0, 0, 0, 0.6) 0%, rgba(0, 0, 0, 0) 72%);
+  opacity: 0;
+}
+
+.auth-chrome__halo--dark-mode::before {
+  opacity: 0;
+}
+
+.auth-chrome__halo--dark-mode::after {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-chrome__halo::before,
+  .auth-chrome__halo::after {
+    transition: none;
+  }
 }
 
 /* Magnetic transform target (see useMagneticPointer in <script>) — written to
