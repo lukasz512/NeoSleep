@@ -6,7 +6,7 @@
   <VAppBar
     flat
     color="surface-container-low"
-    :border="mobile ? false : 'b'"
+    :border="false"
     :height="mobile ? 56 : 64"
     class="app-shell__bar"
     :class="{ 'app-shell__bar--visible': shellVisible }"
@@ -74,6 +74,7 @@
   <VMain
     class="app-shell__main"
     :class="{
+      'app-shell__main--inset': !mobile,
       'app-shell__main--bottom-nav-space': mobile && showBottomNav,
       'app-shell__main--visible': contentVisible,
     }"
@@ -247,6 +248,40 @@ onMounted(async () => {
 
 .app-shell__logo {
   flex-shrink: 0;
+}
+
+/* Bar + drawer read as one continuous chrome frame (same surface-container-low
+   fill, no dividing lines) with the routed content set into it as an inset
+   card, instead of two hard-bordered strips. Vuetify gives a left drawer a thin
+   border-right by default; the bar's own border is off via its :border prop. */
+.app-shell__nav {
+  border: none;
+}
+
+/* The card's rounded top-left corner. Page scroll is on the window (views such
+   as ResourcesView read window.scrollY), so rounding the content itself would
+   scroll the corner away under the fixed bar. Instead a fixed, chrome-colored
+   mask sits exactly where the bar meets the drawer and carves the corner out of
+   whatever scrolls beneath it. --v-layout-top/left are Vuetify's own layout
+   offsets (bar height, drawer or rail width), so it follows rail collapse. */
+.app-shell__main--inset::before {
+  --app-shell-card-radius: 16px;
+  content: "";
+  position: fixed;
+  top: var(--v-layout-top);
+  left: var(--v-layout-left);
+  width: var(--app-shell-card-radius);
+  height: var(--app-shell-card-radius);
+  z-index: 1003;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at 100% 100%,
+    transparent calc(var(--app-shell-card-radius) - 0.5px),
+    rgb(var(--v-theme-surface-container-low)) var(--app-shell-card-radius)
+  );
+  /* Same timing as Vuetify's own .v-main padding transition, so the corner
+     tracks the drawer edge during rail collapse/expand. */
+  transition: left 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* No divider/border above this footer — removed per explicit feedback ("ta linia

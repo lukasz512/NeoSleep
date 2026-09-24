@@ -56,6 +56,19 @@
         ]
       }
     ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/pre-tool-main-tree-guard.sh",
+            "timeout": 10,
+            "statusMessage": "Checking edit target is inside a worktree..."
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "mcp__claude_ai_Linear__save_issue",
