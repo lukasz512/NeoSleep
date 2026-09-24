@@ -55,3 +55,15 @@ export class PartnerServiceError extends AppError {
     super(`${partner}: ${message}`, "PARTNER_SERVICE_ERROR", 502, cause);
   }
 }
+
+/**
+ * HTML→PDF rendering failed (headless Chromium could not launch, or the
+ * page could not be rendered). Kept distinct from DatabaseError so that
+ * withTenant() — which rewraps any non-AppError as "Database error:
+ * withTenant" — passes the real cause through to the caller instead.
+ */
+export class DocumentRenderError extends AppError {
+  constructor(message: string, cause?: unknown) {
+    super(`PDF rendering failed: ${message}`, "RENDER_ERROR", 503, cause);
+  }
+}

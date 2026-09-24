@@ -1,6 +1,7 @@
 import { PDFDocument, StandardFonts, type PDFFont } from "pdf-lib";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { SUPABASE_URL, SUPABASE_SERVICE_KEY, SUPABASE_DOCUMENTS_BUCKET } from "../env.js";
+import { PartnerServiceError } from "../errors.js";
 
 /**
  * Generates the signed GDPR/partner-agreement PDFs produced at doctor-invite
@@ -14,7 +15,11 @@ let supabase: SupabaseClient | null = null;
 
 function getSupabase(): SupabaseClient {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
-    throw new Error("Supabase Storage not configured — set SUPABASE_URL and SUPABASE_SERVICE_KEY");
+    // PartnerServiceError (an AppError), not a plain Error: callers run
+    // inside withTenant(), which rewraps any non-AppError as an opaque
+    // "Database error: withTenant" — hiding a storage/config problem behind
+    // a DB message (NEO-36).
+    throw new PartnerServiceError("supabase-storage", "not configured — set SUPABASE_URL and SUPABASE_SERVICE_KEY");
   }
   if (!supabase) {
     supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, { auth: { persistSession: false } });
@@ -115,7 +120,7 @@ export async function uploadPartnerDocument(
   const { error } = await client.storage
     .from(SUPABASE_DOCUMENTS_BUCKET)
     .upload(path, bytes, { contentType, upsert: false });
-  if (error) throw new Error(`Supabase Storage upload failed: ${error.message}`);
+  if (error) throw new PartnerServiceError("supabase-storage", `upload failed: ${error.message}`, error);
   return { path, bucket: SUPABASE_DOCUMENTS_BUCKET };
 }
 
@@ -125,6 +130,6 @@ export async function getPartnerDocumentSignedUrl(path: string, expiresInSeconds
   const { data, error } = await client.storage
     .from(SUPABASE_DOCUMENTS_BUCKET)
     .createSignedUrl(path, expiresInSeconds);
-  if (error || !data) throw new Error(`Supabase Storage signed URL failed: ${error?.message ?? "unknown error"}`);
+  if (error || !data) throw new PartnerServiceError("supabase-storage", `signed URL failed: ${error?.message ?? "unknown error"}`, error);
   return data.signedUrl;
 }
