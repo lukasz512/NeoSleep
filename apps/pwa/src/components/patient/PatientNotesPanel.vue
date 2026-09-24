@@ -150,7 +150,7 @@ watch(
 .patient-notes-panel__item {
   padding: 12px 16px;
   border-radius: var(--pwa-radius);
-  border: 1px solid rgba(var(--v-border-color, 0, 0, 0), var(--v-border-opacity, 0.12));
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
 
 .patient-notes-panel__item-header {

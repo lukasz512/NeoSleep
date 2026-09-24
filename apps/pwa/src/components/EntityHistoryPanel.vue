@@ -155,7 +155,7 @@ watch(() => props.endpoint, loadHistory);
   grid-template-columns: 180px 1fr;
   gap: 12px;
   padding: 8px 0;
-  border-bottom: 1px solid rgba(var(--v-border-color, 0, 0, 0), var(--v-border-opacity, 0.12));
+  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   font-size: 0.875rem;
 }
 

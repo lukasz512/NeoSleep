@@ -383,7 +383,7 @@ watch(() => props.patientId, loadStudies);
 .patient-studies-panel__item {
   padding: 12px 16px;
   border-radius: var(--pwa-radius);
-  border: 1px solid rgba(var(--v-border-color, 0, 0, 0), var(--v-border-opacity, 0.12));
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   cursor: pointer;
 }
 .patient-studies-panel__item:hover {
@@ -434,7 +434,7 @@ watch(() => props.patientId, loadStudies);
   gap: 4px;
   padding: 4px 6px 4px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(var(--v-border-color, 0, 0, 0), var(--v-border-opacity, 0.12));
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   background: rgba(var(--v-theme-on-surface), 0.03);
 }
 

@@ -123,7 +123,7 @@ const { loading: addLoading, run: onAdd } = useAsyncAction(async () => {
 .oa-comments__item {
   padding: 10px 14px;
   border-radius: var(--pwa-radius);
-  border: 1px solid rgba(var(--v-border-color, 0, 0, 0), var(--v-border-opacity, 0.12));
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
 
 .oa-comments__item-header {

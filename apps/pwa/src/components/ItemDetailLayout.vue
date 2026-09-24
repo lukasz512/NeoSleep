@@ -154,7 +154,7 @@ defineEmits<{
 .view-item__card {
   padding: 24px;
   border-radius: var(--pwa-radius);
-  border: 1px solid rgba(var(--v-border-color, 0, 0, 0), var(--v-border-opacity, 0.12));
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   background: rgba(var(--v-theme-surface), 1);
 }
 
