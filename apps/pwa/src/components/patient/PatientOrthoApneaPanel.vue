@@ -22,7 +22,7 @@
          abandoned OrthoApnea orders. -->
     <VDialog v-model="showDeleteConfirm" max-width="380" persistent>
       <VCard>
-        <VCardTitle>{{ t("app.treatmentPlans.deleteConfirmTitle") }}</VCardTitle>
+        <AppDialogHeader :title="t('app.treatmentPlans.deleteConfirmTitle')" :closable="false" />
         <VCardText>{{ t("app.treatmentPlans.deleteConfirmText") }}</VCardText>
         <VCardActions>
           <VSpacer />
@@ -110,6 +110,7 @@
 import { ref, computed, onMounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import AppButton from "../AppButton.vue";
+import AppDialogHeader from "../AppDialogHeader.vue";
 import AppIcon from "../AppIcon.vue";
 import AppLoadingState from "../AppLoadingState.vue";
 import AppErrorState from "../AppErrorState.vue";

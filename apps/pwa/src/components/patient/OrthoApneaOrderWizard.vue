@@ -1,13 +1,7 @@
 <template>
   <VDialog :model-value="modelValue" max-width="880" :transition="originDialogTransition" persistent @update:model-value="onDialogUpdate">
     <VCard class="oa-wizard__card">
-      <VCardTitle class="oa-wizard__title-row">
-        <span>{{ t("app.orthoApneaOrder.title") }}</span>
-        <VSpacer />
-        <AppButton icon variant="text" :aria-label="t('app.common.close')" @click="onCancelClick">
-          <AppIcon name="close" />
-        </AppButton>
-      </VCardTitle>
+      <AppDialogHeader :title="t('app.orthoApneaOrder.title')" @close="onCancelClick" />
 
       <VStepper v-model="step" flat class="oa-wizard__stepper" hide-actions>
         <VStepperHeader>
@@ -406,6 +400,7 @@ import NumberStepperField from "./NumberStepperField.vue";
 import PhoneField from "../PhoneField.vue";
 import EmailField from "../EmailField.vue";
 import AppConfirmDialog from "../AppConfirmDialog.vue";
+import AppDialogHeader from "../AppDialogHeader.vue";
 import { useNotifications } from "../../composables/useNotifications";
 import { useAsyncAction } from "../../composables/useAsyncAction";
 import { emailFormatRule } from "../../config/forms/identityFields";
@@ -788,12 +783,6 @@ watch(
 </script>
 
 <style scoped>
-.oa-wizard__title-row {
-  display: flex;
-  align-items: center;
-  margin: 8px 8px 0;
-}
-
 .oa-wizard__stepper {
   box-shadow: none;
 }

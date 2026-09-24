@@ -1,13 +1,7 @@
 <template>
   <VDialog :model-value="modelValue" max-width="760" scrollable @update:model-value="(v) => emit('update:modelValue', v)">
     <VCard>
-      <VCardTitle class="oa-txn-log__title-row">
-        <span>{{ t("app.orthoApneaOrder.transactionLog.title") }}</span>
-        <VSpacer />
-        <AppButton icon variant="text" :aria-label="t('app.common.close')" @click="emit('update:modelValue', false)">
-          <AppIcon name="close" />
-        </AppButton>
-      </VCardTitle>
+      <AppDialogHeader :title="t('app.orthoApneaOrder.transactionLog.title')" @close="emit('update:modelValue', false)" />
 
       <VCardText>
         <AppLoadingState v-if="loading && !loaded" />
@@ -72,8 +66,7 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import AppButton from "../AppButton.vue";
-import AppIcon from "../AppIcon.vue";
+import AppDialogHeader from "../AppDialogHeader.vue";
 import AppLoadingState from "../AppLoadingState.vue";
 import AppErrorState from "../AppErrorState.vue";
 import AppEmptyState from "../AppEmptyState.vue";
@@ -192,12 +185,6 @@ watch(
 </script>
 
 <style scoped>
-.oa-txn-log__title-row {
-  display: flex;
-  align-items: center;
-  margin: 8px 8px 0;
-}
-
 .oa-txn-log__summary {
   display: flex;
   align-items: center;
