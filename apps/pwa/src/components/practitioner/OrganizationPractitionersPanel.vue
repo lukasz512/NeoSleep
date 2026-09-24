@@ -1,9 +1,14 @@
 <template>
   <!-- HCO detail "Médicos" tab (NEO-14, docs/stories/hco-medicos-table.md).
        Not cached offline: the counts are derived from patient/treatment data.
-       Sized to the bottom of the page (useFillViewportHeight) so the table
-       scrolls inside itself instead of stretching the detail page. -->
-  <div ref="rootRef" class="org-practitioners" :style="height ? { height: `${height}px` } : undefined">
+       Desktop only: sized to the bottom of the page (useFillViewportHeight) so
+       the table scrolls inside itself instead of stretching the detail page.
+       Mobile keeps AppEntityList's own card-feed sizing (page scrolls). -->
+  <div
+    ref="rootRef"
+    :class="['org-practitioners', { 'org-practitioners--fit': fitToPage }]"
+    :style="fitToPage ? { height: `${height}px` } : undefined"
+  >
     <AppEntityList
       view-id="hco-practitioners"
       :api-endpoint="`/api/v1/organization/${organizationId}/practitioners`"
@@ -47,6 +52,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
+import { useDisplay } from "vuetify";
 import AppEntityList from "../AppEntityList.vue";
 import AppAvatar from "../AppAvatar.vue";
 import { type FilterDefinition } from "../../composables/useFilters";
@@ -70,8 +76,10 @@ defineProps<{ organizationId: string }>();
 const { t } = useI18n();
 const configStore = useConfigStore();
 
+const { mobile } = useDisplay();
 const rootRef = ref<HTMLElement | null>(null);
 const { height } = useFillViewportHeight(rootRef);
+const fitToPage = computed(() => !mobile.value && height.value !== null);
 
 function asRow(item: unknown): OrganizationPractitionerRow {
   return item as OrganizationPractitionerRow;
@@ -127,15 +135,15 @@ function cardMeta(row: OrganizationPractitionerRow): string {
 </script>
 
 <style scoped>
-.org-practitioners {
+.org-practitioners--fit {
   display: flex;
   flex-direction: column;
   min-height: 0;
 }
 
-/* AppEntityList's 70vh floor is for full-page list views; here the wrapper's
-   measured height is the size, and the table/feed scrolls inside it. */
-.org-practitioners :deep(.app-entity-list__table-wrap) {
+/* AppEntityList's 70vh floor is for full-page list views; on desktop here the
+   wrapper's measured height is the size, and the table scrolls inside it. */
+.org-practitioners--fit :deep(.app-entity-list__table-wrap) {
   min-height: 0;
 }
 .org-practitioners__name-cell {
