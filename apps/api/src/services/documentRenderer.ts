@@ -1,5 +1,6 @@
 import puppeteer, { type Browser } from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
+import { applyDocumentFields } from "@neo/documents";
 
 /**
  * Single seam for HTML→PDF rendering. Every document generator in the
@@ -95,6 +96,10 @@ export interface RenderHtmlToPdfOptions {
    * generator to go through renderHtmlToPdf() only.
    */
   dataFields?: Record<string, string>;
+  /** PNG data URLs keyed by `data-image="key"` — signatures (NEO-51). Non-PNG values are ignored. */
+  imageFields?: Record<string, string>;
+  /** Keeps only `[data-variant]` elements with this value (e.g. the agreement's "owner"/"staff" party clause). */
+  variant?: string | null;
 }
 
 export async function renderHtmlToPdf(html: string, options: RenderHtmlToPdfOptions = {}): Promise<Uint8Array> {
@@ -104,13 +109,21 @@ export async function renderHtmlToPdf(html: string, options: RenderHtmlToPdfOpti
     const page = await browser.newPage();
     try {
       await page.setContent(html, { waitUntil: "networkidle0" });
-      if (options.dataFields) {
-        await page.evaluate((fields) => {
-          for (const [key, value] of Object.entries(fields)) {
-            const el = document.querySelector(`[data-field="${key}"]`);
-            if (el) el.textContent = value;
-          }
-        }, options.dataFields);
+      if (options.dataFields || options.imageFields || options.variant) {
+        // The exact function the PWA preview runs (packages/documents/src/
+        // browser/documentFields.ts), serialized into the page — it is
+        // self-contained by design so toString() carries all of it.
+        const values = {
+          dataFields: options.dataFields,
+          imageFields: options.imageFields,
+          variant: options.variant ?? null,
+        };
+        await page.evaluate(`(${applyDocumentFields.toString()})(document, ${JSON.stringify(values)})`);
+        // An <img> added after setContent's networkidle0 still has to decode
+        // before page.pdf() snapshots the page.
+        await page.evaluate(async () => {
+          await Promise.all(Array.from(document.images).map((img) => img.decode().catch(() => undefined)));
+        });
       }
       const displayHeaderFooter = Boolean(options.headerTemplate || options.footerTemplate);
       return await page.pdf({

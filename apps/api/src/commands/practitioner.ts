@@ -23,6 +23,7 @@ import { sendPartnerInviteEmail } from "../mailer.js";
 import { FRONTEND_URL } from "../env.js";
 import { hashToken } from "../utils/hashToken.js";
 import { normalizeNationalIds } from "../utils/nationalIds.js";
+import { partnerJurisdictionForRegion, resolvePartnerDocumentSet } from "./partnerDocuments.js";
 
 /**
  * COMMANDS — Practitioner domain.
@@ -264,6 +265,15 @@ export async function ActivatePractitionerCommand(ctx: TenantContext, id: string
   }
   if (!practitioner.email) throw new ValidationError("Practitioner must have an email address before activation");
 
+  // NEO-51: never send an invite the doctor can't complete — their country's
+  // partner documents must exist, have a NeoSleep signatory, and be approved
+  // by that signatory. Throws PartnerDocumentsNotReadyError (409) otherwise.
+  const jurisdiction = partnerJurisdictionForRegion(practitioner.region);
+  if (!jurisdiction) {
+    throw new ValidationError("Partner onboarding is only available for practitioners in Poland (PL) or Mexico (MX)");
+  }
+  await resolvePartnerDocumentSet(ctx.client, jurisdiction);
+
   // Only provision a login when this identity has no users account yet —
   // a resend (status already "invited") reuses the account created on the
   // first send; a practitioner re-activated after already being a live
@@ -303,7 +313,13 @@ export async function ActivatePractitionerCommand(ctx: TenantContext, id: string
 
     const token = crypto.randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + INVITE_EXPIRY_MS);
-    await createInviteToken(ctx.client, userId, null, hashToken(token), expiresAt, ctx.user.id);
+    // Activation is NeoSleep's countersignature moment: this date is printed
+    // next to the signatory's signature on the partner agreement. A resend
+    // mints a new token, so it also gets a new date.
+    await createInviteToken(ctx.client, userId, null, hashToken(token), expiresAt, ctx.user.id, {
+      counterparty_signed_at: new Date().toISOString(),
+      jurisdiction,
+    });
 
     const registerLink = `${FRONTEND_URL}/partner-register?token=${encodeURIComponent(token)}`;
     await sendPartnerInviteEmail(

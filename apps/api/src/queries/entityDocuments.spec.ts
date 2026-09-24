@@ -4,6 +4,7 @@ import { withTenant, insertStaffUser, insertFileAttachment, getGlobalTerritoryId
 import type { TenantContext } from "../context/TenantContext.js";
 import { CreatePractitionerCommand, ActivatePractitionerCommand } from "../commands/practitioner.js";
 import { NotFoundError } from "../errors.js";
+import { ensurePartnerDocumentsReady } from "../testing/partnerDocumentsFixture.js";
 import {
   GetPractitionerDocumentsQuery,
   GetOrganizationDocumentsQuery,
@@ -34,6 +35,8 @@ async function buildTestContext(client: Parameters<typeof CreatePractitionerComm
   const email = `qa-entity-docs-${uniqueSuffix()}@neosleepcare.com`;
   const hash = await bcrypt.hash("irrelevant-not-logged-in-with", 4);
   const user = await insertStaffUser(client, email, "QA", "Pilot", "admin", hash, false);
+  // ActivatePractitionerCommand (fixture setup below) needs ready partner documents (NEO-51).
+  await ensurePartnerDocumentsReady(client, user!.id);
   return {
     slug: TENANT_SLUG,
     client,
@@ -75,6 +78,7 @@ describe("GetPractitionerDocumentsQuery", () => {
         last_name: `Test-${uniqueSuffix()}`,
         email: `qa-entity-docs-hcp-${uniqueSuffix()}@example.com`,
         phone: "600100200",
+        region: "PL",
       });
       await ActivatePractitionerCommand(ctx, practitioner.id);
 

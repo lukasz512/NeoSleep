@@ -1,6 +1,7 @@
+import crypto from "node:crypto";
 import bcrypt from "bcrypt";
 import type { PoolClient } from "pg";
-import { emailT } from "@neo/email";
+import { isValidLicenseNumber, licenseNumberKey, normalizeLicenseNumber, renderDocumentHtml } from "@neo/documents";
 import type { TenantContext } from "../context/TenantContext.js";
 import {
   getLeadById,
@@ -16,6 +17,9 @@ import {
   getPractitionerIdByIdentityId,
   getPractitionerById,
   getOrganizationById,
+  getOrganizationAffiliations,
+  setAffiliationRole,
+  updatePractitioner,
   updatePractitionerStatus,
   convertLead,
   insertConsent,
@@ -23,11 +27,28 @@ import {
   insertAuditLog,
 } from "../db.js";
 import type { Organization } from "../db/organization.js";
-import { ConflictError, NotFoundError, ValidationError } from "../errors.js";
+import {
+  ConflictError,
+  NotFoundError,
+  PartnerDocumentsNotReadyError,
+  StaleDocumentVersionError,
+  ValidationError,
+} from "../errors.js";
 import { hashToken } from "../utils/hashToken.js";
 import { normalizeNationalIds } from "../utils/nationalIds.js";
 import { sendPartnerJoinThankYouEmail } from "../mailer.js";
-import { renderSignedDocumentPdf, uploadPartnerDocument } from "../services/partnerDocuments.js";
+import { uploadPartnerDocument } from "../services/partnerDocuments.js";
+import { renderHtmlToPdf } from "../services/documentRenderer.js";
+import type { PartnerJurisdiction } from "../db/partnerSignatories.js";
+import {
+  buildAgreementDocument,
+  buildNoticeDocument,
+  formatDocumentDate,
+  loadSignatoryPngDataUrl,
+  partnerJurisdictionForRegion,
+  resolvePartnerDocumentSet,
+  type PracticeRole,
+} from "./partnerDocuments.js";
 
 /**
  * COMMANDS — partner/practitioner invite flow.
@@ -59,12 +80,6 @@ export function inferLanguage(region: string | null | undefined): string {
   if (r === "PL") return "pl";
   if (r === "MX") return "mx";
   return "en";
-}
-
-function inferJurisdiction(region: string | null | undefined): string {
-  const r = (region || "").toUpperCase();
-  if (r === "MX") return "MX";
-  return "EU";
 }
 
 /** Best-effort single display line from Organization's structured address columns — the
@@ -215,6 +230,39 @@ export interface InvitePreview {
   clinicPhone: string | null;
   clinicAddress: string | null;
   taxId: string | null;
+  /** NEO-51 — which country's documents apply (PL / MX). */
+  jurisdiction: PartnerJurisdiction | null;
+  /** PL PWZ / MX cédula already on file, for the doctor to confirm. */
+  licenseNumber: string | null;
+  /** Default for the "I own this practice / I work here" choice — the saved affiliation role, else derived from the clinic type. */
+  practiceRole: PracticeRole;
+  /** Current approved document versions the doctor will sign, or null if the documents aren't ready (activation normally prevents that). */
+  documents: { agreementVersionId: string; dpaVersionId: string; noticeVersionId: string } | null;
+}
+
+/** "practice" (private practice) → the doctor runs it; clinic/hospital/other → they practise there. */
+function defaultPracticeRole(organizationType: string | null | undefined): PracticeRole {
+  return organizationType === "practice" ? "owner" : "staff";
+}
+
+function inviteJurisdiction(
+  invite: { metadata: { jurisdiction?: PartnerJurisdiction } | null },
+  region: string | null | undefined,
+): PartnerJurisdiction | null {
+  return invite.metadata?.jurisdiction ?? partnerJurisdictionForRegion(region);
+}
+
+async function loadInviteParty(client: PoolClient, identityId: string) {
+  const practitionerId = await getPractitionerIdByIdentityId(client, identityId);
+  const practitioner = practitionerId ? await getPractitionerById(client, practitionerId) : null;
+  const organization = practitioner?.organization_id
+    ? await getOrganizationById(client, practitioner.organization_id)
+    : null;
+  const affiliation =
+    practitioner && organization
+      ? (await getOrganizationAffiliations(client, practitioner.id)).find((a) => a.organization_id === organization.id)
+      : undefined;
+  return { practitioner, organization, affiliationRole: affiliation?.role ?? null };
 }
 
 export async function ValidateInviteTokenQuery(client: PoolClient, token: string): Promise<InvitePreview | null> {
@@ -223,15 +271,20 @@ export async function ValidateInviteTokenQuery(client: PoolClient, token: string
   const invite = await getInviteTokenByHash(client, hashToken(tokenStr));
   if (!invite) return null;
 
-  let organization: Organization | null = null;
-  const practitionerId = await getPractitionerIdByIdentityId(client, invite.identity_id);
-  if (practitionerId) {
-    const practitioner = await getPractitionerById(client, practitionerId);
-    if (practitioner?.organization_id) {
-      organization = await getOrganizationById(client, practitioner.organization_id);
+  const { practitioner, organization, affiliationRole } = await loadInviteParty(client, invite.identity_id);
+  const jurisdiction = inviteJurisdiction(invite, practitioner?.region);
+
+  let documents: InvitePreview["documents"] = null;
+  if (jurisdiction) {
+    try {
+      const set = await resolvePartnerDocumentSet(client, jurisdiction);
+      documents = { agreementVersionId: set.agreement.id, dpaVersionId: set.dpa.id, noticeVersionId: set.notice.id };
+    } catch (err) {
+      if (!(err instanceof PartnerDocumentsNotReadyError)) throw err;
     }
   }
 
+  const licenseKey = jurisdiction ? licenseNumberKey(jurisdiction) : null;
   return {
     email: invite.email,
     firstName: invite.first_name,
@@ -241,6 +294,74 @@ export async function ValidateInviteTokenQuery(client: PoolClient, token: string
     clinicPhone: organization?.phone ?? null,
     clinicAddress: organization ? formatOrganizationAddress(organization) : null,
     taxId: organization ? extractTaxId(organization.identifiers) : null,
+    jurisdiction,
+    licenseNumber: licenseKey ? (practitioner?.national_ids?.[licenseKey] ?? null) : null,
+    practiceRole:
+      affiliationRole === "owner" || affiliationRole === "staff"
+        ? affiliationRole
+        : defaultPracticeRole(organization?.type),
+    documents,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// DOCUMENT PREVIEW — public, token-gated (NEO-51)
+// ---------------------------------------------------------------------------
+
+export type PartnerDocumentKind = "agreement" | "notice";
+
+export interface PartnerDocumentPreview {
+  /** Rendered template HTML, ready for applyDocumentFields. */
+  html: string;
+  /** Server-known fields: NeoSleep's signatory name + countersignature date (agreement only). */
+  dataFields: Record<string, string>;
+  /** The signatory's signature PNG as a data URL (agreement only) — only ever sent through this token-gated response. */
+  imageFields: Record<string, string>;
+  versionIds: string[];
+}
+
+/**
+ * What the doctor reads before signing. Party fields (name, licence number,
+ * clinic, role variant) are deliberately NOT filled here — the PWA fills them
+ * from the doctor's current, possibly just-edited form values with the same
+ * applyDocumentFields the PDF renderer uses, so the preview always matches
+ * what Finish will produce.
+ */
+export async function GetPartnerDocumentPreviewQuery(
+  client: PoolClient,
+  token: string,
+  kind: PartnerDocumentKind,
+): Promise<PartnerDocumentPreview | null> {
+  const tokenStr = token?.trim();
+  if (!tokenStr) return null;
+  const invite = await getInviteTokenByHash(client, hashToken(tokenStr));
+  if (!invite) return null;
+
+  const { practitioner } = await loadInviteParty(client, invite.identity_id);
+  const jurisdiction = inviteJurisdiction(invite, practitioner?.region);
+  if (!jurisdiction) throw new PartnerDocumentsNotReadyError("No partner jurisdiction for this invitation");
+  const set = await resolvePartnerDocumentSet(client, jurisdiction);
+
+  if (kind === "notice") {
+    return {
+      html: renderDocumentHtml("partnerPrivacyNotice", set.locale, set.notice.content_html),
+      dataFields: {},
+      imageFields: {},
+      versionIds: [set.notice.id],
+    };
+  }
+
+  const counterpartySignedAt = invite.metadata?.counterparty_signed_at
+    ? new Date(invite.metadata.counterparty_signed_at)
+    : new Date();
+  return {
+    html: renderDocumentHtml("partnerAgreement", set.locale, set.agreement.content_html, { annex: set.dpa.content_html }),
+    dataFields: {
+      counterparty_name: set.signatory.printedName,
+      counterparty_signed_at: formatDocumentDate(counterpartySignedAt, set.locale),
+    },
+    imageFields: { counterparty_signature: await loadSignatoryPngDataUrl(set.signatory) },
+    versionIds: [set.agreement.id, set.dpa.id],
   };
 }
 
@@ -254,12 +375,20 @@ export interface AcceptInviteInput {
   clinicName: string;
   clinicEmail: string;
   clinicPhone: string;
+  /** Required when the doctor owns the practice (it's printed in the party clause); optional for staff. */
   taxId: string;
   billingAddress: string;
-  gdprAccepted: boolean;
-  agreementAccepted: boolean;
-  /** "data:image/png;base64,...." from SignaturePad.vue. */
-  signatureDataUrl: string;
+  /** PL PWZ / MX cédula — validated for the invite's jurisdiction. */
+  licenseNumber: string;
+  /** "owner" | "staff" — anything else is rejected. */
+  practiceRole: string;
+  /** "data:image/png;base64,...." from SignaturePad.vue — the doctor's signature on the agreement + Annex 1. */
+  agreementSignatureDataUrl: string;
+  /** Version ids the doctor actually read and signed (from the preview) — must still be current + approved. */
+  agreementVersionId: string;
+  dpaVersionId: string;
+  noticeVersionId: string;
+  noticeAcknowledged: boolean;
 }
 
 export interface AcceptInviteRequestMeta {
@@ -268,9 +397,9 @@ export interface AcceptInviteRequestMeta {
   userAgent: string | null;
 }
 
-/** One signed PDF ready to email, alongside what's already been uploaded to storage. */
+/** One generated PDF ready to email, alongside what's already been uploaded to storage. */
 export interface SignedDocumentResult {
-  type: "gdpr" | "partner_agreement";
+  type: "partner_agreement" | "privacy_notice";
   filename: string;
   bytes: Uint8Array;
 }
@@ -279,10 +408,16 @@ export interface AcceptInviteResult {
   userId: string;
   email: string;
   locale: string;
+  /** NeoSleep's copy of the documents goes here (per-jurisdiction signatory config). */
+  ccEmail: string;
   documents: SignedDocumentResult[];
 }
 
 const SIGNATURE_DATA_URL_RE = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/;
+
+function sha256Hex(bytes: Uint8Array): string {
+  return crypto.createHash("sha256").update(bytes).digest("hex");
+}
 
 export async function AcceptPractitionerInviteCommand(
   client: PoolClient,
@@ -295,13 +430,16 @@ export async function AcceptPractitionerInviteCommand(
   if (!input.clinicName?.trim()) throw new ValidationError("Clinic name is required");
   if (!input.clinicEmail?.trim()) throw new ValidationError("Clinic email is required");
   if (!input.clinicPhone?.trim()) throw new ValidationError("Clinic phone is required");
-  if (!input.taxId?.trim()) throw new ValidationError("Tax ID is required");
   if (!input.billingAddress?.trim()) throw new ValidationError("Billing address is required");
-  if (!input.gdprAccepted) throw new ValidationError("GDPR consent is required");
-  if (!input.agreementAccepted) throw new ValidationError("Partner agreement acceptance is required");
-  if (!input.signatureDataUrl || !SIGNATURE_DATA_URL_RE.test(input.signatureDataUrl)) {
-    throw new ValidationError("A handwritten signature is required");
+  if (input.practiceRole !== "owner" && input.practiceRole !== "staff") {
+    throw new ValidationError("Choose whether you own the practice or work there");
   }
+  const practiceRole: PracticeRole = input.practiceRole;
+  if (practiceRole === "owner" && !input.taxId?.trim()) throw new ValidationError("Tax ID is required");
+  if (!input.agreementSignatureDataUrl || !SIGNATURE_DATA_URL_RE.test(input.agreementSignatureDataUrl)) {
+    throw new ValidationError("A handwritten signature on the partner agreement is required");
+  }
+  if (!input.noticeAcknowledged) throw new ValidationError("Please confirm you have read the privacy notice");
 
   const invite = await getInviteTokenByHash(client, hashToken(tokenStr));
   if (!invite) throw new ValidationError("Invalid or expired invitation link. Ask staff to send a new one.");
@@ -309,48 +447,113 @@ export async function AcceptPractitionerInviteCommand(
   const user = await getUserById(client, invite.user_id);
   if (!user) throw new NotFoundError("User", invite.user_id);
 
-  const signerName = `${invite.first_name ?? ""} ${invite.last_name ?? ""}`.trim() || invite.email;
-  const locale = inferLanguage(user.region);
-  const jurisdiction = inferJurisdiction(user.region);
-  const signedAt = new Date();
+  const { practitioner, organization } = await loadInviteParty(client, invite.identity_id);
+  const jurisdiction = inviteJurisdiction(invite, practitioner?.region ?? user.region);
+  if (!jurisdiction) throw new PartnerDocumentsNotReadyError("No partner jurisdiction for this invitation");
 
-  // 1. Password + activate the account.
+  if (!isValidLicenseNumber(jurisdiction, input.licenseNumber ?? "")) {
+    throw new ValidationError(jurisdiction === "PL" ? "Invalid PWZ licence number" : "Invalid cédula profesional");
+  }
+  const licenseNumber =
+    jurisdiction === "PL" ? input.licenseNumber.replace(/\s/g, "") : normalizeLicenseNumber(input.licenseNumber);
+
+  // The doctor must have signed exactly the texts that are current + approved
+  // right now — if an admin published a newer version while the form was
+  // open, make them re-read rather than silently signing text they never saw.
+  const set = await resolvePartnerDocumentSet(client, jurisdiction);
+  if (
+    input.agreementVersionId !== set.agreement.id ||
+    input.dpaVersionId !== set.dpa.id ||
+    input.noticeVersionId !== set.notice.id
+  ) {
+    throw new StaleDocumentVersionError();
+  }
+
+  const signerName = `${invite.first_name ?? ""} ${invite.last_name ?? ""}`.trim() || invite.email;
+  const signedAt = new Date();
+  const counterpartySignedAt = invite.metadata?.counterparty_signed_at
+    ? new Date(invite.metadata.counterparty_signed_at)
+    : signedAt;
+  const signedAtLabel = formatDocumentDate(signedAt, set.locale);
+
+  // 1. Render both PDFs BEFORE any write — a rendering failure then leaves
+  // nothing half-done (no activated account without its signed documents).
+  const agreementDoc = await buildAgreementDocument(
+    set,
+    {
+      doctorName: signerName,
+      licenseNumber,
+      clinicName: input.clinicName.trim(),
+      taxId: input.taxId?.trim() ?? "",
+      clinicAddress: input.billingAddress.trim(),
+      email: invite.email,
+      practiceRole,
+    },
+    { counterpartySignedAt, signerSignedAt: signedAtLabel },
+    input.agreementSignatureDataUrl,
+  );
+  const noticeDoc = buildNoticeDocument(set, signerName, signedAtLabel);
+  const agreementPdf = await renderHtmlToPdf(agreementDoc.html, {
+    footerTemplate: agreementDoc.footerHtml,
+    dataFields: agreementDoc.dataFields,
+    imageFields: agreementDoc.imageFields,
+    variant: agreementDoc.variant,
+  });
+  const noticePdf = await renderHtmlToPdf(noticeDoc.html, {
+    footerTemplate: noticeDoc.footerHtml,
+    dataFields: noticeDoc.dataFields,
+  });
+
+  // 2. Password + activate the account.
   const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS);
   await setUserPassword(client, user.id, passwordHash, false);
   await updateUser(client, user.id, { status: "active" });
 
-  // 1b. This is the real "doctor accepted" moment — practitioner.status
+  // 2b. This is the real "doctor accepted" moment — practitioner.status
   // only becomes "active" here, not when staff clicked Activate/Resend
   // (see ActivatePractitionerCommand in commands/practitioner.ts and
-  // docs/stories/practitioner-invite-resend.md). practitioner and users
-  // are separate tables off the same identity, so look it up by identity_id
-  // rather than assuming user.id === practitioner.id. Null is expected for
-  // a users row that was never linked to a practitioner (shouldn't happen
-  // on this invite path, but this command has no other reason to assume
-  // it always is one) — skip rather than throw.
-  const practitionerId = await getPractitionerIdByIdentityId(client, user.identity_id);
-  if (practitionerId) {
-    await updatePractitionerStatus(client, practitionerId, "active");
+  // docs/stories/practitioner-invite-resend.md).
+  if (practitioner) {
+    await updatePractitionerStatus(client, practitioner.id, "active");
+
+    // Licence number the doctor confirmed/entered — merged into national_ids
+    // (other keys untouched), audited when it changed.
+    const key = licenseNumberKey(jurisdiction);
+    const previous = practitioner.national_ids?.[key] ?? null;
+    if (previous !== licenseNumber) {
+      await updatePractitioner(client, practitioner.id, {
+        national_ids: { ...(practitioner.national_ids ?? {}), [key]: licenseNumber },
+      });
+      await insertAuditLog(client, {
+        user_id: user.id,
+        action: "update_license_number",
+        entity_type: "Practitioner",
+        entity_id: practitioner.id,
+        entity_before: { [key]: previous },
+        entity_after: { [key]: licenseNumber },
+        user_ip: meta.ip,
+        user_agent: meta.userAgent,
+        request_id: meta.requestId,
+      });
+    }
+
+    // Owner vs staff — selects the party clause; stored on the affiliation.
+    if (organization) {
+      await setAffiliationRole(client, practitioner.id, organization.id, practiceRole);
+    }
   }
 
-  // 2. Clinic / invoice data — no dedicated columns, lives in identities.metadata.
+  // 3. Clinic / invoice data — no dedicated columns, lives in identities.metadata.
   // If a linked organization record already had these fields (pre-filled for review on the
   // form), log what the doctor actually changed — this is data reviewed right before a legal
   // signature, so a "what did they correct" trail matters. Deliberately NOT written back to the
   // shared `organization` row here (see docs/stories/partner-registration-legal-documents.md,
   // 2026-09-16 addendum) — that's a separate follow-up, not this slice.
-  const organization = practitionerId
-    ? await (async () => {
-        const practitioner = await getPractitionerById(client, practitionerId);
-        return practitioner?.organization_id ? getOrganizationById(client, practitioner.organization_id) : null;
-      })()
-    : null;
-
   const submittedClinicDetails = {
     clinic_name: input.clinicName.trim(),
     clinic_email: input.clinicEmail.trim(),
     clinic_phone: input.clinicPhone.trim(),
-    tax_id: input.taxId.trim(),
+    tax_id: input.taxId?.trim() ?? "",
     billing_address: input.billingAddress.trim(),
   };
 
@@ -382,29 +585,48 @@ export async function AcceptPractitionerInviteCommand(
 
   await mergeIdentityMetadataForUser(client, user.id, submittedClinicDetails);
 
-  // 3. Signed documents — GDPR consent + partner agreement, each a standalone
-  // PDF embedding the drawn signature. `signature_method: 'drawn'` is kept in
-  // metadata (not hardcoded into a fixed enum) so a future e-sign integration
-  // can be added as a second value without a schema change.
-  const documents: { type: "gdpr" | "partner_agreement"; titleKey: string; bodyKey: string }[] = [
-    { type: "gdpr", titleKey: "documents.gdprConsent.title", bodyKey: "documents.gdprConsent.body" },
-    { type: "partner_agreement", titleKey: "documents.partnerAgreement.title", bodyKey: "documents.partnerAgreement.body" },
+  // 4. Store both documents with the evidence bundle the /legal review asked
+  // for: exact version ids, a hash of the signed file, both dates, the
+  // jurisdiction, the invite token (id, never the raw token) and the
+  // request's IP/UA (audit_log). `signature_method: 'drawn'` stays a value,
+  // not an enum, so a qualified e-signature provider can be added later.
+  const evidence = {
+    jurisdiction,
+    signatory: set.signatory.printedName,
+    counterparty_signed_at: counterpartySignedAt.toISOString(),
+    signer_signed_at: signedAt.toISOString(),
+    invite_token_id: invite.id,
+    practice_role: practiceRole,
+  };
+
+  const agreementSha = sha256Hex(agreementPdf);
+  const noticeSha = sha256Hex(noticePdf);
+  const stamp = signedAt.getTime();
+  const documents: {
+    type: SignedDocumentResult["type"];
+    filename: string;
+    bytes: Uint8Array;
+    sha256: string;
+    versions: Record<string, string>;
+  }[] = [
+    {
+      type: "partner_agreement",
+      filename: "NeoSleep-partner-agreement.pdf",
+      bytes: agreementPdf,
+      sha256: agreementSha,
+      versions: { partnerAgreement: set.agreement.id, partnerDpa: set.dpa.id },
+    },
+    {
+      type: "privacy_notice",
+      filename: "NeoSleep-privacy-notice.pdf",
+      bytes: noticePdf,
+      sha256: noticeSha,
+      versions: { partnerPrivacyNotice: set.notice.id },
+    },
   ];
 
-  const signedDocuments: SignedDocumentResult[] = [];
-
   for (const doc of documents) {
-    const pdfBytes = await renderSignedDocumentPdf({
-      title: emailT(locale, doc.titleKey),
-      bodyText: emailT(locale, doc.bodyKey),
-      signerName,
-      signedAt,
-      signatureDataUrl: input.signatureDataUrl,
-    });
-    signedDocuments.push({ type: doc.type, filename: `${doc.type}.pdf`, bytes: pdfBytes });
-    const path = `partner/${user.id}/${doc.type}-${signedAt.getTime()}.pdf`;
-    const uploaded = await uploadPartnerDocument(path, pdfBytes, "application/pdf");
-
+    const uploaded = await uploadPartnerDocument(`partner/${user.id}/${doc.type}-${stamp}.pdf`, doc.bytes, "application/pdf");
     await insertFileAttachment(client, {
       entity_type: "user",
       entity_id: user.id,
@@ -412,38 +634,62 @@ export async function AcceptPractitionerInviteCommand(
       storage_provider: "supabase",
       bucket: uploaded.bucket,
       path: uploaded.path,
-      filename: `${doc.type}.pdf`,
+      filename: doc.filename,
       mime_type: "application/pdf",
-      size_bytes: pdfBytes.byteLength,
+      size_bytes: doc.bytes.byteLength,
       is_public: false,
-      metadata: { document_type: doc.type, signature_method: "drawn" },
-    });
-
-    await insertConsent(client, {
-      entity_type: "user",
-      entity_id: user.id,
-      legal_basis: "consent",
-      jurisdiction,
-      purpose: doc.type,
-      granted_at: signedAt,
-    });
-
-    await insertAuditLog(client, {
-      user_id: user.id,
-      action: "sign",
-      entity_type: "SignedDocument",
-      entity_id: user.id,
-      entity_after: { document_type: doc.type, path: uploaded.path },
-      user_ip: meta.ip,
-      user_agent: meta.userAgent,
-      request_id: meta.requestId,
+      metadata: {
+        document_type: doc.type,
+        signature_method: doc.type === "partner_agreement" ? "drawn" : "acknowledged",
+        content_version_ids: doc.versions,
+        sha256: doc.sha256,
+        ...evidence,
+      },
     });
   }
 
-  // 4. Consume the token.
+  // The agreement is a contract (GDPR art. 6(1)(b)), not a consent — see
+  // the story's /legal round 3. The privacy notice is informational: it gets
+  // an acknowledgement audit row, never a consent row.
+  await insertConsent(client, {
+    entity_type: "user",
+    entity_id: user.id,
+    legal_basis: "contract",
+    jurisdiction,
+    purpose: "partner_agreement_dpa",
+    granted_at: signedAt,
+    metadata: {
+      content_version_ids: documents[0]!.versions,
+      sha256: agreementSha,
+      ...evidence,
+    },
+  });
+
+  await insertAuditLog(client, {
+    user_id: user.id,
+    action: "sign",
+    entity_type: "SignedDocument",
+    entity_id: user.id,
+    entity_after: { document_type: "partner_agreement", sha256: agreementSha, ...documents[0]!.versions },
+    user_ip: meta.ip,
+    user_agent: meta.userAgent,
+    request_id: meta.requestId,
+  });
+  await insertAuditLog(client, {
+    user_id: user.id,
+    action: "acknowledge_privacy_notice",
+    entity_type: "SignedDocument",
+    entity_id: user.id,
+    entity_after: { document_type: "privacy_notice", sha256: noticeSha, ...documents[1]!.versions },
+    user_ip: meta.ip,
+    user_agent: meta.userAgent,
+    request_id: meta.requestId,
+  });
+
+  // 5. Consume the token.
   await markInviteTokenUsed(client, invite.id);
 
-  // 5. Convert the originating Lead, if any.
+  // 6. Convert the originating Lead, if any.
   if (invite.lead_id) {
     await convertLead(client, invite.lead_id, { converted_to_id: user.id, converted_to_type: "user" });
   }
@@ -458,5 +704,11 @@ export async function AcceptPractitionerInviteCommand(
     request_id: meta.requestId,
   });
 
-  return { userId: user.id, email: invite.email, locale, documents: signedDocuments };
+  return {
+    userId: user.id,
+    email: invite.email,
+    locale: set.locale,
+    ccEmail: set.signatory.ccEmail,
+    documents: documents.map(({ type, filename, bytes }) => ({ type, filename, bytes })),
+  };
 }
