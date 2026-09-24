@@ -74,6 +74,17 @@ Decisions (asked and answered in-session):
 | 9 | `apps/pwa/src/appVersion.spec.ts` › drops a missing, zero, negative or non-numeric build number |
 | 10 | `AuthView.spec.ts` › renders nothing when the app provides no version |
 
+### Follow-up 2: NEOSLEEP wordmark on the login page
+
+Łukasz reviewed the result and asked for the login wordmark to follow the same scheme: **white in light mode, dark in dark mode**. Before this, it did the opposite, so it clashed with the badge and version under the card.
+
+11. On `/login`, light mode shows the white wordmark (`logo_dark.svg`) and dark mode shows the dark-ink one (`logo_light.svg`, #4A4A49). Tenant overrides (`app_config.logo_dark_url` / `logo_url`) are swapped the same way.
+12. The contrast halo behind the wordmark always contrasts with it. It's a soft deep-teal shadow (primaryDark #082A27 at 32%) in light mode and a white glow in dark mode.
+
+This is scoped to `AuthChrome` (the login screen) only. `BrandLogo` keeps its normal mapping in the app header (`AppLogo`) and on the website, because those sit on plain light or dark surfaces where the standard mapping is correct.
+
+Tests: `AuthView.spec.ts` › shows the white wordmark in light mode and the dark-ink one in dark mode, with the halo flipped to match. Also checked in a live headless-Chromium render of both themes.
+
 ### Known unrelated issue spotted while testing
 
 With the OS "reduce motion" setting on, the login card and logo never appear. Only the orbs and the badge render, because `AuthView`'s `onMounted` reduced-motion branch skips `authCardRef.playEnter()` / `authChromeRef.playEnter()`. This existed before this change and is not fixed here. It needs its own ticket.

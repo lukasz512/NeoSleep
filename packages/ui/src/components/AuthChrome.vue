@@ -40,10 +40,19 @@
          would fight the rAF loop. Two different strengths (see script) so
          halo/logo visibly separate in depth instead of moving as one block.
          The PWA badge lives in AuthView now, below the card, not here. -->
-    <div ref="haloMagnetEl" class="auth-chrome__halo" />
+    <!-- Inverted on purpose (NEO-12): the login page sits on a teal photo, not
+         a plain surface, so light mode shows the WHITE wordmark (BrandLogo's
+         "dark" asset) and dark mode the dark-ink one — same scheme as the PWA
+         badge and version under the card. The halo flips with it, so it
+         always contrasts with the logo instead of matching it. -->
+    <div
+      ref="haloMagnetEl"
+      class="auth-chrome__halo"
+      :class="{ 'auth-chrome__halo--dark-mode': theme === 'dark' }"
+    />
     <div ref="logoMagnetEl" class="auth-chrome__logo-magnet">
       <BrandLogo
-        :dark="theme === 'dark'"
+        :dark="theme !== 'dark'"
         :light-src="configStore.config.logo_url"
         :dark-src="configStore.config.logo_dark_url"
         :alt="t('user.login.logoAlt')"
@@ -207,23 +216,25 @@ defineExpose({ playEnter, playExit });
 }
 
 /* Soft blurred halo behind the logo — the dot field is busy enough that it
-   needs a bit of contrast lift to stay legible. White in light mode (light
-   bg, so a bright halo separates it), dark in dark mode. First in the DOM
-   (see template) so it paints behind its sibling without needing an explicit
-   z-index; absolutely positioned so it takes no space in the flex layout.
-   Own (very light) magnetic transform — "leciutko" — so it isn't a dead,
-   static backdrop either. */
+   needs a bit of contrast lift to stay legible. Always the opposite of the
+   logo (see template): a soft deep-teal shadow behind the white wordmark in
+   light mode, a white glow behind the dark wordmark in dark mode. First in
+   the DOM (see template) so it paints behind its sibling without needing an
+   explicit z-index; absolutely positioned so it takes no space in the flex
+   layout. Own (very light) magnetic transform — "leciutko" — so it isn't a
+   dead, static backdrop either. */
 .auth-chrome__halo {
   position: absolute;
   inset: -30px -70px;
-  background: radial-gradient(ellipse, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 72%);
+  /* brandColors.primaryDark (#082A27) */
+  background: radial-gradient(ellipse, rgba(8, 42, 39, 0.32) 0%, rgba(8, 42, 39, 0) 72%);
   filter: blur(26px);
   pointer-events: none;
   will-change: transform;
 }
 
-[data-theme="dark"] .auth-chrome__halo {
-  background: radial-gradient(ellipse, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0) 72%);
+.auth-chrome__halo--dark-mode {
+  background: radial-gradient(ellipse, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0) 72%);
 }
 
 /* Magnetic transform target (see useMagneticPointer in <script>) — written to
