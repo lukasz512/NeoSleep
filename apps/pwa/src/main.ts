@@ -18,6 +18,12 @@ import { useNotifications } from "./composables/useNotifications";
 import { getApiUrl } from "./constants";
 import { resolveInitialThemeMode, useMotionPreferenceStore, APP_VERSION_KEY } from "@stores";
 import { resolveAppVersion } from "./appVersion";
+import { activateDeferredStyles } from "./boot/bootSplash";
+
+// First thing: apply the bundle CSS that index.html loads as a non-blocking
+// preload (so the static boot splash could paint before it arrived) — see
+// src/boot/splash.ts. The splash stays up until this has applied.
+activateDeferredStyles();
 
 // Silent wake-up ping: the API can cold-start (Render free tier spins down when
 // idle), so hit the cheapest possible route as early as possible — before the
