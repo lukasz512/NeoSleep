@@ -333,10 +333,10 @@ onMounted(() => {
 }
 
 /* Vuetify's own 20px inline-start margin on the title assumes a bare text
-   label right after the edge. Our title carries its own icon, and on mobile
-   detail views follows the back arrow, so a smaller gap reads as one group. */
+   label right after the edge. Here the app sets it (--app-shell-title-inset),
+   so a title that leads the bar can line up with the page content below. */
 .app-shell__bar :deep(.v-toolbar__content > .v-toolbar-title) {
-  margin-inline-start: 8px;
+  margin-inline-start: var(--app-shell-title-inset, 8px);
 }
 
 /* The bar's two outer edges are set by the app, so its leading/trailing

@@ -70,7 +70,13 @@
       <template #app-bar-title>
         <Transition v-if="isMobile" name="title-fade" mode="out-in">
           <div :key="moduleTitle" class="layout-appbar__title-group">
-            <AppIcon v-if="moduleIcon && !parentRoute" :name="moduleIcon" class="layout-appbar__icon" />
+            <AppIcon
+              v-if="moduleIcon && !parentRoute"
+              :ref="(el) => (barTitleGlyph.el.value = el)"
+              :name="moduleIcon"
+              class="layout-appbar__icon"
+              :style="{ marginInlineStart: `${-barTitleGlyph.inset.value}px` }"
+            />
             <span class="layout-appbar__title">{{ moduleTitle }}</span>
           </div>
         </Transition>
@@ -154,7 +160,13 @@
           </AppButton>
           <Transition name="title-fade" mode="out-in">
             <div :key="moduleTitle" class="layout-appbar__title-group layout-page-header__title">
-              <AppIcon v-if="moduleIcon && !parentRoute" :name="moduleIcon" class="layout-appbar__icon" />
+              <AppIcon
+                v-if="moduleIcon && !parentRoute"
+                :ref="(el) => (headerTitleGlyph.el.value = el)"
+                :name="moduleIcon"
+                class="layout-appbar__icon"
+                :style="{ marginInlineStart: `${-headerTitleGlyph.inset.value}px` }"
+              />
               <span class="layout-appbar__title">{{ moduleTitle }}</span>
             </div>
           </Transition>
@@ -190,6 +202,7 @@ import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRoute } from "vue-router";
 import { navTitleKey, navIconName, navParentName } from "../router/routes";
 import { providePageHeader, PAGE_HEADER_ACTIONS_ID } from "../composables/usePageHeader";
+import { useGlyphInset } from "../composables/useGlyphInset";
 import { useI18n } from "vue-i18n";
 import { AppShell, useAppVersionLabel } from "@ui";
 import { useLayoutState } from "../composables/useLayoutState";
@@ -268,6 +281,12 @@ const moduleTitle = computed(() => {
 
 const backLabel = computed(() => t("layout.backTo", { module: moduleTitle.value }));
 
+// The title's module icon is pulled back by its own glyph margin so the
+// visible drawing — not the icon box — sits on the content edge (mobile app
+// bar and desktop page header each measure their own, visible, instance).
+const barTitleGlyph = useGlyphInset(isMobile);
+const headerTitleGlyph = useGlyphInset(computed(() => !isMobile.value));
+
 const moduleIcon = computed(() => {
   const name = route.name;
   if (typeof name !== "string") return undefined;
@@ -296,6 +315,9 @@ const moduleIcon = computed(() => {
      avatar circle have no such inset, so they sit 1px further in to match
      the icons' visible ink rather than their boxes. */
   --layout-icon-ink-inset: 1px;
+  /* The arrow-left glyph starts 4px into its 24px box (its own shape, not
+     the set-wide 1px above). */
+  --layout-back-arrow-ink-inset: 4px;
   /* Account button's own end padding (its hover pill), subtracted so the
      avatar circle itself — not the pill — lands on the edge. */
   --layout-user-btn-pad-end: 6px;
@@ -309,6 +331,21 @@ const moduleIcon = computed(() => {
 .layout-root--desktop {
   --app-shell-bar-start-inset: calc(
     var(--layout-nav-inset) + var(--layout-nav-item-inset) + var(--layout-icon-ink-inset)
+  );
+}
+
+/* Mobile has no side menu: the bar's leading element lines up with the page
+   content's left edge (--layout-card-inset) instead — the module icon on a
+   list, the back arrow on a detail view (which then carries the title). */
+.layout-root:not(.layout-root--desktop) {
+  /* Back arrow: 24px icon centred in the app bar's 48px icon button. */
+  --layout-back-btn-icon-inset: 12px;
+
+  /* The module icon's own glyph margin is measured at runtime and pulled
+     back (useGlyphInset), so the title starts exactly at the card inset. */
+  --app-shell-title-inset: var(--layout-card-inset);
+  --app-shell-bar-start-inset: calc(
+    var(--layout-card-inset) - var(--layout-back-btn-icon-inset) - var(--layout-back-arrow-ink-inset)
   );
 }
 
@@ -505,9 +542,11 @@ const moduleIcon = computed(() => {
   flex: 0 0 auto;
 }
 
+/* No inline padding: the module icon's glyph (pulled back by its own
+   measured margin, useGlyphInset) starts exactly at the card inset, the same
+   edge as the table/cards below. */
 .layout-page-header__title {
   flex: 0 0 auto;
-  padding-inline-start: 4px;
 }
 
 .layout-page-header__actions {
@@ -519,14 +558,11 @@ const moduleIcon = computed(() => {
   gap: 8px;
 }
 
-/* Pulled toward the card edge and the title, so "← Patients" reads as one label. */
+/* Pulled back by the icon's inset in the 56px button plus the arrow glyph's
+   own margin, so the visible arrow starts at the card inset like the content. */
 .layout-page-header__back {
   background: transparent;
-  margin-inline-start: -8px;
-}
-
-.layout-page-header__back + .layout-page-header__title {
-  padding-inline-start: 0;
+  margin-inline-start: calc(-1 * (var(--layout-action-icon-inset) + var(--layout-back-arrow-ink-inset)));
 }
 
 .layout-back-icon {

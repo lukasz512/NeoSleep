@@ -277,6 +277,22 @@ describe("AppLayout", () => {
       expect(logo).toMatch(/\.layout-app__bar-logo-link\s*\{[\s\S]*?padding:\s*8px 0;/);
     });
 
+    // Mobile: the bar's leading element (module icon / back arrow) and the
+    // desktop page-header title start on the content edge (card inset).
+    it("title icon and back arrow are placed from the card inset, the icon's glyph margin measured, not guessed", () => {
+      const layout = readLayout();
+      expect(layout).toMatch(/--app-shell-title-inset:\s*var\(--layout-card-inset\)/);
+      expect(layout).toMatch(
+        /--app-shell-bar-start-inset:\s*calc\(\s*var\(--layout-card-inset\)\s*-\s*var\(--layout-back-btn-icon-inset\)\s*-\s*var\(--layout-back-arrow-ink-inset\)/,
+      );
+      expect(layout).toMatch(
+        /\.layout-page-header__back\s*\{[\s\S]*?margin-inline-start:\s*calc\(-1 \* \(var\(--layout-action-icon-inset\) \+ var\(--layout-back-arrow-ink-inset\)\)\)/,
+      );
+      expect(layout).toContain("useGlyphInset(isMobile)");
+      expect(layout.match(/marginInlineStart: `\$\{-\w+TitleGlyph\.inset\.value\}px`/g)).toHaveLength(2);
+      expect(readShell()).toContain("margin-inline-start: var(--app-shell-title-inset");
+    });
+
     it("collapse chevron button is 32px with right-edge margin", () => {
       const rule = readLayout().match(/\.layout-collapse-btn\s*\{[\s\S]*?\}/)?.[0] ?? "";
       expect(rule).toMatch(/width:\s*32px/);
