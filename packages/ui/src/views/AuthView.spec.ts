@@ -7,6 +7,8 @@ import * as vuetifyComponents from "vuetify/components";
 import * as vuetifyDirectives from "vuetify/directives";
 import { createRouter, createMemoryHistory, type Router } from "vue-router";
 import en from "@i18n/en.json";
+import { BRAND_PWA_BADGE_URL, BRAND_PWA_BADGE_DARK_URL } from "@brand/logos";
+import { useThemeStore } from "@stores";
 import AuthView from "./AuthView.vue";
 
 const STUB_ROUTE = { template: "<div/>" };
@@ -465,5 +467,25 @@ describe("AuthView — reset password (same persistent card and chrome)", () => 
 
     expect(wrapper.find(".auth-view__card").element).toBe(cardElBefore);
     expect(wrapper.find(".auth-chrome__logo-wrap").element).toBe(logoElBefore);
+  });
+});
+
+describe("AuthView — PWA badge follows the theme (NEO-12)", () => {
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  it("shows the white badge in light mode and the dark badge in dark mode, switching live", async () => {
+    const { wrapper } = await mountAuthView(vi.fn());
+    const themeStore = useThemeStore();
+    const badge = () => wrapper.find(".auth-view__pwa-badge").attributes("src");
+
+    themeStore.setPreference("light");
+    await flushPromises();
+    expect(badge()).toBe(BRAND_PWA_BADGE_URL);
+
+    themeStore.setPreference("dark");
+    await flushPromises();
+    expect(badge()).toBe(BRAND_PWA_BADGE_DARK_URL);
   });
 });
