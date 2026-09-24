@@ -73,16 +73,6 @@ describe("AppLayout", () => {
       expect(appLayoutSource).toContain("useVisibleNavRoutes");
     });
 
-    it("mobile drawer close is wired: AppNavLinks emits navigate, AppLayout closes the drawer", () => {
-      const navLinksSource = readFileSync(path.resolve(__dirname, "components/AppNavLinks.vue"), "utf-8");
-      expect(navLinksSource).toContain("$emit('navigate')");
-      const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
-      expect(appLayoutSource).toContain('@navigate="mobileDrawerOpen = false"');
-    });
-
-    // NEO-44: without an explicit color, VAppBar (flat, no color) renders
-    // transparent and shows through to the app's root "background" color —
-    // the same fallback VMain uses — so in dark mode the top bar and the
     // body below it become visually indistinguishable.
     it("app bar has an explicit surface color so it doesn't blend into the body background in dark mode", () => {
       const appShellSource = readFileSync(
@@ -169,117 +159,111 @@ describe("AppLayout", () => {
     });
   });
 
-  describe("top bar: logo-only on the right, hamburger + title on the left", () => {
-    it("app bar's right side renders only the logo — no notification bell (that's DashboardView-only), no role-preview select, no user menu", () => {
-      const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
-      expect(appLayoutSource).not.toContain("app-bar-actions");
-      // Component usage/import, not the explanatory code comment that legitimately
-      // names AppNotificationCenter.vue (why polling moved out of it) — a bare
-      // substring check would false-positive on that comment.
-      expect(appLayoutSource).not.toMatch(/<AppNotificationCenter\b/);
-      expect(appLayoutSource).not.toMatch(/import\s+AppNotificationCenter\b/);
-      expect(appLayoutSource).not.toContain("rolePreview");
-      expect(appLayoutSource).not.toContain("VSelect");
+  // NEO-55: logo top-left of the full-width app bar (desktop only), account
+  // top-right (both breakpoints), module title in the content card's own
+  // header row on desktop, no hamburger/mobile drawer — bottom bar + "More".
+  describe("NEO-55 — app bar, page header and mobile navigation", () => {
+    const readLayout = () => readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
+    const readShell = () =>
+      readFileSync(path.resolve(__dirname, "../../../../packages/ui/src/components/AppShell.vue"), "utf-8");
+    const slotBlock = (source: string, slot: string) => {
+      const start = source.indexOf(`<template #${slot}`);
+      return source.slice(start, source.indexOf("\n      </template>", start));
+    };
+
+    it("app bar's leading slot renders the logo on desktop only and a back arrow on mobile detail views", () => {
+      const block = slotBlock(readLayout(), "app-bar-start");
+      expect(block).toMatch(/<AppLogo v-if="!isMobile"/);
+      expect(block).toMatch(/v-else-if="parentRoute"/);
+      expect(block).toContain('name="arrow-left"');
+    });
+
+    it("the logo is no longer rendered inside the side menu or on the right of the app bar", () => {
+      const shell = readShell();
+      expect(shell).not.toContain('<slot name="logo"');
+      expect(shell).not.toContain("app-shell__bar-logo");
+      expect(shell).toContain('<slot name="app-bar-start"');
+    });
+
+    it("the account menu lives in the app bar's actions slot, opening below the avatar", () => {
+      const block = slotBlock(readLayout(), "app-bar-actions");
+      expect(block.match(/<AppUserMenuPanel\b/g)).toHaveLength(1);
+      expect(block).toMatch(/<VMenu[\s\S]*?location="bottom end"/);
+      expect(block).toContain("user.initials");
+      // Name + role next to the avatar on desktop only.
+      expect(block).toMatch(/v-if="!isMobile" class="layout-user-info"/);
+    });
+
+    it("the drawer footer holds only the collapse toggle and version label — no account button", () => {
+      const block = slotBlock(readLayout(), "drawer-footer");
+      expect(block).toContain("toggleSidebar");
+      expect(block).toContain("appVersionLabel");
+      expect(block).not.toContain("AppUserMenuPanel");
+      expect(block).not.toContain("VAvatar");
+    });
+
+    it("no notification bell, role-preview select, or theme panel sneaks into the app bar", () => {
+      const source = readLayout();
+      expect(source).not.toMatch(/<AppNotificationCenter\b/);
+      expect(source).not.toMatch(/import\s+AppNotificationCenter\b/);
+      expect(source).not.toContain("rolePreview");
+      expect(source).not.toContain("VSelect");
     });
 
     it("the unread-notification nav dot pulse animation respects prefers-reduced-motion", () => {
-      const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
-      expect(appLayoutSource).toContain("prefers-reduced-motion");
+      expect(readLayout()).toContain("prefers-reduced-motion");
     });
 
-    it("app bar logo slot renders only for the 'bar' location — the left drawer no longer shows a logo", () => {
-      const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
-      expect(appLayoutSource).toMatch(/v-if=["']location === ['"]bar['"]["']/);
-
-      const appLogoSource = readFileSync(path.resolve(__dirname, "components/AppLogo.vue"), "utf-8");
-      // The sidebar/drawer logo variant has been removed entirely, not just hidden.
-      expect(appLogoSource).not.toContain("variant");
-      expect(appLogoSource).not.toContain("layout-app__logo-icon");
-      expect(appLogoSource).toContain("layout-app__bar-logo-link");
-      const barLinkClassBody = appLogoSource.match(/\.layout-app__bar-logo-link\s*\{[\s\S]*?\n\}/)?.[0] ?? "";
-      expect(barLinkClassBody).not.toContain("::after");
-      expect(barLinkClassBody).not.toContain("border");
+    it("desktop page header: back arrow on detail views, module title, and the teleport target for view controls", () => {
+      const source = readLayout();
+      const header = source.slice(source.indexOf('class="layout-page-header"') - 40, source.indexOf("<RouterView"));
+      expect(header).toContain('v-show="!isMobile"');
+      expect(header).toMatch(/v-if="parentRoute"[\s\S]*?:to="parentRoute"/);
+      expect(header).toContain("{{ moduleTitle }}");
+      expect(header).toContain(':id="PAGE_HEADER_ACTIONS_ID"');
+      expect(source).toContain("providePageHeader(");
     });
 
-    it("the shared AppShell always shows the app-bar logo (not mobile-only)", () => {
-      const appShellSource = readFileSync(
-        path.resolve(__dirname, "../../../../packages/ui/src/components/AppShell.vue"),
-        "utf-8",
-      );
-      expect(appShellSource).not.toContain('v-if="mobile" class="app-shell__bar-logo"');
-      expect(appShellSource).toContain("app-shell__bar-logo");
-    });
-  });
-
-  describe("user menu and sidebar collapse toggle live in the desktop drawer footer", () => {
-    it("desktop drawer-footer renders both the user menu and the collapse toggle", () => {
-      const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
-      expect(appLayoutSource).toContain("layout-nav-footer");
-      expect(appLayoutSource).toContain("AppUserMenuPanel");
-      expect(appLayoutSource).toContain("toggleSidebar");
-    });
-  });
-
-  // NEO-9: drawer-footer account menu — mobile parity, spacing/sizing, visibility above the bottom nav.
-  describe("NEO-9 — drawer-footer account menu", () => {
-    it("has a single drawer-footer template shared by desktop and mobile — no VBottomSheet split, no always-expanded inline branch", () => {
-      const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
-      const footerStart = appLayoutSource.indexOf("#drawer-footer");
-      const footerEnd = appLayoutSource.indexOf("#app-bar-title", footerStart);
-      const footerBlock = appLayoutSource.slice(footerStart, footerEnd);
-      expect(footerBlock).not.toMatch(/<AppUserMenuPanel[^>]*\bv-else\b/);
-      expect(footerBlock).not.toContain("<VBottomSheet");
-      // Exactly one AppUserMenuPanel usage, wrapped by the one shared VMenu.
-      expect(footerBlock.match(/<AppUserMenuPanel\b/g)).toHaveLength(1);
-      expect(footerBlock).toMatch(/<VMenu[\s\S]*<AppUserMenuPanel[\s\S]*<\/VMenu>/);
+    it("the app bar title is mobile-only (desktop shows it in the page header instead)", () => {
+      expect(slotBlock(readLayout(), "app-bar-title")).toMatch(/<Transition v-if="isMobile"/);
     });
 
-    it("menu opens above the avatar with breathing room (location=\"top\", not the side-anchored \"end top\")", () => {
-      const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
-      expect(appLayoutSource).toMatch(/<VMenu[\s\S]*?location="top"[\s\S]*?offset="12"/);
-      expect(appLayoutSource).not.toContain('location="end top"');
+    it("detail views show the parent module's title, not the detail route's own", () => {
+      const source = readLayout();
+      expect(source).toContain("navParentName(name)");
+      expect(source).toMatch(/const name = parentName\.value \?\? route\.name/);
     });
 
-    it("collapse chevron button is 32px with right-edge margin (was 24px, flush to the edge)", () => {
-      const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
-      const rule = appLayoutSource.match(/\.layout-collapse-btn\s*\{[\s\S]*?\}/)?.[0] ?? "";
+    it("AppShell has no hamburger and renders the side menu on desktop only", () => {
+      const shell = readShell();
+      expect(shell).not.toContain("app-shell__hamburger");
+      expect(shell).not.toContain(":temporary");
+      expect(shell).toMatch(/<VNavigationDrawer\s+v-if="!mobile"/);
+    });
+
+    it("AppShell's bottom bar adds a More tab and sheet for the nav items past the first 4", () => {
+      const shell = readShell();
+      expect(shell).toContain("props.navItems.slice(BOTTOM_NAV_ITEM_COUNT)");
+      expect(shell).toMatch(/<MobileBottomNavItem\s+v-if="overflowNavItems\.length"[\s\S]*?:label="moreLabel"/);
+      expect(shell).toMatch(/<VBottomSheet[\s\S]*?v-for="item in overflowNavItems"/);
+      const layout = readLayout();
+      expect(layout).toContain(":more-label=\"t('layout.nav.more')\"");
+      expect(layout).toContain(":more-title=\"t('layout.nav.moreModules')\"");
+    });
+
+    it("collapse chevron button is 32px with right-edge margin", () => {
+      const rule = readLayout().match(/\.layout-collapse-btn\s*\{[\s\S]*?\}/)?.[0] ?? "";
       expect(rule).toMatch(/width:\s*32px/);
       expect(rule).toMatch(/height:\s*32px/);
       expect(rule).toMatch(/margin-inline-end:\s*8px/);
     });
 
-    it("collapse chevron only renders on desktop (mobile has no rail-collapse concept)", () => {
-      const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
-      expect(appLayoutSource).toMatch(/<AppButton\s+v-if="!isMobile"[\s\S]*?class="layout-collapse-btn"/);
-    });
-
-    it("avatar/user button has extra bottom margin at rest and no custom hover/focus size animation (two prior attempts both looked broken live)", () => {
-      const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
-      const rule = appLayoutSource.match(/(?<!--collapsed )\.layout-user-btn\s*\{[\s\S]*?\}/)?.[0] ?? "";
-      expect(rule).toMatch(/margin-block-end:\s*12px/);
+    it("account button has no custom hover/focus size animation (two prior attempts both looked broken live)", () => {
+      const source = readLayout();
+      const rule = source.match(/(?<!--compact )\.layout-user-btn\s*\{[\s\S]*?\}/)?.[0] ?? "";
       expect(rule).not.toMatch(/transition/);
-      expect(appLayoutSource).not.toMatch(/\.layout-user-btn:hover/);
-      expect(appLayoutSource).not.toMatch(/\.layout-user-btn[\s\S]{0,400}transform:\s*scale/);
-    });
-
-    it("collapsed rail stacks the avatar above the chevron (column, not row) so both stay visible in the narrow rail width", () => {
-      const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
-      const rule = appLayoutSource.match(/\.layout-nav-footer--collapsed\s*\{[\s\S]*?\}/)?.[0] ?? "";
-      expect(rule).toMatch(/flex-direction:\s*column/);
-      const chevronRule = appLayoutSource.match(/\.layout-nav-footer--collapsed \.layout-collapse-btn\s*\{[\s\S]*?\}/)?.[0] ?? "";
-      expect(chevronRule).toMatch(/width:\s*24px/);
-      expect(chevronRule).toMatch(/margin-inline-end:\s*0/);
-    });
-
-    it("mobile drawer footer gets bottom-nav clearance from AppShell (visible above the bottom nav, not hidden behind it)", () => {
-      const appShellSource = readFileSync(
-        path.resolve(__dirname, "../../../../packages/ui/src/components/AppShell.vue"),
-        "utf-8",
-      );
-      expect(appShellSource).toContain("app-shell__nav-footer--bottom-nav-space");
-      expect(appShellSource).toMatch(/'app-shell__nav-footer--bottom-nav-space':\s*mobile\s*&&\s*showBottomNav/);
-      const rule = appShellSource.match(/\.app-shell__nav-footer--bottom-nav-space\s*\{[\s\S]*?\}/)?.[0] ?? "";
-      expect(rule).toMatch(/padding-bottom:\s*calc\(var\(--mobile-bottom-nav-height/);
+      expect(source).not.toMatch(/\.layout-user-btn:hover/);
+      expect(source).not.toMatch(/\.layout-user-btn[\s\S]{0,400}transform:\s*scale/);
     });
   });
 

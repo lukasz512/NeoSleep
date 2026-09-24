@@ -25,6 +25,15 @@
     margin-bottom var(--pwa-fib-t-xl, 233ms) ease;
 }
 
+/* Teleported into AppLayout's desktop page header (NEO-55): that row owns
+   the spacing below it, and the toolbar fills the space right of the title. */
+.app-entity-list__toolbar--in-header {
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: flex-end;
+  margin-bottom: 0;
+}
+
 .app-entity-list__toolbar--hidden {
   max-height: 0;
   opacity: 0;

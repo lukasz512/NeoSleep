@@ -12,67 +12,40 @@
     <AppOfflineBar />
 
     <AppShell
-      v-model="mobileDrawerOpen"
       :rail-collapsed="sidebarCollapsed"
       :rail-width="64"
       :nav-items="visibleNavItems"
-      :menu-label="t('layout.sidebar.expand')"
+      :menu-label="t('layout.nav.modules')"
+      :more-label="t('layout.nav.more')"
+      :more-title="t('layout.nav.moreModules')"
       bottom-nav-show-labels
     >
-      <template #logo="{ location }">
-        <AppLogo v-if="location === 'bar'" :theme="theme" />
+      <!-- NEO-55: logo on the left of the full-width app bar on desktop (it
+           never collapses with the side menu); on mobile no logo at all, the
+           leading edge is the back arrow on detail views. -->
+      <template #app-bar-start>
+        <AppLogo v-if="!isMobile" :theme="theme" />
+        <AppButton
+          v-else-if="parentRoute"
+          icon
+          variant="text"
+          :to="parentRoute"
+          ignore-global-loading
+          :title="backLabel"
+          :aria-label="backLabel"
+        >
+          <AppIcon name="arrow-left" class="layout-back-icon" />
+        </AppButton>
       </template>
 
       <template #nav>
-        <AppNavLinks :collapsed="!isMobile && sidebarCollapsed" @navigate="mobileDrawerOpen = false" />
+        <AppNavLinks :collapsed="sidebarCollapsed" />
       </template>
 
       <template #drawer-footer>
         <div class="layout-drawer-footer">
-          <div class="layout-nav-footer" :class="{ 'layout-nav-footer--collapsed': !isMobile && sidebarCollapsed }">
-            <!-- Reverted round 2's VBottomSheet split (2026-09-21) — looked worse in
-                 practice than the anchored popup it replaced (overlapped the bottom
-                 nav awkwardly on live pwa-dev). Back to one VMenu for both
-                 breakpoints; kept only the location="top"/offset="12" positioning
-                 fix, which was never the part that was complained about. -->
-            <VMenu
-              v-model="menuOpen"
-              location="top"
-              offset="12"
-              :close-on-content-click="false"
-              min-width="220"
-            >
-              <template #activator="{ props: menuProps }">
-                <AppButton
-                  v-bind="menuProps"
-                  variant="text"
-                  class="layout-user-btn"
-                  :title="t('user.user.menu')"
-                  :aria-label="t('user.user.menu')"
-                >
-                  <VAvatar size="32" color="primary">
-                    <span class="text-caption font-weight-bold">{{ user.initials }}</span>
-                  </VAvatar>
-                  <div v-if="isMobile || !sidebarCollapsed" class="layout-user-info">
-                    <span class="layout-user-name">{{ user.displayName }}</span>
-                    <span class="layout-user-role">{{ user.role }}</span>
-                  </div>
-                </AppButton>
-              </template>
-
-              <AppUserMenuPanel
-                :theme="theme"
-                :locale="(locale as string)"
-                :drawer="isMobile"
-                @toggle-theme="toggleTheme"
-                @change-locale="(lang) => setLocale(lang as 'en' | 'pl' | 'mx')"
-                @logout="onLogout"
-                @close="menuOpen = false"
-              />
-            </VMenu>
-
+          <div class="layout-nav-footer" :class="{ 'layout-nav-footer--collapsed': sidebarCollapsed }">
             <AppButton
-              v-if="!isMobile"
               icon
               variant="text"
               size="small"
@@ -84,23 +57,63 @@
               <AppIcon :name="sidebarCollapsed ? 'chevron-right' : 'chevron-left'" class="layout-nav__chevron" />
             </AppButton>
           </div>
-          <!-- Same label as under the login badge (useAppVersionLabel), on the
-               grey drawer under the account button. Only while the menu is
-               expanded (desktop) or open (mobile drawer) — the collapsed rail
-               is too narrow for it. -->
-          <p v-if="appVersionLabel && (isMobile || !sidebarCollapsed)" class="layout-app-version">
+          <!-- Same label as under the login badge (useAppVersionLabel). Only
+               while the menu is expanded — the collapsed rail is too narrow. -->
+          <p v-if="appVersionLabel && !sidebarCollapsed" class="layout-app-version">
             {{ appVersionLabel }}
           </p>
         </div>
       </template>
 
+      <!-- Mobile only: on desktop the title lives in the content card's own
+           header row instead (see .layout-page-header below). -->
       <template #app-bar-title>
-        <Transition name="title-fade" mode="out-in">
+        <Transition v-if="isMobile" name="title-fade" mode="out-in">
           <div :key="moduleTitle" class="layout-appbar__title-group">
-            <AppIcon v-if="moduleIcon" :name="moduleIcon" class="layout-appbar__icon" />
+            <AppIcon v-if="moduleIcon && !parentRoute" :name="moduleIcon" class="layout-appbar__icon" />
             <span class="layout-appbar__title">{{ moduleTitle }}</span>
           </div>
         </Transition>
+      </template>
+
+      <!-- Account: top right on both breakpoints (NEO-55), avatar + name/role
+           on desktop, avatar only on mobile. The menu opens below it. -->
+      <template #app-bar-actions>
+        <VMenu
+          v-model="menuOpen"
+          location="bottom end"
+          offset="8"
+          :close-on-content-click="false"
+          min-width="220"
+        >
+          <template #activator="{ props: menuProps }">
+            <AppButton
+              v-bind="menuProps"
+              variant="text"
+              class="layout-user-btn"
+              :class="{ 'layout-user-btn--compact': isMobile }"
+              :title="t('user.user.menu')"
+              :aria-label="t('user.user.menu')"
+            >
+              <div v-if="!isMobile" class="layout-user-info">
+                <span class="layout-user-name">{{ user.displayName }}</span>
+                <span class="layout-user-role">{{ user.role }}</span>
+              </div>
+              <VAvatar size="32" color="primary">
+                <span class="text-caption font-weight-bold">{{ user.initials }}</span>
+              </VAvatar>
+            </AppButton>
+          </template>
+
+          <AppUserMenuPanel
+            :theme="theme"
+            :locale="(locale as string)"
+            @toggle-theme="toggleTheme"
+            @change-locale="(lang) => setLocale(lang as 'en' | 'pl' | 'mx')"
+            @logout="onLogout"
+            @close="menuOpen = false"
+          />
+        </VMenu>
       </template>
 
       <template #nav-icon="{ item }">
@@ -120,6 +133,34 @@
         class="layout-main__inner"
         :class="{ 'layout-main--fading': localeTransitioning }"
       >
+        <!-- Desktop page header (NEO-55): [← back on detail views] + module
+             icon + title, and on the right an empty slot the current view
+             teleports its own controls into (usePageHeader.ts). v-show, not
+             v-if: the teleport target must never be removed from under a
+             view that is still teleporting into it. -->
+        <div v-show="!isMobile" class="layout-page-header">
+          <AppButton
+            v-if="parentRoute"
+            icon
+            variant="flat"
+            size="large"
+            :to="parentRoute"
+            ignore-global-loading
+            class="layout-page-header__back"
+            :title="backLabel"
+            :aria-label="backLabel"
+          >
+            <AppIcon name="arrow-left" class="layout-back-icon" />
+          </AppButton>
+          <Transition name="title-fade" mode="out-in">
+            <div :key="moduleTitle" class="layout-appbar__title-group layout-page-header__title">
+              <AppIcon v-if="moduleIcon && !parentRoute" :name="moduleIcon" class="layout-appbar__icon" />
+              <span class="layout-appbar__title">{{ moduleTitle }}</span>
+            </div>
+          </Transition>
+          <div :id="PAGE_HEADER_ACTIONS_ID" class="layout-page-header__actions" />
+        </div>
+
         <RouterView v-slot="{ Component }">
           <!-- appear: this app-layout mount is only reached right after the
                auth screen's own exit sequence finishes (see AuthView.vue),
@@ -147,7 +188,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRoute } from "vue-router";
-import { navTitleKey, navIconName } from "../router/routes";
+import { navTitleKey, navIconName, navParentName } from "../router/routes";
+import { providePageHeader, PAGE_HEADER_ACTIONS_ID } from "../composables/usePageHeader";
 import { useI18n } from "vue-i18n";
 import { AppShell, useAppVersionLabel } from "@ui";
 import { useLayoutState } from "../composables/useLayoutState";
@@ -174,7 +216,7 @@ const initialAppearDone = ref(false);
 const {
   theme, toggleTheme,
   sidebarCollapsed, toggleSidebar,
-  isMobile, mobileDrawerOpen,
+  isMobile,
   user,
   localeTransitioning, setLocale,
   onLogout,
@@ -207,11 +249,24 @@ onMounted(markAppReady);
 const menuOpen = ref(false);
 const appVersionLabel = useAppVersionLabel();
 
-const moduleTitle = computed(() => {
+// Views teleport their controls into the desktop page header only while it is shown.
+providePageHeader(computed(() => !isMobile.value));
+
+/** Detail views (patient-detail, …) point back at their list; undefined on top-level modules. */
+const parentName = computed(() => {
   const name = route.name;
+  return typeof name === "string" ? navParentName(name) : undefined;
+});
+const parentRoute = computed(() => (parentName.value ? { name: parentName.value } : undefined));
+
+// Detail views show "← <Module>" — the parent module's title, not the record's.
+const moduleTitle = computed(() => {
+  const name = parentName.value ?? route.name;
   if (typeof name !== "string") return "";
   return t(navTitleKey(name));
 });
+
+const backLabel = computed(() => t("layout.backTo", { module: moduleTitle.value }));
 
 const moduleIcon = computed(() => {
   const name = route.name;
@@ -337,22 +392,16 @@ const moduleIcon = computed(() => {
   line-height: var(--appbar-row, 28px);
 }
 
+/* Only the collapse chevron lives here now (the account moved to the app
+   bar, NEO-55): right-aligned under the expanded menu, centered in the rail. */
 .layout-nav-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 4px;
+  justify-content: flex-end;
 }
 
-/* Column, not row: the rail is only ~64px wide (AppLayout passes rail-width="64"
-   to AppShell) minus this footer's own padding, leaving no horizontal room for a
-   32px avatar circle next to a 32px chevron button side by side — that overflow is
-   exactly why the chevron became invisible (clipped) once it was sized up for the
-   expanded row below. Stacking removes the horizontal constraint entirely. */
 .layout-nav-footer--collapsed {
-  flex-direction: column;
   justify-content: center;
-  gap: 6px;
 }
 
 :deep(.app-shell__nav-footer:has(.layout-nav-footer--collapsed)) {
@@ -366,47 +415,80 @@ const moduleIcon = computed(() => {
   margin-inline-end: 8px;
 }
 
-/* The extra size/right-margin above only makes sense in the expanded row, where
-   there's space for it — in the collapsed rail it's back to its original compact
-   size with no inline margin (nothing to its right to space away from). */
 .layout-nav-footer--collapsed .layout-collapse-btn {
-  width: 24px;
-  height: 24px;
-  min-width: 24px;
   margin-inline-end: 0;
 }
 
-/* Static sizing only — no hover/focus size change. Two attempts at an animated
-   "grow on hover" (transform: scale, then padding-block) both read as broken in
-   practice (ugly scaling, then a visible slide/overflow jump) — dropped entirely.
-   Hover/focus feedback now comes from Vuetify's own built-in text-button overlay
-   (AppButton variant="text"), not custom CSS. */
+/* Account button, top right of the app bar (NEO-55). Static sizing only — no
+   hover/focus size change (two earlier animated attempts both read as broken);
+   feedback comes from Vuetify's own text-button overlay. */
 .layout-user-btn {
-  flex: 1 1 auto;
-  min-width: 0;
-  justify-content: flex-start;
-  padding-block: 6px;
-  padding-inline: 8px;
-  margin-block-start: 6px;
-  margin-block-end: 12px;
+  height: auto !important;
+  min-height: 44px;
+  padding-block: 4px;
+  padding-inline: 12px 6px;
+  margin-inline-end: 8px;
   text-transform: none;
   letter-spacing: normal;
+  border-radius: 999px;
 }
 
-.layout-nav-footer--collapsed .layout-user-btn {
-  flex: none;
-  min-width: unset;
-  padding-inline: 0;
-  justify-content: center;
+.layout-user-btn--compact {
+  min-width: 0;
+  padding-inline: 6px;
 }
 
 .layout-user-info {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: flex-end;
   gap: 1px;
   min-width: 0;
-  margin-left: 8px;
+  margin-inline-end: 10px;
+}
+
+/* Desktop page header: first row of the content card. min-height matches the
+   list toolbar's search field, so the row doesn't jump between a list (toolbar
+   teleported in) and a view with nothing on the right. Child-combinator
+   selector so it outranks `.layout-main__inner > *` below (which makes every
+   other child a growing column). */
+.layout-main__inner > .layout-page-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  min-height: 48px;
+  margin-bottom: 16px;
+  flex: 0 0 auto;
+}
+
+.layout-page-header__title {
+  flex: 0 0 auto;
+  padding-inline-start: 4px;
+}
+
+.layout-page-header__actions {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* Pulled toward the card edge and the title, so "← Patients" reads as one label. */
+.layout-page-header__back {
+  background: transparent;
+  margin-inline-start: -8px;
+}
+
+.layout-page-header__back + .layout-page-header__title {
+  padding-inline-start: 0;
+}
+
+.layout-back-icon {
+  width: 24px;
+  height: 24px;
 }
 
 .layout-user-name {
@@ -414,7 +496,7 @@ const moduleIcon = computed(() => {
   font-weight: 500;
   line-height: 1.2;
   white-space: nowrap;
-  max-width: 140px;
+  max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
