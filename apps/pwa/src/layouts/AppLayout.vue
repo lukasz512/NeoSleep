@@ -28,60 +28,69 @@
       </template>
 
       <template #drawer-footer>
-        <div class="layout-nav-footer" :class="{ 'layout-nav-footer--collapsed': !isMobile && sidebarCollapsed }">
-          <!-- Reverted round 2's VBottomSheet split (2026-09-21) — looked worse in
-               practice than the anchored popup it replaced (overlapped the bottom
-               nav awkwardly on live pwa-dev). Back to one VMenu for both
-               breakpoints; kept only the location="top"/offset="12" positioning
-               fix, which was never the part that was complained about. -->
-          <VMenu
-            v-model="menuOpen"
-            location="top"
-            offset="12"
-            :close-on-content-click="false"
-            min-width="220"
-          >
-            <template #activator="{ props: menuProps }">
-              <AppButton
-                v-bind="menuProps"
-                variant="text"
-                class="layout-user-btn"
-                :title="t('user.user.menu')"
-                :aria-label="t('user.user.menu')"
-              >
-                <VAvatar size="32" color="primary">
-                  <span class="text-caption font-weight-bold">{{ user.initials }}</span>
-                </VAvatar>
-                <div v-if="isMobile || !sidebarCollapsed" class="layout-user-info">
-                  <span class="layout-user-name">{{ user.displayName }}</span>
-                  <span class="layout-user-role">{{ user.role }}</span>
-                </div>
-              </AppButton>
-            </template>
+        <div class="layout-drawer-footer">
+          <div class="layout-nav-footer" :class="{ 'layout-nav-footer--collapsed': !isMobile && sidebarCollapsed }">
+            <!-- Reverted round 2's VBottomSheet split (2026-09-21) — looked worse in
+                 practice than the anchored popup it replaced (overlapped the bottom
+                 nav awkwardly on live pwa-dev). Back to one VMenu for both
+                 breakpoints; kept only the location="top"/offset="12" positioning
+                 fix, which was never the part that was complained about. -->
+            <VMenu
+              v-model="menuOpen"
+              location="top"
+              offset="12"
+              :close-on-content-click="false"
+              min-width="220"
+            >
+              <template #activator="{ props: menuProps }">
+                <AppButton
+                  v-bind="menuProps"
+                  variant="text"
+                  class="layout-user-btn"
+                  :title="t('user.user.menu')"
+                  :aria-label="t('user.user.menu')"
+                >
+                  <VAvatar size="32" color="primary">
+                    <span class="text-caption font-weight-bold">{{ user.initials }}</span>
+                  </VAvatar>
+                  <div v-if="isMobile || !sidebarCollapsed" class="layout-user-info">
+                    <span class="layout-user-name">{{ user.displayName }}</span>
+                    <span class="layout-user-role">{{ user.role }}</span>
+                  </div>
+                </AppButton>
+              </template>
 
-            <AppUserMenuPanel
-              :theme="theme"
-              :locale="(locale as string)"
-              :drawer="isMobile"
-              @toggle-theme="toggleTheme"
-              @change-locale="(lang) => setLocale(lang as 'en' | 'pl' | 'mx')"
-              @logout="onLogout"
-              @close="menuOpen = false"
-            />
-          </VMenu>
+              <AppUserMenuPanel
+                :theme="theme"
+                :locale="(locale as string)"
+                :drawer="isMobile"
+                @toggle-theme="toggleTheme"
+                @change-locale="(lang) => setLocale(lang as 'en' | 'pl' | 'mx')"
+                @logout="onLogout"
+                @close="menuOpen = false"
+              />
+            </VMenu>
 
-          <AppButton
-            v-if="!isMobile"
-            icon
-            variant="text"
-            size="small"
-            class="layout-collapse-btn"
-            :title="sidebarCollapsed ? t('layout.sidebar.expand') : t('layout.sidebar.collapse')"
-            :aria-label="sidebarCollapsed ? t('layout.sidebar.expand') : t('layout.sidebar.collapse')"
-            @click="toggleSidebar"
-          >
-            <AppIcon :name="sidebarCollapsed ? 'chevron-right' : 'chevron-left'" class="layout-nav__chevron" />
-          </AppButton>
+            <AppButton
+              v-if="!isMobile"
+              icon
+              variant="text"
+              size="small"
+              class="layout-collapse-btn"
+              :title="sidebarCollapsed ? t('layout.sidebar.expand') : t('layout.sidebar.collapse')"
+              :aria-label="sidebarCollapsed ? t('layout.sidebar.expand') : t('layout.sidebar.collapse')"
+              @click="toggleSidebar"
+            >
+              <AppIcon :name="sidebarCollapsed ? 'chevron-right' : 'chevron-left'" class="layout-nav__chevron" />
+            </AppButton>
+          </div>
+          <!-- Same label as under the login badge (useAppVersionLabel), on the
+               grey drawer under the account button. Only while the menu is
+               expanded (desktop) or open (mobile drawer) — the collapsed rail
+               is too narrow for it. -->
+          <p v-if="appVersionLabel && (isMobile || !sidebarCollapsed)" class="layout-app-version">
+            {{ appVersionLabel }}
+          </p>
         </div>
       </template>
 
@@ -109,11 +118,7 @@
         id="main-content"
         tabindex="-1"
         class="layout-main__inner"
-        :class="{
-          'layout-main--fading': localeTransitioning,
-          'layout-main__inner--mobile': isMobile,
-          'layout-main__inner--version-space': !isMobile && !!appVersionLabel,
-        }"
+        :class="{ 'layout-main--fading': localeTransitioning }"
       >
         <RouterView v-slot="{ Component }">
           <!-- appear: this app-layout mount is only reached right after the
@@ -135,20 +140,7 @@
           </Transition>
         </RouterView>
       </div>
-      <!-- Mobile: after the content, not fixed — .layout-main__inner--mobile is
-           at least one screen tall, so this only shows once you scroll to the
-           very bottom instead of sitting over every screen. -->
-      <p v-if="appVersionLabel && isMobile" class="layout-app-version layout-app-version--end-of-page">
-        {{ appVersionLabel }}
-      </p>
     </AppShell>
-
-    <!-- Same label as under the login badge (useAppVersionLabel). Desktop:
-         fixed to the viewport corner, never takes clicks. Mobile: rendered
-         after the content instead (see below). -->
-    <p v-if="appVersionLabel && !isMobile" class="layout-app-version">
-      {{ appVersionLabel }}
-    </p>
   </VApp>
 </template>
 
@@ -458,44 +450,29 @@ const moduleIcon = computed(() => {
   display: flex;
   flex-direction: column;
 }
-/* Desktop: an empty strip under the content for the fixed version line to
-   sit in, so it never lands on a table's last row or pagination. Views that
-   size themselves to the viewport (useFillViewportHeight) count this padding,
-   so their tables end above the strip on their own. */
-.layout-main__inner--version-space {
-  padding-bottom: 44px;
+/* Account row with the app version under it, on the grey drawer. */
+.layout-drawer-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+  padding-bottom: 4px;
 }
 
-/* Quiet footnote, not UI: small, low-contrast, click-through. Desktop:
-   centered in the strip above (44px strip, ~15px line, 14px from the edge). */
+/* Quiet footnote, not UI: small and low-contrast, left-aligned with the
+   account button's avatar above it. */
 .layout-app-version {
-  position: fixed;
-  right: max(16px, env(safe-area-inset-right));
-  bottom: max(14px, env(safe-area-inset-bottom));
-  z-index: 5;
   margin: 0;
+  padding-inline: 12px 0;
   font-size: 11px;
   line-height: 1.4;
   font-weight: 500;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
   color: rgba(var(--v-theme-on-surface), 0.45);
-  pointer-events: none;
-  user-select: none;
-}
-
-/* Mobile: in the page flow, below the content. */
-.layout-app-version--end-of-page {
-  position: static;
-  padding: 4px 16px 8px;
-  text-align: right;
-}
-
-/* At least one full visible screen (viewport minus app bar and bottom nav),
-   so the end-of-page version line starts just below the fold. */
-.layout-main__inner--mobile {
-  min-height: calc(
-    100dvh - var(--v-layout-top, 0px) - var(--mobile-bottom-nav-height, 64px) - env(safe-area-inset-bottom)
-  );
+  /* Wraps rather than truncating if a long build number ever outgrows the
+     ~200px drawer — the number is the point of the line. */
+  overflow-wrap: anywhere;
 }
 </style>
