@@ -315,7 +315,8 @@ import { createUseResetPasswordFlow } from "../composables/useResetPasswordFlow"
 import { useMagneticPointer } from "../composables/useMagneticPointer";
 import { AUTH_BACKGROUND_EXIT_KEY } from "../composables/authBackgroundExit";
 import type { ApiFetchOptions } from "@api";
-import { useThemeStore, APP_VERSION_KEY, type AuthTokenStorage } from "@stores";
+import { useThemeStore, type AuthTokenStorage } from "@stores";
+import { useAppVersionLabel } from "../composables/useAppVersionLabel";
 import AuthChrome from "../components/AuthChrome.vue";
 import AuthCard from "../components/AuthCard.vue";
 
@@ -458,18 +459,8 @@ const smallOrbPhase = ref<OrbPhase>("hidden");
 const badgeVisible = ref(false);
 const authBackgroundExit = inject(AUTH_BACKGROUND_EXIT_KEY, undefined);
 
-// "Version 1.0.0 (build 12) · DEV" under the badge; prod shows no channel suffix.
-const appVersion = inject(APP_VERSION_KEY, undefined);
-const appVersionLabel = computed(() => {
-  if (!appVersion) return "";
-  const { version, build, channel } = appVersion;
-  const base = build === null
-    ? t("user.login.appVersion", { version })
-    : t("user.login.appVersionBuild", { version, build });
-  if (channel === "prod") return base;
-  const channelLabel = channel === "dev" ? t("user.login.appChannelDev") : t("user.login.appChannelLocal");
-  return t("user.login.appVersionWithChannel", { version: base, channel: channelLabel });
-});
+// "Version 1.0.0 (build 12) · DEV" under the badge (see useAppVersionLabel).
+const appVersionLabel = useAppVersionLabel();
 
 function orbAnchorPhaseClass(phase: OrbPhase): Record<string, boolean> {
   return {

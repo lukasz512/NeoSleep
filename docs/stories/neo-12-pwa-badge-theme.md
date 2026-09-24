@@ -81,3 +81,11 @@ With the OS "reduce motion" setting on, the login card and logo never appear. On
 ## Platform vs tenant
 
 Platform-generic. The badge is a shared brand asset, not tenant config.
+
+## Follow-up (2026-09-24): version inside the app
+
+Łukasz asked for the same version label inside the logged-in PWA too, in the bottom-right corner.
+
+- `packages/ui/src/composables/useAppVersionLabel.ts`: the label formatting was moved out of `AuthView.vue` so the login page and the app share one implementation and always show the same text.
+- `apps/pwa/src/layouts/AppLayout.vue`: a small, low-contrast label is fixed to the bottom-right corner of the viewport. It uses theme `on-surface` at 45%, because the in-app background is the plain surface rather than the login gradient. It ignores clicks and sits just above the mobile bottom nav.
+- Test: `packages/ui/src/composables/useAppVersionLabel.spec.ts` covers the empty, prod, dev and local cases.

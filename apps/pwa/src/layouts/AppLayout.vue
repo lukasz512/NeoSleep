@@ -128,6 +128,16 @@
         </RouterView>
       </div>
     </AppShell>
+
+    <!-- Same label as under the login badge (useAppVersionLabel). Fixed to the
+         viewport corner, clear of the mobile bottom nav; never takes clicks. -->
+    <p
+      v-if="appVersionLabel"
+      class="layout-app-version"
+      :class="{ 'layout-app-version--bottom-nav-space': isMobile }"
+    >
+      {{ appVersionLabel }}
+    </p>
   </VApp>
 </template>
 
@@ -136,7 +146,7 @@ import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRoute } from "vue-router";
 import { navTitleKey, navIconName } from "../router/routes";
 import { useI18n } from "vue-i18n";
-import { AppShell } from "@ui";
+import { AppShell, useAppVersionLabel } from "@ui";
 import { useLayoutState } from "../composables/useLayoutState";
 import { useVisibleNavRoutes } from "../composables/useVisibleNavRoutes";
 import {
@@ -193,6 +203,7 @@ onAppReady(() => void loadPartnerResources(locale.value));
 onMounted(markAppReady);
 
 const menuOpen = ref(false);
+const appVersionLabel = useAppVersionLabel();
 
 const moduleTitle = computed(() => {
   const name = route.name;
@@ -436,5 +447,27 @@ const moduleIcon = computed(() => {
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+/* Quiet footnote, not UI: small, low-contrast, click-through so it never
+   covers a list row's tap target underneath. */
+.layout-app-version {
+  position: fixed;
+  right: max(12px, env(safe-area-inset-right));
+  bottom: max(8px, env(safe-area-inset-bottom));
+  z-index: 5;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  color: rgba(var(--v-theme-on-surface), 0.45);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Sits just above MobileBottomNavBar (fixed, see AppShell) instead of under it. */
+.layout-app-version--bottom-nav-space {
+  bottom: calc(var(--mobile-bottom-nav-height, 64px) + env(safe-area-inset-bottom) + 4px);
 }
 </style>

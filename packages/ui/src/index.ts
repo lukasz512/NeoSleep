@@ -16,6 +16,7 @@ export { default as MobileNavDrawer } from "./components/MobileNavDrawer.vue";
 export { default as MobileBottomNavBar } from "./components/MobileBottomNavBar.vue";
 export { default as MobileBottomNavItem } from "./components/MobileBottomNavItem.vue";
 export { AUTH_BACKGROUND_EXIT_KEY } from "./composables/authBackgroundExit";
+export { useAppVersionLabel } from "./composables/useAppVersionLabel";
 export { default as AppStateView } from "./components/AppStateView.vue";
 export { default as OriginDialogTransition } from "./components/OriginDialogTransition.vue";
 export { originDialogTransition } from "./components/originDialogTransition";
