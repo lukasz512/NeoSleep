@@ -70,7 +70,7 @@ const { t } = useI18n();
   align-items: center;
   gap: 16px;
   min-height: 48px;
-  padding: 24px 16px 8px 24px;
+  padding: 24px 16px 16px 24px;
 }
 
 .app-dialog-header__lead {
