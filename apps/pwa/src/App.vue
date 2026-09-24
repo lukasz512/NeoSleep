@@ -1,4 +1,5 @@
 <template>
+  <AppNotifications />
   <component :is="layoutComponent" />
 </template>
 
@@ -8,6 +9,7 @@ import { useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { PublicLayout, AppLayout } from "./router";
 import { useDocumentLang } from "@i18n/useDocumentLang";
+import AppNotifications from "./components/AppNotifications.vue";
 
 const { locale } = useI18n();
 useDocumentLang(locale);

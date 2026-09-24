@@ -73,6 +73,24 @@ describe("AppNotifications", () => {
     });
   });
 
+  it("uses role=\"alert\" for error/warning toasts (assertive) and role=\"status\" for info/success (polite)", async () => {
+    mountNotifications();
+    const { show } = useNotifications();
+    show("Something failed", "error");
+    show("Careful", "warning");
+    show("FYI", "info");
+    show("Saved", "success");
+
+    await vi.waitFor(() => {
+      expect(document.body.querySelectorAll(".notif-toast")).toHaveLength(4);
+    });
+
+    expect(document.body.querySelector(".notif-toast--error")!.getAttribute("role")).toBe("alert");
+    expect(document.body.querySelector(".notif-toast--warning")!.getAttribute("role")).toBe("alert");
+    expect(document.body.querySelector(".notif-toast--info")!.getAttribute("role")).toBe("status");
+    expect(document.body.querySelector(".notif-toast--success")!.getAttribute("role")).toBe("status");
+  });
+
   it("auto-dismisses a toast after 8 seconds", async () => {
     vi.useFakeTimers();
     mountNotifications();

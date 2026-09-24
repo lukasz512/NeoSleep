@@ -63,18 +63,6 @@
              heading on the page. -->
         <p class="auth-view__heading">{{ t('user.login.heading') }}</p>
 
-        <VAlert
-          v-if="loginFlow.errorKey.value"
-          type="error"
-          variant="tonal"
-          density="compact"
-          class="auth-view__alert"
-          closable
-          @click:close="loginFlow.errorKey.value = null"
-        >
-          {{ t(loginFlow.errorKey.value) }}
-        </VAlert>
-
         <VForm ref="signinForm" class="auth-view__form" @submit.prevent="handleSignIn">
           <VTextField
             ref="loginEmailFieldRef"
@@ -315,6 +303,8 @@ const pwaBadgeUrl = computed(() =>
 );
 
 type ApiFetchFn = (path: string, options?: ApiFetchOptions) => Promise<Response>;
+type NotifyType = "success" | "info" | "warning" | "error";
+type NotifyFn = (message: string, type: NotifyType, key?: string) => void;
 type Step = "signin" | "forgot" | "sent" | "reset";
 
 function stepFromPath(path: string): Step {
@@ -329,9 +319,19 @@ const router = useRouter();
 
 const apiFetch = inject<ApiFetchFn>("neo:apiFetch")!;
 const authTokenStorage = inject<AuthTokenStorage>("neo:authTokenStorage")!;
+const notify = inject<NotifyFn>("neo:notify")!;
 
 const useLoginFlow = createUseLoginFlow(apiFetch, authTokenStorage);
 const loginFlow = useLoginFlow();
+
+// The sign-in error used to render inline (a VAlert above the form) — moved
+// onto the app's native toast/notification system instead (NEO-10), matching
+// every other error surface in the app. loginFlow.errorKey itself is
+// untouched (still reset at the top of every submit()), just no longer read
+// for inline display.
+watch(loginFlow.errorKey, (key) => {
+  if (key) notify(t(key), "error", key);
+});
 
 const useForgotPasswordFlow = createUseForgotPasswordFlow(apiFetch);
 const forgotFlow = useForgotPasswordFlow();
