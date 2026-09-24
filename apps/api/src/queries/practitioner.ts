@@ -138,6 +138,63 @@ export async function GetPractitionerListQuery(
 }
 
 // ---------------------------------------------------------------------------
+// QUERY: ORGANIZATION'S PRACTITIONERS WITH STATS (HCO "Médicos" tab, NEO-14)
+// ---------------------------------------------------------------------------
+
+export interface PractitionerWithStatsDto extends PractitionerDto {
+  patient_count: number;
+  device_count: number;
+  /** device_count / patient_count as a rounded %, null when the doctor has no patients. */
+  efficiency_pct: number | null;
+}
+
+export interface GetOrganizationPractitionersInput {
+  organizationId: string;
+  search?: string;
+  specialty?: string | string[];
+  page?: number;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: "asc" | "desc";
+}
+
+/**
+ * Doctors of one clinic (primary organization_id OR a practitioner_organization
+ * affiliation), each with patient/device counts. What each count includes:
+ * docs/stories/hco-medicos-table.md.
+ */
+export async function GetOrganizationPractitionersQuery(
+  ctx: TenantContext,
+  input: GetOrganizationPractitionersInput
+): Promise<{ items: PractitionerWithStatsDto[]; total: number }> {
+  const filters: GetPractitionerFilters = {
+    search:          input.search,
+    specialty:       input.specialty,
+    organization_id: input.organizationId,
+    scopePaths:      await getAllowedScopePaths(ctx.client, ctx.user.roles),
+    includeStats:    true,
+  };
+
+  const { rows, total } = await getPractitionerPaginated(
+    ctx.client,
+    filters,
+    input.page ?? 1,
+    input.limit ?? 50,
+    input.sortBy ?? "name",
+    input.sortOrder ?? "asc"
+  );
+  return {
+    items: rows.map((row) => ({
+      ...toDto(row),
+      patient_count:  row.patient_count ?? 0,
+      device_count:   row.device_count ?? 0,
+      efficiency_pct: row.efficiency_pct ?? null,
+    })),
+    total,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // QUERY: GET BY ID
 // ---------------------------------------------------------------------------
 

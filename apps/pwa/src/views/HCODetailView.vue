@@ -182,11 +182,7 @@
           <PatientNotesPanel entity-type="organization" :entity-id="hco.id" />
         </template>
         <template #relatedDoctors>
-          <RelatedEntityPanel
-            :endpoint="`/api/v1/practitioner?organization_id=${hco.id}&limit=-1`"
-            detail-route-name="hcp-detail"
-            :empty-label="t('user.hco.detail.relatedDoctorsEmpty')"
-          />
+          <OrganizationPractitionersPanel :organization-id="hco.id" />
         </template>
         <template #documents>
           <EntityDocumentsPanel :endpoint="`/api/v1/organization/${hco.id}/documents`" />
@@ -233,7 +229,7 @@ import AppAvatar from "../components/AppAvatar.vue";
 import AppIcon from "../components/AppIcon.vue";
 import DetailViewTabs from "../components/DetailViewTabs.vue";
 import EntityHistoryPanel from "../components/EntityHistoryPanel.vue";
-import RelatedEntityPanel from "../components/RelatedEntityPanel.vue";
+import OrganizationPractitionersPanel from "../components/practitioner/OrganizationPractitionersPanel.vue";
 import EntityDocumentsPanel from "../components/EntityDocumentsPanel.vue";
 import HCOLocationMap from "../components/HCOLocationMap.vue";
 import PatientNotesPanel from "../components/patient/PatientNotesPanel.vue";
