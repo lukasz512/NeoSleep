@@ -151,12 +151,12 @@ defineEmits<{
   display: block;
 }
 
-/* Borderless on purpose — the card keeps its padding/radius/surface for spacing,
-   but draws no outline. */
+/* Not a visual card on purpose — no surface, no border, no inset padding: the
+   entity content sits directly on the page background (same color as the rest
+   of the view), aligned with the header row above it. */
 .view-item__card {
-  padding: 24px;
-  border-radius: var(--pwa-radius);
-  background: rgba(var(--v-theme-surface), 1);
+  background: transparent;
+  border: none;
 }
 
 .view-item__title {
