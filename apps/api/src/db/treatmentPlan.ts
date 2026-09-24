@@ -1,6 +1,7 @@
 import type { PoolClient } from "pg";
 import { AppError, DatabaseError } from "../errors.js";
 import { isoDate } from "../routes/utils.js";
+import { formatOptionalDisplayName } from "../utils/personName.js";
 
 export const TREATMENT_PLAN_TYPES = [
   "cpap",
@@ -89,6 +90,7 @@ export type TreatmentPlanUpdate = Partial<Omit<TreatmentPlanInsert, "patient_id"
 type TreatmentPlanRow = {
   id: string;
   patient_id: string;
+  patient_salutation: string | null;
   patient_first_name: string | null;
   patient_last_name: string | null;
   sleep_study_id: string | null;
@@ -96,6 +98,7 @@ type TreatmentPlanRow = {
   device_product_id: string | null;
   device_purchase_order_id: string | null;
   dentist_id: string | null;
+  dentist_salutation: string | null;
   dentist_first_name: string | null;
   dentist_last_name: string | null;
   dentist_notified_at: Date | null;
@@ -127,8 +130,8 @@ const TREATMENT_PLAN_SELECT_COLS = `
   t.appliance_supplier_id, applsup.name AS appliance_supplier_name,
   t.appliance_ordered_at, t.appliance_delivered_at,
   t.recommended_by, t.notes, t.status, t.metadata, t.created_at, t.updated_at,
-  pi.first_name AS patient_first_name, pi.last_name AS patient_last_name,
-  di.first_name AS dentist_first_name, di.last_name AS dentist_last_name`.trim();
+  pi.title AS patient_salutation, pi.first_name AS patient_first_name, pi.last_name AS patient_last_name,
+  di.title AS dentist_salutation, di.first_name AS dentist_first_name, di.last_name AS dentist_last_name`.trim();
 
 const TREATMENT_PLAN_JOIN = `
   FROM treatment_plan t
@@ -143,13 +146,21 @@ function serialize(row: TreatmentPlanRow): TreatmentPlan {
   return {
     id: row.id,
     patient_id: row.patient_id,
-    patient_name: [row.patient_first_name, row.patient_last_name].filter(Boolean).join(" ").trim() || null,
+    patient_name: formatOptionalDisplayName({
+      salutation: row.patient_salutation,
+      first_name: row.patient_first_name,
+      last_name: row.patient_last_name,
+    }),
     sleep_study_id: row.sleep_study_id,
     type: row.type,
     device_product_id: row.device_product_id,
     device_purchase_order_id: row.device_purchase_order_id,
     dentist_id: row.dentist_id,
-    dentist_name: [row.dentist_first_name, row.dentist_last_name].filter(Boolean).join(" ").trim() || null,
+    dentist_name: formatOptionalDisplayName({
+      salutation: row.dentist_salutation,
+      first_name: row.dentist_first_name,
+      last_name: row.dentist_last_name,
+    }),
     dentist_notified_at: row.dentist_notified_at ? isoDate(row.dentist_notified_at) : null,
     dentist_accepted_at: row.dentist_accepted_at ? isoDate(row.dentist_accepted_at) : null,
     appointment_at: row.appointment_at ? isoDate(row.appointment_at) : null,

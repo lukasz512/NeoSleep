@@ -1,10 +1,13 @@
 <template>
   <RouterLink v-if="to && label" :to="to" class="entity-link" @click.stop>
-    <AppAvatar :name="avatarName" :entity-type="entityType" :size="20" class="entity-link__avatar" />
+    <AppAvatar v-bind="avatarProps" class="entity-link__avatar" />
+    <slot />
     <span>{{ label }}</span>
   </RouterLink>
   <span v-else-if="label" class="entity-link__plain">
-    <AppAvatar :name="avatarName" :entity-type="entityType" :size="20" class="entity-link__avatar" />
+    <AppAvatar v-bind="avatarProps" class="entity-link__avatar" />
+    <!-- Optional decoration between avatar and name (e.g. LeadsView's gender icon). -->
+    <slot />
     <span>{{ label }}</span>
   </span>
   <span v-else class="entity-link__empty">—</span>
@@ -16,8 +19,16 @@ import type { RouteLocationRaw } from "vue-router";
 import AppAvatar, { type AppAvatarEntityType } from "./AppAvatar.vue";
 
 /**
- * Shared "secondary name field → link to that entity's own detail page"
- * component — before this, every list/panel that shows a related person/org
+ * THE shared "avatar + display name (+ optional link)" cell — every table/list
+ * cell and related-entity link that shows a person or org name renders
+ * through this (NEO-13: list-row name cells in Patients/HCP/Leads/Users,
+ * Tratamientos/Estudios patient + doctor columns, notes/history authors,
+ * related-entity panels). `label` is the API's already-formatted display
+ * name — the salutation (Dr./Dra./Prof. only) is applied server-side by
+ * apps/api/src/utils/personName.ts, so this component never re-derives it.
+ *
+ * Originally the "secondary name field → link to that entity's own detail
+ * page" component — before it, every list/panel that shows a related person/org
  * name (Médico on a patient, dentist on a treatment plan, the author of a
  * note, ...) either rendered plain text or hand-rolled its own RouterLink
  * (LeadsView.vue/LeadDetailView.vue's local hcoLink()). `to: null` covers
@@ -26,12 +37,10 @@ import AppAvatar, { type AppAvatarEntityType } from "./AppAvatar.vue";
  * authored by a manager — /users/:id is admin/manager-only) — the caller
  * decides which by what it passes, this component just renders accordingly.
  *
- * Always paired with a small AppAvatar. Deriving the entity type from `to`'s
- * route name — instead of adding an `entityType` prop — is what keeps every
- * one of this component's ~8 call sites unchanged: they already pass a route
- * name in `to`, so the avatar shows up everywhere for free instead of
- * needing a second prop threaded through every query/DTO/call site touching
- * this component.
+ * Always paired with an AppAvatar. The entity type is derived from `to`'s
+ * route name by default, so the related-entity links (which already pass a
+ * route name) need no extra prop; `entityType` is only an override for
+ * call sites with `to: null` (a list row's own name cell).
  *
  * App-wide convention: an *identity* (hcp/patient/lead/user — a person) gets
  * initials-on-a-brand-color, AppAvatar's own designed fallback; a *place*
@@ -41,10 +50,23 @@ import AppAvatar, { type AppAvatarEntityType } from "./AppAvatar.vue";
  * absent -> AppAvatar's own name -> initials -> icon chain falls through to
  * the icon.
  */
-const props = defineProps<{
-  to: RouteLocationRaw | null;
-  label: string | null | undefined;
-}>();
+const props = withDefaults(
+  defineProps<{
+    to: RouteLocationRaw | null;
+    label: string | null | undefined;
+    /**
+     * Explicit override for when `to` can't say what the entity is — a list
+     * row's own name cell passes `to: null` (the whole row already
+     * navigates), so there's no route name to derive the type from.
+     */
+    entityType?: AppAvatarEntityType;
+    /** Passed through to AppAvatar for exact initials on multi-word names (see its own doc). */
+    firstName?: string | null;
+    lastName?: string | null;
+    avatarSize?: number;
+  }>(),
+  { entityType: undefined, firstName: null, lastName: null, avatarSize: 20 },
+);
 
 const ROUTE_ENTITY_TYPES: Record<string, AppAvatarEntityType> = {
   "hcp-detail": "hcp",
@@ -58,11 +80,21 @@ const ROUTE_ENTITY_TYPES: Record<string, AppAvatarEntityType> = {
 const PLACE_ENTITY_TYPES = new Set<AppAvatarEntityType>(["hco"]);
 
 const entityType = computed<AppAvatarEntityType>(() => {
+  if (props.entityType) return props.entityType;
   const name = props.to && typeof props.to === "object" && "name" in props.to ? props.to.name : null;
   return (typeof name === "string" && ROUTE_ENTITY_TYPES[name]) || "user";
 });
 
-const avatarName = computed(() => (PLACE_ENTITY_TYPES.has(entityType.value) ? null : props.label));
+const avatarProps = computed(() => {
+  const isPlace = PLACE_ENTITY_TYPES.has(entityType.value);
+  return {
+    name: isPlace ? null : props.label,
+    firstName: isPlace ? null : props.firstName,
+    lastName: isPlace ? null : props.lastName,
+    entityType: entityType.value,
+    size: props.avatarSize,
+  };
+});
 </script>
 
 <style scoped>

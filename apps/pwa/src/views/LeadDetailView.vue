@@ -287,18 +287,11 @@
                   {{ t("user.leads.detail.institution") }}
                 </dt>
                 <dd class="view-detail__value">
-                  <RouterLink
-                    v-if="leadInstitution(lead)"
-                    :to="hcoListLink(leadInstitution(lead))"
-                    class="view-detail__link view-detail__institution-link"
-                  >
-                    <AppIcon
-                      name="nav-hco"
-                      class="view-detail__institution-icon"
-                    />
-                    {{ leadInstitution(lead) }}
-                  </RouterLink>
-                  <span v-else class="view-detail__empty">—</span>
+                  <EntityLink
+                    :to="leadInstitution(lead) ? hcoListLink(leadInstitution(lead)) : null"
+                    :label="leadInstitution(lead)"
+                    entity-type="hco"
+                  />
                 </dd>
               </div>
 
@@ -395,6 +388,7 @@ import {
   leadInstitution,
 } from "../utils/leadStatus";
 import { hcoListLink } from "../utils/entityLinks";
+import EntityLink from "../components/EntityLink.vue";
 import { leadFormFields } from "../config/forms/leadForm";
 import { hcpFormFields, hcpFormDerive } from "../config/forms/hcpForm";
 import { partnerInviteFormFields } from "../config/forms/partnerInviteForm";
@@ -832,18 +826,6 @@ watch(() => route.params.id, loadLead);
   &:hover {
     text-decoration: underline;
   }
-}
-
-.view-detail__institution-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.view-detail__institution-icon {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
 }
 
 .view-detail__empty {

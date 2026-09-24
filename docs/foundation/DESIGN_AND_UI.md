@@ -159,6 +159,26 @@ not a `background-color` swap, which would replace the tone instead of tinting i
 .card--clickable:active::after { opacity: 0.08; }
 ```
 
+## Identity avatars & entity links
+
+Every patient, doctor (HCP) and organization (HCO) name in the PWA shows up with an avatar,
+whether it's a table cell, a mobile card line, a detail panel or a note author. It is never plain text.
+
+- **Primary name of a row** (the entity the row opens): `AppAvatar` + name
+  (32px in table cells, 55px as the mobile card avatar).
+- **Any related entity** (the doctor on a patient row, the dentist on a plan, a doctor's
+  clinics, a lead's institution): `EntityLink`, i.e. a 20px avatar + link to that entity's
+  detail page. Use the `utils/entityLinks.ts` helpers (`hcpDetailLink`, `hcoDetailLink`,
+  `patientDetailLink`, `hcoListLink`). They return `null` for a missing id, and in that case the
+  name renders unlinked. Mobile card second lines use `EntityMetaLine` (meta text + EntityLink),
+  because a `" · "`-joined string can't carry a link.
+- **Organizations always get the avatar and the link together.** When there's no organization
+  id (a lead's free-text institution), link to the filtered HCO list and pass `entity-type="hco"`.
+- **Patient vs. doctor at a glance:** doctors, reps and leads get a solid fill with white initials.
+  Patients get the negative: a white fill, with the ring and initials in the same seeded color. The ring
+  scales with size (`size / 19`, min 1px) and outlined initials are bold (700), so the ring
+  and the letter strokes match at every size. Organizations get their type icon, never initials.
+
 ## Rollout status
 
 - **Piloted**: `AppEntityList.vue` / `.css` mobile feed cards — Fibonacci shape/spacing,

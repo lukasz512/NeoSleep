@@ -32,6 +32,10 @@ export interface Practitioner {
   updated_at: Date;
   // Computed from organization JOIN
   institution: string | null;
+  // Only selected when GetPractitionerFilters.includeStats is set (see PRAC_STATS_* below)
+  patient_count?: number;
+  device_count?: number;
+  efficiency_pct?: number | null;
 }
 
 export interface GetPractitionerFilters {
@@ -39,9 +43,12 @@ export interface GetPractitionerFilters {
   specialty?: string | string[];
   institution?: string | string[];
   region?: string | string[];
+  /** Matches the primary `practitioner.organization_id` OR any `practitioner_organization` affiliation (NEO-17). */
   organization_id?: string;
   /** RBAC territory scope (migration 022) — see GetPatientsFilters.scopePaths for the contract. */
   scopePaths?: string[] | null;
+  /** Adds patient_count / device_count / efficiency_pct per row (HCO "Médicos" tab, NEO-14). */
+  includeStats?: boolean;
 }
 
 export interface InsertPractitionerInput {
@@ -106,6 +113,41 @@ const PRAC_SELECT_COLS = `
   i.title AS salutation, i.first_name, i.last_name, i.email, i.phone, i.language, i.social_links,
   COALESCE(i.region, '') AS region, i.territory_id, t.name AS territory_name, i.country_code,
   o.name AS institution`.trim();
+
+/**
+ * Per-doctor stats for the HCO "Médicos" table (NEO-14, docs/stories/hco-medicos-table.md):
+ * - patient_count: non-deleted patients attributed to the doctor (patient.practitioner_id)
+ * - device_count: DAN/MAD devices ordered through OrthoApnea for the doctor
+ *   (treatment_plan.dentist_id) — dental_appliance, not cancelled, not deleted,
+ *   and not a local draft never sent to OrthoApnea (metadata.orthoapneaDraft)
+ * - efficiency_pct: device_count / patient_count as a rounded %, NULL for 0 patients
+ */
+const PRAC_STATS_JOINS = `
+  LEFT JOIN LATERAL (
+    SELECT COUNT(*)::int AS patient_count
+    FROM patient pa
+    WHERE pa.practitioner_id = p.id AND pa.deleted_at IS NULL
+  ) ps ON true
+  LEFT JOIN LATERAL (
+    SELECT COUNT(*)::int AS device_count
+    FROM treatment_plan tp
+    WHERE tp.dentist_id = p.id
+      AND tp.type = 'dental_appliance'
+      AND tp.status <> 'cancelled'
+      AND tp.deleted_at IS NULL
+      AND NOT (COALESCE(tp.metadata, '{}'::jsonb) ? 'orthoapneaDraft')
+  ) ds ON true`;
+
+const PRAC_STATS_COLS = `,
+  ps.patient_count, ds.device_count,
+  CASE WHEN ps.patient_count = 0 THEN NULL
+       ELSE ROUND(ds.device_count * 100.0 / ps.patient_count)::int END AS efficiency_pct`;
+
+const PRAC_STATS_SORT_COLUMNS = ["patient_count", "device_count", "efficiency_pct"] as const;
+
+function isPracStatsSortColumn(s: string): s is (typeof PRAC_STATS_SORT_COLUMNS)[number] {
+  return PRAC_STATS_SORT_COLUMNS.includes(s as (typeof PRAC_STATS_SORT_COLUMNS)[number]);
+}
 
 function isPracSortColumn(s: string): s is (typeof PRAC_SORT_COLUMNS)[number] {
   return PRAC_SORT_COLUMNS.includes(s as (typeof PRAC_SORT_COLUMNS)[number]);
@@ -173,7 +215,9 @@ export async function getPractitionerPaginated(
     paramIndex++;
   }
   if (filters.organization_id?.trim()) {
-    conditions.push(`p.organization_id = $${paramIndex}`);
+    conditions.push(
+      `(p.organization_id = $${paramIndex} OR EXISTS (SELECT 1 FROM practitioner_organization po WHERE po.practitioner_id = p.id AND po.organization_id = $${paramIndex}))`
+    );
     params.push(filters.organization_id.trim());
     paramIndex++;
   }
@@ -184,9 +228,18 @@ export async function getPractitionerPaginated(
   }
 
   const whereClause = `WHERE ${conditions.join(" AND ")}`;
-  const orderCol = isPracSortColumn(sortBy) ? sortBy : "created_at";
   const orderDir = sortOrder === "asc" ? "ASC" : "DESC";
-  const safeOrder = orderCol === "created_at" ? "p.created_at" : `i."${orderCol}"`;
+  let safeOrder: string;
+  if (filters.includeStats && isPracStatsSortColumn(sortBy)) {
+    safeOrder = `${sortBy} ${orderDir} NULLS LAST, p.id`;
+  } else if (sortBy === "name") {
+    safeOrder = `i.last_name ${orderDir}, i.first_name ${orderDir}`;
+  } else {
+    const orderCol = isPracSortColumn(sortBy) ? sortBy : "created_at";
+    // created_at / primary_specialty / influence_tier live on practitioner, the rest on identities
+    const table = orderCol === "created_at" || orderCol === "primary_specialty" || orderCol === "influence_tier" ? "p" : "i";
+    safeOrder = `${table}."${orderCol}" ${orderDir}`;
+  }
 
   try {
     const countResult = await client.query<{ count: string }>(
@@ -203,12 +256,13 @@ export async function getPractitionerPaginated(
     const offset = (page - 1) * limit;
     params.push(limit, offset);
     const dataResult = await client.query<Practitioner>(
-      `SELECT ${PRAC_SELECT_COLS}
+      `SELECT ${PRAC_SELECT_COLS}${filters.includeStats ? PRAC_STATS_COLS : ""}
        FROM practitioner p
        JOIN identities i ON p.identity_id = i.id
        LEFT JOIN organization o ON p.organization_id = o.id
        LEFT JOIN territory t ON i.territory_id = t.id
-       ${whereClause} ORDER BY ${safeOrder} ${orderDir} LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+       ${filters.includeStats ? PRAC_STATS_JOINS : ""}
+       ${whereClause} ORDER BY ${safeOrder} LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
       params
     );
     return { rows: dataResult.rows, total };

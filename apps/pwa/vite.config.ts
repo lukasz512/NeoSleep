@@ -1,5 +1,6 @@
+import fs from "fs";
+import { createRequire } from "module";
 import path from "path";
-import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { defineConfig, mergeConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
@@ -70,8 +71,17 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // this app's package.json — the single place it's bumped. Set on process.env
 // before Vite loads env, so it wins over any VITE_APP_VERSION in .env files.
 // Build number + channel are set by CI (see deploy-pwa.yml).
-const pkg = JSON.parse(readFileSync(path.join(__dirname, "package.json"), "utf8")) as { version: string };
+const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "package.json"), "utf8")) as { version: string };
 process.env.VITE_APP_VERSION = pkg.version;
+// Every public Vuetify component entry (vuetify/components/VBtn, …), read
+// from the package's own components/index.js re-export list rather than a
+// glob — the lib/components folder also ships unfinished internals (e.g.
+// VOverflowBtn, commented out of that index) that fail to pre-bundle.
+function vuetifyComponentEntries(): string[] {
+  const vuetifyRoot = path.dirname(createRequire(import.meta.url).resolve("vuetify/package.json"));
+  const index = fs.readFileSync(path.join(vuetifyRoot, "lib/components/index.js"), "utf8");
+  return [...index.matchAll(/^export \* from "\.\/(\w+)\/index\.js";/gm)].map((m) => `vuetify/components/${m[1]}`);
+}
 
 // Dev-server proxy target for /api, /auth, /health — never used in production
 // builds (those get VITE_API_URL baked in at build time by CI, see deploy-pwa.yml).
@@ -113,6 +123,16 @@ export default defineConfig(mergeConfig(sharedViteConfig(__dirname), {
         },
       },
     },
+  },
+  // vite-plugin-vuetify's autoImport injects per-component imports
+  // (vuetify/components/VBtn, …) during transform, which Vite's startup
+  // dependency scanner never sees. On a cold cache (every CI run) Vite then
+  // discovers them on the first page load and force-reloads the page
+  // ("optimized dependencies changed. reloading") — mid-test for Playwright,
+  // wiping a half-filled login form or bouncing an authenticated /login to
+  // /patients. Pre-bundling them up front removes that late reload.
+  optimizeDeps: {
+    include: vuetifyComponentEntries(),
   },
   appType: "spa",
   server: {

@@ -1,6 +1,7 @@
 import type { PoolClient } from "pg";
 import { toArray } from "./helpers.js";
 import { AppError, DatabaseError } from "../errors.js";
+import { displayNameSql } from "../utils/personName.js";
 
 export type StaffRole = "admin" | "manager" | "kam" | "msl" | "rep" | "doctor";
 
@@ -13,7 +14,7 @@ export interface User {
   first_name: string | null;
   last_name: string | null;
   phone: string | null;
-  /** Computed: first_name + ' ' + last_name */
+  /** Computed display name — salutation (Dr./Dra./Prof. only) + first_name + last_name, see utils/personName.ts. */
   name: string | null;
   // From user_roles JOIN — matches the user_roles.role CHECK constraint.
   // "Primary" role/scope (earliest-granted user_roles row) — a user can hold
@@ -61,7 +62,7 @@ const USER_JOIN = `
 
 const USER_COLS = `
   u.id, u.identity_id, i.email, i.title AS salutation, i.first_name, i.last_name, i.phone,
-  TRIM(COALESCE(i.first_name, '') || ' ' || COALESCE(i.last_name, '')) AS name,
+  ${displayNameSql("i")} AS name,
   COALESCE(ur.role, 'rep') AS role,
   ur.territory_id AS scope_territory_id, st.name AS scope_territory_name, st.kind AS scope_territory_kind,
   u.google_sub, i.region, i.country_code, i.language, i.territory_id, u.status, u.token_version,

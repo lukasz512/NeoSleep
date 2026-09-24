@@ -9,7 +9,6 @@
       {{ t("layout.skipToMain") }}
     </a>
 
-    <AppNotifications />
     <AppOfflineBar />
 
     <AppShell
@@ -165,7 +164,6 @@ import {
 } from "./components";
 import AppButton from "../components/AppButton.vue";
 import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
-import AppNotifications from "../components/AppNotifications.vue";
 import { useNotificationCenter } from "../composables/useNotificationCenter";
 import { onAppReady, markAppReady } from "../composables/useAppReady";
 import { usePartnerResources } from "../composables/usePartnerResources";

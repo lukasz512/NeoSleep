@@ -17,7 +17,7 @@ afterEach(() => {
   for (const w of mountedWrappers.splice(0)) w.unmount();
 });
 
-function mountAvatar(props: { entityType: AppAvatarEntityType; orgType?: string; name?: string }) {
+function mountAvatar(props: { entityType: AppAvatarEntityType; orgType?: string; name?: string; avatarUrl?: string; size?: number }) {
   const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
   const wrapper = mount(AppAvatar, { props, global: { plugins: [vuetify] } });
   mountedWrappers.push(wrapper);
@@ -56,5 +56,31 @@ describe("AppAvatar (non-hco entity types)", () => {
   it("still renders initials from a name, unaffected by the hco fix", () => {
     const wrapper = mountAvatar({ entityType: "hcp", name: "Jan Kowalski" });
     expect(wrapper.find(".app-avatar__initials").text()).toBe("JK");
+  });
+});
+
+describe("AppAvatar (patient outlined variant)", () => {
+  it("renders a patient placeholder outlined, with the accent color passed as a CSS var", () => {
+    const wrapper = mountAvatar({ entityType: "patient", name: "Mateusz Dotestowania" });
+    expect(wrapper.classes()).toContain("app-avatar--outlined");
+    expect(wrapper.attributes("style")).toContain("--app-avatar-accent");
+    expect(wrapper.find(".app-avatar__initials").text()).toBe("MD");
+  });
+
+  it("scales the ring with size: ~1px on a 20px chip avatar, ~2px at 40px", () => {
+    const small = mountAvatar({ entityType: "patient", name: "Anna Kowalska", size: 20 });
+    const regular = mountAvatar({ entityType: "patient", name: "Anna Kowalska", size: 40 });
+    expect(small.attributes("style")).toContain("--app-avatar-ring: 1.05px");
+    expect(regular.attributes("style")).toContain("--app-avatar-ring: 2.11px");
+  });
+
+  it("keeps the solid fill for a doctor (hcp)", () => {
+    expect(mountAvatar({ entityType: "hcp", name: "Mateusz Dotestowania" }).classes()).not.toContain("app-avatar--outlined");
+  });
+
+  it("does not outline a patient that has a real photo", () => {
+    expect(
+      mountAvatar({ entityType: "patient", name: "Jan Kowalski", avatarUrl: "https://example.com/a.png" }).classes(),
+    ).not.toContain("app-avatar--outlined");
   });
 });

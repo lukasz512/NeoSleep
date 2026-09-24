@@ -1,5 +1,11 @@
 <template>
-  <VAvatar :size="size" :color="avatarUrl ? undefined : bgColor" class="app-avatar">
+  <VAvatar
+    :size="size"
+    :color="avatarUrl || outlined ? undefined : bgColor"
+    class="app-avatar"
+    :class="{ 'app-avatar--outlined': outlined }"
+    :style="outlined ? { '--app-avatar-accent': bgColor, '--app-avatar-ring': ringWidth } : undefined"
+  >
     <VImg v-if="avatarUrl" :src="avatarUrl" :alt="name || ''" cover />
     <span v-else-if="initials" class="app-avatar__initials" :style="{ fontSize: initialsFontSize }">{{ initials }}</span>
     <AppIcon v-else :name="iconName" class="app-avatar__icon" />
@@ -23,6 +29,11 @@ import { hcoTypeIcon } from "../utils/hcoLabels";
  * Cuicas" as a clinic name is not a person to initial. This is enforced here
  * so every caller gets it right for free, rather than each call site having
  * to remember to withhold `name` for place types.
+ *
+ * A patient placeholder is drawn as the "negative" of everyone else's: white
+ * fill, a ring in the seeded color, and initials/icon in that same color -
+ * so a patient is tellable from a doctor/rep at a glance in mixed lists and
+ * EntityLink chips. A real photo (avatarUrl) is never outlined.
  */
 export type AppAvatarEntityType = "hcp" | "hco" | "patient" | "lead" | "user" | "event";
 
@@ -67,6 +78,7 @@ const initials = computed(() => {
 // Falls back to the entity-type string as the color seed so even a nameless
 // placeholder gets a stable, on-brand color instead of Vuetify's flat gray.
 const bgColor = computed(() => getAvatarColor(props.name?.trim() || props.entityType));
+const outlined = computed(() => props.entityType === "patient" && !props.avatarUrl);
 const iconName = computed(() =>
   props.entityType === "hco" ? hcoTypeIcon(props.orgType ?? undefined) : ENTITY_ICONS[props.entityType],
 );
@@ -79,10 +91,13 @@ const FIBONACCI_INITIALS_RATIO = 21 / 55;
 // `size` must be numeric (px) here: percentage/keyword sizes (e.g. "100%")
 // resolve their real pixel size only via CSS, so callers relying on that
 // must also pass the equivalent numeric size for this calculation.
-const initialsFontSize = computed(() => {
-  const sizeNum = typeof props.size === "number" ? props.size : parseFloat(String(props.size)) || 40;
-  return `${Math.max(sizeNum * FIBONACCI_INITIALS_RATIO, 8)}px`;
-});
+const sizePx = computed(() => (typeof props.size === "number" ? props.size : parseFloat(String(props.size)) || 40));
+const initialsFontSize = computed(() => `${Math.max(sizePx.value * FIBONACCI_INITIALS_RATIO, 8)}px`);
+// Outlined ring scales with `size` so it matches the stroke of the bold
+// initials inside it (~1px on a 20px chip avatar, ~2px at the 40px default)
+// instead of a fixed 2px that swamps small avatars.
+const RING_TO_SIZE_RATIO = 1 / 19;
+const ringWidth = computed(() => `${Math.max(sizePx.value * RING_TO_SIZE_RATIO, 1).toFixed(2)}px`);
 </script>
 
 <style scoped>
@@ -100,5 +115,22 @@ const initialsFontSize = computed(() => {
   width: 55%;
   height: 55%;
   color: #fff;
+}
+
+.app-avatar--outlined {
+  background: #fff;
+  /* Inset shadow instead of border so the ring doesn't grow the avatar past `size`. */
+  box-shadow: inset 0 0 0 var(--app-avatar-ring) var(--app-avatar-accent);
+}
+
+.app-avatar--outlined .app-avatar__initials,
+.app-avatar--outlined .app-avatar__icon {
+  color: var(--app-avatar-accent);
+}
+
+/* Colored letters on white read thinner than white on color - one weight up
+   keeps their stroke equal to the ring. */
+.app-avatar--outlined .app-avatar__initials {
+  font-weight: 700;
 }
 </style>

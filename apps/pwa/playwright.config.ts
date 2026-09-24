@@ -44,7 +44,16 @@ export default defineConfig({
       // minutes — normal E2E traffic, not credential stuffing. See auth.ts's
       // own comment on loginRateLimiter for why this is safe to raise only
       // here (unset everywhere else, production included).
-      env: { LOGIN_RATE_LIMIT_MAX: "1000" },
+      //
+      // OrthoApnea credentials are blanked so the API's login() short-circuits
+      // with "not configured" instead of making a real request to the
+      // partner's production server (apneadock.es) — every login here lands
+      // on AppLayout, which preloads partner resources. CI's job-level env
+      // only carries a placeholder for apps/api's fetch-mocked unit tests;
+      // with it, each E2E run fired ~10 real logins with fake credentials at
+      // the partner. Set here (not just omitted from .env) because a real
+      // env var wins over tsx --env-file, and the CI job env is inherited.
+      env: { LOGIN_RATE_LIMIT_MAX: "1000", ORTHOAPNEA_EMAIL: "", ORTHOAPNEA_PASSWORD: "" },
     },
     {
       command: "pnpm dev",

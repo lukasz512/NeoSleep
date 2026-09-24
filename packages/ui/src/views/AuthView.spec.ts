@@ -7,7 +7,12 @@ import * as vuetifyComponents from "vuetify/components";
 import * as vuetifyDirectives from "vuetify/directives";
 import { createRouter, createMemoryHistory, type Router } from "vue-router";
 import en from "@i18n/en.json";
-import { BRAND_PWA_BADGE_URL, BRAND_PWA_BADGE_DARK_URL } from "@brand/logos";
+import {
+  BRAND_PWA_BADGE_URL,
+  BRAND_PWA_BADGE_DARK_URL,
+  BRAND_LOGO_LIGHT_URL,
+  BRAND_LOGO_DARK_URL,
+} from "@brand/logos";
 import { useThemeStore, APP_VERSION_KEY, type AppVersionInfo } from "@stores";
 import AuthView from "./AuthView.vue";
 
@@ -38,7 +43,8 @@ async function mountAuthView(
   apiFetch: ReturnType<typeof vi.fn>,
   loginPath = "/login",
   appVersion?: AppVersionInfo,
-): Promise<{ wrapper: VueWrapper; router: Router }> {
+  notify: ReturnType<typeof vi.fn> = vi.fn(),
+): Promise<{ wrapper: VueWrapper; router: Router; notify: ReturnType<typeof vi.fn> }> {
   setActivePinia(createPinia());
   const router = createTestRouter();
   await router.push(loginPath);
@@ -56,13 +62,14 @@ async function mountAuthView(
       plugins: [i18n, vuetify, router],
       provide: {
         "neo:apiFetch": apiFetch,
+        "neo:notify": notify,
         ...(appVersion ? { [APP_VERSION_KEY as symbol]: appVersion } : {}),
       },
     },
   });
   mountedWrappers.push(wrapper);
   await flushPromises();
-  return { wrapper, router };
+  return { wrapper, router, notify };
 }
 
 async function fillAndSubmit(
@@ -214,40 +221,67 @@ describe("AuthView — sign in", () => {
     }, { timeout: 3000 });
   });
 
-  it("shows the invalid-credentials message on a 401 response", async () => {
+  it("shows the invalid-credentials message via the native notification on a 401 response, not an inline alert", async () => {
     apiFetch.mockResolvedValue(new Response(JSON.stringify({ error: "Invalid email or password." }), { status: 401 }));
-    const { wrapper } = await mountAuthView(apiFetch);
+    const { wrapper, notify } = await mountAuthView(apiFetch);
 
     await fillAndSubmit(wrapper, "rep@neosleepcare.com", "wrongpassword");
 
-    expect(wrapper.text()).toContain(en["user.login.error.invalidCredentials"]);
+    expect(notify).toHaveBeenCalledWith(
+      en["user.login.error.invalidCredentials"],
+      "error",
+      "user.login.error.invalidCredentials",
+    );
+    expect(wrapper.find(".auth-view__alert").exists()).toBe(false);
   });
 
-  it("shows the too-many-attempts message on a 429 response", async () => {
+  it("shows the too-many-attempts message via the native notification on a 429 response", async () => {
     apiFetch.mockResolvedValue(new Response(JSON.stringify({ error: "Too many login attempts." }), { status: 429 }));
-    const { wrapper } = await mountAuthView(apiFetch);
+    const { wrapper, notify } = await mountAuthView(apiFetch);
 
     await fillAndSubmit(wrapper, "rep@neosleepcare.com", "correcthorse");
 
-    expect(wrapper.text()).toContain(en["user.login.error.tooManyAttempts"]);
+    expect(notify).toHaveBeenCalledWith(
+      en["user.login.error.tooManyAttempts"],
+      "error",
+      "user.login.error.tooManyAttempts",
+    );
   });
 
-  it("shows a generic network error message on a non-ok, non-401/429 response", async () => {
+  it("shows a generic network error message via the native notification on a non-ok, non-401/429 response", async () => {
     apiFetch.mockResolvedValue(new Response(JSON.stringify({ error: "Server error." }), { status: 500 }));
-    const { wrapper } = await mountAuthView(apiFetch);
+    const { wrapper, notify } = await mountAuthView(apiFetch);
 
     await fillAndSubmit(wrapper, "rep@neosleepcare.com", "correcthorse");
 
-    expect(wrapper.text()).toContain(en["user.login.error.network"]);
+    expect(notify).toHaveBeenCalledWith(
+      en["user.login.error.network"],
+      "error",
+      "user.login.error.network",
+    );
   });
 
-  it("shows a generic network error message when the request throws", async () => {
+  it("shows a generic network error message via the native notification when the request throws", async () => {
     apiFetch.mockRejectedValue(new TypeError("Failed to fetch"));
-    const { wrapper } = await mountAuthView(apiFetch);
+    const { wrapper, notify } = await mountAuthView(apiFetch);
 
     await fillAndSubmit(wrapper, "rep@neosleepcare.com", "correcthorse");
 
-    expect(wrapper.text()).toContain(en["user.login.error.network"]);
+    expect(notify).toHaveBeenCalledWith(
+      en["user.login.error.network"],
+      "error",
+      "user.login.error.network",
+    );
+  });
+
+  it("fires a fresh notification for a second consecutive failure with the same error key", async () => {
+    apiFetch.mockResolvedValue(new Response(JSON.stringify({ error: "Invalid email or password." }), { status: 401 }));
+    const { wrapper, notify } = await mountAuthView(apiFetch);
+
+    await fillAndSubmit(wrapper, "rep@neosleepcare.com", "wrongpassword");
+    await fillAndSubmit(wrapper, "rep@neosleepcare.com", "stillwrong");
+
+    expect(notify).toHaveBeenCalledTimes(2);
   });
 
   it("redirects to /dashboard on success when there is no redirect query param", async () => {
@@ -491,6 +525,38 @@ describe("AuthView — PWA badge follows the theme (NEO-12)", () => {
     themeStore.setPreference("dark");
     await flushPromises();
     expect(badge()).toBe(BRAND_PWA_BADGE_DARK_URL);
+  });
+
+  it("shows the white wordmark in light mode and the dark-ink one in dark mode, with the halo switched to match", async () => {
+    const { wrapper } = await mountAuthView(vi.fn());
+    const themeStore = useThemeStore();
+    const logo = () => wrapper.find(".auth-chrome__logo").attributes("src");
+    const halo = () => wrapper.find(".auth-chrome__halo .auth-halo").classes();
+
+    themeStore.setPreference("light");
+    await flushPromises();
+    expect(logo()).toBe(BRAND_LOGO_DARK_URL); // logo_dark.svg = white wordmark
+    expect(halo()).not.toContain("auth-halo--dark");
+
+    themeStore.setPreference("dark");
+    await flushPromises();
+    expect(logo()).toBe(BRAND_LOGO_LIGHT_URL); // logo_light.svg = dark-ink wordmark
+    expect(halo()).toContain("auth-halo--dark");
+  });
+
+  it("puts the same halo, at half size, behind the PWA badge and switches it with the theme", async () => {
+    const { wrapper } = await mountAuthView(vi.fn());
+    const themeStore = useThemeStore();
+    const halo = () => wrapper.find(".auth-view__pwa-badge-halo .auth-halo").classes();
+
+    themeStore.setPreference("light");
+    await flushPromises();
+    expect(halo()).toContain("auth-halo--sm");
+    expect(halo()).not.toContain("auth-halo--dark");
+
+    themeStore.setPreference("dark");
+    await flushPromises();
+    expect(halo()).toContain("auth-halo--dark");
   });
 });
 

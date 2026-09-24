@@ -63,18 +63,6 @@
              heading on the page. -->
         <p class="auth-view__heading">{{ t('user.login.heading') }}</p>
 
-        <VAlert
-          v-if="loginFlow.errorKey.value"
-          type="error"
-          variant="tonal"
-          density="compact"
-          class="auth-view__alert"
-          closable
-          @click:close="loginFlow.errorKey.value = null"
-        >
-          {{ t(loginFlow.errorKey.value) }}
-        </VAlert>
-
         <VForm ref="signinForm" class="auth-view__form" @submit.prevent="handleSignIn">
           <VTextField
             ref="loginEmailFieldRef"
@@ -280,14 +268,25 @@
     </AuthCard>
     </div>
 
-    <div class="auth-view__footer">
+    <!-- Badge (with the same halo as the logo's, see AuthChrome, at half
+         size) and the app version under it. The wrap owns the badge's
+         entrance/exit opacity so halo and badge fade together; the img keeps
+         the magnetic transform. -->
+    <div class="auth-view__badge-footer">
+      <div
+        class="auth-view__pwa-badge-wrap"
+        :class="{ 'auth-view__pwa-badge-wrap--visible': badgeVisible }"
+      >
+        <div class="auth-view__pwa-badge-halo">
+          <AuthHalo :dark="themeStore.mode === 'dark'" size="sm" />
+        </div>
       <img
         ref="pwaBadgeEl"
         :src="pwaBadgeUrl"
         :alt="t('user.login.pwaBadge')"
         class="auth-view__pwa-badge"
-        :class="{ 'auth-view__pwa-badge--visible': badgeVisible }"
-      />
+        />
+      </div>
       <p
         v-if="appVersionLabel"
         class="auth-view__app-version"
@@ -319,6 +318,7 @@ import { useThemeStore, type AuthTokenStorage } from "@stores";
 import { useAppVersionLabel } from "../composables/useAppVersionLabel";
 import AuthChrome from "../components/AuthChrome.vue";
 import AuthCard from "../components/AuthCard.vue";
+import AuthHalo from "../components/AuthHalo.vue";
 
 // White badge in light mode, dark badge in dark mode (NEO-12) — same theme
 // source AuthChrome uses for its logo.
@@ -328,6 +328,8 @@ const pwaBadgeUrl = computed(() =>
 );
 
 type ApiFetchFn = (path: string, options?: ApiFetchOptions) => Promise<Response>;
+type NotifyType = "success" | "info" | "warning" | "error";
+type NotifyFn = (message: string, type: NotifyType, key?: string) => void;
 type Step = "signin" | "forgot" | "sent" | "reset";
 
 function stepFromPath(path: string): Step {
@@ -342,9 +344,19 @@ const router = useRouter();
 
 const apiFetch = inject<ApiFetchFn>("neo:apiFetch")!;
 const authTokenStorage = inject<AuthTokenStorage>("neo:authTokenStorage")!;
+const notify = inject<NotifyFn>("neo:notify")!;
 
 const useLoginFlow = createUseLoginFlow(apiFetch, authTokenStorage);
 const loginFlow = useLoginFlow();
+
+// The sign-in error used to render inline (a VAlert above the form) — moved
+// onto the app's native toast/notification system instead (NEO-10), matching
+// every other error surface in the app. loginFlow.errorKey itself is
+// untouched (still reset at the top of every submit()), just no longer read
+// for inline display.
+watch(loginFlow.errorKey, (key) => {
+  if (key) notify(t(key), "error", key);
+});
 
 const useForgotPasswordFlow = createUseForgotPasswordFlow(apiFetch);
 const forgotFlow = useForgotPasswordFlow();
@@ -631,16 +643,18 @@ const cardAccentStyle = {
   max-width: 420px;
 }
 
+/* z-index 2, above the logo (AuthChrome) and PWA badge wraps (both 1) —
+   their halos bleed past their own boxes and must never paint over the card. */
 .auth-view__card {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   width: 100%;
   /* No background here — VCard already themes its own surface color (light
      vs dark) via --v-theme-surface; a fixed white would fight that. */
   border: 1px solid color-mix(in srgb, var(--auth-view-card-accent) 28%, transparent);
 }
 
-/* Behind the card (z-index: 0 < the card's 1), overflowing its box on
+/* Behind the card (z-index: 0 < the card's 2), overflowing its box on
    purpose so the three circles peek out around its edges. Height comes from
    orbsFrameStyle (frozen on first paint, see script), not inset:0 — this box
    must NOT track .auth-view__card-slot's live height, which animates on
@@ -825,11 +839,9 @@ const cardAccentStyle = {
 }
 
 /* Below the card now, not next to the logo (see AuthChrome) — logo, card,
-   badge, top to bottom. Magnetic transform target (see useMagneticPointer in
-   <script>) — written to directly every frame, so it stays free of any CSS
-   transition of its own. */
-/* Badge + app version, stacked tighter than the page's own 16px gap. */
-.auth-view__footer {
+   badge, app version, top to bottom. Stacked tighter than the page's own
+   16px gap. */
+.auth-view__badge-footer {
   position: relative;
   z-index: 1;
   flex: none;
@@ -839,25 +851,15 @@ const cardAccentStyle = {
   gap: 6px;
 }
 
-.auth-view__pwa-badge {
+.auth-view__pwa-badge-wrap {
   position: relative;
-  z-index: 1;
-  flex: none;
-  height: 20px;
-  width: auto;
-  object-fit: contain;
+  display: flex;
   opacity: 0;
-  will-change: transform;
-  /* opacity only, not transform — transform is written to directly every
-     frame by the magnetic pointer above; transitioning it too would make
-     that continuous per-frame tracking lag/animate instead of following the
-     pointer 1:1. */
   transition: opacity 0.3s ease-out;
 }
 
-/* 70%, not full — the badge is a quiet footnote under the card (NEO-12). */
-.auth-view__pwa-badge--visible {
-  opacity: 0.7;
+.auth-view__pwa-badge-wrap--visible {
+  opacity: 1;
 }
 
 /* Same ink as the badge's P/A letters in each theme (white in light,
@@ -883,10 +885,30 @@ const cardAccentStyle = {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .auth-view__pwa-badge,
+  .auth-view__pwa-badge-wrap,
   .auth-view__app-version {
     transition: none;
   }
+}
+
+/* Half of AuthChrome's logo halo bleed (-30px -70px). */
+.auth-view__pwa-badge-halo {
+  position: absolute;
+  inset: -15px -35px;
+  pointer-events: none;
+}
+
+/* Magnetic transform target (see useMagneticPointer in <script>) — written
+   to directly every frame, so it stays free of any CSS transition of its own. */
+.auth-view__pwa-badge {
+  position: relative;
+  height: 20px;
+  width: auto;
+  object-fit: contain;
+  /* 70%, not full — the badge is a quiet footnote under the card (NEO-12).
+     On the img, not the wrap, so the halo behind it keeps its own strength. */
+  opacity: 0.7;
+  will-change: transform;
 }
 
 .auth-view__body {

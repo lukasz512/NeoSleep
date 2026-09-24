@@ -637,23 +637,6 @@
   padding: 1rem 0;
 }
 
-.app-entity-list__institution-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: rgb(var(--v-theme-primary));
-  text-decoration: none;
-}
-.app-entity-list__institution-link:hover {
-  text-decoration: underline;
-}
-
-.app-entity-list__institution-icon {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-}
-
 .app-entity-list__cell-empty {
   color: rgba(var(--v-theme-on-surface), var(--v-disabled-opacity));
 }
