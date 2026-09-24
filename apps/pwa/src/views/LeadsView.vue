@@ -190,7 +190,6 @@ import { useConfigStore } from "../stores/config";
 import { getGenderFromName } from "../utils/genderFromName";
 import { leadStatusClass, leadStatusI18nKey, leadInstitution } from "../utils/leadStatus";
 import { hcoListLink } from "../utils/entityLinks";
-import EntityLink from "../components/EntityLink.vue";
 
 export interface Lead {
   id: string;
