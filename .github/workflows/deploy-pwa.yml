@@ -50,6 +50,21 @@ jobs:
             echo "VITE_GA_ID=${{ secrets.VITE_GA_ID_DEV }}" >> $GITHUB_ENV
           fi
 
+      # Shown under the login badge as "Version <package.json version> (build N)".
+      # N = this workflow's run number minus BUILD_BASE, so numbering started at 1
+      # with NEO-12 (run 114 was the last deploy before it). Never lower
+      # BUILD_BASE — build numbers must only ever go up.
+      - name: Set app build number and channel
+        env:
+          BUILD_BASE: 114
+        run: |
+          echo "VITE_APP_BUILD=$(( ${{ github.run_number }} - BUILD_BASE ))" >> $GITHUB_ENV
+          if [ "${{ github.ref }}" = "refs/heads/prod" ]; then
+            echo "VITE_APP_CHANNEL=prod" >> $GITHUB_ENV
+          else
+            echo "VITE_APP_CHANNEL=dev" >> $GITHUB_ENV
+          fi
+
       - name: Build rep-app
         run: pnpm run build:pwa
 

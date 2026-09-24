@@ -63,7 +63,7 @@ describe("AppLayout", () => {
   describe("shared AppShell (packages/ui) drives the responsive chrome", () => {
     it("AppLayout uses the shared AppShell component, not a hand-rolled drawer/appbar", () => {
       const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
-      expect(appLayoutSource).toContain('import { AppShell } from "@ui"');
+      expect(appLayoutSource).toMatch(/import \{[^}]*\bAppShell\b[^}]*\} from "@ui"/);
       expect(appLayoutSource).toContain("<AppShell");
     });
 

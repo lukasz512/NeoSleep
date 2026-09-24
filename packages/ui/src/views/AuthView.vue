@@ -268,22 +268,35 @@
     </AuthCard>
     </div>
 
-    <!-- Same halo as the logo's (see AuthChrome), at half size. The wrap owns
-         the entrance/exit opacity so halo and badge fade in/out together;
-         the img keeps the magnetic transform. -->
-    <div
-      class="auth-view__pwa-badge-wrap"
-      :class="{ 'auth-view__pwa-badge-wrap--visible': badgeVisible }"
-    >
-      <div class="auth-view__pwa-badge-halo">
-        <AuthHalo :dark="themeStore.mode === 'dark'" size="sm" />
-      </div>
+    <!-- Badge (with the same halo as the logo's, see AuthChrome, at half
+         size) and the app version under it. The wrap owns the badge's
+         entrance/exit opacity so halo and badge fade together; the img keeps
+         the magnetic transform. -->
+    <div class="auth-view__badge-footer">
+      <div
+        class="auth-view__pwa-badge-wrap"
+        :class="{ 'auth-view__pwa-badge-wrap--visible': badgeVisible }"
+      >
+        <div class="auth-view__pwa-badge-halo">
+          <AuthHalo :dark="themeStore.mode === 'dark'" size="sm" />
+        </div>
       <img
         ref="pwaBadgeEl"
         :src="pwaBadgeUrl"
         :alt="t('user.login.pwaBadge')"
         class="auth-view__pwa-badge"
-      />
+        />
+      </div>
+      <p
+        v-if="appVersionLabel"
+        class="auth-view__app-version"
+        :class="{
+          'auth-view__app-version--visible': badgeVisible,
+          'auth-view__app-version--dark': themeStore.mode === 'dark',
+        }"
+      >
+        {{ appVersionLabel }}
+      </p>
     </div>
   </div>
 </template>
@@ -302,6 +315,7 @@ import { useMagneticPointer } from "../composables/useMagneticPointer";
 import { AUTH_BACKGROUND_EXIT_KEY } from "../composables/authBackgroundExit";
 import type { ApiFetchOptions } from "@api";
 import { useThemeStore, type AuthTokenStorage } from "@stores";
+import { useAppVersionLabel } from "../composables/useAppVersionLabel";
 import AuthChrome from "../components/AuthChrome.vue";
 import AuthCard from "../components/AuthCard.vue";
 import AuthHalo from "../components/AuthHalo.vue";
@@ -456,6 +470,9 @@ const mediumOrbPhase = ref<OrbPhase>("hidden");
 const smallOrbPhase = ref<OrbPhase>("hidden");
 const badgeVisible = ref(false);
 const authBackgroundExit = inject(AUTH_BACKGROUND_EXIT_KEY, undefined);
+
+// "Version 1.0.0 (build 12) · DEV" under the badge (see useAppVersionLabel).
+const appVersionLabel = useAppVersionLabel();
 
 function orbAnchorPhaseClass(phase: OrbPhase): Record<string, boolean> {
   return {
@@ -822,11 +839,20 @@ const cardAccentStyle = {
 }
 
 /* Below the card now, not next to the logo (see AuthChrome) — logo, card,
-   badge, top to bottom. */
-.auth-view__pwa-badge-wrap {
+   badge, app version, top to bottom. Stacked tighter than the page's own
+   16px gap. */
+.auth-view__badge-footer {
   position: relative;
   z-index: 1;
   flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.auth-view__pwa-badge-wrap {
+  position: relative;
   display: flex;
   opacity: 0;
   transition: opacity 0.3s ease-out;
@@ -836,8 +862,31 @@ const cardAccentStyle = {
   opacity: 1;
 }
 
+/* Same ink as the badge's P/A letters in each theme (white in light,
+   #3d3d3d in dark — see packages/brand/logos/pwa/), same 70% and fade-in. */
+.auth-view__app-version {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  color: #ffffff;
+  opacity: 0;
+  transition: opacity 0.3s ease-out;
+}
+
+.auth-view__app-version--dark {
+  color: #3d3d3d;
+}
+
+.auth-view__app-version--visible {
+  opacity: 0.7;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .auth-view__pwa-badge-wrap {
+  .auth-view__pwa-badge-wrap,
+  .auth-view__app-version {
     transition: none;
   }
 }
@@ -853,9 +902,12 @@ const cardAccentStyle = {
    to directly every frame, so it stays free of any CSS transition of its own. */
 .auth-view__pwa-badge {
   position: relative;
-  height: 24px;
+  height: 20px;
   width: auto;
   object-fit: contain;
+  /* 70%, not full — the badge is a quiet footnote under the card (NEO-12).
+     On the img, not the wrap, so the halo behind it keeps its own strength. */
+  opacity: 0.7;
   will-change: transform;
 }
 
