@@ -81,6 +81,22 @@ describe("bootSplash runtime hand-off", () => {
     expect(lifted).toBe(true);
   });
 
+  it("signals the backdrop exit only once the splash has fully faded and been removed", async () => {
+    vi.useFakeTimers();
+    document.body.innerHTML = `<div id="${BOOT_SPLASH_ID}"></div>`;
+    const { dismissBootSplash, whenSplashGone } = await import("./bootSplash");
+
+    let gone = false;
+    void whenSplashGone().then(() => (gone = true));
+    dismissBootSplash();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(gone).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(400);
+    expect(document.getElementById(BOOT_SPLASH_ID)).toBeNull();
+    expect(gone).toBe(true);
+  });
+
   it("does not hold the card back when the page booted without a splash", async () => {
     const { whenSplashLifts } = await import("./bootSplash");
     await expect(whenSplashLifts()).resolves.toBeUndefined();
