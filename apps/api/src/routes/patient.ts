@@ -8,10 +8,15 @@ import { CreatePatientCommand, UpdatePatientCommand, DeletePatientCommand } from
 import { GetPatientListQuery, GetPatientByIdQuery } from "../queries/patient.js";
 import { GetHistoryForPatientQuery } from "../queries/auditLog.js";
 import { GetPatientDocumentsQuery, GetPatientDocumentDownloadUrlQuery } from "../queries/entityDocuments.js";
-import { SaveEndoIntakeCommand, GenerateEndoIntakePdfCommand } from "../commands/endoIntake.js";
-import { GetEndoIntakeQuery } from "../queries/endoIntake.js";
-import { RecordStopBangScreeningCommand, GenerateStopBangPdfCommand } from "../commands/stopBangScreening.js";
-import { ListStopBangScreeningsQuery } from "../queries/stopBangScreening.js";
+import {
+  RecordClinicalQuestionnaireCommand,
+  CompleteStopBangCommand,
+  GenerateClinicalRecordPdfCommand,
+} from "../commands/clinicalRecords.js";
+import { isClinicalRecordKind, type ClinicalRecordKind } from "../commands/clinicalRecordFields.js";
+import { ListClinicalRecordsQuery } from "../queries/clinicalRecords.js";
+import { CreateQuestionnaireRequestCommand, CancelQuestionnaireRequestCommand } from "../commands/questionnaireRequest.js";
+import { resolveFrontendOrigin } from "../utils/frontendOrigin.js";
 import { ValidationError } from "../errors.js";
 import { parsePaginationParams, toFilterArray } from "./utils.js";
 
@@ -137,111 +142,125 @@ patientRouter.get(
 );
 
 // ---------------------------------------------------------------------------
-// GET/PUT /api/v1/patient/:id/endo-intake — Historia Endo checklist
+// Clinical questionnaires (Estudios) — medical history, oral exam, STOP-Bang.
+// Migration 030 / ADR-023; replaces the 026 /endo-intake + /stop-bang routes.
 // ---------------------------------------------------------------------------
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** 400 for a malformed id instead of letting Postgres reject it as a 500 "invalid input syntax for type uuid". */
+function uuidParam(req: Request, name: string): string {
+  const value = req.params[name]?.trim() ?? "";
+  if (!UUID_RE.test(value)) throw new ValidationError(`Invalid ${name}`);
+  return value;
+}
+
+function clinicalKindParam(req: Request): ClinicalRecordKind {
+  const kind = req.params.kind;
+  if (!isClinicalRecordKind(kind)) throw new ValidationError(`Unknown clinical record kind "${kind}"`);
+  return kind;
+}
+
 patientRouter.get(
-  "/patient/:id/endo-intake",
+  "/patient/:id/clinical-records",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
-    if (!id) throw new ValidationError("Missing patient id");
-
-    const slug = tenantSlugFromHost(req.hostname);
-    const intake = await withTenant(slug, async (client) => {
-      const ctx = await buildContext(req, client, slug);
-      return GetEndoIntakeQuery(ctx, id);
-    });
-    res.json(intake);
-  })
-);
-
-patientRouter.put(
-  "/patient/:id/endo-intake",
-  requireAuth,
-  asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
-    if (!id) throw new ValidationError("Missing patient id");
-
-    const slug = tenantSlugFromHost(req.hostname);
-    const intake = await withTenant(slug, async (client) => {
-      const ctx = await buildContext(req, client, slug);
-      return SaveEndoIntakeCommand(ctx, id, (req.body ?? {}) as Record<string, unknown>);
-    });
-    res.json(intake);
-  })
-);
-
-// ---------------------------------------------------------------------------
-// POST /api/v1/patient/:id/endo-intake/generate-pdf
-// ---------------------------------------------------------------------------
-patientRouter.post(
-  "/patient/:id/endo-intake/generate-pdf",
-  requireAuth,
-  asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
-    if (!id) throw new ValidationError("Missing patient id");
+    const id = uuidParam(req, "id");
 
     const slug = tenantSlugFromHost(req.hostname);
     const result = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
-      return GenerateEndoIntakePdfCommand(ctx, id);
+      return ListClinicalRecordsQuery(ctx, id);
     });
+    res.json(result);
+  })
+);
+
+patientRouter.post(
+  "/patient/:id/clinical-records/:kind",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = uuidParam(req, "id");
+    const kind = clinicalKindParam(req);
+
+    const slug = tenantSlugFromHost(req.hostname);
+    const record = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return RecordClinicalQuestionnaireCommand(ctx, id, kind, (req.body ?? {}) as Record<string, unknown>);
+    });
+    res.status(201).json(record);
+  })
+);
+
+// The doctor completes B-A-N-G after the patient self-reported S-T-O-P.
+patientRouter.patch(
+  "/patient/:id/clinical-records/stop_bang/:recordId",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = uuidParam(req, "id");
+    const recordId = uuidParam(req, "recordId");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    const record = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return CompleteStopBangCommand(ctx, id, recordId, (req.body ?? {}) as Record<string, unknown>);
+    });
+    res.json(record);
+  })
+);
+
+patientRouter.post(
+  "/patient/:id/clinical-records/:kind/:recordId/pdf",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = uuidParam(req, "id");
+    const recordId = uuidParam(req, "recordId");
+    const kind = clinicalKindParam(req);
+
+    const slug = tenantSlugFromHost(req.hostname);
+    // Not wrapped in one withTenant: the command opens its own short
+    // transactions around a (slow) render + upload — see its doc comment.
+    const result = await GenerateClinicalRecordPdfCommand(
+      (fn) => withTenant(slug, async (client) => fn(await buildContext(req, client, slug))),
+      id,
+      kind,
+      recordId
+    );
     res.status(201).json(result);
   })
 );
 
 // ---------------------------------------------------------------------------
-// GET/POST /api/v1/patient/:id/stop-bang — STOP-Bang screening (recurring)
+// Patient self-fill links (QR) — the public side lives in routes/public.ts
 // ---------------------------------------------------------------------------
-patientRouter.get(
-  "/patient/:id/stop-bang",
+patientRouter.post(
+  "/patient/:id/questionnaire-requests",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
-    if (!id) throw new ValidationError("Missing patient id");
+    const id = uuidParam(req, "id");
 
     const slug = tenantSlugFromHost(req.hostname);
-    const screenings = await withTenant(slug, async (client) => {
+    const origin = resolveFrontendOrigin(req);
+    const { request, url } = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
-      return ListStopBangScreeningsQuery(ctx, id);
+      return CreateQuestionnaireRequestCommand(ctx, id, (req.body ?? {}).kind, origin);
     });
-    res.json(screenings);
+    res.status(201).json({ ...request, url });
   })
 );
 
-patientRouter.post(
-  "/patient/:id/stop-bang",
+patientRouter.delete(
+  "/patient/:id/questionnaire-requests/:requestId",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
-    if (!id) throw new ValidationError("Missing patient id");
+    const id = uuidParam(req, "id");
+    const requestId = uuidParam(req, "requestId");
 
     const slug = tenantSlugFromHost(req.hostname);
-    const screening = await withTenant(slug, async (client) => {
+    await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
-      return RecordStopBangScreeningCommand(ctx, id, (req.body ?? {}) as Record<string, unknown>);
+      return CancelQuestionnaireRequestCommand(ctx, id, requestId);
     });
-    res.status(201).json(screening);
-  })
-);
-
-// ---------------------------------------------------------------------------
-// POST /api/v1/patient/:id/stop-bang/:screeningId/generate-pdf
-// ---------------------------------------------------------------------------
-patientRouter.post(
-  "/patient/:id/stop-bang/:screeningId/generate-pdf",
-  requireAuth,
-  asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
-    const screeningId = req.params.screeningId?.trim();
-    if (!id || !screeningId) throw new ValidationError("Missing patient id or screening id");
-
-    const slug = tenantSlugFromHost(req.hostname);
-    const result = await withTenant(slug, async (client) => {
-      const ctx = await buildContext(req, client, slug);
-      return GenerateStopBangPdfCommand(ctx, id, screeningId);
-    });
-    res.status(201).json(result);
+    res.status(204).end();
   })
 );
 

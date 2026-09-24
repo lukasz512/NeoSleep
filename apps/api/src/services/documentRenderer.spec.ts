@@ -1,7 +1,7 @@
 import { describe, it, expect, afterAll } from "vitest";
 import puppeteer, { type Browser } from "puppeteer-core";
 import { renderDocumentHtml } from "@neo/documents";
-import { renderHtmlToPdf, resolveBrowserLaunch, applyDataFields } from "./documentRenderer.js";
+import { renderHtmlToPdf, resolveBrowserLaunch, applyDataFields, lockDownPage } from "./documentRenderer.js";
 
 /**
  * Real, non-mocked rendering — every other spec mocks renderHtmlToPdf at
@@ -51,5 +51,23 @@ describe.skipIf(!launch)("renderHtmlToPdf (real Chromium)", () => {
     expect(texts).toEqual(["<b>Ana</b>", "<b>Ana</b>"]);
     expect(html).toBe("&lt;b&gt;Ana&lt;/b&gt;");
     expect(untouched).toBe("keep");
+  });
+
+  it("locked-down page: template scripts don't run, foreign requests are aborted, data fields still fill", { timeout: 60_000 }, async () => {
+    browser ??= await puppeteer.launch({ ...launch!, headless: true });
+    const page = await browser.newPage();
+    const failed: string[] = [];
+    page.on("requestfailed", (request) => failed.push(request.url()));
+    await lockDownPage(page);
+    await page.setContent(
+      `<p data-field="nombre_paciente"></p><img src="https://example.com/track.png"><script>document.body.dataset.ran = "yes";</script>`,
+      { waitUntil: "networkidle0" }
+    );
+
+    await applyDataFields(page, { nombre_paciente: "Ana" });
+
+    expect(await page.$eval("body", (b) => b.dataset.ran ?? "no")).toBe("no");
+    expect(failed).toContain("https://example.com/track.png");
+    expect(await page.$eval("[data-field='nombre_paciente']", (el) => el.textContent)).toBe("Ana");
   });
 });

@@ -80,24 +80,28 @@ describe("PatientDetailView — Documents tab", () => {
   });
 });
 
-describe("PatientDetailView — Historia Endo tab", () => {
-  it("lists 'Historia Endo' among the tabs and wires its panels to the patient's endo-intake/stop-bang endpoints", async () => {
+describe("PatientDetailView — clinical questionnaires live under Studies (NEO-36)", () => {
+  it("has no separate 'Historia Endo' tab; the Studies tab loads sleep studies and clinical records together", async () => {
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, PATIENT));
     const { wrapper } = await mountPatientDetail();
 
     await vi.waitFor(() => expect(wrapper.text()).toContain("Jan Kowalski"));
 
-    const endoIntakeTab = wrapper.findAll('[role="tab"]').find((t) => t.text() === "Historia Endo");
-    expect(endoIntakeTab?.exists()).toBe(true);
+    const tabs = wrapper.findAll('[role="tab"]').map((t) => t.text());
+    expect(tabs).not.toContain("Historia Endo");
+    const studiesTab = wrapper.findAll('[role="tab"]').find((t) => t.text() === "Studies");
 
-    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, null)); // GET endo-intake
-    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, [])); // GET stop-bang
-    await endoIntakeTab?.trigger("click");
+    apiFetch.mockImplementation(async (path: string) =>
+      path.includes("clinical-records")
+        ? jsonResponse(true, 200, { records: [], pending_requests: [] })
+        : jsonResponse(true, 200, { items: [] })
+    );
+    await studiesTab?.trigger("click");
 
     await vi.waitFor(() =>
-      expect(apiFetch).toHaveBeenCalledWith("/api/v1/patient/patient-1/endo-intake", { handleErrors: false })
+      expect(apiFetch).toHaveBeenCalledWith("/api/v1/patient/patient-1/clinical-records", { handleErrors: false })
     );
-    expect(apiFetch).toHaveBeenCalledWith("/api/v1/patient/patient-1/stop-bang", { handleErrors: false });
+    expect(apiFetch).toHaveBeenCalledWith("/api/v1/sleep-study?patient_id=patient-1&limit=-1", { handleErrors: false });
 
     await flushPromises();
   });

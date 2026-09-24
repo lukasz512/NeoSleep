@@ -337,6 +337,13 @@ const ICONS = {
             <line x1="8" y1="2" x2="8" y2="6" />
             <line x1="3" y1="10" x2="21" y2="10" />`,
   },
+  "qr-code": {
+    strokeWidth: 1.75,
+    paths: `<rect x="3" y="3" width="7" height="7" rx="1" />
+            <rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="3" y="14" width="7" height="7" rx="1" />
+            <path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3" />`,
+  },
   "pencil": {
     strokeWidth: 2,
     paths: `<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />

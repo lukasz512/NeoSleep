@@ -65,7 +65,9 @@ app.provide(APP_VERSION_KEY, resolveAppVersion(import.meta.env));
 app.provide("neo:notify", useNotifications().show);
 const gaId = import.meta.env.VITE_GA_ID as string | undefined;
 if (import.meta.env.PROD && gaId) {
-  app.use(createGtag({ tagId: gaId, pageTracker: { router } }));
+  // The patient self-fill page is never tracked: its URL carries a live
+  // single-use credential, and the visit itself is health information.
+  app.use(createGtag({ tagId: gaId, pageTracker: { router, exclude: [{ name: "patient-questionnaire" }] } }));
 }
 
 app.mount("#app");

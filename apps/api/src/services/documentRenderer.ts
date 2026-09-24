@@ -148,6 +148,34 @@ export interface RenderHtmlToPdfOptions {
   dataFields?: Record<string, string>;
 }
 
+/** The only hosts a template may load from — the Poppins webfont the templates link. */
+const ALLOWED_REQUEST_HOSTS = new Set(["fonts.googleapis.com", "fonts.gstatic.com"]);
+
+/**
+ * Rendered HTML includes admin-authored content (document_content_version)
+ * and Chromium runs unsandboxed on Render (@sparticuz/chromium's args carry
+ * --no-sandbox): page scripts are disabled and every request other than
+ * data:/about: and the webfont hosts is aborted, so a template can't make
+ * the API host fetch arbitrary URLs. Data fields are still filled —
+ * page.evaluate goes through CDP, unaffected by the page's own JS switch
+ * (covered by documentRenderer.spec.ts).
+ */
+export async function lockDownPage(page: Page): Promise<void> {
+  await page.setJavaScriptEnabled(false);
+  await page.setRequestInterception(true);
+  page.on("request", (request) => {
+    const url = request.url();
+    if (url.startsWith("data:") || url.startsWith("about:")) return void request.continue();
+    try {
+      const { protocol, hostname } = new URL(url);
+      if (protocol === "https:" && ALLOWED_REQUEST_HOSTS.has(hostname)) return void request.continue();
+    } catch {
+      // unparseable → abort below
+    }
+    void request.abort();
+  });
+}
+
 /**
  * Fills every `[data-field="key"]` element — not just the first; a
  * template can repeat a field (e.g. the patient name in the header and
@@ -171,6 +199,7 @@ export async function renderHtmlToPdf(html: string, options: RenderHtmlToPdfOpti
     const browser = await getBrowser();
     const page = await browser.newPage();
     try {
+      await lockDownPage(page);
       await page.setContent(html, { waitUntil: "networkidle0" });
       if (options.dataFields) await applyDataFields(page, options.dataFields);
       const displayHeaderFooter = Boolean(options.headerTemplate || options.footerTemplate);

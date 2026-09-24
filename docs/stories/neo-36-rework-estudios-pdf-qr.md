@@ -52,6 +52,21 @@ Builds on / supersedes parts of: [historia-endo-clinical-intake-and-printable-pd
 - [ ] Consent text shown to the patient on the public page — placeholder until `/legal` provides it (does not block building, blocks go-live).
 - [ ] Render: fix Chromium on the native runtime vs. switch the API service to a Docker runtime vs. an external rendering service — decided during Plan after reproducing in a Linux container.
 
+### Status (2026-09-24)
+Implemented on `worktree-neo-36-historia-endo-estudios-qr`, see [ADR-023](../ADR-023-clinical-questionnaires-and-patient-self-fill.md).
+All acceptance criteria are met and covered by tests, with two exceptions:
+- **PDF on pwa-dev.** Verified in a Linux container and locally end to end; not yet on the deployed
+  Render instance (that happens after merge).
+- **Consent text.** A placeholder until `/legal` reviews it.
+
+Two bugs were found during live-browser verification and fixed before commit:
+1. On a phone the self-fill card was clipped after about six questions, so the patient couldn't
+   reach Submit. It was a flex-shrink problem.
+2. Answers given in quick succession overwrote each other in `QuestionnaireChecklist`. There is now
+   a regression spec for it.
+
+The same flex pattern exists in `PartnerRegistrationView.vue` and has not been checked there.
+
 ### Hand-off
 → `/arch assess` — data-model split of `endo_intake`, `questionnaire_request` + token design (ADR-023)
 → `/legal` — Art.9 consent text for the patient-facing page (go-live blocker, not build blocker)

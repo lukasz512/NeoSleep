@@ -124,6 +124,13 @@ export async function uploadPartnerDocument(
   return { path, bucket: SUPABASE_DOCUMENTS_BUCKET };
 }
 
+/** Removes an uploaded document — used to clean up when the DB row that should reference it couldn't be written. */
+export async function deletePartnerDocument(path: string): Promise<void> {
+  const client = getSupabase();
+  const { error } = await client.storage.from(SUPABASE_DOCUMENTS_BUCKET).remove([path]);
+  if (error) throw new PartnerServiceError("supabase-storage", `delete failed: ${error.message}`, error);
+}
+
 /** Short-lived signed URL for downloading a private document — the service key itself never reaches the frontend. */
 export async function getPartnerDocumentSignedUrl(path: string, expiresInSeconds = 300): Promise<string> {
   const client = getSupabase();
