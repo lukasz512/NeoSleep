@@ -1,6 +1,7 @@
 import type { PoolClient } from "pg";
 import { AppError, DatabaseError } from "../errors.js";
 import { isoDate } from "../routes/utils.js";
+import { formatOptionalDisplayName } from "../utils/personName.js";
 
 export const SLEEP_STUDY_STATUSES = [
   "ordered",
@@ -87,6 +88,7 @@ export type SleepStudyUpdate = Partial<SleepStudyInsert>;
 type SleepStudyRow = {
   id: string;
   patient_id: string;
+  patient_salutation: string | null;
   patient_first_name: string | null;
   patient_last_name: string | null;
   purchase_order_id: string | null;
@@ -103,6 +105,7 @@ type SleepStudyRow = {
   spo2_nadir: string | null;
   odi: string | null;
   interpreted_by: string | null;
+  interpreted_by_salutation: string | null;
   interpreted_by_first_name: string | null;
   interpreted_by_last_name: string | null;
   interpreted_at: Date | null;
@@ -125,8 +128,8 @@ const SLEEP_STUDY_SELECT_COLS = `
   s.interpreted_by, s.interpreted_at, s.interpretation, s.diagnosis_code,
   s.oa_indicated, s.cpap_indicated, s.status, s.study_type, s.notes, s.metadata,
   s.created_at, s.updated_at,
-  pi.first_name AS patient_first_name, pi.last_name AS patient_last_name,
-  ii.first_name AS interpreted_by_first_name, ii.last_name AS interpreted_by_last_name`.trim();
+  pi.title AS patient_salutation, pi.first_name AS patient_first_name, pi.last_name AS patient_last_name,
+  ii.title AS interpreted_by_salutation, ii.first_name AS interpreted_by_first_name, ii.last_name AS interpreted_by_last_name`.trim();
 
 const SLEEP_STUDY_JOIN = `
   FROM sleep_study s
@@ -144,7 +147,11 @@ function serialize(row: SleepStudyRow): SleepStudy {
   return {
     id: row.id,
     patient_id: row.patient_id,
-    patient_name: [row.patient_first_name, row.patient_last_name].filter(Boolean).join(" ").trim() || null,
+    patient_name: formatOptionalDisplayName({
+      salutation: row.patient_salutation,
+      first_name: row.patient_first_name,
+      last_name: row.patient_last_name,
+    }),
     purchase_order_id: row.purchase_order_id,
     supplier_id: row.supplier_id,
     supplier_name: row.supplier_name,
@@ -159,8 +166,11 @@ function serialize(row: SleepStudyRow): SleepStudy {
     spo2_nadir: optNum(row.spo2_nadir),
     odi: optNum(row.odi),
     interpreted_by: row.interpreted_by,
-    interpreted_by_name:
-      [row.interpreted_by_first_name, row.interpreted_by_last_name].filter(Boolean).join(" ").trim() || null,
+    interpreted_by_name: formatOptionalDisplayName({
+      salutation: row.interpreted_by_salutation,
+      first_name: row.interpreted_by_first_name,
+      last_name: row.interpreted_by_last_name,
+    }),
     interpreted_at: row.interpreted_at ? isoDate(row.interpreted_at) : null,
     interpretation: row.interpretation,
     diagnosis_code: row.diagnosis_code,

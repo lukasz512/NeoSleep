@@ -1,6 +1,6 @@
 import type { PoolClient } from "pg";
 import { AppError, DatabaseError } from "../errors.js";
-import { formatDisplayName } from "../utils/personName.js";
+import { formatDisplayName, formatOptionalDisplayName } from "../utils/personName.js";
 
 /**
  * endo_intake rows — see apps/api/migrations/026_endo_intake.sql and
@@ -164,14 +164,11 @@ export async function getPatientPdfContext(client: PoolClient, patientId: string
         first_name: row.patient_first_name,
         last_name: row.patient_last_name,
       }),
-      practitioner_name:
-        row.practitioner_first_name || row.practitioner_last_name
-          ? formatDisplayName({
-              salutation: row.practitioner_salutation,
-              first_name: row.practitioner_first_name ?? "",
-              last_name: row.practitioner_last_name ?? "",
-            })
-          : null,
+      practitioner_name: formatOptionalDisplayName({
+        salutation: row.practitioner_salutation,
+        first_name: row.practitioner_first_name,
+        last_name: row.practitioner_last_name,
+      }),
       organization_name: row.organization_name,
     };
   } catch (err) {

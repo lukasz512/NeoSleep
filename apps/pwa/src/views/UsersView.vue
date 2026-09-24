@@ -13,13 +13,17 @@
       @add="onAdd"
     >
       <template #item.name="{ item }">
-        <span class="users-name-cell">
-          <AppAvatar :name="(item as UserListItem).name" :first-name="(item as UserListItem).first_name" :last-name="(item as UserListItem).last_name" entity-type="user" :size="32" />
-          {{ (item as { name?: string }).name }}
-        </span>
+        <EntityLink
+          :to="null"
+          entity-type="user"
+          :label="(item as UserListItem).name"
+          :first-name="(item as UserListItem).first_name"
+          :last-name="(item as UserListItem).last_name"
+          :avatar-size="32"
+        />
       </template>
       <template #feed-card-avatar="{ item }">
-        <AppAvatar :name="(item as UserListItem).name" :first-name="(item as UserListItem).first_name" :last-name="(item as UserListItem).last_name" entity-type="user" :size="55" />
+        <AppAvatar v-bind="personAvatarProps(item as UserListItem)" entity-type="user" :size="55" />
       </template>
       <template #feed-card-title="{ item }">
         {{ (item as { name?: string }).name }}
@@ -105,6 +109,8 @@ import { originDialogTransition } from "@ui";
 import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
 import AppAvatar from "../components/AppAvatar.vue";
+import EntityLink from "../components/EntityLink.vue";
+import { personAvatarProps } from "../utils/personAvatarProps";
 import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppListItemMenu from "../components/AppListItemMenu.vue";
@@ -307,12 +313,6 @@ async function onSubmit(payload: Record<string, unknown>, done: (ok: boolean) =>
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
-}
-
-.users-name-cell {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
 }
 
 .users-view__status {

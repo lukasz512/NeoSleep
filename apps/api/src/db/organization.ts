@@ -1,6 +1,7 @@
 import type { PoolClient } from "pg";
 import { trimOrNull, trimOrEmpty } from "./helpers.js";
 import { AppError, DatabaseError, ValidationError } from "../errors.js";
+import { displayNameSql } from "../utils/personName.js";
 
 export interface Organization {
   id: string;
@@ -414,12 +415,12 @@ export async function getPublicSpecialists(
   try {
     const result = await client.query<PublicSpecialistRow>(
       `WITH org_practitioners AS (
-         SELECT DISTINCT p.id AS practitioner_id, p.organization_id, i.first_name, i.last_name, p.specialties
+         SELECT DISTINCT p.id AS practitioner_id, p.organization_id, i.title, i.first_name, i.last_name, p.specialties
          FROM practitioner p
          JOIN identities i ON i.id = p.identity_id
          WHERE p.deleted_at IS NULL AND p.status = 'active' AND p.organization_id IS NOT NULL
          UNION
-         SELECT DISTINCT p.id AS practitioner_id, po.organization_id, i.first_name, i.last_name, p.specialties
+         SELECT DISTINCT p.id AS practitioner_id, po.organization_id, i.title, i.first_name, i.last_name, p.specialties
          FROM practitioner_organization po
          JOIN practitioner p ON p.id = po.practitioner_id
          JOIN identities i ON i.id = p.identity_id
@@ -429,7 +430,7 @@ export async function getPublicSpecialists(
          o.id, o.name, o.address_line1, o.city, o.state, o.country_code,
          o.phone, o.website, o.google_link, o.specialties, o.latitude, o.longitude,
          COALESCE(
-           (SELECT json_agg(json_build_object('id', op.practitioner_id, 'name', op.first_name || ' ' || op.last_name, 'specialties', op.specialties))
+           (SELECT json_agg(json_build_object('id', op.practitioner_id, 'name', ${displayNameSql("op")}, 'specialties', op.specialties))
             FROM org_practitioners op WHERE op.organization_id = o.id),
            '[]'
          ) AS practitioners

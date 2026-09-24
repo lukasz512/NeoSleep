@@ -13,7 +13,7 @@
       :filter-param-keys="['status', 'type']"
     >
       <template #item.patient_name="{ item }">
-        {{ (item as { patient_name?: string }).patient_name || "—" }}
+        <EntityLink :to="null" entity-type="patient" :label="(item as TreatmentPlanRow).patient_name" :avatar-size="32" />
       </template>
       <template #feed-card-title="{ item }">
         {{ (item as { patient_name?: string }).patient_name || "—" }}
@@ -53,6 +53,7 @@ import type { FilterDefinition } from "../composables/useFilters";
 import { treatmentPlanCardMeta as treatmentPlanCardMetaFormatter } from "../utils/mobileCardMeta";
 
 interface TreatmentPlanRow {
+  patient_name?: string | null;
   type?: string;
   dentist_id?: string | null;
   dentist_name?: string | null;
@@ -117,7 +118,7 @@ const tableHeaders = computed(() => [
   { title: t("app.treatmentPlans.table.patient"), key: "patient_name", sortable: false },
   { title: t("app.treatmentPlans.table.type"), key: "type", sortable: true },
   { title: t("app.treatmentPlans.table.status"), key: "status", sortable: true },
-  { title: t("app.treatmentPlans.table.dentist"), key: "dentist_name", sortable: false },
+  { title: t("app.treatmentPlans.table.doctor"), key: "dentist_name", sortable: false },
 ]);
 
 const listI18n = computed(() => ({
