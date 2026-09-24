@@ -9,7 +9,8 @@
     :border="mobile ? false : 'b'"
     :height="mobile ? 56 : 64"
     class="app-shell__bar"
-    :class="{ 'app-shell__bar--visible': shellVisible }"
+    :class="enterClass"
+    :style="{ '--app-shell-enter-order': 0 }"
   >
     <template v-if="mobile" #prepend>
       <!-- No size prop: Vuetify's own default icon-button box (36px
@@ -54,7 +55,8 @@
     :aria-label="menuLabel"
     color="surface-container-low"
     class="app-shell__nav"
-    :class="{ 'app-shell__nav--visible': contentVisible }"
+    :class="enterClass"
+    :style="{ '--app-shell-enter-order': 1 }"
   >
     <div class="app-shell__logo">
       <slot name="logo" :collapsed="!mobile && railCollapsed" location="nav" />
@@ -75,8 +77,9 @@
     class="app-shell__main"
     :class="{
       'app-shell__main--bottom-nav-space': mobile && showBottomNav,
-      'app-shell__main--visible': contentVisible,
+      ...enterClass,
     }"
+    :style="{ '--app-shell-enter-order': 2 }"
   >
     <slot />
   </VMain>
@@ -85,7 +88,8 @@
     v-if="mobile && showBottomNav"
     :aria-label="menuLabel"
     class="app-shell__bottom-nav"
-    :class="{ 'app-shell__bottom-nav--visible': shellVisible }"
+    :class="enterClass"
+    :style="{ '--app-shell-enter-order': 3 }"
   >
     <MobileBottomNavItem
       v-for="item in primaryNavItems"
@@ -180,67 +184,58 @@ const drawerOpenModel = computed({
 const primaryNavItems = computed(() => props.navItems.slice(0, BOTTOM_NAV_ITEM_COUNT));
 
 // One-time entrance, played whenever this shell first mounts (i.e. right
-// after the auth screen's own exit sequence, see AuthView.vue) — the bar
-// slides down from above and the mobile bottom nav slides up from below at
-// the same time, then the drawer/main content fade in a beat later rather
-// than everything appearing at once.
-const CONTENT_ENTER_DELAY = 150;
+// after the auth screen's own exit sequence, see AuthView.vue): the parts
+// appear one after another, top to bottom — app bar, drawer, main content,
+// mobile bottom nav — each out of nothing, rising slightly from below. The
+// order/stagger itself lives in CSS (--app-shell-enter-order in the template,
+// see .app-shell__enter), so this only flips one flag.
+// Once it has played, the entrance classes are dropped entirely, so their
+// transition shorthand stops overriding Vuetify's own drawer/app-bar
+// transitions (rail collapse, mobile drawer slide) for the rest of the session.
+type EnterPhase = "hidden" | "entering" | "done";
+const enterPhase = ref<EnterPhase>("hidden");
+const enterClass = computed(() => ({
+  "app-shell__enter": enterPhase.value !== "done",
+  "app-shell__enter--visible": enterPhase.value === "entering",
+}));
+// Last part's delay (order 3 x 110ms) + its 750ms translate, plus a margin.
+const ENTER_TOTAL_DURATION = 1150;
 
-const shellVisible = ref(false);
-const contentVisible = ref(false);
-
-const prefersReducedMotion =
-  typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-onMounted(async () => {
-  if (prefersReducedMotion) {
-    shellVisible.value = true;
-    contentVisible.value = true;
-    return;
-  }
-  shellVisible.value = true;
-  await wait(CONTENT_ENTER_DELAY);
-  contentVisible.value = true;
+onMounted(() => {
+  // Two frames, so the hidden starting state is painted first — flipping the
+  // flag in the same frame the DOM was inserted would skip the transition.
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      enterPhase.value = "entering";
+      window.setTimeout(() => (enterPhase.value = "done"), ENTER_TOTAL_DURATION);
+    }),
+  );
 });
 </script>
 
 <style scoped>
-/* Entrance only (see shellVisible/contentVisible in <script>) — slides down
-   from above the viewport rather than just fading, so the bar reads as
-   dropping into place. */
-.app-shell__bar {
+/* Entrance only (see `entered` in <script>) — staggered top to bottom by
+   --app-shell-enter-order, each part fading up from 14px below. Fast at the
+   start, a long smooth settle at the end (expo-out). Uses the standalone
+   `translate` property, not `transform`, so it composes with the transforms
+   Vuetify itself writes on the app bar/drawer instead of fighting them. */
+.app-shell__enter {
+  --app-shell-enter-delay: calc(var(--app-shell-enter-order, 0) * 110ms);
   opacity: 0;
-  transform: translateY(-100%);
-  transition: opacity 0.4s ease-out, transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+  translate: 0 14px;
+  transition:
+    opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1) var(--app-shell-enter-delay),
+    translate 0.75s cubic-bezier(0.16, 1, 0.3, 1) var(--app-shell-enter-delay);
 }
 
-.app-shell__bar--visible {
+.app-shell__enter--visible {
   opacity: 1;
-  transform: translateY(0);
-}
-
-/* Same idea, mirrored for the drawer/main content — a plain fade (no slide),
-   starting a beat after the bar/bottom-nav above so the whole shell doesn't
-   pop in as one flat block. */
-.app-shell__nav,
-.app-shell__main {
-  opacity: 0;
-  transition: opacity 0.35s ease-out;
-}
-
-.app-shell__nav--visible,
-.app-shell__main--visible {
-  opacity: 1;
+  translate: 0 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .app-shell__bar,
-  .app-shell__nav,
-  .app-shell__main {
+  .app-shell__enter {
+    translate: none;
     transition: none;
   }
 }
@@ -328,23 +323,5 @@ onMounted(async () => {
   padding-bottom: calc(var(--mobile-bottom-nav-height, 64px) + env(safe-area-inset-bottom));
 }
 
-/* Entrance only (see shellVisible in <script>) — slides up from below the
-   viewport, mirroring the app bar's slide-down above, rather than fading. */
-.app-shell__bottom-nav {
-  opacity: 0;
-  transform: translateY(100%);
-  transition: opacity 0.4s ease-out, transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.app-shell__bottom-nav--visible {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .app-shell__bottom-nav {
-    transition: none;
-  }
-}
 
 </style>
