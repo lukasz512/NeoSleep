@@ -464,7 +464,7 @@ async function onSubmit(payload: Record<string, unknown>, done: (ok: boolean) =>
   border-radius: var(--pwa-radius, 10px);
   overflow: hidden;
   cursor: pointer;
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border: 1px solid rgba(var(--v-border-color, 0, 0, 0), var(--v-border-opacity, 0.12));
   background: rgb(var(--v-theme-surface));
   transition: box-shadow 0.2s ease, transform 0.15s ease;
 

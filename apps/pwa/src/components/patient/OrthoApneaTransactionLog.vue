@@ -212,7 +212,7 @@ watch(
 }
 
 .oa-txn-log__panels {
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border: 1px solid rgba(var(--v-border-color, 0, 0, 0), var(--v-border-opacity, 0.12));
   border-radius: var(--pwa-radius);
 }
 

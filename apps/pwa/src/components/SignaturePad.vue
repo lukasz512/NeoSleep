@@ -96,7 +96,7 @@ defineExpose({ isEmpty: isEmptyValue, clear, toDataURL });
   position: relative;
   width: 100%;
   height: 160px;
-  border: 1px dashed rgba(var(--v-border-color), var(--v-border-opacity));
+  border: 1px dashed rgba(var(--v-border-color, 0, 0, 0), var(--v-border-opacity, 0.12));
   border-radius: var(--pwa-radius, 8px);
   background: rgba(var(--v-theme-surface), 1);
   touch-action: none;

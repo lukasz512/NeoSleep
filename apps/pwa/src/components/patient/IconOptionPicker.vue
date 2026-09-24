@@ -82,7 +82,7 @@ defineEmits<{ "update:modelValue": [value: string] }>();
   min-width: 0;
   padding: 8px 4px;
   border-radius: var(--pwa-radius);
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border: 1px solid rgba(var(--v-border-color, 0, 0, 0), var(--v-border-opacity, 0.12));
   background: transparent;
   cursor: pointer;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));

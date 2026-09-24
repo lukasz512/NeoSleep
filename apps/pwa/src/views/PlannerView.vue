@@ -457,7 +457,7 @@ async function onEventFormSubmit(payload: EventSubmitPayload, done: (ok: boolean
   flex: 1 1 auto;
   min-height: 400px;
   border-radius: var(--pwa-radius);
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border: 1px solid rgba(var(--v-border-color, 0, 0, 0), var(--v-border-opacity, 0.12));
   overflow: hidden;
 }
 
