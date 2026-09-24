@@ -11,6 +11,8 @@ import {
   getInviteTokenByHash,
   updatePractitionerStatus,
   getPractitionerById,
+  getUsersWithoutPassword,
+  getOrCreateUserByProvider,
 } from "../db.js";
 import { hashToken } from "../utils/hashToken.js";
 import type { TenantContext } from "../context/TenantContext.js";
@@ -240,6 +242,42 @@ describe("ActivatePractitionerCommand", () => {
       expect(result?.status).toBe("invited");
       expect(sendPartnerInviteEmailMock).toHaveBeenCalledTimes(1);
       expect(await getUserIdByEmail(client, email)).toBe(existingUser!.id);
+    });
+  }, 15000);
+
+  it("keeps the new doctor login inactive and out of the startup initial-password bootstrap until registration", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const email = `qa-hcp-${uniqueSuffix()}@example.com`;
+      const practitioner = await CreatePractitionerCommand(ctx, {
+        first_name: "Not",
+        last_name: "Yet",
+        email,
+        phone: "600100200",
+        region: "PL",
+      });
+      await ActivatePractitionerCommand(ctx, practitioner.id);
+
+      const userId = await getUserIdByEmail(client, email);
+      const { rows } = await client.query<{ status: string }>(`SELECT status FROM users WHERE id = $1`, [userId]);
+      expect(rows[0]?.status).toBe("inactive");
+      const pending = await getUsersWithoutPassword(client);
+      expect(pending.map((u) => u.id)).not.toContain(userId);
+    });
+  }, 15000);
+
+  it("startup bootstrap only picks seeded staff: never a doctor or a Google sign-in account", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const seeded = await insertStaffUser(client, `qa-seed-${uniqueSuffix()}@example.com`, "Seed", "Staff", "rep", null, true);
+      const noForce = await insertStaffUser(client, `qa-noforce-${uniqueSuffix()}@example.com`, "No", "Force", "rep", null, false);
+      const doctor = await insertStaffUser(client, `qa-doc-${uniqueSuffix()}@example.com`, "Admin", "Made", "doctor", null, true);
+      const google = await getOrCreateUserByProvider(client, "google", `qa-sub-${uniqueSuffix()}`, `qa-google-${uniqueSuffix()}@example.com`, "Goo Gle");
+
+      const pending = (await getUsersWithoutPassword(client)).map((u) => u.id);
+      expect(pending).toContain(seeded!.id);
+      expect(pending).not.toContain(noForce!.id);
+      expect(pending).not.toContain(doctor!.id);
+      expect(pending).not.toContain(google!.id);
     });
   }, 15000);
 });

@@ -137,6 +137,12 @@ authRouter.post(
       if (!match) {
         return { status: 401, body: { error: "Invalid email or password." } } as const;
       }
+      // An 'inactive' account (deactivated, or an invited doctor who hasn't
+      // completed registration yet) must not sign in — same generic message,
+      // so this can't be used to probe which emails were invited.
+      if (staff.status !== "active") {
+        return { status: 401, body: { error: "Invalid email or password." } } as const;
+      }
       const token = signAuthToken(staff);
       const refreshToken = await issueRefreshToken(client, staff.id, remember_me === true, req);
       return {

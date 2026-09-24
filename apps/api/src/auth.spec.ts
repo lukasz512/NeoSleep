@@ -110,6 +110,23 @@ describe("Auth routes", () => {
       expect(res.body.refresh_token.split(".")).toHaveLength(1);
     });
 
+    it("401s with the generic message for an inactive account even with the right password", async () => {
+      const inactiveEmail = testEmail("inactive");
+      await createLoginUser(inactiveEmail);
+      await withTenant(TENANT_SLUG, (client) =>
+        client.query(
+          `UPDATE users SET status = 'inactive' WHERE identity_id = (SELECT id FROM identities WHERE email = $1)`,
+          [inactiveEmail],
+        ),
+      );
+      const res = await request(app)
+        .post("/api/v1/auth/login")
+        .set("X-Forwarded-For", freshIp())
+        .send({ email: inactiveEmail, password: TEST_PASSWORD });
+      expect(res.status).toBe(401);
+      expect(res.body.error).toBe("Invalid email or password.");
+    });
+
     it("eventually 429s after repeated attempts from the same client", async () => {
       const ip = freshIp();
       let sawTooMany = false;
