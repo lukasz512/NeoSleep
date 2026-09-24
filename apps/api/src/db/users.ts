@@ -280,12 +280,21 @@ export async function getUserRoleScopes(client: PoolClient, userId: string): Pro
   }
 }
 
-/** Seeded staff accounts with no password set yet (bootstrapped on startup — see auth.ts). */
+/**
+ * Seeded staff accounts with no password set yet (bootstrapped on startup — see auth.ts).
+ * Never an invited partner/doctor account: those set their own password when they accept
+ * the invite, and giving them the shared initial password would let anyone who knows their
+ * email log in before they've signed anything (found while verifying NEO-51). Invited
+ * accounts are excluded both by status (they stay 'inactive' until acceptance) and by
+ * having an invite token at all.
+ */
 export async function getUsersWithoutPassword(client: PoolClient): Promise<{ id: string; email: string }[]> {
   try {
     const r = await client.query<{ id: string; email: string }>(
       `SELECT u.id, i.email FROM users u JOIN identities i ON u.identity_id = i.id
-       WHERE u.password_hash IS NULL AND u.deleted_at IS NULL`
+       WHERE u.password_hash IS NULL AND u.deleted_at IS NULL
+         AND u.status = 'active'
+         AND NOT EXISTS (SELECT 1 FROM invite_tokens it WHERE it.user_id = u.id)`
     );
     return r.rows;
   } catch (err) {

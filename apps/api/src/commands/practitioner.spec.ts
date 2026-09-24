@@ -11,6 +11,7 @@ import {
   getInviteTokenByHash,
   updatePractitionerStatus,
   getPractitionerById,
+  getUsersWithoutPassword,
 } from "../db.js";
 import { hashToken } from "../utils/hashToken.js";
 import type { TenantContext } from "../context/TenantContext.js";
@@ -254,6 +255,27 @@ describe("ActivatePractitionerCommand", () => {
       expect(result?.status).toBe("invited");
       expect(sendPartnerInviteEmailMock).toHaveBeenCalledTimes(1);
       expect(await getUserIdByEmail(client, email)).toBe(existingUser!.id);
+    });
+  }, 15000);
+
+  it("keeps the new doctor login inactive and out of the startup initial-password bootstrap until registration", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const email = `qa-hcp-${uniqueSuffix()}@example.com`;
+      const practitioner = await CreatePractitionerCommand(ctx, {
+        first_name: "Not",
+        last_name: "Yet",
+        email,
+        phone: "600100200",
+        region: "PL",
+      });
+      await ActivatePractitionerCommand(ctx, practitioner.id);
+
+      const userId = await getUserIdByEmail(client, email);
+      const { rows } = await client.query<{ status: string }>(`SELECT status FROM users WHERE id = $1`, [userId]);
+      expect(rows[0]?.status).toBe("inactive");
+      const pending = await getUsersWithoutPassword(client);
+      expect(pending.map((u) => u.id)).not.toContain(userId);
     });
   }, 15000);
 
