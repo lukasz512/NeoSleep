@@ -287,6 +287,13 @@ export async function getUserRoleScopes(client: PoolClient, userId: string): Pro
  * email log in before they've signed anything (found while verifying NEO-51). Invited
  * accounts are excluded both by status (they stay 'inactive' until acceptance) and by
  * having an invite token at all.
+ *
+ * Opt-in, not "everyone without a password": only rows a seed migration explicitly
+ * created with force_password_change = true (the column defaults to false). Google
+ * sign-in creates accounts without a password too (getOrCreateUserByProvider above)
+ * — those must never get the shared password either, hence also google_sub IS NULL.
+ * Doctors never get it, however they were created (invite, lead conversion, or an
+ * admin adding a 'doctor' user without a password): they set their own password.
  */
 export async function getUsersWithoutPassword(client: PoolClient): Promise<{ id: string; email: string }[]> {
   try {
@@ -294,7 +301,10 @@ export async function getUsersWithoutPassword(client: PoolClient): Promise<{ id:
       `SELECT u.id, i.email FROM users u JOIN identities i ON u.identity_id = i.id
        WHERE u.password_hash IS NULL AND u.deleted_at IS NULL
          AND u.status = 'active'
-         AND NOT EXISTS (SELECT 1 FROM invite_tokens it WHERE it.user_id = u.id)`
+         AND u.force_password_change = true
+         AND u.google_sub IS NULL
+         AND NOT EXISTS (SELECT 1 FROM invite_tokens it WHERE it.user_id = u.id)
+         AND NOT EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.id AND ur.role = 'doctor')`
     );
     return r.rows;
   } catch (err) {

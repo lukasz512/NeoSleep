@@ -12,6 +12,7 @@ import {
   updatePractitionerStatus,
   getPractitionerById,
   getUsersWithoutPassword,
+  getOrCreateUserByProvider,
 } from "../db.js";
 import { hashToken } from "../utils/hashToken.js";
 import type { TenantContext } from "../context/TenantContext.js";
@@ -276,6 +277,21 @@ describe("ActivatePractitionerCommand", () => {
       expect(rows[0]?.status).toBe("inactive");
       const pending = await getUsersWithoutPassword(client);
       expect(pending.map((u) => u.id)).not.toContain(userId);
+    });
+  }, 15000);
+
+  it("startup bootstrap only picks seeded staff: never a doctor or a Google sign-in account", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const seeded = await insertStaffUser(client, `qa-seed-${uniqueSuffix()}@example.com`, "Seed", "Staff", "rep", null, true);
+      const noForce = await insertStaffUser(client, `qa-noforce-${uniqueSuffix()}@example.com`, "No", "Force", "rep", null, false);
+      const doctor = await insertStaffUser(client, `qa-doc-${uniqueSuffix()}@example.com`, "Admin", "Made", "doctor", null, true);
+      const google = await getOrCreateUserByProvider(client, "google", `qa-sub-${uniqueSuffix()}`, `qa-google-${uniqueSuffix()}@example.com`, "Goo Gle");
+
+      const pending = (await getUsersWithoutPassword(client)).map((u) => u.id);
+      expect(pending).toContain(seeded!.id);
+      expect(pending).not.toContain(noForce!.id);
+      expect(pending).not.toContain(doctor!.id);
+      expect(pending).not.toContain(google!.id);
     });
   }, 15000);
 
