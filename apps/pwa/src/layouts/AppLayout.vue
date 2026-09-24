@@ -105,7 +105,12 @@
         </span>
       </template>
 
-      <div id="main-content" tabindex="-1" class="layout-main__inner" :class="{ 'layout-main--fading': localeTransitioning }">
+      <div
+        id="main-content"
+        tabindex="-1"
+        class="layout-main__inner"
+        :class="{ 'layout-main--fading': localeTransitioning, 'layout-main__inner--mobile': isMobile }"
+      >
         <RouterView v-slot="{ Component }">
           <!-- appear: this app-layout mount is only reached right after the
                auth screen's own exit sequence finishes (see AuthView.vue),
@@ -126,7 +131,20 @@
           </Transition>
         </RouterView>
       </div>
+      <!-- Mobile: after the content, not fixed — .layout-main__inner--mobile is
+           at least one screen tall, so this only shows once you scroll to the
+           very bottom instead of sitting over every screen. -->
+      <p v-if="appVersionLabel && isMobile" class="layout-app-version layout-app-version--end-of-page">
+        {{ appVersionLabel }}
+      </p>
     </AppShell>
+
+    <!-- Same label as under the login badge (useAppVersionLabel). Desktop:
+         fixed to the viewport corner, never takes clicks. Mobile: rendered
+         after the content instead (see below). -->
+    <p v-if="appVersionLabel && !isMobile" class="layout-app-version">
+      {{ appVersionLabel }}
+    </p>
   </VApp>
 </template>
 
@@ -135,7 +153,7 @@ import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRoute } from "vue-router";
 import { navTitleKey, navIconName } from "../router/routes";
 import { useI18n } from "vue-i18n";
-import { AppShell } from "@ui";
+import { AppShell, useAppVersionLabel } from "@ui";
 import { useLayoutState } from "../composables/useLayoutState";
 import { useVisibleNavRoutes } from "../composables/useVisibleNavRoutes";
 import {
@@ -191,6 +209,7 @@ onAppReady(() => void loadPartnerResources(locale.value));
 onMounted(markAppReady);
 
 const menuOpen = ref(false);
+const appVersionLabel = useAppVersionLabel();
 
 const moduleTitle = computed(() => {
   const name = route.name;
@@ -434,5 +453,37 @@ const moduleIcon = computed(() => {
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+/* Quiet footnote, not UI: small, low-contrast, click-through so it never
+   covers a list row's tap target underneath. */
+.layout-app-version {
+  position: fixed;
+  right: max(12px, env(safe-area-inset-right));
+  bottom: max(8px, env(safe-area-inset-bottom));
+  z-index: 5;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  color: rgba(var(--v-theme-on-surface), 0.45);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Mobile: in the page flow, below the content. */
+.layout-app-version--end-of-page {
+  position: static;
+  padding: 4px 16px 8px;
+  text-align: right;
+}
+
+/* At least one full visible screen (viewport minus app bar and bottom nav),
+   so the end-of-page version line starts just below the fold. */
+.layout-main__inner--mobile {
+  min-height: calc(
+    100dvh - var(--v-layout-top, 0px) - var(--mobile-bottom-nav-height, 64px) - env(safe-area-inset-bottom)
+  );
 }
 </style>

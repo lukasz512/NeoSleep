@@ -250,9 +250,15 @@ describe("AppEntityList", () => {
       expect(css).not.toMatch(/\.v-field--focused \.v-field__outline\)\s*{[^}]*--pwa-table-border/);
     });
 
-    it("pagination footer has a top border and de-emphasized text instead of Vuetify's unstyled default", () => {
-      expect(css).toMatch(/\.v-data-table-footer\)\s*{[^}]*border-top:\s*1px solid var\(--pwa-table-border\)/);
+    it("pagination footer has de-emphasized text instead of Vuetify's unstyled default", () => {
       expect(css).toMatch(/\.v-data-table-footer\)\s*{[^}]*--v-medium-emphasis-opacity/);
+    });
+
+    it("rows/footer separator is a single line: Vuetify's divider in --pwa-table-border, no extra footer border-top", () => {
+      // A footer border-top stacked on Vuetify's own <VDivider> rendered as a thick double line.
+      expect(css).not.toMatch(/\.v-data-table-footer\)\s*{[^}]*border-top/);
+      const themeScss = readFileSync(path.resolve(__dirname, "../assets/theme.scss"), "utf-8");
+      expect(themeScss).toMatch(/\.v-data-table > \.v-divider\s*{[^}]*border-color:\s*var\(--pwa-table-border\)[^}]*opacity:\s*1/);
     });
 
     it("footer's rows-per-page select border uses --pwa-table-border too", () => {

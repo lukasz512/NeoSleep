@@ -16,7 +16,8 @@ import { apiFetch } from "./composables/useApi";
 import { authTokenStorage } from "./stores/auth";
 import { useNotifications } from "./composables/useNotifications";
 import { getApiUrl } from "./constants";
-import { resolveInitialThemeMode, useMotionPreferenceStore } from "@stores";
+import { resolveInitialThemeMode, useMotionPreferenceStore, APP_VERSION_KEY } from "@stores";
+import { resolveAppVersion } from "./appVersion";
 import { activateDeferredStyles } from "./boot/bootSplash";
 
 // First thing: apply the bundle CSS that index.html loads as a non-blocking
@@ -56,6 +57,7 @@ setupOfflineCacheSession();
 
 app.provide("neo:apiFetch", apiFetch);
 app.provide("neo:authTokenStorage", authTokenStorage);
+app.provide(APP_VERSION_KEY, resolveAppVersion(import.meta.env));
 // Lets shared views in packages/ui (e.g. AuthView, which runs before the
 // authenticated shell that owns most of the app's toasts) show a native
 // notification without packages/ui depending on apps/pwa's useNotifications

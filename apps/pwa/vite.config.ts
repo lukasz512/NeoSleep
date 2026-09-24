@@ -79,6 +79,12 @@ function neoPwaPlugin(opts: NeoPwaOptions): ReturnType<typeof VitePWA> {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// App version (shown under the login badge, sent with diagnostics) comes from
+// this app's package.json — the single place it's bumped. Set on process.env
+// before Vite loads env, so it wins over any VITE_APP_VERSION in .env files.
+// Build number + channel are set by CI (see deploy-pwa.yml).
+const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "package.json"), "utf8")) as { version: string };
+process.env.VITE_APP_VERSION = pkg.version;
 // Every public Vuetify component entry (vuetify/components/VBtn, …), read
 // from the package's own components/index.js re-export list rather than a
 // glob — the lib/components folder also ships unfinished internals (e.g.

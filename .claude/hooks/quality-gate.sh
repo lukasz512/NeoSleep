@@ -50,11 +50,75 @@ fi
 CHANGED="$(git status --porcelain -- apps packages docs 2>/dev/null | awk '{ $1=""; print substr($0,2) }')"
 SRC_CHANGED="$(printf '%s\n' "$CHANGED" | grep -E '^(apps|packages)/[^/]+/src/' || true)"
 
-if [ -z "$SRC_CHANGED" ]; then
-  exit 0
+# --- Branch-level view ------------------------------------------------------------------
+# 2026-09-24: "every change ships with an Artifact, always" (Łukasz). The checks below this
+# block only ever looked at UNCOMMITTED changes, so committing before the turn ended skipped
+# the artifact requirement entirely (it happened on the app-shell inset-card change that
+# prompted this). BRANCH_CHANGED is everything this branch changed vs. its fork point from
+# origin/dev, committed or not — the artifact check runs on that, not just on git status.
+# lint/typecheck/test stay scoped to uncommitted src changes (pre-commit/pre-push cover the
+# committed part, and re-running the suite on every Stop would be too slow).
+BASE="$(git merge-base HEAD origin/dev 2>/dev/null || true)"
+BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo detached)"
+BRANCH_CHANGED=""
+if [ -n "$BASE" ]; then
+  BRANCH_CHANGED="$( { git diff --name-only "$BASE" HEAD 2>/dev/null; git status --porcelain 2>/dev/null | awk '{ $1=""; print substr($0,2) }'; } | grep -v '^$' | sort -u || true)"
 fi
 
 FAILS=()
+
+# Every branch with any change needs a published Artifact recorded in a marker — ticket or
+# no ticket. A ticket-named branch (worktree-neo-123-…, worker/neo-123-…) is satisfied by
+# that ticket's own marker (full schema, checked further down when src changed); any other
+# branch needs .claude/local/artifacts/branch-<branch>.json with at least:
+#   { "url": "<artifact url>", "sections": ["summary","run-locally","qa-checklist"],
+#     "visualComparison": "<required when any .vue/.css changed: real before/after
+#       screenshots, or a labeled mockup when no live render was possible>" }
+# The artifact must also be shown to Łukasz in the reply (link), not just recorded.
+branch_artifact_check() {
+  [ -z "$BRANCH_CHANGED" ] && return 0
+  local ticket marker visual
+  ticket="$(printf '%s' "$BRANCH" | grep -oiE '[a-z]{2,10}-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]' || true)"
+  if [ -n "$ticket" ] && [ -f ".claude/local/artifacts/${ticket}.json" ]; then
+    marker=".claude/local/artifacts/${ticket}.json"
+  else
+    marker=".claude/local/artifacts/branch-$(printf '%s' "$BRANCH" | tr '/' '-').json"
+  fi
+  if [ ! -f "$marker" ]; then
+    FAILS+=("Branch '${BRANCH}' has changes ($(printf '%s' "$BRANCH_CHANGED" | wc -l | tr -d ' ') file(s) vs origin/dev) but no Artifact marker ($marker). Standing rule: every change ships with a published Artifact — build it (What changed / Run it locally / Verify it, plus a real before/after for UI changes), publish it, give Łukasz the link, then write the marker.")
+    return 0
+  fi
+  jq -e '.url != null and .url != ""' "$marker" >/dev/null 2>&1 \
+    || FAILS+=("$marker has no non-empty 'url' — record the published Artifact's link.")
+  jq -e '(.sections // []) | index("summary") != null and index("run-locally") != null and index("qa-checklist") != null' "$marker" >/dev/null 2>&1 \
+    || FAILS+=("$marker 'sections' must cover summary, run-locally and qa-checklist.")
+  # Once the branch is pushed, the Artifact must carry a "Create PR" button at the top
+  # (Łukasz, 2026-09-24: "niech pr przycisk będzie na górze artefaktu") — the pre-filled
+  # compare URL from CLAUDE.md's Linear traceability section. He still clicks Create himself.
+  if git rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1; then
+    jq -e '(.prUrl // "") | test("^https://github.com/.+/compare/")' "$marker" >/dev/null 2>&1 \
+      || FAILS+=("$marker has no 'prUrl' but '${BRANCH}' is pushed — put a 'Create PR' button (pre-filled https://github.com/<org>/<repo>/compare/dev...<branch>?quick_pull=1&title=…&body=… URL) at the TOP of the Artifact, republish, and record it as 'prUrl'.")
+  fi
+  visual="$(printf '%s\n' "$BRANCH_CHANGED" | grep -E '\.(vue|css|scss)$' || true)"
+  if [ -n "$visual" ]; then
+    jq -e '.visualComparison != null and .visualComparison != ""' "$marker" >/dev/null 2>&1 \
+      || FAILS+=("$marker has no 'visualComparison' but this branch changes UI files ($(printf '%s' "$visual" | tr '\n' ' ')) — the Artifact must show a real before/after.")
+  fi
+}
+
+emit_result() {
+  if [ "${#FAILS[@]}" -eq 0 ]; then
+    exit 0
+  fi
+  jq -n --arg reason "$(printf '%s\n' "${FAILS[@]}" | sed 's/^/- /')" \
+    '{continue: false, decision: "block", reason: ("Quality gate failed — fix before this turn can end:\n" + $reason)}'
+  exit 0
+}
+
+if [ -z "$SRC_CHANGED" ]; then
+  branch_artifact_check
+  emit_result
+fi
 mkdir -p /tmp/neocrm-gate
 
 run_check() {
@@ -191,7 +255,12 @@ if [ -n "$FEATURE_SHAPE" ] || [ -n "$VISUAL_SHAPE" ]; then
   #          description of what before/after evidence exists and where, e.g. 'mockup
   #          embedded in artifact What changed section' or 'docs/worker-screenshots/NEO-9/
   #          before.png + after.png'>" }
-  TICKET_REFS="$( { [ -n "${STORY_FILE:-}" ] && cat $STORY_FILE 2>/dev/null; git log --format=%B -n 20 2>/dev/null; } \
+  # Commit messages from THIS branch only (BASE..HEAD). The old `git log -n 20` also swept
+  # in tickets from already-merged dev commits, so a fresh worktree off dev demanded
+  # artifacts for other people's finished tickets (NEO-17 etc.) on its first src edit.
+  if [ -n "$BASE" ]; then LOG_RANGE="$BASE..HEAD"; else LOG_RANGE="-n 20"; fi
+  # shellcheck disable=SC2086 # LOG_RANGE is intentionally word-split in the fallback case
+  TICKET_REFS="$( { [ -n "${STORY_FILE:-}" ] && cat $STORY_FILE 2>/dev/null; git log --format=%B $LOG_RANGE 2>/dev/null; } \
     | grep -oE '\b[A-Z]{2,10}-[0-9]+\b' | sort -u || true)"
   if [ -n "$TICKET_REFS" ]; then
     while IFS= read -r ticket; do
@@ -215,10 +284,5 @@ if [ -n "$FEATURE_SHAPE" ] || [ -n "$VISUAL_SHAPE" ]; then
   fi
 fi
 
-if [ "${#FAILS[@]}" -eq 0 ]; then
-  exit 0
-fi
-
-jq -n --arg reason "$(printf '%s\n' "${FAILS[@]}" | sed 's/^/- /')" \
-  '{continue: false, decision: "block", reason: ("Quality gate failed — fix before this turn can end:\n" + $reason)}'
-exit 0
+branch_artifact_check
+emit_result

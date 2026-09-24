@@ -17,6 +17,7 @@ export { default as MobileBottomNavBar } from "./components/MobileBottomNavBar.v
 export { default as MobileBottomNavItem } from "./components/MobileBottomNavItem.vue";
 export { default as AuthOrbs } from "./components/AuthOrbs.vue";
 export { AUTH_BACKDROP_KEY, type AuthBackdrop } from "./composables/authBackdrop";
+export { useAppVersionLabel } from "./composables/useAppVersionLabel";
 export { default as AppStateView } from "./components/AppStateView.vue";
 export { default as OriginDialogTransition } from "./components/OriginDialogTransition.vue";
 export { originDialogTransition } from "./components/originDialogTransition";
