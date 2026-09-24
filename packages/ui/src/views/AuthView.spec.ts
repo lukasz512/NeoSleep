@@ -522,20 +522,35 @@ describe("AuthView — PWA badge follows the theme (NEO-12)", () => {
     expect(badge()).toBe(BRAND_PWA_BADGE_DARK_URL);
   });
 
-  it("shows the white wordmark in light mode and the dark-ink one in dark mode, with the halo flipped to match", async () => {
+  it("shows the white wordmark in light mode and the dark-ink one in dark mode, with the halo switched to match", async () => {
     const { wrapper } = await mountAuthView(vi.fn());
     const themeStore = useThemeStore();
     const logo = () => wrapper.find(".auth-chrome__logo").attributes("src");
-    const halo = () => wrapper.find(".auth-chrome__halo").classes();
+    const halo = () => wrapper.find(".auth-chrome__halo .auth-halo").classes();
 
     themeStore.setPreference("light");
     await flushPromises();
     expect(logo()).toBe(BRAND_LOGO_DARK_URL); // logo_dark.svg = white wordmark
-    expect(halo()).not.toContain("auth-chrome__halo--dark-mode");
+    expect(halo()).not.toContain("auth-halo--dark");
 
     themeStore.setPreference("dark");
     await flushPromises();
     expect(logo()).toBe(BRAND_LOGO_LIGHT_URL); // logo_light.svg = dark-ink wordmark
-    expect(halo()).toContain("auth-chrome__halo--dark-mode");
+    expect(halo()).toContain("auth-halo--dark");
+  });
+
+  it("puts the same halo, at half size, behind the PWA badge and switches it with the theme", async () => {
+    const { wrapper } = await mountAuthView(vi.fn());
+    const themeStore = useThemeStore();
+    const halo = () => wrapper.find(".auth-view__pwa-badge-halo .auth-halo").classes();
+
+    themeStore.setPreference("light");
+    await flushPromises();
+    expect(halo()).toContain("auth-halo--sm");
+    expect(halo()).not.toContain("auth-halo--dark");
+
+    themeStore.setPreference("dark");
+    await flushPromises();
+    expect(halo()).toContain("auth-halo--dark");
   });
 });
