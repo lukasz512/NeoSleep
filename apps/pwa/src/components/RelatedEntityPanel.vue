@@ -91,7 +91,10 @@ watch(() => props.endpoint, load);
   justify-content: space-between;
   gap: 12px;
   padding: 10px 0;
-  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  /* --pwa-table-border (theme.scss): shared with AppEntityList's table-wrap
+     and AppDataTable's border, was Vuetify's generic --v-border-color here
+     — a different gray from the rest of the app's tables. */
+  border-bottom: 1px solid var(--pwa-table-border);
   font-size: 0.9375rem;
 }
 

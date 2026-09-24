@@ -86,7 +86,11 @@ function formatMeta(item: object): string {
 .app-data-table__table-wrap {
   overflow-x: auto;
   border-radius: var(--pwa-radius);
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  /* --pwa-table-border (theme.scss): shared with AppEntityList's table-wrap
+     and RelatedEntityPanel's item dividers, was Vuetify's generic
+     --v-border-color here — a different gray from the rest of the app's
+     tables. */
+  border: 1px solid var(--pwa-table-border);
 }
 
 .app-data-table__table {

@@ -229,5 +229,50 @@ describe("AppEntityList", () => {
     it("feed container has position relative for absolute leaving items", () => {
       expect(css).toMatch(/\.app-entity-list__feed\s*{[^}]*position:\s*relative/);
     });
+
+    // NEO-15: the search field's inactive border, the table-wrap border, and
+    // the pagination footer each used to pull their color from a different
+    // token (theme.scss's global outline color, M3 outline-variant, or
+    // nothing at all) and visibly disagreed with each other and with the
+    // rest of the app's tables (AppDataTable, RelatedEntityPanel). All of
+    // them now share --pwa-table-border.
+    it("table-wrap border uses the shared --pwa-table-border token, not M3 outline-variant", () => {
+      expect(css).toMatch(/\.app-entity-list__table-wrap\s*{[^}]*border:\s*1px solid var\(--pwa-table-border\)/);
+      expect(css).not.toMatch(/\.app-entity-list__table-wrap\s*{[^}]*--v-theme-outline-variant/);
+    });
+
+    it("search field's inactive (unfocused) border uses --pwa-table-border, leaving the focused-state primary color untouched", () => {
+      expect(css).toMatch(
+        /\.app-entity-list__search :deep\(\.v-field:not\(\.v-field--focused\) \.v-field__outline\)\s*{[^}]*color:\s*var\(--pwa-table-border\)/,
+      );
+      // The focused-state color override belongs to theme.scss's global rule
+      // (--v-theme-primary) — this file must not also claim the focused state.
+      expect(css).not.toMatch(/\.v-field--focused \.v-field__outline\)\s*{[^}]*--pwa-table-border/);
+    });
+
+    it("pagination footer has a top border and de-emphasized text instead of Vuetify's unstyled default", () => {
+      expect(css).toMatch(/\.v-data-table-footer\)\s*{[^}]*border-top:\s*1px solid var\(--pwa-table-border\)/);
+      expect(css).toMatch(/\.v-data-table-footer\)\s*{[^}]*--v-medium-emphasis-opacity/);
+    });
+
+    it("footer's rows-per-page select border uses --pwa-table-border too", () => {
+      expect(css).toMatch(
+        /\.v-data-table-footer \.v-select \.v-field__outline\)\s*{[^}]*color:\s*var\(--pwa-table-border\)/,
+      );
+    });
+  });
+
+  describe("pagination footer rendering (NEO-15)", () => {
+    it("renders Vuetify's data-table footer inside the styled table-wrap", async () => {
+      const wrapper = await mountEntityList({
+        items: [
+          { id: "a", name: "Alpha" },
+          { id: "b", name: "Beta" },
+        ],
+      });
+      const wrap = wrapper.find(".app-entity-list__table-wrap");
+      expect(wrap.exists()).toBe(true);
+      expect(wrap.find(".v-data-table-footer").exists()).toBe(true);
+    });
   });
 });
