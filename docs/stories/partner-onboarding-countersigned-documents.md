@@ -208,3 +208,44 @@ Draft v1 texts (PL + MX: agreement, DPA annex, privacy notice) are in the "NEO-5
 → `/arch assess`: token-gated preview endpoint, private-bucket CEO signature, content-version race handling
 → `/ux`: document dialog + pad + Clear placement, mobile full-screen
 → `/dev feat` in worktree `neo-51-partner-countersigned-documents`
+
+### Implementation (2026-09-24, branch `worktree-neo-51-partner-countersigned-documents`)
+Design decision record: `docs/ADR-023-countersigned-partner-documents.md`. The "Current state" section above describes the code **before** this branch.
+
+- **Licence number**
+  - PL PWZ (mod-11 check digit) and MX cédula are validated by one shared validator (`@neo/documents` browser entry).
+  - They appear on the HCP, lead and invite forms, on the HCP detail view, and in the registration edit dialog (required there).
+  - Migration 028 moves the old `national_ids.primary` value into `pwz` or `cedula`.
+- **Documents**
+  - Three templates, `partnerAgreement` (with the DPA in `{{slot:annex}}`), `partnerDpa` and `partnerPrivacyNotice`, each with `pl` and `mx` locales.
+  - The approved v1 texts are seeded by `apps/api/scripts/seedPartnerDocumentContent.ts`.
+  - `gdprConsent.*` is hidden from the editor.
+- **API**
+  - Signatory config and approvals live in `app_config.metadata.partnerSignatories`.
+  - Activation blocks the invite when the documents aren't ready, and stamps the countersignature date on the token.
+  - Token-gated preview: `GET /invite/document`.
+  - Accept takes one signature plus the notice acknowledgement plus the version ids; a stale version returns 409.
+  - PDFs are rendered with Puppeteer and stored with the evidence bundle.
+  - The email CC goes to the jurisdiction's inbox.
+  - pdf-lib is removed.
+- **PWA**
+  - The checkboxes become two document rows and a `PartnerDocumentDialog` (the real document, NeoSleep's signature, a pad with Clear on it).
+  - Edit details is an outlined button; the dialog adds the licence number and owner/staff choice.
+  - Finish is gated on all steps being done.
+  - Success screen, then `/login?email=` prefill.
+  - The scroll bug is fixed (the card was a shrinking flex item).
+  - The Documents editor has an approval banner.
+- **Security fix found on the way:** invited doctors' logins got the shared initial password on every API start. They are now excluded, and password login rejects inactive accounts.
+
+**Verified locally** (throwaway Postgres, fake storage, local Chrome):
+- A full PL flow in the browser at 390×844.
+- A MX flow through the API.
+- The generated PDFs, with both signatures and dates, the owner and staff variants, and the licence number.
+- Login with the new password.
+- Approve → edit → re-approve in the editor.
+
+**Ops after merge to dev** (manual):
+1. `seedPartnerDocumentContent.ts`.
+2. `setupPartnerSignatories.ts`, once each for PL and MX, using the PNGs from `secrets/signatures/`.
+3. Łukasz approves the PL versions and Alfred the MX versions in the Documents tab.
+4. Re-send one test invite.
