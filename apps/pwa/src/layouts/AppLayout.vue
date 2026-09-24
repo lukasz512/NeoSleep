@@ -109,7 +109,11 @@
         id="main-content"
         tabindex="-1"
         class="layout-main__inner"
-        :class="{ 'layout-main--fading': localeTransitioning, 'layout-main__inner--mobile': isMobile }"
+        :class="{
+          'layout-main--fading': localeTransitioning,
+          'layout-main__inner--mobile': isMobile,
+          'layout-main__inner--version-space': !isMobile && !!appVersionLabel,
+        }"
       >
         <RouterView v-slot="{ Component }">
           <!-- appear: this app-layout mount is only reached right after the
@@ -454,12 +458,20 @@ const moduleIcon = computed(() => {
   display: flex;
   flex-direction: column;
 }
-/* Quiet footnote, not UI: small, low-contrast, click-through so it never
-   covers a list row's tap target underneath. */
+/* Desktop: an empty strip under the content for the fixed version line to
+   sit in, so it never lands on a table's last row or pagination. Views that
+   size themselves to the viewport (useFillViewportHeight) count this padding,
+   so their tables end above the strip on their own. */
+.layout-main__inner--version-space {
+  padding-bottom: 44px;
+}
+
+/* Quiet footnote, not UI: small, low-contrast, click-through. Desktop:
+   centered in the strip above (44px strip, ~15px line, 14px from the edge). */
 .layout-app-version {
   position: fixed;
-  right: max(12px, env(safe-area-inset-right));
-  bottom: max(8px, env(safe-area-inset-bottom));
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(14px, env(safe-area-inset-bottom));
   z-index: 5;
   margin: 0;
   font-size: 11px;
