@@ -296,18 +296,23 @@ import type { Ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 import { brandColors } from "@brand/colors";
-import { BRAND_PWA_BADGE_URL } from "@brand/logos";
+import { BRAND_PWA_BADGE_URL, BRAND_PWA_BADGE_DARK_URL } from "@brand/logos";
 import { createUseLoginFlow } from "../composables/useLoginFlow";
 import { createUseForgotPasswordFlow } from "../composables/useForgotPasswordFlow";
 import { createUseResetPasswordFlow } from "../composables/useResetPasswordFlow";
 import { useMagneticPointer } from "../composables/useMagneticPointer";
 import { AUTH_BACKGROUND_EXIT_KEY } from "../composables/authBackgroundExit";
 import type { ApiFetchOptions } from "@api";
-import type { AuthTokenStorage } from "@stores";
+import { useThemeStore, type AuthTokenStorage } from "@stores";
 import AuthChrome from "../components/AuthChrome.vue";
 import AuthCard from "../components/AuthCard.vue";
 
-const pwaBadgeUrl = BRAND_PWA_BADGE_URL;
+// White badge in light mode, dark badge in dark mode (NEO-12) — same theme
+// source AuthChrome uses for its logo.
+const themeStore = useThemeStore();
+const pwaBadgeUrl = computed(() =>
+  themeStore.mode === "dark" ? BRAND_PWA_BADGE_DARK_URL : BRAND_PWA_BADGE_URL,
+);
 
 type ApiFetchFn = (path: string, options?: ApiFetchOptions) => Promise<Response>;
 type Step = "signin" | "forgot" | "sent" | "reset";

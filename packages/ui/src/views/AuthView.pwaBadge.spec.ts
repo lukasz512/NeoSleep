@@ -4,11 +4,12 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { inflateSync } from "node:zlib";
-import { BRAND_PWA_BADGE_URL } from "@brand/logos";
+import { BRAND_PWA_BADGE_URL, BRAND_PWA_BADGE_DARK_URL } from "@brand/logos";
 
-// NEO-12: the PWA badge under the login card must read as light-on-teal —
-// white P and A, a light lavender W — instead of the original dark grey
-// (#3d3d3d) + saturated purple (#5a0fc8), which clashed with the login page.
+// NEO-12: the PWA badge under the login card has one asset per theme.
+// Light mode: white P and A, light lavender W. Dark mode: the original dark
+// grey (#3d3d3d) P and A with a purple (#5a0fc8) W. AuthView picks between them
+// (see AuthView.spec.ts); this spec guards the pixels of each file.
 
 interface DecodedPng {
   width: number;
@@ -66,9 +67,9 @@ function decodeRgbaPng(buf: Buffer): DecodedPng {
   return { width, height, rgba };
 }
 
-function loadBadge(): DecodedPng {
-  // BRAND_PWA_BADGE_URL is served from packages/brand ("/brand/..." → packages/brand/...).
-  const relative = BRAND_PWA_BADGE_URL.replace(/^\/brand\//, "");
+function loadBadge(url: string): DecodedPng {
+  // Badge URLs are served from packages/brand ("/brand/..." → packages/brand/...).
+  const relative = url.replace(/^\/brand\//, "");
   const here = dirname(fileURLToPath(import.meta.url));
   const path = resolve(here, "../../../brand", relative);
   return decodeRgbaPng(readFileSync(path));
@@ -84,9 +85,9 @@ function opaqueColorCounts(png: DecodedPng): Map<string, number> {
   return counts;
 }
 
-describe("PWA badge asset (NEO-12)", () => {
+describe("PWA badge asset — light mode (NEO-12)", () => {
   it("uses white and light lavender (#c4b5fd) as its two dominant colors", () => {
-    const counts = opaqueColorCounts(loadBadge());
+    const counts = opaqueColorCounts(loadBadge(BRAND_PWA_BADGE_URL));
     const topTwo = [...counts.entries()]
       .sort((x, y) => y[1] - x[1])
       .slice(0, 2)
@@ -96,7 +97,7 @@ describe("PWA badge asset (NEO-12)", () => {
   });
 
   it("has no dark or saturated-purple pixels left from the old badge", () => {
-    const png = loadBadge();
+    const png = loadBadge(BRAND_PWA_BADGE_URL);
     let darkPixels = 0;
     for (let i = 0; i < png.rgba.length; i += 4) {
       if (png.rgba[i + 3] === 0) continue;
@@ -105,5 +106,17 @@ describe("PWA badge asset (NEO-12)", () => {
       if (Math.min(png.rgba[i], png.rgba[i + 1], png.rgba[i + 2]) < 0xb5) darkPixels++;
     }
     expect(darkPixels).toBe(0);
+  });
+});
+
+describe("PWA badge asset — dark mode (NEO-12)", () => {
+  it("uses dark grey (#3d3d3d) and purple (#5a0fc8) as its two dominant colors", () => {
+    const counts = opaqueColorCounts(loadBadge(BRAND_PWA_BADGE_DARK_URL));
+    const topTwo = [...counts.entries()]
+      .sort((x, y) => y[1] - x[1])
+      .slice(0, 2)
+      .map(([hex]) => hex)
+      .sort();
+    expect(topTwo).toEqual(["3d3d3d", "5a0fc8"]);
   });
 });
