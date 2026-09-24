@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mount, type VueWrapper } from "@vue/test-utils";
+import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
 import { setActivePinia, createPinia } from "pinia";
 import { createI18n } from "vue-i18n";
 import { createVuetify } from "vuetify";
@@ -51,6 +51,9 @@ const HISTORY = [
   },
 ];
 
+/** GET .../approval for a template NeoSleep doesn't countersign (NEO-51). */
+const NOT_COUNTERSIGNED = jsonResponse(true, 200, { countersigned: false });
+
 const mountedWrappers: VueWrapper[] = [];
 afterEach(() => {
   for (const w of mountedWrappers.splice(0)) w.unmount();
@@ -81,14 +84,18 @@ describe("DocumentContentEditorView", () => {
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, CURRENT_VERSION));
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, HISTORY));
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, []));
+    apiFetch.mockResolvedValueOnce(NOT_COUNTERSIGNED);
     const { wrapper } = await mountEditor();
 
-    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(3));
+    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(4));
     expect(apiFetch).toHaveBeenNthCalledWith(1, "/api/v1/document-content/gdprConsent.pl/pl", { handleErrors: false });
     expect(apiFetch).toHaveBeenNthCalledWith(2, "/api/v1/document-content/gdprConsent.pl/pl/versions", {
       handleErrors: false,
     });
     expect(apiFetch).toHaveBeenNthCalledWith(3, "/api/v1/document-content/gdprConsent.pl/entity-types", {
+      handleErrors: false,
+    });
+    expect(apiFetch).toHaveBeenNthCalledWith(4, "/api/v1/document-content/gdprConsent.pl/pl/approval", {
       handleErrors: false,
     });
 
@@ -102,8 +109,9 @@ describe("DocumentContentEditorView", () => {
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, CURRENT_VERSION));
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, HISTORY));
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, []));
+    apiFetch.mockResolvedValueOnce(NOT_COUNTERSIGNED);
     const { wrapper } = await mountEditor();
-    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(3));
+    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(4));
     await wrapper.vm.$nextTick();
 
     const chip = wrapper.find("span[data-protected-token]");
@@ -115,9 +123,10 @@ describe("DocumentContentEditorView", () => {
     apiFetch.mockResolvedValueOnce(jsonResponse(false, 404, { error: "not found" }));
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, []));
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, []));
+    apiFetch.mockResolvedValueOnce(NOT_COUNTERSIGNED);
     const { wrapper } = await mountEditor();
 
-    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(3));
+    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(4));
     await wrapper.vm.$nextTick();
 
     expect(wrapper.text()).not.toContain("Document not found");
@@ -129,20 +138,22 @@ describe("DocumentContentEditorView", () => {
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, CURRENT_VERSION));
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, HISTORY));
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, []));
+    apiFetch.mockResolvedValueOnce(NOT_COUNTERSIGNED);
     const { wrapper } = await mountEditor();
-    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(3));
+    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(4));
     await wrapper.vm.$nextTick();
 
     const saveResponse = { ...CURRENT_VERSION, id: "v-3", version_number: 3 };
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, saveResponse));
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, [saveResponse, ...HISTORY]));
+    apiFetch.mockResolvedValueOnce(NOT_COUNTERSIGNED);
 
     await wrapper.find("button.doc-editor__toolbar-btn").trigger("click"); // sanity: toolbar renders without throwing
     const saveButton = wrapper.findAll("button").find((b) => b.text().includes("Save new version"));
     await saveButton?.trigger("click");
 
-    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(5));
-    const saveCall = apiFetch.mock.calls[3];
+    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(7));
+    const saveCall = apiFetch.mock.calls[4];
     expect(saveCall[0]).toBe("/api/v1/document-content/gdprConsent.pl/pl");
     const body = JSON.parse((saveCall[1] as RequestInit).body as string) as { contentHtml: string };
     expect(body.contentHtml).toContain("{legalEntityName}");
@@ -155,8 +166,9 @@ describe("DocumentContentEditorView", () => {
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, CURRENT_VERSION));
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, HISTORY));
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, ["practitioner"]));
+    apiFetch.mockResolvedValueOnce(NOT_COUNTERSIGNED);
     const { wrapper } = await mountEditor();
-    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(3));
+    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(4));
     await wrapper.vm.$nextTick();
 
     const permissionsTab = wrapper.findAll("button, [role='tab']").find((b) => b.text() === "Permissions");
@@ -167,10 +179,33 @@ describe("DocumentContentEditorView", () => {
     const saveButton = wrapper.findAll("button").find((b) => b.text() === "Save");
     await saveButton?.trigger("click");
 
-    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(4));
-    const putCall = apiFetch.mock.calls[3];
+    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(5));
+    const putCall = apiFetch.mock.calls[4];
     expect(putCall[0]).toBe("/api/v1/document-content/gdprConsent.pl/entity-types");
     expect((putCall[1] as RequestInit).method).toBe("PUT");
     expect(notify).toHaveBeenCalledWith("Saved", "success");
+  });
+  it("shows the signatory approval banner for a countersigned document and approves the current version (NEO-51)", async () => {
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, CURRENT_VERSION));
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, HISTORY));
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, []));
+    apiFetch.mockResolvedValueOnce(
+      jsonResponse(true, 200, { countersigned: true, signatoryName: "Łukasz Ostrowski / NeoSleep", canApprove: true, approvedVersionId: null }),
+    );
+    const { wrapper } = await mountEditor();
+    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(4));
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("isn't approved yet");
+    const approve = wrapper.findAll("button").find((b) => b.text().includes("Approve & apply my signature"))!;
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, { versionId: CURRENT_VERSION.id, versionNumber: 2 }));
+    apiFetch.mockResolvedValueOnce(
+      jsonResponse(true, 200, { countersigned: true, signatoryName: "Łukasz Ostrowski / NeoSleep", canApprove: true, approvedVersionId: CURRENT_VERSION.id }),
+    );
+    await approve.trigger("click");
+    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(6));
+    expect(apiFetch.mock.calls[4]![0]).toBe(`/api/v1/document-content/gdprConsent.pl/pl/versions/${CURRENT_VERSION.id}/approve`);
+    await flushPromises();
+    expect(wrapper.text()).toContain("is approved and carries");
   });
 });

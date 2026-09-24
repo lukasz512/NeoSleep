@@ -335,6 +335,13 @@ const notify = inject<NotifyFn>("neo:notify")!;
 const useLoginFlow = createUseLoginFlow(apiFetch, authTokenStorage);
 const loginFlow = useLoginFlow();
 
+// ?email= prefill — e.g. the "Go to login" button a doctor sees right after
+// finishing partner registration (NEO-51), so they only type the password
+// they just chose. Never overwrites something already typed.
+if (typeof route.query.email === "string" && !loginFlow.email.value) {
+  loginFlow.email.value = route.query.email;
+}
+
 // The sign-in error used to render inline (a VAlert above the form) — moved
 // onto the app's native toast/notification system instead (NEO-10), matching
 // every other error surface in the app. loginFlow.errorKey itself is

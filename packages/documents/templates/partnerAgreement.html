@@ -43,7 +43,9 @@
     --font: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
   * { box-sizing: border-box; }
-  @page { size: A4; margin: 18mm 14mm 14mm; }
+  /* 26mm bottom: room for the 3-line Puppeteer contact footer (CSS @page
+     margins win over page.pdf()'s own margin option). */
+  @page { size: A4; margin: 18mm 14mm 26mm; }
   body {
     font-family: var(--font);
     font-weight: 300;
@@ -72,6 +74,8 @@
   ol, ul { margin: 0 0 8px; padding-left: 20px; }
   li { margin-bottom: 4px; text-align: justify; }
   .doc-content p strong, .annex-content p strong { display: block; text-align: center; margin-top: 14px; color: var(--secondary); font-weight: 600; }
+  /* A "§ n." heading paragraph never ends a page on its own. */
+  .doc-content p:has(> strong:only-child), .annex-content p:has(> strong:only-child) { break-after: avoid; }
   .parties p { text-align: justify; }
   .field-value { font-weight: 500; }
   .annex { break-before: page; margin-top: 28px; }
@@ -85,6 +89,14 @@
   .screen-only.contact-footer { font-size: 8pt; color: var(--secondary); border-top: 1px solid #ccc; padding-top: 8px; margin-top: 24px; }
   .screen-only.contact-footer .doc-ref { text-align: right; margin-top: 2px; }
   @media print { body { padding: 0; max-width: none; } .screen-only { display: none; } }
+  /* Phone-width preview (PWA signing dialog): justified legal text leaves
+     huge word gaps in a narrow column — left-align there; the A4 PDF keeps
+     justification. Stack the two signature blocks too. */
+  @media screen and (max-width: 600px) {
+    body { padding: 20px 16px; }
+    p, li, .parties p { text-align: left; }
+    .signatures { grid-template-columns: 1fr; }
+  }
 </style>
 </head>
 <body>

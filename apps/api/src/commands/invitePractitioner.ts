@@ -318,6 +318,8 @@ export interface PartnerDocumentPreview {
   /** The signatory's signature PNG as a data URL (agreement only) — only ever sent through this token-gated response. */
   imageFields: Record<string, string>;
   versionIds: string[];
+  /** Human version shown in the signing intent statement — "agreement.dpa" for the agreement (e.g. "1.1"), the notice's own number otherwise. */
+  versionLabel: string;
 }
 
 /**
@@ -348,6 +350,7 @@ export async function GetPartnerDocumentPreviewQuery(
       dataFields: {},
       imageFields: {},
       versionIds: [set.notice.id],
+      versionLabel: String(set.notice.version_number),
     };
   }
 
@@ -362,6 +365,7 @@ export async function GetPartnerDocumentPreviewQuery(
     },
     imageFields: { counterparty_signature: await loadSignatoryPngDataUrl(set.signatory) },
     versionIds: [set.agreement.id, set.dpa.id],
+    versionLabel: `${set.agreement.version_number}.${set.dpa.version_number}`,
   };
 }
 
@@ -493,14 +497,18 @@ export async function AcceptPractitionerInviteCommand(
     input.agreementSignatureDataUrl,
   );
   const noticeDoc = buildNoticeDocument(set, signerName, signedAtLabel);
+  // 26mm bottom margin: the shared 3-line contact footer is taller than the
+  // renderer's 14mm default, and body text would otherwise run into it.
   const agreementPdf = await renderHtmlToPdf(agreementDoc.html, {
     footerTemplate: agreementDoc.footerHtml,
+    marginBottom: "26mm",
     dataFields: agreementDoc.dataFields,
     imageFields: agreementDoc.imageFields,
     variant: agreementDoc.variant,
   });
   const noticePdf = await renderHtmlToPdf(noticeDoc.html, {
     footerTemplate: noticeDoc.footerHtml,
+    marginBottom: "26mm",
     dataFields: noticeDoc.dataFields,
   });
 

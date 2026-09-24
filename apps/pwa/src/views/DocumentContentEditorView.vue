@@ -30,6 +30,29 @@
               {{ t("user.document-content.editor.noContentYet") }}
             </p>
 
+            <!-- NEO-51: partner agreement / DPA carry a NeoSleep signatory's
+                 signature — only on a version that signatory approved. -->
+            <VAlert
+              v-if="approval?.countersigned && currentVersionNumber !== null"
+              :type="!approval.signatoryName ? 'error' : isCurrentApproved ? 'success' : 'warning'"
+              variant="tonal"
+              density="compact"
+              class="doc-editor__approval"
+            >
+              <template v-if="!approval.signatoryName">{{ t("user.document-content.approval.noSignatory") }}</template>
+              <template v-else-if="isCurrentApproved">
+                {{ t("user.document-content.approval.approved", { version: currentVersionNumber, name: approval.signatoryName }) }}
+              </template>
+              <template v-else>
+                {{ t("user.document-content.approval.pending", { version: currentVersionNumber, name: approval.signatoryName }) }}
+              </template>
+              <template v-if="approval.canApprove && !isCurrentApproved" #append>
+                <AppButton color="primary" variant="flat" size="small" :loading="approving" @click="onApprove">
+                  {{ t("user.document-content.approval.approve") }}
+                </AppButton>
+              </template>
+            </VAlert>
+
             <div class="doc-editor__layout">
               <div class="doc-editor__main">
                 <p class="doc-editor__token-hint">{{ t("user.document-content.editor.protectedTokenHint") }}</p>
@@ -96,6 +119,9 @@
                     <span class="doc-editor__history-version">
                       v{{ v.version_number }}
                       <span v-if="v.is_current" class="doc-editor__history-badge">{{ t("user.document-content.editor.history.current") }}</span>
+                      <span v-if="approval?.approvedVersionId === v.id" class="doc-editor__history-badge doc-editor__history-badge--approved">
+                        {{ t("user.document-content.editor.history.approved") }}
+                      </span>
                     </span>
                     <span class="doc-editor__history-by">{{ t("user.document-content.editor.history.by", { name: v.created_by_name }) }}</span>
                     <span class="doc-editor__history-date">{{ formatDate(v.created_at) }}</span>
@@ -141,7 +167,7 @@ import { useRoute, useRouter } from "vue-router";
 import { useEditor, EditorContent } from "@tiptap/vue-3";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
-import { VTextField, VAutocomplete } from "vuetify/components";
+import { VTextField, VAutocomplete, VAlert } from "vuetify/components";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import DetailViewTabs, { type DetailViewTab } from "../components/DetailViewTabs.vue";
 import AppIcon from "../components/AppIcon.vue";
@@ -175,7 +201,21 @@ const loading = ref(true);
 const loadError = ref(false);
 const hasContent = ref(false);
 const currentVersionNumber = ref<number | null>(null);
+const currentVersionId = ref<string | null>(null);
 const history = ref<DocumentContentVersion[]>([]);
+
+/** GET .../approval — `countersigned: false` for every template the NeoSleep signatory doesn't sign. */
+interface ApprovalStatus {
+  countersigned: boolean;
+  signatoryName?: string | null;
+  canApprove?: boolean;
+  approvedVersionId?: string | null;
+}
+const approval = ref<ApprovalStatus | null>(null);
+const approving = ref(false);
+const isCurrentApproved = computed(
+  () => !!currentVersionId.value && approval.value?.approvedVersionId === currentVersionId.value
+);
 const changeNote = ref("");
 const saving = ref(false);
 
@@ -223,6 +263,34 @@ async function loadHistory(): Promise<void> {
   if (res.ok) history.value = (await res.json()) as DocumentContentVersion[];
 }
 
+async function loadApproval(): Promise<void> {
+  const res = await apiFetch(`/api/v1/document-content/${templateKey.value}/${documentLocale.value}/approval`, {
+    handleErrors: false,
+  });
+  approval.value = res.ok ? ((await res.json()) as ApprovalStatus) : null;
+}
+
+async function onApprove(): Promise<void> {
+  if (!currentVersionId.value || approving.value) return;
+  approving.value = true;
+  try {
+    const res = await apiFetch(
+      `/api/v1/document-content/${templateKey.value}/${documentLocale.value}/versions/${currentVersionId.value}/approve`,
+      { method: "POST" },
+    );
+    if (res.ok) {
+      notifications.show(t("user.document-content.approval.approveSuccess"), "success");
+      await loadApproval();
+    } else {
+      notifications.show(t("user.document-content.approval.approveError"), "error");
+    }
+  } catch {
+    notifications.show(t("user.document-content.approval.approveError"), "error");
+  } finally {
+    approving.value = false;
+  }
+}
+
 /** Entity-type assignment is keyed by templateKey alone (not templateKey+locale — see ADR-021: assignment is a template-level property). */
 async function loadEntityTypes(): Promise<void> {
   const res = await apiFetch(`/api/v1/document-content/${templateKey.value}/entity-types`, { handleErrors: false });
@@ -240,6 +308,7 @@ async function load(): Promise<void> {
     if (res.ok) {
       const version = (await res.json()) as DocumentContentVersion;
       currentVersionNumber.value = version.version_number;
+      currentVersionId.value = version.id;
       editor.value?.commands.setContent(htmlToEditorHtml(version.content_html));
       hasContent.value = true;
     } else if (res.status === 404) {
@@ -256,6 +325,7 @@ async function load(): Promise<void> {
     }
     await loadHistory();
     await loadEntityTypes();
+    await loadApproval();
   } catch {
     loadError.value = true;
   } finally {
@@ -279,9 +349,12 @@ async function onSave(): Promise<void> {
     if (res.ok) {
       const version = (await res.json()) as DocumentContentVersion;
       currentVersionNumber.value = version.version_number;
+      currentVersionId.value = version.id;
       changeNote.value = "";
       notifications.show(t("user.document-content.editor.saveSuccess"), "success");
       await loadHistory();
+      // A new version is never approved — the banner must flip to "pending".
+      await loadApproval();
     } else {
       notifications.show(t("user.document-content.editor.saveError"), "error");
     }
@@ -451,6 +524,20 @@ async function onSavePermissions(): Promise<void> {
   font-weight: 500;
   background: rgba(var(--v-theme-success), 0.12);
   color: rgb(var(--v-theme-success));
+}
+
+.doc-editor__history-badge--approved {
+  background: rgba(var(--v-theme-primary), 0.12);
+  color: rgb(var(--v-theme-primary));
+}
+
+.doc-editor__approval {
+  margin: 0 0 16px;
+}
+
+.doc-editor__approval :deep(.v-btn) {
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 .doc-editor__history-by,

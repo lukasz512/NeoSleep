@@ -34,12 +34,26 @@ const renderQueue: Array<() => void> = [];
 async function getBrowser(): Promise<Browser> {
   if (!browserPromise) {
     browserPromise = (async () => {
-      const executablePath = await chromium.executablePath();
-      return puppeteer.launch({
-        args: chromium.args,
-        executablePath,
-        headless: true,
+      // Local development only: @sparticuz/chromium ships a Linux binary, so
+      // on macOS/Windows a developer points CHROME_EXECUTABLE_PATH at a local
+      // Chrome/Chromium (e.g. Playwright's) to render PDFs. Unset everywhere
+      // else — Render uses the bundled binary.
+      const localChrome = process.env.CHROME_EXECUTABLE_PATH;
+      const browser = localChrome
+        ? await puppeteer.launch({ executablePath: localChrome, headless: true })
+        : await puppeteer.launch({
+            args: chromium.args,
+            executablePath: await chromium.executablePath(),
+            headless: true,
+          });
+      // If Chrome crashes or gets killed, drop the cached handle so the next
+      // render launches a fresh browser instead of every render failing with
+      // "Connection closed" until the whole API process restarts (seen while
+      // verifying NEO-51 locally).
+      browser.on("disconnected", () => {
+        browserPromise = null;
       });
+      return browser;
     })().catch((err: unknown) => {
       // Don't cache a rejected launch — let the next call retry instead of
       // every future render failing forever off one transient error.
