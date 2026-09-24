@@ -14,6 +14,7 @@ vi.mock("../composables/useApi", async (importOriginal) => ({
 }));
 
 import EntityHistoryPanel from "./EntityHistoryPanel.vue";
+import { useConfigStore } from "../stores/config";
 
 function jsonResponse(ok: boolean, body: unknown) {
   return { ok, json: async () => body } as Response;
@@ -157,6 +158,36 @@ describe("EntityHistoryPanel", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].text()).toContain("Ordered");
     expect(rows[0].text()).toContain("Device shipped");
+  });
+
+  it("shows region names from the tenant region lookup instead of raw codes", async () => {
+    apiFetch.mockResolvedValueOnce(
+      jsonResponse(true, {
+        entries: [
+          {
+            ...statusChangeEntry,
+            entity_type: "Patient",
+            entity_before: { status: "active", region: "PL-MZ" },
+            entity_after: { status: "active", region: "PL-PM" },
+          },
+        ],
+        lead_source: null,
+      })
+    );
+    const wrapper = mountPanel();
+    const region = (key: string, value: string, sort_order: number) =>
+      ({ key, value, locale: "en", sort_order, locked: false, custom: true });
+    useConfigStore().options = {
+      regions: [region("PL-MZ", "Mazowieckie", 1), region("PL-PM", "Pomorskie", 2)],
+      specialties: [],
+      organization_types: [],
+    };
+
+    await vi.waitFor(() => expect(wrapper.find("[data-test='history-changes']").exists()).toBe(true));
+    const changes = wrapper.get("[data-test='history-changes']").text();
+    expect(changes).toContain("Mazowieckie");
+    expect(changes).toContain("Pomorskie");
+    expect(changes).not.toContain("PL-MZ");
   });
 
   it("attributes entries without a user to the system", async () => {

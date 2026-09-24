@@ -135,6 +135,12 @@ describe("historyValueLabel", () => {
     expect(historyValueLabel(tEn, "Practitioner", "primary_specialty", "custom_code", lookups)).toBe("custom_code");
   });
 
+  it("resolves region codes through the tenant region lookup, falling back to the code", () => {
+    const lookups = { region: (code: string) => (code === "PL-MZ" ? "Mazowieckie" : undefined) };
+    expect(historyValueLabel(tEn, "Patient", "region", "PL-MZ", lookups)).toBe("Mazowieckie");
+    expect(historyValueLabel(tEn, "Patient", "region", "XX-UNKNOWN", lookups)).toBe("XX-UNKNOWN");
+  });
+
   it("says 'Not set' for empty values instead of a bare dash", () => {
     expect(historyValueLabel(tEn, "Organization", "region", null)).toBe("Not set");
     expect(historyValueLabel(tEn, "Organization", "region", "")).toBe("Not set");

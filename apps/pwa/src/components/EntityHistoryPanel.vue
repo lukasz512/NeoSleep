@@ -260,8 +260,11 @@ const dayGroups = computed(() => groupHistoryByDay(entries.value));
 const entryIndexById = computed(() => new Map(entries.value.map((e, i) => [e.id, i])));
 const dateLocale = computed(() => intlLocale(locale.value));
 
+// Tenant lookups, localized and loaded app-wide by useLayoutState — the same
+// lists the entity forms write `region`/`primary_specialty` from.
 const lookups: HistoryValueLookups = {
   specialty: (code) => configStore.specialtyItems.find((o) => o.value === code)?.title,
+  region: (code) => configStore.regionItems.find((o) => o.value === code)?.title,
 };
 
 function entryIndex(id: string): number {
