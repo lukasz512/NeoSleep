@@ -18,6 +18,9 @@ brand/
     logo/            Full logo (icon + wordmark) – header, sidebar
       logo_light.svg   For light theme.
       logo_dark.svg    For dark theme.
+    pwa/
+      pwa-badge.png    "PWA" badge under the login card – white P/A, lavender (#C4B5FD) W,
+                       made for the teal login background (NEO-12; guarded by AuthView.pwaBadge.spec.ts).
   fonts/             Optional: custom font files if specified in brandbook
 ```
 
