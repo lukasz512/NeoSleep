@@ -158,6 +158,17 @@ defineEmits<{
   background: rgba(var(--v-theme-surface), 1);
 }
 
+/* Desktop (>= MOBILE_BREAKPOINT, constants.ts): no card chrome — the detail content
+   sits directly on the page, flush with the back-button row above it. */
+@media (min-width: 768px) {
+  .view-item__card {
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+  }
+}
+
 .view-item__title {
   margin: 0 0 20px 0;
   font-size: 1.5rem;
