@@ -13,7 +13,14 @@
       :filter-param-keys="['status', 'type']"
     >
       <template #item.patient_name="{ item }">
-        {{ (item as { patient_name?: string }).patient_name || "—" }}
+        <span v-if="(item as TreatmentPlanRow).patient_name" class="treatment-plans-name-cell">
+          <AppAvatar :name="(item as TreatmentPlanRow).patient_name" entity-type="patient" :size="32" />
+          {{ (item as TreatmentPlanRow).patient_name }}
+        </span>
+        <span v-else>—</span>
+      </template>
+      <template #feed-card-avatar="{ item }">
+        <AppAvatar :name="(item as TreatmentPlanRow).patient_name" entity-type="patient" :size="55" />
       </template>
       <template #feed-card-title="{ item }">
         {{ (item as { patient_name?: string }).patient_name || "—" }}
@@ -32,13 +39,14 @@
         </VChip>
       </template>
       <template #feed-card-meta="{ item }">
-        {{ treatmentPlanCardMeta(item as TreatmentPlanRow) }}
-      </template>
-      <template #item.dentist_name="{ item }">
-        <EntityLink
-          :to="(item as TreatmentPlanRow).dentist_id ? { name: 'hcp-detail', params: { id: (item as TreatmentPlanRow).dentist_id } } : null"
+        <EntityMetaLine
+          :text="treatmentPlanCardMeta(item as TreatmentPlanRow)"
+          :to="hcpDetailLink((item as TreatmentPlanRow).dentist_id)"
           :label="(item as TreatmentPlanRow).dentist_name"
         />
+      </template>
+      <template #item.dentist_name="{ item }">
+        <EntityLink :to="hcpDetailLink((item as TreatmentPlanRow).dentist_id)" :label="(item as TreatmentPlanRow).dentist_name" />
       </template>
     </AppEntityList>
   </div>
@@ -49,10 +57,14 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
 import EntityLink from "../components/EntityLink.vue";
+import EntityMetaLine from "../components/EntityMetaLine.vue";
+import AppAvatar from "../components/AppAvatar.vue";
 import type { FilterDefinition } from "../composables/useFilters";
 import { treatmentPlanCardMeta as treatmentPlanCardMetaFormatter } from "../utils/mobileCardMeta";
+import { hcpDetailLink } from "../utils/entityLinks";
 
 interface TreatmentPlanRow {
+  patient_name?: string | null;
   type?: string;
   dentist_id?: string | null;
   dentist_name?: string | null;
@@ -101,9 +113,9 @@ function typeLabel(type?: string): string {
   return type ? t(`app.treatmentPlans.type.${camelKey(type)}`) : "—";
 }
 
-/** Mobile card's second line — type + dentist, same data the desktop table
- *  already shows in separate columns (status is shown via the chip already,
- *  not repeated here — NEO-19). */
+/** Mobile card's second line — the type; the dentist is appended as an
+ *  EntityLink by EntityMetaLine (status is shown via the chip already, not
+ *  repeated here — NEO-19). */
 function treatmentPlanCardMeta(plan: TreatmentPlanRow): string {
   return treatmentPlanCardMetaFormatter(plan, typeLabel);
 }
@@ -133,3 +145,11 @@ const listI18n = computed(() => ({
   errorLoad: "app.treatmentPlans.errorLoad",
 }));
 </script>
+
+<style scoped>
+.treatment-plans-name-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+</style>

@@ -48,10 +48,7 @@
       {{ specialtyLabel((item as HCPListItem).specialty) }}
     </template>
     <template #item.institution="{ item }">
-      <EntityLink
-        :to="(item as HCPListItem).organization_id ? { name: 'hco-detail', params: { id: (item as HCPListItem).organization_id } } : null"
-        :label="(item as HCPListItem).institution"
-      />
+      <EntityLink :to="hcoDetailLink((item as HCPListItem).organization_id)" :label="(item as HCPListItem).institution" />
     </template>
     <template #item.region="{ item }">
       {{ (item as HCPListItem).territory_name || (item as HCPListItem).region || "—" }}
@@ -65,7 +62,11 @@
       </span>
     </template>
     <template #feed-card-meta="{ item }">
-      {{ hcpCardMeta(item as HCPListItem) }}
+      <EntityMetaLine
+        :text="hcpCardMeta(item as HCPListItem)"
+        :to="hcoDetailLink((item as HCPListItem).organization_id)"
+        :label="(item as HCPListItem).institution"
+      />
     </template>
     <template #feed-card-status="{ item }">
       <VChip size="x-small" variant="tonal" color="primary" class="hcp-specialty-chip">
@@ -107,6 +108,8 @@ import { useConfigStore } from "../stores/config";
 import { hcpFormFields, hcpFormDerive, resolveOrganizationIdForSubmit } from "../config/forms/hcpForm";
 import { practitionerSpecialtyIcon } from "../utils/hcpLabels";
 import { hcpCardMeta } from "../utils/mobileCardMeta";
+import { hcoDetailLink } from "../utils/entityLinks";
+import EntityMetaLine from "../components/EntityMetaLine.vue";
 
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));

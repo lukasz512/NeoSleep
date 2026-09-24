@@ -44,6 +44,12 @@ import AppAvatar, { type AppAvatarEntityType } from "./AppAvatar.vue";
 const props = defineProps<{
   to: RouteLocationRaw | null;
   label: string | null | undefined;
+  /**
+   * Only for a `to` with no route name to derive the type from - e.g. a
+   * lead's free-text institution, linked via hcoListLink()'s path + query
+   * because there's no organization id to link to.
+   */
+  entityType?: AppAvatarEntityType;
 }>();
 
 const ROUTE_ENTITY_TYPES: Record<string, AppAvatarEntityType> = {
@@ -58,6 +64,7 @@ const ROUTE_ENTITY_TYPES: Record<string, AppAvatarEntityType> = {
 const PLACE_ENTITY_TYPES = new Set<AppAvatarEntityType>(["hco"]);
 
 const entityType = computed<AppAvatarEntityType>(() => {
+  if (props.entityType) return props.entityType;
   const name = props.to && typeof props.to === "object" && "name" in props.to ? props.to.name : null;
   return (typeof name === "string" && ROUTE_ENTITY_TYPES[name]) || "user";
 });

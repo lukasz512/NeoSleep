@@ -13,7 +13,14 @@
       :filter-param-keys="['status']"
     >
       <template #item.patient_name="{ item }">
-        {{ (item as { patient_name?: string }).patient_name || "—" }}
+        <span v-if="(item as SleepStudyRow).patient_name" class="sleep-studies-name-cell">
+          <AppAvatar :name="(item as SleepStudyRow).patient_name" entity-type="patient" :size="32" />
+          {{ (item as SleepStudyRow).patient_name }}
+        </span>
+        <span v-else>—</span>
+      </template>
+      <template #feed-card-avatar="{ item }">
+        <AppAvatar :name="(item as SleepStudyRow).patient_name" entity-type="patient" :size="55" />
       </template>
       <template #feed-card-title="{ item }">
         {{ (item as { patient_name?: string }).patient_name || "—" }}
@@ -34,7 +41,11 @@
         </VChip>
       </template>
       <template #feed-card-meta="{ item }">
-        {{ sleepStudyCardMeta(item as SleepStudyRow) }}
+        <EntityMetaLine
+          :text="sleepStudyCardMeta(item as SleepStudyRow)"
+          :to="hcpDetailLink((item as SleepStudyRow).interpreted_by)"
+          :label="(item as SleepStudyRow).interpreted_by_name"
+        />
       </template>
       <template #item.study_date="{ item }">
         {{ (item as { study_date?: string }).study_date ? new Date((item as { study_date?: string }).study_date!).toLocaleDateString() : "—" }}
@@ -43,10 +54,7 @@
         {{ (item as { ahi_score?: number | null }).ahi_score ?? "—" }}
       </template>
       <template #item.interpreted_by_name="{ item }">
-        <EntityLink
-          :to="(item as SleepStudyRow).interpreted_by ? { name: 'hcp-detail', params: { id: (item as SleepStudyRow).interpreted_by } } : null"
-          :label="(item as SleepStudyRow).interpreted_by_name"
-        />
+        <EntityLink :to="hcpDetailLink((item as SleepStudyRow).interpreted_by)" :label="(item as SleepStudyRow).interpreted_by_name" />
       </template>
     </AppEntityList>
   </div>
@@ -57,10 +65,14 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
 import EntityLink from "../components/EntityLink.vue";
+import EntityMetaLine from "../components/EntityMetaLine.vue";
+import AppAvatar from "../components/AppAvatar.vue";
 import type { FilterDefinition } from "../composables/useFilters";
 import { sleepStudyCardMeta as sleepStudyCardMetaFormatter } from "../utils/mobileCardMeta";
+import { hcpDetailLink } from "../utils/entityLinks";
 
 interface SleepStudyRow {
+  patient_name?: string | null;
   study_type?: string;
   study_date?: string;
   ahi_score?: number | null;
@@ -103,9 +115,9 @@ function studyTypeLabel(studyType?: string): string {
   return studyType ? t(`app.sleepStudies.type.${statusKey(studyType)}`) : "—";
 }
 
-/** Mobile card's second line — same study type/date/AHI/interpreted-by data
- *  the desktop table already shows in separate columns (status is shown via
- *  the chip already, not repeated here — NEO-19). */
+/** Mobile card's second line — study type/date/AHI; the interpreting doctor
+ *  is appended as an EntityLink by EntityMetaLine (status is shown via the
+ *  chip already, not repeated here — NEO-19). */
 function sleepStudyCardMeta(study: SleepStudyRow): string {
   return sleepStudyCardMetaFormatter(study, studyTypeLabel, t);
 }
@@ -132,3 +144,11 @@ const listI18n = computed(() => ({
   errorLoad: "app.sleepStudies.errorLoad",
 }));
 </script>
+
+<style scoped>
+.sleep-studies-name-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+</style>

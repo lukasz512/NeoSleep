@@ -49,10 +49,7 @@
         {{ (item as { name?: string }).name }}
       </template>
       <template #item.practitioner_name="{ item }">
-        <span v-if="(item as { practitioner_name?: string }).practitioner_name">
-          {{ (item as { practitioner_name?: string }).practitioner_name }}
-        </span>
-        <span v-else class="app-entity-list__cell-empty">—</span>
+        <EntityLink :to="hcpDetailLink((item as PatientListItem).practitioner_id)" :label="(item as PatientListItem).practitioner_name" />
       </template>
       <template #item.region="{ item }">
         {{ (item as PatientListItem).territory_name || (item as PatientListItem).region || "—" }}
@@ -67,9 +64,11 @@
         </VChip>
       </template>
       <template #feed-card-meta="{ item }">
-        <span v-if="(item as { practitioner_name?: string }).practitioner_name">
-          {{ (item as { practitioner_name?: string }).practitioner_name }}
-        </span>
+        <EntityLink
+          v-if="(item as PatientListItem).practitioner_name"
+          :to="hcpDetailLink((item as PatientListItem).practitioner_id)"
+          :label="(item as PatientListItem).practitioner_name"
+        />
       </template>
       <template #feed-card-status="{ item }">
         <VChip
@@ -99,6 +98,8 @@ import { ref, computed, defineAsyncComponent } from "vue";
 import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
 import AppAvatar from "../components/AppAvatar.vue";
+import EntityLink from "../components/EntityLink.vue";
+import { hcpDetailLink } from "../utils/entityLinks";
 import AppIcon from "../components/AppIcon.vue";
 import AppListItemMenu from "../components/AppListItemMenu.vue";
 import { entityActionIcon, entityActionMenuIconClass } from "../config/entityActions";

@@ -17,7 +17,7 @@ afterEach(() => {
   for (const w of mountedWrappers.splice(0)) w.unmount();
 });
 
-function mountAvatar(props: { entityType: AppAvatarEntityType; orgType?: string; name?: string; avatarUrl?: string }) {
+function mountAvatar(props: { entityType: AppAvatarEntityType; orgType?: string; name?: string; avatarUrl?: string; size?: number }) {
   const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
   const wrapper = mount(AppAvatar, { props, global: { plugins: [vuetify] } });
   mountedWrappers.push(wrapper);
@@ -65,6 +65,13 @@ describe("AppAvatar (patient outlined variant)", () => {
     expect(wrapper.classes()).toContain("app-avatar--outlined");
     expect(wrapper.attributes("style")).toContain("--app-avatar-accent");
     expect(wrapper.find(".app-avatar__initials").text()).toBe("MD");
+  });
+
+  it("scales the ring with size: ~1px on a 20px chip avatar, ~2px at 40px", () => {
+    const small = mountAvatar({ entityType: "patient", name: "Anna Kowalska", size: 20 });
+    const regular = mountAvatar({ entityType: "patient", name: "Anna Kowalska", size: 40 });
+    expect(small.attributes("style")).toContain("--app-avatar-ring: 1.05px");
+    expect(regular.attributes("style")).toContain("--app-avatar-ring: 2.11px");
   });
 
   it("keeps the solid fill for a doctor (hcp)", () => {
