@@ -55,11 +55,11 @@ const authBackgroundUrl = BRAND_AUTH_BACKGROUND_URL;
 
 // Fades the background (photo + gradient, see .layout-public__bg) in on
 // mount. On exit it dissolves (fade + slight swell + blur) in the same beat as
-// the orbs expanding past the screen edges (AuthOrbs' playExit), so the orbs
+// the orbs growing toward the viewer and melting (AuthOrbs' playExit), so the orbs
 // read as pulling the whole canvas away with them — all before router.push
 // swaps this layout for AppLayout (see App.vue), which has no transition of
 // its own.
-const BG_DISSOLVE_DURATION = 1100;
+const BG_DISSOLVE_DURATION = 1400;
 
 // The static HTML boot splash (src/boot/splash.ts) already painted this exact
 // backdrop before any JS ran. Taking over from it, the background starts fully
@@ -226,16 +226,16 @@ onBeforeUnmount(() => {
 }
 
 /* "Rozpływa się" — melts rather than cuts: fades while swelling slightly and
-   going soft-focus, over the same 1.1s the orbs take to expand past the
+   going soft-focus, over the same 1.4s the orbs take to grow past the
    screen edges (AuthOrbs), so the two read as one motion. */
 .layout-public__bg--dissolving {
   opacity: 0;
   transform: scale(1.06);
   filter: blur(14px);
   transition:
-    opacity 1.1s cubic-bezier(0.4, 0, 0.2, 1),
-    transform 1.1s cubic-bezier(0.4, 0, 0.2, 1),
-    filter 1.1s cubic-bezier(0.4, 0, 0.2, 1);
+    opacity 1.4s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 1.4s cubic-bezier(0.4, 0, 0.2, 1),
+    filter 1.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 @media (prefers-reduced-motion: reduce) {

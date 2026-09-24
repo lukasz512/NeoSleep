@@ -18,7 +18,9 @@
         :class="[`auth-orbs__anchor--${orb.key}`, anchorPhaseClass(phases[index])]"
       >
         <div :ref="(el) => setElement(breathRefs[index], el)" class="auth-orbs__breath">
-          <span :ref="(el) => setElement(magnetRefs[index], el)" class="auth-orbs__orb" :class="`auth-orbs__orb--${orb.key}`" />
+          <span :ref="(el) => setElement(magnetRefs[index], el)" class="auth-orbs__orb" :class="`auth-orbs__orb--${orb.key}`">
+            <span :ref="(el) => setElement(rippleRefs[index], el)" class="auth-orbs__ripple" />
+          </span>
         </div>
       </div>
     </div>
@@ -61,16 +63,19 @@ interface OrbSpec {
 // instead of pulsing as one block. Smaller orbs also float more with the
 // pointer ("lighter things move more"), same depth logic as the logo/badge
 // split in AuthChrome.
+// Busy periods sit near a calm resting heartbeat (~40–55 bpm) — the first
+// pass (2–2.6 s, ±7.5%) measured as practically invisible behind the card.
 const ORBS: readonly OrbSpec[] = [
-  { key: "big", idlePeriod: 11000, busyPeriod: 2600, phaseOffset: 0, magnet: { strength: 8, ease: 0.06 } },
-  { key: "medium", idlePeriod: 9400, busyPeriod: 2250, phaseOffset: 0.33, magnet: { strength: 16, ease: 0.11 } },
-  { key: "small", idlePeriod: 8000, busyPeriod: 1950, phaseOffset: 0.66, magnet: { strength: 26, ease: 0.18 } },
+  { key: "big", idlePeriod: 11000, busyPeriod: 1500, phaseOffset: 0, magnet: { strength: 8, ease: 0.06 } },
+  { key: "medium", idlePeriod: 9400, busyPeriod: 1300, phaseOffset: 0.33, magnet: { strength: 16, ease: 0.11 } },
+  { key: "small", idlePeriod: 8000, busyPeriod: 1100, phaseOffset: 0.66, magnet: { strength: 26, ease: 0.18 } },
 ];
 
 // How far each breath swells (scale) and how much it brightens (opacity),
-// idle vs. busy — the busy breath is both quicker and a little deeper.
-const SCALE_AMPLITUDE = { idle: 0.03, busy: 0.075 };
-const OPACITY_RANGE = { idle: [0.42, 0.58], busy: [0.34, 0.72] } as const;
+// idle vs. busy — while loading the pulse has to read clearly at a glance,
+// so it is both much quicker and much deeper than the idle breath.
+const SCALE_AMPLITUDE = { idle: 0.035, busy: 0.16 };
+const OPACITY_RANGE = { idle: [0.42, 0.58], busy: [0.3, 0.8] } as const;
 // Share of each cycle spent inhaling — a real breath swells a bit faster
 // than it lets go, so it's asymmetric rather than a plain sine.
 const INHALE_SHARE = 0.42;
@@ -79,13 +84,19 @@ const INHALE_SHARE = 0.42;
 const CYCLE_JITTER = 0.06;
 // How quickly the rhythm eases between idle and busy (ms time constant) — the
 // switch never jumps mid-breath, it speeds up / calms down over ~1s.
-const MIX_TIME_CONSTANT = 700;
+const MIX_TIME_CONSTANT = 450;
+// Loading-only pulse wave: a light ring leaves each orb's rim on every beat
+// and fades as it travels outward. Teal orbs on the teal gradient, mostly
+// behind the card, barely read as pulsing on scale alone — the lighter ring
+// contrasts with the background and travels out past the card's edges.
+const RIPPLE_REACH = 0.32;
+const RIPPLE_OPACITY = 0.9;
 const MAX_FRAME_DELTA = 100;
 
 // Pop-in gaps/duration come from the Fibonacci sequence (in ms) — a growing,
 // organic rhythm rather than evenly-spaced steps.
 const FIB = { gap1: 89, gap2: 144, popIn: 610 };
-const EXIT_DURATION = 1100;
+const EXIT_DURATION = 1400;
 
 const prefersReducedMotion =
   typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -98,6 +109,7 @@ const rootEl = ref<HTMLElement | null>(null);
 // Function refs (see template), not `:ref="someRef"` — inside v-for Vue would
 // collect a plain ref binding into an array instead of the single element.
 const breathRefs = ORBS.map(() => ref<HTMLElement | null>(null));
+const rippleRefs = ORBS.map(() => ref<HTMLElement | null>(null));
 const magnetRefs = ORBS.map(() => ref<HTMLElement | null>(null));
 ORBS.forEach((orb, index) => useMagneticPointer(magnetRefs[index], orb.magnet));
 
@@ -207,6 +219,16 @@ function tick(now: number): void {
     const f = breathCurve(state.phase);
     el.style.transform = `scale(${(1 + amplitude * f).toFixed(4)})`;
     el.style.opacity = lerp(opacityLow, opacityHigh, f).toFixed(3);
+
+    // One wave per beat, launched at the start of each inhale, fading out as
+    // it spreads; scaled by `mix` so it only exists while loading (and fades
+    // in/out with the rhythm change). Suppressed once the exit takes over.
+    const ripple = rippleRefs[index].value;
+    if (!ripple) return;
+    const strength = phases.value[index] === "exit" ? 0 : mix;
+    const travel = 1 - (1 - state.phase) ** 3;
+    ripple.style.transform = `scale(${(1 + RIPPLE_REACH * travel).toFixed(4)})`;
+    ripple.style.opacity = (strength * RIPPLE_OPACITY * (1 - state.phase) ** 2).toFixed(3);
   });
 
   rafId = requestAnimationFrame(tick);
@@ -361,16 +383,21 @@ defineExpose({ whenEntered, playExit, replay });
   animation-name: auth-orbs-pop-in-centered;
 }
 
-/* Post-login exit: each orb swells far past the screen edges and thins out
-   as it goes, while the layout dissolves the background underneath at the
-   same time — the orbs read as pulling the whole canvas away with them.
-   Slow gather at the start, a long soft tail at the end. */
+/* Post-login exit: the orbs come *at the user* — they grow with accelerating
+   speed (exponential ease-in, like something flying toward the camera) to ~9×,
+   going soft-focus as they pass, and only dissolve at the very end, over the
+   viewer. The layout dissolves the background underneath in the same beat.
+   Two animations on purpose: growth (transform) and dissolve (opacity/blur)
+   need different curves — the dissolve must lag the growth, or the orbs fade
+   away before they ever fill the screen (which read as shrinking). */
 .auth-orbs__anchor--exit {
-  animation: auth-orbs-expand 1100ms cubic-bezier(0.5, 0, 0.2, 1) forwards;
+  animation:
+    auth-orbs-grow 1400ms cubic-bezier(0.7, 0, 0.84, 0) forwards,
+    auth-orbs-dissolve 1400ms linear forwards;
 }
 
 .auth-orbs__anchor--big.auth-orbs__anchor--exit {
-  animation-name: auth-orbs-expand-centered;
+  animation-name: auth-orbs-grow-centered, auth-orbs-dissolve;
 }
 
 /* Taking over from the static boot splash — already at rest, no pop. */
@@ -411,31 +438,35 @@ defineExpose({ whenEntered, playExit, replay });
   }
 }
 
-@keyframes auth-orbs-expand {
-  0% {
+@keyframes auth-orbs-grow {
+  from {
     transform: scale(1);
-    opacity: 1;
   }
-  40% {
-    opacity: 0.9;
-  }
-  100% {
-    transform: scale(5);
-    opacity: 0;
+  to {
+    transform: scale(9);
   }
 }
 
-@keyframes auth-orbs-expand-centered {
-  0% {
+@keyframes auth-orbs-grow-centered {
+  from {
     transform: translate(-50%, -50%) scale(1);
-    opacity: 1;
   }
-  40% {
-    opacity: 0.9;
+  to {
+    transform: translate(-50%, -50%) scale(9);
+  }
+}
+
+/* Fully there for the first two thirds (while they swell toward the viewer),
+   then melt — opacity down, blur up — once they already cover the screen. */
+@keyframes auth-orbs-dissolve {
+  0%,
+  60% {
+    opacity: 1;
+    filter: blur(0);
   }
   100% {
-    transform: translate(-50%, -50%) scale(5);
     opacity: 0;
+    filter: blur(24px);
   }
 }
 
@@ -454,6 +485,24 @@ defineExpose({ whenEntered, playExit, replay });
   border-radius: 50%;
   background: rgb(var(--v-theme-primary));
   will-change: transform;
+}
+
+/* Loading pulse wave (see RIPPLE_* in <script>): a soft light ring at the
+   orb's rim, painted once as a static radial gradient — the loop only writes
+   transform/opacity to it, so it stays compositor-only on phones. */
+.auth-orbs__ripple {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle closest-side,
+    transparent 78%,
+    color-mix(in srgb, rgb(var(--v-theme-primary)) 25%, white 75%) 91%,
+    transparent 100%
+  );
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform, opacity;
 }
 
 /* Lighter than the other two so the three don't read as one flat,

@@ -519,13 +519,13 @@ const cardAccentStyle = {
   gap: 16px;
 }
 
-/* Same 1.1s / easing as the layout's background dissolve (PublicLayout's
+/* Same 1.4s / easing as the layout's background dissolve (PublicLayout's
    .layout-public__bg--dissolving), so the dot field and the settings chip
    melt away with the rest of the canvas instead of lingering on the bare page. */
 .auth-view--backdrop-exiting :deep(.auth-dot-grid),
 .auth-view--backdrop-exiting :deep(.auth-chrome__topbar) {
   opacity: 0;
-  transition: opacity 1.1s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity 1.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* The card's box — also the anchor the layout's breathing orbs (AuthOrbs)

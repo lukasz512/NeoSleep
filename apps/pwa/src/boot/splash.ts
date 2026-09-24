@@ -67,20 +67,20 @@ const css = `
   border-radius: 50%;
   background: var(--bs-primary);
   opacity: 0.5;
-  animation: boot-splash-breath 2.6s ease-in-out infinite;
+  animation: boot-splash-breath 1.5s ease-in-out infinite;
 }
 .boot-splash__orb--big { width: 150%; top: 56%; left: 70%; translate: -50% -50%; }
 .boot-splash__orb--medium {
   width: 78%; bottom: 35%; left: -17%;
   background: color-mix(in srgb, var(--bs-primary) 55%, white 45%);
-  animation-duration: 2.25s; animation-delay: -0.8s;
+  animation-duration: 1.3s; animation-delay: -0.45s;
 }
-.boot-splash__orb--small { width: 102%; top: -11%; left: -48%; animation-duration: 1.95s; animation-delay: -1.3s; }
+.boot-splash__orb--small { width: 102%; top: -11%; left: -48%; animation-duration: 1.1s; animation-delay: -0.75s; }
 /* Busy pace (the page is loading by definition) — same range AuthOrbs uses
    while busy, so the hand-over to the JS-driven loop doesn't change rhythm. */
 @keyframes boot-splash-breath {
-  0%, 100% { scale: 1; opacity: 0.34; }
-  42% { scale: 1.075; opacity: 0.72; }
+  0%, 100% { scale: 1; opacity: 0.3; }
+  42% { scale: 1.16; opacity: 0.8; }
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) #${BOOT_SPLASH_ID} { --bs-ground: #111111; }

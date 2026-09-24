@@ -2,7 +2,7 @@
   <VCard
     ref="cardEl"
     class="animated-card"
-    :class="[`animated-card--${motion}`, { 'animated-card--visible': cardVisible }]"
+    :class="[`animated-card--${motion}`, { 'animated-card--visible': cardVisible, 'animated-card--leaving': cardLeaving }]"
     :loading="loading ? 'primary' : false"
   >
     <div class="animated-card__content" :class="{ 'animated-card__content--visible': contentVisible }">
@@ -23,7 +23,8 @@ const { loading = false, autoPlay = true, motion = "lift" } = defineProps<{
   /**
    * "lift" (default): rises slightly into place. "zoom": grows out of a point
    * behind it — AuthView uses this so the card reads as emerging from the
-   * breathing orbs, and shrinking back into them on exit.
+   * breathing orbs; on exit it melts forward toward the viewer (slight swell,
+   * blur, fade) rather than shrinking away.
    */
   motion?: "lift" | "zoom";
 }>();
@@ -40,6 +41,9 @@ const CONTENT_DELAY = { lift: 150, zoom: 260 } as const;
 const cardEl = ref<{ $el: HTMLElement } | null>(null);
 const cardVisible = ref(false);
 const contentVisible = ref(false);
+// Exit-only state, so "zoom" can leave differently from how it arrived: it
+// enters from small, but leaves toward the viewer instead of shrinking back.
+const cardLeaving = ref(false);
 
 const prefersReducedMotion =
   typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -55,6 +59,7 @@ async function playEnter(): Promise<void> {
     return;
   }
   await nextTick();
+  cardLeaving.value = false;
   cardVisible.value = true;
   await wait(CONTENT_DELAY[motion]);
   contentVisible.value = true;
@@ -69,6 +74,7 @@ async function playExit(): Promise<void> {
   if (prefersReducedMotion) return;
   contentVisible.value = false;
   await wait(CONTENT_DURATION);
+  cardLeaving.value = true;
   cardVisible.value = false;
   await wait(CARD_DURATION[motion]);
 }
@@ -105,9 +111,13 @@ defineExpose({ playEnter, playExit });
   filter: blur(0);
 }
 
-/* Exit: shrinks back into the orbs — accelerating away (ease-in) instead of
-   reusing the entrance's slow tail, so the orbs can take over straight after. */
-.animated-card--zoom:not(.animated-card--visible) {
+/* Exit: melts forward, toward the viewer — the same direction the orbs then
+   take (AuthOrbs' exit) — instead of shrinking back into them, which read as
+   the whole scene collapsing. Accelerating (ease-in) so the orbs can take over
+   straight after. */
+.animated-card--zoom.animated-card--leaving {
+  transform: scale(1.08);
+  filter: blur(12px);
   transition:
     opacity 0.4s cubic-bezier(0.55, 0, 1, 0.45),
     transform 0.45s cubic-bezier(0.55, 0, 1, 0.45),
@@ -129,7 +139,7 @@ defineExpose({ playEnter, playExit });
   .animated-card,
   .animated-card__content,
   .animated-card--zoom,
-  .animated-card--zoom:not(.animated-card--visible) {
+  .animated-card--zoom.animated-card--leaving {
     transition: none;
     filter: none;
   }
