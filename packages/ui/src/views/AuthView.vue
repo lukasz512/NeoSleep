@@ -280,13 +280,25 @@
     </AuthCard>
     </div>
 
-    <img
-      ref="pwaBadgeEl"
-      :src="pwaBadgeUrl"
-      :alt="t('user.login.pwaBadge')"
-      class="auth-view__pwa-badge"
-      :class="{ 'auth-view__pwa-badge--visible': badgeVisible }"
-    />
+    <div class="auth-view__footer">
+      <img
+        ref="pwaBadgeEl"
+        :src="pwaBadgeUrl"
+        :alt="t('user.login.pwaBadge')"
+        class="auth-view__pwa-badge"
+        :class="{ 'auth-view__pwa-badge--visible': badgeVisible }"
+      />
+      <p
+        v-if="appVersionLabel"
+        class="auth-view__app-version"
+        :class="{
+          'auth-view__app-version--visible': badgeVisible,
+          'auth-view__app-version--dark': themeStore.mode === 'dark',
+        }"
+      >
+        {{ appVersionLabel }}
+      </p>
+    </div>
   </div>
 </template>
 
@@ -303,7 +315,7 @@ import { createUseResetPasswordFlow } from "../composables/useResetPasswordFlow"
 import { useMagneticPointer } from "../composables/useMagneticPointer";
 import { AUTH_BACKGROUND_EXIT_KEY } from "../composables/authBackgroundExit";
 import type { ApiFetchOptions } from "@api";
-import { useThemeStore, type AuthTokenStorage } from "@stores";
+import { useThemeStore, APP_VERSION_KEY, type AuthTokenStorage } from "@stores";
 import AuthChrome from "../components/AuthChrome.vue";
 import AuthCard from "../components/AuthCard.vue";
 
@@ -445,6 +457,19 @@ const mediumOrbPhase = ref<OrbPhase>("hidden");
 const smallOrbPhase = ref<OrbPhase>("hidden");
 const badgeVisible = ref(false);
 const authBackgroundExit = inject(AUTH_BACKGROUND_EXIT_KEY, undefined);
+
+// "Version 1.0.0 (build 12) · DEV" under the badge; prod shows no channel suffix.
+const appVersion = inject(APP_VERSION_KEY, undefined);
+const appVersionLabel = computed(() => {
+  if (!appVersion) return "";
+  const { version, build, channel } = appVersion;
+  const base = build === null
+    ? t("user.login.appVersion", { version })
+    : t("user.login.appVersionBuild", { version, build });
+  if (channel === "prod") return base;
+  const channelLabel = channel === "dev" ? t("user.login.appChannelDev") : t("user.login.appChannelLocal");
+  return t("user.login.appVersionWithChannel", { version: base, channel: channelLabel });
+});
 
 function orbAnchorPhaseClass(phase: OrbPhase): Record<string, boolean> {
   return {
@@ -812,11 +837,22 @@ const cardAccentStyle = {
    badge, top to bottom. Magnetic transform target (see useMagneticPointer in
    <script>) — written to directly every frame, so it stays free of any CSS
    transition of its own. */
+/* Badge + app version, stacked tighter than the page's own 16px gap. */
+.auth-view__footer {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
 .auth-view__pwa-badge {
   position: relative;
   z-index: 1;
   flex: none;
-  height: 24px;
+  height: 20px;
   width: auto;
   object-fit: contain;
   opacity: 0;
@@ -828,12 +864,36 @@ const cardAccentStyle = {
   transition: opacity 0.3s ease-out;
 }
 
+/* 70%, not full — the badge is a quiet footnote under the card (NEO-12). */
 .auth-view__pwa-badge--visible {
-  opacity: 1;
+  opacity: 0.7;
+}
+
+/* Same ink as the badge's P/A letters in each theme (white in light,
+   #3d3d3d in dark — see packages/brand/logos/pwa/), same 70% and fade-in. */
+.auth-view__app-version {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  color: #ffffff;
+  opacity: 0;
+  transition: opacity 0.3s ease-out;
+}
+
+.auth-view__app-version--dark {
+  color: #3d3d3d;
+}
+
+.auth-view__app-version--visible {
+  opacity: 0.7;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .auth-view__pwa-badge {
+  .auth-view__pwa-badge,
+  .auth-view__app-version {
     transition: none;
   }
 }

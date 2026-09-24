@@ -15,7 +15,8 @@ import { setupOfflineCacheSession } from "./composables/useOfflineCacheSession";
 import { apiFetch } from "./composables/useApi";
 import { authTokenStorage } from "./stores/auth";
 import { getApiUrl } from "./constants";
-import { resolveInitialThemeMode, useMotionPreferenceStore } from "@stores";
+import { resolveInitialThemeMode, useMotionPreferenceStore, APP_VERSION_KEY } from "@stores";
+import { resolveAppVersion } from "./appVersion";
 
 // Silent wake-up ping: the API can cold-start (Render free tier spins down when
 // idle), so hit the cheapest possible route as early as possible — before the
@@ -49,6 +50,7 @@ setupOfflineCacheSession();
 
 app.provide("neo:apiFetch", apiFetch);
 app.provide("neo:authTokenStorage", authTokenStorage);
+app.provide(APP_VERSION_KEY, resolveAppVersion(import.meta.env));
 const gaId = import.meta.env.VITE_GA_ID as string | undefined;
 if (import.meta.env.PROD && gaId) {
   app.use(createGtag({ tagId: gaId, pageTracker: { router } }));

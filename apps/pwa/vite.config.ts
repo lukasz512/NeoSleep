@@ -1,4 +1,5 @@
 import path from "path";
+import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { defineConfig, mergeConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
@@ -64,6 +65,13 @@ function neoPwaPlugin(opts: NeoPwaOptions): ReturnType<typeof VitePWA> {
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// App version (shown under the login badge, sent with diagnostics) comes from
+// this app's package.json — the single place it's bumped. Set on process.env
+// before Vite loads env, so it wins over any VITE_APP_VERSION in .env files.
+// Build number + channel are set by CI (see deploy-pwa.yml).
+const pkg = JSON.parse(readFileSync(path.join(__dirname, "package.json"), "utf8")) as { version: string };
+process.env.VITE_APP_VERSION = pkg.version;
 
 // Dev-server proxy target for /api, /auth, /health — never used in production
 // builds (those get VITE_API_URL baked in at build time by CI, see deploy-pwa.yml).

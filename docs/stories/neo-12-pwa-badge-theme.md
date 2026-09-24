@@ -35,6 +35,49 @@ The ticket's screenshot (133×78, the badge only) shows the request is about the
 | 3 | `AuthView.spec.ts` › PWA badge follows the theme › light → dark switches src live |
 | 4 | Existing `AuthView.spec.ts` suite (unchanged, passing) |
 
+## Follow-up (2026-09-24): badge sizing + app version under it
+
+Łukasz's follow-up asked for the badge at **20px tall and 70% opacity**, and for the **app version** under it. The version should look serious, medical and minimal, and be white in light mode and dark in dark mode. No versioning existed before this: no `version` field, no release tags, and `VITE_APP_VERSION` was never set by CI. Numbering therefore starts at 1.
+
+Decisions (asked and answered in-session):
+
+| Question | Decision |
+|---|---|
+| Format | `Version 1.0.0 (build N)`: semver plus a monotonically increasing build number, so every build is identified unambiguously (IEC 62304-style) |
+| Source | Semver in `apps/pwa/package.json`, bumped by hand at release. The build number comes from CI: `github.run_number − 114` in `deploy-pwa.yml`, where run 114 was the last deploy before this |
+| DEV vs PROD | Prod: no suffix. Dev: `· DEV`. Local dev server: `· LOCAL`, with no build number |
+| Placement | Under the badge, 11px, tabular numerals, same 70% opacity and fade-in as the badge |
+
+### Acceptance criteria (follow-up)
+
+6. The badge renders 20px tall at 70% opacity in both themes.
+7. The version line reads `Version <semver> (build <N>)`, with `· DEV` appended on pwa-dev and nothing appended on prod.
+8. The version text is white in light mode and #3D3D3D in dark mode, and switches with the theme like the badge.
+9. A missing or malformed build number is never rendered: no "build 0", "build NaN" or negative numbers.
+10. An app that doesn't provide a version renders no version line.
+
+### Implementation (follow-up)
+
+- `packages/stores/src/appVersion.ts`: `AppVersionInfo` type plus the `APP_VERSION_KEY` injection key. It lives in `@stores`, not `@ui`, because the apps' tsconfigs include `@stores`, so plain `.ts` app code (`main.ts`) can import it.
+- `apps/pwa/src/appVersion.ts`: `resolveAppVersion(import.meta.env)`, which validates the build number and channel and provides safe fallbacks.
+- `apps/pwa/vite.config.ts`: sets `VITE_APP_VERSION` from `package.json` before Vite loads env, so it wins over `.env`. Diagnostics (`useDiagnosticReporter`) now report the real version too.
+- `packages/ui/src/views/AuthView.vue`: injects the version and renders the i18n-formatted label under the badge.
+- i18n: `user.login.appVersion`, `appVersionBuild`, `appVersionWithChannel`, `appChannelDev`, `appChannelLocal` in en, pl and mx.
+
+### Tests (follow-up)
+
+| AC | Test |
+|---|---|
+| 6 | Live render check (headless Chromium: height 20, opacity 0.7). CSS in `AuthView.vue` |
+| 7 | `AuthView.spec.ts` › app version under the badge › prod / dev / local cases |
+| 8 | `AuthView.spec.ts` › uses the dark-ink style in dark mode and the white style in light mode |
+| 9 | `apps/pwa/src/appVersion.spec.ts` › drops a missing, zero, negative or non-numeric build number |
+| 10 | `AuthView.spec.ts` › renders nothing when the app provides no version |
+
+### Known unrelated issue spotted while testing
+
+With the OS "reduce motion" setting on, the login card and logo never appear. Only the orbs and the badge render, because `AuthView`'s `onMounted` reduced-motion branch skips `authCardRef.playEnter()` / `authChromeRef.playEnter()`. This existed before this change and is not fixed here. It needs its own ticket.
+
 ## Platform vs tenant
 
 Platform-generic. The badge is a shared brand asset, not tenant config.
