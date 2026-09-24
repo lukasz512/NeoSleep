@@ -1,5 +1,11 @@
 <template>
-  <VAvatar :size="size" :color="avatarUrl ? undefined : bgColor" class="app-avatar">
+  <VAvatar
+    :size="size"
+    :color="avatarUrl || outlined ? undefined : bgColor"
+    class="app-avatar"
+    :class="{ 'app-avatar--outlined': outlined }"
+    :style="outlined ? { '--app-avatar-accent': bgColor } : undefined"
+  >
     <VImg v-if="avatarUrl" :src="avatarUrl" :alt="name || ''" cover />
     <span v-else-if="initials" class="app-avatar__initials" :style="{ fontSize: initialsFontSize }">{{ initials }}</span>
     <AppIcon v-else :name="iconName" class="app-avatar__icon" />
@@ -23,6 +29,11 @@ import { hcoTypeIcon } from "../utils/hcoLabels";
  * Cuicas" as a clinic name is not a person to initial. This is enforced here
  * so every caller gets it right for free, rather than each call site having
  * to remember to withhold `name` for place types.
+ *
+ * A patient placeholder is drawn as the "negative" of everyone else's: white
+ * fill, a ring in the seeded color, and initials/icon in that same color -
+ * so a patient is tellable from a doctor/rep at a glance in mixed lists and
+ * EntityLink chips. A real photo (avatarUrl) is never outlined.
  */
 export type AppAvatarEntityType = "hcp" | "hco" | "patient" | "lead" | "user" | "event";
 
@@ -67,6 +78,7 @@ const initials = computed(() => {
 // Falls back to the entity-type string as the color seed so even a nameless
 // placeholder gets a stable, on-brand color instead of Vuetify's flat gray.
 const bgColor = computed(() => getAvatarColor(props.name?.trim() || props.entityType));
+const outlined = computed(() => props.entityType === "patient" && !props.avatarUrl);
 const iconName = computed(() =>
   props.entityType === "hco" ? hcoTypeIcon(props.orgType ?? undefined) : ENTITY_ICONS[props.entityType],
 );
@@ -100,5 +112,16 @@ const initialsFontSize = computed(() => {
   width: 55%;
   height: 55%;
   color: #fff;
+}
+
+.app-avatar--outlined {
+  background: #fff;
+  /* Inset shadow instead of border so the ring doesn't grow the avatar past `size`. */
+  box-shadow: inset 0 0 0 2px var(--app-avatar-accent);
+}
+
+.app-avatar--outlined .app-avatar__initials,
+.app-avatar--outlined .app-avatar__icon {
+  color: var(--app-avatar-accent);
 }
 </style>
