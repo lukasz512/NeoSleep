@@ -51,27 +51,50 @@ export function createAuthStore(apiFetch: ApiFetchFn, tokenStorage: AuthTokenSto
   return defineStore("auth", () => {
     const user = ref<AuthUser | null>(null);
     const sessionChecked = ref(false);
+    /** A session check is in flight right now (e.g. still running in the background past the router's wait budget). */
+    const sessionChecking = ref(false);
 
     const isAuthenticated = computed(() => !!user.value);
     const displayName = computed(() => user.value?.name ?? user.value?.email ?? null);
 
+    // The router no longer blocks the login form on a slow session check (see
+    // apps/pwa router/index.ts), so a login can now complete while that check
+    // is still in flight. authGeneration lets the late check see that and
+    // leave the fresh login alone instead of overwriting it with its stale 401.
+    let sessionCheck: Promise<boolean> | null = null;
+    let authGeneration = 0;
+
     /** On app mount: the access token is gone (memory-only), but a stored refresh token
      *  means apiFetch's own 401 handling will silently re-derive one — see useApi.ts. */
     async function fetchSession(): Promise<boolean> {
+      // Concurrent callers (router guard + a background re-check) share one request.
+      sessionChecking.value = true;
+      sessionCheck ??= runSessionCheck().finally(() => {
+        sessionCheck = null;
+        sessionChecking.value = false;
+      });
+      return sessionCheck;
+    }
+
+    async function runSessionCheck(): Promise<boolean> {
+      const generation = authGeneration;
+      const stale = () => generation !== authGeneration;
       try {
         if (!tokenStorage.getRefreshToken()) {
           user.value = null;
           return false;
         }
         const res = await apiFetch("/api/v1/auth/session", { handleErrors: false });
+        if (stale()) return !!user.value;
         if (res.ok) {
           const data = (await res.json()) as { user: AuthUser };
+          if (stale()) return !!user.value;
           user.value = data.user;
         } else {
           user.value = null;
         }
       } catch {
-        user.value = null;
+        if (!stale()) user.value = null;
       } finally {
         sessionChecked.value = true;
       }
@@ -91,6 +114,7 @@ export function createAuthStore(apiFetch: ApiFetchFn, tokenStorage: AuthTokenSto
     }
 
     function clearAuth(): void {
+      authGeneration++;
       user.value = null;
       sessionChecked.value = true;
       tokenStorage.setAccessToken(null);
@@ -99,6 +123,7 @@ export function createAuthStore(apiFetch: ApiFetchFn, tokenStorage: AuthTokenSto
 
     /** Used after a successful login/OAuth-exchange response to set the authenticated user and both tokens directly. */
     function setAuthenticated(value: boolean, userData?: AuthUser | null, token?: string, refreshToken?: string): void {
+      authGeneration++;
       sessionChecked.value = true;
       if (!value) { clearAuth(); return; }
       user.value = userData ?? null;
@@ -109,6 +134,7 @@ export function createAuthStore(apiFetch: ApiFetchFn, tokenStorage: AuthTokenSto
     return {
       user,
       sessionChecked,
+      sessionChecking,
       isAuthenticated,
       displayName,
       fetchSession,

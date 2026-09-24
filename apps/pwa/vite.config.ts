@@ -8,7 +8,16 @@ import vuetify from "vite-plugin-vuetify";
 import { VitePWA } from "vite-plugin-pwa";
 import type { VitePWAOptions } from "vite-plugin-pwa";
 import basicSsl from "@vitejs/plugin-basic-ssl";
+import type { Plugin } from "vite";
 import { sharedViteConfig } from "../../vite.shared.ts";
+import { injectBootSplash } from "./src/boot/splash.ts";
+
+/** Paints the auth backdrop from static HTML before any JS runs — see src/boot/splash.ts. */
+function bootSplashPlugin(): Plugin {
+  // "post": after Vite has injected the built CSS/JS links, which the splash
+  // transform rewrites to be non-render-blocking.
+  return { name: "neo-boot-splash", transformIndexHtml: { order: "post", handler: (html) => injectBootSplash(html) } };
+}
 
 interface NeoPwaOptions {
   name: string;
@@ -24,6 +33,9 @@ interface NeoPwaOptions {
 function neoPwaPlugin(opts: NeoPwaOptions): ReturnType<typeof VitePWA> {
   const config: Partial<VitePWAOptions> = {
     registerType: "autoUpdate",
+    // Deferred, so the service-worker registration script in <head> never
+    // blocks the HTML parser (and with it the boot splash's first paint).
+    injectRegister: "script-defer",
     includeAssets: ["favicon.ico", "apple-touch-icon.png"],
     manifest: {
       name:             opts.name,
@@ -67,6 +79,12 @@ function neoPwaPlugin(opts: NeoPwaOptions): ReturnType<typeof VitePWA> {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// App version (shown under the login badge, sent with diagnostics) comes from
+// this app's package.json — the single place it's bumped. Set on process.env
+// before Vite loads env, so it wins over any VITE_APP_VERSION in .env files.
+// Build number + channel are set by CI (see deploy-pwa.yml).
+const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "package.json"), "utf8")) as { version: string };
+process.env.VITE_APP_VERSION = pkg.version;
 // Every public Vuetify component entry (vuetify/components/VBtn, …), read
 // from the package's own components/index.js re-export list rather than a
 // glob — the lib/components folder also ships unfinished internals (e.g.
@@ -91,6 +109,7 @@ export default defineConfig(mergeConfig(sharedViteConfig(__dirname), {
     // if the dev server itself isn't served over HTTPS.
     ...(devApiIsHttps ? [basicSsl()] : []),
     vue(),
+    bootSplashPlugin(),
     neoPwaPlugin({
       name:        "NeoSleep Rep",
       shortName:   "NeoSleep",
@@ -131,6 +150,10 @@ export default defineConfig(mergeConfig(sharedViteConfig(__dirname), {
   appType: "spa",
   server: {
     host: true,
+    // Pre-transform the entry's import graph as soon as the dev server starts,
+    // instead of on the first page load — a cold first load was ~22s of
+    // on-demand transforms (600+ module requests) otherwise.
+    warmup: { clientFiles: ["./src/main.ts", "./src/App.vue", "./src/layouts/*.vue"] },
     proxy: {
       "/api":    { target: devApiTarget, changeOrigin: true, secure: devApiIsHttps },
       "/auth":   { target: devApiTarget, changeOrigin: true, secure: devApiIsHttps },

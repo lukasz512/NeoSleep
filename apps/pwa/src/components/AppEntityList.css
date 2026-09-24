@@ -34,32 +34,18 @@
 
 /* Search + filter + clear-all read as one cluster, pinned to the right edge
    of the toolbar, flush against the add button. Content-hugging (not
-   flex:1) so the --active tonal background below hugs just the visible
-   controls instead of stretching across unused toolbar width.
+   flex:1) so nothing stretches across unused toolbar width.
    margin-left:auto here is the *only* auto margin in this row — the add
    button (further down) deliberately has none. Two competing auto margins
    split the leftover space between them instead of both collapsing to
    zero-gap, which is exactly what left this group sitting in the middle of
-   the toolbar with add pushed off to the far right past a gap. */
-/* Active search/filters: tonal M3 pill behind the whole group (field +
-   filter + clear-all) so the three read as one connected control instead of
-   three separate icons that happen to be near each other. Same
-   surface-container-low tone already used for the table header and mobile
-   feed cards elsewhere in this file.
-   This used to be a separate ::after pseudo-element, absolutely positioned
-   with a negative inset to bleed outward without occupying real layout
-   space. That kept breaking: border-radius on a manually-inset box is only
-   ever as good as the browser correctly clamping *that* box's own corner
-   radius to *its own* dimensions, and something about the extra layer kept
-   reading as flattened/uneven rather than a clean stadium.
-   box-shadow's spread avoids the whole problem: a solid (non-blurred)
-   shadow with 0 blur and a spread radius traces the element's *own*
-   border-radius outward by exactly that spread amount — the browser
-   guarantees the offset curve is parallel to the original, so the "bleed"
-   is mathematically tied to this element's real shape instead of being a
-   second box that has to be kept in sync with it by hand. No extra
-   pseudo-element, no z-index/stacking to manage, no separate inset to keep
-   matched to the icon row's own gap. */
+   the toolbar with add pushed off to the far right past a gap.
+   No real padding here on purpose — the icon row's own spacing must equal
+   the toolbar's gap to the add button (that's the "equal spacing" this
+   component is supposed to have). Real padding on this box would inflate
+   it beyond that shared gap: the group's own padding-right + the
+   toolbar's gap would double up, so filter→+ reads wider than
+   search→filter. */
 .app-entity-list__search-group {
   display: flex;
   align-items: center;
@@ -67,34 +53,6 @@
   flex: 0 1 auto;
   margin-left: auto;
   min-width: 0;
-  border-radius: var(--pwa-radius-pill, 9999px);
-  /* No real padding here on purpose — the icon row's own spacing must equal
-     the toolbar's gap to the add button (that's the "equal spacing" this
-     component is supposed to have). Real padding on this box would inflate
-     it beyond that shared gap: the group's own padding-right + the
-     toolbar's gap would double up, so filter→+ reads wider than
-     search→filter. The --active pill's breathing room comes from the
-     box-shadow spread below instead, which doesn't occupy real layout
-     space — same visual buffer, but it can't disturb the icon spacing or
-     the group's own size (no jump between active/inactive either, since
-     nothing here resizes).
-     No flex-grow here, even while typing — flex-grow saturates at "fill all
-     remaining space" and can never overshoot past that regardless of the
-     eased value transiently exceeding 1, which is why the group used to
-     grow via flex-grow:1 and the field never visibly bounced: there was no
-     slack for a spring curve to overshoot *into*. The field's own
-     flex-basis (below) is a real, generous-but-bounded px value instead —
-     content-hugging auto-sizing here naturally grows the group to match it
-     (a definite child basis participates in the parent's own preferred-size
-     computation even when the parent itself isn't flex-growing), and a
-     definite basis *can* genuinely overshoot past its target before
-     settling, which is what the bounce actually needs. */
-  box-shadow: 0 0 0 0 transparent;
-  transition: box-shadow var(--pwa-fib-t-md, 89ms) ease;
-}
-
-.app-entity-list__search-group--active {
-  box-shadow: 0 0 0 var(--pwa-fib-sm, 8px) rgb(var(--v-theme-surface-container-low));
 }
 
 .app-entity-list__search-icon {
@@ -228,29 +186,16 @@
   color: inherit;
 }
 
-/* Width is a deterministic flex-basis per state, not flex-grow competing for
-   "leftover space" inside a content-hugging parent. .app-entity-list__search-group
-   only grows (flex-grow:1) in the --typing state — at rest it hugs its own
-   content, meaning a field relying on flex-grow to reach its size has
-   nothing to grow *into* and collapses to its own minimum content width
-   instead (this is what truncated the placeholder to "Searc"). A fixed
-   basis sizes it correctly regardless of what the parent is doing.
-   One transition on the base rule covers every state (collapsed, medium,
-   desktop, typing) — a single continuous spring motion instead of the
-   previous per-state transitions with their own extra staggered delays,
-   which read as several small disjointed motions rather than one fluid one. */
+/* A static, bounded width (610 — a term of the same Fibonacci sequence used
+   throughout this file) rather than flex-grow:1 filling the whole row, which
+   read as too wide (swallowing the entire toolbar, no breathing room before
+   filter/add). Always the same size at rest and while typing — no animated
+   state change here, so the field never visibly shifts the filter/clear-all/
+   add controls sitting next to it. flex-shrink:1 lets it yield gracefully on
+   phones where 610px doesn't fit next to filter+add. */
 .app-entity-list__search {
-  /* One open width, used from the moment it opens — no separate smaller
-     "just focused" stage that then grows again once typing starts. It's a
-     real, bounded px value (610 — a term of the same Fibonacci sequence
-     used throughout this file) rather than flex-grow:1 filling literally
-     100% of the row, which read as *too* wide (swallowing the whole
-     toolbar, no breathing room before filter/add) when this was still a
-     separate --typing-only state. flex-shrink:1 lets it yield gracefully
-     on phones where 610px genuinely doesn't fit next to filter+add. */
   flex: 0 1 610px;
   min-width: 0;
-  transition: flex-basis var(--pwa-fib-t-xl, 233ms) var(--pwa-ease-spring, cubic-bezier(0.34, 1.2, 0.64, 1));
 }
 
 /* Belt-and-suspenders floor under the flex-basis above: even if this outer
@@ -259,11 +204,8 @@
    typed text stays legible instead of getting clipped mid-word. Can make
    the field visually overflow its own (shrunk) outer box on very narrow
    viewports rather than silently truncating — an intentional trade-off,
-   legible-but-slightly-overflowing beats illegible-but-contained.
-   :not(--collapsed) matters here: this must NOT apply to the bare 44px
-   mobile icon (no text to protect there, and forcing 300px onto a
-   supposedly-collapsed control just re-expands it right back open). */
-.app-entity-list__search:not(.app-entity-list__search--collapsed) :deep(.v-input__control) {
+   legible-but-slightly-overflowing beats illegible-but-contained. */
+.app-entity-list__search :deep(.v-input__control) {
   min-width: 300px;
 }
 
@@ -293,8 +235,7 @@
 }
 
 /* Vuetify thickens the outline to 2px on focus/error by default — keep it at
-   the same thin 1px while the mobile search expands, so the box only grows
-   in width, not stroke weight. */
+   the same thin 1px as the resting state, for visual consistency. */
 .app-entity-list__search :deep(.v-field--focused .v-field__outline) {
   --v-field-border-width: 1px;
 }
@@ -312,33 +253,6 @@
    winner would depend on source order alone. */
 .app-entity-list__search :deep(.v-field:not(.v-field--focused) .v-field__outline) {
   color: var(--pwa-table-border);
-}
-
-/* Mobile: search collapses to just the prepend icon at rest (border faded
-   out, same transition as the width change so both move together);
-   focusing grows it straight to the open width (610px, see the base rule
-   above, shared with desktop and with typing — no separate stage). */
-@media (max-width: 767px) {
-  /* 20px (desktop, inside a full-width field) reads noticeably thinner than
-     the 24px filter/add icons once it's a bare icon sitting next to them at
-     rest — bump to 24px here so the stroke weight matches. */
-  .app-entity-list__search-icon {
-    width: 24px;
-    height: 24px;
-  }
-
-  .app-entity-list__search :deep(.v-field__outline) {
-    opacity: 1;
-    transition: opacity var(--pwa-fib-t-xl, 233ms) var(--pwa-ease-spring, cubic-bezier(0.34, 1.2, 0.64, 1));
-  }
-
-  .app-entity-list__search--collapsed {
-    flex-basis: 44px;
-  }
-
-  .app-entity-list__search--collapsed :deep(.v-field__outline) {
-    opacity: 0;
-  }
 }
 
 .app-entity-list__empty-wrap,
@@ -379,16 +293,15 @@
 }
 
 /* VDataTableServer's default pagination footer (rows-per-page, page count,
-   prev/next) rendered fully unstyled — no border separating it from the
-   rows above, full-emphasis body text on the row count/page controls. A
-   thin --pwa-table-border top edge frames it against the table body the
-   same way the table's own outer border does, and de-emphasizing the text
+   prev/next) rendered with full-emphasis body text on the row count/page
+   controls. The separator above it is Vuetify's own <VDivider>, recolored
+   globally in theme.scss — no border-top here, or the two stack into a
+   double line. De-emphasizing the text
    (medium-emphasis on-surface, same tone used for the row-count/meta text
    elsewhere in this file) reads as a quieter, data-dense footer rather than
    another row of primary content — closer to the clinical-record tables
    this is meant to match than Vuetify's generic default. */
 .app-entity-list__table-wrap :deep(.v-data-table-footer) {
-  border-top: 1px solid var(--pwa-table-border);
   padding: 8px 16px;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   font-size: 0.8125rem;

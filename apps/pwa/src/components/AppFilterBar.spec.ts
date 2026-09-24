@@ -76,6 +76,17 @@ describe("AppFilterBar", () => {
     expect(badge.props("content")).toBe(2);
   });
 
+  // NEO-49: the badge's :v-badge__badge circle used to be pinned to a fixed
+  // 18x18 square, which could clip a two-digit count. It now has only a
+  // min-width/min-height floor plus horizontal padding, so it always renders
+  // the full number in the DOM regardless of digit count.
+  it("renders the full active-filter count for a two-digit value, not truncated", () => {
+    const wrapper = mountFilterBar({ activeFilterCount: 12 });
+    const badgeEl = wrapper.find(".v-badge__badge");
+    expect(badgeEl.exists()).toBe(true);
+    expect(badgeEl.text()).toBe("12");
+  });
+
   it("opens the menu on click and emits an updated filter value from a select field", async () => {
     const wrapper = mountFilterBar();
     await wrapper.find(".app-filter-bar__btn").trigger("click");

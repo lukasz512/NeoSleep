@@ -13,7 +13,7 @@ import {
   BRAND_LOGO_LIGHT_URL,
   BRAND_LOGO_DARK_URL,
 } from "@brand/logos";
-import { useThemeStore } from "@stores";
+import { useThemeStore, APP_VERSION_KEY, type AppVersionInfo } from "@stores";
 import AuthView from "./AuthView.vue";
 
 const STUB_ROUTE = { template: "<div/>" };
@@ -42,6 +42,7 @@ afterEach(() => {
 async function mountAuthView(
   apiFetch: ReturnType<typeof vi.fn>,
   loginPath = "/login",
+  appVersion?: AppVersionInfo,
   notify: ReturnType<typeof vi.fn> = vi.fn(),
 ): Promise<{ wrapper: VueWrapper; router: Router; notify: ReturnType<typeof vi.fn> }> {
   setActivePinia(createPinia());
@@ -59,7 +60,11 @@ async function mountAuthView(
     attachTo: el,
     global: {
       plugins: [i18n, vuetify, router],
-      provide: { "neo:apiFetch": apiFetch, "neo:notify": notify },
+      provide: {
+        "neo:apiFetch": apiFetch,
+        "neo:notify": notify,
+        ...(appVersion ? { [APP_VERSION_KEY as symbol]: appVersion } : {}),
+      },
     },
   });
   mountedWrappers.push(wrapper);
@@ -552,5 +557,46 @@ describe("AuthView — PWA badge follows the theme (NEO-12)", () => {
     themeStore.setPreference("dark");
     await flushPromises();
     expect(halo()).toContain("auth-halo--dark");
+  });
+});
+
+describe("AuthView — app version under the badge (NEO-12)", () => {
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  const versionText = (wrapper: VueWrapper) => wrapper.find(".auth-view__app-version");
+
+  it("shows version and build number with no suffix on prod", async () => {
+    const { wrapper } = await mountAuthView(vi.fn(), "/login", { version: "1.0.0", build: 12, channel: "prod" });
+    expect(versionText(wrapper).text()).toBe("Version 1.0.0 (build 12)");
+  });
+
+  it("marks dev deploys with a DEV suffix", async () => {
+    const { wrapper } = await mountAuthView(vi.fn(), "/login", { version: "1.0.0", build: 3, channel: "dev" });
+    expect(versionText(wrapper).text()).toBe("Version 1.0.0 (build 3) · DEV");
+  });
+
+  it("shows a local build without a build number", async () => {
+    const { wrapper } = await mountAuthView(vi.fn(), "/login", { version: "1.0.0", build: null, channel: "local" });
+    expect(versionText(wrapper).text()).toBe("Version 1.0.0 · LOCAL");
+  });
+
+  it("renders nothing when the app provides no version", async () => {
+    const { wrapper } = await mountAuthView(vi.fn());
+    expect(versionText(wrapper).exists()).toBe(false);
+  });
+
+  it("uses the dark-ink style in dark mode and the white style in light mode, like the badge", async () => {
+    const { wrapper } = await mountAuthView(vi.fn(), "/login", { version: "1.0.0", build: 1, channel: "prod" });
+    const themeStore = useThemeStore();
+
+    themeStore.setPreference("light");
+    await flushPromises();
+    expect(versionText(wrapper).classes()).not.toContain("auth-view__app-version--dark");
+
+    themeStore.setPreference("dark");
+    await flushPromises();
+    expect(versionText(wrapper).classes()).toContain("auth-view__app-version--dark");
   });
 });
