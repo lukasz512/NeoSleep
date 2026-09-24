@@ -24,8 +24,13 @@
       <li v-for="form in forms" :key="form.key" class="intake-forms__item">
         <AppIcon :name="intakeFormIcon(form.key)" class="intake-forms__item-icon" />
         <span>{{ formLabel(form.key) }}</span>
-        <span class="intake-forms__state" :class="{ 'intake-forms__state--done': form.done }">
-          {{ form.done ? t("app.patients.forms.collected") : t("app.patients.forms.pending") }}
+        <span class="intake-forms__check" :class="{ 'intake-forms__check--done': form.done }">
+          <svg v-if="form.done" viewBox="0 0 12 12" aria-hidden="true">
+            <path d="M2.5 6.2l2.3 2.3 4.7-5" />
+          </svg>
+          <span class="intake-forms__sr-only">
+            {{ form.done ? t("app.patients.forms.collected") : t("app.patients.forms.pending") }}
+          </span>
         </span>
       </li>
     </ul>
@@ -136,14 +141,40 @@ function formLabel(key: string): string {
   opacity: 0.8;
 }
 
-.intake-forms__state {
-  opacity: 0.6;
-  font-size: 0.75rem;
+/* Read-only checkbox: an empty outlined box while pending, a filled brand box with a tick once collected. */
+.intake-forms__check {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1.5px solid currentColor;
+  opacity: 0.55;
+  display: grid;
+  place-items: center;
 }
 
-.intake-forms__state--done {
+.intake-forms__check--done {
+  border-color: rgb(var(--v-theme-primary));
+  background: rgb(var(--v-theme-primary));
   opacity: 1;
-  font-weight: 600;
+}
+
+.intake-forms__check svg {
+  width: 10px;
+  height: 10px;
+  fill: none;
+  stroke: rgb(var(--v-theme-on-primary));
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.intake-forms__sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 @media (prefers-reduced-motion: reduce) {
