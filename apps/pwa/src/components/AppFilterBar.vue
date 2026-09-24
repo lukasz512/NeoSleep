@@ -163,8 +163,11 @@ function removeChip(def: FilterDefinition, value: string) {
 
 .app-filter-bar__badge :deep(.v-badge__badge) {
   min-width: 18px;
-  height: 18px;
+  min-height: 18px;
+  height: auto;
+  padding: 0 4px;
   font-size: 0.7rem;
+  line-height: 18px;
 }
 
 .app-filter-bar__btn {

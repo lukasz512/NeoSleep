@@ -122,6 +122,15 @@ describe("AppEntityList", () => {
       expect(wrapper.find(".app-entity-list__add").exists()).toBe(false);
     });
 
+    it("search group never carries the removed active-state modifier class", async () => {
+      const wrapper = await mountEntityList();
+      await wrapper.find(".app-entity-list__search input").setValue("acme");
+      await flushPromises();
+      expect(wrapper.find(".app-entity-list__search-group").classes()).not.toContain(
+        "app-entity-list__search-group--active",
+      );
+    });
+
     it("clear-filters button is hidden until search or filters are active, then clears on click", async () => {
       const wrapper = await mountEntityList();
       expect(wrapper.find(".app-entity-list__clear-filters-wrap").classes()).toContain(
@@ -259,6 +268,22 @@ describe("AppEntityList", () => {
       expect(css).toMatch(
         /\.v-data-table-footer \.v-select \.v-field__outline\)\s*{[^}]*color:\s*var\(--pwa-table-border\)/,
       );
+    });
+
+    // NEO-49: the search/filter toolbar used to grow a tonal box-shadow
+    // "pill" behind itself once search/filters were active, and the search
+    // field animated its flex-basis between a collapsed 44px icon (mobile,
+    // at rest) and 610px (focused/typing) — the resulting motion visibly
+    // shifted the filter/clear-all icons sitting next to it. Both are gone:
+    // no more active-state background, no more animated/collapsing width.
+    it("no longer renders an active-state background behind the search/filter group", () => {
+      expect(css).not.toMatch(/search-group--active/);
+    });
+
+    it("search field has a static width with no flex-basis transition or mobile collapse state", () => {
+      expect(css).not.toMatch(/transition:\s*flex-basis/);
+      expect(css).not.toMatch(/search--collapsed/);
+      expect(css).toMatch(/\.app-entity-list__search\s*{[^}]*flex:\s*0 1 610px/);
     });
   });
 
