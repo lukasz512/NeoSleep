@@ -116,7 +116,7 @@ for new/touched code going forward.
 |---|---|---|
 | `--pwa-fib-xs` … `--pwa-fib-3xl` | 5 / 8 / 13 / 21 / 34 / 55 / 89px | Fibonacci spacing/shape scale — expressive surfaces (feed cards) |
 | `--pwa-radius` | 10px | Flat controls: inputs, buttons |
-| `--pwa-modal-radius` | 16px | Dialogs/modals |
+| `--pwa-modal-radius` | 28px | Dialogs/modals (M3 extra-large) |
 | `--pwa-radius-sm` | 2px | Small elements (loader bars) |
 | `--pwa-shadow-sm` / `--pwa-shadow-md` | soft, low-alpha black | Supporting elevation only — never the primary depth cue |
 | `--pwa-ease-out-smooth` | `cubic-bezier(0.22, 1, 0.36, 1)` | Default transition easing |
@@ -205,6 +205,15 @@ whether it's a table cell, a mobile card line, a detail panel or a note author. 
     a card title silently loses (`display: block`) and the X wraps under the avatar. Guarded by
     `AppDialogHeader.spec.ts` (no `VCardTitle` in any dialog file) and
     `apps/pwa/e2e/dialog-header.spec.ts` (real-browser layout on Chromium/Firefox/WebKit).
+  - Dialog spacing (M3 dialog spec, 2026-09-25): every dialog card carries
+    `pwa-form-dialog__card` (forms) or `pwa-confirm-dialog__card` (confirmations) and gets
+    one spacing system from `theme.scss`'s `--pwa-dialog-*` tokens — 24dp container padding,
+    16dp header→content, 16dp between fields, 24dp content→actions, 8dp between actions,
+    28dp corner radius (`--pwa-modal-radius`), M3 headline-small title (24/32), sentence-case
+    text buttons with 12dp side padding. Vuetify's always-reserved error line under each field
+    only takes space while it shows a message. The same e2e spec measures all of these in
+    pixels; the unit guard fails on a dialog card missing one of the two classes.
+    Uppercase buttons outside dialogs are unchanged (still Vuetify's M2-style default).
   - Desktop data table: `.app-entity-list__table-wrap` border moved from generic
     `--v-border-color` to `outline-variant`; header row (`.v-data-table__th`) now sits on
     `surface-container-low` as a distinct tonal layer instead of Vuetify's own header

@@ -101,7 +101,7 @@
     />
 
     <VDialog v-model="showDeleteConfirm" max-width="400" :transition="originDialogTransition">
-      <VCard>
+      <VCard class="pwa-confirm-dialog__card">
         <VCardText>{{ t("app.sleepStudies.deleteConfirmText") }}</VCardText>
         <VCardActions>
           <VSpacer />

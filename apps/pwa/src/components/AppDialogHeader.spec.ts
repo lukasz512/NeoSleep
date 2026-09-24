@@ -89,6 +89,20 @@ describe("dialog headers — one shared component, everywhere", () => {
     },
   );
 
+  it.each(dialogFiles.map((f) => [path.relative(SRC, f), f]))(
+    "%s: every dialog card opts into the shared M3 spacing (pwa-form-dialog__card / pwa-confirm-dialog__card)",
+    (_rel, file) => {
+      const source = readFileSync(file, "utf-8");
+      // A VCard opened directly inside a VDialog is that dialog's surface;
+      // without one of the shared classes it silently falls back to
+      // Vuetify's own card padding/radius (theme.scss's --pwa-dialog-* rules).
+      const cards = [...source.matchAll(/<VDialog\b[^>]*>\s*<VCard\b([^>]*)>/g)].map((m) => m[1]);
+      for (const attrs of cards) {
+        expect(attrs).toMatch(/class="[^"]*\bpwa-(form|confirm)-dialog__card\b/);
+      }
+    },
+  );
+
   it("theme.scss no longer styles dialog titles globally", () => {
     const scss = readFileSync(path.join(SRC, "assets/theme.scss"), "utf-8");
     expect(scss).not.toMatch(/\.pwa-form-dialog__card \.v-card-title|\.pwa-form-dialog__title-row \{/);
