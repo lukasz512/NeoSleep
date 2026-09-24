@@ -59,7 +59,7 @@ withDefaults(
 }
 
 .auth-halo::after {
-  background: radial-gradient(ellipse, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0) 72%);
+  background: radial-gradient(ellipse, rgba(0, 0, 0, 0.25) 0%, rgba(0, 0, 0, 0) 72%);
   opacity: 0;
 }
 

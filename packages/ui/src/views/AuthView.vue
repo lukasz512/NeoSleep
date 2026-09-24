@@ -626,16 +626,18 @@ const cardAccentStyle = {
   max-width: 420px;
 }
 
+/* z-index 2, above the logo (AuthChrome) and PWA badge wraps (both 1) —
+   their halos bleed past their own boxes and must never paint over the card. */
 .auth-view__card {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   width: 100%;
   /* No background here — VCard already themes its own surface color (light
      vs dark) via --v-theme-surface; a fixed white would fight that. */
   border: 1px solid color-mix(in srgb, var(--auth-view-card-accent) 28%, transparent);
 }
 
-/* Behind the card (z-index: 0 < the card's 1), overflowing its box on
+/* Behind the card (z-index: 0 < the card's 2), overflowing its box on
    purpose so the three circles peek out around its edges. Height comes from
    orbsFrameStyle (frozen on first paint, see script), not inset:0 — this box
    must NOT track .auth-view__card-slot's live height, which animates on
