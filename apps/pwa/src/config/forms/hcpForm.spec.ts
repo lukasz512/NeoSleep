@@ -7,6 +7,7 @@ vi.mock("../../composables/useApi", async (importOriginal) => ({
 }));
 
 import { hcpFormFields, hcpFormDerive, isCreatingNewOrganization, resolveOrganizationIdForSubmit } from "./hcpForm";
+import type { FormFieldDef } from "../../types/formField";
 
 function jsonResponse(ok: boolean, body: unknown) {
   return { ok, json: async () => body } as Response;
@@ -101,10 +102,25 @@ describe("hcpFormFields", () => {
     expect(typeof language.default).toBe("function");
   });
 
-  it("national id keeps the literal key 'primary' nested under national_ids (matches existing saved data)", () => {
-    const nationalId = hcpFormFields.find((f) => f.nestUnder === "national_ids")!;
-    expect(nationalId.key).toBe("primary");
-    expect(nationalId.icon).toBe("id-card");
+  it("licence number: PWZ shown only for PL, cédula only for MX, both nested under national_ids (NEO-51)", () => {
+    const ids = hcpFormFields.filter((f) => f.nestUnder === "national_ids");
+    expect(ids.map((f) => f.key)).toEqual(["pwz", "cedula"]);
+    const [pwz, cedula] = ids as [FormFieldDef, FormFieldDef];
+    const isHidden = (f: FormFieldDef, form: Record<string, unknown>) =>
+      typeof f.hidden === "function" ? f.hidden(form) : Boolean(f.hidden);
+    expect(isHidden(pwz, { region: "PL" })).toBe(false);
+    expect(isHidden(cedula, { region: "PL" })).toBe(true);
+    expect(isHidden(pwz, { region: "MX" })).toBe(true);
+    expect(isHidden(cedula, { region: "MX" })).toBe(false);
+    expect(isHidden(pwz, { region: "" })).toBe(true);
+  });
+
+  it("licence number rules reject a bad PWZ checksum and accept a valid one", () => {
+    const pwz = hcpFormFields.find((f) => f.key === "pwz")!;
+    const rule = pwz.rules![0]!;
+    expect(rule("3123456")).toBe(true);
+    expect(rule("4123456")).toBe("app.identity.form.validation.pwzInvalid");
+    expect(rule("")).toBe(true);
   });
 
   it("social links (linkedin/instagram/facebook/google) all nest under social_links with icons", () => {

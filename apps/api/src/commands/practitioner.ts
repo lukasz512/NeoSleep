@@ -22,6 +22,7 @@ import { inferLanguage } from "./invitePractitioner.js";
 import { sendPartnerInviteEmail } from "../mailer.js";
 import { FRONTEND_URL } from "../env.js";
 import { hashToken } from "../utils/hashToken.js";
+import { normalizeNationalIds } from "../utils/nationalIds.js";
 
 /**
  * COMMANDS — Practitioner domain.
@@ -92,7 +93,7 @@ export async function CreatePractitionerCommand(
     country_code:     input.country_code ?? null,
     influence_tier:   input.influence_tier,
     language:         input.language ?? null,
-    national_ids:     input.national_ids ?? null,
+    national_ids:     normalizeNationalIds(input.national_ids) ?? null,
     social_links:     input.social_links ?? null,
   };
 
@@ -197,7 +198,7 @@ export async function UpdatePractitionerCommand(
     territory_id:     input.territory_id,
     influence_tier:   input.influence_tier,
     language:         input.language,
-    national_ids:     input.national_ids,
+    national_ids:     normalizeNationalIds(input.national_ids),
     social_links:     input.social_links,
     status:           input.status,
   };

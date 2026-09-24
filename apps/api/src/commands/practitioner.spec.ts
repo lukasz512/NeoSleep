@@ -329,3 +329,58 @@ describe("UpdatePractitionerCommand", () => {
     });
   }, 15000);
 });
+
+describe("Practitioner licence number (national_ids.pwz / cedula, NEO-51)", () => {
+  it("stores a valid PWZ and a cédula normalized to digits only", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const pl = await CreatePractitionerCommand(ctx, {
+        first_name: "Anna",
+        last_name: "Kowalska",
+        email: `qa-hcp-pwz-${uniqueSuffix()}@example.com`,
+        phone: "600100200",
+        region: "PL",
+        // 1·1+2·2+3·3+4·4+5·5+6·6 = 91 → 91 mod 11 = 3
+        national_ids: { pwz: "3123456" },
+      });
+      expect(pl.national_ids).toEqual({ pwz: "3123456" });
+
+      const mx = await CreatePractitionerCommand(ctx, {
+        first_name: "Luis",
+        last_name: "García",
+        email: `qa-hcp-cedula-${uniqueSuffix()}@example.com`,
+        phone: "5512345678",
+        region: "MX",
+        national_ids: { cedula: "AE-1234567" },
+      });
+      expect(mx.national_ids).toEqual({ cedula: "1234567" });
+    });
+  }, 15000);
+
+  it("rejects an invalid PWZ checksum on create and on update", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      await expect(
+        CreatePractitionerCommand(ctx, {
+          first_name: "Anna",
+          last_name: "Kowalska",
+          email: `qa-hcp-badpwz-${uniqueSuffix()}@example.com`,
+          phone: "600100200",
+          region: "PL",
+          national_ids: { pwz: "4123456" },
+        }),
+      ).rejects.toBeInstanceOf(ValidationError);
+
+      const practitioner = await CreatePractitionerCommand(ctx, {
+        first_name: "Anna",
+        last_name: "Kowalska",
+        email: `qa-hcp-updpwz-${uniqueSuffix()}@example.com`,
+        phone: "600100200",
+        region: "PL",
+      });
+      await expect(
+        UpdatePractitionerCommand(ctx, practitioner.id, { national_ids: { pwz: "1234567" } }),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+  }, 15000);
+});

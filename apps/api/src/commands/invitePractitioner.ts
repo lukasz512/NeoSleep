@@ -25,6 +25,7 @@ import {
 import type { Organization } from "../db/organization.js";
 import { ConflictError, NotFoundError, ValidationError } from "../errors.js";
 import { hashToken } from "../utils/hashToken.js";
+import { normalizeNationalIds } from "../utils/nationalIds.js";
 import { sendPartnerJoinThankYouEmail } from "../mailer.js";
 import { renderSignedDocumentPdf, uploadPartnerDocument } from "../services/partnerDocuments.js";
 
@@ -90,6 +91,9 @@ export interface InvitePractitionerInput {
   first_name?: string;
   last_name?: string;
   email?: string;
+  /** Licence number (PL pwz / MX cedula) — falls back to the lead's own
+   *  metadata.pwz/cedula (leadForm.ts) when not sent (NEO-51). */
+  national_ids?: Record<string, string>;
 }
 
 export async function InvitePractitionerCommand(
@@ -112,6 +116,13 @@ export async function InvitePractitionerCommand(
   const email = input.email?.trim() || lead.email;
   if (!email) throw new ValidationError("An email address is required");
   if (!lead.phone) throw new ValidationError("A phone number is required — add it to the lead before inviting");
+
+  const leadLicense: Record<string, string> = {};
+  for (const key of ["pwz", "cedula"] as const) {
+    const v = lead.metadata?.[key];
+    if (typeof v === "string" && v.trim()) leadLicense[key] = v;
+  }
+  const nationalIds = normalizeNationalIds({ ...leadLicense, ...(input.national_ids ?? {}) });
 
   // Doctors are per-country by definition (they practice in one market) — scope
   // the new "doctor" role to the lead's own country_code, not global. Falls
@@ -157,6 +168,7 @@ export async function InvitePractitionerCommand(
     region: lead.region,
     country_code: lead.country_code,
     institution: lead.institution ?? undefined,
+    national_ids: nationalIds && Object.keys(nationalIds).length > 0 ? nationalIds : null,
   });
 
   // The actual "set your password" registration email (with its 7-day-expiry
