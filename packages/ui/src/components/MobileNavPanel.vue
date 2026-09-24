@@ -7,10 +7,11 @@
     ref="panelEl"
     v-bind="$attrs"
     class="mobile-nav-panel"
-    :class="{ 'mobile-nav-panel--expanded': expanded, 'mobile-nav-panel--dragging': dragOffset > 0 }"
-    :style="dragOffset > 0 ? { transform: `translateY(${dragOffset}px)` } : undefined"
+    :class="{ 'mobile-nav-panel--expanded': expanded, 'mobile-nav-panel--dragging': dragOffset !== 0 }"
+    :style="dragOffset !== 0 ? { transform: `translateY(${dragOffset}px)` } : undefined"
     :aria-label="ariaLabel"
     @pointerdown="onPointerDown"
+    @dragstart.prevent
   >
     <div v-if="expanded" class="mobile-nav-panel__handle" aria-hidden="true" />
     <div class="mobile-nav-panel__items">
@@ -66,8 +67,9 @@ export interface MobileNavPanelItem {
  * items fade in behind them, and "More" — which lands in the grid's last
  * cell, next to where it was — turns into a close chevron.
  *
- * Closes on: the chevron, a tap on the scrim, a drag down, Escape, and any
- * navigation. Honors prefers-reduced-motion (state changes, no movement).
+ * Opens on: "More", or pulling the bar up. Closes on: the chevron, a tap on
+ * the scrim, a drag down, Escape, and any navigation. Honors
+ * prefers-reduced-motion (state changes, no movement).
  */
 // Two roots (scrim + panel): parent class/style (e.g. AppShell's entrance
 // animation) belongs on the panel itself, which stays position: fixed — a
@@ -91,6 +93,11 @@ const DURATION = 360;
 const EASING = "cubic-bezier(0.2, 0, 0, 1)";
 /** How far a drag must travel down before release closes the panel. */
 const DRAG_CLOSE_THRESHOLD = 72;
+/** How far the collapsed bar must be pulled up before release opens it. */
+const DRAG_OPEN_THRESHOLD = 32;
+/** The collapsed bar follows an upward pull at this fraction, capped — a hint, not a real move. */
+const DRAG_OPEN_RESISTANCE = 0.35;
+const DRAG_OPEN_MAX_LIFT = 20;
 
 const route = useRoute();
 const panelEl = ref<HTMLElement | null>(null);
@@ -222,9 +229,11 @@ watch(expanded, (isOpen) => {
   else window.removeEventListener("keydown", onKeydown);
 });
 
-// ── Drag down to close ───────────────────────────────────────────────────
+// ── Drag: pull the bar up to open, drag the grid down to close ────────────
 let dragStartY = 0;
 let dragging = false;
+/** Raw finger travel (px, negative = up), independent of the resisted visual offset. */
+let dragDelta = 0;
 let suppressNextClick = false;
 
 function consumeSuppressedClick(event: MouseEvent): boolean {
@@ -235,18 +244,26 @@ function consumeSuppressedClick(event: MouseEvent): boolean {
 }
 
 function onPointerDown(event: PointerEvent) {
-  if (!expanded.value || transitioning) return;
+  if (transitioning || (!expanded.value && !hasOverflow.value)) return;
   dragStartY = event.clientY;
   dragging = false;
+  dragDelta = 0;
   window.addEventListener("pointermove", onPointerMove);
   window.addEventListener("pointerup", onPointerUp);
   window.addEventListener("pointercancel", onPointerUp);
 }
 
 function onPointerMove(event: PointerEvent) {
-  const dy = event.clientY - dragStartY;
-  if (!dragging && dy > 8) dragging = true;
-  if (dragging) dragOffset.value = Math.max(0, dy);
+  dragDelta = event.clientY - dragStartY;
+  if (expanded.value) {
+    // Grid: follows the finger down 1:1.
+    if (!dragging && dragDelta > 8) dragging = true;
+    if (dragging) dragOffset.value = Math.max(0, dragDelta);
+  } else {
+    // Bar: lifts a little under an upward pull, so the gesture visibly "takes".
+    if (!dragging && dragDelta < -8) dragging = true;
+    if (dragging) dragOffset.value = Math.max(-DRAG_OPEN_MAX_LIFT, Math.min(0, dragDelta * DRAG_OPEN_RESISTANCE));
+  }
 }
 
 function removeDragListeners() {
@@ -262,8 +279,12 @@ function onPointerUp() {
   suppressNextClick = true;
   // The click (if any) fires right after pointerup; drop the guard after it.
   window.setTimeout(() => (suppressNextClick = false), 0);
-  if (dragOffset.value > DRAG_CLOSE_THRESHOLD) {
+  // Both continue from where the finger let go: setExpanded measures the
+  // FLIP "first" positions with the drag offset still applied.
+  if (expanded.value && dragDelta > DRAG_CLOSE_THRESHOLD) {
     void setExpanded(false);
+  } else if (!expanded.value && dragDelta < -DRAG_OPEN_THRESHOLD) {
+    void setExpanded(true);
   } else {
     const panel = panelEl.value;
     const from = dragOffset.value;
@@ -301,7 +322,10 @@ defineExpose({ expanded, setExpanded });
   border-top-left-radius: var(--mobile-bottom-nav-radius, 0);
   border-top-right-radius: var(--mobile-bottom-nav-radius, 0);
   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
-  touch-action: manipulation;
+  /* Vertical drags are ours (pull up to open, drag down to close) — the bar
+     never scrolls, so the browser must not claim them as a pan. Taps are
+     unaffected. */
+  touch-action: none;
 }
 
 .mobile-nav-panel__items {
@@ -336,7 +360,6 @@ defineExpose({ expanded, setExpanded });
   border-top-left-radius: 20px;
   border-top-right-radius: 20px;
   box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.16);
-  touch-action: none;
 }
 
 .mobile-nav-panel--expanded .mobile-nav-panel__items {

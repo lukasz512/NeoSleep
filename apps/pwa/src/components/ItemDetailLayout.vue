@@ -133,10 +133,13 @@ defineEmits<{
   margin-left: auto;
 }
 
-/* Borderless on purpose — the card keeps its padding/radius/surface for spacing,
-   but draws no outline. */
+/* Borderless and page-coloured, so it is not a visible card — no inline
+   padding (NEO-55): its content (avatar, name, tabs, fields) starts on the
+   same page gutter as lists and the "← Module" header above it
+   (AppLayout's --layout-card-inset). Bordered cards inside views keep their
+   own inner padding; their border is what sits on the gutter. */
 .view-item__card {
-  padding: 24px;
+  padding: 0 0 24px;
   border-radius: var(--pwa-radius);
   background: rgba(var(--v-theme-surface), 1);
 }

@@ -89,6 +89,36 @@ describe("MobileNavPanel", () => {
     expect(isExpanded(wrapper)).toBe(false);
   });
 
+  // jsdom has no PointerEvent constructor; a MouseEvent of the same type
+  // carries clientY and reaches the same listeners.
+  async function drag(w: VueWrapper, fromY: number, toY: number) {
+    w.find(".mobile-nav-panel").element.dispatchEvent(new MouseEvent("pointerdown", { clientY: fromY, bubbles: true }));
+    for (let y = fromY; fromY < toY ? y <= toY : y >= toY; y += fromY < toY ? 10 : -10) {
+      window.dispatchEvent(new MouseEvent("pointermove", { clientY: y }));
+    }
+    window.dispatchEvent(new MouseEvent("pointermove", { clientY: toY }));
+    window.dispatchEvent(new MouseEvent("pointerup", { clientY: toY }));
+    await flushPromises();
+  }
+
+  it("pulling the collapsed bar up opens the grid; a short pull does not", async () => {
+    const { wrapper } = await mountPanel();
+    await drag(wrapper, 800, 790);
+    expect(isExpanded(wrapper)).toBe(false);
+    await drag(wrapper, 800, 740);
+    expect(isExpanded(wrapper)).toBe(true);
+  });
+
+  it("dragging the open grid down closes it; a short drag springs back open", async () => {
+    const { wrapper } = await mountPanel();
+    await toggle(wrapper).trigger("click");
+    await flushPromises();
+    await drag(wrapper, 500, 540);
+    expect(isExpanded(wrapper)).toBe(true);
+    await drag(wrapper, 500, 620);
+    expect(isExpanded(wrapper)).toBe(false);
+  });
+
   it("More reads as active while inside an overflow module (list or detail), not otherwise", async () => {
     const onOverflow = await mountPanel("/patients/42");
     expect(toggle(onOverflow.wrapper).classes()).toContain("mobile-bottom-nav-item--active");
