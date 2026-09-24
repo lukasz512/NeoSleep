@@ -36,7 +36,7 @@
     <ul v-else class="practitioner-clinics-panel__list">
       <li v-for="org in organizations" :key="org.id" class="practitioner-clinics-panel__item">
         <div class="practitioner-clinics-panel__item-main">
-          <span class="practitioner-clinics-panel__name">{{ org.name }}</span>
+          <EntityLink :to="hcoDetailLink(org.organization_id)" :label="org.name" class="practitioner-clinics-panel__name" />
           <VChip size="small" :color="hcoTypeColor(org.type ?? undefined)" variant="tonal">
             {{ hcoTypeLabel(t, org.type ?? undefined) }}
           </VChip>
@@ -121,6 +121,8 @@ import { useI18n } from "vue-i18n";
 import AppButton from "../AppButton.vue";
 import AppIcon from "../AppIcon.vue";
 import AppAvatar from "../AppAvatar.vue";
+import EntityLink from "../EntityLink.vue";
+import { hcoDetailLink } from "../../utils/entityLinks";
 import AppEmptyState from "../AppEmptyState.vue";
 import AppConfirmDialog from "../AppConfirmDialog.vue";
 import { apiFetch } from "../../composables/useApi";
