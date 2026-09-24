@@ -7,7 +7,12 @@ import * as vuetifyComponents from "vuetify/components";
 import * as vuetifyDirectives from "vuetify/directives";
 import { createRouter, createMemoryHistory, type Router } from "vue-router";
 import en from "@i18n/en.json";
-import { BRAND_PWA_BADGE_URL, BRAND_PWA_BADGE_DARK_URL } from "@brand/logos";
+import {
+  BRAND_PWA_BADGE_URL,
+  BRAND_PWA_BADGE_DARK_URL,
+  BRAND_LOGO_LIGHT_URL,
+  BRAND_LOGO_DARK_URL,
+} from "@brand/logos";
 import { useThemeStore } from "@stores";
 import AuthView from "./AuthView.vue";
 
@@ -515,5 +520,22 @@ describe("AuthView — PWA badge follows the theme (NEO-12)", () => {
     themeStore.setPreference("dark");
     await flushPromises();
     expect(badge()).toBe(BRAND_PWA_BADGE_DARK_URL);
+  });
+
+  it("shows the white wordmark in light mode and the dark-ink one in dark mode, with the halo flipped to match", async () => {
+    const { wrapper } = await mountAuthView(vi.fn());
+    const themeStore = useThemeStore();
+    const logo = () => wrapper.find(".auth-chrome__logo").attributes("src");
+    const halo = () => wrapper.find(".auth-chrome__halo").classes();
+
+    themeStore.setPreference("light");
+    await flushPromises();
+    expect(logo()).toBe(BRAND_LOGO_DARK_URL); // logo_dark.svg = white wordmark
+    expect(halo()).not.toContain("auth-chrome__halo--dark-mode");
+
+    themeStore.setPreference("dark");
+    await flushPromises();
+    expect(logo()).toBe(BRAND_LOGO_LIGHT_URL); // logo_light.svg = dark-ink wordmark
+    expect(halo()).toContain("auth-chrome__halo--dark-mode");
   });
 });
