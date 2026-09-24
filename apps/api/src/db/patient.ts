@@ -1,6 +1,6 @@
 import type { PoolClient } from "pg";
 import { AppError, DatabaseError } from "../errors.js";
-import { formatDisplayName } from "../utils/personName.js";
+import { formatDisplayName, formatOptionalDisplayName } from "../utils/personName.js";
 
 function isoDate(val: Date | string | null | undefined): string {
   if (!val) return "";
@@ -148,11 +148,10 @@ function buildPractitionerName(row: {
   practitioner_first_name: string | null;
   practitioner_last_name: string | null;
 }): string | null {
-  if (!row.practitioner_first_name && !row.practitioner_last_name) return null;
-  return formatDisplayName({
+  return formatOptionalDisplayName({
     salutation: row.practitioner_salutation,
-    first_name: row.practitioner_first_name ?? "",
-    last_name: row.practitioner_last_name ?? "",
+    first_name: row.practitioner_first_name,
+    last_name: row.practitioner_last_name,
   });
 }
 

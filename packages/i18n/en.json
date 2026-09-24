@@ -890,7 +890,7 @@
   "app.treatmentPlans.table.patient": "Patient",
   "app.treatmentPlans.table.type": "Type",
   "app.treatmentPlans.table.status": "Status",
-  "app.treatmentPlans.table.dentist": "Dentist",
+  "app.treatmentPlans.table.doctor": "Doctor",
   "app.treatmentPlans.table.scanOrdered": "Scan ordered",
   "app.treatmentPlans.table.applianceDelivered": "Appliance delivered",
   "app.treatmentPlans.table.noResults": "No treatment plans found.",

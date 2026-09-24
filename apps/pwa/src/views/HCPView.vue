@@ -39,10 +39,14 @@
       @add="onAddContact"
     >
     <template #item.name="{ item }">
-      <span class="hcp-name-cell">
-        <AppAvatar :name="(item as HCPListItem).name" :first-name="(item as HCPListItem).first_name" :last-name="(item as HCPListItem).last_name" entity-type="hcp" :size="32" />
-        {{ (item as { name?: string }).name }}
-      </span>
+      <EntityLink
+        :to="null"
+        entity-type="hcp"
+        :label="(item as HCPListItem).name"
+        :first-name="(item as HCPListItem).first_name"
+        :last-name="(item as HCPListItem).last_name"
+        :avatar-size="32"
+      />
     </template>
     <template #item.specialty="{ item }">
       {{ specialtyLabel((item as HCPListItem).specialty) }}
@@ -57,12 +61,10 @@
       {{ (item as HCPListItem).territory_name || (item as HCPListItem).region || "—" }}
     </template>
     <template #feed-card-avatar="{ item }">
-      <AppAvatar :name="(item as HCPListItem).name" :first-name="(item as HCPListItem).first_name" :last-name="(item as HCPListItem).last_name" entity-type="hcp" :size="55" />
+      <AppAvatar v-bind="personAvatarProps(item as HCPListItem)" entity-type="hcp" :size="55" />
     </template>
     <template #feed-card-title="{ item }">
-      <span class="hcp-name-cell">
-        {{ (item as { name?: string }).name }}
-      </span>
+      {{ (item as { name?: string }).name }}
     </template>
     <template #feed-card-meta="{ item }">
       {{ hcpCardMeta(item as HCPListItem) }}
@@ -96,6 +98,7 @@ import AppEntityList from "../components/AppEntityList.vue";
 import AppAvatar from "../components/AppAvatar.vue";
 import AppIcon from "../components/AppIcon.vue";
 import EntityLink from "../components/EntityLink.vue";
+import { personAvatarProps } from "../utils/personAvatarProps";
 import AppListItemMenu from "../components/AppListItemMenu.vue";
 import { entityActionIcon, entityActionMenuIconClass } from "../config/entityActions";
 import { apiFetch } from "../composables/useApi";
@@ -300,12 +303,6 @@ async function onEventFormSubmit(
 </script>
 
 <style scoped>
-.hcp-name-cell {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .hcp-specialty-chip__icon {
   width: 14px;
   height: 14px;

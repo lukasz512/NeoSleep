@@ -1,6 +1,7 @@
 import type { PoolClient } from "pg";
 import { getDb } from "./connection.js";
 import { isoDate } from "../routes/utils.js";
+import { formatOptionalDisplayName } from "../utils/personName.js";
 
 /**
  * Full audit log row. Aligns with the audit_log table in the tenant schema (FHIR: AuditEvent).
@@ -113,6 +114,7 @@ type AuditLogRow = {
   id: string;
   created_at: Date;
   user_id: string | null;
+  user_salutation: string | null;
   user_first_name: string | null;
   user_last_name: string | null;
   action: string;
@@ -140,7 +142,7 @@ export async function getAuditLogForEntities(
   const result = await client.query<AuditLogRow>(
     `SELECT a.id, a.created_at, a.user_id, a.action, a.entity_type, a.entity_id, a.outcome,
             a.entity_before, a.entity_after,
-            ui.first_name AS user_first_name, ui.last_name AS user_last_name
+            ui.title AS user_salutation, ui.first_name AS user_first_name, ui.last_name AS user_last_name
      FROM audit_log a
      LEFT JOIN users u ON a.user_id = u.id
      LEFT JOIN identities ui ON u.identity_id = ui.id
@@ -153,7 +155,11 @@ export async function getAuditLogForEntities(
     id: row.id,
     created_at: isoDate(row.created_at),
     user_id: row.user_id,
-    user_name: [row.user_first_name, row.user_last_name].filter(Boolean).join(" ").trim() || null,
+    user_name: formatOptionalDisplayName({
+      salutation: row.user_salutation,
+      first_name: row.user_first_name,
+      last_name: row.user_last_name,
+    }),
     action: row.action,
     entity_type: row.entity_type,
     entity_id: row.entity_id,

@@ -13,7 +13,7 @@
       :filter-param-keys="['status']"
     >
       <template #item.patient_name="{ item }">
-        {{ (item as { patient_name?: string }).patient_name || "—" }}
+        <EntityLink :to="null" entity-type="patient" :label="(item as SleepStudyRow).patient_name" :avatar-size="32" />
       </template>
       <template #feed-card-title="{ item }">
         {{ (item as { patient_name?: string }).patient_name || "—" }}
@@ -61,6 +61,7 @@ import type { FilterDefinition } from "../composables/useFilters";
 import { sleepStudyCardMeta as sleepStudyCardMetaFormatter } from "../utils/mobileCardMeta";
 
 interface SleepStudyRow {
+  patient_name?: string | null;
   study_type?: string;
   study_date?: string;
   ahi_score?: number | null;

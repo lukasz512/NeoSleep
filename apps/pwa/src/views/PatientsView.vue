@@ -37,22 +37,27 @@
       @add="onAddPatient"
     >
       <template #item.name="{ item }">
-        <span class="patients-name-cell">
-          <AppAvatar :name="(item as PatientListItem).name" :first-name="(item as PatientListItem).first_name" :last-name="(item as PatientListItem).last_name" entity-type="patient" :size="32" />
-          {{ (item as { name?: string }).name }}
-        </span>
+        <EntityLink
+          :to="null"
+          entity-type="patient"
+          :label="(item as PatientListItem).name"
+          :first-name="(item as PatientListItem).first_name"
+          :last-name="(item as PatientListItem).last_name"
+          :avatar-size="32"
+        />
       </template>
       <template #feed-card-avatar="{ item }">
-        <AppAvatar :name="(item as PatientListItem).name" :first-name="(item as PatientListItem).first_name" :last-name="(item as PatientListItem).last_name" entity-type="patient" :size="55" />
+        <AppAvatar v-bind="personAvatarProps(item as PatientListItem)" entity-type="patient" :size="55" />
       </template>
       <template #feed-card-title="{ item }">
         {{ (item as { name?: string }).name }}
       </template>
       <template #item.practitioner_name="{ item }">
-        <span v-if="(item as { practitioner_name?: string }).practitioner_name">
-          {{ (item as { practitioner_name?: string }).practitioner_name }}
-        </span>
-        <span v-else class="app-entity-list__cell-empty">—</span>
+        <EntityLink
+          :to="(item as PatientListItem).practitioner_id ? { name: 'hcp-detail', params: { id: (item as PatientListItem).practitioner_id } } : null"
+          entity-type="hcp"
+          :label="(item as PatientListItem).practitioner_name"
+        />
       </template>
       <template #item.region="{ item }">
         {{ (item as PatientListItem).territory_name || (item as PatientListItem).region || "—" }}
@@ -99,6 +104,8 @@ import { ref, computed, defineAsyncComponent } from "vue";
 import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
 import AppAvatar from "../components/AppAvatar.vue";
+import EntityLink from "../components/EntityLink.vue";
+import { personAvatarProps } from "../utils/personAvatarProps";
 import AppIcon from "../components/AppIcon.vue";
 import AppListItemMenu from "../components/AppListItemMenu.vue";
 import { entityActionIcon, entityActionMenuIconClass } from "../config/entityActions";
@@ -267,12 +274,3 @@ async function onEventFormSubmit(
   );
 }
 </script>
-
-<style scoped>
-.patients-name-cell {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-</style>
