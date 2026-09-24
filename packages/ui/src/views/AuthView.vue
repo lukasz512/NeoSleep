@@ -268,13 +268,23 @@
     </AuthCard>
     </div>
 
-    <img
-      ref="pwaBadgeEl"
-      :src="pwaBadgeUrl"
-      :alt="t('user.login.pwaBadge')"
-      class="auth-view__pwa-badge"
-      :class="{ 'auth-view__pwa-badge--visible': badgeVisible }"
-    />
+    <!-- Same halo as the logo's (see AuthChrome), at half size. The wrap owns
+         the entrance/exit opacity so halo and badge fade in/out together;
+         the img keeps the magnetic transform. -->
+    <div
+      class="auth-view__pwa-badge-wrap"
+      :class="{ 'auth-view__pwa-badge-wrap--visible': badgeVisible }"
+    >
+      <div class="auth-view__pwa-badge-halo">
+        <AuthHalo :dark="themeStore.mode === 'dark'" size="sm" />
+      </div>
+      <img
+        ref="pwaBadgeEl"
+        :src="pwaBadgeUrl"
+        :alt="t('user.login.pwaBadge')"
+        class="auth-view__pwa-badge"
+      />
+    </div>
   </div>
 </template>
 
@@ -294,6 +304,7 @@ import type { ApiFetchOptions } from "@api";
 import { useThemeStore, type AuthTokenStorage } from "@stores";
 import AuthChrome from "../components/AuthChrome.vue";
 import AuthCard from "../components/AuthCard.vue";
+import AuthHalo from "../components/AuthHalo.vue";
 
 // White badge in light mode, dark badge in dark mode (NEO-12) — same theme
 // source AuthChrome uses for its logo.
@@ -809,33 +820,41 @@ const cardAccentStyle = {
 }
 
 /* Below the card now, not next to the logo (see AuthChrome) — logo, card,
-   badge, top to bottom. Magnetic transform target (see useMagneticPointer in
-   <script>) — written to directly every frame, so it stays free of any CSS
-   transition of its own. */
-.auth-view__pwa-badge {
+   badge, top to bottom. */
+.auth-view__pwa-badge-wrap {
   position: relative;
   z-index: 1;
   flex: none;
-  height: 24px;
-  width: auto;
-  object-fit: contain;
+  display: flex;
   opacity: 0;
-  will-change: transform;
-  /* opacity only, not transform — transform is written to directly every
-     frame by the magnetic pointer above; transitioning it too would make
-     that continuous per-frame tracking lag/animate instead of following the
-     pointer 1:1. */
   transition: opacity 0.3s ease-out;
 }
 
-.auth-view__pwa-badge--visible {
+.auth-view__pwa-badge-wrap--visible {
   opacity: 1;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .auth-view__pwa-badge {
+  .auth-view__pwa-badge-wrap {
     transition: none;
   }
+}
+
+/* Half of AuthChrome's logo halo bleed (-30px -70px). */
+.auth-view__pwa-badge-halo {
+  position: absolute;
+  inset: -15px -35px;
+  pointer-events: none;
+}
+
+/* Magnetic transform target (see useMagneticPointer in <script>) — written
+   to directly every frame, so it stays free of any CSS transition of its own. */
+.auth-view__pwa-badge {
+  position: relative;
+  height: 24px;
+  width: auto;
+  object-fit: contain;
+  will-change: transform;
 }
 
 .auth-view__body {
