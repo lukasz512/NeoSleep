@@ -131,8 +131,6 @@ jobs:
           DATABASE_URL=${DATABASE_URL}
           DEFAULT_TENANT_SLUG=${DEFAULT_TENANT_SLUG}
           SESSION_SECRET=${SESSION_SECRET}
-          ORTHOAPNEA_EMAIL=${ORTHOAPNEA_EMAIL}
-          ORTHOAPNEA_PASSWORD=${ORTHOAPNEA_PASSWORD}
           EOF
 
       - name: Test — pwa e2e (blocking)
