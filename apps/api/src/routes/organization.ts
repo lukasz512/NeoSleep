@@ -8,8 +8,9 @@ import { CreateOrganizationCommand, UpdateOrganizationCommand, DeleteOrganizatio
 import { GetOrganizationListQuery, GetOrganizationByIdQuery } from "../queries/organization.js";
 import { GetHistoryForOrganizationQuery } from "../queries/auditLog.js";
 import { GetOrganizationDocumentsQuery, GetOrganizationDocumentDownloadUrlQuery } from "../queries/entityDocuments.js";
+import { GetOrganizationPractitionersQuery } from "../queries/practitioner.js";
 import { ValidationError } from "../errors.js";
-import { parsePaginationParams } from "./utils.js";
+import { parsePaginationParams, toFilterArray } from "./utils.js";
 
 /**
  * Organization routes — thin waiters.
@@ -70,6 +71,36 @@ organizationRouter.get(
 
     if (!organization) { res.status(404).json({ error: "Organization not found" }); return; }
     res.json(organization);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/organization/:id/practitioners — clinic's doctors + stats (NEO-14)
+// ---------------------------------------------------------------------------
+organizationRouter.get(
+  "/organization/:id/practitioners",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id?.trim();
+    if (!id) throw new ValidationError("Missing organization id");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    const { page, limit, sortBy, sortOrder } = parsePaginationParams(req);
+    const search = typeof req.query.search === "string" ? req.query.search.trim() : undefined;
+
+    const result = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return GetOrganizationPractitionersQuery(ctx, {
+        organizationId: id,
+        search:    search || undefined,
+        specialty: toFilterArray(req.query.specialty),
+        page,
+        limit,
+        sortBy,
+        sortOrder,
+      });
+    });
+    res.json(result);
   })
 );
 

@@ -88,6 +88,37 @@ describe("HCODetailView — Documents tab", () => {
   });
 });
 
+describe("HCODetailView — Doctors tab table with stats (NEO-14)", () => {
+  it("loads the clinic's doctors from /organization/:id/practitioners and renders patient/device/efficiency stats", async () => {
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, HCO));
+    const { wrapper } = await mountHCODetail();
+
+    await vi.waitFor(() => expect(wrapper.text()).toContain("Acme Clinic"));
+
+    const doctorsTab = wrapper.findAll('[role="tab"]').find((t) => t.text() === "Doctors");
+    expect(doctorsTab?.exists()).toBe(true);
+
+    apiFetch.mockResolvedValue(jsonResponse(true, 200, {
+      items: [
+        { id: "prac-1", name: "Dra. Lorena Pimentel", first_name: "Lorena", last_name: "Pimentel", primary_specialty: "dentist", patient_count: 3, device_count: 2, efficiency_pct: 67 },
+        { id: "prac-2", name: "Dr. Beto Ruiz", first_name: "Beto", last_name: "Ruiz", primary_specialty: "dentist", patient_count: 0, device_count: 0, efficiency_pct: null },
+      ],
+      total: 2,
+    }));
+    await doctorsTab?.trigger("click");
+
+    await vi.waitFor(() => {
+      const urls = apiFetch.mock.calls.map((c) => String(c[0]));
+      expect(urls.some((u) => u.startsWith("/api/v1/organization/hco-1/practitioners?"))).toBe(true);
+    });
+    await vi.waitFor(() => expect(wrapper.text()).toContain("Dra. Lorena Pimentel"));
+    expect(wrapper.text()).toContain("3 patients · 2 devices · 67%");
+    expect(wrapper.text()).toContain("0 patients · 0 devices · —");
+
+    await flushPromises();
+  });
+});
+
 describe("HCODetailView — avatar icon per org type (NEO-18)", () => {
   // hcoTypeIcon()/AppAvatar's own prop logic already have unit coverage
   // (hcoLabels.spec.ts, AppAvatar.spec.ts) — this closes the one gap flagged
