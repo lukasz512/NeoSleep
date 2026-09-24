@@ -4,7 +4,7 @@
     :color="avatarUrl || outlined ? undefined : bgColor"
     class="app-avatar"
     :class="{ 'app-avatar--outlined': outlined }"
-    :style="outlined ? { '--app-avatar-accent': bgColor } : undefined"
+    :style="outlined ? { '--app-avatar-accent': bgColor, '--app-avatar-ring': ringWidth } : undefined"
   >
     <VImg v-if="avatarUrl" :src="avatarUrl" :alt="name || ''" cover />
     <span v-else-if="initials" class="app-avatar__initials" :style="{ fontSize: initialsFontSize }">{{ initials }}</span>
@@ -91,10 +91,13 @@ const FIBONACCI_INITIALS_RATIO = 21 / 55;
 // `size` must be numeric (px) here: percentage/keyword sizes (e.g. "100%")
 // resolve their real pixel size only via CSS, so callers relying on that
 // must also pass the equivalent numeric size for this calculation.
-const initialsFontSize = computed(() => {
-  const sizeNum = typeof props.size === "number" ? props.size : parseFloat(String(props.size)) || 40;
-  return `${Math.max(sizeNum * FIBONACCI_INITIALS_RATIO, 8)}px`;
-});
+const sizePx = computed(() => (typeof props.size === "number" ? props.size : parseFloat(String(props.size)) || 40));
+const initialsFontSize = computed(() => `${Math.max(sizePx.value * FIBONACCI_INITIALS_RATIO, 8)}px`);
+// Outlined ring scales with `size` so it matches the stroke of the bold
+// initials inside it (~1px on a 20px chip avatar, ~2px at the 40px default)
+// instead of a fixed 2px that swamps small avatars.
+const RING_TO_SIZE_RATIO = 1 / 19;
+const ringWidth = computed(() => `${Math.max(sizePx.value * RING_TO_SIZE_RATIO, 1).toFixed(2)}px`);
 </script>
 
 <style scoped>
@@ -117,11 +120,17 @@ const initialsFontSize = computed(() => {
 .app-avatar--outlined {
   background: #fff;
   /* Inset shadow instead of border so the ring doesn't grow the avatar past `size`. */
-  box-shadow: inset 0 0 0 2px var(--app-avatar-accent);
+  box-shadow: inset 0 0 0 var(--app-avatar-ring) var(--app-avatar-accent);
 }
 
 .app-avatar--outlined .app-avatar__initials,
 .app-avatar--outlined .app-avatar__icon {
   color: var(--app-avatar-accent);
+}
+
+/* Colored letters on white read thinner than white on color - one weight up
+   keeps their stroke equal to the ring. */
+.app-avatar--outlined .app-avatar__initials {
+  font-weight: 700;
 }
 </style>

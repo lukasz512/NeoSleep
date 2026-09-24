@@ -102,15 +102,17 @@
     <template #item.type="{ item }">
       {{ typeLabel(getLeadFromItem(item).type) }}
     </template>
+    <!-- Second tile line: specialty when known, else the clinic the lead came in through. -->
     <template #feed-card-meta="{ item }">
-      <span v-if="leadSecondaryLine(getLeadFromItem(item))" class="leads-feed-meta">
-        <AppIcon
-          v-if="!getLeadFromItem(item).specialty && leadInstitution(getLeadFromItem(item))"
-          name="nav-hco"
-          class="app-entity-list__institution-icon"
-        />
-        {{ leadSecondaryLine(getLeadFromItem(item)) }}
+      <span v-if="getLeadFromItem(item).specialty" class="leads-feed-meta">
+        {{ getLeadFromItem(item).specialty }}
       </span>
+      <EntityLink
+        v-else-if="leadInstitution(getLeadFromItem(item))"
+        :to="hcoListLink(leadInstitution(getLeadFromItem(item)))"
+        :label="leadInstitution(getLeadFromItem(item))"
+        entity-type="hco"
+      />
     </template>
     <template #feed-card-status="{ item }">
       <span
@@ -120,16 +122,11 @@
       </span>
     </template>
     <template #item.institution="{ item }">
-      <RouterLink
-        v-if="leadInstitution(getLeadFromItem(item))"
-        :to="hcoListLink(leadInstitution(getLeadFromItem(item)))"
-        class="app-entity-list__institution-link"
-        @click.stop
-      >
-        <AppIcon name="nav-hco" class="app-entity-list__institution-icon" />
-        {{ leadInstitution(getLeadFromItem(item)) }}
-      </RouterLink>
-      <span v-else class="app-entity-list__cell-empty">—</span>
+      <EntityLink
+        :to="leadInstitution(getLeadFromItem(item)) ? hcoListLink(leadInstitution(getLeadFromItem(item))) : null"
+        :label="leadInstitution(getLeadFromItem(item))"
+        entity-type="hco"
+      />
     </template>
     <template #feed-card-actions="{ item }">
       <AppListItemMenu :aria-label="t('app.common.moreActions')">
@@ -193,6 +190,7 @@ import { useConfigStore } from "../stores/config";
 import { getGenderFromName } from "../utils/genderFromName";
 import { leadStatusClass, leadStatusI18nKey, leadInstitution } from "../utils/leadStatus";
 import { hcoListLink } from "../utils/entityLinks";
+import EntityLink from "../components/EntityLink.vue";
 
 export interface Lead {
   id: string;
@@ -342,11 +340,6 @@ function isInactive(lead: Lead): boolean {
 
 function isConverted(lead: Lead): boolean {
   return (lead.status || "").toLowerCase() === "converted";
-}
-
-/** Second tile line — specialty when known, else the clinic the lead came in through. */
-function leadSecondaryLine(lead: Lead): string {
-  return lead.specialty || leadInstitution(lead) || "";
 }
 
 function onScheduleVisit() {

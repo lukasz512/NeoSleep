@@ -23,3 +23,16 @@ export function userDetailLink(role: UserRole | undefined | null, userId: string
 export function hcoListLink(institutionName: string): RouteLocationRaw {
   return { path: "/hco", query: { institution: institutionName } };
 }
+
+/** Detail page of a doctor (HCP) / clinic (HCO) / patient, or null when the id is missing (unassigned/deleted). */
+export function hcpDetailLink(id: string | null | undefined): RouteLocationRaw | null {
+  return id ? { name: "hcp-detail", params: { id } } : null;
+}
+
+export function hcoDetailLink(id: string | null | undefined): RouteLocationRaw | null {
+  return id ? { name: "hco-detail", params: { id } } : null;
+}
+
+export function patientDetailLink(id: string | null | undefined): RouteLocationRaw | null {
+  return id ? { name: "patient-detail", params: { id } } : null;
+}

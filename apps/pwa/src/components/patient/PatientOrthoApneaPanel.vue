@@ -64,7 +64,7 @@
         :class="{ 'patient-orthoapnea-panel__item--static': !isDraft(plan) }"
       >
         <div class="patient-orthoapnea-panel__item-header" @click="isDraft(plan) && onEdit(plan)">
-          <EntityLink class="patient-orthoapnea-panel__dentist" :to="null" entity-type="hcp" :label="plan.dentist_name" />
+          <EntityLink class="patient-orthoapnea-panel__dentist" :to="hcpDetailLink(plan.dentist_id)" entity-type="hcp" :label="plan.dentist_name" />
           <VChip v-if="isDraft(plan)" color="warning" size="small" variant="tonal">{{ t("app.orthoApneaOrder.draftBadge") }}</VChip>
           <VChip v-else :color="statusColor(plan.status)" size="small" variant="tonal">{{ statusLabel(plan.status) }}</VChip>
           <VSpacer />
@@ -115,6 +115,7 @@ import AppLoadingState from "../AppLoadingState.vue";
 import AppErrorState from "../AppErrorState.vue";
 import AppEmptyState from "../AppEmptyState.vue";
 import EntityLink from "../EntityLink.vue";
+import { hcpDetailLink } from "../../utils/entityLinks";
 import { apiFetch } from "../../composables/useApi";
 import { useNotifications } from "../../composables/useNotifications";
 import { useAuthStore } from "../../stores/auth";
