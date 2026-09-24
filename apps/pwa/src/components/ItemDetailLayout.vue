@@ -151,21 +151,17 @@ defineEmits<{
   display: block;
 }
 
+/* No card chrome (border/radius/background) at any width — the detail content sits
+   directly on the page. Mobile keeps the inner padding as spacing; desktop
+   (>= MOBILE_BREAKPOINT, constants.ts) drops it so content is flush with the
+   back-button row above. */
 .view-item__card {
   padding: 24px;
-  border-radius: var(--pwa-radius);
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  background: rgba(var(--v-theme-surface), 1);
 }
 
-/* Desktop (>= MOBILE_BREAKPOINT, constants.ts): no card chrome — the detail content
-   sits directly on the page, flush with the back-button row above it. */
 @media (min-width: 768px) {
   .view-item__card {
     padding: 0;
-    border: none;
-    border-radius: 0;
-    background: transparent;
   }
 }
 
