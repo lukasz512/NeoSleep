@@ -389,8 +389,7 @@ describe("createOrthoApneaTreatment", () => {
       createOrthoApneaTreatment(TENANT_SLUG, planB.id, {}),
     ]);
 
-    expect(overlapDetected).toBe(false);
-
+    // Register both links for cleanup before asserting, so a failure can't leak them.
     const [linkA, linkB] = await withTenant(TENANT_SLUG, (client) =>
       Promise.all([
         getPartnerLink(client, "orthoapnea", "treatment_plan", planA.id),
@@ -398,6 +397,8 @@ describe("createOrthoApneaTreatment", () => {
       ])
     );
     createdPartnerLinkIds.push(linkA!.id, linkB!.id);
+
+    expect(overlapDetected).toBe(false);
   });
 });
 
@@ -430,6 +431,12 @@ describe("SyncOrthoApneaTreatmentStatusesCommand", () => {
       "/api/treatments": () => ({ status: 200, body: treatmentDtoFixture }), // statusId 1
     });
     await createOrthoApneaTreatment(TENANT_SLUG, plan.id, {});
+    // Register for cleanup right away, not after the assertions below — a link
+    // leaked by a failing run stays in the sync worklist of every later run
+    // (SyncOrthoApneaTreatmentStatusesCommand polls ALL non-terminal links),
+    // which is exactly how this test used to snowball past its timeout.
+    const createdLink = await withTenant(TENANT_SLUG, (client) => getPartnerLink(client, "orthoapnea", "treatment_plan", plan.id));
+    createdPartnerLinkIds.push(createdLink!.id);
 
     stubFetchRoutes({
       [LOGIN_ROUTE[0]]: LOGIN_ROUTE[1],
@@ -448,7 +455,6 @@ describe("SyncOrthoApneaTreatmentStatusesCommand", () => {
 
     const link = await withTenant(TENANT_SLUG, (client) => getPartnerLink(client, "orthoapnea", "treatment_plan", plan.id));
     expect(link?.external_status).toBe("2");
-    createdPartnerLinkIds.push(link!.id);
 
     const patientNotifications = await withTenant(TENANT_SLUG, (client) =>
       getNotificationsPaginated(client, patient.identity_id, "all", 1, 10)
