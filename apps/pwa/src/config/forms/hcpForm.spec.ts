@@ -8,6 +8,8 @@ vi.mock("../../composables/useApi", async (importOriginal) => ({
 
 import { hcpFormFields, hcpFormDerive, isCreatingNewOrganization, resolveOrganizationIdForSubmit } from "./hcpForm";
 import type { FormFieldDef } from "../../types/formField";
+import { createPinia, setActivePinia } from "pinia";
+import { useAuthStore } from "../../stores/auth";
 
 function jsonResponse(ok: boolean, body: unknown) {
   return { ok, json: async () => body } as Response;
@@ -112,7 +114,13 @@ describe("hcpFormFields", () => {
     expect(isHidden(cedula, { region: "PL" })).toBe(true);
     expect(isHidden(pwz, { region: "MX" })).toBe(true);
     expect(isHidden(cedula, { region: "MX" })).toBe(false);
+    // No region on the form and no signed-in user → nothing to decide by.
+    setActivePinia(createPinia());
     expect(isHidden(pwz, { region: "" })).toBe(true);
+    // No region on the form yet (no clinic picked) → falls back to the user's own region.
+    useAuthStore().user = { region: "PL" } as NonNullable<ReturnType<typeof useAuthStore>["user"]>;
+    expect(isHidden(pwz, { region: "" })).toBe(false);
+    expect(isHidden(cedula, { region: "" })).toBe(true);
   });
 
   it("licence number rules reject a bad PWZ checksum and accept a valid one", () => {

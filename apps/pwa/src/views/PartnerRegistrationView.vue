@@ -86,10 +86,10 @@
               <h2 class="partner-registration__clinic-details-heading">
                 {{ t('user.partnerRegistration.form.clinicDetailsHeading') }}
               </h2>
+              <!-- Default (not small) size: more air inside the outline (Łukasz, NEO-51 review). -->
               <AppButton
                 variant="outlined"
                 color="primary"
-                size="small"
                 type="button"
                 class="partner-registration__edit-button"
                 @click="openEditDialog"
@@ -116,18 +116,18 @@
             <PartnerDocumentRow
               :title="t('user.partnerRegistration.documents.agreementTitle')"
               :subtitle="t('user.partnerRegistration.documents.agreementSubtitle')"
-              :status="agreementSignature ? t('user.partnerRegistration.documents.statusSigned') : t('user.partnerRegistration.documents.statusToSign')"
+              :state="agreementState"
+              :status="t(`user.partnerRegistration.documents.status.agreement.${agreementState}`)"
               :action-label="agreementSignature ? t('user.partnerRegistration.documents.viewAndResign') : t('user.partnerRegistration.documents.readAndSign')"
-              :done="!!agreementSignature"
               :thumbnail="agreementSignature"
               @open="openDocument('agreement')"
             />
             <PartnerDocumentRow
               :title="t('user.partnerRegistration.documents.noticeTitle')"
               :subtitle="t('user.partnerRegistration.documents.noticeSubtitle')"
-              :status="noticeVersionId ? t('user.partnerRegistration.documents.statusRead') : t('user.partnerRegistration.documents.statusToRead')"
+              :state="noticeState"
+              :status="t(`user.partnerRegistration.documents.status.notice.${noticeState}`)"
               :action-label="noticeVersionId ? t('user.partnerRegistration.documents.view') : t('user.partnerRegistration.documents.read')"
-              :done="!!noticeVersionId"
               @open="openDocument('notice')"
             />
           </div>
@@ -441,8 +441,23 @@ async function saveEditDialog() {
 const documentDialogOpen = ref(false);
 const openKind = ref<"agreement" | "notice">("agreement");
 
+// Whether the doctor has opened each document at all — the tiles show
+// "not opened" → "opened" → "signed"/"read", so progress is visible at a glance.
+const agreementOpened = ref(false);
+const noticeOpened = ref(false);
+
+type DocumentState = "notOpened" | "opened" | "done";
+const agreementState = computed<DocumentState>(() =>
+  agreementSignature.value ? "done" : agreementOpened.value ? "opened" : "notOpened"
+);
+const noticeState = computed<DocumentState>(() =>
+  noticeVersionId.value ? "done" : noticeOpened.value ? "opened" : "notOpened"
+);
+
 function openDocument(kind: "agreement" | "notice") {
   openKind.value = kind;
+  if (kind === "agreement") agreementOpened.value = true;
+  else noticeOpened.value = true;
   documentDialogOpen.value = true;
 }
 
@@ -672,6 +687,10 @@ async function onSubmit() {
   text-transform: none;
   letter-spacing: normal;
   flex-shrink: 0;
+}
+
+.partner-registration__edit-button :deep(.v-btn__prepend) {
+  margin-inline-end: 8px;
 }
 
 .partner-registration__clinic-details-hint {

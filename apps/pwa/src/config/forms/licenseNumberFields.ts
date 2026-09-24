@@ -1,5 +1,6 @@
 import type { FormFieldDef } from "../../types/formField";
 import { isValidLicenseNumber, licenseCountryForRegion } from "@documents-browser";
+import { useAuthStore } from "../../stores/auth";
 
 /**
  * Professional licence number fields — PL "numer PWZ" / MX "cédula
@@ -14,9 +15,17 @@ import { isValidLicenseNumber, licenseCountryForRegion } from "@documents-browse
  * round-trips without a mapping layer.
  */
 
+/**
+ * The form's own region when it has one (e.g. derived from the chosen clinic),
+ * otherwise the signed-in user's region — so a PL/MX rep sees the licence
+ * field straight away instead of only after picking a clinic that carries a
+ * region (Łukasz couldn't find the field in the HCP form, NEO-51 review).
+ */
 function regionIs(country: "PL" | "MX") {
-  return (form: Record<string, unknown>) =>
-    licenseCountryForRegion(typeof form.region === "string" ? form.region : null) === country;
+  return (form: Record<string, unknown>) => {
+    const own = typeof form.region === "string" && form.region ? form.region : null;
+    return licenseCountryForRegion(own ?? useAuthStore().user?.region ?? null) === country;
+  };
 }
 
 function pwzRule(v: unknown): true | string {

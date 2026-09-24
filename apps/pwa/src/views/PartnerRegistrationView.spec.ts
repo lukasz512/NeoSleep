@@ -106,8 +106,20 @@ describe("PartnerRegistrationView — documents instead of checkboxes (NEO-51)",
     expect(wrapper.findAll('input[type="checkbox"]')).toHaveLength(0);
     expect(wrapper.text()).toContain(en["user.partnerRegistration.documents.agreementTitle"]);
     expect(wrapper.text()).toContain(en["user.partnerRegistration.documents.noticeTitle"]);
-    expect(wrapper.text()).toContain(en["user.partnerRegistration.documents.statusToSign"]);
-    expect(wrapper.text()).toContain(en["user.partnerRegistration.documents.statusToRead"]);
+    expect(wrapper.text()).toContain(en["user.partnerRegistration.documents.status.agreement.notOpened"]);
+    expect(wrapper.text()).toContain(en["user.partnerRegistration.documents.status.notice.notOpened"]);
+  });
+
+  it("shows a tile going from 'not opened' to 'opened' when the doctor opens it (NEO-51 review)", async () => {
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, VALID_PREVIEW));
+    const { wrapper } = await mountPartnerRegistrationView();
+    // The dialog fetches its preview on open — keep that pending so only the tile state is asserted.
+    apiFetch.mockReturnValue(new Promise(() => {}));
+    const readAndSign = wrapper.findAll("button").find((b) => b.text() === en["user.partnerRegistration.documents.readAndSign"])!;
+    await readAndSign.trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain(en["user.partnerRegistration.documents.status.agreement.opened"]);
+    expect(wrapper.text()).toContain(en["user.partnerRegistration.documents.status.notice.notOpened"]);
   });
 
   it("makes Edit details an outlined button, not a flat text link", async () => {
@@ -128,7 +140,7 @@ describe("PartnerRegistrationView — documents instead of checkboxes (NEO-51)",
     dialog.vm.$emit("signed", { signatureDataUrl: SIGNATURE, versionIds: ["agr-1", "dpa-1"] });
     await flushPromises();
     expect(wrapper.text()).toContain(en["user.partnerRegistration.form.finishHintNotice"]);
-    expect(wrapper.text()).toContain(en["user.partnerRegistration.documents.statusSigned"]);
+    expect(wrapper.text()).toContain(en["user.partnerRegistration.documents.status.agreement.done"]);
 
     dialog.vm.$emit("acknowledged", { versionIds: ["not-1"] });
     await flushPromises();
@@ -185,7 +197,7 @@ describe("PartnerRegistrationView — documents instead of checkboxes (NEO-51)",
     await flushPromises();
 
     expect(wrapper.text()).toContain(en["user.partnerRegistration.form.errorStale"]);
-    expect(wrapper.text()).toContain(en["user.partnerRegistration.documents.statusToSign"]);
+    expect(wrapper.text()).not.toContain(en["user.partnerRegistration.documents.status.agreement.done"]);
     expect(finishButton(wrapper).attributes("disabled")).toBeDefined();
   });
 });
