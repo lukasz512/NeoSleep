@@ -1,6 +1,6 @@
 <template>
   <VDialog :model-value="modelValue" max-width="760" scrollable @update:model-value="(v) => emit('update:modelValue', v)">
-    <VCard>
+    <VCard class="pwa-form-dialog__card">
       <AppDialogHeader :title="t('app.orthoApneaOrder.transactionLog.title')" @close="emit('update:modelValue', false)" />
 
       <VCardText>

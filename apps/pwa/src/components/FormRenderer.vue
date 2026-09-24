@@ -125,7 +125,7 @@
           </template>
         </VForm>
       </VCardText>
-      <VCardActions class="mx-2 mb-2">
+      <VCardActions>
         <VSpacer />
         <AppButton variant="text" @click="onCancelClick">
           {{ t("app.common.cancel") }}
