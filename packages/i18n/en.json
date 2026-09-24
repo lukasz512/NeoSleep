@@ -307,7 +307,7 @@
   "layout.sidebar.collapse": "Collapse sidebar",
   "layout.nav.modules": "Modules",
   "layout.nav.more": "More",
-  "layout.nav.moreModules": "More modules",
+  "layout.nav.close": "Close",
   "layout.backTo": "Back to {module}",
   "layout.skipToMain": "Skip to main content",
   "layout.loader.label": "Loading",

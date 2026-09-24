@@ -68,75 +68,30 @@
     <slot />
   </VMain>
 
-  <MobileBottomNavBar
+  <!-- NEO-55: the bottom bar expands in place into a grid of every module
+       ("More" → close chevron) — see MobileNavPanel for the transition. -->
+  <MobileNavPanel
     v-if="mobile && showBottomNav"
+    :items="navItems"
+    :primary-count="BOTTOM_NAV_ITEM_COUNT"
+    :show-labels="bottomNavShowLabels"
     :aria-label="menuLabel"
+    :more-label="moreLabel"
+    :close-label="closeLabel"
     class="app-shell__bottom-nav"
     :class="enterClass"
     :style="{ '--app-shell-enter-order': 3 }"
   >
-    <MobileBottomNavItem
-      v-for="item in primaryNavItems"
-      :key="item.path"
-      :to="item.path"
-      :label="item.label"
-      :show-label="bottomNavShowLabels"
-    >
+    <template #icon="{ item }">
       <slot name="nav-icon" :item="item" />
-    </MobileBottomNavItem>
-    <MobileBottomNavItem
-      v-if="overflowNavItems.length"
-      :label="moreLabel"
-      :show-label="bottomNavShowLabels"
-      :active="moreOpen || overflowActive"
-      :expanded="moreOpen"
-      class="app-shell__more"
-      @click="moreOpen = !moreOpen"
-    >
-      <slot name="more-icon">
-        <span class="app-shell__more-dots"><span /><span /><span /></span>
-      </slot>
-    </MobileBottomNavItem>
-  </MobileBottomNavBar>
-
-  <!-- "More": the modules that don't fit the bottom bar (NEO-55). Modules
-       only — the account menu stays under the avatar in the app bar. Its
-       content is padded by the bottom bar's height, so the sheet rises from
-       behind the (higher z-index) bar and the bar stays tappable. -->
-  <VBottomSheet
-    v-if="mobile && showBottomNav && overflowNavItems.length"
-    v-model="moreOpen"
-    class="app-shell__more-sheet"
-  >
-    <VCard color="surface-container-low" class="app-shell__more-card">
-      <p class="app-shell__more-title">{{ moreTitle }}</p>
-      <VList nav bg-color="transparent" :aria-label="moreTitle">
-        <VListItem
-          v-for="item in overflowNavItems"
-          :key="item.path"
-          :to="item.path"
-          :title="item.label"
-          rounded="lg"
-          class="app-shell__more-item"
-          @click="moreOpen = false"
-        >
-          <template #prepend>
-            <span class="app-shell__more-item-icon" aria-hidden="true">
-              <slot name="nav-icon" :item="item" />
-            </span>
-          </template>
-        </VListItem>
-      </VList>
-    </VCard>
-  </VBottomSheet>
+    </template>
+  </MobileNavPanel>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, watch } from "vue";
+import { computed, ref, onMounted } from "vue";
 import { useDisplay } from "vuetify";
-import { useRoute } from "vue-router";
-import MobileBottomNavBar from "./MobileBottomNavBar.vue";
-import MobileBottomNavItem from "./MobileBottomNavItem.vue";
+import MobileNavPanel from "./MobileNavPanel.vue";
 
 export interface AppShellNavItem {
   path: string;
@@ -151,10 +106,10 @@ const BOTTOM_NAV_ITEM_COUNT = 4;
  * Shared responsive app shell (packages/ui) — the structural chrome only:
  * a full-width VAppBar, a permanent rail-collapsible VNavigationDrawer on
  * desktop, and on mobile (`useDisplay().mobile`) no drawer at all but a
- * bottom nav bar (the shared MobileBottomNavBar/MobileBottomNavItem, same
- * feel as apps/web's) with the first 4 nav items plus a "More" tab that
- * opens a bottom sheet with the rest (NEO-55 — one visible navigation, no
- * hamburger), and a VMain for routed content.
+ * bottom nav bar (MobileNavPanel, built from the shared MobileBottomNavItem,
+ * same feel as apps/web's) with the first 4 nav items plus a "More" tab that
+ * expands the bar into a grid of every module (NEO-55 — one visible
+ * navigation, no hamburger), and a VMain for routed content.
  *
  * Deliberately has no knowledge of roles, auth, theming, or branding — those
  * are app-specific concerns supplied via slots (app-bar-start, app-bar-title,
@@ -175,8 +130,8 @@ const props = withDefaults(
     menuLabel?: string;
     /** Label of the bottom bar's "More" tab. */
     moreLabel?: string;
-    /** Heading of the "More" sheet. */
-    moreTitle?: string;
+    /** Label of the "More" tab while expanded (it closes the grid). */
+    closeLabel?: string;
     width?: number;
     railWidth?: number;
   }>(),
@@ -187,31 +142,13 @@ const props = withDefaults(
     bottomNavShowLabels: false,
     menuLabel: "Menu",
     moreLabel: "More",
-    moreTitle: "More",
+    closeLabel: "Close",
     width: 220,
     railWidth: 56,
   },
 );
 
 const { mobile } = useDisplay();
-const route = useRoute();
-
-const primaryNavItems = computed(() => props.navItems.slice(0, BOTTOM_NAV_ITEM_COUNT));
-const overflowNavItems = computed(() => props.navItems.slice(BOTTOM_NAV_ITEM_COUNT));
-
-const moreOpen = ref(false);
-
-/** "More" reads as the active tab while the rep is inside one of its modules (list or detail). */
-const overflowActive = computed(() =>
-  overflowNavItems.value.some((item) => route.path === item.path || route.path.startsWith(`${item.path}/`)),
-);
-
-// Any navigation (a sheet item, the back arrow, a bottom-bar tab) closes the sheet.
-watch(() => route.fullPath, () => (moreOpen.value = false));
-watch(mobile, (isMobile) => {
-  if (!isMobile) moreOpen.value = false;
-});
-
 // One-time entrance, played whenever this shell first mounts (i.e. right
 // after the auth screen's own exit sequence, see AuthView.vue): the parts
 // appear one after another, top to bottom — app bar, drawer, main content,
@@ -374,56 +311,7 @@ onMounted(() => {
   display: none;
 }
 
-/* The "More" tab's icon: three dots, drawn at the nav icons' 20px box. */
-.app-shell__more-dots {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  width: 20px;
-  height: 20px;
-
-  span {
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    background: currentColor;
-  }
-}
-
-.app-shell__more-card {
-  padding: 16px 12px calc(var(--mobile-bottom-nav-height, 64px) + env(safe-area-inset-bottom) + 8px);
-  border-radius: 16px 16px 0 0 !important;
-}
-
-.app-shell__more-title {
-  margin: 0 12px 4px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  opacity: var(--v-medium-emphasis-opacity);
-}
-
-.app-shell__more-item {
-  min-height: 48px;
-}
-
-.app-shell__more-item-icon {
-  display: inline-flex;
-  width: 24px;
-  height: 24px;
-  margin-inline-end: 16px;
-  align-items: center;
-  justify-content: center;
-}
-
-.app-shell__more-item-icon :deep(svg) {
-  width: 22px;
-  height: 22px;
-}
-
-/* MobileBottomNavBar is position: fixed, not a Vuetify layout item, so VMain
+/* The bottom nav (MobileNavPanel) is position: fixed, not a Vuetify layout item, so VMain
    never learns to reserve space for it — without this, scrollable content
    (e.g. entity list feeds) renders its last rows underneath the nav bar. */
 .app-shell__main--bottom-nav-space {

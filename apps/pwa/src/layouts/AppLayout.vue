@@ -17,7 +17,7 @@
       :nav-items="visibleNavItems"
       :menu-label="t('layout.nav.modules')"
       :more-label="t('layout.nav.more')"
-      :more-title="t('layout.nav.moreModules')"
+      :close-label="t('layout.nav.close')"
       bottom-nav-show-labels
     >
       <!-- NEO-55: logo on the left of the full-width app bar on desktop (it

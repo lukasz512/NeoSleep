@@ -320,7 +320,7 @@
   "layout.sidebar.collapse": "Contraer barra",
   "layout.nav.modules": "Módulos",
   "layout.nav.more": "Más",
-  "layout.nav.moreModules": "Más módulos",
+  "layout.nav.close": "Cerrar",
   "layout.backTo": "Volver a {module}",
   "layout.skipToMain": "Saltar al contenido principal",
   "layout.loader.label": "Cargando",

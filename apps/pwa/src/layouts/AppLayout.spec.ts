@@ -241,14 +241,13 @@ describe("AppLayout", () => {
       expect(shell).toMatch(/<VNavigationDrawer\s+v-if="!mobile"/);
     });
 
-    it("AppShell's bottom bar adds a More tab and sheet for the nav items past the first 4", () => {
+    it("AppShell's bottom bar is the expanding MobileNavPanel: all nav items, first 4 in the bar, More/Close labels from i18n", () => {
       const shell = readShell();
-      expect(shell).toContain("props.navItems.slice(BOTTOM_NAV_ITEM_COUNT)");
-      expect(shell).toMatch(/<MobileBottomNavItem\s+v-if="overflowNavItems\.length"[\s\S]*?:label="moreLabel"/);
-      expect(shell).toMatch(/<VBottomSheet[\s\S]*?v-for="item in overflowNavItems"/);
+      expect(shell).toMatch(/<MobileNavPanel[\s\S]*?:items="navItems"[\s\S]*?:primary-count="BOTTOM_NAV_ITEM_COUNT"/);
+      expect(shell).not.toContain("<VBottomSheet");
       const layout = readLayout();
       expect(layout).toContain(":more-label=\"t('layout.nav.more')\"");
-      expect(layout).toContain(":more-title=\"t('layout.nav.moreModules')\"");
+      expect(layout).toContain(":close-label=\"t('layout.nav.close')\"");
     });
 
     // Logo ↔ side-menu icons and avatar ↔ page-header icons must line up by
