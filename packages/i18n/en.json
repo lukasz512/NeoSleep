@@ -1539,6 +1539,7 @@
   "user.document-content.labels.gdprConsentMx": "Doctor Data Protection Consent — Mexico (LFPDPPP)",
   "user.document-content.labels.historiaEndo": "Historia Endo — Root Canal Informed Consent",
   "user.document-content.labels.stopBang": "STOP-Bang OSA Screening",
+  "user.document-content.labels.polysomnography": "Polysomnography",
   "user.document-content.locale.en": "English",
   "user.document-content.locale.pl": "Polish",
   "user.document-content.locale.mx": "Spanish (Mexico)",

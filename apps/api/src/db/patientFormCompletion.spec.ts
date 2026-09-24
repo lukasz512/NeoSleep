@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import { withTenant, insertPatient, softDeletePatient } from "../db.js";
 import { upsertEndoIntake } from "./endoIntake.js";
 import { insertStopBangScreening } from "./stopBangScreening.js";
-import { getPatientFormCompletion } from "./patientFormCompletion.js";
+import { insertSleepStudy } from "./sleepStudy.js";
+import { getPatientFormCompletion, POLYSOMNOGRAPHY_FORM_KEY } from "./patientFormCompletion.js";
 
 const TENANT_SLUG = process.env.DEFAULT_TENANT_SLUG ?? "neosleep";
 
@@ -50,6 +51,27 @@ describe("getPatientFormCompletion", () => {
       const result = await getPatientFormCompletion(client, [patient.id], ["informedConsent"]);
       expect(result.get(patient.id)?.size).toBe(0);
       await softDeletePatient(client, patient.id);
+    });
+  }, 15000);
+
+  it("counts polysomnography only once results are in, and ignores other study types", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ordered = await insertPatient(client, { first_name: "Psg", last_name: `Ordered-${uniqueSuffix()}` });
+      const results = await insertPatient(client, { first_name: "Psg", last_name: `Results-${uniqueSuffix()}` });
+      const interpreted = await insertPatient(client, { first_name: "Psg", last_name: `Interpreted-${uniqueSuffix()}` });
+      const otherType = await insertPatient(client, { first_name: "Psg", last_name: `Other-${uniqueSuffix()}` });
+
+      await insertSleepStudy(client, { patient_id: ordered.id, status: "ordered", study_type: "polysomnography" });
+      await insertSleepStudy(client, { patient_id: results.id, status: "results_received", study_type: "polysomnography" });
+      await insertSleepStudy(client, { patient_id: interpreted.id, status: "interpreted", study_type: "polysomnography" });
+      await insertSleepStudy(client, { patient_id: otherType.id, status: "interpreted", study_type: "other" });
+
+      const all = [ordered, results, interpreted, otherType];
+      const result = await getPatientFormCompletion(client, all.map((p) => p.id), [POLYSOMNOGRAPHY_FORM_KEY]);
+
+      expect(all.map((p) => result.get(p.id)?.has(POLYSOMNOGRAPHY_FORM_KEY))).toEqual([false, true, true, false]);
+
+      for (const p of all) await softDeletePatient(client, p.id);
     });
   }, 15000);
 

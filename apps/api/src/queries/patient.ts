@@ -9,7 +9,7 @@ import {
 } from "../db.js";
 import { withPlatform } from "../db/tenant.js";
 import { getTemplateKeysForEntityType } from "../db/documentTemplateEntityType.js";
-import { getPatientFormCompletion } from "../db/patientFormCompletion.js";
+import { getPatientFormCompletion, POLYSOMNOGRAPHY_FORM_KEY } from "../db/patientFormCompletion.js";
 import { DOCUMENT_MANIFEST } from "@neo/documents";
 import { getAllowedScopePaths, assertTerritoryAccessByTerritoryId } from "../middleware/requireScope.js";
 
@@ -139,12 +139,14 @@ export async function GetPatientListQuery(
 
 /**
  * Templates an admin assigned to "patient" (Documents → Permissions tab),
- * ordered by DOCUMENT_MANIFEST so the dots and tooltip list always come out
- * in the same order. Hidden (test-fixture) and unknown keys are dropped.
+ * ordered by DOCUMENT_MANIFEST so the icons and tooltip list always come out
+ * in the same order, then polysomnography, which every patient always has.
+ * Hidden (test-fixture) and unknown keys are dropped.
  */
 async function getPatientIntakeFormKeys(): Promise<string[]> {
   const assigned = new Set(await withPlatform((client) => getTemplateKeysForEntityType(client, "patient")));
-  return DOCUMENT_MANIFEST.filter((entry) => !entry.hidden && assigned.has(entry.templateKey)).map((entry) => entry.templateKey);
+  const templateKeys = DOCUMENT_MANIFEST.filter((entry) => !entry.hidden && assigned.has(entry.templateKey)).map((entry) => entry.templateKey);
+  return [...templateKeys, POLYSOMNOGRAPHY_FORM_KEY];
 }
 
 // ---------------------------------------------------------------------------

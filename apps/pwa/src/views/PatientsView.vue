@@ -56,7 +56,7 @@
         <EntityLink :to="hcpDetailLink((item as PatientListItem).practitioner_id)" entity-type="hcp" :label="(item as PatientListItem).practitioner_name" :avatar-size="32" />
       </template>
       <template #item.intake_forms="{ item }">
-        <PatientIntakeDots :forms="(item as PatientListItem).intake_forms ?? []" />
+        <PatientIntakeForms :forms="(item as PatientListItem).intake_forms ?? []" />
       </template>
       <template #item.status="{ item }">
         <VChip
@@ -102,7 +102,7 @@ import { ref, computed, defineAsyncComponent } from "vue";
 import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
 import AppAvatar from "../components/AppAvatar.vue";
-import PatientIntakeDots from "../components/patient/PatientIntakeDots.vue";
+import PatientIntakeForms from "../components/patient/PatientIntakeForms.vue";
 import type { PatientIntakeFormStatus } from "../types/patientIntakeForm";
 import EntityLink from "../components/EntityLink.vue";
 import { hcpDetailLink } from "../utils/entityLinks";

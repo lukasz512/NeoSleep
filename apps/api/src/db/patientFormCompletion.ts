@@ -1,12 +1,19 @@
 import type { PoolClient } from "pg";
 import { DatabaseError } from "../errors.js";
 
+/** Always the last intake form on every patient (NEO-54) — not admin-assignable like the document templates. */
+export const POLYSOMNOGRAPHY_FORM_KEY = "polysomnography";
+
 /**
  * "Has this form been collected for this patient?" — one EXISTS check per
  * @neo/documents templateKey, evaluated against the patient's own record
  * table (NEO-54). A templateKey with no entry here always reads as not
  * done: informedConsent has no per-patient record yet (planned: sent by
- * email + signed, a later ticket), so its dot stays empty until then.
+ * email + signed, a later ticket), so it stays pending until then.
+ *
+ * "polysomnography" isn't a document template: it's a sleep_study row, and
+ * counts only once its results are in (results_received / interpreted), not
+ * when the study is merely ordered.
  *
  * `ids.id` is the patient id from the unnest() below. The SQL fragments are
  * static strings, never user input.
@@ -14,6 +21,8 @@ import { DatabaseError } from "../errors.js";
 const COMPLETION_EXISTS_SQL: Record<string, string> = {
   historiaEndo: "EXISTS (SELECT 1 FROM endo_intake e WHERE e.patient_id = ids.id AND e.deleted_at IS NULL)",
   stopBang: "EXISTS (SELECT 1 FROM stop_bang_screening s WHERE s.patient_id = ids.id)",
+  [POLYSOMNOGRAPHY_FORM_KEY]:
+    "EXISTS (SELECT 1 FROM sleep_study ss WHERE ss.patient_id = ids.id AND ss.study_type = 'polysomnography' AND ss.status IN ('results_received', 'interpreted'))",
 };
 
 /** Returns patientId -> set of completed templateKeys, restricted to `templateKeys`. */
