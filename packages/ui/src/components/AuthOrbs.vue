@@ -29,11 +29,17 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance, type Ref } from "vue";
 import { useMagneticPointer } from "../composables/useMagneticPointer";
 
-const { busy = false, anchor = null } = defineProps<{
+const { busy = false, anchor = null, instant = false } = defineProps<{
   /** Any loading in progress (session check, sign-in, reset…) — breathing speeds up while true. */
   busy?: boolean;
   /** Element to sit behind (the auth card slot). Null keeps the orbs at their default, card-shaped spot. */
   anchor?: HTMLElement | null;
+  /**
+   * Start already at rest, skipping the pop-in — for when an identical static
+   * backdrop (apps/pwa's HTML boot splash) is already on screen and these
+   * orbs are taking over from it rather than appearing for the first time.
+   */
+  instant?: boolean;
 }>();
 
 type OrbKey = "big" | "medium" | "small";
@@ -105,6 +111,7 @@ const phases = ref<OrbPhase[]>(ORBS.map(() => "hidden"));
 function anchorPhaseClass(phase: OrbPhase): Record<string, boolean> {
   return {
     "auth-orbs__anchor--enter": phase === "enter",
+    "auth-orbs__anchor--instant": phase === "enter" && instant,
     "auth-orbs__anchor--exit": phase === "exit",
   };
 }
@@ -114,7 +121,7 @@ function setPhase(index: number, phase: OrbPhase): void {
 }
 
 async function playEnter(): Promise<void> {
-  if (prefersReducedMotion) {
+  if (prefersReducedMotion || instant) {
     phases.value = ORBS.map(() => "enter");
     return;
   }
@@ -364,6 +371,20 @@ defineExpose({ whenEntered, playExit, replay });
 
 .auth-orbs__anchor--big.auth-orbs__anchor--exit {
   animation-name: auth-orbs-expand-centered;
+}
+
+/* Taking over from the static boot splash — already at rest, no pop. */
+.auth-orbs__anchor--instant,
+.auth-orbs__anchor--big.auth-orbs__anchor--instant {
+  animation: none;
+}
+
+.auth-orbs__anchor--instant {
+  transform: scale(1);
+}
+
+.auth-orbs__anchor--big.auth-orbs__anchor--instant {
+  transform: translate(-50%, -50%) scale(1);
 }
 
 @keyframes auth-orbs-pop-in {

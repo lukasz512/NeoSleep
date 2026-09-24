@@ -46,6 +46,34 @@ anything it owns cannot be on screen during that wait. The layout ↔ view contr
 It replaces the old single-purpose `AUTH_BACKGROUND_EXIT_KEY`. Platform-generic — no
 tenant-specific logic; tenants still restyle via brand colors/background URL.
 
+## Robustness pass — first paint (2026-09-24)
+
+Łukasz reported ~12 s before *anything* appeared. Measured (headless Chromium, 390×844):
+
+| Scenario | Before | After |
+|---|---|---|
+| Cold `vite` dev server — backdrop visible | 22.0 s | 0.36 s |
+| Slow API (session check 8 s) — login card visible | 8.2 s | 2.7 s |
+| Slow API (session check 25 s, prod build) — login card visible | up to 20 s (request timeout) | 2.6 s |
+| Throttled network (~1.6 Mbit, 300 ms RTT, prod) — first paint | 2.15 s | 0.39 s |
+
+Root causes and fixes:
+
+1. **Nothing paints until JS runs** — index.html was an empty `<div id="app">`. Now a static
+   HTML/CSS boot splash (`apps/pwa/src/boot/splash.ts`, injected by a Vite `transformIndexHtml`
+   plugin) paints the photo, gradient and breathing orbs from the HTML itself. Vue takes over
+   in place (`AuthOrbs instant`, background already visible) and the splash crossfades off.
+2. **~650 KB bundle CSS was render-blocking** — the browser painted nothing, splash included,
+   until it downloaded. It is now a `rel="preload" as="style"` link; `main.ts` switches it to a
+   stylesheet first thing, and the splash only lifts once it has applied (10 s safety timeout),
+   so the app never shows unstyled. `registerSW.js` is now `defer`.
+3. **Login form waited for the full session check** (router guard, up to apiFetch's 20 s
+   timeout on a cold Render API). Capped at `SESSION_CHECK_BUDGET_MS` = 2.5 s; the check keeps
+   running in the background (orbs stay "busy" via `auth.sessionChecking`) and redirects to the
+   app if it finds a valid session. The auth store now dedupes concurrent checks and ignores a
+   late answer if a login/logout happened meanwhile (`authGeneration`).
+4. **Cold dev server** — `server.warmup` pre-transforms the entry graph at startup.
+
 ## Out of scope / follow-ups
 
 - Restored-session path (valid refresh token → straight to `/patients`) still swaps

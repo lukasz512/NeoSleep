@@ -12,6 +12,9 @@ const router = createRouter({
 
 const isDev = import.meta.env.DEV;
 
+/** How long /login and /forgot-password wait for the session check before showing the form anyway. */
+export const SESSION_CHECK_BUDGET_MS = 2500;
+
 /**
  * Auth guard: app starts at login; protected routes require valid session (API).
  * - Root "/" redirects to /login (route config); authenticated users are redirected from /login to /patients.
@@ -32,9 +35,28 @@ router.beforeEach(async (to, _from, next) => {
 
   if (to.meta.public) {
     if (to.path === "/login" || to.path === "/forgot-password") {
-      if (!auth.sessionChecked) await auth.fetchSession();
+      const redirect = typeof to.query.redirect === "string" && to.query.redirect ? to.query.redirect : "/patients";
+      if (!auth.sessionChecked) {
+        // Never hold the login form hostage to a slow API (Render cold start,
+        // bad mobile network — up to apiFetch's 20s timeout). Past the budget,
+        // show the form now and let the check finish in the background; if it
+        // does find a valid session, move on to the app from there.
+        const check = auth.fetchSession();
+        const settledInTime = await Promise.race([
+          check.then(() => true),
+          new Promise<false>((resolve) => setTimeout(() => resolve(false), SESSION_CHECK_BUDGET_MS)),
+        ]);
+        if (!settledInTime) {
+          void check.then((authenticated) => {
+            if (authenticated && router.currentRoute.value.meta.public) {
+              void router.replace({ path: redirect, query: {} });
+            }
+          });
+          next();
+          return;
+        }
+      }
       if (auth.isAuthenticated) {
-        const redirect = typeof to.query.redirect === "string" && to.query.redirect ? to.query.redirect : "/patients";
         next({ path: redirect, query: {} });
         return;
       }

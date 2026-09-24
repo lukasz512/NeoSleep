@@ -23,7 +23,7 @@
          z-index 1). Owned here rather than by AuthView so the orbs are on
          screen from the first paint, together with the background — also
          while the router is still resolving the session (see backdropBusy). -->
-    <AuthOrbs ref="orbsRef" :busy="backdropBusy" :anchor="orbsAnchor" />
+    <AuthOrbs ref="orbsRef" :busy="backdropBusy" :anchor="orbsAnchor" :instant="orbsInstant" />
     <main id="main-content" class="layout-public__main" role="main">
       <RouterView v-slot="{ Component }">
         <!-- No :key="route.path" here (unlike AppLayout): /login,
@@ -48,6 +48,8 @@ import { useThemeStore } from "@stores";
 import { brandColors } from "@brand/colors";
 import { BRAND_AUTH_BACKGROUND_URL } from "@brand/logos";
 import { AuthOrbs, AUTH_BACKDROP_KEY, type AuthBackdrop } from "@ui";
+import { useAuthStore } from "../stores/auth";
+import { bootedWithSplash } from "../boot/bootSplash";
 
 const authBackgroundUrl = BRAND_AUTH_BACKGROUND_URL;
 
@@ -59,8 +61,14 @@ const authBackgroundUrl = BRAND_AUTH_BACKGROUND_URL;
 // its own.
 const BG_DISSOLVE_DURATION = 1100;
 
-const bgVisible = ref(false);
+// The static HTML boot splash (src/boot/splash.ts) already painted this exact
+// backdrop before any JS ran. Taking over from it, the background starts fully
+// visible and the orbs start at rest — no second fade/pop-in — and the splash
+// crossfades away on top once this layout has rendered underneath it.
+const takingOverFromSplash = bootedWithSplash();
+const bgVisible = ref(takingOverFromSplash);
 const bgDissolving = ref(false);
+const orbsInstant = ref(takingOverFromSplash);
 const prefersReducedMotion =
   typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -97,8 +105,13 @@ void router.isReady().then(() => {
   routerReady.value = true;
 });
 
+// Also busy while the session check keeps running in the background after the
+// router stopped waiting for it (SESSION_CHECK_BUDGET_MS in router/index.ts).
+const auth = useAuthStore();
 const busySources = reactive(new Set<string>());
-const backdropBusy = computed(() => !routerReady.value || busySources.size > 0);
+const backdropBusy = computed(
+  () => !routerReady.value || auth.sessionChecking || busySources.size > 0,
+);
 
 let backdropExited = false;
 
@@ -129,6 +142,7 @@ watch(
     if (!backdropExited || router.currentRoute.value.meta.layout !== "public") return;
     backdropExited = false;
     bgDissolving.value = false;
+    orbsInstant.value = false;
     void orbsRef.value?.replay();
   },
 );
