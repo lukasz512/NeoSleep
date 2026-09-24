@@ -28,7 +28,7 @@ async function insertTestUser(client: Parameters<typeof insertStaffUser>[0], rol
   return { id: user!.id, email };
 }
 
-async function authAndPatient(role: StaffRole = "rep"): Promise<{ auth: string; patientId: string }> {
+async function authAndPatient(role: StaffRole = "doctor"): Promise<{ auth: string; patientId: string }> {
   const user = await withTenant(TENANT_SLUG, (client) => insertTestUser(client, role));
   const patient = await withTenant(TENANT_SLUG, (client) =>
     insertPatient(client, { first_name: "Route", last_name: `Test-${uniqueSuffix()}` })
@@ -40,6 +40,13 @@ describe("/api/v1/patient/:id/clinical-records", () => {
   it("401s with no token", async () => {
     const res = await request(app).get(`/api/v1/patient/${crypto.randomUUID()}/clinical-records`);
     expect(res.status).toBe(401);
+  });
+
+  it.each(["rep", "kam", "msl", "manager"] as const)("403s for the commercial field-force role %s — health data is admin/doctor only", async (role) => {
+    const { auth, patientId } = await authAndPatient(role);
+    const read = await request(app).get(`/api/v1/patient/${patientId}/clinical-records`).set("Authorization", auth);
+    const link = await request(app).post(`/api/v1/patient/${patientId}/questionnaire-requests`).set("Authorization", auth).send({ kind: "stop_bang" });
+    expect([read.status, link.status]).toEqual([403, 403]);
   });
 
   it("400s for an unknown questionnaire kind", async () => {

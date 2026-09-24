@@ -44,7 +44,7 @@
           </AppButton>
         </template>
         <VList density="comfortable" class="patient-studies-panel__add-menu">
-          <template v-for="entry in ADD_STUDY_MENU" :key="entry.kind">
+          <template v-for="entry in addMenu" :key="entry.kind">
             <template v-if="entry.patientFillable">
               <VListSubheader>{{ t(entry.labelKey) }}</VListSubheader>
               <VListItem @click="openAdd(entry.kind)">
@@ -214,6 +214,7 @@ import QuestionnaireQrDialog from "../questionnaire/QuestionnaireQrDialog.vue";
 import { useClinicalRecords, type ClinicalRecord } from "../../composables/useClinicalRecords";
 import {
   ADD_STUDY_MENU,
+  CLINICAL_ROLES,
   KIND_LABEL_KEYS,
   MEDICAL_HISTORY_QUESTIONS,
   ORAL_EXAM_QUESTIONS,
@@ -259,6 +260,9 @@ const { t, locale } = useI18n();
 const notifications = useNotifications();
 const authStore = useAuthStore();
 const isAdmin = computed(() => authStore.user?.role === "admin");
+/** Health data (questionnaires) — admin + doctor only; other roles see sleep studies alone. */
+const canSeeClinical = computed(() => CLINICAL_ROLES.includes(authStore.user?.role ?? ""));
+const addMenu = computed(() => ADD_STUDY_MENU.filter((entry) => entry.kind === "polysomnography" || canSeeClinical.value));
 
 const studies = ref<SleepStudyItem[]>([]);
 const loading = ref(false);
@@ -570,7 +574,7 @@ async function sendToPatient(kind: PatientFillableKind) {
 }
 
 async function loadAll() {
-  await Promise.all([loadStudies(), clinical.load()]);
+  await Promise.all([loadStudies(), canSeeClinical.value ? clinical.load() : Promise.resolve()]);
 }
 
 onMounted(loadAll);

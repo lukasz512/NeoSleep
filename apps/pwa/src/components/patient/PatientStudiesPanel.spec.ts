@@ -17,6 +17,7 @@ const notify = vi.fn();
 vi.mock("../../composables/useNotifications", () => ({ useNotifications: () => ({ show: notify }) }));
 
 import "../FormRenderer.vue";
+import { useAuthStore } from "../../stores/auth";
 import PatientStudiesPanel from "./PatientStudiesPanel.vue";
 
 function jsonResponse(ok: boolean, status: number, body: unknown) {
@@ -66,8 +67,9 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-async function mountPanel(): Promise<VueWrapper> {
+async function mountPanel(role = "doctor"): Promise<VueWrapper> {
   setActivePinia(createPinia());
+  useAuthStore().user = { id: "u-1", email: "doc@clinic.test", name: "Dra. Test", role } as ReturnType<typeof useAuthStore>["user"];
   const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
   const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
   const wrapper = mount(PatientStudiesPanel, { props: { patientId: "patient-1" }, attachTo: document.body, global: { plugins: [i18n, vuetify] } });
@@ -90,6 +92,13 @@ describe("PatientStudiesPanel — sleep studies + clinical questionnaires in one
 
     expect(wrapper.text()).toContain("Waiting for the patient");
     expect(wrapper.text()).toContain("Medical history");
+  });
+
+  it("a rep (commercial role) never loads or offers health questionnaires — sleep studies only", async () => {
+    const wrapper = await mountPanel("rep");
+    expect(apiFetch.mock.calls.some(([path]) => String(path).includes("clinical-records"))).toBe(false);
+    expect(wrapper.findAll(".patient-studies-panel__item")).toHaveLength(1);
+    expect(wrapper.text()).not.toContain("Waiting for the patient");
   });
 
   it("flags a patient-answered STOP-Bang as missing B-A-N-G, with a Complete action instead of a score", async () => {

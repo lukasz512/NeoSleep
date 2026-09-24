@@ -145,6 +145,14 @@ patientRouter.get(
 // Clinical questionnaires (Estudios) — medical history, oral exam, STOP-Bang.
 // Migration 030 / ADR-023; replaces the 026 /endo-intake + /stop-bang routes.
 // ---------------------------------------------------------------------------
+/**
+ * Clinical questionnaires are GDPR Art.9 health data — readable and
+ * writable only by treating clinicians and admins (Łukasz, 2026-09-25),
+ * not by the commercial field force (rep / KAM / MSL / manager), even
+ * inside their own territory.
+ */
+const requireClinicalRole = requireRole("admin", "doctor");
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** 400 for a malformed id instead of letting Postgres reject it as a 500 "invalid input syntax for type uuid". */
@@ -162,7 +170,7 @@ function clinicalKindParam(req: Request): ClinicalRecordKind {
 
 patientRouter.get(
   "/patient/:id/clinical-records",
-  requireAuth,
+  requireClinicalRole,
   asyncHandler(async (req: Request, res: Response) => {
     const id = uuidParam(req, "id");
 
@@ -177,7 +185,7 @@ patientRouter.get(
 
 patientRouter.post(
   "/patient/:id/clinical-records/:kind",
-  requireAuth,
+  requireClinicalRole,
   asyncHandler(async (req: Request, res: Response) => {
     const id = uuidParam(req, "id");
     const kind = clinicalKindParam(req);
@@ -194,7 +202,7 @@ patientRouter.post(
 // The doctor completes B-A-N-G after the patient self-reported S-T-O-P.
 patientRouter.patch(
   "/patient/:id/clinical-records/stop_bang/:recordId",
-  requireAuth,
+  requireClinicalRole,
   asyncHandler(async (req: Request, res: Response) => {
     const id = uuidParam(req, "id");
     const recordId = uuidParam(req, "recordId");
@@ -210,7 +218,7 @@ patientRouter.patch(
 
 patientRouter.post(
   "/patient/:id/clinical-records/:kind/:recordId/pdf",
-  requireAuth,
+  requireClinicalRole,
   asyncHandler(async (req: Request, res: Response) => {
     const id = uuidParam(req, "id");
     const recordId = uuidParam(req, "recordId");
@@ -234,7 +242,7 @@ patientRouter.post(
 // ---------------------------------------------------------------------------
 patientRouter.post(
   "/patient/:id/questionnaire-requests",
-  requireAuth,
+  requireClinicalRole,
   asyncHandler(async (req: Request, res: Response) => {
     const id = uuidParam(req, "id");
 
@@ -250,7 +258,7 @@ patientRouter.post(
 
 patientRouter.delete(
   "/patient/:id/questionnaire-requests/:requestId",
-  requireAuth,
+  requireClinicalRole,
   asyncHandler(async (req: Request, res: Response) => {
     const id = uuidParam(req, "id");
     const requestId = uuidParam(req, "requestId");

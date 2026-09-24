@@ -40,6 +40,8 @@
           class="patient-questionnaire__other"
         />
 
+        <ConsentNotice :clinic="clinicName" :clinic-email="questionnaire.clinic_email" :privacy-notice-url="questionnaire.privacy_notice_url" />
+
         <VCheckbox v-model="consent" hide-details class="patient-questionnaire__consent">
           <template #label>{{ t("app.questionnaire.consent", { clinic: clinicName }) }}</template>
         </VCheckbox>
@@ -68,6 +70,7 @@ import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppLoadingState from "../components/AppLoadingState.vue";
 import QuestionnaireChecklist from "../components/questionnaire/QuestionnaireChecklist.vue";
+import ConsentNotice from "../components/questionnaire/ConsentNotice.vue";
 import { apiFetch } from "../composables/useApi";
 import { MEDICAL_HISTORY_QUESTIONS, STOP_QUESTIONS, type PatientFillableKind } from "../config/questionnaires";
 
@@ -82,6 +85,8 @@ interface PublicQuestionnaire {
   kind: PatientFillableKind;
   patient_first_name: string;
   clinic_name: string | null;
+  clinic_email: string | null;
+  privacy_notice_url: string;
 }
 
 const route = useRoute();
@@ -194,11 +199,6 @@ async function onSubmit() {
   z-index: 1;
   width: 100%;
   max-width: 560px;
-  /* A flex item in a fixed-height column shrinks to fit it by default — the
-     card (overflow: hidden) then clipped everything below ~the first six
-     questions on a phone, submit button included. Let it be as tall as its
-     content and let .patient-questionnaire scroll instead. */
-  flex-shrink: 0;
 }
 
 .patient-questionnaire__body {

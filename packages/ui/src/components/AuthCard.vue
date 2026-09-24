@@ -84,6 +84,13 @@ defineExpose({
 <style scoped>
 .auth-card {
   position: relative;
+  /* Every page hosting this card (login, partner registration, patient
+     questionnaire) lays it out in a fixed-height, scrolling flex column. A
+     flex item shrinks to fit by default, and the card clips its overflow —
+     so on a phone a tall step (the partner registration form, the patient
+     questionnaire) was cut off with its submit button out of reach. The
+     card keeps its content height; the page column scrolls. */
+  flex-shrink: 0;
 }
 
 /* Flex row, full card width, in normal flow above the step content — not

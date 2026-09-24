@@ -5,7 +5,10 @@
  * staff dialog and the patient self-fill page.
  */
 
-export type ClinicalRecordKind = "medical_history" | "oral_exam" | "stop_bang";
+/** Roles allowed to see clinical questionnaires (health data) — mirrors the API's requireClinicalRole (admin + doctor, 2026-09-25). */
+export const CLINICAL_ROLES: readonly string[] = ["admin", "doctor"];
+
+export type ClinicalRecordKind ="medical_history" | "oral_exam" | "stop_bang";
 export type PatientFillableKind = "medical_history" | "stop_bang";
 
 export interface QuestionDef {

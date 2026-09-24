@@ -8,6 +8,8 @@ export interface PatientPdfContext {
   patient_first_name: string;
   practitioner_name: string | null;
   organization_name: string | null;
+  /** The clinic's own contact email — where a patient exercises their data rights (the clinic is the controller). */
+  organization_email: string | null;
 }
 
 /**
@@ -26,11 +28,12 @@ export async function getPatientPdfContext(client: PoolClient, patientId: string
       practitioner_first_name: string | null;
       practitioner_last_name: string | null;
       organization_name: string | null;
+      organization_email: string | null;
     }>(
       `SELECT
          pi.title AS patient_salutation, pi.first_name AS patient_first_name, pi.last_name AS patient_last_name,
          pri.title AS practitioner_salutation, pri.first_name AS practitioner_first_name, pri.last_name AS practitioner_last_name,
-         o.name AS organization_name
+         o.name AS organization_name, o.email AS organization_email
        FROM patient p
        JOIN identities pi ON p.identity_id = pi.id
        LEFT JOIN practitioner pr ON p.practitioner_id = pr.id
@@ -55,6 +58,7 @@ export async function getPatientPdfContext(client: PoolClient, patientId: string
         last_name: row.practitioner_last_name,
       }),
       organization_name: row.organization_name,
+      organization_email: row.organization_email,
     };
   } catch (err) {
     if (err instanceof AppError) throw err;

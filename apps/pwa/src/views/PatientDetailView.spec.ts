@@ -8,6 +8,7 @@ import * as vuetifyDirectives from "vuetify/directives";
 import { createRouter, createMemoryHistory, type Router } from "vue-router";
 import en from "@i18n/en.json";
 import { routes } from "../router/routes";
+import { useAuthStore } from "../stores/auth";
 
 const apiFetch = vi.fn();
 vi.mock("../composables/useApi", async (importOriginal) => ({
@@ -46,6 +47,8 @@ afterEach(() => {
 
 async function mountPatientDetail(): Promise<{ wrapper: VueWrapper; router: Router }> {
   setActivePinia(createPinia());
+  // Clinical questionnaires (health data) load for admin/doctor only.
+  useAuthStore().user = { id: "u-1", email: "doc@clinic.test", name: "Dra. Test", role: "doctor" } as ReturnType<typeof useAuthStore>["user"];
   const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
   const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
   const router = createRouter({ history: createMemoryHistory(), routes });

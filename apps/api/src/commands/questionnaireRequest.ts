@@ -15,6 +15,7 @@ import { GetPatientByIdQuery } from "../queries/patient.js";
 import { hashToken } from "../utils/hashToken.js";
 import { generateToken } from "../utils/generateToken.js";
 import { AppError, NotFoundError, ValidationError } from "../errors.js";
+import { PRIVACY_NOTICE_URL } from "../env.js";
 import {
   isPatientFillableKind,
   validateMedicalHistory,
@@ -39,7 +40,7 @@ export const QUESTIONNAIRE_LINK_TTL_MS = 24 * 60 * 60 * 1000;
  * (packages/i18n app.questionnaire.consent) — stored on every
  * patient-submitted record, so it's always known which text was accepted.
  */
-export const PATIENT_CONSENT_VERSION = "patient-self-fill-v1";
+export const PATIENT_CONSENT_VERSION = "patient-self-fill-2026-09-25";
 
 /** Unknown, used, cancelled and expired links all look identical from outside — no signal about which tokens ever existed. */
 export class QuestionnaireLinkInvalidError extends AppError {
@@ -112,6 +113,9 @@ export interface PublicQuestionnaire {
   kind: PatientFillableKind;
   patient_first_name: string;
   clinic_name: string | null;
+  /** Where the patient exercises data rights — the clinic, as controller. Null → the page says "ask at the clinic". */
+  clinic_email: string | null;
+  privacy_notice_url: string;
   expires_at: Date;
 }
 
@@ -131,6 +135,8 @@ export async function GetPublicQuestionnaireQuery(client: PoolClient, token: str
     kind: request.kind,
     patient_first_name: context.patient_first_name,
     clinic_name: context.organization_name,
+    clinic_email: context.organization_email,
+    privacy_notice_url: PRIVACY_NOTICE_URL,
     expires_at: request.expires_at,
   };
 }
