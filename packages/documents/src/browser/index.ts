@@ -11,3 +11,4 @@ export {
   licenseCountryForRegion,
   type LicenseCountry,
 } from "./licenseNumber.js";
+export { applyDocumentFields, type DocumentFieldValues } from "./documentFields.js";

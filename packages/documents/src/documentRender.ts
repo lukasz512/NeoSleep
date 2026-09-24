@@ -181,6 +181,13 @@ function fillStaticTokens(html: string, locale: string | null | undefined): stri
   const params = getLegalEntityParams(locale);
   const i18nTokenPattern = /\{\{(documents\.[a-zA-Z0-9_.]+)\}\}/g;
   filled = filled.replace(i18nTokenPattern, (_match, key: string) => documentT(locale, key, params));
+  // i18n prose can reference a per-instance value inline — e.g. a party
+  // clause "[[doctor_name]], licence no. [[license_number]], …" — as
+  // [[field]] markers, which become empty data-field spans for the API to
+  // fill (applyDocumentFields). Runs on our own trusted template + i18n text
+  // only, before any admin-authored content is spliced in (see
+  // renderDocumentHtml's ordering comment), so admin text can never inject one.
+  filled = filled.replace(/\[\[([a-z_]+)\]\]/g, (_match, field: string) => `<span class="field-value" data-field="${field}"></span>`);
   return filled;
 }
 
@@ -206,11 +213,25 @@ function fillStaticTokens(html: string, locale: string | null | undefined): stri
  * FIRST (as if contentHtml didn't exist), fillContentParams runs on
  * contentHtml SEPARATELY, and the {{content}} splice is a single literal,
  * non-regex .replace() done LAST, after both passes are already finished.
+ *
+ * `slots` (NEO-51) are additional admin-authored content blocks for
+ * templates that embed a second document — e.g. the partner agreement's
+ * Annex 1 (the DPA, its own separately-versioned content) goes into a
+ * named slot token ("{{slot:annex}}"). Each slot gets the same treatment
+ * as `contentHtml`: params filled on the content alone, and the splice is a
+ * single regex pass over the static template, so no inserted content is
+ * ever re-scanned for another slot or content token.
  */
-export function renderDocumentHtml(templateName: string, locale: string | null | undefined, contentHtml?: string): string {
+export function renderDocumentHtml(
+  templateName: string,
+  locale: string | null | undefined,
+  contentHtml?: string,
+  slots?: Record<string, string>,
+): string {
   const html = fillStaticTokens(loadTemplate(templateName), locale);
   if (contentHtml === undefined) return html;
-  const filledContent = fillContentParams(contentHtml, getLegalEntityParams(locale));
+  const params = getLegalEntityParams(locale);
+  const filledContent = fillContentParams(contentHtml, params);
   // Guards the exact mistake this splice is designed to prevent: a template
   // author mentioning the literal "{{content}}" string a second time (e.g.
   // in a doc comment describing the slot) would make String.replace()
@@ -224,7 +245,22 @@ export function renderDocumentHtml(templateName: string, locale: string | null |
       `renderDocumentHtml: expected exactly one "{{content}}" slot in template "${templateName}", found ${occurrences}`
     );
   }
-  return html.replace("{{content}}", filledContent);
+  const filledSlots = new Map<string, string>();
+  for (const [name, slotHtml] of Object.entries(slots ?? {})) {
+    const slotOccurrences = html.split(`{{slot:${name}}}`).length - 1;
+    if (slotOccurrences !== 1) {
+      throw new Error(
+        `renderDocumentHtml: expected exactly one "{{slot:${name}}}" in template "${templateName}", found ${slotOccurrences}`
+      );
+    }
+    filledSlots.set(name, fillContentParams(slotHtml, params));
+  }
+  return html.replace(/\{\{content\}\}|\{\{slot:([a-zA-Z0-9_]+)\}\}/g, (_match, slotName: string | undefined) => {
+    if (slotName === undefined) return filledContent;
+    // A slot the caller didn't provide (e.g. the editor previewing the
+    // agreement body alone) renders empty rather than as raw token text.
+    return filledSlots.get(slotName) ?? "";
+  });
 }
 
 /** Muted gray for the footer specifically — distinct from BRAND.secondary (used for body labels/borders, too dark to read as a footer-quiet tone). Puppeteer's footerTemplate renders in its own isolated frame with no access to the main page's stylesheet/CSS variables, so this has to be a literal inline value, not var(--secondary). */

@@ -7,4 +7,6 @@ export {
   licenseNumberKey,
   licenseCountryForRegion,
   type LicenseCountry,
+  applyDocumentFields,
+  type DocumentFieldValues,
 } from "./browser/index.js";
