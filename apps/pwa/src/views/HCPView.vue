@@ -39,33 +39,36 @@
       @add="onAddContact"
     >
     <template #item.name="{ item }">
-      <span class="hcp-name-cell">
-        <AppAvatar :name="(item as HCPListItem).name" :first-name="(item as HCPListItem).first_name" :last-name="(item as HCPListItem).last_name" entity-type="hcp" :size="32" />
-        {{ (item as { name?: string }).name }}
-      </span>
+      <EntityLink
+        :to="null"
+        entity-type="hcp"
+        :label="(item as HCPListItem).name"
+        :first-name="(item as HCPListItem).first_name"
+        :last-name="(item as HCPListItem).last_name"
+        :avatar-size="32"
+      />
     </template>
     <template #item.specialty="{ item }">
       {{ specialtyLabel((item as HCPListItem).specialty) }}
     </template>
     <template #item.institution="{ item }">
-      <EntityLink
-        :to="(item as HCPListItem).organization_id ? { name: 'hco-detail', params: { id: (item as HCPListItem).organization_id } } : null"
-        :label="(item as HCPListItem).institution"
-      />
+      <EntityLink :to="hcoDetailLink((item as HCPListItem).organization_id)" :label="(item as HCPListItem).institution" />
     </template>
     <template #item.region="{ item }">
       {{ (item as HCPListItem).territory_name || (item as HCPListItem).region || "—" }}
     </template>
     <template #feed-card-avatar="{ item }">
-      <AppAvatar :name="(item as HCPListItem).name" :first-name="(item as HCPListItem).first_name" :last-name="(item as HCPListItem).last_name" entity-type="hcp" :size="55" />
+      <AppAvatar v-bind="personAvatarProps(item as HCPListItem)" entity-type="hcp" :size="55" />
     </template>
     <template #feed-card-title="{ item }">
-      <span class="hcp-name-cell">
-        {{ (item as { name?: string }).name }}
-      </span>
+      {{ (item as { name?: string }).name }}
     </template>
     <template #feed-card-meta="{ item }">
-      {{ hcpCardMeta(item as HCPListItem) }}
+      <EntityMetaLine
+        :text="hcpCardMeta(item as HCPListItem)"
+        :to="hcoDetailLink((item as HCPListItem).organization_id)"
+        :label="(item as HCPListItem).institution"
+      />
     </template>
     <template #feed-card-status="{ item }">
       <VChip size="x-small" variant="tonal" color="primary" class="hcp-specialty-chip">
@@ -96,6 +99,7 @@ import AppEntityList from "../components/AppEntityList.vue";
 import AppAvatar from "../components/AppAvatar.vue";
 import AppIcon from "../components/AppIcon.vue";
 import EntityLink from "../components/EntityLink.vue";
+import { personAvatarProps } from "../utils/personAvatarProps";
 import AppListItemMenu from "../components/AppListItemMenu.vue";
 import { entityActionIcon, entityActionMenuIconClass } from "../config/entityActions";
 import { apiFetch } from "../composables/useApi";
@@ -107,6 +111,8 @@ import { useConfigStore } from "../stores/config";
 import { hcpFormFields, hcpFormDerive, resolveOrganizationIdForSubmit } from "../config/forms/hcpForm";
 import { practitionerSpecialtyIcon } from "../utils/hcpLabels";
 import { hcpCardMeta } from "../utils/mobileCardMeta";
+import { hcoDetailLink } from "../utils/entityLinks";
+import EntityMetaLine from "../components/EntityMetaLine.vue";
 
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
@@ -300,12 +306,6 @@ async function onEventFormSubmit(
 </script>
 
 <style scoped>
-.hcp-name-cell {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .hcp-specialty-chip__icon {
   width: 14px;
   height: 14px;

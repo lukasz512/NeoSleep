@@ -14,6 +14,7 @@ import { setupDiagnosticReporter } from "./composables/useDiagnosticReporter";
 import { setupOfflineCacheSession } from "./composables/useOfflineCacheSession";
 import { apiFetch } from "./composables/useApi";
 import { authTokenStorage } from "./stores/auth";
+import { useNotifications } from "./composables/useNotifications";
 import { getApiUrl } from "./constants";
 import { resolveInitialThemeMode, useMotionPreferenceStore } from "@stores";
 import { activateDeferredStyles } from "./boot/bootSplash";
@@ -55,6 +56,11 @@ setupOfflineCacheSession();
 
 app.provide("neo:apiFetch", apiFetch);
 app.provide("neo:authTokenStorage", authTokenStorage);
+// Lets shared views in packages/ui (e.g. AuthView, which runs before the
+// authenticated shell that owns most of the app's toasts) show a native
+// notification without packages/ui depending on apps/pwa's useNotifications
+// module directly — same cross-package DI pattern as apiFetch/authTokenStorage.
+app.provide("neo:notify", useNotifications().show);
 const gaId = import.meta.env.VITE_GA_ID as string | undefined;
 if (import.meta.env.PROD && gaId) {
   app.use(createGtag({ tagId: gaId, pageTracker: { router } }));

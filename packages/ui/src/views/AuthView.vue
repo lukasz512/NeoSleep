@@ -25,18 +25,6 @@
              heading on the page. -->
         <p class="auth-view__heading">{{ t('user.login.heading') }}</p>
 
-        <VAlert
-          v-if="loginFlow.errorKey.value"
-          type="error"
-          variant="tonal"
-          density="compact"
-          class="auth-view__alert"
-          closable
-          @click:close="loginFlow.errorKey.value = null"
-        >
-          {{ t(loginFlow.errorKey.value) }}
-        </VAlert>
-
         <VForm ref="signinForm" class="auth-view__form" @submit.prevent="handleSignIn">
           <VTextField
             ref="loginEmailFieldRef"
@@ -242,13 +230,23 @@
     </AuthCard>
     </div>
 
-    <img
-      ref="pwaBadgeEl"
-      :src="pwaBadgeUrl"
-      :alt="t('user.login.pwaBadge')"
-      class="auth-view__pwa-badge"
-      :class="{ 'auth-view__pwa-badge--visible': badgeVisible }"
-    />
+    <!-- Same halo as the logo's (see AuthChrome), at half size. The wrap owns
+         the entrance/exit opacity so halo and badge fade in/out together;
+         the img keeps the magnetic transform. -->
+    <div
+      class="auth-view__pwa-badge-wrap"
+      :class="{ 'auth-view__pwa-badge-wrap--visible': badgeVisible }"
+    >
+      <div class="auth-view__pwa-badge-halo">
+        <AuthHalo :dark="themeStore.mode === 'dark'" size="sm" />
+      </div>
+      <img
+        ref="pwaBadgeEl"
+        :src="pwaBadgeUrl"
+        :alt="t('user.login.pwaBadge')"
+        class="auth-view__pwa-badge"
+      />
+    </div>
   </div>
 </template>
 
@@ -268,6 +266,7 @@ import type { ApiFetchOptions } from "@api";
 import { useThemeStore, type AuthTokenStorage } from "@stores";
 import AuthChrome from "../components/AuthChrome.vue";
 import AuthCard from "../components/AuthCard.vue";
+import AuthHalo from "../components/AuthHalo.vue";
 
 // White badge in light mode, dark badge in dark mode (NEO-12) — same theme
 // source AuthChrome uses for its logo.
@@ -277,6 +276,8 @@ const pwaBadgeUrl = computed(() =>
 );
 
 type ApiFetchFn = (path: string, options?: ApiFetchOptions) => Promise<Response>;
+type NotifyType = "success" | "info" | "warning" | "error";
+type NotifyFn = (message: string, type: NotifyType, key?: string) => void;
 type Step = "signin" | "forgot" | "sent" | "reset";
 
 function stepFromPath(path: string): Step {
@@ -291,9 +292,19 @@ const router = useRouter();
 
 const apiFetch = inject<ApiFetchFn>("neo:apiFetch")!;
 const authTokenStorage = inject<AuthTokenStorage>("neo:authTokenStorage")!;
+const notify = inject<NotifyFn>("neo:notify")!;
 
 const useLoginFlow = createUseLoginFlow(apiFetch, authTokenStorage);
 const loginFlow = useLoginFlow();
+
+// The sign-in error used to render inline (a VAlert above the form) — moved
+// onto the app's native toast/notification system instead (NEO-10), matching
+// every other error surface in the app. loginFlow.errorKey itself is
+// untouched (still reset at the top of every submit()), just no longer read
+// for inline display.
+watch(loginFlow.errorKey, (key) => {
+  if (key) notify(t(key), "error", key);
+});
 
 const useForgotPasswordFlow = createUseForgotPasswordFlow(apiFetch);
 const forgotFlow = useForgotPasswordFlow();
@@ -369,13 +380,14 @@ onBeforeUnmount(() => backdrop?.setBusy("auth-view", false));
 const pwaBadgeEl = ref<HTMLElement | null>(null);
 useMagneticPointer(pwaBadgeEl, { strength: 4, ease: 0.14 });
 
-// Whole-screen entrance/exit choreography. The orbs pop in first (owned by
-// the layout, see AuthBackdrop) — then the card zooms out of them, then the
-// logo, then the PWA badge, each starting once the previous has settled.
-// playExitSequence() on successful login runs it back: badge + logo, then the
-// card shrinks back into the orbs, then the orbs expand past the screen edges
-// while the background dissolves with them — router.push only fires once all
-// of that has finished, see handleSignIn.
+// Whole-screen entrance/exit choreography. The layout's intro plays first
+// (orbs pop in on a plain ground, the background spreads out from under them,
+// see AuthBackdrop) — then the card zooms out of the orbs, then the logo, then
+// the PWA badge, each starting once the previous has settled.
+// playExitSequence() on successful login: badge + logo leave, the card melts
+// forward, then the orbs rush toward the user and dissolve together with the
+// background — router.push only fires once all of that has finished, see
+// handleSignIn.
 const badgeVisible = ref(false);
 // AuthChrome's dot field and settings chip are part of the "canvas" too —
 // they dissolve together with the layout's background, not before or after it.
@@ -536,9 +548,11 @@ const cardAccentStyle = {
   max-width: 420px;
 }
 
+/* z-index 2, above the logo (AuthChrome) and PWA badge wraps (both 1) —
+   their halos bleed past their own boxes and must never paint over the card. */
 .auth-view__card {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   width: 100%;
   /* No background here — VCard already themes its own surface color (light
      vs dark) via --v-theme-surface; a fixed white would fight that. */
@@ -546,33 +560,41 @@ const cardAccentStyle = {
 }
 
 /* Below the card now, not next to the logo (see AuthChrome) — logo, card,
-   badge, top to bottom. Magnetic transform target (see useMagneticPointer in
-   <script>) — written to directly every frame, so it stays free of any CSS
-   transition of its own. */
-.auth-view__pwa-badge {
+   badge, top to bottom. */
+.auth-view__pwa-badge-wrap {
   position: relative;
   z-index: 1;
   flex: none;
-  height: 24px;
-  width: auto;
-  object-fit: contain;
+  display: flex;
   opacity: 0;
-  will-change: transform;
-  /* opacity only, not transform — transform is written to directly every
-     frame by the magnetic pointer above; transitioning it too would make
-     that continuous per-frame tracking lag/animate instead of following the
-     pointer 1:1. */
   transition: opacity 0.3s ease-out;
 }
 
-.auth-view__pwa-badge--visible {
+.auth-view__pwa-badge-wrap--visible {
   opacity: 1;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .auth-view__pwa-badge {
+  .auth-view__pwa-badge-wrap {
     transition: none;
   }
+}
+
+/* Half of AuthChrome's logo halo bleed (-30px -70px). */
+.auth-view__pwa-badge-halo {
+  position: absolute;
+  inset: -15px -35px;
+  pointer-events: none;
+}
+
+/* Magnetic transform target (see useMagneticPointer in <script>) — written
+   to directly every frame, so it stays free of any CSS transition of its own. */
+.auth-view__pwa-badge {
+  position: relative;
+  height: 24px;
+  width: auto;
+  object-fit: contain;
+  will-change: transform;
 }
 
 .auth-view__body {

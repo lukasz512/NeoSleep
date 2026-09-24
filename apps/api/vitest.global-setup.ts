@@ -7,12 +7,20 @@ import { Client } from "pg";
  * Specs that create throwaway accounts follow the `qa-<label>-<suffix>`
  * email convention (see e.g. commands/lead.spec.ts); this sweeps them out
  * before and after the run so a crashed prior run can't leave stragglers.
+ *
+ * partner_link rows are swept too (partner_transaction cascades). The
+ * OrthoApnea status sync polls EVERY non-terminal link in the tenant, so a
+ * link leaked by one failed run made every later run's sync tests slower,
+ * until they timed out on every run (12 leaked links ≈ 30s against the
+ * remote dev DB). The "test" schema holds only test-created data, so
+ * clearing the whole table is safe.
  */
 async function sweepTestData(): Promise<void> {
   const client = new Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
   try {
     await client.query(`DELETE FROM test.identities WHERE email LIKE 'qa-%'`);
+    await client.query(`DELETE FROM test.partner_link`);
   } finally {
     await client.end();
   }

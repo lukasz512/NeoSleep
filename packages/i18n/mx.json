@@ -814,7 +814,7 @@
   "app.treatmentPlans.table.patient": "Paciente",
   "app.treatmentPlans.table.type": "Tipo",
   "app.treatmentPlans.table.status": "Estado",
-  "app.treatmentPlans.table.dentist": "Dentista",
+  "app.treatmentPlans.table.doctor": "Médico",
   "app.treatmentPlans.table.scanOrdered": "Escaneo solicitado",
   "app.treatmentPlans.table.applianceDelivered": "Aparato entregado",
   "app.treatmentPlans.table.noResults": "No se encontraron planes de tratamiento.",

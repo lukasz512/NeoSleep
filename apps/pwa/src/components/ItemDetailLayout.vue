@@ -151,10 +151,11 @@ defineEmits<{
   display: block;
 }
 
+/* Borderless on purpose — the card keeps its padding/radius/surface for spacing,
+   but draws no outline. */
 .view-item__card {
   padding: 24px;
   border-radius: var(--pwa-radius);
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   background: rgba(var(--v-theme-surface), 1);
 }
 

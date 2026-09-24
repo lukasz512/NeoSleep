@@ -37,7 +37,11 @@ function createFakeBackdrop() {
   return { backdrop, busyLog };
 }
 
-async function mountWithBackdrop(apiFetch: ReturnType<typeof vi.fn>, backdrop: AuthBackdrop) {
+async function mountWithBackdrop(
+  apiFetch: ReturnType<typeof vi.fn>,
+  backdrop: AuthBackdrop,
+  notify: ReturnType<typeof vi.fn> = vi.fn(),
+) {
   setActivePinia(createPinia());
   const router = createRouter({
     history: createMemoryHistory(),
@@ -62,7 +66,7 @@ async function mountWithBackdrop(apiFetch: ReturnType<typeof vi.fn>, backdrop: A
         createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives }),
         router,
       ],
-      provide: { "neo:apiFetch": apiFetch, [AUTH_BACKDROP_KEY as symbol]: backdrop },
+      provide: { "neo:apiFetch": apiFetch, "neo:notify": notify, [AUTH_BACKDROP_KEY as symbol]: backdrop },
     },
   });
   mountedWrappers.push(wrapper);
@@ -112,7 +116,8 @@ describe("AuthView — shared auth backdrop", () => {
     const apiFetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ error: "Invalid email or password." }), { status: 401 }),
     );
-    const { wrapper } = await mountWithBackdrop(apiFetch, backdrop);
+    const notify = vi.fn();
+    const { wrapper } = await mountWithBackdrop(apiFetch, backdrop, notify);
 
     await wrapper.find('input[type="email"]').setValue("rep@neosleepcare.com");
     await wrapper.find('input[type="password"]').setValue("wrongpassword");
@@ -120,7 +125,12 @@ describe("AuthView — shared auth backdrop", () => {
     await flushPromises();
     await flushPromises();
 
-    expect(wrapper.text()).toContain(en["user.login.error.invalidCredentials"]);
+    // Sign-in errors surface through the app's toast system (NEO-10), not inline.
+    expect(notify).toHaveBeenCalledWith(
+      en["user.login.error.invalidCredentials"],
+      "error",
+      "user.login.error.invalidCredentials",
+    );
     expect(busyLog.at(-1)).toEqual(["auth-view", false]);
     expect(backdrop.playExit).not.toHaveBeenCalled();
   });

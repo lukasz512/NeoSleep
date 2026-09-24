@@ -4,16 +4,16 @@ import { hcpCardMeta, kindPascal, territoryCardMeta, treatmentPlanCardMeta, slee
 const translate = (key: string) => `T:${key}`;
 
 describe("hcpCardMeta", () => {
-  it("joins institution and territory, same data the desktop table shows in separate columns", () => {
-    expect(hcpCardMeta({ institution: "Klinika Zdrowie", territory_name: "Mazowieckie" })).toBe("Klinika Zdrowie · Mazowieckie");
+  it("shows the territory (the institution is rendered separately as an EntityLink)", () => {
+    expect(hcpCardMeta({ territory_name: "Mazowieckie" })).toBe("Mazowieckie");
   });
 
   it("falls back to region when territory_name is missing", () => {
-    expect(hcpCardMeta({ institution: "Klinika Zdrowie", territory_name: null, region: "PL" })).toBe("Klinika Zdrowie · PL");
+    expect(hcpCardMeta({ territory_name: null, region: "PL" })).toBe("PL");
   });
 
-  it("returns an em dash when neither field is present", () => {
-    expect(hcpCardMeta({})).toBe("—");
+  it("returns an empty string when neither field is present", () => {
+    expect(hcpCardMeta({})).toBe("");
   });
 });
 
@@ -41,27 +41,26 @@ describe("territoryCardMeta", () => {
 describe("treatmentPlanCardMeta", () => {
   const typeLabel = (type?: string) => (type ? `Type:${type}` : "—");
 
-  it("joins the translated type and dentist name", () => {
-    expect(treatmentPlanCardMeta({ type: "cpap", dentist_name: "Dr. Nowak" }, typeLabel)).toBe("Type:cpap · Dr. Nowak");
+  it("shows the translated type (the dentist is rendered separately as an EntityLink)", () => {
+    expect(treatmentPlanCardMeta({ type: "cpap" }, typeLabel)).toBe("Type:cpap");
   });
 
-  it("returns an em dash when neither field is present", () => {
-    expect(treatmentPlanCardMeta({}, typeLabel)).toBe("—");
+  it("returns an empty string when the type is missing", () => {
+    expect(treatmentPlanCardMeta({}, typeLabel)).toBe("");
   });
 });
 
 describe("sleepStudyCardMeta", () => {
   const studyTypeLabel = (studyType?: string) => (studyType ? `Study:${studyType}` : "—");
 
-  it("joins study type, formatted date, AHI (translated label), and interpreter", () => {
+  it("joins study type, formatted date, and AHI (translated label); the interpreter is an EntityLink", () => {
     const result = sleepStudyCardMeta(
-      { study_type: "home", study_date: "2026-01-15T00:00:00.000Z", ahi_score: 12.5, interpreted_by_name: "Dr. Kowalski" },
+      { study_type: "home", study_date: "2026-01-15T00:00:00.000Z", ahi_score: 12.5 },
       studyTypeLabel,
       translate,
     );
     expect(result).toContain("Study:home");
     expect(result).toContain("T:app.sleepStudies.table.ahiScore 12.5");
-    expect(result).toContain("Dr. Kowalski");
   });
 
   it("omits AHI when the score is null, without leaving a dangling separator", () => {
@@ -69,7 +68,7 @@ describe("sleepStudyCardMeta", () => {
     expect(result).toBe("Study:home");
   });
 
-  it("returns an em dash when nothing is present", () => {
-    expect(sleepStudyCardMeta({}, studyTypeLabel, translate)).toBe("—");
+  it("returns an empty string when nothing is present", () => {
+    expect(sleepStudyCardMeta({}, studyTypeLabel, translate)).toBe("");
   });
 });

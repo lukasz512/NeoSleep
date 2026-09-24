@@ -30,6 +30,8 @@
     "prepare": "husky || true",
     "start": "./infrastructure/scripts/start.sh",
     "worker:test": "./infrastructure/scripts/worker-test.sh",
+    "worktree:clean": "./infrastructure/scripts/worktree-clean.sh",
+    "worktree:clean:test": "./infrastructure/scripts/worktree-clean.test.sh",
     "dev": "pnpm exec concurrently --names api,pwa,web -c blue,green,magenta \"pnpm --filter @neo/api dev\" \"pnpm --filter @neo/pwa dev\" \"pnpm --filter @neo/web dev\"",
     "db:seed": "pnpm --filter @neo/api seed:demo"
   },

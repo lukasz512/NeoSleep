@@ -7,7 +7,7 @@
           :key="n.id"
           class="notif-toast"
           :class="`notif-toast--${n.type}`"
-          role="status"
+          :role="n.type === 'error' || n.type === 'warning' ? 'alert' : 'status'"
           @touchstart.passive="onTouchStart(n.id, $event)"
           @touchend.passive="onTouchEnd(n.id, $event)"
         >

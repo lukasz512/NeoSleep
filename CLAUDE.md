@@ -109,6 +109,7 @@ pnpm build:web         # Build website
 pnpm ci                # Full CI gate: lint + typecheck + test
 pnpm i18n:extract      # Extract new i18n keys from source
 pnpm i18n:prune        # Mark unused keys
+pnpm worktree:clean    # Dry-run: which worktrees/branches look closed (use /worktree-clean to remove — it checks Linear)
 ```
 
 ## Git / PR Workflow
