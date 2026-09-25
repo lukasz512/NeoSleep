@@ -3,20 +3,20 @@
 ## Quick start (one command)
 
 ```bash
-# Prerequisites: Docker Desktop installed, Node 20+
+# Prerequisites: Docker Desktop installed, Node 22+
 pnpm start
 ```
 
 Starts Docker Desktop (if not running), then Postgres, runs migrations, installs deps, and launches API + PWA + WEB. See [README.md](../README.md) for details.
 
 ## Prereqs
-- **Node 20+** (required for Vite 7, Vitest 4, ESLint 9; project has `.nvmrc` with `20`)
+- **Node 22+** (required for Vite 7, Vitest 4, ESLint 9; project has `.nvmrc` with `22`)
 - **pnpm 9+**
 
-**Using Node 20 in this project:**
+**Using Node 22 in this project:**
 - Before first install or running dev/tests: `nvm use` (uses `.nvmrc`)
 - Or manually: `nvm use 20`
-- If you don't have Node 20: install via [nodejs.org](https://nodejs.org/) (LTS 20 or 22) or `nvm install 20`
+- If you don't have Node 22: install via [nodejs.org](https://nodejs.org/) (LTS 22) or `nvm install 22`
 
 **Auto-switching to Node from `.nvmrc` when entering the directory (optional):**  
 Add to `~/.zshrc` (for zsh):
@@ -44,7 +44,7 @@ pnpm install
 ## Troubleshooting tests
 
 **"crypto.getRandomValues is not a function" or "You installed esbuild for another platform"**  
-- You are likely on **Node 16** or wrong architecture. Use **Node 20+** and reinstall:
+- You are likely on **Node 16** or wrong architecture. Use **Node 22+** and reinstall:
   ```bash
   nvm use
   rm -rf node_modules

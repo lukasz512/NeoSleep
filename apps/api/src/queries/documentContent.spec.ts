@@ -16,21 +16,24 @@ function uniqueSuffix(): string {
 }
 
 describe("GetDocumentContentIndexQuery", () => {
-  it("lists every real (non-hidden) manifest entry and never the hidden __test fixture", async () => {
+  it("lists every real (non-hidden) manifest entry and never a hidden one", async () => {
     const index = await GetDocumentContentIndexQuery();
     const keys = index.map((e) => e.templateKey);
     expect(keys).toContain("informedConsent");
-    expect(keys).toContain("gdprConsent.pl");
-    expect(keys).toContain("gdprConsent.mx");
+    expect(keys).toContain("partnerAgreement");
+    expect(keys).toContain("partnerDpa");
+    expect(keys).toContain("partnerPrivacyNotice");
     expect(keys).not.toContain("__test");
+    // Superseded by partnerPrivacyNotice (NEO-51) — hidden, kept only for history.
+    expect(keys).not.toContain("gdprConsent.pl");
+    expect(keys).not.toContain("gdprConsent.mx");
   });
 
-  it("includes gdprConsent.pl/gdprConsent.mx only for their own single locale, not every locale", async () => {
+  it("lists the partner documents only for their own jurisdiction locales (pl, mx), not every locale", async () => {
     const index = await GetDocumentContentIndexQuery();
-    const plEntries = index.filter((e) => e.templateKey === "gdprConsent.pl");
-    expect(plEntries.map((e) => e.locale)).toEqual(["pl"]);
-    const mxEntries = index.filter((e) => e.templateKey === "gdprConsent.mx");
-    expect(mxEntries.map((e) => e.locale)).toEqual(["mx"]);
+    for (const key of ["partnerAgreement", "partnerDpa", "partnerPrivacyNotice"]) {
+      expect(index.filter((e) => e.templateKey === key).map((e) => e.locale)).toEqual(["pl", "mx"]);
+    }
   });
 });
 

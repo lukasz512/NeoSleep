@@ -78,3 +78,48 @@ describe("renderDocumentHtml", () => {
     }
   );
 });
+
+describe("renderDocumentHtml — partner onboarding templates (NEO-51)", () => {
+  it("splices the agreement body into {{content}} and the DPA into the annex slot, each exactly once", () => {
+    const html = renderDocumentHtml("partnerAgreement", "pl", "<p>AGREEMENT BODY</p>", { annex: "<p>DPA BODY</p>" });
+    expect(html.split("AGREEMENT BODY").length - 1).toBe(1);
+    expect(html.split("DPA BODY").length - 1).toBe(1);
+    expect(html.indexOf("AGREEMENT BODY")).toBeLessThan(html.indexOf("DPA BODY"));
+    expect(html).not.toContain("{{slot:");
+    expect(html).not.toContain("{{content}}");
+  });
+
+  it("never re-scans spliced admin content: a slot token typed into the body stays literal text", () => {
+    const html = renderDocumentHtml("partnerAgreement", "pl", "<p>{{slot:annex}}</p>", { annex: "<p>DPA</p>" });
+    expect(html).toContain("<p>{{slot:annex}}</p>");
+    expect(html.split("<p>DPA</p>").length - 1).toBe(1);
+  });
+
+  it("renders an unprovided slot as empty rather than raw token text", () => {
+    const html = renderDocumentHtml("partnerAgreement", "mx", "<p>body</p>");
+    expect(html).not.toContain("{{slot:annex}}");
+  });
+
+  it("throws when a slot is passed that the template doesn't have", () => {
+    expect(() => renderDocumentHtml("partnerPrivacyNotice", "pl", "<p>x</p>", { annex: "<p>y</p>" })).toThrow(/slot:annex/);
+  });
+
+  it("turns [[field]] markers in the i18n party clauses into empty data-field spans, per jurisdiction", () => {
+    const pl = renderDocumentHtml("partnerAgreement", "pl", "<p>x</p>");
+    expect(pl).toContain("Ostrowski Investment sp. z o.o.");
+    expect(pl).toContain('data-variant="owner"');
+    expect(pl).toContain('data-variant="staff"');
+    expect(pl).toContain('<span class="field-value" data-field="license_number"></span>');
+    expect(pl).not.toContain("[[");
+
+    const mx = renderDocumentHtml("partnerAgreement", "mx", "<p>x</p>");
+    expect(mx).toContain("Alfredjan de Jesús Díaz Urdaneta");
+    expect(mx).toContain("cédula profesional");
+  });
+
+  it("has both signature image slots on the agreement", () => {
+    const html = renderDocumentHtml("partnerAgreement", "pl", "<p>x</p>");
+    expect(html).toContain('data-image="counterparty_signature"');
+    expect(html).toContain('data-image="signer_signature"');
+  });
+});
