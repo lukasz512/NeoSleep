@@ -66,6 +66,21 @@ export const publicQuestionnaireSubmitLimiter = rateLimit({
   message: { error: "Too many requests, please try again later" },
 });
 
+/**
+ * Applied to GET /health/pdf — public, unauthenticated, and each call launches
+ * a real Chromium render. One shared bucket for all callers (not per IP), so
+ * no amount of distributed traffic can make it render more than 3 PDFs a
+ * minute; the post-deploy smoke test needs one.
+ */
+export const smokePdfLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 3,
+  keyGenerator: () => "smoke-pdf",
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later" },
+});
+
 /** Applied globally — 200 requests per 15 minutes per IP. */
 export const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
