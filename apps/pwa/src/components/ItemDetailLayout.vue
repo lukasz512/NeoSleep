@@ -1,10 +1,28 @@
 <template>
   <div class="view-item">
-    <div class="view-item__header-row">
-      <!-- NEO-56: desktop shows breadcrumbs instead of the back arrow (the
-           parent crumb IS the way back); phones keep just the arrow — the
-           record name is the big title right below it. With nothing to show
-           (not found / load error) the arrow stays on every width. -->
+    <!-- NEO-56 record header (Salesforce Lightning / Veeva pattern): a tile
+         with the entity's module icon, the parent list as a small eyebrow
+         link above the record's name, actions on the right. Same on every
+         width. The name is never truncated — it is the record's identity. -->
+    <header v-if="showRecordHeader" class="view-item__record-header">
+      <div class="view-item__tile" aria-hidden="true">
+        <AppIcon v-if="tileIcon" :name="tileIcon" class="view-item__tile-icon" />
+      </div>
+      <div class="view-item__record-text">
+        <AppBreadcrumbs v-if="parentCrumb" class="view-item__eyebrow" :items="[parentCrumb]" />
+        <div class="view-item__record-title-row">
+          <h1 v-if="hasContent" class="view-item__record-title">{{ recordTitle }}</h1>
+          <span v-else class="view-item__record-title-skeleton" aria-hidden="true" />
+          <slot v-if="hasContent" name="title-extra" />
+        </div>
+      </div>
+      <div v-if="hasContent && $slots['header-actions']" class="view-item__header-actions">
+        <slot name="header-actions" />
+      </div>
+    </header>
+    <!-- No record to describe (not found / load error), or a view without a
+         record title: the plain back arrow row. -->
+    <div v-else class="view-item__header-row">
       <AppButton
         icon
         variant="flat"
@@ -12,19 +30,11 @@
         :to="backRoute"
         ignore-global-loading
         class="view-item__back-btn view-item__back-btn--no-border"
-        :class="{ 'view-item__back-btn--phone-only': showBreadcrumbs }"
         :title="backLabel"
         :aria-label="backLabel"
       >
         <AppIcon name="arrow-left" class="view-item__back-icon" />
       </AppButton>
-      <AppBreadcrumbs
-        v-if="showBreadcrumbs"
-        class="view-item__breadcrumbs"
-        :items="breadcrumbItems"
-        :loading="loading && !hasContent"
-        :trailing-separator="hasContent && !breadcrumbs.length && !!$slots['header-title']"
-      />
       <div v-if="$slots['header-title']" class="view-item__header-title">
         <slot name="header-title" />
       </div>
@@ -34,7 +44,7 @@
     </div>
     <slot v-if="hasContent && $slots.body" name="body" />
     <div v-else-if="hasContent" class="view-item__card">
-      <slot name="title">
+      <slot v-if="!showRecordHeader" name="title">
         <h1 v-if="title" class="view-item__title">{{ title }}</h1>
       </slot>
       <div v-if="$slots.sections" class="view-item__sections">
@@ -117,13 +127,15 @@ const props = withDefaults(defineProps<{
    */
   loadError?: boolean;
   /**
-   * Breadcrumb levels after the parent list (NEO-56) — the record, then the
-   * active tab (see useDetailBreadcrumbs). The parent crumb itself is
-   * derived from `backRoute`. Empty + a `header-title` slot = the caller
-   * renders the record inline (lead detail).
+   * The record's display name (NEO-56). When set, the header becomes the
+   * record header — module tile, parent eyebrow link, this name as the h1 —
+   * instead of the back-arrow row. Pass it even while loading (empty is
+   * fine): the header then holds a placeholder so nothing jumps.
    */
-  breadcrumbs?: BreadcrumbItem[];
-}>(), { title: "", loadError: false, breadcrumbs: () => [] });
+  recordTitle?: string;
+  /** Tile icon override — e.g. the org-type icon for an HCO (NEO-18). Defaults to the module icon. */
+  recordIcon?: AppIconName;
+}>(), { title: "", loadError: false, recordTitle: undefined, recordIcon: undefined });
 
 /** Parent crumb: the nav title + icon of the named back route (same as the sidebar item). */
 const parentCrumb = computed<BreadcrumbItem | null>(() => {
@@ -136,9 +148,11 @@ const parentCrumb = computed<BreadcrumbItem | null>(() => {
   };
 });
 
-const breadcrumbItems = computed(() => (parentCrumb.value ? [parentCrumb.value, ...props.breadcrumbs] : []));
+const tileIcon = computed(() => props.recordIcon ?? parentCrumb.value?.icon);
 
-const showBreadcrumbs = computed(() => !!parentCrumb.value && (props.hasContent || props.loading));
+const showRecordHeader = computed(
+  () => !!parentCrumb.value && props.recordTitle !== undefined && (props.hasContent || props.loading),
+);
 
 defineEmits<{
   retry: [];
@@ -167,23 +181,107 @@ defineEmits<{
   margin-left: auto;
 }
 
-/* NEO-56 — below MOBILE_BREAKPOINT (constants.ts, 768px): arrow only; from
-   there up: breadcrumbs only. */
-.view-item__breadcrumbs {
+/* NEO-56 record header. */
+.view-item__record-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+  /* The action buttons are 56px tall; reserving that height means the
+     header doesn't grow when they appear after loading (nothing jumps). */
+  min-height: 56px;
+}
+
+.view-item__tile {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: rgb(var(--v-theme-primary));
+  color: rgb(var(--v-theme-on-primary));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.view-item__tile-icon {
+  width: 26px;
+  height: 26px;
+}
+
+.view-item__record-text {
   flex: 1 1 auto;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
-.view-item__breadcrumbs:has(+ .view-item__header-title) {
-  flex: 0 1 auto;
+
+.view-item__record-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  min-height: 2rem;
 }
-@media (max-width: 767.98px) {
-  .view-item__breadcrumbs {
-    display: none;
+
+.view-item__record-title {
+  margin: 0;
+  font-size: 1.5rem;
+  line-height: 1.2;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+}
+
+.view-item__record-title-skeleton {
+  display: inline-block;
+  width: 220px;
+  max-width: 60%;
+  height: 1.25rem;
+  border-radius: 8px;
+  background: rgba(var(--v-theme-on-surface), 0.08);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .view-item__record-title-skeleton {
+    animation: view-item-pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes view-item-pulse {
+    50% { opacity: 0.45; }
   }
 }
-@media (min-width: 768px) {
-  .view-item__back-btn--phone-only {
-    display: none;
+
+/* Phone (Salesforce Mobile pattern): tile + eyebrow + actions on the first
+   row, the name on its own full-width row below — three 56px actions next to
+   the name would otherwise wrap even a short name onto two lines. */
+@media (max-width: 767.98px) {
+  .view-item__record-header {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-rows: minmax(56px, auto) auto;
+    grid-template-areas:
+      "tile eyebrow actions"
+      "title title title";
+    align-items: center;
+    column-gap: 12px;
+    row-gap: 8px;
+    min-height: 0;
+  }
+  .view-item__record-header .view-item__tile { grid-area: tile; }
+  .view-item__record-header .view-item__record-text { display: contents; }
+  .view-item__record-header .view-item__eyebrow { grid-area: eyebrow; }
+  .view-item__record-header .view-item__record-title-row { grid-area: title; }
+  .view-item__record-header .view-item__header-actions { grid-area: actions; }
+  .view-item__tile {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+  }
+  .view-item__tile-icon {
+    width: 22px;
+    height: 22px;
+  }
+  .view-item__record-title {
+    font-size: 1.25rem;
   }
 }
 

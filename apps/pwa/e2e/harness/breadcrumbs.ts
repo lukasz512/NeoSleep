@@ -1,13 +1,12 @@
 /**
  * DB-free harness for e2e/breadcrumbs.spec.ts (NEO-56) — served only by the
  * Vite dev server, never part of `vite build`. Mounts the real
- * ItemDetailLayout (header row: back arrow, AppBreadcrumbs, three icon
- * actions like every detail view) with the real Vuetify plugin and global
- * stylesheet, because the desktop/phone swap, truncation and touch targets are
+ * ItemDetailLayout record header (module tile, parent eyebrow link, name h1,
+ * three icon actions like every detail view) with the real Vuetify plugin and
+ * global stylesheet, because hit areas, wrapping and "nothing jumps" are
  * layout facts only a real browser engine computes.
  *
- * `?state=record` (default) · `loading` · `long` (very long name) · `lead`
- * (inline header-title, no trail).
+ * `?state=record` (default) · `loading` · `long` (very long name) · `notfound`.
  */
 import { createApp, defineComponent, h } from "vue";
 import { createPinia } from "pinia";
@@ -19,7 +18,6 @@ import "../../src/assets/app-responsive.scss";
 import ItemDetailLayout from "../../src/components/ItemDetailLayout.vue";
 import AppButton from "../../src/components/AppButton.vue";
 import AppIcon from "../../src/components/AppIcon.vue";
-import type { BreadcrumbItem } from "../../src/components/AppBreadcrumbs.types";
 
 const state = new URLSearchParams(location.search).get("state") ?? "record";
 vuetify.theme.change(lightTheme);
@@ -30,25 +28,12 @@ const router = createRouter({
   routes: [
     { path: "/", component: Stub },
     { path: "/patients", name: "patients", component: Stub },
-    { path: "/leads", name: "leads", component: Stub },
   ],
 });
 
 const name = state === "long"
-  ? "María de los Ángeles Fernández-Villaseñor Gutiérrez de la Concepción"
+  ? "María de los Ángeles Fernández-Villaseñor Gutiérrez de la Concepción y Santa Cruz"
   : "Jan Kowalski";
-
-const trail: BreadcrumbItem[] = [
-  {
-    label: name,
-    avatar: { name, entityType: "patient" },
-    secondary: "Mar 12, 1968",
-    secondaryLabel: "Date of birth",
-    status: { label: "Follow-up", color: "warning" },
-    action: () => {},
-  },
-  { label: "Studies" },
-];
 
 const actions = () =>
   (["calendar", "pencil", "trash"] as const).map((icon) =>
@@ -62,17 +47,16 @@ const Harness = defineComponent({
         h(
           ItemDetailLayout,
           {
-            hasContent: state !== "loading",
+            hasContent: state !== "loading" && state !== "notfound",
             loading: state === "loading",
-            backRoute: { name: state === "lead" ? "leads" : "patients" },
+            backRoute: { name: "patients" },
             backLabel: "Back",
             notFoundLabel: "Not found",
-            breadcrumbs: state === "lead" ? [] : trail,
+            recordTitle: state === "loading" || state === "notfound" ? "" : name,
           },
           {
-            ...(state === "lead" ? { "header-title": () => h("h1", { style: "margin:0;font-size:1.25rem" }, "Maria Wiśniewska") } : {}),
             "header-actions": actions,
-            title: () => h("h1", { class: "view-item__title" }, name),
+            sections: () => h("p", "Details"),
           },
         ),
       ]);

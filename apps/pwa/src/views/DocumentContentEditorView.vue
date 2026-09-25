@@ -5,17 +5,10 @@
     :load-error="loadError"
     :back-route="{ name: 'document-content' }"
     :back-label="t('user.document-content.editor.back')"
-    :breadcrumbs="breadcrumbs"
+    :record-title="documentLabel"
     :not-found-label="t('user.document-content.editor.notFound')"
     @retry="load"
   >
-    <template #title>
-      <span class="view-item__title-wrap">
-        <AppIcon name="nav-document-content" class="doc-editor__title-icon" />
-        <h1 class="view-item__title">{{ documentLabel }}</h1>
-      </span>
-    </template>
-
     <template #body>
       <DetailViewTabs v-model="activeTab" :tabs="editorTabs">
         <template #editor>
@@ -145,7 +138,6 @@ import Underline from "@tiptap/extension-underline";
 import { VTextField, VAutocomplete } from "vuetify/components";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import DetailViewTabs, { type DetailViewTab } from "../components/DetailViewTabs.vue";
-import AppIcon from "../components/AppIcon.vue";
 import AppButton from "../components/AppButton.vue";
 import ProtectedToken, { htmlToEditorHtml, editorHtmlToPlainHtml } from "../components/documents/protectedTokenExtension";
 import { apiFetch } from "../composables/useApi";
@@ -314,8 +306,6 @@ async function onSavePermissions(): Promise<void> {
     savingPermissions.value = false;
   }
 }
-// NEO-56 breadcrumbs: Documents › template › language.
-const breadcrumbs = computed(() => [{ label: documentLabel.value }, { label: localeLabel.value }]);
 </script>
 
 <style scoped>
@@ -325,11 +315,6 @@ const breadcrumbs = computed(() => [{ label: documentLabel.value }, { label: loc
   gap: 10px;
 }
 
-.doc-editor__title-icon {
-  width: 22px;
-  height: 22px;
-  color: rgb(var(--v-theme-primary));
-}
 
 .doc-editor__meta {
   margin: 0 0 8px;

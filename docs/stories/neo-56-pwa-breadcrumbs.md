@@ -1,54 +1,50 @@
-# NEO-56: Medical-grade breadcrumbs on detail views
+# NEO-56: Record header with breadcrumb (Salesforce Lightning / Veeva pattern)
 
 **Linear:** NEO-56
-**Decided by:** Łukasz, over two rounds on 2026-09-25.
-- **Proposal:** https://claude.ai/artifact/7dqKz9MZdES7gSTiFyRE8v
-- **Round 1** placed the breadcrumbs "w wierszu za strzałką", in the card's existing header row.
-- **Round 2** swapped the desktop and phone behaviour and raised the breadcrumbs to medical grade.
+**Decided by:** Łukasz, 2026-09-25, after three rounds:
+
+1. **Round 1:** crumbs after the ← arrow in the card's header row.
+2. **Round 2:** "medical grade": desktop trail with avatar, date of birth, status and tab; arrow on phones.
+3. **Round 3 (current):** rejected round 2's trail ("ta data i status odpadają"), compared 4 popular patterns (https://claude.ai/artifact/Kw5EZnheAiHDzZHSipjgts: NHS, Salesforce/Veeva, Apple, Jira), and **picked B: Salesforce Lightning / Veeva record header**.
 
 ## Story
-As a field user on a record's detail page, I want to know *whose* record I am in (name, second identifier, anything unusual about its state) and where it sits in the app, before I read anything else. I also want one tap back to the list.
+As a field user on a record's detail page, I want to see at a glance what kind of record this is and whose it is, and to get back to its list in one tap, without navigation noise competing with the clinical data.
 
-## Decisions
+## Decisions (round 3)
 | Question | Answer |
 |---|---|
-| Desktop | Breadcrumbs **instead of** the back arrow. The parent crumb is the way back. |
-| Phone (<768px, `MOBILE_BREAKPOINT`) | Back arrow **only**. The record name is the large title right below it. |
-| Hierarchy | Module only: `Patients › Jan Kowalski`. No care-context path (clinic › doctor). Hierarchy, never click history. |
-| Second identifier | **Date of birth** for patients. The `identities.date_of_birth` column already existed but was not in the API or the form, so both were added. |
-| Active tab in the trail | Yes, as the last crumb (current page). On another tab, the record crumb switches back to the first tab. |
-| Entity icons | The module icon on the parent crumb and the record avatar on the record crumb. |
-| Status | A small chip, **only for an exceptional state**: patient follow-up/discharged, HCP invited/pending/inactive, HCO not active, user inactive/suspended. The normal state shows nothing. |
-| Stability & a11y | Skeleton while loading (the row height doesn't change). Long names ellipsize with the full name + identifier in a tooltip. 44px touch targets. Visible focus ring. `<nav aria-label>` + `<ol>` with `aria-current="page"`. Real-browser tests on 3 engines. |
+| Pattern | **Record header**: a tile with the module icon, the parent list as a small uppercase eyebrow link (`PACJENCI ›`) above the record's name (the only h1), and actions on the right. |
+| Back arrow | **Gone** while there is a record (or one is loading). It returns only when there is nothing to describe (not found / load error). |
+| Phone | **The same block**. The actions sit on the eyebrow row and the name gets its own full-width row below (Salesforce Mobile layout), so even a short name doesn't wrap next to three 56px buttons. |
+| Date of birth in the trail | No. It stays as patient data: form field + first details row (API support from round 2 kept). |
+| Status in the trail | No. The existing badges keep their old place next to the name (HCP "invited", HCO type/status chips). |
+| Active tab in the trail | No. The highlighted tab pill right below says it. |
+| Current page in the trail | No. The h1 is the current page, so the eyebrow lists ancestors only (NHS/GOV.UK rule). |
+| Name length | Never truncated (it is the record's identity); it wraps. |
 
-## Behaviour
-| Route | Desktop (≥768px) | Phone |
-|---|---|---|
-| `/patients/:id` | 👤 Patients › (JK) Jan Kowalski · Mar 12, 1968 [Follow-up] › Notes | ← |
-| `/hcp/:id`, `/hco/:id`, `/users/:id` | Module › (avatar) Name [status if exceptional] › Tab | ← |
-| `/leads/:id` | Leads › (MW) Maria Wiśniewska (the existing inline title) | ← (MW) Maria Wiśniewska |
-| `/documents/:templateKey/:locale` | Documents › Template › Language | ← |
-| Loading | Module › ▭ (skeleton, `aria-busy`) | ← |
-| Not found / load error | ← (arrow on every width; no record to describe) | ← |
-
-## Date of birth
-- **Storage and format:** stored as a plain calendar date. The API reads it with `to_char(..., 'YYYY-MM-DD')`, so it can never shift a day in a negative-offset timezone (MX). There is a test for this under `TZ=America/Mexico_City`.
-- **Validation:** API `parseDateOfBirth` and the form rule `dateOfBirthRule` both require a real date, not in the future and not before 1900. Empty means no date.
-- **Display:** the month is spelled out ("12 mar 1968" / "Mar 12, 1968"). A numeric 03/12/1968 reads as two different dates across en vs pl/mx, and a wrong-patient mix-up is exactly what a second identifier exists to prevent.
-- **Audit:** not written to `audit_log.entity_before/after`. The patient audit entries only carry status/region by design, to keep PHI out of the log.
-- **Known limitation:** the shared FormRenderer drops blank fields from the payload. Clearing the date in the edit form therefore leaves the stored value, the same as every other optional patient field. The API itself supports `date_of_birth: null` to clear it.
+## Medical-grade properties
+- **Identity:** one source of identity (the h1). The tile tells the record type apart (patient / doctor / clinic, including the org-type icon for clinics, NEO-18).
+- **Touch target:** the eyebrow link has a 44px-tall hit area via a pseudo-element, so the small line doesn't grow.
+- **Accessibility:** focus ring, `<nav aria-label>` + `<ol>`.
+- **Loading:** tile + eyebrow + a placeholder bar. The header reserves the actions' 56px, so nothing jumps when the record arrives.
+- **Width:** no horizontal scroll at 390px or 1024px, even for a very long name.
 
 ## Implementation
-- **`AppBreadcrumbs.vue` + `AppBreadcrumbs.types.ts`:** the generic trail component.
-- **`ItemDetailLayout.vue`:** derives the parent crumb (nav title + icon) from `backRoute` and takes the rest via `breadcrumbs`. It also does the CSS swap at 768px.
-- **`useDetailBreadcrumbs.ts`:** builds `record › active tab` for the tabbed detail views.
-- **`utils/dateOfBirth.ts`:** `formatDateOfBirth`, `dateOfBirthRule`.
-- **API:** `date_of_birth` on the `Patient` DTO, create/PATCH, and validation in `commands/patient.ts`.
+- **`ItemDetailLayout.vue`:**
+  - New `recordTitle` prop. It switches the header to the record header; views pass it (`''` while loading).
+  - `recordIcon` overrides the tile icon (HCO org type).
+  - `title-extra` slot for badges next to the name.
+  - The parent crumb (label + icon) is derived from `backRoute`'s nav title.
+- **`AppBreadcrumbs.vue`:** the eyebrow trail (ancestor links only, each followed by ›).
+- **Views:** patient, HCP, HCO, user, lead and document editor pass `record-title`. Their own avatar + h1 title slots are removed. The document editor's `#title` slot was dead before, because the body slot wins; its name now shows in the header.
+- **Patient date of birth:**
+  - API read/create/PATCH + validation (real date, not future, ≥1900). `to_char` keeps it a calendar date, so no MX day-shift.
+  - PWA: form field and the first details row. The month is spelled out (`utils/dateOfBirth.ts`).
+  - Clearing it in the edit form keeps the old value, because the shared FormRenderer drops blank fields (same as every optional patient field).
 - **Tests:**
-  - Unit: `AppBreadcrumbs.spec.ts`, `ItemDetailLayout.spec.ts`, `useDetailBreadcrumbs.spec.ts`, `dateOfBirth.spec.ts`, `commands/patientDateOfBirth.spec.ts`.
-  - Real Postgres: `routes/patient.spec.ts`.
-  - Real browsers: `e2e/breadcrumbs.spec.ts` (Chromium/Firefox/WebKit, DB-free harness `e2e/harness/breadcrumbs.*`).
+  - Unit: `ItemDetailLayout.spec.ts`, `AppBreadcrumbs.spec.ts`, `HCODetailView.spec.ts` (tile icon per org type), `dateOfBirth.spec.ts`.
+  - API: `routes/patient.spec.ts` and `commands/patientDateOfBirth.spec.ts` on real Postgres.
+  - Real browsers: `e2e/breadcrumbs.spec.ts` (Chromium/Firefox/WebKit, desktop + phone, DB-free harness).
 
 ## Follow-ups
-- NEO-55 (shell relayout, unmerged) reworks the same header row. Expect a merge conflict; the two designs are compatible.
-- The native date input's display format follows the browser's locale, not the app language.
+- NEO-55 (shell relayout, unmerged) reworks the same header area. Expect a merge conflict. B already puts the module name into the card, which is what NEO-55 wants.

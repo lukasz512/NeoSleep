@@ -31,7 +31,7 @@
       :load-error="loadFailed"
       :back-route="{ name: 'hcp' }"
       :back-label="t('user.hcp.detail.back')"
-      :breadcrumbs="breadcrumbs"
+      :record-title="hcp?.name ?? ''"
       :not-found-label="t('user.hcp.detail.notFound')"
       @retry="loadHCP"
     >
@@ -117,14 +117,8 @@
           <span>{{ t("user.hcp.actions.delete") }}</span>
         </VTooltip>
       </template>
-      <template v-if="hcp" #title>
-        <span class="view-item__title-wrap">
-          <AppAvatar :name="hcp.name" :first-name="hcp.first_name" :last-name="hcp.last_name" entity-type="hcp" :size="40" />
-          <h1 class="view-item__title">{{ hcp.name }}</h1>
-          <span v-if="hcp.status === 'invited'" class="hcp-detail__status-badge">
-            {{ t("user.hcp.detail.statusInvited") }}
-          </span>
-        </span>
+      <template v-if="hcp?.status === 'invited'" #title-extra>
+        <span class="hcp-detail__status-badge">{{ t("user.hcp.detail.statusInvited") }}</span>
       </template>
       <template v-if="hcp" #sections>
         <DetailViewTabs v-model="activeTab" :tabs="hcpTabs">
@@ -234,10 +228,8 @@ import { useNotifications } from "../composables/useNotifications";
 import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
-import { useDetailBreadcrumbs } from "../composables/useDetailBreadcrumbs";
 import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
-import AppAvatar from "../components/AppAvatar.vue";
 import DetailViewTabs from "../components/DetailViewTabs.vue";
 import EntityLink from "../components/EntityLink.vue";
 import EntityHistoryPanel from "../components/EntityHistoryPanel.vue";
@@ -524,25 +516,6 @@ async function loadHCP() {
 
 onMounted(loadHCP);
 watch(() => route.params.id, loadHCP);
-// NEO-56 breadcrumbs: avatar + name + status when it isn't "active", then the open tab.
-const HCP_BREADCRUMB_STATUS: Record<string, { labelKey: string; color: string }> = {
-  invited: { labelKey: "user.hcp.filters.statusInvited", color: "warning" },
-  pending_approval: { labelKey: "user.hcp.filters.statusPendingApproval", color: "warning" },
-  inactive: { labelKey: "user.hcp.filters.statusInactive", color: "default" },
-};
-const breadcrumbs = useDetailBreadcrumbs({
-  record: () => {
-    if (!hcp.value) return null;
-    const status = hcp.value.status ? HCP_BREADCRUMB_STATUS[hcp.value.status] : undefined;
-    return {
-      label: hcp.value.name,
-      avatar: { name: hcp.value.name, firstName: hcp.value.first_name, lastName: hcp.value.last_name, entityType: "hcp" },
-      status: status ? { label: t(status.labelKey), color: status.color } : undefined,
-    };
-  },
-  tabs: hcpTabs,
-  activeTab,
-});
 </script>
 
 <style scoped>

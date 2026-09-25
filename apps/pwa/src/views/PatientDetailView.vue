@@ -22,16 +22,10 @@
       :load-error="loadFailed"
       :back-route="{ name: 'patients' }"
       :back-label="t('app.patients.detail.back')"
-      :breadcrumbs="breadcrumbs"
+      :record-title="patient?.name ?? ''"
       :not-found-label="t('app.patients.detail.notFound')"
       @retry="loadPatient"
     >
-      <template v-if="patient" #title>
-        <span class="view-item__title-wrap">
-          <AppAvatar :name="patient.name" :first-name="patient.first_name" :last-name="patient.last_name" entity-type="patient" :size="40" />
-          <h1 class="view-item__title">{{ patient.name }}</h1>
-        </span>
-      </template>
       <template v-if="patient" #header-actions>
         <VTooltip location="bottom">
           <template #activator="{ props: tooltipProps }">
@@ -192,11 +186,9 @@ import { useNotifications } from "../composables/useNotifications";
 import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
-import { useDetailBreadcrumbs } from "../composables/useDetailBreadcrumbs";
 import { formatDateOfBirth } from "../utils/dateOfBirth";
 import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
-import AppAvatar from "../components/AppAvatar.vue";
 import DetailViewTabs from "../components/DetailViewTabs.vue";
 import EntityLink from "../components/EntityLink.vue";
 import PatientNotesPanel from "../components/patient/PatientNotesPanel.vue";
@@ -380,23 +372,9 @@ async function loadPatient() {
 
 onMounted(loadPatient);
 watch(() => route.params.id, loadPatient);
-// NEO-56 breadcrumbs: avatar + name + date of birth (second identifier) +
-// status when it isn't the normal "active", then the open tab.
-const { locale: breadcrumbLocale } = useI18n();
-const dateOfBirthLabel = computed(() => formatDateOfBirth(patient.value?.date_of_birth, breadcrumbLocale.value as string));
-const breadcrumbs = useDetailBreadcrumbs({
-  record: () => patient.value && {
-    label: patient.value.name,
-    avatar: { name: patient.value.name, firstName: patient.value.first_name, lastName: patient.value.last_name, entityType: "patient" },
-    secondary: dateOfBirthLabel.value || undefined,
-    secondaryLabel: t("app.patients.detail.dateOfBirth"),
-    status: patient.value.status && patient.value.status !== "active"
-      ? { label: patientStatusLabel(t, patient.value.status), color: patientStatusColor(patient.value.status) }
-      : undefined,
-  },
-  tabs: patientTabs,
-  activeTab,
-});
+// Date of birth — the patient's second identifier, first row of the details (NEO-56).
+const { locale: dobLocale } = useI18n();
+const dateOfBirthLabel = computed(() => formatDateOfBirth(patient.value?.date_of_birth, dobLocale.value as string));
 </script>
 
 <style scoped>

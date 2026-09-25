@@ -25,16 +25,10 @@
       :load-error="loadFailed"
       :back-route="{ name: 'users' }"
       :back-label="t('user.users.detail.back')"
-      :breadcrumbs="breadcrumbs"
+      :record-title="user?.name ?? ''"
       :not-found-label="t('user.users.detail.notFound')"
       @retry="loadUser"
     >
-      <template v-if="user" #title>
-        <span class="view-item__title-wrap">
-          <AppAvatar :name="user.name" :first-name="user.first_name" :last-name="user.last_name" entity-type="user" :size="40" />
-          <h1 class="view-item__title">{{ user.name }}</h1>
-        </span>
-      </template>
       <template v-if="user" #header-actions>
         <VTooltip location="bottom">
           <template #activator="{ props: tooltipProps }">
@@ -264,11 +258,9 @@ import { useNotifications } from "../composables/useNotifications";
 import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
-import { useDetailBreadcrumbs } from "../composables/useDetailBreadcrumbs";
 import DetailViewTabs from "../components/DetailViewTabs.vue";
 import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
-import AppAvatar from "../components/AppAvatar.vue";
 import AppLoadingState from "../components/AppLoadingState.vue";
 import { userFormFields } from "../config/forms/userForm";
 import {
@@ -503,18 +495,6 @@ watch(
     loadDocuments();
   },
 );
-// NEO-56 breadcrumbs: avatar + name + status when it isn't "active", then the open tab.
-const breadcrumbs = useDetailBreadcrumbs({
-  record: () => user.value && {
-    label: user.value.name,
-    avatar: { name: user.value.name, firstName: user.value.first_name ?? undefined, lastName: user.value.last_name ?? undefined, entityType: "user" },
-    status: user.value.status !== "active"
-      ? { label: t(`user.users.status.${user.value.status}`), color: user.value.status === "suspended" ? "error" : "default" }
-      : undefined,
-  },
-  tabs: userTabs,
-  activeTab,
-});
 </script>
 
 <style scoped>

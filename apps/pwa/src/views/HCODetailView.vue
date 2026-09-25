@@ -30,16 +30,13 @@
     :load-error="loadFailed"
     :back-route="{ name: 'hco' }"
     :back-label="t('user.hco.detail.back')"
-    :breadcrumbs="breadcrumbs"
+    :record-title="hco?.name ?? ''"
+    :record-icon="hco ? hcoTypeIcon(hco.type) : undefined"
     :not-found-label="t('user.hco.detail.notFound')"
     @retry="loadHCO"
   >
-    <template v-if="hco" #title>
-      <span class="view-item__title-wrap hco-title-row">
-        <span class="view-item__title-wrap">
-          <AppAvatar entity-type="hco" :org-type="hco.type" :size="40" />
-          <h1 class="view-item__title">{{ hco.name }}</h1>
-        </span>
+    <template v-if="hco" #title-extra>
+      <span class="hco-title-row">
         <span class="hco-title-row__badges">
           <VChip :color="hcoTypeColor(hco.type)" size="large" variant="tonal">
             {{ hcoTypeLabel(hco.type) }}
@@ -225,9 +222,7 @@ import { useNotifications } from "../composables/useNotifications";
 import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
-import { useDetailBreadcrumbs } from "../composables/useDetailBreadcrumbs";
 import AppButton from "../components/AppButton.vue";
-import AppAvatar from "../components/AppAvatar.vue";
 import AppIcon from "../components/AppIcon.vue";
 import DetailViewTabs from "../components/DetailViewTabs.vue";
 import EntityHistoryPanel from "../components/EntityHistoryPanel.vue";
@@ -242,6 +237,7 @@ import {
   hcoStatusLabel as hcoStatusLabelFor,
   hcoTypeColor,
   hcoStatusColor,
+  hcoTypeIcon,
 } from "../utils/hcoLabels";
 
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
@@ -442,18 +438,6 @@ async function loadHCO() {
 
 onMounted(loadHCO);
 watch(() => route.params.id, loadHCO);
-// NEO-56 breadcrumbs: type icon + name + status when it isn't "active", then the open tab.
-const breadcrumbs = useDetailBreadcrumbs({
-  record: () => hco.value && {
-    label: hco.value.name,
-    avatar: { name: hco.value.name, entityType: "hco", orgType: hco.value.type },
-    status: hco.value.status && hco.value.status !== "active"
-      ? { label: hcoStatusLabel(hco.value.status), color: hcoStatusColor(hco.value.status) }
-      : undefined,
-  },
-  tabs: hcoTabs,
-  activeTab,
-});
 </script>
 
 <style scoped>

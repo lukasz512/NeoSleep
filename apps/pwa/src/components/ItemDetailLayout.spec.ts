@@ -11,12 +11,11 @@ import en from "@i18n/en.json";
 import ItemDetailLayout from "./ItemDetailLayout.vue";
 import AppBreadcrumbs from "./AppBreadcrumbs.vue";
 
-// NEO-56: desktop shows breadcrumbs instead of the back arrow, phones keep the
-// arrow (the swap itself is CSS at 768px — covered by the real-browser
-// e2e/breadcrumbs.spec.ts). Here: which pieces render, and with what data.
+// NEO-56 record header (Salesforce Lightning / Veeva pattern): module tile,
+// parent eyebrow link, the record's name as the h1, actions — no back arrow.
+// The arrow only comes back when there is no record to describe.
 
 const mountedWrappers: VueWrapper[] = [];
-
 afterEach(() => {
   for (const w of mountedWrappers.splice(0)) w.unmount();
 });
@@ -28,7 +27,6 @@ function makeRouter() {
     routes: [
       { path: "/", component: Stub },
       { path: "/patients", name: "patients", component: Stub },
-      { path: "/leads", name: "leads", component: Stub },
     ],
   });
 }
@@ -45,59 +43,65 @@ function mountLayout(props: Partial<Props>, slots?: Record<string, () => ReturnT
       backRoute: { name: "patients" },
       backLabel: "Back to patients",
       notFoundLabel: "Not found",
+      recordTitle: "Jan Kowalski",
       ...props,
     } as Props,
-    slots,
+    slots: { "header-actions": () => h("button", { class: "act" }, "Edit"), ...slots },
     global: { plugins: [vuetify, i18n, makeRouter(), createPinia()] },
   });
   mountedWrappers.push(wrapper);
   return wrapper;
 }
 
+const header = (w: VueWrapper) => w.find("header.view-item__record-header");
 const backBtn = (w: VueWrapper) => w.find(".view-item__back-btn");
 
-describe("ItemDetailLayout — breadcrumbs vs back arrow", () => {
-  it("with a record: breadcrumbs = parent (from backRoute) + the given trail; arrow is phone-only", () => {
-    const wrapper = mountLayout({ breadcrumbs: [{ label: "Jan Kowalski" }, { label: "Details" }] });
+describe("ItemDetailLayout — record header", () => {
+  it("renders tile (module icon), parent eyebrow link, the name as the only h1, and the actions — no back arrow", () => {
+    const wrapper = mountLayout({});
+    expect(header(wrapper).exists()).toBe(true);
+    expect(backBtn(wrapper).exists()).toBe(false);
 
-    const crumbs = wrapper.findComponent(AppBreadcrumbs);
-    expect(crumbs.exists()).toBe(true);
-    const items = crumbs.props("items");
-    expect(items.map((i: { label: string }) => i.label)).toEqual([en["user.patients.title"], "Jan Kowalski", "Details"]);
-    expect(items[0].to).toEqual({ name: "patients" });
-    expect(items[0].icon).toBe("nav-patients");
+    expect(header(wrapper).find(".view-item__tile").exists()).toBe(true);
+    const items = wrapper.findComponent(AppBreadcrumbs).props("items");
+    expect(items).toEqual([{ label: en["user.patients.title"], to: { name: "patients" }, icon: "nav-patients" }]);
 
-    expect(backBtn(wrapper).classes()).toContain("view-item__back-btn--phone-only");
+    const h1s = wrapper.findAll("h1");
+    expect(h1s).toHaveLength(1);
+    expect(h1s[0]!.text()).toBe("Jan Kowalski");
+    expect(header(wrapper).find(".act").exists()).toBe(true);
   });
 
-  it("while loading: breadcrumbs with a placeholder for the record, so nothing jumps", () => {
-    const wrapper = mountLayout({ hasContent: false, loading: true });
-    const crumbs = wrapper.findComponent(AppBreadcrumbs);
-    expect(crumbs.exists()).toBe(true);
-    expect(crumbs.props("loading")).toBe(true);
+  it("puts title-extra (badges) next to the name", () => {
+    const wrapper = mountLayout({}, { "title-extra": () => h("span", { class: "badge" }, "Invited") });
+    expect(wrapper.find(".view-item__record-title-row .badge").text()).toBe("Invited");
   });
 
-  it("not found / load error: no breadcrumbs, and the back arrow shows on every width", () => {
+  it("while loading: the same header with a placeholder instead of the name, and no actions yet", () => {
+    const wrapper = mountLayout({ hasContent: false, loading: true, recordTitle: "" });
+    expect(header(wrapper).exists()).toBe(true);
+    expect(wrapper.find(".view-item__record-title-skeleton").exists()).toBe(true);
+    expect(wrapper.find("h1").exists()).toBe(false);
+    expect(wrapper.find(".act").exists()).toBe(false);
+  });
+
+  it("not found / load error: no record header, the back arrow instead", () => {
     for (const props of [{ hasContent: false }, { hasContent: false, loadError: true }]) {
       const wrapper = mountLayout(props);
-      expect(wrapper.findComponent(AppBreadcrumbs).exists()).toBe(false);
-      expect(backBtn(wrapper).classes()).not.toContain("view-item__back-btn--phone-only");
+      expect(header(wrapper).exists()).toBe(false);
+      expect(backBtn(wrapper).exists()).toBe(true);
     }
   });
 
-  it("lead detail (inline header-title, no trail): parent + trailing separator before the inline name", () => {
-    const wrapper = mountLayout(
-      { backRoute: { name: "leads" } },
-      { "header-title": () => h("h1", "Maria Wiśniewska") },
-    );
-    const crumbs = wrapper.findComponent(AppBreadcrumbs);
-    expect(crumbs.props("trailingSeparator")).toBe(true);
-    expect(wrapper.find(".view-item__header-title").text()).toBe("Maria Wiśniewska");
+  it("a view that passes no recordTitle keeps the plain back-arrow row", () => {
+    const wrapper = mountLayout({ recordTitle: undefined });
+    expect(header(wrapper).exists()).toBe(false);
+    expect(backBtn(wrapper).exists()).toBe(true);
   });
 
-  it("a plain-path back route has no nav title: arrow only, everywhere", () => {
+  it("a plain-path back route has no module to name: back arrow", () => {
     const wrapper = mountLayout({ backRoute: "/somewhere" });
-    expect(wrapper.findComponent(AppBreadcrumbs).exists()).toBe(false);
-    expect(backBtn(wrapper).classes()).not.toContain("view-item__back-btn--phone-only");
+    expect(header(wrapper).exists()).toBe(false);
+    expect(backBtn(wrapper).exists()).toBe(true);
   });
 });
