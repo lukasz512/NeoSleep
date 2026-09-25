@@ -18,6 +18,20 @@ export const inviteAcceptLimiter = rateLimit({
   message: { error: "Too many requests, please try again later" },
 });
 
+/**
+ * Applied to GET /invite/document — public, token-gated (NEO-51). A doctor
+ * opens each of the 2 documents, maybe re-opens after editing details —
+ * 30 per 15 minutes per IP is generous for that and still caps scraping the
+ * signatory's signature image with a leaked token.
+ */
+export const invitePreviewLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later" },
+});
+
 /** Applied to GET /booking/slots and POST /booking/book — public, unauthenticated; 20 requests per 15 minutes per IP. */
 export const bookingLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -61,6 +75,21 @@ export const publicQuestionnaireReadLimiter = rateLimit({
 export const publicQuestionnaireSubmitLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later" },
+});
+
+/**
+ * Applied to GET /health/pdf — public, unauthenticated, and each call launches
+ * a real Chromium render. One shared bucket for all callers (not per IP), so
+ * no amount of distributed traffic can make it render more than 3 PDFs a
+ * minute; the post-deploy smoke test needs one.
+ */
+export const smokePdfLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 3,
+  keyGenerator: () => "smoke-pdf",
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many requests, please try again later" },

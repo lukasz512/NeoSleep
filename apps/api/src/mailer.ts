@@ -20,14 +20,12 @@ export interface EmailRecipient {
   region?: string | null;
 }
 
-/** The rep/admin a personal-outreach email is "from" — e.g. a lead-offer or partner-invite
- * email should look like it came from the rep who actually triggered it, not a faceless
- * "NeoSleep" system sender. Resend's verified sending address stays the same either way (it
- * has to, for SPF/DKIM/DMARC alignment — see ADR-016 on why that's a dedicated subdomain, not
- * a per-person mailbox); what changes is the display name and the Reply-To header, so a doctor
- * hitting "reply" lands in the rep's own real inbox (e.g. alfred.jan@neosleepcare.com on
- * Microsoft 365), not a noreply@ black hole. This needs no new mailbox to be provisioned per
- * rep — it reuses whatever real address the rep already logs in with. */
+/** The rep/admin a personal-outreach email is "from" — the display name always reads
+ * "NeoSleep" (consistent brand sender across lead-offer, partner-invite, and thank-you
+ * emails), but Reply-To is still set to the rep's own address, so a doctor hitting "reply"
+ * lands in the rep's real inbox (e.g. alfred.jan@neosleepcare.com on Microsoft 365), not a
+ * noreply@ black hole. This needs no new mailbox to be provisioned per rep — it reuses
+ * whatever real address the rep already logs in with. */
 export interface EmailSender {
   name: string;
   email: string;
@@ -51,8 +49,6 @@ interface SendEmailArgs {
   subject: string;
   html: string;
   attachments: EmailAttachment[];
-  /** Overrides the "NeoSleep" display name — e.g. the rep's own name for personal outreach. */
-  fromName?: string;
   /** Set so replies land in a real inbox (the rep's) instead of the noreply@ sending address. */
   replyTo?: string;
   /** Fixed extra recipient(s), e.g. an internal compliance inbox — see PARTNER_DOCS_CC_EMAIL. */
@@ -68,15 +64,15 @@ interface SendEmailArgs {
  * (e.g. auth.ts's fire-and-forget forgot-password handler) already expect a
  * rejected promise on failure.
  */
-async function sendEmail(logLabel: string, args: SendEmailArgs): Promise<void> {
+async function sendEmail(logLabel: string, args: SendEmailArgs): Promise<string | null> {
   if (!resend || !RESEND_FROM_EMAIL) {
     console.warn(`[mailer] Resend not configured – set RESEND_API_KEY, RESEND_FROM_EMAIL in .env`);
-    return;
+    return null;
   }
 
   try {
-    const { error } = await resend.emails.send({
-      from: `${args.fromName ?? "NeoSleep"} <${RESEND_FROM_EMAIL}>`,
+    const { data, error } = await resend.emails.send({
+      from: `NeoSleep <${RESEND_FROM_EMAIL}>`,
       to: args.to,
       subject: args.subject,
       html: args.html,
@@ -88,6 +84,7 @@ async function sendEmail(logLabel: string, args: SendEmailArgs): Promise<void> {
       throw new Error(`${error.name}: ${error.message}`);
     }
     console.log(`[mailer] Sent ${logLabel} to ${args.to}`);
+    return data?.id ?? null;
   } catch (err) {
     console.error(`[mailer] Failed to send ${logLabel}:`, err);
     throw err;
@@ -200,7 +197,6 @@ export async function sendLeadOfferEmail(
     subject: emailT(locale, "email.leadOffer.subject"),
     html,
     attachments: getEmailAttachments(socials),
-    fromName: sender.name,
     replyTo: sender.email,
   });
 }
@@ -285,7 +281,6 @@ export async function sendPartnerInviteEmail(
     subject: emailT(locale, "email.partnerInvite.subject"),
     html,
     attachments: getEmailAttachments(socials),
-    fromName: sender.name,
     replyTo: sender.email,
   });
 }
@@ -321,7 +316,6 @@ export async function sendPartnerJoinThankYouEmail(to: string, recipient: EmailR
     subject: emailT(locale, "email.partnerJoinThankYou.subject"),
     html,
     attachments: getEmailAttachments(socials),
-    fromName: sender.name,
     replyTo: sender.email,
   });
 }
@@ -335,16 +329,17 @@ export interface SignedDocumentAttachment {
 
 /**
  * Sent right after AcceptPractitionerInviteCommand's transaction commits (never from inside
- * it — a failure here must not roll back a signature that already succeeded). Ccs a fixed
- * internal compliance inbox when PARTNER_DOCS_CC_EMAIL is set (interim single-tenant-MVP env
- * var — see docs/stories/partner-registration-legal-documents.md, 2026-09-16 addendum, on why
- * this isn't per-tenant config yet).
+ * it — a failure here must not roll back a signature that already succeeded). NeoSleep's copy
+ * goes to `ccEmail` — the jurisdiction's signatory config (NEO-51: PL → lukasz.ostrowski@,
+ * MX → alfred.jan@) — falling back to the older single PARTNER_DOCS_CC_EMAIL env var.
+ * Returns Resend's message id (null when email isn't configured) for the evidence trail.
  */
 export async function sendSignedDocumentsEmail(
   to: string,
   recipient: EmailRecipient,
-  documents: SignedDocumentAttachment[]
-): Promise<void> {
+  documents: SignedDocumentAttachment[],
+  ccEmail?: string | null
+): Promise<string | null> {
   const locale = recipient.language;
   const greetingName = formatGreetingName(recipient, to);
 
@@ -364,11 +359,12 @@ export async function sendSignedDocumentsEmail(
     socials,
   });
 
-  await sendEmail("signed documents email", {
+  const cc = ccEmail || PARTNER_DOCS_CC_EMAIL;
+  return sendEmail("signed documents email", {
     to,
     subject: emailT(locale, "email.signedDocuments.subject"),
     html,
     attachments: [...getEmailAttachments(socials), ...documents.map((d) => ({ filename: d.filename, content: d.content }))],
-    ...(PARTNER_DOCS_CC_EMAIL ? { cc: PARTNER_DOCS_CC_EMAIL } : {}),
+    ...(cc ? { cc } : {}),
   });
 }

@@ -65,6 +65,17 @@ export function createNeoVuetify(
     },
     date: { adapter: VuetifyDateAdapter },
     locale: { adapter: createVueI18nAdapter(adapterInput) },
+    defaults: {
+      // The data-table footer's items-per-page VSelect exposes no props of
+      // its own; nested defaults are the only way to tag its teleported
+      // menu so app CSS can style it like the table (see pwa theme.scss).
+      VDataTableFooter: {
+        VSelect: {
+          itemColor: "primary",
+          menuProps: { contentClass: "neo-table-page-size-menu" },
+        },
+      },
+    },
     theme: {
       defaultTheme: light,
       themes: {

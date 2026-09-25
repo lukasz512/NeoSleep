@@ -67,14 +67,17 @@ project).
   `pwa/dev`, `web/prod`, `web/dev`). See `.github/workflows/deploy-pwa.yml` /
   `deploy-web.yml` for the CI deploy steps, `secrets/deploy-notes.md` for the
   document-root mapping and FTP account history.
-- **`apps/api`**: **Render** (`render.yaml`), currently tracking the `dev`
-  branch for both environments (see comment at top of `render.yaml` — switch to
-  `prod` once verified). A git push to the tracked branch is the whole deploy
-  pipeline, no separate CD tooling.
-  - Future scale-up path (not active): Hetzner VPS + PM2 + nginx, see
-    `infrastructure/setup/provision.md`.
-- **Database**: **Supabase** (managed PostgreSQL), schema-per-tenant. Connection
-  string is `DATABASE_URL` on the Render service, never in frontend code.
+- **`apps/api`**: **Google Cloud Run**, project `neosleep-api`, region
+  `us-west2` (Los Angeles, next to the DB). Two services: `neosleep-api-dev`
+  (push to `dev`) and `neosleep-api-prod` (push to `prod`), deployed by
+  `.github/workflows/deploy-api.yml`. See ADR-025 and
+  `docs/RUNBOOK_API_CLOUD_RUN.md`.
+  - **Transition (NEO-45)**: the old **Render** service (`render.yaml`, Frankfurt,
+    one service for both environments) keeps running as the rollback target until
+    prod has been stable on Cloud Run for a week, then it is removed.
+- **Database**: **Supabase** (managed PostgreSQL, us-west-1), schema-per-tenant.
+  Connection string is the `DATABASE_URL` secret in Secret Manager (and on Render
+  during the transition), never in frontend code.
   Supabase Free plan has no restorable backups, so a nightly GitHub Actions job
   dumps the DB + Storage, encrypts them and uploads them to a Google Cloud Storage
   bucket (Mexico region, 30-day retention). See `docs/RUNBOOK_BACKUP_RESTORE.md`.

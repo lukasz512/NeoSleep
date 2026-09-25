@@ -29,6 +29,7 @@ function workspaceAliases(): Alias[] {
     { find: "@ui",         replacement: path.resolve(rootDir, "packages/ui/src/index.ts") },
     { find: "@stores",     replacement: path.resolve(rootDir, "packages/stores/src/index.ts") },
     { find: /^@vuetify$/,  replacement: path.resolve(rootDir, "packages/vuetify/src/index.ts") },
+    { find: "@documents-browser", replacement: path.resolve(rootDir, "packages/documents/src/browser/index.ts") },
   ];
 }
 

@@ -12,7 +12,8 @@
     "migrate": "tsx scripts/migrate.ts",
     "sync-test-schema": "tsx scripts/sync-test-schema.ts",
     "check-tenant-schema-parity": "tsx scripts/check-tenant-schema-parity.ts",
-    "seed:e2e-user": "tsx --env-file=../../.env scripts/seed-e2e-user.ts"
+    "seed:e2e-user": "tsx --env-file=../../.env scripts/seed-e2e-user.ts",
+    "seed:qa-user": "tsx --env-file=../../.env scripts/seed-qa-user.ts"
   },
   "dependencies": {
     "@neo/documents": "workspace:*",
@@ -27,7 +28,6 @@
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.4.0",
-    "pdf-lib": "^1.17.1",
     "pg": "^8.23.0",
     "puppeteer-core": "24.34.0",
     "resend": "^6.29.0",
