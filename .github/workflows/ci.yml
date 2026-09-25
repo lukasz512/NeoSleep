@@ -159,3 +159,15 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build API image
         run: docker build --platform linux/amd64 -f apps/api/Dockerfile -t neo-api:ci .
+      # Render a real PDF inside the built image, with a Google Font like every document
+      # template: that HTTPS fetch loads Chromium's network stack (NSS + libsqlite3). A plain
+      # page renders even when those system libs are missing, so it must be this page.
+      - name: Render a PDF inside the image
+        run: |
+          docker run --rm -w /app/apps/api --entrypoint node neo-api:ci --input-type=module -e '
+            const r = await import("/app/apps/api/dist/services/documentRenderer.js");
+            const html = "<!doctype html><html><head><meta charset=UTF-8><link href=\"https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap\" rel=stylesheet><style>body{font-family:Poppins,sans-serif}</style></head><body><h1>CI smoke é ñ ł</h1></body></html>";
+            const pdf = await r.renderHtmlToPdf(html);
+            if (Buffer.from(pdf.subarray(0, 5)).toString("latin1") !== "%PDF-") throw new Error("not a PDF");
+            console.log("PDF OK", pdf.length, "bytes");
+            process.exit(0);'

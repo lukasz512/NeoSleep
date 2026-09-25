@@ -29,6 +29,12 @@ RUN rm -rf node_modules apps/api/node_modules \
 
 FROM node:20-bookworm-slim AS runtime
 ENV NODE_ENV=production
+# Chromium's network stack (NSS) needs libsqlite3 the moment a document fetches anything
+# over HTTPS — e.g. the Google Fonts every template loads. It is not in @sparticuz/chromium's
+# bundled libs nor in bookworm-slim; without it Chromium aborts ("Connection closed").
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libsqlite3-0 ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 COPY --from=build /app/package.json ./package.json
