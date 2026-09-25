@@ -102,6 +102,18 @@ describe.skipIf(!launch)("renderHtmlToPdf (real Chromium)", () => {
     expect(state.images.every(Boolean)).toBe(true);
   });
 
+  it("signature panel: 'signed electronically' shows only once a drawn signature is placed", { timeout: 60_000 }, async () => {
+    const onePixel = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+    browser ??= await puppeteer.launch({ ...launch!, headless: true });
+    const page = await browser.newPage();
+    await page.setContent(renderDocumentHtml("medicalHistory", "mx"), { waitUntil: "load" });
+    const noteDisplay = () => page.$eval(".sig-e-note", (el) => getComputedStyle(el).display);
+
+    expect(await noteDisplay()).toBe("none"); // paper copy: blank panel
+    await applyDataImages(page, { firma_paciente: onePixel });
+    expect(await noteDisplay()).toBe("block");
+  });
+
   it("partner agreement path: variant pruned, data-image signatures decoded and fonts settled before print", { timeout: 60_000 }, async () => {
     const onePixel = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
     const html = renderDocumentHtml("partnerAgreement", "mx", "<p>Cláusula de prueba.</p>", { annex: "<p>Anexo DPA.</p>" });

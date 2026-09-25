@@ -50,7 +50,7 @@
      records, not our own authored copy). This pass also toggles the
      manufacturer checkboxes' checked state the same way.
 
-  Firma: the signature-box element further down (data-field firma_paciente)
+  Firma: the sig-area element further down (data-field firma_paciente)
   is left empty for a printed copy (signed on paper). When the patient signs
   on their phone (QR flow, ADR-024) the renderer's dataImages option puts the
   drawn PNG into it, sized to the box.
@@ -168,13 +168,6 @@
   }
 
 
-  .sig-label { font-weight: 600; color: var(--secondary); margin: 18px 0 6px; }
-  .signature-box {
-    border: 1px solid var(--secondary);
-    height: 90px;
-    width: 260px;
-    padding: 8px;
-  }
 
   .screen-only.contact-footer {
     font-size: 8pt;
@@ -223,8 +216,7 @@
     <div class="doc-field doc-field--short"><dt>{{documents.informedConsent.fieldDate}}</dt><dd data-field="fecha"></dd></div>
   </dl>
 
-  <div class="sig-label">{{documents.informedConsent.signatureLabel}}</div>
-  <div id="firma-paciente" class="signature-box" data-field="firma_paciente"></div>
+  <div class="sig-panels"><div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.informedConsent.signatureLabel}}</div><div id="firma-paciente" class="sig-area" data-field="firma_paciente"></div><div class="sig-e-note">{{documents.signature.eSigned}}</div></div></div></div>
 
   <div class="contact-footer screen-only">
     <div>{{brand:contactLine}}</div>

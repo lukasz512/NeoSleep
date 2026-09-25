@@ -210,7 +210,7 @@ export async function applyDataImages(
         img.alt = "";
         // Fit the box: a phone canvas is ~2-3x the box's size at device pixel
         // ratio, and an unconstrained image spills out and across a page break.
-        // Partner templates (data-image) size their own .sig-image img, matching the PWA preview.
+        // Partner templates (data-image) size their own .sig-area img (docFields.css), matching the PWA preview.
         if (attr === "data-field") img.style.cssText = "display:block;width:100%;height:100%;object-fit:contain;";
         el.style.breakInside = "avoid";
         el.replaceChildren(img);

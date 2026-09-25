@@ -230,7 +230,7 @@ async function onFrameLoad(): Promise<void> {
 
 /** On the signed preview, land on the two signatures — that's what the doctor wants to check. */
 function scrollToSignatures(doc: Document): void {
-  const block = doc.querySelector(".signatures");
+  const block = doc.querySelector(".sig-panels");
   const body = bodyRef.value?.$el as HTMLElement | undefined;
   const frame = frameRef.value;
   if (!(block instanceof HTMLElement) || !body || !frame) return;
