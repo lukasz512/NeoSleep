@@ -78,12 +78,37 @@ describe("recoverFromChunkError", () => {
     const { deps, runScheduled } = makeDeps();
 
     expect(recoverFromChunkError("/patients/42", deps)).toBe("reloading");
-    expect(deps.notify).toHaveBeenCalledWith("", "info", "app.update.reloading", { countdownMs: RELOAD_DELAY_MS });
+    expect(deps.notify).toHaveBeenCalledWith("", "info", "app.update.reloading", expect.objectContaining({ countdownMs: RELOAD_DELAY_MS }));
     expect(RELOAD_DELAY_MS).toBe(5_000); // enough to read the toast — never an unexplained reload
     expect(deps.schedule).toHaveBeenCalledWith(expect.any(Function), RELOAD_DELAY_MS);
     expect(deps.reload).not.toHaveBeenCalled(); // the countdown runs first
 
     runScheduled();
+    expect(deps.reload).toHaveBeenCalledWith("/patients/42");
+  });
+
+  it("'Reload now' on the countdown toast reloads at once, and the countdown doesn't reload a second time", () => {
+    const { deps, notify, runScheduled } = makeDeps();
+    recoverFromChunkError("/patients/42", deps);
+    const options = notify.mock.calls[0][3];
+    expect(options?.action?.labelKey).toBe("notification.action.reloadNow");
+
+    void options?.action?.run();
+    expect(deps.reload).toHaveBeenCalledWith("/patients/42");
+    runScheduled();
+    expect(deps.reload).toHaveBeenCalledTimes(1);
+  });
+
+  it("the load-failed toast offers a manual Reload into the same page", () => {
+    const { deps, notify, advance } = makeDeps();
+    recoverFromChunkError("/patients/42", deps);
+    notify.mockClear();
+    advance(2_000);
+    recoverFromChunkError("/patients/42", deps);
+
+    const options = notify.mock.calls[0][3];
+    expect(options?.action?.labelKey).toBe("notification.action.reload");
+    void options?.action?.run();
     expect(deps.reload).toHaveBeenCalledWith("/patients/42");
   });
 
@@ -94,7 +119,7 @@ describe("recoverFromChunkError", () => {
 
     advance(2_000);
     expect(recoverFromChunkError("/patients/42", deps)).toBe("failed");
-    expect(deps.notify).toHaveBeenCalledWith("", "error", "app.update.loadFailed");
+    expect(deps.notify).toHaveBeenCalledWith("", "error", "app.update.loadFailed", expect.objectContaining({ icon: "refresh" }));
     expect(deps.schedule).toHaveBeenCalledTimes(1);
   });
 
@@ -120,7 +145,7 @@ describe("recoverFromChunkError", () => {
     const { deps } = makeDeps({ isOnline: () => false });
 
     expect(recoverFromChunkError("/patients/42", deps)).toBe("offline");
-    expect(deps.notify).toHaveBeenCalledWith("", "warning", "app.update.offline");
+    expect(deps.notify).toHaveBeenCalledWith("", "warning", "app.update.offline", { icon: "sad-cloud" });
     expect(deps.schedule).not.toHaveBeenCalled();
   });
 
@@ -130,7 +155,7 @@ describe("recoverFromChunkError", () => {
     const { deps } = makeDeps({ storage: blocked });
 
     expect(recoverFromChunkError("/patients/42", deps)).toBe("failed");
-    expect(deps.notify).toHaveBeenCalledWith("", "error", "app.update.loadFailed");
+    expect(deps.notify).toHaveBeenCalledWith("", "error", "app.update.loadFailed", expect.objectContaining({ icon: "refresh" }));
     expect(deps.schedule).not.toHaveBeenCalled();
   });
 });
@@ -160,7 +185,7 @@ describe("installChunkRecovery on a real router", () => {
 
     await expect(router.push("/patients/42?tab=history")).rejects.toThrow(CHROME);
 
-    expect(harness.deps.notify).toHaveBeenCalledWith("", "info", "app.update.reloading", { countdownMs: RELOAD_DELAY_MS });
+    expect(harness.deps.notify).toHaveBeenCalledWith("", "info", "app.update.reloading", expect.objectContaining({ countdownMs: RELOAD_DELAY_MS }));
     harness.runScheduled();
     expect(harness.deps.reload).toHaveBeenCalledWith("/patients/42?tab=history");
   });

@@ -1,4 +1,4 @@
-import { useNotifications } from "./useNotifications";
+import { useNotifications, type NotificationIcon, type ShowOptions } from "./useNotifications";
 
 export interface EntitySubmitResult {
   ok: boolean;
@@ -10,6 +10,10 @@ export interface EntitySubmitOptions {
   errorMessage: string;
   onSuccess?: (result: EntitySubmitResult) => void | Promise<void>;
   refresh?: boolean;
+  /** What the form saves (patient, clinic, visit…) — the toast's tile icon. */
+  icon: NotificationIcon;
+  /** Display name of the record the form belongs to, when there is one. */
+  context?: string;
 }
 
 /**
@@ -34,20 +38,23 @@ export function useEntitySubmit() {
    * loader) — so no other change would be needed to add that branch later.
    */
   async function submit(opts: EntitySubmitOptions, done: (ok: boolean) => void) {
+    // No Retry on a failed save: the form stays open with its own Save
+    // button, which is the retry — a second one in the toast would race it.
+    const toast: ShowOptions = { icon: opts.icon, context: opts.context };
     let result: EntitySubmitResult;
     try {
       result = await opts.request();
     } catch {
-      notifications.show(opts.errorMessage, "error");
+      notifications.show(opts.errorMessage, "error", undefined, toast);
       done(false);
       return;
     }
     if (!result.ok) {
-      notifications.show(opts.errorMessage, "error");
+      notifications.show(opts.errorMessage, "error", undefined, toast);
       done(false);
       return;
     }
-    notifications.show(opts.successMessage, "success");
+    notifications.show(opts.successMessage, "success", undefined, toast);
     done(true);
     if (opts.refresh !== false) window.dispatchEvent(new Event("entity-list-refresh"));
     if (opts.onSuccess) await opts.onSuccess(result);

@@ -39,6 +39,18 @@ test("stale chunk: toast explains, then reloads into the clicked page", async ({
   await expect.poll(() => page.evaluate(() => window.__reloadedTo), { timeout: 10_000 }).toBe("/patients/42");
 });
 
+test("stale chunk: 'Reload now' on the toast reloads at once, without waiting for the countdown", async ({ page }) => {
+  await serveChunkAsHtml(page);
+  await open(page);
+
+  await page.getByTestId("open-detail").click();
+  const toast = page.locator(".notif-toast--info");
+  await toast.getByRole("button", { name: "Reload now" }).click();
+
+  expect(await page.evaluate(() => window.__reloadedTo)).toBe("/patients/42");
+  await expect(page.locator(".notif-toast")).toHaveCount(0);
+});
+
 test("chunk still missing after the reload: error toast, no reload loop", async ({ page }) => {
   await serveChunkAsHtml(page);
   await open(page);
@@ -47,8 +59,13 @@ test("chunk still missing after the reload: error toast, no reload loop", async 
 
   await page.getByTestId("open-detail").click();
 
-  await expect(page.locator(".notif-toast--error")).toContainText("couldn't be loaded");
+  const toast = page.locator(".notif-toast--error");
+  await expect(toast).toContainText("couldn't be loaded");
   expect(await page.evaluate(() => window.__reloadedTo)).toBeUndefined();
+
+  // Only the user starts the next attempt.
+  await toast.getByRole("button", { name: "Reload", exact: true }).click();
+  expect(await page.evaluate(() => window.__reloadedTo)).toBe("/patients/42");
 });
 
 test("offline: explains instead of reloading into a dead page", async ({ page, context }) => {

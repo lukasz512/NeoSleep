@@ -89,7 +89,7 @@ const { loading: addLoading, run: onAdd } = useAsyncAction(async () => {
       handleErrors: false,
     });
     if (res.ok) {
-      notifications.show(t("app.notes.addSuccess"), "success");
+      notifications.show(t("app.notes.addSuccess"), "success", undefined, { icon: "pencil" });
       draft.value = "";
       notifyOrthoApnea.value = false;
       await loadNotes();
@@ -98,7 +98,7 @@ const { loading: addLoading, run: onAdd } = useAsyncAction(async () => {
   } catch {
     // fall through to the error toast below
   }
-  notifications.show(t("app.notes.errorSave"), "error");
+  notifications.show(t("app.notes.errorSave"), "error", undefined, { icon: "pencil" });
 });
 </script>
 

@@ -130,6 +130,23 @@ $pwa-fib-t-3xl: 987ms;
   --pwa-identity-org-soft: rgba(160, 120, 40, 0.1);
   --pwa-identity-person: #56625f;
   --pwa-identity-person-soft: rgba(40, 60, 58, 0.07);
+  /* Toasts (AppNotifications.vue, NEO-76 "record context"): white card, the
+     entity icon on a neutral grey tile, status only on the small badge and
+     the action button. Semantic colors, deliberately not the brand teal. */
+  --pwa-toast-bg: #ffffff;
+  --pwa-toast-border: #e3e6e5;
+  --pwa-toast-shadow: 0 6px 24px rgba(8, 42, 39, 0.12), 0 1px 3px rgba(8, 42, 39, 0.08);
+  --pwa-toast-tile: #eef0f0;
+  --pwa-toast-tile-icon: #5b6664;
+  --pwa-toast-badge-fg: #ffffff;
+  --pwa-toast-success: #1f7a4d;
+  --pwa-toast-success-soft: #e5f3eb;
+  --pwa-toast-info: #1f5fa8;
+  --pwa-toast-info-soft: #e5eef9;
+  --pwa-toast-warning: #a35f00;
+  --pwa-toast-warning-soft: #fcf0da;
+  --pwa-toast-error: #b42323;
+  --pwa-toast-error-soft: #fbe6e6;
   /* Buttons: desktop default; mobile/tablet use larger touch targets */
   --pwa-btn-min-height: #{$pwa-touch-target-desktop};
   --pwa-btn-min-width: #{$pwa-touch-target-desktop};
@@ -167,6 +184,20 @@ $pwa-fib-t-3xl: 987ms;
   --pwa-identity-org-soft: rgba(201, 168, 106, 0.14);
   --pwa-identity-person: #a3b1ae;
   --pwa-identity-person-soft: rgba(160, 175, 172, 0.12);
+  --pwa-toast-bg: #1e1e1e;
+  --pwa-toast-border: #333333;
+  --pwa-toast-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+  --pwa-toast-tile: #2a2c2c;
+  --pwa-toast-tile-icon: #b3bdbb;
+  --pwa-toast-badge-fg: #111111;
+  --pwa-toast-success: #5bc48c;
+  --pwa-toast-success-soft: #16291f;
+  --pwa-toast-info: #7fb1ee;
+  --pwa-toast-info-soft: #14223a;
+  --pwa-toast-warning: #f0b35a;
+  --pwa-toast-warning-soft: #2e2210;
+  --pwa-toast-error: #f08080;
+  --pwa-toast-error-soft: #331616;
 }
 
 body {

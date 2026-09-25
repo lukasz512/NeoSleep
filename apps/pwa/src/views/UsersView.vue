@@ -216,6 +216,7 @@ async function onEditSubmit(payload: Record<string, unknown>, done: (ok: boolean
           body: JSON.stringify(payload),
         }),
       successMessage: t("user.users.form.editSuccess"),
+      icon: "nav-users",
       errorMessage: t("user.users.form.errorSave"),
     },
     done,
@@ -227,7 +228,7 @@ const { run: onResetPassword } = useAsyncAction(async (user: UserListItem) => {
     method: "POST",
   });
   if (res.ok) {
-    notifications.show(t("user.users.actions.resetPasswordSuccess"), "success");
+    notifications.show(t("user.users.actions.resetPasswordSuccess"), "success", undefined, { icon: "key", context: user.name });
   }
 });
 
@@ -242,6 +243,8 @@ const { run: onToggleStatus } = useAsyncAction(async (user: UserListItem) => {
     notifications.show(
       t(nextStatus === "active" ? "user.users.actions.enableSuccess" : "user.users.actions.disableSuccess"),
       "success",
+      undefined,
+      { icon: "nav-users", context: user.name },
     );
     window.dispatchEvent(new Event("entity-list-refresh"));
   }
@@ -284,7 +287,7 @@ const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
   if (res.ok) {
     showDeleteConfirm.value = false;
     deletingUserId.value = null;
-    notifications.show(t("user.users.actions.deleteSuccess"), "success");
+    notifications.show(t("user.users.actions.deleteSuccess"), "success", undefined, { icon: "nav-users" });
     window.dispatchEvent(new Event("entity-list-refresh"));
   }
 });
@@ -299,6 +302,7 @@ async function onSubmit(payload: Record<string, unknown>, done: (ok: boolean) =>
           body: JSON.stringify(payload),
         }),
       successMessage: t("user.users.form.success"),
+      icon: "nav-users",
       errorMessage: t("user.users.form.errorSave"),
     },
     done,

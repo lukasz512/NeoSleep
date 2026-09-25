@@ -11,8 +11,24 @@
           @touchstart.passive="onTouchStart(n.id, $event)"
           @touchend.passive="onTouchEnd(n.id, $event)"
         >
-          <AppIcon :name="ICON_BY_TYPE[n.type]" class="notif-toast__icon" />
-          <span class="notif-toast__msg">{{ messageOf(n) }}</span>
+          <span class="notif-toast__tile">
+            <AppIcon :name="n.icon ?? DEFAULT_ICON_BY_TYPE[n.type]" class="notif-toast__icon" />
+            <span class="notif-toast__badge">
+              <AppIcon :name="BADGE_BY_TYPE[n.type]" />
+            </span>
+          </span>
+          <span class="notif-toast__text">
+            <span class="notif-toast__msg">{{ messageOf(n) }}</span>
+            <span v-if="n.context" class="notif-toast__context">{{ n.context }}</span>
+          </span>
+          <button
+            v-if="n.action"
+            type="button"
+            class="notif-toast__action"
+            @click="runAction(n)"
+          >
+            {{ t(n.action.labelKey) }}
+          </button>
           <button
             type="button"
             class="notif-toast__close"
@@ -21,7 +37,7 @@
           >
             <AppIcon name="close" />
           </button>
-          <div class="notif-toast__bar" :style="{ animationDuration: `${n.countdownMs ?? DURATION}ms` }" />
+          <div class="notif-toast__bar" :style="{ animationDuration: `${lifetimeOf(n)}ms` }" />
         </div>
       </TransitionGroup>
     </div>
@@ -33,17 +49,33 @@ import { ref, watch, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useDebounceFn } from "@vueuse/core";
 import AppIcon from "./AppIcon.vue";
-import { useNotifications, type Notification, type NotificationType } from "../composables/useNotifications";
+import {
+  useNotifications,
+  type Notification,
+  type NotificationIcon,
+  type NotificationType,
+} from "../composables/useNotifications";
 import { MOBILE_BREAKPOINT } from "../constants";
 
 const DURATION = 8000;
+/** A toast with a button (Retry…) stays longer, so there is time to reach it. */
+const ACTION_DURATION = 12_000;
 const SWIPE_DOWN_DISMISS_THRESHOLD = 40;
 
-const ICON_BY_TYPE: Record<NotificationType, "check-circle" | "info-circle" | "alert-triangle" | "alert-circle"> = {
+/** Tile icon when the caller didn't say what the toast is about. */
+const DEFAULT_ICON_BY_TYPE: Record<NotificationType, NotificationIcon> = {
   success: "check-circle",
   info: "info-circle",
   warning: "alert-triangle",
   error: "alert-circle",
+};
+
+/** The status itself lives on the small badge in the tile's corner. */
+const BADGE_BY_TYPE: Record<NotificationType, NotificationIcon> = {
+  success: "check",
+  info: "info-mark",
+  warning: "exclamation",
+  error: "close",
 };
 
 const { t } = useI18n();
@@ -57,6 +89,15 @@ let countdownClock: ReturnType<typeof setInterval> | null = null;
 
 function secondsLeft(n: Notification): number {
   return Math.max(0, Math.ceil((n.shownAt + (n.countdownMs ?? 0) - now.value) / 1000));
+}
+
+function lifetimeOf(n: Notification): number {
+  return n.countdownMs ?? (n.action ? ACTION_DURATION : DURATION);
+}
+
+function runAction(n: Notification): void {
+  dismiss(n.id);
+  void n.action?.run();
 }
 
 function messageOf(n: Notification): string {
@@ -92,7 +133,7 @@ watch(
     for (const n of list) {
       // A countdown toast stays until what it announces happens (or the user closes it).
       if (n.countdownMs === undefined && !timers.has(n.id)) {
-        timers.set(n.id, setTimeout(() => dismiss(n.id), DURATION));
+        timers.set(n.id, setTimeout(() => dismiss(n.id), lifetimeOf(n)));
       }
     }
     const counting = list.some((n) => n.countdownMs !== undefined);
@@ -138,8 +179,10 @@ function onTouchEnd(id: number, e: TouchEvent) {
   width: min(400px, calc(100vw - 32px));
 }
 
+/* Phone: sit above the bottom nav bar instead of covering it. */
 .notif-hub--mobile {
   right: 50%;
+  bottom: calc(var(--mobile-bottom-nav-height, 56px) + 12px + env(safe-area-inset-bottom, 0px));
   transform: translateX(50%);
 }
 
@@ -149,67 +192,142 @@ function onTouchEnd(id: number, e: TouchEvent) {
   gap: 10px;
 }
 
+/* "Record context" toast (NEO-76): white card; the grey tile says what the
+   toast is about, the colored badge on it says how it went. Status color
+   appears only on the badge, the action button and the time bar. */
 .notif-toast {
+  --notif-status: var(--pwa-toast-info);
+  --notif-status-soft: var(--pwa-toast-info-soft);
   pointer-events: all;
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 14px 16px 16px;
-  border-radius: 18px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 10px 12px;
+  border-radius: 14px;
   overflow: hidden;
   position: relative;
-  backdrop-filter: blur(24px) saturate(160%);
-  -webkit-backdrop-filter: blur(24px) saturate(160%);
-  background: rgba(20, 20, 30, 0.78);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  color: #fff;
-  font-size: 0.9rem;
-  font-weight: 400;
-  line-height: 1.4;
+  background: var(--pwa-toast-bg);
+  border: 1px solid var(--pwa-toast-border);
+  box-shadow: var(--pwa-toast-shadow);
+  color: var(--pwa-text);
+  font-family: var(--pwa-font-sans);
   user-select: none;
   -webkit-user-select: none;
 }
 
-.notif-toast--success { background: rgba(15, 80, 40, 0.85); }
-.notif-toast--error   { background: rgba(110, 20, 20, 0.88); }
-.notif-toast--warning { background: rgba(100, 50, 10, 0.85); }
-.notif-toast--info    { background: rgba(20, 50, 120, 0.85); }
+.notif-toast--success { --notif-status: var(--pwa-toast-success); --notif-status-soft: var(--pwa-toast-success-soft); }
+.notif-toast--warning { --notif-status: var(--pwa-toast-warning); --notif-status-soft: var(--pwa-toast-warning-soft); }
+.notif-toast--error   { --notif-status: var(--pwa-toast-error);   --notif-status-soft: var(--pwa-toast-error-soft); }
+
+.notif-toast__tile {
+  position: relative;
+  flex-shrink: 0;
+  align-self: flex-start;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--pwa-toast-tile);
+  color: var(--pwa-toast-tile-icon);
+  display: grid;
+  place-items: center;
+}
 
 .notif-toast__icon {
-  flex-shrink: 0;
-  margin-top: 1px;
-  opacity: 0.9;
+  width: 20px;
+  height: 20px;
+}
+
+.notif-toast__badge {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--notif-status);
+  color: var(--pwa-toast-badge-fg);
+  border: 2px solid var(--pwa-toast-bg);
+  display: grid;
+  place-items: center;
+}
+
+.notif-toast__badge :deep(.app-icon) {
+  width: 12px;
+  height: 12px;
+}
+
+.notif-toast__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
 
 .notif-toast__msg {
-  flex: 1;
-  opacity: 0.95;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.notif-toast__context {
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--pwa-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notif-toast__action {
+  flex-shrink: 0;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--notif-status-soft);
+  color: var(--notif-status);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.notif-toast__action:hover {
+  filter: brightness(0.96);
 }
 
 .notif-toast__close {
   flex-shrink: 0;
+  align-self: flex-start;
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 28px;
+  height: 28px;
   padding: 0;
-  margin: -2px -4px 0 0;
+  margin: -2px -2px 0 -4px;
   background: none;
   border: none;
-  color: inherit;
-  opacity: 0.75;
+  border-radius: 50%;
+  color: var(--pwa-text-secondary);
   cursor: pointer;
 }
+.notif-toast__close :deep(.app-icon) {
+  width: 16px;
+  height: 16px;
+}
 .notif-toast__close:hover {
-  opacity: 1;
+  color: var(--pwa-text);
 }
 
 .notif-toast__bar {
   position: absolute;
   bottom: 0;
   left: 0;
-  height: 3px;
-  background: rgba(255, 255, 255, 0.45);
+  height: 2px;
+  background: var(--notif-status);
+  opacity: 0.55;
   width: 0;
   animation: notif-bar linear forwards;
 }
@@ -242,5 +360,16 @@ function onTouchEnd(id: number, e: TouchEvent) {
 .notif-hub--mobile .notif-leave-to {
   transform: translateY(64px);
   opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notif-toast__bar { animation: none; width: 100%; opacity: 0.25; }
+  .notif-move,
+  .notif-leave-active,
+  .notif-enter-active { transition: opacity 0.15s ease; }
+  .notif-enter-from,
+  .notif-leave-to,
+  .notif-hub--mobile .notif-enter-from,
+  .notif-hub--mobile .notif-leave-to { transform: none; }
 }
 </style>

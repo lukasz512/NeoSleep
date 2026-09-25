@@ -16,7 +16,10 @@ vi.mock("../../composables/useApi", async (importOriginal) => ({
 }));
 
 const notify = vi.fn();
-vi.mock("../../composables/useNotifications", () => ({ useNotifications: () => ({ show: notify }) }));
+vi.mock("../../composables/useNotifications", () => ({
+  useNotifications: () => ({ show: notify }),
+  retryAction: (run: () => unknown) => ({ labelKey: "notification.action.retry", run }),
+}));
 
 import PractitionerClinicsPanel from "./PractitionerClinicsPanel.vue";
 
@@ -121,7 +124,7 @@ describe("PractitionerClinicsPanel — add affiliation", () => {
       })
     );
     await vi.waitFor(() => expect(wrapper.emitted("changed")).toBeTruthy());
-    expect(notify).toHaveBeenCalledWith("Clinic added", "success");
+    expect(notify).toHaveBeenCalledWith("Clinic added", "success", undefined, expect.objectContaining({ icon: "nav-hco" }));
   });
 });
 
