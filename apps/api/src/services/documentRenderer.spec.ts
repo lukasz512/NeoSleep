@@ -1,7 +1,15 @@
 import { describe, it, expect, afterAll } from "vitest";
 import puppeteer, { type Browser } from "puppeteer-core";
 import { renderDocumentHtml } from "@neo/documents";
-import { renderHtmlToPdf, getRenderBrowser, resolveBrowserLaunch, applyDataFields, applyDataImages, lockDownPage } from "./documentRenderer.js";
+import {
+  renderHtmlToPdf,
+  getRenderBrowser,
+  resolveBrowserLaunch,
+  applyDataFields,
+  applyDataImages,
+  lockDownPage,
+  waitForRenderReady,
+} from "./documentRenderer.js";
 
 /**
  * Real, non-mocked rendering — every other spec mocks renderHtmlToPdf at
@@ -61,6 +69,27 @@ describe.skipIf(!launch)("renderHtmlToPdf (real Chromium)", () => {
     await expect(applyDataImages(page, { firma_paciente: "https://evil.test/x.png" })).rejects.toThrow(/PNG data URL/);
   });
 
+  it("waitForRenderReady: after filling fields and images, fonts are settled and every image is decoded", { timeout: 60_000 }, async () => {
+    browser ??= await puppeteer.launch({ ...launch!, headless: true });
+    const page = await browser.newPage();
+    await lockDownPage(page);
+    await page.setContent(renderDocumentHtml("medicalHistory", "mx"), { waitUntil: "load" });
+    await applyDataFields(page, { nombre_paciente: "Ana López Núñez" });
+    await applyDataImages(page, {
+      firma_paciente: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+    });
+
+    await waitForRenderReady(page);
+
+    const state = await page.evaluate(() => ({
+      fonts: document.fonts.status,
+      images: Array.from(document.images).map((img) => img.complete && img.naturalWidth > 0),
+    }));
+    expect(state.fonts).toBe("loaded");
+    expect(state.images.length).toBeGreaterThan(0);
+    expect(state.images.every(Boolean)).toBe(true);
+  });
+
   it("renders the medical-history print form with a signature image", { timeout: 60_000 }, async () => {
     const html = renderDocumentHtml("medicalHistory", "mx");
     const pdf = await renderHtmlToPdf(html, {
@@ -101,8 +130,9 @@ describe.skipIf(!launch)("renderHtmlToPdf (real Chromium)", () => {
     await lockDownPage(page);
     await page.setContent(
       `<p data-field="nombre_paciente"></p><img src="https://example.com/track.png"><script>document.body.dataset.ran = "yes";</script>`,
-      { waitUntil: "networkidle0" }
+      { waitUntil: "load" }
     );
+    await waitForRenderReady(page);
 
     await applyDataFields(page, { nombre_paciente: "Ana" });
 
