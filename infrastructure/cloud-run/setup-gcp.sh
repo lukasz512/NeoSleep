@@ -20,7 +20,7 @@ run gcloud billing projects link "$PROJECT_ID" --billing-account="$BILLING_ACCOU
 gcloud config set project "$PROJECT_ID"
 
 run gcloud services enable run.googleapis.com artifactregistry.googleapis.com secretmanager.googleapis.com \
-  iamcredentials.googleapis.com sts.googleapis.com
+  iam.googleapis.com iamcredentials.googleapis.com sts.googleapis.com
 
 # Image registry, keeping only the 5 newest images (storage stays inside the free 0.5 GB).
 run gcloud artifacts repositories create api --repository-format=docker --location="$REGION" \

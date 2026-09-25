@@ -58,9 +58,11 @@ Console → service → **Logs**, or
    `GCP_API_DEPLOY_SA`, `GCP_API_RUNTIME_SA`.
 4. `RENDER_API_KEY=<key> bash infrastructure/cloud-run/sync-secrets-from-render.sh`
    copies secrets from Render into Secret Manager without printing them.
-5. In the Google OAuth client (the GCP project holding the login client), add the
-   authorized redirect URIs:
-   `https://neosleep-api-dev-<projnum>.us-west2.run.app/api/v1/auth/google/callback` and the
-   `-prod-` equivalent.
+5. Only when Google login is switched on for deployed environments (it was never
+   configured on Render, so it is off at cutover): add `GOOGLE_CLIENT_ID` to the env
+   yaml, create the `GOOGLE_CLIENT_SECRET` secret, list it in `secrets.list`, set
+   `OAUTH_REDIRECT_ORIGIN` to the service URL, and add
+   `https://neosleep-api-{dev,prod}-692668694184.us-west2.run.app/api/v1/auth/google/callback`
+   as authorized redirect URIs in the OAuth client (GCP project `neosleep`).
 6. Merge to `dev`, check the dev service, set `API_URL_DEV`, re-run Deploy PWA. Then
    repeat for prod.
