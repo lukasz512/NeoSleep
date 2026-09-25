@@ -298,16 +298,16 @@ async function onApprove(): Promise<void> {
   try {
     const res = await apiFetch(
       `/api/v1/document-content/${templateKey.value}/${documentLocale.value}/versions/${currentVersionId.value}/approve`,
-      { method: "POST" },
+      { method: "POST", handleErrors: false },
     );
     if (res.ok) {
-      notifications.show(t("user.document-content.approval.approveSuccess"), "success");
+      notifications.show(t("user.document-content.approval.approveSuccess"), "success", undefined, { icon: "nav-document-content" });
       await loadApproval();
     } else {
-      notifications.show(t("user.document-content.approval.approveError"), "error");
+      notifications.show(t("user.document-content.approval.approveError"), "error", undefined, { icon: "nav-document-content" });
     }
   } catch {
-    notifications.show(t("user.document-content.approval.approveError"), "error");
+    notifications.show(t("user.document-content.approval.approveError"), "error", undefined, { icon: "nav-document-content" });
   } finally {
     approving.value = false;
   }
@@ -397,21 +397,22 @@ async function onSave(): Promise<void> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contentHtml, changeNote: changeNote.value || null }),
+      handleErrors: false, // own error toast below — one failure, one toast
     });
     if (res.ok) {
       const version = (await res.json()) as DocumentContentVersion;
       currentVersionNumber.value = version.version_number;
       currentVersionId.value = version.id;
       changeNote.value = "";
-      notifications.show(t("user.document-content.editor.saveSuccess"), "success");
+      notifications.show(t("user.document-content.editor.saveSuccess"), "success", undefined, { icon: "nav-document-content" });
       await loadHistory();
       // A new version is never approved — the banner must flip to "pending".
       await loadApproval();
     } else {
-      notifications.show(t("user.document-content.editor.saveError"), "error");
+      notifications.show(t("user.document-content.editor.saveError"), "error", undefined, { icon: "nav-document-content" });
     }
   } catch {
-    notifications.show(t("user.document-content.editor.saveError"), "error");
+    notifications.show(t("user.document-content.editor.saveError"), "error", undefined, { icon: "nav-document-content" });
   } finally {
     saving.value = false;
   }
@@ -425,15 +426,16 @@ async function onSavePermissions(): Promise<void> {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ entityTypes: selectedEntityTypes.value }),
+      handleErrors: false,
     });
     if (res.ok && (await saveChecklistConfig())) {
       selectedEntityTypes.value = (await res.json()) as string[];
-      notifications.show(t("user.document-content.permissions.saveSuccess"), "success");
+      notifications.show(t("user.document-content.permissions.saveSuccess"), "success", undefined, { icon: "nav-document-content" });
     } else {
-      notifications.show(t("user.document-content.permissions.saveError"), "error");
+      notifications.show(t("user.document-content.permissions.saveError"), "error", undefined, { icon: "nav-document-content" });
     }
   } catch {
-    notifications.show(t("user.document-content.permissions.saveError"), "error");
+    notifications.show(t("user.document-content.permissions.saveError"), "error", undefined, { icon: "nav-document-content" });
   } finally {
     savingPermissions.value = false;
   }

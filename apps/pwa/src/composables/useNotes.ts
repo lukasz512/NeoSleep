@@ -63,14 +63,14 @@ export function useNotes(entityType: string, entityId: () => string | undefined)
         handleErrors: false,
       });
       if (res.ok) {
-        notifications.show(t("app.notes.addSuccess"), "success");
+        notifications.show(t("app.notes.addSuccess"), "success", undefined, { icon: "pencil" });
         await loadNotes();
         return true;
       }
     } catch {
       // fall through to the error toast below
     }
-    notifications.show(t("app.notes.errorSave"), "error");
+    notifications.show(t("app.notes.errorSave"), "error", undefined, { icon: "pencil" });
     return false;
   }
 
@@ -79,13 +79,13 @@ export function useNotes(entityType: string, entityId: () => string | undefined)
       const res = await apiFetch(`/api/v1/note/${noteId}`, { method: "DELETE", handleErrors: false });
       if (res.ok) {
         notes.value = notes.value.filter((n) => n.id !== noteId);
-        notifications.show(t("app.notes.deleteSuccess"), "success");
+        notifications.show(t("app.notes.deleteSuccess"), "success", undefined, { icon: "pencil" });
         return true;
       }
     } catch {
       // fall through to the error toast below
     }
-    notifications.show(t("app.notes.errorDelete"), "error");
+    notifications.show(t("app.notes.errorDelete"), "error", undefined, { icon: "pencil" });
     return false;
   }
 

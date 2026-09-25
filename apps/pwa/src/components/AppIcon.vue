@@ -523,6 +523,22 @@ const ICONS = {
     strokeWidth: 1.5,
     paths: `<path d="M12 2.5l2.9 6.3 6.9.8-5.1 4.8 1.4 6.9L12 17.7l-6.1 3.6 1.4-6.9-5.1-4.8 6.9-.8z" stroke-linejoin="round" />`,
   },
+  // ── Bare status glyphs (toast status badge, NEO-76) — no enclosing circle,
+  //    the badge itself is the circle ─────────────────────────────────────────
+  "check": {
+    strokeWidth: 2.6,
+    paths: `<path d="M5.5 12.5l4 4L18.5 8" />`,
+  },
+  "info-mark": {
+    strokeWidth: 2.6,
+    paths: `<line x1="12" y1="10.5" x2="12" y2="17.5" />
+            <circle cx="12" cy="6.5" r="1.3" fill="currentColor" stroke="none" />`,
+  },
+  "exclamation": {
+    strokeWidth: 2.6,
+    paths: `<line x1="12" y1="5.5" x2="12" y2="13.5" />
+            <circle cx="12" cy="18" r="1.3" fill="currentColor" stroke="none" />`,
+  },
 } as const;
 </script>
 

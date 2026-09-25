@@ -1,7 +1,7 @@
 import { reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { apiFetch } from "./useApi";
-import { useNotifications } from "./useNotifications";
+import { retryAction, useNotifications, type ShowOptions } from "./useNotifications";
 
 /**
  * Extracted from OrthoApneaOrderWizard.vue: everything that does an apiFetch
@@ -86,9 +86,51 @@ export type OrthoApneaWizardForm = ReturnType<typeof defaultForm>;
 
 const DEFAULT_SEQUENCE: OrthoApneaWizardSequence = { seq1: 60, seq2: 70, seq3: 80 };
 
+/** A treatment_plan saved locally whose OrthoApnea order still has to be sent. */
+interface UnsentOrder {
+  planId: string;
+  body: string;
+}
+
+const ORDER_TOAST: ShowOptions = { icon: "nav-treatment-plans" };
+
 export function useOrthoApneaOrderWizard() {
   const { t } = useI18n();
   const notifications = useNotifications();
+
+  async function sendOrder(order: UnsentOrder): Promise<boolean> {
+    try {
+      const res = await apiFetch("/api/v1/partners/orthoapnea/treatments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: order.body,
+        handleErrors: false,
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Error toast; with anything left unsent it carries Retry, which re-sends just those. */
+  function showOrderFailure(key: string, unsent: UnsentOrder[]): void {
+    notifications.show(t(key), "error", undefined, {
+      ...ORDER_TOAST,
+      action: unsent.length > 0 ? retryAction(() => resendOrders(unsent)) : undefined,
+    });
+  }
+
+  async function resendOrders(orders: UnsentOrder[]): Promise<void> {
+    const stillUnsent: UnsentOrder[] = [];
+    for (const order of orders) {
+      if (!(await sendOrder(order))) stillUnsent.push(order);
+    }
+    if (stillUnsent.length === 0) {
+      notifications.show(t("app.orthoApneaOrder.success"), "success", undefined, ORDER_TOAST);
+    } else {
+      showOrderFailure(stillUnsent.length < orders.length ? "app.orthoApneaOrder.partialFailure" : "app.orthoApneaOrder.error", stillUnsent);
+    }
+  }
 
   const form = reactive(defaultForm());
   const sequence = reactive<OrthoApneaWizardSequence>({ ...DEFAULT_SEQUENCE });
@@ -342,6 +384,10 @@ export function useOrthoApneaOrderWizard() {
 
       let succeeded = 0;
       let failed = 0;
+      // Plans that exist locally but whose OrthoApnea mirror failed — the only
+      // part Retry can redo (the API refuses a plan already submitted, so a
+      // retry can never order the same device twice).
+      const unsent: UnsentOrder[] = [];
 
       for (let i = 0; i < form.products.length; i++) {
         const product = form.products[i]!;
@@ -382,28 +428,24 @@ export function useOrthoApneaOrderWizard() {
           planId = ((await planRes.json()) as { id: string }).id;
         }
 
-        const orderRes = await apiFetch("/api/v1/partners/orthoapnea/treatments", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ treatment_plan_id: planId, ...buildWizardPayload(product) }),
-          handleErrors: false,
-        });
+        const order: UnsentOrder = { planId, body: JSON.stringify({ treatment_plan_id: planId, ...buildWizardPayload(product) }) };
         // treatment_plan already exists locally either way (source of truth preserved) —
         // a failure here only means the OrthoApnea mirror for THIS product failed.
-        if (orderRes.ok) succeeded += 1;
-        else failed += 1;
+        if (await sendOrder(order)) succeeded += 1;
+        else {
+          failed += 1;
+          unsent.push(order);
+        }
       }
 
       if (failed === 0) {
-        notifications.show(t("app.orthoApneaOrder.success"), "success");
-      } else if (succeeded > 0) {
-        notifications.show(t("app.orthoApneaOrder.partialFailure"), "error");
+        notifications.show(t("app.orthoApneaOrder.success"), "success", undefined, ORDER_TOAST);
       } else {
-        notifications.show(t("app.orthoApneaOrder.error"), "error");
+        showOrderFailure(succeeded > 0 ? "app.orthoApneaOrder.partialFailure" : "app.orthoApneaOrder.error", unsent);
       }
       return true;
     } catch {
-      notifications.show(t("app.orthoApneaOrder.error"), "error");
+      notifications.show(t("app.orthoApneaOrder.error"), "error", undefined, ORDER_TOAST);
       return false;
     } finally {
       submitLoading.value = false;

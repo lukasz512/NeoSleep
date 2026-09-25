@@ -401,6 +401,8 @@ async function onSubmit(payload: Record<string, unknown>, done: (ok: boolean) =>
       notifications.show(
         t(isEdit ? "user.presentations.form.editSuccess" : "user.presentations.form.success"),
         "success",
+        undefined,
+        { icon: "nav-presentations" },
       );
       editingItem.value = null;
       window.dispatchEvent(new Event("entity-list-refresh"));

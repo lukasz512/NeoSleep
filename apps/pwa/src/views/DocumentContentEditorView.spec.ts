@@ -16,7 +16,10 @@ vi.mock("../composables/useApi", async (importOriginal) => ({
 }));
 
 const notify = vi.fn();
-vi.mock("../composables/useNotifications", () => ({ useNotifications: () => ({ show: notify }) }));
+vi.mock("../composables/useNotifications", () => ({
+  useNotifications: () => ({ show: notify }),
+  retryAction: (run: () => unknown) => ({ labelKey: "notification.action.retry", run }),
+}));
 
 import DocumentContentEditorView from "./DocumentContentEditorView.vue";
 
@@ -159,7 +162,7 @@ describe("DocumentContentEditorView", () => {
     expect(body.contentHtml).toContain("{legalEntityName}");
     expect(body.contentHtml).not.toContain("data-protected-token");
 
-    expect(notify).toHaveBeenCalledWith("New version saved", "success");
+    expect(notify).toHaveBeenCalledWith("New version saved", "success", undefined, expect.objectContaining({ icon: "nav-document-content" }));
   });
 
   it("Permissions tab: loads the current entity-type assignment and saves a new one", async () => {
@@ -183,7 +186,7 @@ describe("DocumentContentEditorView", () => {
     const putCall = apiFetch.mock.calls[4];
     expect(putCall[0]).toBe("/api/v1/document-content/gdprConsent.pl/entity-types");
     expect((putCall[1] as RequestInit).method).toBe("PUT");
-    expect(notify).toHaveBeenCalledWith("Saved", "success");
+    expect(notify).toHaveBeenCalledWith("Saved", "success", undefined, expect.objectContaining({ icon: "nav-document-content" }));
   });
   it("shows the signatory approval banner for a countersigned document and approves the current version (NEO-51)", async () => {
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, CURRENT_VERSION));
@@ -228,7 +231,7 @@ describe("DocumentContentEditorView", () => {
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, { fillMode: "consent", sortOrder: 10 })); // PUT patient-checklist
     await wrapper.findAll("button").find((b) => b.text() === "Save")?.trigger("click");
 
-    await vi.waitFor(() => expect(notify).toHaveBeenCalledWith("Saved", "success"));
+    await vi.waitFor(() => expect(notify).toHaveBeenCalledWith("Saved", "success", undefined, expect.objectContaining({ icon: "nav-document-content" })));
     const checklistPut = apiFetch.mock.calls.find(([path, init]) => String(path).endsWith("/patient-checklist") && (init as RequestInit)?.method === "PUT");
     expect(JSON.parse((checklistPut![1] as RequestInit).body as string)).toEqual({ fillMode: "consent", sortOrder: 10 });
   });

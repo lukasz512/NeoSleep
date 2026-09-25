@@ -1,6 +1,16 @@
 import { ref, computed } from "vue";
+import type AppIcon from "../components/AppIcon.vue";
 
 export type NotificationType = "success" | "info" | "warning" | "error";
+
+export type NotificationIcon = InstanceType<typeof AppIcon>["$props"]["name"];
+
+/** One button on the toast. Clicking it dismisses the toast, then runs `run`. */
+export interface NotificationAction {
+  /** i18n key of the button label, e.g. "notification.action.retry". */
+  labelKey: string;
+  run: () => void | Promise<void>;
+}
 
 export interface Notification {
   id: number;
@@ -15,12 +25,24 @@ export interface Notification {
    * happens at zero.
    */
   countdownMs?: number;
+  /**
+   * What the toast is about (note, patient, clinic…), drawn on the grey tile.
+   * The status (success/error…) is the small badge on that tile, so without an
+   * icon AppNotifications falls back to a generic one per type.
+   */
+  icon?: NotificationIcon;
+  /** Second line naming the record, e.g. "Anna Nowak". Display name only — never clinical data. */
+  context?: string;
+  action?: NotificationAction;
   /** Date.now() when shown — the countdown's start. */
   shownAt: number;
 }
 
 export interface ShowOptions {
   countdownMs?: number;
+  icon?: NotificationIcon;
+  context?: string;
+  action?: NotificationAction;
 }
 
 const notifications = ref<Notification[]>([]);
@@ -40,7 +62,17 @@ export function useNotifications() {
   function show(message: string, type: NotificationType = "info", key?: string, options: ShowOptions = {}): void {
     notifications.value = [
       ...notifications.value,
-      { id: nextId++, message, type, key, countdownMs: options.countdownMs, shownAt: Date.now() },
+      {
+        id: nextId++,
+        message,
+        type,
+        key,
+        countdownMs: options.countdownMs,
+        icon: options.icon,
+        context: options.context,
+        action: options.action,
+        shownAt: Date.now(),
+      },
     ];
   }
 
@@ -61,4 +93,9 @@ export function useNotifications() {
     dismiss,
     dismissCurrent,
   };
+}
+
+/** Standard "Retry" action — re-runs the operation that just failed. */
+export function retryAction(run: () => void | Promise<void>): NotificationAction {
+  return { labelKey: "notification.action.retry", run };
 }

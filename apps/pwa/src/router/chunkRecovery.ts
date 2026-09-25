@@ -55,25 +55,42 @@ export type ChunkRecoveryOutcome = "reloading" | "offline" | "failed";
 /** Decides what to do about one chunk-load failure while trying to open `targetUrl`. */
 export function recoverFromChunkError(targetUrl: string, deps: ChunkRecoveryDeps): ChunkRecoveryOutcome {
   if (!deps.isOnline()) {
-    deps.notify("", "warning", "app.update.offline");
+    deps.notify("", "warning", "app.update.offline", { icon: "sad-cloud" });
     return "offline";
   }
+
+  // Failed outright: the user decides when to try again — a manual reload,
+  // never an automatic one (that is what the loop guard is for).
+  const loadFailedOptions: ShowOptions = {
+    icon: "refresh",
+    action: { labelKey: "notification.action.reload", run: () => deps.reload(targetUrl) },
+  };
 
   const last = Number(safeGet(deps.storage, RELOAD_GUARD_KEY) ?? 0);
   if (last && deps.now() - last < RELOAD_GUARD_MS) {
     // Already reloaded once for this and it still fails — not a stale tab.
     safeRemove(deps.storage, RELOAD_GUARD_KEY);
-    deps.notify("", "error", "app.update.loadFailed");
+    deps.notify("", "error", "app.update.loadFailed", loadFailedOptions);
     return "failed";
   }
 
   if (!safeSet(deps.storage, RELOAD_GUARD_KEY, String(deps.now()))) {
     // No loop guard available (storage blocked) — never auto-reload blind.
-    deps.notify("", "error", "app.update.loadFailed");
+    deps.notify("", "error", "app.update.loadFailed", loadFailedOptions);
     return "failed";
   }
-  deps.notify("", "info", "app.update.reloading", { countdownMs: RELOAD_DELAY_MS });
-  deps.schedule(() => deps.reload(targetUrl), RELOAD_DELAY_MS);
+  let reloaded = false;
+  const reloadOnce = (): void => {
+    if (reloaded) return;
+    reloaded = true;
+    deps.reload(targetUrl);
+  };
+  deps.notify("", "info", "app.update.reloading", {
+    countdownMs: RELOAD_DELAY_MS,
+    icon: "refresh",
+    action: { labelKey: "notification.action.reloadNow", run: reloadOnce },
+  });
+  deps.schedule(reloadOnce, RELOAD_DELAY_MS);
   return "reloading";
 }
 

@@ -29,12 +29,14 @@ describe("useEntitySubmit", () => {
         },
         successMessage: "Saved",
         errorMessage: "Failed",
+        icon: "nav-patients",
         onSuccess,
       },
       done,
     );
 
     expect(current.value?.message).toBe("Saved");
+    expect(current.value?.icon).toBe("nav-patients");
     expect(current.value?.type).toBe("success");
     dismissCurrent();
 
@@ -50,7 +52,7 @@ describe("useEntitySubmit", () => {
     const dispatchSpy = vi.spyOn(window, "dispatchEvent");
 
     await submit(
-      { request: async () => okResponse(), successMessage: "Saved", errorMessage: "Failed", refresh: false },
+      { request: async () => okResponse(), successMessage: "Saved", errorMessage: "Failed", icon: "nav-patients", refresh: false },
       vi.fn(),
     );
 
@@ -66,7 +68,7 @@ describe("useEntitySubmit", () => {
     const dispatchSpy = vi.spyOn(window, "dispatchEvent");
 
     await submit(
-      { request: async () => failResponse(), successMessage: "Saved", errorMessage: "Could not save" },
+      { request: async () => failResponse(), successMessage: "Saved", errorMessage: "Could not save", icon: "nav-patients" },
       done,
     );
 
@@ -90,6 +92,7 @@ describe("useEntitySubmit", () => {
         },
         successMessage: "Saved",
         errorMessage: "Could not save",
+        icon: "nav-patients",
       },
       done,
     );

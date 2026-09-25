@@ -243,6 +243,7 @@ async function onContactSubmit(data: Record<string, unknown>, done: (ok: boolean
         });
       },
       successMessage: t("user.hcp.form.success"),
+      icon: "nav-hcp",
       errorMessage: t("user.hcp.form.errorSave"),
     },
     done,
@@ -269,6 +270,7 @@ async function onEditSubmit(data: Record<string, unknown>, done: (ok: boolean) =
         });
       },
       successMessage: t("user.hcp.form.editSuccess"),
+      icon: "nav-hcp",
       errorMessage: t("user.hcp.form.errorSave"),
     },
     done,
@@ -300,6 +302,7 @@ async function onEventFormSubmit(
           body: JSON.stringify({ title: payload.title, start_at: payload.start_at, end_at: payload.end_at, type: payload.type, status: payload.status, location: payload.location, video_link: payload.video_link, notes: payload.notes, region: payload.region, attendees: payload.attendees }),
         }),
       successMessage: t("user.planner.form.success"),
+      icon: "nav-planner",
       errorMessage: t("user.planner.form.errorSave"),
       refresh: false,
     },

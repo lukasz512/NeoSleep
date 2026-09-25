@@ -322,6 +322,8 @@ async function onEventFormSubmit(
           body: JSON.stringify({ title: payload.title, start_at: payload.start_at, end_at: payload.end_at, type: payload.type, status: payload.status, location: payload.location, video_link: payload.video_link, notes: payload.notes, region: payload.region, attendees: payload.attendees }),
         }),
       successMessage: t("user.planner.form.success"),
+      icon: "nav-planner",
+      context: patient.value?.name,
       errorMessage: t("user.planner.form.errorSave"),
       refresh: false,
     },
@@ -341,6 +343,8 @@ async function onPatientSubmit(data: Record<string, unknown>, done: (ok: boolean
           body: JSON.stringify(data),
         }),
       successMessage: t("app.patients.form.editSuccess"),
+      icon: "nav-patients",
+      context: patient.value?.name,
       errorMessage: t("app.patients.form.errorSave"),
       onSuccess: () => loadPatient(),
     },
@@ -356,7 +360,7 @@ const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
   });
   if (res.ok) {
     showDeleteConfirm.value = false;
-    notifications.show(t("app.patients.actions.deleteSuccess"), "success");
+    notifications.show(t("app.patients.actions.deleteSuccess"), "success", undefined, { icon: "nav-patients", context: patient.value?.name });
     window.dispatchEvent(new Event("entity-list-refresh"));
     router.push({ name: "patients" });
   }

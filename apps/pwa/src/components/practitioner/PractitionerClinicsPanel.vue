@@ -129,7 +129,7 @@ import { hcoDetailLink } from "../../utils/entityLinks";
 import AppEmptyState from "../AppEmptyState.vue";
 import AppConfirmDialog from "../AppConfirmDialog.vue";
 import { apiFetch } from "../../composables/useApi";
-import { useNotifications } from "../../composables/useNotifications";
+import { retryAction, useNotifications, type ShowOptions } from "../../composables/useNotifications";
 import { useAsyncAction } from "../../composables/useAsyncAction";
 import { useAuthStore } from "../../stores/auth";
 import { useIdentity } from "../../composables/useIdentity";
@@ -162,6 +162,14 @@ const orgOptions = ref<{ id: string; name: string }[]>([]);
 const loadingOrgOptions = ref(false);
 const selectedOrgId = ref<string | null>(null);
 
+/** Toast options for a clinic: its icon plus its name as the record line. */
+function clinicToast(organizationId: string): ShowOptions {
+  const name =
+    props.organizations.find((a) => a.organization_id === organizationId)?.name ??
+    orgOptions.value.find((o) => o.id === organizationId)?.name;
+  return { icon: "nav-hco", context: name };
+}
+
 const availableOrgOptions = computed(() =>
   orgOptions.value.filter((o) => !props.organizations.some((a) => a.organization_id === o.id))
 );
@@ -191,14 +199,15 @@ const { loading: addLoading, run: onAdd } = useAsyncAction(async () => {
     });
     if (res.ok) {
       selectedOrgId.value = null;
-      notifications.show(t("user.hcp.detail.clinics.addSuccess"), "success");
+      notifications.show(t("user.hcp.detail.clinics.addSuccess"), "success", undefined, clinicToast(organizationId));
       emit("changed");
       return;
     }
   } catch {
     // fall through to the error toast below
   }
-  notifications.show(t("user.hcp.detail.clinics.addError"), "error");
+  // The picker keeps the clinic selected — its Add button is the retry.
+  notifications.show(t("user.hcp.detail.clinics.addError"), "error", undefined, clinicToast(organizationId));
 });
 
 // ---------------------------------------------------------------------------
@@ -224,14 +233,15 @@ const { loading: removeLoading, run: onConfirmRemove } = useAsyncAction(async ()
     if (res.ok) {
       showRemoveConfirm.value = false;
       pendingRemoveOrgId.value = null;
-      notifications.show(t("user.hcp.detail.clinics.removeSuccess"), "success");
+      notifications.show(t("user.hcp.detail.clinics.removeSuccess"), "success", undefined, clinicToast(organizationId));
       emit("changed");
       return;
     }
   } catch {
     // fall through to the error toast below
   }
-  notifications.show(t("user.hcp.detail.clinics.removeError"), "error");
+  // The confirm dialog stays open on failure — its button is the retry.
+  notifications.show(t("user.hcp.detail.clinics.removeError"), "error", undefined, clinicToast(organizationId));
 });
 
 // ---------------------------------------------------------------------------
@@ -248,19 +258,24 @@ async function onSetPrimary(organizationId: string, scope: "default" | "mine"): 
 
   busyOrgId.value = organizationId;
   busyAction.value = scope;
+  const failSetPrimary = (): void =>
+    notifications.show(t("user.hcp.detail.clinics.setPrimaryError"), "error", undefined, {
+      ...clinicToast(organizationId),
+      action: retryAction(() => onSetPrimary(organizationId, scope)),
+    });
   try {
     const res = await apiFetch(`/api/v1/practitioner/${props.practitionerId}/organizations/${organizationId}/primary`, {
       method: "PATCH",
       handleErrors: false,
     });
     if (res.ok) {
-      notifications.show(t("user.hcp.detail.clinics.setPrimarySuccess"), "success");
+      notifications.show(t("user.hcp.detail.clinics.setPrimarySuccess"), "success", undefined, clinicToast(organizationId));
       emit("changed");
     } else {
-      notifications.show(t("user.hcp.detail.clinics.setPrimaryError"), "error");
+      failSetPrimary();
     }
   } catch {
-    notifications.show(t("user.hcp.detail.clinics.setPrimaryError"), "error");
+    failSetPrimary();
   } finally {
     busyOrgId.value = null;
     busyAction.value = null;
