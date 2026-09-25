@@ -83,8 +83,10 @@ const props = withDefaults(
     details?: string[];
     /** Overflow values behind a "+N" with a tooltip (a doctor's other specialties). */
     moreDetails?: string[];
+    /** A doctor's (first) specialty code — the avatar badge shows its icon. */
+    specialty?: string | null;
   }>(),
-  { entityType: undefined, firstName: null, lastName: null, avatarSize: 20, details: () => [], moreDetails: () => [] },
+  { entityType: undefined, firstName: null, lastName: null, avatarSize: 20, details: () => [], moreDetails: () => [], specialty: null },
 );
 
 const ROUTE_ENTITY_TYPES: Record<string, AppAvatarEntityType> = {
@@ -121,6 +123,7 @@ const avatarProps = computed(() => {
     lastName: isPlace ? null : props.lastName,
     entityType: entityType.value,
     size: props.avatarSize,
+    specialty: props.specialty,
   };
 });
 </script>
@@ -159,6 +162,11 @@ const avatarProps = computed(() => {
 /* The hover underline belongs to the name only, never the specialty line. */
 .entity-link--two-line:hover {
   text-decoration: none;
+}
+.entity-link--two-line .entity-link__label {
+  /* Name above the quiet detail line: a touch heavier, so size and weight
+     both say which line is which. */
+  font-weight: 500;
 }
 .entity-link--two-line:hover .entity-link__label {
   text-decoration: underline;

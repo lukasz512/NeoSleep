@@ -190,8 +190,12 @@ const ICONS = {
   // Keyed by the `specialty` lookup's seeded codes (apps/api/migrations/002_seed.sql).
   // A tenant-added or unseeded code falls back to "nav-hcp" — see hcpLabels.ts.
   "specialty-dentist": {
-    strokeWidth: 1.6,
-    paths: `<path d="M12 4C10 4 9 5 7.5 5S5 4 4 4C2.5 4 2 5.5 2.3 8c.3 2.5 1.2 4.5 2 7 .5 1.8 1 3.5 1.8 4.6.4.5.9.9 1.4.9.9 0 1.2-1.1 1.5-3 .2-1.3.5-2.3 1-2.3s.8 1 1 2.3c.3 1.9.6 3 1.5 3 .5 0 1-.4 1.4-.9.8-1.1 1.3-2.8 1.8-4.6.8-2.5 1.7-4.5 2-7C21.7 5.5 21 4 19.6 4c-1 0-1.9 1-3.1 1S14 4 12 4z" stroke-linejoin="round" />`,
+    // A symmetric molar (NEO-57 redraw): two rounded cusps meeting in a soft
+    // dip at the top center, straight flanks, two roots with an arch between
+    // them. Mirrored exactly around x=12 so it reads as a tooth down to the
+    // ~9px doctor badge; the old outline was lopsided on the right.
+    strokeWidth: 1.8,
+    paths: `<path d="M12 4.1C10.3 4.1 9.1 3 7.5 3 5.3 3 4 4.6 4 7c0 1.8.5 3.3 1 4.8.6 1.7.9 3.5 1.2 5.6.3 2 .8 3.6 1.9 3.6 1.2 0 1.5-1.6 1.8-3.4.2-1.4.6-2.6 2.1-2.6s1.9 1.2 2.1 2.6c.3 1.8.6 3.4 1.8 3.4 1.1 0 1.6-1.6 1.9-3.6.3-2.1.6-3.9 1.2-5.6.5-1.5 1-3 1-4.8 0-2.4-1.3-4-3.5-4-1.6 0-2.8 1.1-4.5 1.1z" />`,
   },
   "specialty-ent": {
     strokeWidth: 1.6,

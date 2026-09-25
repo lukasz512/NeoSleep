@@ -57,6 +57,7 @@
         <EntityLink
           :to="hcpDetailLink((item as PatientListItem).practitioner_id)"
           entity-type="hcp"
+          :specialty="(item as PatientListItem).practitioner_specialty"
           :label="(item as PatientListItem).practitioner_name"
           :first-name="(item as PatientListItem).practitioner_first_name"
           :last-name="(item as PatientListItem).practitioner_last_name"
@@ -98,9 +99,11 @@
             v-else-if="(item as PatientListItem).practitioner_name"
             :to="hcpDetailLink((item as PatientListItem).practitioner_id)"
             entity-type="hcp"
+            :specialty="(item as PatientListItem).practitioner_specialty"
             :label="(item as PatientListItem).practitioner_name"
             :first-name="(item as PatientListItem).practitioner_first_name"
             :last-name="(item as PatientListItem).practitioner_last_name"
+            :avatar-size="24"
           />
         </span>
       </template>

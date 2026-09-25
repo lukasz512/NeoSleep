@@ -118,7 +118,7 @@
         </VTooltip>
       </template>
       <template v-if="hcp" #record-tile>
-        <AppAvatar :name="hcp.name" entity-type="hcp" :first-name="hcp.first_name" :last-name="hcp.last_name" :size="48" />
+        <AppAvatar :name="hcp.name" entity-type="hcp" :specialty="hcp.primary_specialty || hcp.specialty" :first-name="hcp.first_name" :last-name="hcp.last_name" :size="48" />
       </template>
       <template v-if="hcp?.status === 'invited'" #title-extra>
         <span class="hcp-detail__status-badge">{{ t("user.hcp.detail.statusInvited") }}</span>

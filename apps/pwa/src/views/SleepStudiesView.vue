@@ -51,6 +51,7 @@
           :first-name="(item as SleepStudyRow).interpreted_by_first_name"
           :last-name="(item as SleepStudyRow).interpreted_by_last_name"
           entity-type="hcp"
+          :specialty="(item as SleepStudyRow).interpreted_by_specialty"
         />
       </template>
       <template #item.study_date="{ item }">
@@ -66,6 +67,7 @@
           :first-name="(item as SleepStudyRow).interpreted_by_first_name"
           :last-name="(item as SleepStudyRow).interpreted_by_last_name"
           entity-type="hcp"
+          :specialty="(item as SleepStudyRow).interpreted_by_specialty"
           :details="doctorOf(item as SleepStudyRow).details"
           :more-details="doctorOf(item as SleepStudyRow).more"
           :avatar-size="32"

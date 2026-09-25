@@ -42,6 +42,7 @@
       <EntityLink
         :to="null"
         entity-type="hcp"
+        :specialty="(item as HCPListItem).specialty"
         :label="(item as HCPListItem).name"
         :first-name="(item as HCPListItem).first_name"
         :last-name="(item as HCPListItem).last_name"
@@ -57,7 +58,7 @@
       {{ (item as HCPListItem).territory_name || (item as HCPListItem).region || "—" }}
     </template>
     <template #feed-card-avatar="{ item }">
-      <AppAvatar v-bind="personAvatarProps(item as HCPListItem)" entity-type="hcp" :size="55" />
+      <AppAvatar v-bind="personAvatarProps(item as HCPListItem)" entity-type="hcp" :specialty="(item as HCPListItem).specialty" :size="55" />
     </template>
     <template #feed-card-title="{ item }">
       {{ shortPersonName((item as HCPListItem).name, (item as HCPListItem).first_name, (item as HCPListItem).last_name) }}
