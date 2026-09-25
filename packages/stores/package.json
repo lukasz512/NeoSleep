@@ -11,6 +11,7 @@
   "dependencies": {
     "@neo/api-client": "workspace:*",
     "pinia": "catalog:",
+    "@vue/devtools-api": "catalog:",
     "vue": "catalog:"
   },
   "devDependencies": {

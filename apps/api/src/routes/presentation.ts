@@ -6,7 +6,7 @@ import { buildContext } from "../context/TenantContext.js";
 import { CreatePresentationCommand, UpdatePresentationCommand } from "../commands/presentation.js";
 import { GetPresentationListQuery, GetPresentationByIdQuery } from "../queries/presentation.js";
 import { ValidationError } from "../errors.js";
-import { parsePaginationParams } from "./utils.js";
+import { parsePaginationParams, routeParam } from "./utils.js";
 
 /**
  * Presentation routes — thin waiters.
@@ -61,7 +61,7 @@ presentationRouter.get(
   "/presentation/:id",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing presentation id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -114,7 +114,7 @@ presentationRouter.patch(
   "/presentation/:id",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing presentation id");
 
     const slug = tenantSlugFromHost(req.hostname);

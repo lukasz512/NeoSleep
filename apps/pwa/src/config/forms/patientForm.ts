@@ -64,8 +64,8 @@ async function loadPractitionerOptions(form?: Record<string, unknown>): Promise<
 const identity = identityFields();
 identity[0] = { ...identity[0], key: "salutation" };
 
-// Same set as the identities.gender CHECK constraint. Optional — the list
-// shows "F · 47 y" only for what was actually recorded (utils/patientDemographics.ts).
+// Same set as the identities.gender CHECK constraint. Required for patients
+// (the list's "F · 47 y" line depends on it); doctors never ask for either.
 const GENDER_OPTIONS: FormFieldOption[] = [
   { title: "app.patients.form.genderFemale", value: "female" },
   { title: "app.patients.form.genderMale", value: "male" },
@@ -81,6 +81,7 @@ export const patientFormFields: FormFieldDef[] = [
     labelKey: "app.patients.form.gender",
     options: GENDER_OPTIONS,
     default: null,
+    required: true,
     cols: 6,
   },
   {
@@ -88,6 +89,7 @@ export const patientFormFields: FormFieldDef[] = [
     type: "date",
     labelKey: "app.patients.form.dateOfBirth",
     default: null,
+    required: true,
     cols: 6,
   },
   {

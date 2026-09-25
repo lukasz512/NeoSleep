@@ -7,7 +7,7 @@ import { buildContext } from "../context/TenantContext.js";
 import { CreateTreatmentPlanCommand, UpdateTreatmentPlanCommand, DeleteTreatmentPlanCommand } from "../commands/treatmentPlan.js";
 import { GetTreatmentPlanListQuery, GetTreatmentPlanByIdQuery } from "../queries/treatmentPlan.js";
 import { ValidationError } from "../errors.js";
-import { parsePaginationParams } from "./utils.js";
+import { parsePaginationParams, routeParam } from "./utils.js";
 
 /**
  * Treatment plan routes — thin waiters. Generic across all treatment types
@@ -107,7 +107,7 @@ treatmentPlanRouter.get(
   "/treatment-plan/:id",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing treatment plan id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -158,7 +158,7 @@ treatmentPlanRouter.patch(
   "/treatment-plan/:id",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing treatment plan id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -185,7 +185,7 @@ treatmentPlanRouter.delete(
   "/treatment-plan/:id",
   requireRole("admin"),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing treatment plan id");
 
     const slug = tenantSlugFromHost(req.hostname);

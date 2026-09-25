@@ -80,7 +80,15 @@ app.set("trust proxy", 1);
 // documents — the most fragile piece on Render (bundled Chromium + system
 // libraries), which /health alone can't vouch for. Used by the post-deploy
 // smoke test; tightly rate-limited because every call launches a render.
-const SMOKE_PDF_HTML = "<!doctype html><html><body><h1>Smoke test</h1><p>Render check.</p></body></html>";
+// Loads Poppins from Google Fonts exactly like packages/documents/templates do:
+// that HTTPS fetch is what pulls in Chromium's network stack (NSS, libsqlite3)
+// — a missing system library there crashes real documents but not a page
+// with no web font. The accented glyphs pull a second font subset.
+const SMOKE_PDF_HTML =
+  '<!doctype html><html><head><meta charset="UTF-8">' +
+  '<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">' +
+  "<style>body{font-family:'Poppins',sans-serif}</style></head>" +
+  "<body><h1>Smoke test</h1><p>Render check, accented glyphs: é ñ ó ł ź</p></body></html>";
 app.get("/health/pdf", smokePdfLimiter, async (_req, res) => {
   const started = Date.now();
   try {
@@ -112,6 +120,15 @@ app.use(
 // mounted first; body-parser then skips the already-parsed body below.
 app.use("/api/v1/public/questionnaire/submit", express.json({ limit: "600kb" }));
 app.use(express.json({ limit: "50kb" }));
+// Express 5 (body-parser 2) leaves req.body undefined when nothing was parsed — a
+// GET, a bodiless POST/DELETE, or a non-JSON content type. Express 4 always set {}.
+// Route handlers destructure `req.body as {...}` directly, so restore the Express 4
+// default here instead of crashing into a 500 on every bodiless request. Multer
+// routes still replace this with their own parsed multipart body.
+app.use((req, _res, next) => {
+  if (req.body === undefined) req.body = {};
+  next();
+});
 app.use(apiLimiter);
 
 // Every /api/v1 response is per-request-credential (keyed off the Authorization bearer
@@ -213,7 +230,14 @@ if (typeof process.env.VITEST === "undefined") {
   async function start() {
     await runMigrationsWithRetry();
     await ensureInitialUserPasswords(process.env.DEFAULT_TENANT_SLUG ?? "neosleep");
-    server = app.listen(port, () => {
+    // Express 5 routes listen errors (e.g. EADDRINUSE) into this callback instead of
+    // throwing them as an unhandled 'error' event — without this check the process
+    // would log "listening", stay alive, and serve nothing.
+    server = app.listen(port, (err?: Error) => {
+      if (err) {
+        console.error("[neocrm-api] failed to listen:", err);
+        process.exit(1);
+      }
       console.log(`[neocrm-api] listening on http://localhost:${port}`);
     });
   }

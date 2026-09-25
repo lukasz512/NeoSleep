@@ -7,7 +7,7 @@ import { buildContext } from "../context/TenantContext.js";
 import { CreateTerritoryCommand, UpdateTerritoryCommand, DeleteTerritoryCommand } from "../commands/territory.js";
 import { GetTerritoryListQuery, GetTerritoryByIdQuery, GetTerritoryPathQuery } from "../queries/territory.js";
 import { ValidationError } from "../errors.js";
-import { parsePaginationParams, toFilterArray } from "./utils.js";
+import { parsePaginationParams, toFilterArray, routeParam } from "./utils.js";
 
 /**
  * Territory routes — the geographic hierarchy (country > region > city >
@@ -79,7 +79,7 @@ territoryRouter.get(
   "/territory/:id/path",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing territory id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -98,7 +98,7 @@ territoryRouter.get(
   "/territory/:id",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing territory id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -151,7 +151,7 @@ territoryRouter.patch(
   "/territory/:id",
   requireRole("admin"),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing territory id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -180,7 +180,7 @@ territoryRouter.delete(
   "/territory/:id",
   requireRole("admin"),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing territory id");
 
     const slug = tenantSlugFromHost(req.hostname);

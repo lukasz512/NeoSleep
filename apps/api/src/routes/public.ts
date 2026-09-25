@@ -12,6 +12,7 @@ import { GetPublicLeadInfoQuery } from "../queries/lead.js";
 import { GetPublicSpecialistsQuery } from "../queries/organization.js";
 import { GetPublicQuestionnaireQuery, SubmitPublicQuestionnaireCommand } from "../commands/questionnaireRequest.js";
 import { ValidationError } from "../errors.js";
+import { routeParam } from "./utils.js";
 
 /**
  * Public, unauthenticated endpoints — no session/TenantContext, see
@@ -25,7 +26,7 @@ publicRouter.get(
   "/public/lead/:id",
   publicLeadLimiter,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing lead id");
 
     const slug = tenantSlugFromHost(req.hostname);
