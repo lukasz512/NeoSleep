@@ -173,29 +173,52 @@ export interface RenderHtmlToPdfOptions {
    * content is replaced by one <img>.
    */
   dataImages?: Record<string, string>;
+  /**
+   * Partner documents (NEO-51): PNG data URLs placed into `[data-image="key"]`
+   * elements — the doctor's and NeoSleep signatory's signatures. Same rules as
+   * the PWA preview's applyDocumentFields (packages/documents), so the preview
+   * and the signed PDF match.
+   */
+  imageFields?: Record<string, string>;
+  /** Keeps only `[data-variant]` elements with this value (e.g. the agreement's "owner"/"staff" party clause). */
+  variant?: string | null;
 }
 
 const PNG_DATA_URL_RE = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/;
 
 /** Exported for the spec; callers go through renderHtmlToPdf(). */
-export async function applyDataImages(page: Page, images: Record<string, string>): Promise<void> {
+export async function applyDataImages(
+  page: Page,
+  images: Record<string, string>,
+  attribute: "data-field" | "data-image" = "data-field"
+): Promise<void> {
   for (const [key, url] of Object.entries(images)) {
     if (!PNG_DATA_URL_RE.test(url)) throw new DocumentRenderError(`data image for "${key}" must be a PNG data URL`);
   }
-  await page.evaluate((values) => {
+  await page.evaluate((values, attr) => {
     for (const [key, src] of Object.entries(values)) {
-      document.querySelectorAll<HTMLElement>(`[data-field="${CSS.escape(key)}"]`).forEach((el) => {
+      document.querySelectorAll<HTMLElement>(`[${attr}="${CSS.escape(key)}"]`).forEach((el) => {
         const img = document.createElement("img");
         img.src = src;
         img.alt = "";
         // Fit the box: a phone canvas is ~2-3x the box's size at device pixel
         // ratio, and an unconstrained image spills out and across a page break.
-        img.style.cssText = "display:block;width:100%;height:100%;object-fit:contain;";
+        // Partner templates (data-image) size their own .sig-image img, matching the PWA preview.
+        if (attr === "data-field") img.style.cssText = "display:block;width:100%;height:100%;object-fit:contain;";
         el.style.breakInside = "avoid";
         el.replaceChildren(img);
       });
     }
-  }, images);
+  }, images, attribute);
+}
+
+/** Removes `[data-variant]` elements whose value differs — exported for the spec. */
+export async function applyVariant(page: Page, variant: string): Promise<void> {
+  await page.evaluate((value) => {
+    document.querySelectorAll("[data-variant]").forEach((el) => {
+      if (el.getAttribute("data-variant") !== value) el.remove();
+    });
+  }, variant);
 }
 
 /** The only hosts a template may load from — the Poppins webfont the templates link. */
@@ -289,7 +312,10 @@ export async function renderHtmlToPdf(html: string, options: RenderHtmlToPdfOpti
       await lockDownPage(page);
       await page.setContent(html, { waitUntil: "load" });
       if (options.dataFields) await applyDataFields(page, options.dataFields);
+      if (options.variant) await applyVariant(page, options.variant);
       if (options.dataImages) await applyDataImages(page, options.dataImages);
+      if (options.imageFields) await applyDataImages(page, options.imageFields, "data-image");
+      // After every DOM mutation above: webfonts settled, every image decoded.
       await waitForRenderReady(page);
       const displayHeaderFooter = Boolean(options.headerTemplate || options.footerTemplate);
       return await page.pdf({

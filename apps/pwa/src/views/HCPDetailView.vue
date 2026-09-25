@@ -165,6 +165,10 @@
                   <dt class="view-item__label">{{ t("user.hcp.detail.region") }}</dt>
                   <dd class="view-item__value">{{ territoryLabel }}</dd>
                 </div>
+                <div v-if="licenseNumber" class="view-item__row">
+                  <dt class="view-item__label view-item__label--icon"><AppIcon name="id-card" />{{ t(licenseNumber.labelKey) }}</dt>
+                  <dd class="view-item__value">{{ licenseNumber.value }}</dd>
+                </div>
               </VCol>
               <VCol cols="12" md="6">
                 <h2 class="hcp-detail__clinics-title">{{ t("user.hcp.detail.clinics.title") }}</h2>
@@ -324,6 +328,13 @@ const territoryLabel = computed(() => {
     return path.map((node) => (node.code || node.name).toLowerCase()).join("/");
   }
   return hcp.value?.territory_name || hcp.value?.region || "—";
+});
+/** PL PWZ / MX cédula (NEO-51) — whichever the practitioner has on file. */
+const licenseNumber = computed<{ labelKey: string; value: string } | null>(() => {
+  const ids = hcp.value?.national_ids;
+  if (ids?.pwz) return { labelKey: "app.identity.form.pwz", value: ids.pwz };
+  if (ids?.cedula) return { labelKey: "app.identity.form.cedula", value: ids.cedula };
+  return null;
 });
 const canActivate = computed(
   () => authStore.user?.role === "admin" || authStore.user?.role === "manager",

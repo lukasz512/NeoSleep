@@ -52,6 +52,7 @@ export function sharedViteConfig(appDir: string): Partial<UserConfig> {
         "@ui":      path.resolve(rootDir, "packages/ui/src/index.ts"),
         "@stores":  path.resolve(rootDir, "packages/stores/src/index.ts"),
         "@vuetify": path.resolve(rootDir, "packages/vuetify/src/index.ts"),
+        "@documents-browser": path.resolve(rootDir, "packages/documents/src/browser/index.ts"),
       },
     },
   };
@@ -67,6 +68,7 @@ export function sharedVitestResolve(): UserConfig["resolve"] {
       "@ui":      path.resolve(rootDir, "packages/ui/src/index.ts"),
       "@stores":  path.resolve(rootDir, "packages/stores/src/index.ts"),
       "@vuetify": path.resolve(rootDir, "packages/vuetify/src/index.ts"),
+      "@documents-browser": path.resolve(rootDir, "packages/documents/src/browser/index.ts"),
     },
   };
 }
