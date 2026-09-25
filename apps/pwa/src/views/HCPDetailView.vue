@@ -170,7 +170,7 @@
                   <dd class="view-item__value">{{ licenseNumber.value }}</dd>
                 </div>
               </VCol>
-              <VCol cols="12" md="6">
+              <VCol v-if="SHOW_CLINICS_PANEL" cols="12" md="6">
                 <h2 class="hcp-detail__clinics-title">{{ t("user.hcp.detail.clinics.title") }}</h2>
                 <PractitionerClinicsPanel
                   :practitioner-id="hcp.id"
@@ -345,6 +345,12 @@ const activateLabelKey = computed(() =>
 );
 
 const hcpCache = useEntityCacheStore("hcp");
+/**
+ * Clinics panel (NEO-17) is hidden until the bug where newly added clinics
+ * disappear after being added is fixed. Flip back to true to restore it.
+ */
+const SHOW_CLINICS_PANEL = false;
+
 const hcp = ref<HCP | null>(null);
 const loading = ref(true);
 /** True while `hcp` is being served from the offline cache — see docs/ADR-013-offline-read-cache.md. */

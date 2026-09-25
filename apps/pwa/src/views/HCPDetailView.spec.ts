@@ -97,14 +97,14 @@ async function mountHCPDetail(status: string, role: "admin" | "rep" = "admin"): 
 }
 
 describe("HCPDetailView — Details tab clinics panel (NEO-17)", () => {
-  it("renders the col6x2 layout — identity fields left, PractitionerClinicsPanel right, fed from the fetched practitioner", async () => {
+  // Panel is temporarily hidden (SHOW_CLINICS_PANEL = false) until newly
+  // added clinics stop disappearing. When restoring it, bring back the
+  // positive assertion: title present + "QA Clinic" rendered.
+  it("hides the clinics panel for now", async () => {
     const wrapper = await mountHCPDetail("active");
 
-    expect(wrapper.find(".hcp-detail__clinics-title").exists()).toBe(true);
-    // The clinic loaded via hcpFixture's `organizations` array should be
-    // visible on the Details tab (the initially active tab) without needing
-    // to switch tabs first, unlike Documents/History/Notes (lazy panels).
-    expect(wrapper.text()).toContain("QA Clinic");
+    expect(wrapper.find(".hcp-detail__clinics-title").exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("QA Clinic");
   });
 });
 
