@@ -8,6 +8,17 @@ import App from "./App.vue";
 import router from "./router";
 import { getTenantId, loadTenantOverlay } from "./composables/useTenantI18n";
 import { resolveInitialThemeMode, useMotionPreferenceStore } from "@stores";
+import { configureErrorReporting, installGlobalErrorHandlers } from "@api";
+import { getWebApiBase } from "./utils/api";
+
+// Before anything can fail: reportCaught() and the global handlers below log to
+// the console and report to POST /api/v1/diagnostics (NEO-81). The website had
+// no global handler at all before — an uncaught error left no trace anywhere.
+configureErrorReporting({
+  getApiBase: getWebApiBase,
+  app: "web",
+  appVersion: (import.meta.env.VITE_APP_VERSION as string | undefined) ?? "dev",
+});
 
 // Pre-mount, before Pinia exists — avoids a flash of the wrong theme. The
 // theme store re-resolves reactively (incl. the tenant-default tier) once
@@ -37,7 +48,9 @@ function getInitialLocale(): string {
     const lang = navigator.language.toLowerCase();
     if (lang.startsWith("pl")) return "pl";
     if (lang.startsWith("es")) return "mx";
-  } catch (_) {}
+  } catch {
+    // benign: storage/navigator unavailable (privacy mode) — default to English.
+  }
   return "en";
 }
 
@@ -53,6 +66,7 @@ const i18n = createI18n({
 });
 
 const app = createApp(App);
+installGlobalErrorHandlers(app);
 app.use(createPinia());
 app.use(router);
 app.use(i18n);

@@ -1,3 +1,4 @@
+import { isOfflineError, reportCaught, reportFailedResponse } from "@api";
 import { ref } from "vue";
 import { apiFetch } from "./useApi";
 
@@ -62,6 +63,8 @@ const total = ref(0);
 const unreadCount = ref(0);
 const loading = ref(false);
 const loadError = ref(false);
+/** The error behind loadError (NEO-81) — lets the error state say offline vs. server problem. */
+const loadFailure = ref<unknown>(null);
 
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let pollRefCount = 0;
@@ -69,27 +72,37 @@ let pollRefCount = 0;
 async function fetchUnreadCount(): Promise<void> {
   try {
     const res = await apiFetch("/api/v1/notification/unread-count", { handleErrors: false });
-    if (!res.ok) return;
+    if (!res.ok) {
+      // Deduped by reportCaught, so a failing poll reports at most once per 5 s.
+      await reportFailedResponse(res, { where: "useNotificationCenter.fetchUnreadCount" });
+      return;
+    }
     const data = (await res.json()) as { count: number };
     unreadCount.value = data.count;
-  } catch {
-    // Silent — badge just stays stale until the next successful poll.
+  } catch (err) {
+    // The badge just stays stale until the next successful poll. Offline polls are
+    // expected (a rep in a basement) and not worth a console line every interval.
+    if (!isOfflineError(err)) reportCaught(err, { where: "useNotificationCenter.fetchUnreadCount" });
   }
 }
 
 async function fetchList(filter: "all" | "unread"): Promise<void> {
   loading.value = true;
   loadError.value = false;
+  loadFailure.value = null;
   try {
     const res = await apiFetch(`/api/v1/notification?filter=${filter}&limit=30`, { handleErrors: false });
     if (!res.ok) {
+      loadFailure.value = await reportFailedResponse(res, { where: "useNotificationCenter.fetchList" });
       loadError.value = true;
       return;
     }
     const data = (await res.json()) as { items: NotificationApiRow[]; total: number };
     items.value = data.items.map(fromApi);
     total.value = data.total;
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "useNotificationCenter.fetchList" });
+    loadFailure.value = err;
     loadError.value = true;
   } finally {
     loading.value = false;
@@ -143,6 +156,7 @@ export function useNotificationCenter() {
     items,
     total,
     unreadCount,
+    loadFailure,
     loading,
     loadError,
     fetchList,

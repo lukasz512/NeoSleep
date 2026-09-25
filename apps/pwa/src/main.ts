@@ -12,7 +12,7 @@ import "./assets/flags.css";
 import "@brand/spacing.css";
 import "@brand/transitions.css";
 import "./assets/transitions.css";
-import { setupDiagnosticReporter } from "./composables/useDiagnosticReporter";
+import { configureErrorReporting, installGlobalErrorHandlers } from "@api";
 import { setupOfflineCacheSession } from "./composables/useOfflineCacheSession";
 import { apiFetch } from "./composables/useApi";
 import { authTokenStorage } from "./stores/auth";
@@ -35,7 +35,9 @@ activateDeferredStyles();
 // notification pipeline). no-cors: the response is never read, and /health
 // sends no CORS headers — a normal cross-origin fetch logged a CORS error in
 // every console even though the ping itself worked.
-fetch(`${getApiUrl()}/health`, { mode: "no-cors" }).catch(() => {});
+fetch(`${getApiUrl()}/health`, { mode: "no-cors" }).catch(() => {
+  // benign: wake-up ping only — the first real request reports its own failure.
+});
 
 // Pre-mount, before Pinia exists — avoids a flash of the wrong theme. The
 // theme store re-resolves reactively (incl. the tenant-default tier) once
@@ -48,6 +50,14 @@ if (typeof document !== "undefined" && document.documentElement) {
 
 vuetify.theme.change(savedTheme === "dark" ? darkTheme : lightTheme);
 
+// Before anything can fail: every reportCaught() call (and the global handlers
+// below) logs to the console and reports to POST /api/v1/diagnostics (NEO-81).
+configureErrorReporting({
+  getApiBase: getApiUrl,
+  app: "pwa",
+  appVersion: (import.meta.env.VITE_APP_VERSION as string | undefined) ?? "dev",
+});
+
 const app = createApp(App);
 app.use(createPinia());
 app.use(vuetify);
@@ -59,7 +69,7 @@ app.use(i18n);
 
 useMotionPreferenceStore().startListening();
 
-setupDiagnosticReporter(app);
+installGlobalErrorHandlers(app);
 setupOfflineCacheSession();
 
 app.provide("neo:apiFetch", apiFetch);

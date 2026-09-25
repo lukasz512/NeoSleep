@@ -1,7 +1,7 @@
 import { ref, computed } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { createAuthStore, type AuthTokenStorage } from "@stores";
-import type { ApiFetchOptions } from "@api";
+import { errorBodyKeyOr, reportCaught, reportFailedResponse, type ApiFetchOptions } from "@api";
 
 type ApiFetchFn = (path: string, options?: ApiFetchOptions) => Promise<Response>;
 
@@ -50,7 +50,9 @@ export function createUseLoginFlow(apiFetch: ApiFetchFn, tokenStorage: AuthToken
           return;
         }
         if (!res.ok) {
-          errorKey.value = "user.login.error.network";
+          // Status/code only — the payload (email, password) never leaves this function.
+          const failure = await reportFailedResponse(res, { where: "useLoginFlow.submit" });
+          errorKey.value = errorBodyKeyOr(failure, "user.login.error.network");
           return;
         }
 
@@ -73,8 +75,9 @@ export function createUseLoginFlow(apiFetch: ApiFetchFn, tokenStorage: AuthToken
         } else {
           await router.push(redirectPath.value);
         }
-      } catch {
-        errorKey.value = "user.login.error.network";
+      } catch (err) {
+        reportCaught(err, { where: "useLoginFlow.submit" });
+        errorKey.value = errorBodyKeyOr(err, "user.login.error.network");
       } finally {
         loading.value = false;
       }

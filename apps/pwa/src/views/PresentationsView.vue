@@ -85,7 +85,7 @@
 
     <div v-if="loadError" class="app-entity-list__error-wrap">
       <AppErrorState
-        :title="t('app.errorState.title')"
+        :error="loadFailure"
         :subtitle="loadError"
         :refresh-label="t('app.errorState.refresh')"
         :loading="loading"
@@ -260,6 +260,8 @@
 </template>
 
 <script setup lang="ts">
+import { reportCaught } from "@api";
+import { showErrorToast } from "../composables/useErrorToast";
 import { ref, computed, defineAsyncComponent } from "vue";
 import { useI18n } from "vue-i18n";
 import AppButton from "../components/AppButton.vue";
@@ -320,7 +322,7 @@ const presentationFilterDefinitions = computed<FilterDefinition[]>(() => [
 
 const {
   searchQuery, filterState, activeFilterCount, tableOptions,
-  loading, clearingSearch, clearingFilters, loadError, items, total,
+  loading, clearingSearch, clearingFilters, loadError, loadFailure, items, total,
   hasActiveFiltersOrSearch, isTrulyEmpty,
   onFilterStateUpdate, onFiltersClear, onSearchClear,
   onOptionsUpdate, loadData,
@@ -410,7 +412,10 @@ async function onSubmit(payload: Record<string, unknown>, done: (ok: boolean) =>
     } else {
       done(false);
     }
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "PresentationsView.onSubmit" });
+    // A non-2xx already toasts via apiFetch; a thrown error (offline, bad response) had no feedback at all.
+    showErrorToast(err, { icon: "nav-presentations" });
     done(false);
   }
 }

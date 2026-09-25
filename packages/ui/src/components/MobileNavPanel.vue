@@ -151,6 +151,7 @@ async function setExpanded(next: boolean) {
             fill: "forwards",
           }),
         );
+      // benign: a cancelled animation rejects `finished` — it is still finished for our purposes.
       await Promise.all(leaving.map((a) => a.finished.catch(() => undefined)));
       leaving.forEach((a) => a.cancel());
     }

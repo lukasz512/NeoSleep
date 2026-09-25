@@ -54,6 +54,7 @@ function introFinished(el: HTMLElement): Promise<void> {
   const finite = el
     .getAnimations({ subtree: true })
     .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity);
+  // benign: `finished` rejects when an animation is cancelled — that still counts as done here.
   return Promise.all(finite.map((animation) => animation.finished.catch(() => undefined))).then(() => undefined);
 }
 

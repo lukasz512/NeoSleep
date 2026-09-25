@@ -28,6 +28,7 @@
 </template>
 
 <script setup lang="ts">
+import { reportCaught } from "@api";
 import { onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import AppDialogHeader from "../AppDialogHeader.vue";
@@ -99,7 +100,8 @@ async function copyLink() {
   try {
     await navigator.clipboard.writeText(props.url);
     notifications.show(t("app.clinical.qr.copied"), "success", undefined, { icon: "qr-code" });
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "QuestionnaireQrDialog.copyLink", level: "warn" });
     // Clipboard API unavailable (insecure context / denied) — nothing else to do.
   }
 }

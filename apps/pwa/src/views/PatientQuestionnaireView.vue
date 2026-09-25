@@ -91,6 +91,7 @@
 </template>
 
 <script setup lang="ts">
+import { reportCaught, reportFailedResponse } from "@api";
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
@@ -201,13 +202,15 @@ async function load() {
       return;
     }
     if (!res.ok) {
+      await reportFailedResponse(res, { where: "PatientQuestionnaireView.load" });
       phase.value = "unreachable";
       return;
     }
     questionnaire.value = (await res.json()) as PublicQuestionnaire;
     phase.value = step.value ? "steps" : "submitted";
     resetStepState();
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "PatientQuestionnaireView.load" });
     phase.value = "unreachable";
   }
 }
@@ -241,12 +244,15 @@ async function send(body: Record<string, unknown>) {
       return;
     }
     if (!res.ok) {
+      // A patient's answers failed to save — must never be silent. Status/code only, never the answers.
+      await reportFailedResponse(res, { where: "PatientQuestionnaireView.send" });
       submitError.value = true;
       return;
     }
     const result = (await res.json()) as { step: string; completed: boolean };
     advance(result.step, result.completed);
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "PatientQuestionnaireView.send" });
     submitError.value = true;
   } finally {
     submitting.value = false;

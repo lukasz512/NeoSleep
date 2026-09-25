@@ -107,6 +107,7 @@
 </template>
 
 <script setup lang="ts">
+import { reportCaught } from "@api";
 import { ref, computed, watch, nextTick } from "vue";
 import { useI18n } from "vue-i18n";
 import { useDisplay } from "vuetify";
@@ -191,7 +192,8 @@ async function load(): Promise<void> {
     }
     preview.value = (await res.json()) as PartnerDocumentPreview;
     state.value = "ready";
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "PartnerDocumentDialog.load" });
     state.value = "error";
   }
 }
@@ -252,6 +254,7 @@ async function flySignatureIntoDocument(doc: Document, flight: { src: string; fr
   const frame = frameRef.value;
   if (!target || !frame) return;
   const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  // benign: decode() rejects for an image that can't be pre-decoded — the flight still works, just unwarmed.
   await target.decode().catch(() => undefined);
   const frameRect = frame.getBoundingClientRect();
   const imgRect = target.getBoundingClientRect();
@@ -287,7 +290,7 @@ async function flySignatureIntoDocument(doc: Document, flight: { src: string; fr
       { duration: FLIGHT_MS, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)", fill: "forwards" },
     ).finished;
   } catch {
-    // interrupted (dialog closed mid-flight) — just settle below
+    // benign: animation interrupted (dialog closed mid-flight) — just settle below.
   } finally {
     target.style.transition = "opacity 120ms ease-out";
     target.style.opacity = "1";

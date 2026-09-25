@@ -146,6 +146,7 @@
 </template>
 
 <script setup lang="ts">
+import { readJson, reportCaught } from "@api";
 import { ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute } from "vue-router";
@@ -196,8 +197,9 @@ interface PublicLeadInfo {
 async function loadLeadPrefill(leadId: string) {
   try {
     const res = await apiFetch(`/api/v1/public/lead/${encodeURIComponent(leadId)}`);
-    if (!res.ok) return;
-    const lead = (await res.json()) as PublicLeadInfo;
+    // 404 = unknown/expired lead link: expected, the modal simply starts empty.
+    if (res.status === 404) return;
+    const lead = await readJson<PublicLeadInfo>(res, { path: "/api/v1/public/lead/:id" });
     bookingPrefill.value = {
       id: lead.id,
       firstName: lead.first_name,
@@ -208,8 +210,9 @@ async function loadLeadPrefill(leadId: string) {
       city: lead.city ?? undefined,
       countryCode: lead.country_code ?? undefined,
     };
-  } catch {
-    // Prefill is a nicety — if it fails, the modal still works fully self-serve.
+  } catch (err) {
+    // Prefill is a nicety — if it fails, the modal still works fully self-serve — but log it.
+    reportCaught(err, { where: "web.ForProfessionalsView.loadLeadPrefill", level: "warn" });
   }
 }
 

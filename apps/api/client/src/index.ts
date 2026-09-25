@@ -1,38 +1,41 @@
+import { extractErrorCode, extractErrorMessage, responseHeader, stripQuery, toApiError } from "./errors";
+
+export * from "./errors";
+export * from "./report";
+export * from "./globalHandlers";
+export * from "./errorMessage";
+
 export interface ApiFetchOptions extends Omit<RequestInit, "credentials"> {
   handleErrors?: boolean;
   errorMessageKey?: string;
 }
 
+/** Extra context about a non-2xx response, passed as onError's 5th argument (NEO-81). */
+export interface ApiErrorInfo {
+  /** The API's machine-readable `code`, when the error body carries one. */
+  code: string | null;
+  /** Server-side correlation id from the `X-Request-ID` response header. */
+  requestId: string | null;
+  method: string;
+}
+
 export interface ApiClientConfig {
   getApiBase: () => string;
-  onError?: (path: string, status: number, message: string, errorMessageKey?: string) => void;
+  onError?: (path: string, status: number, message: string, errorMessageKey?: string, info?: ApiErrorInfo) => void;
   /** Optional custom fetch implementation (e.g. auth-aware interceptor). Defaults to global fetch. */
   fetchFn?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 }
 
-/** Reads `.error`/`.message` off a parsed JSON body — the shape every route in this API returns errors as. */
-function pickErrorField(value: unknown): string | undefined {
-  if (typeof value !== "object" || value === null) return undefined;
-  const field = (value as Record<string, unknown>).error ?? (value as Record<string, unknown>).message;
-  return typeof field === "string" && field.trim() ? field.trim() : undefined;
-}
-
-/** Unwraps one level of double-encoded JSON (an error string that is itself `{"error": "..."}`). */
-export function extractErrorMessage(bodyText: string): string {
-  try {
-    const outer = pickErrorField(JSON.parse(bodyText));
-    if (!outer) return bodyText;
-    if (outer.startsWith("{")) return pickErrorField(JSON.parse(outer)) ?? outer;
-    return outer;
-  } catch {
-    // Not JSON — e.g. a framework's default HTML error page (404/500 before it
-    // ever reaches our JSON error handler). Never show raw markup to the user;
-    // the caller falls back to res.statusText / "HTTP <code>" instead.
-    const trimmed = bodyText.trim();
-    return trimmed.startsWith("<") ? "" : trimmed;
-  }
-}
-
+/**
+ * Returns `apiFetch(path, options)`:
+ *   - transport failures (offline, DNS, CORS, timeout) reject with a typed
+ *     `ApiError` (kind "network" | "timeout") — it is still an `Error`, so
+ *     existing `catch` blocks keep working, but they can now branch on `.kind`;
+ *   - HTTP error statuses still resolve with the `Response` (callers check
+ *     `res.ok`), after logging and calling `onError` with the server message,
+ *     `code` and `X-Request-ID`. Use `readJson(res)` / `apiErrorFromResponse(res)`
+ *     to turn a failed Response into an `ApiError`.
+ */
 export function createApiFetch(config: ApiClientConfig) {
   const fetchImpl = config.fetchFn ?? fetch;
   return async function apiFetch(path: string, options: ApiFetchOptions = {}): Promise<Response> {
@@ -40,6 +43,8 @@ export function createApiFetch(config: ApiClientConfig) {
     const base = config.getApiBase();
     const url = `${base}${path.startsWith("/") ? path : `/${path}`}`;
     const method = init.method ?? "GET";
+    // Query strings can carry search terms typed by the user (names, phone numbers) — never log them.
+    const logPath = stripQuery(path);
 
     let res: Response;
     try {
@@ -48,17 +53,29 @@ export function createApiFetch(config: ApiClientConfig) {
       // to another (this is what previously let a device show a stale, different user's data).
       res = await fetchImpl(url, { ...init, credentials: "include", cache: "no-store" });
     } catch (err) {
-      console.error(`[api] ${method} ${path} — network error`, err);
-      throw err;
+      const apiErr = toApiError(err, { path: logPath, method });
+      // A TypeError that isn't a fetch transport failure is a bug in fetchFn — surface it as-is.
+      if (apiErr.kind !== "network" && apiErr.kind !== "timeout") throw err;
+      console.error(`[api] ${method} ${logPath} — ${apiErr.kind} error`, err);
+      throw apiErr;
     }
 
     if (!res.ok) {
+      // benign: an unreadable error body only costs the server message; the status is still logged.
       const bodyText = await res.clone().text().catch(() => "");
       const message = extractErrorMessage(bodyText) || res.statusText || `HTTP ${res.status}`;
-      console.error(`[api] ${method} ${path} — ${res.status} ${message}`);
-      if (handleErrors && config.onError) config.onError(path, res.status, message, errorMessageKey);
+      const requestId = responseHeader(res, "x-request-id");
+      console.error(`[api] ${method} ${logPath} — ${res.status} ${message}${requestId ? ` (request ${requestId})` : ""}`);
+      if (handleErrors && config.onError) {
+        config.onError(path, res.status, message, errorMessageKey, {
+          code: extractErrorCode(bodyText),
+          requestId,
+          method,
+        });
+      }
     }
 
     return res;
   };
 }
+

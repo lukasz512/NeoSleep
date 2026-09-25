@@ -1,6 +1,6 @@
 import { ref } from "vue";
 import { useRoute } from "vue-router";
-import type { ApiFetchOptions } from "@api";
+import { errorBodyKeyOr, reportCaught, reportFailedResponse, type ApiFetchOptions } from "@api";
 
 type ApiFetchFn = (path: string, options?: ApiFetchOptions) => Promise<Response>;
 
@@ -28,7 +28,8 @@ export function createUseForgotPasswordFlow(apiFetch: ApiFetchFn) {
         });
 
         if (!res.ok) {
-          errorKey.value = "user.forgotPassword.error.network";
+          const failure = await reportFailedResponse(res, { where: "useForgotPasswordFlow.submit" });
+          errorKey.value = errorBodyKeyOr(failure, "user.forgotPassword.error.network");
           return;
         }
 
@@ -36,8 +37,9 @@ export function createUseForgotPasswordFlow(apiFetch: ApiFetchFn) {
         // whether the account exists, so the UI can't distinguish either —
         // that's intentional, it prevents email enumeration.
         submitted.value = true;
-      } catch {
-        errorKey.value = "user.forgotPassword.error.network";
+      } catch (err) {
+        reportCaught(err, { where: "useForgotPasswordFlow.submit" });
+        errorKey.value = errorBodyKeyOr(err, "user.forgotPassword.error.network");
       } finally {
         loading.value = false;
       }

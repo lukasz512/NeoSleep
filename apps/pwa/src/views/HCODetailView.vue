@@ -28,6 +28,7 @@
     :has-content="!!hco"
     :loading="loading"
     :load-error="loadFailed"
+    :load-error-cause="loadFailure"
     :back-route="{ name: 'hco' }"
     :back-label="t('user.hco.detail.back')"
     :record-title="hco?.name ?? ''"
@@ -209,6 +210,7 @@
 </template>
 
 <script setup lang="ts">
+import { isOfflineError, reportCaught, reportFailedResponse } from "@api";
 import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
 import { originDialogTransition } from "@ui";
 import { useRoute, useRouter } from "vue-router";
@@ -310,6 +312,8 @@ const loading = ref(true);
 const isOffline = ref(false);
 /** True when loadHCO() failed for a reason other than a genuine 404 (network/server) — see loadHCO(). */
 const loadFailed = ref(false);
+/** The error behind loadFailed (NEO-81) — lets the error state say offline vs. server problem. */
+const loadFailure = ref<unknown>(null);
 const showEditModal = ref(false);
 const showDeleteConfirm = ref(false);
 const showEventForm = ref(false);
@@ -420,11 +424,15 @@ async function loadHCO() {
       // Not a genuine 404 — ItemDetailLayout renders its own "connection
       // problem" + retry state for this (see :load-error), so no separate
       // toast on top of it.
+      loadFailure.value = await reportFailedResponse(res, { where: "HCODetailView.load", path: "/api/v1/organization/:id" });
       loadFailed.value = true;
     }
-  } catch {
-    // Network failure, not a server error — fall back to the cached record if we have one.
-    const cached = await hcoCache.readOne(id);
+  } catch (err) {
+    reportCaught(err, { where: "HCODetailView.load" });
+    loadFailure.value = err;
+    // Only a request that never reached the server may fall back to the cached record (ADR-013) —
+    // a bad response or a bug shows the real error instead of stale data.
+    const cached = isOfflineError(err) ? await hcoCache.readOne(id) : null;
     if (cached) {
       hco.value = cached as unknown as HCO;
       isOffline.value = true;

@@ -27,7 +27,7 @@
     </div>
     <AppErrorState
       v-else-if="loadError"
-      :title="t('app.errorState.title')"
+      :error="loadFailure"
       :subtitle="t('app.history.errorLoad')"
       :refresh-label="t('app.errorState.refresh')"
       :loading="loading"
@@ -183,6 +183,7 @@
 </template>
 
 <script setup lang="ts">
+import { reportCaught, reportFailedResponse } from "@api";
 import { ref, computed, onMounted, watch, useId } from "vue";
 import { useI18n } from "vue-i18n";
 import { AppStateView } from "@ui";
@@ -252,6 +253,8 @@ const history = ref<EntityHistory | null>(null);
 const loading = ref(false);
 const loaded = ref(false);
 const loadError = ref(false);
+/** The error behind loadError (NEO-81) — lets the error state say offline vs. server problem. */
+const loadFailure = ref<unknown>(null);
 const expanded = ref(new Set<string>());
 const now = ref(new Date());
 
@@ -319,6 +322,7 @@ function changeSentence(entry: HistoryEntry, change: HistoryFieldChange): string
 async function loadHistory() {
   loading.value = true;
   loadError.value = false;
+  loadFailure.value = null;
   try {
     const res = await apiFetch(props.endpoint, { handleErrors: false });
     if (res.ok) {
@@ -326,9 +330,12 @@ async function loadHistory() {
       expanded.value = new Set();
       now.value = new Date();
     } else {
+      loadFailure.value = await reportFailedResponse(res, { where: "EntityHistoryPanel.loadHistory" });
       loadError.value = true;
     }
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "EntityHistoryPanel.loadHistory" });
+    loadFailure.value = err;
     loadError.value = true;
   } finally {
     loading.value = false;

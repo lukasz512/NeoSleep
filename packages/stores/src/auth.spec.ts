@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
+import { ApiError } from "@api";
 import { createAuthStore, type AuthTokenStorage } from "./auth";
 
 /**
@@ -83,5 +84,47 @@ describe("auth store — fetchSession", () => {
     expect(apiFetch).not.toHaveBeenCalled();
     expect(store.sessionChecked).toBe(true);
     expect(store.sessionChecking).toBe(false);
+  });
+});
+
+/**
+ * NEO-81: only the server saying "this session is gone" (401/403) signs a user
+ * out. A background re-check that hits a 5xx or a dropped connection keeps the
+ * signed-in rep signed in — and the failure is reported instead of swallowed.
+ */
+describe("auth store — session check failures", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  });
+
+  it("a 500 during a re-check keeps the signed-in user and logs the failure", async () => {
+    const apiFetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "boom" }), { status: 500 }));
+    const store = createAuthStore(apiFetch, createTokenStorage())();
+    store.setAuthenticated(true, USER, "access", "refresh");
+
+    await expect(store.fetchSession()).resolves.toBe(true);
+    expect(store.user).toEqual(USER);
+    expect(console.error).toHaveBeenCalled();
+  });
+
+  it("a network error during a re-check keeps the signed-in user and logs it", async () => {
+    const apiFetch = vi.fn().mockRejectedValue(new ApiError({ kind: "network", message: "Failed to fetch" }));
+    const store = createAuthStore(apiFetch, createTokenStorage())();
+    store.setAuthenticated(true, USER, "access", "refresh");
+
+    await expect(store.fetchSession()).resolves.toBe(true);
+    expect(store.user).toEqual(USER);
+    expect(console.warn).toHaveBeenCalled();
+  });
+
+  it("a 401 still signs the user out", async () => {
+    const apiFetch = vi.fn().mockResolvedValue(new Response("{}", { status: 401 }));
+    const store = createAuthStore(apiFetch, createTokenStorage())();
+    store.setAuthenticated(true, USER, "access", "refresh");
+
+    await expect(store.fetchSession()).resolves.toBe(false);
+    expect(store.user).toBeNull();
   });
 });

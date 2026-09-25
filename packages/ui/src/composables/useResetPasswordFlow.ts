@@ -1,6 +1,6 @@
 import { ref } from "vue";
 import { useRouter, useRoute } from "vue-router";
-import type { ApiFetchOptions } from "@api";
+import { apiErrorFromResponse, errorBodyKeyOr, reportCaught, type ApiFetchOptions } from "@api";
 
 type ApiFetchFn = (path: string, options?: ApiFetchOptions) => Promise<Response>;
 
@@ -28,10 +28,25 @@ export function createUseResetPasswordFlow(apiFetch: ApiFetchFn) {
           `/api/v1/auth/reset-password/validate?token=${encodeURIComponent(token)}`,
           { handleErrors: false },
         );
+        if (!res.ok) {
+          const failure = await apiErrorFromResponse(res);
+          if (failure.kind === "client") {
+            tokenValid.value = false;
+            return;
+          }
+          // Our side failed (5xx / 429) — never tell the user their link is invalid for
+          // that. Let them try: submit re-checks the token and says so if it's really bad.
+          reportCaught(failure, { where: "useResetPasswordFlow.validateToken" });
+          errorKey.value = errorBodyKeyOr(failure, "user.resetPassword.error.network");
+          tokenValid.value = true;
+          return;
+        }
         const data = (await res.json()) as { valid: boolean };
         tokenValid.value = !!data.valid;
-      } catch {
-        tokenValid.value = false;
+      } catch (err) {
+        reportCaught(err, { where: "useResetPasswordFlow.validateToken" });
+        errorKey.value = errorBodyKeyOr(err, "user.resetPassword.error.network");
+        tokenValid.value = true;
       } finally {
         loading.value = false;
       }
@@ -49,13 +64,19 @@ export function createUseResetPasswordFlow(apiFetch: ApiFetchFn) {
         });
 
         if (!res.ok) {
-          errorKey.value = "user.resetPassword.error.invalidToken";
+          const failure = await apiErrorFromResponse(res);
+          if (failure.kind !== "client") reportCaught(failure, { where: "useResetPasswordFlow.submit" });
+          // A 4xx here is the token (expired / used); anything else is not the user's link.
+          errorKey.value = failure.kind === "client"
+            ? "user.resetPassword.error.invalidToken"
+            : errorBodyKeyOr(failure, "user.resetPassword.error.network");
           return;
         }
 
         await router.push("/login");
-      } catch {
-        errorKey.value = "user.resetPassword.error.network";
+      } catch (err) {
+        reportCaught(err, { where: "useResetPasswordFlow.submit" });
+        errorKey.value = errorBodyKeyOr(err, "user.resetPassword.error.network");
       } finally {
         loading.value = false;
       }

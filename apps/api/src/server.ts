@@ -1,7 +1,7 @@
 import express, { type Express } from "express";
 import helmet from "helmet";
 import cors from "cors";
-import { requestIdMiddleware } from "./middleware/requestId.js";
+import { REQUEST_ID_HEADER, requestIdMiddleware } from "./middleware/requestId.js";
 import { FRONTEND_URLS } from "./env.js";
 import { authRouter, ensureInitialUserPasswords } from "./auth.js";
 import { leadsRouter } from "./routes/leads.js";
@@ -116,6 +116,10 @@ app.use(
   cors({
     origin: corsOrigin,
     credentials: true,
+    // Lets the frontends read the correlation id off error responses and send it
+    // with their diagnostics report (NEO-81) — without this a cross-origin fetch
+    // can't see the header at all.
+    exposedHeaders: [REQUEST_ID_HEADER],
   })
 );
 // The patient QR submit carries a drawn signature (PNG data URL, ≤ ~400 KB,

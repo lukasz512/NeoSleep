@@ -3,8 +3,7 @@
     <AppLoadingState v-if="loading && !loaded" />
     <AppErrorState
       v-else-if="loadError"
-      :title="t('app.errorState.title')"
-      :subtitle="t('app.errorState.subtitle')"
+      :error="loadFailure"
       :refresh-label="t('app.errorState.refresh')"
       :loading="loading"
       @refresh="load"
@@ -20,6 +19,7 @@
 </template>
 
 <script setup lang="ts">
+import { reportCaught, reportFailedResponse } from "@api";
 import { ref, onMounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import AppLoadingState from "./AppLoadingState.vue";
@@ -51,19 +51,25 @@ const items = ref<RelatedItem[]>([]);
 const loading = ref(false);
 const loaded = ref(false);
 const loadError = ref(false);
+/** The error behind loadError (NEO-81) — lets the error state say offline vs. server problem. */
+const loadFailure = ref<unknown>(null);
 
 async function load() {
   loading.value = true;
   loadError.value = false;
+  loadFailure.value = null;
   try {
     const res = await apiFetch(props.endpoint, { handleErrors: false });
     if (res.ok) {
       const json = (await res.json()) as { items?: RelatedItem[] };
       items.value = json.items ?? [];
     } else {
+      loadFailure.value = await reportFailedResponse(res, { where: "RelatedEntityPanel.load" });
       loadError.value = true;
     }
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "RelatedEntityPanel.load" });
+    loadFailure.value = err;
     loadError.value = true;
   } finally {
     loading.value = false;

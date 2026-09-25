@@ -1,5 +1,5 @@
 <template>
-  <AppStateView :title="title" :subtitle="subtitle">
+  <AppStateView :title="displayTitle" :subtitle="displaySubtitle">
     <template #icon>
       <AppIcon name="sad-cloud" />
     </template>
@@ -34,22 +34,41 @@
 </template>
 
 <script setup lang="ts">
-import { AppStateView } from "@ui";
+import { computed } from "vue";
+import { AppStateView, useErrorText } from "@ui";
 import AppButton from "./AppButton.vue";
 import AppIcon from "./AppIcon.vue";
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
-    title: string;
+    /** Contextual title. Optional when `error` is given — the title then comes from the error class (NEO-81). */
+    title?: string;
     subtitle?: string;
+    /**
+     * The caught error (ApiError or anything else). When set, the title says what
+     * actually went wrong (offline vs. server problem vs. not found...) instead of
+     * always "Network problem", and a short support reference is appended for
+     * failures on our side.
+     */
+    error?: unknown;
     refreshLabel: string;
     loading?: boolean;
     /** Optional secondary action (e.g. "Report incident") rendered as a plain-text link below the refresh button — a `href` (mailto:, tel:, etc.) rather than an emit, since it's meant for actions that leave the app. */
     secondaryLabel?: string;
     secondaryHref?: string;
   }>(),
-  { loading: false },
+  { loading: false, title: undefined, subtitle: undefined, error: undefined },
 );
+
+const describeError = useErrorText();
+const errorText = computed(() => (props.error == null ? null : describeError(props.error)));
+// A caller's own contextual title ("Failed to load documents") wins; otherwise the
+// error class names the problem ("Can't reach the server" / "Something went wrong on our side").
+const displayTitle = computed(() => props.title ?? errorText.value?.title ?? "");
+const displaySubtitle = computed(() => {
+  if (!errorText.value) return props.subtitle;
+  return [props.subtitle, errorText.value.body, errorText.value.reference].filter(Boolean).join(" ");
+});
 
 defineEmits<{
   refresh: [];

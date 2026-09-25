@@ -1,5 +1,5 @@
 import { ref, computed, type Ref, type ComputedRef } from "vue";
-import type { ApiFetchOptions } from "@api";
+import { reportCaught, type ApiFetchOptions } from "@api";
 
 type ApiFetchFn = (path: string, options?: ApiFetchOptions) => Promise<Response>;
 
@@ -55,8 +55,9 @@ export function useGoogleSignIn(apiFetch: ApiFetchFn, apiUrl: string | null): Go
       if (!res.ok) return;
       const body = (await res.json()) as { google?: unknown };
       available.value = body.google === true;
-    } catch {
-      // Unknown → keep the button hidden; password sign-in still works.
+    } catch (err) {
+      // Unknown → keep the button hidden; password sign-in still works — but log why (NEO-81).
+      reportCaught(err, { where: "useGoogleSignIn.load", level: "warn" });
       available.value = false;
     }
   }

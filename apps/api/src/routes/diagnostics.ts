@@ -6,6 +6,7 @@ import { Request, Response, Router } from "express";
 import crypto from "crypto";
 import { insertDiagnostic } from "../db.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
+import { diagnosticsLimiter } from "../middleware/rateLimiter.js";
 
 const router = Router();
 
@@ -33,6 +34,7 @@ interface DiagnosticBody {
 
 router.post(
   "/diagnostics",
+  diagnosticsLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     if (!isDiagnosticsEnabled()) {
       res.status(204).end();
