@@ -76,6 +76,32 @@ export async function linkPractitionerOrganization(
 }
 
 /**
+ * Records how the practitioner relates to a clinic — NEO-51 uses "owner"
+ * (runs the practice) vs "staff" (practises there), chosen by the doctor at
+ * registration; it selects the partner agreement's party clause. Upserts:
+ * links the clinic first if the affiliation row doesn't exist yet (e.g. a
+ * practitioner known only through the legacy practitioner.organization_id).
+ */
+export async function setAffiliationRole(
+  client: PoolClient,
+  practitionerId: string,
+  organizationId: string,
+  role: string
+): Promise<void> {
+  try {
+    await client.query(
+      `INSERT INTO practitioner_organization (practitioner_id, organization_id, role)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (practitioner_id, organization_id) DO UPDATE SET role = EXCLUDED.role`,
+      [practitionerId, organizationId, role]
+    );
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("setAffiliationRole", err);
+  }
+}
+
+/**
  * Deletes the affiliation, and clears any rep's practitioner_assignment
  * that pointed its primary_org_id at the same clinic — an assignment row's
  * primary_org_id must never reference a clinic the practitioner is no

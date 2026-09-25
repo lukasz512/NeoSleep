@@ -189,7 +189,7 @@ import { type FilterDefinition } from "../composables/useFilters";
 import { useAuthStore } from "../stores/auth";
 import { useConfigStore } from "../stores/config";
 import { getGenderFromName } from "../utils/genderFromName";
-import { leadStatusClass, leadStatusI18nKey, leadInstitution } from "../utils/leadStatus";
+import { leadStatusClass, leadStatusI18nKey, leadInstitution, leadNationalIds } from "../utils/leadStatus";
 import { hcoListLink } from "../utils/entityLinks";
 
 export interface Lead {
@@ -238,6 +238,7 @@ const moveToDoctorsInitialData = computed(() => (selectedLead.value ? {
   // isCreatingNewOrganization() resolves it against the loaded clinic list
   // once options finish loading (see hcpForm.ts).
   organization_id: leadInstitution(selectedLead.value),
+  national_ids: leadNationalIds(selectedLead.value),
 } : undefined));
 
 /** Same stable-reference reasoning as moveToDoctorsInitialData above. */
@@ -245,6 +246,8 @@ const inviteInitialData = computed(() => (selectedLead.value ? {
   first_name: selectedLead.value.first_name,
   last_name: selectedLead.value.last_name,
   email: selectedLead.value.email ?? "",
+  region: selectedLead.value.region,
+  national_ids: leadNationalIds(selectedLead.value),
 } : undefined));
 
 /** Same stable-reference reasoning as moveToDoctorsInitialData above. */
