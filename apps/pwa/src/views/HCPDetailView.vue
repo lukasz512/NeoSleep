@@ -122,7 +122,8 @@
           entity-type="hcp"
           :first-name="hcp.first_name"
           :last-name="hcp.last_name"
-          :fields="doctorFields(hcp)"
+          :details="doctorDetails(hcp, { withClinic: true }).details"
+          :more-details="doctorDetails(hcp, { withClinic: true }).more"
         >
           <span v-if="hcp.status === 'invited'" class="hcp-detail__status-badge">
             {{ t("user.hcp.detail.statusInvited") }}
@@ -290,7 +291,7 @@ interface HCP {
 }
 
 const { t } = useI18n();
-const { doctorFields } = useIdentity();
+const { doctorDetails } = useIdentity();
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();

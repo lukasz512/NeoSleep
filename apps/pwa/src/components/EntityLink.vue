@@ -4,7 +4,7 @@
     <slot />
     <span v-if="isLarge" class="entity-link__text">
       <span class="entity-link__label">{{ label }}</span>
-      <IdentityTags :tags="tags" :more="moreTags" :tone="tone" />
+      <IdentityDetails :details="details" :more="moreDetails" />
     </span>
     <span v-else>{{ label }}</span>
   </RouterLink>
@@ -14,7 +14,7 @@
     <slot />
     <span v-if="isLarge" class="entity-link__text">
       <span class="entity-link__label">{{ label }}</span>
-      <IdentityTags :tags="tags" :more="moreTags" :tone="tone" />
+      <IdentityDetails :details="details" :more="moreDetails" />
     </span>
     <span v-else>{{ label }}</span>
   </span>
@@ -25,8 +25,7 @@
 import { computed } from "vue";
 import type { RouteLocationRaw } from "vue-router";
 import AppAvatar, { type AppAvatarEntityType } from "./AppAvatar.vue";
-import { identityTone } from "../utils/identityTone";
-import IdentityTags from "./IdentityTags.vue";
+import IdentityDetails from "./IdentityDetails.vue";
 
 /**
  * THE shared "avatar + display name (+ optional link)" cell — every table/list
@@ -75,16 +74,16 @@ const props = withDefaults(
     lastName?: string | null;
     avatarSize?: number;
     /**
-     * Large identity (NEO-57): "wristband" tags under the name — [F] [47 Y]
-     * for a patient, [DENTIST] for a doctor, [CLINIC] for an organization
-     * (see composables/useIdentity.ts). No tags = the small identity, just
-     * avatar + name, for mentions (note authors, history, meta lines).
+     * Large identity (NEO-57): one quiet line under the name — "F · 47 y"
+     * for a patient, "Dentist" for a doctor, "Clinic" for an organization
+     * (see composables/useIdentity.ts). No details = the small identity,
+     * just avatar + name, for mentions (note authors, history, meta lines).
      */
-    tags?: string[];
-    /** Overflow values behind a "+N" tag with a tooltip (a doctor's other specialties). */
-    moreTags?: string[];
+    details?: string[];
+    /** Overflow values behind a "+N" with a tooltip (a doctor's other specialties). */
+    moreDetails?: string[];
   }>(),
-  { entityType: undefined, firstName: null, lastName: null, avatarSize: 20, tags: () => [], moreTags: () => [] },
+  { entityType: undefined, firstName: null, lastName: null, avatarSize: 20, details: () => [], moreDetails: () => [] },
 );
 
 const ROUTE_ENTITY_TYPES: Record<string, AppAvatarEntityType> = {
@@ -104,8 +103,7 @@ const entityType = computed<AppAvatarEntityType>(() => {
   return (typeof name === "string" && ROUTE_ENTITY_TYPES[name]) || "user";
 });
 
-const tone = computed(() => identityTone(entityType.value));
-const isLarge = computed(() => props.tags.length > 0 || props.moreTags.length > 0);
+const isLarge = computed(() => props.details.length > 0 || props.moreDetails.length > 0);
 
 const avatarProps = computed(() => {
   const isPlace = PLACE_ENTITY_TYPES.has(entityType.value);
@@ -146,7 +144,7 @@ const avatarProps = computed(() => {
   display: inline-flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
   line-height: 1.3;
 }

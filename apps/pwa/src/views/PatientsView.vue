@@ -43,7 +43,7 @@
           :label="(item as PatientListItem).name"
           :first-name="(item as PatientListItem).first_name"
           :last-name="(item as PatientListItem).last_name"
-          :tags="patientTags(item as PatientListItem).tags"
+          :details="patientDetails(item as PatientListItem).details"
           :avatar-size="32"
         />
       </template>
@@ -58,8 +58,8 @@
           :to="hcpDetailLink((item as PatientListItem).practitioner_id)"
           entity-type="hcp"
           :label="(item as PatientListItem).practitioner_name"
-          :tags="doctorOf(item as PatientListItem).tags"
-          :more-tags="doctorOf(item as PatientListItem).more"
+          :details="doctorOf(item as PatientListItem).details"
+          :more-details="doctorOf(item as PatientListItem).more"
           :avatar-size="32"
         />
       </template>
@@ -84,11 +84,11 @@
         </VChip>
       </template>
       <template #feed-card-meta="{ item }">
-        <!-- Mobile card (NEO-57): the patient's wristband tags incl. date of
+        <!-- Mobile card (NEO-57): the patient's quiet line incl. date of
              birth, then the doctor as a small identity (name only) — or, in
              the doctor's own list, when the record last changed. -->
         <span class="patients-view__card-stack">
-          <IdentityTags :tags="patientTags(item as PatientListItem, { withDob: true }).tags" tone="patient" />
+          <IdentityDetails :details="patientDetails(item as PatientListItem, { withDob: true }).details" />
           <span v-if="isDoctor" class="patients-view__card-meta">
             {{ formatRelativeToNow((item as PatientListItem).updated_at, dateLocale) }}
           </span>
@@ -132,7 +132,7 @@ import PatientIntakeForms from "../components/patient/PatientIntakeForms.vue";
 import type { PatientIntakeFormStatus } from "../types/patientIntakeForm";
 import EntityLink from "../components/EntityLink.vue";
 import { intlLocale } from "@i18n/language-options";
-import IdentityTags from "../components/IdentityTags.vue";
+import IdentityDetails from "../components/IdentityDetails.vue";
 import { useIdentity } from "../composables/useIdentity";
 import { formatDateShort, formatRelativeToNow } from "../utils/relativeDate";
 import { hcpDetailLink } from "../utils/entityLinks";
@@ -177,7 +177,7 @@ interface PatientListItem {
 
 const { t, locale } = useI18n();
 const configStore = useConfigStore();
-const { patientTags, specialtySet } = useIdentity();
+const { patientDetails, specialtySet } = useIdentity();
 const dateLocale = computed(() => intlLocale(locale.value));
 function doctorOf(p: PatientListItem) {
   return specialtySet(p.practitioner_specialty, p.practitioner_specialties);

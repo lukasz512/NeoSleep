@@ -31,7 +31,7 @@
           entity-type="patient"
           :first-name="patient.first_name"
           :last-name="patient.last_name"
-          :fields="patientFields(patient)"
+          :details="patientDetails(patient, { long: true }).details"
         />
       </template>
       <template v-if="patient" #header-actions>
@@ -108,8 +108,8 @@
                   :to="patient.practitioner_id ? { name: 'hcp-detail', params: { id: patient.practitioner_id } } : null"
                   :label="patient.practitioner_name"
                   entity-type="hcp"
-                  :tags="specialtySet(patient.practitioner_specialty, patient.practitioner_specialties).tags"
-                  :more-tags="specialtySet(patient.practitioner_specialty, patient.practitioner_specialties).more"
+                  :details="specialtySet(patient.practitioner_specialty, patient.practitioner_specialties).details"
+                  :more-details="specialtySet(patient.practitioner_specialty, patient.practitioner_specialties).more"
                   :avatar-size="32"
                 />
               </dd>
@@ -238,7 +238,7 @@ interface PatientDetail {
 }
 
 const { t } = useI18n();
-const { patientFields, specialtySet } = useIdentity();
+const { patientDetails, specialtySet } = useIdentity();
 const route = useRoute();
 const router = useRouter();
 const notifications = useNotifications();

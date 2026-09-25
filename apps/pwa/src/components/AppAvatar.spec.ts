@@ -59,18 +59,13 @@ describe("AppAvatar (non-hco entity types)", () => {
   });
 });
 
-describe("AppAvatar (identity tint + shape, NEO-57)", () => {
+describe("AppAvatar (identity tint, NEO-57)", () => {
   it("tints each identity type with its own tone class", () => {
     expect(mountAvatar({ entityType: "patient", name: "Mateusz Dotestowania" }).classes()).toContain("app-avatar--patient");
     expect(mountAvatar({ entityType: "hcp", name: "Jan Kowalski" }).classes()).toContain("app-avatar--doctor");
     expect(mountAvatar({ entityType: "hco" }).classes()).toContain("app-avatar--org");
     expect(mountAvatar({ entityType: "user", name: "Anna Nowak" }).classes()).toContain("app-avatar--person");
     expect(mountAvatar({ entityType: "lead", name: "Anna Nowak" }).classes()).toContain("app-avatar--person");
-  });
-
-  it("is a rounded square whose corner radius scales with size", () => {
-    expect(mountAvatar({ entityType: "patient", name: "Anna Kowalska", size: 56 }).attributes("style")).toContain("--app-avatar-radius: 16px");
-    expect(mountAvatar({ entityType: "patient", name: "Anna Kowalska", size: 20 }).attributes("style")).toContain("--app-avatar-radius: 6px");
   });
 
   it("keeps initials for people and drops the tint behind a real photo", () => {

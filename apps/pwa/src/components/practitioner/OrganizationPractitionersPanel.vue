@@ -26,8 +26,8 @@
           :label="asRow(item).name"
           :first-name="asRow(item).first_name"
           :last-name="asRow(item).last_name"
-          :tags="specialtySet(asRow(item).primary_specialty, asRow(item).specialties).tags"
-          :more-tags="specialtySet(asRow(item).primary_specialty, asRow(item).specialties).more"
+          :details="specialtySet(asRow(item).primary_specialty, asRow(item).specialties).details"
+          :more-details="specialtySet(asRow(item).primary_specialty, asRow(item).specialties).more"
           :avatar-size="32"
         />
       </template>

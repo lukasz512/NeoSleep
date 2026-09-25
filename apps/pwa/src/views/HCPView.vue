@@ -45,8 +45,8 @@
         :label="(item as HCPListItem).name"
         :first-name="(item as HCPListItem).first_name"
         :last-name="(item as HCPListItem).last_name"
-        :tags="doctorTags(item as HCPListItem).tags"
-        :more-tags="doctorTags(item as HCPListItem).more"
+        :details="doctorDetails(item as HCPListItem).details"
+        :more-details="doctorDetails(item as HCPListItem).more"
         :avatar-size="32"
       />
     </template>
@@ -139,7 +139,7 @@ interface HCPListItem {
 }
 
 const { t } = useI18n();
-const { doctorTags } = useIdentity();
+const { doctorDetails } = useIdentity();
 const configStore = useConfigStore();
 const authStore = useAuthStore();
 // Direct add is its own, narrower admin/manager-only path — reps/kam/msl still

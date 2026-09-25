@@ -34,7 +34,7 @@
           entity-type="user"
           :first-name="user.first_name"
           :last-name="user.last_name"
-          :fields="[{ label: t('user.users.detail.role'), value: t(`user.users.role.${roleKey}`) }]"
+          :details="[t(`user.users.role.${roleKey}`)]"
         />
       </template>
       <template v-if="user" #header-actions>

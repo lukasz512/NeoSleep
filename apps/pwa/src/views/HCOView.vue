@@ -40,7 +40,7 @@
           :to="null"
           entity-type="hco"
           :label="(item as HCOListItem).name"
-          :tags="orgTags(item as HCOListItem).tags"
+          :details="orgDetails(item as HCOListItem).details"
           :avatar-size="32"
         />
       </template>
@@ -137,7 +137,7 @@ interface HCOListItem {
 }
 
 const { t } = useI18n();
-const { orgTags } = useIdentity();
+const { orgDetails } = useIdentity();
 const configStore = useConfigStore();
 const notifications = useNotifications();
 const { submit } = useEntitySubmit();

@@ -47,8 +47,8 @@
           :to="hcpDetailLink((item as TreatmentPlanRow).dentist_id)"
           :label="(item as TreatmentPlanRow).dentist_name"
           entity-type="hcp"
-          :tags="doctorOf(item as TreatmentPlanRow).tags"
-          :more-tags="doctorOf(item as TreatmentPlanRow).more"
+          :details="doctorOf(item as TreatmentPlanRow).details"
+          :more-details="doctorOf(item as TreatmentPlanRow).more"
           :avatar-size="32"
         />
       </template>

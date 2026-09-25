@@ -39,7 +39,7 @@
           <EntityLink
             :to="hcoDetailLink(org.organization_id)"
             :label="org.name"
-            :tags="orgTags(org).tags"
+            :details="orgDetails(org).details"
             :avatar-size="32"
             class="practitioner-clinics-panel__name"
           />
@@ -146,7 +146,7 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
-const { orgTags } = useIdentity();
+const { orgDetails } = useIdentity();
 const notifications = useNotifications();
 const authStore = useAuthStore();
 

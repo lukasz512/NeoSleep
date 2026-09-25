@@ -19,7 +19,7 @@
           :label="(item as UserListItem).name"
           :first-name="(item as UserListItem).first_name"
           :last-name="(item as UserListItem).last_name"
-          :tags="userTags(roleKeyOf(item as Record<string, unknown>)).tags"
+          :details="userDetails(roleKeyOf(item as Record<string, unknown>)).details"
           :avatar-size="32"
         />
       </template>
@@ -134,7 +134,7 @@ interface UserListItem {
 }
 
 const { t } = useI18n();
-const { userTags } = useIdentity();
+const { userDetails } = useIdentity();
 const notifications = useNotifications();
 const { submit } = useEntitySubmit();
 const authStore = useAuthStore();

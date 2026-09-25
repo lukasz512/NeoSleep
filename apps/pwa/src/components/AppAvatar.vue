@@ -3,7 +3,6 @@
     :size="size"
     class="app-avatar"
     :class="[`app-avatar--${tone}`, { 'app-avatar--photo': !!avatarUrl }]"
-    :style="{ '--app-avatar-radius': radius }"
   >
     <VImg v-if="avatarUrl" :src="avatarUrl" :alt="name || ''" cover />
     <span v-else-if="initials" class="app-avatar__initials" :style="{ fontSize: initialsFontSize }">{{ initials }}</span>
@@ -29,7 +28,7 @@ import { identityTone } from "../utils/identityTone";
  * so every caller gets it right for free, rather than each call site having
  * to remember to withhold `name` for place types.
  *
- * NEO-57 "wristband" identity: a rounded square tinted with its type's color
+ * NEO-57 identity: an organic square (squircle) tinted with its type's color
  * (theme.scss --pwa-identity-*: patient teal, doctor blue, organization
  * amber, users/leads neutral), initials/icon in that same color — so a mixed
  * list reads by kind at a glance. Replaces the earlier per-name seeded
@@ -90,17 +89,19 @@ const FIBONACCI_INITIALS_RATIO = 21 / 55;
 // must also pass the equivalent numeric size for this calculation.
 const sizePx = computed(() => (typeof props.size === "number" ? props.size : parseFloat(String(props.size)) || 40));
 const initialsFontSize = computed(() => `${Math.max(sizePx.value * FIBONACCI_INITIALS_RATIO, 8)}px`);
-// Corner radius scales with size (~28%): 16px on the 56px header avatar,
-// ~5px on an 18px mention — the same squircle-ish shape at every size.
-const RADIUS_TO_SIZE_RATIO = 0.28;
-const radius = computed(() => `${Math.round(sizePx.value * RADIUS_TO_SIZE_RATIO)}px`);
+
 </script>
 
 <style scoped>
 .app-avatar {
   flex-shrink: 0;
-  /* VAvatar is a circle by default; the identity shape is a rounded square. */
-  border-radius: var(--app-avatar-radius) !important;
+  /* Organic square (squircle): a superellipse mask instead of VAvatar's
+     circle or a plain rounded rectangle — the corners flow into the sides
+     with no visible arc joint, at every size from an 18px mention to the
+     56px header, because the mask scales with the element. */
+  border-radius: 0 !important;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 0C88 0 100 12 100 50S88 100 50 100 0 88 0 50 12 0 50 0Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 0C88 0 100 12 100 50S88 100 50 100 0 88 0 50 12 0 50 0Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
   background: var(--app-avatar-bg);
   color: var(--app-avatar-fg);
 }

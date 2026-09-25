@@ -69,8 +69,8 @@
             :to="hcpDetailLink(plan.dentist_id)"
             entity-type="hcp"
             :label="plan.dentist_name"
-            :tags="specialtySet(plan.dentist_specialty, plan.dentist_specialties).tags"
-            :more-tags="specialtySet(plan.dentist_specialty, plan.dentist_specialties).more"
+            :details="specialtySet(plan.dentist_specialty, plan.dentist_specialties).details"
+            :more-details="specialtySet(plan.dentist_specialty, plan.dentist_specialties).more"
           />
           <VChip v-if="isDraft(plan)" color="warning" size="small" variant="tonal">{{ t("app.orthoApneaOrder.draftBadge") }}</VChip>
           <VChip v-else :color="statusColor(plan.status)" size="small" variant="tonal">{{ statusLabel(plan.status) }}</VChip>

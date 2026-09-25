@@ -137,25 +137,29 @@ describe("EntityLink — avatar initials and size", () => {
   });
 });
 
-describe("EntityLink — large identity tags (NEO-57)", () => {
-  it("renders wristband tags under the name, with extras behind a +N tag", () => {
+describe("EntityLink — large identity (NEO-57)", () => {
+  it("renders one plain line under the name, with extras behind a +N", () => {
     const wrapper = mountLink({
       to: { name: "hcp-detail", params: { id: "p1" } },
       label: "Dra. Ana López",
-      tags: ["Dentist"],
-      moreTags: ["Orthodontist"],
+      details: ["Dentist"],
+      moreDetails: ["Orthodontist"],
     });
 
     expect(wrapper.find(".entity-link__label").text()).toBe("Dra. Ana López");
-    const tags = wrapper.findAll(".identity-tags__tag").map((t) => t.text());
-    expect(tags).toEqual(["Dentist", "+1"]);
-    expect(wrapper.find(".identity-tags--doctor").exists()).toBe(true);
+    expect(wrapper.find(".identity-details").text()).toContain("Dentist");
+    expect(wrapper.find(".identity-details__more").text()).toBe("+1");
   });
 
-  it("is the small identity (name only) when there are no tags", () => {
+  it("joins several details with a middle dot, no labels", () => {
+    const wrapper = mountLink({ to: null, label: "Ana López", entityType: "patient", details: ["F", "47 y"] });
+    expect(wrapper.find(".identity-details").text()).toBe("F · 47 y");
+  });
+
+  it("is the small identity (name only) when there are no details", () => {
     const wrapper = mountLink({ to: null, label: "Dra. Ana López", entityType: "hcp" });
 
-    expect(wrapper.find(".identity-tags").exists()).toBe(false);
+    expect(wrapper.find(".identity-details").exists()).toBe(false);
     expect(wrapper.find(".entity-link--two-line").exists()).toBe(false);
     expect(wrapper.text()).toContain("Dra. Ana López");
   });

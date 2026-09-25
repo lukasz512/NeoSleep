@@ -4,17 +4,9 @@ import { useSpecialtyLabel } from "./useSpecialtyLabel";
 import { ageFromDateOfBirth } from "../utils/patientDemographics";
 import { hcoTypeLabel } from "../utils/hcoLabels";
 
-/** One labelled field of a large identity header ("SEX · Female"). */
-export interface IdentityField {
-  label: string;
-  value: string;
-  /** Extra values shown as a "+N" tag with a tooltip (a doctor's other specialties). */
-  more?: string[];
-}
-
-/** Tags + overflow for a large identity in a list row or card. */
-export interface IdentityTagSet {
-  tags: string[];
+/** The quiet line under a large identity's name: values joined with " · ", overflow behind "+N". */
+export interface IdentityDetailSet {
+  details: string[];
   more: string[];
 }
 
@@ -43,13 +35,14 @@ const GENDER_LABEL_KEYS: Record<string, string> = {
 };
 
 /**
- * What goes under a name in the shared identity (NEO-57 "wristband + EHR"):
- * `*Tags` for the large identity in list rows / mobile cards, `*Fields` for
- * the labelled detail-view header. One place decides it, so a patient, a
- * doctor or a clinic looks the same on every screen:
- * - patient: sex · age (+ date of birth on cards and in the header)
- * - doctor: the first specialty, the rest in a "+N" tooltip
- * - organization: its type
+ * What goes under a name in the shared identity (NEO-57) — the one place
+ * that decides it, so a patient, a doctor or a clinic reads the same on
+ * every screen. Plain values, no labels:
+ * - patient: "F · 47 y" (+ "b. 3/12/1979" on mobile cards; the header spells
+ *   the sex out: "Female · 47 y · b. 3/12/1979")
+ * - doctor: the first specialty, the rest behind "+N" (+ clinic in the header)
+ * - organization: its type (+ city in the header)
+ * - user: role
  */
 export function useIdentity() {
   const { t, locale } = useI18n();
@@ -62,58 +55,39 @@ export function useIdentity() {
     return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).toLocaleDateString(intlLocale(locale.value));
   }
 
-  function patientTags(p: PatientLike, opts: { withDob?: boolean } = {}): IdentityTagSet {
-    const tags: string[] = [];
-    if (p.gender === "female" || p.gender === "male") tags.push(t(`app.patients.sexShort.${p.gender}`));
-    const age = ageFromDateOfBirth(p.date_of_birth);
-    if (age != null) tags.push(t("app.patients.ageShort", { age }));
-    if (opts.withDob && p.date_of_birth) tags.push(t("app.patients.dobShort", { date: formatDob(p.date_of_birth) }));
-    return { tags, more: [] };
-  }
-
-  function patientFields(p: PatientLike): IdentityField[] {
-    const age = ageFromDateOfBirth(p.date_of_birth);
+  function patientDetails(p: PatientLike, opts: { withDob?: boolean; long?: boolean } = {}): IdentityDetailSet {
+    const details: string[] = [];
     const genderKey = p.gender ? GENDER_LABEL_KEYS[p.gender] : undefined;
-    return [
-      { label: t("app.identity.field.sex"), value: genderKey ? t(genderKey) : "" },
-      { label: t("app.identity.field.age"), value: age != null ? String(age) : "" },
-      { label: t("app.identity.field.dateOfBirth"), value: formatDob(p.date_of_birth) },
-    ];
+    if (opts.long && genderKey) details.push(t(genderKey));
+    else if (p.gender === "female" || p.gender === "male") details.push(t(`app.patients.sexShort.${p.gender}`));
+    const age = ageFromDateOfBirth(p.date_of_birth);
+    if (age != null) details.push(t("app.patients.ageShort", { age }));
+    if ((opts.withDob || opts.long) && p.date_of_birth) details.push(t("app.patients.dobShort", { date: formatDob(p.date_of_birth) }));
+    return { details, more: [] };
   }
 
-  /** First specialty as the tag; any others (from the full list) go to "+N". */
-  function specialtySet(primary?: string | null, all?: string[] | null): IdentityTagSet {
+  /** First specialty shown; any others (from the full list) go behind "+N". */
+  function specialtySet(primary?: string | null, all?: string[] | null): IdentityDetailSet {
     const first = primary || all?.[0] || "";
     const rest = (all ?? []).filter((s) => s && s !== first);
-    return { tags: first ? [specialtyLabel(first)] : [], more: rest.map((s) => specialtyLabel(s)) };
+    return { details: first ? [specialtyLabel(first)] : [], more: rest.map((s) => specialtyLabel(s)) };
   }
 
-  function doctorTags(d: DoctorLike): IdentityTagSet {
-    return specialtySet(d.primary_specialty || d.specialty, d.specialties);
+  function doctorDetails(d: DoctorLike, opts: { withClinic?: boolean } = {}): IdentityDetailSet {
+    const set = specialtySet(d.primary_specialty || d.specialty, d.specialties);
+    if (opts.withClinic && d.institution) set.details.push(d.institution);
+    return set;
   }
 
-  function doctorFields(d: DoctorLike): IdentityField[] {
-    const s = doctorTags(d);
-    return [
-      { label: t("app.identity.field.specialty"), value: s.tags[0] ?? "", more: s.more },
-      { label: t("app.identity.field.clinic"), value: d.institution ?? "" },
-    ];
+  function orgDetails(o: OrgLike, opts: { withCity?: boolean } = {}): IdentityDetailSet {
+    const details = o.type ? [hcoTypeLabel(t, o.type)] : [];
+    if (opts.withCity && o.city) details.push(o.city);
+    return { details, more: [] };
   }
 
-  function orgTags(o: OrgLike): IdentityTagSet {
-    return { tags: o.type ? [hcoTypeLabel(t, o.type)] : [], more: [] };
+  function userDetails(role?: string | null): IdentityDetailSet {
+    return { details: role ? [t(`user.users.role.${role}`)] : [], more: [] };
   }
 
-  function orgFields(o: OrgLike): IdentityField[] {
-    return [
-      { label: t("app.identity.field.type"), value: o.type ? hcoTypeLabel(t, o.type) : "" },
-      { label: t("app.identity.field.city"), value: o.city ?? "" },
-    ];
-  }
-
-  function userTags(role?: string | null): IdentityTagSet {
-    return { tags: role ? [t(`user.users.role.${role}`)] : [], more: [] };
-  }
-
-  return { patientTags, patientFields, specialtySet, doctorTags, doctorFields, orgTags, orgFields, userTags, formatDob };
+  return { patientDetails, specialtySet, doctorDetails, orgDetails, userDetails, formatDob };
 }

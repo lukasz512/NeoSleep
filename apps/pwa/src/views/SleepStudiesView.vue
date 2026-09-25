@@ -55,8 +55,8 @@
           :to="hcpDetailLink((item as SleepStudyRow).interpreted_by)"
           :label="(item as SleepStudyRow).interpreted_by_name"
           entity-type="hcp"
-          :tags="doctorOf(item as SleepStudyRow).tags"
-          :more-tags="doctorOf(item as SleepStudyRow).more"
+          :details="doctorOf(item as SleepStudyRow).details"
+          :more-details="doctorOf(item as SleepStudyRow).more"
           :avatar-size="32"
         />
       </template>

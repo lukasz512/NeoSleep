@@ -35,7 +35,7 @@
   >
     <template v-if="hco" #title>
       <!-- Type now lives in the identity's labelled fields; status stays a badge next to the name. -->
-      <IdentityHeader :name="hco.name" entity-type="hco" :org-type="hco.type" :fields="orgFields(hco)">
+      <IdentityHeader :name="hco.name" entity-type="hco" :org-type="hco.type" :details="orgDetails(hco, { withCity: true }).details">
         <VChip :color="hcoStatusColor(hco.status)" size="small" variant="tonal">
           {{ hcoStatusLabel(hco.status) }}
         </VChip>
@@ -262,7 +262,7 @@ interface HCO {
 }
 
 const { t } = useI18n();
-const { orgFields } = useIdentity();
+const { orgDetails } = useIdentity();
 const route = useRoute();
 const router = useRouter();
 const notifications = useNotifications();

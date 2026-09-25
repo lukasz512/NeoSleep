@@ -14,47 +14,34 @@
         <!-- Status badges etc. that belong next to the name. -->
         <slot />
       </span>
-      <dl v-if="visibleFields.length" class="identity-header__fields">
-        <div v-for="field in visibleFields" :key="field.label" class="identity-header__field">
-          <dt>{{ field.label }}</dt>
-          <dd>
-            {{ field.value }}
-            <IdentityTags v-if="field.more?.length" :tags="[]" :more="field.more" :tone="tone" class="identity-header__more" />
-          </dd>
-        </div>
-      </dl>
+      <IdentityDetails :details="details" :more="moreDetails" class="identity-header__details" />
     </span>
   </span>
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
 import AppAvatar, { type AppAvatarEntityType } from "./AppAvatar.vue";
-import { identityTone } from "../utils/identityTone";
-import IdentityTags from "./IdentityTags.vue";
-import type { IdentityField } from "../composables/useIdentity";
+import IdentityDetails from "./IdentityDetails.vue";
 
 /**
- * Large identity for a detail view's title (NEO-57): the "medical record"
- * header — rounded-square avatar in the identity's tint, the name, and under
- * it quiet labelled fields the way an EHR patient banner shows them
- * (SEX · AGE · DATE OF BIRTH for a patient, SPECIALTY · CLINIC for a doctor,
- * TYPE · CITY for an organization). Fields without a value are left out.
+ * Large identity for a detail view's title (NEO-57): the organic-square
+ * avatar in the identity's tint, the name, and one quiet line under it —
+ * "Female · 40 y · b. 7/2/1986" for a patient, "Dentist · Clínica Dental
+ * Polanco" for a doctor, "Clinic · Ciudad de México" for an organization.
+ * Same line as in the lists, just a little larger; no field labels.
  */
-const props = withDefaults(
+withDefaults(
   defineProps<{
     name: string;
     entityType: AppAvatarEntityType;
     firstName?: string | null;
     lastName?: string | null;
     orgType?: string | null;
-    fields?: IdentityField[];
+    details?: string[];
+    moreDetails?: string[];
   }>(),
-  { firstName: null, lastName: null, orgType: null, fields: () => [] },
+  { firstName: null, lastName: null, orgType: null, details: () => [], moreDetails: () => [] },
 );
-
-const tone = computed(() => identityTone(props.entityType));
-const visibleFields = computed(() => props.fields.filter((f) => f.value));
 </script>
 
 <style scoped>
@@ -70,7 +57,7 @@ const visibleFields = computed(() => props.fields.filter((f) => f.value));
 .identity-header__text {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -90,33 +77,7 @@ const visibleFields = computed(() => props.fields.filter((f) => f.value));
   overflow-wrap: anywhere;
 }
 
-.identity-header__fields {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 24px;
-  margin: 0;
-}
-
-.identity-header__field {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.identity-header__field dt {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 0.59375rem;
-  font-weight: 500;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: rgba(var(--v-theme-on-surface), var(--v-disabled-opacity));
-}
-
-.identity-header__field dd {
-  margin: 0;
-  font-size: 0.84375rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+.identity-header__details {
+  font-size: 0.875rem;
 }
 </style>
