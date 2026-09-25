@@ -128,11 +128,23 @@ export default defineConfig(mergeConfig(sharedViteConfig(__dirname), {
     },
   },
   build: {
-    rollupOptions: {
+    // Vite 8 bundles with Rolldown: the Rollup `manualChunks` object form is
+    // gone, so the same two long-lived vendor chunks are declared as
+    // codeSplitting groups. Each group also captures its matched modules'
+    // dependencies (Rolldown default), mirroring what manualChunks did.
+    rolldownOptions: {
       output: {
-        manualChunks: {
-          vuetify: ["vuetify"],
-          vue: ["vue", "vue-router", "pinia", "vue-i18n"],
+        codeSplitting: {
+          groups: [
+            // Higher priority first, so vue itself lands here and not in the
+            // vuetify chunk (vuetify's framework entry imports vue).
+            { name: "vue", priority: 2, test: /[\\/]node_modules[\\/](?:vue|vue-router|pinia|vue-i18n)[\\/]/ },
+            // Only vuetify's package entry (createVuetify + its composables),
+            // exactly what `manualChunks: { vuetify: ["vuetify"] }` resolved to —
+            // auto-imported components (vuetify/components/*) stay with the
+            // views that use them.
+            { name: "vuetify", priority: 1, test: /[\\/]node_modules[\\/]vuetify[\\/]lib[\\/]framework\.js$/ },
+          ],
         },
       },
     },
