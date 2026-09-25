@@ -37,16 +37,25 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # VITE_API_URL points the built site at the API (booking widget, find-a-specialist
+      # map). Without it apiFetch falls back to a same-origin relative path, which 404s on
+      # the static GoDaddy host — the secret never existed, so neither feature ever worked.
+      # Same per-branch secrets as deploy-pwa.yml: dev site -> dev API, prod site -> prod
+      # API (Render as fallback until the NEO-45 prod cutover sets API_URL_PROD).
+      # VITE_GOOGLE_MAPS_BROWSER_API_KEY powers the /find-specialist map —
+      # an HTTP-referrer-restricted key, safe to ship in the bundle (see
+      # apps/web/src/composables/useGoogleMaps.ts).
+      - name: Set API URL for build
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/prod" ]; then
+            echo "VITE_API_URL=${{ secrets.API_URL_PROD || secrets.RENDER_API_URL_PROD }}" >> $GITHUB_ENV
+          else
+            echo "VITE_API_URL=${{ secrets.API_URL_DEV || secrets.RENDER_API_URL_DEV }}" >> $GITHUB_ENV
+          fi
+
       - name: Build website
-        # VITE_API_URL points the built site at the prod API (needed for the
-        # /for-professionals booking widget) — without it, apiFetch falls back
-        # to a same-origin relative path, which 404s on the static GoDaddy host.
-        # VITE_GOOGLE_MAPS_BROWSER_API_KEY powers the /find-specialist map —
-        # an HTTP-referrer-restricted key, safe to ship in the bundle (see
-        # apps/web/src/composables/useGoogleMaps.ts).
         run: pnpm run build:web
         env:
-          VITE_API_URL: ${{ secrets.VITE_API_URL }}
           VITE_GOOGLE_MAPS_BROWSER_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_BROWSER_API_KEY }}
 
       - name: Deploy to PROD (neosleepcare.com)
