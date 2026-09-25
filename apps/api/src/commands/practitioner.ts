@@ -24,7 +24,7 @@ import { sendPartnerInviteEmail } from "../mailer.js";
 import { DEFAULT_FRONTEND_ORIGIN } from "../utils/frontendOrigin.js";
 import { hashToken } from "../utils/hashToken.js";
 import { normalizeNationalIds } from "../utils/nationalIds.js";
-import { partnerJurisdictionForRegion, resolvePartnerDocumentSet } from "./partnerDocuments.js";
+import { resolvePractitionerJurisdiction, resolvePartnerDocumentSet } from "./partnerDocuments.js";
 
 /**
  * COMMANDS — Practitioner domain.
@@ -276,9 +276,11 @@ export async function ActivatePractitionerCommand(
   // NEO-51: never send an invite the doctor can't complete — their country's
   // partner documents must exist, have a NeoSleep signatory, and be approved
   // by that signatory. Throws PartnerDocumentsNotReadyError (409) otherwise.
-  const jurisdiction = partnerJurisdictionForRegion(practitioner.region);
+  const jurisdiction = await resolvePractitionerJurisdiction(ctx.client, practitioner);
   if (!jurisdiction) {
-    throw new ValidationError("Partner onboarding is only available for practitioners in Poland (PL) or Mexico (MX)");
+    throw new ValidationError(
+      "Partner onboarding is only available for practitioners in Poland (PL) or Mexico (MX) — set the doctor's or their clinic's country first"
+    );
   }
   await resolvePartnerDocumentSet(ctx.client, jurisdiction);
 
@@ -341,8 +343,8 @@ export async function ActivatePractitionerCommand(
         title: practitioner.salutation,
         firstName: practitioner.first_name,
         lastName: practitioner.last_name,
-        language: inferLanguage(practitioner.region),
-        region: practitioner.region,
+        language: inferLanguage(jurisdiction),
+        region: jurisdiction,
       },
       { name: ctx.user.name ?? "NeoSleep", email: ctx.user.email }
     );
