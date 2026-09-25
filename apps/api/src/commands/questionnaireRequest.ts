@@ -99,7 +99,8 @@ export async function CreateQuestionnaireRequestCommand(
     if (!key || !completable.some((item) => item.key === key)) throw new ValidationError(`kind must be "medical_history" or "stop_bang"`);
     items = [key];
   } else {
-    items = completable.filter((item) => item.status !== "done").map((item) => item.key);
+    // "partial" = the patient's part is in (STOP-Bang awaiting the clinician's B-A-N-G) — not theirs to redo.
+    items = completable.filter((item) => item.status === "missing" || item.status === "pending_patient").map((item) => item.key);
   }
   if (items.length === 0) throw new ValidationError("Nothing left for the patient to complete");
 

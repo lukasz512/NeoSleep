@@ -1,9 +1,9 @@
-import { describe, it, expect, vi, beforeAll } from "vitest";
+import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import bcrypt from "bcrypt";
 import { withTenant, insertStaffUser, insertPatient, getGlobalTerritoryId } from "../db.js";
 import { getAuditLogForEntities } from "../db/audit-log.js";
 import { withPlatform } from "../db/tenant.js";
-import { insertDocumentContentVersion } from "../db/documentContent.js";
+import { insertDocumentContentVersion, getCurrentDocumentContentVersion } from "../db/documentContent.js";
 import type { TenantContext } from "../context/TenantContext.js";
 import { ValidationError } from "../errors.js";
 import {
@@ -58,9 +58,13 @@ const STOP = { snoring: true, tiredness: true, observed_apnea: false, pressure: 
 const inTx = (client: Client): PublicRunner => (fn) => fn(client);
 
 // informedConsent needs a current consent text (the patient reads it before signing).
+// It's the real template key in the shared platform schema, so the seeded
+// version is removed afterwards and the previous current text restored.
+let seeded: { id: string; previousId: string | null } | null = null;
 beforeAll(async () => {
-  await withPlatform((client) =>
-    insertDocumentContentVersion(client, {
+  seeded = await withPlatform(async (client) => {
+    const previous = await getCurrentDocumentContentVersion(client, "informedConsent", "mx");
+    const version = await insertDocumentContentVersion(client, {
       templateKey: "informedConsent",
       locale: "mx",
       contentHtml: "<p>Autorizo el tratamiento con dispositivo de avance mandibular. {legalEntityName}</p><script>alert(1)</script>",
@@ -69,9 +73,19 @@ beforeAll(async () => {
       createdByEmail: "qa@neosleepcare.com",
       createdByTenantSlug: TENANT_SLUG,
       changeNote: "seeded by commands/questionnaireRequest.spec.ts",
-    })
-  );
+    });
+    return { id: version.id, previousId: previous?.id ?? null };
+  });
 }, 15000);
+
+afterAll(async () => {
+  if (!seeded) return;
+  const { id, previousId } = seeded;
+  await withPlatform(async (client) => {
+    await client.query(`DELETE FROM platform.document_content_version WHERE id = $1`, [id]);
+    if (previousId) await client.query(`UPDATE platform.document_content_version SET is_current = true WHERE id = $1`, [previousId]);
+  });
+});
 
 describe("patient QR link — one link for everything the patient has to do", () => {
   it("bundles consent → medical history → S-T-O-P in checklist order; the link dies only after the last step", async () => {
@@ -126,6 +140,9 @@ describe("patient QR link — one link for everything the patient has to do", ()
       expect(mh[0].consent_version).toBe(PATIENT_CONSENT_VERSION);
       const audit = await getAuditLogForEntities(client, ["MedicalHistoryQuestionnaire"], [history.id]);
       expect(audit[0]).toMatchObject({ action: "create", user_id: null });
+
+      // STOP-Bang is only "partial" now, but what's missing (B-A-N-G) is the clinician's — nothing left for the patient.
+      await expect(CreateQuestionnaireRequestCommand(ctx, patient.id, {}, ORIGIN)).rejects.toThrow(ValidationError);
     });
   }, 60000);
 

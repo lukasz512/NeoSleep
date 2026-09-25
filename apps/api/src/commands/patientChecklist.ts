@@ -178,7 +178,7 @@ export async function UploadPatientStudyCommand(ctx: TenantContext, patientId: s
       size_bytes: input.bytes.byteLength,
       is_public: false,
       uploaded_by: ctx.user.id,
-      metadata: { document_type: "study_upload", title, notes: notes || null, checklist_item: item, uploaded_by_name: ctx.user.email },
+      metadata: { document_type: "study_upload", title, notes: notes || null, checklist_item: item, uploaded_by_name: ctx.user.name || ctx.user.email },
     });
     await insertAuditLog(ctx.client, {
       user_id: ctx.user.id,

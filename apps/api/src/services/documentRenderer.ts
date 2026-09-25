@@ -85,17 +85,33 @@ export async function resolveBrowserLaunch(): Promise<BrowserLaunch> {
   return { executablePath: await chromium.executablePath(), args: chromium.args };
 }
 
-async function getBrowser(): Promise<Browser> {
+/**
+ * The one shared browser. Exported for the renderer spec only (it kills the
+ * process to prove a crashed browser is replaced, not reused).
+ */
+export async function getRenderBrowser(): Promise<Browser> {
+  if (browserPromise) {
+    const cached = await browserPromise.catch(() => null);
+    // A browser that crashed / was OOM-killed stays cached as a dead
+    // connection ("Connection closed" on every render until a restart) —
+    // drop it and launch a fresh one.
+    if (cached && !cached.connected) browserPromise = null;
+  }
   if (!browserPromise) {
-    browserPromise = (async () => {
+    const current: Promise<Browser> = (async () => {
       const { executablePath, args } = await resolveBrowserLaunch();
-      return puppeteer.launch({ args, executablePath, headless: true });
+      const browser = await puppeteer.launch({ args, executablePath, headless: true });
+      browser.once("disconnected", () => {
+        if (browserPromise === current) browserPromise = null;
+      });
+      return browser;
     })().catch((err: unknown) => {
       // Don't cache a rejected launch — let the next call retry instead of
       // every future render failing forever off one transient error.
-      browserPromise = null;
+      if (browserPromise === current) browserPromise = null;
       throw err;
     });
+    browserPromise = current;
   }
   return browserPromise;
 }
@@ -164,10 +180,14 @@ export async function applyDataImages(page: Page, images: Record<string, string>
   }
   await page.evaluate((values) => {
     for (const [key, src] of Object.entries(values)) {
-      document.querySelectorAll(`[data-field="${CSS.escape(key)}"]`).forEach((el) => {
+      document.querySelectorAll<HTMLElement>(`[data-field="${CSS.escape(key)}"]`).forEach((el) => {
         const img = document.createElement("img");
         img.src = src;
         img.alt = "";
+        // Fit the box: a phone canvas is ~2-3x the box's size at device pixel
+        // ratio, and an unconstrained image spills out and across a page break.
+        img.style.cssText = "display:block;width:100%;height:100%;object-fit:contain;";
+        el.style.breakInside = "avoid";
         el.replaceChildren(img);
       });
     }
@@ -222,7 +242,7 @@ export async function applyDataFields(page: Page, fields: Record<string, string>
 export async function renderHtmlToPdf(html: string, options: RenderHtmlToPdfOptions = {}): Promise<Uint8Array> {
   await acquireRenderSlot();
   try {
-    const browser = await getBrowser();
+    const browser = await getRenderBrowser();
     const page = await browser.newPage();
     try {
       await lockDownPage(page);

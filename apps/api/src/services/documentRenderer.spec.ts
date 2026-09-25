@@ -1,7 +1,7 @@
 import { describe, it, expect, afterAll } from "vitest";
 import puppeteer, { type Browser } from "puppeteer-core";
 import { renderDocumentHtml } from "@neo/documents";
-import { renderHtmlToPdf, resolveBrowserLaunch, applyDataFields, applyDataImages, lockDownPage } from "./documentRenderer.js";
+import { renderHtmlToPdf, getRenderBrowser, resolveBrowserLaunch, applyDataFields, applyDataImages, lockDownPage } from "./documentRenderer.js";
 
 /**
  * Real, non-mocked rendering — every other spec mocks renderHtmlToPdf at
@@ -30,15 +30,33 @@ describe.skipIf(!launch)("renderHtmlToPdf (real Chromium)", () => {
     expect(Buffer.from(pdf.subarray(0, 5)).toString("latin1")).toBe("%PDF-");
   });
 
+  it("a crashed shared browser is replaced on the next render, not reused as a dead connection", { timeout: 60_000 }, async () => {
+    const first = await getRenderBrowser();
+    first.process()?.kill("SIGKILL");
+    await new Promise<void>((resolve) => (first.connected ? first.once("disconnected", () => resolve()) : resolve()));
+
+    const pdf = await renderHtmlToPdf("<html><body><h1>after a crash</h1></body></html>");
+    expect(Buffer.from(pdf.subarray(0, 5)).toString("latin1")).toBe("%PDF-");
+    expect(await getRenderBrowser()).not.toBe(first);
+  });
+
   it("places a drawn signature (PNG data URL) into its data-field, and rejects anything that isn't one", { timeout: 60_000 }, async () => {
     browser ??= await puppeteer.launch({ ...launch!, headless: true });
     const page = await browser.newPage();
     await lockDownPage(page);
-    await page.setContent(`<div class="signature-box" data-field="firma_paciente">placeholder</div>`);
+    await page.setContent(`<div class="signature-box" style="width:260px;height:90px" data-field="firma_paciente">placeholder</div>`);
     const onePixel = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 
     await applyDataImages(page, { firma_paciente: onePixel });
-    expect(await page.$eval("[data-field='firma_paciente']", (el) => el.innerHTML)).toBe(`<img src="${onePixel}" alt="">`);
+    const placed = await page.$eval("[data-field='firma_paciente']", (el) => {
+      const img = el.querySelector("img")!;
+      const box = el.getBoundingClientRect();
+      const pic = img.getBoundingClientRect();
+      return { children: el.childNodes.length, src: img.getAttribute("src"), fits: pic.width <= box.width && pic.height <= box.height };
+    });
+    // The image replaces the placeholder and is sized to the box — a phone canvas at 2-3x DPR
+    // otherwise spills out of it and across a page break (seen on the signed consent PDF).
+    expect(placed).toEqual({ children: 1, src: onePixel, fits: true });
 
     await expect(applyDataImages(page, { firma_paciente: "https://evil.test/x.png" })).rejects.toThrow(/PNG data URL/);
   });

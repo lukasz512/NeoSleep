@@ -265,7 +265,8 @@ const GROUP_ORDER: ChecklistGroup[] = ["consent", "patient", "doctor", "results"
 const groups = computed(() =>
   GROUP_ORDER.map((key) => ({ key, items: items.value.filter((item) => item.group === key) })).filter((g) => g.items.length)
 );
-const patientCanStillDoSomething = computed(() => items.value.some((item) => item.actions.qr && item.status !== "done"));
+/** "partial" = the patient's part is in (STOP-Bang awaiting B-A-N-G) — mirrors the API's bundle selection. */
+const patientCanStillDoSomething = computed(() => items.value.some((item) => item.actions.qr && (item.status === "missing" || item.status === "pending_patient")));
 
 // ---------------------------------------------------------------------------
 // Labels
