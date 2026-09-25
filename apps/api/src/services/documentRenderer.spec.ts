@@ -1,7 +1,7 @@
 import { describe, it, expect, afterAll } from "vitest";
 import puppeteer, { type Browser } from "puppeteer-core";
 import { renderDocumentHtml } from "@neo/documents";
-import { renderHtmlToPdf, resolveBrowserLaunch, applyDataFields, lockDownPage } from "./documentRenderer.js";
+import { renderHtmlToPdf, resolveBrowserLaunch, applyDataFields, applyDataImages, lockDownPage } from "./documentRenderer.js";
 
 /**
  * Real, non-mocked rendering — every other spec mocks renderHtmlToPdf at
@@ -30,6 +30,28 @@ describe.skipIf(!launch)("renderHtmlToPdf (real Chromium)", () => {
     expect(Buffer.from(pdf.subarray(0, 5)).toString("latin1")).toBe("%PDF-");
   });
 
+  it("places a drawn signature (PNG data URL) into its data-field, and rejects anything that isn't one", { timeout: 60_000 }, async () => {
+    browser ??= await puppeteer.launch({ ...launch!, headless: true });
+    const page = await browser.newPage();
+    await lockDownPage(page);
+    await page.setContent(`<div class="signature-box" data-field="firma_paciente">placeholder</div>`);
+    const onePixel = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+
+    await applyDataImages(page, { firma_paciente: onePixel });
+    expect(await page.$eval("[data-field='firma_paciente']", (el) => el.innerHTML)).toBe(`<img src="${onePixel}" alt="">`);
+
+    await expect(applyDataImages(page, { firma_paciente: "https://evil.test/x.png" })).rejects.toThrow(/PNG data URL/);
+  });
+
+  it("renders the medical-history print form with a signature image", { timeout: 60_000 }, async () => {
+    const html = renderDocumentHtml("medicalHistory", "mx");
+    const pdf = await renderHtmlToPdf(html, {
+      dataFields: { nombre_paciente: "Ana López", q_has_diabetes: "Sí" },
+      dataImages: { firma_paciente: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==" },
+    });
+    expect(Buffer.from(pdf.subarray(0, 5)).toString("latin1")).toBe("%PDF-");
+  });
+
   it("renders the STOP-Bang template end to end with data fields", { timeout: 60_000 }, async () => {
     const html = renderDocumentHtml("stopBang", "mx");
     const pdf = await renderHtmlToPdf(html, { dataFields: { nombre_paciente: "Ana López", score: "5" } });
@@ -37,7 +59,7 @@ describe.skipIf(!launch)("renderHtmlToPdf (real Chromium)", () => {
   });
 
   it("fills every element sharing a data-field, not just the first, and escapes markup", { timeout: 60_000 }, async () => {
-    browser = await puppeteer.launch({ ...launch!, headless: true });
+    browser ??= await puppeteer.launch({ ...launch!, headless: true });
     const page = await browser.newPage();
     await page.setContent(
       `<p data-field="nombre_paciente"></p><p data-field="nombre_paciente"></p><p data-field="untouched">keep</p>`

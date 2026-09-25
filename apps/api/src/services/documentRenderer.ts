@@ -146,6 +146,32 @@ export interface RenderHtmlToPdfOptions {
    * generator to go through renderHtmlToPdf() only.
    */
   dataFields?: Record<string, string>;
+  /**
+   * Images placed into `[data-field="key"]` elements — a drawn signature
+   * (data:image/png;base64 only: the page lockdown allows data: URLs and
+   * nothing else, and callers validate the format first). The element's
+   * content is replaced by one <img>.
+   */
+  dataImages?: Record<string, string>;
+}
+
+const PNG_DATA_URL_RE = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/;
+
+/** Exported for the spec; callers go through renderHtmlToPdf(). */
+export async function applyDataImages(page: Page, images: Record<string, string>): Promise<void> {
+  for (const [key, url] of Object.entries(images)) {
+    if (!PNG_DATA_URL_RE.test(url)) throw new DocumentRenderError(`data image for "${key}" must be a PNG data URL`);
+  }
+  await page.evaluate((values) => {
+    for (const [key, src] of Object.entries(values)) {
+      document.querySelectorAll(`[data-field="${CSS.escape(key)}"]`).forEach((el) => {
+        const img = document.createElement("img");
+        img.src = src;
+        img.alt = "";
+        el.replaceChildren(img);
+      });
+    }
+  }, images);
 }
 
 /** The only hosts a template may load from — the Poppins webfont the templates link. */
@@ -202,6 +228,11 @@ export async function renderHtmlToPdf(html: string, options: RenderHtmlToPdfOpti
       await lockDownPage(page);
       await page.setContent(html, { waitUntil: "networkidle0" });
       if (options.dataFields) await applyDataFields(page, options.dataFields);
+      if (options.dataImages) {
+        await applyDataImages(page, options.dataImages);
+        // data: images still decode asynchronously — wait so page.pdf() never captures an empty box.
+        await page.waitForFunction(() => Array.from(document.images).every((img) => img.complete), { timeout: 5000 });
+      }
       const displayHeaderFooter = Boolean(options.headerTemplate || options.footerTemplate);
       return await page.pdf({
         format: "A4",

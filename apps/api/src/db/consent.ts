@@ -19,6 +19,33 @@ export interface InsertConsentInput {
   metadata?: Record<string, unknown> | null;
 }
 
+export interface ConsentRow {
+  id: string;
+  purpose: string;
+  granted_at: Date;
+  withdrawn_at: Date | null;
+  collected_by: string | null;
+  metadata: Record<string, unknown> | null;
+}
+
+/** Newest first; includes withdrawn rows (callers decide what counts). */
+export async function listConsentsForEntity(
+  client: PoolClient,
+  entityType: InsertConsentInput["entity_type"],
+  entityId: string
+): Promise<ConsentRow[]> {
+  try {
+    const r = await client.query<ConsentRow>(
+      `SELECT id, purpose, granted_at, withdrawn_at, collected_by, metadata FROM consent
+        WHERE entity_type = $1 AND entity_id = $2 ORDER BY granted_at DESC`,
+      [entityType, entityId]
+    );
+    return r.rows;
+  } catch (err) {
+    throw new DatabaseError("listConsentsForEntity", err);
+  }
+}
+
 export async function insertConsent(client: PoolClient, input: InsertConsentInput): Promise<string> {
   try {
     const r = await client.query<{ id: string }>(

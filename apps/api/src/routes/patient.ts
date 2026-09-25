@@ -9,11 +9,10 @@ import { CreatePatientCommand, UpdatePatientCommand, DeletePatientCommand } from
 import { GetPatientListQuery, GetPatientByIdQuery } from "../queries/patient.js";
 import { GetHistoryForPatientQuery } from "../queries/auditLog.js";
 import { GetPatientDocumentsQuery, GetPatientDocumentDownloadUrlQuery } from "../queries/entityDocuments.js";
-import {
-  RecordClinicalQuestionnaireCommand,
-  CompleteStopBangCommand,
-  GenerateClinicalRecordPdfCommand,
-} from "../commands/clinicalRecords.js";
+import { RecordClinicalQuestionnaireCommand, CompleteStopBangCommand } from "../commands/clinicalRecords.js";
+import { PrintChecklistItemCommand, UploadPatientStudyCommand, DeletePatientStudyUploadCommand } from "../commands/patientChecklist.js";
+import { GetPatientChecklistQuery } from "../queries/patientChecklist.js";
+import multer from "multer";
 import { isClinicalRecordKind, type ClinicalRecordKind } from "../commands/clinicalRecordFields.js";
 import { ListClinicalRecordsQuery } from "../queries/clinicalRecords.js";
 import { GetLatestSleepStudyRefQuery } from "../queries/sleepStudy.js";
@@ -34,6 +33,9 @@ import { parsePaginationParams, toFilterArray } from "./utils.js";
  */
 
 export const patientRouter: RouterType = Router();
+
+/** "Agregar estudio" uploads — same limits as sleep-study attachments (routes/sleepStudy.ts). */
+const studyUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
 // ---------------------------------------------------------------------------
 // GET /api/v1/patient — list patients
@@ -230,24 +232,82 @@ patientRouter.patch(
   })
 );
 
-patientRouter.post(
-  "/patient/:id/clinical-records/:kind/:recordId/pdf",
+// ---------------------------------------------------------------------------
+// Estudios checklist (ADR-024): the list, printing an item, uploading studies
+// ---------------------------------------------------------------------------
+patientRouter.get(
+  "/patient/:id/checklist",
   requireClinicalRole,
   asyncHandler(async (req: Request, res: Response) => {
     const id = uuidParam(req, "id");
-    const recordId = uuidParam(req, "recordId");
-    const kind = clinicalKindParam(req);
-
     const slug = tenantSlugFromHost(req.hostname);
-    // Not wrapped in one withTenant: the command opens its own short
-    // transactions around a (slow) render + upload — see its doc comment.
-    const result = await GenerateClinicalRecordPdfCommand(
-      (fn) => withTenant(slug, async (client) => fn(await buildContext(req, client, slug))),
-      id,
-      kind,
-      recordId
-    );
+    const checklist = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return GetPatientChecklistQuery(ctx, id);
+    });
+    res.json(checklist);
+  })
+);
+
+// Streams a freshly rendered PDF (nothing stored), or — for a consent the
+// patient already signed — returns { url } to the stored signed document.
+patientRouter.post(
+  "/patient/:id/checklist/:key/print",
+  requireClinicalRole,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = uuidParam(req, "id");
+    const key = req.params.key?.trim() ?? "";
+    const recordId = typeof req.body?.recordId === "string" && UUID_RE.test(req.body.recordId) ? req.body.recordId : undefined;
+    const slug = tenantSlugFromHost(req.hostname);
+    const result = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return PrintChecklistItemCommand(ctx, id, key, recordId);
+    });
+    if (result.kind === "stored") {
+      res.json({ url: result.url });
+      return;
+    }
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="${result.filename}"`);
+    res.send(Buffer.from(result.bytes));
+  })
+);
+
+patientRouter.post(
+  "/patient/:id/studies/uploads",
+  requireClinicalRole,
+  studyUpload.single("file"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = uuidParam(req, "id");
+    if (!req.file) throw new ValidationError("A file is required");
+    const slug = tenantSlugFromHost(req.hostname);
+    const result = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return UploadPatientStudyCommand(ctx, id, {
+        bytes: new Uint8Array(req.file!.buffer),
+        mimeType: req.file!.mimetype,
+        filename: req.file!.originalname,
+        title: req.body?.title,
+        notes: req.body?.notes,
+        checklistItem: req.body?.checklistItem,
+      });
+    });
     res.status(201).json(result);
+  })
+);
+
+patientRouter.delete(
+  "/patient/:id/studies/uploads/:attachmentId",
+  requireRole("admin"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = uuidParam(req, "id");
+    const attachmentId = uuidParam(req, "attachmentId");
+    const slug = tenantSlugFromHost(req.hostname);
+    await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return DeletePatientStudyUploadCommand(ctx, id, attachmentId);
+    });
+    res.status(204).end();
   })
 );
 
@@ -264,7 +324,7 @@ patientRouter.post(
     const origin = resolveFrontendOrigin(req);
     const { request, url } = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
-      return CreateQuestionnaireRequestCommand(ctx, id, (req.body ?? {}).kind, origin);
+      return CreateQuestionnaireRequestCommand(ctx, id, (req.body ?? {}) as { items?: unknown; kind?: unknown }, origin);
     });
     res.status(201).json({ ...request, url });
   })

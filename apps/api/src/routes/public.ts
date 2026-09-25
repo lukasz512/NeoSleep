@@ -69,7 +69,8 @@ publicRouter.post(
   publicQuestionnaireReadLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     const slug = tenantSlugFromHost(req.hostname);
-    const questionnaire = await withTenant(slug, async (client) => GetPublicQuestionnaireQuery(client, bodyToken(req)));
+    const locale = (req.body as { locale?: unknown } | undefined)?.locale;
+    const questionnaire = await withTenant(slug, async (client) => GetPublicQuestionnaireQuery(client, bodyToken(req), locale));
     res.json(questionnaire);
   })
 );
@@ -82,12 +83,17 @@ publicRouter.post(
     // X-Request-ID is client-controlled; on an unauthenticated route it only
     // reaches the audit row if it has the shape our own middleware generates.
     const requestId = (req as RequestWithId).requestId;
-    const result = await withTenant(slug, async (client) =>
-      SubmitPublicQuestionnaireCommand(client, bodyToken(req), (req.body ?? {}) as Record<string, unknown>, {
+    // A runner, not one withTenant: signing a consent renders a PDF between
+    // two short transactions (see SubmitPublicQuestionnaireCommand).
+    const result = await SubmitPublicQuestionnaireCommand(
+      (fn) => withTenant(slug, fn),
+      bodyToken(req),
+      (req.body ?? {}) as Record<string, unknown>,
+      {
         ip: req.ip ?? null,
         userAgent: req.get("user-agent")?.slice(0, 512) ?? null,
         requestId: requestId && UUID_RE.test(requestId) ? requestId : null,
-      })
+      }
     );
     res.status(201).json(result);
   })

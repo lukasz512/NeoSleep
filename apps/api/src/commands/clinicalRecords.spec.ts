@@ -1,32 +1,12 @@
-import { describe, it, expect, vi, beforeAll } from "vitest";
+import { describe, it, expect } from "vitest";
 import bcrypt from "bcrypt";
 import { withTenant, insertStaffUser, insertPatient, getGlobalTerritoryId, getCountryTerritoryId } from "../db.js";
 import { getAuditLogForEntities } from "../db/audit-log.js";
-import { withPlatform } from "../db/tenant.js";
-import { insertDocumentContentVersion } from "../db/documentContent.js";
 import type { TenantContext } from "../context/TenantContext.js";
 import type { StaffRole } from "../db/users.js";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../errors.js";
-import { RecordClinicalQuestionnaireCommand, CompleteStopBangCommand, GenerateClinicalRecordPdfCommand, type TenantRunner } from "./clinicalRecords.js";
+import { RecordClinicalQuestionnaireCommand, CompleteStopBangCommand } from "./clinicalRecords.js";
 import { ListClinicalRecordsQuery } from "../queries/clinicalRecords.js";
-
-// Supabase Storage is the one external boundary mocked here. PDF rendering
-// is REAL (headless Chromium, real templates) — NEO-36 shipped a renderer
-// that had never once run because every spec mocked it.
-const { uploadMock } = vi.hoisted(() => ({
-  uploadMock: vi.fn(async (path: string, bytes: Uint8Array) => {
-    uploads.push(bytes);
-    return { path, bucket: "partner-documents" };
-  }),
-}));
-const { deleteMock } = vi.hoisted(() => ({ deleteMock: vi.fn(async (_path: string) => undefined) }));
-const uploads: Uint8Array[] = [];
-vi.mock("../services/partnerDocuments.js", async (importActual) => ({
-  ...(await importActual<typeof import("../services/partnerDocuments.js")>()),
-  uploadPartnerDocument: uploadMock,
-  deletePartnerDocument: deleteMock,
-  getPartnerDocumentSignedUrl: vi.fn(async (path: string) => `https://storage.test/${path}?signed`),
-}));
 
 const TENANT_SLUG = process.env.DEFAULT_TENANT_SLUG ?? "test";
 type Client = TenantContext["client"];
@@ -46,27 +26,8 @@ async function buildContext(client: Client, role: StaffRole = "admin", territory
 const newPatient = (client: Client, territoryId?: string) =>
   insertPatient(client, { first_name: "Ana", last_name: `Clinical-${uniqueSuffix()}`, territory_id: territoryId ?? null });
 
-/** Tests run every phase inside the one test transaction — same ctx, so the phases see each other's writes. */
-const inSameTransaction = (ctx: TenantContext): TenantRunner => (fn) => fn(ctx);
-
-const ALL_STOP ={ snoring: true, tiredness: false, observed_apnea: true, pressure: false };
+const ALL_STOP = { snoring: true, tiredness: false, observed_apnea: true, pressure: false };
 const ALL_BANG = { bmi_over_35: true, age_over_50: true, neck_circumference_over_40cm: false, is_male: true };
-
-// historiaEndo needs a current consent-text version (fail-loud by design).
-beforeAll(async () => {
-  await withPlatform((client) =>
-    insertDocumentContentVersion(client, {
-      templateKey: "historiaEndo",
-      locale: "mx",
-      contentHtml: "<p>QA test consent body.</p>",
-      createdByUserId: "00000000-0000-0000-0000-000000000000",
-      createdByName: "QA",
-      createdByEmail: "qa@neosleepcare.com",
-      createdByTenantSlug: TENANT_SLUG,
-      changeNote: "seeded by commands/clinicalRecords.spec.ts",
-    })
-  );
-}, 15000);
 
 describe("RecordClinicalQuestionnaireCommand", () => {
   it("appends a new dated row per fill — history is kept, never overwritten", async () => {
@@ -169,59 +130,4 @@ describe("CompleteStopBangCommand", () => {
       await expect(CompleteStopBangCommand(ctx, other.id, partial.id, ALL_BANG)).rejects.toThrow(NotFoundError);
     });
   });
-});
-
-describe("GenerateClinicalRecordPdfCommand (real rendering)", () => {
-  it("renders a real Historia Endo PDF from a medical-history record, stores it and returns a signed URL", async () => {
-    await withTenant(TENANT_SLUG, async (client) => {
-      const ctx = await buildContext(client);
-      const patient = await newPatient(client);
-      const history = await RecordClinicalQuestionnaireCommand(ctx, patient.id, "medical_history", { has_diabetes: true });
-      await RecordClinicalQuestionnaireCommand(ctx, patient.id, "oral_exam", { has_bruxism: true });
-
-      const before = uploads.length;
-      const pdf = await GenerateClinicalRecordPdfCommand(inSameTransaction(ctx), patient.id, "medical_history", history.id);
-
-      expect(pdf.filename).toMatch(/^historia-endo-\d{4}-\d{2}-\d{2}\.pdf$/);
-      expect(pdf.url).toContain("https://storage.test/patient/");
-      const bytes = uploads[before]!;
-      expect(Buffer.from(bytes.subarray(0, 5)).toString("latin1")).toBe("%PDF-");
-    });
-  }, 60000);
-
-  it("renders a STOP-Bang PDF even while B-A-N-G is still pending", async () => {
-    await withTenant(TENANT_SLUG, async (client) => {
-      const ctx = await buildContext(client);
-      const patient = await newPatient(client);
-      const partial = await RecordClinicalQuestionnaireCommand(ctx, patient.id, "stop_bang", ALL_STOP);
-
-      const pdf = await GenerateClinicalRecordPdfCommand(inSameTransaction(ctx), patient.id, "stop_bang", partial.id);
-      expect(pdf.filename).toMatch(/^stop-bang-/);
-    });
-  }, 60000);
-
-  it("404s for a record that belongs to a different patient", async () => {
-    await withTenant(TENANT_SLUG, async (client) => {
-      const ctx = await buildContext(client);
-      const patient = await newPatient(client);
-      const other = await newPatient(client);
-      const exam = await RecordClinicalQuestionnaireCommand(ctx, other.id, "oral_exam", { has_bruxism: true });
-      await expect(GenerateClinicalRecordPdfCommand(inSameTransaction(ctx), patient.id, "oral_exam", exam.id)).rejects.toThrow(NotFoundError);
-    });
-  });
-
-  it("deletes the uploaded PDF again when its attachment row can't be written — no orphaned health data in the bucket", async () => {
-    await withTenant(TENANT_SLUG, async (client) => {
-      const ctx = await buildContext(client);
-      const patient = await newPatient(client);
-      const partial = await RecordClinicalQuestionnaireCommand(ctx, patient.id, "stop_bang", ALL_STOP);
-
-      let phase = 0;
-      const failingRecordPhase: TenantRunner = (fn) => (++phase === 2 ? Promise.reject(new Error("record phase failed")) : fn(ctx));
-      deleteMock.mockClear();
-      await expect(GenerateClinicalRecordPdfCommand(failingRecordPhase, patient.id, "stop_bang", partial.id)).rejects.toThrow("record phase failed");
-      expect(deleteMock).toHaveBeenCalledTimes(1);
-      expect(deleteMock.mock.calls[0]![0]).toMatch(new RegExp(`^patient/${patient.id}/stop_bang-`));
-    });
-  }, 60000);
 });

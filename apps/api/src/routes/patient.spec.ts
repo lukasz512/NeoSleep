@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import request from "supertest";
 import bcrypt from "bcrypt";
 import { app } from "../server.js";
@@ -7,13 +7,19 @@ import { signAuthToken } from "../utils/jwt.js";
 import type { StaffRole } from "../db/users.js";
 import { MEDICAL_HISTORY_QUESTIONS } from "../commands/clinicalRecordFields.js";
 
+// Supabase Storage is the external boundary (uploads) — everything else is real.
+vi.mock("../services/partnerDocuments.js", async (importActual) => ({
+  ...(await importActual<typeof import("../services/partnerDocuments.js")>()),
+  uploadPartnerDocument: vi.fn(async (path: string) => ({ path, bucket: "partner-documents" })),
+  deletePartnerDocument: vi.fn(async () => undefined),
+}));
+
 /**
  * HTTP-level coverage for the clinical questionnaire routes (Estudios) and
  * the patient self-fill public routes (migration 030, ADR-023): auth
  * boundaries, status codes, and one full doctor → QR → patient → doctor
- * round trip through the real Express stack and real Postgres. The PDF
- * route is covered in commands/clinicalRecords.spec.ts (it needs the
- * Supabase Storage boundary mocked).
+ * round trip through the real Express stack and real Postgres, plus the
+ * Estudios checklist / print / upload routes (ADR-024).
  */
 const TENANT_SLUG = process.env.DEFAULT_TENANT_SLUG ?? "test";
 
@@ -100,11 +106,11 @@ describe("patient self-fill: doctor → QR link → patient (public) → doctor"
     // Public — no Authorization header at all.
     const view = await request(app).post("/api/v1/public/questionnaire/lookup").send({ token });
     expect(view.status).toBe(200);
-    expect(view.body).toMatchObject({ kind: "stop_bang", patient_first_name: "Route" });
+    expect(view.body).toMatchObject({ patient_first_name: "Route", steps: [{ key: "stopBang", type: "stop_bang", done: false }] });
 
     const submit = await request(app)
       .post("/api/v1/public/questionnaire/submit")
-      .send({ token, consent: true, answers: { snoring: true, tiredness: true, observed_apnea: false, pressure: false } });
+      .send({ token, step: "stopBang", consent: true, answers: { snoring: true, tiredness: true, observed_apnea: false, pressure: false } });
     expect(submit.status).toBe(201);
 
     const again = await request(app).post("/api/v1/public/questionnaire/lookup").send({ token });
@@ -137,7 +143,7 @@ describe("patient self-fill: doctor → QR link → patient (public) → doctor"
       .set("Authorization", auth)
       .send({ kind: "stop_bang" });
     const token = String(created.body.url).split("/q#")[1];
-    const body = { token, consent: true, answers: { snoring: true, tiredness: false, observed_apnea: false, pressure: false } };
+    const body = { token, step: "stopBang", consent: true, answers: { snoring: true, tiredness: false, observed_apnea: false, pressure: false } };
 
     const [a, b] = await Promise.all([
       request(app).post("/api/v1/public/questionnaire/submit").send(body),
@@ -161,7 +167,7 @@ describe("patient self-fill: doctor → QR link → patient (public) → doctor"
     const lookup = await request(app).post("/api/v1/public/questionnaire/lookup").send({ token });
     const submit = await request(app)
       .post("/api/v1/public/questionnaire/submit")
-      .send({ token, consent: true, answers: { snoring: true, tiredness: false, observed_apnea: false, pressure: false } });
+      .send({ token, step: "stopBang", consent: true, answers: { snoring: true, tiredness: false, observed_apnea: false, pressure: false } });
     expect([lookup.status, submit.status]).toEqual([410, 410]);
   });
 
@@ -184,7 +190,65 @@ describe("patient self-fill: doctor → QR link → patient (public) → doctor"
     const token = String(created.body.url).split("/q#")[1];
     const submit = await request(app)
       .post("/api/v1/public/questionnaire/submit")
-      .send({ token, consent: true, answers: Object.fromEntries(MEDICAL_HISTORY_QUESTIONS.map((q) => [q, false])) });
+      .send({ token, step: "medicalHistory", consent: true, answers: Object.fromEntries(MEDICAL_HISTORY_QUESTIONS.map((q) => [q, false])) });
     expect(submit.status).toBe(410);
+  });
+});
+
+describe("/api/v1/patient/:id/checklist + print + uploads (Estudios, ADR-024)", () => {
+  it("403s the commercial roles; a doctor gets the ordered checklist", async () => {
+    const rep = await authAndPatient("rep");
+    expect((await request(app).get(`/api/v1/patient/${rep.patientId}/checklist`).set("Authorization", rep.auth)).status).toBe(403);
+
+    const { auth, patientId } = await authAndPatient("doctor");
+    const res = await request(app).get(`/api/v1/patient/${patientId}/checklist`).set("Authorization", auth);
+    expect(res.status).toBe(200);
+    expect(res.body.items.at(-1).key).toBe("polysomnography");
+    expect(res.body.summary.total).toBe(res.body.items.length);
+  });
+
+  it("print streams a PDF (nothing stored)", async () => {
+    const { auth, patientId } = await authAndPatient("doctor");
+    const res = await request(app).post(`/api/v1/patient/${patientId}/checklist/medicalHistory/print`).set("Authorization", auth).send({});
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toBe("application/pdf");
+    expect(Buffer.from(res.body as Buffer).subarray(0, 5).toString("latin1")).toBe("%PDF-");
+  }, 60000);
+
+  it("uploads a study (multipart) that completes polysomnography; only an admin may delete it", async () => {
+    const { auth, patientId } = await authAndPatient("doctor");
+    const upload = await request(app)
+      .post(`/api/v1/patient/${patientId}/studies/uploads`)
+      .set("Authorization", auth)
+      .field("title", "Polisomnografía")
+      .field("notes", "IAH 22")
+      .field("checklistItem", "polysomnography")
+      .attach("file", Buffer.from("%PDF-1.4 test"), { filename: "psg.pdf", contentType: "application/pdf" });
+    expect(upload.status).toBe(201);
+
+    const checklist = await request(app).get(`/api/v1/patient/${patientId}/checklist`).set("Authorization", auth);
+    expect(checklist.body.items.at(-1).status).toBe("done");
+
+    const byDoctor = await request(app).delete(`/api/v1/patient/${patientId}/studies/uploads/${upload.body.id}`).set("Authorization", auth);
+    expect(byDoctor.status).toBe(403);
+    const admin = await authAndPatient("admin");
+    const byAdmin = await request(app).delete(`/api/v1/patient/${patientId}/studies/uploads/${upload.body.id}`).set("Authorization", admin.auth);
+    expect(byAdmin.status).toBe(204);
+  });
+
+  it("one QR link for everything: lookup lists the steps, each step submits on its own", async () => {
+    const { auth, patientId } = await authAndPatient("doctor");
+    const created = await request(app).post(`/api/v1/patient/${patientId}/questionnaire-requests`).set("Authorization", auth).send({});
+    expect(created.status).toBe(201);
+    const token = String(created.body.url).split("/q#")[1];
+
+    const view = await request(app).post("/api/v1/public/questionnaire/lookup").send({ token, locale: "mx" });
+    expect(view.body.steps.map((s: { key: string }) => s.key)).toEqual(["informedConsent", "medicalHistory", "stopBang"]);
+
+    const step = await request(app)
+      .post("/api/v1/public/questionnaire/submit")
+      .send({ token, step: "stopBang", consent: true, answers: { snoring: false, tiredness: false, observed_apnea: false, pressure: false } });
+    expect(step.status).toBe(201);
+    expect(step.body).toEqual({ step: "stopBang", completed: false });
   });
 });

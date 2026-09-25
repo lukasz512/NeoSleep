@@ -105,6 +105,16 @@ export function fillContentParams(contentHtml: string, params: Record<string, st
   return filled;
 }
 
+/**
+ * Admin-authored document content with the locale's legal-entity params
+ * ({legalEntityName}, {company}) filled in — the same text the PDF shows,
+ * for showing a consent on screen before it is signed (patient QR flow).
+ * The caller still sanitizes it for display.
+ */
+export function fillContentForLocale(contentHtml: string, locale: string | null | undefined): string {
+  return fillContentParams(contentHtml, getLegalEntityParams(locale));
+}
+
 let cachedLogoSvg: string | null = null;
 let cachedIconSvg: string | null = null;
 
