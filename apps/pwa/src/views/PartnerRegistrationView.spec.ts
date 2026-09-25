@@ -122,11 +122,12 @@ describe("PartnerRegistrationView — documents instead of checkboxes (NEO-51)",
     expect(wrapper.text()).toContain(en["user.partnerRegistration.documents.status.notice.notOpened"]);
   });
 
-  it("makes Edit details an outlined button, not a flat text link", async () => {
+  it("makes Edit details a filled (tonal) button with an icon, not a flat text link", async () => {
     apiFetch.mockResolvedValueOnce(jsonResponse(true, VALID_PREVIEW));
     const { wrapper } = await mountPartnerRegistrationView();
     const edit = wrapper.findAll("button").find((b) => b.text().includes(en["user.partnerRegistration.form.editDetails"]))!;
-    expect(edit.classes()).toContain("v-btn--variant-outlined");
+    expect(edit.classes()).toContain("v-btn--variant-tonal");
+    expect(edit.find(".v-btn__prepend").exists()).toBe(true);
   });
 
   it("keeps Finish disabled until the agreement is signed and the notice read", async () => {
