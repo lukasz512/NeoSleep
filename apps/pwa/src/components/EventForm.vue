@@ -294,7 +294,7 @@ export interface EventSubmitPayload {
 }
 
 const props = withDefaults(
-  defineProps<{ modelValue: boolean; initialData?: EventFormInitialData }>(),
+  defineProps<{ modelValue?: boolean; initialData?: EventFormInitialData }>(),
   { modelValue: false }
 );
 
