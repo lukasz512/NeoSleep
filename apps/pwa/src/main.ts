@@ -3,6 +3,7 @@ import { createGtag } from "vue-gtag";
 import { createPinia } from "pinia";
 import App from "./App.vue";
 import router from "./router";
+import { installChunkRecovery, browserChunkRecoveryDeps } from "./router/chunkRecovery";
 import vuetify, { lightTheme, darkTheme } from "./plugins/vuetify";
 import { i18n } from "./plugins/i18n";
 import "./assets/theme.scss";
@@ -48,6 +49,9 @@ const app = createApp(App);
 app.use(createPinia());
 app.use(vuetify);
 app.use(router);
+// After a deploy, an already-open tab can't fetch its old lazy chunks —
+// reload into the new version (with a toast) instead of silently ignoring clicks.
+installChunkRecovery(router, browserChunkRecoveryDeps(useNotifications().show));
 app.use(i18n);
 
 useMotionPreferenceStore().startListening();
