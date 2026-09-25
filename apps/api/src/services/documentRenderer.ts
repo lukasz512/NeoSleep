@@ -283,10 +283,13 @@ export async function applyChoiceFields(page: Page, fields: Record<string, reado
   await page.evaluate((values) => {
     for (const [key, options] of Object.entries(values)) {
       document.querySelectorAll(`[data-field="${CSS.escape(key)}"]`).forEach((el) => {
-        const choices = options.map((option, i) => {
+        const choices = options.map((option) => {
           const choice = document.createElement("span");
           choice.className = "choice";
-          choice.style.cssText = `display:inline-flex;align-items:center;gap:6px;vertical-align:middle;${i ? "margin-left:16px;" : ""}`;
+          // Fixed-width slots (fit "III" / "Sí"): in a right-aligned answer column each row's
+          // last option shares one x, so "I / II / III" sits in the same grid as "Sí / No"
+          // (III under No, II under Sí, I one slot further left).
+          choice.style.cssText = "display:inline-flex;align-items:center;gap:6px;vertical-align:middle;width:52px;";
           const box = document.createElement("span");
           box.className = "choice-box";
           box.style.cssText =
