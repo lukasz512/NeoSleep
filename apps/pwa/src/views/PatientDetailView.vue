@@ -22,15 +22,10 @@
       :load-error="loadFailed"
       :back-route="{ name: 'patients' }"
       :back-label="t('app.patients.detail.back')"
+      :record-title="patient?.name ?? ''"
       :not-found-label="t('app.patients.detail.notFound')"
       @retry="loadPatient"
     >
-      <template v-if="patient" #title>
-        <span class="view-item__title-wrap">
-          <AppAvatar :name="patient.name" :first-name="patient.first_name" :last-name="patient.last_name" entity-type="patient" :size="40" />
-          <h1 class="view-item__title">{{ patient.name }}</h1>
-        </span>
-      </template>
       <template v-if="patient" #header-actions>
         <VTooltip location="bottom">
           <template #activator="{ props: tooltipProps }">
@@ -200,7 +195,6 @@ import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
-import AppAvatar from "../components/AppAvatar.vue";
 import DetailViewTabs from "../components/DetailViewTabs.vue";
 import EntityLink from "../components/EntityLink.vue";
 import { useSpecialtyLabel } from "../composables/useSpecialtyLabel";

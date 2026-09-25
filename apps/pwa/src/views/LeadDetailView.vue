@@ -61,16 +61,10 @@
       :load-error="loadFailed"
       :back-route="backRoute"
       :back-label="t('user.leads.detail.back')"
+      :record-title="lead?.name ?? ''"
       :not-found-label="t('user.leads.detail.notFound')"
       @retry="loadLead"
     >
-      <!-- Name inline with back arrow -->
-      <template v-if="lead" #header-title>
-        <span class="view-detail__header-name-wrap">
-          <AppAvatar :name="lead.name" :first-name="lead.first_name" :last-name="lead.last_name" entity-type="lead" :size="32" />
-          <h1 class="view-detail__header-name">{{ lead.name }}</h1>
-        </span>
-      </template>
 
       <!-- Actions on the right — for a doctor-type lead, Send Offer and Invite
            to Partner are the two-step conversion pipeline, so they lead. -->
@@ -379,7 +373,6 @@ import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
-import AppAvatar from "../components/AppAvatar.vue";
 import GenderIcon from "../components/GenderIcon.vue";
 import { getGenderFromName } from "../utils/genderFromName";
 import {
@@ -752,21 +745,7 @@ watch(() => route.params.id, loadLead);
 }
 
 /* Header name */
-.view-detail__header-name-wrap {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
 
-.view-detail__header-name {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
 .view-detail__body {
   display: grid;

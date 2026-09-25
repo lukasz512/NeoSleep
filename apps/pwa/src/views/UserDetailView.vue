@@ -25,15 +25,10 @@
       :load-error="loadFailed"
       :back-route="{ name: 'users' }"
       :back-label="t('user.users.detail.back')"
+      :record-title="user?.name ?? ''"
       :not-found-label="t('user.users.detail.notFound')"
       @retry="loadUser"
     >
-      <template v-if="user" #title>
-        <span class="view-item__title-wrap">
-          <AppAvatar :name="user.name" :first-name="user.first_name" :last-name="user.last_name" entity-type="user" :size="40" />
-          <h1 class="view-item__title">{{ user.name }}</h1>
-        </span>
-      </template>
       <template v-if="user" #header-actions>
         <VTooltip location="bottom">
           <template #activator="{ props: tooltipProps }">
@@ -266,7 +261,6 @@ import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import DetailViewTabs from "../components/DetailViewTabs.vue";
 import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
-import AppAvatar from "../components/AppAvatar.vue";
 import AppLoadingState from "../components/AppLoadingState.vue";
 import { userFormFields } from "../config/forms/userForm";
 import {

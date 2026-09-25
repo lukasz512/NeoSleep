@@ -30,15 +30,13 @@
     :load-error="loadFailed"
     :back-route="{ name: 'hco' }"
     :back-label="t('user.hco.detail.back')"
+    :record-title="hco?.name ?? ''"
+    :record-icon="hco ? hcoTypeIcon(hco.type) : undefined"
     :not-found-label="t('user.hco.detail.notFound')"
     @retry="loadHCO"
   >
-    <template v-if="hco" #title>
-      <span class="view-item__title-wrap hco-title-row">
-        <span class="view-item__title-wrap">
-          <AppAvatar entity-type="hco" :org-type="hco.type" :size="40" />
-          <h1 class="view-item__title">{{ hco.name }}</h1>
-        </span>
+    <template v-if="hco" #title-extra>
+      <span class="hco-title-row">
         <span class="hco-title-row__badges">
           <VChip :color="hcoTypeColor(hco.type)" size="large" variant="tonal">
             {{ hcoTypeLabel(hco.type) }}
@@ -225,7 +223,6 @@ import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import AppButton from "../components/AppButton.vue";
-import AppAvatar from "../components/AppAvatar.vue";
 import AppIcon from "../components/AppIcon.vue";
 import DetailViewTabs from "../components/DetailViewTabs.vue";
 import EntityHistoryPanel from "../components/EntityHistoryPanel.vue";
@@ -240,6 +237,7 @@ import {
   hcoStatusLabel as hcoStatusLabelFor,
   hcoTypeColor,
   hcoStatusColor,
+  hcoTypeIcon,
 } from "../utils/hcoLabels";
 
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));

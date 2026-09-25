@@ -144,7 +144,9 @@
              teleports its own controls into (usePageHeader.ts). v-show, not
              v-if: the teleport target must never be removed from under a
              view that is still teleporting into it. -->
-        <div v-show="!isMobile" class="layout-page-header">
+        <!-- NEO-56: hidden while a detail view shows its record header, whose
+             "MODULE ›" eyebrow above the record's name replaces this row. -->
+        <div v-show="!isMobile && !recordHeaderClaim" class="layout-page-header">
           <AppButton
             v-if="parentRoute"
             icon
@@ -201,7 +203,7 @@
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRoute } from "vue-router";
 import { navTitleKey, navIconName, navParentName } from "../router/routes";
-import { providePageHeader, PAGE_HEADER_ACTIONS_ID } from "../composables/usePageHeader";
+import { providePageHeader, provideRecordHeaderClaim, PAGE_HEADER_ACTIONS_ID } from "../composables/usePageHeader";
 import { useGlyphInset } from "../composables/useGlyphInset";
 import { useI18n } from "vue-i18n";
 import { AppShell, useAppVersionLabel } from "@ui";
@@ -264,6 +266,7 @@ const appVersionLabel = useAppVersionLabel();
 
 // Views teleport their controls into the desktop page header only while it is shown.
 providePageHeader(computed(() => !isMobile.value));
+const recordHeaderClaim = provideRecordHeaderClaim();
 
 /** Detail views (patient-detail, …) point back at their list; undefined on top-level modules. */
 const parentName = computed(() => {
