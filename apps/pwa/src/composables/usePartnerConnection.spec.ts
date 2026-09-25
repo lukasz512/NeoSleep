@@ -56,4 +56,14 @@ describe("ensurePartnerConnection", () => {
     await warning.action!.run(); // explicit Retry: always gets an answer
     expect(useNotifications().notifications.value[0]?.type).toBe("warning");
   });
+
+  it("server login rejected: tells the rep to get an administrator, not to reload", async () => {
+    // Own partner key again — see the cooldown note above.
+    apiFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ connected: false, attemptsExhausted: true, reason: "credentials_rejected" }),
+    } as Response);
+    await ensurePartnerConnection("watchpat");
+    expect(useNotifications().notifications.value[0]?.message).toBe("app.partners.connectionErrorConfig:watchpat");
+  });
 });

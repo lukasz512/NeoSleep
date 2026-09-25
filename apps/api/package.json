@@ -12,6 +12,7 @@
     "migrate": "tsx scripts/migrate.ts",
     "sync-test-schema": "tsx scripts/sync-test-schema.ts",
     "check-tenant-schema-parity": "tsx scripts/check-tenant-schema-parity.ts",
+    "oa:smoke": "tsx --env-file=../../.env scripts/oa-smoke.ts",
     "seed:e2e-user": "tsx --env-file=../../.env scripts/seed-e2e-user.ts",
     "seed:qa-user": "tsx --env-file=../../.env scripts/seed-qa-user.ts"
   },

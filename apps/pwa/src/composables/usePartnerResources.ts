@@ -1,6 +1,7 @@
 import { reportCaught, reportFailedResponse } from "@api";
 import { ref, computed } from "vue";
 import { apiFetch } from "./useApi";
+import { getApiUrl } from "../constants";
 
 /**
  * OrthoApnea resources (documents/videos) — ADR-015 discussion. Module-level
@@ -58,12 +59,27 @@ function groupByCategory(items: PartnerResourceItem[]): PartnerResourceGroup[] {
   return groups;
 }
 
+/**
+ * The API returns media paths relative to itself. `<video src>`/`<a href>`
+ * would resolve them against the PWA's own host (a static site — no API
+ * there) and can't send the Authorization header, so point them at the API
+ * and add the media-only token it issued with the list (signMediaToken).
+ */
+export function playableMediaUrl(path: string, mediaToken: string | undefined): string {
+  const url = `${getApiUrl()}${path}`;
+  if (!mediaToken) return url;
+  return `${url}${url.includes("?") ? "&" : "?"}t=${encodeURIComponent(mediaToken)}`;
+}
+
 const items = ref<PartnerResourceItem[]>([]);
 const loading = ref(false);
 const loadError = ref(false);
 /** The error behind loadError (NEO-81) — lets the error state say offline vs. server problem. */
 const loadFailure = ref<unknown>(null);
 const loadedForLocale = ref<string | null>(null);
+let loadedAt = 0;
+/** Media tokens live 4h (API signMediaToken) — refetch before the cached URLs stop playing. */
+const MEDIA_URL_MAX_AGE_MS = 3 * 60 * 60 * 1000;
 
 const documents = computed(() => items.value.filter((r) => r.kind === "document"));
 const videos = computed(() => items.value.filter((r) => r.kind === "video"));
@@ -72,7 +88,7 @@ const videoGroups = computed(() => groupByCategory(videos.value));
 
 /** Re-fetches only if not already loaded for this locale — safe to call repeatedly (preload + view mount). */
 async function load(locale: string): Promise<void> {
-  if (loadedForLocale.value === locale && !loadError.value) return;
+  if (loadedForLocale.value === locale && !loadError.value && Date.now() - loadedAt < MEDIA_URL_MAX_AGE_MS) return;
 
   loading.value = true;
   loadError.value = false;
@@ -84,9 +100,14 @@ async function load(locale: string): Promise<void> {
       loadError.value = true;
       return;
     }
-    const data = (await res.json()) as { resources: PartnerResourceItem[] };
-    items.value = data.resources;
+    const data = (await res.json()) as { resources: PartnerResourceItem[]; mediaToken?: string };
+    items.value = data.resources.map((r) => ({
+      ...r,
+      mediaUrl: playableMediaUrl(r.mediaUrl, data.mediaToken),
+      languages: r.languages.map((l) => ({ ...l, mediaUrl: playableMediaUrl(l.mediaUrl, data.mediaToken) })),
+    }));
     loadedForLocale.value = locale;
+    loadedAt = Date.now();
   } catch (err) {
     reportCaught(err, { where: "usePartnerResources.load" });
     loadFailure.value = err;

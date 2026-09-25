@@ -322,6 +322,7 @@
   "user.resources.reportIncident": "Report incident",
   "app.partners.connectionError": "Couldn't connect to {partner}",
   "app.partners.connectionErrorPersistent": "Still can't connect to {partner} after several tries — try reloading the app",
+  "app.partners.connectionErrorConfig": "{partner} rejected NeoSleep's server login — reloading won't help, please tell an administrator",
   "app.partners.connectionRestored": "Connected to {partner} again",
   "layout.sidebar.placeholder": "Sidebar (placeholder)",
   "layout.sidebar.expand": "Expand sidebar",
