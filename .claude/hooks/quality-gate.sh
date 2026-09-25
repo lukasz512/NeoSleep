@@ -130,7 +130,37 @@ dev_mergeable_check() {
   fi
 }
 
+# 2026-09-25 (Łukasz, NEO-57): "after merge, test it on pwa-dev too". Once everything this
+# branch shipped is in origin/dev (the PR was merged), the turn can't end until the deployed
+# pwa-dev has been checked and the result recorded in the branch's Artifact marker as
+#   "devVerified": { "sha": "<HEAD sha>", "ok": true, "at": "<ISO time>", "summary": "..." }
+# Checking means: the "Deploy NeoSleepCare App" run on dev for a commit containing HEAD
+# finished green (gh run list --workflow deploy-pwa.yml --branch dev), then
+# infrastructure/scripts/smoke-dev-bundle.mjs finds the change's markers in the deployed
+# bundle (marker file "smokeMarkers": [{label,text}]), plus a logged-in click-through when a
+# QA account is configured. Runs outside branch_artifact_check on purpose: after a merge the
+# branch has no diff vs origin/dev, so that check exits early.
+dev_deploy_check() {
+  local ticket marker head
+  ticket="$(printf '%s' "$BRANCH" | grep -oiE '[a-z]{2,10}-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]' || true)"
+  if [ -n "$ticket" ] && [ -f ".claude/local/artifacts/${ticket}.json" ]; then
+    marker=".claude/local/artifacts/${ticket}.json"
+  else
+    marker=".claude/local/artifacts/branch-$(printf '%s' "$BRANCH" | tr '/' '-').json"
+  fi
+  # Only for work that was actually shipped: a marker with a PR link.
+  [ -f "$marker" ] || return 0
+  jq -e '(.prUrl // "") != ""' "$marker" >/dev/null 2>&1 || return 0
+  GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh} -o ConnectTimeout=10 -o BatchMode=yes" git fetch --quiet origin dev 2>/dev/null || return 0
+  head="$(git rev-parse HEAD 2>/dev/null)" || return 0
+  git merge-base --is-ancestor "$head" origin/dev 2>/dev/null || return 0
+  if ! jq -e --arg sha "$head" '.devVerified.sha == $sha and .devVerified.ok == true' "$marker" >/dev/null 2>&1; then
+    FAILS+=("'${BRANCH}' is merged into dev (HEAD ${head:0:7} is in origin/dev) but not verified on pwa-dev yet. Wait for the dev 'Deploy NeoSleepCare App' run containing it to finish green (gh run list --workflow deploy-pwa.yml --branch dev), run node infrastructure/scripts/smoke-dev-bundle.mjs --markers <this change's markers> (store them as 'smokeMarkers' in $marker), click through the changed screens on https://pwa-dev.neosleepcare.com if a QA login is available, then record devVerified {sha, ok, at, summary} in $marker and tell Łukasz the result.")
+  fi
+}
+
 emit_result() {
+  dev_deploy_check
   if [ "${#FAILS[@]}" -eq 0 ]; then
     if [ "${#WARNS[@]}" -gt 0 ]; then
       jq -n --arg msg "$(printf '%s\n' "${WARNS[@]}" | sed 's/^/- /')" '{systemMessage: ("Quality gate warnings:\n" + $msg)}'
