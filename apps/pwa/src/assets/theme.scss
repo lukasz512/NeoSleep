@@ -110,6 +110,14 @@ $pwa-fib-t-3xl: 987ms;
   --pwa-table-header-text: #424242;
   --pwa-table-border: #e0e0e0;
   --pwa-table-row-hover: color-mix(in srgb, #{brand.$pwa-brand-primary} 8%, transparent);
+  /* "Clinical card" lists (NEO-57, AppEntityList table rows + mobile feed
+     cards): each row/card is its own rounded surface with a hairline
+     teal-tinted outline, no dividers, on the view's own background. Rows
+     reuse the Vuetify surface color so they match every other card. */
+  --pwa-list-row-bg: rgb(var(--v-theme-surface));
+  --pwa-list-row-outline: rgba(18, 80, 74, 0.08);
+  --pwa-list-row-radius: 14px;
+  --pwa-list-row-gap: 8px;
   /* Buttons: desktop default; mobile/tablet use larger touch targets */
   --pwa-btn-min-height: #{$pwa-touch-target-desktop};
   --pwa-btn-min-width: #{$pwa-touch-target-desktop};
@@ -138,6 +146,7 @@ $pwa-fib-t-3xl: 987ms;
   --pwa-table-header-text: #e0e0e0;
   --pwa-table-border: #3a3a3a;
   --pwa-table-row-hover: color-mix(in srgb, #{brand.$pwa-brand-primary-on-dark} 12%, transparent);
+  --pwa-list-row-outline: rgba(142, 214, 206, 0.09);
 }
 
 body {

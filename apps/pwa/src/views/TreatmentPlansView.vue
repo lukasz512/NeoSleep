@@ -39,10 +39,16 @@
           :text="treatmentPlanCardMeta(item as TreatmentPlanRow)"
           :to="hcpDetailLink((item as TreatmentPlanRow).dentist_id)"
           :label="(item as TreatmentPlanRow).dentist_name"
+          :subtitle="specialtyLabel((item as TreatmentPlanRow).dentist_specialty)"
         />
       </template>
       <template #item.dentist_name="{ item }">
-        <EntityLink :to="hcpDetailLink((item as TreatmentPlanRow).dentist_id)" :label="(item as TreatmentPlanRow).dentist_name" />
+        <EntityLink
+          :to="hcpDetailLink((item as TreatmentPlanRow).dentist_id)"
+          :label="(item as TreatmentPlanRow).dentist_name"
+          :subtitle="specialtyLabel((item as TreatmentPlanRow).dentist_specialty)"
+          :avatar-size="32"
+        />
       </template>
     </AppEntityList>
   </div>
@@ -53,6 +59,7 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
 import EntityLink from "../components/EntityLink.vue";
+import { useSpecialtyLabel } from "../composables/useSpecialtyLabel";
 import EntityMetaLine from "../components/EntityMetaLine.vue";
 import AppAvatar from "../components/AppAvatar.vue";
 import type { FilterDefinition } from "../composables/useFilters";
@@ -64,9 +71,11 @@ interface TreatmentPlanRow {
   type?: string;
   dentist_id?: string | null;
   dentist_name?: string | null;
+  dentist_specialty?: string | null;
 }
 
 const { t } = useI18n();
+const specialtyLabel = useSpecialtyLabel();
 
 const STATUSES = ["initiated", "patient_notified", "in_progress", "completed", "cancelled", "on_hold"];
 const TYPES = ["cpap", "apap", "dental_appliance", "positional", "lifestyle", "watchful_waiting"];

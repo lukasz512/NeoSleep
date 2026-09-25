@@ -114,7 +114,10 @@
       :text="t('app.common.offlineShowingCached')"
     />
 
-    <div v-if="loadError" class="app-entity-list__error-wrap">
+    <!-- One element at a time (error / empty / skeleton / list), cross-faded
+         so the list never pops in or snaps between states. -->
+    <Transition name="app-entity-list-swap" mode="out-in">
+    <div v-if="loadError" key="error" class="app-entity-list__error-wrap">
       <AppErrorState
         :title="t('app.errorState.title')"
         :subtitle="loadError"
@@ -124,7 +127,7 @@
       />
     </div>
 
-    <div v-else-if="isTrulyEmpty" class="app-entity-list__empty-wrap">
+    <div v-else-if="isTrulyEmpty" key="empty" class="app-entity-list__empty-wrap">
       <AppEmptyState
         :title="t(i18n.emptyTitle)"
         :subtitle="t(i18n.emptySubtitle)"
@@ -134,13 +137,38 @@
       />
     </div>
 
-    <div v-else-if="isInitialLoading" class="app-entity-list__loading-wrap">
-      <AppLoadingState />
+    <!-- First load: quiet skeleton rows in the same card shape the data will
+         take, so the list fills in instead of a spinner swapping for a table. -->
+    <div
+      v-else-if="isInitialLoading"
+      key="skeleton"
+      :class="['app-entity-list__skeleton', { 'app-entity-list__skeleton--mobile': mobile }]"
+      role="status"
+      aria-live="polite"
+      :aria-label="t('layout.loader.label')"
+    >
+      <div v-for="n in SKELETON_ROWS" :key="n" class="app-entity-list__skeleton-row" :style="{ '--row-i': n - 1 }">
+        <span class="app-entity-list__skeleton-avatar" />
+        <span class="app-entity-list__skeleton-lines">
+          <span class="app-entity-list__skeleton-line" />
+          <span class="app-entity-list__skeleton-line app-entity-list__skeleton-line--short" />
+        </span>
+      </div>
     </div>
 
-    <div v-else :class="['app-entity-list__table-wrap', { 'app-entity-list__table-wrap--flat': mobile }]">
+    <div
+      v-else
+      key="list"
+      :class="[
+        'app-entity-list__table-wrap',
+        { 'app-entity-list__table-wrap--flat': mobile, 'app-entity-list__table-wrap--busy': isRefreshing },
+      ]"
+    >
+      <!-- No rows at all → only the message, never an empty table body.
+           Stays up while a follow-up search is still loading, so typing into
+           a search that already matched nothing doesn't flash the table. -->
       <div
-        v-if="!loading && total === 0 && hasActiveFiltersOrSearch"
+        v-if="total === 0 && hasActiveFiltersOrSearch"
         class="app-entity-list__no-results-placeholder"
         role="status"
       >
@@ -163,7 +191,7 @@
           :item-value="itemValue"
           class="app-entity-list__table"
           hover
-          :row-props="rowProps"
+          :row-props="tableRowProps"
           @update:options="onOptionsUpdate"
         >
           <template v-for="(_, name) in $slots" :key="name" #[name]="slotData">
@@ -181,7 +209,7 @@
               v-for="(item, index) in mobileItems"
               :key="(item as Record<string, unknown>)[itemValue]"
               variant="flat"
-              elevation="1"
+              elevation="0"
               :class="[
                 'app-entity-list__card',
                 'app-entity-list__card--clickable',
@@ -240,6 +268,7 @@
         </div>
       </template>
     </div>
+    </Transition>
   </div>
 </template>
 
@@ -251,7 +280,6 @@ import { useIntersectionObserver } from "@vueuse/core";
 import AppButton from "./AppButton.vue";
 import AppEmptyState from "./AppEmptyState.vue";
 import AppErrorState from "./AppErrorState.vue";
-import AppLoadingState from "./AppLoadingState.vue";
 import AppIcon from "./AppIcon.vue";
 import AppFilterBar from "./AppFilterBar.vue";
 import AppSpinner from "./AppSpinner.vue";
@@ -395,6 +423,18 @@ const itemValue = "id";
    skeleton mid-keystroke, which flashed away the very input being typed
    into. */
 const isInitialLoading = computed(() => loading.value && !hasCompletedInitialLoad.value);
+/* Any reload after the first one (search, filter, page, sort): the current
+   rows stay in place and dim until the new ones land, instead of the table
+   being torn down. */
+const isRefreshing = computed(() => loading.value && hasCompletedInitialLoad.value);
+const SKELETON_ROWS = 6;
+
+/* Row index as a CSS variable drives the staggered row entrance
+   (AppEntityList.css, app-entity-list-row-in); capped so a long page doesn't
+   take seconds to finish arriving. */
+function tableRowProps(data: { item: Record<string, unknown>; index: number }) {
+  return { ...rowProps(data), style: { "--row-i": Math.min(data.index, 10) } };
+}
 const titleKey = computed(() => (props.headers.length > 0 ? props.headers[0].key : "name"));
 const metaKeys = computed(() => props.headers.slice(1).map((h) => h.key));
 

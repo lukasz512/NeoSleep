@@ -43,6 +43,7 @@
           :label="(item as PatientListItem).name"
           :first-name="(item as PatientListItem).first_name"
           :last-name="(item as PatientListItem).last_name"
+          :subtitle="sexAge(item as PatientListItem)"
           :avatar-size="32"
         />
       </template>
@@ -53,7 +54,21 @@
         {{ (item as { name?: string }).name }}
       </template>
       <template #item.practitioner_name="{ item }">
-        <EntityLink :to="hcpDetailLink((item as PatientListItem).practitioner_id)" entity-type="hcp" :label="(item as PatientListItem).practitioner_name" :avatar-size="32" />
+        <EntityLink
+          :to="hcpDetailLink((item as PatientListItem).practitioner_id)"
+          entity-type="hcp"
+          :label="(item as PatientListItem).practitioner_name"
+          :subtitle="specialtyLabel((item as PatientListItem).practitioner_specialty)"
+          :avatar-size="32"
+        />
+      </template>
+      <!-- Doctor's own list: every patient is theirs, so the column that
+           would repeat their name shows when the record last changed. -->
+      <template #item.updated_at="{ item }">
+        <span class="patients-view__updated">
+          <span>{{ formatDateShort((item as PatientListItem).updated_at, dateLocale) }}</span>
+          <span class="patients-view__updated-ago">{{ formatRelativeToNow((item as PatientListItem).updated_at, dateLocale) }}</span>
+        </span>
       </template>
       <template #item.intake_forms="{ item }">
         <PatientIntakeForms :forms="(item as PatientListItem).intake_forms ?? []" />
@@ -68,11 +83,21 @@
         </VChip>
       </template>
       <template #feed-card-meta="{ item }">
-        <EntityLink
-          v-if="(item as PatientListItem).practitioner_name"
-          :to="hcpDetailLink((item as PatientListItem).practitioner_id)"
-          :label="(item as PatientListItem).practitioner_name"
-        />
+        <span v-if="isDoctor" class="patients-view__card-meta">
+          {{ [sexAge(item as PatientListItem), formatRelativeToNow((item as PatientListItem).updated_at, dateLocale)].filter(Boolean).join(" · ") }}
+        </span>
+        <!-- Sex · age on its own line, the doctor (+ specialty) under it — a
+             two-line doctor block can't share a row with a " · " separator. -->
+        <span v-else class="patients-view__card-stack">
+          <span v-if="sexAge(item as PatientListItem)" class="patients-view__card-meta">{{ sexAge(item as PatientListItem) }}</span>
+          <EntityLink
+            v-if="(item as PatientListItem).practitioner_name"
+            :to="hcpDetailLink((item as PatientListItem).practitioner_id)"
+            entity-type="hcp"
+            :label="(item as PatientListItem).practitioner_name"
+            :subtitle="specialtyLabel((item as PatientListItem).practitioner_specialty)"
+          />
+        </span>
       </template>
       <template #feed-card-status="{ item }">
         <VChip
@@ -105,6 +130,10 @@ import AppAvatar from "../components/AppAvatar.vue";
 import PatientIntakeForms from "../components/patient/PatientIntakeForms.vue";
 import type { PatientIntakeFormStatus } from "../types/patientIntakeForm";
 import EntityLink from "../components/EntityLink.vue";
+import { intlLocale } from "@i18n/language-options";
+import { useSpecialtyLabel } from "../composables/useSpecialtyLabel";
+import { patientSexAge } from "../utils/patientDemographics";
+import { formatDateShort, formatRelativeToNow } from "../utils/relativeDate";
 import { hcpDetailLink } from "../utils/entityLinks";
 import { personAvatarProps } from "../utils/personAvatarProps";
 import AppIcon from "../components/AppIcon.vue";
@@ -131,6 +160,10 @@ interface PatientListItem {
   phone?: string | null;
   practitioner_id?: string | null;
   practitioner_name?: string | null;
+  practitioner_specialty?: string | null;
+  gender?: string | null;
+  date_of_birth?: string | null;
+  updated_at?: string;
   status?: string;
   region?: string;
   territory_name?: string | null;
@@ -140,13 +173,19 @@ interface PatientListItem {
   medical_record?: string | null;
 }
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const configStore = useConfigStore();
+const specialtyLabel = useSpecialtyLabel();
+const dateLocale = computed(() => intlLocale(locale.value));
+function sexAge(p: PatientListItem): string {
+  return patientSexAge(p, t);
+}
 const { submit } = useEntitySubmit();
 const authStore = useAuthStore();
 // Direct add is its own, narrower admin/manager-only shortcut — everyone
 // else still adds patients through the lead pipeline.
 const canAdd = computed(() => authStore.user?.role === "admin" || authStore.user?.role === "manager");
+const isDoctor = computed(() => authStore.user?.role === "doctor");
 const { canEditPatients } = usePermissions();
 const showAddModal = ref(false);
 const showEditModal = ref(false);
@@ -178,7 +217,9 @@ const patientFilterDefinitions = computed<FilterDefinition[]>(() => [
 
 const tableHeaders = computed(() => [
   { title: t("app.patients.table.name"),             key: "name",              sortable: true },
-  { title: t("app.patients.table.practitioner"),     key: "practitioner_name", sortable: false },
+  isDoctor.value
+    ? { title: t("app.patients.table.lastUpdated"),  key: "updated_at",        sortable: true }
+    : { title: t("app.patients.table.practitioner"), key: "practitioner_name", sortable: false },
   { title: t("app.patients.table.forms"),            key: "intake_forms",      sortable: false },
   { title: t("app.patients.table.status"),           key: "status",            sortable: true },
 ]);
@@ -276,3 +317,24 @@ async function onEventFormSubmit(
   );
 }
 </script>
+
+<style scoped>
+.patients-view__updated {
+  display: inline-flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+
+.patients-view__card-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.patients-view__updated-ago,
+.patients-view__card-meta {
+  font-size: 0.78125rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+</style>
