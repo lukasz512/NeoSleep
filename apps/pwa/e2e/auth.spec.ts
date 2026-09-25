@@ -70,6 +70,12 @@ test.describe("back/forward navigation (bfcache)", () => {
 
 test.describe("logout is per-device", () => {
   test("logging out in one browser context does not affect a second concurrent session", async ({ browser }) => {
+    // Two full logins + a logout + a reload against the unbundled Vite dev
+    // server: on CI's Linux WebKit, under the parallel load of the rest of the
+    // suite, that sometimes doesn't fit in the default 30 s (flaky on dev too,
+    // e.g. run 36126093961; failed outright on NEO-56's larger suite, always
+    // in the final reload's "load" wait). test.slow() triples the budget.
+    test.slow();
     const contextA = await browser.newContext();
     const contextB = await browser.newContext();
     const pageA = await contextA.newPage();
