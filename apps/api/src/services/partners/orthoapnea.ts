@@ -82,9 +82,35 @@ const RECONNECT_COOLDOWN_MS = 15_000;
 /** After this many consecutive failed logins, checkConnection() reports `attemptsExhausted` so the frontend can switch from "retrying" to "this looks like a real outage" messaging. Still keeps retrying on the same cooldown — a doctor's reload can't fix a server-side outage, but OrthoApnea coming back on its own shouldn't require one either. */
 const MAX_CONSECUTIVE_FAILURES = 3;
 
+/** Same budget as FETCH_TIMEOUT_MS below. Without it a hung login never settles, loginInFlight is never cleared, and every later caller awaits the same dead promise — "disconnected" until the process restarts. */
+const LOGIN_TIMEOUT_MS = 20_000;
+
+/**
+ * Why the last login failed — reported by checkConnection() so "OrthoApnea
+ * is down" and "this server has the wrong password" stop looking identical
+ * from the PWA; they need completely different fixes.
+ */
+export type ConnectionFailureReason =
+  | "not_configured"
+  | "credentials_rejected"
+  | "unreachable"
+  | "timeout"
+  | "unexpected_response";
+
+class OrthoApneaLoginError extends PartnerServiceError {
+  constructor(
+    readonly reason: ConnectionFailureReason,
+    message: string,
+    cause?: unknown
+  ) {
+    super("orthoapnea", message, cause);
+  }
+}
+
 let session: OrthoApneaSession | null = null;
 let loginInFlight: Promise<OrthoApneaSession> | null = null;
 let lastLoginFailureAt: number | null = null;
+let lastFailureReason: ConnectionFailureReason | null = null;
 let consecutiveFailures = 0;
 
 function isSessionValid(s: OrthoApneaSession): boolean {
@@ -93,31 +119,50 @@ function isSessionValid(s: OrthoApneaSession): boolean {
 
 async function login(): Promise<OrthoApneaSession> {
   if (!ORTHOAPNEA_EMAIL || !ORTHOAPNEA_PASSWORD) {
-    throw new PartnerServiceError("orthoapnea", "ORTHOAPNEA_EMAIL / ORTHOAPNEA_PASSWORD not configured");
+    throw new OrthoApneaLoginError("not_configured", "ORTHOAPNEA_EMAIL / ORTHOAPNEA_PASSWORD not configured");
   }
 
   // Confirmed from a captured request: POST with no body, credentials via
   // HTTP Basic auth (not a JSON body) — matches apneadock.es's Angular client.
   const basicAuth = Buffer.from(`${ORTHOAPNEA_EMAIL}:${ORTHOAPNEA_PASSWORD}`).toString("base64");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), LOGIN_TIMEOUT_MS);
   let res: Response;
   try {
     res = await fetch(`${ORTHOAPNEA_BASE_URL}${LOGIN_PATH}`, {
       method: "POST",
       headers: { Authorization: `Basic ${basicAuth}` },
+      signal: controller.signal,
     });
   } catch (cause) {
+    if (controller.signal.aborted) {
+      console.error(`[orthoapnea] login timed out after ${LOGIN_TIMEOUT_MS}ms`);
+      throw new OrthoApneaLoginError("timeout", `login timed out after ${LOGIN_TIMEOUT_MS}ms`, cause);
+    }
     console.error("[orthoapnea] login request failed (network error):", cause);
-    throw new PartnerServiceError("orthoapnea", "login request failed (network error)", cause);
+    throw new OrthoApneaLoginError("unreachable", "login request failed (network error)", cause);
+  } finally {
+    clearTimeout(timeout);
   }
   if (!res.ok) {
-    console.error(`[orthoapnea] login failed with status ${res.status}`);
-    throw new PartnerServiceError("orthoapnea", `login failed with status ${res.status}`);
+    // 401/403 from /api/login = OrthoApnea rejected ORTHOAPNEA_EMAIL/PASSWORD
+    // as configured on this server (e.g. the password was changed on
+    // apneadock.es but not in the Render environment).
+    const reason = res.status === 401 || res.status === 403 ? "credentials_rejected" : "unexpected_response";
+    console.error(`[orthoapnea] login failed with status ${res.status} (${reason})`);
+    throw new OrthoApneaLoginError(reason, `login failed with status ${res.status}`);
   }
 
-  const data = (await res.json()) as { token?: string };
+  let data: { token?: string };
+  try {
+    data = (await res.json()) as { token?: string };
+  } catch (cause) {
+    console.error("[orthoapnea] login response was not JSON");
+    throw new OrthoApneaLoginError("unexpected_response", "login response was not JSON", cause);
+  }
   if (!data.token) {
-    console.error("[orthoapnea] login response did not contain a token field:", data);
-    throw new PartnerServiceError("orthoapnea", "login response did not contain a token field");
+    console.error("[orthoapnea] login response did not contain a token field");
+    throw new OrthoApneaLoginError("unexpected_response", "login response did not contain a token field");
   }
   const expiresAt = decodeJwtExpiry(data.token) ?? Date.now() + FALLBACK_SESSION_TTL_MS;
   console.log(`[orthoapnea] login succeeded, session valid until ${new Date(expiresAt).toISOString()}`);
@@ -142,11 +187,13 @@ async function ensureSession(): Promise<OrthoApneaSession> {
       .then((s) => {
         session = s;
         lastLoginFailureAt = null;
+        lastFailureReason = null;
         consecutiveFailures = 0;
         return s;
       })
       .catch((err: unknown) => {
         lastLoginFailureAt = Date.now();
+        lastFailureReason = err instanceof OrthoApneaLoginError ? err.reason : "unexpected_response";
         consecutiveFailures += 1;
         throw err;
       })
@@ -174,6 +221,7 @@ export function __resetOrthoApneaStateForTests(): void {
   session = null;
   loginInFlight = null;
   lastLoginFailureAt = null;
+  lastFailureReason = null;
   consecutiveFailures = 0;
 }
 
@@ -181,6 +229,8 @@ export interface ConnectionStatus {
   connected: boolean;
   /** True once MAX_CONSECUTIVE_FAILURES has been hit without a successful login in between — signals "this isn't a blip" rather than "still trying". */
   attemptsExhausted: boolean;
+  /** Why the last login failed; only set when not connected. Names which side to fix, never contains a credential. */
+  reason?: ConnectionFailureReason;
 }
 
 /**
@@ -196,7 +246,11 @@ export async function checkConnection(): Promise<ConnectionStatus> {
     await ensureSession();
     return { connected: true, attemptsExhausted: false };
   } catch {
-    return { connected: false, attemptsExhausted: consecutiveFailures >= MAX_CONSECUTIVE_FAILURES };
+    return {
+      connected: false,
+      attemptsExhausted: consecutiveFailures >= MAX_CONSECUTIVE_FAILURES,
+      reason: lastFailureReason ?? "unexpected_response",
+    };
   }
 }
 
@@ -231,8 +285,11 @@ async function authedFetch(path: string, init: RequestInit = {}, isRetry = false
   } finally {
     clearTimeout(timeout);
   }
-  if (res.status === 401 && !isRetry) {
-    console.warn(`[orthoapnea] 401 on ${path} — session likely expired, re-logging in and retrying once`);
+  // apneadock.es answers an invalid/expired/revoked JWT with 403, not 401
+  // (verified 2026-09-25 against production). Retrying on 401 only left a
+  // stale cached token failing every call until its `exp` (~12h later).
+  if ((res.status === 401 || res.status === 403) && !isRetry) {
+    console.warn(`[orthoapnea] ${res.status} on ${path} — session likely stale, re-logging in and retrying once`);
     session = null; // force a fresh login and retry exactly once
     return authedFetch(path, init, true);
   }
@@ -457,7 +514,7 @@ export async function fetchResources(locale: string): Promise<PartnerResourceIte
 /** Resource id -> the video media path that actually worked, so repeat requests for the same video don't pay the two-path probe again. */
 const resolvedVideoPathCache = new Map<string, string>();
 
-async function tryVideoPaths(resourceId: string, filename: string): Promise<Response> {
+async function tryVideoPaths(resourceId: string, filename: string, init: RequestInit): Promise<Response> {
   const encoded = encodeURIComponent(filename);
   const cached = resolvedVideoPathCache.get(resourceId);
   const candidates = cached
@@ -466,7 +523,7 @@ async function tryVideoPaths(resourceId: string, filename: string): Promise<Resp
 
   let lastRes: Response | null = null;
   for (const path of candidates) {
-    const res = await authedFetch(path);
+    const res = await authedFetch(path, init);
     if (res.ok && res.body) {
       resolvedVideoPathCache.set(resourceId, path);
       return res;
@@ -488,11 +545,40 @@ async function tryVideoPaths(resourceId: string, filename: string): Promise<Resp
  * path confirmed (DOCUMENT_MEDIA_PATH); video path resolved via
  * tryVideoPaths (see its comment).
  */
+export interface ResourceMedia {
+  body: ReadableStream<Uint8Array>;
+  /** 200, or 206 when a `range` was asked for and honoured. */
+  status: number;
+  /** Only the headers a browser needs to play/seek — passed through as-is. */
+  headers: Record<"content-type" | "content-length" | "content-range" | "accept-ranges", string | null>;
+}
+
+function mediaFrom(res: Response): ResourceMedia {
+  const h = (name: keyof ResourceMedia["headers"]) => res.headers.get(name);
+  return {
+    body: res.body as ReadableStream<Uint8Array>,
+    status: res.status,
+    headers: {
+      "content-type": h("content-type"),
+      "content-length": h("content-length"),
+      "content-range": h("content-range"),
+      "accept-ranges": h("accept-ranges"),
+    },
+  };
+}
+
+/**
+ * `range` is the browser's own Range header, forwarded untouched: webinars
+ * are hundreds of MB (id 26 is ~580 MB), Safari/iPadOS refuses to play
+ * `<video>` without 206 responses, and seeking must not re-download from
+ * byte 0. apneadock.es answers Range with 206 (verified 2026-09-25).
+ */
 export async function fetchResourceMedia(
   resourceId: string,
   locale: string,
-  lang?: string
-): Promise<{ body: ReadableStream<Uint8Array>; contentType: string | null }> {
+  lang?: string,
+  range?: string
+): Promise<ResourceMedia> {
   const rows = await fetchRawResources();
   const raw = rows.find((r) => String(r.id) === resourceId && !r.deleted);
   if (!raw) {
@@ -510,18 +596,19 @@ export async function fetchResourceMedia(
     );
   }
 
+  const init: RequestInit = range ? { headers: { Range: range } } : {};
+
   if (raw.type === VIDEO_TYPE) {
-    const mediaRes = await tryVideoPaths(resourceId, filename);
-    return { body: mediaRes.body as ReadableStream<Uint8Array>, contentType: mediaRes.headers.get("content-type") };
+    return mediaFrom(await tryVideoPaths(resourceId, filename, init));
   }
 
   const mediaPath = `${DOCUMENT_MEDIA_PATH}/${encodeURIComponent(filename)}`;
-  const mediaRes = await authedFetch(mediaPath);
+  const mediaRes = await authedFetch(mediaPath, init);
   if (!mediaRes.ok || !mediaRes.body) {
     console.error(`[orthoapnea] document fetch failed with status ${mediaRes.status} for '${mediaPath}'`);
     throw new PartnerServiceError("orthoapnea", `media fetch failed with status ${mediaRes.status} for '${mediaPath}'`);
   }
-  return { body: mediaRes.body, contentType: mediaRes.headers.get("content-type") };
+  return mediaFrom(mediaRes);
 }
 
 // =============================================================================

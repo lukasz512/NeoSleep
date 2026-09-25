@@ -28,7 +28,12 @@ function partnerDisplayName(partner: string): string {
 interface ConnectionStatus {
   connected: boolean;
   attemptsExhausted: boolean;
+  /** Set by the API when not connected (see ConnectionFailureReason in services/partners/orthoapnea.ts). */
+  reason?: string;
 }
+
+/** Failures only a server-side config change fixes — telling the rep to reload would be wrong. */
+const CONFIG_FAILURE_REASONS = new Set(["credentials_rejected", "not_configured"]);
 
 /** One toast per partner per cooldown window — repeatedly bouncing between two OrthoApnea-tagged routes while it's down shouldn't spam a notification on every navigation. */
 const NOTIFY_COOLDOWN_MS = 30_000;
@@ -81,7 +86,12 @@ export async function ensurePartnerConnection(partner: string, { fromRetry = fal
   if (!fromRetry && now - last < NOTIFY_COOLDOWN_MS) return;
   lastNotifiedAt.set(partner, now);
 
-  const key = status.attemptsExhausted ? "app.partners.connectionErrorPersistent" : "app.partners.connectionError";
+  const key =
+    status.reason && CONFIG_FAILURE_REASONS.has(status.reason)
+      ? "app.partners.connectionErrorConfig"
+      : status.attemptsExhausted
+        ? "app.partners.connectionErrorPersistent"
+        : "app.partners.connectionError";
   useNotifications().show(
     i18n.global.t(key, { partner: partnerDisplayName(partner) }),
     "warning",

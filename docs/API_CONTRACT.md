@@ -31,6 +31,11 @@ Base: `/api`
 - `GET /api/content/:id` – metadata
 - `GET /api/content/:id/file` – pdf (cacheable)
 
+## Partner: OrthoApnea
+- `GET /api/v1/partners/orthoapnea/status` – `{ connected, attemptsExhausted, reason? }`; `reason` ∈ `not_configured | credentials_rejected | unreachable | timeout | unexpected_response` (set only when not connected)
+- `GET /api/v1/partners/orthoapnea/resources?locale=` – `{ resources: [...], mediaToken }`; each `mediaUrl` is relative to the API
+- `GET /api/v1/partners/orthoapnea/resources/:id/media?locale=&lang=&t=<mediaToken>` – streams the file; auth by Bearer or `?t=` media token (ADR-020 addendum); forwards `Range` → `206` + `Content-Range`; `Cross-Origin-Resource-Policy: cross-origin`
+
 ## Planner events (calendar)
 - `GET /api/events?start=&end=&region=` – list events (filtered by rep/region)
 - `GET /api/events/:id` – event detail with attendees

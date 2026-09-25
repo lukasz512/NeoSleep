@@ -325,6 +325,7 @@
   "user.resources.reportIncident": "Reportar incidente",
   "app.partners.connectionError": "No se pudo conectar con {partner}",
   "app.partners.connectionErrorPersistent": "Sigue sin poder conectar con {partner} después de varios intentos — intenta recargar la aplicación",
+  "app.partners.connectionErrorConfig": "{partner} rechazó el inicio de sesión del servidor de NeoSleep — recargar no ayudará, avisa a un administrador",
   "app.partners.connectionRestored": "Conexión con {partner} restablecida",
   "user.settings.menu": "Configuración de pantalla",
   "user.settings.theme": "Tema",
