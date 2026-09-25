@@ -12,7 +12,8 @@
     "migrate": "tsx scripts/migrate.ts",
     "sync-test-schema": "tsx scripts/sync-test-schema.ts",
     "check-tenant-schema-parity": "tsx scripts/check-tenant-schema-parity.ts",
-    "seed:e2e-user": "tsx --env-file=../../.env scripts/seed-e2e-user.ts"
+    "oa:smoke": "tsx --env-file=../../.env scripts/oa-smoke.ts",
+    "seed:e2e-user":"tsx --env-file=../../.env scripts/seed-e2e-user.ts"
   },
   "dependencies": {
     "@neo/documents": "workspace:*",

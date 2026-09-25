@@ -309,6 +309,7 @@
   "user.resources.reportIncident": "Zgłoś incydent",
   "app.partners.connectionError": "Nie udało się połączyć z {partner}",
   "app.partners.connectionErrorPersistent": "Nadal nie można połączyć się z {partner} po kilku próbach — spróbuj przeładować aplikację",
+  "app.partners.connectionErrorConfig": "{partner} odrzucił logowanie serwera NeoSleep — przeładowanie nie pomoże, zgłoś to administratorowi",
   "user.settings.menu": "Ustawienia wyświetlania",
   "user.settings.theme": "Motyw",
   "user.settings.language": "Język",
