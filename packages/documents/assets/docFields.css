@@ -1,0 +1,46 @@
+/*
+ * Shared "who / where / when" field grid for generated documents — patient,
+ * doctor, clinic, date, ... Inlined into every template via the
+ * {{style:docFields}} token (documentRender.ts), so all documents lay it out
+ * the same way. Small label above, value below on a write-in line (a blank
+ * form gets a line to write on). Items share each row evenly and wrap to
+ * the next one when they no longer fit, so 3, 4 or 5 fields all fill the
+ * width; write-in lines stay aligned across a row even when a value wraps.
+ * .doc-field--wide takes a full row (the patient's name); .doc-field--short
+ * gets less room (date, tooth).
+ */
+.doc-fields {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 20px;
+  row-gap: 10px;
+  margin: 0 0 18px;
+  padding: 12px 14px 14px;
+  border: 1px solid #e3e8e7;
+  border-radius: 8px;
+  background: #f7faf9;
+  break-inside: avoid;
+}
+.doc-field { flex: 1 1 150px; min-width: 0; display: flex; flex-direction: column; }
+.doc-field--short { flex: 0.6 1 90px; }
+.doc-field--wide { flex-basis: 100%; }
+.doc-field dt {
+  font-size: 7pt;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--secondary);
+  margin: 0 0 2px;
+}
+.doc-field dd {
+  flex: 1;
+  margin: 0;
+  min-height: 1.8em;
+  padding-bottom: 2px;
+  border-bottom: 1px solid #cfd8d6;
+  font-size: 10pt;
+  font-weight: 400;
+  color: var(--text, #1a1a1a);
+  overflow-wrap: anywhere;
+}
+.doc-field--wide dd { font-weight: 500; }

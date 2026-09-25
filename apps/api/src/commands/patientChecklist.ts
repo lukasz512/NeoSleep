@@ -19,11 +19,24 @@ import { MEDICAL_HISTORY_QUESTIONS, ORAL_EXAM_QUESTIONS, STOP_QUESTIONS, BANG_QU
 // Print
 // ---------------------------------------------------------------------------
 
-/** Answer from a record — or tick boxes to fill in by hand on a blank form. */
-function yesNo(value: boolean | null | undefined, blank: boolean): string {
-  if (value === true) return "Sí";
-  if (value === false) return "No";
-  return blank ? "☐ Sí   ☐ No" : "";
+const YES_NO = ["Sí", "No"] as const;
+const SKELETAL_CLASSES = ["I", "II", "III"] as const;
+
+/**
+ * Answer from a record into `fields` — or, on a blank form, empty tick-boxes
+ * to fill in by hand (drawn by the renderer, see choiceFields).
+ */
+function setYesNo(
+  fields: Record<string, string>,
+  choices: Record<string, readonly string[]>,
+  key: string,
+  value: boolean | null | undefined,
+  blank: boolean
+): void {
+  if (value === true) fields[key] = "Sí";
+  else if (value === false) fields[key] = "No";
+  else if (blank) choices[key] = YES_NO;
+  else fields[key] = "";
 }
 
 /** The dental/sleep clinical templates are Mexican Spanish content; fall back to a template's first locale. */
@@ -68,13 +81,14 @@ export async function PrintChecklistItemCommand(
   const locale = printLocale(key);
   let date = new Date();
   const fields: Record<string, string> = {};
+  const choices: Record<string, readonly string[]> = {};
 
   if (key === "medicalHistory" || key === "historiaEndo") {
     const history =
       key === "medicalHistory"
         ? recordOf<MedicalHistoryRecord>(item, recordId)
         : (recordOf<MedicalHistoryRecord>(checklist.items.find((i) => i.key === "medicalHistory") ?? item, undefined));
-    for (const q of MEDICAL_HISTORY_QUESTIONS) fields[`q_${q}`] = yesNo(history?.[q], key === "medicalHistory");
+    for (const q of MEDICAL_HISTORY_QUESTIONS) setYesNo(fields, choices, `q_${q}`, history?.[q], key === "medicalHistory");
     fields.medical_history_other = history?.medical_history_other ?? "";
     if (key === "medicalHistory" && history) date = history.created_at;
   }
@@ -83,14 +97,16 @@ export async function PrintChecklistItemCommand(
       key === "oralExam"
         ? recordOf<OralExamRecord>(item, recordId)
         : recordOf<OralExamRecord>(checklist.items.find((i) => i.key === "oralExam") ?? item, undefined);
-    for (const q of ORAL_EXAM_QUESTIONS) fields[`q_${q}`] = yesNo(exam?.[q], key === "oralExam");
-    fields.q_skeletal_class = exam?.skeletal_class ?? (key === "oralExam" ? "☐ I   ☐ II   ☐ III" : "");
+    for (const q of ORAL_EXAM_QUESTIONS) setYesNo(fields, choices, `q_${q}`, exam?.[q], key === "oralExam");
+    if (exam?.skeletal_class) fields.q_skeletal_class = exam.skeletal_class;
+    else if (key === "oralExam") choices.q_skeletal_class = SKELETAL_CLASSES;
+    else fields.q_skeletal_class = "";
     fields.diente = exam?.tooth ?? "";
     if (key === "oralExam" && exam) date = exam.created_at;
   }
   if (key === "stopBang") {
     const screening = recordOf<StopBangRecord>(item, recordId);
-    for (const q of [...STOP_QUESTIONS, ...BANG_QUESTIONS]) fields[`q_${q}`] = yesNo(screening?.[q], true);
+    for (const q of [...STOP_QUESTIONS, ...BANG_QUESTIONS]) setYesNo(fields, choices, `q_${q}`, screening?.[q], true);
     fields.score = screening?.score == null ? "—" : String(screening.score);
     if (screening) date = screening.created_at;
   }
@@ -119,6 +135,7 @@ export async function PrintChecklistItemCommand(
       fecha: date.toLocaleDateString("es-MX"),
       ...fields,
     },
+    choiceFields: choices,
   });
 
   await insertAuditLog(ctx.client, {

@@ -117,6 +117,7 @@
     body { padding: 0; max-width: none; }
     .screen-only { display: none; }
   }
+  {{style:docFields}}
 </style>
 </head>
 <body>
@@ -129,22 +130,13 @@
   <h1>{{documents.historiaEndo.title}}</h1>
   <h2>{{documents.historiaEndo.subtitle}}</h2>
 
-  <div class="field-row">
-    <span class="field-label">{{documents.historiaEndo.fieldPatientName}} </span
-    ><span class="field-value" data-field="nombre_paciente"></span>
-  </div>
-  <div class="field-row">
-    <span class="field-label">{{documents.historiaEndo.fieldPractitioner}} </span
-    ><span class="field-value" data-field="nombre_medico"></span>
-    <span class="field-label" style="margin-left:24px;">{{documents.historiaEndo.fieldClinic}} </span
-    ><span class="field-value" data-field="nombre_clinica"></span>
-  </div>
-  <div class="field-row">
-    <span class="field-label">{{documents.historiaEndo.fieldDate}} </span
-    ><span class="field-value" data-field="fecha"></span>
-    <span class="field-label" style="margin-left:24px;">{{documents.historiaEndo.fieldTooth}} </span
-    ><span class="field-value" data-field="diente"></span>
-  </div>
+  <dl class="doc-fields">
+    <div class="doc-field doc-field--wide"><dt>{{documents.historiaEndo.fieldPatientName}}</dt><dd data-field="nombre_paciente"></dd></div>
+    <div class="doc-field"><dt>{{documents.historiaEndo.fieldPractitioner}}</dt><dd data-field="nombre_medico"></dd></div>
+    <div class="doc-field"><dt>{{documents.historiaEndo.fieldClinic}}</dt><dd data-field="nombre_clinica"></dd></div>
+    <div class="doc-field doc-field--short"><dt>{{documents.historiaEndo.fieldDate}}</dt><dd data-field="fecha"></dd></div>
+    <div class="doc-field doc-field--short"><dt>{{documents.historiaEndo.fieldTooth}}</dt><dd data-field="diente"></dd></div>
+  </dl>
 
   <h3>{{documents.historiaEndo.sectionMedicalHistory}}</h3>
   <table class="checklist">

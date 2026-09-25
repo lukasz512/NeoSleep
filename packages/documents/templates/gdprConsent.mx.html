@@ -74,14 +74,12 @@
   h1 { color: var(--primary); font-size: 14pt; font-weight: 500; margin: 0 0 2px; line-height: 1.3; }
   h2 { color: var(--secondary); font-size: 11pt; font-weight: 400; margin: 0 0 14px; line-height: 1.3; }
   p { margin: 0 0 9px; text-align: justify; text-justify: inter-word; }
-  .field-row { margin: 0 0 6px; }
-  .field-row .field-label { font-weight: 600; color: var(--secondary); }
-  .field-row .field-value { color: var(--text); }
   .sig-label { font-weight: 600; color: var(--secondary); margin: 18px 0 6px; }
   .signature-box { border: 1px solid var(--secondary); height: 90px; width: 260px; padding: 8px; }
   .screen-only.contact-footer { font-size: 8pt; color: var(--secondary); border-top: 1px solid #ccc; padding-top: 8px; margin-top: 24px; }
   .screen-only.contact-footer .doc-ref { text-align: right; margin-top: 2px; }
   @media print { body { padding: 0; max-width: none; } .screen-only { display: none; } }
+  {{style:docFields}}
 </style>
 </head>
 <body>
@@ -96,18 +94,11 @@
 
   <div class="doc-content">{{content}}</div>
 
-  <div class="field-row">
-    <span class="field-label">{{documents.gdprConsentMx.fieldDoctorName}} </span
-    ><span class="field-value" data-field="doctor_name"></span>
-  </div>
-  <div class="field-row">
-    <span class="field-label">{{documents.gdprConsentMx.fieldClinicName}} </span
-    ><span class="field-value" data-field="clinic_name"></span>
-  </div>
-  <div class="field-row">
-    <span class="field-label">{{documents.gdprConsentMx.fieldDate}} </span
-    ><span class="field-value" data-field="date"></span>
-  </div>
+  <dl class="doc-fields">
+    <div class="doc-field"><dt>{{documents.gdprConsentMx.fieldDoctorName}}</dt><dd data-field="doctor_name"></dd></div>
+    <div class="doc-field"><dt>{{documents.gdprConsentMx.fieldClinicName}}</dt><dd data-field="clinic_name"></dd></div>
+    <div class="doc-field doc-field--short"><dt>{{documents.gdprConsentMx.fieldDate}}</dt><dd data-field="date"></dd></div>
+  </dl>
 
   <div class="sig-label">{{documents.gdprConsentMx.signatureLabel}}</div>
   <div id="signature" class="signature-box" data-field="signature"></div>
