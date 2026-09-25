@@ -56,7 +56,12 @@ function resizeCanvas() {
   const wrapper = wrapperRef.value;
   if (!canvas || !wrapper) return;
   const ratio = Math.max(window.devicePixelRatio || 1, 1);
-  const { width, height } = wrapper.getBoundingClientRect();
+  // Layout size, not getBoundingClientRect(): inside a dialog the pad mounts
+  // mid zoom-in transition, and the transformed (smaller) rect sized the
+  // canvas to ~half its real width — strokes beyond it were lost (the whole
+  // signature in Safari, part of it elsewhere; NEO-51 review).
+  const width = wrapper.offsetWidth;
+  const height = wrapper.offsetHeight;
   if (width === 0 || height === 0) return;
   const data = pad.value && !pad.value.isEmpty() ? pad.value.toData() : null;
   canvas.width = width * ratio;
@@ -123,7 +128,20 @@ function trimmedDataURL(canvas: HTMLCanvasElement): string | null {
   out.width = right - left + 1;
   out.height = bottom - top + 1;
   out.getContext("2d")?.drawImage(canvas, left, top, out.width, out.height, 0, 0, out.width, out.height);
+  const scale = canvas.width / (canvas.offsetWidth || canvas.width);
+  lastTrimBox = { left: left / scale, top: top / scale, width: out.width / scale, height: out.height / scale };
   return out.toDataURL("image/png");
+}
+
+/** Where the last trimmed signature sat inside the canvas, in CSS pixels — lets a caller animate it from there. */
+let lastTrimBox: { left: number; top: number; width: number; height: number } | null = null;
+
+/** Viewport rect of the ink from the last `toDataURL({ trim: true })`, or null. */
+function trimmedInkRect(): DOMRect | null {
+  const canvas = canvasRef.value;
+  if (!canvas || !lastTrimBox) return null;
+  const r = canvas.getBoundingClientRect();
+  return new DOMRect(r.left + lastTrimBox.left, r.top + lastTrimBox.top, lastTrimBox.width, lastTrimBox.height);
 }
 
 /** `trim: true` returns only the inked area (NEO-51 agreement signature); the default keeps the whole pad. */
@@ -138,7 +156,7 @@ function isEmptyValue(): boolean {
   return isEmpty.value;
 }
 
-defineExpose({ isEmpty: isEmptyValue, clear, toDataURL });
+defineExpose({ isEmpty: isEmptyValue, clear, toDataURL, trimmedInkRect });
 </script>
 
 <style scoped>

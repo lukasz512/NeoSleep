@@ -197,7 +197,15 @@ async function load(): Promise<void> {
 }
 
 function fitFrame(doc: Document): void {
-  frameHeight.value = `${Math.ceil(doc.documentElement.scrollHeight) + 8}px`;
+  // The <html> box's own height, not scrollHeight: Safari/Firefox report
+  // scrollHeight as at least the frame's current height, so a frame could
+  // only ever grow (the short privacy notice inherited the agreement's
+  // ~2900px). Body margins are outside <html>'s content box, so add them.
+  const html = doc.documentElement;
+  const bodyStyle = doc.defaultView?.getComputedStyle(doc.body);
+  const margins = bodyStyle ? parseFloat(bodyStyle.marginTop) + parseFloat(bodyStyle.marginBottom) : 0;
+  const height = Math.ceil(Math.max(html.getBoundingClientRect().height, doc.body.getBoundingClientRect().height + margins));
+  if (height > 0) frameHeight.value = `${height + 8}px`;
 }
 
 /** Today, formatted the way the PDF will print the doctor's signing date (Finish stamps the real one server-side). */
@@ -226,6 +234,65 @@ async function onFrameLoad(): Promise<void> {
   fitFrame(doc);
   Array.from(doc.images).forEach((img) => img.addEventListener("load", () => fitFrame(doc), { once: true }));
   if (signed) scrollToSignatures(doc);
+  if (signed && pendingFlight) {
+    const flight = pendingFlight;
+    pendingFlight = null;
+    await flySignatureIntoDocument(doc, flight);
+  }
+}
+
+// Set by onSign: where the doctor's ink sat on the pad, so the signed preview
+// can carry it into the agreement's signature line instead of it just
+// vanishing from the pad and reappearing (Łukasz, NEO-51 review).
+let pendingFlight: { src: string; from: DOMRect } | null = null;
+const FLIGHT_MS = 650;
+
+async function flySignatureIntoDocument(doc: Document, flight: { src: string; from: DOMRect }): Promise<void> {
+  const target = doc.querySelector<HTMLImageElement>('[data-image="signer_signature"] img');
+  const frame = frameRef.value;
+  if (!target || !frame) return;
+  const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  await target.decode().catch(() => undefined);
+  const frameRect = frame.getBoundingClientRect();
+  const imgRect = target.getBoundingClientRect();
+  const to = new DOMRect(frameRect.left + imgRect.left, frameRect.top + imgRect.top, imgRect.width, imgRect.height);
+  if (reduceMotion || !to.width || !flight.from.width || typeof document.body.animate !== "function") return;
+
+  const ghost = document.createElement("img");
+  ghost.src = flight.src;
+  ghost.alt = "";
+  ghost.setAttribute("aria-hidden", "true");
+  Object.assign(ghost.style, {
+    position: "fixed",
+    left: `${flight.from.left}px`,
+    top: `${flight.from.top}px`,
+    width: `${flight.from.width}px`,
+    height: `${flight.from.height}px`,
+    zIndex: "10000",
+    pointerEvents: "none",
+    transformOrigin: "0 0",
+  });
+  document.body.appendChild(ghost);
+  target.style.opacity = "0";
+  const dx = to.left - flight.from.left;
+  const dy = to.top - flight.from.top;
+  const sx = to.width / flight.from.width;
+  const sy = to.height / flight.from.height;
+  try {
+    await ghost.animate(
+      [
+        { transform: "translate(0, 0) scale(1, 1)" },
+        { transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})` },
+      ],
+      { duration: FLIGHT_MS, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)", fill: "forwards" },
+    ).finished;
+  } catch {
+    // interrupted (dialog closed mid-flight) — just settle below
+  } finally {
+    target.style.transition = "opacity 120ms ease-out";
+    target.style.opacity = "1";
+    ghost.remove();
+  }
 }
 
 /** On the signed preview, land on the two signatures — that's what the doctor wants to check. */
@@ -267,6 +334,8 @@ function keepSignature(): void {
 function onSign(): void {
   const signatureDataUrl = padRef.value?.toDataURL({ trim: true });
   if (!signatureDataUrl || !preview.value) return;
+  const from = padRef.value?.trimmedInkRect();
+  pendingFlight = from ? { src: signatureDataUrl, from } : null;
   emit("signed", { signatureDataUrl, versionIds: preview.value.versionIds });
   // Stay open: the parent's new `signature` flips the dialog to the signed preview.
   resigning.value = false;
