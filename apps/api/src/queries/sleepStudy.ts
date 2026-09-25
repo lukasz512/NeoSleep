@@ -1,5 +1,21 @@
 import type { TenantContext } from "../context/TenantContext.js";
 import { getSleepStudiesPaginated, getSleepStudyById, type GetSleepStudiesFilters, type SleepStudy } from "../db.js";
+import { getLatestSleepStudyIdForPatient } from "../db/sleepStudy.js";
+import { GetPatientByIdQuery } from "./patient.js";
+import { NotFoundError } from "../errors.js";
+
+/**
+ * The latest sleep study's id only — what a device order needs
+ * (treatment_plan.sleep_study_id is required) and the one sleep-study fact
+ * the commercial field force may still see: every clinical field (AHI,
+ * SpO2, interpretation, results) is admin/doctor only since 2026-09-25.
+ * Territory-checked through GetPatientByIdQuery.
+ */
+export async function GetLatestSleepStudyRefQuery(ctx: TenantContext, patientId: string): Promise<{ id: string | null }> {
+  const patient = await GetPatientByIdQuery(ctx, patientId);
+  if (!patient) throw new NotFoundError("Patient", patientId);
+  return { id: await getLatestSleepStudyIdForPatient(ctx.client, patientId) };
+}
 
 /**
  * QUERIES — Sleep study domain.

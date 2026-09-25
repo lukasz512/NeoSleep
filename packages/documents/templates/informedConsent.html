@@ -51,10 +51,9 @@
      manufacturer checkboxes' checked state the same way.
 
   Firma: the signature-box element further down (data-field firma_paciente)
-  is left empty on purpose — v1 is PDF-generation only, no e-signature yet
-  (a canvas/image signature is future work). When that lands, insert the
-  resulting image into that box (or draw directly on a canvas with the same
-  id) via the same DOM-manipulation pass described above.
+  is left empty for a printed copy (signed on paper). When the patient signs
+  on their phone (QR flow, ADR-024) the renderer's dataImages option puts the
+  drawn PNG into it, sized to the box.
 
   Paginación / pie de página repetido en cada hoja:
   This HTML does NOT repeat the footer on every page via CSS (not reliable

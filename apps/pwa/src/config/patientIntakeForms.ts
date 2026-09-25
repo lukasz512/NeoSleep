@@ -10,8 +10,10 @@ type AppIconName = InstanceType<typeof AppIcon>["$props"]["name"];
  */
 const INTAKE_FORM_ICONS: Record<string, AppIconName> = {
   informedConsent: "form-consent",
-  historiaEndo: "form-history",
+  medicalHistory: "form-history",
   stopBang: "form-screening",
+  oralExam: "specialty-dentist",
+  historiaEndo: "form-history",
   polysomnography: "nav-sleep-studies",
 };
 
@@ -21,13 +23,16 @@ export function intakeFormIcon(key: string): AppIconName {
 
 /**
  * i18n key of the short clinical abbreviation shown in the patient list's
- * Forms cell (NEO-57): CI (consentimiento informado), HE (Historia Endo),
+ * Forms cell (NEO-57): CI (consentimiento informado), AM (medical history),
+ * EO (oral exam), HE (Historia Endo),
  * SB (STOP-BANG), PSG (polysomnography) — terms clinicians already use, so
  * the row reads like a chart, not an icon row. Keys not listed here fall
  * back to initials of the form's own label (see PatientIntakeForms.vue).
  */
 const INTAKE_FORM_ABBR_KEYS: Record<string, string> = {
   informedConsent: "app.patients.forms.abbr.informedConsent",
+  medicalHistory: "app.patients.forms.abbr.medicalHistory",
+  oralExam: "app.patients.forms.abbr.oralExam",
   historiaEndo: "app.patients.forms.abbr.historiaEndo",
   stopBang: "app.patients.forms.abbr.stopBang",
   polysomnography: "app.patients.forms.abbr.polysomnography",

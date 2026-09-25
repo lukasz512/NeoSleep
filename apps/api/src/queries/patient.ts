@@ -8,8 +8,8 @@ import {
   type TerritoryPathNode,
 } from "../db.js";
 import { withPlatform } from "../db/tenant.js";
-import { getTemplateKeysForEntityType } from "../db/documentTemplateEntityType.js";
-import { getPatientFormCompletion, POLYSOMNOGRAPHY_FORM_KEY } from "../db/patientFormCompletion.js";
+import { listPatientChecklistConfig, type ChecklistFillMode } from "../db/documentTemplateEntityType.js";
+import { getPatientFormCompletion, POLYSOMNOGRAPHY_FORM_KEY, type FormCompletionItem } from "../db/patientFormCompletion.js";
 import { DOCUMENT_MANIFEST } from "@neo/documents";
 import { getAllowedScopePaths, assertTerritoryAccessByTerritoryId } from "../middleware/requireScope.js";
 
@@ -134,28 +134,35 @@ export async function GetPatientListQuery(
 
   const { rows, total } = await getPatientsPaginated(ctx.client, filters, page, limit, sortBy, sortOrder);
 
-  const formKeys = await getPatientIntakeFormKeys();
-  const completion = await getPatientFormCompletion(ctx.client, rows.map((row) => row.id), formKeys);
+  const forms = await getPatientIntakeForms();
+  const completion = await getPatientFormCompletion(ctx.client, rows.map((row) => row.id), forms);
   const items = rows.map((row) => {
     const done = completion.get(row.id);
     return {
       ...toDto(row),
-      intake_forms: formKeys.map((key) => ({ key, done: done?.has(key) ?? false })),
+      intake_forms: forms.map(({ key }) => ({ key, done: done?.has(key) ?? false })),
     };
   });
   return { items, total };
 }
 
 /**
- * Templates an admin assigned to "patient" (Documents → Permissions tab),
- * ordered by DOCUMENT_MANIFEST so the icons and tooltip list always come out
- * in the same order, then polysomnography, which every patient always has.
- * Hidden (test-fixture) and unknown keys are dropped.
+ * The patient's Estudios items, in the same order the Estudios checklist
+ * shows them (ADR-024): the templates an admin assigned to "patient"
+ * (Documents → Permissions), grouped consent → patient → doctor → results by
+ * their fill mode and ordered by the admin's position within a group, then
+ * polysomnography, which every patient always has. Hidden (test-fixture) and
+ * unknown keys are dropped.
  */
-async function getPatientIntakeFormKeys(): Promise<string[]> {
-  const assigned = new Set(await withPlatform((client) => getTemplateKeysForEntityType(client, "patient")));
-  const templateKeys = DOCUMENT_MANIFEST.filter((entry) => !entry.hidden && assigned.has(entry.templateKey)).map((entry) => entry.templateKey);
-  return [...templateKeys, POLYSOMNOGRAPHY_FORM_KEY];
+const FILL_MODE_ORDER: ChecklistFillMode[] = ["consent", "patient", "doctor", "external"];
+async function getPatientIntakeForms(): Promise<FormCompletionItem[]> {
+  const config = await withPlatform((client) => listPatientChecklistConfig(client));
+  const known = new Set(DOCUMENT_MANIFEST.filter((entry) => !entry.hidden).map((entry) => entry.templateKey));
+  const templates = config
+    .filter((c) => known.has(c.template_key))
+    .map((c) => ({ key: c.template_key, fillMode: c.fill_mode ?? ("doctor" as const) }))
+    .sort((x, y) => FILL_MODE_ORDER.indexOf(x.fillMode) - FILL_MODE_ORDER.indexOf(y.fillMode));
+  return [...templates, { key: POLYSOMNOGRAPHY_FORM_KEY, fillMode: null }];
 }
 
 // ---------------------------------------------------------------------------
