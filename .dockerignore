@@ -1,0 +1,19 @@
+# Build context for apps/api/Dockerfile is the repo root — keep it small and free of secrets.
+**/node_modules
+**/dist
+**/.vite
+**/coverage
+.git
+.github
+.claude
+.husky
+.env
+.env.*
+!.env.example
+secrets
+backups
+docs
+e2e
+**/test-results
+**/playwright-report
+*.log
