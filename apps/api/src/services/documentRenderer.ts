@@ -1,5 +1,6 @@
-import puppeteer, { type Browser } from "puppeteer-core";
-import chromium from "@sparticuz/chromium";
+import { existsSync } from "node:fs";
+import puppeteer, { type Browser, type Page } from "puppeteer-core";
+import { AppError, DocumentRenderError } from "../errors.js";
 
 /**
  * Single seam for HTML→PDF rendering. Every document generator in the
@@ -30,21 +31,87 @@ let browserPromise: Promise<Browser> | null = null;
 let activeRenders = 0;
 const renderQueue: Array<() => void> = [];
 
-async function getBrowser(): Promise<Browser> {
+/** Well-known local browser installs — only used off Linux (dev machines), where @sparticuz/chromium's Linux-only binary can't run at all (spawn ENOEXEC on macOS). */
+const LOCAL_BROWSER_PATHS: Record<string, string[]> = {
+  darwin: [
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+    "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+  ],
+  win32: [
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+  ],
+};
+
+export interface BrowserLaunch {
+  executablePath: string;
+  args: string[];
+}
+
+/**
+ * Picks the Chromium binary to launch:
+ * 1. CHROME_EXECUTABLE_PATH, when set (explicit override, any platform).
+ * 2. Off Linux: a locally installed Chrome/Chromium/Edge/Brave.
+ * 3. On Linux (Render, CI): @sparticuz/chromium's bundled binary.
+ *
+ * @sparticuz/chromium only unpacks its bundled shared libraries (libnss3,
+ * libnspr4, fonts — the al2023 pack) when it believes it runs on AWS
+ * Lambda, and it decides that once, at module import time. Render's native
+ * Node runtime isn't Lambda and lacks those system libraries, so without
+ * this the launch dies with "libnspr4.so: cannot open shared object file"
+ * — the actual cause of NEO-36's "Database error: withTenant" on pwa-dev.
+ * Setting AWS_LAMBDA_JS_RUNTIME before a *dynamic* import makes it unpack
+ * them into /tmp and set LD_LIBRARY_PATH itself (verified in a
+ * node:20-bookworm amd64 container).
+ */
+export async function resolveBrowserLaunch(): Promise<BrowserLaunch> {
+  const override = process.env.CHROME_EXECUTABLE_PATH;
+  if (override) return { executablePath: override, args: ["--no-sandbox", "--disable-dev-shm-usage"] };
+
+  if (process.platform !== "linux") {
+    const found = (LOCAL_BROWSER_PATHS[process.platform] ?? []).find((path) => existsSync(path));
+    if (!found) {
+      throw new DocumentRenderError(
+        `no local Chrome/Chromium found on ${process.platform} — install Google Chrome or set CHROME_EXECUTABLE_PATH`
+      );
+    }
+    return { executablePath: found, args: [] };
+  }
+
+  process.env.AWS_LAMBDA_JS_RUNTIME ??= "nodejs20.x";
+  const { default: chromium } = await import("@sparticuz/chromium");
+  return { executablePath: await chromium.executablePath(), args: chromium.args };
+}
+
+/**
+ * The one shared browser. Exported for the renderer spec only (it kills the
+ * process to prove a crashed browser is replaced, not reused).
+ */
+export async function getRenderBrowser(): Promise<Browser> {
+  if (browserPromise) {
+    const cached = await browserPromise.catch(() => null);
+    // A browser that crashed / was OOM-killed stays cached as a dead
+    // connection ("Connection closed" on every render until a restart) —
+    // drop it and launch a fresh one.
+    if (cached && !cached.connected) browserPromise = null;
+  }
   if (!browserPromise) {
-    browserPromise = (async () => {
-      const executablePath = await chromium.executablePath();
-      return puppeteer.launch({
-        args: chromium.args,
-        executablePath,
-        headless: true,
+    const current: Promise<Browser> = (async () => {
+      const { executablePath, args } = await resolveBrowserLaunch();
+      const browser = await puppeteer.launch({ args, executablePath, headless: true });
+      browser.once("disconnected", () => {
+        if (browserPromise === current) browserPromise = null;
       });
+      return browser;
     })().catch((err: unknown) => {
       // Don't cache a rejected launch — let the next call retry instead of
       // every future render failing forever off one transient error.
-      browserPromise = null;
+      if (browserPromise === current) browserPromise = null;
       throw err;
     });
+    browserPromise = current;
   }
   return browserPromise;
 }
@@ -95,22 +162,96 @@ export interface RenderHtmlToPdfOptions {
    * generator to go through renderHtmlToPdf() only.
    */
   dataFields?: Record<string, string>;
+  /**
+   * Images placed into `[data-field="key"]` elements — a drawn signature
+   * (data:image/png;base64 only: the page lockdown allows data: URLs and
+   * nothing else, and callers validate the format first). The element's
+   * content is replaced by one <img>.
+   */
+  dataImages?: Record<string, string>;
+}
+
+const PNG_DATA_URL_RE = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/;
+
+/** Exported for the spec; callers go through renderHtmlToPdf(). */
+export async function applyDataImages(page: Page, images: Record<string, string>): Promise<void> {
+  for (const [key, url] of Object.entries(images)) {
+    if (!PNG_DATA_URL_RE.test(url)) throw new DocumentRenderError(`data image for "${key}" must be a PNG data URL`);
+  }
+  await page.evaluate((values) => {
+    for (const [key, src] of Object.entries(values)) {
+      document.querySelectorAll<HTMLElement>(`[data-field="${CSS.escape(key)}"]`).forEach((el) => {
+        const img = document.createElement("img");
+        img.src = src;
+        img.alt = "";
+        // Fit the box: a phone canvas is ~2-3x the box's size at device pixel
+        // ratio, and an unconstrained image spills out and across a page break.
+        img.style.cssText = "display:block;width:100%;height:100%;object-fit:contain;";
+        el.style.breakInside = "avoid";
+        el.replaceChildren(img);
+      });
+    }
+  }, images);
+}
+
+/** The only hosts a template may load from — the Poppins webfont the templates link. */
+const ALLOWED_REQUEST_HOSTS = new Set(["fonts.googleapis.com", "fonts.gstatic.com"]);
+
+/**
+ * Rendered HTML includes admin-authored content (document_content_version)
+ * and Chromium runs unsandboxed on Render (@sparticuz/chromium's args carry
+ * --no-sandbox): page scripts are disabled and every request other than
+ * data:/about: and the webfont hosts is aborted, so a template can't make
+ * the API host fetch arbitrary URLs. Data fields are still filled —
+ * page.evaluate goes through CDP, unaffected by the page's own JS switch
+ * (covered by documentRenderer.spec.ts).
+ */
+export async function lockDownPage(page: Page): Promise<void> {
+  await page.setJavaScriptEnabled(false);
+  await page.setRequestInterception(true);
+  page.on("request", (request) => {
+    const url = request.url();
+    if (url.startsWith("data:") || url.startsWith("about:")) return void request.continue();
+    try {
+      const { protocol, hostname } = new URL(url);
+      if (protocol === "https:" && ALLOWED_REQUEST_HOSTS.has(hostname)) return void request.continue();
+    } catch {
+      // unparseable → abort below
+    }
+    void request.abort();
+  });
+}
+
+/**
+ * Fills every `[data-field="key"]` element — not just the first; a
+ * template can repeat a field (e.g. the patient name in the header and
+ * again in the signature block). textContent, so values are auto-escaped.
+ * Exported only so the spec can assert on the live DOM; callers go through
+ * renderHtmlToPdf().
+ */
+export async function applyDataFields(page: Page, fields: Record<string, string>): Promise<void> {
+  await page.evaluate((values) => {
+    for (const [key, value] of Object.entries(values)) {
+      document.querySelectorAll(`[data-field="${CSS.escape(key)}"]`).forEach((el) => {
+        el.textContent = value;
+      });
+    }
+  }, fields);
 }
 
 export async function renderHtmlToPdf(html: string, options: RenderHtmlToPdfOptions = {}): Promise<Uint8Array> {
   await acquireRenderSlot();
   try {
-    const browser = await getBrowser();
+    const browser = await getRenderBrowser();
     const page = await browser.newPage();
     try {
+      await lockDownPage(page);
       await page.setContent(html, { waitUntil: "networkidle0" });
-      if (options.dataFields) {
-        await page.evaluate((fields) => {
-          for (const [key, value] of Object.entries(fields)) {
-            const el = document.querySelector(`[data-field="${key}"]`);
-            if (el) el.textContent = value;
-          }
-        }, options.dataFields);
+      if (options.dataFields) await applyDataFields(page, options.dataFields);
+      if (options.dataImages) {
+        await applyDataImages(page, options.dataImages);
+        // data: images still decode asynchronously — wait so page.pdf() never captures an empty box.
+        await page.waitForFunction(() => Array.from(document.images).every((img) => img.complete), { timeout: 5000 });
       }
       const displayHeaderFooter = Boolean(options.headerTemplate || options.footerTemplate);
       return await page.pdf({
@@ -129,6 +270,9 @@ export async function renderHtmlToPdf(html: string, options: RenderHtmlToPdfOpti
     } finally {
       await page.close();
     }
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DocumentRenderError((err as Error)?.message?.split("\n")[0] ?? "unknown error", err);
   } finally {
     releaseRenderSlot();
   }

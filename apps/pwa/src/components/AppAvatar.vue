@@ -1,10 +1,8 @@
 <template>
   <VAvatar
     :size="size"
-    :color="avatarUrl || outlined ? undefined : bgColor"
     class="app-avatar"
-    :class="{ 'app-avatar--outlined': outlined }"
-    :style="outlined ? { '--app-avatar-accent': bgColor, '--app-avatar-ring': ringWidth } : undefined"
+    :class="[`app-avatar--${tone}`, { 'app-avatar--photo': !!avatarUrl }]"
   >
     <VImg v-if="avatarUrl" :src="avatarUrl" :alt="name || ''" cover />
     <span v-else-if="initials" class="app-avatar__initials" :style="{ fontSize: initialsFontSize }">{{ initials }}</span>
@@ -16,8 +14,8 @@
 import { computed } from "vue";
 import AppIcon, { type AppIconName } from "./AppIcon.vue";
 import { getInitials, getInitialsFromParts } from "../utils/initials";
-import { getAvatarColor } from "../utils/avatarColor";
 import { hcoTypeIcon } from "../utils/hcoLabels";
+import { identityTone } from "../utils/identityTone";
 
 /**
  * Placeholder identity photo, shared by HCP/HCO/patient/lead/user lists,
@@ -30,10 +28,11 @@ import { hcoTypeIcon } from "../utils/hcoLabels";
  * so every caller gets it right for free, rather than each call site having
  * to remember to withhold `name` for place types.
  *
- * A patient placeholder is drawn as the "negative" of everyone else's: white
- * fill, a ring in the seeded color, and initials/icon in that same color -
- * so a patient is tellable from a doctor/rep at a glance in mixed lists and
- * EntityLink chips. A real photo (avatarUrl) is never outlined.
+ * NEO-57 identity: an organic square (squircle) tinted with its type's color
+ * (theme.scss --pwa-identity-*: patient teal, doctor blue, organization
+ * amber, users/leads neutral), initials/icon in that same color — so a mixed
+ * list reads by kind at a glance. Replaces the earlier per-name seeded
+ * colors and the outlined patient circle. A real photo keeps the same shape.
  */
 export type AppAvatarEntityType = "hcp" | "hco" | "patient" | "lead" | "user" | "event";
 
@@ -75,10 +74,7 @@ const initials = computed(() => {
   }
   return props.name?.trim() ? getInitials(props.name) : "";
 });
-// Falls back to the entity-type string as the color seed so even a nameless
-// placeholder gets a stable, on-brand color instead of Vuetify's flat gray.
-const bgColor = computed(() => getAvatarColor(props.name?.trim() || props.entityType));
-const outlined = computed(() => props.entityType === "patient" && !props.avatarUrl);
+const tone = computed(() => identityTone(props.entityType));
 const iconName = computed(() =>
   props.entityType === "hco" ? hcoTypeIcon(props.orgType ?? undefined) : ENTITY_ICONS[props.entityType],
 );
@@ -93,20 +89,34 @@ const FIBONACCI_INITIALS_RATIO = 21 / 55;
 // must also pass the equivalent numeric size for this calculation.
 const sizePx = computed(() => (typeof props.size === "number" ? props.size : parseFloat(String(props.size)) || 40));
 const initialsFontSize = computed(() => `${Math.max(sizePx.value * FIBONACCI_INITIALS_RATIO, 8)}px`);
-// Outlined ring scales with `size` so it matches the stroke of the bold
-// initials inside it (~1px on a 20px chip avatar, ~2px at the 40px default)
-// instead of a fixed 2px that swamps small avatars.
-const RING_TO_SIZE_RATIO = 1 / 19;
-const ringWidth = computed(() => `${Math.max(sizePx.value * RING_TO_SIZE_RATIO, 1).toFixed(2)}px`);
+
 </script>
 
 <style scoped>
 .app-avatar {
   flex-shrink: 0;
+  /* Organic square (squircle): a superellipse mask instead of VAvatar's
+     circle or a plain rounded rectangle — the corners flow into the sides
+     with no visible arc joint, at every size from an 18px mention to the
+     56px header, because the mask scales with the element. */
+  border-radius: 0 !important;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 0C88 0 100 12 100 50S88 100 50 100 0 88 0 50 12 0 50 0Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 0C88 0 100 12 100 50S88 100 50 100 0 88 0 50 12 0 50 0Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  background: var(--app-avatar-bg);
+  color: var(--app-avatar-fg);
+}
+
+.app-avatar--patient { --app-avatar-bg: var(--pwa-identity-patient-soft); --app-avatar-fg: var(--pwa-identity-patient); }
+.app-avatar--doctor  { --app-avatar-bg: var(--pwa-identity-doctor-soft);  --app-avatar-fg: var(--pwa-identity-doctor); }
+.app-avatar--org     { --app-avatar-bg: var(--pwa-identity-org-soft);     --app-avatar-fg: var(--pwa-identity-org); }
+.app-avatar--person  { --app-avatar-bg: var(--pwa-identity-person-soft);  --app-avatar-fg: var(--pwa-identity-person); }
+
+.app-avatar--photo {
+  background: transparent;
 }
 
 .app-avatar__initials {
-  color: #fff;
+  color: inherit;
   font-weight: 600;
   letter-spacing: 0.02em;
 }
@@ -114,23 +124,6 @@ const ringWidth = computed(() => `${Math.max(sizePx.value * RING_TO_SIZE_RATIO, 
 .app-avatar__icon {
   width: 55%;
   height: 55%;
-  color: #fff;
-}
-
-.app-avatar--outlined {
-  background: #fff;
-  /* Inset shadow instead of border so the ring doesn't grow the avatar past `size`. */
-  box-shadow: inset 0 0 0 var(--app-avatar-ring) var(--app-avatar-accent);
-}
-
-.app-avatar--outlined .app-avatar__initials,
-.app-avatar--outlined .app-avatar__icon {
-  color: var(--app-avatar-accent);
-}
-
-/* Colored letters on white read thinner than white on color - one weight up
-   keeps their stroke equal to the ring. */
-.app-avatar--outlined .app-avatar__initials {
-  font-weight: 700;
+  color: inherit;
 }
 </style>

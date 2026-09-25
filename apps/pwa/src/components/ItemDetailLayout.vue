@@ -7,7 +7,10 @@
          phones AppLayout's app bar keeps "← <Module>", so the eyebrow is
          hidden there. The name is never truncated — it is the record's identity. -->
     <header v-if="showRecordHeader" class="view-item__record-header">
-      <div class="view-item__tile" aria-hidden="true">
+      <!-- A record with an identity (NEO-57) swaps the module tile for its
+           avatar via #record-tile; the module icon is the fallback. -->
+      <slot v-if="hasContent && $slots['record-tile']" name="record-tile" />
+      <div v-else class="view-item__tile" aria-hidden="true">
         <AppIcon v-if="tileIcon" :name="tileIcon" class="view-item__tile-icon" />
       </div>
       <div class="view-item__record-text">
@@ -16,6 +19,10 @@
           <h1 v-if="hasContent" class="view-item__record-title">{{ recordTitle }}</h1>
           <span v-else class="view-item__record-title-skeleton" aria-hidden="true" />
           <slot v-if="hasContent" name="title-extra" />
+        </div>
+        <!-- NEO-57's quiet identity line under the name ("F · 47 y", "Dentist · Clinic"). -->
+        <div v-if="hasContent && $slots['record-details']" class="view-item__record-details">
+          <slot name="record-details" />
         </div>
       </div>
       <div v-if="hasContent && $slots['header-actions']" class="view-item__header-actions">
@@ -248,6 +255,10 @@ defineEmits<{
   color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
 }
 
+.view-item__record-details {
+  font-size: 0.875rem;
+}
+
 .view-item__record-title-skeleton {
   display: inline-block;
   width: 220px;
@@ -272,20 +283,23 @@ defineEmits<{
   .view-item__record-header {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
-    grid-template-rows: minmax(56px, auto) auto;
+    grid-template-rows: minmax(56px, auto) auto auto;
     grid-template-areas:
       "tile . actions"
-      "title title title";
+      "title title title"
+      "details details details";
     align-items: center;
     column-gap: 12px;
     row-gap: 8px;
     min-height: 0;
   }
-  .view-item__record-header .view-item__tile { grid-area: tile; }
+  .view-item__record-header .view-item__tile,
+  .view-item__record-header > .app-avatar { grid-area: tile; }
   .view-item__record-header .view-item__record-text { display: contents; }
   /* AppLayout's mobile app bar already shows "← <Module>" (NEO-55). */
   .view-item__record-header .view-item__eyebrow { display: none; }
   .view-item__record-header .view-item__record-title-row { grid-area: title; }
+  .view-item__record-header .view-item__record-details { grid-area: details; }
   .view-item__record-header .view-item__header-actions { grid-area: actions; }
   .view-item__tile {
     width: 40px;

@@ -1,8 +1,6 @@
 /**
- * Patient "sex · age" line shown under the patient's name in lists (NEO-57),
- * e.g. "F · 47 y" / "K · 47 l." / "F · 47 años". A plain function with the
- * translator injected, same convention as utils/mobileCardMeta.ts, so it's
- * unit-testable without the vue-i18n harness.
+ * Patient demographics helpers (NEO-57). The tags/fields built from them
+ * live in composables/useIdentity.ts.
  */
 
 export interface PatientDemographics {
@@ -19,23 +17,4 @@ export function ageFromDateOfBirth(dateOfBirth: string | null | undefined, today
   const beforeBirthday = today.getMonth() + 1 < month || (today.getMonth() + 1 === month && today.getDate() < day);
   if (beforeBirthday) age -= 1;
   return age >= 0 && age < 150 ? age : null;
-}
-
-/**
- * Only female/male get a letter — "other" and "prefer_not_to_say" show just
- * the age, so the line never labels a patient with something they didn't
- * choose. Returns "" when there is nothing to show.
- */
-export function patientSexAge(
-  patient: PatientDemographics,
-  translate: (key: string, params?: Record<string, unknown>) => string,
-  today?: Date,
-): string {
-  const sex =
-    patient.gender === "female" || patient.gender === "male"
-      ? translate(`app.patients.sexShort.${patient.gender}`)
-      : "";
-  const age = ageFromDateOfBirth(patient.date_of_birth, today);
-  const ageText = age != null ? translate("app.patients.ageShort", { age }) : "";
-  return [sex, ageText].filter(Boolean).join(" · ");
 }

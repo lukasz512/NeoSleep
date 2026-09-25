@@ -118,6 +118,35 @@
               density="comfortable"
               class="doc-editor__permissions-field"
             />
+            <!-- Patient Estudios checklist (ADR-024): who fills this document and where it sits. -->
+            <fieldset v-if="selectedEntityTypes.includes('patient')" class="doc-editor__checklist">
+              <legend class="doc-editor__checklist-title">{{ t("user.document-content.permissions.checklist.title") }}</legend>
+              <p class="doc-editor__permissions-hint">{{ t("user.document-content.permissions.checklist.hint") }}</p>
+              <div class="doc-editor__checklist-fields">
+                <VSelect
+                  id="doc-editor-fill-mode"
+                  v-model="checklistFillMode"
+                  :items="fillModeOptions"
+                  item-title="title"
+                  item-value="value"
+                  :label="t('user.document-content.permissions.checklist.fillMode')"
+                  variant="outlined"
+                  density="comfortable"
+                />
+                <VTextField
+                  id="doc-editor-sort-order"
+                  v-model.number="checklistSortOrder"
+                  type="number"
+                  min="0"
+                  max="999"
+                  :label="t('user.document-content.permissions.checklist.sortOrder')"
+                  :hint="t('user.document-content.permissions.checklist.sortOrderHint')"
+                  persistent-hint
+                  variant="outlined"
+                  density="comfortable"
+                />
+              </div>
+            </fieldset>
             <AppButton color="primary" :loading="savingPermissions" @click="onSavePermissions">
               {{ t("user.document-content.permissions.save") }}
             </AppButton>
@@ -220,6 +249,36 @@ async function loadHistory(): Promise<void> {
 async function loadEntityTypes(): Promise<void> {
   const res = await apiFetch(`/api/v1/document-content/${templateKey.value}/entity-types`, { handleErrors: false });
   if (res.ok) selectedEntityTypes.value = (await res.json()) as string[];
+  await loadChecklistConfig();
+}
+
+// Patient Estudios checklist config — only when the template is assigned to patients.
+const FILL_MODES = ["consent", "patient", "doctor", "external"] as const;
+const fillModeOptions = computed(() =>
+  FILL_MODES.map((value) => ({ value, title: t(`user.document-content.permissions.checklist.fillModes.${value}`) }))
+);
+const checklistFillMode = ref<string | null>(null);
+const checklistSortOrder = ref<number | null>(null);
+
+async function loadChecklistConfig(): Promise<void> {
+  checklistFillMode.value = null;
+  checklistSortOrder.value = null;
+  if (!selectedEntityTypes.value.includes("patient")) return;
+  const res = await apiFetch(`/api/v1/document-content/${templateKey.value}/patient-checklist`, { handleErrors: false });
+  if (!res.ok) return;
+  const config = (await res.json()) as { fillMode: string | null; sortOrder: number | null } | null;
+  checklistFillMode.value = config?.fillMode ?? null;
+  checklistSortOrder.value = config?.sortOrder ?? null;
+}
+
+async function saveChecklistConfig(): Promise<boolean> {
+  if (!selectedEntityTypes.value.includes("patient") || !checklistFillMode.value || checklistSortOrder.value == null) return true;
+  const res = await apiFetch(`/api/v1/document-content/${templateKey.value}/patient-checklist`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fillMode: checklistFillMode.value, sortOrder: checklistSortOrder.value }),
+  });
+  return res.ok;
 }
 
 async function load(): Promise<void> {
@@ -294,7 +353,7 @@ async function onSavePermissions(): Promise<void> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ entityTypes: selectedEntityTypes.value }),
     });
-    if (res.ok) {
+    if (res.ok && (await saveChecklistConfig())) {
       selectedEntityTypes.value = (await res.json()) as string[];
       notifications.show(t("user.document-content.permissions.saveSuccess"), "success");
     } else {
@@ -458,6 +517,27 @@ async function onSavePermissions(): Promise<void> {
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
+.doc-editor__checklist {
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-radius: var(--pwa-radius);
+  padding: 12px 16px 16px;
+  margin: 0 0 16px;
+  max-width: 560px;
+}
+.doc-editor__checklist-title {
+  padding: 0 6px;
+  font-weight: 600;
+}
+.doc-editor__checklist-fields {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 12px;
+}
+@media (max-width: 600px) {
+  .doc-editor__checklist-fields {
+    grid-template-columns: 1fr;
+  }
+}
 .doc-editor__permissions {
   max-width: 480px;
 }

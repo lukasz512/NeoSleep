@@ -38,6 +38,9 @@ export const routes: RouteRecordRaw[] = [
   { path: "/auth/callback", name: "auth-callback", component: () => import("../views/AuthCallbackView.vue"), meta: { layout: "public", public: true } },
   { path: "/change-password", name: "change-password", component: () => import("../views/ChangePasswordView.vue"), meta: { layout: "public", requiresAuth: true } },
   { path: "/partner-register", name: "partner-register", component: () => import("../views/PartnerRegistrationView.vue"), meta: { layout: "public", public: true } },
+  // Patient self-fill questionnaire from a doctor's QR code (NEO-36) — no account; the token is the
+  // credential and lives in the URL #fragment (/q#<token>), which browsers never send to any server.
+  { path: "/q", name: "patient-questionnaire", component: () => import("../views/PatientQuestionnaireView.vue"), meta: { layout: "public", public: true } },
   { path: "/dev", name: "dev", component: () => import("../views/DevView.vue"), meta: { layout: "app", devOnly: true } },
   { path: "/dashboard", name: "dashboard", component: () => import("../views/DashboardView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
   { path: "/leads", name: "leads", component: () => import("../views/LeadsView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep", "kam", "msl", "manager", "admin"] } },
@@ -49,7 +52,7 @@ export const routes: RouteRecordRaw[] = [
   { path: "/patients", name: "patients", component: () => import("../views/PatientsView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
   { path: "/patients/:id", name: "patient-detail", component: () => import("../views/PatientDetailView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
   // Cross-patient clinical aggregates — rep excluded (sees studies/orders only inside their own patient's tabs, not this tenant-wide list).
-  { path: "/sleep-studies", name: "sleep-studies", component: () => import("../views/SleepStudiesView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["doctor", "manager", "admin"] } },
+  { path: "/sleep-studies", name: "sleep-studies", component: () => import("../views/SleepStudiesView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["doctor", "admin"] } }, // health data: admin + doctor only (2026-09-25)
   { path: "/treatment-plans", name: "treatment-plans", component: () => import("../views/TreatmentPlansView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["doctor", "manager", "admin"] } },
   { path: "/planner", name: "planner", component: () => import("../views/PlannerView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
   // Hidden from nav while the OrthoApnea resources module ships (not deleted — see the `hidden` filter in appNavRoutes below).

@@ -69,7 +69,8 @@
             :to="hcpDetailLink(plan.dentist_id)"
             entity-type="hcp"
             :label="plan.dentist_name"
-            :subtitle="specialtyLabel(plan.dentist_specialty)"
+            :details="specialtySet(plan.dentist_specialty, plan.dentist_specialties).details"
+            :more-details="specialtySet(plan.dentist_specialty, plan.dentist_specialties).more"
           />
           <VChip v-if="isDraft(plan)" color="warning" size="small" variant="tonal">{{ t("app.orthoApneaOrder.draftBadge") }}</VChip>
           <VChip v-else :color="statusColor(plan.status)" size="small" variant="tonal">{{ statusLabel(plan.status) }}</VChip>
@@ -122,7 +123,7 @@ import AppLoadingState from "../AppLoadingState.vue";
 import AppErrorState from "../AppErrorState.vue";
 import AppEmptyState from "../AppEmptyState.vue";
 import EntityLink from "../EntityLink.vue";
-import { useSpecialtyLabel } from "../../composables/useSpecialtyLabel";
+import { useIdentity } from "../../composables/useIdentity";
 import { hcpDetailLink } from "../../utils/entityLinks";
 import { apiFetch } from "../../composables/useApi";
 import { useNotifications } from "../../composables/useNotifications";
@@ -138,6 +139,7 @@ interface TreatmentPlanItem {
   dentist_id: string | null;
   dentist_name: string | null;
   dentist_specialty?: string | null;
+  dentist_specialties?: string[] | null;
   appointment_at: string | null;
   scan_ordered_at: string | null;
   scan_received_at: string | null;
@@ -157,13 +159,8 @@ function isDraft(plan: TreatmentPlanItem): boolean {
   return !!plan.metadata?.orthoapneaDraft;
 }
 
-interface SleepStudyRef {
-  id: string;
-  created_at: string;
-}
-
 const { t } = useI18n();
-const specialtyLabel = useSpecialtyLabel();
+const { specialtySet } = useIdentity();
 const notifications = useNotifications();
 const authStore = useAuthStore();
 const isAdmin = computed(() => authStore.user?.role === "admin");
@@ -237,7 +234,8 @@ async function loadPlans() {
   try {
     const [plansRes, studiesRes] = await Promise.all([
       apiFetch(`/api/v1/treatment-plan?patient_id=${props.patientId}&type=dental_appliance&limit=-1`, { handleErrors: false }),
-      apiFetch(`/api/v1/sleep-study?patient_id=${props.patientId}&limit=1&sortBy=created_at&sortOrder=desc`, { handleErrors: false }),
+      // Id only — sleep-study contents are admin/doctor-only health data.
+      apiFetch(`/api/v1/patient/${props.patientId}/sleep-study-ref`, { handleErrors: false }),
     ]);
     if (plansRes.ok) {
       const data = (await plansRes.json()) as { items: TreatmentPlanItem[] };
@@ -246,8 +244,8 @@ async function loadPlans() {
       loadError.value = true;
     }
     if (studiesRes.ok) {
-      const data = (await studiesRes.json()) as { items: SleepStudyRef[] };
-      latestSleepStudyId.value = data.items[0]?.id ?? null;
+      const data = (await studiesRes.json()) as { id: string | null };
+      latestSleepStudyId.value = data.id;
     }
   } catch {
     loadError.value = true;

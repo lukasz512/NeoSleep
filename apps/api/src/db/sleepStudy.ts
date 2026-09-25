@@ -22,6 +22,9 @@ export interface SleepStudy {
   id: string;
   patient_id: string;
   patient_name: string | null;
+  /** Name parts for the PWA's short list name (first given name + first surname). */
+  patient_first_name: string | null;
+  patient_last_name: string | null;
   purchase_order_id: string | null;
   supplier_id: string | null;
   supplier_name: string | null;
@@ -37,8 +40,11 @@ export interface SleepStudy {
   odi: number | null;
   interpreted_by: string | null;
   interpreted_by_name: string | null;
+  interpreted_by_first_name: string | null;
+  interpreted_by_last_name: string | null;
   /** Interpreting practitioner's primary_specialty lookup key (NEO-57) */
   interpreted_by_specialty: string | null;
+  interpreted_by_specialties: string[];
   interpreted_at: string | null;
   interpretation: string | null;
   diagnosis_code: Record<string, unknown> | null;
@@ -111,6 +117,7 @@ type SleepStudyRow = {
   interpreted_by_first_name: string | null;
   interpreted_by_last_name: string | null;
   interpreted_by_specialty: string | null;
+  interpreted_by_specialties: string[] | null;
   interpreted_at: Date | null;
   interpretation: string | null;
   diagnosis_code: Record<string, unknown> | null;
@@ -133,7 +140,7 @@ const SLEEP_STUDY_SELECT_COLS = `
   s.created_at, s.updated_at,
   pi.title AS patient_salutation, pi.first_name AS patient_first_name, pi.last_name AS patient_last_name,
   ii.title AS interpreted_by_salutation, ii.first_name AS interpreted_by_first_name, ii.last_name AS interpreted_by_last_name,
-  ipr.primary_specialty AS interpreted_by_specialty`.trim();
+  ipr.primary_specialty AS interpreted_by_specialty, ipr.specialties AS interpreted_by_specialties`.trim();
 
 const SLEEP_STUDY_JOIN = `
   FROM sleep_study s
@@ -151,6 +158,10 @@ function serialize(row: SleepStudyRow): SleepStudy {
   return {
     id: row.id,
     patient_id: row.patient_id,
+    patient_first_name: row.patient_first_name,
+    patient_last_name: row.patient_last_name,
+    interpreted_by_first_name: row.interpreted_by_first_name,
+    interpreted_by_last_name: row.interpreted_by_last_name,
     patient_name: formatOptionalDisplayName({
       salutation: row.patient_salutation,
       first_name: row.patient_first_name,
@@ -176,6 +187,7 @@ function serialize(row: SleepStudyRow): SleepStudy {
       last_name: row.interpreted_by_last_name,
     }),
     interpreted_by_specialty: row.interpreted_by_specialty,
+    interpreted_by_specialties: row.interpreted_by_specialties ?? [],
     interpreted_at: row.interpreted_at ? isoDate(row.interpreted_at) : null,
     interpretation: row.interpretation,
     diagnosis_code: row.diagnosis_code,
@@ -255,6 +267,20 @@ export async function getSleepStudyById(client: PoolClient, id: string): Promise
   } catch (err) {
     if (err instanceof AppError) throw err;
     throw new DatabaseError("getSleepStudyById", err);
+  }
+}
+
+/** Only the id of the patient's most recent sleep study — no clinical fields (see GetLatestSleepStudyRefQuery). */
+export async function getLatestSleepStudyIdForPatient(client: PoolClient, patientId: string): Promise<string | null> {
+  try {
+    const result = await client.query<{ id: string }>(
+      `SELECT id FROM sleep_study WHERE patient_id = $1 ORDER BY created_at DESC LIMIT 1`,
+      [patientId]
+    );
+    return result.rows[0]?.id ?? null;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getLatestSleepStudyIdForPatient", err);
   }
 }
 

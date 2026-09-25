@@ -13,13 +13,20 @@
       :filter-param-keys="['status', 'type']"
     >
       <template #item.patient_name="{ item }">
-        <EntityLink :to="null" entity-type="patient" :label="(item as TreatmentPlanRow).patient_name" :avatar-size="32" />
+        <EntityLink
+          :to="null"
+          entity-type="patient"
+          :label="(item as TreatmentPlanRow).patient_name"
+          :first-name="(item as TreatmentPlanRow).patient_first_name"
+          :last-name="(item as TreatmentPlanRow).patient_last_name"
+          :avatar-size="32"
+        />
       </template>
       <template #feed-card-avatar="{ item }">
         <AppAvatar :name="(item as TreatmentPlanRow).patient_name" entity-type="patient" :size="55" />
       </template>
       <template #feed-card-title="{ item }">
-        {{ (item as { patient_name?: string }).patient_name || "—" }}
+        {{ shortPersonName((item as TreatmentPlanRow).patient_name, (item as TreatmentPlanRow).patient_first_name, (item as TreatmentPlanRow).patient_last_name) || "—" }}
       </template>
       <template #item.type="{ item }">
         {{ typeLabel((item as { type?: string }).type) }}
@@ -39,14 +46,20 @@
           :text="treatmentPlanCardMeta(item as TreatmentPlanRow)"
           :to="hcpDetailLink((item as TreatmentPlanRow).dentist_id)"
           :label="(item as TreatmentPlanRow).dentist_name"
-          :subtitle="specialtyLabel((item as TreatmentPlanRow).dentist_specialty)"
+          :first-name="(item as TreatmentPlanRow).dentist_first_name"
+          :last-name="(item as TreatmentPlanRow).dentist_last_name"
+          entity-type="hcp"
         />
       </template>
       <template #item.dentist_name="{ item }">
         <EntityLink
           :to="hcpDetailLink((item as TreatmentPlanRow).dentist_id)"
           :label="(item as TreatmentPlanRow).dentist_name"
-          :subtitle="specialtyLabel((item as TreatmentPlanRow).dentist_specialty)"
+          :first-name="(item as TreatmentPlanRow).dentist_first_name"
+          :last-name="(item as TreatmentPlanRow).dentist_last_name"
+          entity-type="hcp"
+          :details="doctorOf(item as TreatmentPlanRow).details"
+          :more-details="doctorOf(item as TreatmentPlanRow).more"
           :avatar-size="32"
         />
       </template>
@@ -59,7 +72,8 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
 import EntityLink from "../components/EntityLink.vue";
-import { useSpecialtyLabel } from "../composables/useSpecialtyLabel";
+import { useIdentity } from "../composables/useIdentity";
+import { shortPersonName } from "../utils/shortPersonName";
 import EntityMetaLine from "../components/EntityMetaLine.vue";
 import AppAvatar from "../components/AppAvatar.vue";
 import type { FilterDefinition } from "../composables/useFilters";
@@ -71,11 +85,19 @@ interface TreatmentPlanRow {
   type?: string;
   dentist_id?: string | null;
   dentist_name?: string | null;
+  dentist_first_name?: string | null;
+  dentist_last_name?: string | null;
+  patient_first_name?: string | null;
+  patient_last_name?: string | null;
   dentist_specialty?: string | null;
+  dentist_specialties?: string[] | null;
 }
 
 const { t } = useI18n();
-const specialtyLabel = useSpecialtyLabel();
+const { specialtySet } = useIdentity();
+function doctorOf(row: TreatmentPlanRow) {
+  return specialtySet(row.dentist_specialty, row.dentist_specialties);
+}
 
 const STATUSES = ["initiated", "patient_notified", "in_progress", "completed", "cancelled", "on_hold"];
 const TYPES = ["cpap", "apap", "dental_appliance", "positional", "lifestyle", "watchful_waiting"];
