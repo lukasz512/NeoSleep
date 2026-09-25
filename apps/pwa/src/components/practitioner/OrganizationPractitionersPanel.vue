@@ -20,13 +20,16 @@
       :cacheable="false"
     >
       <template #item.name="{ item }">
-        <span class="org-practitioners__name-cell">
-          <AppAvatar :name="asRow(item).name" :first-name="asRow(item).first_name" :last-name="asRow(item).last_name" entity-type="hcp" :size="32" />
-          {{ asRow(item).name }}
-        </span>
-      </template>
-      <template #item.primary_specialty="{ item }">
-        {{ specialtyLabel(asRow(item).primary_specialty) }}
+        <EntityLink
+          :to="null"
+          entity-type="hcp"
+          :label="asRow(item).name"
+          :first-name="asRow(item).first_name"
+          :last-name="asRow(item).last_name"
+          :tags="specialtySet(asRow(item).primary_specialty, asRow(item).specialties).tags"
+          :more-tags="specialtySet(asRow(item).primary_specialty, asRow(item).specialties).more"
+          :avatar-size="32"
+        />
       </template>
       <template #item.efficiency_pct="{ item }">
         {{ formatEfficiency(asRow(item).efficiency_pct) }}
@@ -55,6 +58,8 @@ import { useI18n } from "vue-i18n";
 import { useDisplay } from "vuetify";
 import AppEntityList from "../AppEntityList.vue";
 import AppAvatar from "../AppAvatar.vue";
+import EntityLink from "../EntityLink.vue";
+import { useIdentity } from "../../composables/useIdentity";
 import { type FilterDefinition } from "../../composables/useFilters";
 import { useFillViewportHeight } from "../../composables/useFillViewportHeight";
 import { useConfigStore } from "../../stores/config";
@@ -66,6 +71,7 @@ export interface OrganizationPractitionerRow {
   first_name?: string;
   last_name?: string;
   primary_specialty?: string;
+  specialties?: string[] | null;
   patient_count: number;
   device_count: number;
   efficiency_pct: number | null;
@@ -74,6 +80,7 @@ export interface OrganizationPractitionerRow {
 defineProps<{ organizationId: string }>();
 
 const { t } = useI18n();
+const { specialtySet } = useIdentity();
 const configStore = useConfigStore();
 
 const { mobile } = useDisplay();
@@ -97,7 +104,6 @@ const filterDefinitions = computed<FilterDefinition[]>(() => [
 
 const tableHeaders = computed(() => [
   { title: t("user.hcp.table.name"), key: "name", sortable: true },
-  { title: t("user.hcp.table.specialty"), key: "primary_specialty", sortable: true },
   { title: t("user.hco.detail.doctors.table.patients"), key: "patient_count", sortable: true },
   { title: t("user.hco.detail.doctors.table.devices"), key: "device_count", sortable: true },
   { title: t("user.hco.detail.doctors.table.efficiency"), key: "efficiency_pct", sortable: true },
@@ -145,10 +151,5 @@ function cardMeta(row: OrganizationPractitionerRow): string {
    wrapper's measured height is the size, and the table scrolls inside it. */
 .org-practitioners--fit :deep(.app-entity-list__table-wrap) {
   min-height: 0;
-}
-.org-practitioners__name-cell {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
 }
 </style>

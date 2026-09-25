@@ -45,11 +45,10 @@
         :label="(item as HCPListItem).name"
         :first-name="(item as HCPListItem).first_name"
         :last-name="(item as HCPListItem).last_name"
+        :tags="doctorTags(item as HCPListItem).tags"
+        :more-tags="doctorTags(item as HCPListItem).more"
         :avatar-size="32"
       />
-    </template>
-    <template #item.specialty="{ item }">
-      {{ specialtyLabel((item as HCPListItem).specialty) }}
     </template>
     <template #item.institution="{ item }">
       <EntityLink :to="hcoDetailLink((item as HCPListItem).organization_id)" :label="(item as HCPListItem).institution" />
@@ -99,6 +98,7 @@ import AppEntityList from "../components/AppEntityList.vue";
 import AppAvatar from "../components/AppAvatar.vue";
 import AppIcon from "../components/AppIcon.vue";
 import EntityLink from "../components/EntityLink.vue";
+import { useIdentity } from "../composables/useIdentity";
 import { personAvatarProps } from "../utils/personAvatarProps";
 import AppListItemMenu from "../components/AppListItemMenu.vue";
 import { entityActionIcon, entityActionMenuIconClass } from "../config/entityActions";
@@ -127,6 +127,7 @@ interface HCPListItem {
   phone?: string;
   primary_specialty?: string;
   specialty?: string;
+  specialties?: string[];
   organization_id?: string | null;
   institution?: string;
   region?: string;
@@ -138,6 +139,7 @@ interface HCPListItem {
 }
 
 const { t } = useI18n();
+const { doctorTags } = useIdentity();
 const configStore = useConfigStore();
 const authStore = useAuthStore();
 // Direct add is its own, narrower admin/manager-only path — reps/kam/msl still
@@ -196,7 +198,6 @@ const hcpFilterDefinitions = computed<FilterDefinition[]>(() => [
 
 const tableHeaders = computed(() => [
   { title: t("user.hcp.table.name"), key: "name", sortable: true },
-  { title: t("user.hcp.table.specialty"), key: "specialty", sortable: true },
   { title: t("user.hcp.table.institution"), key: "institution", sortable: true },
   { title: t("user.hcp.table.region"), key: "region", sortable: true },
 ]);

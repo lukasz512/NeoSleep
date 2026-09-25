@@ -26,10 +26,13 @@
       @retry="loadPatient"
     >
       <template v-if="patient" #title>
-        <span class="view-item__title-wrap">
-          <AppAvatar :name="patient.name" :first-name="patient.first_name" :last-name="patient.last_name" entity-type="patient" :size="40" />
-          <h1 class="view-item__title">{{ patient.name }}</h1>
-        </span>
+        <IdentityHeader
+          :name="patient.name"
+          entity-type="patient"
+          :first-name="patient.first_name"
+          :last-name="patient.last_name"
+          :fields="patientFields(patient)"
+        />
       </template>
       <template v-if="patient" #header-actions>
         <VTooltip location="bottom">
@@ -99,26 +102,14 @@
               </dd>
             </div>
             <div class="view-item__row">
-              <dt class="view-item__label">{{ t("app.patients.form.gender") }}</dt>
-              <dd class="view-item__value">
-                <span v-if="genderLabel">{{ genderLabel }}</span>
-                <span v-else class="view-item__empty">—</span>
-              </dd>
-            </div>
-            <div class="view-item__row">
-              <dt class="view-item__label">{{ t("app.patients.form.dateOfBirth") }}</dt>
-              <dd class="view-item__value">
-                <span v-if="patient.date_of_birth">{{ dateOfBirthText }}</span>
-                <span v-else class="view-item__empty">—</span>
-              </dd>
-            </div>
-            <div class="view-item__row">
               <dt class="view-item__label">{{ t("app.patients.detail.practitioner") }}</dt>
               <dd class="view-item__value">
                 <EntityLink
                   :to="patient.practitioner_id ? { name: 'hcp-detail', params: { id: patient.practitioner_id } } : null"
                   :label="patient.practitioner_name"
-                  :subtitle="specialtyLabel(patient.practitioner_specialty)"
+                  entity-type="hcp"
+                  :tags="specialtySet(patient.practitioner_specialty, patient.practitioner_specialties).tags"
+                  :more-tags="specialtySet(patient.practitioner_specialty, patient.practitioner_specialties).more"
                   :avatar-size="32"
                 />
               </dd>
@@ -194,8 +185,6 @@ import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
 import { originDialogTransition } from "@ui";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { intlLocale } from "@i18n/language-options";
-import { ageFromDateOfBirth } from "../utils/patientDemographics";
 import { usePermissions } from "../composables/usePermissions";
 import { apiFetch } from "../composables/useApi";
 import { useNotifications } from "../composables/useNotifications";
@@ -204,10 +193,10 @@ import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
-import AppAvatar from "../components/AppAvatar.vue";
 import DetailViewTabs from "../components/DetailViewTabs.vue";
 import EntityLink from "../components/EntityLink.vue";
-import { useSpecialtyLabel } from "../composables/useSpecialtyLabel";
+import { useIdentity } from "../composables/useIdentity";
+import IdentityHeader from "../components/IdentityHeader.vue";
 import PatientNotesPanel from "../components/patient/PatientNotesPanel.vue";
 import PatientStudiesPanel from "../components/patient/PatientStudiesPanel.vue";
 import PatientOrthoApneaPanel from "../components/patient/PatientOrthoApneaPanel.vue";
@@ -235,6 +224,7 @@ interface PatientDetail {
   practitioner_id?: string | null;
   practitioner_name?: string | null;
   practitioner_specialty?: string | null;
+  practitioner_specialties?: string[] | null;
   gender?: string | null;
   date_of_birth?: string | null;
   status?: string;
@@ -249,8 +239,8 @@ interface PatientDetail {
   medical_record?: string | null;
 }
 
-const { t, locale } = useI18n();
-const specialtyLabel = useSpecialtyLabel();
+const { t } = useI18n();
+const { patientFields, specialtySet } = useIdentity();
 const route = useRoute();
 const router = useRouter();
 const notifications = useNotifications();
@@ -258,27 +248,6 @@ const { submit } = useEntitySubmit();
 
 const patient = ref<PatientDetail | null>(null);
 
-const GENDER_LABEL_KEYS: Record<string, string> = {
-  female: "app.patients.form.genderFemale",
-  male: "app.patients.form.genderMale",
-  other: "app.patients.form.genderOther",
-  prefer_not_to_say: "app.patients.form.genderPreferNot",
-};
-const genderLabel = computed(() => {
-  const key = patient.value?.gender ? GENDER_LABEL_KEYS[patient.value.gender] : undefined;
-  return key ? t(key) : "";
-});
-
-/** "12.03.1979 · 47 y" — the date as stored (no time zone shift: it's parsed
- *  as a local calendar date, not an instant) plus the age from it. */
-const dateOfBirthText = computed(() => {
-  const dob = patient.value?.date_of_birth;
-  const m = dob ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(dob) : null;
-  if (!m) return dob ?? "";
-  const date = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).toLocaleDateString(intlLocale(locale.value));
-  const age = ageFromDateOfBirth(dob);
-  return age != null ? `${date} · ${t("app.patients.ageShort", { age })}` : date;
-});
 
 /** territory_path (when set) as "mx/cdmx/polanco" — each ancestor's own short
  *  `code`, root-first, lowercased. Falls back to the flat identities.region

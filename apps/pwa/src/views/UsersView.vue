@@ -19,6 +19,7 @@
           :label="(item as UserListItem).name"
           :first-name="(item as UserListItem).first_name"
           :last-name="(item as UserListItem).last_name"
+          :tags="userTags(roleKeyOf(item as Record<string, unknown>)).tags"
           :avatar-size="32"
         />
       </template>
@@ -27,9 +28,6 @@
       </template>
       <template #feed-card-title="{ item }">
         {{ (item as { name?: string }).name }}
-      </template>
-      <template #item.role="{ item }">
-        {{ t(`user.users.role.${roleKeyOf(item as Record<string, unknown>)}`) }}
       </template>
       <template #item.status="{ item }">
         <span :class="['users-view__status', `users-view__status--${(item as Record<string, unknown>).status}`]">
@@ -110,6 +108,7 @@ import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
 import AppAvatar from "../components/AppAvatar.vue";
 import EntityLink from "../components/EntityLink.vue";
+import { useIdentity } from "../composables/useIdentity";
 import { personAvatarProps } from "../utils/personAvatarProps";
 import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
@@ -135,6 +134,7 @@ interface UserListItem {
 }
 
 const { t } = useI18n();
+const { userTags } = useIdentity();
 const notifications = useNotifications();
 const { submit } = useEntitySubmit();
 const authStore = useAuthStore();
@@ -174,7 +174,6 @@ const usersFilterDefinitions = computed<FilterDefinition[]>(() => [
 const tableHeaders = computed(() => [
   { title: t("user.users.table.name"), key: "name", sortable: true },
   { title: t("user.users.table.email"), key: "email", sortable: true },
-  { title: t("user.users.table.role"), key: "role", sortable: false },
   { title: t("user.users.table.status"), key: "status", sortable: true },
 ]);
 

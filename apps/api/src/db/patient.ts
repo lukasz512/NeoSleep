@@ -45,6 +45,8 @@ export interface Patient {
   /** Assigned practitioner's primary_specialty lookup key (e.g. "dentist"),
    *  shown under the doctor's name in lists (NEO-57). */
   practitioner_specialty: string | null;
+  /** All of the assigned practitioner's specialties (for the "+N" tooltip). */
+  practitioner_specialties: string[];
 }
 
 export interface GetPatientsFilters {
@@ -112,7 +114,7 @@ const PATIENT_SELECT_COLS = `
   p.created_at, p.updated_at,
   i.title AS salutation, i.first_name, i.last_name, i.email, i.phone,
   i.gender, to_char(i.date_of_birth, 'YYYY-MM-DD') AS date_of_birth,
-  pr.primary_specialty AS practitioner_specialty,
+  pr.primary_specialty AS practitioner_specialty, pr.specialties AS practitioner_specialties,
   COALESCE(i.region, '') AS region, i.territory_id, t.name AS territory_name,
   pi.title AS practitioner_salutation, pi.first_name AS practitioner_first_name, pi.last_name AS practitioner_last_name`.trim();
 
@@ -141,6 +143,7 @@ type PatientRow = {
   gender: string | null;
   date_of_birth: string | null;
   practitioner_specialty: string | null;
+  practitioner_specialties: string[] | null;
   practitioner_id: string | null;
   diagnosis_code: Record<string, unknown> | null;
   // NUMERIC(6,2) column — pg driver returns it as a string, not a number.
@@ -196,6 +199,7 @@ function serialize(row: PatientRow): Patient & { name: string } {
     updated_at: isoDate(row.updated_at),
     practitioner_name: buildPractitionerName(row),
     practitioner_specialty: row.practitioner_specialty,
+    practitioner_specialties: row.practitioner_specialties ?? [],
     name: buildName(row),
   };
 }

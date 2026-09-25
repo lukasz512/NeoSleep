@@ -118,6 +118,18 @@ $pwa-fib-t-3xl: 987ms;
   --pwa-list-row-outline: rgba(18, 80, 74, 0.08);
   --pwa-list-row-radius: 14px;
   --pwa-list-row-gap: 8px;
+  /* Identity tints (NEO-57 "wristband"): every person/place carries its
+     type's color on its avatar and tags — patient teal, doctor blue,
+     organization amber, everyone else (users, leads) neutral — so a mixed
+     list reads by kind before anyone reads a name. */
+  --pwa-identity-patient: #{brand.$pwa-brand-primary};
+  --pwa-identity-patient-soft: rgba(18, 143, 131, 0.1);
+  --pwa-identity-doctor: #2f6fcf;
+  --pwa-identity-doctor-soft: rgba(47, 111, 207, 0.09);
+  --pwa-identity-org: #8a6a2a;
+  --pwa-identity-org-soft: rgba(160, 120, 40, 0.1);
+  --pwa-identity-person: #56625f;
+  --pwa-identity-person-soft: rgba(40, 60, 58, 0.07);
   /* Buttons: desktop default; mobile/tablet use larger touch targets */
   --pwa-btn-min-height: #{$pwa-touch-target-desktop};
   --pwa-btn-min-width: #{$pwa-touch-target-desktop};
@@ -147,6 +159,14 @@ $pwa-fib-t-3xl: 987ms;
   --pwa-table-border: #3a3a3a;
   --pwa-table-row-hover: color-mix(in srgb, #{brand.$pwa-brand-primary-on-dark} 12%, transparent);
   --pwa-list-row-outline: rgba(142, 214, 206, 0.09);
+  --pwa-identity-patient: #{brand.$pwa-brand-primary-on-dark};
+  --pwa-identity-patient-soft: rgba(23, 181, 165, 0.14);
+  --pwa-identity-doctor: #7fb4ff;
+  --pwa-identity-doctor-soft: rgba(127, 180, 255, 0.13);
+  --pwa-identity-org: #c9a86a;
+  --pwa-identity-org-soft: rgba(201, 168, 106, 0.14);
+  --pwa-identity-person: #a3b1ae;
+  --pwa-identity-person-soft: rgba(160, 175, 172, 0.12);
 }
 
 body {

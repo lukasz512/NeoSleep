@@ -1,20 +1,20 @@
 <template>
-  <RouterLink v-if="to && label" :to="to" :class="['entity-link', { 'entity-link--two-line': subtitle }]" @click.stop>
+  <RouterLink v-if="to && label" :to="to" :class="['entity-link', { 'entity-link--two-line': isLarge }]" @click.stop>
     <AppAvatar v-bind="avatarProps" class="entity-link__avatar" />
     <slot />
-    <span v-if="subtitle" class="entity-link__text">
+    <span v-if="isLarge" class="entity-link__text">
       <span class="entity-link__label">{{ label }}</span>
-      <span class="entity-link__subtitle">{{ subtitle }}</span>
+      <IdentityTags :tags="tags" :more="moreTags" :tone="tone" />
     </span>
     <span v-else>{{ label }}</span>
   </RouterLink>
-  <span v-else-if="label" :class="['entity-link__plain', { 'entity-link--two-line': subtitle }]">
+  <span v-else-if="label" :class="['entity-link__plain', { 'entity-link--two-line': isLarge }]">
     <AppAvatar v-bind="avatarProps" class="entity-link__avatar" />
     <!-- Optional decoration between avatar and name (e.g. LeadsView's gender icon). -->
     <slot />
-    <span v-if="subtitle" class="entity-link__text">
+    <span v-if="isLarge" class="entity-link__text">
       <span class="entity-link__label">{{ label }}</span>
-      <span class="entity-link__subtitle">{{ subtitle }}</span>
+      <IdentityTags :tags="tags" :more="moreTags" :tone="tone" />
     </span>
     <span v-else>{{ label }}</span>
   </span>
@@ -25,6 +25,8 @@
 import { computed } from "vue";
 import type { RouteLocationRaw } from "vue-router";
 import AppAvatar, { type AppAvatarEntityType } from "./AppAvatar.vue";
+import { identityTone } from "../utils/identityTone";
+import IdentityTags from "./IdentityTags.vue";
 
 /**
  * THE shared "avatar + display name (+ optional link)" cell — every table/list
@@ -73,13 +75,16 @@ const props = withDefaults(
     lastName?: string | null;
     avatarSize?: number;
     /**
-     * Quiet second line under the name: a doctor's specialty (NEO-57, every
-     * assigned-doctor cell shows "Dr. X" over "Dentist") or a patient's
-     * "F · 47 y". Empty/null keeps the single-line layout.
+     * Large identity (NEO-57): "wristband" tags under the name — [F] [47 Y]
+     * for a patient, [DENTIST] for a doctor, [CLINIC] for an organization
+     * (see composables/useIdentity.ts). No tags = the small identity, just
+     * avatar + name, for mentions (note authors, history, meta lines).
      */
-    subtitle?: string | null;
+    tags?: string[];
+    /** Overflow values behind a "+N" tag with a tooltip (a doctor's other specialties). */
+    moreTags?: string[];
   }>(),
-  { entityType: undefined, firstName: null, lastName: null, avatarSize: 20, subtitle: null },
+  { entityType: undefined, firstName: null, lastName: null, avatarSize: 20, tags: () => [], moreTags: () => [] },
 );
 
 const ROUTE_ENTITY_TYPES: Record<string, AppAvatarEntityType> = {
@@ -98,6 +103,9 @@ const entityType = computed<AppAvatarEntityType>(() => {
   const name = props.to && typeof props.to === "object" && "name" in props.to ? props.to.name : null;
   return (typeof name === "string" && ROUTE_ENTITY_TYPES[name]) || "user";
 });
+
+const tone = computed(() => identityTone(entityType.value));
+const isLarge = computed(() => props.tags.length > 0 || props.moreTags.length > 0);
 
 const avatarProps = computed(() => {
   const isPlace = PLACE_ENTITY_TYPES.has(entityType.value);
@@ -137,6 +145,8 @@ const avatarProps = computed(() => {
 .entity-link__text {
   display: inline-flex;
   flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
   min-width: 0;
   line-height: 1.3;
 }
@@ -147,10 +157,7 @@ const avatarProps = computed(() => {
 .entity-link--two-line:hover .entity-link__label {
   text-decoration: underline;
 }
-.entity-link__subtitle {
-  font-size: 0.78125rem;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-}
+
 .entity-link__empty {
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }

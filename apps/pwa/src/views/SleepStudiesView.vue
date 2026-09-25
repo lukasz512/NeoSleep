@@ -41,7 +41,7 @@
           :text="sleepStudyCardMeta(item as SleepStudyRow)"
           :to="hcpDetailLink((item as SleepStudyRow).interpreted_by)"
           :label="(item as SleepStudyRow).interpreted_by_name"
-          :subtitle="specialtyLabel((item as SleepStudyRow).interpreted_by_specialty)"
+          entity-type="hcp"
         />
       </template>
       <template #item.study_date="{ item }">
@@ -54,7 +54,9 @@
         <EntityLink
           :to="hcpDetailLink((item as SleepStudyRow).interpreted_by)"
           :label="(item as SleepStudyRow).interpreted_by_name"
-          :subtitle="specialtyLabel((item as SleepStudyRow).interpreted_by_specialty)"
+          entity-type="hcp"
+          :tags="doctorOf(item as SleepStudyRow).tags"
+          :more-tags="doctorOf(item as SleepStudyRow).more"
           :avatar-size="32"
         />
       </template>
@@ -67,7 +69,7 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
 import EntityLink from "../components/EntityLink.vue";
-import { useSpecialtyLabel } from "../composables/useSpecialtyLabel";
+import { useIdentity } from "../composables/useIdentity";
 import EntityMetaLine from "../components/EntityMetaLine.vue";
 import AppAvatar from "../components/AppAvatar.vue";
 import type { FilterDefinition } from "../composables/useFilters";
@@ -82,10 +84,14 @@ interface SleepStudyRow {
   interpreted_by?: string | null;
   interpreted_by_name?: string | null;
   interpreted_by_specialty?: string | null;
+  interpreted_by_specialties?: string[] | null;
 }
 
 const { t } = useI18n();
-const specialtyLabel = useSpecialtyLabel();
+const { specialtySet } = useIdentity();
+function doctorOf(row: SleepStudyRow) {
+  return specialtySet(row.interpreted_by_specialty, row.interpreted_by_specialties);
+}
 
 const STATUSES = ["ordered", "device_shipped", "device_delivered", "study_complete", "results_received", "interpreted", "cancelled"];
 

@@ -69,7 +69,8 @@
             :to="hcpDetailLink(plan.dentist_id)"
             entity-type="hcp"
             :label="plan.dentist_name"
-            :subtitle="specialtyLabel(plan.dentist_specialty)"
+            :tags="specialtySet(plan.dentist_specialty, plan.dentist_specialties).tags"
+            :more-tags="specialtySet(plan.dentist_specialty, plan.dentist_specialties).more"
           />
           <VChip v-if="isDraft(plan)" color="warning" size="small" variant="tonal">{{ t("app.orthoApneaOrder.draftBadge") }}</VChip>
           <VChip v-else :color="statusColor(plan.status)" size="small" variant="tonal">{{ statusLabel(plan.status) }}</VChip>
@@ -122,7 +123,7 @@ import AppLoadingState from "../AppLoadingState.vue";
 import AppErrorState from "../AppErrorState.vue";
 import AppEmptyState from "../AppEmptyState.vue";
 import EntityLink from "../EntityLink.vue";
-import { useSpecialtyLabel } from "../../composables/useSpecialtyLabel";
+import { useIdentity } from "../../composables/useIdentity";
 import { hcpDetailLink } from "../../utils/entityLinks";
 import { apiFetch } from "../../composables/useApi";
 import { useNotifications } from "../../composables/useNotifications";
@@ -138,6 +139,7 @@ interface TreatmentPlanItem {
   dentist_id: string | null;
   dentist_name: string | null;
   dentist_specialty?: string | null;
+  dentist_specialties?: string[] | null;
   appointment_at: string | null;
   scan_ordered_at: string | null;
   scan_received_at: string | null;
@@ -163,7 +165,7 @@ interface SleepStudyRef {
 }
 
 const { t } = useI18n();
-const specialtyLabel = useSpecialtyLabel();
+const { specialtySet } = useIdentity();
 const notifications = useNotifications();
 const authStore = useAuthStore();
 const isAdmin = computed(() => authStore.user?.role === "admin");

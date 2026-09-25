@@ -36,13 +36,13 @@
       @add="onAddAccount"
     >
       <template #item.name="{ item }">
-        <span class="hco-name-cell">
-          <AppAvatar entity-type="hco" :org-type="(item as HCOListItem).type" :size="32" />
-          {{ (item as HCOListItem).name }}
-        </span>
-      </template>
-      <template #item.type="{ item }">
-        {{ hcoTypeLabel((item as HCOListItem).type) }}
+        <EntityLink
+          :to="null"
+          entity-type="hco"
+          :label="(item as HCOListItem).name"
+          :tags="orgTags(item as HCOListItem).tags"
+          :avatar-size="32"
+        />
       </template>
       <template #item.region="{ item }">
         {{ (item as HCOListItem).territory_name || (item as HCOListItem).region || "—" }}
@@ -99,6 +99,8 @@ import { originDialogTransition } from "@ui";
 import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
 import AppAvatar from "../components/AppAvatar.vue";
+import EntityLink from "../components/EntityLink.vue";
+import { useIdentity } from "../composables/useIdentity";
 import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppListItemMenu from "../components/AppListItemMenu.vue";
@@ -135,6 +137,7 @@ interface HCOListItem {
 }
 
 const { t } = useI18n();
+const { orgTags } = useIdentity();
 const configStore = useConfigStore();
 const notifications = useNotifications();
 const { submit } = useEntitySubmit();
@@ -182,7 +185,6 @@ const hcoFilterDefinitions = computed<FilterDefinition[]>(() => [
 
 const tableHeaders = computed(() => [
   { title: t("user.hco.table.name"), key: "name", sortable: true },
-  { title: t("user.hco.table.type"), key: "type", sortable: true },
   { title: t("user.hco.table.region"), key: "region", sortable: true },
 ]);
 
@@ -303,10 +305,5 @@ async function onEventFormSubmit(
 </script>
 
 <style scoped>
-.hco-name-cell {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
 </style>
 

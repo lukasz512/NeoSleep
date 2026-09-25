@@ -43,7 +43,7 @@
           :label="(item as PatientListItem).name"
           :first-name="(item as PatientListItem).first_name"
           :last-name="(item as PatientListItem).last_name"
-          :subtitle="sexAge(item as PatientListItem)"
+          :tags="patientTags(item as PatientListItem).tags"
           :avatar-size="32"
         />
       </template>
@@ -58,7 +58,8 @@
           :to="hcpDetailLink((item as PatientListItem).practitioner_id)"
           entity-type="hcp"
           :label="(item as PatientListItem).practitioner_name"
-          :subtitle="specialtyLabel((item as PatientListItem).practitioner_specialty)"
+          :tags="doctorOf(item as PatientListItem).tags"
+          :more-tags="doctorOf(item as PatientListItem).more"
           :avatar-size="32"
         />
       </template>
@@ -83,19 +84,19 @@
         </VChip>
       </template>
       <template #feed-card-meta="{ item }">
-        <span v-if="isDoctor" class="patients-view__card-meta">
-          {{ [sexAge(item as PatientListItem), formatRelativeToNow((item as PatientListItem).updated_at, dateLocale)].filter(Boolean).join(" · ") }}
-        </span>
-        <!-- Sex · age on its own line, the doctor (+ specialty) under it — a
-             two-line doctor block can't share a row with a " · " separator. -->
-        <span v-else class="patients-view__card-stack">
-          <span v-if="sexAge(item as PatientListItem)" class="patients-view__card-meta">{{ sexAge(item as PatientListItem) }}</span>
+        <!-- Mobile card (NEO-57): the patient's wristband tags incl. date of
+             birth, then the doctor as a small identity (name only) — or, in
+             the doctor's own list, when the record last changed. -->
+        <span class="patients-view__card-stack">
+          <IdentityTags :tags="patientTags(item as PatientListItem, { withDob: true }).tags" tone="patient" />
+          <span v-if="isDoctor" class="patients-view__card-meta">
+            {{ formatRelativeToNow((item as PatientListItem).updated_at, dateLocale) }}
+          </span>
           <EntityLink
-            v-if="(item as PatientListItem).practitioner_name"
+            v-else-if="(item as PatientListItem).practitioner_name"
             :to="hcpDetailLink((item as PatientListItem).practitioner_id)"
             entity-type="hcp"
             :label="(item as PatientListItem).practitioner_name"
-            :subtitle="specialtyLabel((item as PatientListItem).practitioner_specialty)"
           />
         </span>
       </template>
@@ -131,8 +132,8 @@ import PatientIntakeForms from "../components/patient/PatientIntakeForms.vue";
 import type { PatientIntakeFormStatus } from "../types/patientIntakeForm";
 import EntityLink from "../components/EntityLink.vue";
 import { intlLocale } from "@i18n/language-options";
-import { useSpecialtyLabel } from "../composables/useSpecialtyLabel";
-import { patientSexAge } from "../utils/patientDemographics";
+import IdentityTags from "../components/IdentityTags.vue";
+import { useIdentity } from "../composables/useIdentity";
 import { formatDateShort, formatRelativeToNow } from "../utils/relativeDate";
 import { hcpDetailLink } from "../utils/entityLinks";
 import { personAvatarProps } from "../utils/personAvatarProps";
@@ -161,6 +162,7 @@ interface PatientListItem {
   practitioner_id?: string | null;
   practitioner_name?: string | null;
   practitioner_specialty?: string | null;
+  practitioner_specialties?: string[] | null;
   gender?: string | null;
   date_of_birth?: string | null;
   updated_at?: string;
@@ -175,10 +177,10 @@ interface PatientListItem {
 
 const { t, locale } = useI18n();
 const configStore = useConfigStore();
-const specialtyLabel = useSpecialtyLabel();
+const { patientTags, specialtySet } = useIdentity();
 const dateLocale = computed(() => intlLocale(locale.value));
-function sexAge(p: PatientListItem): string {
-  return patientSexAge(p, t);
+function doctorOf(p: PatientListItem) {
+  return specialtySet(p.practitioner_specialty, p.practitioner_specialties);
 }
 const { submit } = useEntitySubmit();
 const authStore = useAuthStore();

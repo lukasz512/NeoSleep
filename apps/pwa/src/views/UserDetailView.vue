@@ -29,10 +29,13 @@
       @retry="loadUser"
     >
       <template v-if="user" #title>
-        <span class="view-item__title-wrap">
-          <AppAvatar :name="user.name" :first-name="user.first_name" :last-name="user.last_name" entity-type="user" :size="40" />
-          <h1 class="view-item__title">{{ user.name }}</h1>
-        </span>
+        <IdentityHeader
+          :name="user.name"
+          entity-type="user"
+          :first-name="user.first_name"
+          :last-name="user.last_name"
+          :fields="[{ label: t('user.users.detail.role'), value: t(`user.users.role.${roleKey}`) }]"
+        />
       </template>
       <template v-if="user" #header-actions>
         <VTooltip location="bottom">
@@ -266,7 +269,7 @@ import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import DetailViewTabs from "../components/DetailViewTabs.vue";
 import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
-import AppAvatar from "../components/AppAvatar.vue";
+import IdentityHeader from "../components/IdentityHeader.vue";
 import AppLoadingState from "../components/AppLoadingState.vue";
 import { userFormFields } from "../config/forms/userForm";
 import {
