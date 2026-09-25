@@ -582,6 +582,7 @@
   "documents.partnerAgreement.signCounterparty": "Za NeoSleep",
   "documents.partnerAgreement.signPartner": "Partner",
   "documents.signature.eSigned": "Podpisano elektronicznie",
+  "documents.fieldBirthDate": "Data urodzenia",
   "documents.signature.name": "Imię i nazwisko",
   "documents.signature.date": "Data",
   "documents.signature.license": "Nr prawa wykonywania zawodu",

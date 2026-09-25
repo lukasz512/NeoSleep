@@ -10,7 +10,7 @@
   per-instance patient/doctor/clinic/score data-fields.
 
   data-field values filled by apps/api's renderHtmlToPdf({dataFields}):
-    nombre_paciente, nombre_medico, nombre_clinica, fecha — same as historiaEndo.html
+    nombre_paciente, fecha_nacimiento, nombre_medico, nombre_clinica, fecha — same as historiaEndo.html
     q_snoring / q_tiredness / q_observed_apnea / q_pressure / q_bmi_over_35 /
       q_age_over_50 / q_neck_circumference_over_40cm / q_is_male — "Sí"/"No"
     score — the computed total (0-8), from stop_bang_screening.score
@@ -88,7 +88,8 @@
   <h2>{{documents.stopBang.subtitle}}</h2>
 
   <dl class="doc-fields">
-    <div class="doc-field doc-field--wide"><dt>{{documents.stopBang.fieldPatientName}}</dt><dd data-field="nombre_paciente"></dd></div>
+    <div class="doc-field doc-field--patient"><dt>{{documents.stopBang.fieldPatientName}}</dt><dd data-field="nombre_paciente"></dd></div>
+    <div class="doc-field doc-field--short"><dt>{{documents.fieldBirthDate}}</dt><dd data-field="fecha_nacimiento"></dd></div>
     <div class="doc-field"><dt>{{documents.stopBang.fieldPractitioner}}</dt><dd data-field="nombre_medico"></dd></div>
     <div class="doc-field"><dt>{{documents.stopBang.fieldClinic}}</dt><dd data-field="nombre_clinica"></dd></div>
     <div class="doc-field doc-field--short"><dt>{{documents.stopBang.fieldDate}}</dt><dd data-field="fecha"></dd></div>

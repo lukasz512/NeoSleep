@@ -193,6 +193,24 @@ describe.skipIf(!launch)("renderHtmlToPdf (real Chromium)", () => {
     expect(skeletal).toContain("&lt;b&gt;II&lt;/b&gt;");
   });
 
+  it("lines tick-boxes up in one grid across rows: III under No, II under Sí, I one slot left", { timeout: 60_000 }, async () => {
+    browser ??= await puppeteer.launch({ ...launch!, headless: true });
+    const page = await browser.newPage();
+    await page.setContent(
+      `<table style="width:600px"><tr><td>a</td><td style="text-align:right" data-field="q_yes_no"></td></tr><tr><td>b</td><td style="text-align:right" data-field="q_skeletal_class"></td></tr></table>`
+    );
+
+    await applyChoiceFields(page, { q_yes_no: ["Sí", "No"], q_skeletal_class: ["I", "II", "III"] });
+
+    const lefts = (key: string) =>
+      page.$$eval(`[data-field='${key}'] .choice-box`, (boxes) => boxes.map((b) => Math.round(b.getBoundingClientRect().left)));
+    const [si, no] = await lefts("q_yes_no");
+    const [one, two, three] = await lefts("q_skeletal_class");
+    expect(three).toBe(no);
+    expect(two).toBe(si);
+    expect(one).toBe(si - (no - si));
+  });
+
   it("locked-down page: template scripts don't run, foreign requests are aborted, data fields still fill", { timeout: 60_000 }, async () => {
     browser ??= await puppeteer.launch({ ...launch!, headless: true });
     const page = await browser.newPage();
