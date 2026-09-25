@@ -155,6 +155,14 @@ function getBrandIconSvgAtHeight(heightPx: number): string {
   return getBrandIconSvg().replace("<svg ", `<svg style="height:${heightPx}px;width:auto;display:block;" `);
 }
 
+let cachedDocFieldsCss: string | null = null;
+
+/** Shared field-grid CSS (patient / doctor / clinic / date block) — one source for every template, see assets/docFields.css. */
+function getDocFieldsCss(): string {
+  if (cachedDocFieldsCss === null) cachedDocFieldsCss = fs.readFileSync(path.join(ASSETS_DIR, "docFields.css"), "utf-8").trim();
+  return cachedDocFieldsCss;
+}
+
 function loadTemplate(name: string): string {
   return fs.readFileSync(path.join(TEMPLATES_DIR, `${name}.html`), "utf-8");
 }
@@ -163,6 +171,7 @@ function loadTemplate(name: string): string {
  * Fills the template's two *static* (non-per-instance) token kinds:
  *   {{brand:primary}} / {{brand:secondary}} / {{brand:logo}} — same for
  *     every render, sourced from BRAND/getBrandLogoSvg() above.
+ *   {{style:docFields}} — shared field-grid CSS (assets/docFields.css).
  *   {{documents.<template>.<key>}} — locale-driven prose, sourced from
  *     packages/i18n/{en,pl,mx}.json via documentT().
  *
@@ -186,7 +195,8 @@ function fillStaticTokens(html: string, locale: string | null | undefined): stri
     .replaceAll("{{brand:primary}}", BRAND.primary)
     .replaceAll("{{brand:secondary}}", BRAND.secondary)
     .replaceAll("{{brand:logo}}", getBrandLogoSvg())
-    .replaceAll("{{brand:contactLine}}", getContactLines(locale).join(" · "));
+    .replaceAll("{{brand:contactLine}}", getContactLines(locale).join(" · "))
+    .replaceAll("{{style:docFields}}", getDocFieldsCss());
 
   const params = getLegalEntityParams(locale);
   const i18nTokenPattern = /\{\{(documents\.[a-zA-Z0-9_.]+)\}\}/g;
