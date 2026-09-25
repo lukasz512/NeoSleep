@@ -254,6 +254,47 @@ describe("useOrthoApneaOrderWizard", () => {
       expect(useNotifications().notifications.value[0]?.message).toBe("app.orthoApneaOrder.partialFailure");
     });
 
+    it("Retry on the partial-failure toast re-sends only the unsent order (same plan), then reports success", async () => {
+      let planCounter = 0;
+      let treatmentCalls = 0;
+      const { calls } = stubFetchRoutes([
+        ["/patients/patient-1/ensure", () => ({ status: 200, body: { externalId: "oa-1" } })],
+        ["/treatment-plan", () => ({ status: 201, body: { id: `plan-${++planCounter}` } })],
+        ["/partners/orthoapnea/treatments", () => {
+          treatmentCalls += 1;
+          return treatmentCalls === 2 ? { status: 503, body: { error: "down" } } : { status: 201, body: {} };
+        }],
+      ]);
+      const wizard = useOrthoApneaOrderWizard();
+      wizard.form.products = [NOA, MORNING_ALIGNER];
+      await wizard.confirmOrder("patient-1", "study-1");
+
+      const toast = useNotifications().notifications.value[0]!;
+      expect(toast.action?.labelKey).toBe("notification.action.retry");
+      useNotifications().notifications.value = [];
+      await toast.action!.run();
+
+      const orderCalls = calls.filter((c) => c.url.includes("/partners/orthoapnea/treatments"));
+      expect(orderCalls).toHaveLength(3); // 2 in the wizard + exactly 1 retry
+      expect(JSON.parse(orderCalls[2]!.init!.body as string).treatment_plan_id).toBe("plan-2"); // no new plan created
+      expect(planCounter).toBe(2);
+      expect(useNotifications().notifications.value[0]?.message).toBe("app.orthoApneaOrder.success");
+    });
+
+    it("no Retry when every failure happened before a plan existed (nothing to re-send)", async () => {
+      stubFetchRoutes([
+        ["/patients/patient-1/ensure", () => ({ status: 200, body: { externalId: "oa-1" } })],
+        ["/treatment-plan", () => ({ status: 500, body: { error: "boom" } })],
+      ]);
+      const wizard = useOrthoApneaOrderWizard();
+      wizard.form.products = [NOA];
+      await wizard.confirmOrder("patient-1", "study-1");
+
+      const toast = useNotifications().notifications.value[0]!;
+      expect(toast.message).toBe("app.orthoApneaOrder.error");
+      expect(toast.action).toBeUndefined();
+    });
+
     it("returns false and shows the generic error when the initial ensure-patient call throws", async () => {
       vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
       const wizard = useOrthoApneaOrderWizard();

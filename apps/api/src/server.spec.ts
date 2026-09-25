@@ -217,7 +217,7 @@ describe("API server", () => {
 
   it("global rate limiter sends standard RateLimit headers with the configured limit", async () => {
     const res = await request(app).get("/api/v1/lead");
-    expect(res.headers["ratelimit-limit"]).toBe("200");
+    expect(res.headers["ratelimit-limit"]).toBe("1000");
     expect(res.headers["x-ratelimit-limit"]).toBeUndefined();
   });
 

@@ -429,6 +429,8 @@ async function onEventFormSubmit(
           }),
         }),
       successMessage: t("user.planner.form.success"),
+      icon: "nav-planner",
+      context: hcp.value?.name,
       errorMessage: t("user.planner.form.errorSave"),
       refresh: false,
     },
@@ -452,6 +454,8 @@ const { loading: activateLoading, run: onActivate } = useAsyncAction(
       notifications.show(
         t(isResend ? "user.hcp.detail.resendInviteSuccess" : "user.hcp.detail.activateSuccess"),
         "success",
+        undefined,
+        { icon: "mail", context: hcp.value?.name },
       );
       await loadHCP();
       window.dispatchEvent(new Event("entity-list-refresh"));
@@ -480,6 +484,8 @@ async function onContactSubmit(
         });
       },
       successMessage: t("user.hcp.form.editSuccess"),
+      icon: "nav-hcp",
+      context: hcp.value?.name,
       errorMessage: t("user.hcp.form.errorSave"),
       onSuccess: () => loadHCP(),
     },
@@ -495,7 +501,7 @@ const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
   });
   if (res.ok) {
     showDeleteConfirm.value = false;
-    notifications.show(t("user.hcp.actions.deleteSuccess"), "success");
+    notifications.show(t("user.hcp.actions.deleteSuccess"), "success", undefined, { icon: "nav-hcp", context: hcp.value?.name });
     window.dispatchEvent(new Event("entity-list-refresh"));
     router.push({ name: "hcp" });
   }

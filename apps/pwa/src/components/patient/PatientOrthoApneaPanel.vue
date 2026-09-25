@@ -213,15 +213,15 @@ async function confirmDelete() {
   try {
     const res = await apiFetch(`/api/v1/treatment-plan/${id}`, { method: "DELETE", handleErrors: false });
     if (res.ok) {
-      notifications.show(t("app.treatmentPlans.deleteSuccess"), "success");
+      notifications.show(t("app.treatmentPlans.deleteSuccess"), "success", undefined, { icon: "nav-treatment-plans" });
       showDeleteConfirm.value = false;
       deleteTargetPlanId.value = null;
       await loadPlans();
     } else {
-      notifications.show(t("app.treatmentPlans.deleteError"), "error");
+      notifications.show(t("app.treatmentPlans.deleteError"), "error", undefined, { icon: "nav-treatment-plans" });
     }
   } catch {
-    notifications.show(t("app.treatmentPlans.deleteError"), "error");
+    notifications.show(t("app.treatmentPlans.deleteError"), "error", undefined, { icon: "nav-treatment-plans" });
   } finally {
     deleting.value = false;
   }
