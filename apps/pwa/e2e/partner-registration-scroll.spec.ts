@@ -37,7 +37,9 @@ async function openRegistration(page: Page, width: number, height: number) {
         : route.fulfill({ status: 401, json: {} }),
   );
   await page.goto("/partner-register?token=e2e");
-  await expect(page.locator(".partner-registration__documents")).toBeVisible();
+  // A cold WebKit page on a busy CI runner can take longer than the 5s default
+  // to render this first view (flaked on PR #233, even after the global warm-up).
+  await expect(page.locator(".partner-registration__documents")).toBeVisible({ timeout: 20_000 });
   // The card zooms in after the backdrop intro — measure once it has settled
   // (the backdrop's gradient/orb loops are infinite and never settle; skip them).
   await page.waitForFunction(() =>

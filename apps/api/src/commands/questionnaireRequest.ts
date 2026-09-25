@@ -11,7 +11,7 @@ import {
 } from "../db/questionnaireRequest.js";
 import { insertMedicalHistory, insertStopBang } from "../db/clinicalRecords.js";
 import { insertConsent } from "../db/consent.js";
-import { getPatientPdfContext } from "../db/patientPdfContext.js";
+import { getPatientPdfContext, formatBirthDate } from "../db/patientPdfContext.js";
 import { withPlatform } from "../db/tenant.js";
 import { listPatientChecklistConfig } from "../db/documentTemplateEntityType.js";
 import { GetPatientChecklistQuery } from "../queries/patientChecklist.js";
@@ -329,7 +329,7 @@ export async function SubmitPublicQuestionnaireCommand(
   // (1) lock + validate + prepare
   const prepared = await run(async (client) => {
     const request = await lockOpenStep(client, token, step);
-    const context = await getPatientPdfContext(client, request.patient_id);
+    const context = await getPatientPdfContext(client, request.patient_id, request.created_by); // no linked doctor → the doctor who sent the link
     if (!context) throw new QuestionnaireLinkInvalidError();
     const version = await GetCurrentDocumentContentQuery(step, locale); // NotFound until an admin authors it
     return { patientId: request.patient_id, context, version };
@@ -341,6 +341,7 @@ export async function SubmitPublicQuestionnaireCommand(
   const pdfBytes = await renderHtmlToPdf(html, {
     dataFields: {
       nombre_paciente: prepared.context.patient_name,
+      fecha_nacimiento: formatBirthDate(prepared.context.patient_birth_date, locale),
       nombre_medico: prepared.context.practitioner_name ?? "",
       nombre_clinica: prepared.context.organization_name ?? "",
       lugar: prepared.context.organization_name ?? "",

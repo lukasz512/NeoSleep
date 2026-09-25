@@ -1,7 +1,7 @@
 import type { TenantContext } from "../context/TenantContext.js";
 import { insertAuditLog, insertFileAttachment, getFileAttachmentById, deleteFileAttachment } from "../db.js";
 import type { MedicalHistoryRecord, OralExamRecord, StopBangRecord } from "../db/clinicalRecords.js";
-import { getPatientPdfContext } from "../db/patientPdfContext.js";
+import { getPatientPdfContext, formatBirthDate } from "../db/patientPdfContext.js";
 import { GetPatientChecklistQuery, POLYSOMNOGRAPHY_KEY, type ChecklistItem } from "../queries/patientChecklist.js";
 import { GetCurrentDocumentContentQuery } from "../queries/documentContent.js";
 import { renderDocumentHtml, DOCUMENT_MANIFEST } from "@neo/documents";
@@ -76,7 +76,7 @@ export async function PrintChecklistItemCommand(
     if (file?.path) return { kind: "stored", url: await getPartnerDocumentSignedUrl(file.path) };
   }
 
-  const pdfContext = await getPatientPdfContext(ctx.client, patientId);
+  const pdfContext = await getPatientPdfContext(ctx.client, patientId, ctx.user.id);
   if (!pdfContext) throw new NotFoundError("Patient", patientId);
   const locale = printLocale(key);
   let date = new Date();
@@ -129,6 +129,7 @@ export async function PrintChecklistItemCommand(
   const bytes = await renderHtmlToPdf(html, {
     dataFields: {
       nombre_paciente: pdfContext.patient_name,
+      fecha_nacimiento: formatBirthDate(pdfContext.patient_birth_date, locale),
       nombre_medico: pdfContext.practitioner_name ?? "",
       nombre_clinica: pdfContext.organization_name ?? "",
       lugar: pdfContext.organization_name ?? "",
