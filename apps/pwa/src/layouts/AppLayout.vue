@@ -310,9 +310,10 @@ const moduleIcon = computed(() => {
   /* Side menu: list padding + nav item padding → icon box left edge. */
   --layout-nav-inset: 8px;
   --layout-nav-item-inset: 10px;
-  /* Content card padding, and the icon's inset inside a size="large" (56px)
-     icon button holding a 24px icon: (56 − 24) / 2. */
-  --layout-card-inset: 16px;
+  /* Content card padding = the responsive page gutter (NEO-61, 20/24/32px,
+     packages/brand/spacing.css), and the icon's inset inside a size="large"
+     (56px) icon button holding a 24px icon: (56 − 24) / 2. */
+  --layout-card-inset: var(--page-gutter, 16px);
   --layout-action-icon-inset: 16px;
   /* AppIcon glyphs are stroked ~1px inside their box; the logo and the
      avatar circle have no such inset, so they sit 1px further in to match
@@ -539,9 +540,9 @@ const moduleIcon = computed(() => {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1, 4px);
   min-height: 48px;
-  margin-bottom: 16px;
+  margin-bottom: var(--space-6, 24px);
   flex: 0 0 auto;
 }
 

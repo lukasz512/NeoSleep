@@ -2,6 +2,14 @@
   <div class="detail-view-tabs">
     <div class="detail-view-tabs__tabs-wrap">
       <AppSegmentedTabs
+        v-if="smAndUp"
+        :model-value="modelValue"
+        :options="options"
+        fit
+        @update:model-value="(v: string) => $emit('update:modelValue', v)"
+      />
+      <AppChipTabs
+        v-else
         :model-value="modelValue"
         :options="options"
         @update:model-value="(v: string) => $emit('update:modelValue', v)"
@@ -28,8 +36,9 @@
  */
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
+import { useDisplay } from "vuetify";
 import { VWindow, VWindowItem } from "vuetify/components";
-import { AppSegmentedTabs } from "@ui";
+import { AppChipTabs, AppSegmentedTabs } from "@ui";
 
 export interface DetailViewTab {
   value: string;
@@ -46,24 +55,20 @@ defineEmits<{
 }>();
 
 const { t } = useI18n();
+const { smAndUp } = useDisplay();
 
 const options = computed(() => props.tabs.map((tab) => ({ value: tab.value, label: t(tab.labelKey) })));
 </script>
 
 <style scoped>
-/* Full-width is correct on mobile (the tab bar spans the narrow viewport
-   either way) — desktop is where an unconstrained 100%-wide pill bar reads
-   as stretched-too-thin across a much wider content column. Capped, not
-   changed, on AppSegmentedTabs itself: that's a shared component (also used
-   full-width in ResourcesView.vue), so the cap lives on this wrapper instead. */
-@media (min-width: 600px) {
-  .detail-view-tabs__tabs-wrap {
-    max-width: 600px;
-  }
-}
+/* NEO-61: every label in full at every width. From 600px up the pill bar hugs
+   its tabs (AppSegmentedTabs `fit`); on phones a scrolling row of chips
+   (AppChipTabs) — 6–7 sections never fit a 360px row as equal slots. */
 
+/* Tabs → content is one 32px step: 24px here plus the item's 8px inner
+   padding below. */
 .detail-view-tabs__window {
-  margin-top: 28px;
+  margin-top: var(--space-6, 24px);
 }
 
 /* VWindow/VWindowItem clip overflow for the slide transition — an outlined
@@ -73,6 +78,6 @@ const options = computed(() => props.tabs.map((tab) => ({ value: tab.value, labe
    padding keeps the label's travel room inside the clipped box, unlike
    margin-top above (which is outside it and doesn't help). */
 .detail-view-tabs__window :deep(.v-window-item) {
-  padding-top: 10px;
+  padding-top: var(--space-2, 8px);
 }
 </style>

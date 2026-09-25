@@ -349,16 +349,16 @@ watch(() => props.endpoint, loadHistory);
 }
 
 .entity-history-panel__lead-source {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-4, 16px);
 }
 
 /* ── Day groups ───────────────────────────────────────────────────────── */
 .entity-history-panel__day + .entity-history-panel__day {
-  margin-top: 20px;
+  margin-top: var(--space-8, 32px);
 }
 
 .entity-history-panel__day-label {
-  margin: 0 0 8px;
+  margin: 0 0 var(--space-4, 16px);
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.06em;
@@ -377,8 +377,8 @@ watch(() => props.endpoint, loadHistory);
   position: relative;
   display: grid;
   grid-template-columns: var(--history-rail) 1fr;
-  column-gap: 12px;
-  padding-bottom: 16px;
+  column-gap: var(--space-3, 12px);
+  padding-bottom: var(--space-6, 24px);
 }
 
 .entity-history-panel__entry::before {
@@ -471,7 +471,7 @@ watch(() => props.endpoint, loadHistory);
 }
 
 .entity-history-panel__meta {
-  margin: 2px 0 0;
+  margin: var(--space-1, 4px) 0 0;
   font-size: 0.8125rem;
   color: var(--history-muted);
 }
@@ -527,7 +527,7 @@ watch(() => props.endpoint, loadHistory);
   align-items: center;
   gap: 4px;
   min-height: 32px;
-  margin: 4px 0 0 -8px;
+  margin: var(--space-1, 4px) 0 0 calc(-1 * var(--space-2, 8px));
   padding: 4px 8px;
   border-radius: 6px;
   font-size: 0.8125rem;
@@ -632,8 +632,8 @@ watch(() => props.endpoint, loadHistory);
 .entity-history-panel__skeleton-row {
   display: grid;
   grid-template-columns: var(--history-rail) 1fr;
-  column-gap: 12px;
-  padding-bottom: 20px;
+  column-gap: var(--space-3, 12px);
+  padding-bottom: var(--space-6, 24px);
 }
 
 .entity-history-panel__skeleton-dot,

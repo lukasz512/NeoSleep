@@ -189,8 +189,8 @@ defineEmits<{
 .view-item__header-row {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-bottom: 16px;
+  gap: var(--space-1, 4px);
+  margin-bottom: var(--space-6, 24px);
 }
 
 .view-item__header-title {
@@ -207,8 +207,8 @@ defineEmits<{
 .view-item__record-header {
   display: flex;
   align-items: center;
-  gap: 14px;
-  margin-bottom: 20px;
+  gap: var(--space-4, 16px);
+  margin-bottom: var(--space-6, 24px);
   /* The action buttons are 56px tall; reserving that height means the
      header doesn't grow when they appear after loading (nothing jumps). */
   min-height: 56px;
@@ -235,14 +235,14 @@ defineEmits<{
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-1, 4px);
 }
 
 .view-item__record-title-row {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px 12px;
+  gap: var(--space-2, 8px) var(--space-3, 12px);
   min-height: 2rem;
 }
 
@@ -289,8 +289,8 @@ defineEmits<{
       "title title title"
       "details details details";
     align-items: center;
-    column-gap: 12px;
-    row-gap: 8px;
+    column-gap: var(--space-3, 12px);
+    row-gap: var(--space-3, 12px);
     min-height: 0;
   }
   .view-item__record-header .view-item__tile,
@@ -326,16 +326,20 @@ defineEmits<{
 }
 
 .view-item__title {
-  margin: 0 0 20px 0;
+  margin: 0 0 var(--space-6, 24px) 0;
   font-size: 1.5rem;
   font-weight: 600;
   color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
 }
 
 .view-item__sections {
-  margin: 0 0 24px 0;
+  margin: 0 0 var(--space-6, 24px) 0;
   display: grid;
-  gap: 12px 16px;
+  /* minmax(0, …): an implicit `auto` column grows to its widest child's
+     min-content (a long e-mail, a scrolling tab row), which pushed the whole
+     record 5–25px past a 360px phone screen. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4, 16px);
 }
 
 /* Slot content (sections) uses these classes; :deep so they apply. */
