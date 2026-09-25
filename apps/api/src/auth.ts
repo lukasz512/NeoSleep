@@ -7,7 +7,7 @@ import { requireAuth } from "./middleware/requireAuth.js";
 import {
   withTenant,
   tenantSlugFromHost,
-  getOrCreateUserByProvider,
+  resolveGoogleSignInUser,
   getStaffUserByEmail,
   setUserPassword,
   createPasswordResetToken,
@@ -26,6 +26,7 @@ import {
 import { sendPasswordResetEmail } from "./mailer.js";
 import { hashToken } from "./utils/hashToken.js";
 import { DEFAULT_FRONTEND_ORIGIN, resolveFrontendOrigin } from "./utils/frontendOrigin.js";
+import { FRONTEND_URLS } from "./env.js";
 import { signAuthToken, refreshTokenExpiryDate } from "./utils/jwt.js";
 import { signOAuthState, verifyOAuthState, signExchangeCode, verifyExchangeCode } from "./utils/oauthTokens.js";
 
@@ -433,7 +434,13 @@ authRouter.post("/auth/reset-password", asyncHandler(async (req: Request, res: R
 }));
 
 // ---------------------------------------------------------------------------
-// Google OAuth (for portal/doctors; rep-app uses email/password only)
+// Google OAuth: an alternative sign-in for EXISTING accounts only (NEO-78).
+// The rep app shows a "Sign in with Google" button when GET /auth/providers
+// says Google is configured. A Google identity is matched to an existing
+// active user (by linked google_sub, else by Google-verified email); an
+// unknown email is refused, never auto-provisioned: accounts are created only
+// by an admin. Refusals come back as /login?error=<GoogleSignInError> so the
+// login screen can show a localized message.
 //
 // No server-side session exists to stash anything in across the redirect to
 // Google and back — the CSRF `state` and the post-callback hand-off are both
@@ -446,21 +453,54 @@ authRouter.post("/auth/reset-password", asyncHandler(async (req: Request, res: R
 // that for a real token via POST /auth/google/exchange.
 // ---------------------------------------------------------------------------
 
+/** Error codes the callback puts in /login?error=... . Mirrored by the login screen
+ *  (packages/ui GOOGLE_SIGN_IN_ERROR_KEYS), which maps each to an i18n message. */
+export const GOOGLE_SIGN_IN_ERRORS = {
+  /** No active admin-created account matches this Google identity. */
+  noAccount: "google_no_account",
+  /** The matching account exists but is not active. */
+  inactive: "google_account_inactive",
+} as const;
+
+const googleLoginConfigured = (): boolean => Boolean(clientId && clientSecret);
+
+/**
+ * GET /auth/providers: public, tells the login screen which alternative sign-in
+ * methods this environment supports, so the "Sign in with Google" button is only
+ * rendered where the flow can actually complete. Deliberately separate from
+ * /config/app (per-tenant branding stored in the DB): this is per-deployment
+ * env configuration. Returns booleans only, never the client id itself.
+ */
+authRouter.get("/auth/providers", (_req: Request, res: Response) => {
+  res.json({ google: googleLoginConfigured() });
+});
+
+/** The frontend passes its own origin as ?origin= (a top-level navigation carries
+ *  no Origin header, so resolveFrontendOrigin() alone would always fall back to the
+ *  default). Honoured only when it's in the FRONTEND_URL allowlist, same set CORS
+ *  allows, so this can never become an open redirect. */
+function googleStartOrigin(req: Request): string {
+  const requested = typeof req.query.origin === "string" ? req.query.origin : "";
+  return requested && FRONTEND_URLS.includes(requested) ? requested : resolveFrontendOrigin(req);
+}
+
 authRouter.get("/auth/google", (req: Request, res: Response) => {
-  if (!clientId) {
-    res.status(503).json({ error: "Google login not configured (GOOGLE_CLIENT_ID)" });
+  if (!googleLoginConfigured()) {
+    res.status(503).json({ error: "Google login not configured (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET)" });
     return;
   }
-  const state = signOAuthState(resolveFrontendOrigin(req));
+  const state = signOAuthState(googleStartOrigin(req));
   const redirectUri = `${oauthRedirectOrigin}/api/v1/auth/google/callback`;
+  // select_account (not consent): lets someone with several Google accounts pick
+  // the right one every time. No access_type=offline: the app never calls Google
+  // APIs on the user's behalf, it only needs the identity once.
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
     response_type: "code",
     scope: "openid email profile",
     state,
-    access_type: "offline",
-    prompt: "consent",
+    prompt: "select_account",
   });
   res.redirect(`${GOOGLE_AUTH_URL}?${params.toString()}`);
 });
@@ -517,21 +557,28 @@ authRouter.get("/auth/google/callback", asyncHandler(async (req: Request, res: R
   }
 
   const userInfo = (await userRes.json()) as {
-    sub: string;
+    sub?: string;
     email?: string;
-    name?: string;
+    email_verified?: boolean;
   };
-  const email = userInfo.email ?? "";
+  if (!userInfo.sub) {
+    res.redirect(`${frontendOrigin}/login?error=userinfo`);
+    return;
+  }
   const slug = tenantSlugFromHost(req.hostname);
-  const dbUser = await withTenant(slug, (client) =>
-    getOrCreateUserByProvider(client, "google", userInfo.sub, email, userInfo.name)
+  const result = await withTenant(slug, (client) =>
+    resolveGoogleSignInUser(client, userInfo.sub!, userInfo.email ?? "", userInfo.email_verified === true)
   );
-  if (!dbUser) {
-    res.redirect(`${frontendOrigin}/login?error=account_provision_failed`);
+  if (result.kind === "no_account") {
+    res.redirect(`${frontendOrigin}/login?error=${GOOGLE_SIGN_IN_ERRORS.noAccount}`);
+    return;
+  }
+  if (result.kind === "inactive") {
+    res.redirect(`${frontendOrigin}/login?error=${GOOGLE_SIGN_IN_ERRORS.inactive}`);
     return;
   }
 
-  const exchangeCode = signExchangeCode(dbUser.id);
+  const exchangeCode = signExchangeCode(result.user.id);
   res.redirect(`${frontendOrigin}/auth/callback?code=${encodeURIComponent(exchangeCode)}`);
 }));
 
@@ -561,6 +608,11 @@ authRouter.post("/auth/google/exchange", asyncHandler(async (req: Request, res: 
     const user = await getUserById(client, userId);
     if (!user) {
       return { status: 401, body: { error: "Account no longer exists." } } as const;
+    }
+    // The callback already refused inactive accounts; this covers one deactivated
+    // in the (at most 60 s) window between the callback and this exchange.
+    if (user.status !== "active") {
+      return { status: 401, body: { error: "Account is not active." } } as const;
     }
     const token = signAuthToken(user);
     const refreshToken = await issueRefreshToken(client, user.id, false, req);
