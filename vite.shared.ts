@@ -13,6 +13,16 @@ import type { Plugin, UserConfig } from "vite";
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 
+/**
+ * Libraries that hold app-wide state behind Vue's provide/inject and so must exist exactly
+ * once in a bundle. The @ui / @stores aliases import package *sources*, so a bare
+ * `import "vue-router"` inside packages/ui resolves from packages/ui/node_modules — and pnpm
+ * can give that a different copy than the app's (same version, different peer set). Two
+ * copies = two injection keys: useRoute() in packages/ui returned undefined and the login
+ * screen crashed on pwa-dev after the vue-router 5 upgrade (NEO-70). dedupe forces one copy.
+ */
+const SINGLETON_DEPS = ["vue", "vue-router", "pinia", "vue-i18n"];
+
 export const brandDir = path.resolve(rootDir, "packages/brand");
 
 /** Brand assets served at /brand in dev; copied to dist/brand at build time. */
@@ -45,6 +55,7 @@ export function sharedViteConfig(appDir: string): Partial<UserConfig> {
     envDir: rootDir,
     plugins: [brandAssetsPlugin(appDir)],
     resolve: {
+      dedupe: SINGLETON_DEPS,
       alias: {
         "@i18n":    path.resolve(rootDir, "packages/i18n"),
         "@brand":   brandDir,
@@ -61,6 +72,7 @@ export function sharedViteConfig(appDir: string): Partial<UserConfig> {
 /** Base Vitest/Vite resolve config shared across all apps (no brand plugin needed for tests). */
 export function sharedVitestResolve(): UserConfig["resolve"] {
   return {
+    dedupe: SINGLETON_DEPS,
     alias: {
       "@i18n":    path.resolve(rootDir, "packages/i18n"),
       "@brand":   brandDir,
