@@ -7,10 +7,12 @@
     <VImg v-if="avatarUrl" :src="avatarUrl" :alt="name || ''" cover />
     <span v-else-if="initials" class="app-avatar__initials" :style="{ fontSize: initialsFontSize }">{{ initials }}</span>
     <AppIcon v-else :name="iconName" class="app-avatar__icon" />
-    <!-- Doctor badge (NEO-57): a small stethoscope disc on the bottom-right
-         corner, so a doctor reads as a doctor while keeping their initials. -->
+    <!-- Doctor badge (NEO-57): a small disc on the bottom-right corner with
+         the doctor's specialty icon (tooth for a dentist, lungs for a
+         pulmonologist, ...; stethoscope when unknown), so a doctor reads as
+         a doctor — and as which kind — while keeping their initials. -->
     <span v-if="showDoctorBadge" class="app-avatar__badge" data-testid="app-avatar-doctor-badge" aria-hidden="true">
-      <AppIcon name="nav-hcp" class="app-avatar__badge-icon" />
+      <AppIcon :name="badgeIcon" class="app-avatar__badge-icon" />
     </span>
   </VAvatar>
 </template>
@@ -21,6 +23,7 @@ import AppIcon, { type AppIconName } from "./AppIcon.vue";
 import { getInitials, getInitialsFromParts } from "../utils/initials";
 import { hcoTypeIcon } from "../utils/hcoLabels";
 import { identityTone } from "../utils/identityTone";
+import { practitionerSpecialtyIcon } from "../utils/hcpLabels";
 
 /**
  * Placeholder identity photo, shared by HCP/HCO/patient/lead/user lists,
@@ -68,8 +71,10 @@ const props = withDefaults(
     /** Only meaningful when entityType is "hco" — organization.type (clinic/hospital/pharmacy/practice/other), selects the type-specific icon. */
     orgType?: string | null;
     size?: number | string;
+    /** Only for entityType "hcp": the doctor's (first) specialty code — picks the badge icon. */
+    specialty?: string | null;
   }>(),
-  { entityType: "user", size: 40 },
+  { entityType: "user", size: 40, specialty: null },
 );
 
 const initials = computed(() => {
@@ -97,6 +102,7 @@ const sizePx = computed(() => (typeof props.size === "number" ? props.size : par
 // Every doctor avatar carries the badge, at every size — the disc has its
 // own minimum size (CSS below), so it stays readable on a 20px mention.
 const showDoctorBadge = computed(() => props.entityType === "hcp");
+const badgeIcon = computed(() => practitionerSpecialtyIcon(props.specialty ?? undefined));
 const initialsFontSize = computed(() => `${Math.max(sizePx.value * FIBONACCI_INITIALS_RATIO, 8)}px`);
 
 </script>

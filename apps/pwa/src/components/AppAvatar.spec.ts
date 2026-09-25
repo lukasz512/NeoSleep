@@ -66,6 +66,18 @@ describe("AppAvatar (doctor badge, NEO-57)", () => {
     expect(wrapper.find(".app-avatar__initials").text()).toBe("LG");
   });
 
+  it("the badge shows the doctor's specialty icon, stethoscope when unknown", () => {
+    const dentist = mount(AppAvatar, {
+      props: { entityType: "hcp", name: "Lorena González", specialty: "dentist" },
+      global: { plugins: [createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives })] },
+    });
+    mountedWrappers.push(dentist);
+    expect(dentist.find("[data-testid=app-avatar-doctor-badge]").findComponent(AppIcon).props("name")).toBe("specialty-dentist");
+
+    const unknown = mountAvatar({ entityType: "hcp", name: "Jan Kowalski" });
+    expect(unknown.find("[data-testid=app-avatar-doctor-badge]").findComponent(AppIcon).props("name")).toBe("nav-hcp");
+  });
+
   it("shows the badge at every size, and never for other identities", () => {
     expect(mountAvatar({ entityType: "patient", name: "Anna Nowak" }).find("[data-testid=app-avatar-doctor-badge]").exists()).toBe(false);
     expect(mountAvatar({ entityType: "hco" }).find("[data-testid=app-avatar-doctor-badge]").exists()).toBe(false);

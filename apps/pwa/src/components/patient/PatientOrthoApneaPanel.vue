@@ -68,6 +68,7 @@
             class="patient-orthoapnea-panel__dentist"
             :to="hcpDetailLink(plan.dentist_id)"
             entity-type="hcp"
+            :specialty="plan.dentist_specialty"
             :label="plan.dentist_name"
             :details="specialtySet(plan.dentist_specialty, plan.dentist_specialties).details"
             :more-details="specialtySet(plan.dentist_specialty, plan.dentist_specialties).more"

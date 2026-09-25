@@ -108,6 +108,7 @@
                   :to="patient.practitioner_id ? { name: 'hcp-detail', params: { id: patient.practitioner_id } } : null"
                   :label="patient.practitioner_name"
                   entity-type="hcp"
+                  :specialty="patient.practitioner_specialty"
                   :details="specialtySet(patient.practitioner_specialty, patient.practitioner_specialties).details"
                   :more-details="specialtySet(patient.practitioner_specialty, patient.practitioner_specialties).more"
                   :avatar-size="32"

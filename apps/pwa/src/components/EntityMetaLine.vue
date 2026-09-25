@@ -2,7 +2,7 @@
   <span v-if="text || label" class="entity-meta-line">
     <span v-if="text">{{ text }}</span>
     <span v-if="text && label" aria-hidden="true">·</span>
-    <EntityLink v-if="label" :to="to" :label="label" :entity-type="entityType" :first-name="firstName" :last-name="lastName" />
+    <EntityLink v-if="label" :to="to" :label="label" :entity-type="entityType" :first-name="firstName" :last-name="lastName" :specialty="specialty" />
   </span>
   <span v-else>—</span>
 </template>
@@ -25,6 +25,7 @@ defineProps<{
   entityType?: AppAvatarEntityType;
   firstName?: string | null;
   lastName?: string | null;
+  specialty?: string | null;
 }>();
 </script>
 

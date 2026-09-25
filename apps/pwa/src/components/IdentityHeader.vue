@@ -6,6 +6,7 @@
       :last-name="lastName"
       :entity-type="entityType"
       :org-type="orgType"
+      :specialty="specialty"
       :size="56"
     />
     <span class="identity-header__text">
@@ -39,8 +40,10 @@ withDefaults(
     orgType?: string | null;
     details?: string[];
     moreDetails?: string[];
+    /** Doctor's (first) specialty code, for the avatar badge icon. */
+    specialty?: string | null;
   }>(),
-  { firstName: null, lastName: null, orgType: null, details: () => [], moreDetails: () => [] },
+  { firstName: null, lastName: null, orgType: null, details: () => [], moreDetails: () => [], specialty: null },
 );
 </script>
 

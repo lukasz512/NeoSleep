@@ -120,6 +120,7 @@
         <IdentityHeader
           :name="hcp.name"
           entity-type="hcp"
+          :specialty="hcp.primary_specialty || hcp.specialty"
           :first-name="hcp.first_name"
           :last-name="hcp.last_name"
           :details="doctorDetails(hcp, { withClinic: true }).details"

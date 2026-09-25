@@ -23,6 +23,7 @@
         <EntityLink
           :to="null"
           entity-type="hcp"
+          :specialty="asRow(item).primary_specialty"
           :label="asRow(item).name"
           :first-name="asRow(item).first_name"
           :last-name="asRow(item).last_name"
@@ -35,7 +36,7 @@
         {{ formatEfficiency(asRow(item).efficiency_pct) }}
       </template>
       <template #feed-card-avatar="{ item }">
-        <AppAvatar :name="asRow(item).name" :first-name="asRow(item).first_name" :last-name="asRow(item).last_name" entity-type="hcp" :size="55" />
+        <AppAvatar :name="asRow(item).name" :first-name="asRow(item).first_name" :last-name="asRow(item).last_name" entity-type="hcp" :specialty="asRow(item).primary_specialty" :size="55" />
       </template>
       <template #feed-card-title="{ item }">
         {{ shortPersonName(asRow(item).name, asRow(item).first_name, asRow(item).last_name) }}

@@ -49,6 +49,7 @@
           :first-name="(item as TreatmentPlanRow).dentist_first_name"
           :last-name="(item as TreatmentPlanRow).dentist_last_name"
           entity-type="hcp"
+          :specialty="(item as TreatmentPlanRow).dentist_specialty"
         />
       </template>
       <template #item.dentist_name="{ item }">
@@ -58,6 +59,7 @@
           :first-name="(item as TreatmentPlanRow).dentist_first_name"
           :last-name="(item as TreatmentPlanRow).dentist_last_name"
           entity-type="hcp"
+          :specialty="(item as TreatmentPlanRow).dentist_specialty"
           :details="doctorOf(item as TreatmentPlanRow).details"
           :more-details="doctorOf(item as TreatmentPlanRow).more"
           :avatar-size="32"

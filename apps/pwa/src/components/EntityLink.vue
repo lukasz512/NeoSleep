@@ -83,8 +83,10 @@ const props = withDefaults(
     details?: string[];
     /** Overflow values behind a "+N" with a tooltip (a doctor's other specialties). */
     moreDetails?: string[];
+    /** A doctor's (first) specialty code — the avatar badge shows its icon. */
+    specialty?: string | null;
   }>(),
-  { entityType: undefined, firstName: null, lastName: null, avatarSize: 20, details: () => [], moreDetails: () => [] },
+  { entityType: undefined, firstName: null, lastName: null, avatarSize: 20, details: () => [], moreDetails: () => [], specialty: null },
 );
 
 const ROUTE_ENTITY_TYPES: Record<string, AppAvatarEntityType> = {
@@ -121,6 +123,7 @@ const avatarProps = computed(() => {
     lastName: isPlace ? null : props.lastName,
     entityType: entityType.value,
     size: props.avatarSize,
+    specialty: props.specialty,
   };
 });
 </script>
