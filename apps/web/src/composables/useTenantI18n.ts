@@ -34,6 +34,7 @@ export async function loadTenantOverlay(
     const mod = await import(/* @vite-ignore */ `@i18n/tenants/${tenantId}/${locale}.json`);
     return mod.default ?? {};
   } catch {
+    // benign: most tenants have no overlay file for a locale — the base JSON is complete on its own.
     return {};
   }
 }

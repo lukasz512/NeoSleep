@@ -18,6 +18,13 @@
         <p class="partner-registration__subtitle">{{ t('user.partnerRegistration.invalidBody') }}</p>
       </div>
 
+      <div v-else-if="step === 'unreachable'" class="partner-registration__body">
+        <p class="partner-registration__subtitle" role="alert">{{ inviteFailureText?.body }} {{ inviteFailureText?.reference }}</p>
+        <AppButton color="primary" size="large" block class="partner-registration__submit" @click="loadInvite">
+          {{ t('app.errorState.refresh') }}
+        </AppButton>
+      </div>
+
       <div v-else-if="step === 'submitted'" class="partner-registration__body">
         <VAlert type="success" variant="tonal" class="partner-registration__alert">
           <strong class="partner-registration__status-title">{{ t('user.partnerRegistration.form.successTitle') }}</strong>
@@ -245,11 +252,12 @@
 </template>
 
 <script setup lang="ts">
+import { apiErrorFromResponse, reportCaught } from "@api";
 import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { VRadioGroup, VRadio } from "vuetify/components";
-import { AuthChrome, AuthCard, originDialogTransition } from "@ui";
+import { AuthChrome, AuthCard, originDialogTransition, useErrorTextFor } from "@ui";
 import { brandColors } from "@brand/colors";
 import { isValidLicenseNumber, type LicenseCountry } from "@documents-browser";
 import AppLoadingState from "../components/AppLoadingState.vue";
@@ -303,7 +311,8 @@ onBeforeUnmount(() => {
   if (redirectTimer) clearInterval(redirectTimer);
 });
 
-type Step = "loading" | "invalid" | "form" | "submitted";
+/** "unreachable": the invite could not be checked (network / server) — not the same as an invalid link (NEO-81). */
+type Step = "loading" | "invalid" | "unreachable" | "form" | "submitted";
 type PracticeRole = "owner" | "staff";
 
 interface InvitePreview {
@@ -509,9 +518,14 @@ function onNoticeAcknowledged(payload: { versionIds: string[] }) {
 // validation is in flight.
 const loading = computed(() => step.value === "loading");
 
-const cardTitle = computed(() =>
-  step.value === "invalid" ? t("user.partnerRegistration.invalidTitle") : t("user.partnerRegistration.title")
-);
+const inviteFailure = ref<unknown>(null);
+const inviteFailureText = useErrorTextFor(inviteFailure);
+
+const cardTitle = computed(() => {
+  if (step.value === "invalid") return t("user.partnerRegistration.invalidTitle");
+  if (step.value === "unreachable" && inviteFailureText.value) return inviteFailureText.value.title;
+  return t("user.partnerRegistration.title");
+});
 
 // Same technique as AuthView.vue's cardAccentStyle — feeds brand teal into
 // the card border via a CSS custom property instead of a hardcoded hex.
@@ -547,8 +561,10 @@ function ruleLicenseNumber(v: string) {
   );
 }
 
-onMounted(async () => {
+async function loadInvite(): Promise<void> {
   if (!token) { step.value = "invalid"; return; }
+  step.value = "loading";
+  inviteFailure.value = null;
   try {
     const res = await apiFetch(`/api/v1/invite/validate?token=${encodeURIComponent(token)}`, { handleErrors: false });
     if (res.ok) {
@@ -564,12 +580,26 @@ onMounted(async () => {
       if (!data.documents) errorKey.value = "user.partnerRegistration.form.errorNotReady";
       step.value = "form";
     } else {
-      step.value = "invalid";
+      const failure = await apiErrorFromResponse(res);
+      // Only a 4xx means the link itself is bad (expired / used / unknown) — an expected
+      // outcome, not reported. A 5xx or 429 is our problem and must not tell the doctor
+      // their invitation is invalid.
+      if (failure.kind === "client") {
+        step.value = "invalid";
+      } else {
+        reportCaught(failure, { where: "PartnerRegistrationView.loadInvite" });
+        inviteFailure.value = failure;
+        step.value = "unreachable";
+      }
     }
-  } catch {
-    step.value = "invalid";
+  } catch (err) {
+    reportCaught(err, { where: "PartnerRegistrationView.loadInvite" });
+    inviteFailure.value = err;
+    step.value = "unreachable";
   }
-});
+}
+
+onMounted(loadInvite);
 
 function resetSigning() {
   agreementSignature.value = null;
@@ -611,16 +641,19 @@ async function onSubmit() {
       startLoginRedirect();
       return;
     }
-    const body = (await res.json().catch(() => ({}))) as { code?: string };
-    if (body.code === "DOCUMENT_VERSION_STALE") {
+    const failure = await apiErrorFromResponse(res);
+    if (failure.code === "DOCUMENT_VERSION_STALE") {
       resetSigning();
       errorKey.value = "user.partnerRegistration.form.errorStale";
-    } else if (body.code === "PARTNER_DOCUMENTS_NOT_READY") {
+    } else if (failure.code === "PARTNER_DOCUMENTS_NOT_READY") {
       errorKey.value = "user.partnerRegistration.form.errorNotReady";
     } else {
+      // Anything unexpected is reported — a doctor's signed registration must never fail silently.
+      reportCaught(failure, { where: "PartnerRegistrationView.onSubmit" });
       errorKey.value = "user.partnerRegistration.form.errorSubmit";
     }
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "PartnerRegistrationView.onSubmit" });
     errorKey.value = "user.partnerRegistration.form.errorSubmit";
   } finally {
     submitting.value = false;

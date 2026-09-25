@@ -1,3 +1,4 @@
+import { reportCaught } from "@api";
 import { reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { apiFetch } from "./useApi";
@@ -107,7 +108,8 @@ export function useOrthoApneaOrderWizard() {
         handleErrors: false,
       });
       return res.ok;
-    } catch {
+    } catch (err) {
+      reportCaught(err, { where: "useOrthoApneaOrderWizard.sendOrder" });
       return false;
     }
   }
@@ -209,7 +211,8 @@ export function useOrthoApneaOrderWizard() {
         const data = (await res.json()) as { items: { id: number; name: string }[] };
         internalClinicId.value = data.items[0]?.id ?? null;
       }
-    } catch {
+    } catch (err) {
+      reportCaught(err, { where: "useOrthoApneaOrderWizard.loadClinic", level: "warn" });
       // leave internalClinicId null — createOrthoApneaTreatment on the backend will surface the real error
     }
   }
@@ -444,7 +447,8 @@ export function useOrthoApneaOrderWizard() {
         showOrderFailure(succeeded > 0 ? "app.orthoApneaOrder.partialFailure" : "app.orthoApneaOrder.error", unsent);
       }
       return true;
-    } catch {
+    } catch (err) {
+      reportCaught(err, { where: "useOrthoApneaOrderWizard.confirmOrder" });
       notifications.show(t("app.orthoApneaOrder.error"), "error", undefined, ORDER_TOAST);
       return false;
     } finally {

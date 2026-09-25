@@ -59,6 +59,7 @@
       :has-content="!!lead"
       :loading="loading"
       :load-error="loadFailed"
+      :load-error-cause="loadFailure"
       :back-route="backRoute"
       :back-label="t('user.leads.detail.back')"
       :record-title="lead?.name ?? ''"
@@ -360,6 +361,7 @@
 </template>
 
 <script setup lang="ts">
+import { isOfflineError, reportCaught, reportFailedResponse } from "@api";
 import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
 import { originDialogTransition } from "@ui";
 import { useRoute, useRouter } from "vue-router";
@@ -417,6 +419,8 @@ const loading = ref(true);
 const isOffline = ref(false);
 /** True when loadLead() failed for a reason other than a genuine 404 (network/server) — see loadLead(). */
 const loadFailed = ref(false);
+/** The error behind loadFailed (NEO-81) — lets the error state say offline vs. server problem. */
+const loadFailure = ref<unknown>(null);
 const showEditModal = ref(false);
 const showMoveToDoctorsModal = ref(false);
 const showInviteModal = ref(false);
@@ -728,11 +732,15 @@ async function loadLead() {
       // Not a genuine 404 — ItemDetailLayout renders its own "connection
       // problem" + retry state for this (see :load-error), so no separate
       // toast on top of it.
+      loadFailure.value = await reportFailedResponse(res, { where: "LeadDetailView.load", path: "/api/v1/lead/:id" });
       loadFailed.value = true;
     }
-  } catch {
-    // Network failure, not a server error — fall back to the cached record if we have one.
-    const cached = await leadCache.readOne(id);
+  } catch (err) {
+    reportCaught(err, { where: "LeadDetailView.load" });
+    loadFailure.value = err;
+    // Only a request that never reached the server may fall back to the cached record (ADR-013) —
+    // a bad response or a bug shows the real error instead of stale data.
+    const cached = isOfflineError(err) ? await leadCache.readOne(id) : null;
     if (cached) {
       lead.value = cached as unknown as Lead;
       isOffline.value = true;

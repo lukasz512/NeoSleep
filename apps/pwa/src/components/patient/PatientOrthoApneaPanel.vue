@@ -49,7 +49,7 @@
     <AppLoadingState v-if="loading && !loaded" />
     <AppErrorState
       v-else-if="loadError"
-      :title="t('app.errorState.title')"
+      :error="loadFailure"
       :subtitle="t('app.treatmentPlans.errorLoad')"
       :refresh-label="t('app.errorState.refresh')"
       :loading="loading"
@@ -115,6 +115,7 @@
 </template>
 
 <script setup lang="ts">
+import { reportCaught, reportFailedResponse } from "@api";
 import { ref, computed, onMounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import AppButton from "../AppButton.vue";
@@ -170,6 +171,8 @@ const plans = ref<TreatmentPlanItem[]>([]);
 const loading = ref(false);
 const loaded = ref(false);
 const loadError = ref(false);
+/** The error behind loadError (NEO-81) — lets the error state say offline vs. server problem. */
+const loadFailure = ref<unknown>(null);
 const showOrderWizard = ref(false);
 const showTransactionLog = ref(false);
 const transactionLogPlanId = ref<string | null>(null);
@@ -220,7 +223,8 @@ async function confirmDelete() {
     } else {
       notifications.show(t("app.treatmentPlans.deleteError"), "error", undefined, { icon: "nav-treatment-plans" });
     }
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "PatientOrthoApneaPanel.confirmDelete" });
     notifications.show(t("app.treatmentPlans.deleteError"), "error", undefined, { icon: "nav-treatment-plans" });
   } finally {
     deleting.value = false;
@@ -232,6 +236,7 @@ const latestSleepStudyId = ref<string | null>(null);
 async function loadPlans() {
   loading.value = true;
   loadError.value = false;
+  loadFailure.value = null;
   try {
     const [plansRes, studiesRes] = await Promise.all([
       apiFetch(`/api/v1/treatment-plan?patient_id=${props.patientId}&type=dental_appliance&limit=-1`, { handleErrors: false }),
@@ -242,13 +247,16 @@ async function loadPlans() {
       const data = (await plansRes.json()) as { items: TreatmentPlanItem[] };
       plans.value = data.items;
     } else {
+      loadFailure.value = await reportFailedResponse(plansRes, { where: "PatientOrthoApneaPanel.loadPlans" });
       loadError.value = true;
     }
     if (studiesRes.ok) {
       const data = (await studiesRes.json()) as { id: string | null };
       latestSleepStudyId.value = data.id;
     }
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "PatientOrthoApneaPanel.loadPlans" });
+    loadFailure.value = err;
     loadError.value = true;
   } finally {
     loading.value = false;

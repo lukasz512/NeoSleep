@@ -2,6 +2,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useDebounceFn } from "@vueuse/core";
+import { apiErrorFromResponse, isOfflineError, readJson, reportCaught } from "@api";
 import { apiFetch } from "./useApi";
 import { useFilters, type FilterDefinition } from "./useFilters";
 import { CACHEABLE_ENTITIES, type CacheableEntity } from "../utils/offlineCache";
@@ -69,6 +70,12 @@ export function useEntityList(opts: EntityListOptions) {
   const clearingSearch = ref(false);
   const clearingFilters = ref(false);
   const loadError = ref("");
+  /**
+   * The error behind `loadError` (NEO-81) — an ApiError for request failures,
+   * so the error state can say "server problem" vs. "offline" instead of
+   * always "Network problem". Null while there's no error.
+   */
+  const loadFailure = ref<unknown>(null);
   const items = ref<Record<string, unknown>[]>([]);
   const total = ref(0);
   const hasCompletedInitialLoad = ref(false);
@@ -183,6 +190,7 @@ export function useEntityList(opts: EntityListOptions) {
   async function loadData() {
     loading.value = true;
     loadError.value = "";
+    loadFailure.value = null;
     const o = tableOptions.value;
     const isFreshLoad = o.page === 1;
     const params = buildParams(o.page);
@@ -191,7 +199,7 @@ export function useEntityList(opts: EntityListOptions) {
         errorMessageKey: opts.i18n.errorLoad,
       });
       if (res.ok) {
-        const data = (await res.json()) as { items: Record<string, unknown>[]; total: number };
+        const data = await readJson<{ items: Record<string, unknown>[]; total: number }>(res, { path: opts.apiEndpoint });
         items.value = data.items;
         total.value = data.total;
         isOffline.value = false;
@@ -202,19 +210,24 @@ export function useEntityList(opts: EntityListOptions) {
         }
         if (cacheStore) void cacheStore.cacheList(data.items);
       } else {
+        // Already logged + reported by apiFetch's onError — only keep it for the error state.
         items.value = [];
         total.value = 0;
         loadError.value = t(opts.i18n.errorLoad);
+        loadFailure.value = await apiErrorFromResponse(res, { path: opts.apiEndpoint });
         if (isFreshLoad) {
           mobileItems.value = [];
           mobileHasMore.value = false;
         }
       }
-    } catch {
-      // Network failure (offline, DNS, timeout) — not a server error response, so
-      // falling back to whatever this entity has cached is safe: we never reached
-      // the server to know it's wrong. See docs/ADR-013-offline-read-cache.md.
-      const cached = cacheStore && isFreshLoad ? await cacheStore.readList() : [];
+    } catch (err) {
+      // Only a request that never reached the server (offline, DNS, timeout) may
+      // fall back to cached data — ADR-013. A bad response body or a bug is not
+      // "offline": show the real error instead of stale data. (Offline is still
+      // logged — as a warning — so a CORS/API-down case is visible in DevTools.)
+      const offline = isOfflineError(err);
+      reportCaught(err, { where: `useEntityList.load:${opts.viewId}` });
+      const cached = offline && cacheStore && isFreshLoad ? await cacheStore.readList() : [];
       if (cached.length > 0) {
         items.value = cached;
         total.value = cached.length;
@@ -225,6 +238,7 @@ export function useEntityList(opts: EntityListOptions) {
         items.value = [];
         total.value = 0;
         loadError.value = t(opts.i18n.errorLoad);
+        loadFailure.value = err;
         if (isFreshLoad) {
           mobileItems.value = [];
           mobileHasMore.value = false;
@@ -246,7 +260,7 @@ export function useEntityList(opts: EntityListOptions) {
         errorMessageKey: opts.i18n.errorLoad,
       });
       if (res.ok) {
-        const data = (await res.json()) as { items: Record<string, unknown>[]; total: number };
+        const data = await readJson<{ items: Record<string, unknown>[]; total: number }>(res, { path: opts.apiEndpoint });
         mobileItems.value = [...mobileItems.value, ...data.items];
         mobilePage.value = nextPage;
         total.value = data.total;
@@ -254,7 +268,9 @@ export function useEntityList(opts: EntityListOptions) {
       } else {
         mobileHasMore.value = false;
       }
-    } catch {
+    } catch (err) {
+      // Stop paging either way.
+      reportCaught(err, { where: `useEntityList.loadMore:${opts.viewId}` });
       mobileHasMore.value = false;
     } finally {
       loadingMore.value = false;
@@ -280,6 +296,7 @@ export function useEntityList(opts: EntityListOptions) {
     clearingSearch,
     clearingFilters,
     loadError,
+    loadFailure,
     isOffline,
     items,
     total,

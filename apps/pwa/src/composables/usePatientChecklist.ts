@@ -1,3 +1,4 @@
+import { reportCaught, reportFailedResponse } from "@api";
 import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { apiFetch, extractErrorMessage } from "./useApi";
@@ -91,6 +92,8 @@ export function usePatientChecklist(patientId: () => string) {
   const checklist = ref<PatientChecklist | null>(null);
   const loading = ref(false);
   const loadError = ref(false);
+  /** The error behind loadError (NEO-81) — lets the error state say offline vs. server problem. */
+  const loadFailure = ref<unknown>(null);
 
   async function failWith(
     res: Response,
@@ -98,6 +101,9 @@ export function usePatientChecklist(patientId: () => string) {
     icon: NotificationIcon,
     retry?: () => Promise<unknown>,
   ): Promise<void> {
+    // Requests here use handleErrors: false, so apiFetch did not report this failure — do it once here.
+    await reportFailedResponse(res, { where: `usePatientChecklist:${fallbackKey}` });
+    // benign: an unreadable body only loses the server message; the fallback key is shown instead.
     const bodyText = await res.text().catch(() => "");
     notifications.show(extractErrorMessage(bodyText) || t(fallbackKey), "error", undefined, {
       icon,
@@ -108,14 +114,18 @@ export function usePatientChecklist(patientId: () => string) {
   async function load(): Promise<void> {
     loading.value = true;
     loadError.value = false;
+    loadFailure.value = null;
     try {
       const res = await apiFetch(`/api/v1/patient/${patientId()}/checklist`, { handleErrors: false });
       if (!res.ok) {
+        loadFailure.value = await reportFailedResponse(res, { where: "usePatientChecklist.load" });
         loadError.value = true;
         return;
       }
       checklist.value = (await res.json()) as PatientChecklist;
-    } catch {
+    } catch (err) {
+      reportCaught(err, { where: "usePatientChecklist.load" });
+      loadFailure.value = err;
       loadError.value = true;
     } finally {
       loading.value = false;
@@ -213,5 +223,5 @@ export function usePatientChecklist(patientId: () => string) {
     await send(`/studies/uploads/${attachmentId}`, { method: "DELETE" }, { icon: "file", errorKey: "app.clinical.upload.deleteError", successKey: "app.clinical.upload.deleted", retryable: true });
   }
 
-  return { checklist, loading, loadError, load, recordQuestionnaire, completeBang, print, openFile, createRequest, cancelRequest, upload, deleteUpload };
+  return { checklist, loading, loadError, loadFailure, load, recordQuestionnaire, completeBang, print, openFile, createRequest, cancelRequest, upload, deleteUpload };
 }

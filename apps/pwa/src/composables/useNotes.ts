@@ -1,3 +1,4 @@
+import { reportCaught, reportFailedResponse } from "@api";
 import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { apiFetch } from "./useApi";
@@ -26,12 +27,15 @@ export function useNotes(entityType: string, entityId: () => string | undefined)
   const loading = ref(false);
   const loaded = ref(false);
   const loadError = ref(false);
+  /** The error behind loadError (NEO-81) — lets the error state say offline vs. server problem. */
+  const loadFailure = ref<unknown>(null);
 
   async function loadNotes(): Promise<void> {
     const id = entityId();
     if (!id) return;
     loading.value = true;
     loadError.value = false;
+    loadFailure.value = null;
     try {
       const res = await apiFetch(
         `/api/v1/note?entity_type=${encodeURIComponent(entityType)}&entity_id=${encodeURIComponent(id)}`,
@@ -41,9 +45,12 @@ export function useNotes(entityType: string, entityId: () => string | undefined)
         const data = (await res.json()) as { items: NoteItem[] };
         notes.value = data.items;
       } else {
+        loadFailure.value = await reportFailedResponse(res, { where: "useNotes.loadNotes" });
         loadError.value = true;
       }
-    } catch {
+    } catch (err) {
+      reportCaught(err, { where: "useNotes.loadNotes" });
+      loadFailure.value = err;
       loadError.value = true;
     } finally {
       loading.value = false;
@@ -67,7 +74,8 @@ export function useNotes(entityType: string, entityId: () => string | undefined)
         await loadNotes();
         return true;
       }
-    } catch {
+    } catch (err) {
+      reportCaught(err, { where: "useNotes.addNote" });
       // fall through to the error toast below
     }
     notifications.show(t("app.notes.errorSave"), "error", undefined, { icon: "pencil" });
@@ -82,12 +90,13 @@ export function useNotes(entityType: string, entityId: () => string | undefined)
         notifications.show(t("app.notes.deleteSuccess"), "success", undefined, { icon: "pencil" });
         return true;
       }
-    } catch {
+    } catch (err) {
+      reportCaught(err, { where: "useNotes.deleteNote" });
       // fall through to the error toast below
     }
     notifications.show(t("app.notes.errorDelete"), "error", undefined, { icon: "pencil" });
     return false;
   }
 
-  return { notes, loading, loaded, loadError, loadNotes, addNote, deleteNote };
+  return { notes, loading, loaded, loadError, loadFailure, loadNotes, addNote, deleteNote };
 }

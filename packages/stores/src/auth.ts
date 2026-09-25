@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
-import type { ApiFetchOptions } from "@api";
+import { reportCaught, reportFailedResponse, type ApiFetchOptions } from "@api";
 
 export type UserRole = "admin" | "manager" | "kam" | "msl" | "rep" | "doctor";
 
@@ -90,11 +90,20 @@ export function createAuthStore(apiFetch: ApiFetchFn, tokenStorage: AuthTokenSto
           const data = (await res.json()) as { user: AuthUser };
           if (stale()) return !!user.value;
           user.value = data.user;
-        } else {
+        } else if (res.status === 401 || res.status === 403) {
+          // The session itself is gone — the only answer that means "signed out".
           user.value = null;
+        } else {
+          // 5xx / 429: our side failed, the session may be fine. Keep whoever is
+          // signed in (a background re-check must not sign a rep out because the
+          // API hiccuped); at boot there is no user yet, so the guard still sends
+          // them to /login exactly as before.
+          await reportFailedResponse(res, { where: "authStore.runSessionCheck" });
         }
-      } catch {
-        if (!stale()) user.value = null;
+      } catch (err) {
+        // Same for a network blip / timeout: keep the current user, report, and let
+        // the next check (or request) decide. Never sign out on "couldn't ask".
+        reportCaught(err, { where: "authStore.runSessionCheck" });
       } finally {
         sessionChecked.value = true;
       }
@@ -109,7 +118,9 @@ export function createAuthStore(apiFetch: ApiFetchFn, tokenStorage: AuthTokenSto
           body: JSON.stringify({ refresh_token: tokenStorage.getRefreshToken() }),
           handleErrors: false,
         });
-      } catch { /* ignore network errors on logout */ }
+      } catch {
+        // benign: the server-side revoke failed (offline) — local tokens are cleared below regardless.
+      }
       clearAuth();
     }
 

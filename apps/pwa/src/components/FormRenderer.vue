@@ -323,7 +323,7 @@ function insertAtSign(f: FormFieldDef) {
     try {
       inputEl?.setSelectionRange(start + 1, start + 1);
     } catch {
-      // no-op: unsupported input type, focus() above is enough
+      // benign: unsupported input type for setSelectionRange — focus() above is enough.
     }
   });
 }

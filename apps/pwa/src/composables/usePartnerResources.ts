@@ -1,3 +1,4 @@
+import { reportCaught, reportFailedResponse } from "@api";
 import { ref, computed } from "vue";
 import { apiFetch } from "./useApi";
 
@@ -60,6 +61,8 @@ function groupByCategory(items: PartnerResourceItem[]): PartnerResourceGroup[] {
 const items = ref<PartnerResourceItem[]>([]);
 const loading = ref(false);
 const loadError = ref(false);
+/** The error behind loadError (NEO-81) — lets the error state say offline vs. server problem. */
+const loadFailure = ref<unknown>(null);
 const loadedForLocale = ref<string | null>(null);
 
 const documents = computed(() => items.value.filter((r) => r.kind === "document"));
@@ -73,16 +76,20 @@ async function load(locale: string): Promise<void> {
 
   loading.value = true;
   loadError.value = false;
+  loadFailure.value = null;
   try {
     const res = await apiFetch(`/api/v1/partners/orthoapnea/resources?locale=${locale}`, { handleErrors: false });
     if (!res.ok) {
+      loadFailure.value = await reportFailedResponse(res, { where: "usePartnerResources.load" });
       loadError.value = true;
       return;
     }
     const data = (await res.json()) as { resources: PartnerResourceItem[] };
     items.value = data.resources;
     loadedForLocale.value = locale;
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "usePartnerResources.load" });
+    loadFailure.value = err;
     loadError.value = true;
   } finally {
     loading.value = false;
@@ -90,5 +97,5 @@ async function load(locale: string): Promise<void> {
 }
 
 export function usePartnerResources() {
-  return { items, documents, videos, documentGroups, videoGroups, loading, loadError, load };
+  return { items, documents, videos, documentGroups, videoGroups, loading, loadError, loadFailure, load };
 }

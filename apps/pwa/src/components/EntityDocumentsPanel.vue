@@ -17,6 +17,7 @@
 </template>
 
 <script setup lang="ts">
+import { reportCaught } from "@api";
 /**
  * Entity-agnostic "Documents" tab panel — one file instead of duplicating
  * UserDetailView.vue's inline fetch/list/download logic on HCP/HCO/Patient
@@ -72,7 +73,8 @@ async function load(): Promise<void> {
     } else {
       failLoad();
     }
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "EntityDocumentsPanel.load" });
     failLoad();
   } finally {
     loading.value = false;

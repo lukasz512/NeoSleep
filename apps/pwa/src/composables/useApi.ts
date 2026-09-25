@@ -22,7 +22,7 @@
  * setAuthInterceptor() — called from stores/auth.ts after store creation.
  */
 import { useLocalStorage } from "@vueuse/core";
-import { createApiFetch, extractErrorMessage, type ApiFetchOptions } from "@api";
+import { ApiError, classifyStatus, createApiFetch, extractErrorMessage, reportCaught, type ApiFetchOptions } from "@api";
 import { useGlobalLoaderStore } from "@stores";
 import { getApiUrl, APP_STORAGE_KEYS } from "../constants";
 import { useNotifications } from "../composables/useNotifications";
@@ -88,6 +88,9 @@ async function refreshAccessToken(): Promise<boolean> {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refresh_token: current }),
+        // Same ceiling as every other request (REQUEST_TIMEOUT_MS below) — a hung
+        // refresh would otherwise block every 401-retrying caller behind refreshPromise.
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
       if (!res.ok) {
         accessToken = null;
@@ -98,9 +101,10 @@ async function refreshAccessToken(): Promise<boolean> {
       accessToken = data.token;
       refreshToken.value = data.refresh_token;
       return true;
-    } catch {
-      // Network error, not an auth rejection — leave the refresh token alone so the
-      // next request can simply try again rather than forcing a real re-login.
+    } catch (err) {
+      // Network error / timeout, not an auth rejection — leave the refresh token alone so
+      // the next request can simply try again rather than forcing a real re-login.
+      reportCaught(err, { where: "useApi.refreshAccessToken", level: "warn" });
       return false;
     }
   })();
@@ -175,53 +179,29 @@ async function fetchWithAuth(
   }
 }
 
-export async function sendDiagnostic(
-  message: string,
-  stack: string,
-  meta: Record<string, unknown> = {},
-) {
-  try {
-    await fetch(`${getApiUrl()}/api/v1/diagnostics`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        level: "error",
-        message: message.slice(0, 500),
-        stack: stack.slice(0, 2000),
-        source: "frontend",
-        metadata: meta,
-      }),
-    });
-  } catch { /* ignore */ }
-}
-
-async function sendErrorLog(path: string, status: number, message: string) {
-  try {
-    await fetch(`${getApiUrl()}/api/v1/diagnostics`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        level: "error",
-        message: `API ${status} ${path}: ${message.slice(0, 500)}`,
-        source: "frontend",
-        metadata: { path, status },
-      }),
-    });
-  } catch { /* ignore */ }
-}
-
 export const apiFetch = createApiFetch({
   getApiBase: getApiUrl,
   fetchFn: fetchWithAuth,
-  onError: (path, status, message, errorMessageKey) => {
+  onError: (path, status, message, errorMessageKey, info) => {
     // errorMessageKey (when the caller provides one) wins — AppNotifications.vue
     // translates it. `message` (the server's own error text, or a generic
     // "HTTP <code>" fallback — see extractErrorMessage) is always passed too,
     // as what shows if the key is absent or fails to resolve.
     const toShow = message || `Request failed: ${status} ${path}`;
     useNotifications().show(toShow, "error", errorMessageKey, { icon: "sad-cloud" });
-    void sendErrorLog(path, status, message);
+    // Every non-2xx apiFetch response is reported here, exactly once (NEO-81) —
+    // callers' own `!res.ok` branches don't need to report the same failure again.
+    reportCaught(
+      new ApiError({
+        kind: classifyStatus(status),
+        message,
+        status,
+        code: info?.code ?? null,
+        requestId: info?.requestId ?? null,
+        path,
+        method: info?.method ?? null,
+      }),
+      { where: "apiFetch" },
+    );
   },
 });

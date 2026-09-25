@@ -72,6 +72,7 @@
 </template>
 
 <script setup lang="ts">
+import { reportCaught } from "@api";
 import { ref, computed, watch, defineAsyncComponent } from "vue";
 import { useI18n } from "vue-i18n";
 import { apiFetch } from "../composables/useApi";
@@ -346,7 +347,8 @@ async function onEventFormSubmit(payload: EventSubmitPayload, done: (ok: boolean
         done(false);
       }
     }
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "PlannerView.onEventFormSubmit" });
     notifications.show(t("user.planner.form.errorSave"), "error", undefined, { icon: "nav-planner" });
     done(false);
   }

@@ -129,6 +129,7 @@ export function browserChunkRecoveryDeps(
   try {
     storage = window.sessionStorage;
   } catch {
+    // benign: sessionStorage blocked (privacy mode) — recovery works without the reload-loop guard.
     storage = null;
   }
   return {
@@ -145,6 +146,7 @@ function safeGet(storage: ChunkRecoveryDeps["storage"], key: string): string | n
   try {
     return storage?.getItem(key) ?? null;
   } catch {
+    // benign: storage blocked — treat as "never recorded".
     return null;
   }
 }
@@ -155,6 +157,7 @@ function safeSet(storage: ChunkRecoveryDeps["storage"], key: string, value: stri
     storage.setItem(key, value);
     return true;
   } catch {
+    // benign: storage blocked/full — caller treats "not saved" explicitly.
     return false;
   }
 }
@@ -163,6 +166,6 @@ function safeRemove(storage: ChunkRecoveryDeps["storage"], key: string): void {
   try {
     storage?.removeItem(key);
   } catch {
-    // Storage blocked — nothing to clear.
+    // benign: storage blocked — nothing to clear.
   }
 }

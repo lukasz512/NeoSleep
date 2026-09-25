@@ -3,6 +3,7 @@ import eslintConfigPrettier from "eslint-config-prettier";
 import tsParser from "@typescript-eslint/parser";
 import tsPlugin from "@typescript-eslint/eslint-plugin";
 import vueParser from "vue-eslint-parser";
+import neoRules from "./infrastructure/eslint/no-silent-catch.mjs";
 
 export default [
   // Ambient declaration files legitimately use `any` for third-party type
@@ -60,6 +61,22 @@ export default [
       // "Flag" (apps/web) is a small country-flag-icon component, not a native
       // element name — allowed as the one intentional single-word exception.
       "vue/multi-word-component-names": ["error", { ignores: ["Flag"] }],
+    },
+  },
+  {
+    // NEO-81: no silent errors in frontend code — an empty catch needs a
+    // `// benign: <reason>` comment, everything else calls reportCaught().
+    // Specs are exempt (they swallow rejections on purpose to assert later).
+    files: [
+      "apps/pwa/src/**/*.{ts,vue}",
+      "apps/web/src/**/*.{ts,vue}",
+      "apps/api/client/src/**/*.ts",
+      "packages/*/src/**/*.{ts,vue}",
+    ],
+    ignores: ["**/*.spec.ts", "**/*.d.ts"],
+    plugins: { neo: neoRules },
+    rules: {
+      "neo/no-silent-catch": "error",
     },
   },
   eslintConfigPrettier,

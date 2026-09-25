@@ -165,6 +165,7 @@
 </template>
 
 <script setup lang="ts">
+import { apiErrorFromResponse, errorBodyKeyOr, readJson, reportCaught } from "@api";
 import { ref, computed, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { OriginDialogTransition } from "@ui";
@@ -269,11 +270,11 @@ async function loadSlots() {
   slotsError.value = false;
   try {
     const res = await apiFetch("/api/v1/booking/slots");
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = (await res.json()) as { slots: Slot[] };
+    const data = await readJson<{ slots: Slot[] }>(res, { path: "/api/v1/booking/slots" });
     slots.value = data.slots;
     selectFirstAvailableDay();
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "web.BookingModal.loadSlots" });
     slotsError.value = true;
   } finally {
     slotsLoading.value = false;
@@ -393,10 +394,14 @@ async function onSubmit() {
       await loadSlots();
       return;
     }
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) throw await apiErrorFromResponse(res, { path: "/api/v1/booking/book", method: "POST" });
     step.value = "done";
-  } catch {
-    submitError.value = t("website.professionalsPage.booking.submitError");
+  } catch (err) {
+    // A specialist's booking request failing must leave a trace — status/code only, never the form.
+    reportCaught(err, { where: "web.BookingModal.submit" });
+    // Say "check your connection" / "wait a moment" / "our side" when that's what happened;
+    // otherwise keep the booking-specific message.
+    submitError.value = t(errorBodyKeyOr(err, "website.professionalsPage.booking.submitError"));
   } finally {
     submitting.value = false;
   }

@@ -38,9 +38,10 @@
       <div class="fs-map-wrap" :class="{ 'fs-map-wrap--loading': isPending }">
         <span v-if="isPending" class="fs-sr-only" role="status">{{ t("website.findSpecialist.loading") }}</span>
         <div ref="mapContainer" class="fs-map" :title="t('website.findSpecialist.mapTitle')" />
-        <div v-if="hasError" class="fs-map__overlay">
-          <p class="fs-map__error-text">{{ t("website.findSpecialist.loadError") }}</p>
-          <button type="button" class="fs-map__retry" @click="retry">{{ t("website.findSpecialist.retry") }}</button>
+        <!-- Only the map's own failure (bad key, blocked script) — the list below keeps working (NEO-81). -->
+        <div v-if="mapError && !mapLoading" class="fs-map__overlay">
+          <p class="fs-map__error-text">{{ t("website.findSpecialist.mapUnavailable") }}</p>
+          <button type="button" class="fs-map__retry" @click="retryMap">{{ t("website.findSpecialist.retry") }}</button>
         </div>
       </div>
     </div>
@@ -49,7 +50,17 @@
       <h2 class="home-heading">{{ t("website.findSpecialist.nearbyTitle") }}</h2>
       <p class="fs-results__note">{{ t("website.findSpecialist.networkNote") }}</p>
 
-      <div v-if="!isPending && !hasError" class="fs-network-grid">
+      <div v-if="dataFailureText && !dataLoading" class="fs-network-grid">
+        <div class="fs-network-empty" role="alert">
+          <p class="fs-network-empty__title">{{ dataFailureText.title }}</p>
+          <p class="fs-network-empty__desc">
+            {{ t("website.findSpecialist.loadError") }} {{ dataFailureText.body }} {{ dataFailureText.reference }}
+          </p>
+          <button type="button" class="fs-map__retry" @click="retry">{{ t("website.findSpecialist.retry") }}</button>
+        </div>
+      </div>
+
+      <div v-else-if="!dataLoading" class="fs-network-grid">
 
         <!-- Results -->
         <article
@@ -129,6 +140,8 @@ import { useI18n } from "vue-i18n";
 import { useReveal } from "../composables/useReveal";
 import { useSeoMeta } from "../composables/useSeoMeta";
 import { loadGoogleMaps, CLEAN_MAP_STYLES } from "../composables/useGoogleMaps";
+import { isApiError, readJson, reportCaught } from "@api";
+import { useErrorTextFor } from "@ui";
 import { apiFetch } from "../utils/api";
 
 const { t, locale } = useI18n();
@@ -166,14 +179,15 @@ interface Specialist {
 const searchQuery = ref("");
 const specialists = ref<Specialist[]>([]);
 const dataLoading = ref(true);
-const dataError = ref(false);
+/** Why the specialists request failed (NEO-81) — null while it hasn't. */
+const dataFailure = ref<unknown>(null);
+const dataFailureText = useErrorTextFor(dataFailure);
 const selectedId = ref<string | null>(null);
 
-// Single pending/error surface driving the map-area overlay — either the
-// specialists fetch or the Maps SDK itself can fail independently, but the
-// user just needs one clear "still loading" / "something's wrong" state.
+// The specialists fetch and the Maps SDK fail independently and are shown
+// independently: a broken Maps key leaves the list working, and a failed
+// request says what went wrong where the list would be.
 const isPending = computed(() => dataLoading.value || mapLoading.value);
-const hasError = computed(() => !isPending.value && (dataError.value || mapError.value));
 
 function mapLinkFor(specialist: Specialist): string {
   if (specialist.google_link) return specialist.google_link;
@@ -208,7 +222,9 @@ async function ensureMap(): Promise<google.maps.Map | null> {
     });
     infoWindow = new g.maps.InfoWindow();
     return map;
-  } catch {
+  } catch (err) {
+    // Degraded, not broken: the list still works without the map.
+    reportCaught(err, { where: "web.FindSpecialistView.loadMap", level: "warn" });
     mapError.value = true;
     return null;
   } finally {
@@ -254,7 +270,7 @@ function focusSpecialist(id: string) {
 // The specialists fetch and the Maps SDK load are independent failure modes
 // (a slow/broken API vs. a bad Maps key) — run them concurrently so one
 // failing doesn't block the other from ever being attempted, and each
-// updates its own loading/error state (surfaced together via isPending/hasError).
+// updates its own loading/error state (mapError / dataFailure, shown separately).
 
 // A couple of silent retries before surfacing an error — the API can
 // genuinely still be waking up on the very first request (Render's free
@@ -262,24 +278,31 @@ function focusSpecialist(id: string) {
 // dev API is still finishing its DB connection when the page loads).
 const FETCH_RETRY_DELAYS_MS = [1500, 3000];
 
+/** Retrying only helps when the server may answer differently in a moment. */
+function isRetryable(err: unknown): boolean {
+  return isApiError(err) && err.kind !== "client" && err.kind !== "rate_limited";
+}
+
 async function fetchSpecialists() {
   dataLoading.value = true;
-  dataError.value = false;
+  dataFailure.value = null;
   const query = searchQuery.value.trim();
   const url = `/api/v1/public/specialists${query ? `?search=${encodeURIComponent(query)}` : ""}`;
 
   for (let attempt = 0; ; attempt++) {
     try {
       const res = await apiFetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = (await res.json()) as { specialists: Specialist[] };
+      // readJson throws a typed ApiError for a non-2xx *and* for a 200 that isn't JSON
+      // (e.g. index.html when VITE_API_URL is missing) — the silent case behind NEO-81.
+      const data = await readJson<{ specialists: Specialist[] }>(res, { path: "/api/v1/public/specialists" });
       specialists.value = data.specialists;
       dataLoading.value = false;
       return;
-    } catch {
+    } catch (err) {
       const delay = FETCH_RETRY_DELAYS_MS[attempt];
-      if (delay === undefined) {
-        dataError.value = true;
+      if (delay === undefined || !isRetryable(err)) {
+        reportCaught(err, { where: "web.FindSpecialistView.fetchSpecialists", extra: { attempts: attempt + 1 } });
+        dataFailure.value = err;
         dataLoading.value = false;
         return;
       }
@@ -298,6 +321,11 @@ async function runSearch() {
 function clearSearch() {
   searchQuery.value = "";
   void runSearch();
+}
+
+async function retryMap() {
+  const m = await ensureMap();
+  if (m) renderMarkers(specialists.value);
 }
 
 async function retry() {
@@ -471,6 +499,8 @@ const ctaVisible = useReveal(ctaRef, 0.10);
     align-items: center;
     justify-content: center;
     gap: 0.75rem;
+    padding: 1rem;
+    text-align: center;
   }
 
   .fs-map__error-text {

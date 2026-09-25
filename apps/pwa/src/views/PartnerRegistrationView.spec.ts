@@ -1,3 +1,4 @@
+import { ApiError } from "@api";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
@@ -19,7 +20,7 @@ import PartnerRegistrationView from "./PartnerRegistrationView.vue";
 import PartnerDocumentDialog from "../components/partner/PartnerDocumentDialog.vue";
 
 function jsonResponse(ok: boolean, body: unknown, status = ok ? 200 : 400) {
-  return { ok, status, json: async () => body } as Response;
+  return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
 const VALID_PREVIEW = {
@@ -83,6 +84,26 @@ describe("PartnerRegistrationView — invite validation", () => {
     apiFetch.mockResolvedValueOnce(jsonResponse(false, {}));
     const { wrapper } = await mountPartnerRegistrationView();
     expect(wrapper.text()).toContain(en["user.partnerRegistration.invalidTitle"]);
+  });
+
+  // NEO-81: our own failure must never tell a doctor their invitation is invalid.
+  it("a server error while validating says 'problem on our side' with a retry, not 'invalid link'", async () => {
+    apiFetch.mockResolvedValueOnce(jsonResponse(false, { error: "Internal server error" }, 500));
+    const { wrapper } = await mountPartnerRegistrationView();
+    expect(wrapper.text()).toContain(en["common.error.server.title"]);
+    expect(wrapper.text()).not.toContain(en["user.partnerRegistration.invalidTitle"]);
+
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, VALID_PREVIEW));
+    await wrapper.findAll("button").find((b) => b.text() === en["app.errorState.refresh"])!.trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).not.toContain(en["common.error.server.title"]);
+  });
+
+  it("a dropped connection while validating says so, not 'invalid link'", async () => {
+    apiFetch.mockRejectedValueOnce(new ApiError({ kind: "network", message: "Failed to fetch" }));
+    const { wrapper } = await mountPartnerRegistrationView();
+    expect(wrapper.text()).toContain(en["common.error.network.title"]);
+    expect(wrapper.text()).not.toContain(en["user.partnerRegistration.invalidTitle"]);
   });
 
   it("shows the registration form pre-filled from the invite, including the licence number", async () => {

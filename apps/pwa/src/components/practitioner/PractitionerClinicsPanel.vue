@@ -109,6 +109,7 @@
 </template>
 
 <script setup lang="ts">
+import { reportCaught } from "@api";
 /**
  * Practitioner clinic affiliations — the col6x2 "clinic" side of
  * HCPDetailView's Details tab (NEO-17). "Primary" is dual-scoped, not one
@@ -203,7 +204,8 @@ const { loading: addLoading, run: onAdd } = useAsyncAction(async () => {
       emit("changed");
       return;
     }
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "PractitionerClinicsPanel.onAdd" });
     // fall through to the error toast below
   }
   // The picker keeps the clinic selected — its Add button is the retry.
@@ -237,7 +239,8 @@ const { loading: removeLoading, run: onConfirmRemove } = useAsyncAction(async ()
       emit("changed");
       return;
     }
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "PractitionerClinicsPanel.onConfirmRemove" });
     // fall through to the error toast below
   }
   // The confirm dialog stays open on failure — its button is the retry.
@@ -274,7 +277,8 @@ async function onSetPrimary(organizationId: string, scope: "default" | "mine"): 
     } else {
       failSetPrimary();
     }
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "PractitionerClinicsPanel.onSetPrimary" });
     failSetPrimary();
   } finally {
     busyOrgId.value = null;

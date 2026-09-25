@@ -55,6 +55,8 @@ afterEach(() => {
 async function mountEntityList(opts: {
   items?: Record<string, unknown>[];
   showAddButton?: boolean;
+  /** Replace the default successful list response (NEO-81 error-state tests). */
+  fetchImpl?: () => Promise<Response>;
 } = {}) {
   setActivePinia(createPinia());
   const router = createTestRouter();
@@ -64,7 +66,7 @@ async function mountEntityList(opts: {
   const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
   const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
 
-  vi_stubFetch(() => Promise.resolve(fakeListResponse(opts.items)));
+  vi_stubFetch(opts.fetchImpl ?? (() => Promise.resolve(fakeListResponse(opts.items))));
 
   const el = document.createElement("div");
   document.body.appendChild(el);
@@ -101,6 +103,44 @@ function vi_stubFetch(impl: () => Promise<Response>) {
 }
 
 describe("AppEntityList", () => {
+  // NEO-81: the list's error state says what actually went wrong — a server
+  // failure is not a "network problem", and gets a support reference.
+  describe("error state by error class", () => {
+    it("a 500 says 'problem on our side' with the request reference, not 'Network problem'", async () => {
+      const wrapper = await mountEntityList({
+        fetchImpl: () =>
+          Promise.resolve(
+            new Response(JSON.stringify({ error: "Internal server error" }), {
+              status: 500,
+              headers: { "Content-Type": "application/json", "X-Request-ID": "3f2a9c1e-7b4d-4e21-9a0f-5c8d2e6b1a47" },
+            }),
+          ),
+      });
+      const text = wrapper.find(".app-entity-list__error-wrap").text();
+      expect(text).toContain(en["common.error.server.title"]);
+      expect(text).toContain(en["user.leads.errorLoad"]);
+      expect(text).toContain("3f2a9c1e");
+      expect(text).not.toContain(en["app.errorState.title"]);
+    });
+
+    it("a request that never reached the server says to check the connection", async () => {
+      const wrapper = await mountEntityList({ fetchImpl: () => Promise.reject(new TypeError("Failed to fetch")) });
+      const text = wrapper.find(".app-entity-list__error-wrap").text();
+      expect(text).toContain(en["common.error.network.title"]);
+      expect(text).toContain(en["common.error.network.body"]);
+    });
+
+    it("a 200 that isn't JSON (e.g. index.html) is a server-side problem, not 'offline'", async () => {
+      const wrapper = await mountEntityList({
+        fetchImpl: () =>
+          Promise.resolve(new Response("<!doctype html><div id=app></div>", { status: 200, headers: { "Content-Type": "text/html" } })),
+      });
+      const text = wrapper.find(".app-entity-list__error-wrap").text();
+      expect(text).toContain(en["common.error.server.title"]);
+      expect(text).not.toContain(en["common.error.network.title"]);
+    });
+  });
+
   describe("toolbar icons (filter and add)", () => {
     it("shows the add button with a visible plus icon (no VIcon), no border, min touch target", async () => {
       const wrapper = await mountEntityList();

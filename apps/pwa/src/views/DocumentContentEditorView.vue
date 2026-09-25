@@ -3,6 +3,7 @@
     :has-content="hasContent"
     :loading="loading"
     :load-error="loadError"
+    :load-error-cause="loadFailure"
     :back-route="{ name: 'document-content' }"
     :back-label="t('user.document-content.editor.back')"
     :record-title="documentLabel"
@@ -184,6 +185,7 @@
 </template>
 
 <script setup lang="ts">
+import { reportCaught, reportFailedResponse } from "@api";
 import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
@@ -221,6 +223,8 @@ const documentLocale = computed(() => route.params.locale as string);
 
 const loading = ref(true);
 const loadError = ref(false);
+/** The error behind loadError (NEO-81) — lets the error state say offline vs. server problem. */
+const loadFailure = ref<unknown>(null);
 const hasContent = ref(false);
 const currentVersionNumber = ref<number | null>(null);
 const currentVersionId = ref<string | null>(null);
@@ -306,7 +310,8 @@ async function onApprove(): Promise<void> {
     } else {
       notifications.show(t("user.document-content.approval.approveError"), "error", undefined, { icon: "nav-document-content" });
     }
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "DocumentContentEditorView.onApprove" });
     notifications.show(t("user.document-content.approval.approveError"), "error", undefined, { icon: "nav-document-content" });
   } finally {
     approving.value = false;
@@ -352,6 +357,7 @@ async function saveChecklistConfig(): Promise<boolean> {
 async function load(): Promise<void> {
   loading.value = true;
   loadError.value = false;
+  loadFailure.value = null;
   hasContent.value = false;
   try {
     const res = await apiFetch(`/api/v1/document-content/${templateKey.value}/${documentLocale.value}`, {
@@ -373,12 +379,15 @@ async function load(): Promise<void> {
       editor.value?.commands.setContent("");
       hasContent.value = true;
     } else {
+      loadFailure.value = await reportFailedResponse(res, { where: "DocumentContentEditorView.load" });
       loadError.value = true;
     }
     await loadHistory();
     await loadEntityTypes();
     await loadApproval();
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "DocumentContentEditorView.load" });
+    loadFailure.value = err;
     loadError.value = true;
   } finally {
     loading.value = false;
@@ -411,7 +420,8 @@ async function onSave(): Promise<void> {
     } else {
       notifications.show(t("user.document-content.editor.saveError"), "error", undefined, { icon: "nav-document-content" });
     }
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "DocumentContentEditorView.onSave" });
     notifications.show(t("user.document-content.editor.saveError"), "error", undefined, { icon: "nav-document-content" });
   } finally {
     saving.value = false;
@@ -434,7 +444,8 @@ async function onSavePermissions(): Promise<void> {
     } else {
       notifications.show(t("user.document-content.permissions.saveError"), "error", undefined, { icon: "nav-document-content" });
     }
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "DocumentContentEditorView.onSavePermissions" });
     notifications.show(t("user.document-content.permissions.saveError"), "error", undefined, { icon: "nav-document-content" });
   } finally {
     savingPermissions.value = false;

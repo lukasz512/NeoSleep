@@ -59,7 +59,7 @@
     <AppLoadingState v-if="checklistApi.loading.value && !checklist" />
     <AppErrorState
       v-else-if="checklistApi.loadError.value"
-      :title="t('app.errorState.title')"
+      :error="checklistApi.loadFailure.value"
       :subtitle="t('app.clinical.errorLoad')"
       :refresh-label="t('app.errorState.refresh')"
       :loading="checklistApi.loading.value"

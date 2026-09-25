@@ -1,6 +1,6 @@
 import { ref } from "vue";
 import { useRouter } from "vue-router";
-import type { ApiFetchOptions } from "@api";
+import { errorBodyKeyOr, reportCaught, reportFailedResponse, type ApiFetchOptions } from "@api";
 
 type ApiFetchFn = (path: string, options?: ApiFetchOptions) => Promise<Response>;
 
@@ -32,13 +32,15 @@ export function createUseChangePasswordFlow(apiFetch: ApiFetchFn) {
           return;
         }
         if (!res.ok) {
-          errorKey.value = "user.changePassword.error.network";
+          const failure = await reportFailedResponse(res, { where: "useChangePasswordFlow.submit" });
+          errorKey.value = errorBodyKeyOr(failure, "user.changePassword.error.network");
           return;
         }
 
         await router.push("/dashboard");
-      } catch {
-        errorKey.value = "user.changePassword.error.network";
+      } catch (err) {
+        reportCaught(err, { where: "useChangePasswordFlow.submit" });
+        errorKey.value = errorBodyKeyOr(err, "user.changePassword.error.network");
       } finally {
         loading.value = false;
       }

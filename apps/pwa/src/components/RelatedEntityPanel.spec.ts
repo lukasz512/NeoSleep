@@ -49,7 +49,7 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-async function mountPanel(opts: { items?: Record<string, unknown>[]; ok?: boolean } = {}) {
+async function mountPanel(opts: { items?: Record<string, unknown>[]; ok?: boolean; offline?: boolean } = {}) {
   setActivePinia(createPinia());
   const router = createTestRouter();
   await router.push("/");
@@ -58,7 +58,11 @@ async function mountPanel(opts: { items?: Record<string, unknown>[]; ok?: boolea
   const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
   const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
 
-  stubFetch(() => Promise.resolve(fakeResponse(opts.items ?? [], opts.ok ?? true)));
+  stubFetch(() =>
+    opts.offline
+      ? Promise.reject(new TypeError("Failed to fetch"))
+      : Promise.resolve(fakeResponse(opts.items ?? [], opts.ok ?? true)),
+  );
 
   const el = document.createElement("div");
   document.body.appendChild(el);
@@ -104,9 +108,18 @@ describe("RelatedEntityPanel", () => {
     expect(wrapper.text()).toContain("No related patients");
   });
 
-  it("shows an error state when the request fails", async () => {
+  // NEO-81: a server failure is no longer described as a connection problem.
+  it("a 500 says the problem is on our side, not the user's connection", async () => {
     const wrapper = await mountPanel({ ok: false });
-    expect(wrapper.text()).toContain(en["app.errorState.title"]);
+    expect(wrapper.text()).toContain(en["common.error.server.title"]);
+    expect(wrapper.text()).not.toContain(en["common.error.network.title"]);
+    expect(wrapper.text()).not.toContain(en["app.errorState.title"]);
+  });
+
+  it("a request that never reached the server says to check the connection", async () => {
+    const wrapper = await mountPanel({ offline: true });
+    expect(wrapper.text()).toContain(en["common.error.network.title"]);
+    expect(wrapper.text()).toContain(en["common.error.network.body"]);
   });
 
   // CSS values aren't observable through a jsdom mount — read the scoped

@@ -22,7 +22,7 @@
     <AppLoadingState v-if="loading && !loaded" />
     <AppErrorState
       v-else-if="loadError"
-      :title="t('app.errorState.title')"
+      :error="loadFailure"
       :subtitle="t('app.notes.errorLoad')"
       :refresh-label="t('app.errorState.refresh')"
       :loading="loading"
@@ -42,6 +42,7 @@
 </template>
 
 <script setup lang="ts">
+import { reportCaught } from "@api";
 import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import AppButton from "../AppButton.vue";
@@ -73,7 +74,7 @@ const props = defineProps<{ treatmentPlanId: string }>();
 const { t } = useI18n();
 const notifications = useNotifications();
 const authStore = useAuthStore();
-const { notes, loading, loaded, loadError, loadNotes } = useNotes("treatment_plan", () => props.treatmentPlanId);
+const { notes, loading, loaded, loadError, loadFailure, loadNotes } = useNotes("treatment_plan", () => props.treatmentPlanId);
 
 const draft = ref("");
 const notifyOrthoApnea = ref(false);
@@ -95,7 +96,8 @@ const { loading: addLoading, run: onAdd } = useAsyncAction(async () => {
       await loadNotes();
       return;
     }
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "OrthoApneaOrderComments.onAdd" });
     // fall through to the error toast below
   }
   notifications.show(t("app.notes.errorSave"), "error", undefined, { icon: "pencil" });

@@ -415,6 +415,8 @@
 </template>
 
 <script setup lang="ts">
+import { reportCaught } from "@api";
+import { submitWeb3Form } from "../utils/web3forms";
 import { ref, reactive, onMounted, onUnmounted } from "vue";
 import Flag from "../components/Flag.vue";
 import { LazyImg } from "@ui";
@@ -499,25 +501,19 @@ async function onSubmitEvento() {
   }
   evStatus.value = "loading";
   try {
-    const res = await fetch("https://api.web3forms.com/submit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        access_key: "669fb922-3b25-4b2c-8d6d-a6bd86b9d5a4",
-        subject: `🎤 Evento CDMX 17.06.26 — ${evForm.firstName} ${evForm.lastName} (${evForm.especialidad})`,
-        from_name: "NeoSleep Evento CDMX",
-        type: "evento-cdmx-17-06-26",
-        nombre: evForm.firstName,
-        apellido: evForm.lastName,
-        especialidad: evForm.especialidad,
-        clinica: evForm.clinica,
-        telefono: evForm.phone,
-        email: evForm.email,
-        instagram: evForm.instagram ? `@${evForm.instagram.replace(/^@/, "")}` : "",
-      }),
+    await submitWeb3Form({
+      access_key: "669fb922-3b25-4b2c-8d6d-a6bd86b9d5a4",
+      subject: `🎤 Evento CDMX 17.06.26 — ${evForm.firstName} ${evForm.lastName} (${evForm.especialidad})`,
+      from_name: "NeoSleep Evento CDMX",
+      type: "evento-cdmx-17-06-26",
+      nombre: evForm.firstName,
+      apellido: evForm.lastName,
+      especialidad: evForm.especialidad,
+      clinica: evForm.clinica,
+      telefono: evForm.phone,
+      email: evForm.email,
+      instagram: evForm.instagram ? `@${evForm.instagram.replace(/^@/, "")}` : "",
     });
-    const data = (await res.json()) as { success: boolean; message?: string };
-    if (!data.success) throw new Error(data.message);
     evStatus.value = "success";
     evForm.firstName = "";
     evForm.lastName = "";
@@ -526,7 +522,9 @@ async function onSubmitEvento() {
     evForm.phone = "";
     evForm.email = "";
     evForm.instagram = "";
-  } catch {
+  } catch (err) {
+    // A lost event registration must never be silent (NEO-81) — status only, never the fields.
+    reportCaught(err, { where: "web.EventoView.submit" });
     evStatus.value = "error";
   }
 }

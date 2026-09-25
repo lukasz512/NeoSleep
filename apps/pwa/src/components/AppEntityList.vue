@@ -119,7 +119,7 @@
     <Transition name="app-entity-list-swap" mode="out-in">
     <div v-if="loadError" key="error" class="app-entity-list__error-wrap">
       <AppErrorState
-        :title="t('app.errorState.title')"
+        :error="loadFailure"
         :subtitle="loadError"
         :refresh-label="t('app.errorState.refresh')"
         :loading="loading"
@@ -361,7 +361,7 @@ const tableHeaders = computed<AppEntityListHeader[]>(() =>
 
 const {
   searchQuery, filterState, activeFilterCount, tableOptions,
-  loading, clearingSearch, clearingFilters, loadError, isOffline, items, total,
+  loading, clearingSearch, clearingFilters, loadError, loadFailure, isOffline, items, total,
   mobileItems, mobileHasMore, loadingMore,
   hasActiveFiltersOrSearch, isTrulyEmpty, hasCompletedInitialLoad,
   onFilterStateUpdate, onFiltersClear, onSearchClear,

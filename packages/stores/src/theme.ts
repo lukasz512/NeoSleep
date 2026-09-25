@@ -11,7 +11,7 @@ function readStoredPreference(): ThemePreference | null {
     const v = localStorage.getItem(STORAGE_KEY);
     if (v === "light" || v === "dark" || v === "system") return v;
   } catch {
-    // localStorage unavailable (SSR, privacy mode) — fall through
+    // benign: localStorage unavailable (SSR, privacy mode) — fall through to the default.
   }
   return null;
 }
@@ -20,7 +20,7 @@ function writeStoredPreference(pref: ThemePreference): void {
   try {
     localStorage.setItem(STORAGE_KEY, pref);
   } catch {
-    // non-fatal — preference just won't persist across reloads
+    // benign: storage unavailable — the preference just won't persist across reloads.
   }
 }
 

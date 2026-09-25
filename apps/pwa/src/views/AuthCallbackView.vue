@@ -2,6 +2,9 @@
   <div class="auth-callback">
     <VProgressCircular v-if="!errored" indeterminate color="primary" size="32" />
     <p>{{ t(errored ? "user.login.callback.error" : "user.login.callback.loading") }}</p>
+    <!-- NEO-81: only when it wasn't the code itself (connection / our side) — an
+         expired code is already covered by the message above. -->
+    <p v-if="failureDetail" class="auth-callback__detail">{{ failureDetail }}</p>
     <!-- Never a dead end: a failed exchange (expired code, account deactivated
          meanwhile) gets a way back to the login screen. -->
     <VBtn v-if="errored" to="/login" color="primary" variant="outlined">
@@ -11,7 +14,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { reportCaught, reportFailedResponse } from "@api";
+import { useErrorTextFor } from "@ui";
+import { computed, ref, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { apiFetch } from "../composables/useApi";
@@ -26,6 +31,15 @@ const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 const errored = ref(false);
+/** Why the exchange failed (NEO-81) — an expired code (4xx) reads differently from a server/network problem. */
+const failure = ref<unknown>(null);
+const failureText = useErrorTextFor(failure);
+const NOT_THE_USERS_FAULT = new Set(["network", "timeout", "server", "rateLimited", "unexpected"]);
+const failureDetail = computed(() =>
+  failureText.value && NOT_THE_USERS_FAULT.has(failureText.value.cls)
+    ? [failureText.value.body, failureText.value.reference].filter(Boolean).join(" ")
+    : "",
+);
 
 onMounted(async () => {
   const code = typeof route.query.code === "string" ? route.query.code : "";
@@ -41,6 +55,7 @@ onMounted(async () => {
       handleErrors: false,
     });
     if (!res.ok) {
+      failure.value = await reportFailedResponse(res, { where: "AuthCallbackView.exchangeCode" });
       errored.value = true;
       return;
     }
@@ -52,7 +67,9 @@ onMounted(async () => {
     };
     authStore.setAuthenticated(true, data.user, data.token, data.refresh_token);
     await router.push(data.forcePasswordChange ? "/change-password" : "/dashboard");
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "AuthCallbackView.exchangeCode" });
+    failure.value = err;
     errored.value = true;
   }
 });
@@ -67,5 +84,11 @@ onMounted(async () => {
   gap: 1rem;
   min-height: 60vh;
   text-align: center;
+}
+
+.auth-callback__detail {
+  max-width: 32rem;
+  font-size: 0.875rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 </style>

@@ -2,7 +2,7 @@
   <div class="view-resources d-flex flex-column">
     <div v-if="loadError" class="view-resources__state">
       <AppErrorState
-        :title="t('app.errorState.title')"
+        :error="loadFailure"
         :refresh-label="t('app.errorState.refresh')"
         :loading="loading"
         :secondary-label="t('user.resources.reportIncident')"
@@ -149,7 +149,7 @@ import { useAuthStore } from "../stores/auth";
 import { SUPPORT_EMAIL } from "../constants";
 
 const { t, locale } = useI18n();
-const { items, documents, videos, documentGroups, videoGroups, loading, loadError, load } = usePartnerResources();
+const { items, documents, videos, documentGroups, videoGroups, loading, loadError, loadFailure, load } = usePartnerResources();
 const authStore = useAuthStore();
 
 // Documents tab hidden per product decision — only Webinars (the renamed

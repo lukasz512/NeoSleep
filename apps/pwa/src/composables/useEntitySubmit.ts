@@ -1,3 +1,4 @@
+import { reportCaught } from "@api";
 import { useNotifications, type NotificationIcon, type ShowOptions } from "./useNotifications";
 
 export interface EntitySubmitResult {
@@ -44,7 +45,8 @@ export function useEntitySubmit() {
     let result: EntitySubmitResult;
     try {
       result = await opts.request();
-    } catch {
+    } catch (err) {
+      reportCaught(err, { where: "useEntitySubmit.submit" });
       notifications.show(opts.errorMessage, "error", undefined, toast);
       done(false);
       return;

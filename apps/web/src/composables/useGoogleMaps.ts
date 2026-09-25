@@ -51,6 +51,7 @@ export function loadGoogleMaps(): Promise<typeof google> {
   // A failed load must not stay cached forever — the next call (e.g. a user
   // clicking "Try again") should get a fresh attempt, not the same rejection.
   loadPromise.catch(() => {
+    // benign: only resets the cache; the caller awaiting loadPromise reports the rejection.
     loadPromise = null;
   });
 

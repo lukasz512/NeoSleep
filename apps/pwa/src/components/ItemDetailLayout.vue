@@ -61,7 +61,7 @@
       </div>
     </div>
     <div v-else-if="!loading && loadError" class="view-item__state-wrap">
-      <AppStateView :title="t('app.errorState.title')" :subtitle="t('app.errorState.subtitle')">
+      <AppStateView :title="loadErrorTitle" :subtitle="loadErrorSubtitle">
         <template #icon>
           <AppIcon name="sad-cloud" />
         </template>
@@ -100,7 +100,7 @@
 import { computed, onBeforeUnmount, watchEffect } from "vue";
 import { useI18n } from "vue-i18n";
 import type { RouteLocationRaw } from "vue-router";
-import { AppStateView } from "@ui";
+import { AppStateView, useErrorText } from "@ui";
 import AppButton from "./AppButton.vue";
 import AppIcon from "./AppIcon.vue";
 import AppLoadingState from "./AppLoadingState.vue";
@@ -139,6 +139,12 @@ const props = withDefaults(defineProps<{
    */
   loadError?: boolean;
   /**
+   * The error behind `loadError` (NEO-81). When given, the error state says
+   * what actually happened — offline vs. a problem on our side (with a short
+   * support reference) vs. no access — instead of always "Network problem".
+   */
+  loadErrorCause?: unknown;
+  /**
    * The record's display name (NEO-56). When set, the header becomes the
    * record header — module tile, parent eyebrow link, this name as the h1 —
    * instead of the back-arrow row. Pass it even while loading (empty is
@@ -147,7 +153,16 @@ const props = withDefaults(defineProps<{
   recordTitle?: string;
   /** Tile icon override — e.g. the org-type icon for an HCO (NEO-18). Defaults to the module icon. */
   recordIcon?: AppIconName;
-}>(), { title: "", loadError: false, recordTitle: undefined, recordIcon: undefined });
+}>(), { title: "", loadError: false, loadErrorCause: undefined, recordTitle: undefined, recordIcon: undefined });
+
+const describeError = useErrorText();
+const loadErrorText = computed(() => (props.loadErrorCause == null ? null : describeError(props.loadErrorCause)));
+const loadErrorTitle = computed(() => loadErrorText.value?.title ?? t("app.errorState.title"));
+const loadErrorSubtitle = computed(() =>
+  loadErrorText.value
+    ? [loadErrorText.value.body, loadErrorText.value.reference].filter(Boolean).join(" ")
+    : t("app.errorState.subtitle"),
+);
 
 /** Parent crumb: the nav title + icon of the named back route (same as the sidebar item). */
 const parentCrumb = computed<BreadcrumbItem | null>(() => {

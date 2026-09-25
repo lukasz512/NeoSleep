@@ -96,6 +96,21 @@ export const smokePdfLimiter = rateLimit({
 });
 
 /**
+ * Applied to POST /diagnostics — public and unauthenticated (the website and the
+ * PWA's login screen report errors before anyone is signed in), so it gets its
+ * own per-IP ceiling on top of the global apiLimiter (NEO-81). 60 per 15 minutes
+ * is far above what a real browser sends — reportCaught dedupes identical errors
+ * for 5 s — and low enough that nobody can flood platform.diagnostics.
+ */
+export const diagnosticsLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later" },
+});
+
+/**
  * Applied globally — 1000 requests per 15 minutes per IP (~1/s sustained).
  *
  * Was 200, which one active PWA user exceeds within minutes (every list view fans out into

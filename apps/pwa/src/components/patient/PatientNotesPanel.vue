@@ -18,7 +18,7 @@
     <AppLoadingState v-if="loading && !loaded" />
     <AppErrorState
       v-else-if="loadError"
-      :title="t('app.errorState.title')"
+      :error="loadFailure"
       :subtitle="t('app.notes.errorLoad')"
       :refresh-label="t('app.errorState.refresh')"
       :loading="loading"
@@ -87,7 +87,7 @@ const props = defineProps<{
 const { t } = useI18n();
 const authStore = useAuthStore();
 
-const { notes, loading, loaded, loadError, loadNotes, addNote, deleteNote } = useNotes(
+const { notes, loading, loaded, loadError, loadFailure, loadNotes, addNote, deleteNote } = useNotes(
   props.entityType,
   () => props.entityId
 );

@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import { ref, shallowRef, computed } from "vue";
 import { brandColors } from "@brand/colors";
-import type { ApiFetchOptions } from "@api";
+import { reportCaught, type ApiFetchOptions } from "@api";
 import { useThemeStore } from "./theme";
 
 /** Matches the API's LookupItem shape (apps/api/src/db/lookup.ts) — key is the stable
@@ -143,8 +143,10 @@ export function createConfigStore(apiFetch: ApiFetchFn, applyI18nOverrides?: I18
         if (!res.ok) return;
         const data = (await res.json()) as Record<string, Record<string, string>>;
         applyI18nOverrides(data);
-      } catch {
-        // Non-fatal — static JSON is the fallback
+      } catch (err) {
+        // Non-fatal — static JSON is the fallback — but a tenant's wording silently
+        // missing is worth knowing about.
+        reportCaught(err, { where: "configStore.loadI18nOverrides", level: "warn" });
       }
     }
 
@@ -159,7 +161,8 @@ export function createConfigStore(apiFetch: ApiFetchFn, applyI18nOverrides?: I18
           organization_types:Array.isArray(data.organization_types)? data.organization_types : [],
         };
         return options.value;
-      } catch {
+      } catch (err) {
+        reportCaught(err, { where: "configStore.loadOptions", level: "warn" });
         return options.value;
       }
     }

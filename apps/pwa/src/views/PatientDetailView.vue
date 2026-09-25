@@ -20,6 +20,7 @@
       :has-content="!!patient"
       :loading="loading"
       :load-error="loadFailed"
+      :load-error-cause="loadFailure"
       :back-route="{ name: 'patients' }"
       :back-label="t('app.patients.detail.back')"
       :record-title="patient?.name ?? ''"
@@ -176,6 +177,7 @@
 </template>
 
 <script setup lang="ts">
+import { reportCaught, reportFailedResponse } from "@api";
 import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
 import { originDialogTransition } from "@ui";
 import { useRoute, useRouter } from "vue-router";
@@ -262,6 +264,8 @@ const regionBreadcrumb = computed(() => {
 const loading = ref(true);
 /** True when loadPatient() failed for a reason other than a genuine 404 (network/server) — see loadPatient(). */
 const loadFailed = ref(false);
+/** The error behind loadFailed (NEO-81) — lets the error state say offline vs. server problem. */
+const loadFailure = ref<unknown>(null);
 const showEditModal = ref(false);
 const showEventForm = ref(false);
 const eventFormInitial = ref<{ start_at: string; end_at: string; patientIds?: string[] } | undefined>(undefined);
@@ -383,9 +387,12 @@ async function loadPatient() {
       // Not a genuine 404 — ItemDetailLayout renders its own "connection
       // problem" + retry state for this (see :load-error), so no separate
       // toast on top of it.
+      loadFailure.value = await reportFailedResponse(res, { where: "PatientDetailView.load", path: "/api/v1/patient/:id" });
       loadFailed.value = true;
     }
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "PatientDetailView.load" });
+    loadFailure.value = err;
     loadFailed.value = true;
     patient.value = null;
   } finally {

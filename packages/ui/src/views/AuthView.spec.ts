@@ -7,6 +7,7 @@ import * as vuetifyComponents from "vuetify/components";
 import * as vuetifyDirectives from "vuetify/directives";
 import { createRouter, createMemoryHistory, type Router } from "vue-router";
 import en from "@i18n/en.json";
+import { ApiError } from "@api";
 import {
   BRAND_PWA_BADGE_URL,
   BRAND_PWA_BADGE_DARK_URL,
@@ -248,8 +249,18 @@ describe("AuthView — sign in", () => {
     );
   });
 
-  it("shows a generic network error message via the native notification on a non-ok, non-401/429 response", async () => {
+  // NEO-81: a 5xx is "a problem on our side", not a vague "something went wrong".
+  it("says the problem is on our side on a 5xx response", async () => {
     apiFetch.mockResolvedValue(new Response(JSON.stringify({ error: "Server error." }), { status: 500 }));
+    const { wrapper, notify } = await mountAuthView(apiFetch);
+
+    await fillAndSubmit(wrapper, "rep@neosleepcare.com", "correcthorse");
+
+    expect(notify).toHaveBeenCalledWith(en["common.error.server.body"], "error", "common.error.server.body");
+  });
+
+  it("keeps the generic sign-in message for an unexpected 4xx", async () => {
+    apiFetch.mockResolvedValue(new Response(JSON.stringify({ error: "Bad request." }), { status: 400 }));
     const { wrapper, notify } = await mountAuthView(apiFetch);
 
     await fillAndSubmit(wrapper, "rep@neosleepcare.com", "correcthorse");
@@ -259,6 +270,15 @@ describe("AuthView — sign in", () => {
       "error",
       "user.login.error.network",
     );
+  });
+
+  it("says to check the connection when the request never reached the server", async () => {
+    apiFetch.mockRejectedValue(new ApiError({ kind: "network", message: "Failed to fetch" }));
+    const { wrapper, notify } = await mountAuthView(apiFetch);
+
+    await fillAndSubmit(wrapper, "rep@neosleepcare.com", "correcthorse");
+
+    expect(notify).toHaveBeenCalledWith(en["common.error.network.body"], "error", "common.error.network.body");
   });
 
   it("shows a generic network error message via the native notification when the request throws", async () => {
@@ -403,7 +423,7 @@ describe("AuthView — forgot password (same card, in-place step)", () => {
     await flushPromises();
     await flushPromises();
 
-    expect(wrapper.text()).toContain(en["user.forgotPassword.error.network"]);
+    expect(wrapper.text()).toContain(en["common.error.server.body"]);
     const retryBtn = wrapper.findAll("button").find((b) => b.text() === en["user.forgotPassword.tryAgain"]);
     expect(retryBtn).toBeTruthy();
 

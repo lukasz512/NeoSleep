@@ -75,6 +75,8 @@
 </template>
 
 <script setup lang="ts">
+import { reportCaught } from "@api";
+import { showErrorToast } from "../composables/useErrorToast";
 import { ref, computed, defineAsyncComponent } from "vue";
 import { originDialogTransition } from "@ui";
 import { useI18n } from "vue-i18n";
@@ -158,7 +160,10 @@ async function onSubmit(payload: Record<string, unknown>, done: (ok: boolean) =>
     } else {
       done(false);
     }
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "TerritoriesView.onSubmit" });
+    // A non-2xx already toasts via apiFetch; a thrown error (offline, bad response) had no feedback at all.
+    showErrorToast(err, { icon: "nav-territories" });
     done(false);
   }
 }
@@ -179,7 +184,9 @@ async function onEditSubmit(payload: Record<string, unknown>, done: (ok: boolean
     } else {
       done(false);
     }
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "TerritoriesView.onEditSubmit" });
+    showErrorToast(err, { icon: "nav-territories" });
     done(false);
   }
 }

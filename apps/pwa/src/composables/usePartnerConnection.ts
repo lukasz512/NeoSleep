@@ -1,3 +1,4 @@
+import { reportCaught, reportFailedResponse } from "@api";
 import { apiFetch } from "./useApi";
 import { retryAction, useNotifications } from "./useNotifications";
 import { i18n } from "../plugins/i18n";
@@ -36,9 +37,15 @@ const lastNotifiedAt = new Map<string, number>();
 async function checkPartnerConnection(partner: string): Promise<ConnectionStatus> {
   try {
     const res = await apiFetch(`/api/v1/partners/${partner}/status`, { handleErrors: false });
-    if (!res.ok) return { connected: false, attemptsExhausted: false };
+    if (!res.ok) {
+      // The status route itself never fails for a down partner (it answers 200 + connected:false),
+      // so a non-2xx here is our own API failing — report it, the toast below still warns the user.
+      await reportFailedResponse(res, { where: "usePartnerConnection.checkPartnerConnection" });
+      return { connected: false, attemptsExhausted: false };
+    }
     return (await res.json()) as ConnectionStatus;
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "usePartnerConnection.checkPartnerConnection" });
     return { connected: false, attemptsExhausted: false };
   }
 }

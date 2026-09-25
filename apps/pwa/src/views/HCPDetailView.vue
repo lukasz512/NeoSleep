@@ -29,6 +29,7 @@
       :has-content="!!hcp"
       :loading="loading"
       :load-error="loadFailed"
+      :load-error-cause="loadFailure"
       :back-route="{ name: 'hcp' }"
       :back-label="t('user.hcp.detail.back')"
       :record-title="hcp?.name ?? ''"
@@ -229,6 +230,7 @@
 </template>
 
 <script setup lang="ts">
+import { isOfflineError, reportCaught, reportFailedResponse } from "@api";
 import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
 import { originDialogTransition } from "@ui";
 import { useRoute, useRouter } from "vue-router";
@@ -357,6 +359,8 @@ const loading = ref(true);
 const isOffline = ref(false);
 /** True when loadHCP() failed for a reason other than a genuine 404 (network/server) — see loadHCP(). */
 const loadFailed = ref(false);
+/** The error behind loadFailed (NEO-81) — lets the error state say offline vs. server problem. */
+const loadFailure = ref<unknown>(null);
 const showEditModal = ref(false);
 const showDeleteConfirm = ref(false);
 const showEventForm = ref(false);
@@ -534,11 +538,15 @@ async function loadHCP() {
       // Not a genuine 404 — ItemDetailLayout renders its own "connection
       // problem" + retry state for this (see :load-error), so no separate
       // toast on top of it.
+      loadFailure.value = await reportFailedResponse(res, { where: "HCPDetailView.load", path: "/api/v1/practitioner/:id" });
       loadFailed.value = true;
     }
-  } catch {
-    // Network failure, not a server error — fall back to the cached record if we have one.
-    const cached = await hcpCache.readOne(id);
+  } catch (err) {
+    reportCaught(err, { where: "HCPDetailView.load" });
+    loadFailure.value = err;
+    // Only a request that never reached the server may fall back to the cached record (ADR-013) —
+    // a bad response or a bug shows the real error instead of stale data.
+    const cached = isOfflineError(err) ? await hcpCache.readOne(id) : null;
     if (cached) {
       hcp.value = cached as unknown as HCP;
       isOffline.value = true;

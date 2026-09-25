@@ -7,7 +7,7 @@
         <AppLoadingState v-if="loading && !loaded" />
         <AppErrorState
           v-else-if="loadError"
-          :title="t('app.errorState.title')"
+          :error="loadFailure"
           :subtitle="t('app.orthoApneaOrder.transactionLog.errorLoad')"
           :refresh-label="t('app.errorState.refresh')"
           :loading="loading"
@@ -64,6 +64,7 @@
 </template>
 
 <script setup lang="ts">
+import { reportCaught, reportFailedResponse } from "@api";
 import { ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import AppDialogHeader from "../AppDialogHeader.vue";
@@ -131,10 +132,13 @@ const history = ref<PartnerTransactionHistory | null>(null);
 const loading = ref(false);
 const loaded = ref(false);
 const loadError = ref(false);
+/** The error behind loadError (NEO-81) — lets the error state say offline vs. server problem. */
+const loadFailure = ref<unknown>(null);
 
 async function load() {
   loading.value = true;
   loadError.value = false;
+  loadFailure.value = null;
   try {
     const res = await apiFetch(`/api/v1/partners/orthoapnea/treatments/${props.treatmentPlanId}/transactions`, {
       handleErrors: false,
@@ -142,9 +146,12 @@ async function load() {
     if (res.ok) {
       history.value = (await res.json()) as PartnerTransactionHistory;
     } else {
+      loadFailure.value = await reportFailedResponse(res, { where: "OrthoApneaTransactionLog.load" });
       loadError.value = true;
     }
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "OrthoApneaTransactionLog.load" });
+    loadFailure.value = err;
     loadError.value = true;
   } finally {
     loading.value = false;
