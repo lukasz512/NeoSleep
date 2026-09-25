@@ -34,6 +34,9 @@ export interface PractitionerDto {
   // primary_specialty is the canonical field; specialty is the legacy alias
   primary_specialty: string;
   specialty: string;
+  /** Every specialty the practitioner has (lookup keys); the PWA shows the
+   *  primary one and lists the rest in a "+N" tooltip (NEO-57). */
+  specialties: string[];
   organization_id: string | null;
   institution: string;
   region: string;
@@ -76,6 +79,7 @@ function toDto(
     phone:             p.phone ?? "",
     primary_specialty: p.primary_specialty ?? "",
     specialty:         p.primary_specialty ?? "",  // legacy alias
+    specialties:       p.specialties ?? [],
     organization_id:   p.organization_id ?? null,
     institution:       p.institution ?? "",
     region:            p.region,

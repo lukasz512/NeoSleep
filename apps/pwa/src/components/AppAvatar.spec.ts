@@ -59,28 +59,19 @@ describe("AppAvatar (non-hco entity types)", () => {
   });
 });
 
-describe("AppAvatar (patient outlined variant)", () => {
-  it("renders a patient placeholder outlined, with the accent color passed as a CSS var", () => {
-    const wrapper = mountAvatar({ entityType: "patient", name: "Mateusz Dotestowania" });
-    expect(wrapper.classes()).toContain("app-avatar--outlined");
-    expect(wrapper.attributes("style")).toContain("--app-avatar-accent");
-    expect(wrapper.find(".app-avatar__initials").text()).toBe("MD");
+describe("AppAvatar (identity tint, NEO-57)", () => {
+  it("tints each identity type with its own tone class", () => {
+    expect(mountAvatar({ entityType: "patient", name: "Mateusz Dotestowania" }).classes()).toContain("app-avatar--patient");
+    expect(mountAvatar({ entityType: "hcp", name: "Jan Kowalski" }).classes()).toContain("app-avatar--doctor");
+    expect(mountAvatar({ entityType: "hco" }).classes()).toContain("app-avatar--org");
+    expect(mountAvatar({ entityType: "user", name: "Anna Nowak" }).classes()).toContain("app-avatar--person");
+    expect(mountAvatar({ entityType: "lead", name: "Anna Nowak" }).classes()).toContain("app-avatar--person");
   });
 
-  it("scales the ring with size: ~1px on a 20px chip avatar, ~2px at 40px", () => {
-    const small = mountAvatar({ entityType: "patient", name: "Anna Kowalska", size: 20 });
-    const regular = mountAvatar({ entityType: "patient", name: "Anna Kowalska", size: 40 });
-    expect(small.attributes("style")).toContain("--app-avatar-ring: 1.05px");
-    expect(regular.attributes("style")).toContain("--app-avatar-ring: 2.11px");
-  });
-
-  it("keeps the solid fill for a doctor (hcp)", () => {
-    expect(mountAvatar({ entityType: "hcp", name: "Mateusz Dotestowania" }).classes()).not.toContain("app-avatar--outlined");
-  });
-
-  it("does not outline a patient that has a real photo", () => {
+  it("keeps initials for people and drops the tint behind a real photo", () => {
+    expect(mountAvatar({ entityType: "patient", name: "Mateusz Dotestowania" }).find(".app-avatar__initials").text()).toBe("MD");
     expect(
       mountAvatar({ entityType: "patient", name: "Jan Kowalski", avatarUrl: "https://example.com/a.png" }).classes(),
-    ).not.toContain("app-avatar--outlined");
+    ).toContain("app-avatar--photo");
   });
 });

@@ -37,8 +37,12 @@ export interface PatientDto {
   date_of_birth: string | null;
   practitioner_id: string | null;
   practitioner_name: string | null;
+  /** Name parts for the PWA's short list name (first given name + first surname). */
+  practitioner_first_name: string | null;
+  practitioner_last_name: string | null;
   /** Doctor's specialty lookup key, labelled via lookups on the client */
   practitioner_specialty: string | null;
+  practitioner_specialties: string[];
   diagnosis_code: Record<string, unknown> | null;
   ahi_baseline: number | null;
   cpap_device: string | null;
@@ -79,7 +83,10 @@ function toDto(p: Patient & { name: string }, territoryPath: TerritoryPathNode[]
     date_of_birth:   p.date_of_birth ?? null,
     practitioner_id: p.practitioner_id ?? null,
     practitioner_name: p.practitioner_name ?? null,
+    practitioner_first_name: p.practitioner_first_name ?? null,
+    practitioner_last_name: p.practitioner_last_name ?? null,
     practitioner_specialty: p.practitioner_specialty ?? null,
+    practitioner_specialties: p.practitioner_specialties ?? [],
     diagnosis_code:  p.diagnosis_code ?? null,
     ahi_baseline:    p.ahi_baseline ?? null,
     cpap_device:     p.cpap_device ?? null,

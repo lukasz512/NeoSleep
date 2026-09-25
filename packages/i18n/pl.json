@@ -673,6 +673,7 @@
   "app.patients.sexShort.female": "K",
   "app.patients.sexShort.male": "M",
   "app.patients.ageShort": "{age} l.",
+  "app.patients.dobShort": "ur. {date}",
   "app.patients.table.lastUpdated": "Ostatnia aktualizacja",
   "app.patients.form.validation.firstNameRequired": "Imię jest wymagane",
   "app.patients.form.validation.lastNameRequired": "Nazwisko jest wymagane",

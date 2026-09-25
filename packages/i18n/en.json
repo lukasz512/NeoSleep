@@ -754,6 +754,7 @@
   "app.patients.sexShort.female": "F",
   "app.patients.sexShort.male": "M",
   "app.patients.ageShort": "{age} y",
+  "app.patients.dobShort": "b. {date}",
   "app.patients.table.lastUpdated": "Last updated",
   "app.patients.form.validation.firstNameRequired": "First name is required",
   "app.patients.form.validation.lastNameRequired": "Last name is required",

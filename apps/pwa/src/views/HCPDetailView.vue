@@ -117,13 +117,18 @@
         </VTooltip>
       </template>
       <template v-if="hcp" #title>
-        <span class="view-item__title-wrap">
-          <AppAvatar :name="hcp.name" :first-name="hcp.first_name" :last-name="hcp.last_name" entity-type="hcp" :size="40" />
-          <h1 class="view-item__title">{{ hcp.name }}</h1>
+        <IdentityHeader
+          :name="hcp.name"
+          entity-type="hcp"
+          :first-name="hcp.first_name"
+          :last-name="hcp.last_name"
+          :details="doctorDetails(hcp, { withClinic: true }).details"
+          :more-details="doctorDetails(hcp, { withClinic: true }).more"
+        >
           <span v-if="hcp.status === 'invited'" class="hcp-detail__status-badge">
             {{ t("user.hcp.detail.statusInvited") }}
           </span>
-        </span>
+        </IdentityHeader>
       </template>
       <template v-if="hcp" #sections>
         <DetailViewTabs v-model="activeTab" :tabs="hcpTabs">
@@ -235,7 +240,8 @@ import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
-import AppAvatar from "../components/AppAvatar.vue";
+import IdentityHeader from "../components/IdentityHeader.vue";
+import { useIdentity } from "../composables/useIdentity";
 import DetailViewTabs from "../components/DetailViewTabs.vue";
 import EntityLink from "../components/EntityLink.vue";
 import EntityHistoryPanel from "../components/EntityHistoryPanel.vue";
@@ -268,6 +274,7 @@ interface HCP {
   phone?: string;
   specialty?: string;
   primary_specialty?: string;
+  specialties?: string[];
   organization_id?: string | null;
   institution?: string;
   region?: string;
@@ -284,6 +291,7 @@ interface HCP {
 }
 
 const { t } = useI18n();
+const { doctorDetails } = useIdentity();
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();

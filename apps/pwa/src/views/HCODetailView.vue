@@ -34,20 +34,12 @@
     @retry="loadHCO"
   >
     <template v-if="hco" #title>
-      <span class="view-item__title-wrap hco-title-row">
-        <span class="view-item__title-wrap">
-          <AppAvatar entity-type="hco" :org-type="hco.type" :size="40" />
-          <h1 class="view-item__title">{{ hco.name }}</h1>
-        </span>
-        <span class="hco-title-row__badges">
-          <VChip :color="hcoTypeColor(hco.type)" size="large" variant="tonal">
-            {{ hcoTypeLabel(hco.type) }}
-          </VChip>
-          <VChip :color="hcoStatusColor(hco.status)" size="large" variant="tonal">
-            {{ hcoStatusLabel(hco.status) }}
-          </VChip>
-        </span>
-      </span>
+      <!-- Type now lives in the identity's labelled fields; status stays a badge next to the name. -->
+      <IdentityHeader :name="hco.name" entity-type="hco" :org-type="hco.type" :details="orgDetails(hco, { withCity: true }).details">
+        <VChip :color="hcoStatusColor(hco.status)" size="small" variant="tonal">
+          {{ hcoStatusLabel(hco.status) }}
+        </VChip>
+      </IdentityHeader>
     </template>
     <template v-if="hco" #header-actions>
       <VTooltip location="bottom">
@@ -225,7 +217,8 @@ import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import AppButton from "../components/AppButton.vue";
-import AppAvatar from "../components/AppAvatar.vue";
+import IdentityHeader from "../components/IdentityHeader.vue";
+import { useIdentity } from "../composables/useIdentity";
 import AppIcon from "../components/AppIcon.vue";
 import DetailViewTabs from "../components/DetailViewTabs.vue";
 import EntityHistoryPanel from "../components/EntityHistoryPanel.vue";
@@ -236,9 +229,7 @@ import PatientNotesPanel from "../components/patient/PatientNotesPanel.vue";
 import { hcoFormFields } from "../config/forms/hcoForm";
 import { entityActionIcon, entityActionBtnClass } from "../config/entityActions";
 import {
-  hcoTypeLabel as hcoTypeLabelFor,
   hcoStatusLabel as hcoStatusLabelFor,
-  hcoTypeColor,
   hcoStatusColor,
 } from "../utils/hcoLabels";
 
@@ -271,6 +262,7 @@ interface HCO {
 }
 
 const { t } = useI18n();
+const { orgDetails } = useIdentity();
 const route = useRoute();
 const router = useRouter();
 const notifications = useNotifications();
@@ -289,9 +281,6 @@ watch(activeTab, (tab) => {
   router.replace({ query: { ...route.query, tab } });
 });
 
-function hcoTypeLabel(type?: string): string {
-  return hcoTypeLabelFor(t, type);
-}
 function hcoStatusLabel(status?: string): string {
   return hcoStatusLabelFor(t, status);
 }
@@ -453,18 +442,7 @@ watch(() => route.params.id, loadHCO);
   gap: 8px;
 }
 
-.hco-title-row {
-  width: 100%;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
-}
 
-.hco-title-row__badges {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
 
 .hco-specialties {
   display: flex;
