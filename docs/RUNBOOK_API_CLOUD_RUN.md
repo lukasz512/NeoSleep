@@ -58,11 +58,25 @@ Console → service → **Logs**, or
    `GCP_API_DEPLOY_SA`, `GCP_API_RUNTIME_SA`.
 4. `RENDER_API_KEY=<key> bash infrastructure/cloud-run/sync-secrets-from-render.sh`
    copies secrets from Render into Secret Manager without printing them.
-5. Only when Google login is switched on for deployed environments (it was never
-   configured on Render, so it is off at cutover): add `GOOGLE_CLIENT_ID` to the env
-   yaml, create the `GOOGLE_CLIENT_SECRET` secret, list it in `secrets.list`, set
-   `OAUTH_REDIRECT_ORIGIN` to the service URL, and add
+5. Google login: in the OAuth client (GCP project `neosleep` → APIs & Services →
+   Credentials), add both
    `https://neosleep-api-{dev,prod}-692668694184.us-west2.run.app/api/v1/auth/google/callback`
-   as authorized redirect URIs in the OAuth client (GCP project `neosleep`).
+   as authorized redirect URIs. `OAUTH_REDIRECT_ORIGIN` in each env yaml points at the
+   service's own URL.
+
+## Features switched on at the move (2026-09-25)
+
+Render only ever had 9 env vars, so several features never worked on a deployed API.
+Cloud Run enables them, with the same keys as the local `.env`:
+
+- Google login
+- Supabase Storage (generated PDFs, signed documents, attachments)
+- OrthoApnea: the shared **real** account, so dev orders are real
+- Google Calendar booking: the **real** calendar, so dev bookings send real invites
+- Google Maps geocoding: the server key lives in GCP project `project-c793f38f-…`
+  ("My First Project"). The Geocoding API had to be enabled there and added to the key's
+  API restrictions.
+
+Web push is not enabled because the PWA has no subscription code yet.
 6. Merge to `dev`, check the dev service, set `API_URL_DEV`, re-run Deploy PWA. Then
    repeat for prod.
