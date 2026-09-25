@@ -412,6 +412,11 @@ export interface AcceptInviteResult {
   userId: string;
   email: string;
   locale: string;
+  /** For the formal "Dr First Last," address line of the signed-documents email. */
+  title: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  region: string | null;
   /** NeoSleep's copy of the documents goes here (per-jurisdiction signatory config). */
   ccEmail: string;
   documents: SignedDocumentResult[];
@@ -716,6 +721,10 @@ export async function AcceptPractitionerInviteCommand(
     userId: user.id,
     email: invite.email,
     locale: set.locale,
+    title: practitioner?.salutation ?? null,
+    firstName: invite.first_name ?? practitioner?.first_name ?? null,
+    lastName: invite.last_name ?? practitioner?.last_name ?? null,
+    region: practitioner?.region ?? user.region ?? null,
     ccEmail: set.signatory.ccEmail,
     documents: documents.map(({ type, filename, bytes }) => ({ type, filename, bytes })),
   };

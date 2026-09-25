@@ -338,20 +338,27 @@ export async function sendSignedDocumentsEmail(
   to: string,
   recipient: EmailRecipient,
   documents: SignedDocumentAttachment[],
+  loginLink: string,
   ccEmail?: string | null
 ): Promise<string | null> {
   const locale = recipient.language;
-  const greetingName = formatGreetingName(recipient, to);
+  // These are the signed legal documents, so the address line is formal ("Dr First Last,"), never
+  // the casual "Hi …," greeting and never the bare email address. Every partner is a doctor, so a
+  // missing salutation on the record falls back to the locale's "Dr" rather than dropping the title.
+  const hasName = !!(recipient.firstName?.trim() || recipient.lastName?.trim());
+  const title = recipient.title?.trim() || (hasName ? emailT(locale, "email.signedDocuments.defaultTitle") : null);
+  const addressName = formatGreetingName({ ...recipient, title }, to);
 
   const bodyHtml = `
     <h1 style="margin:0 0 16px;font-size:20px;font-weight:bold;color:#128F83;text-align:center;">${escapeHtml(emailT(locale, "email.signedDocuments.title"))}</h1>
-    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.greeting", { name: greetingName }))}</p>
+    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.signedDocuments.address", { name: addressName }))}</p>
     <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.signedDocuments.body"))}</p>`;
 
   const socials = getSocialsForRegion(recipient.region);
   const html = renderEmailLayout({
     preheader: emailT(locale, "email.signedDocuments.title"),
     bodyHtml,
+    cta: { text: emailT(locale, "email.signedDocuments.cta"), href: loginLink },
     footerTagline: emailT(locale, "email.footer.tagline"),
     footerCities: emailT(locale, "email.footer.cities"),
     footerCopyright: emailT(locale, "email.footer.copyright", { year: String(new Date().getFullYear()) }),
