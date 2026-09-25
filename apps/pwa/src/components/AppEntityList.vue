@@ -1,8 +1,16 @@
 <template>
   <div class="app-entity-list">
+    <!-- NEO-55: on desktop the toolbar sits in AppLayout's page header, on the
+         same row as the module title (usePageHeader.ts); inline on mobile. -->
+    <Teleport v-if="!isTrulyEmpty && !loadError && !isInitialLoading" :to="pageHeader.to" defer :disabled="pageHeader.disabled.value">
     <div
-      v-if="!isTrulyEmpty && !loadError && !isInitialLoading"
-      :class="['app-entity-list__toolbar', { 'app-entity-list__toolbar--hidden': mobile && toolbarHiddenByScroll }]"
+      :class="[
+        'app-entity-list__toolbar',
+        {
+          'app-entity-list__toolbar--hidden': mobile && toolbarHiddenByScroll,
+          'app-entity-list__toolbar--in-header': !pageHeader.disabled.value,
+        },
+      ]"
     >
       <div class="app-entity-list__search-group">
         <VTextField
@@ -95,6 +103,7 @@
         <span>{{ t(i18n.add) }}</span>
       </VTooltip>
     </div>
+    </Teleport>
 
     <VAlert
       v-if="isOffline"
@@ -276,6 +285,7 @@ import AppFilterBar from "./AppFilterBar.vue";
 import AppSpinner from "./AppSpinner.vue";
 import { useEntityList } from "../composables/useEntityList";
 import type { FilterDefinition } from "../composables/useFilters";
+import { usePageHeaderTeleport } from "../composables/usePageHeader";
 
 export interface AppEntityListHeader {
   title: string;
@@ -334,6 +344,7 @@ defineEmits<{ add: [] }>();
 
 const { t } = useI18n();
 const { mobile } = useDisplay();
+const pageHeader = usePageHeaderTeleport();
 const slots = useSlots();
 
 /* The mobile card feed's kebab menu (`feed-card-actions`) has no desktop

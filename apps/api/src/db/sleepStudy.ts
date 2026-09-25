@@ -261,6 +261,20 @@ export async function getSleepStudyById(client: PoolClient, id: string): Promise
   }
 }
 
+/** Only the id of the patient's most recent sleep study — no clinical fields (see GetLatestSleepStudyRefQuery). */
+export async function getLatestSleepStudyIdForPatient(client: PoolClient, patientId: string): Promise<string | null> {
+  try {
+    const result = await client.query<{ id: string }>(
+      `SELECT id FROM sleep_study WHERE patient_id = $1 ORDER BY created_at DESC LIMIT 1`,
+      [patientId]
+    );
+    return result.rows[0]?.id ?? null;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getLatestSleepStudyIdForPatient", err);
+  }
+}
+
 export async function insertSleepStudy(client: PoolClient, data: SleepStudyInsert): Promise<SleepStudy> {
   try {
     const result = await client.query<{ id: string }>(

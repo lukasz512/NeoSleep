@@ -28,6 +28,9 @@ export const FRONTEND_URL: string = process.env.FRONTEND_URL ?? "http://localhos
  */
 export const FRONTEND_URLS: string[] = FRONTEND_URL.split(",").map((s) => s.trim()).filter(Boolean);
 
+/** Full privacy notice linked from the patient self-fill consent (the layered notice there is the short version). */
+export const PRIVACY_NOTICE_URL: string = process.env.PRIVACY_NOTICE_URL ?? "https://neosleepcare.com/privacy";
+
 /** Supabase Storage — signed documents (GDPR consent, partner agreement PDFs). Backend-only, never sent to the frontend. */
 export const SUPABASE_URL: string | undefined = process.env.SUPABASE_URL;
 export const SUPABASE_SERVICE_KEY: string | undefined = process.env.SUPABASE_SERVICE_KEY;

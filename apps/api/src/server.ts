@@ -86,6 +86,10 @@ app.use(
     credentials: true,
   })
 );
+// The patient QR submit carries a drawn signature (PNG data URL, ≤ ~400 KB,
+// validated in commands/questionnaireRequest.ts) — its own larger parser,
+// mounted first; body-parser then skips the already-parsed body below.
+app.use("/api/v1/public/questionnaire/submit", express.json({ limit: "600kb" }));
 app.use(express.json({ limit: "50kb" }));
 app.use(apiLimiter);
 

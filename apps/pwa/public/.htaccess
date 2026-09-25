@@ -1,15 +1,29 @@
 Options -Indexes
 
-# SPA fallback — wszystkie ścieżki które nie są plikiem/katalogiem → index.html
-# Bez tego Apache zwraca 404 przy bezpośrednim wejściu na /leads, /hcp itp.
+# SPA fallback — any path that isn't an existing file/directory → index.html,
+# so a direct hit on /leads, /hcp etc. reaches Vue Router instead of a 404.
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
 
-  # Nie przepisuj istniejących plików (JS, CSS, obrazki...)
+  # A missing build asset (an old hashed chunk after a deploy) must be a real
+  # 404, never index.html: served as HTML it fails with a confusing MIME-type
+  # error instead of a plain "not found". The app recovers either way (see
+  # src/router/chunkRecovery.ts), but a 404 is the honest answer.
+  RewriteRule ^assets/ - [L]
+
+  # Leave existing files (JS, CSS, images...) alone
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
 
-  # Wszystko inne → index.html, Vue Router obsługuje resztę
+  # Everything else → index.html, Vue Router handles the rest
   RewriteRule ^ index.html [L]
+</IfModule>
+
+# index.html must always be revalidated — it's what points at the current
+# hashed chunks, so a cached copy is exactly what strands a tab on old ones.
+<IfModule mod_headers.c>
+  <FilesMatch "^index\.html$">
+    Header set Cache-Control "no-cache, must-revalidate"
+  </FilesMatch>
 </IfModule>

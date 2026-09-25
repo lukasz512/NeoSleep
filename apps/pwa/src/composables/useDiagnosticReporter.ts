@@ -12,7 +12,8 @@ const _recentErrors = new Map<string, number>();
 
 function getErrorMeta(extra: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    url: typeof window !== "undefined" ? window.location.href : "",
+    // Without the #fragment: /q#<token> carries a patient's single-use link credential.
+    url: typeof window !== "undefined" ? `${window.location.origin}${window.location.pathname}${window.location.search}` : "",
     viewport: typeof window !== "undefined" ? `${window.innerWidth}x${window.innerHeight}` : "",
     user_agent: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 200) : "",
     app_version: import.meta.env.VITE_APP_VERSION ?? "dev",

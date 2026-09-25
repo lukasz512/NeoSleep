@@ -3,13 +3,14 @@ import { asyncHandler } from "../middleware/errorHandler.js";
 import { requireRole } from "../middleware/requireRole.js";
 import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
-import { SaveDocumentContentVersionCommand, SetDocumentTemplateEntityTypesCommand } from "../commands/documentContent.js";
+import { SaveDocumentContentVersionCommand, SetDocumentTemplateEntityTypesCommand, SetPatientChecklistConfigCommand } from "../commands/documentContent.js";
 import {
   GetDocumentContentIndexQuery,
   GetCurrentDocumentContentQuery,
   ListDocumentContentVersionsQuery,
   GetDocumentContentVersionByIdQuery,
   GetDocumentTemplateEntityTypesQuery,
+  GetPatientChecklistConfigQuery,
 } from "../queries/documentContent.js";
 import { ValidationError } from "../errors.js";
 
@@ -75,6 +76,36 @@ documentContentRouter.put(
     const result = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
       return SetDocumentTemplateEntityTypesCommand(ctx, templateKey, entityTypes);
+    });
+    res.json(result);
+  })
+);
+
+// Patient Estudios checklist config (who fills it, position) — also before
+// the ":locale" wildcard below, same reason as entity-types above.
+documentContentRouter.get(
+  "/document-content/:templateKey/patient-checklist",
+  requireRole("admin", "manager"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { templateKey } = req.params;
+    const slug = tenantSlugFromHost(req.hostname);
+    const result = await withTenant(slug, async (client) => {
+      await buildContext(req, client, slug);
+      return GetPatientChecklistConfigQuery(templateKey);
+    });
+    res.json(result);
+  })
+);
+
+documentContentRouter.put(
+  "/document-content/:templateKey/patient-checklist",
+  requireRole("admin", "manager"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { templateKey } = req.params;
+    const slug = tenantSlugFromHost(req.hostname);
+    const result = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return SetPatientChecklistConfigCommand(ctx, templateKey, (req.body ?? {}) as { fillMode?: unknown; sortOrder?: unknown });
     });
     res.json(result);
   })

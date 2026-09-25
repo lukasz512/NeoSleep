@@ -138,23 +138,19 @@
               <dt class="view-item__label">{{ t("app.patients.detail.medicalRecord") }}</dt>
               <dd class="view-item__value">{{ patient.medical_record || "—" }}</dd>
             </div>
+            <PatientStudiesSummary v-if="canSeeClinical" :patient-id="patient.id" @open="openStudy" />
           </template>
           <template #notes>
             <PatientNotesPanel entity-type="patient" :entity-id="patient.id" />
           </template>
           <template #studies>
-            <PatientStudiesPanel :patient-id="patient.id" />
+            <PatientStudiesPanel :patient-id="patient.id" :focus-item="studyItem" />
           </template>
           <template #orthoapnea>
             <PatientOrthoApneaPanel :patient-id="patient.id" />
           </template>
           <template #documents>
             <EntityDocumentsPanel :endpoint="`/api/v1/patient/${patient.id}/documents`" />
-          </template>
-          <template #endoIntake>
-            <PatientEndoIntakePanel :patient-id="patient.id" />
-            <VDivider class="endo-intake-divider" />
-            <PatientStopBangPanel :patient-id="patient.id" />
           </template>
           <template #history>
             <EntityHistoryPanel :endpoint="`/api/v1/patient/${patient.id}/history`" />
@@ -199,12 +195,13 @@ import { useIdentity } from "../composables/useIdentity";
 import IdentityHeader from "../components/IdentityHeader.vue";
 import PatientNotesPanel from "../components/patient/PatientNotesPanel.vue";
 import PatientStudiesPanel from "../components/patient/PatientStudiesPanel.vue";
+import PatientStudiesSummary from "../components/patient/PatientStudiesSummary.vue";
 import PatientOrthoApneaPanel from "../components/patient/PatientOrthoApneaPanel.vue";
 import EntityHistoryPanel from "../components/EntityHistoryPanel.vue";
 import EntityDocumentsPanel from "../components/EntityDocumentsPanel.vue";
-import PatientEndoIntakePanel from "../components/patient/PatientEndoIntakePanel.vue";
-import PatientStopBangPanel from "../components/patient/PatientStopBangPanel.vue";
 import { patientFormFields } from "../config/forms/patientForm";
+import { CLINICAL_ROLES } from "../config/questionnaires";
+import { useAuthStore } from "../stores/auth";
 import { entityActionIcon, entityActionBtnClass } from "../config/entityActions";
 import { patientStatusColor, patientStatusLabel } from "../utils/patientStatus";
 
@@ -212,6 +209,7 @@ const FormRenderer = defineAsyncComponent(() => import("../components/FormRender
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
 
 const { canEditPatients, isAdmin } = usePermissions();
+const authStore = useAuthStore();
 
 interface PatientDetail {
   id: string;
@@ -269,20 +267,31 @@ const showEventForm = ref(false);
 const eventFormInitial = ref<{ start_at: string; end_at: string; patientIds?: string[] } | undefined>(undefined);
 const showDeleteConfirm = ref(false);
 
-const patientTabs = [
+const ALL_PATIENT_TABS = [
   { value: "details", labelKey: "app.patients.detail.tabs.details" },
   { value: "notes", labelKey: "app.patients.detail.tabs.notes" },
-  { value: "studies", labelKey: "app.patients.detail.tabs.studies" },
+  { value: "studies", labelKey: "app.patients.detail.tabs.studies", clinical: true },
   { value: "orthoapnea", labelKey: "app.patients.detail.tabs.orthoapnea" },
-  { value: "documents", labelKey: "app.patients.detail.tabs.documents" },
-  { value: "endoIntake", labelKey: "app.patients.detail.tabs.endoIntake" },
+  { value: "documents", labelKey: "app.patients.detail.tabs.documents", clinical: true },
   { value: "history", labelKey: "app.patients.detail.tabs.history" },
 ];
+/** Studies and Documents hold health data — shown to admin/doctor only (the API enforces the same). */
+const canSeeClinical = computed(() => CLINICAL_ROLES.includes(authStore.user?.role ?? ""));
+const patientTabs = computed(() => ALL_PATIENT_TABS.filter((tab) => !tab.clinical || canSeeClinical.value));
 /** Deep-linkable via ?tab= — see SleepStudiesView/TreatmentPlansView row clicks. */
 const activeTab = ref((route.query.tab as string) || "details");
-watch(activeTab, (tab) => {
-  router.replace({ query: { ...route.query, tab } });
-});
+/** Details → Estudios card click: open that item in the Estudios tab (?tab=studies&item=…). */
+const studyItem = ref<string | null>((route.query.item as string) || null);
+function syncQuery() {
+  const item = activeTab.value === "studies" ? studyItem.value ?? undefined : undefined;
+  router.replace({ query: { ...route.query, tab: activeTab.value, item } });
+}
+watch(activeTab, syncQuery);
+function openStudy(itemKey: string) {
+  studyItem.value = itemKey;
+  if (activeTab.value === "studies") syncQuery();
+  else activeTab.value = "studies";
+}
 
 function onEdit() {
   showEditModal.value = true;
@@ -394,9 +403,5 @@ watch(() => route.params.id, loadPatient);
      20px from .view-item__title read as cramped, especially for a long
      name that wraps to two lines. */
   margin-bottom: 12px;
-}
-
-.endo-intake-divider {
-  margin: 28px 0;
 }
 </style>

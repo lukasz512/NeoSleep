@@ -1,24 +1,22 @@
 <template>
   <div class="view-item">
-    <div class="view-item__header-row">
-      <AppButton
-        icon
-        variant="flat"
-        size="large"
-        :to="backRoute"
-        ignore-global-loading
-        class="view-item__back-btn view-item__back-btn--no-border"
-        :title="backLabel"
-        :aria-label="backLabel"
-      >
-        <AppIcon name="arrow-left" class="view-item__back-icon" />
-      </AppButton>
+    <!-- NEO-55: the back arrow is AppLayout's now ("← <Module>" in the desktop
+         page header / mobile app bar, derived from the route). This row keeps
+         only the view's own title and actions; on desktop the actions are
+         teleported up into the page header, next to that back arrow. -->
+    <div
+      v-if="$slots['header-title'] || $slots['header-actions']"
+      v-show="$slots['header-title'] || pageHeader.disabled.value"
+      class="view-item__header-row"
+    >
       <div v-if="$slots['header-title']" class="view-item__header-title">
         <slot name="header-title" />
       </div>
-      <div v-if="$slots['header-actions']" class="view-item__header-actions">
-        <slot name="header-actions" />
-      </div>
+      <Teleport v-if="$slots['header-actions']" :to="pageHeader.to" defer :disabled="pageHeader.disabled.value">
+        <div class="view-item__header-actions">
+          <slot name="header-actions" />
+        </div>
+      </Teleport>
     </div>
     <slot v-if="hasContent && $slots.body" name="body" />
     <div v-else-if="hasContent" class="view-item__card">
@@ -76,17 +74,23 @@ import { AppStateView } from "@ui";
 import AppButton from "./AppButton.vue";
 import AppIcon from "./AppIcon.vue";
 import AppLoadingState from "./AppLoadingState.vue";
+import { usePageHeaderTeleport, releasePageHeaderForDescendants } from "../composables/usePageHeader";
 
 const { t } = useI18n();
+
+// This view's actions claim the page header; lists nested in its sections
+// (e.g. OrganizationPractitionersPanel) must keep their toolbars inline.
+const pageHeader = usePageHeaderTeleport();
+releasePageHeaderForDescendants();
 
 defineProps<{
   /** Whether item data is loaded and present. */
   hasContent: boolean;
   /** Whether still loading. */
   loading: boolean;
-  /** Route for back button. */
+  /** Route for the not-found state's "back to list" button (the header back arrow is AppLayout's). */
   backRoute: RouteLocationRaw;
-  /** Label for back button. */
+  /** Label for the not-found state's "back to list" button. */
   backLabel: string;
   /** Optional title (used when no title slot). */
   title?: string;
@@ -129,31 +133,11 @@ defineEmits<{
   margin-left: auto;
 }
 
-.view-item__back-btn {
-  min-height: var(--pwa-btn-min-height, 44px);
-  min-width: var(--pwa-btn-min-width, 44px);
-  color: var(--pwa-text, rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity)));
-}
-
-.view-item__back-btn--no-border {
-  border: none;
-  box-shadow: none;
-  background: transparent;
-
-  &:hover {
-    background: rgba(var(--v-theme-on-surface), 0.08);
-  }
-}
-
-.view-item__back-icon {
-  width: 24px;
-  height: 24px;
-  display: block;
-}
-
 /* Not a visual card on purpose — no surface, no border, no inset padding: the
    entity content sits directly on the page background (same color as the rest
-   of the view), aligned with the header row above it. */
+   of the view), aligned with the header row above it — i.e. on the same page
+   gutter as lists and the "← Module" header (AppLayout's --layout-card-inset,
+   NEO-55). */
 .view-item__card {
   background: transparent;
   border: none;

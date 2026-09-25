@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import bcrypt from "bcrypt";
-import { withTenant, insertStaffUser, insertFileAttachment, getGlobalTerritoryId, getLinkedUserIdForPractitioner } from "../db.js";
+import { withTenant, insertStaffUser, insertFileAttachment, insertPatient, getGlobalTerritoryId, getLinkedUserIdForPractitioner } from "../db.js";
 import type { TenantContext } from "../context/TenantContext.js";
 import { CreatePractitionerCommand, ActivatePractitionerCommand } from "../commands/practitioner.js";
 import { NotFoundError } from "../errors.js";
@@ -123,7 +123,8 @@ describe("GetOrganizationDocumentsQuery / GetPatientDocumentsQuery", () => {
   it("returns file_attachment rows scoped to the given patient", async () => {
     await withTenant(TENANT_SLUG, async (client) => {
       const ctx = await buildTestContext(client);
-      const patientId = crypto.randomUUID();
+      // A real patient: the query is territory-checked through GetPatientByIdQuery.
+      const patientId = (await insertPatient(client, { first_name: "Docs", last_name: `Patient-${crypto.randomUUID().slice(0, 8)}` })).id;
       await insertFileAttachment(client, {
         entity_type: "patient",
         entity_id: patientId,
