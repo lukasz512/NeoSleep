@@ -17,6 +17,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
+import { execFileSync } from "node:child_process";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
 const require = createRequire(path.join(ROOT, "apps/pwa/package.json"));
@@ -35,6 +36,14 @@ for (let i = 0; i < args.length; i++) {
   }
 }
 if (checks.length === 0) checks.push({ route: "/patients", selector: null });
+// Worktrees don't share .claude/local/ — fall back to the main checkout's copy.
+if (!fs.existsSync(credsFile)) {
+  try {
+    const commonDir = execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd: ROOT }).toString().trim();
+    const mainCopy = path.join(path.dirname(commonDir), ".claude/local/qa-dev.json");
+    if (fs.existsSync(mainCopy)) credsFile = mainCopy;
+  } catch { /* not a git checkout — keep the default path */ }
+}
 if (!fs.existsSync(credsFile)) {
   console.error(`No QA credentials at ${credsFile} — create them with: pnpm --filter @neo/api seed:qa-user -- --out ../../.claude/local/qa-dev.json`);
   process.exit(2);
@@ -71,17 +80,30 @@ try {
     await page.waitForURL((u) => !u.pathname.startsWith("/login"), { timeout: 45_000 });
 
     for (const { route, selector } of checks) {
-      await page.goto(`${base}${route}`, { waitUntil: "domcontentloaded" });
-      try {
-        await page.locator(".v-data-table, .app-entity-list__feed, main").first().waitFor({ timeout: 30_000 });
+      // One retry per route: a single blank frame (e.g. the app reloading
+      // itself onto a just-deployed version) shouldn't fail the whole check,
+      // but a pass-on-retry is still reported so it isn't silently hidden.
+      let rendered = false;
+      let lastError = "";
+      for (let attempt = 1; attempt <= 2 && !rendered; attempt++) {
+        await page.goto(`${base}${route}`, { waitUntil: "domcontentloaded" });
+        try {
+          await page.locator(".v-data-table, .app-entity-list__feed, main").first().waitFor({ timeout: 30_000 });
+          rendered = true;
+          if (attempt > 1) warnings.push(`[${viewport.name}] ${route}: blank on first load, rendered on retry (${lastError})`);
+        } catch (e) {
+          lastError = e.message.split("\n")[0];
+        }
+      }
+      if (!rendered) {
+        problems.push(`[${viewport.name}] ${route}: didn't render after 2 attempts (${lastError})`);
+      } else {
         await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => {});
         await page.waitForTimeout(800);
         if (selector) {
           const n = await page.locator(selector).count();
           if (n === 0) problems.push(`[${viewport.name}] ${route}: expected "${selector}" but found none`);
         }
-      } catch (e) {
-        problems.push(`[${viewport.name}] ${route}: didn't render (${e.message.split("\n")[0]})`);
       }
       const file = path.join(out, `${viewport.name}${route.replace(/\//g, "_") || "_root"}.png`);
       await page.screenshot({ path: file });
@@ -94,7 +116,7 @@ try {
 }
 
 if (warnings.length) {
-  console.log(`\nWARN — third-party proxy errors (not failing):\n  ${[...new Set(warnings)].join("\n  ")}`);
+  console.log(`\nWARN (not failing):\n  ${[...new Set(warnings)].join("\n  ")}`);
 }
 if (problems.length) {
   console.log(`\nFAIL — ${problems.length} problem(s):\n  ${problems.join("\n  ")}`);
