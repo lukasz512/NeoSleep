@@ -25,6 +25,7 @@
       :load-error="loadFailed"
       :back-route="{ name: 'users' }"
       :back-label="t('user.users.detail.back')"
+      :trail="user ? [user.name] : []"
       :not-found-label="t('user.users.detail.notFound')"
       @retry="loadUser"
     >

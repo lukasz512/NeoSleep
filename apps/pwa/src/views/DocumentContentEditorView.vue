@@ -5,6 +5,7 @@
     :load-error="loadError"
     :back-route="{ name: 'document-content' }"
     :back-label="t('user.document-content.editor.back')"
+    :trail="[documentLabel, localeLabel]"
     :not-found-label="t('user.document-content.editor.notFound')"
     @retry="load"
   >

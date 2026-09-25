@@ -22,6 +22,7 @@
       :load-error="loadFailed"
       :back-route="{ name: 'patients' }"
       :back-label="t('app.patients.detail.back')"
+      :trail="patient ? [patient.name] : []"
       :not-found-label="t('app.patients.detail.notFound')"
       @retry="loadPatient"
     >

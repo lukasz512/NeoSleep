@@ -31,6 +31,7 @@
       :load-error="loadFailed"
       :back-route="{ name: 'hcp' }"
       :back-label="t('user.hcp.detail.back')"
+      :trail="hcp ? [hcp.name] : []"
       :not-found-label="t('user.hcp.detail.notFound')"
       @retry="loadHCP"
     >

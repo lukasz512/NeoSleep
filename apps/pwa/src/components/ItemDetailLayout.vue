@@ -13,6 +13,32 @@
       >
         <AppIcon name="arrow-left" class="view-item__back-icon" />
       </AppButton>
+      <!-- Breadcrumbs right after the back arrow (NEO-56): the parent list,
+           then `trail` (record name, or deeper levels). Hierarchy, not
+           history — the parent is always the back route. Below 600px only
+           the parent stays; the record name is the big title right under. -->
+      <nav v-if="hasContent && parentLabel" class="view-item__breadcrumbs" :aria-label="t('app.common.breadcrumbs')">
+        <ol class="view-item__crumbs">
+          <li class="view-item__crumb">
+            <RouterLink :to="backRoute" class="view-item__crumb-link">{{ parentLabel }}</RouterLink>
+          </li>
+          <li
+            v-for="(crumb, i) in trail"
+            :key="i"
+            class="view-item__crumb view-item__crumb--trail"
+            :aria-current="i === trail.length - 1 ? 'page' : undefined"
+          >
+            <AppIcon name="chevron-right" class="view-item__crumb-sep" aria-hidden="true" />
+            <span class="view-item__crumb-text">{{ crumb }}</span>
+          </li>
+        </ol>
+        <AppIcon
+          v-if="!trail.length && $slots['header-title']"
+          name="chevron-right"
+          class="view-item__crumb-sep"
+          aria-hidden="true"
+        />
+      </nav>
       <div v-if="$slots['header-title']" class="view-item__header-title">
         <slot name="header-title" />
       </div>
@@ -76,10 +102,11 @@ import { AppStateView } from "@ui";
 import AppButton from "./AppButton.vue";
 import AppIcon from "./AppIcon.vue";
 import AppLoadingState from "./AppLoadingState.vue";
+import { navTitleKey } from "../router/routes";
 
 const { t } = useI18n();
 
-defineProps<{
+const props = withDefaults(defineProps<{
   /** Whether item data is loaded and present. */
   hasContent: boolean;
   /** Whether still loading. */
@@ -100,7 +127,20 @@ defineProps<{
    * callers set this apart from a real 404.
    */
   loadError?: boolean;
-}>();
+  /**
+   * Breadcrumb levels after the parent list (NEO-56) — usually just the
+   * record's display name; the last one is the current page. The parent
+   * crumb itself comes from `backRoute`.
+   */
+  trail?: string[];
+}>(), { trail: () => [] });
+
+/** Parent crumb label: the nav title of the named back route (same key as the sidebar item). */
+const parentLabel = computed(() => {
+  const route = props.backRoute;
+  if (typeof route !== "object" || !("name" in route) || typeof route.name !== "string") return "";
+  return t(navTitleKey(route.name));
+});
 
 defineEmits<{
   retry: [];
@@ -127,6 +167,84 @@ defineEmits<{
 .view-item__header-actions {
   flex-shrink: 0;
   margin-left: auto;
+}
+
+.view-item__breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  /* Takes the row's free space (pushes the actions right) unless a
+     header-title follows, which then gets the space instead. */
+  flex: 1 1 auto;
+}
+.view-item__breadcrumbs:has(+ .view-item__header-title) {
+  flex: 0 1 auto;
+}
+
+.view-item__crumbs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-size: 0.9375rem;
+}
+
+.view-item__crumb {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.view-item__crumb:first-child {
+  flex-shrink: 0;
+}
+
+.view-item__crumb-link {
+  display: inline-flex;
+  align-items: center;
+  /* 44px touch target, same as the back button next to it. */
+  min-height: var(--pwa-btn-min-height, 44px);
+  padding: 0 4px;
+  color: rgb(var(--v-theme-primary));
+  font-weight: 500;
+  text-decoration: none;
+  border-radius: 6px;
+}
+.view-item__crumb-link:hover {
+  text-decoration: underline;
+}
+.view-item__crumb-link:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 2px;
+}
+
+.view-item__crumb-sep {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+.view-item__crumb-text {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.view-item__crumb[aria-current="page"] .view-item__crumb-text {
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-weight: 600;
+}
+
+/* Phone: parent only — the record name is the large title right below. */
+@media (max-width: 600px) {
+  .view-item__crumb--trail {
+    display: none;
+  }
 }
 
 .view-item__back-btn {
