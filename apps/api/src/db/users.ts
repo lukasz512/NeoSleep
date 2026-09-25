@@ -76,52 +76,62 @@ const STAFF_AUTH_COLS = `${USER_COLS}, u.password_hash, u.force_password_change`
  * already in effect on that client. Never call these with a pool-level client.
  */
 
-export async function getOrCreateUserByProvider(
+/** Outcome of matching a Google identity to an existing staff account (NEO-78). */
+export type GoogleSignInResult =
+  | { kind: "ok"; user: User }
+  /** No usable account: unknown email, unverified Google email, or the matching
+   *  account is already linked to a different Google account. Never auto-created:
+   *  accounts are created only by an admin. */
+  | { kind: "no_account" }
+  /** An account exists but its status is not 'active' (inactive / suspended / pending invite). */
+  | { kind: "inactive" };
+
+/**
+ * Resolves the staff user a Google sign-in belongs to. Never creates an account:
+ * before NEO-78 this auto-provisioned a global-scope 'rep' for any Google email,
+ * which would have let anyone with a Google account into the CRM.
+ *
+ * 1. A user already linked to this Google `sub` wins (an email change on the
+ *    Google side doesn't lock them out).
+ * 2. Otherwise only a Google-verified email is matched against identities.email
+ *    (UNIQUE, and users.identity_id is UNIQUE, so at most one user), and that
+ *    user's google_sub is linked on first sign-in, unless it is already linked
+ *    to a different Google account.
+ */
+export async function resolveGoogleSignInUser(
   client: PoolClient,
-  _provider: string,
   googleSub: string,
   email: string,
-  name?: string | null
-): Promise<User | null> {
+  emailVerified: boolean
+): Promise<GoogleSignInResult> {
   try {
-    // Check by google_sub first
-    const existing = await client.query<User>(
+    const bySub = await client.query<User>(
       `SELECT ${USER_COLS} ${USER_JOIN} WHERE u.google_sub = $1 AND u.deleted_at IS NULL`,
       [googleSub]
     );
-    if (existing.rows[0]) return existing.rows[0];
+    const linked = bySub.rows[0];
+    if (linked) return linked.status === "active" ? { kind: "ok", user: linked } : { kind: "inactive" };
 
-    // Not found — create. The surrounding withTenant() transaction owns atomicity.
-    const firstName = name ? name.split(" ")[0] ?? null : null;
-    const lastName = name && name.includes(" ") ? name.split(" ").slice(1).join(" ") : null;
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!emailVerified || !normalizedEmail) return { kind: "no_account" };
 
-    const identityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (email, first_name, last_name) VALUES ($1, $2, $3) RETURNING id`,
-      [email.trim().toLowerCase(), firstName, lastName]
+    const byEmail = await client.query<User>(
+      `SELECT ${USER_COLS} ${USER_JOIN} WHERE lower(i.email) = $1 AND u.deleted_at IS NULL`,
+      [normalizedEmail]
     );
-    const identityId = identityResult.rows[0]!.id;
-
-    const userResult = await client.query<{ id: string }>(
-      `INSERT INTO users (identity_id, google_sub, status) VALUES ($1, $2, 'active') RETURNING id`,
-      [identityId, googleSub]
-    );
-    const userId = userResult.rows[0]!.id;
+    const candidate = byEmail.rows[0];
+    if (!candidate || byEmail.rows.length > 1) return { kind: "no_account" };
+    if (candidate.google_sub && candidate.google_sub !== googleSub) return { kind: "no_account" };
+    if (candidate.status !== "active") return { kind: "inactive" };
 
     await client.query(
-      `INSERT INTO user_roles (user_id, role, territory_id)
-       VALUES ($1, 'rep', (SELECT id FROM territory WHERE kind = 'global' LIMIT 1))
-       ON CONFLICT (user_id, role, territory_id) DO NOTHING`,
-      [userId]
+      `UPDATE users SET google_sub = $1, updated_at = now() WHERE id = $2 AND google_sub IS NULL`,
+      [googleSub, candidate.id]
     );
-
-    const inserted = await client.query<User>(
-      `SELECT ${USER_COLS} ${USER_JOIN} WHERE u.id = $1`,
-      [userId]
-    );
-    return inserted.rows[0] ?? null;
+    return { kind: "ok", user: { ...candidate, google_sub: googleSub } };
   } catch (err) {
     if (err instanceof AppError) throw err;
-    throw new DatabaseError("getOrCreateUserByProvider", err);
+    throw new DatabaseError("resolveGoogleSignInUser", err);
   }
 }
 
@@ -289,9 +299,9 @@ export async function getUserRoleScopes(client: PoolClient, userId: string): Pro
  * having an invite token at all.
  *
  * Opt-in, not "everyone without a password": only rows a seed migration explicitly
- * created with force_password_change = true (the column defaults to false). Google
- * sign-in creates accounts without a password too (getOrCreateUserByProvider above)
- * — those must never get the shared password either, hence also google_sub IS NULL.
+ * created with force_password_change = true (the column defaults to false). Accounts
+ * linked to Google sign-in (resolveGoogleSignInUser above) sign in through Google and
+ * must never get the shared password either, hence also google_sub IS NULL.
  * Doctors never get it, however they were created (invite, lead conversion, or an
  * admin adding a 'doctor' user without a password): they set their own password.
  */

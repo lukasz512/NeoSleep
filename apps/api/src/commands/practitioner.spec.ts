@@ -12,7 +12,7 @@ import {
   updatePractitionerStatus,
   getPractitionerById,
   getUsersWithoutPassword,
-  getOrCreateUserByProvider,
+  resolveGoogleSignInUser,
 } from "../db.js";
 import { hashToken } from "../utils/hashToken.js";
 import type { TenantContext } from "../context/TenantContext.js";
@@ -289,13 +289,19 @@ describe("ActivatePractitionerCommand", () => {
       const seeded = await insertStaffUser(client, `qa-seed-${uniqueSuffix()}@example.com`, "Seed", "Staff", "rep", null, true);
       const noForce = await insertStaffUser(client, `qa-noforce-${uniqueSuffix()}@example.com`, "No", "Force", "rep", null, false);
       const doctor = await insertStaffUser(client, `qa-doc-${uniqueSuffix()}@example.com`, "Admin", "Made", "doctor", null, true);
-      const google = await getOrCreateUserByProvider(client, "google", `qa-sub-${uniqueSuffix()}`, `qa-google-${uniqueSuffix()}@example.com`, "Goo Gle");
+      // Google sign-in never creates accounts (NEO-78): a seeded account that got
+      // linked to Google on its first Google sign-in must still be skipped.
+      const googleEmail = `qa-google-${uniqueSuffix()}@example.com`;
+      await insertStaffUser(client, googleEmail, "Goo", "Gle", "rep", null, true);
+      const linked = await resolveGoogleSignInUser(client, `qa-sub-${uniqueSuffix()}`, googleEmail, true);
+      if (linked.kind !== "ok") throw new Error(`expected a linked Google account, got ${linked.kind}`);
+      const google = linked.user;
 
       const pending = (await getUsersWithoutPassword(client)).map((u) => u.id);
       expect(pending).toContain(seeded!.id);
       expect(pending).not.toContain(noForce!.id);
       expect(pending).not.toContain(doctor!.id);
-      expect(pending).not.toContain(google!.id);
+      expect(pending).not.toContain(google.id);
     });
   }, 15000);
 
