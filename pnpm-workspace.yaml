@@ -6,11 +6,12 @@ packages:
 # Shared versions across workspaces — one update bumps the version everywhere.
 catalog:
   vue: ^3.5.43
-  vue-router: ^4.6.4
-  vue-i18n: ^10.0.8
+  vue-router: ^5.3.1
+  vue-i18n: ^11.4.12
   vuetify: ^3.13.5
   "@mdi/font": ^7.4.47
-  pinia: ^3.0.4
+  pinia: ^4.0.3
+  "@vue/devtools-api": ^8.2.1
   "@vitejs/plugin-vue": ^6.0.9
   "@vueuse/core": ^14.4.0
   "@unhead/vue": ^2.1.17

@@ -20,17 +20,15 @@ export const SESSION_CHECK_BUDGET_MS = 2500;
  * - Root "/" redirects to /login (route config); authenticated users are redirected from /login to /patients.
  * - requiresAuth: ensure session is checked (fetchSession), then allow or redirect to /login?redirect=.
  */
-router.beforeEach(async (to, _from, next) => {
+router.beforeEach(async (to) => {
   const auth = useAuthStore();
   const rolePreview = useRolePreviewStore();
 
   if (to.meta.devOnly) {
     if (isDev) {
-      next();
-      return;
+      return true;
     }
-    next({ path: "/login" });
-    return;
+    return { path: "/login" };
   }
 
   if (to.meta.public) {
@@ -52,17 +50,14 @@ router.beforeEach(async (to, _from, next) => {
               void router.replace({ path: redirect, query: {} });
             }
           });
-          next();
-          return;
+          return true;
         }
       }
       if (auth.isAuthenticated) {
-        next({ path: redirect, query: {} });
-        return;
+        return { path: redirect, query: {} };
       }
     }
-    next();
-    return;
+    return true;
   }
 
   if (to.meta.requiresAuth) {
@@ -70,8 +65,7 @@ router.beforeEach(async (to, _from, next) => {
       await auth.fetchSession();
     }
     if (!auth.isAuthenticated) {
-      next({ path: "/login", query: { redirect: to.fullPath } });
-      return;
+      return { path: "/login", query: { redirect: to.fullPath } };
     }
     // Admin's "view as" preview (rolePreview.ts) is respected here too — only for
     // navigation, so testing as another role actually redirects like the real
@@ -80,8 +74,7 @@ router.beforeEach(async (to, _from, next) => {
     const roles = to.meta.roles as UserRole[] | undefined;
     const effectiveRole = rolePreview.previewRole ?? auth.user?.role;
     if (!isRoleAllowed(roles, effectiveRole)) {
-      next({ path: appHomePath });
-      return;
+      return { path: appHomePath };
     }
 
     // Fire-and-forget: retries the partner connection if it's down and
@@ -90,11 +83,10 @@ router.beforeEach(async (to, _from, next) => {
     const partner = to.meta.partner as string | undefined;
     if (partner) void ensurePartnerConnection(partner);
 
-    next();
-    return;
+    return true;
   }
 
-  next();
+  return true;
 });
 
 /** Trace view navigation in dev (from → to, route name). */
