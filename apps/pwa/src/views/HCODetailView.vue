@@ -30,16 +30,21 @@
     :load-error="loadFailed"
     :back-route="{ name: 'hco' }"
     :back-label="t('user.hco.detail.back')"
+    :record-title="hco?.name ?? ''"
     :not-found-label="t('user.hco.detail.notFound')"
     @retry="loadHCO"
   >
-    <template v-if="hco" #title>
-      <!-- Type now lives in the identity's labelled fields; status stays a badge next to the name. -->
-      <IdentityHeader :name="hco.name" entity-type="hco" :org-type="hco.type" :details="orgDetails(hco, { withCity: true }).details">
-        <VChip :color="hcoStatusColor(hco.status)" size="small" variant="tonal">
-          {{ hcoStatusLabel(hco.status) }}
-        </VChip>
-      </IdentityHeader>
+    <template v-if="hco" #record-tile>
+      <AppAvatar :name="hco.name" entity-type="hco" :org-type="hco.type" :size="48" />
+    </template>
+    <template v-if="hco" #title-extra>
+      <!-- Type now lives in the identity line; status stays a badge next to the name. -->
+      <VChip :color="hcoStatusColor(hco.status)" size="small" variant="tonal">
+        {{ hcoStatusLabel(hco.status) }}
+      </VChip>
+    </template>
+    <template v-if="hco" #record-details>
+      <IdentityDetails :details="orgDetails(hco, { withCity: true }).details" />
     </template>
     <template v-if="hco" #header-actions>
       <VTooltip location="bottom">
@@ -217,7 +222,8 @@ import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import AppButton from "../components/AppButton.vue";
-import IdentityHeader from "../components/IdentityHeader.vue";
+import AppAvatar from "../components/AppAvatar.vue";
+import IdentityDetails from "../components/IdentityDetails.vue";
 import { useIdentity } from "../composables/useIdentity";
 import AppIcon from "../components/AppIcon.vue";
 import DetailViewTabs from "../components/DetailViewTabs.vue";

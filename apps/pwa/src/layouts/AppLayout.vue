@@ -44,7 +44,10 @@
 
       <template #drawer-footer>
         <div class="layout-drawer-footer">
-          <div class="layout-nav-footer" :class="{ 'layout-nav-footer--collapsed': sidebarCollapsed }">
+          <div
+            v-if="SIDEBAR_COLLAPSE_ENABLED"
+            class="layout-nav-footer"
+            :class="{ 'layout-nav-footer--collapsed': sidebarCollapsed }">
             <AppButton
               icon
               variant="text"
@@ -97,6 +100,7 @@
               v-bind="menuProps"
               variant="text"
               class="layout-user-btn"
+              ignore-global-loading
               :class="{ 'layout-user-btn--compact': isMobile }"
               :title="t('user.user.menu')"
               :aria-label="t('user.user.menu')"
@@ -144,7 +148,9 @@
              teleports its own controls into (usePageHeader.ts). v-show, not
              v-if: the teleport target must never be removed from under a
              view that is still teleporting into it. -->
-        <div v-show="!isMobile" class="layout-page-header">
+        <!-- NEO-56: hidden while a detail view shows its record header, whose
+             "MODULE ›" eyebrow above the record's name replaces this row. -->
+        <div v-show="!isMobile && !recordHeaderClaim" class="layout-page-header">
           <AppButton
             v-if="parentRoute"
             icon
@@ -201,7 +207,7 @@
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRoute } from "vue-router";
 import { navTitleKey, navIconName, navParentName } from "../router/routes";
-import { providePageHeader, PAGE_HEADER_ACTIONS_ID } from "../composables/usePageHeader";
+import { providePageHeader, provideRecordHeaderClaim, PAGE_HEADER_ACTIONS_ID } from "../composables/usePageHeader";
 import { useGlyphInset } from "../composables/useGlyphInset";
 import { useI18n } from "vue-i18n";
 import { AppShell, useAppVersionLabel } from "@ui";
@@ -218,6 +224,7 @@ import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
 import { useNotificationCenter } from "../composables/useNotificationCenter";
 import { onAppReady, markAppReady } from "../composables/useAppReady";
 import { usePartnerResources } from "../composables/usePartnerResources";
+import { SIDEBAR_COLLAPSE_ENABLED } from "../constants";
 
 const route = useRoute();
 const { t, locale } = useI18n();
@@ -264,6 +271,7 @@ const appVersionLabel = useAppVersionLabel();
 
 // Views teleport their controls into the desktop page header only while it is shown.
 providePageHeader(computed(() => !isMobile.value));
+const recordHeaderClaim = provideRecordHeaderClaim();
 
 /** Detail views (patient-detail, …) point back at their list; undefined on top-level modules. */
 const parentName = computed(() => {
@@ -307,9 +315,10 @@ const moduleIcon = computed(() => {
   /* Side menu: list padding + nav item padding → icon box left edge. */
   --layout-nav-inset: 8px;
   --layout-nav-item-inset: 10px;
-  /* Content card padding, and the icon's inset inside a size="large" (56px)
-     icon button holding a 24px icon: (56 − 24) / 2. */
-  --layout-card-inset: 16px;
+  /* Content card padding = the responsive page gutter (NEO-61, 20/24/32px,
+     packages/brand/spacing.css), and the icon's inset inside a size="large"
+     (56px) icon button holding a 24px icon: (56 − 24) / 2. */
+  --layout-card-inset: var(--page-gutter, 16px);
   --layout-action-icon-inset: 16px;
   /* AppIcon glyphs are stroked ~1px inside their box; the logo and the
      avatar circle have no such inset, so they sit 1px further in to match
@@ -536,9 +545,9 @@ const moduleIcon = computed(() => {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1, 4px);
   min-height: 48px;
-  margin-bottom: 16px;
+  margin-bottom: var(--space-6, 24px);
   flex: 0 0 auto;
 }
 
@@ -618,20 +627,20 @@ const moduleIcon = computed(() => {
   gap: 2px;
   width: 100%;
   min-width: 0;
-  padding-bottom: 4px;
+  padding-bottom: 0;
 }
 
-/* Quiet footnote, not UI: small and low-contrast, left-aligned with the
-   account button's avatar above it. */
+/* Quiet footnote, not UI: tiny, low-contrast, tucked into the drawer's
+   bottom-left corner. */
 .layout-app-version {
   margin: 0;
-  padding-inline: 12px 0;
-  font-size: 11px;
-  line-height: 1.4;
-  font-weight: 500;
+  padding-inline: 2px 0;
+  font-size: 10px;
+  line-height: 1.3;
+  font-weight: 400;
   letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
-  color: rgba(var(--v-theme-on-surface), 0.45);
+  color: rgba(var(--v-theme-on-surface), 0.32);
   /* Wraps rather than truncating if a long build number ever outgrows the
      ~200px drawer — the number is the point of the line. */
   overflow-wrap: anywhere;

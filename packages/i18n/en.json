@@ -4,6 +4,7 @@
   "app.common.yes": "Yes",
   "app.common.no": "No",
   "app.common.close": "Close",
+  "app.common.breadcrumbs": "Breadcrumbs",
   "app.common.discard": "Discard",
   "app.common.remove": "Remove",
   "app.common.discardChanges": "Discard unsaved changes?",

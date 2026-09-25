@@ -315,7 +315,8 @@ defineExpose({ expanded, setExpanded });
   display: flex;
   flex-direction: column;
   height: calc(var(--mobile-bottom-nav-height, 64px) + env(safe-area-inset-bottom));
-  padding-inline: 21px;
+  /* Same side edge as the page content above it (NEO-61). */
+  padding-inline: var(--page-gutter, 20px);
   padding-bottom: env(safe-area-inset-bottom);
   background: var(--mobile-bottom-nav-bg, #fff);
   border-top: 1px solid var(--mobile-bottom-nav-border, rgba(0, 0, 0, 0.12));
@@ -333,7 +334,13 @@ defineExpose({ expanded, setExpanded });
   display: flex;
   align-items: stretch;
   justify-content: center;
-  gap: 8px;
+  gap: var(--space-2, 8px);
+  /* Tablet width (NEO-61): the items — and the expanded module grid — stay a
+     phone-sized cluster in the middle instead of spreading across the whole
+     bar. 5 cells × 89px + 4 gaps. */
+  width: 100%;
+  max-width: 480px;
+  margin-inline: auto;
 }
 
 .mobile-nav-panel__cell {
@@ -355,8 +362,8 @@ defineExpose({ expanded, setExpanded });
 /* Expanded: the same cells as a 4-column grid, the panel sized by content. */
 .mobile-nav-panel--expanded {
   height: auto;
-  padding-top: 8px;
-  padding-bottom: calc(8px + env(safe-area-inset-bottom));
+  padding-top: var(--space-2, 8px);
+  padding-bottom: calc(var(--space-4, 16px) + env(safe-area-inset-bottom));
   border-top-left-radius: 20px;
   border-top-right-radius: 20px;
   box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.16);
@@ -365,7 +372,7 @@ defineExpose({ expanded, setExpanded });
 .mobile-nav-panel--expanded .mobile-nav-panel__items {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  gap: var(--space-2, 8px);
 }
 
 .mobile-nav-panel--expanded .mobile-nav-panel__cell,

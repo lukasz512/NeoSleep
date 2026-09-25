@@ -202,6 +202,16 @@ describe("AppLayout", () => {
       expect(block).not.toContain("VAvatar");
     });
 
+    it("the collapse toggle is hidden behind SIDEBAR_COLLAPSE_ENABLED (off for now)", () => {
+      const block = slotBlock(readLayout(), "drawer-footer");
+      expect(block).toMatch(/v-if="SIDEBAR_COLLAPSE_ENABLED"\s+class="layout-nav-footer"/);
+    });
+
+    it("the account button never locks while a request is in flight (only view controls do)", () => {
+      const block = slotBlock(readLayout(), "app-bar-actions");
+      expect(block).toMatch(/class="layout-user-btn"[\s\S]*?ignore-global-loading/);
+    });
+
     it("no notification bell, role-preview select, or theme panel sneaks into the app bar", () => {
       const source = readLayout();
       expect(source).not.toMatch(/<AppNotificationCenter\b/);
@@ -217,7 +227,9 @@ describe("AppLayout", () => {
     it("desktop page header: back arrow on detail views, module title, and the teleport target for view controls", () => {
       const source = readLayout();
       const header = source.slice(source.indexOf('class="layout-page-header"') - 40, source.indexOf("<RouterView"));
-      expect(header).toContain('v-show="!isMobile"');
+      // NEO-56: also hidden while a detail view's record header replaces it.
+      expect(source).toContain('<div v-show="!isMobile && !recordHeaderClaim" class="layout-page-header">');
+      expect(source).toContain("provideRecordHeaderClaim()");
       expect(header).toMatch(/v-if="parentRoute"[\s\S]*?:to="parentRoute"/);
       expect(header).toContain("{{ moduleTitle }}");
       expect(header).toContain(':id="PAGE_HEADER_ACTIONS_ID"');

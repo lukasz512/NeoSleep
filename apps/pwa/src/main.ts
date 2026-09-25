@@ -9,6 +9,7 @@ import { i18n } from "./plugins/i18n";
 import "./assets/theme.scss";
 import "./assets/app-responsive.scss";
 import "./assets/flags.css";
+import "@brand/spacing.css";
 import "@brand/transitions.css";
 import "./assets/transitions.css";
 import { setupDiagnosticReporter } from "./composables/useDiagnosticReporter";
