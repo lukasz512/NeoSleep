@@ -191,6 +191,39 @@ describe("PatientStudiesPanel — the Estudios checklist", () => {
     expect(button(row, "Upload file")).toBeUndefined();
   });
 
+  it("a sleep study can still be deleted from the polysomnography history, after confirming", async () => {
+    const psg = (checklistBody.items as Record<string, unknown>[])[5]!;
+    Object.assign(psg, {
+      status: "partial",
+      history: [
+        {
+          id: "ss-2",
+          type: "sleep_study",
+          created_at: "2026-09-22T10:00:00Z",
+          source: "staff",
+          by: null,
+          sleep_study: { id: "ss-2", status: "ordered", study_date: null, ahi_score: null, spo2_nadir: null, odi: null, interpretation: null },
+        },
+      ],
+    });
+    const base = apiFetch.getMockImplementation()!;
+    apiFetch.mockImplementation(async (path: string, init?: RequestInit) =>
+      path === "/api/v1/sleep-study/ss-2" && init?.method === "DELETE" ? jsonResponse(true, 204, null) : base(path, init)
+    );
+    const wrapper = await mountPanel();
+    const row = rows(wrapper)[5]!;
+    await button(row, "History (1)")!.trigger("click");
+    await row.find('[aria-label="Remove"]').trigger("click");
+    await flushPromises();
+    expect(apiFetch).not.toHaveBeenCalledWith("/api/v1/sleep-study/ss-2", expect.anything()); // not before confirming
+
+    const confirm = [...document.body.querySelectorAll(".pwa-confirm-dialog__card button")].find((b) => b.textContent?.includes("Remove")) as HTMLButtonElement;
+    confirm.click();
+    await flushPromises();
+    expect(apiFetch).toHaveBeenCalledWith("/api/v1/sleep-study/ss-2", expect.objectContaining({ method: "DELETE" }));
+    expect(notify).toHaveBeenCalledWith("Sleep study deleted", "success");
+  });
+
   it("prints an item as a PDF opened in a new tab", async () => {
     const tab = { location: { href: "" }, close: vi.fn(), opener: {} };
     const open = vi.spyOn(window, "open").mockReturnValue(tab as unknown as Window);

@@ -1,7 +1,7 @@
 <template>
   <VDialog :model-value="modelValue" max-width="420" :transition="originDialogTransition" @update:model-value="emit('update:modelValue', $event)">
-    <VCard class="qr-dialog">
-      <VCardTitle>{{ t("app.clinical.qr.title") }}</VCardTitle>
+    <VCard class="qr-dialog pwa-form-dialog__card">
+      <AppDialogHeader :title="t('app.clinical.qr.title')" @close="emit('update:modelValue', false)" />
       <VCardText class="qr-dialog__body">
         <p class="qr-dialog__kind">{{ title }}</p>
 
@@ -30,6 +30,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import AppDialogHeader from "../AppDialogHeader.vue";
 import QRCode from "qrcode";
 import { originDialogTransition } from "@ui";
 import AppButton from "../AppButton.vue";

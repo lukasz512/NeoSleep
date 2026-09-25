@@ -124,8 +124,8 @@
     </AuthCard>
 
     <VDialog v-model="showEditDialog" max-width="520" :transition="originDialogTransition">
-      <VCard>
-        <VCardTitle>{{ t('user.partnerRegistration.form.editModal.title') }}</VCardTitle>
+      <VCard class="pwa-form-dialog__card">
+        <AppDialogHeader :title="t('user.partnerRegistration.form.editModal.title')" @close="cancelEditDialog" />
         <VCardText>
           <VForm ref="editFormRef">
             <VTextField
@@ -177,15 +177,15 @@
       </VCard>
     </VDialog>
     <VDialog v-model="showGdprDialog" max-width="560" :transition="originDialogTransition">
-      <VCard>
-        <VCardTitle>{{ t('documents.gdprConsent.title') }}</VCardTitle>
+      <VCard class="pwa-form-dialog__card">
+        <AppDialogHeader :title="t('documents.gdprConsent.title')" @close="showGdprDialog = false" />
         <VCardText class="partner-registration__document-text">{{ t('documents.gdprConsent.body') }}</VCardText>
         <VCardActions><VSpacer /><AppButton variant="text" @click="showGdprDialog = false">{{ t('app.common.close') }}</AppButton></VCardActions>
       </VCard>
     </VDialog>
     <VDialog v-model="showAgreementDialog" max-width="560" :transition="originDialogTransition">
-      <VCard>
-        <VCardTitle>{{ t('documents.partnerAgreement.title') }}</VCardTitle>
+      <VCard class="pwa-form-dialog__card">
+        <AppDialogHeader :title="t('documents.partnerAgreement.title')" @close="showAgreementDialog = false" />
         <VCardText class="partner-registration__document-text">{{ t('documents.partnerAgreement.body') }}</VCardText>
         <VCardActions><VSpacer /><AppButton variant="text" @click="showAgreementDialog = false">{{ t('app.common.close') }}</AppButton></VCardActions>
       </VCard>
@@ -201,6 +201,7 @@ import { AuthChrome, AuthCard, originDialogTransition } from "@ui";
 import { brandColors } from "@brand/colors";
 import AppLoadingState from "../components/AppLoadingState.vue";
 import AppButton from "../components/AppButton.vue";
+import AppDialogHeader from "../components/AppDialogHeader.vue";
 import SignaturePad from "../components/SignaturePad.vue";
 import { apiFetch } from "../composables/useApi";
 

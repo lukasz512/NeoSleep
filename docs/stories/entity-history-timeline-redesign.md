@@ -48,7 +48,7 @@ n/a — internal change (rep-facing audit/history UI polish, not an HCP-engageme
 - [x] Loading shows a skeleton with `role="status"` and a screen-reader label; entry fade-in, the skeleton pulse and the details transition all run only under `prefers-reduced-motion: no-preference`.
 - [x] Dates go through `Intl` with the real BCP 47 tag (`mx` → `es-MX` via the new `intlLocale()` in `@i18n/language-options`).
 
-### Deliberately not done (need a decision first)
-- **CSV/PDF export of history**: exporting audit data off a rep device is a GDPR question (who may export, and whether the export itself must be audited, which needs a backend write). Left out until decided.
-- **Merging runs of small edits into one entry**: for an audit trail every write should stay a distinct, individually referenceable entry, so this was skipped on purpose.
-- **Region labels**: region codes (e.g. `PL-MZ`) are shown as stored. Humanizing them needs the territory lookup, and the History endpoint doesn't return it.
+### Decisions (Łukasz, 2026-09-24)
+- **No export of history, for anyone.** No CSV/PDF/print export of the History tab is to be built. Audit data stays on screen only.
+- **No merging of small edits.** Every audit write stays a distinct, individually referenceable entry. Keeping them separate is the legally safer choice.
+- **Region names: fixed.** `region` values now render through the tenant's `region` lookup (`configStore.regionItems`, already loaded app-wide by `useLayoutState` and localized per locale). This is the same lookup the patient, HCP and HCO forms write from, so no backend change is needed. Codes with no lookup entry still show as stored (fail visible).

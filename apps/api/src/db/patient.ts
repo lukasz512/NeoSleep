@@ -22,6 +22,10 @@ export interface Patient {
   last_name: string;
   email: string | null;
   phone: string | null;
+  /** identities.gender: male | female | other | prefer_not_to_say | null */
+  gender: string | null;
+  /** identities.date_of_birth as a plain YYYY-MM-DD string (no time zone shift) */
+  date_of_birth: string | null;
   // From patient table
   practitioner_id: string | null;
   diagnosis_code: Record<string, unknown> | null;
@@ -38,6 +42,9 @@ export interface Patient {
   // Computed from practitioner + identities JOIN (resolved display name, mirrors
   // practitioner.ts's own organization.name AS institution join for the same need)
   practitioner_name: string | null;
+  /** Assigned practitioner's primary_specialty lookup key (e.g. "dentist"),
+   *  shown under the doctor's name in lists (NEO-57). */
+  practitioner_specialty: string | null;
 }
 
 export interface GetPatientsFilters {
@@ -60,6 +67,8 @@ export interface PatientInsert {
   last_name: string;
   email?: string;
   phone?: string;
+  gender?: string | null;
+  date_of_birth?: string | null;
   practitioner_id?: string;
   diagnosis_code?: Record<string, unknown>;
   ahi_baseline?: number;
@@ -79,6 +88,8 @@ export interface PatientUpdate {
   last_name?: string;
   email?: string;
   phone?: string;
+  gender?: string | null;
+  date_of_birth?: string | null;
   practitioner_id?: string;
   diagnosis_code?: Record<string, unknown>;
   ahi_baseline?: number;
@@ -100,6 +111,8 @@ const PATIENT_SELECT_COLS = `
   p.cpap_device, p.medical_record, p.status, p.metadata,
   p.created_at, p.updated_at,
   i.title AS salutation, i.first_name, i.last_name, i.email, i.phone,
+  i.gender, to_char(i.date_of_birth, 'YYYY-MM-DD') AS date_of_birth,
+  pr.primary_specialty AS practitioner_specialty,
   COALESCE(i.region, '') AS region, i.territory_id, t.name AS territory_name,
   pi.title AS practitioner_salutation, pi.first_name AS practitioner_first_name, pi.last_name AS practitioner_last_name`.trim();
 
@@ -125,6 +138,9 @@ type PatientRow = {
   last_name: string;
   email: string | null;
   phone: string | null;
+  gender: string | null;
+  date_of_birth: string | null;
+  practitioner_specialty: string | null;
   practitioner_id: string | null;
   diagnosis_code: Record<string, unknown> | null;
   // NUMERIC(6,2) column — pg driver returns it as a string, not a number.
@@ -164,6 +180,8 @@ function serialize(row: PatientRow): Patient & { name: string } {
     last_name: row.last_name,
     email: row.email,
     phone: row.phone,
+    gender: row.gender,
+    date_of_birth: row.date_of_birth,
     practitioner_id: row.practitioner_id,
     diagnosis_code: row.diagnosis_code,
     ahi_baseline: optNum(row.ahi_baseline),
@@ -177,6 +195,7 @@ function serialize(row: PatientRow): Patient & { name: string } {
     created_at: isoDate(row.created_at),
     updated_at: isoDate(row.updated_at),
     practitioner_name: buildPractitionerName(row),
+    practitioner_specialty: row.practitioner_specialty,
     name: buildName(row),
   };
 }
@@ -189,7 +208,7 @@ export async function getPatientsPaginated(
   sortBy = "created_at",
   sortOrder: "asc" | "desc" = "desc"
 ): Promise<{ rows: (Patient & { name: string })[]; total: number }> {
-  const allowed = ["created_at", "last_name", "first_name", "status", "region"];
+  const allowed = ["created_at", "updated_at", "last_name", "first_name", "status", "region"];
   const col = allowed.includes(sortBy) ? sortBy : "created_at";
   const dir = sortOrder === "asc" ? "ASC" : "DESC";
   const safeCol = ["first_name", "last_name", "region"].includes(col) ? `i.${col}` : `p.${col}`;
@@ -275,8 +294,8 @@ export async function getPatientById(client: PoolClient, id: string): Promise<(P
 export async function insertPatient(client: PoolClient, data: PatientInsert): Promise<Patient & { name: string }> {
   try {
     const identityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (title, first_name, last_name, email, phone, region, territory_id, country_code)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO identities (title, first_name, last_name, email, phone, region, territory_id, country_code, gender, date_of_birth)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING id`,
       [
         data.salutation ?? null,
@@ -287,6 +306,8 @@ export async function insertPatient(client: PoolClient, data: PatientInsert): Pr
         data.region ?? null,
         data.territory_id ?? null,
         data.country_code ?? null,
+        data.gender ?? null,
+        data.date_of_birth ?? null,
       ]
     );
     const identityId = identityResult.rows[0]!.id;
@@ -345,6 +366,8 @@ export async function updatePatient(
       region: "region",
       territory_id: "territory_id",
       country_code: "country_code",
+      gender: "gender",
+      date_of_birth: "date_of_birth",
     };
     for (const [field, column] of Object.entries(identityFieldToColumn) as [keyof PatientUpdate, string][]) {
       if (data[field] !== undefined) {

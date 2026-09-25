@@ -105,7 +105,8 @@ const GROUP_FOR: Record<ChecklistFillMode, ChecklistGroup> = {
   external: "results",
 };
 const GROUP_ORDER: ChecklistGroup[] = ["consent", "patient", "doctor", "results"];
-const PSG_DONE_STATUSES = new Set(["study_complete", "results_received", "interpreted"]);
+/** PSG counts once a polysomnography's RESULTS are in — not when merely ordered or recorded (same rule as db/patientFormCompletion.ts, NEO-54). */
+const PSG_DONE_STATUSES = new Set(["results_received", "interpreted"]);
 
 function uploadEntry(file: FileAttachment): ChecklistHistoryEntry {
   const meta = file.metadata ?? {};
@@ -240,7 +241,10 @@ export async function GetPatientChecklistQuery(ctx: TenantContext, patientId: st
     ...uploadsFor(POLYSOMNOGRAPHY_KEY),
     ...src.sleepStudyFiles.map((file) => ({ ...uploadEntry(file), title: file.filename, file_attachment_id: file.id, sleep_study_id: file.sleep_study_id })),
   ].sort((a, b) => b.created_at.getTime() - a.created_at.getTime());
-  const psgDone = psgHistory.find((h) => h.type === "upload" || PSG_DONE_STATUSES.has(h.sleep_study?.status ?? ""));
+  const psgDoneStudies = new Set(
+    src.sleepStudies.filter((s) => s.study_type === "polysomnography" && PSG_DONE_STATUSES.has(s.status)).map((s) => s.id)
+  );
+  const psgDone = psgHistory.find((h) => h.type === "upload" || (h.sleep_study != null && psgDoneStudies.has(h.sleep_study.id)));
   items.push({
     key: POLYSOMNOGRAPHY_KEY,
     templateKey: null,

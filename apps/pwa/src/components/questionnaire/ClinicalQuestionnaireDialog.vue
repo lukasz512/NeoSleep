@@ -1,12 +1,10 @@
 <template>
   <VDialog :model-value="modelValue" max-width="640" scrollable :transition="originDialogTransition" @update:model-value="emit('update:modelValue', $event)">
-    <VCard>
-      <VCardTitle class="clinical-dialog__title">
-        {{ t(KIND_LABEL_KEYS[kind]) }}
-        <span v-if="record" class="clinical-dialog__subtitle">{{ subtitle }}</span>
-      </VCardTitle>
+    <VCard class="pwa-form-dialog__card">
+      <AppDialogHeader :title="t(KIND_LABEL_KEYS[kind])" @close="emit('update:modelValue', false)" />
 
       <VCardText>
+        <p v-if="record" class="clinical-dialog__subtitle">{{ subtitle }}</p>
         <template v-if="kind === 'medical_history'">
           <QuestionnaireChecklist v-model="answers" :questions="MEDICAL_HISTORY_QUESTIONS" :readonly="readonly" />
           <p v-if="readonly && text.medical_history_other" class="clinical-dialog__other">
@@ -70,6 +68,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import AppDialogHeader from "../AppDialogHeader.vue";
 import { originDialogTransition } from "@ui";
 import { intlLocale } from "@i18n/language-options";
 import AppButton from "../AppButton.vue";
@@ -177,12 +176,8 @@ function onSave() {
 </script>
 
 <style scoped>
-.clinical-dialog__title {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
 .clinical-dialog__subtitle {
+  margin: 0 0 8px;
   font-size: 0.8125rem;
   font-weight: 400;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));

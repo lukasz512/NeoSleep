@@ -1,7 +1,7 @@
 <template>
   <VDialog :model-value="modelValue" max-width="520" :transition="originDialogTransition" @update:model-value="emit('update:modelValue', $event)">
-    <VCard>
-      <VCardTitle>{{ t("app.clinical.upload.title") }}</VCardTitle>
+    <VCard class="pwa-form-dialog__card">
+      <AppDialogHeader :title="t('app.clinical.upload.title')" @close="emit('update:modelValue', false)" />
       <VCardText>
         <form id="study-upload-form" class="study-upload" novalidate @submit.prevent="onSubmit">
           <VFileInput
@@ -60,6 +60,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import AppDialogHeader from "../AppDialogHeader.vue";
 import { originDialogTransition } from "@ui";
 import AppButton from "../AppButton.vue";
 import type { ChecklistItem } from "../../composables/usePatientChecklist";

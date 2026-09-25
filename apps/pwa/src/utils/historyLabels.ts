@@ -26,9 +26,10 @@ export interface HistoryFieldChange {
   after: unknown;
 }
 
-/** Resolves tenant-configurable lookup codes (specialty) the util can't know statically. */
+/** Resolves tenant-configurable lookup codes (specialty, region) the util can't know statically. */
 export interface HistoryValueLookups {
   specialty?: (code: string) => string | undefined;
+  region?: (code: string) => string | undefined;
 }
 
 export function historyActionIcon(action: string): AppIconName {
@@ -136,6 +137,7 @@ export function historyValueLabel(
     if (entityType === "TreatmentPlan") return translateOr(t, `app.treatmentPlans.type.${camelKey(value)}`, value);
   }
   if (field === "primary_specialty") return lookups.specialty?.(value) ?? value;
+  if (field === "region") return lookups.region?.(value) ?? value;
   return value;
 }
 

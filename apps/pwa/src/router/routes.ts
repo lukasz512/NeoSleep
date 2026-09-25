@@ -130,6 +130,11 @@ const detailRouteParents: Record<string, string> = {
   "document-content-detail": "document-content",
 };
 
+/** Parent list route name for a detail route (e.g. `patient-detail` → `patients`), or undefined for top-level routes. */
+export function navParentName(name: string): string | undefined {
+  return detailRouteParents[name];
+}
+
 /**
  * Returns the AppIcon name (e.g. `nav-leads`) for a route, reusing the same
  * sidebar/bottom-nav icon on detail pages. Undefined for routes with no nav

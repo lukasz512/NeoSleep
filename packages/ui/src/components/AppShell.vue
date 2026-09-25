@@ -12,44 +12,33 @@
     :class="enterClass"
     :style="{ '--app-shell-enter-order': 0 }"
   >
-    <template v-if="mobile" #prepend>
-      <!-- No size prop: Vuetify's own default icon-button box (36px
-           --v-btn-height + 12px density padding = 48px) is exactly the
-           Material touch-target minimum. This button only renders on
-           mobile, so that's the size that matters here — size="small"
-           (28+12=40px) undercut it for no reason. -->
-      <VBtn
-        icon
-        variant="text"
-        :aria-label="menuLabel"
-        :aria-expanded="drawerOpenModel"
-        @click="drawerOpenModel = !drawerOpenModel"
-      >
-        <slot name="menu-icon">
-          <span class="app-shell__hamburger" aria-hidden="true">
-            <span /><span /><span />
-          </span>
-        </slot>
-      </VBtn>
+    <!-- NEO-55: no hamburger — on mobile every module is reachable from the
+         bottom bar (+ its "More" sheet), so the bar's leading edge is left to
+         the app: the logo on desktop, a back arrow on mobile detail views. -->
+    <template #prepend>
+      <div class="app-shell__bar-start">
+        <slot name="app-bar-start" :mobile="mobile" />
+      </div>
     </template>
 
     <VAppBarTitle class="app-shell__title">
-      <slot name="app-bar-title" />
+      <slot name="app-bar-title" :mobile="mobile" />
     </VAppBarTitle>
 
     <template #append>
-      <slot name="app-bar-actions" />
-      <div class="app-shell__bar-logo">
-        <slot name="logo" :collapsed="false" location="bar" />
+      <div class="app-shell__bar-end">
+        <slot name="app-bar-actions" :mobile="mobile" />
       </div>
     </template>
   </VAppBar>
 
+  <!-- Desktop only: the permanent, rail-collapsible side menu. Mobile has no
+       drawer at all any more — its navigation is the bottom bar. -->
   <VNavigationDrawer
-    v-model="drawerOpenModel"
-    :permanent="!mobile"
-    :temporary="mobile"
-    :rail="!mobile && railCollapsed"
+    v-if="!mobile"
+    :model-value="true"
+    permanent
+    :rail="railCollapsed"
     :width="width"
     :rail-width="railWidth"
     :aria-label="menuLabel"
@@ -58,16 +47,10 @@
     :class="enterClass"
     :style="{ '--app-shell-enter-order': 1 }"
   >
-    <div class="app-shell__logo">
-      <slot name="logo" :collapsed="!mobile && railCollapsed" location="nav" />
-    </div>
     <slot name="nav" />
 
     <template #append>
-      <div
-        class="app-shell__nav-footer"
-        :class="{ 'app-shell__nav-footer--bottom-nav-space': mobile && showBottomNav }"
-      >
+      <div class="app-shell__nav-footer">
         <slot name="drawer-footer" />
       </div>
     </template>
@@ -85,31 +68,30 @@
     <slot />
   </VMain>
 
-  <MobileBottomNavBar
+  <!-- NEO-55: the bottom bar expands in place into a grid of every module
+       ("More" → close chevron) — see MobileNavPanel for the transition. -->
+  <MobileNavPanel
     v-if="mobile && showBottomNav"
+    :items="navItems"
+    :primary-count="BOTTOM_NAV_ITEM_COUNT"
+    :show-labels="bottomNavShowLabels"
     :aria-label="menuLabel"
+    :more-label="moreLabel"
+    :close-label="closeLabel"
     class="app-shell__bottom-nav"
     :class="enterClass"
     :style="{ '--app-shell-enter-order': 3 }"
   >
-    <MobileBottomNavItem
-      v-for="item in primaryNavItems"
-      :key="item.path"
-      :to="item.path"
-      :label="item.label"
-      :show-label="bottomNavShowLabels"
-    >
+    <template #icon="{ item }">
       <slot name="nav-icon" :item="item" />
-    </MobileBottomNavItem>
-    <slot name="bottom-nav-extra" />
-  </MobileBottomNavBar>
+    </template>
+  </MobileNavPanel>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, onMounted } from "vue";
 import { useDisplay } from "vuetify";
-import MobileBottomNavBar from "./MobileBottomNavBar.vue";
-import MobileBottomNavItem from "./MobileBottomNavItem.vue";
+import MobileNavPanel from "./MobileNavPanel.vue";
 
 export interface AppShellNavItem {
   path: string;
@@ -122,68 +104,51 @@ const BOTTOM_NAV_ITEM_COUNT = 4;
 
 /**
  * Shared responsive app shell (packages/ui) — the structural chrome only:
- * a single VNavigationDrawer that's permanent + rail-collapsible on desktop
- * and Vuetify's own temporary (scrim + slide) drawer on mobile — driven by
- * `useDisplay().mobile`, no branching between two different drawer
- * components — a VAppBar, a mobile bottom nav bar (the shared
- * MobileBottomNavBar/MobileBottomNavItem, same feel as apps/web's) showing
- * the first 4 nav items (full stop — no "more"/overflow button; the
- * hamburger in the app bar is always available as the way to reach
- * everything else), and a VMain for routed content.
+ * a full-width VAppBar, a permanent rail-collapsible VNavigationDrawer on
+ * desktop, and on mobile (`useDisplay().mobile`) no drawer at all but a
+ * bottom nav bar (MobileNavPanel, built from the shared MobileBottomNavItem,
+ * same feel as apps/web's) with the first 4 nav items plus a "More" tab that
+ * expands the bar into a grid of every module (NEO-55 — one visible
+ * navigation, no hamburger), and a VMain for routed content.
  *
  * Deliberately has no knowledge of roles, auth, theming, or branding — those
- * are app-specific concerns supplied via slots (logo, nav, app-bar-actions,
- * drawer-footer) so apps/pwa can plug in its own content. Only apps/pwa
+ * are app-specific concerns supplied via slots (app-bar-start, app-bar-title,
+ * app-bar-actions, nav, drawer-footer) so apps/pwa can plug in its own content. Only apps/pwa
  * consumes AppShell today — apps/web has its own DefaultHeader, built on the
  * separately-exported MobileNavDrawer instead, since apps/web doesn't use
  * Vuetify anywhere else.
  */
 const props = withDefaults(
   defineProps<{
-    /** v-model: drawer open (mobile temporary drawer, or forced-open desktop). */
-    modelValue?: boolean;
     /** Desktop rail (icon-only collapsed) mode. Ignored on mobile. */
     railCollapsed?: boolean;
-    /** Nav items — the mobile bottom bar shows exactly the first 4. */
+    /** Nav items — the mobile bottom bar shows the first 4, the rest go under "More". */
     navItems?: AppShellNavItem[];
     showBottomNav?: boolean;
     /** Show text labels under the bottom-nav icons (apps/web keeps them icon-only). */
     bottomNavShowLabels?: boolean;
     menuLabel?: string;
+    /** Label of the bottom bar's "More" tab. */
+    moreLabel?: string;
+    /** Label of the "More" tab while expanded (it closes the grid). */
+    closeLabel?: string;
     width?: number;
     railWidth?: number;
   }>(),
   {
-    modelValue: false,
     railCollapsed: false,
     navItems: () => [],
     showBottomNav: true,
     bottomNavShowLabels: false,
     menuLabel: "Menu",
+    moreLabel: "More",
+    closeLabel: "Close",
     width: 220,
     railWidth: 56,
   },
 );
 
-const emit = defineEmits<{
-  "update:modelValue": [value: boolean];
-}>();
-
 const { mobile } = useDisplay();
-
-// On desktop the drawer is `:permanent`, which only affects the scrim/closability
-// — Vuetify still renders it translated off-screen unless its own v-model reports
-// "open". Since this v-model is also the mobile hamburger's open/close toggle
-// (defaults closed), forcing it through unchanged would leave the desktop drawer
-// closed on first paint. So: report true whenever not mobile, and only defer to
-// the real toggle state while mobile (temporary) drawer behavior actually applies.
-const drawerOpenModel = computed({
-  get: () => (mobile.value ? props.modelValue : true),
-  set: (value: boolean) => emit("update:modelValue", value),
-});
-
-const primaryNavItems = computed(() => props.navItems.slice(0, BOTTOM_NAV_ITEM_COUNT));
-
 // One-time entrance, played whenever this shell first mounts (i.e. right
 // after the auth screen's own exit sequence, see AuthView.vue): the parts
 // appear one after another, top to bottom — app bar, drawer, main content,
@@ -241,10 +206,6 @@ onMounted(() => {
   }
 }
 
-.app-shell__logo {
-  flex-shrink: 0;
-}
-
 /* Bar + drawer read as one continuous chrome frame (same surface-container-low
    fill, no dividing lines) with the routed content set into it as an inset
    card, instead of two hard-bordered strips. Vuetify gives a left drawer a thin
@@ -289,17 +250,8 @@ onMounted(() => {
   padding: 12px;
 }
 
-/* Mirrors .app-shell__main--bottom-nav-space below: the mobile temporary
-   drawer's footer sits at the same fixed screen position as MobileBottomNavBar
-   (position: fixed, z-index: 9998, above the drawer's own stacking), so
-   without this the footer content (account menu, logout) renders visually
-   underneath the bottom nav and becomes unreachable. */
-.app-shell__nav-footer--bottom-nav-space {
-  padding-bottom: calc(var(--mobile-bottom-nav-height, 64px) + env(safe-area-inset-bottom));
-}
-
 /* --appbar-row: the one shared height every app-bar leading element (the
-   hamburger, the title's icon+text, the logo) is built to. Previously each
+   back arrow, the title's icon+text, the logo) is built to. Previously each
    element had its own hand-tuned padding/margin to fake a shared baseline
    under `align-items: flex-end` — fragile, and it broke again on every
    unrelated tweak. Now every element's own box is this height, so plain
@@ -318,40 +270,48 @@ onMounted(() => {
 }
 
 /* Vuetify's own 20px inline-start margin on the title assumes a bare text
-   label right after the edge/hamburger. Our title always carries its own
-   icon (.layout-appbar__title-group's 8px gap before the text), so 20px on
-   top of that reads as a big, unintentional-looking gap. On desktop there's
-   no hamburger at all (prepend only renders on mobile), so the title sits
-   right after the drawer edge — needs a bit more room than mobile to not
-   look flush against it. */
+   label right after the edge. Here the app sets it (--app-shell-title-inset),
+   so a title that leads the bar can line up with the page content below. */
 .app-shell__bar :deep(.v-toolbar__content > .v-toolbar-title) {
-  margin-inline-start: 16px;
+  margin-inline-start: var(--app-shell-title-inset, 8px);
 }
 
-.app-shell__bar-logo {
+/* The bar's two outer edges are set by the app, so its leading/trailing
+   content can line up with the app's own content below (apps/pwa: logo with
+   the side-menu icons, avatar with the page-header icons — see AppLayout's
+   shell edge tokens). Vuetify's own prepend/append margins are zeroed so
+   these insets are the only offset from the viewport edge. */
+.app-shell__bar :deep(.v-toolbar__prepend) {
+  margin-inline-start: 0;
+}
+
+.app-shell__bar :deep(.v-toolbar__append) {
+  margin-inline-end: 0;
+}
+
+.app-shell__bar-start {
   display: flex;
   align-items: center;
-  height: var(--appbar-row);
-  margin-left: 8px;
+  min-height: var(--appbar-row);
+  padding-inline-start: var(--app-shell-bar-start-inset, 8px);
 }
 
-.app-shell__hamburger {
+.app-shell__bar-end {
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  height: var(--appbar-row);
-  gap: 4px;
-  width: 20px;
-
-  span {
-    display: block;
-    height: 2px;
-    border-radius: 1px;
-    background: currentColor;
-  }
+  align-items: center;
+  padding-inline-end: var(--app-shell-bar-end-inset, 8px);
 }
 
-/* MobileBottomNavBar is position: fixed, not a Vuetify layout item, so VMain
+/* Back arrow + title read as one "← Patients" label on mobile. */
+.app-shell__bar :deep(.v-toolbar__prepend:has(.app-shell__bar-start:not(:empty)) + .v-toolbar-title) {
+  margin-inline-start: 0;
+}
+
+.app-shell__bar-start:empty {
+  display: none;
+}
+
+/* The bottom nav (MobileNavPanel) is position: fixed, not a Vuetify layout item, so VMain
    never learns to reserve space for it — without this, scrollable content
    (e.g. entity list feeds) renders its last rows underneath the nav bar. */
 .app-shell__main--bottom-nav-space {

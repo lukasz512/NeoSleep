@@ -316,7 +316,7 @@
       :transition="originDialogTransition"
       persistent
     >
-      <VCard>
+      <VCard class="pwa-confirm-dialog__card">
         <VCardText>{{ t("user.leads.actions.deleteConfirmText") }}</VCardText>
         <VCardActions>
           <VSpacer />
@@ -341,7 +341,7 @@
       :transition="originDialogTransition"
       persistent
     >
-      <VCard>
+      <VCard class="pwa-confirm-dialog__card">
         <VCardText>{{
           t("user.leads.detail.sendOfferResendConfirmText", {
             date: offerSentAtLabel,
@@ -775,12 +775,11 @@ watch(() => route.params.id, loadLead);
   gap: 16px;
 }
 
-/* Data card */
+/* Data block — flat like ItemDetailLayout's .view-item__card: page
+   background, no border, no inset padding. */
 .view-detail__card {
-  padding: 24px;
-  border-radius: var(--pwa-radius);
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  background: rgba(var(--v-theme-surface), 1);
+  background: transparent;
+  border: none;
 }
 
 .view-detail__fields {

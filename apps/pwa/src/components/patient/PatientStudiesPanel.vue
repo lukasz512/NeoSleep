@@ -43,6 +43,18 @@
       :saving="saving"
       @submit="onUpload"
     />
+    <VDialog v-model="deleteSleepStudy.open" max-width="400" :transition="originDialogTransition">
+      <VCard class="pwa-confirm-dialog__card">
+        <VCardText>{{ t("app.sleepStudies.deleteConfirmText") }}</VCardText>
+        <VCardActions>
+          <VSpacer />
+          <AppButton variant="text" @click="deleteSleepStudy.open = false">{{ t("app.common.cancel") }}</AppButton>
+          <AppButton color="error" variant="text" :loading="deleteSleepStudy.loading" @click="onConfirmDeleteSleepStudy">
+            {{ t("app.common.remove") }}
+          </AppButton>
+        </VCardActions>
+      </VCard>
+    </VDialog>
 
     <AppLoadingState v-if="checklistApi.loading.value && !checklist" />
     <AppErrorState
@@ -196,6 +208,16 @@
                       >
                         <AppIcon name="trash" />
                       </AppButton>
+                      <AppButton
+                        v-if="entry.type === 'sleep_study' && entry.sleep_study"
+                        icon
+                        variant="text"
+                        size="small"
+                        :aria-label="t('app.common.remove')"
+                        @click="askDeleteSleepStudy(entry.sleep_study.id)"
+                      >
+                        <AppIcon name="trash" />
+                      </AppButton>
                     </li>
                   </ul>
                 </VExpandTransition>
@@ -240,6 +262,7 @@
 import { computed, defineAsyncComponent, nextTick, onMounted, reactive, ref, watch, type ComponentPublicInstance } from "vue";
 import { useI18n } from "vue-i18n";
 import { intlLocale } from "@i18n/language-options";
+import { originDialogTransition } from "@ui";
 import AppButton from "../AppButton.vue";
 import AppIcon from "../AppIcon.vue";
 import AppLoadingState from "../AppLoadingState.vue";
@@ -250,7 +273,7 @@ import StudyUploadDialog from "../questionnaire/StudyUploadDialog.vue";
 import ChecklistStatusIcon from "../questionnaire/ChecklistStatusIcon.vue";
 import ChecklistResult from "../questionnaire/ChecklistResult.vue";
 import AppListItemMenu from "../AppListItemMenu.vue";
-import { apiFetch } from "../../composables/useApi";
+import { apiFetch, extractErrorMessage } from "../../composables/useApi";
 import { useNotifications } from "../../composables/useNotifications";
 import { useAuthStore } from "../../stores/auth";
 import {
@@ -547,6 +570,29 @@ async function onSleepStudyEdit(data: Record<string, unknown>, done: (ok: boolea
     await checklistApi.load();
   }
   done(res.ok);
+}
+
+// Deleting a sleep study (kept from the pre-checklist panel) — from its history entry, confirmed first.
+const deleteSleepStudy = reactive<{ open: boolean; id: string | null; loading: boolean }>({ open: false, id: null, loading: false });
+function askDeleteSleepStudy(id: string) {
+  Object.assign(deleteSleepStudy, { open: true, id });
+}
+async function onConfirmDeleteSleepStudy() {
+  if (!deleteSleepStudy.id) return;
+  deleteSleepStudy.loading = true;
+  try {
+    const res = await apiFetch(`/api/v1/sleep-study/${deleteSleepStudy.id}`, { method: "DELETE", handleErrors: false });
+    if (res.ok) {
+      notifications.show(t("app.sleepStudies.deleteSuccess"), "success");
+      Object.assign(deleteSleepStudy, { open: false, id: null });
+      await checklistApi.load();
+    } else {
+      const bodyText = await res.text().catch(() => "");
+      notifications.show(extractErrorMessage(bodyText) || t("app.sleepStudies.errorDelete"), "error");
+    }
+  } finally {
+    deleteSleepStudy.loading = false;
+  }
 }
 
 onMounted(async () => {

@@ -25,6 +25,15 @@
     margin-bottom var(--pwa-fib-t-xl, 233ms) ease;
 }
 
+/* Teleported into AppLayout's desktop page header (NEO-55): that row owns
+   the spacing below it, and the toolbar fills the space right of the title. */
+.app-entity-list__toolbar--in-header {
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: flex-end;
+  margin-bottom: 0;
+}
+
 .app-entity-list__toolbar--hidden {
   max-height: 0;
   opacity: 0;
@@ -256,8 +265,7 @@
 }
 
 .app-entity-list__empty-wrap,
-.app-entity-list__error-wrap,
-.app-entity-list__loading-wrap {
+.app-entity-list__error-wrap {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
@@ -270,26 +278,94 @@
   margin: 0 0 12px;
 }
 
+/* Height follows the rows: a short list ends right after its last row with
+   the pagination footer directly underneath, a long one grows until the
+   page runs out and then scrolls inside (.v-table__wrapper below) while the
+   footer stays visible. The old flex:1 + 70vh floor stretched a 2-row list
+   over the whole page with the footer stranded at the bottom. */
 .app-entity-list__table-wrap {
-  flex: 1 1 0;
-  min-height: 70vh;
+  flex: 0 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-radius: var(--pwa-radius);
-  /* --pwa-table-border (theme.scss): the one border color every table/list
-     surface in the app shares (AppDataTable, RelatedEntityPanel, and the
-     search field above) — was M3 outline-variant here specifically, a
-     close but not identical gray that made this table read as a slightly
-     different tone from the rest. */
-  border: 1px solid var(--pwa-table-border);
+  /* NEO-57 "clinical card": no outer border and no background of its own —
+     the list sits directly on whatever surface the view gives it, and every
+     row is its own rounded card (below), separated by gaps, not rules. */
+  background: transparent;
 }
 
-/* M3: header row reads as a distinct tonal layer (surface-container-low)
-   above the body's plain surface, instead of Vuetify's own header
-   background — depth via tone, not a rule/shadow under the header. */
-.app-entity-list__table-wrap :deep(.v-data-table__th) {
-  background: rgb(var(--v-theme-surface-container-low));
+/* The table itself is transparent too so the view's surface shows through
+   the gaps between rows; rows are separated by border-spacing, not dividers. */
+.app-entity-list__table-wrap :deep(.v-table) {
+  background: transparent;
+  --v-table-header-height: 40px;
+  --v-table-row-height: 64px;
+}
+
+.app-entity-list__table-wrap :deep(.v-table > .v-table__wrapper > table) {
+  border-collapse: separate;
+  border-spacing: 0 var(--pwa-list-row-gap);
+}
+
+/* Header: small uppercase labels floating above the rows — no tonal band,
+   no rule underneath. */
+.app-entity-list__table-wrap :deep(.v-table > .v-table__wrapper > table > thead > tr > th) {
+  background: transparent;
+  border-bottom: 0;
+  font-size: 0.65625rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  vertical-align: bottom;
+  padding-bottom: 2px;
+}
+
+/* Each row is one card: the cells share the surface color, the outline is
+   drawn with inset shadows (top/bottom on every cell, plus the outer side on
+   the first/last cell) because table cells can't carry a single border
+   around the whole row. */
+.app-entity-list__table-wrap :deep(.v-table > .v-table__wrapper > table > tbody > tr > td) {
+  background: var(--pwa-list-row-bg);
+  border-bottom: 0;
+  box-shadow:
+    inset 0 1px var(--pwa-list-row-outline),
+    inset 0 -1px var(--pwa-list-row-outline);
+}
+
+.app-entity-list__table-wrap :deep(.v-table > .v-table__wrapper > table > tbody > tr > td:first-child) {
+  border-radius: var(--pwa-list-row-radius) 0 0 var(--pwa-list-row-radius);
+  box-shadow:
+    inset 1px 0 var(--pwa-list-row-outline),
+    inset 0 1px var(--pwa-list-row-outline),
+    inset 0 -1px var(--pwa-list-row-outline);
+}
+
+.app-entity-list__table-wrap :deep(.v-table > .v-table__wrapper > table > tbody > tr > td:last-child) {
+  border-radius: 0 var(--pwa-list-row-radius) var(--pwa-list-row-radius) 0;
+  box-shadow:
+    inset -1px 0 var(--pwa-list-row-outline),
+    inset 0 1px var(--pwa-list-row-outline),
+    inset 0 -1px var(--pwa-list-row-outline);
+}
+
+.app-entity-list__table-wrap :deep(.v-table > .v-table__wrapper > table > tbody > tr > td:only-child) {
+  border-radius: var(--pwa-list-row-radius);
+  box-shadow: inset 0 0 0 1px var(--pwa-list-row-outline);
+}
+
+/* Vuetify's hover layer is a ::after on each cell — tint it with the brand
+   hover token and round it with the cell so the corners stay clean. */
+.app-entity-list__table-wrap :deep(.v-table.v-table--hover > .v-table__wrapper > table > tbody > tr:hover > td::after) {
+  background: var(--pwa-table-row-hover);
+  border-radius: inherit;
+}
+
+/* With floating rows there is nothing for a rows→footer divider to separate;
+   the global theme.scss divider rule still applies to every other table. */
+.app-entity-list__table-wrap :deep(.v-data-table > .v-divider) {
+  display: none;
 }
 
 /* VDataTableServer's default pagination footer (rows-per-page, page count,
@@ -316,34 +392,151 @@
   color: var(--pwa-table-border);
 }
 
-/* Mobile feed items carry their own border + elevation (below) — the
-   outer wrap border would otherwise double up as a card-around-cards box. */
+/* Mobile: the feed cards (below) are the surfaces, on the same paper
+   ground as the desktop table — a flat wrap so the cards run the full
+   content width instead of sitting in a padded box-around-cards. */
 .app-entity-list__table-wrap--flat {
   overflow: visible;
-  border: none;
   border-radius: 0;
+  padding: 0;
+  background: transparent;
 }
 
 .app-entity-list__table-wrap :deep(.v-data-table) {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  flex: 1;
+  flex: 0 1 auto;
   min-height: 0;
-}
-
-.app-entity-list__table-wrap :deep(.v-data-table__td) {
-  transition: opacity 0.5s ease;
-}
-
-.app-entity-list__table-wrap :deep(.v-data-table tbody tr) {
-  transition: opacity 0.45s ease, background-color 0.25s ease;
 }
 
 .app-entity-list__table-wrap :deep(.v-table__wrapper) {
-  flex: 1;
+  flex: 0 1 auto;
   min-height: 0;
   overflow: auto;
+}
+
+/* ── Motion (NEO-57) ─────────────────────────────────────────────────────
+   Minimal on purpose: rows rise 6px and fade in, one after another 35ms
+   apart (index from tableRowProps, capped at 10), only when a row is new to
+   the DOM — a re-fetch returning the same patients doesn't replay it.
+   A reload in flight (search/filter/page/sort) dims the current rows
+   instead of blanking the table; states (skeleton → list, list → empty)
+   cross-fade via <Transition name="app-entity-list-swap">. */
+@keyframes app-entity-list-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.app-entity-list__table-wrap :deep(.v-data-table tbody tr) {
+  animation: app-entity-list-row-in var(--pwa-fib-t-2xl, 377ms) var(--pwa-ease-out-smooth, cubic-bezier(0.22, 1, 0.36, 1)) both;
+  animation-delay: calc(var(--row-i, 0) * 35ms);
+}
+
+.app-entity-list__table-wrap :deep(.v-data-table tbody) {
+  transition: opacity var(--pwa-fib-t-xl, 233ms) ease;
+}
+
+.app-entity-list__table-wrap--busy :deep(.v-data-table tbody) {
+  opacity: 0.45;
+}
+
+.app-entity-list-swap-enter-active,
+.app-entity-list-swap-leave-active {
+  transition: opacity var(--pwa-fib-t-xl, 233ms) ease, transform var(--pwa-fib-t-xl, 233ms) var(--pwa-ease-out-smooth, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.app-entity-list-swap-enter-from {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+.app-entity-list-swap-leave-to {
+  opacity: 0;
+}
+
+/* First-load skeleton: the same card shape as a real row, breathing softly
+   (opacity only, no shimmer sweep) so it reads as "loading" without
+   drawing the eye. */
+.app-entity-list__skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pwa-list-row-gap);
+  padding-top: 40px;
+}
+
+.app-entity-list__skeleton--mobile {
+  padding-top: var(--pwa-fib-md, 13px);
+}
+
+.app-entity-list__skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 64px;
+  padding: 0 16px;
+  border-radius: var(--pwa-list-row-radius);
+  background: var(--pwa-list-row-bg);
+  box-shadow: inset 0 0 0 1px var(--pwa-list-row-outline);
+  animation: app-entity-list-skeleton-breathe 1.6s ease-in-out infinite;
+  animation-delay: calc(var(--row-i, 0) * 90ms);
+}
+
+.app-entity-list__skeleton--mobile .app-entity-list__skeleton-row {
+  height: var(--pwa-fib-3xl, 89px);
+}
+
+.app-entity-list__skeleton-avatar {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(var(--v-theme-on-surface), 0.07);
+}
+
+.app-entity-list__skeleton-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.app-entity-list__skeleton-line {
+  height: 10px;
+  width: min(220px, 60%);
+  border-radius: 5px;
+  background: rgba(var(--v-theme-on-surface), 0.07);
+}
+
+.app-entity-list__skeleton-line--short {
+  width: min(120px, 35%);
+}
+
+@keyframes app-entity-list-skeleton-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-entity-list__table-wrap :deep(.v-data-table tbody tr),
+  .app-entity-list__skeleton-row {
+    animation: none;
+  }
+
+  .app-entity-list-swap-enter-active,
+  .app-entity-list-swap-leave-active {
+    transition: opacity 1ms;
+  }
 }
 
 .app-entity-list__table-wrap :deep(.v-data-table__tr--clickable) {
@@ -376,14 +569,13 @@
 }
 
 .app-entity-list__no-results-placeholder {
-  flex: 1;
-  min-height: 40vh;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 12px;
-  padding: 24px;
+  padding: 48px 24px;
   text-align: center;
 }
 
@@ -439,14 +631,14 @@
    rounder shape for the feed's list-item cards specifically. */
 .app-entity-list__card {
   position: relative;
-  margin-bottom: var(--pwa-fib-md, 13px);
-  border-radius: var(--pwa-fib-lg, 21px);
-  /* M3 outline-variant + surface-container-low (packages/vuetify theme
-     colors) instead of Vuetify's generic --v-border-color/surface — a
-     low-emphasis divider around a faintly tonal card, the M3 "filled card"
-     look, rather than a plain outline on the page background. */
-  border: 1px solid rgb(var(--v-theme-outline-variant));
-  background: rgb(var(--v-theme-surface-container-low));
+  margin-bottom: var(--pwa-list-row-gap);
+  /* NEO-57: same "clinical card" recipe as a desktop table row (theme.scss
+     --pwa-list-*) — surface color, hairline teal-tinted outline, no shadow —
+     so a patient looks like the same object on phone and desktop. */
+  border-radius: var(--pwa-list-row-radius);
+  border: 1px solid var(--pwa-list-row-outline);
+  background: var(--pwa-list-row-bg);
+  box-shadow: none;
   overflow: hidden;
   transition: opacity 0.2s ease, background-color 0.2s ease;
 }

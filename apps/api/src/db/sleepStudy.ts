@@ -37,6 +37,8 @@ export interface SleepStudy {
   odi: number | null;
   interpreted_by: string | null;
   interpreted_by_name: string | null;
+  /** Interpreting practitioner's primary_specialty lookup key (NEO-57) */
+  interpreted_by_specialty: string | null;
   interpreted_at: string | null;
   interpretation: string | null;
   diagnosis_code: Record<string, unknown> | null;
@@ -108,6 +110,7 @@ type SleepStudyRow = {
   interpreted_by_salutation: string | null;
   interpreted_by_first_name: string | null;
   interpreted_by_last_name: string | null;
+  interpreted_by_specialty: string | null;
   interpreted_at: Date | null;
   interpretation: string | null;
   diagnosis_code: Record<string, unknown> | null;
@@ -129,7 +132,8 @@ const SLEEP_STUDY_SELECT_COLS = `
   s.oa_indicated, s.cpap_indicated, s.status, s.study_type, s.notes, s.metadata,
   s.created_at, s.updated_at,
   pi.title AS patient_salutation, pi.first_name AS patient_first_name, pi.last_name AS patient_last_name,
-  ii.title AS interpreted_by_salutation, ii.first_name AS interpreted_by_first_name, ii.last_name AS interpreted_by_last_name`.trim();
+  ii.title AS interpreted_by_salutation, ii.first_name AS interpreted_by_first_name, ii.last_name AS interpreted_by_last_name,
+  ipr.primary_specialty AS interpreted_by_specialty`.trim();
 
 const SLEEP_STUDY_JOIN = `
   FROM sleep_study s
@@ -171,6 +175,7 @@ function serialize(row: SleepStudyRow): SleepStudy {
       first_name: row.interpreted_by_first_name,
       last_name: row.interpreted_by_last_name,
     }),
+    interpreted_by_specialty: row.interpreted_by_specialty,
     interpreted_at: row.interpreted_at ? isoDate(row.interpreted_at) : null,
     interpretation: row.interpretation,
     diagnosis_code: row.diagnosis_code,
