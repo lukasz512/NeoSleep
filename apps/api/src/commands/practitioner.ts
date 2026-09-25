@@ -21,7 +21,7 @@ import { ValidationError, ConflictError } from "../errors.js";
 import { ConvertLeadCommand } from "./lead.js";
 import { inferLanguage } from "./invitePractitioner.js";
 import { sendPartnerInviteEmail } from "../mailer.js";
-import { FRONTEND_URL } from "../env.js";
+import { DEFAULT_FRONTEND_ORIGIN } from "../utils/frontendOrigin.js";
 import { hashToken } from "../utils/hashToken.js";
 import { normalizeNationalIds } from "../utils/nationalIds.js";
 import { partnerJurisdictionForRegion, resolvePartnerDocumentSet } from "./partnerDocuments.js";
@@ -256,7 +256,14 @@ export async function DeletePractitionerCommand(ctx: TenantContext, id: string):
 
 const INVITE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days — see invitePractitioner.ts's own constant/comment for why this is minted here, not at invite time.
 
-export async function ActivatePractitionerCommand(ctx: TenantContext, id: string): Promise<Practitioner | null> {
+export async function ActivatePractitionerCommand(
+  ctx: TenantContext,
+  id: string,
+  /** Resolved by the route from the request (utils/frontendOrigin.ts) — never the raw,
+   * possibly comma-separated FRONTEND_URL, which produced links like
+   * "https://pwa…,https://pwa-dev…/partner-register" that Gmail flags as invalid. */
+  frontendOrigin: string = DEFAULT_FRONTEND_ORIGIN
+): Promise<Practitioner | null> {
   if (!id?.trim()) throw new ValidationError("practitioner id is required");
 
   const practitioner = await getPractitionerById(ctx.client, id);
@@ -326,7 +333,7 @@ export async function ActivatePractitionerCommand(ctx: TenantContext, id: string
       jurisdiction,
     });
 
-    const registerLink = `${FRONTEND_URL}/partner-register?token=${encodeURIComponent(token)}`;
+    const registerLink = `${frontendOrigin}/partner-register?token=${encodeURIComponent(token)}`;
     await sendPartnerInviteEmail(
       practitioner.email,
       registerLink,

@@ -81,7 +81,7 @@ describe("ActivatePractitionerCommand", () => {
         region: "PL",
       });
 
-      const result = await ActivatePractitionerCommand(ctx, practitioner.id);
+      const result = await ActivatePractitionerCommand(ctx, practitioner.id, "https://pwa-dev.neosleepcare.com");
 
       // Not "active" — that now only happens once the doctor actually
       // completes registration via AcceptPractitionerInviteCommand (see
@@ -92,6 +92,9 @@ describe("ActivatePractitionerCommand", () => {
       const [to, , , sender] = sendPartnerInviteEmailMock.mock.calls[0]!;
       expect(to).toBe(practitionerEmail);
       expect(sender).toEqual({ name: "NeoSleep", email: ctx.user.email });
+      // Exactly one origin — never the raw comma-separated FRONTEND_URL.
+      const link = sendPartnerInviteEmailMock.mock.calls[0]![1] as string;
+      expect(link).toMatch(/^https:\/\/pwa-dev\.neosleepcare\.com\/partner-register\?token=[0-9a-f]{64}$/);
     });
   }, 15000);
 
