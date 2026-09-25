@@ -78,9 +78,10 @@ describe("recoverFromChunkError", () => {
     const { deps, runScheduled } = makeDeps();
 
     expect(recoverFromChunkError("/patients/42", deps)).toBe("reloading");
-    expect(deps.notify).toHaveBeenCalledWith("", "info", "app.update.reloading");
+    expect(deps.notify).toHaveBeenCalledWith("", "info", "app.update.reloading", { countdownMs: RELOAD_DELAY_MS });
+    expect(RELOAD_DELAY_MS).toBe(5_000); // enough to read the toast — never an unexplained reload
     expect(deps.schedule).toHaveBeenCalledWith(expect.any(Function), RELOAD_DELAY_MS);
-    expect(deps.reload).not.toHaveBeenCalled(); // toast gets a moment to paint first
+    expect(deps.reload).not.toHaveBeenCalled(); // the countdown runs first
 
     runScheduled();
     expect(deps.reload).toHaveBeenCalledWith("/patients/42");
@@ -159,7 +160,7 @@ describe("installChunkRecovery on a real router", () => {
 
     await expect(router.push("/patients/42?tab=history")).rejects.toThrow(CHROME);
 
-    expect(harness.deps.notify).toHaveBeenCalledWith("", "info", "app.update.reloading");
+    expect(harness.deps.notify).toHaveBeenCalledWith("", "info", "app.update.reloading", { countdownMs: RELOAD_DELAY_MS });
     harness.runScheduled();
     expect(harness.deps.reload).toHaveBeenCalledWith("/patients/42?tab=history");
   });

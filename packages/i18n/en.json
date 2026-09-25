@@ -13,7 +13,7 @@
   "app.errorState.title": "Network problem",
   "app.errorState.subtitle": "Check your connection and try again",
   "app.errorState.refresh": "Refresh",
-  "app.update.reloading": "A new version of the app is available — reloading…",
+  "app.update.reloading": "A new version of the app is available — reloading in {seconds} s…",
   "app.update.loadFailed": "This page couldn't be loaded. Check your connection and try again.",
   "app.update.offline": "You're offline — this page hasn't been loaded yet. Try again once you're back online.",
   "app.common.offlineShowingCached": "You're offline — showing previously loaded data.",

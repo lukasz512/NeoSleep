@@ -1,5 +1,5 @@
 import type { Router } from "vue-router";
-import type { NotificationType } from "../composables/useNotifications";
+import type { NotificationType, ShowOptions } from "../composables/useNotifications";
 
 /**
  * Recovery from "stale chunk" failures after a deploy.
@@ -10,8 +10,9 @@ import type { NotificationType } from "../composables/useNotifications";
  * the import rejects, the navigation is cancelled, and without this module the
  * click just silently does nothing ("the app froze").
  *
- * Fix: detect that specific failure, tell the user, and do a full page load of
- * the page they were trying to open, which fetches the new index.html and the
+ * Fix: detect that specific failure, tell the user (a toast counting down the
+ * RELOAD_DELAY_MS, so the reload never comes as a surprise), then do a full
+ * page load of the page they were trying to open, which fetches the new index.html and the
  * new chunks. A sessionStorage marker stops this from becoming a reload loop
  * when the chunk is genuinely unreachable (network down, broken deploy) — the
  * second failure inside RELOAD_GUARD_MS shows an error toast instead.
@@ -19,8 +20,8 @@ import type { NotificationType } from "../composables/useNotifications";
 
 export const RELOAD_GUARD_KEY = "neo:chunk-reload-at";
 export const RELOAD_GUARD_MS = 30_000;
-/** Lets the "reloading…" toast paint before the page goes away. */
-export const RELOAD_DELAY_MS = 800;
+/** Long enough to read the "new version — reloading in N s" toast before the page goes away. */
+export const RELOAD_DELAY_MS = 5_000;
 /** One failure reaches both hooks moments apart — only the first one counts. */
 const DUPLICATE_WINDOW_MS = 1_000;
 
@@ -41,7 +42,7 @@ export function isChunkLoadError(err: unknown): boolean {
 }
 
 export interface ChunkRecoveryDeps {
-  notify: (message: string, type: NotificationType, key?: string) => void;
+  notify: (message: string, type: NotificationType, key?: string, options?: ShowOptions) => void;
   reload: (url: string) => void;
   storage: Pick<Storage, "getItem" | "setItem" | "removeItem"> | null;
   isOnline: () => boolean;
@@ -71,7 +72,7 @@ export function recoverFromChunkError(targetUrl: string, deps: ChunkRecoveryDeps
     deps.notify("", "error", "app.update.loadFailed");
     return "failed";
   }
-  deps.notify("", "info", "app.update.reloading");
+  deps.notify("", "info", "app.update.reloading", { countdownMs: RELOAD_DELAY_MS });
   deps.schedule(() => deps.reload(targetUrl), RELOAD_DELAY_MS);
   return "reloading";
 }

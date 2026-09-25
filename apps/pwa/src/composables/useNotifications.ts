@@ -8,6 +8,19 @@ export interface Notification {
   type: NotificationType;
   /** Optional i18n key; if set, message is used as fallback or default text */
   key?: string;
+  /**
+   * Countdown toast: `key` is rendered with a live `{seconds}` param counting
+   * down over `countdownMs`, the progress bar spans the same time, and the
+   * toast does not auto-dismiss — whatever it announces (e.g. a reload)
+   * happens at zero.
+   */
+  countdownMs?: number;
+  /** Date.now() when shown — the countdown's start. */
+  shownAt: number;
+}
+
+export interface ShowOptions {
+  countdownMs?: number;
 }
 
 const notifications = ref<Notification[]>([]);
@@ -24,10 +37,10 @@ let nextId = 1;
 export function useNotifications() {
   const current = computed(() => notifications.value[0] ?? null);
 
-  function show(message: string, type: NotificationType = "info", key?: string): void {
+  function show(message: string, type: NotificationType = "info", key?: string, options: ShowOptions = {}): void {
     notifications.value = [
       ...notifications.value,
-      { id: nextId++, message, type, key },
+      { id: nextId++, message, type, key, countdownMs: options.countdownMs, shownAt: Date.now() },
     ];
   }
 
