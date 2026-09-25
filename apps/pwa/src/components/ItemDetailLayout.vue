@@ -321,6 +321,10 @@ defineEmits<{
 .view-item__sections {
   margin: 0 0 var(--space-6, 24px) 0;
   display: grid;
+  /* minmax(0, …): an implicit `auto` column grows to its widest child's
+     min-content (a long e-mail, a scrolling tab row), which pushed the whole
+     record 5–25px past a 360px phone screen. */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4, 16px);
 }
 

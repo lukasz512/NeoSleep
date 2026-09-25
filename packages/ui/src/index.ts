@@ -24,3 +24,4 @@ export { default as OriginDialogTransition } from "./components/OriginDialogTran
 export { originDialogTransition } from "./components/originDialogTransition";
 export { getDialogOrigin } from "./composables/useDialogOrigin";
 export { default as AppSegmentedTabs, type AppSegmentedTabOption } from "./components/AppSegmentedTabs.vue";
+export { default as AppChipTabs } from "./components/AppChipTabs.vue";

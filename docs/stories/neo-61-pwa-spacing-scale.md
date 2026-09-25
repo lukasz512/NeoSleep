@@ -23,11 +23,11 @@
 - [ ] Tabs → tab content is one 32px gap (the 28 + 10 workaround is gone), and the floating label of an outlined field is still not clipped.
 - [ ] History timeline: entries 24px apart, day groups 32px apart, day label → first entry 16px.
 - [ ] Mobile bottom bar: spacing is on the scale. On tablet width (≥ 600px) the item row is centred with a max width, so the icons don't spread across the whole bar.
-- [ ] Mobile detail tabs: implemented in the pattern Łukasz picks from the proposal artifact.
+- [ ] Mobile detail tabs (< 600px): pattern A, scrolling chips (decided 2026-09-25). Every label is shown in full, the row scrolls under the screen edge with fades on the overflowing side, the active chip scrolls into view, WAI-ARIA arrow/Home/End keys work, and the page never scrolls sideways at 360px.
 - [ ] Before/after screenshots of the running app at 360 / 768 / 1440px in the NEO-61 artifact.
 
 ### Open Questions
-- [ ] Mobile tab pattern: Łukasz picks from the options in the artifact.
+- none. The mobile tab pattern was decided on 2026-09-25: A, scrolling chips (options B–E were underline tabs, section picker + sheet, icon grid, overview list).
 
 ### Hand-off
 → `/dev feat pwa-spacing-scale`: scope is clear and visual-only. There is no schema or architecture impact, so /arch is not needed.

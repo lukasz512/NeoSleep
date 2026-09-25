@@ -2,9 +2,16 @@
   <div class="detail-view-tabs">
     <div class="detail-view-tabs__tabs-wrap">
       <AppSegmentedTabs
+        v-if="smAndUp"
         :model-value="modelValue"
         :options="options"
-        :fit="smAndUp"
+        fit
+        @update:model-value="(v: string) => $emit('update:modelValue', v)"
+      />
+      <AppChipTabs
+        v-else
+        :model-value="modelValue"
+        :options="options"
         @update:model-value="(v: string) => $emit('update:modelValue', v)"
       />
     </div>
@@ -31,7 +38,7 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { useDisplay } from "vuetify";
 import { VWindow, VWindowItem } from "vuetify/components";
-import { AppSegmentedTabs } from "@ui";
+import { AppChipTabs, AppSegmentedTabs } from "@ui";
 
 export interface DetailViewTab {
   value: string;
@@ -54,10 +61,9 @@ const options = computed(() => props.tabs.map((tab) => ({ value: tab.value, labe
 </script>
 
 <style scoped>
-/* From tablet width up the bar hugs its tabs (AppSegmentedTabs `fit`, NEO-61):
-   every label in full, no stretched-thin pill across a wide column, and no
-   equal-slot cap that ellipsized "Studies"/"Documents". Phones keep the
-   full-width bar. */
+/* NEO-61: every label in full at every width. From 600px up the pill bar hugs
+   its tabs (AppSegmentedTabs `fit`); on phones a scrolling row of chips
+   (AppChipTabs) — 6–7 sections never fit a 360px row as equal slots. */
 
 /* Tabs → content is one 32px step: 24px here plus the item's 8px inner
    padding below. */
