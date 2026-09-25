@@ -703,6 +703,9 @@
 
 .app-entity-list__card-meta {
   margin-top: 2px;
+  /* Room for the doctor badge, which overhangs its avatar's bottom-right
+     corner by 3px — without it this overflow:hidden clips the disc. */
+  padding-bottom: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
 }

@@ -80,8 +80,7 @@ const initials = computed(() => {
   return props.name?.trim() ? getInitials(props.name) : "";
 });
 const tone = computed(() => identityTone(props.entityType));
-// Below ~18px the disc would be a few pixels wide — an unreadable dot.
-const DOCTOR_BADGE_MIN_SIZE = 18;
+
 const iconName = computed(() =>
   props.entityType === "hco" ? hcoTypeIcon(props.orgType ?? undefined) : ENTITY_ICONS[props.entityType],
 );
@@ -95,7 +94,9 @@ const FIBONACCI_INITIALS_RATIO = 21 / 55;
 // resolve their real pixel size only via CSS, so callers relying on that
 // must also pass the equivalent numeric size for this calculation.
 const sizePx = computed(() => (typeof props.size === "number" ? props.size : parseFloat(String(props.size)) || 40));
-const showDoctorBadge = computed(() => props.entityType === "hcp" && sizePx.value >= DOCTOR_BADGE_MIN_SIZE);
+// Every doctor avatar carries the badge, at every size — the disc has its
+// own minimum size (CSS below), so it stays readable on a 20px mention.
+const showDoctorBadge = computed(() => props.entityType === "hcp");
 const initialsFontSize = computed(() => `${Math.max(sizePx.value * FIBONACCI_INITIALS_RATIO, 8)}px`);
 
 </script>
@@ -135,10 +136,15 @@ const initialsFontSize = computed(() => `${Math.max(sizePx.value * FIBONACCI_INI
 
 .app-avatar__badge {
   position: absolute;
-  right: -12%;
-  bottom: -12%;
-  width: 46%;
-  height: 46%;
+  /* Fixed small overhang (not a % of the avatar): enough to sit on the
+     corner, never so much that a table cell or card clips it. The disc is
+     never smaller than 13px, so the stethoscope stays legible on a 20px
+     mention; on big avatars it scales with them. */
+  right: -3px;
+  bottom: -3px;
+  width: max(44%, 13px);
+  height: max(44%, 13px);
+  z-index: 1;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -148,11 +154,17 @@ const initialsFontSize = computed(() => `${Math.max(sizePx.value * FIBONACCI_INI
   box-shadow: 0 0 0 2px rgb(var(--v-theme-surface));
 }
 
+/* Nudge a doctor's initials up-left, away from the badge in the corner,
+   so neither covers the other on small avatars. */
+.app-avatar--doctor .app-avatar__initials {
+  transform: translate(-10%, -10%);
+}
+
 .app-avatar__badge-icon {
-  width: 66%;
-  height: 66%;
+  width: 72%;
+  height: 72%;
   /* Thicker than the icon's own stroke so it survives at ~9px. */
-  stroke-width: 2.6 !important;
+  stroke-width: 2.8 !important;
 }
 
 .app-avatar--patient { --app-avatar-bg: var(--pwa-identity-patient-soft); --app-avatar-fg: var(--pwa-identity-patient); }

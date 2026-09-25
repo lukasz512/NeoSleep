@@ -66,10 +66,10 @@ describe("AppAvatar (doctor badge, NEO-57)", () => {
     expect(wrapper.find(".app-avatar__initials").text()).toBe("LG");
   });
 
-  it("no badge for other identities, nor on an avatar too small to read it", () => {
+  it("shows the badge at every size, and never for other identities", () => {
     expect(mountAvatar({ entityType: "patient", name: "Anna Nowak" }).find("[data-testid=app-avatar-doctor-badge]").exists()).toBe(false);
     expect(mountAvatar({ entityType: "hco" }).find("[data-testid=app-avatar-doctor-badge]").exists()).toBe(false);
-    expect(mountAvatar({ entityType: "hcp", name: "Jan Kowalski", size: 16 }).find("[data-testid=app-avatar-doctor-badge]").exists()).toBe(false);
+    expect(mountAvatar({ entityType: "hcp", name: "Jan Kowalski", size: 16 }).find("[data-testid=app-avatar-doctor-badge]").exists()).toBe(true);
   });
 });
 
