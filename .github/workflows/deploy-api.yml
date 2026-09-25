@@ -1,0 +1,93 @@
+# Deploys apps/api to Google Cloud Run (NEO-45, ADR-025).
+#
+#   push to dev  -> neosleep-api-dev
+#   push to prod -> neosleep-api-prod
+#
+# Both run in us-west2 (Los Angeles), next to the Supabase DB (us-west-1), with
+# min 0 / max 1 instance: scale-to-zero keeps it ~free, and max 1 is required
+# while the OrthoApnea mutation queue and the rate limiters live in memory
+# (services/partners/orthoapnea.ts). Raise it only after those move to the DB.
+#
+# Config:
+#   - infrastructure/cloud-run/<env>.env.yaml  non-secret env vars, per service
+#   - infrastructure/cloud-run/secrets.list    names of Secret Manager secrets,
+#                                              mounted as env vars of the same name
+# GCP access is keyless (Workload Identity Federation, dev/prod branches only).
+# Runbook: docs/RUNBOOK_API_CLOUD_RUN.md
+
+name: Deploy API (Cloud Run)
+
+on:
+  push:
+    branches: [dev, prod]
+    paths:
+      - "apps/api/**"
+      - "packages/documents/**"
+      - "packages/email/**"
+      - "packages/i18n/*.json"
+      - "infrastructure/cloud-run/**"
+      - "pnpm-lock.yaml"
+      - ".dockerignore"
+      - ".github/workflows/deploy-api.yml"
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-api-${{ github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  REGION: us-west2
+  IMAGE: us-west2-docker.pkg.dev/${{ secrets.GCP_API_PROJECT }}/api/neosleep-api
+
+jobs:
+  deploy:
+    if: github.ref_name == 'dev' || github.ref_name == 'prod'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_API_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_API_DEPLOY_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build and push image
+        run: |
+          gcloud auth configure-docker us-west2-docker.pkg.dev --quiet
+          docker build --platform linux/amd64 -f apps/api/Dockerfile -t "$IMAGE:$GITHUB_SHA" .
+          docker push "$IMAGE:$GITHUB_SHA"
+
+      - name: Deploy to Cloud Run
+        run: |
+          SERVICE="neosleep-api-${GITHUB_REF_NAME}"
+          SECRETS="$(grep -Ev '^\s*(#|$)' infrastructure/cloud-run/secrets.list | sed 's/.*/&=&:latest/' | paste -sd, -)"
+          gcloud run deploy "$SERVICE" \
+            --project "${{ secrets.GCP_API_PROJECT }}" \
+            --region "$REGION" \
+            --image "$IMAGE:$GITHUB_SHA" \
+            --service-account "${{ secrets.GCP_API_RUNTIME_SA }}" \
+            --allow-unauthenticated \
+            --min-instances 0 --max-instances 1 \
+            --cpu 1 --memory 1Gi --concurrency 40 --timeout 300 \
+            --env-vars-file "infrastructure/cloud-run/${GITHUB_REF_NAME}.env.yaml" \
+            --set-secrets "$SECRETS" \
+            --quiet
+          URL="$(gcloud run services describe "$SERVICE" --project "${{ secrets.GCP_API_PROJECT }}" --region "$REGION" --format 'value(status.url)')"
+          echo "SERVICE_URL=$URL" >> "$GITHUB_ENV"
+          echo "Deployed $SERVICE -> $URL" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke check /health
+        run: |
+          for i in 1 2 3 4 5 6; do
+            if curl -sf -o /dev/null -w "HTTP %{http_code} in %{time_total}s\n" "$SERVICE_URL/health"; then exit 0; fi
+            sleep 10
+          done
+          echo "::error::$SERVICE_URL/health did not return 200"
+          exit 1

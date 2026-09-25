@@ -28,7 +28,7 @@ import { noteRouter } from "./routes/note.js";
 import { sleepStudyRouter } from "./routes/sleepStudy.js";
 import { treatmentPlanRouter } from "./routes/treatmentPlan.js";
 import { territoryRouter } from "./routes/territory.js";
-import { runMigrations } from "./db.js";
+import { runMigrations, getDb } from "./db.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { apiLimiter, smokePdfLimiter } from "./middleware/rateLimiter.js";
 import { renderHtmlToPdf } from "./services/documentRenderer.js";
@@ -80,7 +80,15 @@ app.set("trust proxy", 1);
 // documents — the most fragile piece on Render (bundled Chromium + system
 // libraries), which /health alone can't vouch for. Used by the post-deploy
 // smoke test; tightly rate-limited because every call launches a render.
-const SMOKE_PDF_HTML = "<!doctype html><html><body><h1>Smoke test</h1><p>Render check.</p></body></html>";
+// Loads Poppins from Google Fonts exactly like packages/documents/templates do:
+// that HTTPS fetch is what pulls in Chromium's network stack (NSS, libsqlite3)
+// — a missing system library there crashes real documents but not a page
+// with no web font. The accented glyphs pull a second font subset.
+const SMOKE_PDF_HTML =
+  '<!doctype html><html><head><meta charset="UTF-8">' +
+  '<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">' +
+  "<style>body{font-family:'Poppins',sans-serif}</style></head>" +
+  "<body><h1>Smoke test</h1><p>Render check, accented glyphs: é ñ ó ł ź</p></body></html>";
 app.get("/health/pdf", smokePdfLimiter, async (_req, res) => {
   const started = Date.now();
   try {
@@ -222,6 +230,25 @@ if (typeof process.env.VITEST === "undefined") {
     console.error("[neocrm-api] failed to start:", err);
     process.exit(1);
   });
+
+  /**
+   * Cloud Run sends SIGTERM before stopping an instance (scale-to-zero, new revision) and
+   * allows ~10s. Stop accepting connections, let in-flight requests finish, return pooled DB
+   * connections to Supabase instead of leaving them to time out, then exit.
+   */
+  function shutdown(signal: string): void {
+    console.log(`[neocrm-api] ${signal} received, shutting down`);
+    setTimeout(() => process.exit(0), 9_000).unref();
+    const closeDb = () =>
+      getDb()
+        .end()
+        .catch((err: unknown) => console.error("[neocrm-api] pool close failed:", err))
+        .finally(() => process.exit(0));
+    if (server) server.close(() => void closeDb());
+    else void closeDb();
+  }
+  process.once("SIGTERM", () => shutdown("SIGTERM"));
+  process.once("SIGINT", () => shutdown("SIGINT"));
 }
 
 export { server };
