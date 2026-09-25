@@ -214,28 +214,38 @@ onMounted(() => {
   border: none;
 }
 
-/* The card's rounded top-left corner. Page scroll is on the window (views such
-   as ResourcesView read window.scrollY), so rounding the content itself would
-   scroll the corner away under the fixed bar. Instead a fixed, chrome-colored
-   mask sits exactly where the bar meets the drawer and carves the corner out of
-   whatever scrolls beneath it. --v-layout-top/left are Vuetify's own layout
-   offsets (bar height, drawer or rail width), so it follows rail collapse. */
-.app-shell__main--inset::before {
+/* The content card: rounded on all four corners and set into the chrome on
+   every side — the bar above, the drawer on the left, and a chrome gutter on
+   the right and bottom. Page scroll is on the window (views such as
+   ResourcesView read window.scrollY), so rounding the content itself would
+   scroll its corners away. Instead one fixed, pointer-transparent frame sits
+   exactly over the card's visible area: its box-shadow (which follows the
+   border-radius) paints chrome outside the rounded rectangle — the four
+   corners plus the right/bottom gutters — and clip-path keeps that shadow off
+   the bar and drawer. --v-layout-top/left are Vuetify's own layout offsets
+   (bar height, drawer or rail width), so it follows rail collapse. VMain's
+   own right/bottom padding grows by the gutter so content never ends up
+   underneath it. */
+.app-shell__main--inset {
   --app-shell-card-radius: 16px;
+  --app-shell-card-gutter: 12px;
+  padding-right: calc(var(--v-layout-right) + var(--app-shell-card-gutter));
+  padding-bottom: calc(var(--v-layout-bottom) + var(--app-shell-card-gutter));
+}
+
+.app-shell__main--inset::before {
   content: "";
   position: fixed;
   top: var(--v-layout-top);
   left: var(--v-layout-left);
-  width: var(--app-shell-card-radius);
-  height: var(--app-shell-card-radius);
+  right: var(--app-shell-card-gutter);
+  bottom: var(--app-shell-card-gutter);
   z-index: 1003;
   pointer-events: none;
-  background: radial-gradient(
-    circle at 100% 100%,
-    transparent calc(var(--app-shell-card-radius) - 0.5px),
-    rgb(var(--v-theme-surface-container-low)) var(--app-shell-card-radius)
-  );
-  /* Same timing as Vuetify's own .v-main padding transition, so the corner
+  border-radius: var(--app-shell-card-radius);
+  box-shadow: 0 0 0 100vmax rgb(var(--v-theme-surface-container-low));
+  clip-path: inset(0 calc(-1 * var(--app-shell-card-gutter)) calc(-1 * var(--app-shell-card-gutter)) 0);
+  /* Same timing as Vuetify's own .v-main padding transition, so the frame
      tracks the drawer edge during rail collapse/expand. */
   transition: left 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -245,9 +255,10 @@ onMounted(() => {
    border-top because the default VDivider read as invisible) on a misreading of
    the original ask; this corrects that. */
 .app-shell__nav-footer {
+  --app-shell-nav-footer-pad: 12px;
   display: flex;
   justify-content: center;
-  padding: 12px;
+  padding: var(--app-shell-nav-footer-pad);
 }
 
 /* --appbar-row: the one shared height every app-bar leading element (the

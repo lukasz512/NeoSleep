@@ -80,9 +80,9 @@ const { unreadCount } = useNotificationCenter();
 }
 
 .layout-app__nav-list :deep(.v-list-item__prepend) {
-  margin-inline-end: 10px;
+  margin-inline-end: var(--layout-nav-icon-gap, 10px);
   opacity: 1;
-  min-width: 20px;
+  min-width: var(--layout-nav-icon-size, 20px);
   flex-shrink: 0;
 }
 
