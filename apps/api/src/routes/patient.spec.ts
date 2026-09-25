@@ -266,6 +266,7 @@ describe("patient date_of_birth (POST / PATCH / GET /api/v1/patient)", () => {
     last_name: `Route-${uniqueSuffix()}`,
     email: `dob-${uniqueSuffix()}@example.com`,
     phone: "+48 600 100 200",
+    gender: "male",
   });
 
   it("round trip: create with a date of birth, read it back unchanged", async () => {
@@ -279,14 +280,16 @@ describe("patient date_of_birth (POST / PATCH / GET /api/v1/patient)", () => {
     expect(get.body.date_of_birth).toBe("1968-03-12");
   });
 
-  it("is null when not given", async () => {
+  // Sex and date of birth are required for patients (doctors never record them).
+  it("400s when date of birth or sex is missing", async () => {
     const auth = await adminAuth();
-    const post = await request(app).post("/api/v1/patient").set("Authorization", auth).send(base());
-    expect(post.status).toBe(201);
-    expect(post.body.date_of_birth).toBeNull();
+    const noDob = await request(app).post("/api/v1/patient").set("Authorization", auth).send(base());
+    expect(noDob.status).toBe(400);
+    const noSex = await request(app).post("/api/v1/patient").set("Authorization", auth).send({ ...base(), gender: "", date_of_birth: "1968-03-12" });
+    expect(noSex.status).toBe(400);
   });
 
-  it("PATCH changes it, null clears it, omitting it leaves it alone", async () => {
+  it("PATCH changes it, omitting it leaves it alone, clearing it (or sex) 400s", async () => {
     const auth = await adminAuth();
     const post = await request(app).post("/api/v1/patient").set("Authorization", auth).send({ ...base(), date_of_birth: "1990-01-31" });
     const id = post.body.id as string;
@@ -299,8 +302,9 @@ describe("patient date_of_birth (POST / PATCH / GET /api/v1/patient)", () => {
     expect(untouched.body.date_of_birth).toBe("1991-02-28");
 
     const cleared = await request(app).patch(`/api/v1/patient/${id}`).set("Authorization", auth).send({ date_of_birth: null });
-    expect(cleared.status).toBe(200);
-    expect(cleared.body.date_of_birth).toBeNull();
+    expect(cleared.status).toBe(400);
+    const clearedSex = await request(app).patch(`/api/v1/patient/${id}`).set("Authorization", auth).send({ gender: null });
+    expect(clearedSex.status).toBe(400);
   });
 
   it.each([

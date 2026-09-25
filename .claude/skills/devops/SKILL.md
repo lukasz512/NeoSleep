@@ -105,7 +105,7 @@ Tracked in the project backlog as a deferred improvement, not urgent. Do not pre
 □ Ubuntu 22.04 LTS, non-root deploy user
 □ UFW: allow 22, 80, 443 only
 □ fail2ban for SSH brute force protection
-□ Node 20 LTS via NodeSource
+□ Node 22 LTS via NodeSource
 □ PM2 global, pm2 save + pm2 startup for auto-restart
 □ Nginx reverse proxy + Let's Encrypt via certbot, verify auto-renewal
 □ unattended-upgrades for security patches

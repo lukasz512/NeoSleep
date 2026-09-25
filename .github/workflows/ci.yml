@@ -148,3 +148,14 @@ jobs:
 
       - name: Test — pwa e2e (blocking)
         run: pnpm --filter @neo/pwa test:e2e
+
+  # The API ships as a Docker image to Cloud Run (NEO-45, deploy-api.yml). Build it on
+  # every PR/push so a broken Dockerfile fails here, not during a deploy. Build only,
+  # nothing is pushed.
+  api-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build API image
+        run: docker build --platform linux/amd64 -f apps/api/Dockerfile -t neo-api:ci .
