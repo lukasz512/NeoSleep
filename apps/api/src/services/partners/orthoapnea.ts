@@ -514,7 +514,7 @@ export async function fetchResources(locale: string): Promise<PartnerResourceIte
 /** Resource id -> the video media path that actually worked, so repeat requests for the same video don't pay the two-path probe again. */
 const resolvedVideoPathCache = new Map<string, string>();
 
-async function tryVideoPaths(resourceId: string, filename: string): Promise<Response> {
+async function tryVideoPaths(resourceId: string, filename: string, init: RequestInit): Promise<Response> {
   const encoded = encodeURIComponent(filename);
   const cached = resolvedVideoPathCache.get(resourceId);
   const candidates = cached
@@ -523,7 +523,7 @@ async function tryVideoPaths(resourceId: string, filename: string): Promise<Resp
 
   let lastRes: Response | null = null;
   for (const path of candidates) {
-    const res = await authedFetch(path);
+    const res = await authedFetch(path, init);
     if (res.ok && res.body) {
       resolvedVideoPathCache.set(resourceId, path);
       return res;
@@ -545,11 +545,40 @@ async function tryVideoPaths(resourceId: string, filename: string): Promise<Resp
  * path confirmed (DOCUMENT_MEDIA_PATH); video path resolved via
  * tryVideoPaths (see its comment).
  */
+export interface ResourceMedia {
+  body: ReadableStream<Uint8Array>;
+  /** 200, or 206 when a `range` was asked for and honoured. */
+  status: number;
+  /** Only the headers a browser needs to play/seek — passed through as-is. */
+  headers: Record<"content-type" | "content-length" | "content-range" | "accept-ranges", string | null>;
+}
+
+function mediaFrom(res: Response): ResourceMedia {
+  const h = (name: keyof ResourceMedia["headers"]) => res.headers.get(name);
+  return {
+    body: res.body as ReadableStream<Uint8Array>,
+    status: res.status,
+    headers: {
+      "content-type": h("content-type"),
+      "content-length": h("content-length"),
+      "content-range": h("content-range"),
+      "accept-ranges": h("accept-ranges"),
+    },
+  };
+}
+
+/**
+ * `range` is the browser's own Range header, forwarded untouched: webinars
+ * are hundreds of MB (id 26 is ~580 MB), Safari/iPadOS refuses to play
+ * `<video>` without 206 responses, and seeking must not re-download from
+ * byte 0. apneadock.es answers Range with 206 (verified 2026-09-25).
+ */
 export async function fetchResourceMedia(
   resourceId: string,
   locale: string,
-  lang?: string
-): Promise<{ body: ReadableStream<Uint8Array>; contentType: string | null }> {
+  lang?: string,
+  range?: string
+): Promise<ResourceMedia> {
   const rows = await fetchRawResources();
   const raw = rows.find((r) => String(r.id) === resourceId && !r.deleted);
   if (!raw) {
@@ -567,18 +596,19 @@ export async function fetchResourceMedia(
     );
   }
 
+  const init: RequestInit = range ? { headers: { Range: range } } : {};
+
   if (raw.type === VIDEO_TYPE) {
-    const mediaRes = await tryVideoPaths(resourceId, filename);
-    return { body: mediaRes.body as ReadableStream<Uint8Array>, contentType: mediaRes.headers.get("content-type") };
+    return mediaFrom(await tryVideoPaths(resourceId, filename, init));
   }
 
   const mediaPath = `${DOCUMENT_MEDIA_PATH}/${encodeURIComponent(filename)}`;
-  const mediaRes = await authedFetch(mediaPath);
+  const mediaRes = await authedFetch(mediaPath, init);
   if (!mediaRes.ok || !mediaRes.body) {
     console.error(`[orthoapnea] document fetch failed with status ${mediaRes.status} for '${mediaPath}'`);
     throw new PartnerServiceError("orthoapnea", `media fetch failed with status ${mediaRes.status} for '${mediaPath}'`);
   }
-  return { body: mediaRes.body, contentType: mediaRes.headers.get("content-type") };
+  return mediaFrom(mediaRes);
 }
 
 // =============================================================================

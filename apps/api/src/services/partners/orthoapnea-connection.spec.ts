@@ -20,8 +20,12 @@ interface FakeOrthoApnea {
   /** Tokens the fake currently accepts; clearing it simulates OrthoApnea revoking every issued session. */
   validTokens: Set<string>;
   mode: "ok" | "hang" | "server_error";
+  /** Range header the video endpoint last received. */
+  lastRange: string | null;
   close: () => Promise<void>;
 }
+
+const VIDEO_BYTES = Buffer.from("0123456789abcdef");
 
 function jwt(expiresInSeconds: number, nonce: number): string {
   const payload = Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + expiresInSeconds, n: nonce })).toString(
@@ -37,6 +41,7 @@ async function startFakeOrthoApnea(): Promise<FakeOrthoApnea> {
     loginCalls: 0,
     validTokens: new Set(),
     mode: "ok",
+    lastRange: null,
     close: async () => {},
   };
 
@@ -71,7 +76,35 @@ async function startFakeOrthoApnea(): Promise<FakeOrthoApnea> {
         return;
       }
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify([{ id: 1, type: 1, category: 1, weight: 1, deleted: false, titleEs: "Guía", urlEs: "a.pdf" }]));
+      res.end(
+        JSON.stringify([
+          { id: 1, type: 1, category: 1, weight: 1, deleted: false, titleEs: "Guía", urlEs: "a.pdf" },
+          { id: 26, type: 2, category: 1, weight: 2, deleted: false, titleEs: "Webinar", urlEs: "Introducción.mp4" },
+        ])
+      );
+      return;
+    }
+    if (req.method === "GET" && req.url === `/media/video/tutorials/${encodeURIComponent("Introducción.mp4")}`) {
+      if (!fake.validTokens.has(auth.replace(/^Bearer /, ""))) {
+        res.writeHead(403).end();
+        return;
+      }
+      fake.lastRange = req.headers.range ?? null;
+      // Same shape apneadock.es answers with for Range (verified 2026-09-25).
+      const match = /^bytes=(\d+)-(\d+)$/.exec(req.headers.range ?? "");
+      if (match) {
+        const [start, end] = [Number(match[1]), Number(match[2])];
+        res.writeHead(206, {
+          "Content-Type": "video/mp4",
+          "Content-Length": String(end - start + 1),
+          "Content-Range": `bytes ${start}-${end}/${VIDEO_BYTES.length}`,
+          "Accept-Ranges": "bytes",
+        });
+        res.end(VIDEO_BYTES.subarray(start, end + 1));
+        return;
+      }
+      res.writeHead(200, { "Content-Type": "video/mp4", "Content-Length": String(VIDEO_BYTES.length) });
+      res.end(VIDEO_BYTES);
       return;
     }
     res.writeHead(404).end();
@@ -119,7 +152,7 @@ describe("OrthoApnea connection resilience (fake apneadock.es over real HTTP)", 
     const { checkConnection, fetchResources } = await importService(fake);
     expect(await checkConnection()).toEqual({ connected: true, attemptsExhausted: false });
     const items = await fetchResources("es");
-    expect(items).toHaveLength(1);
+    expect(items).toHaveLength(2);
     expect(fake.loginCalls).toBe(1);
   });
 
@@ -129,7 +162,7 @@ describe("OrthoApnea connection resilience (fake apneadock.es over real HTTP)", 
     fake.validTokens.clear(); // e.g. OrthoApnea restarted or rotated its signing key
 
     const items = await fetchResources("es");
-    expect(items).toHaveLength(1);
+    expect(items).toHaveLength(2);
     expect(fake.loginCalls).toBe(2);
   });
 
@@ -173,5 +206,29 @@ describe("OrthoApnea connection resilience (fake apneadock.es over real HTTP)", 
     const { checkConnection } = await importService(fake, "stale-password");
     for (let i = 0; i < 10; i++) await checkConnection();
     expect(fake.loginCalls).toBe(1);
+  });
+});
+
+describe("OrthoApnea webinar streaming (fake apneadock.es over real HTTP)", () => {
+  async function readAll(body: ReadableStream<Uint8Array>): Promise<string> {
+    return Buffer.from(await new Response(body).arrayBuffer()).toString();
+  }
+
+  it("forwards the player's Range and passes back 206 + Content-Range, so Safari can play and seek", async () => {
+    const { fetchResourceMedia } = await importService(fake);
+    const media = await fetchResourceMedia("26", "es", undefined, "bytes=4-7");
+
+    expect(fake.lastRange).toBe("bytes=4-7");
+    expect(media.status).toBe(206);
+    expect(media.headers["content-range"]).toBe("bytes 4-7/16");
+    expect(media.headers["content-type"]).toBe("video/mp4");
+    expect(await readAll(media.body)).toBe("4567");
+  });
+
+  it("streams the whole file with 200 when no Range is sent", async () => {
+    const { fetchResourceMedia } = await importService(fake);
+    const media = await fetchResourceMedia("26", "es");
+    expect(media.status).toBe(200);
+    expect(await readAll(media.body)).toBe("0123456789abcdef");
   });
 });
