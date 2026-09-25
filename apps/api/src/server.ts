@@ -28,7 +28,7 @@ import { noteRouter } from "./routes/note.js";
 import { sleepStudyRouter } from "./routes/sleepStudy.js";
 import { treatmentPlanRouter } from "./routes/treatmentPlan.js";
 import { territoryRouter } from "./routes/territory.js";
-import { runMigrations } from "./db.js";
+import { runMigrations, getDb } from "./db.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { apiLimiter, smokePdfLimiter } from "./middleware/rateLimiter.js";
 import { renderHtmlToPdf } from "./services/documentRenderer.js";
@@ -222,6 +222,25 @@ if (typeof process.env.VITEST === "undefined") {
     console.error("[neocrm-api] failed to start:", err);
     process.exit(1);
   });
+
+  /**
+   * Cloud Run sends SIGTERM before stopping an instance (scale-to-zero, new revision) and
+   * allows ~10s. Stop accepting connections, let in-flight requests finish, return pooled DB
+   * connections to Supabase instead of leaving them to time out, then exit.
+   */
+  function shutdown(signal: string): void {
+    console.log(`[neocrm-api] ${signal} received, shutting down`);
+    setTimeout(() => process.exit(0), 9_000).unref();
+    const closeDb = () =>
+      getDb()
+        .end()
+        .catch((err: unknown) => console.error("[neocrm-api] pool close failed:", err))
+        .finally(() => process.exit(0));
+    if (server) server.close(() => void closeDb());
+    else void closeDb();
+  }
+  process.once("SIGTERM", () => shutdown("SIGTERM"));
+  process.once("SIGINT", () => shutdown("SIGINT"));
 }
 
 export { server };
