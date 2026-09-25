@@ -124,7 +124,7 @@
             closable-chips
             hide-selected
           >
-            <template #chip="{ item, props: chipProps }">
+            <template #chip="{ internalItem: item, props: chipProps }">
               <VChip v-bind="chipProps" :color="productChipColor(item.title)" />
             </template>
           </VAutocomplete>
@@ -141,7 +141,7 @@
               <NumberStepperField v-model="form.protrusionMax" />
             </VCol>
             <VCol cols="6" class="oa-wizard__range-col">
-              <span class="text-caption text-medium-emphasis">{{ t("app.orthoApneaOrder.form.mandibularRange") }}</span>
+              <span class="text-body-small text-medium-emphasis">{{ t("app.orthoApneaOrder.form.mandibularRange") }}</span>
               <span class="oa-wizard__range-value">{{ mandibularRange }}</span>
             </VCol>
           </VRow>
@@ -212,7 +212,7 @@
           <div class="d-flex align-center flex-wrap mb-1 mt-4">
             <span class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.form.sequenceType") }}</span>
             <FieldTooltip :text="t('app.orthoApneaOrder.tooltip.sequenceType')" />
-            <span class="text-caption text-medium-emphasis ml-2">{{ t("app.orthoApneaOrder.form.sequenceTypeHint") }}</span>
+            <span class="text-body-small text-medium-emphasis ml-2">{{ t("app.orthoApneaOrder.form.sequenceTypeHint") }}</span>
           </div>
           <div class="d-flex align-center flex-wrap ga-4 mb-2">
             <VCheckbox v-model="form.sequenceTypeStandard" color="primary" :label="t('app.orthoApneaOrder.form.sequenceTypeStandard')" hide-details density="compact" @update:model-value="onSequenceTypeStandard" />
@@ -236,7 +236,7 @@
             <VRadio :value="false" :label="t('app.orthoApneaOrder.form.unitPercent')" />
           </VRadioGroup>
           <p class="oa-wizard__field-label">SP</p>
-          <VRow class="mb-1" dense>
+          <VRow class="mb-1" density="compact">
             <VCol cols="4"><NumberStepperField v-model="sequence.seq1" :disabled="form.sequenceTypeStandard" /></VCol>
             <VCol cols="4"><NumberStepperField v-model="sequence.seq2" :disabled="form.sequenceTypeStandard" /></VCol>
             <VCol cols="4"><NumberStepperField v-model="sequence.seq3" :disabled="form.sequenceTypeStandard" /></VCol>
@@ -247,7 +247,7 @@
             <AppButton icon size="small" variant="tonal" color="primary" class="ml-2" :aria-label="t('app.orthoApneaOrder.form.additionalSplintsAdd')" @click="form.additionalSplints.push('')">
               <AppIcon name="plus" />
             </AppButton>
-            <span class="text-caption text-medium-emphasis font-italic ml-2">{{ t("app.orthoApneaOrder.form.additionalSplintsHint") }}</span>
+            <span class="text-body-small text-medium-emphasis font-italic ml-2">{{ t("app.orthoApneaOrder.form.additionalSplintsHint") }}</span>
           </div>
           <div v-for="(_, idx) in form.additionalSplints" :key="idx" class="d-flex align-center ga-2 mb-2">
             <VTextField v-model="form.additionalSplints[idx]" variant="outlined" density="comfortable" hide-details />
@@ -298,11 +298,11 @@
             </VCol>
           </VRow>
           <div class="oa-wizard__section--centered">
-            <p class="text-caption mb-1">{{ t("app.orthoApneaOrder.form.splintDesignUpperBand") }}</p>
+            <p class="text-body-small mb-1">{{ t("app.orthoApneaOrder.form.splintDesignUpperBand") }}</p>
             <IconOptionPicker v-model="form.upperBandSplintDesign" :options="BAND_OPTIONS" large hide-labels class="mb-3" />
-            <p class="text-caption mb-1">{{ t("app.orthoApneaOrder.form.splintDesignLowerBand") }}</p>
+            <p class="text-body-small mb-1">{{ t("app.orthoApneaOrder.form.splintDesignLowerBand") }}</p>
             <IconOptionPicker v-model="form.lowerBandSplintDesign" :options="BAND_OPTIONS" large hide-labels class="mb-3" />
-            <p class="text-caption mb-1">{{ t("app.orthoApneaOrder.form.finish") }}</p>
+            <p class="text-body-small mb-1">{{ t("app.orthoApneaOrder.form.finish") }}</p>
             <IconOptionPicker v-model="form.finish" :options="FINISH_OPTIONS" fill large class="mb-4" />
           </div>
 

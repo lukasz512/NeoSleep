@@ -110,7 +110,7 @@
                 <span class="layout-user-role">{{ user.role }}</span>
               </div>
               <VAvatar size="32" color="primary">
-                <span class="text-caption font-weight-bold">{{ user.initials }}</span>
+                <span class="text-body-small font-weight-bold">{{ user.initials }}</span>
               </VAvatar>
             </AppButton>
           </template>

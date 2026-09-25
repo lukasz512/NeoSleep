@@ -44,9 +44,9 @@
             </div>
             <template v-else>
               <section v-for="group in documentGroups" :key="group.category" class="view-resources__group">
-                <h2 class="text-body-1 font-weight-bold mb-3">{{ group.category }}</h2>
+                <h2 class="text-body-large font-weight-bold mb-3">{{ group.category }}</h2>
                 <div v-for="subgroup in group.subgroups" :key="subgroup.subcategory ?? ''" class="view-resources__subgroup">
-                  <h3 v-if="subgroup.subcategory" class="text-caption font-weight-bold text-medium-emphasis mb-2">
+                  <h3 v-if="subgroup.subcategory" class="text-body-small font-weight-bold text-medium-emphasis mb-2">
                     {{ subgroup.subcategory }}
                   </h3>
                   <div class="view-resources__grid">
@@ -67,7 +67,7 @@
                             rel="noopener"
                           >
                             <AppIcon :name="fileTypeIcon(doc.fileType)" class="view-resources__card-icon mb-2" />
-                            <span :ref="(el) => registerTitleEl(doc.id, el as Element | null)" class="view-resources__card-title text-body-2 font-weight-bold">
+                            <span :ref="(el) => registerTitleEl(doc.id, el as Element | null)" class="view-resources__card-title text-body-medium font-weight-bold">
                               {{ doc.title }}
                             </span>
                           </a>
@@ -77,7 +77,7 @@
                         <a
                           v-for="lang in doc.languages"
                           :key="lang.code"
-                          class="view-resources__lang-chip text-caption font-weight-bold rounded-pill px-2 py-1"
+                          class="view-resources__lang-chip text-body-small font-weight-bold rounded-pill px-2 py-1"
                           :href="lang.mediaUrl"
                           target="_blank"
                           rel="noopener"
@@ -99,17 +99,17 @@
             </div>
             <template v-else>
               <section v-for="group in videoGroups" :key="group.category" class="view-resources__group">
-                <h2 class="text-body-1 font-weight-bold mb-3">{{ group.category }}</h2>
+                <h2 class="text-body-large font-weight-bold mb-3">{{ group.category }}</h2>
                 <div v-for="subgroup in group.subgroups" :key="subgroup.subcategory ?? ''" class="view-resources__grid view-resources__grid--videos">
                   <VCard v-for="video in subgroup.items" :key="video.id" variant="flat" rounded="lg" class="bg-surface-container-low pa-3">
                     <video controls preload="none" class="view-resources__video rounded-lg" :src="video.mediaUrl" />
                     <VTooltip location="bottom" :text="video.title" open-delay="400" :disabled="!truncatedTitles[video.id]">
                       <template #activator="{ props: tooltipProps }">
                         <div v-bind="tooltipProps" class="d-flex flex-column w-100 mt-2">
-                          <span :ref="(el) => registerTitleEl(video.id, el as Element | null)" class="view-resources__card-title text-body-2 font-weight-bold">
+                          <span :ref="(el) => registerTitleEl(video.id, el as Element | null)" class="view-resources__card-title text-body-medium font-weight-bold">
                             {{ video.title }}
                           </span>
-                          <span v-if="video.description" class="text-caption text-medium-emphasis">{{ video.description }}</span>
+                          <span v-if="video.description" class="text-body-small text-medium-emphasis">{{ video.description }}</span>
                         </div>
                       </template>
                     </VTooltip>
@@ -117,7 +117,7 @@
                       <a
                         v-for="lang in video.languages"
                         :key="lang.code"
-                        class="view-resources__lang-chip text-caption font-weight-bold rounded-pill px-2 py-1"
+                        class="view-resources__lang-chip text-body-small font-weight-bold rounded-pill px-2 py-1"
                         :href="lang.mediaUrl"
                         target="_blank"
                         rel="noopener"

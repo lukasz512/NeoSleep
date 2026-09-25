@@ -18,7 +18,7 @@
       <template #prepend-inner>
         <FlagIcon v-if="currentFlagCountry" :country-code="currentFlagCountry" />
       </template>
-      <template #item="{ item, props: itemProps }">
+      <template #item="{ internalItem: item, props: itemProps }">
         <VListItem v-bind="itemProps" :title="undefined" class="pwa-phone-field__item">
           <template #prepend>
             <FlagIcon :country-code="item.raw.country" class="pwa-phone-field__item-flag" />
