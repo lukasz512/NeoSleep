@@ -9,7 +9,7 @@
   data-field values filled by apps/api's renderHtmlToPdf.
 
   data-field values:
-    nombre_paciente, nombre_medico, nombre_clinica, fecha
+    nombre_paciente, fecha_nacimiento, nombre_medico, nombre_clinica, fecha
     q_has_* — "Sí" / "No" from the latest medical_history_questionnaire, or
       empty Sí / No tick-boxes (drawn by the
       renderer, choiceFields) when printing a blank form to fill in by hand
@@ -60,7 +60,8 @@
   <h2>{{documents.medicalHistory.subtitle}}</h2>
 
   <dl class="doc-fields">
-    <div class="doc-field doc-field--wide"><dt>{{documents.historiaEndo.fieldPatientName}}</dt><dd data-field="nombre_paciente"></dd></div>
+    <div class="doc-field doc-field--patient"><dt>{{documents.historiaEndo.fieldPatientName}}</dt><dd data-field="nombre_paciente"></dd></div>
+    <div class="doc-field doc-field--short"><dt>{{documents.fieldBirthDate}}</dt><dd data-field="fecha_nacimiento"></dd></div>
     <div class="doc-field"><dt>{{documents.historiaEndo.fieldPractitioner}}</dt><dd data-field="nombre_medico"></dd></div>
     <div class="doc-field"><dt>{{documents.historiaEndo.fieldClinic}}</dt><dd data-field="nombre_clinica"></dd></div>
     <div class="doc-field doc-field--short"><dt>{{documents.historiaEndo.fieldDate}}</dt><dd data-field="fecha"></dd></div>

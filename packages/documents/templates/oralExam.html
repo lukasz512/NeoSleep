@@ -7,7 +7,7 @@
   instrument, no content slot. Same substitution split as stopBang.html.
 
   data-field values:
-    nombre_paciente, nombre_medico, nombre_clinica, fecha, diente
+    nombre_paciente, fecha_nacimiento, nombre_medico, nombre_clinica, fecha, diente
     q_has_* / q_is_mouth_breather — "Sí" / "No" from the latest oral_exam,
       or empty Sí / No tick-boxes on a blank form (renderer choiceFields)
     q_skeletal_class — "I" / "II" / "III", or I / II / III tick-boxes blank
@@ -55,7 +55,8 @@
   <h2>{{documents.oralExam.subtitle}}</h2>
 
   <dl class="doc-fields">
-    <div class="doc-field doc-field--wide"><dt>{{documents.historiaEndo.fieldPatientName}}</dt><dd data-field="nombre_paciente"></dd></div>
+    <div class="doc-field doc-field--patient"><dt>{{documents.historiaEndo.fieldPatientName}}</dt><dd data-field="nombre_paciente"></dd></div>
+    <div class="doc-field doc-field--short"><dt>{{documents.fieldBirthDate}}</dt><dd data-field="fecha_nacimiento"></dd></div>
     <div class="doc-field"><dt>{{documents.historiaEndo.fieldPractitioner}}</dt><dd data-field="nombre_medico"></dd></div>
     <div class="doc-field"><dt>{{documents.historiaEndo.fieldClinic}}</dt><dd data-field="nombre_clinica"></dd></div>
     <div class="doc-field doc-field--short"><dt>{{documents.historiaEndo.fieldDate}}</dt><dd data-field="fecha"></dd></div>

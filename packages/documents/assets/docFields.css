@@ -24,6 +24,8 @@
 .doc-field { flex: 1 1 150px; min-width: 0; display: flex; flex-direction: column; }
 .doc-field--short { flex: 0.6 1 90px; }
 .doc-field--wide { flex-basis: 100%; }
+/* Patient name + date of birth share the first row; the name's basis leaves no room for a third field there. */
+.doc-field--patient { flex: 1 1 calc(100% - 200px); }
 .doc-field dt {
   font-size: 7pt;
   font-weight: 500;
