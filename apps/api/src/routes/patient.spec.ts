@@ -259,7 +259,7 @@ describe("/api/v1/patient/:id/checklist + print + uploads (Estudios, ADR-024)", 
 describe("patient date_of_birth (POST / PATCH / GET /api/v1/patient)", () => {
   async function adminAuth(): Promise<string> {
     const admin = await withTenant(TENANT_SLUG, (client) => insertTestUser(client, "admin"));
-    return `Bearer ${tokenFor(admin, "admin")}`;
+    return `Bearer ${signAuthToken({ id: admin.id, email: admin.email, role: "admin", token_version: 0 })}`;
   }
   const base = () => ({
     first_name: "Dob",

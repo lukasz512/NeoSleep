@@ -1,0 +1,31 @@
+/* Spacing scale (NEO-61) — the one set of steps every margin, padding and gap
+ * in the apps should come from. 4-px base, the same grid Material 3, Apple HIG
+ * and Salesforce SLDS use. Names are the multiple of 4 (--space-6 = 24px), so
+ * a missing step (5, 7, …) is visible at a glance rather than silently added.
+ * Imported once per app (apps/pwa main.ts). */
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+
+  /* Page gutter: distance from the content card's edge to its content.
+   * Phone 20px (iOS content margin), tablet 24px (Material "medium"),
+   * desktop 32px. */
+  --page-gutter: 20px;
+}
+
+@media (min-width: 600px) {
+  :root {
+    --page-gutter: 24px;
+  }
+}
+
+@media (min-width: 1280px) {
+  :root {
+    --page-gutter: 32px;
+  }
+}
