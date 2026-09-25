@@ -6,7 +6,7 @@ describe("API server", () => {
   it("GET /health returns ok", async () => {
     const res = await request(app).get("/health");
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ ok: true, commit: process.env.RENDER_GIT_COMMIT ?? null });
+    expect(res.body).toEqual({ ok: true, commit: process.env.GIT_COMMIT || process.env.RENDER_GIT_COMMIT || null });
   });
 
   it("GET /health/pdf renders a real PDF, then rate-limits after 3 calls a minute", async () => {

@@ -62,6 +62,11 @@ setupOfflineCacheSession();
 
 app.provide("neo:apiFetch", apiFetch);
 app.provide("neo:authTokenStorage", authTokenStorage);
+// AuthView's "Sign in with Google" button (NEO-78) is a top-level navigation
+// to the API, not a fetch, so it needs the API base URL itself. Same string
+// key as packages/ui's API_URL_KEY (a plain string, like the provides above,
+// so main.ts doesn't pull the whole @ui barrel into the entry chunk).
+app.provide("neo:apiUrl", getApiUrl());
 app.provide(APP_VERSION_KEY, resolveAppVersion(import.meta.env));
 // Lets shared views in packages/ui (e.g. AuthView, which runs before the
 // authenticated shell that owns most of the app's toasts) show a native

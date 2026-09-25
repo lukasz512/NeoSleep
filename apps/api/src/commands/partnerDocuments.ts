@@ -17,6 +17,8 @@ import {
   type PartnerSignatory,
 } from "../db/partnerSignatories.js";
 import { insertAuditLog } from "../db.js";
+import { getTerritoryCountryCode } from "../db/territory.js";
+import { getOrganizationById } from "../db/organization.js";
 import { downloadPartnerDocument } from "../services/partnerDocuments.js";
 import {
   ForbiddenError,
@@ -43,8 +45,45 @@ import {
 export const COUNTERSIGNED_TEMPLATES = ["partnerAgreement", "partnerDpa"] as const;
 
 export function partnerJurisdictionForRegion(region: string | null | undefined): PartnerJurisdiction | null {
-  const r = (region ?? "").toUpperCase();
+  const r = (region ?? "").trim().toUpperCase();
   return r === "PL" || r === "MX" ? r : null;
+}
+
+interface JurisdictionSource {
+  region: string | null;
+  country_code: string | null;
+  territory_id: string | null;
+}
+
+/** The country above a territory node (e.g. MX for "mx/cdmx/polanco"). */
+async function territoryJurisdiction(client: PoolClient, territoryId: string | null): Promise<PartnerJurisdiction | null> {
+  if (!territoryId) return null;
+  return partnerJurisdictionForRegion(await getTerritoryCountryCode(client, territoryId));
+}
+
+async function sourceJurisdiction(client: PoolClient, source: JurisdictionSource): Promise<PartnerJurisdiction | null> {
+  return (
+    partnerJurisdictionForRegion(source.region) ??
+    partnerJurisdictionForRegion(source.country_code) ??
+    (await territoryJurisdiction(client, source.territory_id))
+  );
+}
+
+/**
+ * Which country's partner documents a practitioner signs. Region alone was
+ * too narrow: a doctor added under a territory ("mx/cdmx") or with only a
+ * country code, or whose clinic carries the country, got "only available for
+ * PL or MX" (Łukasz, 2026-09-25). Order: the practitioner's own region →
+ * country code → territory's country → the same three on their clinic.
+ */
+export async function resolvePractitionerJurisdiction(
+  client: PoolClient,
+  practitioner: JurisdictionSource & { organization_id: string | null },
+): Promise<PartnerJurisdiction | null> {
+  const own = await sourceJurisdiction(client, practitioner);
+  if (own || !practitioner.organization_id) return own;
+  const organization = await getOrganizationById(client, practitioner.organization_id);
+  return organization ? sourceJurisdiction(client, organization) : null;
 }
 
 export interface PartnerDocumentSet {

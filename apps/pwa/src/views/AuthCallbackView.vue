@@ -2,6 +2,11 @@
   <div class="auth-callback">
     <VProgressCircular v-if="!errored" indeterminate color="primary" size="32" />
     <p>{{ t(errored ? "user.login.callback.error" : "user.login.callback.loading") }}</p>
+    <!-- Never a dead end: a failed exchange (expired code, account deactivated
+         meanwhile) gets a way back to the login screen. -->
+    <VBtn v-if="errored" to="/login" color="primary" variant="outlined">
+      {{ t("user.login.callback.backToLogin") }}
+    </VBtn>
   </div>
 </template>
 

@@ -37,6 +37,10 @@ ENV NODE_ENV=production
 RUN apt-get update \
  && apt-get install -y --no-install-recommends libsqlite3-0 ca-certificates \
  && rm -rf /var/lib/apt/lists/*
+# The commit this image was built from — /health reports it so the post-deploy
+# smoke test can tell when the new revision is actually serving.
+ARG GIT_COMMIT=""
+ENV GIT_COMMIT=$GIT_COMMIT
 WORKDIR /app
 
 COPY --from=build /app/package.json ./package.json
