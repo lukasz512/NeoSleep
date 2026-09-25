@@ -46,34 +46,33 @@
 .doc-field--wide dd { font-weight: 500; }
 
 /*
- * Free-text write-in area ("Otros", "Observaciones") — same card as the field
- * grid, with ruled lines to write on by hand. A recorded value sits on the
- * first line; the rules keep going underneath for anything added on paper.
+ * Free-text write-in area ("Otros", "Observaciones") — no card, just ruled
+ * lines matching the checklist rows above it (Łukasz, 2026-09-25). A recorded
+ * value sits on the first line; the rules keep going underneath for anything
+ * added on paper. The label is one more checklist row and the rules carry on
+ * at the same pitch, so the whole thing reads as a continuation of the list
+ * (Łukasz, 2026-09-25). --doc-notes-line / --doc-notes-font must match the
+ * template's checklist row height and text size.
  */
+table.checklist:has(+ .doc-notes) { margin-bottom: 0; }
 .doc-notes {
+  --line: var(--doc-notes-line, 29px);
   margin: 0 0 18px;
-  padding: 12px 14px 10px;
-  border: 1px solid #e3e8e7;
-  border-radius: 8px;
-  background: #f7faf9;
+  font-size: var(--doc-notes-font, 9.5pt);
+  color: var(--text, #1a1a1a);
   break-inside: avoid;
 }
 .doc-notes .doc-notes-label {
-  font-size: 7pt;
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--secondary);
-  margin: 0 0 2px;
+  line-height: calc(var(--line) - 1px);
+  border-bottom: 1px solid #eee;
 }
 .doc-notes .doc-notes-body {
-  min-height: 32mm;
-  line-height: 8mm;
-  font-size: 10pt;
+  min-height: calc(var(--line) * 4);
+  line-height: var(--line);
   color: var(--text, #1a1a1a);
   overflow-wrap: anywhere;
   white-space: pre-wrap;
-  background-image: repeating-linear-gradient(to bottom, transparent 0, transparent calc(8mm - 1px), #cfd8d6 calc(8mm - 1px), #cfd8d6 8mm);
+  background-image: repeating-linear-gradient(to bottom, transparent 0, transparent calc(var(--line) - 1px), #eee calc(var(--line) - 1px), #eee var(--line));
 }
 
 /*
