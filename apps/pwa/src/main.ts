@@ -32,8 +32,10 @@ activateDeferredStyles();
 // user even reaches the login form — instead of waiting for their first real
 // request to eat the cold-start delay. Fire-and-forget: no loading state, no
 // error surfaced (plain fetch, not apiFetch, so a failure never reaches the
-// notification pipeline).
-fetch(`${getApiUrl()}/health`).catch(() => {});
+// notification pipeline). no-cors: the response is never read, and /health
+// sends no CORS headers — a normal cross-origin fetch logged a CORS error in
+// every console even though the ping itself worked.
+fetch(`${getApiUrl()}/health`, { mode: "no-cors" }).catch(() => {});
 
 // Pre-mount, before Pinia exists — avoids a flash of the wrong theme. The
 // theme store re-resolves reactively (incl. the tenant-default tier) once
