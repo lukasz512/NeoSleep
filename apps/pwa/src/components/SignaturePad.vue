@@ -91,8 +91,45 @@ function clear() {
   emit("change", true);
 }
 
-function toDataURL(): string | null {
+/** Transparent margin kept around a trimmed signature, in device pixels. */
+const TRIM_MARGIN = 8;
+
+/**
+ * Crops the canvas to the drawn strokes (plus a small margin). Without this
+ * the PNG carries all the empty pad around the ink, so a document can't
+ * centre the signature over its line — it would centre the whole pad.
+ */
+function trimmedDataURL(canvas: HTMLCanvasElement): string | null {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  const { width, height } = canvas;
+  const alpha = ctx.getImageData(0, 0, width, height).data;
+  let top = height, left = width, right = -1, bottom = -1;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (alpha[(y * width + x) * 4 + 3] === 0) continue;
+      if (x < left) left = x;
+      if (x > right) right = x;
+      if (y < top) top = y;
+      if (y > bottom) bottom = y;
+    }
+  }
+  if (right < 0) return null;
+  left = Math.max(0, left - TRIM_MARGIN);
+  top = Math.max(0, top - TRIM_MARGIN);
+  right = Math.min(width - 1, right + TRIM_MARGIN);
+  bottom = Math.min(height - 1, bottom + TRIM_MARGIN);
+  const out = document.createElement("canvas");
+  out.width = right - left + 1;
+  out.height = bottom - top + 1;
+  out.getContext("2d")?.drawImage(canvas, left, top, out.width, out.height, 0, 0, out.width, out.height);
+  return out.toDataURL("image/png");
+}
+
+/** `trim: true` returns only the inked area (NEO-51 agreement signature); the default keeps the whole pad. */
+function toDataURL(options: { trim?: boolean } = {}): string | null {
   if (!pad.value || pad.value.isEmpty()) return null;
+  if (options.trim && canvasRef.value) return trimmedDataURL(canvasRef.value) ?? pad.value.toDataURL("image/png");
   return pad.value.toDataURL("image/png");
 }
 

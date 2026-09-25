@@ -236,6 +236,8 @@
       :party="partyFields"
       :variant="practiceRole"
       :jurisdiction="jurisdiction"
+      :signature="agreementSignature"
+      :acknowledged="!!noticeVersionId"
       @signed="onAgreementSigned"
       @acknowledged="onNoticeAcknowledged"
     />
