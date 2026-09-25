@@ -15,7 +15,7 @@
           class="intake-forms__tile"
           :class="{ 'intake-forms__tile--done': form.done }"
         >
-          <AppIcon :name="intakeFormIcon(form.key)" class="intake-forms__icon" />
+          {{ formAbbr(form.key) }}
         </span>
       </span>
     </template>
@@ -42,7 +42,7 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import AppIcon from "../AppIcon.vue";
 import { documentLabelKey } from "../../utils/documentLabels";
-import { intakeFormIcon } from "../../config/patientIntakeForms";
+import { intakeFormAbbrKey, intakeFormIcon, initialsAbbr } from "../../config/patientIntakeForms";
 import type { PatientIntakeFormStatus } from "../../types/patientIntakeForm";
 
 // Order is the API's (assigned templates in DOCUMENT_MANIFEST order, then
@@ -56,6 +56,13 @@ const doneCount = computed(() => props.forms.filter((f) => f.done).length);
 const progressLabel = computed(() =>
   t("app.patients.forms.progress", { done: doneCount.value, total: props.forms.length }),
 );
+
+/** Clinical abbreviation (CI / HE / SB / PSG), or initials of the form's label for a template without one. */
+function formAbbr(key: string): string {
+  const abbrKey = intakeFormAbbrKey(key);
+  const translated = abbrKey ? t(abbrKey) : "";
+  return translated && translated !== abbrKey ? translated : initialsAbbr(formLabel(key));
+}
 
 function formLabel(key: string): string {
   // Same fallback as DocumentsView's documentLabel(): te() misses these flat dotted keys, so compare t()'s output instead.
@@ -79,40 +86,30 @@ function formLabel(key: string): string {
   box-shadow: 0 0 0 2px rgba(var(--v-theme-primary), 0.4);
 }
 
-/* Pending: a quiet grey tile. */
+/* NEO-57: a clinical-abbreviation chip per form (CI / HE / SB / PSG).
+   Pending: just a faint outline, the letters barely there — what's
+   missing reads at a glance without shouting. */
 .intake-forms__tile {
-  position: relative;
-  width: 24px;
-  height: 24px;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 6px;
   border-radius: 6px;
   display: grid;
   place-items: center;
-  background: rgba(var(--v-theme-on-surface), 0.06);
-  color: rgba(var(--v-theme-on-surface), 0.38);
-  transition: background-color 0.3s ease, color 0.3s ease;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.65625rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: rgba(var(--v-theme-on-surface), 0.34);
+  box-shadow: inset 0 0 0 1px rgba(var(--v-theme-on-surface), 0.14);
+  transition: background-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
 }
 
-/* Collected: tinted with the brand color, plus a small status dot. */
+/* Collected: brand-tinted fill, brand letters, no outline. */
 .intake-forms__tile--done {
   background: rgba(var(--v-theme-primary), 0.14);
   color: rgb(var(--v-theme-primary));
-}
-
-.intake-forms__tile--done::after {
-  content: "";
-  position: absolute;
-  right: -2px;
-  bottom: -2px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: rgb(var(--v-theme-primary));
-  box-shadow: 0 0 0 2px rgb(var(--v-theme-surface));
-}
-
-.intake-forms__icon {
-  width: 15px;
-  height: 15px;
+  box-shadow: none;
 }
 
 .intake-forms__tooltip-title {
