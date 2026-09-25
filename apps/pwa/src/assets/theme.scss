@@ -210,6 +210,29 @@ body {
   opacity: 1;
 }
 
+/*
+ * The footer's "Items per page" control is a Vuetify outlined VSelect. Next
+ * to the page count it read as a form field to fill in; it is a setting, so
+ * it renders as plain text: no outline, no chevron. The value stays
+ * clickable and still opens the page-size menu.
+ */
+.v-data-table-footer__items-per-page .v-field__outline,
+.v-data-table-footer__items-per-page .v-select__menu-icon {
+  display: none;
+}
+
+.v-data-table-footer__items-per-page > .v-select {
+  font-size: inherit;
+  width: auto;
+}
+
+.v-data-table-footer__items-per-page .v-field,
+.v-data-table-footer__items-per-page .v-field__input {
+  padding-inline: 4px;
+  font-size: inherit;
+  color: inherit;
+}
+
 /* Inputs: match app design (border-radius, transitions, touch targets) */
 .v-field {
   border-radius: var(--pwa-radius) !important;
