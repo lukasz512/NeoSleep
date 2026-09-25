@@ -1,502 +1,304 @@
 <template>
-  <div class="patient-studies-panel">
+  <div class="studies">
     <FormRenderer
-      v-model="showAddModal"
+      v-model="showSleepStudyAdd"
       :fields="sleepStudyFormFields"
       title-key="app.sleepStudies.form.title"
       submit-label-key="app.sleepStudies.form.submit"
-      @submit="onAddSubmit"
+      @submit="onSleepStudyAdd"
     />
     <FormRenderer
-      v-model="showEditModal"
+      v-model="showSleepStudyEdit"
       :fields="sleepStudyFormFields"
-      :initial-data="selectedStudy ?? undefined"
+      :initial-data="editingSleepStudy ?? undefined"
       title-key="app.sleepStudies.form.title"
       edit-title-key="app.sleepStudies.form.editTitle"
       submit-label-key="app.sleepStudies.form.submit"
       edit-submit-label-key="app.sleepStudies.form.editSubmit"
-      @submit="onEditSubmit"
+      @submit="onSleepStudyEdit"
     />
     <ClinicalQuestionnaireDialog
       v-model="questionnaireDialog.open"
       :kind="questionnaireDialog.kind"
       :mode="questionnaireDialog.mode"
       :record="questionnaireDialog.record"
-      :saving="questionnaireSaving"
-      :pdf-loading="pdfLoadingId === questionnaireDialog.record?.id"
+      :saving="saving"
+      :pdf-loading="printingKey !== null"
       @save="onQuestionnaireSave"
-      @pdf="questionnaireDialog.record && onGeneratePdf(questionnaireDialog.record)"
+      @pdf="onPrintRecord"
     />
     <QuestionnaireQrDialog
       v-model="qrDialog.open"
-      :kind="qrDialog.kind"
+      :title="qrDialog.title"
       :url="qrDialog.url"
+      :progress="qrProgress"
       :completed="qrCompleted"
-      @poll="clinical.load"
+      @poll="checklistApi.load"
+    />
+    <StudyUploadDialog
+      v-model="uploadDialog.open"
+      :items="items"
+      :item-title="itemTitle"
+      :initial-item="uploadDialog.item"
+      :saving="saving"
+      @submit="onUpload"
     />
 
-    <div class="patient-studies-panel__toolbar">
-      <VMenu location="bottom end">
-        <template #activator="{ props: menuProps }">
-          <AppButton color="primary" variant="tonal" v-bind="menuProps">
-            <template #prepend><AppIcon name="plus" /></template>
+    <AppLoadingState v-if="checklistApi.loading.value && !checklist" />
+    <AppErrorState
+      v-else-if="checklistApi.loadError.value"
+      :title="t('app.errorState.title')"
+      :subtitle="t('app.clinical.errorLoad')"
+      :refresh-label="t('app.errorState.refresh')"
+      :loading="checklistApi.loading.value"
+      @refresh="checklistApi.load"
+    />
+    <template v-else-if="checklist">
+      <header class="studies__header">
+        <div class="studies__progress">
+          <span class="studies__progress-text">{{ t("app.clinical.progress", checklist.summary) }}</span>
+          <VProgressLinear
+            :model-value="(checklist.summary.done / Math.max(checklist.summary.total, 1)) * 100"
+            color="success"
+            bg-color="surface-variant"
+            height="6"
+            rounded
+            :aria-label="t('app.clinical.progress', checklist.summary)"
+          />
+        </div>
+        <div class="studies__header-actions">
+          <AppButton v-if="patientCanStillDoSomething" color="primary" @click="sendEverything">
+            <template #prepend><AppIcon name="qr-code" /></template>
+            {{ t("app.clinical.bundleQr") }}
+          </AppButton>
+          <AppButton color="primary" variant="tonal" @click="openUpload(null)">
+            <template #prepend><AppIcon name="upload" /></template>
             {{ t("app.clinical.addStudy") }}
           </AppButton>
-        </template>
-        <VList density="comfortable" class="patient-studies-panel__add-menu">
-          <template v-for="entry in addMenu" :key="entry.kind">
-            <template v-if="entry.patientFillable">
-              <VListSubheader>{{ t(entry.labelKey) }}</VListSubheader>
-              <VListItem @click="openAdd(entry.kind)">
-                <template #prepend><AppIcon name="pencil" class="patient-studies-panel__menu-icon" /></template>
-                <VListItemTitle>{{ t("app.clinical.fillNow") }}</VListItemTitle>
-              </VListItem>
-              <VListItem @click="sendToPatient(entry.kind as PatientFillableKind)">
-                <template #prepend><AppIcon name="qr-code" class="patient-studies-panel__menu-icon" /></template>
-                <VListItemTitle>{{ t("app.clinical.sendToPatient") }}</VListItemTitle>
-              </VListItem>
-            </template>
-            <VListItem v-else @click="openAdd(entry.kind)">
-              <VListItemTitle>{{ t(entry.labelKey) }}</VListItemTitle>
-            </VListItem>
-          </template>
-        </VList>
-      </VMenu>
-    </div>
-
-    <section v-if="clinical.pendingRequests.value.length" class="patient-studies-panel__pending" :aria-label="t('app.clinical.pending.title')">
-      <h3 class="patient-studies-panel__pending-title">{{ t("app.clinical.pending.title") }}</h3>
-      <div v-for="request in clinical.pendingRequests.value" :key="request.id" class="patient-studies-panel__pending-item">
-        <AppIcon name="qr-code" class="patient-studies-panel__menu-icon" />
-        <div class="patient-studies-panel__pending-text">
-          <strong>{{ t(KIND_LABEL_KEYS[request.kind]) }}</strong>
-          <span>{{ t("app.clinical.pending.expires", { time: formatDateTime(request.expires_at) }) }}</span>
         </div>
-        <AppButton variant="text" size="small" @click="sendToPatient(request.kind)">{{ t("app.clinical.pending.showQr") }}</AppButton>
-        <AppButton variant="text" size="small" color="error" @click="clinical.cancelRequest(request.id)">{{ t("app.clinical.pending.cancel") }}</AppButton>
-      </div>
-    </section>
+      </header>
 
-    <AppLoadingState v-if="(loading || clinical.loading.value) && !loaded" />
-    <AppErrorState
-      v-else-if="loadError || clinical.loadError.value"
-      :title="t('app.errorState.title')"
-      :subtitle="t(loadError ? 'app.sleepStudies.errorLoad' : 'app.clinical.errorLoad')"
-      :refresh-label="t('app.errorState.refresh')"
-      :loading="loading"
-      @refresh="loadAll"
-    />
-    <AppEmptyState v-else-if="entries.length === 0" :title="t('app.sleepStudies.emptyTitle')" :subtitle="t('app.sleepStudies.emptySubtitle')" />
-    <ul v-else class="patient-studies-panel__list">
-      <template v-for="entry in entries" :key="entry.key">
-        <li v-if="entry.type === 'clinical'" class="patient-studies-panel__item" @click="openRecord(entry.record)">
-          <div class="patient-studies-panel__item-header">
-            <span class="patient-studies-panel__date">{{ formatDate(entry.record.created_at) }}</span>
-            <VChip color="primary" size="small" variant="tonal">{{ t(KIND_LABEL_KEYS[entry.record.kind]) }}</VChip>
-            <VChip v-if="entry.record.source === 'patient'" color="secondary" size="small" variant="tonal">
-              {{ t("app.clinical.source.patient") }}
-            </VChip>
-            <template v-if="entry.record.kind === 'stop_bang'">
-              <VChip v-if="entry.record.score != null" :color="RISK_COLOR[stopBangRisk(entry.record.score)]" size="small" variant="tonal">
-                {{ t("app.clinical.score", { score: entry.record.score }) }} · {{ t(`app.clinical.risk.${stopBangRisk(entry.record.score)}`) }}
-              </VChip>
-              <VChip v-else color="warning" size="small" variant="tonal">{{ t("app.clinical.awaitingBang") }}</VChip>
-            </template>
-          </div>
-          <p v-if="entry.record.kind !== 'stop_bang'" class="patient-studies-panel__findings">{{ findingsSummary(entry.record) }}</p>
-          <p v-if="entry.record.source === 'staff' && entry.record.recorded_by_name" class="patient-studies-panel__recorded-by">
-            {{ t("app.clinical.recordedBy", { name: entry.record.recorded_by_name }) }}
-          </p>
-          <div class="patient-studies-panel__attachments">
-            <AppButton
-              v-if="entry.record.kind === 'stop_bang' && entry.record.score == null"
-              variant="tonal"
-              size="small"
-              color="warning"
-              @click.stop="openCompleteBang(entry.record)"
-            >
-              {{ t("app.clinical.completeBang") }}
-            </AppButton>
-            <AppButton variant="text" size="small" :loading="pdfLoadingId === entry.record.id" @click.stop="onGeneratePdf(entry.record)">
-              <template #prepend><AppIcon name="file-pdf" /></template>
-              {{ t("app.clinical.generatePdf") }}
-            </AppButton>
-          </div>
-        </li>
-        <li v-else class="patient-studies-panel__item" @click="onEdit(entry.study)">
-          <div class="patient-studies-panel__item-header">
-            <span class="patient-studies-panel__date">{{ entry.study.study_date ? formatDate(entry.study.study_date) : "—" }}</span>
-            <VChip color="info" size="small" variant="tonal">{{ studyTypeLabel(entry.study.study_type) }}</VChip>
-            <VChip :color="statusColor(entry.study.status)" size="small" variant="tonal">{{ statusLabel(entry.study.status) }}</VChip>
-            <AppButton
-              v-if="isAdmin"
-              icon
-              variant="text"
-              size="small"
-              class="patient-studies-panel__delete-btn"
-              :aria-label="t('app.common.remove')"
-              @click.stop="askDelete(entry.study.id)"
-            >
-              <AppIcon name="trash" />
-            </AppButton>
-          </div>
-          <div class="patient-studies-panel__metrics">
-            <span v-if="entry.study.ahi_score != null">AHI {{ entry.study.ahi_score }}</span>
-            <span v-if="entry.study.spo2_nadir != null">SpO2 {{ entry.study.spo2_nadir }}%</span>
-            <span v-if="entry.study.odi != null">ODI {{ entry.study.odi }}</span>
-          </div>
-          <p v-if="entry.study.interpretation" class="patient-studies-panel__interpretation">
-            <strong>{{ t("app.sleepStudies.detail.interpretation") }}:</strong> {{ entry.study.interpretation }}
-          </p>
-          <div class="patient-studies-panel__attachments">
-            <div v-for="att in attachmentsByStudy[entry.study.id] || []" :key="att.id" class="patient-studies-panel__attachment">
-              <AppIcon name="file-pdf" class="patient-studies-panel__attachment-icon" />
-              <button type="button" class="patient-studies-panel__attachment-name" @click.stop="onDownloadAttachment(att.id, entry.study.id)">
-                {{ att.filename }}
-              </button>
-              <AppButton
-                icon
-                variant="text"
-                size="small"
-                :aria-label="t('app.common.remove')"
-                @click.stop="onDeleteAttachment(att.id, entry.study.id)"
-              >
-                <AppIcon name="trash" />
-              </AppButton>
+      <section v-for="request in checklist.pending_requests" :key="request.id" class="studies__pending" :aria-label="t('app.clinical.pending.title')">
+        <AppIcon name="clock" class="studies__pending-icon" />
+        <div class="studies__pending-text">
+          <strong>{{ t("app.clinical.pending.title") }}</strong>
+          <span>
+            {{ request.items.map((key) => itemTitleByKey(key)).join(" · ") }} —
+            {{ t("app.clinical.qr.progress", { done: request.completed_items.length, total: request.items.length }) }} ·
+            {{ t("app.clinical.pending.expires", { time: formatDateTime(request.expires_at) }) }}
+          </span>
+        </div>
+        <AppButton variant="text" size="small" @click="resend(request.items)">{{ t("app.clinical.pending.showQr") }}</AppButton>
+        <AppButton variant="text" size="small" color="error" @click="checklistApi.cancelRequest(request.id)">{{ t("app.clinical.pending.cancel") }}</AppButton>
+      </section>
+
+      <section v-for="group in groups" :key="group.key" class="studies__group" :aria-labelledby="`studies-group-${group.key}`">
+        <h3 :id="`studies-group-${group.key}`" class="studies__group-title">{{ t(`app.clinical.group.${group.key}`) }}</h3>
+        <ul class="studies__list">
+          <li
+            v-for="item in group.items"
+            :key="item.key"
+            :ref="(el) => setRowRef(item.key, el)"
+            class="studies__item"
+            :class="[`studies__item--${item.status}`, { 'studies__item--focus': focusedKey === item.key }]"
+          >
+            <div class="studies__item-main">
+              <ChecklistStatusIcon :status="item.status" />
+              <div class="studies__item-text">
+                <span class="studies__item-title">{{ itemTitle(item) }}</span>
+                <span class="studies__item-status">{{ statusLine(item) }}</span>
+                <span v-if="latestSummary(item)" class="studies__item-summary">{{ latestSummary(item) }}</span>
+              </div>
+              <div class="studies__item-actions">
+                <AppButton
+                  v-if="item.actions.form === 'stop_bang' && item.status === 'partial'"
+                  color="warning"
+                  variant="tonal"
+                  size="small"
+                  @click="openCompleteBang(item)"
+                >
+                  {{ t("app.clinical.completeBang") }}
+                </AppButton>
+                <AppButton v-if="item.actions.qr && item.status !== 'done'" variant="text" size="small" @click="resend([item.key])">
+                  <template #prepend><AppIcon name="qr-code" /></template>
+                  {{ t("app.clinical.action.qr") }}
+                </AppButton>
+                <AppButton v-if="item.actions.fill" variant="text" size="small" @click="onFill(item)">
+                  <template #prepend><AppIcon name="pencil" /></template>
+                  {{ t("app.clinical.action.fill") }}
+                </AppButton>
+                <AppButton v-if="item.actions.print" variant="text" size="small" :loading="printingKey === item.key" @click="onPrint(item.key)">
+                  <template #prepend><AppIcon name="printer" /></template>
+                  {{ t("app.clinical.action.print") }}
+                </AppButton>
+                <AppButton v-if="item.actions.upload" variant="text" size="small" @click="openUpload(item.key)">
+                  <template #prepend><AppIcon name="upload" /></template>
+                  {{ t("app.clinical.action.upload") }}
+                </AppButton>
+              </div>
             </div>
-            <AppButton
-              variant="text"
-              size="small"
-              class="patient-studies-panel__attach-btn"
-              :loading="uploadingStudyId === entry.study.id"
-              @click.stop="triggerUpload(entry.study.id)"
-            >
-              <template #prepend><AppIcon name="file-pdf" /></template>
-              {{ t("app.sleepStudies.attachments.upload") }}
-            </AppButton>
-          </div>
-        </li>
-      </template>
-    </ul>
 
-    <input
-      ref="fileInputEl"
-      type="file"
-      accept="application/pdf"
-      class="patient-studies-panel__file-input"
-      @click.stop
-      @change="onFileChange"
-    />
+            <template v-if="item.history.length">
+              <button
+                type="button"
+                class="studies__history-toggle"
+                :aria-expanded="expanded.has(item.key)"
+                :aria-controls="`studies-history-${item.key}`"
+                @click="toggle(item.key)"
+              >
+                <AppIcon :name="expanded.has(item.key) ? 'chevron-up' : 'chevron-down'" />
+                {{ t("app.clinical.action.history", { n: item.history.length }) }}
+              </button>
+              <VExpandTransition>
+                <ul v-show="expanded.has(item.key)" :id="`studies-history-${item.key}`" class="studies__history">
+                  <li v-for="entry in item.history" :key="entry.id">
+                    <button type="button" class="studies__history-entry" @click="openEntry(item, entry)">
+                      <span class="studies__history-date">{{ formatDate(entry.created_at) }}</span>
+                      <span>{{ entryLine(entry) }}</span>
+                    </button>
+                    <AppButton
+                      v-if="isAdmin && entry.type === 'upload' && !entry.sleep_study_id"
+                      icon
+                      variant="text"
+                      size="small"
+                      :aria-label="t('app.common.remove')"
+                      @click="checklistApi.deleteUpload(entry.id)"
+                    >
+                      <AppIcon name="trash" />
+                    </AppButton>
+                  </li>
+                </ul>
+              </VExpandTransition>
+            </template>
+          </li>
+        </ul>
+      </section>
 
-    <VDialog v-model="showDeleteConfirm" max-width="400" :transition="originDialogTransition">
-      <VCard>
-        <VCardText>{{ t("app.sleepStudies.deleteConfirmText") }}</VCardText>
-        <VCardActions>
-          <VSpacer />
-          <AppButton variant="text" @click="showDeleteConfirm = false">{{ t("app.common.cancel") }}</AppButton>
-          <AppButton color="error" variant="text" :loading="deleteLoading" @click="onConfirmDelete">
-            {{ t("app.common.remove") }}
-          </AppButton>
-        </VCardActions>
-      </VCard>
-    </VDialog>
+      <section v-if="checklist.other_uploads.length" class="studies__group" aria-labelledby="studies-group-other">
+        <h3 id="studies-group-other" class="studies__group-title">{{ t("app.clinical.group.other") }}</h3>
+        <ul class="studies__list">
+          <li v-for="upload in checklist.other_uploads" :key="upload.id" class="studies__item studies__item--done">
+            <div class="studies__item-main">
+              <ChecklistStatusIcon status="done" />
+              <div class="studies__item-text">
+                <span class="studies__item-title">{{ upload.title }}</span>
+                <span class="studies__item-status">{{ formatDate(upload.created_at) }} · {{ upload.filename }}</span>
+                <span v-if="upload.notes" class="studies__item-summary">{{ upload.notes }}</span>
+              </div>
+              <div class="studies__item-actions">
+                <AppButton variant="text" size="small" @click="checklistApi.openFile(upload.id)">
+                  <template #prepend><AppIcon name="file" /></template>
+                  {{ t("app.clinical.action.open") }}
+                </AppButton>
+                <AppButton
+                  v-if="isAdmin"
+                  icon
+                  variant="text"
+                  size="small"
+                  :aria-label="t('app.common.remove')"
+                  @click="checklistApi.deleteUpload(upload.id)"
+                >
+                  <AppIcon name="trash" />
+                </AppButton>
+              </div>
+            </div>
+          </li>
+        </ul>
+      </section>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from "vue";
+import { computed, defineAsyncComponent, nextTick, onMounted, reactive, ref, watch, type ComponentPublicInstance } from "vue";
 import { useI18n } from "vue-i18n";
-import { defineAsyncComponent } from "vue";
-import { originDialogTransition } from "@ui";
 import { intlLocale } from "@i18n/language-options";
-import ClinicalQuestionnaireDialog from "../questionnaire/ClinicalQuestionnaireDialog.vue";
-import QuestionnaireQrDialog from "../questionnaire/QuestionnaireQrDialog.vue";
-import { useClinicalRecords, type ClinicalRecord } from "../../composables/useClinicalRecords";
-import {
-  ADD_STUDY_MENU,
-  CLINICAL_ROLES,
-  KIND_LABEL_KEYS,
-  MEDICAL_HISTORY_QUESTIONS,
-  ORAL_EXAM_QUESTIONS,
-  stopBangRisk,
-  type ClinicalRecordKind,
-  type PatientFillableKind,
-} from "../../config/questionnaires";
 import AppButton from "../AppButton.vue";
 import AppIcon from "../AppIcon.vue";
 import AppLoadingState from "../AppLoadingState.vue";
 import AppErrorState from "../AppErrorState.vue";
-import AppEmptyState from "../AppEmptyState.vue";
-import { apiFetch, extractErrorMessage } from "../../composables/useApi";
+import ClinicalQuestionnaireDialog from "../questionnaire/ClinicalQuestionnaireDialog.vue";
+import QuestionnaireQrDialog from "../questionnaire/QuestionnaireQrDialog.vue";
+import StudyUploadDialog from "../questionnaire/StudyUploadDialog.vue";
+import ChecklistStatusIcon from "../questionnaire/ChecklistStatusIcon.vue";
+import { apiFetch } from "../../composables/useApi";
 import { useNotifications } from "../../composables/useNotifications";
-import { useAsyncAction } from "../../composables/useAsyncAction";
 import { useAuthStore } from "../../stores/auth";
+import {
+  usePatientChecklist,
+  type ChecklistHistoryEntry,
+  type ChecklistItem,
+  type ChecklistRecord,
+  type ChecklistGroup,
+} from "../../composables/usePatientChecklist";
 import { sleepStudyFormFields } from "../../config/forms/sleepStudyForm";
+import {
+  MEDICAL_HISTORY_QUESTIONS,
+  ORAL_EXAM_QUESTIONS,
+  stopBangRisk,
+  checklistItemTitle,
+  type ClinicalRecordKind,
+} from "../../config/questionnaires";
 
 const FormRenderer = defineAsyncComponent(() => import("../FormRenderer.vue"));
 
-const props = defineProps<{ patientId: string }>();
-
-export interface SleepStudyItem {
-  id: string;
-  study_date: string | null;
-  status: string;
-  study_type: string;
-  ahi_score: number | null;
-  spo2_nadir: number | null;
-  odi: number | null;
-  interpretation: string | null;
-}
-
-interface AttachmentItem {
-  id: string;
-  filename: string | null;
-  mimeType: string | null;
-  sizeBytes: number | null;
-  uploadedAt: string;
-}
+/**
+ * Estudios tab — the patient's checklist (NEO-36 part 2, ADR-024): every
+ * document assigned to patients in the Documents admin, grouped consent →
+ * patient → doctor → results (polysomnography always last), each with its
+ * status, history and actions (QR for the patient, fill, print, upload).
+ * One primary action: a single QR for everything the patient still has to
+ * do. Health data — the parent only renders this for admin/doctor.
+ */
+const props = defineProps<{ patientId: string; focusItem?: string | null }>();
 
 const { t, locale } = useI18n();
 const notifications = useNotifications();
 const authStore = useAuthStore();
 const isAdmin = computed(() => authStore.user?.role === "admin");
-/** Health data (questionnaires) — admin + doctor only; other roles see sleep studies alone. */
-const canSeeClinical = computed(() => CLINICAL_ROLES.includes(authStore.user?.role ?? ""));
-const addMenu = computed(() => ADD_STUDY_MENU.filter((entry) => entry.kind === "polysomnography" || canSeeClinical.value));
 
-const studies = ref<SleepStudyItem[]>([]);
-const loading = ref(false);
-const loaded = ref(false);
-const loadError = ref(false);
-const showAddModal = ref(false);
-const showEditModal = ref(false);
-const selectedStudy = ref<SleepStudyItem | null>(null);
+const checklistApi = usePatientChecklist(() => props.patientId);
+const checklist = computed(() => checklistApi.checklist.value);
+const items = computed(() => checklist.value?.items ?? []);
 
-// Manual PDF attachment upload (2026-09) — narrow first cut: results PDF
-// only, uploaded by hand. A richer flow (device/lab webhook writing
-// straight into sleep_study.raw_results) is future work, not this.
-const attachmentsByStudy = ref<Record<string, AttachmentItem[]>>({});
-const uploadingStudyId = ref<string | null>(null);
-const fileInputEl = ref<HTMLInputElement | null>(null);
-const uploadTargetStudyId = ref<string | null>(null);
-
-async function loadAttachmentsFor(studyId: string) {
-  const res = await apiFetch(`/api/v1/sleep-study/${studyId}/attachments`, { handleErrors: false });
-  if (res.ok) {
-    const data = (await res.json()) as { items: AttachmentItem[] };
-    attachmentsByStudy.value = { ...attachmentsByStudy.value, [studyId]: data.items };
-  }
-}
-
-async function loadStudies() {
-  loading.value = true;
-  loadError.value = false;
-  try {
-    const res = await apiFetch(`/api/v1/sleep-study?patient_id=${props.patientId}&limit=-1`, { handleErrors: false });
-    if (res.ok) {
-      const data = (await res.json()) as { items: SleepStudyItem[] };
-      studies.value = data.items;
-      await Promise.all(studies.value.map((s) => loadAttachmentsFor(s.id)));
-    } else {
-      loadError.value = true;
-    }
-  } catch {
-    loadError.value = true;
-  } finally {
-    loading.value = false;
-    loaded.value = true;
-  }
-}
-
-function triggerUpload(studyId: string) {
-  uploadTargetStudyId.value = studyId;
-  fileInputEl.value?.click();
-}
-
-async function onFileChange(e: Event) {
-  const input = e.target as HTMLInputElement;
-  const file = input.files?.[0];
-  const studyId = uploadTargetStudyId.value;
-  input.value = ""; // reset so re-selecting the same file re-fires change
-  if (!file || !studyId) return;
-
-  if (file.type !== "application/pdf") {
-    notifications.show(t("app.sleepStudies.attachments.errorType"), "error");
-    return;
-  }
-
-  uploadingStudyId.value = studyId;
-  try {
-    const formData = new FormData();
-    formData.append("file", file);
-    const res = await apiFetch(`/api/v1/sleep-study/${studyId}/attachments`, {
-      method: "POST",
-      body: formData,
-      handleErrors: false,
-    });
-    if (res.ok) {
-      notifications.show(t("app.sleepStudies.attachments.uploadSuccess"), "success");
-      await loadAttachmentsFor(studyId);
-    } else {
-      // Prefer the server's own message (e.g. "Storage not configured — set
-      // SUPABASE_URL and SUPABASE_SERVICE_KEY") over the generic translated
-      // fallback — handleErrors:false above means the global handler won't
-      // show it, so this is the only place it surfaces.
-      const bodyText = await res.text().catch(() => "");
-      const serverMessage = extractErrorMessage(bodyText);
-      notifications.show(serverMessage || t("app.sleepStudies.attachments.errorUpload"), "error");
-    }
-  } catch {
-    notifications.show(t("app.sleepStudies.attachments.errorUpload"), "error");
-  } finally {
-    uploadingStudyId.value = null;
-  }
-}
-
-async function onDownloadAttachment(attachmentId: string, studyId: string) {
-  const res = await apiFetch(`/api/v1/sleep-study/${studyId}/attachments/${attachmentId}/download`, { handleErrors: false });
-  if (res.ok) {
-    const { url } = (await res.json()) as { url: string };
-    window.open(url, "_blank", "noopener");
-  }
-}
-
-async function onDeleteAttachment(attachmentId: string, studyId: string) {
-  if (!window.confirm(t("app.sleepStudies.attachments.deleteConfirmText"))) return;
-  const res = await apiFetch(`/api/v1/sleep-study/${studyId}/attachments/${attachmentId}`, {
-    method: "DELETE",
-    handleErrors: false,
-  });
-  if (res.ok) {
-    attachmentsByStudy.value = {
-      ...attachmentsByStudy.value,
-      [studyId]: (attachmentsByStudy.value[studyId] ?? []).filter((a) => a.id !== attachmentId),
-    };
-  } else {
-    notifications.show(t("app.sleepStudies.attachments.errorDelete"), "error");
-  }
-}
-
-function statusColor(status: string): string {
-  switch (status) {
-    case "interpreted": return "success";
-    case "results_received":
-    case "study_complete": return "info";
-    case "cancelled": return "default";
-    default: return "warning";
-  }
-}
-
-function statusLabel(status: string): string {
-  const key = `app.sleepStudies.status.${status.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase())}`;
-  return t(key);
-}
-
-function studyTypeLabel(studyType: string): string {
-  return t(`app.sleepStudies.type.${studyType.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase())}`);
-}
-
-async function onAddSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
-  try {
-    const res = await apiFetch("/api/v1/sleep-study", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...data, patient_id: props.patientId }),
-    });
-    if (res.ok) {
-      notifications.show(t("app.sleepStudies.form.success"), "success");
-      await loadStudies();
-      done(true);
-    } else {
-      done(false);
-    }
-  } catch {
-    done(false);
-  }
-}
-
-function onEdit(study: SleepStudyItem) {
-  selectedStudy.value = study;
-  showEditModal.value = true;
-}
-
-async function onEditSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
-  const id = selectedStudy.value?.id;
-  if (!id) { done(false); return; }
-  try {
-    const res = await apiFetch(`/api/v1/sleep-study/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    if (res.ok) {
-      notifications.show(t("app.sleepStudies.form.editSuccess"), "success");
-      await loadStudies();
-      done(true);
-    } else {
-      done(false);
-    }
-  } catch {
-    done(false);
-  }
-}
-
-const showDeleteConfirm = ref(false);
-const pendingDeleteId = ref<string | null>(null);
-
-function askDelete(studyId: string) {
-  pendingDeleteId.value = studyId;
-  showDeleteConfirm.value = true;
-}
-
-const { loading: deleteLoading, run: onConfirmDelete } = useAsyncAction(async () => {
-  const id = pendingDeleteId.value;
-  if (!id) return;
-  const res = await apiFetch(`/api/v1/sleep-study/${id}`, { method: "DELETE", handleErrors: false });
-  if (res.ok) {
-    notifications.show(t("app.sleepStudies.deleteSuccess"), "success");
-    showDeleteConfirm.value = false;
-    pendingDeleteId.value = null;
-    await loadStudies();
-  } else {
-    const bodyText = await res.text().catch(() => "");
-    notifications.show(extractErrorMessage(bodyText) || t("app.sleepStudies.errorDelete"), "error");
-  }
-});
-
-// ---------------------------------------------------------------------------
-// Clinical questionnaires (NEO-36, migration 030) — medical history, oral
-// exam, STOP-Bang live in the same Estudios list as sleep studies, each
-// fill its own dated entry. Patient-fillable ones can be sent as a QR link.
-// ---------------------------------------------------------------------------
-const clinical = useClinicalRecords(() => props.patientId);
-
-type Entry =
-  | { type: "sleep"; key: string; date: number; study: SleepStudyItem }
-  | { type: "clinical"; key: string; date: number; record: ClinicalRecord };
-
-/** Sleep studies and questionnaires merged, newest first; undated sleep studies (not yet scheduled) sort to the top. */
-const entries = computed<Entry[]>(() =>
-  [
-    ...studies.value.map((study): Entry => ({
-      type: "sleep",
-      key: `sleep-${study.id}`,
-      date: study.study_date ? new Date(study.study_date).getTime() : Number.MAX_SAFE_INTEGER,
-      study,
-    })),
-    ...clinical.records.value.map((record): Entry => ({
-      type: "clinical",
-      key: `${record.kind}-${record.id}`,
-      date: new Date(record.created_at).getTime(),
-      record,
-    })),
-  ].sort((a, b) => b.date - a.date)
+const GROUP_ORDER: ChecklistGroup[] = ["consent", "patient", "doctor", "results"];
+const groups = computed(() =>
+  GROUP_ORDER.map((key) => ({ key, items: items.value.filter((item) => item.group === key) })).filter((g) => g.items.length)
 );
+const patientCanStillDoSomething = computed(() => items.value.some((item) => item.actions.qr && item.status !== "done"));
 
-const RISK_COLOR = { low: "success", intermediate: "warning", high: "error" } as const;
+// ---------------------------------------------------------------------------
+// Labels
+// ---------------------------------------------------------------------------
+const dateLocale = computed(() => intlLocale(locale.value));
+const formatDate = (value: string) => new Date(value).toLocaleDateString(dateLocale.value);
+const formatDateTime = (value: string) => new Date(value).toLocaleString(dateLocale.value, { dateStyle: "short", timeStyle: "short" });
 
-/** One-line clinical glance — the "yes" answers (plus skeletal class / free text), so a record needn't be opened to see what matters. */
-function findingsSummary(record: ClinicalRecord): string {
+/** Known items have their own translated title; documents an admin adds later fall back to their manifest label. */
+function itemTitle(item: Pick<ChecklistItem, "key" | "label">): string {
+  return checklistItemTitle(t, item.key, item.label);
+}
+function itemTitleByKey(key: string): string {
+  const item = items.value.find((i) => i.key === key);
+  return item ? itemTitle(item) : key;
+}
+
+function statusLine(item: ChecklistItem): string {
+  const latest = item.history[0];
+  if (item.status === "done" && latest) {
+    const who = latest.source === "patient" ? t("app.clinical.source.patient") : latest.by ? t("app.clinical.recordedBy", { name: latest.by }) : "";
+    return [t("app.clinical.status.doneOn", { date: formatDate(latest.created_at) }), who].filter(Boolean).join(" · ");
+  }
+  if (item.key === "polysomnography" && item.status === "partial") return t("app.clinical.status.inProgress");
+  return t(`app.clinical.status.${item.status}`);
+}
+
+function findings(record: ChecklistRecord): string {
+  if (record.kind === "stop_bang") {
+    return record.score == null
+      ? t("app.clinical.awaitingBang")
+      : `${t("app.clinical.score", { score: record.score })} · ${t(`app.clinical.risk.${stopBangRisk(record.score)}`)}`;
+  }
   const questions = record.kind === "medical_history" ? MEDICAL_HISTORY_QUESTIONS : ORAL_EXAM_QUESTIONS;
   const positives = questions.filter((q) => record[q.key] === true).map((q) => t(q.labelKey));
   if (record.kind === "oral_exam" && record.skeletal_class) positives.push(`${t("app.clinical.skeletalClassLabel")} ${record.skeletal_class}`);
@@ -504,230 +306,382 @@ function findingsSummary(record: ClinicalRecord): string {
   return positives.length ? t("app.clinical.positiveFindings", { list: positives.join(", ") }) : t("app.clinical.noPositiveFindings");
 }
 
-const dateLocale = computed(() => intlLocale(locale.value));
-const formatDate = (value: string) => new Date(value).toLocaleDateString(dateLocale.value);
-const formatDateTime = (value: string) =>
-  new Date(value).toLocaleString(dateLocale.value, { dateStyle: "short", timeStyle: "short" });
+function latestSummary(item: ChecklistItem): string | null {
+  const latest = item.history[0];
+  if (!latest) return null;
+  if (latest.record) return findings(latest.record);
+  if (latest.sleep_study) return latest.sleep_study.ahi_score != null ? `AHI ${latest.sleep_study.ahi_score}` : null;
+  if (latest.type === "upload") return [latest.title, latest.notes].filter(Boolean).join(" — ");
+  return null;
+}
+
+function entryLine(entry: ChecklistHistoryEntry): string {
+  if (entry.record) {
+    const who = entry.source === "patient" ? t("app.clinical.source.patient") : (entry.by ?? "");
+    return [findings(entry.record), who].filter(Boolean).join(" · ");
+  }
+  if (entry.type === "consent") return t(entry.source === "patient" ? "app.clinical.history.signedByPatient" : "app.clinical.history.signed");
+  if (entry.sleep_study) {
+    const status = t(`app.sleepStudies.status.${entry.sleep_study.status.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase())}`);
+    return [status, entry.sleep_study.ahi_score != null ? `AHI ${entry.sleep_study.ahi_score}` : null].filter(Boolean).join(" · ");
+  }
+  return [entry.title ?? entry.filename, entry.notes].filter(Boolean).join(" — ");
+}
+
+// ---------------------------------------------------------------------------
+// History expand + deep-link focus (?item=…)
+// ---------------------------------------------------------------------------
+const expanded = reactive(new Set<string>());
+function toggle(key: string) {
+  if (expanded.has(key)) expanded.delete(key);
+  else expanded.add(key);
+}
+
+const rowRefs = new Map<string, HTMLElement>();
+function setRowRef(key: string, el: Element | ComponentPublicInstance | null) {
+  if (el instanceof HTMLElement) rowRefs.set(key, el);
+}
+const focusedKey = ref<string | null>(null);
+async function highlightItem(key: string | null | undefined) {
+  if (!key) return;
+  await nextTick();
+  rowRefs.get(key)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  focusedKey.value = key;
+  setTimeout(() => (focusedKey.value = null), 2400);
+}
+
+// ---------------------------------------------------------------------------
+// Actions
+// ---------------------------------------------------------------------------
+const saving = ref(false);
+const printingKey = ref<string | null>(null);
 
 const questionnaireDialog = reactive<{
   open: boolean;
   kind: ClinicalRecordKind;
   mode: "create" | "view" | "completeBang";
-  record: ClinicalRecord | null;
+  record: ChecklistRecord | null;
 }>({ open: false, kind: "medical_history", mode: "create", record: null });
-const questionnaireSaving = ref(false);
-const pdfLoadingId = ref<string | null>(null);
 
-function openAdd(kind: ClinicalRecordKind | "polysomnography") {
-  if (kind === "polysomnography") {
-    showAddModal.value = true;
+function onFill(item: ChecklistItem) {
+  if (item.actions.fill === "sleep_study") {
+    showSleepStudyAdd.value = true;
     return;
   }
-  Object.assign(questionnaireDialog, { open: true, kind, mode: "create", record: null });
+  if (item.actions.form) Object.assign(questionnaireDialog, { open: true, kind: item.actions.form, mode: "create", record: null });
 }
 
-function openRecord(record: ClinicalRecord) {
-  Object.assign(questionnaireDialog, { open: true, kind: record.kind, mode: "view", record });
-}
-
-function openCompleteBang(record: ClinicalRecord) {
+function openCompleteBang(item: ChecklistItem) {
+  const record = item.history.find((h) => h.record)?.record ?? null;
   Object.assign(questionnaireDialog, { open: true, kind: "stop_bang", mode: "completeBang", record });
 }
 
+async function openEntry(item: ChecklistItem, entry: ChecklistHistoryEntry) {
+  if (entry.record) {
+    Object.assign(questionnaireDialog, { open: true, kind: entry.record.kind, mode: "view", record: entry.record });
+  } else if (entry.sleep_study) {
+    await editSleepStudy(entry.sleep_study.id);
+  } else if (entry.file_attachment_id) {
+    await checklistApi.openFile(entry.file_attachment_id, entry.sleep_study_id);
+  } else if (item.actions.print) {
+    await onPrint(item.key);
+  }
+}
+
 async function onQuestionnaireSave(answers: Record<string, unknown>) {
-  questionnaireSaving.value = true;
+  saving.value = true;
   try {
     const ok =
       questionnaireDialog.mode === "completeBang" && questionnaireDialog.record
-        ? await clinical.completeBang(questionnaireDialog.record.id, answers)
-        : await clinical.record(questionnaireDialog.kind, answers);
+        ? await checklistApi.completeBang(questionnaireDialog.record.id, answers)
+        : await checklistApi.recordQuestionnaire(questionnaireDialog.kind, answers);
     if (ok) questionnaireDialog.open = false;
   } finally {
-    questionnaireSaving.value = false;
+    saving.value = false;
   }
 }
 
-async function onGeneratePdf(record: ClinicalRecord) {
-  pdfLoadingId.value = record.id;
+const PRINT_KEY_FOR_FORM: Record<ClinicalRecordKind, string> = {
+  medical_history: "medicalHistory",
+  oral_exam: "oralExam",
+  stop_bang: "stopBang",
+};
+
+async function onPrint(key: string, recordId?: string) {
+  printingKey.value = key;
   try {
-    await clinical.generatePdf(record.kind, record.id);
+    await checklistApi.print(key, recordId);
   } finally {
-    pdfLoadingId.value = null;
+    printingKey.value = null;
   }
 }
 
-const qrDialog = reactive<{ open: boolean; kind: PatientFillableKind; url: string | null; requestId: string | null }>({
+function onPrintRecord() {
+  const record = questionnaireDialog.record;
+  if (record) void onPrint(PRINT_KEY_FOR_FORM[record.kind], record.id);
+}
+
+// QR — one link for everything, or one item.
+const qrDialog = reactive<{ open: boolean; title: string; url: string | null; requestId: string | null }>({
   open: false,
-  kind: "medical_history",
+  title: "",
   url: null,
   requestId: null,
 });
-/** The request left the pending list while the QR was showing → the patient submitted it. */
-const qrCompleted = computed(
-  () => !!qrDialog.requestId && !clinical.pendingRequests.value.some((r) => r.id === qrDialog.requestId)
-);
+const qrRequest = computed(() => checklist.value?.pending_requests.find((r) => r.id === qrDialog.requestId) ?? null);
+const qrProgress = computed(() => (qrRequest.value ? { done: qrRequest.value.completed_items.length, total: qrRequest.value.items.length } : null));
+/** The link left the pending list while the QR was showing → the patient finished every step. */
+const qrCompleted = computed(() => !!qrDialog.requestId && !qrRequest.value && !checklistApi.loading.value);
 
-async function sendToPatient(kind: PatientFillableKind) {
-  const created = await clinical.createRequest(kind);
+async function openQr(items?: string[]) {
+  const created = await checklistApi.createRequest(items);
   if (!created?.url) return;
-  Object.assign(qrDialog, { open: true, kind, url: created.url, requestId: created.id });
+  const title =
+    created.items.length === 1 ? itemTitleByKey(created.items[0]!) : created.items.map((key) => itemTitleByKey(key)).join(" · ");
+  Object.assign(qrDialog, { open: true, title, url: created.url, requestId: created.id });
+}
+const sendEverything = () => openQr();
+const resend = (keys: string[]) => openQr(keys);
+
+// Uploads
+const uploadDialog = reactive<{ open: boolean; item: string | null }>({ open: false, item: null });
+function openUpload(item: string | null) {
+  Object.assign(uploadDialog, { open: true, item });
+}
+async function onUpload(form: FormData) {
+  saving.value = true;
+  try {
+    if (await checklistApi.upload(form)) uploadDialog.open = false;
+  } finally {
+    saving.value = false;
+  }
 }
 
-async function loadAll() {
-  await Promise.all([loadStudies(), canSeeClinical.value ? clinical.load() : Promise.resolve()]);
+// Sleep study (the polysomnography item) — the existing form.
+const showSleepStudyAdd = ref(false);
+const showSleepStudyEdit = ref(false);
+const editingSleepStudy = ref<Record<string, unknown> | null>(null);
+
+async function editSleepStudy(id: string) {
+  const res = await apiFetch(`/api/v1/sleep-study/${id}`, { handleErrors: false });
+  if (!res.ok) return;
+  editingSleepStudy.value = (await res.json()) as Record<string, unknown>;
+  showSleepStudyEdit.value = true;
 }
 
-onMounted(loadAll);
-watch(() => props.patientId, loadAll);
+async function onSleepStudyAdd(data: Record<string, unknown>, done: (ok: boolean) => void) {
+  const res = await apiFetch("/api/v1/sleep-study", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...data, patient_id: props.patientId }),
+  });
+  if (res.ok) {
+    notifications.show(t("app.sleepStudies.form.success"), "success");
+    await checklistApi.load();
+  }
+  done(res.ok);
+}
+
+async function onSleepStudyEdit(data: Record<string, unknown>, done: (ok: boolean) => void) {
+  const id = editingSleepStudy.value?.id;
+  if (typeof id !== "string") return done(false);
+  const res = await apiFetch(`/api/v1/sleep-study/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (res.ok) {
+    notifications.show(t("app.sleepStudies.form.editSuccess"), "success");
+    await checklistApi.load();
+  }
+  done(res.ok);
+}
+
+onMounted(async () => {
+  await checklistApi.load();
+  await highlightItem(props.focusItem);
+});
+watch(() => props.patientId, () => checklistApi.load());
+watch(() => props.focusItem, (key) => highlightItem(key));
 </script>
 
 <style scoped>
-.patient-studies-panel__toolbar {
+.studies {
   display: flex;
-  justify-content: flex-end;
-  margin-bottom: 16px;
+  flex-direction: column;
+  gap: 20px;
 }
 
+.studies__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+}
+.studies__progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 220px;
+  max-width: 360px;
+}
+.studies__progress-text {
+  font-weight: 600;
+}
+.studies__header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 
-.patient-studies-panel__list {
+.studies__pending {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 10px 14px;
+  border-radius: var(--pwa-radius);
+  border: 1px dashed rgb(var(--v-theme-warning));
+  background: rgba(var(--v-theme-warning), 0.07);
+}
+.studies__pending-icon {
+  width: 22px;
+  height: 22px;
+  color: rgb(var(--v-theme-warning));
+}
+.studies__pending-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 200px;
+  font-size: 0.875rem;
+}
+
+.studies__group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.studies__group-title {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+.studies__list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 8px;
 }
 
-.patient-studies-panel__item {
+.studies__item {
   padding: 12px 16px;
   border-radius: var(--pwa-radius);
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  cursor: pointer;
+  transition: background-color 0.2s ease, box-shadow 0.3s ease;
 }
-.patient-studies-panel__item:hover {
-  background: rgba(var(--v-theme-on-surface), 0.04);
+/* Done = lightly highlighted, so what's still missing stands out by contrast. */
+.studies__item--done {
+  background: rgba(var(--v-theme-success), 0.07);
+  border-color: rgba(var(--v-theme-success), 0.35);
+}
+.studies__item--pending_patient,
+.studies__item--partial {
+  border-color: rgba(var(--v-theme-warning), 0.45);
+}
+.studies__item--focus {
+  box-shadow: 0 0 0 3px rgba(var(--v-theme-primary), 0.45);
 }
 
-.patient-studies-panel__item-header {
+.studies__item-main {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 6px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px 12px;
 }
-
-.patient-studies-panel__delete-btn {
-  margin-left: auto;
+.studies__item-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 240px;
+  min-width: 0;
 }
-
-.patient-studies-panel__date {
+.studies__item-title {
   font-weight: 600;
   font-size: 0.9375rem;
 }
-
-.patient-studies-panel__metrics {
-  display: flex;
-  gap: 16px;
+.studies__item-status {
   font-size: 0.8125rem;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  margin-bottom: 6px;
 }
-
-.patient-studies-panel__interpretation {
-  margin: 0;
+.studies__item-summary {
+  margin-top: 2px;
   font-size: 0.875rem;
-  white-space: pre-wrap;
 }
-
-.patient-studies-panel__attachments {
+.studies__item-actions {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-top: 10px;
+  gap: 2px;
+  margin-left: auto;
+}
+.studies__item-actions :deep(.v-btn) {
+  min-height: 44px; /* touch target */
 }
 
-.patient-studies-panel__attachment {
+.studies__history-toggle {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 6px 4px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  background: rgba(var(--v-theme-on-surface), 0.03);
-}
-
-.patient-studies-panel__attachment-icon {
-  color: rgb(var(--v-theme-primary));
-  flex-shrink: 0;
-}
-
-.patient-studies-panel__attachment-name {
-  font-size: 0.8125rem;
-  color: rgb(var(--v-theme-primary));
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  text-decoration: none;
-}
-.patient-studies-panel__attachment-name:hover {
-  text-decoration: underline;
-}
-
-.patient-studies-panel__file-input {
-  display: none;
-}
-
-.patient-studies-panel__menu-icon {
-  width: 20px;
-  height: 20px;
-  margin-right: 12px;
-  color: rgb(var(--v-theme-primary));
-}
-
-.patient-studies-panel__findings {
-  margin: 0 0 4px;
-  font-size: 0.875rem;
-}
-
-.patient-studies-panel__recorded-by {
-  margin: 0;
-  font-size: 0.8125rem;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-}
-
-.patient-studies-panel__pending {
-  margin-bottom: 16px;
-  padding: 12px 16px;
-  border-radius: var(--pwa-radius);
-  border: 1px dashed rgb(var(--v-theme-secondary));
-  background: rgba(var(--v-theme-secondary), 0.06);
-}
-
-.patient-studies-panel__pending-title {
-  margin: 0 0 8px;
-  font-size: 0.875rem;
-  font-weight: 600;
-}
-
-.patient-studies-panel__pending-item {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 8px;
+  margin-top: 6px;
   padding: 4px 0;
+  min-height: 32px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: rgb(var(--v-theme-primary));
+  font-size: 0.8125rem;
 }
-
-.patient-studies-panel__pending-text {
+.studies__history-toggle :deep(svg) {
+  width: 16px;
+  height: 16px;
+}
+.studies__history {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0 0 0 36px;
   display: flex;
   flex-direction: column;
-  flex: 1;
-  min-width: 160px;
-  font-size: 0.875rem;
+  gap: 2px;
 }
-
-.patient-studies-panel__pending-text span {
+.studies__history li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.studies__history-entry {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  text-align: left;
+  cursor: pointer;
   font-size: 0.8125rem;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  color: inherit;
+}
+.studies__history-entry:hover,
+.studies__history-entry:focus-visible {
+  background: rgba(var(--v-theme-on-surface), 0.05);
+}
+.studies__history-date {
+  font-weight: 600;
+  white-space: nowrap;
 }
 </style>

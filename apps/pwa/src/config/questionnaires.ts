@@ -71,15 +71,16 @@ export const KIND_LABEL_KEYS: Record<ClinicalRecordKind, string> = {
 };
 
 /**
- * The "Add study" menu, in the order the partner dentist listed them.
- * `patientFillable` entries also offer the QR self-fill option.
+ * Title of a checklist item: its own translation for the documents we know
+ * (app.clinical.item.<key>), else the admin-facing manifest label — for a
+ * document an admin adds later. (`te()` doesn't see this app's flat dotted
+ * keys, so "translated to itself" is the not-found signal.)
  */
-export const ADD_STUDY_MENU: { kind: ClinicalRecordKind | "polysomnography"; labelKey: string; patientFillable: boolean }[] = [
-  { kind: "polysomnography", labelKey: "app.clinical.kind.polysomnography", patientFillable: false },
-  { kind: "medical_history", labelKey: KIND_LABEL_KEYS.medical_history, patientFillable: true },
-  { kind: "oral_exam", labelKey: KIND_LABEL_KEYS.oral_exam, patientFillable: false },
-  { kind: "stop_bang", labelKey: KIND_LABEL_KEYS.stop_bang, patientFillable: true },
-];
+export function checklistItemTitle(t: (key: string) => string, key: string, label: string): string {
+  const i18nKey = `app.clinical.item.${key}`;
+  const translated = t(i18nKey);
+  return translated === i18nKey ? label : translated;
+}
 
 /** Standard STOP-Bang interpretation: 0–2 low, 3–4 intermediate, 5–8 high OSA risk. */
 export function stopBangRisk(score: number): "low" | "intermediate" | "high" {

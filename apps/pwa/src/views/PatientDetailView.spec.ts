@@ -97,29 +97,65 @@ describe("PatientDetailView — Documents tab", () => {
   });
 });
 
-describe("PatientDetailView — clinical questionnaires live under Studies (NEO-36)", () => {
-  it("has no separate 'Historia Endo' tab; the Studies tab loads sleep studies and clinical records together", async () => {
-    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, PATIENT));
-    const { wrapper } = await mountPatientDetail();
+const CHECKLIST = {
+  items: [
+    { key: "informedConsent", templateKey: "informedConsent", label: "informedConsent", fillMode: "consent", group: "consent", status: "done", completed_at: null, history: [], pending_request_id: null, actions: {} },
+    { key: "polysomnography", templateKey: null, label: "polysomnography", fillMode: "external", group: "results", status: "missing", completed_at: null, history: [], pending_request_id: null, actions: {} },
+  ],
+  other_uploads: [],
+  pending_requests: [],
+  summary: { done: 1, total: 2 },
+};
 
+// jsdom has no scrollIntoView (the Studies tab scrolls the opened item into view).
+Element.prototype.scrollIntoView = vi.fn();
+
+function routeApi() {
+  apiFetch.mockImplementation(async (path: string) => {
+    if (path === "/api/v1/patient/patient-1") return jsonResponse(true, 200, PATIENT);
+    if (path.endsWith("/checklist")) return jsonResponse(true, 200, CHECKLIST);
+    return jsonResponse(true, 200, { items: [] });
+  });
+}
+
+describe("PatientDetailView — Estudios checklist (NEO-36)", () => {
+  it("the Details tab shows one status icon per study; a click opens that item in the Studies tab", async () => {
+    routeApi();
+    const { wrapper, router } = await mountPatientDetail();
+    await vi.waitFor(() => expect(wrapper.find(".studies-summary__item").exists()).toBe(true));
+
+    const icons = wrapper.findAll(".studies-summary__item");
+    expect(icons.map((b) => b.text())).toEqual(["Informed consent", "Polysomnography"]);
+    expect(icons[0]!.classes()).toContain("studies-summary__item--done");
+    expect(wrapper.text()).toContain("1 of 2 done");
+
+    await icons[1]!.trigger("click");
+    await vi.waitFor(() => expect(router.currentRoute.value.query).toMatchObject({ tab: "studies", item: "polysomnography" }));
+    await vi.waitFor(() => expect(wrapper.find(".studies__item").exists()).toBe(true));
+    await flushPromises();
+  });
+
+  it("a rep gets no Estudios card and never requests the checklist", async () => {
+    routeApi();
+    const { wrapper } = await mountPatientDetail("rep");
+    await vi.waitFor(() => expect(wrapper.text()).toContain("Jan Kowalski"));
+    await flushPromises();
+    expect(wrapper.find(".studies-summary").exists()).toBe(false);
+    expect(apiFetch.mock.calls.some(([path]) => String(path).endsWith("/checklist"))).toBe(false);
+  });
+
+  it("has no separate 'Historia Endo' tab; the Studies tab loads the patient's checklist", async () => {
+    routeApi();
+    const { wrapper } = await mountPatientDetail();
     await vi.waitFor(() => expect(wrapper.text()).toContain("Jan Kowalski"));
 
     const tabs = wrapper.findAll('[role="tab"]').map((t) => t.text());
     expect(tabs).not.toContain("Historia Endo");
-    const studiesTab = wrapper.findAll('[role="tab"]').find((t) => t.text() === "Studies");
+    apiFetch.mockClear();
+    await wrapper.findAll('[role="tab"]').find((t) => t.text() === "Studies")!.trigger("click");
 
-    apiFetch.mockImplementation(async (path: string) =>
-      path.includes("clinical-records")
-        ? jsonResponse(true, 200, { records: [], pending_requests: [] })
-        : jsonResponse(true, 200, { items: [] })
-    );
-    await studiesTab?.trigger("click");
-
-    await vi.waitFor(() =>
-      expect(apiFetch).toHaveBeenCalledWith("/api/v1/patient/patient-1/clinical-records", { handleErrors: false })
-    );
-    expect(apiFetch).toHaveBeenCalledWith("/api/v1/sleep-study?patient_id=patient-1&limit=-1", { handleErrors: false });
-
+    await vi.waitFor(() => expect(wrapper.find(".studies__item").exists()).toBe(true));
+    expect(apiFetch).toHaveBeenCalledWith("/api/v1/patient/patient-1/checklist", { handleErrors: false });
     await flushPromises();
   });
 });

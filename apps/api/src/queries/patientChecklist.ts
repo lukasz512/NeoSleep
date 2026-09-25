@@ -65,6 +65,8 @@ export interface ChecklistHistoryEntry {
   title?: string | null;
   notes?: string | null;
   filename?: string | null;
+  /** A file attached directly to a sleep study (the pre-checklist "Subir PDF") — downloaded via the sleep-study attachment endpoint. */
+  sleep_study_id?: string | null;
   sleep_study?: Pick<SleepStudy, "id" | "status" | "study_date" | "ahi_score" | "spo2_nadir" | "odi" | "interpretation">;
 }
 
@@ -128,7 +130,11 @@ async function loadSources(client: PoolClient, patientId: string) {
   const files = await getFileAttachmentsForEntity(client, "patient", patientId);
   const { rows: sleepStudies } = await getSleepStudiesPaginated(client, { patient_id: patientId }, 1, 500, "created_at", "desc");
   const pending = await listPendingQuestionnaireRequestsForPatient(client, patientId);
-  return { histories, exams, screenings, consents, files, sleepStudies, pending };
+  const sleepStudyFiles: Array<FileAttachment & { sleep_study_id: string }> = [];
+  for (const study of sleepStudies) {
+    for (const file of await getFileAttachmentsForEntity(client, "sleep_study", study.id)) sleepStudyFiles.push({ ...file, sleep_study_id: study.id });
+  }
+  return { histories, exams, screenings, consents, files, sleepStudies, pending, sleepStudyFiles };
 }
 
 export async function GetPatientChecklistQuery(ctx: TenantContext, patientId: string): Promise<PatientChecklist> {
@@ -232,6 +238,7 @@ export async function GetPatientChecklistQuery(ctx: TenantContext, patientId: st
       },
     })),
     ...uploadsFor(POLYSOMNOGRAPHY_KEY),
+    ...src.sleepStudyFiles.map((file) => ({ ...uploadEntry(file), title: file.filename, file_attachment_id: file.id, sleep_study_id: file.sleep_study_id })),
   ].sort((a, b) => b.created_at.getTime() - a.created_at.getTime());
   const psgDone = psgHistory.find((h) => h.type === "upload" || PSG_DONE_STATUSES.has(h.sleep_study?.status ?? ""));
   items.push({

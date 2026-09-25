@@ -52,8 +52,8 @@
 
       <VCardActions>
         <AppButton v-if="record" variant="text" :loading="pdfLoading" @click="emit('pdf')">
-          <template #prepend><AppIcon name="file-pdf" /></template>
-          {{ t("app.clinical.generatePdf") }}
+          <template #prepend><AppIcon name="printer" /></template>
+          {{ t("app.clinical.action.print") }}
         </AppButton>
         <VSpacer />
         <AppButton variant="text" @click="emit('update:modelValue', false)">
@@ -86,7 +86,7 @@ import {
   type ClinicalRecordKind,
   type QuestionDef,
 } from "../../config/questionnaires";
-import type { ClinicalRecord } from "../../composables/useClinicalRecords";
+import type { ChecklistRecord as ClinicalRecord } from "../../composables/usePatientChecklist";
 
 /**
  * One clinical questionnaire, three modes:

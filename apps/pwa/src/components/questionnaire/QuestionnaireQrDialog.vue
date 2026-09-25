@@ -3,7 +3,7 @@
     <VCard class="qr-dialog">
       <VCardTitle>{{ t("app.clinical.qr.title") }}</VCardTitle>
       <VCardText class="qr-dialog__body">
-        <p class="qr-dialog__kind">{{ t(KIND_LABEL_KEYS[kind]) }}</p>
+        <p class="qr-dialog__kind">{{ title }}</p>
 
         <div v-if="completed" class="qr-dialog__done" role="status">
           <AppIcon name="check-circle" class="qr-dialog__done-icon" />
@@ -14,7 +14,7 @@
           <p class="qr-dialog__instructions">{{ t("app.clinical.qr.instructions") }}</p>
           <p class="qr-dialog__waiting" role="status">
             <VProgressCircular indeterminate size="16" width="2" />
-            {{ t("app.clinical.qr.waiting") }}
+            {{ progress && progress.total > 1 ? t("app.clinical.qr.progress", progress) : t("app.clinical.qr.waiting") }}
           </p>
         </template>
       </VCardText>
@@ -35,7 +35,6 @@ import { originDialogTransition } from "@ui";
 import AppButton from "../AppButton.vue";
 import AppIcon from "../AppIcon.vue";
 import { useNotifications } from "../../composables/useNotifications";
-import { KIND_LABEL_KEYS, type PatientFillableKind } from "../../config/questionnaires";
 
 /**
  * Shows the patient self-fill link as a QR code (rendered locally — the
@@ -50,8 +49,11 @@ const POLL_MAX_MS = 15 * 60_000;
 
 const props = defineProps<{
   modelValue: boolean;
-  kind: PatientFillableKind;
+  /** What the link covers — one item's title, or "everything still missing". */
+  title: string;
   url: string | null;
+  /** Steps done so far on a multi-step link (the patient saves each step on its own). */
+  progress?: { done: number; total: number } | null;
   completed: boolean;
 }>();
 const emit = defineEmits<{ "update:modelValue": [open: boolean]; poll: [] }>();

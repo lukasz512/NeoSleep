@@ -20,41 +20,81 @@ import "../FormRenderer.vue";
 import { useAuthStore } from "../../stores/auth";
 import PatientStudiesPanel from "./PatientStudiesPanel.vue";
 
-function jsonResponse(ok: boolean, status: number, body: unknown) {
-  return { ok, status, json: async () => body, text: async () => JSON.stringify(body) } as Response;
+function jsonResponse(ok: boolean, status: number, body: unknown, contentType = "application/json") {
+  return {
+    ok,
+    status,
+    headers: { get: () => contentType },
+    json: async () => body,
+    text: async () => JSON.stringify(body),
+    blob: async () => new Blob(["%PDF-"], { type: "application/pdf" }),
+  } as unknown as Response;
 }
 
-const SLEEP_STUDY = {
-  id: "ss-1", study_date: "2026-09-01", status: "interpreted", study_type: "polysomnography",
-  ahi_score: 12, spo2_nadir: 88, odi: 9, interpretation: null,
-};
-const STOP_BANG_PENDING = {
-  kind: "stop_bang", id: "sb-1", created_at: "2026-09-20T10:00:00Z", source: "patient", recorded_by_name: null,
-  snoring: true, tiredness: true, observed_apnea: false, pressure: true,
-  bmi_over_35: null, age_over_50: null, neck_circumference_over_40cm: null, is_male: null, score: null,
-};
-const ORAL_EXAM = {
-  kind: "oral_exam", id: "oe-1", created_at: "2026-09-22T10:00:00Z", source: "staff", recorded_by_name: "Lorena González",
-  has_bruxism: true, skeletal_class: "II", tooth: null,
-};
+const actions = (over: Partial<Record<string, unknown>> = {}) => ({ qr: false, fill: null, form: null, print: true, upload: true, ...over });
+const item = (key: string, group: string, status: string, over: Record<string, unknown> = {}) => ({
+  key,
+  templateKey: key === "polysomnography" ? null : key,
+  label: key,
+  fillMode: group === "results" ? "external" : group,
+  group,
+  status,
+  completed_at: null,
+  history: [],
+  pending_request_id: null,
+  actions: actions(),
+  ...over,
+});
 
-let clinicalBody: unknown;
+let checklistBody: Record<string, unknown>;
 
 beforeEach(() => {
-  clinicalBody = {
-    records: [ORAL_EXAM, STOP_BANG_PENDING],
-    pending_requests: [{ id: "qr-1", kind: "medical_history", expires_at: "2026-09-25T10:00:00Z", status: "pending" }],
+  checklistBody = {
+    items: [
+      item("informedConsent", "consent", "missing", { actions: actions({ qr: true }) }),
+      item("medicalHistory", "patient", "done", {
+        actions: actions({ qr: true, fill: "questionnaire", form: "medical_history" }),
+        history: [
+          {
+            id: "mh-1",
+            type: "record",
+            created_at: "2026-09-20T10:00:00Z",
+            source: "patient",
+            by: null,
+            record: { kind: "medical_history", id: "mh-1", created_at: "2026-09-20T10:00:00Z", source: "patient", recorded_by_name: null, has_diabetes: true },
+          },
+        ],
+      }),
+      item("stopBang", "patient", "partial", {
+        actions: actions({ qr: true, fill: "questionnaire", form: "stop_bang" }),
+        history: [
+          {
+            id: "sb-1",
+            type: "record",
+            created_at: "2026-09-21T10:00:00Z",
+            source: "patient",
+            by: null,
+            record: { kind: "stop_bang", id: "sb-1", created_at: "2026-09-21T10:00:00Z", source: "patient", recorded_by_name: null, score: null, snoring: true },
+          },
+        ],
+      }),
+      item("oralExam", "doctor", "missing", { actions: actions({ fill: "questionnaire", form: "oral_exam" }) }),
+      item("historiaEndo", "doctor", "missing"),
+      item("polysomnography", "results", "missing", { actions: actions({ fill: "sleep_study", print: false }) }),
+    ],
+    other_uploads: [],
+    pending_requests: [],
+    summary: { done: 1, total: 6 },
   };
   apiFetch.mockImplementation(async (path: string, init?: RequestInit) => {
-    if (path.endsWith("/clinical-records")) return jsonResponse(true, 200, clinicalBody);
-    if (path.includes("/sleep-study?")) return jsonResponse(true, 200, { items: [SLEEP_STUDY] });
-    if (path.includes("/attachments")) return jsonResponse(true, 200, { items: [] });
-    if (path.endsWith("/pdf")) return jsonResponse(true, 201, { id: "fa-1", filename: "stop-bang.pdf", url: "https://storage.test/signed" });
+    if (path.endsWith("/checklist")) return jsonResponse(true, 200, structuredClone(checklistBody));
+    if (path.endsWith("/print")) return jsonResponse(true, 200, null, "application/pdf");
     if (path.endsWith("/questionnaire-requests") && init?.method === "POST") {
-      const created = { id: "qr-2", kind: "stop_bang", status: "pending", expires_at: "2026-09-25T10:00:00Z" };
-      (clinicalBody as { pending_requests: unknown[] }).pending_requests.push(created);
+      const created = { id: "qr-1", items: ["informedConsent", "stopBang"], completed_items: [], expires_at: "2026-09-26T10:00:00Z" };
+      (checklistBody.pending_requests as unknown[]).push(created);
       return jsonResponse(true, 201, { ...created, url: `https://pwa.test/q#${"b".repeat(43)}` });
     }
+    if (path.endsWith("/studies/uploads")) return jsonResponse(true, 201, { id: "up-1" });
     return jsonResponse(false, 404, { error: "unexpected" });
   });
 });
@@ -67,9 +107,9 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-async function mountPanel(role = "doctor"): Promise<VueWrapper> {
+async function mountPanel(): Promise<VueWrapper> {
   setActivePinia(createPinia());
-  useAuthStore().user = { id: "u-1", email: "doc@clinic.test", name: "Dra. Test", role } as ReturnType<typeof useAuthStore>["user"];
+  useAuthStore().user = { id: "u-1", email: "doc@clinic.test", name: "Dra. Test", role: "doctor" } as ReturnType<typeof useAuthStore>["user"];
   const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
   const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
   const wrapper = mount(PatientStudiesPanel, { props: { patientId: "patient-1" }, attachTo: document.body, global: { plugins: [i18n, vuetify] } });
@@ -78,71 +118,71 @@ async function mountPanel(role = "doctor"): Promise<VueWrapper> {
   return wrapper;
 }
 
-describe("PatientStudiesPanel — sleep studies + clinical questionnaires in one Estudios list", () => {
-  it("merges sleep studies and questionnaires newest first, and shows links waiting for the patient", async () => {
+const rows = (wrapper: VueWrapper) => wrapper.findAll(".studies__item");
+type Scope = Pick<VueWrapper, "findAll">;
+const button = (scope: Scope, text: string) => scope.findAll("button").find((b) => b.text().includes(text));
+
+describe("PatientStudiesPanel — the Estudios checklist", () => {
+  it("shows every item grouped consent → patient → doctor → results, polysomnography last, with done/total", async () => {
     const wrapper = await mountPanel();
-    const items = wrapper.findAll(".patient-studies-panel__item").map((li) => li.text());
-    expect(items).toHaveLength(3);
-    expect(items[0]).toContain("Oral cavity exam");
-    expect(items[0]).toContain("Recorded by Lorena González");
-    expect(items[0]).toContain("Yes: Bruxism, Skeletal class II");
-    expect(items[1]).toContain("STOP-Bang questionnaire");
-    expect(items[1]).toContain("Filled in by the patient");
-    expect(items[2]).toContain("AHI 12");
-
-    expect(wrapper.text()).toContain("Waiting for the patient");
-    expect(wrapper.text()).toContain("Medical history");
+    expect(wrapper.findAll(".studies__group-title").map((h) => h.text())).toEqual(["Consent", "Completed by the patient", "Completed by the doctor", "Results"]);
+    expect(rows(wrapper).map((r) => r.find(".studies__item-title").text())).toEqual([
+      "Informed consent",
+      "Medical history",
+      "STOP-Bang questionnaire",
+      "Oral cavity exam",
+      "Historia Endo (endodontic record)",
+      "Polysomnography",
+    ]);
+    expect(wrapper.text()).toContain("1 of 6 done");
   });
 
-  it("a rep (commercial role) never loads or offers health questionnaires — sleep studies only", async () => {
-    const wrapper = await mountPanel("rep");
-    expect(apiFetch.mock.calls.some(([path]) => String(path).includes("clinical-records"))).toBe(false);
-    expect(wrapper.findAll(".patient-studies-panel__item")).toHaveLength(1);
-    expect(wrapper.text()).not.toContain("Waiting for the patient");
-  });
-
-  it("flags a patient-answered STOP-Bang as missing B-A-N-G, with a Complete action instead of a score", async () => {
+  it("highlights done items, shows the findings and who filled it; missing ones stay plain", async () => {
     const wrapper = await mountPanel();
-    const stopBang = wrapper.findAll(".patient-studies-panel__item")[1]!;
-    expect(stopBang.text()).toContain("B-A-N-G missing");
-    expect(stopBang.text()).toContain("Complete B-A-N-G");
-    expect(stopBang.text()).not.toContain("Score");
+    const [consent, history, stopBang, oralExam] = rows(wrapper);
+    expect(history!.classes()).toContain("studies__item--done");
+    expect(history!.text()).toContain("Filled in by the patient");
+    expect(history!.text()).toContain("Yes: Diabetes");
+    expect(consent!.classes()).toContain("studies__item--missing");
+    expect(stopBang!.text()).toContain("B-A-N-G missing");
+    expect(button(stopBang!, "Complete B-A-N-G")).toBeTruthy();
+    // QR only on items the patient completes, never on the doctor's oral exam.
+    expect(button(oralExam!, "QR")).toBeUndefined();
   });
 
-  it("generates the PDF and opens it in a new tab", async () => {
-    const tab = { location: { href: "" }, close: vi.fn() };
+  it("prints an item as a PDF opened in a new tab", async () => {
+    const tab = { location: { href: "" }, close: vi.fn(), opener: {} };
     const open = vi.spyOn(window, "open").mockReturnValue(tab as unknown as Window);
+    const createObjectURL = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:pdf-1");
     const wrapper = await mountPanel();
 
-    const pdfButton = wrapper.findAll(".patient-studies-panel__item")[1]!.findAll("button").find((b) => b.text() === "Generate PDF")!;
-    await pdfButton.trigger("click");
+    await button(rows(wrapper)[4]!, "Print")!.trigger("click");
     await flushPromises();
 
-    expect(apiFetch).toHaveBeenCalledWith("/api/v1/patient/patient-1/clinical-records/stop_bang/sb-1/pdf", { method: "POST", handleErrors: false });
-    expect(open).toHaveBeenCalledWith("", "_blank");
-    expect(tab.location.href).toBe("https://storage.test/signed");
+    expect(apiFetch).toHaveBeenCalledWith("/api/v1/patient/patient-1/checklist/historiaEndo/print", expect.objectContaining({ method: "POST" }));
+    expect(tab.location.href).toBe("blob:pdf-1");
+    expect(tab.opener).toBeNull();
     open.mockRestore();
+    createObjectURL.mockRestore();
   });
 
-  it("'Patient fills in (QR)' creates a link and shows it as a QR code", async () => {
+  it("'QR for the patient' creates one link for everything left and shows its step progress", async () => {
     const wrapper = await mountPanel();
-    await wrapper.findAll("button").find((b) => b.text().includes("Add study"))!.trigger("click");
+    await button(wrapper, "QR for the patient")!.trigger("click");
     await flushPromises();
-
-    const qrItems = [...document.body.querySelectorAll(".v-list-item")].filter((el) => el.textContent?.includes("Patient fills in (QR)"));
-    expect(qrItems).toHaveLength(2); // medical history + STOP-Bang; never the oral exam
-    (qrItems[1] as HTMLElement).click();
-    await flushPromises();
-    await vi.waitFor(() => expect(document.body.querySelector(".qr-dialog__code")).not.toBeNull());
 
     const [, init] = apiFetch.mock.calls.find(([path, i]) => String(path).endsWith("/questionnaire-requests") && (i as RequestInit)?.method === "POST")!;
-    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ kind: "stop_bang" });
-    expect(document.body.textContent).toContain("Scan to fill in");
-    expect(document.body.textContent).toContain("Waiting for the patient to submit");
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({}); // no items → everything still missing
+    await vi.waitFor(() => expect(document.body.querySelector(".qr-dialog__code")).not.toBeNull());
+    expect(document.body.textContent).toContain("0 of 2 steps done");
+    expect(wrapper.text()).toContain("Waiting for the patient");
+  });
 
-    // The patient submits: the request leaves the pending list on the next poll → "Received".
-    (clinicalBody as { pending_requests: { id: string }[] }).pending_requests = [];
-    await wrapper.findComponent({ name: "QuestionnaireQrDialog" }).vm.$emit("poll");
-    await vi.waitFor(() => expect(document.body.textContent).toContain("Received"));
+  it("'Upload file' on a row preselects that item in the Add-study dialog", async () => {
+    const wrapper = await mountPanel();
+    await button(rows(wrapper)[5]!, "Upload file")!.trigger("click");
+    await flushPromises();
+    expect(document.body.textContent).toContain("Add study");
+    expect((document.body.querySelector("#study-upload-title") as HTMLInputElement).value).toBe("Polysomnography");
   });
 });

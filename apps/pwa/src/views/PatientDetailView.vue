@@ -131,12 +131,13 @@
               <dt class="view-item__label">{{ t("app.patients.detail.medicalRecord") }}</dt>
               <dd class="view-item__value">{{ patient.medical_record || "—" }}</dd>
             </div>
+            <PatientStudiesSummary v-if="canSeeClinical" :patient-id="patient.id" @open="openStudy" />
           </template>
           <template #notes>
             <PatientNotesPanel entity-type="patient" :entity-id="patient.id" />
           </template>
           <template #studies>
-            <PatientStudiesPanel :patient-id="patient.id" />
+            <PatientStudiesPanel :patient-id="patient.id" :focus-item="studyItem" />
           </template>
           <template #orthoapnea>
             <PatientOrthoApneaPanel :patient-id="patient.id" />
@@ -186,6 +187,7 @@ import DetailViewTabs from "../components/DetailViewTabs.vue";
 import EntityLink from "../components/EntityLink.vue";
 import PatientNotesPanel from "../components/patient/PatientNotesPanel.vue";
 import PatientStudiesPanel from "../components/patient/PatientStudiesPanel.vue";
+import PatientStudiesSummary from "../components/patient/PatientStudiesSummary.vue";
 import PatientOrthoApneaPanel from "../components/patient/PatientOrthoApneaPanel.vue";
 import EntityHistoryPanel from "../components/EntityHistoryPanel.vue";
 import EntityDocumentsPanel from "../components/EntityDocumentsPanel.vue";
@@ -260,14 +262,22 @@ const ALL_PATIENT_TABS = [
   { value: "history", labelKey: "app.patients.detail.tabs.history" },
 ];
 /** Studies and Documents hold health data — shown to admin/doctor only (the API enforces the same). */
-const patientTabs = computed(() =>
-  ALL_PATIENT_TABS.filter((tab) => !tab.clinical || CLINICAL_ROLES.includes(authStore.user?.role ?? ""))
-);
+const canSeeClinical = computed(() => CLINICAL_ROLES.includes(authStore.user?.role ?? ""));
+const patientTabs = computed(() => ALL_PATIENT_TABS.filter((tab) => !tab.clinical || canSeeClinical.value));
 /** Deep-linkable via ?tab= — see SleepStudiesView/TreatmentPlansView row clicks. */
 const activeTab = ref((route.query.tab as string) || "details");
-watch(activeTab, (tab) => {
-  router.replace({ query: { ...route.query, tab } });
-});
+/** Details → Estudios card click: open that item in the Estudios tab (?tab=studies&item=…). */
+const studyItem = ref<string | null>((route.query.item as string) || null);
+function syncQuery() {
+  const item = activeTab.value === "studies" ? studyItem.value ?? undefined : undefined;
+  router.replace({ query: { ...route.query, tab: activeTab.value, item } });
+}
+watch(activeTab, syncQuery);
+function openStudy(itemKey: string) {
+  studyItem.value = itemKey;
+  if (activeTab.value === "studies") syncQuery();
+  else activeTab.value = "studies";
+}
 
 function onEdit() {
   showEditModal.value = true;
