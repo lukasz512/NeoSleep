@@ -66,6 +66,7 @@ if [ -n "$BASE" ]; then
 fi
 
 FAILS=()
+WARNS=()
 
 # Every branch with any change needs a published Artifact recorded in a marker — ticket or
 # no ticket. A ticket-named branch (worktree-neo-123-…, worker/neo-123-…) is satisfied by
@@ -104,10 +105,36 @@ branch_artifact_check() {
     jq -e '.visualComparison != null and .visualComparison != ""' "$marker" >/dev/null 2>&1 \
       || FAILS+=("$marker has no 'visualComparison' but this branch changes UI files ($(printf '%s' "$visual" | tr '\n' ' ')) — the Artifact must show a real before/after.")
   fi
+  dev_mergeable_check
+}
+
+# 2026-09-25 (Łukasz, NEO-57): a "Create PR" link is only useful if GitHub can actually
+# merge it — he hit a PR that couldn't merge into dev because dev had moved on (NEO-56 /
+# NEO-61 landed underneath). Once the branch is pushed, fetch the latest dev and do a
+# trial merge IN MEMORY (git merge-tree --write-tree: no checkout, no index, no files
+# touched). Conflicts block the turn, so the Artifact link is never handed over for a
+# branch that can't merge. Needs git >= 2.38; an unreachable remote only warns, never
+# blocks (offline shouldn't strand the turn).
+dev_mergeable_check() {
+  git rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1 || return 0
+  # macOS has no `timeout`; bound the fetch via ssh's own connect timeout instead.
+  if ! GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh} -o ConnectTimeout=10 -o BatchMode=yes" git fetch --quiet origin dev 2>/dev/null; then
+    WARNS+=("Couldn't fetch origin/dev to check that '${BRANCH}' still merges cleanly — check before handing over the PR link.")
+    return 0
+  fi
+  local out conflicts
+  if ! out="$(git merge-tree --write-tree --name-only origin/dev HEAD 2>/dev/null)"; then
+    # First line is the tree id; the conflicted paths follow until the first blank line.
+    conflicts="$(printf '%s\n' "$out" | sed -n '2,/^$/p' | grep -v '^$' | sort -u | tr '\n' ' ')"
+    FAILS+=("Branch '${BRANCH}' does NOT merge cleanly into origin/dev — the PR link would be unmergeable. Conflicts in: ${conflicts:-(see git merge-tree)}. Merge origin/dev into the branch, resolve, re-run tests, push, refresh the Artifact, and only then give Łukasz the link.")
+  fi
 }
 
 emit_result() {
   if [ "${#FAILS[@]}" -eq 0 ]; then
+    if [ "${#WARNS[@]}" -gt 0 ]; then
+      jq -n --arg msg "$(printf '%s\n' "${WARNS[@]}" | sed 's/^/- /')" '{systemMessage: ("Quality gate warnings:\n" + $msg)}'
+    fi
     exit 0
   fi
   jq -n --arg reason "$(printf '%s\n' "${FAILS[@]}" | sed 's/^/- /')" \
