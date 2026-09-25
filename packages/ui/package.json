@@ -15,7 +15,7 @@
     "vuetify": "catalog:",
     "pinia": "catalog:",
     "@vue/devtools-api": "catalog:",
-    "motion": "^12.43.0",
+    "motion": "^13.4.4",
     "@neo/stores": "workspace:*",
     "@neo/api-client": "workspace:*"
   },

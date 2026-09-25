@@ -19,10 +19,12 @@ import { AppError, DocumentRenderError } from "../errors.js";
  * allowlist configured, so a package that needs one would silently fail to
  * fetch its browser on `pnpm install --frozen-lockfile` (Render's build
  * command). Versions are pinned to a matched Chromium build (puppeteer-core
- * 24.34.0 ships Chromium 143.0.7499.169; @sparticuz/chromium 143.0.4 is the
- * same major — mismatched pairs are a common source of launch failures)
- * and both packages are Node >=18 / >=20.11 respectively, compatible with
- * this repo's Node 20 (.nvmrc).
+ * 25.11.0 ships Chromium 153.0.8010.36; @sparticuz/chromium 153.0.0 is the
+ * same major — mismatched pairs are a common source of launch failures).
+ * When bumping either, read puppeteer-core's Chromium version from its
+ * lib/puppeteer/revisions.js (or pptr.dev/chromium-support) and pick the
+ * @sparticuz/chromium release with that same major. Both packages are
+ * ESM-only and need Node >=22.12 / ^22.17 respectively (.nvmrc: 22).
  */
 
 const MAX_CONCURRENT_RENDERS = 2;
@@ -80,6 +82,8 @@ export async function resolveBrowserLaunch(): Promise<BrowserLaunch> {
     return { executablePath: found, args: [] };
   }
 
+  // @sparticuz/chromium (checked up to 153) only substring-tests this for
+  // "20.x"/"22.x"/"24.x", so the value needn't track the real Node version.
   process.env.AWS_LAMBDA_JS_RUNTIME ??= "nodejs20.x";
   const { default: chromium } = await import("@sparticuz/chromium");
   return { executablePath: await chromium.executablePath(), args: chromium.args };
@@ -169,29 +173,52 @@ export interface RenderHtmlToPdfOptions {
    * content is replaced by one <img>.
    */
   dataImages?: Record<string, string>;
+  /**
+   * Partner documents (NEO-51): PNG data URLs placed into `[data-image="key"]`
+   * elements — the doctor's and NeoSleep signatory's signatures. Same rules as
+   * the PWA preview's applyDocumentFields (packages/documents), so the preview
+   * and the signed PDF match.
+   */
+  imageFields?: Record<string, string>;
+  /** Keeps only `[data-variant]` elements with this value (e.g. the agreement's "owner"/"staff" party clause). */
+  variant?: string | null;
 }
 
 const PNG_DATA_URL_RE = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/;
 
 /** Exported for the spec; callers go through renderHtmlToPdf(). */
-export async function applyDataImages(page: Page, images: Record<string, string>): Promise<void> {
+export async function applyDataImages(
+  page: Page,
+  images: Record<string, string>,
+  attribute: "data-field" | "data-image" = "data-field"
+): Promise<void> {
   for (const [key, url] of Object.entries(images)) {
     if (!PNG_DATA_URL_RE.test(url)) throw new DocumentRenderError(`data image for "${key}" must be a PNG data URL`);
   }
-  await page.evaluate((values) => {
+  await page.evaluate((values, attr) => {
     for (const [key, src] of Object.entries(values)) {
-      document.querySelectorAll<HTMLElement>(`[data-field="${CSS.escape(key)}"]`).forEach((el) => {
+      document.querySelectorAll<HTMLElement>(`[${attr}="${CSS.escape(key)}"]`).forEach((el) => {
         const img = document.createElement("img");
         img.src = src;
         img.alt = "";
         // Fit the box: a phone canvas is ~2-3x the box's size at device pixel
         // ratio, and an unconstrained image spills out and across a page break.
-        img.style.cssText = "display:block;width:100%;height:100%;object-fit:contain;";
+        // Partner templates (data-image) size their own .sig-image img, matching the PWA preview.
+        if (attr === "data-field") img.style.cssText = "display:block;width:100%;height:100%;object-fit:contain;";
         el.style.breakInside = "avoid";
         el.replaceChildren(img);
       });
     }
-  }, images);
+  }, images, attribute);
+}
+
+/** Removes `[data-variant]` elements whose value differs — exported for the spec. */
+export async function applyVariant(page: Page, variant: string): Promise<void> {
+  await page.evaluate((value) => {
+    document.querySelectorAll("[data-variant]").forEach((el) => {
+      if (el.getAttribute("data-variant") !== value) el.remove();
+    });
+  }, variant);
 }
 
 /** The only hosts a template may load from — the Poppins webfont the templates link. */
@@ -239,6 +266,43 @@ export async function applyDataFields(page: Page, fields: Record<string, string>
   }, fields);
 }
 
+const RENDER_READY_TIMEOUT_MS = 10_000;
+
+/**
+ * Waits until the page is safe to print: every webfont face in use is
+ * loaded and every image (including data: signatures) is decoded.
+ *
+ * Replaces setContent's old waitUntil "networkidle0", which puppeteer-core
+ * >=24.43 no longer accepts for setContent. "load" alone is not enough: it
+ * fires once the Google Fonts stylesheet is in, but the font files it
+ * points to are only fetched when layout needs a glyph — and data fields
+ * filled after load can pull in another unicode-range subset (e.g. "ó" ->
+ * latin-ext). So this runs after all DOM mutations: force a layout so font
+ * loads get scheduled, await document.fonts.ready, then decode every image
+ * (a broken/aborted image rejects decode() and is ignored — lockDownPage
+ * aborts foreign requests on purpose). Works with page JS disabled:
+ * page.evaluate goes through CDP. Exported for the spec.
+ */
+export async function waitForRenderReady(page: Page, timeoutMs = RENDER_READY_TIMEOUT_MS): Promise<void> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new DocumentRenderError(`fonts/images not ready after ${timeoutMs} ms`)), timeoutMs);
+  });
+  try {
+    await Promise.race([
+      page.evaluate(async () => {
+        void document.body?.offsetHeight;
+        await document.fonts.ready;
+        await Promise.all(Array.from(document.images).map((img) => img.decode().catch(() => undefined)));
+        await document.fonts.ready;
+      }),
+      timeout,
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function renderHtmlToPdf(html: string, options: RenderHtmlToPdfOptions = {}): Promise<Uint8Array> {
   await acquireRenderSlot();
   try {
@@ -246,13 +310,13 @@ export async function renderHtmlToPdf(html: string, options: RenderHtmlToPdfOpti
     const page = await browser.newPage();
     try {
       await lockDownPage(page);
-      await page.setContent(html, { waitUntil: "networkidle0" });
+      await page.setContent(html, { waitUntil: "load" });
       if (options.dataFields) await applyDataFields(page, options.dataFields);
-      if (options.dataImages) {
-        await applyDataImages(page, options.dataImages);
-        // data: images still decode asynchronously — wait so page.pdf() never captures an empty box.
-        await page.waitForFunction(() => Array.from(document.images).every((img) => img.complete), { timeout: 5000 });
-      }
+      if (options.variant) await applyVariant(page, options.variant);
+      if (options.dataImages) await applyDataImages(page, options.dataImages);
+      if (options.imageFields) await applyDataImages(page, options.imageFields, "data-image");
+      // After every DOM mutation above: webfonts settled, every image decoded.
+      await waitForRenderReady(page);
       const displayHeaderFooter = Boolean(options.headerTemplate || options.footerTemplate);
       return await page.pdf({
         format: "A4",

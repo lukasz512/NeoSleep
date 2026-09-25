@@ -54,6 +54,8 @@ async function setUserTitle(client: PoolClient, userId: string, title: string | 
 
 async function createPatientWithStudy(ctx: TenantContext, salutation?: string) {
   const patient = await CreatePatientCommand(ctx, {
+    gender: "female",
+    date_of_birth: "1980-01-01",
     salutation,
     first_name: "Lucia",
     last_name: `Paciente-${uniqueSuffix()}`,

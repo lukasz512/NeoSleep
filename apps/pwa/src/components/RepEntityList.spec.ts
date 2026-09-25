@@ -296,9 +296,10 @@ describe("AppEntityList", () => {
       expect(themeScss).toMatch(/\.v-data-table > \.v-divider\s*{[^}]*border-color:\s*var\(--pwa-table-border\)[^}]*opacity:\s*1/);
     });
 
-    it("footer's rows-per-page select border uses --pwa-table-border too", () => {
-      expect(css).toMatch(
-        /\.v-data-table-footer \.v-select \.v-field__outline\)\s*{[^}]*color:\s*var\(--pwa-table-border\)/,
+    it("footer's items-per-page select renders as plain text: no outline, no chevron", () => {
+      const themeScss = readFileSync(path.resolve(__dirname, "../assets/theme.scss"), "utf-8");
+      expect(themeScss).toMatch(
+        /\.v-data-table-footer__items-per-page \.v-field__outline,\s*\.v-data-table-footer__items-per-page \.v-select__menu-icon\s*{\s*display:\s*none/,
       );
     });
 

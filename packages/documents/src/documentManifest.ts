@@ -31,8 +31,16 @@ export interface DocumentManifestEntry {
 
 export const DOCUMENT_MANIFEST: readonly DocumentManifestEntry[] = [
   { templateKey: "informedConsent", locales: ["en", "pl", "mx"], label: "Patient Informed Consent (MAD)" },
-  { templateKey: "gdprConsent.pl", locales: ["pl"], label: "Doctor Data Protection Consent — Poland (GDPR)" },
-  { templateKey: "gdprConsent.mx", locales: ["mx"], label: "Doctor Data Protection Consent — Mexico (LFPDPPP)" },
+  // NEO-51: partner onboarding documents. Locale == jurisdiction (pl = Poland,
+  // mx = Mexico). partnerAgreement + partnerDpa render as ONE signed PDF
+  // (the DPA is the agreement's Annex 1, see templates/partnerAgreement.html).
+  { templateKey: "partnerAgreement", locales: ["pl", "mx"], label: "Partner Collaboration Agreement" },
+  { templateKey: "partnerDpa", locales: ["pl", "mx"], label: "Partner Agreement — Annex 1: Data Processing Agreement" },
+  { templateKey: "partnerPrivacyNotice", locales: ["pl", "mx"], label: "Partner Privacy Notice" },
+  // Superseded by partnerPrivacyNotice (NEO-51) — hidden from the editor's
+  // picker, kept so already-signed historical records still resolve.
+  { templateKey: "gdprConsent.pl", locales: ["pl"], label: "Doctor Data Protection Consent — Poland (GDPR)", hidden: true },
+  { templateKey: "gdprConsent.mx", locales: ["mx"], label: "Doctor Data Protection Consent — Mexico (LFPDPPP)", hidden: true },
   { templateKey: "historiaEndo", locales: ["en", "mx"], label: "Historia Endo — Root Canal Informed Consent" },
   { templateKey: "stopBang", locales: ["en", "mx"], label: "STOP-Bang OSA Screening" },
   { templateKey: "medicalHistory", locales: ["en", "mx"], label: "Antecedentes médicos — Patient Medical History" },

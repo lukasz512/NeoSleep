@@ -244,8 +244,15 @@ onBeforeUnmount(() => {
      it, .layout-public__bg (a sibling, absolutely positioned, ignoring this
      padding) still bleeds all the way to the true screen edges — only the
      card/logo content below gets pushed clear of the hardware cutouts. */
-  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
-    max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  /* Exposed as variables so a view that scrolls itself (PartnerRegistrationView)
+     can extend its scroller under this frame — otherwise a wheel/swipe that
+     starts in the 16px band around the card scrolls nothing. */
+  --layout-public-inset-top: max(16px, env(safe-area-inset-top));
+  --layout-public-inset-right: max(16px, env(safe-area-inset-right));
+  --layout-public-inset-bottom: max(16px, env(safe-area-inset-bottom));
+  --layout-public-inset-left: max(16px, env(safe-area-inset-left));
+  padding: var(--layout-public-inset-top) var(--layout-public-inset-right) var(--layout-public-inset-bottom)
+    var(--layout-public-inset-left);
 }
 
 /* Wraps both layers below — fades in on mount and dissolves via

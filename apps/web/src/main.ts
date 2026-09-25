@@ -2,7 +2,7 @@ import { createApp } from "vue";
 import { createPinia } from "pinia";
 import "./assets/flags.css";
 import { createI18n } from "vue-i18n";
-import { createUnhead, headSymbol } from "@unhead/vue";
+import { createHead } from "@unhead/vue/client";
 import { createGtag } from "vue-gtag";
 import App from "./App.vue";
 import router from "./router";
@@ -56,7 +56,10 @@ const app = createApp(App);
 app.use(createPinia());
 app.use(router);
 app.use(i18n);
-app.provide(headSymbol, createUnhead());
+// The client head renders useHead() entries into document.head. The previous
+// bare createUnhead() (core, no DOM renderer) collected entries but never
+// wrote them to the page.
+app.use(createHead());
 
 useMotionPreferenceStore().startListening();
 
