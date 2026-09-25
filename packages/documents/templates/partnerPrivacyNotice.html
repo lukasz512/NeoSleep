@@ -38,9 +38,12 @@
   p { margin: 0 0 8px; text-align: justify; }
   ol, ul { margin: 0 0 8px; padding-left: 20px; }
   li { margin-bottom: 6px; text-align: justify; }
-  .ack { margin-top: 28px; border-top: 1px solid var(--text); padding-top: 6px; }
-  .ack .ack-label { font-weight: 600; color: var(--secondary); }
-  .ack .field-value { font-weight: 500; }
+  /* Acknowledgement uses the shared sign-off panel (docFields.css) — no drawn
+     signature, just who acknowledged and when, side by side. */
+  .ack.sig-panels { grid-template-columns: minmax(0, 1fr); max-width: 420px; margin-top: 28px; }
+  .ack > .sig-panel > .sig-main > .sig-label { color: var(--primary); font-weight: 600; }
+  .ack .sig-details { border: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px; margin-top: 8px; padding: 0; background: none; }
+  .ack .sig-details dd { font-weight: 500; }
   .screen-only.contact-footer { font-size: 8pt; color: var(--secondary); border-top: 1px solid #ccc; padding-top: 8px; margin-top: 24px; }
   .screen-only.contact-footer .doc-ref { text-align: right; margin-top: 2px; }
   @media print { body { padding: 0; max-width: none; } .screen-only { display: none; } }
@@ -49,6 +52,7 @@
     body { padding: 20px 16px; }
     p, li { text-align: left; }
   }
+  {{style:docFields}}
 </style>
 </head>
 <body>
@@ -63,10 +67,16 @@
 
   <div class="doc-content">{{content}}</div>
 
-  <div class="ack">
-    <span class="ack-label">{{documents.partnerPrivacyNotice.ackLabel}}</span>
-    <span class="field-value" data-field="doctor_name"></span>,
-    <span class="field-value" data-field="acknowledged_at"></span>
+  <div class="ack sig-panels">
+    <div class="sig-panel">
+      <div class="sig-main">
+        <div class="sig-label">{{documents.partnerPrivacyNotice.ackLabel}}</div>
+        <dl class="sig-details">
+          <div><dt>{{documents.signature.name}}</dt><dd data-field="doctor_name"></dd></div>
+          <div><dt>{{documents.signature.date}}</dt><dd data-field="acknowledged_at"></dd></div>
+        </dl>
+      </div>
+    </div>
   </div>
 
   <div class="contact-footer screen-only">

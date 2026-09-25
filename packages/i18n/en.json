@@ -585,7 +585,7 @@
   "documents.signature.license": "Professional licence no.",
   "documents.partnerPrivacyNotice.title": "Privacy Notice for NeoSleep Partners",
   "documents.partnerPrivacyNotice.subtitle": "Information on the processing of your personal data",
-  "documents.partnerPrivacyNotice.ackLabel": "Read and acknowledged by:",
+  "documents.partnerPrivacyNotice.ackLabel": "Read and acknowledged",
   "documents.medicalHistory.title": "Medical history",
   "documents.medicalHistory.subtitle": "Patient questionnaire",
   "documents.medicalHistory.prompt": "Do you have, or have you had, any of the following?",
