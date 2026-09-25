@@ -15,7 +15,7 @@
         </AppButton>
       </div>
 
-      <VCardText class="partner-doc-dialog__body">
+      <VCardText ref="bodyRef" class="partner-doc-dialog__body">
         <div v-if="state === 'loading'" class="partner-doc-dialog__state">
           <AppLoadingState />
         </div>
@@ -29,8 +29,12 @@
              (see packages/documents/src/browser/documentFields.ts). No
              allow-scripts: the frame is static; allow-same-origin only so this
              component can fill it. -->
+        <!-- Keyed so every open (and every new signature) gets a fresh
+             document: the same srcdoc wouldn't fire load again, and a
+             leftover signature image must never linger in the preview. -->
         <iframe
           v-show="state === 'ready'"
+          :key="frameKey"
           ref="frameRef"
           class="partner-doc-dialog__frame"
           :style="{ height: frameHeight }"
@@ -40,43 +44,70 @@
           @load="onFrameLoad"
         />
 
-        <section v-if="kind === 'agreement' && state === 'ready'" class="partner-doc-dialog__signature">
+        <!-- Signed: the preview above already shows both signatures, exactly
+             as the PDF will; the doctor can still redraw theirs. -->
+        <section
+          v-if="kind === 'agreement' && state === 'ready' && shownSignature"
+          class="partner-doc-dialog__signature partner-doc-dialog__signature--signed"
+        >
+          <h3 class="partner-doc-dialog__signature-heading">{{ t('user.partnerRegistration.dialog.signedHeading') }}</h3>
+          <p class="partner-doc-dialog__intent">{{ t('user.partnerRegistration.dialog.signedBody') }}</p>
+          <div class="partner-doc-dialog__pad">
+            <AppButton variant="tonal" color="primary" class="partner-doc-dialog__change" @click="startResign">
+              <template #prepend><AppIcon name="pencil" /></template>
+              {{ t('user.partnerRegistration.dialog.changeSignature') }}
+            </AppButton>
+          </div>
+        </section>
+
+        <section v-else-if="kind === 'agreement' && state === 'ready'" class="partner-doc-dialog__signature">
           <h3 class="partner-doc-dialog__signature-heading">{{ t('user.partnerRegistration.dialog.signatureHeading') }}</h3>
           <p class="partner-doc-dialog__intent">
             {{ t('user.partnerRegistration.dialog.intent', { version: preview?.versionLabel ?? '' }) }}
           </p>
-          <SignaturePad
-            ref="padRef"
-            :clear-label="t('user.partnerRegistration.form.signatureClear')"
-            :placeholder="t('user.partnerRegistration.dialog.signHere')"
-            clear-placement="overlay"
-            @change="padEmpty = $event"
-          />
+          <!-- As wide as a signature line in the document, not the whole dialog. -->
+          <div class="partner-doc-dialog__pad">
+            <SignaturePad
+              ref="padRef"
+              :clear-label="t('user.partnerRegistration.form.signatureClear')"
+              :placeholder="t('user.partnerRegistration.dialog.signHere')"
+              clear-placement="overlay"
+              @change="padEmpty = $event"
+            />
+          </div>
         </section>
       </VCardText>
 
       <VCardActions class="partner-doc-dialog__actions">
         <VSpacer />
-        <AppButton variant="text" @click="close">{{ t('user.partnerRegistration.dialog.close') }}</AppButton>
-        <AppButton
-          v-if="kind === 'agreement'"
-          color="primary"
-          variant="flat"
-          :disabled="state !== 'ready' || padEmpty"
-          @click="onSign"
-        >
-          {{ t('user.partnerRegistration.dialog.sign') }}
-        </AppButton>
-        <AppButton v-else color="primary" variant="flat" :disabled="state !== 'ready'" @click="onAcknowledge">
-          {{ t('user.partnerRegistration.dialog.acknowledge') }}
-        </AppButton>
+        <template v-if="kind === 'agreement' && shownSignature">
+          <AppButton color="primary" variant="flat" @click="close">{{ t('user.partnerRegistration.dialog.done') }}</AppButton>
+        </template>
+        <template v-else-if="kind === 'agreement'">
+          <AppButton v-if="signature" variant="text" @click="keepSignature">
+            {{ t('user.partnerRegistration.dialog.keepSignature') }}
+          </AppButton>
+          <AppButton v-else variant="text" @click="close">{{ t('user.partnerRegistration.dialog.close') }}</AppButton>
+          <AppButton color="primary" variant="flat" :disabled="state !== 'ready' || padEmpty" @click="onSign">
+            {{ t('user.partnerRegistration.dialog.sign') }}
+          </AppButton>
+        </template>
+        <template v-else-if="acknowledged">
+          <AppButton color="primary" variant="flat" @click="close">{{ t('user.partnerRegistration.dialog.done') }}</AppButton>
+        </template>
+        <template v-else>
+          <AppButton variant="text" @click="close">{{ t('user.partnerRegistration.dialog.close') }}</AppButton>
+          <AppButton color="primary" variant="flat" :disabled="state !== 'ready'" @click="onAcknowledge">
+            {{ t('user.partnerRegistration.dialog.acknowledge') }}
+          </AppButton>
+        </template>
       </VCardActions>
     </VCard>
   </VDialog>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick } from "vue";
+import { ref, computed, watch, nextTick } from "vue";
 import { useI18n } from "vue-i18n";
 import { useDisplay } from "vuetify";
 import { VDialog, VCard, VCardText, VCardActions, VSpacer } from "vuetify/components";
@@ -115,6 +146,10 @@ const props = defineProps<{
   variant: string;
   /** The document's jurisdiction — dates are shown in its language/time zone, like the PDF (apps/api formatDocumentDate). */
   jurisdiction: "PL" | "MX" | null;
+  /** The doctor's current signature on the agreement, if any — the dialog then opens on the signed preview. */
+  signature?: string | null;
+  /** Whether the privacy notice is already acknowledged — it stays readable, only the button changes. */
+  acknowledged?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -132,10 +167,19 @@ const frameRef = ref<HTMLIFrameElement | null>(null);
 const frameHeight = ref("60vh");
 const padRef = ref<InstanceType<typeof SignaturePad> | null>(null);
 const padEmpty = ref(true);
+const bodyRef = ref<InstanceType<typeof VCardText> | null>(null);
+const frameKey = ref(0);
+
+// "Change signature" swaps the signed preview back to the pad; the current
+// signature only goes away if the doctor actually signs again.
+const resigning = ref(false);
+const shownSignature = computed(() => (props.kind === "agreement" && !resigning.value ? props.signature ?? null : null));
 
 async function load(): Promise<void> {
   state.value = "loading";
   padEmpty.value = true;
+  resigning.value = false;
+  frameKey.value += 1;
   try {
     const res = await apiFetch(
       `/api/v1/invite/document?token=${encodeURIComponent(props.token)}&type=${props.kind}`,
@@ -169,9 +213,10 @@ async function onFrameLoad(): Promise<void> {
   const doc = frameRef.value?.contentDocument;
   if (!doc || !preview.value) return;
   const today = todayLabel();
+  const signed = shownSignature.value;
   applyDocumentFields(doc, {
     dataFields: { ...preview.value.dataFields, ...props.party, signer_signed_at: today, acknowledged_at: today },
-    imageFields: preview.value.imageFields,
+    imageFields: signed ? { ...preview.value.imageFields, signer_signature: signed } : preview.value.imageFields,
     variant: props.kind === "agreement" ? props.variant : null,
   });
   fitFrame(doc);
@@ -180,6 +225,16 @@ async function onFrameLoad(): Promise<void> {
   await nextTick();
   fitFrame(doc);
   Array.from(doc.images).forEach((img) => img.addEventListener("load", () => fitFrame(doc), { once: true }));
+  if (signed) scrollToSignatures(doc);
+}
+
+/** On the signed preview, land on the two signatures — that's what the doctor wants to check. */
+function scrollToSignatures(doc: Document): void {
+  const block = doc.querySelector(".sig-panels");
+  const body = bodyRef.value?.$el as HTMLElement | undefined;
+  const frame = frameRef.value;
+  if (!(block instanceof HTMLElement) || !body || !frame) return;
+  body.scrollTop = frame.offsetTop + block.offsetTop - 24;
 }
 
 watch(
@@ -190,15 +245,31 @@ watch(
   { immediate: true },
 );
 
+// A new (or cleared) signature re-renders the document so the preview is
+// always exactly what will be saved.
+watch(shownSignature, () => {
+  if (props.modelValue && state.value === "ready") frameKey.value += 1;
+});
+
 function close(): void {
   emit("update:modelValue", false);
 }
 
+function startResign(): void {
+  padEmpty.value = true;
+  resigning.value = true;
+}
+
+function keepSignature(): void {
+  resigning.value = false;
+}
+
 function onSign(): void {
-  const signatureDataUrl = padRef.value?.toDataURL();
+  const signatureDataUrl = padRef.value?.toDataURL({ trim: true });
   if (!signatureDataUrl || !preview.value) return;
   emit("signed", { signatureDataUrl, versionIds: preview.value.versionIds });
-  close();
+  // Stay open: the parent's new `signature` flips the dialog to the signed preview.
+  resigning.value = false;
 }
 
 function onAcknowledge(): void {
@@ -264,6 +335,28 @@ function onAcknowledge(): void {
   margin: 0;
   font-size: 0.8125rem;
   color: rgba(var(--v-theme-on-surface), 0.75);
+}
+
+/* The pad is as wide as one signature line in the document (≈360px at the
+   dialog's width), centred — never the full dialog (Łukasz, NEO-51 review). */
+.partner-doc-dialog__pad {
+  width: 100%;
+  max-width: 360px;
+  margin: 4px auto 0;
+}
+
+.partner-doc-dialog__signature--signed .partner-doc-dialog__pad {
+  display: flex;
+  justify-content: center;
+}
+
+.partner-doc-dialog__change {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.partner-doc-dialog__change :deep(.v-btn__prepend) {
+  margin-inline-end: 8px;
 }
 
 .partner-doc-dialog__actions {

@@ -120,6 +120,15 @@ app.use(
 // mounted first; body-parser then skips the already-parsed body below.
 app.use("/api/v1/public/questionnaire/submit", express.json({ limit: "600kb" }));
 app.use(express.json({ limit: "50kb" }));
+// Express 5 (body-parser 2) leaves req.body undefined when nothing was parsed — a
+// GET, a bodiless POST/DELETE, or a non-JSON content type. Express 4 always set {}.
+// Route handlers destructure `req.body as {...}` directly, so restore the Express 4
+// default here instead of crashing into a 500 on every bodiless request. Multer
+// routes still replace this with their own parsed multipart body.
+app.use((req, _res, next) => {
+  if (req.body === undefined) req.body = {};
+  next();
+});
 app.use(apiLimiter);
 
 // Every /api/v1 response is per-request-credential (keyed off the Authorization bearer
@@ -221,7 +230,14 @@ if (typeof process.env.VITEST === "undefined") {
   async function start() {
     await runMigrationsWithRetry();
     await ensureInitialUserPasswords(process.env.DEFAULT_TENANT_SLUG ?? "neosleep");
-    server = app.listen(port, () => {
+    // Express 5 routes listen errors (e.g. EADDRINUSE) into this callback instead of
+    // throwing them as an unhandled 'error' event — without this check the process
+    // would log "listening", stay alive, and serve nothing.
+    server = app.listen(port, (err?: Error) => {
+      if (err) {
+        console.error("[neocrm-api] failed to listen:", err);
+        process.exit(1);
+      }
       console.log(`[neocrm-api] listening on http://localhost:${port}`);
     });
   }

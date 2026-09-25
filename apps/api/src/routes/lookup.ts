@@ -4,6 +4,7 @@ import { asyncHandler } from "../middleware/errorHandler.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { requireRole } from "../middleware/requireRole.js";
 import { ValidationError } from "../errors.js";
+import { routeParam } from "./utils.js";
 
 /**
  * Lookup routes — the proper replacement for the removed config_options system.
@@ -52,7 +53,7 @@ lookupRouter.get(
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
     const slug   = tenantSlugFromHost(req.hostname);
-    const type   = req.params.type?.trim();
+    const type   = routeParam(req, "type")?.trim();
     const locale = (req.query.locale as string | undefined) ?? "en";
 
     if (!type) { res.status(400).json({ error: "type is required" }); return; }
@@ -111,7 +112,7 @@ lookupRouter.delete(
   requireRole("admin"),
   asyncHandler(async (req: Request, res: Response) => {
     const slug     = tenantSlugFromHost(req.hostname);
-    const globalId = req.params.globalId?.trim();
+    const globalId = routeParam(req, "globalId")?.trim();
     if (!globalId) { res.status(400).json({ error: "globalId is required" }); return; }
 
     const disabled = await withTenant(slug, (client) =>

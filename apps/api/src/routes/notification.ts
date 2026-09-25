@@ -6,7 +6,7 @@ import { buildContext } from "../context/TenantContext.js";
 import { GetNotificationListQuery, GetUnreadNotificationCountQuery } from "../queries/notification.js";
 import { MarkNotificationReadCommand, MarkAllNotificationsReadCommand } from "../commands/notification.js";
 import { ValidationError } from "../errors.js";
-import { parsePaginationParams } from "./utils.js";
+import { parsePaginationParams, routeParam } from "./utils.js";
 
 /**
  * Notification Center routes (ADR-012) — thin waiters, see routes/leads.ts
@@ -57,7 +57,7 @@ notificationRouter.patch(
   "/notification/:id/read",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing notification id");
 
     const slug = tenantSlugFromHost(req.hostname);

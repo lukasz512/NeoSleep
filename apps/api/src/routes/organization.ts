@@ -10,7 +10,7 @@ import { GetHistoryForOrganizationQuery } from "../queries/auditLog.js";
 import { GetOrganizationDocumentsQuery, GetOrganizationDocumentDownloadUrlQuery } from "../queries/entityDocuments.js";
 import { GetOrganizationPractitionersQuery } from "../queries/practitioner.js";
 import { ValidationError } from "../errors.js";
-import { parsePaginationParams, toFilterArray } from "./utils.js";
+import { parsePaginationParams, toFilterArray, routeParam } from "./utils.js";
 
 /**
  * Organization routes — thin waiters.
@@ -60,7 +60,7 @@ organizationRouter.get(
   "/organization/:id",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing organization id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -81,7 +81,7 @@ organizationRouter.get(
   "/organization/:id/practitioners",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing organization id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -111,7 +111,7 @@ organizationRouter.get(
   "/organization/:id/history",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing organization id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -131,7 +131,7 @@ organizationRouter.get(
   "/organization/:id/documents",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing organization id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -150,8 +150,8 @@ organizationRouter.get(
   "/organization/:id/documents/:documentId/download",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
-    const documentId = req.params.documentId?.trim();
+    const id = routeParam(req, "id")?.trim();
+    const documentId = routeParam(req, "documentId")?.trim();
     if (!id || !documentId) throw new ValidationError("Missing organization id or document id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -212,7 +212,7 @@ organizationRouter.patch(
   "/organization/:id",
   requireRole("admin", "manager", "kam", "msl", "rep"),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing organization id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -258,7 +258,7 @@ organizationRouter.delete(
   "/organization/:id",
   requireRole("admin"),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing organization id");
 
     const slug = tenantSlugFromHost(req.hostname);

@@ -223,12 +223,12 @@
                   <slot name="feed-card-avatar" :item="item" />
                 </div>
                 <div class="app-entity-list__card-main">
-                  <div class="text-body-1 font-weight-medium app-entity-list__card-title">
+                  <div class="text-body-large font-weight-medium app-entity-list__card-title">
                     <slot name="feed-card-title" :item="item">
                       {{ getCell(item, titleKey) }}
                     </slot>
                   </div>
-                  <div v-if="metaKeys.length" class="text-caption text-medium-emphasis app-entity-list__card-meta">
+                  <div v-if="metaKeys.length" class="text-body-small text-medium-emphasis app-entity-list__card-meta">
                     <slot name="feed-card-meta" :item="item">
                       {{ formatMeta(item) }}
                     </slot>

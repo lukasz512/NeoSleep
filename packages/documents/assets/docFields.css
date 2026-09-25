@@ -114,9 +114,11 @@
   margin-top: 2px;
   display: flex;
   align-items: flex-end;
+  justify-content: center;
   border-bottom: 1px solid #cfd8d6;
 }
-.sig-area img { display: block; max-height: 100%; max-width: 100%; object-fit: contain; object-position: left bottom; }
+/* Each signature sits centred over its line (Łukasz, NEO-51 review 2026-09-25). */
+.sig-area img { display: block; max-height: 100%; max-width: 100%; object-fit: contain; object-position: center bottom; }
 .sig-e-note { display: none; margin-top: 5px; font-size: 7.5pt; font-weight: 500; color: var(--primary); }
 .sig-panel:has(.sig-area img) .sig-e-note { display: block; }
 .sig-details {

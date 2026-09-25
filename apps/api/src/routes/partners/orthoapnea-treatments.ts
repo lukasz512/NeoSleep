@@ -16,6 +16,7 @@ import {
 import { SyncOrthoApneaTreatmentStatusesAllTenantsCommand } from "../../commands/orthoapneaSync.js";
 import { CreateNoteCommand } from "../../commands/note.js";
 import { ValidationError } from "../../errors.js";
+import { routeParam } from "../utils.js";
 
 /**
  * OrthoApnea order submission — patient create, treatment create, and the
@@ -34,7 +35,7 @@ orthoapneaTreatmentsRouter.post(
   "/partners/orthoapnea/patients/:patientId/ensure",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const patientId = req.params.patientId?.trim();
+    const patientId = routeParam(req, "patientId")?.trim();
     if (!patientId) throw new ValidationError("Missing patient id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -135,7 +136,7 @@ orthoapneaTreatmentsRouter.post(
   "/partners/orthoapnea/treatments/:treatmentPlanId/comments",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const treatmentPlanId = req.params.treatmentPlanId?.trim();
+    const treatmentPlanId = routeParam(req, "treatmentPlanId")?.trim();
     if (!treatmentPlanId) throw new ValidationError("Missing treatment_plan id");
 
     const body = req.body as { body?: unknown; notifyOrthoApnea?: unknown };
@@ -189,7 +190,7 @@ orthoapneaTreatmentsRouter.get(
   "/partners/orthoapnea/treatments/:treatmentPlanId/transactions",
   requireRole("admin"),
   asyncHandler(async (req: Request, res: Response) => {
-    const treatmentPlanId = req.params.treatmentPlanId?.trim();
+    const treatmentPlanId = routeParam(req, "treatmentPlanId")?.trim();
     if (!treatmentPlanId) throw new ValidationError("Missing treatment_plan id");
 
     const slug = tenantSlugFromHost(req.hostname);
