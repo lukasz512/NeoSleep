@@ -29,7 +29,7 @@ async function buildTestContext(client: Parameters<typeof CreatePatientCommand>[
 }
 
 async function createTestPatient(ctx: TenantContext) {
-  return CreatePatientCommand(ctx, { first_name: "Test", last_name: `Patient-${uniqueSuffix()}`, email: `qa-patient-${uniqueSuffix()}@example.com`, phone: "600100200" });
+  return CreatePatientCommand(ctx, { gender: "female", date_of_birth: "1980-01-01", first_name: "Test", last_name: `Patient-${uniqueSuffix()}`, email: `qa-patient-${uniqueSuffix()}@example.com`, phone: "600100200" });
 }
 
 describe("CreateSleepStudyCommand", () => {
