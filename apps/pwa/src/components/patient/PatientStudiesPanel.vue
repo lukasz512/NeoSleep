@@ -752,8 +752,11 @@ watch(() => props.focusItem, (key) => highlightItem(key));
   gap: 2px;
   margin-left: auto;
 }
-.studies__item-actions :deep(.v-btn) {
-  min-height: 44px; /* touch target */
+/* Touch target for the text buttons only, from the app-wide token (44px on
+   phones). Icon buttons (the row's ⋮ menu) keep their own square size — a
+   forced height on them turned the round button into an oval on desktop. */
+.studies__item-actions :deep(.v-btn:not(.v-btn--icon)) {
+  min-height: var(--pwa-btn-min-height, 44px);
 }
 
 .studies__history-toggle {
