@@ -137,19 +137,30 @@ describe("EntityLink — avatar initials and size", () => {
   });
 });
 
-describe("EntityLink — subtitle (NEO-57)", () => {
-  it("renders a quiet second line under the name (a doctor's specialty)", () => {
-    const wrapper = mountLink({ to: { name: "hcp-detail", params: { id: "p1" } }, label: "Dra. Ana López", subtitle: "Dentist" });
+describe("EntityLink — large identity (NEO-57)", () => {
+  it("renders one plain line under the name, with extras behind a +N", () => {
+    const wrapper = mountLink({
+      to: { name: "hcp-detail", params: { id: "p1" } },
+      label: "Dra. Ana López",
+      details: ["Dentist"],
+      moreDetails: ["Orthodontist"],
+    });
 
     expect(wrapper.find(".entity-link__label").text()).toBe("Dra. Ana López");
-    expect(wrapper.find(".entity-link__subtitle").text()).toBe("Dentist");
-    expect(wrapper.find(".entity-link--two-line").exists()).toBe(true);
+    expect(wrapper.find(".identity-details").text()).toContain("Dentist");
+    expect(wrapper.find(".identity-details__more").text()).toBe("+1");
   });
 
-  it("keeps the single-line layout when the subtitle is empty", () => {
-    const wrapper = mountLink({ to: null, label: "Dra. Ana López", entityType: "hcp", subtitle: "" });
+  it("joins several details with a middle dot, no labels", () => {
+    const wrapper = mountLink({ to: null, label: "Ana López", entityType: "patient", details: ["F", "47 y"] });
+    expect(wrapper.find(".identity-details").text()).toBe("F · 47 y");
+  });
 
-    expect(wrapper.find(".entity-link__subtitle").exists()).toBe(false);
+  it("is the small identity (name only) when there are no details", () => {
+    const wrapper = mountLink({ to: null, label: "Dra. Ana López", entityType: "hcp" });
+
+    expect(wrapper.find(".identity-details").exists()).toBe(false);
+    expect(wrapper.find(".entity-link--two-line").exists()).toBe(false);
     expect(wrapper.text()).toContain("Dra. Ana López");
   });
 });

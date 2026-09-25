@@ -29,6 +29,12 @@
       :not-found-label="t('user.users.detail.notFound')"
       @retry="loadUser"
     >
+      <template v-if="user" #record-tile>
+        <AppAvatar :name="user.name" entity-type="user" :first-name="user.first_name" :last-name="user.last_name" :size="48" />
+      </template>
+      <template v-if="user" #record-details>
+        <IdentityDetails :details="[t(`user.users.role.${roleKey}`)]" />
+      </template>
       <template v-if="user" #header-actions>
         <VTooltip location="bottom">
           <template #activator="{ props: tooltipProps }">
@@ -261,6 +267,8 @@ import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import DetailViewTabs from "../components/DetailViewTabs.vue";
 import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
+import AppAvatar from "../components/AppAvatar.vue";
+import IdentityDetails from "../components/IdentityDetails.vue";
 import AppLoadingState from "../components/AppLoadingState.vue";
 import { userFormFields } from "../config/forms/userForm";
 import {

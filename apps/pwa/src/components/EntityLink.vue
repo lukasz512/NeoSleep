@@ -1,22 +1,22 @@
 <template>
-  <RouterLink v-if="to && label" :to="to" :class="['entity-link', { 'entity-link--two-line': subtitle }]" @click.stop>
+  <RouterLink v-if="to && label" :to="to" :title="shortened ? label : undefined" :class="['entity-link', { 'entity-link--two-line': isLarge }]" @click.stop>
     <AppAvatar v-bind="avatarProps" class="entity-link__avatar" />
     <slot />
-    <span v-if="subtitle" class="entity-link__text">
-      <span class="entity-link__label">{{ label }}</span>
-      <span class="entity-link__subtitle">{{ subtitle }}</span>
+    <span v-if="isLarge" class="entity-link__text">
+      <span class="entity-link__label">{{ displayLabel }}</span>
+      <IdentityDetails :details="details" :more="moreDetails" />
     </span>
-    <span v-else>{{ label }}</span>
+    <span v-else>{{ displayLabel }}</span>
   </RouterLink>
-  <span v-else-if="label" :class="['entity-link__plain', { 'entity-link--two-line': subtitle }]">
+  <span v-else-if="label" :title="shortened ? label : undefined" :class="['entity-link__plain', { 'entity-link--two-line': isLarge }]">
     <AppAvatar v-bind="avatarProps" class="entity-link__avatar" />
     <!-- Optional decoration between avatar and name (e.g. LeadsView's gender icon). -->
     <slot />
-    <span v-if="subtitle" class="entity-link__text">
-      <span class="entity-link__label">{{ label }}</span>
-      <span class="entity-link__subtitle">{{ subtitle }}</span>
+    <span v-if="isLarge" class="entity-link__text">
+      <span class="entity-link__label">{{ displayLabel }}</span>
+      <IdentityDetails :details="details" :more="moreDetails" />
     </span>
-    <span v-else>{{ label }}</span>
+    <span v-else>{{ displayLabel }}</span>
   </span>
   <span v-else class="entity-link__empty">—</span>
 </template>
@@ -25,6 +25,8 @@
 import { computed } from "vue";
 import type { RouteLocationRaw } from "vue-router";
 import AppAvatar, { type AppAvatarEntityType } from "./AppAvatar.vue";
+import IdentityDetails from "./IdentityDetails.vue";
+import { shortPersonName } from "../utils/shortPersonName";
 
 /**
  * THE shared "avatar + display name (+ optional link)" cell — every table/list
@@ -73,13 +75,16 @@ const props = withDefaults(
     lastName?: string | null;
     avatarSize?: number;
     /**
-     * Quiet second line under the name: a doctor's specialty (NEO-57, every
-     * assigned-doctor cell shows "Dr. X" over "Dentist") or a patient's
-     * "F · 47 y". Empty/null keeps the single-line layout.
+     * Large identity (NEO-57): one quiet line under the name — "F · 47 y"
+     * for a patient, "Dentist" for a doctor, "Clinic" for an organization
+     * (see composables/useIdentity.ts). No details = the small identity,
+     * just avatar + name, for mentions (note authors, history, meta lines).
      */
-    subtitle?: string | null;
+    details?: string[];
+    /** Overflow values behind a "+N" with a tooltip (a doctor's other specialties). */
+    moreDetails?: string[];
   }>(),
-  { entityType: undefined, firstName: null, lastName: null, avatarSize: 20, subtitle: null },
+  { entityType: undefined, firstName: null, lastName: null, avatarSize: 20, details: () => [], moreDetails: () => [] },
 );
 
 const ROUTE_ENTITY_TYPES: Record<string, AppAvatarEntityType> = {
@@ -98,6 +103,15 @@ const entityType = computed<AppAvatarEntityType>(() => {
   const name = props.to && typeof props.to === "object" && "name" in props.to ? props.to.name : null;
   return (typeof name === "string" && ROUTE_ENTITY_TYPES[name]) || "user";
 });
+
+const isLarge = computed(() => props.details.length > 0 || props.moreDetails.length > 0);
+
+/* Rows, cards and mentions show the short name — first given name + first
+   surname (utils/shortPersonName.ts) — whenever the name parts are known;
+   the full name stays one hover away. Detail headers (ItemDetailLayout record header) keep
+   the full name. */
+const displayLabel = computed(() => shortPersonName(props.label, props.firstName, props.lastName) || props.label || "");
+const shortened = computed(() => displayLabel.value !== (props.label ?? ""));
 
 const avatarProps = computed(() => {
   const isPlace = PLACE_ENTITY_TYPES.has(entityType.value);
@@ -137,6 +151,8 @@ const avatarProps = computed(() => {
 .entity-link__text {
   display: inline-flex;
   flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
   min-width: 0;
   line-height: 1.3;
 }
@@ -147,10 +163,7 @@ const avatarProps = computed(() => {
 .entity-link--two-line:hover .entity-link__label {
   text-decoration: underline;
 }
-.entity-link__subtitle {
-  font-size: 0.78125rem;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-}
+
 .entity-link__empty {
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
