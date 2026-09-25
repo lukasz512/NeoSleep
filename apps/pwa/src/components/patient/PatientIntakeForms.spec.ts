@@ -7,7 +7,7 @@ import * as vuetifyDirectives from "vuetify/directives";
 import en from "@i18n/en.json";
 import PatientIntakeForms from "./PatientIntakeForms.vue";
 import type { PatientIntakeFormStatus } from "../../types/patientIntakeForm";
-import { intakeFormIcon } from "../../config/patientIntakeForms";
+import { intakeFormIcon, initialsAbbr } from "../../config/patientIntakeForms";
 
 const mountedWrappers: VueWrapper[] = [];
 afterEach(() => {
@@ -30,11 +30,21 @@ const FORMS: PatientIntakeFormStatus[] = [
 ];
 
 describe("PatientIntakeForms", () => {
-  it("renders one icon tile per form, in the given order, with collected ones marked", () => {
+  it("renders one tile per form, in the given order, with collected ones marked", () => {
     const wrapper = mountForms(FORMS);
     const tiles = wrapper.findAll(".intake-forms__tile");
     expect(tiles).toHaveLength(4);
     expect(tiles.map((d) => d.classes().includes("intake-forms__tile--done"))).toEqual([false, true, true, false]);
+  });
+
+  it("shows the clinical abbreviation on each tile, in order (NEO-57)", () => {
+    const wrapper = mountForms(FORMS);
+    expect(wrapper.findAll(".intake-forms__tile").map((d) => d.text())).toEqual(["CI", "HE", "SB", "PSG"]);
+  });
+
+  it("falls back to initials of the form label for a template without an abbreviation", () => {
+    expect(initialsAbbr("Informed consent")).toBe("IC");
+    expect(initialsAbbr("Sleep-apnea follow up form")).toBe("SAF");
   });
 
   it("labels the progress for screen readers", () => {

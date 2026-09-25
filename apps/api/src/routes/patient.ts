@@ -255,7 +255,8 @@ patientRouter.post(
     const slug = tenantSlugFromHost(req.hostname);
     const body = req.body as {
       salutation?: string; first_name?: string; last_name?: string;
-      email?: string; phone?: string; date_of_birth?: string | null;
+      email?: string; phone?: string;
+      gender?: string | null; date_of_birth?: string | null;
       practitioner_id?: string;
       hcp_id?: string; // legacy alias
       status?: string; region?: string; territory_id?: string | null;
@@ -274,6 +275,7 @@ patientRouter.post(
         last_name:       typeof body.last_name       === "string" ? body.last_name.trim()   : "",
         email:           typeof body.email           === "string" ? body.email.trim()        : undefined,
         phone:           typeof body.phone           === "string" ? body.phone.trim() || undefined : undefined,
+        gender:          typeof body.gender          === "string" ? body.gender : undefined,
         date_of_birth:   typeof body.date_of_birth   === "string" ? body.date_of_birth : undefined,
         practitioner_id: typeof body.practitioner_id === "string" ? body.practitioner_id.trim() || undefined : undefined,
         hcp_id:          typeof body.hcp_id          === "string" ? body.hcp_id.trim() || undefined : undefined,
@@ -307,7 +309,8 @@ patientRouter.patch(
     const slug = tenantSlugFromHost(req.hostname);
     const body = req.body as {
       salutation?: string; first_name?: string; last_name?: string;
-      email?: string; phone?: string; date_of_birth?: string | null;
+      email?: string; phone?: string;
+      gender?: string | null; date_of_birth?: string | null;
       practitioner_id?: string; hcp_id?: string;
       status?: string; region?: string; territory_id?: string | null;
       country_code?: string | null;
@@ -324,7 +327,8 @@ patientRouter.patch(
         last_name:       typeof body.last_name  === "string" ? body.last_name.trim()  || undefined : undefined,
         email:           body.email            !== undefined ? body.email              : undefined,
         phone:           body.phone            !== undefined ? body.phone              : undefined,
-        date_of_birth:   body.date_of_birth === null ? null : typeof body.date_of_birth === "string" ? body.date_of_birth : undefined,
+        gender:          body.gender === null || typeof body.gender === "string" ? body.gender : undefined,
+        date_of_birth:   body.date_of_birth === null || typeof body.date_of_birth === "string" ? body.date_of_birth : undefined,
         practitioner_id: body.practitioner_id  !== undefined ? body.practitioner_id   : undefined,
         hcp_id:          body.hcp_id           !== undefined ? body.hcp_id            : undefined,
         status:          typeof body.status    === "string"  ? body.status            : undefined,

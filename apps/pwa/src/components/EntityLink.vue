@@ -1,14 +1,22 @@
 <template>
-  <RouterLink v-if="to && label" :to="to" class="entity-link" @click.stop>
+  <RouterLink v-if="to && label" :to="to" :class="['entity-link', { 'entity-link--two-line': subtitle }]" @click.stop>
     <AppAvatar v-bind="avatarProps" class="entity-link__avatar" />
     <slot />
-    <span>{{ label }}</span>
+    <span v-if="subtitle" class="entity-link__text">
+      <span class="entity-link__label">{{ label }}</span>
+      <span class="entity-link__subtitle">{{ subtitle }}</span>
+    </span>
+    <span v-else>{{ label }}</span>
   </RouterLink>
-  <span v-else-if="label" class="entity-link__plain">
+  <span v-else-if="label" :class="['entity-link__plain', { 'entity-link--two-line': subtitle }]">
     <AppAvatar v-bind="avatarProps" class="entity-link__avatar" />
     <!-- Optional decoration between avatar and name (e.g. LeadsView's gender icon). -->
     <slot />
-    <span>{{ label }}</span>
+    <span v-if="subtitle" class="entity-link__text">
+      <span class="entity-link__label">{{ label }}</span>
+      <span class="entity-link__subtitle">{{ subtitle }}</span>
+    </span>
+    <span v-else>{{ label }}</span>
   </span>
   <span v-else class="entity-link__empty">—</span>
 </template>
@@ -64,8 +72,14 @@ const props = withDefaults(
     firstName?: string | null;
     lastName?: string | null;
     avatarSize?: number;
+    /**
+     * Quiet second line under the name: a doctor's specialty (NEO-57, every
+     * assigned-doctor cell shows "Dr. X" over "Dentist") or a patient's
+     * "F · 47 y". Empty/null keeps the single-line layout.
+     */
+    subtitle?: string | null;
   }>(),
-  { entityType: undefined, firstName: null, lastName: null, avatarSize: 20 },
+  { entityType: undefined, firstName: null, lastName: null, avatarSize: 20, subtitle: null },
 );
 
 const ROUTE_ENTITY_TYPES: Record<string, AppAvatarEntityType> = {
@@ -116,6 +130,26 @@ const avatarProps = computed(() => {
 }
 .entity-link__avatar {
   flex-shrink: 0;
+}
+.entity-link--two-line {
+  gap: 10px;
+}
+.entity-link__text {
+  display: inline-flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+/* The hover underline belongs to the name only, never the specialty line. */
+.entity-link--two-line:hover {
+  text-decoration: none;
+}
+.entity-link--two-line:hover .entity-link__label {
+  text-decoration: underline;
+}
+.entity-link__subtitle {
+  font-size: 0.78125rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 .entity-link__empty {
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));

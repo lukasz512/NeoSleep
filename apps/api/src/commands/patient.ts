@@ -21,24 +21,29 @@ import { ConvertLeadCommand } from "./lead.js";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/**
- * Validates a date of birth: a real calendar date "YYYY-MM-DD", not in the
- * future, not before 1900. Returns the normalized value; empty → null.
- * `today` is injectable for tests.
- */
-export function parseDateOfBirth(value: string | null | undefined, today = new Date()): string | null {
+/** Same set as the identities.gender CHECK constraint (001_tenant_schema.sql). */
+const GENDERS = ["male", "female", "other", "prefer_not_to_say"] as const;
+
+/** undefined = not sent (leave as is), null/"" = clear, otherwise must be a known value. */
+function normalizeGender(value: string | null | undefined): string | null | undefined {
+  if (value === undefined) return undefined;
+  const v = value?.trim() ?? "";
+  if (!v) return null;
+  if (!(GENDERS as readonly string[]).includes(v)) throw new ValidationError("Invalid gender");
+  return v;
+}
+
+/** undefined = not sent, null/"" = clear, otherwise a real calendar date
+ *  (YYYY-MM-DD) between 1900-01-01 and today. */
+function normalizeDateOfBirth(value: string | null | undefined): string | null | undefined {
+  if (value === undefined) return undefined;
   const v = value?.trim() ?? "";
   if (!v) return null;
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
   if (!m) throw new ValidationError("date_of_birth must be YYYY-MM-DD");
-  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
-  const date = new Date(Date.UTC(y, mo - 1, d));
-  if (date.getUTCFullYear() !== y || date.getUTCMonth() !== mo - 1 || date.getUTCDate() !== d) {
-    throw new ValidationError("date_of_birth is not a valid date");
-  }
-  if (y < 1900) throw new ValidationError("date_of_birth cannot be before 1900");
-  const todayUtc = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
-  if (date.getTime() > todayUtc) throw new ValidationError("date_of_birth cannot be in the future");
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  if (d.toISOString().slice(0, 10) !== v) throw new ValidationError("date_of_birth is not a valid date");
+  if (v < "1900-01-01" || d.getTime() > Date.now()) throw new ValidationError("date_of_birth is out of range");
   return v;
 }
 
@@ -52,6 +57,7 @@ export interface CreatePatientInput {
   last_name: string;
   email?: string;
   phone?: string;
+  gender?: string | null;
   date_of_birth?: string | null;
   practitioner_id?: string;
   // Legacy alias: hcp_id maps to practitioner_id
@@ -91,8 +97,6 @@ export async function CreatePatientCommand(
   if (!phone) throw new ValidationError("phone is required");
   if (phone.replace(/\D/g, "").length < 9) throw new ValidationError("Phone must contain at least 9 digits");
 
-  const dateOfBirth = parseDateOfBirth(input.date_of_birth);
-
   // Support legacy hcp_id → practitioner_id
   const practitionerId = input.practitioner_id?.trim() || input.hcp_id?.trim() || undefined;
 
@@ -102,7 +106,8 @@ export async function CreatePatientCommand(
     last_name:      lastName,
     email,
     phone,
-    date_of_birth:  dateOfBirth,
+    gender:         normalizeGender(input.gender) ?? null,
+    date_of_birth:  normalizeDateOfBirth(input.date_of_birth) ?? null,
     practitioner_id: practitionerId,
     diagnosis_code: input.diagnosis_code,
     ahi_baseline:   input.ahi_baseline,
@@ -149,7 +154,7 @@ export interface UpdatePatientPayload {
   last_name?: string;
   email?: string;
   phone?: string;
-  /** "YYYY-MM-DD"; null or "" clears it; undefined leaves it untouched. */
+  gender?: string | null;
   date_of_birth?: string | null;
   practitioner_id?: string;
   hcp_id?: string;
@@ -186,8 +191,6 @@ export async function UpdatePatientCommand(
     if (phone.replace(/\D/g, "").length < 9) throw new ValidationError("Phone must contain at least 9 digits");
   }
 
-  const dateOfBirth = input.date_of_birth !== undefined ? parseDateOfBirth(input.date_of_birth) : undefined;
-
   const before = await getPatientById(ctx.client, id);
   if (!before) return null;
 
@@ -204,7 +207,8 @@ export async function UpdatePatientCommand(
     last_name:      input.last_name?.trim() || undefined,
     email:          input.email !== undefined ? input.email : undefined,
     phone:          input.phone !== undefined ? input.phone : undefined,
-    date_of_birth:  dateOfBirth,
+    gender:         normalizeGender(input.gender),
+    date_of_birth:  normalizeDateOfBirth(input.date_of_birth),
     practitioner_id: practitionerId,
     diagnosis_code: input.diagnosis_code,
     ahi_baseline:   input.ahi_baseline,

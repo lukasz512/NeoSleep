@@ -14,9 +14,9 @@ As a field user on a record's detail page, I want to see at a glance what kind o
 | Question | Answer |
 |---|---|
 | Pattern | **Record header**: a tile with the module icon, the parent list as a small uppercase eyebrow link (`PACJENCI ›`) above the record's name (the only h1), and actions on the right. |
-| Back arrow | **Gone** while there is a record (or one is loading). It returns only when there is nothing to describe (not found / load error). |
-| Phone | **The same block**. The actions sit on the eyebrow row and the name gets its own full-width row below (Salesforce Mobile layout), so even a short name doesn't wrap next to three 56px buttons. |
-| Date of birth in the trail | No. It stays as patient data: form field + first details row (API support from round 2 kept). |
+| Back arrow | **Gone on desktop** while there is a record (or one is loading): the record header replaces AppLayout's "← Module" row. It returns only when there is nothing to describe (not found / load error). |
+| Phone | AppLayout's app bar keeps "← Module" (NEO-55); the card shows tile + actions on one row and the name on its own full-width row below (Salesforce Mobile layout), with no eyebrow, so nothing is duplicated and even a short name doesn't wrap next to three 56px buttons. |
+| Date of birth in the trail | No. It is patient data only (form + details row, as NEO-57 implemented it on `dev`). |
 | Status in the trail | No. The existing badges keep their old place next to the name (HCP "invited", HCO type/status chips). |
 | Active tab in the trail | No. The highlighted tab pill right below says it. |
 | Current page in the trail | No. The h1 is the current page, so the eyebrow lists ancestors only (NHS/GOV.UK rule). |
@@ -37,14 +37,19 @@ As a field user on a record's detail page, I want to see at a glance what kind o
   - The parent crumb (label + icon) is derived from `backRoute`'s nav title.
 - **`AppBreadcrumbs.vue`:** the eyebrow trail (ancestor links only, each followed by ›).
 - **Views:** patient, HCP, HCO, user, lead and document editor pass `record-title`. Their own avatar + h1 title slots are removed. The document editor's `#title` slot was dead before, because the body slot wins; its name now shows in the header.
-- **Patient date of birth:**
-  - API read/create/PATCH + validation (real date, not future, ≥1900). `to_char` keeps it a calendar date, so no MX day-shift.
-  - PWA: form field and the first details row. The month is spelled out (`utils/dateOfBirth.ts`).
-  - Clearing it in the edit form keeps the old value, because the shared FormRenderer drops blank fields (same as every optional patient field).
+- **`usePageHeader.ts` / `AppLayout.vue`:** `provideRecordHeaderClaim` / `useRecordHeaderClaim` — the record header hides AppLayout's desktop page-header row while shown (see the merge section below).
+- **Patient date of birth:** `dev`'s NEO-57 implementation (API, form, details row with age). This branch only adds API round-trip tests for it.
 - **Tests:**
-  - Unit: `ItemDetailLayout.spec.ts`, `AppBreadcrumbs.spec.ts`, `HCODetailView.spec.ts` (tile icon per org type), `dateOfBirth.spec.ts`.
-  - API: `routes/patient.spec.ts` and `commands/patientDateOfBirth.spec.ts` on real Postgres.
+  - Unit: `ItemDetailLayout.spec.ts` (incl. the claim), `AppBreadcrumbs.spec.ts`, `HCODetailView.spec.ts` (tile icon per org type), `AppLayout.spec.ts`.
+  - API: `routes/patient.spec.ts` (date of birth round trip) on real Postgres.
   - Real browsers: `e2e/breadcrumbs.spec.ts` (Chromium/Firefox/WebKit, desktop + phone, DB-free harness).
 
-## Follow-ups
-- NEO-55 (shell relayout, unmerged) reworks the same header area. Expect a merge conflict. B already puts the module name into the card, which is what NEO-55 wants.
+## Merged with NEO-55 and NEO-57 (2026-09-25)
+While this branch was open, NEO-55 (shell relayout) and NEO-57 (clinical-card lists, patient sex/age) landed on `dev`.
+
+**NEO-55:** it moved the back arrow into AppLayout ("← Module" in the desktop page-header row / mobile app bar) and teleports detail actions into that row. Resolution, as Łukasz decided:
+- **Desktop:** the record header **replaces** AppLayout's "← Module" row. `ItemDetailLayout` sets `useRecordHeaderClaim()` while it shows the record header, and AppLayout hides its page-header row (`v-show="!isMobile && !recordHeaderClaim"`). The actions render inline in the record header, not teleported.
+- **Phone:** AppLayout's app bar keeps "← Module" (NEO-55). The record header shows tile + name + actions and **hides the eyebrow**, so nothing is duplicated.
+- **Not found / load error, or views without a record title:** the NEO-55 behaviour is unchanged (AppLayout's arrow, teleported actions).
+
+**NEO-57:** it added `date_of_birth` + `gender` to the patient API, form and details (with age). This branch's own DOB work duplicated it, so `dev`'s version was kept everywhere. Our API validator, form field, details row, `utils/dateOfBirth.ts` and i18n keys are dropped. This branch's DOB API round-trip tests remain and pass against `dev`'s implementation.

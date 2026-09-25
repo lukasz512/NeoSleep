@@ -31,10 +31,14 @@ export interface PatientDto {
   last_name: string;
   email: string | null;
   phone: string | null;
-  /** "YYYY-MM-DD" — the second patient identifier next to the name (NEO-56). */
+  /** male | female | other | prefer_not_to_say | null — the list shows F/M + age (NEO-57) */
+  gender: string | null;
+  /** YYYY-MM-DD or null */
   date_of_birth: string | null;
   practitioner_id: string | null;
   practitioner_name: string | null;
+  /** Doctor's specialty lookup key, labelled via lookups on the client */
+  practitioner_specialty: string | null;
   diagnosis_code: Record<string, unknown> | null;
   ahi_baseline: number | null;
   cpap_device: string | null;
@@ -71,9 +75,11 @@ function toDto(p: Patient & { name: string }, territoryPath: TerritoryPathNode[]
     last_name:       p.last_name,
     email:           p.email ?? null,
     phone:           p.phone ?? null,
+    gender:          p.gender ?? null,
     date_of_birth:   p.date_of_birth ?? null,
     practitioner_id: p.practitioner_id ?? null,
     practitioner_name: p.practitioner_name ?? null,
+    practitioner_specialty: p.practitioner_specialty ?? null,
     diagnosis_code:  p.diagnosis_code ?? null,
     ahi_baseline:    p.ahi_baseline ?? null,
     cpap_device:     p.cpap_device ?? null,

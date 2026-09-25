@@ -1,9 +1,11 @@
 <template>
   <div class="view-item">
     <!-- NEO-56 record header (Salesforce Lightning / Veeva pattern): a tile
-         with the entity's module icon, the parent list as a small eyebrow
-         link above the record's name, actions on the right. Same on every
-         width. The name is never truncated — it is the record's identity. -->
+         with the entity's icon, the parent list as a small eyebrow link above
+         the record's name, actions on the right. On desktop it replaces
+         AppLayout's "← <Module>" page-header row (claimRecordHeader); on
+         phones AppLayout's app bar keeps "← <Module>", so the eyebrow is
+         hidden there. The name is never truncated — it is the record's identity. -->
     <header v-if="showRecordHeader" class="view-item__record-header">
       <div class="view-item__tile" aria-hidden="true">
         <AppIcon v-if="tileIcon" :name="tileIcon" class="view-item__tile-icon" />
@@ -20,27 +22,24 @@
         <slot name="header-actions" />
       </div>
     </header>
-    <!-- No record to describe (not found / load error), or a view without a
-         record title: the plain back arrow row. -->
-    <div v-else class="view-item__header-row">
-      <AppButton
-        icon
-        variant="flat"
-        size="large"
-        :to="backRoute"
-        ignore-global-loading
-        class="view-item__back-btn view-item__back-btn--no-border"
-        :title="backLabel"
-        :aria-label="backLabel"
-      >
-        <AppIcon name="arrow-left" class="view-item__back-icon" />
-      </AppButton>
+    <!-- NEO-55 row for views without a record header (and for not-found /
+         load error): the back arrow is AppLayout's ("← <Module>" in the
+         desktop page header / mobile app bar); this row keeps only the view's
+         own title and actions, the actions teleported up into the page header
+         on desktop. -->
+    <div
+      v-else-if="$slots['header-title'] || $slots['header-actions']"
+      v-show="$slots['header-title'] || pageHeader.disabled.value"
+      class="view-item__header-row"
+    >
       <div v-if="$slots['header-title']" class="view-item__header-title">
         <slot name="header-title" />
       </div>
-      <div v-if="$slots['header-actions']" class="view-item__header-actions">
-        <slot name="header-actions" />
-      </div>
+      <Teleport v-if="$slots['header-actions']" :to="pageHeader.to" defer :disabled="pageHeader.disabled.value">
+        <div class="view-item__header-actions">
+          <slot name="header-actions" />
+        </div>
+      </Teleport>
     </div>
     <slot v-if="hasContent && $slots.body" name="body" />
     <div v-else-if="hasContent" class="view-item__card">
@@ -91,7 +90,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onBeforeUnmount, watchEffect } from "vue";
 import { useI18n } from "vue-i18n";
 import type { RouteLocationRaw } from "vue-router";
 import { AppStateView } from "@ui";
@@ -102,17 +101,23 @@ import AppBreadcrumbs from "./AppBreadcrumbs.vue";
 import type { BreadcrumbItem } from "./AppBreadcrumbs.types";
 import type { AppIconName } from "./AppIcon.vue";
 import { navTitleKey, navIconName } from "../router/routes";
+import { usePageHeaderTeleport, releasePageHeaderForDescendants, useRecordHeaderClaim } from "../composables/usePageHeader";
 
 const { t } = useI18n();
+
+// This view's actions claim the page header; lists nested in its sections
+// (e.g. OrganizationPractitionersPanel) must keep their toolbars inline.
+const pageHeader = usePageHeaderTeleport();
+releasePageHeaderForDescendants();
 
 const props = withDefaults(defineProps<{
   /** Whether item data is loaded and present. */
   hasContent: boolean;
   /** Whether still loading. */
   loading: boolean;
-  /** Route for back button. */
+  /** Route of the parent list: the record header's eyebrow link, and the not-found state's "back to list" button. */
   backRoute: RouteLocationRaw;
-  /** Label for back button. */
+  /** Label for the not-found state's "back to list" button. */
   backLabel: string;
   /** Optional title (used when no title slot). */
   title?: string;
@@ -153,6 +158,16 @@ const tileIcon = computed(() => props.recordIcon ?? parentCrumb.value?.icon);
 const showRecordHeader = computed(
   () => !!parentCrumb.value && props.recordTitle !== undefined && (props.hasContent || props.loading),
 );
+
+// While the record header is shown it replaces AppLayout's desktop
+// "← <Module>" page-header row (NEO-55) — the eyebrow link is the way back.
+const recordHeaderClaim = useRecordHeaderClaim();
+watchEffect(() => {
+  recordHeaderClaim.value = showRecordHeader.value;
+});
+onBeforeUnmount(() => {
+  recordHeaderClaim.value = false;
+});
 
 defineEmits<{
   retry: [];
@@ -250,16 +265,16 @@ defineEmits<{
   }
 }
 
-/* Phone (Salesforce Mobile pattern): tile + eyebrow + actions on the first
-   row, the name on its own full-width row below — three 56px actions next to
-   the name would otherwise wrap even a short name onto two lines. */
+/* Phone (Salesforce Mobile pattern): tile + actions on the first row, the
+   name on its own full-width row below — three 56px actions next to the name
+   would otherwise wrap even a short name onto two lines. */
 @media (max-width: 767.98px) {
   .view-item__record-header {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
     grid-template-rows: minmax(56px, auto) auto;
     grid-template-areas:
-      "tile eyebrow actions"
+      "tile . actions"
       "title title title";
     align-items: center;
     column-gap: 12px;
@@ -268,7 +283,8 @@ defineEmits<{
   }
   .view-item__record-header .view-item__tile { grid-area: tile; }
   .view-item__record-header .view-item__record-text { display: contents; }
-  .view-item__record-header .view-item__eyebrow { grid-area: eyebrow; }
+  /* AppLayout's mobile app bar already shows "← <Module>" (NEO-55). */
+  .view-item__record-header .view-item__eyebrow { display: none; }
   .view-item__record-header .view-item__record-title-row { grid-area: title; }
   .view-item__record-header .view-item__header-actions { grid-area: actions; }
   .view-item__tile {
@@ -285,31 +301,11 @@ defineEmits<{
   }
 }
 
-.view-item__back-btn {
-  min-height: var(--pwa-btn-min-height, 44px);
-  min-width: var(--pwa-btn-min-width, 44px);
-  color: var(--pwa-text, rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity)));
-}
-
-.view-item__back-btn--no-border {
-  border: none;
-  box-shadow: none;
-  background: transparent;
-
-  &:hover {
-    background: rgba(var(--v-theme-on-surface), 0.08);
-  }
-}
-
-.view-item__back-icon {
-  width: 24px;
-  height: 24px;
-  display: block;
-}
-
 /* Not a visual card on purpose — no surface, no border, no inset padding: the
    entity content sits directly on the page background (same color as the rest
-   of the view), aligned with the header row above it. */
+   of the view), aligned with the header row above it — i.e. on the same page
+   gutter as lists and the "← Module" header (AppLayout's --layout-card-inset,
+   NEO-55). */
 .view-item__card {
   background: transparent;
   border: none;
