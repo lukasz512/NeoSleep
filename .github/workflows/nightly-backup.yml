@@ -1,0 +1,129 @@
+# Nightly encrypted backup of the Supabase database + Storage files (NEO-62).
+#
+# Supabase Free plan has no restorable backups, and the DB holds medical data.
+# Every night this job:
+#   1. pg_dumps the whole database (all tenant schemas, platform, public)
+#   2. restores that dump into a throwaway Postgres and checks every app schema
+#      came back with the same table count (fails the run if not)
+#   3. copies every object from every Supabase Storage bucket
+#   4. encrypts both archives with `age` to a PUBLIC key. The private key lives
+#      only offline with Łukasz, never in GitHub or GCP.
+#   5. uploads them to a GCS bucket (Mexico region) via keyless Workload
+#      Identity Federation. The service account can create objects only; the
+#      bucket's 30-day retention policy means nobody can delete them early.
+#
+# Nothing unencrypted is ever uploaded as a workflow artifact.
+# Restore procedure: docs/RUNBOOK_BACKUP_RESTORE.md
+# Setup (GCP bucket, WIF, secrets): same runbook, "One-time setup".
+
+name: Nightly backup (DB + Storage)
+
+on:
+  schedule:
+    # 09:00 UTC = 03:00 in Mexico City, the quietest hour for the active market.
+    - cron: "0 9 * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: nightly-backup
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write # Workload Identity Federation (keyless GCP auth)
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      restore-check:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: restore_check_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Postgres 17 client and age
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y -qq postgresql-client-17 age
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      - name: Prepare work dir and file names
+        run: |
+          WORK="$RUNNER_TEMP/backup"
+          mkdir -p "$WORK"
+          STAMP="$(date -u +%Y-%m-%dT%H%MZ)"
+          {
+            echo "WORK=$WORK"
+            echo "STAMP=$STAMP"
+            echo "GCS_PREFIX=$(date -u +%Y/%m/%d)"
+          } >> "$GITHUB_ENV"
+
+      - name: Dump database
+        env:
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+        run: |
+          pg_dump --format=custom --compress=6 --no-password \
+            --file="$WORK/neosleep-db-$STAMP.dump" "$DATABASE_URL"
+          ls -lh "$WORK"
+
+      - name: Verify dump restores cleanly
+        env:
+          RESTORE_URL: postgresql://postgres:restore_check_only@localhost:5432/postgres
+        run: bash infrastructure/scripts/nightly-backup/restore-check.sh "$WORK/neosleep-db-$STAMP.dump"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Export Storage files
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          TOOL="$RUNNER_TEMP/storage-export"
+          mkdir -p "$TOOL"
+          cp infrastructure/scripts/nightly-backup/storage-export.mjs "$TOOL/"
+          (cd "$TOOL" && npm init -y >/dev/null && npm install --silent @supabase/supabase-js@2)
+          node "$TOOL/storage-export.mjs" "$WORK/storage"
+          tar -C "$WORK" -czf "$WORK/neosleep-storage-$STAMP.tar.gz" storage
+          rm -rf "$WORK/storage"
+
+      - name: Encrypt archives
+        env:
+          AGE_RECIPIENT: ${{ secrets.BACKUP_AGE_RECIPIENT }}
+        run: |
+          mkdir -p "$WORK/out"
+          for f in "$WORK/neosleep-db-$STAMP.dump" "$WORK/neosleep-storage-$STAMP.tar.gz"; do
+            age --encrypt --recipient "$AGE_RECIPIENT" --output "$WORK/out/$(basename "$f").age" "$f"
+            rm -f "$f"
+          done
+          ls -lh "$WORK/out"
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_BACKUP_SERVICE_ACCOUNT }}
+
+      - name: Upload to GCS
+        uses: google-github-actions/upload-cloud-storage@v2
+        with:
+          path: ${{ env.WORK }}/out
+          destination: ${{ secrets.GCS_BACKUP_BUCKET }}/${{ env.GCS_PREFIX }}
+          parent: false
+          process_gcloudignore: false
+
+      - name: Remove local copies
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/backup"
