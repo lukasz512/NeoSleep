@@ -242,10 +242,12 @@ Attach it to the ticket via `save_issue`'s `links` param. Then write `.claude/lo
   "hoisting": "platform | client:<slug>",
   "sections": ["summary", "run-locally", "qa-checklist"],
   "testCoverageMap": [ { "ac": "<short AC text>", "tests": ["<file> › <test name>"] } ],
-  "visualComparison": "<omit only when no .vue/.css file changed; otherwise a short note on what before/after evidence exists and where — e.g. 'mockup embedded in artifact What changed section' or 'docs/worker-screenshots/<ticket>/before.png + after.png'>"
+  "visualComparison": "<omit only when no .vue/.css file changed; otherwise a short note on what before/after evidence exists and where — e.g. 'mockup embedded in artifact What changed section' or 'docs/worker-screenshots/<ticket>/before.png + after.png'>",
+  "linearAttached": true,
+  "linearCommented": true
 }
 ```
-This is the same marker schema `quality-gate.sh` enforces for interactive sessions — one convention, two enforcement paths. `quality-gate.sh` triggers this on any `.vue`/`.css` change (its `VISUAL_SHAPE` check), independent of whether the ticket also counts as `FEATURE_SHAPE` (new view/route/migration) — a layout- or component-only diff needs this exactly as much as a new view does.
+This is the same marker schema `quality-gate.sh` enforces for interactive sessions — one convention, two enforcement paths. `linearAttached`/`linearCommented` record the `links` attachment above and the Step 9 comment. Interactive sessions build the same page with `/ship-artifact` (`.claude/skills/ship-artifact/build.mjs` renders it from one template). `quality-gate.sh` triggers this on any `.vue`/`.css` change (its `VISUAL_SHAPE` check), independent of whether the ticket also counts as `FEATURE_SHAPE` (new view/route/migration) — a layout- or component-only diff needs this exactly as much as a new view does.
 
 - Commit with a clear message (screenshot PNGs, if produced, are included in this same commit). Include a co-authorship trailer identifying this as agent work, same convention as any Claude-authored commit in this repo, so `git blame` is never ambiguous about human vs. agent authorship.
 - Branch name: `worker/<linear-ticket-id>-<kebab-slug-of-title>`, created from `dev` (this repo's default branch — confirm via `git remote show origin` if unsure, never assume `main`).
