@@ -379,6 +379,7 @@ import {
   leadStatusClass,
   leadStatusI18nKey,
   leadInstitution,
+  leadNationalIds,
 } from "../utils/leadStatus";
 import { hcoListLink } from "../utils/entityLinks";
 import EntityLink from "../components/EntityLink.vue";
@@ -445,6 +446,7 @@ const moveToDoctorsInitialData = computed(() =>
         // isCreatingNewOrganization() resolves it against the loaded clinic list
         // once options finish loading (see hcpForm.ts).
         organization_id: leadInstitution(lead.value),
+        national_ids: leadNationalIds(lead.value),
       }
     : undefined,
 );
@@ -456,6 +458,8 @@ const inviteInitialData = computed(() =>
         first_name: lead.value.first_name,
         last_name: lead.value.last_name,
         email: lead.value.email ?? "",
+        region: lead.value.region,
+        national_ids: leadNationalIds(lead.value),
       }
     : undefined,
 );
