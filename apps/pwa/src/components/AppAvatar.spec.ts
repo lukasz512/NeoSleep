@@ -59,6 +59,20 @@ describe("AppAvatar (non-hco entity types)", () => {
   });
 });
 
+describe("AppAvatar (doctor badge, NEO-57)", () => {
+  it("gives a doctor a stethoscope badge and keeps their initials", () => {
+    const wrapper = mountAvatar({ entityType: "hcp", name: "Lorena González", size: 32 });
+    expect(wrapper.find("[data-testid=app-avatar-doctor-badge]").exists()).toBe(true);
+    expect(wrapper.find(".app-avatar__initials").text()).toBe("LG");
+  });
+
+  it("shows the badge at every size, and never for other identities", () => {
+    expect(mountAvatar({ entityType: "patient", name: "Anna Nowak" }).find("[data-testid=app-avatar-doctor-badge]").exists()).toBe(false);
+    expect(mountAvatar({ entityType: "hco" }).find("[data-testid=app-avatar-doctor-badge]").exists()).toBe(false);
+    expect(mountAvatar({ entityType: "hcp", name: "Jan Kowalski", size: 16 }).find("[data-testid=app-avatar-doctor-badge]").exists()).toBe(true);
+  });
+});
+
 describe("AppAvatar (identity tint, NEO-57)", () => {
   it("tints each identity type with its own tone class", () => {
     expect(mountAvatar({ entityType: "patient", name: "Mateusz Dotestowania" }).classes()).toContain("app-avatar--patient");

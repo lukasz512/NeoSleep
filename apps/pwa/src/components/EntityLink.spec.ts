@@ -151,9 +151,14 @@ describe("EntityLink — large identity (NEO-57)", () => {
     expect(wrapper.find(".identity-details__more").text()).toBe("+1");
   });
 
+  it("keeps +N next to the first value it belongs to", () => {
+    const wrapper = mountLink({ to: null, label: "Dra. Ana López", entityType: "hcp", details: ["Dentist", "Clínica Polanco"], moreDetails: ["Orthodontist"] });
+    expect(wrapper.find(".identity-details").text()).toMatch(/^Dentist\s*\+1\s*·\s*Clínica Polanco$/);
+  });
+
   it("joins several details with a middle dot, no labels", () => {
     const wrapper = mountLink({ to: null, label: "Ana López", entityType: "patient", details: ["F", "47 y"] });
-    expect(wrapper.find(".identity-details").text()).toBe("F · 47 y");
+    expect(wrapper.find(".identity-details").text()).toMatch(/^F\s*·\s*47 y$/);
   });
 
   it("is the small identity (name only) when there are no details", () => {

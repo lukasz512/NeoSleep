@@ -7,6 +7,11 @@
     <VImg v-if="avatarUrl" :src="avatarUrl" :alt="name || ''" cover />
     <span v-else-if="initials" class="app-avatar__initials" :style="{ fontSize: initialsFontSize }">{{ initials }}</span>
     <AppIcon v-else :name="iconName" class="app-avatar__icon" />
+    <!-- Doctor badge (NEO-57): a small stethoscope disc on the bottom-right
+         corner, so a doctor reads as a doctor while keeping their initials. -->
+    <span v-if="showDoctorBadge" class="app-avatar__badge" data-testid="app-avatar-doctor-badge" aria-hidden="true">
+      <AppIcon name="nav-hcp" class="app-avatar__badge-icon" />
+    </span>
   </VAvatar>
 </template>
 
@@ -75,6 +80,7 @@ const initials = computed(() => {
   return props.name?.trim() ? getInitials(props.name) : "";
 });
 const tone = computed(() => identityTone(props.entityType));
+
 const iconName = computed(() =>
   props.entityType === "hco" ? hcoTypeIcon(props.orgType ?? undefined) : ENTITY_ICONS[props.entityType],
 );
@@ -88,6 +94,9 @@ const FIBONACCI_INITIALS_RATIO = 21 / 55;
 // resolve their real pixel size only via CSS, so callers relying on that
 // must also pass the equivalent numeric size for this calculation.
 const sizePx = computed(() => (typeof props.size === "number" ? props.size : parseFloat(String(props.size)) || 40));
+// Every doctor avatar carries the badge, at every size — the disc has its
+// own minimum size (CSS below), so it stays readable on a 20px mention.
+const showDoctorBadge = computed(() => props.entityType === "hcp");
 const initialsFontSize = computed(() => `${Math.max(sizePx.value * FIBONACCI_INITIALS_RATIO, 8)}px`);
 
 </script>
@@ -100,10 +109,62 @@ const initialsFontSize = computed(() => `${Math.max(sizePx.value * FIBONACCI_INI
      with no visible arc joint, at every size from an 18px mention to the
      56px header, because the mask scales with the element. */
   border-radius: 0 !important;
+  /* The tint and the squircle live on ::before, not on the avatar itself:
+     masking the avatar would also clip the doctor badge that sits over its
+     corner. A photo gets the same mask directly (below). */
+  overflow: visible !important;
+  position: relative;
+  isolation: isolate;
+  background: transparent;
+  color: var(--app-avatar-fg);
+}
+
+.app-avatar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--app-avatar-bg);
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 0C88 0 100 12 100 50S88 100 50 100 0 88 0 50 12 0 50 0Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 0C88 0 100 12 100 50S88 100 50 100 0 88 0 50 12 0 50 0Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
-  background: var(--app-avatar-bg);
-  color: var(--app-avatar-fg);
+}
+
+.app-avatar :deep(.v-img) {
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 0C88 0 100 12 100 50S88 100 50 100 0 88 0 50 12 0 50 0Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 0C88 0 100 12 100 50S88 100 50 100 0 88 0 50 12 0 50 0Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+}
+
+.app-avatar__badge {
+  position: absolute;
+  /* Fixed small overhang (not a % of the avatar): enough to sit on the
+     corner, never so much that a table cell or card clips it. The disc is
+     never smaller than 13px, so the stethoscope stays legible on a 20px
+     mention; on big avatars it scales with them. */
+  right: -3px;
+  bottom: -3px;
+  width: max(44%, 13px);
+  height: max(44%, 13px);
+  z-index: 1;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--pwa-identity-doctor);
+  color: rgb(var(--v-theme-surface));
+  /* Ring in the surface color separates the disc from the avatar under it. */
+  box-shadow: 0 0 0 2px rgb(var(--v-theme-surface));
+}
+
+/* Nudge a doctor's initials up-left, away from the badge in the corner,
+   so neither covers the other on small avatars. */
+.app-avatar--doctor .app-avatar__initials {
+  transform: translate(-10%, -10%);
+}
+
+.app-avatar__badge-icon {
+  width: 72%;
+  height: 72%;
+  /* Thicker than the icon's own stroke so it survives at ~9px. */
+  stroke-width: 2.8 !important;
 }
 
 .app-avatar--patient { --app-avatar-bg: var(--pwa-identity-patient-soft); --app-avatar-fg: var(--pwa-identity-patient); }
@@ -111,7 +172,7 @@ const initialsFontSize = computed(() => `${Math.max(sizePx.value * FIBONACCI_INI
 .app-avatar--org     { --app-avatar-bg: var(--pwa-identity-org-soft);     --app-avatar-fg: var(--pwa-identity-org); }
 .app-avatar--person  { --app-avatar-bg: var(--pwa-identity-person-soft);  --app-avatar-fg: var(--pwa-identity-person); }
 
-.app-avatar--photo {
+.app-avatar--photo::before {
   background: transparent;
 }
 
