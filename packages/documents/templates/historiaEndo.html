@@ -102,6 +102,7 @@
   table.checklist { width: 100%; border-collapse: collapse; margin: 0 0 10px; }
   table.checklist td { padding: 3px 6px 3px 0; border-bottom: 1px solid #eee; font-size: 9pt; }
   table.checklist td.q-answer { text-align: right; font-weight: 600; color: var(--primary); width: 60px; }
+  .doc-notes { --doc-notes-line: 24px; --doc-notes-font: 9pt; }
   .blank-section { border: 1px solid #ddd; border-radius: 4px; padding: 10px; min-height: 60px; margin: 0 0 10px; color: var(--secondary); font-size: 8.5pt; }
 
 
@@ -125,7 +126,8 @@
   <h2>{{documents.historiaEndo.subtitle}}</h2>
 
   <dl class="doc-fields">
-    <div class="doc-field doc-field--wide"><dt>{{documents.historiaEndo.fieldPatientName}}</dt><dd data-field="nombre_paciente"></dd></div>
+    <div class="doc-field doc-field--patient"><dt>{{documents.historiaEndo.fieldPatientName}}</dt><dd data-field="nombre_paciente"></dd></div>
+    <div class="doc-field doc-field--short"><dt>{{documents.fieldBirthDate}}</dt><dd data-field="fecha_nacimiento"></dd></div>
     <div class="doc-field"><dt>{{documents.historiaEndo.fieldPractitioner}}</dt><dd data-field="nombre_medico"></dd></div>
     <div class="doc-field"><dt>{{documents.historiaEndo.fieldClinic}}</dt><dd data-field="nombre_clinica"></dd></div>
     <div class="doc-field doc-field--short"><dt>{{documents.historiaEndo.fieldDate}}</dt><dd data-field="fecha"></dd></div>

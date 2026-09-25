@@ -96,8 +96,10 @@ branch_artifact_check() {
   # Once the branch is pushed, the Artifact must carry a "Create PR" button at the top
   # (Łukasz, 2026-09-24: "niech pr przycisk będzie na górze artefaktu") — the pre-filled
   # compare URL from CLAUDE.md's Linear traceability section. He still clicks Create himself.
+  # Once he has opened the PR, ship-artifact's build.mjs links the button to it instead
+  # (…/pull/<n>) — accept that too, or every refresh after the PR exists would be blocked.
   if git rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1; then
-    jq -e '(.prUrl // "") | test("^https://github.com/.+/compare/")' "$marker" >/dev/null 2>&1 \
+    jq -e '(.prUrl // "") | test("^https://github.com/.+/(compare/|pull/[0-9]+$)")' "$marker" >/dev/null 2>&1 \
       || FAILS+=("$marker has no 'prUrl' but '${BRANCH}' is pushed — put a 'Create PR' button (pre-filled https://github.com/<org>/<repo>/compare/dev...<branch>?quick_pull=1&title=…&body=… URL) at the TOP of the Artifact, republish, and record it as 'prUrl'.")
   fi
   visual="$(printf '%s\n' "$BRANCH_CHANGED" | grep -E '\.(vue|css|scss)$' || true)"

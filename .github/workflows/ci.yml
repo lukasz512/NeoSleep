@@ -149,6 +149,16 @@ jobs:
       - name: Test — pwa e2e (blocking)
         run: pnpm --filter @neo/pwa test:e2e
 
+      # Page snapshot + trace of each failing e2e test — the log alone only
+      # says "element not found", not what the page showed instead.
+      - name: Upload e2e failure traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pwa-e2e-test-results
+          path: apps/pwa/test-results/
+          retention-days: 7
+
   # The API ships as a Docker image to Cloud Run (NEO-45, deploy-api.yml). Build it on
   # every PR/push so a broken Dockerfile fails here, not during a deploy. Build only,
   # nothing is pushed.

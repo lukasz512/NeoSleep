@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeAll } from "vitest";
 import bcrypt from "bcrypt";
-import { withTenant, insertStaffUser, insertPatient, insertSleepStudy, getGlobalTerritoryId } from "../db.js";
+import { withTenant, insertStaffUser, insertPatient, insertPractitioner, insertSleepStudy, getGlobalTerritoryId } from "../db.js";
 import { withPlatform } from "../db/tenant.js";
 import { insertDocumentContentVersion } from "../db/documentContent.js";
 import type { TenantContext } from "../context/TenantContext.js";
@@ -22,6 +22,19 @@ vi.mock("../services/partnerDocuments.js", async (importActual) => ({
   uploadPartnerDocument: uploadMock,
   deletePartnerDocument: deleteMock,
 }));
+
+// Still the real renderer — only wrapped, to read back which fields each print sent.
+const { renderSpy } = vi.hoisted(() => ({ renderSpy: vi.fn() }));
+vi.mock("../services/documentRenderer.js", async (importActual) => {
+  const actual = await importActual<typeof import("../services/documentRenderer.js")>();
+  return {
+    ...actual,
+    renderHtmlToPdf: async (...args: Parameters<typeof actual.renderHtmlToPdf>) => {
+      renderSpy(...args);
+      return actual.renderHtmlToPdf(...args);
+    },
+  };
+});
 
 const TENANT_SLUG = process.env.DEFAULT_TENANT_SLUG ?? "test";
 type Client = TenantContext["client"];
@@ -171,4 +184,52 @@ describe("PrintChecklistItemCommand (real rendering)", () => {
       await expect(PrintChecklistItemCommand(ctx, patient.id, "polysomnography")).rejects.toThrow(ValidationError);
     });
   }, 90000);
+
+  const PATIENT_FORMS = ["medicalHistory", "oralExam", "historiaEndo", "informedConsent", "stopBang"];
+
+  /** Prints every patient form and returns the header fields each one was filled with. */
+  async function printHeaders(ctx: TenantContext, patientId: string) {
+    const headers = [];
+    for (const key of PATIENT_FORMS) {
+      renderSpy.mockClear();
+      await PrintChecklistItemCommand(ctx, patientId, key);
+      const [html, options] = renderSpy.mock.calls[0] as [string, { dataFields: Record<string, string> }];
+      for (const field of ["nombre_paciente", "fecha_nacimiento", "nombre_medico"]) expect(html, `${key} has ${field}`).toContain(`data-field="${field}"`);
+      const { nombre_paciente, fecha_nacimiento, nombre_medico } = options.dataFields;
+      headers.push({ key, nombre_paciente, fecha_nacimiento, nombre_medico });
+    }
+    return headers;
+  }
+
+  it("every patient form prints the patient (name + date of birth) and the patient's own doctor", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const doctor = await insertPractitioner(client, { first_name: "Elena", last_name: `Linked-${uniqueSuffix()}` });
+      const patient = await insertPatient(client, { first_name: "Ana", last_name: "Headers", date_of_birth: "1980-03-07", practitioner_id: doctor.id });
+
+      for (const header of await printHeaders(ctx, patient.id)) {
+        expect(header.nombre_paciente, header.key).toContain("Ana Headers");
+        expect(header.fecha_nacimiento, header.key).toBe("07/03/1980");
+        expect(header.nombre_medico, header.key).toContain("Elena Linked-");
+      }
+    });
+  }, 120000);
+
+  it("a patient without a linked doctor prints the doctor who prints it; a non-doctor leaves the line blank", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      await insertPractitioner(client, { first_name: "QA", last_name: "Doctor", email: ctx.user.email }); // same identity as the printing user (ADR-014)
+      const patient = await newPatient(client);
+
+      for (const header of await printHeaders(ctx, patient.id)) {
+        expect(header.nombre_medico, header.key).toContain("QA Doctor");
+        expect(header.fecha_nacimiento, header.key).toBe(""); // unknown → blank line to fill by hand
+      }
+
+      const staff = await buildContext(client); // a users row with no practitioner behind it
+      renderSpy.mockClear();
+      await PrintChecklistItemCommand(staff, patient.id, "oralExam");
+      expect((renderSpy.mock.calls[0] as [string, { dataFields: Record<string, string> }])[1].dataFields.nombre_medico).toBe("");
+    });
+  }, 120000);
 });

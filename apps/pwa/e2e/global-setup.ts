@@ -36,6 +36,11 @@ async function warmUpDevServer(baseURL: string): Promise<void> {
     await page.getByRole("button", { name: "Sign in" }).click();
     await page.waitForURL("**/dashboard");
     await page.waitForLoadState("networkidle");
+    // Public pages outside the logged-in shell compile separately — the
+    // partner-registration specs' first page.goto timed out in WebKit on PR #233.
+    // An invalid token is enough: the view and its children still get compiled.
+    await page.goto("/partner-register?token=warm-up");
+    await page.waitForLoadState("networkidle");
   } finally {
     await browser.close();
   }

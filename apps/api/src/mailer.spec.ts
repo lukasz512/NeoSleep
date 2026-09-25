@@ -36,6 +36,7 @@ async function importMailer(configured: boolean, overrides: Record<string, strin
     RESEND_API_KEY: configured ? "re_test_key" : undefined,
     RESEND_FROM_EMAIL: configured ? "noreply@mail.neosleepcare.com" : undefined,
     RESEND_NOTIFY_TO: configured ? "admin@neosleepcare.com" : undefined,
+    PARTNER_DOCS_CC_EMAIL: undefined,
     ...overrides,
   }));
   vi.resetModules();
@@ -106,6 +107,22 @@ describe("mailer — configured", () => {
     const call = sendMock.mock.calls[0]![0];
     expect(call.to).toBe("hcp@example.com");
     expect(call.html).toContain(registerLink);
+  });
+
+  it("sendSignedDocumentsEmail addresses the doctor formally by title + name and links to login", async () => {
+    const { sendSignedDocumentsEmail } = await importMailer(true);
+    const loginLink = "https://pwa.neosleepcare.com/login";
+    const doc = { filename: "agreement.pdf", content: Buffer.from("%PDF") };
+
+    await sendSignedDocumentsEmail("jan@example.com", { ...RECIPIENT, language: "pl", title: null, firstName: "Jan", lastName: "Kowalski" }, [doc], loginLink);
+
+    const call = sendMock.mock.calls[0]![0];
+    expect(call.html).toContain("Dr Jan Kowalski,");
+    expect(call.html).not.toContain("Cześć");
+    expect(call.html).not.toContain("jan@example.com,");
+    expect(call.html).toContain(loginLink);
+    expect(call.html).toContain("Zaloguj się do NeoSleep");
+    expect(call.attachments).toEqual(expect.arrayContaining([expect.objectContaining({ filename: "agreement.pdf" })]));
   });
 
   it("logs and rethrows when Resend returns an API error", async () => {
