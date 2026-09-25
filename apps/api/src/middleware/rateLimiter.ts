@@ -18,6 +18,20 @@ export const inviteAcceptLimiter = rateLimit({
   message: { error: "Too many requests, please try again later" },
 });
 
+/**
+ * Applied to GET /invite/document — public, token-gated (NEO-51). A doctor
+ * opens each of the 2 documents, maybe re-opens after editing details —
+ * 30 per 15 minutes per IP is generous for that and still caps scraping the
+ * signatory's signature image with a leaked token.
+ */
+export const invitePreviewLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later" },
+});
+
 /** Applied to GET /booking/slots and POST /booking/book — public, unauthenticated; 20 requests per 15 minutes per IP. */
 export const bookingLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

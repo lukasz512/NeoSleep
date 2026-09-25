@@ -3,8 +3,19 @@
     <div ref="wrapperRef" class="signature-pad__canvas-wrap">
       <canvas ref="canvasRef" class="signature-pad__canvas" />
       <span v-if="isEmpty" class="signature-pad__placeholder">{{ placeholder }}</span>
+      <AppButton
+        v-if="clearPlacement === 'overlay'"
+        variant="outlined"
+        size="small"
+        class="signature-pad__clear-overlay"
+        :disabled="isEmpty"
+        @click="clear"
+      >
+        <template #prepend><AppIcon name="close" /></template>
+        {{ clearLabel }}
+      </AppButton>
     </div>
-    <div class="signature-pad__actions">
+    <div v-if="clearPlacement !== 'overlay'" class="signature-pad__actions">
       <AppButton variant="text" size="small" @click="clear">{{ clearLabel }}</AppButton>
     </div>
   </div>
@@ -14,6 +25,7 @@
 import { ref, onMounted, onBeforeUnmount, shallowRef } from "vue";
 import SignaturePadLib from "signature_pad";
 import AppButton from "./AppButton.vue";
+import AppIcon from "./AppIcon.vue";
 
 /**
  * Thin wrapper around the `signature_pad` library — captures a handwritten
@@ -24,10 +36,15 @@ import AppButton from "./AppButton.vue";
  * parent decides when to read the signature (on submit), not on every stroke.
  */
 
-defineProps<{
+const { clearPlacement = "below" } = defineProps<{
   placeholder?: string;
   clearLabel: string;
+  /** "overlay" puts Clear on the pad's own top-right corner, right where the signer is looking (NEO-51). */
+  clearPlacement?: "below" | "overlay";
 }>();
+
+/** Fires whenever the pad goes from empty to signed or back — lets a parent enable/disable its own "Sign" action. */
+const emit = defineEmits<{ change: [empty: boolean] }>();
 
 const wrapperRef = ref<HTMLDivElement | null>(null);
 const canvasRef = ref<HTMLCanvasElement | null>(null);
@@ -56,6 +73,7 @@ onMounted(() => {
   pad.value = new SignaturePadLib(canvas, { backgroundColor: "rgba(255,255,255,0)" });
   pad.value.addEventListener("endStroke", () => {
     isEmpty.value = pad.value?.isEmpty() ?? true;
+    emit("change", isEmpty.value);
   });
   resizeCanvas();
   resizeObserver = new ResizeObserver(resizeCanvas);
@@ -70,6 +88,7 @@ onBeforeUnmount(() => {
 function clear() {
   pad.value?.clear();
   isEmpty.value = true;
+  emit("change", true);
 }
 
 function toDataURL(): string | null {
@@ -123,5 +142,15 @@ defineExpose({ isEmpty: isEmptyValue, clear, toDataURL });
 .signature-pad__actions {
   display: flex;
   justify-content: flex-end;
+}
+
+.signature-pad__clear-overlay {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  background: rgba(var(--v-theme-surface), 1);
+  text-transform: none;
+  letter-spacing: normal;
 }
 </style>

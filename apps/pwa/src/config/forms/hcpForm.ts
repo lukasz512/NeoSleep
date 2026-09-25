@@ -4,6 +4,7 @@ import { useConfigStore } from "../../stores/config";
 import { useAuthStore } from "../../stores/auth";
 import { identityFields } from "./identityFields";
 import { loadTerritoryOptions } from "./territoryOptions";
+import { licenseNumberFields } from "./licenseNumberFields";
 
 /**
  * Practitioner (HCP) entity config for the generic FormRenderer. Reuses the
@@ -322,14 +323,9 @@ export const hcpFormFields: FormFieldDef[] = [
     hidden: true,
     default: () => useAuthStore().user?.language ?? "en",
   },
-  {
-    key: "primary",
-    type: "text",
-    labelKey: "user.hcp.form.nationalId",
-    icon: "id-card",
-    nestUnder: "national_ids",
-    cols: 12,
-  },
+  // PL PWZ / MX cédula — replaces the old generic "National ID" field
+  // (national_ids.primary), migrated by apps/api/migrations/028 (NEO-51).
+  ...licenseNumberFields({ nestUnder: "national_ids" }),
   {
     key: "linkedin",
     type: "text",
