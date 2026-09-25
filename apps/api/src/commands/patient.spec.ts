@@ -37,6 +37,8 @@ async function createTestPatient(ctx: TenantContext, territoryId: string | null)
     last_name: `Test-${uniqueSuffix()}`,
     email: `qa-patient-${uniqueSuffix()}@example.com`,
     phone: "600100200",
+    gender: "female",
+    date_of_birth: "1980-05-17",
     territory_id: territoryId,
   });
 }
