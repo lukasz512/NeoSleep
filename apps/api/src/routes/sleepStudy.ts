@@ -10,7 +10,7 @@ import { UploadSleepStudyAttachmentCommand, DeleteSleepStudyAttachmentCommand } 
 import { GetSleepStudyListQuery, GetSleepStudyByIdQuery } from "../queries/sleepStudy.js";
 import { GetSleepStudyAttachmentsQuery, GetSleepStudyAttachmentDownloadUrlQuery } from "../queries/sleepStudyAttachment.js";
 import { ValidationError } from "../errors.js";
-import { parsePaginationParams } from "./utils.js";
+import { parsePaginationParams, routeParam } from "./utils.js";
 
 // In-memory buffer — attachments are small PDFs (results reports), never
 // streamed to disk. 15MB is generous headroom over a typical few-hundred-KB
@@ -129,7 +129,7 @@ sleepStudyRouter.get(
   "/sleep-study/:id",
   requireClinicalRole,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing sleep study id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -171,7 +171,7 @@ sleepStudyRouter.patch(
   "/sleep-study/:id",
   requireClinicalRole,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing sleep study id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -193,7 +193,7 @@ sleepStudyRouter.get(
   "/sleep-study/:id/attachments",
   requireClinicalRole,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing sleep study id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -213,7 +213,7 @@ sleepStudyRouter.post(
   requireClinicalRole,
   upload.single("file"),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing sleep study id");
     if (!req.file) throw new ValidationError("file is required");
 
@@ -238,8 +238,8 @@ sleepStudyRouter.get(
   "/sleep-study/:id/attachments/:attachmentId/download",
   requireClinicalRole,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
-    const attachmentId = req.params.attachmentId?.trim();
+    const id = routeParam(req, "id")?.trim();
+    const attachmentId = routeParam(req, "attachmentId")?.trim();
     if (!id || !attachmentId) throw new ValidationError("Missing sleep study id or attachment id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -258,8 +258,8 @@ sleepStudyRouter.delete(
   "/sleep-study/:id/attachments/:attachmentId",
   requireClinicalRole,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
-    const attachmentId = req.params.attachmentId?.trim();
+    const id = routeParam(req, "id")?.trim();
+    const attachmentId = routeParam(req, "attachmentId")?.trim();
     if (!id || !attachmentId) throw new ValidationError("Missing sleep study id or attachment id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -278,7 +278,7 @@ sleepStudyRouter.delete(
   "/sleep-study/:id",
   requireRole("admin"),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing sleep study id");
 
     const slug = tenantSlugFromHost(req.hostname);
