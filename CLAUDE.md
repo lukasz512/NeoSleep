@@ -115,6 +115,7 @@ pnpm worktree:clean    # Dry-run: which worktrees/branches look closed (use /wor
 ## Git / PR Workflow
 - Never push directly to `dev`, `prod`, or any shared branch — always branch, commit, `git push -u origin <branch>`, and give the user the GitHub "create a pull request" link GitHub prints after the push (`https://github.com/<org>/<repo>/pull/new/<branch>`).
 - **The PR itself is always created by the user, never by Claude/CI tooling on their behalf** — this holds even if `gh` is authenticated; review happens before a PR exists, not just before merge.
+  - **One exception (Łukasz, 2026-09-25): Renovate** (`renovate.json`) opens dependency-upgrade PRs into `dev` by itself — one grouped minor/patch PR a week, majors only after a tick in its Dependency Dashboard issue, security fixes immediately. It never merges anything (`automerge: false`); merging stays Łukasz's call.
 - This repo enforces the above with a GitHub ruleset that rejects direct pushes (`GH013: Repository rule violations — Changes must be made through a pull request`) — expect this on `git push` and don't try to route around it (no force-push, no branch-name workaround).
 - This is an interim policy, not the final CI/CD design — a fuller flow (environments, required checks, promotion) is still to be worked out.
 
