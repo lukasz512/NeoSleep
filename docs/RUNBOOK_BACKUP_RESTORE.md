@@ -57,9 +57,9 @@ Save the whole file content in your password manager, make one offline copy
 3. Set `PROJECT_ID` to the project ID shown in the project picker, paste the block, press Enter:
 
 ```bash
-PROJECT_ID="REPLACE_ME"
+PROJECT_ID="neosleep-backups"
 REGION="northamerica-south1"
-BUCKET="neosleep-backups-${PROJECT_ID}"
+BUCKET="${PROJECT_ID}-db"
 REPO="lukasz512/NeoSleep"
 
 gcloud config set project "$PROJECT_ID"
