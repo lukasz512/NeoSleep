@@ -199,7 +199,7 @@ import type { FormFieldDef, FormFieldType } from "../types/formField";
 
 const props = withDefaults(
   defineProps<{
-    modelValue: boolean;
+    modelValue?: boolean;
     fields: FormFieldDef[];
     initialData?: Record<string, unknown>;
     titleKey: string;

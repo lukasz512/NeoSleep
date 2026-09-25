@@ -40,13 +40,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # API_URL_PROD / API_URL_DEV point at the Cloud Run services (NEO-45). Until
+      # they are set, the old RENDER_API_URL_* secrets are used, so switching the
+      # frontend over (or rolling back to Render) is just changing a secret and
+      # re-running this workflow. See docs/RUNBOOK_API_CLOUD_RUN.md.
       - name: Set API URL for build
         run: |
           if [ "${{ github.ref }}" = "refs/heads/prod" ]; then
-            echo "VITE_API_URL=${{ secrets.RENDER_API_URL_PROD }}" >> $GITHUB_ENV
+            echo "VITE_API_URL=${{ secrets.API_URL_PROD || secrets.RENDER_API_URL_PROD }}" >> $GITHUB_ENV
             echo "VITE_GA_ID=${{ secrets.VITE_GA_ID_PROD }}" >> $GITHUB_ENV
           else
-            echo "VITE_API_URL=${{ secrets.RENDER_API_URL_DEV }}" >> $GITHUB_ENV
+            echo "VITE_API_URL=${{ secrets.API_URL_DEV || secrets.RENDER_API_URL_DEV }}" >> $GITHUB_ENV
             echo "VITE_GA_ID=${{ secrets.VITE_GA_ID_DEV }}" >> $GITHUB_ENV
           fi
 

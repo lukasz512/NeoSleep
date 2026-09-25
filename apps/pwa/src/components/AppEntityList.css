@@ -383,15 +383,6 @@
   font-size: 0.8125rem;
 }
 
-/* The footer's "rows per page" control is itself an outlined VSelect
-   (Vuetify's own VDataTableFooter), so it inherits the same
-   --v-theme-outline border theme.scss's global rule gives every outlined
-   field — one more spot where the table's border color and this footer's
-   own control disagreed. */
-.app-entity-list__table-wrap :deep(.v-data-table-footer .v-select .v-field__outline) {
-  color: var(--pwa-table-border);
-}
-
 /* Mobile: the feed cards (below) are the surfaces, on the same paper
    ground as the desktop table — a flat wrap so the cards run the full
    content width instead of sitting in a padded box-around-cards. */

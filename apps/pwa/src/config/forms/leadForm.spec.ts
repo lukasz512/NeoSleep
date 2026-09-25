@@ -51,10 +51,19 @@ describe("leadFormFields", () => {
     expect(typeof countryCode.default).toBe("function");
   });
 
-  it("exposes only Identity + institution + diagnosis + hidden status/region/country_code/type — nothing else", () => {
+  it("exposes only Identity + institution + licence number + diagnosis + hidden status/region/country_code/type — nothing else", () => {
     expect(leadFormFields.map((f) => f.key)).toEqual([
       "salutation", "first_name", "last_name", "email", "phone",
-      "institution", "diagnosis", "type", "status", "region", "country_code",
+      "institution", "pwz", "cedula", "diagnosis", "type", "status", "region", "country_code",
     ]);
+  });
+
+  it("licence number fields show only for doctor leads in the matching country (NEO-51)", () => {
+    const pwz = leadFormFields.find((f) => f.key === "pwz")!;
+    const hidden = pwz.hidden as (form: Record<string, unknown>) => boolean;
+    expect(hidden({ type: "doctor", region: "PL" })).toBe(false);
+    expect(hidden({ type: "patient", region: "PL" })).toBe(true);
+    expect(hidden({ type: "doctor", region: "MX" })).toBe(true);
+    expect(pwz.nestUnder).toBe("metadata");
   });
 });

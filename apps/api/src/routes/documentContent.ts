@@ -12,6 +12,7 @@ import {
   GetDocumentTemplateEntityTypesQuery,
   GetPatientChecklistConfigQuery,
 } from "../queries/documentContent.js";
+import { ApprovePartnerDocumentVersionCommand, GetPartnerApprovalStatusQuery } from "../commands/partnerDocuments.js";
 import { ValidationError } from "../errors.js";
 import { routeParam } from "./utils.js";
 
@@ -153,6 +154,42 @@ documentContentRouter.get(
     const result = await withTenant(slug, async (client) => {
       await buildContext(req, client, slug);
       return GetDocumentContentVersionByIdQuery(versionId);
+    });
+    res.json(result);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// Partner documents (NEO-51) — the jurisdiction's NeoSleep signatory approves
+// a version, which is what lets their signature appear on that exact text.
+// Non-countersigned templates answer { countersigned: false }.
+// ---------------------------------------------------------------------------
+documentContentRouter.get(
+  "/document-content/:templateKey/:locale/approval",
+  requireRole("admin", "manager"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const templateKey = routeParam(req, "templateKey") ?? "";
+    const locale = routeParam(req, "locale") ?? "";
+    const slug = tenantSlugFromHost(req.hostname);
+    const result = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return GetPartnerApprovalStatusQuery(ctx, templateKey, locale);
+    });
+    res.json(result ? { countersigned: true, ...result } : { countersigned: false });
+  })
+);
+
+documentContentRouter.post(
+  "/document-content/:templateKey/:locale/versions/:versionId/approve",
+  requireRole("admin", "manager"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const templateKey = routeParam(req, "templateKey") ?? "";
+    const locale = routeParam(req, "locale") ?? "";
+    const versionId = routeParam(req, "versionId") ?? "";
+    const slug = tenantSlugFromHost(req.hostname);
+    const result = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return ApprovePartnerDocumentVersionCommand(ctx, templateKey, locale, versionId);
     });
     res.json(result);
   })

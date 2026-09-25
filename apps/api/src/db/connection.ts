@@ -26,6 +26,16 @@ let db: Pool | null = null;
  * - statement_timeout: 30_000 → kill any query running longer than 30s (runaway queries).
  * - application_name → visible in pg_stat_activity — identifies this pool in DB monitoring.
  */
+/**
+ * Pool size override (DB_POOL_MAX). Several deployments share one Supabase pooler (Cloud Run
+ * dev + prod, Render during the NEO-45 transition), so each Cloud Run service runs with a
+ * smaller pool than the local/Render default of 25.
+ */
+function poolMax(): number {
+  const n = Number.parseInt(process.env.DB_POOL_MAX ?? "", 10);
+  return Number.isInteger(n) && n > 0 ? n : 25;
+}
+
 export function getDb(): Pool {
   if (db) return db;
   const url = process.env.DATABASE_URL;
@@ -34,7 +44,7 @@ export function getDb(): Pool {
   }
   db = new Pool({
     connectionString: url,
-    max: 25,
+    max: poolMax(),
     min: 2,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 15_000,

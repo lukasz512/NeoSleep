@@ -28,9 +28,10 @@ import { noteRouter } from "./routes/note.js";
 import { sleepStudyRouter } from "./routes/sleepStudy.js";
 import { treatmentPlanRouter } from "./routes/treatmentPlan.js";
 import { territoryRouter } from "./routes/territory.js";
-import { runMigrations } from "./db.js";
+import { runMigrations, getDb } from "./db.js";
 import { errorHandler } from "./middleware/errorHandler.js";
-import { apiLimiter } from "./middleware/rateLimiter.js";
+import { apiLimiter, smokePdfLimiter } from "./middleware/rateLimiter.js";
+import { renderHtmlToPdf } from "./services/documentRenderer.js";
 
 // Allow multiple origins (e.g. localhost + LAN IP for phone testing): set FRONTEND_URL="http://localhost:5173,http://192.168.1.x:5173"
 const corsOrigins = FRONTEND_URLS;
@@ -64,12 +65,40 @@ export const app: Express = express();
 // Registered before any other middleware (rate limiter, CORS, auth) so Render's
 // health checker never gets rate-limited or blocked by an unrelated dependency —
 // a 429/5xx here makes Render think the whole instance is down.
-app.get("/health", (_req, res) => res.json({ ok: true }));
+// `commit` is the git SHA Render built this instance from (RENDER_GIT_COMMIT,
+// set by Render itself; null locally) — the post-deploy smoke test
+// (.github/workflows/post-deploy-smoke.yml) polls it to know when the pushed
+// commit is actually live.
+app.get("/health", (_req, res) => res.json({ ok: true, commit: process.env.RENDER_GIT_COMMIT ?? null }));
 
 // Render (and any reverse-proxy host) sits in front of this process and sets
 // X-Forwarded-For / X-Forwarded-Proto. Without this, express-rate-limit
 // refuses to trust X-Forwarded-For (ERR_ERL_UNEXPECTED_X_FORWARDED_FOR).
 app.set("trust proxy", 1);
+
+// Renders one fixed, data-free PDF through the same Chromium path as real
+// documents — the most fragile piece on Render (bundled Chromium + system
+// libraries), which /health alone can't vouch for. Used by the post-deploy
+// smoke test; tightly rate-limited because every call launches a render.
+// Loads Poppins from Google Fonts exactly like packages/documents/templates do:
+// that HTTPS fetch is what pulls in Chromium's network stack (NSS, libsqlite3)
+// — a missing system library there crashes real documents but not a page
+// with no web font. The accented glyphs pull a second font subset.
+const SMOKE_PDF_HTML =
+  '<!doctype html><html><head><meta charset="UTF-8">' +
+  '<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">' +
+  "<style>body{font-family:'Poppins',sans-serif}</style></head>" +
+  "<body><h1>Smoke test</h1><p>Render check, accented glyphs: é ñ ó ł ź</p></body></html>";
+app.get("/health/pdf", smokePdfLimiter, async (_req, res) => {
+  const started = Date.now();
+  try {
+    const pdf = await renderHtmlToPdf(SMOKE_PDF_HTML);
+    const isPdf = Buffer.from(pdf.subarray(0, 5)).toString("latin1") === "%PDF-";
+    res.status(isPdf ? 200 : 503).json({ ok: isPdf, bytes: pdf.length, ms: Date.now() - started });
+  } catch (err) {
+    res.status(503).json({ ok: false, error: (err as Error)?.message?.split("\n")[0] ?? "render failed" });
+  }
+});
 
 app.use(requestIdMiddleware);
 // Security headers: HSTS, X-Frame-Options, X-Content-Type-Options, CSP, etc.
@@ -217,6 +246,25 @@ if (typeof process.env.VITEST === "undefined") {
     console.error("[neocrm-api] failed to start:", err);
     process.exit(1);
   });
+
+  /**
+   * Cloud Run sends SIGTERM before stopping an instance (scale-to-zero, new revision) and
+   * allows ~10s. Stop accepting connections, let in-flight requests finish, return pooled DB
+   * connections to Supabase instead of leaving them to time out, then exit.
+   */
+  function shutdown(signal: string): void {
+    console.log(`[neocrm-api] ${signal} received, shutting down`);
+    setTimeout(() => process.exit(0), 9_000).unref();
+    const closeDb = () =>
+      getDb()
+        .end()
+        .catch((err: unknown) => console.error("[neocrm-api] pool close failed:", err))
+        .finally(() => process.exit(0));
+    if (server) server.close(() => void closeDb());
+    else void closeDb();
+  }
+  process.once("SIGTERM", () => shutdown("SIGTERM"));
+  process.once("SIGINT", () => shutdown("SIGINT"));
 }
 
 export { server };

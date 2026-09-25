@@ -1,31 +1,52 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended"],
+  "description": "Dependency upgrades as scheduled PRs into dev. Nothing is merged automatically — every PR waits for Łukasz, same as any other PR.",
+  "extends": ["config:recommended", ":dependencyDashboard", ":semanticCommitTypeAll(chore)"],
   "timezone": "Europe/Warsaw",
-  "schedule": ["every monday"],
-  "dependencyDashboard": true,
+  "schedule": ["before 7am on monday"],
+  "prConcurrentLimit": 4,
+  "prHourlyLimit": 2,
+  "rangeStrategy": "bump",
   "labels": ["dependencies"],
-  "rangeStrategy": "replace",
+  "automerge": false,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 7am on monday"]
+  },
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["dependencies", "security"],
+    "schedule": ["at any time"]
+  },
   "packageRules": [
     {
-      "description": "patch + minor: automerge co poniedziałek",
-      "matchUpdateTypes": ["patch", "minor"],
-      "automerge": true,
-      "automergeType": "pr",
-      "platformAutomerge": true
+      "description": "All minor + patch updates in one weekly PR instead of dozens.",
+      "matchUpdateTypes": ["minor", "patch"],
+      "matchCurrentVersion": "!/^0/",
+      "groupName": "non-major dependencies",
+      "groupSlug": "non-major"
     },
     {
-      "description": "major: PR do manualnego review",
+      "description": "Majors need a tick in the Dependency Dashboard issue first — no surprise breaking-change PRs.",
       "matchUpdateTypes": ["major"],
-      "automerge": false,
-      "addLabels": ["upgrade-major"]
+      "dependencyDashboardApproval": true
     },
     {
-      "description": "GitHub Actions: automerge patch/minor",
+      "description": "puppeteer-core and @sparticuz/chromium must ship the same Chromium major (see apps/api/src/services/documentRenderer.ts).",
+      "matchPackageNames": ["puppeteer-core", "@sparticuz/chromium"],
+      "groupName": "PDF renderer (puppeteer-core + @sparticuz/chromium)",
+      "groupSlug": "pdf-renderer"
+    },
+    {
+      "description": "@types/node follows the Node version we run (.nvmrc = 22), not the newest Node.",
+      "matchPackageNames": ["@types/node"],
+      "allowedVersions": "<23"
+    },
+    {
+      "description": "GitHub Actions versions in one PR.",
       "matchManagers": ["github-actions"],
-      "matchUpdateTypes": ["patch", "minor"],
-      "automerge": true
+      "groupName": "GitHub Actions",
+      "groupSlug": "github-actions"
     }
-  ],
-  "ignorePaths": ["**/node_modules/**"]
+  ]
 }
