@@ -3,7 +3,7 @@
   "private": true,
   "packageManager": "pnpm@9.15.0",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   },
   "workspaces": [
     "apps/*",
@@ -36,17 +36,17 @@
     "db:seed": "pnpm --filter @neo/api seed:demo"
   },
   "devDependencies": {
-    "@typescript-eslint/eslint-plugin": "^8.70.0",
-    "@typescript-eslint/parser": "^8.70.0",
+    "@typescript-eslint/eslint-plugin": "^8.70.1",
+    "@typescript-eslint/parser": "^8.70.1",
     "@vitejs/plugin-basic-ssl": "^2.3.0",
-    "concurrently": "^9.1.0",
-    "dependency-cruiser": "^18.3.1",
-    "eslint": "^9.0.0",
-    "eslint-config-prettier": "^9.0.0",
-    "eslint-plugin-vue": "^9.0.0",
+    "concurrently": "^9.2.4",
+    "dependency-cruiser": "^18.4.0",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^9.1.2",
+    "eslint-plugin-vue": "^9.33.0",
     "husky": "^9.1.7",
-    "prettier": "^3.9.6",
-    "typescript": "^5.6.0",
+    "prettier": "^3.9.9",
+    "typescript": "^5.9.3",
     "vite": "catalog:"
   }
 }
