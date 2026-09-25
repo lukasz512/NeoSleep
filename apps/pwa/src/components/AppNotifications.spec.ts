@@ -102,4 +102,22 @@ describe("AppNotifications", () => {
     await vi.advanceTimersByTimeAsync(8000);
     expect(document.body.querySelectorAll(".notif-toast")).toHaveLength(0);
   });
+
+  it("countdown toast: shows the seconds left, ticks down, and does not auto-dismiss", async () => {
+    vi.useFakeTimers();
+    mountNotifications();
+    const { show } = useNotifications();
+    show("", "info", "app.update.reloading", { countdownMs: 5_000 });
+    await vi.advanceTimersByTimeAsync(10);
+    const text = () => document.body.querySelector(".notif-toast__msg")!.textContent;
+    expect(text()).toContain("reloading in 5 s");
+    expect(document.body.querySelector<HTMLElement>(".notif-toast__bar")!.style.animationDuration).toBe("5000ms");
+
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(text()).toContain("reloading in 3 s");
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(document.body.querySelectorAll(".notif-toast")).toHaveLength(1);
+    expect(text()).toContain("reloading in 0 s");
+  });
 });

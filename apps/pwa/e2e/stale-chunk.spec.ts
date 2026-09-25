@@ -30,8 +30,13 @@ test("stale chunk: toast explains, then reloads into the clicked page", async ({
 
   await page.getByTestId("open-detail").click();
 
-  await expect(page.locator(".notif-toast--info")).toContainText("new version");
-  await expect.poll(() => page.evaluate(() => window.__reloadedTo)).toBe("/patients/42");
+  const toast = page.locator(".notif-toast--info");
+  await expect(toast).toContainText("new version");
+  await expect(toast).toContainText(/reloading in [45] s/);
+  // Not yet: the user gets the countdown before the page goes away.
+  await page.waitForTimeout(2_000);
+  expect(await page.evaluate(() => window.__reloadedTo)).toBeUndefined();
+  await expect.poll(() => page.evaluate(() => window.__reloadedTo), { timeout: 10_000 }).toBe("/patients/42");
 });
 
 test("chunk still missing after the reload: error toast, no reload loop", async ({ page }) => {

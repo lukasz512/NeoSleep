@@ -13,7 +13,7 @@
   "app.errorState.title": "Problema de red",
   "app.errorState.subtitle": "Revisa tu conexión e inténtalo de nuevo",
   "app.errorState.refresh": "Actualizar",
-  "app.update.reloading": "Hay una nueva versión de la app disponible — recargando…",
+  "app.update.reloading": "Hay una nueva versión de la app disponible — recargando en {seconds} s…",
   "app.update.loadFailed": "No se pudo cargar esta página. Revisa tu conexión e inténtalo de nuevo.",
   "app.update.offline": "Estás sin conexión — esta página aún no se ha cargado. Inténtalo de nuevo cuando vuelvas a tener conexión.",
   "app.common.offlineShowingCached": "Estás sin conexión — mostrando datos cargados anteriormente.",
