@@ -149,6 +149,29 @@ export async function getCountryTerritoryId(client: PoolClient, countryCode: str
   }
 }
 
+/** The country_code of the country node at or above a territory (e.g. "MX" for mx/cdmx/polanco), or null. */
+export async function getTerritoryCountryCode(client: PoolClient, id: string): Promise<string | null> {
+  try {
+    const r = await client.query<{ country_code: string | null }>(
+      `WITH RECURSIVE ancestors AS (
+         SELECT id, parent_id, kind, country_code, 0 AS depth
+         FROM territory WHERE id = $1 AND deleted_at IS NULL
+         UNION ALL
+         SELECT t.id, t.parent_id, t.kind, t.country_code, a.depth + 1
+         FROM territory t
+         JOIN ancestors a ON t.id = a.parent_id
+         WHERE t.deleted_at IS NULL AND a.depth < 20
+       )
+       SELECT country_code FROM ancestors WHERE kind = 'country' ORDER BY depth LIMIT 1`,
+      [id]
+    );
+    return r.rows[0]?.country_code ?? null;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getTerritoryCountryCode", err);
+  }
+}
+
 export async function getTerritoryById(client: PoolClient, id: string): Promise<Territory | null> {
   try {
     const result = await client.query<Territory>(

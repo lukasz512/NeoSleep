@@ -88,6 +88,22 @@
           </VBtn>
         </VForm>
 
+        <!-- Only where this environment has a Google OAuth client configured
+             (GET /auth/providers, see useGoogleSignIn) — NEO-78. -->
+        <template v-if="googleSignIn.available.value">
+          <div class="auth-view__divider" role="separator">
+            <span>{{ t('user.login.google.or') }}</span>
+          </div>
+          <GoogleSignInButton
+            :href="googleSignIn.href.value"
+            :label="t('user.login.google.signIn')"
+            :dark="themeStore.mode === 'dark'"
+            :loading="googleSignIn.redirecting.value"
+            :disabled="loginFlow.loading.value"
+            @start="googleSignIn.redirecting.value = true"
+          />
+        </template>
+
         <div class="auth-view__footer">
           <VBtn
             variant="text"
@@ -281,6 +297,8 @@ import { useAppVersionLabel } from "../composables/useAppVersionLabel";
 import AuthChrome from "../components/AuthChrome.vue";
 import AuthCard from "../components/AuthCard.vue";
 import AuthHalo from "../components/AuthHalo.vue";
+import GoogleSignInButton from "../components/GoogleSignInButton.vue";
+import { API_URL_KEY, googleSignInErrorKey, useGoogleSignIn } from "../composables/useGoogleSignIn";
 
 // White badge in light mode, dark badge in dark mode (NEO-12) — same theme
 // source AuthChrome uses for its logo.
@@ -327,6 +345,21 @@ watch(loginFlow.errorKey, (key) => {
   if (key) notify(t(key), "error", key);
 });
 
+// "Sign in with Google" (NEO-78): shown only when the API says it's configured.
+const googleSignIn = useGoogleSignIn(apiFetch, inject<string | null>(API_URL_KEY, null));
+onMounted(() => googleSignIn.load());
+
+// The Google callback sends refusals/failures back as /login?error=<code>
+// (e.g. an email no admin has invited). Shown once as a toast, then dropped
+// from the URL so a reload or back-navigation doesn't repeat it.
+const googleErrorKey = googleSignInErrorKey(route.query.error);
+if (googleErrorKey) {
+  notify(t(googleErrorKey), "error", googleErrorKey);
+  void router.replace({
+    query: Object.fromEntries(Object.entries(route.query).filter(([key]) => key !== "error")),
+  });
+}
+
 const useForgotPasswordFlow = createUseForgotPasswordFlow(apiFetch);
 const forgotFlow = useForgotPasswordFlow();
 
@@ -365,7 +398,11 @@ const cardTitle = computed(() => {
   return null;
 });
 const isLoading = computed(
-  () => loginFlow.loading.value || forgotFlow.loading.value || resetFlow.loading.value,
+  () =>
+    loginFlow.loading.value ||
+    forgotFlow.loading.value ||
+    resetFlow.loading.value ||
+    googleSignIn.redirecting.value,
 );
 
 const showPassword = ref(false);
@@ -745,6 +782,25 @@ const cardAccentStyle = {
 .auth-view__submit:hover,
 .auth-view__submit:active {
   transform: none !important;
+}
+
+/* "or" between the password form and the Google button: hairlines in the
+   same muted on-surface ink the subtitles use, so it reads in both themes. */
+.auth-view__divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+  font-size: 0.8125rem;
+  color: rgba(var(--v-theme-on-surface), 0.6);
+}
+
+.auth-view__divider::before,
+.auth-view__divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(var(--v-theme-on-surface), 0.16);
 }
 
 .auth-view__footer {

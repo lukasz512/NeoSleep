@@ -12,13 +12,14 @@ import {
   updatePractitionerStatus,
   getPractitionerById,
   getUsersWithoutPassword,
-  getOrCreateUserByProvider,
+  resolveGoogleSignInUser,
 } from "../db.js";
 import { hashToken } from "../utils/hashToken.js";
 import type { TenantContext } from "../context/TenantContext.js";
 import { ConflictError, PartnerDocumentsNotReadyError, ValidationError } from "../errors.js";
 import { CreatePractitionerCommand, ActivatePractitionerCommand, UpdatePractitionerCommand } from "./practitioner.js";
 import { setApprovedPartnerVersion } from "../db/partnerSignatories.js";
+import { insertOrganization } from "../db/organization.js";
 import { ensurePartnerDocumentsReady } from "../testing/partnerDocumentsFixture.js";
 
 // mailer.ts is the external boundary (Resend, see ADR-016) — mocked here, same
@@ -288,13 +289,19 @@ describe("ActivatePractitionerCommand", () => {
       const seeded = await insertStaffUser(client, `qa-seed-${uniqueSuffix()}@example.com`, "Seed", "Staff", "rep", null, true);
       const noForce = await insertStaffUser(client, `qa-noforce-${uniqueSuffix()}@example.com`, "No", "Force", "rep", null, false);
       const doctor = await insertStaffUser(client, `qa-doc-${uniqueSuffix()}@example.com`, "Admin", "Made", "doctor", null, true);
-      const google = await getOrCreateUserByProvider(client, "google", `qa-sub-${uniqueSuffix()}`, `qa-google-${uniqueSuffix()}@example.com`, "Goo Gle");
+      // Google sign-in never creates accounts (NEO-78): a seeded account that got
+      // linked to Google on its first Google sign-in must still be skipped.
+      const googleEmail = `qa-google-${uniqueSuffix()}@example.com`;
+      await insertStaffUser(client, googleEmail, "Goo", "Gle", "rep", null, true);
+      const linked = await resolveGoogleSignInUser(client, `qa-sub-${uniqueSuffix()}`, googleEmail, true);
+      if (linked.kind !== "ok") throw new Error(`expected a linked Google account, got ${linked.kind}`);
+      const google = linked.user;
 
       const pending = (await getUsersWithoutPassword(client)).map((u) => u.id);
       expect(pending).toContain(seeded!.id);
       expect(pending).not.toContain(noForce!.id);
       expect(pending).not.toContain(doctor!.id);
-      expect(pending).not.toContain(google!.id);
+      expect(pending).not.toContain(google.id);
     });
   }, 15000);
 
@@ -315,6 +322,61 @@ describe("ActivatePractitionerCommand", () => {
       const invite = await getInviteTokenByHash(client, hashToken(token));
       expect(invite?.metadata?.jurisdiction).toBe("MX");
       expect(new Date(invite!.metadata!.counterparty_signed_at!).getTime()).toBeGreaterThanOrEqual(before - 1000);
+    });
+  }, 15000);
+
+  // Łukasz, 2026-09-25: a global admin inviting a doctor whose region text
+  // wasn't literally PL/MX got "only available for PL or MX". The country can
+  // also come from the doctor's country code, territory, or clinic.
+  async function activatedJurisdiction(
+    ctx: TenantContext,
+    client: TenantContext["client"],
+    input: Parameters<typeof CreatePractitionerCommand>[1],
+  ): Promise<string | undefined> {
+    const practitioner = await CreatePractitionerCommand(ctx, input);
+    await ActivatePractitionerCommand(ctx, practitioner.id);
+    const token = new URL(sendPartnerInviteEmailMock.mock.calls.at(-1)![1] as string).searchParams.get("token")!;
+    return (await getInviteTokenByHash(client, hashToken(token)))?.metadata?.jurisdiction;
+  }
+
+  const noRegionDoctor = () => ({
+    first_name: "No",
+    last_name: "Region",
+    email: `qa-hcp-${uniqueSuffix()}@example.com`,
+    phone: "600100200",
+    region: "",
+  });
+
+  it("finds the jurisdiction from the doctor's country code when region is blank", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      expect(await activatedJurisdiction(ctx, client, { ...noRegionDoctor(), country_code: "MX" })).toBe("MX");
+    });
+  }, 15000);
+
+  it("finds the jurisdiction from the doctor's territory (country above it)", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const territoryId = await getCountryTerritoryId(client, "PL");
+      expect(territoryId).not.toBeNull();
+      expect(await activatedJurisdiction(ctx, client, { ...noRegionDoctor(), territory_id: territoryId })).toBe("PL");
+    });
+  }, 15000);
+
+  it("finds the jurisdiction from the doctor's clinic when the doctor has none", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const clinic = await insertOrganization(client, { name: `QA Clinic ${uniqueSuffix()}`, region: "MX" });
+      expect(await activatedJurisdiction(ctx, client, { ...noRegionDoctor(), organization_id: clinic.id })).toBe("MX");
+    });
+  }, 15000);
+
+  it("still refuses, with a hint, when no country can be found anywhere", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const practitioner = await CreatePractitionerCommand(ctx, noRegionDoctor());
+      await expect(ActivatePractitionerCommand(ctx, practitioner.id)).rejects.toThrow(/set the doctor's or their clinic's country/);
+      expect(sendPartnerInviteEmailMock).not.toHaveBeenCalled();
     });
   }, 15000);
 
