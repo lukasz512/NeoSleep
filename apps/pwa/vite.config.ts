@@ -121,6 +121,14 @@ export default defineConfig(mergeConfig(sharedViteConfig(__dirname), {
       styles: { configFile: "src/styles/vuetify-settings.scss" },
     }),
   ],
+  // One copy of each, always (NEO-80). pnpm can resolve the same version twice
+  // with different peer sets (vue-router@5 for apps/pwa vs packages/ui did),
+  // and a production build then bundles both: packages/ui's useRoute() looks
+  // up the other copy's injection key, gets undefined, and the login page
+  // never renders. Dev mode prebundles a single copy, so only prod breaks.
+  resolve: {
+    dedupe: ["vue", "vue-router", "pinia", "vue-i18n"],
+  },
   css: {
     preprocessorOptions: {
       sass: { api: "modern-compiler" },
