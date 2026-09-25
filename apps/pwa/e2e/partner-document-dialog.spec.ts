@@ -53,7 +53,9 @@ async function openRegistration(page: Page) {
     },
   );
   await page.goto("/partner-register?token=e2e");
-  await expect(page.locator(".partner-registration__documents")).toBeVisible();
+  // A cold WebKit page on a busy CI runner can take longer than the 5s default
+  // to render this first view (flaked on PR #233) — see partner-registration-scroll.spec.ts.
+  await expect(page.locator(".partner-registration__documents")).toBeVisible({ timeout: 20_000 });
 }
 
 const frameHeight = (page: Page) =>
