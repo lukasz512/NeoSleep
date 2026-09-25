@@ -31,7 +31,7 @@
       :load-error="loadFailed"
       :back-route="{ name: 'hcp' }"
       :back-label="t('user.hcp.detail.back')"
-      :trail="hcp ? [hcp.name] : []"
+      :breadcrumbs="breadcrumbs"
       :not-found-label="t('user.hcp.detail.notFound')"
       @retry="loadHCP"
     >
@@ -234,6 +234,7 @@ import { useNotifications } from "../composables/useNotifications";
 import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
+import { useDetailBreadcrumbs } from "../composables/useDetailBreadcrumbs";
 import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppAvatar from "../components/AppAvatar.vue";
@@ -523,6 +524,25 @@ async function loadHCP() {
 
 onMounted(loadHCP);
 watch(() => route.params.id, loadHCP);
+// NEO-56 breadcrumbs: avatar + name + status when it isn't "active", then the open tab.
+const HCP_BREADCRUMB_STATUS: Record<string, { labelKey: string; color: string }> = {
+  invited: { labelKey: "user.hcp.filters.statusInvited", color: "warning" },
+  pending_approval: { labelKey: "user.hcp.filters.statusPendingApproval", color: "warning" },
+  inactive: { labelKey: "user.hcp.filters.statusInactive", color: "default" },
+};
+const breadcrumbs = useDetailBreadcrumbs({
+  record: () => {
+    if (!hcp.value) return null;
+    const status = hcp.value.status ? HCP_BREADCRUMB_STATUS[hcp.value.status] : undefined;
+    return {
+      label: hcp.value.name,
+      avatar: { name: hcp.value.name, firstName: hcp.value.first_name, lastName: hcp.value.last_name, entityType: "hcp" },
+      status: status ? { label: t(status.labelKey), color: status.color } : undefined,
+    };
+  },
+  tabs: hcpTabs,
+  activeTab,
+});
 </script>
 
 <style scoped>

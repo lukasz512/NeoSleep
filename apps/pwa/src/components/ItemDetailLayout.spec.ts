@@ -9,10 +9,11 @@ import { h } from "vue";
 import { createPinia } from "pinia";
 import en from "@i18n/en.json";
 import ItemDetailLayout from "./ItemDetailLayout.vue";
+import AppBreadcrumbs from "./AppBreadcrumbs.vue";
 
-// NEO-56: breadcrumbs sit right after the back arrow on every detail view.
-// The parent crumb is derived from backRoute (same nav title as the sidebar),
-// the rest comes from `trail`; the last crumb is the current page.
+// NEO-56: desktop shows breadcrumbs instead of the back arrow, phones keep the
+// arrow (the swap itself is CSS at 768px — covered by the real-browser
+// e2e/breadcrumbs.spec.ts). Here: which pieces render, and with what data.
 
 const mountedWrappers: VueWrapper[] = [];
 
@@ -28,7 +29,6 @@ function makeRouter() {
       { path: "/", component: Stub },
       { path: "/patients", name: "patients", component: Stub },
       { path: "/leads", name: "leads", component: Stub },
-      { path: "/documents", name: "document-content", component: Stub },
     ],
   });
 }
@@ -54,57 +54,50 @@ function mountLayout(props: Partial<Props>, slots?: Record<string, () => ReturnT
   return wrapper;
 }
 
-describe("ItemDetailLayout — breadcrumbs", () => {
-  it("renders parent link + record name after the back arrow", () => {
-    const wrapper = mountLayout({ trail: ["Jan Kowalski"] });
+const backBtn = (w: VueWrapper) => w.find(".view-item__back-btn");
 
-    const nav = wrapper.find("nav.view-item__breadcrumbs");
-    expect(nav.exists()).toBe(true);
-    expect(nav.attributes("aria-label")).toBe(en["app.common.breadcrumbs"]);
+describe("ItemDetailLayout — breadcrumbs vs back arrow", () => {
+  it("with a record: breadcrumbs = parent (from backRoute) + the given trail; arrow is phone-only", () => {
+    const wrapper = mountLayout({ breadcrumbs: [{ label: "Jan Kowalski" }, { label: "Details" }] });
 
-    const link = nav.find("a.view-item__crumb-link");
-    expect(link.text()).toBe(en["user.patients.title"]);
-    expect(link.attributes("href")).toBe("/patients");
+    const crumbs = wrapper.findComponent(AppBreadcrumbs);
+    expect(crumbs.exists()).toBe(true);
+    const items = crumbs.props("items");
+    expect(items.map((i: { label: string }) => i.label)).toEqual([en["user.patients.title"], "Jan Kowalski", "Details"]);
+    expect(items[0].to).toEqual({ name: "patients" });
+    expect(items[0].icon).toBe("nav-patients");
 
-    // DOM order: back button first, breadcrumbs right after it.
-    const row = wrapper.find(".view-item__header-row").element;
-    expect(row.children[0].classList.contains("view-item__back-btn")).toBe(true);
-    expect(row.children[1].classList.contains("view-item__breadcrumbs")).toBe(true);
+    expect(backBtn(wrapper).classes()).toContain("view-item__back-btn--phone-only");
   });
 
-  it("marks only the last crumb as the current page, and it is not a link", () => {
-    const wrapper = mountLayout({ backRoute: { name: "document-content" }, trail: ["GDPR consent", "Polish"] });
-
-    const items = wrapper.findAll("li.view-item__crumb");
-    expect(items.map((li) => li.text())).toEqual([en["user.document-content.title"], "GDPR consent", "Polish"]);
-    expect(items[1].attributes("aria-current")).toBeUndefined();
-    expect(items[2].attributes("aria-current")).toBe("page");
-    expect(items[2].find("a").exists()).toBe(false);
+  it("while loading: breadcrumbs with a placeholder for the record, so nothing jumps", () => {
+    const wrapper = mountLayout({ hasContent: false, loading: true });
+    const crumbs = wrapper.findComponent(AppBreadcrumbs);
+    expect(crumbs.exists()).toBe(true);
+    expect(crumbs.props("loading")).toBe(true);
   });
 
-  it("shows just the parent when there is no trail", () => {
-    const wrapper = mountLayout({});
-    expect(wrapper.findAll("li.view-item__crumb")).toHaveLength(1);
+  it("not found / load error: no breadcrumbs, and the back arrow shows on every width", () => {
+    for (const props of [{ hasContent: false }, { hasContent: false, loadError: true }]) {
+      const wrapper = mountLayout(props);
+      expect(wrapper.findComponent(AppBreadcrumbs).exists()).toBe(false);
+      expect(backBtn(wrapper).classes()).not.toContain("view-item__back-btn--phone-only");
+    }
   });
 
-  it("puts a separator before an inline header-title (lead detail) instead of a trail crumb", () => {
+  it("lead detail (inline header-title, no trail): parent + trailing separator before the inline name", () => {
     const wrapper = mountLayout(
       { backRoute: { name: "leads" } },
       { "header-title": () => h("h1", "Maria Wiśniewska") },
     );
-    const nav = wrapper.find("nav.view-item__breadcrumbs");
-    expect(nav.find("a").text()).toBe(en["user.leads.title"]);
-    expect(nav.findAll(".view-item__crumb-sep")).toHaveLength(1);
+    const crumbs = wrapper.findComponent(AppBreadcrumbs);
+    expect(crumbs.props("trailingSeparator")).toBe(true);
     expect(wrapper.find(".view-item__header-title").text()).toBe("Maria Wiśniewska");
   });
 
-  it("renders no breadcrumbs while loading or when the record is missing", () => {
-    expect(mountLayout({ hasContent: false, loading: true }).find("nav.view-item__breadcrumbs").exists()).toBe(false);
-    expect(mountLayout({ hasContent: false }).find("nav.view-item__breadcrumbs").exists()).toBe(false);
-  });
-
-  it("renders no breadcrumbs when the back route is a plain path (no nav title to show)", () => {
+  it("a plain-path back route has no nav title: arrow only, everywhere", () => {
     const wrapper = mountLayout({ backRoute: "/somewhere" });
-    expect(wrapper.find("nav.view-item__breadcrumbs").exists()).toBe(false);
+    expect(wrapper.findComponent(AppBreadcrumbs).exists()).toBe(false);
+    expect(backBtn(wrapper).classes()).not.toContain("view-item__back-btn--phone-only");
   });
 });

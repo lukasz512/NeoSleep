@@ -30,7 +30,7 @@
     :load-error="loadFailed"
     :back-route="{ name: 'hco' }"
     :back-label="t('user.hco.detail.back')"
-    :trail="hco ? [hco.name] : []"
+    :breadcrumbs="breadcrumbs"
     :not-found-label="t('user.hco.detail.notFound')"
     @retry="loadHCO"
   >
@@ -225,6 +225,7 @@ import { useNotifications } from "../composables/useNotifications";
 import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
+import { useDetailBreadcrumbs } from "../composables/useDetailBreadcrumbs";
 import AppButton from "../components/AppButton.vue";
 import AppAvatar from "../components/AppAvatar.vue";
 import AppIcon from "../components/AppIcon.vue";
@@ -441,6 +442,18 @@ async function loadHCO() {
 
 onMounted(loadHCO);
 watch(() => route.params.id, loadHCO);
+// NEO-56 breadcrumbs: type icon + name + status when it isn't "active", then the open tab.
+const breadcrumbs = useDetailBreadcrumbs({
+  record: () => hco.value && {
+    label: hco.value.name,
+    avatar: { name: hco.value.name, entityType: "hco", orgType: hco.value.type },
+    status: hco.value.status && hco.value.status !== "active"
+      ? { label: hcoStatusLabel(hco.value.status), color: hcoStatusColor(hco.value.status) }
+      : undefined,
+  },
+  tabs: hcoTabs,
+  activeTab,
+});
 </script>
 
 <style scoped>

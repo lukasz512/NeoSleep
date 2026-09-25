@@ -22,6 +22,8 @@ export interface Patient {
   last_name: string;
   email: string | null;
   phone: string | null;
+  /** identities.date_of_birth as a plain calendar date "YYYY-MM-DD" (no time, no timezone). */
+  date_of_birth: string | null;
   // From patient table
   practitioner_id: string | null;
   diagnosis_code: Record<string, unknown> | null;
@@ -60,6 +62,8 @@ export interface PatientInsert {
   last_name: string;
   email?: string;
   phone?: string;
+  /** "YYYY-MM-DD" — validated by CreatePatientCommand. */
+  date_of_birth?: string | null;
   practitioner_id?: string;
   diagnosis_code?: Record<string, unknown>;
   ahi_baseline?: number;
@@ -79,6 +83,8 @@ export interface PatientUpdate {
   last_name?: string;
   email?: string;
   phone?: string;
+  /** "YYYY-MM-DD", or null to clear. */
+  date_of_birth?: string | null;
   practitioner_id?: string;
   diagnosis_code?: Record<string, unknown>;
   ahi_baseline?: number;
@@ -100,6 +106,7 @@ const PATIENT_SELECT_COLS = `
   p.cpap_device, p.medical_record, p.status, p.metadata,
   p.created_at, p.updated_at,
   i.title AS salutation, i.first_name, i.last_name, i.email, i.phone,
+  to_char(i.date_of_birth, 'YYYY-MM-DD') AS date_of_birth,
   COALESCE(i.region, '') AS region, i.territory_id, t.name AS territory_name,
   pi.title AS practitioner_salutation, pi.first_name AS practitioner_first_name, pi.last_name AS practitioner_last_name`.trim();
 
@@ -125,6 +132,7 @@ type PatientRow = {
   last_name: string;
   email: string | null;
   phone: string | null;
+  date_of_birth: string | null;
   practitioner_id: string | null;
   diagnosis_code: Record<string, unknown> | null;
   // NUMERIC(6,2) column — pg driver returns it as a string, not a number.
@@ -164,6 +172,7 @@ function serialize(row: PatientRow): Patient & { name: string } {
     last_name: row.last_name,
     email: row.email,
     phone: row.phone,
+    date_of_birth: row.date_of_birth,
     practitioner_id: row.practitioner_id,
     diagnosis_code: row.diagnosis_code,
     ahi_baseline: optNum(row.ahi_baseline),
@@ -275,8 +284,8 @@ export async function getPatientById(client: PoolClient, id: string): Promise<(P
 export async function insertPatient(client: PoolClient, data: PatientInsert): Promise<Patient & { name: string }> {
   try {
     const identityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (title, first_name, last_name, email, phone, region, territory_id, country_code)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO identities (title, first_name, last_name, email, phone, region, territory_id, country_code, date_of_birth)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING id`,
       [
         data.salutation ?? null,
@@ -287,6 +296,7 @@ export async function insertPatient(client: PoolClient, data: PatientInsert): Pr
         data.region ?? null,
         data.territory_id ?? null,
         data.country_code ?? null,
+        data.date_of_birth ?? null,
       ]
     );
     const identityId = identityResult.rows[0]!.id;
@@ -342,6 +352,7 @@ export async function updatePatient(
       last_name: "last_name",
       email: "email",
       phone: "phone",
+      date_of_birth: "date_of_birth",
       region: "region",
       territory_id: "territory_id",
       country_code: "country_code",

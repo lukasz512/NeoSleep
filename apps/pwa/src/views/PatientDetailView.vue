@@ -22,7 +22,7 @@
       :load-error="loadFailed"
       :back-route="{ name: 'patients' }"
       :back-label="t('app.patients.detail.back')"
-      :trail="patient ? [patient.name] : []"
+      :breadcrumbs="breadcrumbs"
       :not-found-label="t('app.patients.detail.notFound')"
       @retry="loadPatient"
     >
@@ -85,6 +85,13 @@
       <template v-if="patient" #sections>
         <DetailViewTabs v-model="activeTab" :tabs="patientTabs">
           <template #details>
+            <div class="view-item__row">
+              <dt class="view-item__label">{{ t("app.patients.detail.dateOfBirth") }}</dt>
+              <dd class="view-item__value">
+                <span v-if="dateOfBirthLabel">{{ dateOfBirthLabel }}</span>
+                <span v-else class="view-item__empty">—</span>
+              </dd>
+            </div>
             <div class="view-item__row">
               <dt class="view-item__label">{{ t("app.patients.detail.email") }}</dt>
               <dd class="view-item__value">
@@ -185,6 +192,8 @@ import { useNotifications } from "../composables/useNotifications";
 import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
+import { useDetailBreadcrumbs } from "../composables/useDetailBreadcrumbs";
+import { formatDateOfBirth } from "../utils/dateOfBirth";
 import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppAvatar from "../components/AppAvatar.vue";
@@ -214,6 +223,8 @@ interface PatientDetail {
   last_name?: string;
   email?: string | null;
   phone?: string | null;
+  /** "YYYY-MM-DD" — second identifier next to the name (NEO-56). */
+  date_of_birth?: string | null;
   practitioner_id?: string | null;
   practitioner_name?: string | null;
   status?: string;
@@ -369,6 +380,23 @@ async function loadPatient() {
 
 onMounted(loadPatient);
 watch(() => route.params.id, loadPatient);
+// NEO-56 breadcrumbs: avatar + name + date of birth (second identifier) +
+// status when it isn't the normal "active", then the open tab.
+const { locale: breadcrumbLocale } = useI18n();
+const dateOfBirthLabel = computed(() => formatDateOfBirth(patient.value?.date_of_birth, breadcrumbLocale.value as string));
+const breadcrumbs = useDetailBreadcrumbs({
+  record: () => patient.value && {
+    label: patient.value.name,
+    avatar: { name: patient.value.name, firstName: patient.value.first_name, lastName: patient.value.last_name, entityType: "patient" },
+    secondary: dateOfBirthLabel.value || undefined,
+    secondaryLabel: t("app.patients.detail.dateOfBirth"),
+    status: patient.value.status && patient.value.status !== "active"
+      ? { label: patientStatusLabel(t, patient.value.status), color: patientStatusColor(patient.value.status) }
+      : undefined,
+  },
+  tabs: patientTabs,
+  activeTab,
+});
 </script>
 
 <style scoped>

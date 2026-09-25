@@ -24,7 +24,7 @@ describe("patientFormFields", () => {
 
   it("carries the full existing field set (no fields dropped in the migration)", () => {
     expect(patientFormFields.map((f) => f.key)).toEqual([
-      "salutation", "first_name", "last_name", "email", "phone",
+      "salutation", "first_name", "last_name", "email", "phone", "date_of_birth",
       "practitioner_id", "status", "region", "territory_id", "country_code", "ahi_baseline", "cpap_device", "medical_record",
     ]);
   });

@@ -131,3 +131,65 @@ describe("GET/POST /api/v1/patient/:id/stop-bang", () => {
     expect(res.status).toBe(400);
   });
 });
+
+// NEO-56: date of birth is the patient's second identifier (shown next to the
+// name in the PWA breadcrumbs). Stored on identities.date_of_birth, returned as
+// a plain "YYYY-MM-DD" — never a timestamp, so it can't shift a day in MX.
+describe("patient date_of_birth (POST / PATCH / GET /api/v1/patient)", () => {
+  async function adminAuth(): Promise<string> {
+    const admin = await withTenant(TENANT_SLUG, (client) => insertTestUser(client, "admin"));
+    return `Bearer ${tokenFor(admin, "admin")}`;
+  }
+  const base = () => ({
+    first_name: "Dob",
+    last_name: `Route-${uniqueSuffix()}`,
+    email: `dob-${uniqueSuffix()}@example.com`,
+    phone: "+48 600 100 200",
+  });
+
+  it("round trip: create with a date of birth, read it back unchanged", async () => {
+    const auth = await adminAuth();
+    const post = await request(app).post("/api/v1/patient").set("Authorization", auth).send({ ...base(), date_of_birth: "1968-03-12" });
+    expect(post.status).toBe(201);
+    expect(post.body.date_of_birth).toBe("1968-03-12");
+
+    const get = await request(app).get(`/api/v1/patient/${post.body.id}`).set("Authorization", auth);
+    expect(get.status).toBe(200);
+    expect(get.body.date_of_birth).toBe("1968-03-12");
+  });
+
+  it("is null when not given", async () => {
+    const auth = await adminAuth();
+    const post = await request(app).post("/api/v1/patient").set("Authorization", auth).send(base());
+    expect(post.status).toBe(201);
+    expect(post.body.date_of_birth).toBeNull();
+  });
+
+  it("PATCH changes it, null clears it, omitting it leaves it alone", async () => {
+    const auth = await adminAuth();
+    const post = await request(app).post("/api/v1/patient").set("Authorization", auth).send({ ...base(), date_of_birth: "1990-01-31" });
+    const id = post.body.id as string;
+
+    const changed = await request(app).patch(`/api/v1/patient/${id}`).set("Authorization", auth).send({ date_of_birth: "1991-02-28" });
+    expect(changed.status).toBe(200);
+    expect(changed.body.date_of_birth).toBe("1991-02-28");
+
+    const untouched = await request(app).patch(`/api/v1/patient/${id}`).set("Authorization", auth).send({ status: "follow_up" });
+    expect(untouched.body.date_of_birth).toBe("1991-02-28");
+
+    const cleared = await request(app).patch(`/api/v1/patient/${id}`).set("Authorization", auth).send({ date_of_birth: null });
+    expect(cleared.status).toBe(200);
+    expect(cleared.body.date_of_birth).toBeNull();
+  });
+
+  it.each([
+    ["not a date", "12.03.1968"],
+    ["impossible day", "1990-02-30"],
+    ["future", "2999-01-01"],
+    ["before 1900", "1899-12-31"],
+  ])("400s an invalid date of birth (%s)", async (_label, dob) => {
+    const auth = await adminAuth();
+    const res = await request(app).post("/api/v1/patient").set("Authorization", auth).send({ ...base(), date_of_birth: dob });
+    expect(res.status).toBe(400);
+  });
+});

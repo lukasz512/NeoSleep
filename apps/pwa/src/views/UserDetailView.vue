@@ -25,7 +25,7 @@
       :load-error="loadFailed"
       :back-route="{ name: 'users' }"
       :back-label="t('user.users.detail.back')"
-      :trail="user ? [user.name] : []"
+      :breadcrumbs="breadcrumbs"
       :not-found-label="t('user.users.detail.notFound')"
       @retry="loadUser"
     >
@@ -264,6 +264,7 @@ import { useNotifications } from "../composables/useNotifications";
 import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
+import { useDetailBreadcrumbs } from "../composables/useDetailBreadcrumbs";
 import DetailViewTabs from "../components/DetailViewTabs.vue";
 import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
@@ -502,6 +503,18 @@ watch(
     loadDocuments();
   },
 );
+// NEO-56 breadcrumbs: avatar + name + status when it isn't "active", then the open tab.
+const breadcrumbs = useDetailBreadcrumbs({
+  record: () => user.value && {
+    label: user.value.name,
+    avatar: { name: user.value.name, firstName: user.value.first_name ?? undefined, lastName: user.value.last_name ?? undefined, entityType: "user" },
+    status: user.value.status !== "active"
+      ? { label: t(`user.users.status.${user.value.status}`), color: user.value.status === "suspended" ? "error" : "default" }
+      : undefined,
+  },
+  tabs: userTabs,
+  activeTab,
+});
 </script>
 
 <style scoped>

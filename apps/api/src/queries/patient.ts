@@ -31,6 +31,8 @@ export interface PatientDto {
   last_name: string;
   email: string | null;
   phone: string | null;
+  /** "YYYY-MM-DD" — the second patient identifier next to the name (NEO-56). */
+  date_of_birth: string | null;
   practitioner_id: string | null;
   practitioner_name: string | null;
   diagnosis_code: Record<string, unknown> | null;
@@ -69,6 +71,7 @@ function toDto(p: Patient & { name: string }, territoryPath: TerritoryPathNode[]
     last_name:       p.last_name,
     email:           p.email ?? null,
     phone:           p.phone ?? null,
+    date_of_birth:   p.date_of_birth ?? null,
     practitioner_id: p.practitioner_id ?? null,
     practitioner_name: p.practitioner_name ?? null,
     diagnosis_code:  p.diagnosis_code ?? null,

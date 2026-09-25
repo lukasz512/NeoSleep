@@ -4,6 +4,7 @@ import { useConfigStore } from "../../stores/config";
 import { useAuthStore } from "../../stores/auth";
 import { identityFields } from "./identityFields";
 import { loadTerritoryOptions } from "./territoryOptions";
+import { dateOfBirthRule } from "../../utils/dateOfBirth";
 
 /**
  * Patient entity config for the generic FormRenderer. Reuses the shared
@@ -66,6 +67,17 @@ identity[0] = { ...identity[0], key: "salutation" };
 
 export const patientFormFields: FormFieldDef[] = [
   ...identity,
+  // Second patient identifier next to the name (NEO-56) — shown in the
+  // detail view's breadcrumbs so two "Jan Kowalski"s can't be confused.
+  // Optional: existing patients have none yet.
+  {
+    key: "date_of_birth",
+    type: "date",
+    labelKey: "app.patients.form.dateOfBirth",
+    icon: "calendar",
+    rules: [(v) => dateOfBirthRule(v)],
+    cols: 12,
+  },
   {
     key: "practitioner_id",
     type: "autocomplete",
