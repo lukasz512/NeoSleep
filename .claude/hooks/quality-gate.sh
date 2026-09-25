@@ -105,6 +105,14 @@ branch_artifact_check() {
     jq -e '.visualComparison != null and .visualComparison != ""' "$marker" >/dev/null 2>&1 \
       || FAILS+=("$marker has no 'visualComparison' but this branch changes UI files ($(printf '%s' "$visual" | tr '\n' ' ')) — the Artifact must show a real before/after.")
   fi
+  # 2026-09-25 (Łukasz, NEO-47/48): the Artifact is the one deliverable, and it has to be
+  # ON the ticket, not only in chat — "zawsze ma byc po sesji w tasku albo tutaj". A ticket
+  # branch needs it attached (save_issue links) and commented (save_comment). The
+  # ship-artifact skill does both and records them via `build.mjs finalize`.
+  if [ -n "$ticket" ] && [ "$marker" = ".claude/local/artifacts/${ticket}.json" ]; then
+    jq -e '.linearAttached == true and .linearCommented == true' "$marker" >/dev/null 2>&1 \
+      || FAILS+=("$marker: the Artifact isn't attached to and commented on ${ticket} yet. Attach it (save_issue links), post the summary comment (save_comment), then record both — see .claude/skills/ship-artifact/SKILL.md Steps 4-5.")
+  fi
   dev_mergeable_check
 }
 
