@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<!--
+  Partner collaboration agreement + Annex 1 (data processing agreement)
+  =====================================================================
+  NEO-51. See templates/informedConsent.html's header comment for the full
+  substitution pipeline and the "no literal double-curly-brace token syntax
+  in comments" rule — which is why the tokens below are described in words
+  rather than written out.
+
+  One template, two jurisdictions: rendered with locale "pl" for Polish
+  partners and "mx" for Mexican partners (jurisdiction == locale for this
+  document). The legally different parts all come from locale-specific
+  sources — the i18n party clauses (documents.partnerAgreement.*) and the
+  admin-editable content versions (partnerAgreement / partnerDpa, one
+  current version per locale in platform.document_content_version).
+
+  - Agreement body: the content slot (admin-editable, version-pinned).
+  - Annex 1 body: the named slot "annex" (partnerDpa's own content version).
+  - Party clause: two variants, data-variant owner / staff — the doctor
+    chooses in the registration form; applyDocumentFields removes the other.
+  - Per-instance values are data-field spans (written in the i18n strings
+    as double-square-bracket markers) — filled by applyDocumentFields
+    (packages/documents/src/browser/documentFields.ts) in Puppeteer and in
+    the PWA preview. Fields: doctor_name, license_number, clinic_name,
+    tax_id, clinic_address, email, signer_signed_at, counterparty_name,
+    counterparty_signed_at.
+  - Signatures: data-image counterparty_signature (the approved NeoSleep
+    signatory's PNG) and data-image signer_signature (the doctor's drawn
+    signature). One signature at the end covers the agreement and Annex 1.
+-->
+<html>
+<head>
+<meta charset="UTF-8" />
+<title>{{documents.partnerAgreement.title}}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: {{brand:primary}};
+    --secondary: {{brand:secondary}};
+    --text: #1a1a1a;
+    --font: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  /* 26mm bottom: room for the 3-line Puppeteer contact footer (CSS @page
+     margins win over page.pdf()'s own margin option). */
+  @page { size: A4; margin: 18mm 14mm 26mm; }
+  body {
+    font-family: var(--font);
+    font-weight: 300;
+    color: var(--text);
+    font-size: 9.5pt;
+    line-height: 1.45;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 28px 24px 20px;
+    background: #fff;
+  }
+  header.doc-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    /* A logo-height square of space between the logo and the title, so a
+       wrapped title never sits tight against the mark. */
+    gap: 24px;
+    border-bottom: 0.5px solid rgba(71, 71, 71, 0.35);
+    padding-bottom: 6px;
+    margin-bottom: 16px;
+  }
+  header.doc-header .doc-label { text-align: right; }
+  header.doc-header .logo svg { height: 24px; width: auto; display: block; }
+  header.doc-header .doc-label { font-size: 8pt; font-weight: 400; color: var(--secondary); }
+  h1 { color: var(--primary); font-size: 14pt; font-weight: 500; margin: 0 0 2px; line-height: 1.3; text-align: center; }
+  h2 { color: var(--secondary); font-size: 11pt; font-weight: 400; margin: 0 0 16px; line-height: 1.3; text-align: center; }
+  .date-line { text-align: center; color: var(--secondary); margin: 0 0 16px; }
+  p { margin: 0 0 8px; text-align: justify; text-justify: inter-word; }
+  ol, ul { margin: 0 0 8px; padding-left: 20px; }
+  li { margin-bottom: 4px; text-align: justify; }
+  .doc-content p strong, .annex-content p strong { display: block; text-align: center; margin-top: 14px; color: var(--secondary); font-weight: 600; }
+  /* A "§ n." heading paragraph never ends a page on its own. */
+  .doc-content p:has(> strong:only-child), .annex-content p:has(> strong:only-child) { break-after: avoid; }
+  .parties p { text-align: justify; }
+  .field-value { font-weight: 500; }
+  .annex { break-before: page; margin-top: 28px; }
+  .annex .annex-heading { text-align: center; color: var(--secondary); font-weight: 500; margin: 0; }
+  .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 32px; break-inside: avoid; }
+  .signature .sig-role { font-weight: 600; color: var(--secondary); margin-bottom: 4px; }
+  .signature .sig-image { height: 80px; border-bottom: 1px solid var(--text); display: flex; align-items: flex-end; }
+  .signature .sig-image img { max-height: 76px; max-width: 100%; display: block; }
+  .signature .sig-name { margin-top: 4px; font-weight: 500; }
+  .signature .sig-date { color: var(--secondary); font-size: 8.5pt; }
+  .screen-only.contact-footer { font-size: 8pt; color: var(--secondary); border-top: 1px solid #ccc; padding-top: 8px; margin-top: 24px; }
+  .screen-only.contact-footer .doc-ref { text-align: right; margin-top: 2px; }
+  @media print { body { padding: 0; max-width: none; } .screen-only { display: none; } }
+  /* Phone-width preview (PWA signing dialog): justified legal text leaves
+     huge word gaps in a narrow column — left-align there; the A4 PDF keeps
+     justification. Stack the two signature blocks too. */
+  @media screen and (max-width: 600px) {
+    body { padding: 20px 16px; }
+    p, li, .parties p { text-align: left; }
+    .signatures { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+  <header class="doc-header">
+    <span class="logo">{{brand:logo}}</span>
+    <span class="doc-label">{{documents.partnerAgreement.title}}</span>
+  </header>
+
+  <h1>{{documents.partnerAgreement.title}}</h1>
+  <p class="date-line">{{documents.partnerAgreement.dateLine}}</p>
+
+  <div class="parties">
+    <p>{{documents.partnerAgreement.partyNeoSleep}}</p>
+    <p>{{documents.partnerAgreement.partyAnd}}</p>
+    <p data-variant="owner">{{documents.partnerAgreement.partyOwner}}</p>
+    <p data-variant="staff">{{documents.partnerAgreement.partyStaff}}</p>
+    <p>{{documents.partnerAgreement.partiesTogether}}</p>
+  </div>
+
+  <div class="doc-content">{{content}}</div>
+
+  <section class="annex">
+    <p class="annex-heading">{{documents.partnerAgreement.annexHeading}}</p>
+    <h1>{{documents.partnerAgreement.annexTitle}}</h1>
+    <p class="date-line">{{documents.partnerAgreement.annexSubtitle}}</p>
+    <div class="annex-content">{{slot:annex}}</div>
+  </section>
+
+  <div class="signatures">
+    <div class="signature">
+      <div class="sig-role">{{documents.partnerAgreement.signCounterparty}}</div>
+      <div class="sig-image" data-image="counterparty_signature"></div>
+      <div class="sig-name" data-field="counterparty_name"></div>
+      <div class="sig-date">{{documents.partnerAgreement.signedOn}} <span data-field="counterparty_signed_at"></span></div>
+    </div>
+    <div class="signature">
+      <div class="sig-role">{{documents.partnerAgreement.signPartner}}</div>
+      <div class="sig-image" data-image="signer_signature"></div>
+      <div class="sig-name" data-field="doctor_name"></div>
+      <div class="sig-date">{{documents.partnerAgreement.signedOn}} <span data-field="signer_signed_at"></span></div>
+    </div>
+  </div>
+
+  <div class="contact-footer screen-only">
+    <div>{{brand:contactLine}}</div>
+    <div class="doc-ref">NSL-PA v1</div>
+  </div>
+
+</body>
+</html>

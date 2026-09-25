@@ -98,6 +98,12 @@ export async function CreatePatientCommand(
   if (!phone) throw new ValidationError("phone is required");
   if (phone.replace(/\D/g, "").length < 9) throw new ValidationError("Phone must contain at least 9 digits");
 
+  // Required for patients only (doctors share identities but never record these).
+  const gender = normalizeGender(input.gender);
+  if (!gender) throw new ValidationError("gender is required");
+  const dateOfBirth = normalizeDateOfBirth(input.date_of_birth);
+  if (!dateOfBirth) throw new ValidationError("date_of_birth is required");
+
   // Support legacy hcp_id → practitioner_id
   const practitionerId = input.practitioner_id?.trim() || input.hcp_id?.trim() || undefined;
 
@@ -107,8 +113,8 @@ export async function CreatePatientCommand(
     last_name:      lastName,
     email,
     phone,
-    gender:         normalizeGender(input.gender) ?? null,
-    date_of_birth:  normalizeDateOfBirth(input.date_of_birth) ?? null,
+    gender,
+    date_of_birth:  dateOfBirth,
     practitioner_id: practitionerId,
     diagnosis_code: input.diagnosis_code,
     ahi_baseline:   input.ahi_baseline,
@@ -192,6 +198,12 @@ export async function UpdatePatientCommand(
     if (phone.replace(/\D/g, "").length < 9) throw new ValidationError("Phone must contain at least 9 digits");
   }
 
+  // Can be filled in on an older patient that lacks them, never cleared.
+  const gender = normalizeGender(input.gender);
+  if (gender === null) throw new ValidationError("gender cannot be blank");
+  const dateOfBirth = normalizeDateOfBirth(input.date_of_birth);
+  if (dateOfBirth === null) throw new ValidationError("date_of_birth cannot be blank");
+
   const before = await getPatientById(ctx.client, id);
   if (!before) return null;
   // Same scope check as GetPatientByIdQuery — editing must not reach further
@@ -215,8 +227,8 @@ export async function UpdatePatientCommand(
     last_name:      input.last_name?.trim() || undefined,
     email:          input.email !== undefined ? input.email : undefined,
     phone:          input.phone !== undefined ? input.phone : undefined,
-    gender:         normalizeGender(input.gender),
-    date_of_birth:  normalizeDateOfBirth(input.date_of_birth),
+    gender,
+    date_of_birth:  dateOfBirth,
     practitioner_id: practitionerId,
     diagnosis_code: input.diagnosis_code,
     ahi_baseline:   input.ahi_baseline,

@@ -315,6 +315,14 @@ const moduleIcon = computed(() => {
   /* Side menu: list padding + nav item padding → icon box left edge. */
   --layout-nav-inset: 8px;
   --layout-nav-item-inset: 10px;
+  /* Nav icon slot (VListItem prepend) + its gap to the label → where the
+     menu labels start; the version footnote lines up with that edge. */
+  --layout-nav-icon-size: 20px;
+  --layout-nav-icon-gap: 10px;
+  --layout-nav-label-inset: calc(
+    var(--layout-nav-inset) + var(--layout-nav-item-inset) + var(--layout-nav-icon-size)
+      + var(--layout-nav-icon-gap)
+  );
   /* Content card padding = the responsive page gutter (NEO-61, 20/24/32px,
      packages/brand/spacing.css), and the icon's inset inside a size="large"
      (56px) icon button holding a 24px icon: (56 − 24) / 2. */
@@ -630,11 +638,11 @@ const moduleIcon = computed(() => {
   padding-bottom: 0;
 }
 
-/* Quiet footnote, not UI: tiny, low-contrast, tucked into the drawer's
-   bottom-left corner. */
+/* Quiet footnote, not UI: tiny, low-contrast, at the drawer's bottom, its
+   left edge on the menu labels' edge (the footer's own padding subtracted). */
 .layout-app-version {
   margin: 0;
-  padding-inline: 2px 0;
+  padding-inline: calc(var(--layout-nav-label-inset) - var(--app-shell-nav-footer-pad, 12px)) 0;
   font-size: 10px;
   line-height: 1.3;
   font-weight: 400;

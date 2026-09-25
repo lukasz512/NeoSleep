@@ -22,6 +22,12 @@ describe("patientFormFields", () => {
     expect(ahi.type).toBe("number");
   });
 
+  it("sex and date of birth are required for a patient", () => {
+    const byKey = Object.fromEntries(patientFormFields.map((f) => [f.key, f]));
+    expect(byKey.gender.required).toBe(true);
+    expect(byKey.date_of_birth.required).toBe(true);
+  });
+
   it("carries the full existing field set (no fields dropped in the migration)", () => {
     expect(patientFormFields.map((f) => f.key)).toEqual([
       "salutation", "first_name", "last_name", "email", "phone", "gender", "date_of_birth",

@@ -210,6 +210,87 @@ body {
   opacity: 1;
 }
 
+/*
+ * The footer's "Items per page" control is a Vuetify outlined VSelect. Next
+ * to the page count it read as a form field to fill in; it is a setting, so
+ * it renders as plain text: no outline, no chevron. The value stays
+ * clickable and still opens the page-size menu.
+ */
+.v-data-table-footer__items-per-page .v-field__outline,
+.v-data-table-footer__items-per-page .v-select__menu-icon {
+  display: none;
+}
+
+.v-data-table-footer__items-per-page > .v-select {
+  font-size: inherit;
+  width: auto;
+}
+
+.v-data-table-footer__items-per-page .v-field,
+.v-data-table-footer__items-per-page .v-field__input {
+  padding-inline: 4px;
+  font-size: inherit;
+  color: inherit;
+}
+
+/* Hover/focus reads as the same teal tint a table row gets on hover. */
+.v-data-table-footer__items-per-page .v-field {
+  border-radius: var(--pwa-radius-pill) !important;
+  padding-inline: 6px;
+  cursor: pointer;
+  --v-field-input-padding-top: 0px;
+  --v-field-input-padding-bottom: 0px;
+}
+.v-data-table-footer__items-per-page .v-field__input {
+  min-height: 28px;
+}
+.v-data-table-footer__items-per-page .v-field:hover,
+.v-data-table-footer__items-per-page .v-field--focused {
+  background: var(--pwa-table-row-hover);
+  color: var(--pwa-primary);
+}
+
+/*
+ * Its menu (tagged via Vuetify defaults in @neo/vuetify, teleported to
+ * <body>) mirrors the table's clinical-card rows: same radius, hairline
+ * outline, surface, footer-sized text; the current value and hover use the
+ * row-hover teal instead of Vuetify's grey block.
+ */
+.neo-table-page-size-menu {
+  min-width: 72px !important;
+  margin-top: -4px;
+  border-radius: var(--pwa-list-row-radius) !important;
+  border: 1px solid var(--pwa-table-border);
+  box-shadow: var(--pwa-shadow-md);
+  overflow: hidden;
+}
+.neo-table-page-size-menu > .v-list {
+  padding: 4px !important;
+  background: var(--pwa-list-row-bg);
+  box-shadow: none;
+}
+.neo-table-page-size-menu .v-list-item {
+  min-height: 32px !important;
+  padding-inline: 12px !important;
+  border-radius: calc(var(--pwa-list-row-radius) - 4px) !important;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+.neo-table-page-size-menu .v-list-item-title {
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+}
+.neo-table-page-size-menu .v-list-item__overlay {
+  display: none;
+}
+.neo-table-page-size-menu .v-list-item:hover {
+  background: var(--pwa-table-row-hover);
+}
+.neo-table-page-size-menu .v-list-item--active {
+  background: var(--pwa-table-row-hover);
+  color: var(--pwa-primary);
+  font-weight: 600;
+}
+
 /* Inputs: match app design (border-radius, transitions, touch targets) */
 .v-field {
   border-radius: var(--pwa-radius) !important;

@@ -1,6 +1,7 @@
 import type { FormFieldDef } from "../../types/formField";
 import { useAuthStore } from "../../stores/auth";
 import { identityFields } from "./identityFields";
+import { licenseNumberFields } from "./licenseNumberFields";
 import { i18n } from "../../plugins/i18n";
 
 /**
@@ -45,6 +46,9 @@ export const leadFormFields: FormFieldDef[] = [
     nestUnder: "metadata",
     cols: 12,
   },
+  // Optional on a lead; carried over to practitioner.national_ids when the
+  // lead becomes an HCP (moveToDoctorsInitialData / InvitePractitionerCommand).
+  ...licenseNumberFields({ nestUnder: "metadata", hiddenWhen: (form) => !isDoctorType(form) }),
   {
     key: "diagnosis",
     type: "text",

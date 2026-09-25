@@ -4,6 +4,7 @@ import { requireAuth } from "../middleware/requireAuth.js";
 import { requireRole } from "../middleware/requireRole.js";
 import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
+import { resolveFrontendOrigin } from "../utils/frontendOrigin.js";
 import { CreatePractitionerCommand, UpdatePractitionerCommand, DeletePractitionerCommand, ActivatePractitionerCommand } from "../commands/practitioner.js";
 import {
   LinkPractitionerOrganizationCommand,
@@ -322,7 +323,7 @@ practitionerRouter.post(
     const slug = tenantSlugFromHost(req.hostname);
     const practitioner = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
-      return ActivatePractitionerCommand(ctx, id);
+      return ActivatePractitionerCommand(ctx, id, resolveFrontendOrigin(req));
     });
 
     if (!practitioner) { res.status(404).json({ error: "Practitioner not found" }); return; }

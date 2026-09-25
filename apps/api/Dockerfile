@@ -1,59 +1,57 @@
 # =============================================================================
-# NeoSleep BFF — multi-stage Docker build
-# Build context: repo root (so pnpm workspace deps are accessible)
-# Usage: docker build -f apps/api/Dockerfile -t neo-api .
+# NeoSleep API — container image for Google Cloud Run (NEO-45, ADR-025)
+#
+# Build context: repo root.
+#   docker build --platform linux/amd64 -f apps/api/Dockerfile -t neo-api .
+#
+# Why it looks like this:
+# - Debian (bookworm-slim), not Alpine: @sparticuz/chromium (PDF documents) ships a
+#   glibc build and fails on musl. See services/documentRenderer.ts.
+# - linux/amd64: that Chromium binary is x86_64 only, and Cloud Run runs amd64.
+# - The workspace layout (/app/apps/api, /app/packages/*) is kept as-is in the final
+#   image, because @neo/documents and @neo/email read templates, assets and
+#   packages/i18n/*.json relative to their own dist/ folders at runtime.
+# - Same build command as CI and Render: pnpm --filter "@neo/api..." build.
 # =============================================================================
 
-# Stage 1: builder — install all deps and compile TypeScript
-FROM node:20-alpine AS builder
-
-RUN corepack enable && corepack prepare pnpm@latest --activate
-
+FROM node:20-bookworm-slim AS build
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 WORKDIR /app
 
-# Copy workspace manifests and lockfile first (layer cache)
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
-COPY apps/api/package.json ./apps/api/package.json
-COPY tsconfig.base.json ./
+COPY . .
+RUN pnpm install --frozen-lockfile --filter "@neo/api..."
+RUN pnpm --filter "@neo/api..." build
 
-# Install all workspace dependencies
-RUN pnpm install --frozen-lockfile
+# Swap to production-only dependencies, keeping the same workspace layout.
+RUN rm -rf node_modules apps/api/node_modules \
+ && pnpm install --frozen-lockfile --prod --filter "@neo/api..."
 
-# Copy API source and compile
-COPY apps/api/src ./apps/api/src
-COPY apps/api/tsconfig.json ./apps/api/tsconfig.json
 
-WORKDIR /app/apps/api
-RUN pnpm exec tsc -p tsconfig.json
-
-# Stage 2: production — minimal image with non-root user
-FROM node:20-alpine AS production
-
-RUN corepack enable && corepack prepare pnpm@latest --activate
-
-# Create non-root user
-RUN addgroup -S bff && adduser -S -u 1001 -G bff bff
-
+FROM node:20-bookworm-slim AS runtime
+ENV NODE_ENV=production
 WORKDIR /app
 
-# Copy workspace manifests (needed for pnpm to resolve workspaces)
-COPY --chown=bff:bff package.json pnpm-workspace.yaml pnpm-lock.yaml ./
-COPY --chown=bff:bff apps/api/package.json ./apps/api/package.json
+COPY --from=build /app/package.json ./package.json
+COPY --from=build /app/node_modules ./node_modules
 
-# Install production dependencies only
-RUN pnpm install --frozen-lockfile --prod
+COPY --from=build /app/apps/api/package.json ./apps/api/package.json
+COPY --from=build /app/apps/api/node_modules ./apps/api/node_modules
+COPY --from=build /app/apps/api/dist ./apps/api/dist
+COPY --from=build /app/apps/api/migrations ./apps/api/migrations
 
-# Copy compiled output and migrations
-COPY --from=builder --chown=bff:bff /app/apps/api/dist ./apps/api/dist
-COPY --chown=bff:bff apps/api/migrations ./apps/api/migrations
+COPY --from=build /app/packages/documents/package.json ./packages/documents/package.json
+COPY --from=build /app/packages/documents/dist ./packages/documents/dist
+COPY --from=build /app/packages/documents/templates ./packages/documents/templates
+COPY --from=build /app/packages/documents/assets ./packages/documents/assets
 
+COPY --from=build /app/packages/email/package.json ./packages/email/package.json
+COPY --from=build /app/packages/email/dist ./packages/email/dist
+COPY --from=build /app/packages/email/assets ./packages/email/assets
+
+COPY --from=build /app/packages/i18n/en.json /app/packages/i18n/pl.json /app/packages/i18n/mx.json ./packages/i18n/
+
+# Unprivileged user. Chromium unpacks itself into /tmp, which stays writable.
+USER node
 WORKDIR /app/apps/api
-
-USER bff
-
-EXPOSE 3000
-
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD wget -qO- http://localhost:3000/health || exit 1
-
+EXPOSE 8080
 CMD ["node", "dist/server.js"]

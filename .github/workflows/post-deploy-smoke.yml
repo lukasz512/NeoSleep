@@ -1,0 +1,102 @@
+# Post-deploy smoke test for DEV — runs by itself after every merge to dev,
+# so "did the deploy actually work?" is answered without anyone remembering
+# to click through pwa-dev. A red run here means the merge is live but broken
+# (or never went live); GitHub notifies whoever merged.
+#
+# - api:      Render auto-deploys every push to dev (render.yaml). Waits until
+#             /health reports the pushed commit, then renders one real PDF via
+#             /health/pdf (bundled Chromium is the most fragile piece on Render).
+# - frontend: after each FTP deploy workflow finishes, fails if the deploy
+#             itself failed, otherwise checks the page and every JS/CSS asset
+#             it references return 200 (a half-finished FTP upload leaves the
+#             page pointing at assets that 404).
+#
+# workflow_run only fires from this file on the default branch (dev).
+
+name: Post-deploy smoke test (dev)
+
+on:
+  push:
+    branches: [dev]
+  workflow_run:
+    workflows: ["Deploy NeoSleepCare App", "Deploy NeoSleepCare Site"]
+    types: [completed]
+    branches: [dev]
+  workflow_dispatch: {}
+
+jobs:
+  api:
+    if: github.event_name != 'workflow_run'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # A newer push supersedes this one — Render only ever serves the newest.
+    concurrency:
+      group: smoke-api-dev
+      cancel-in-progress: true
+    env:
+      API_URL: ${{ secrets.RENDER_API_URL_DEV }}
+      EXPECTED_COMMIT: ${{ github.sha }}
+    steps:
+      - name: Wait for Render to serve this commit
+        if: github.event_name == 'push'
+        run: |
+          for i in $(seq 1 80); do
+            live=$(curl -sf --max-time 20 "$API_URL/health" | jq -r '.commit // empty' || true)
+            if [ "$live" = "$EXPECTED_COMMIT" ]; then
+              echo "API is serving $live"
+              exit 0
+            fi
+            echo "[$i] live commit: ${live:-unknown} — waiting for $EXPECTED_COMMIT"
+            sleep 15
+          done
+          echo "::error::Render did not serve $EXPECTED_COMMIT within 20 minutes — check the Render dashboard for a failed build."
+          exit 1
+
+      - name: API health
+        run: curl -sf --max-time 30 "$API_URL/health" | tee /dev/stderr | jq -e '.ok == true' > /dev/null
+
+      - name: PDF render
+        run: |
+          # The first render after a deploy launches Chromium cold — one retry.
+          for attempt in 1 2; do
+            body=$(curl -s --max-time 90 "$API_URL/health/pdf" || true)
+            echo "attempt $attempt: $body"
+            if echo "$body" | jq -e '.ok == true' > /dev/null 2>&1; then exit 0; fi
+            sleep 30
+          done
+          echo "::error::PDF generation is broken on dev: $body"
+          exit 1
+
+  frontend:
+    if: github.event_name == 'workflow_run'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      DEPLOY_NAME: ${{ github.event.workflow_run.name }}
+      DEPLOY_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+      DEPLOY_URL: ${{ github.event.workflow_run.html_url }}
+    steps:
+      - name: Deploy itself succeeded
+        run: |
+          if [ "$DEPLOY_CONCLUSION" != "success" ]; then
+            echo "::error::$DEPLOY_NAME ended with '$DEPLOY_CONCLUSION' — this merge is NOT live. Re-run it: $DEPLOY_URL"
+            exit 1
+          fi
+
+      - name: Page and all its assets load
+        run: |
+          case "$DEPLOY_NAME" in
+            "Deploy NeoSleepCare App")  SITE=https://pwa-dev.neosleepcare.com ;;
+            "Deploy NeoSleepCare Site") SITE=https://dev.neosleepcare.com ;;
+            *) echo "::error::Unknown deploy workflow: $DEPLOY_NAME"; exit 1 ;;
+          esac
+          html=$(curl -sf --max-time 30 -H 'Cache-Control: no-cache' "$SITE/") || { echo "::error::$SITE/ did not load"; exit 1; }
+          assets=$(echo "$html" | grep -oE '(src|href)="/[^"]+\.(js|css)"' | sed -E 's/^(src|href)="//; s/"$//' | sort -u)
+          if [ -z "$assets" ]; then echo "::error::$SITE/ references no JS/CSS — not a built page"; exit 1; fi
+          failed=0
+          for a in $assets; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$SITE$a")
+            echo "$code $a"
+            [ "$code" = "200" ] || failed=1
+          done
+          if [ "$failed" = "1" ]; then echo "::error::$SITE is missing assets — the FTP upload was incomplete"; exit 1; fi
