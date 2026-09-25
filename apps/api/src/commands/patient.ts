@@ -10,6 +10,7 @@ import {
 } from "../db.js";
 import { insertAuditLog } from "../db.js";
 import { ValidationError } from "../errors.js";
+import { assertTerritoryAccessByTerritoryId } from "../middleware/requireScope.js";
 import { ConvertLeadCommand } from "./lead.js";
 
 /**
@@ -205,6 +206,13 @@ export async function UpdatePatientCommand(
 
   const before = await getPatientById(ctx.client, id);
   if (!before) return null;
+  // Same scope check as GetPatientByIdQuery — editing must not reach further
+  // than reading. A territory change is checked against the target too, so a
+  // patient can't be moved into a territory the caller doesn't cover.
+  await assertTerritoryAccessByTerritoryId(ctx, before.territory_id);
+  if (input.territory_id && input.territory_id !== before.territory_id) {
+    await assertTerritoryAccessByTerritoryId(ctx, input.territory_id);
+  }
 
   // Support legacy hcp_id → practitioner_id
   const practitionerId = input.practitioner_id !== undefined
@@ -255,6 +263,10 @@ export async function UpdatePatientCommand(
 
 export async function DeletePatientCommand(ctx: TenantContext, id: string): Promise<void> {
   if (!id?.trim()) throw new ValidationError("patient id is required");
+
+  // Admin-only route, but admins can be region-scoped too.
+  const before = await getPatientById(ctx.client, id);
+  if (before) await assertTerritoryAccessByTerritoryId(ctx, before.territory_id);
 
   await softDeletePatient(ctx.client, id);
 

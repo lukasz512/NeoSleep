@@ -25,6 +25,7 @@ Migrations: `022_territory_ltree_scope.sql` (the mechanism), `023_territory_coun
 ### Acceptance Criteria
 - [x] `user_roles.territory_id` replaces `scope`; `getAllowedScopePaths`/`assertTerritoryAccess`/`assertTerritoryAccessByTerritoryId` (`middleware/requireScope.ts`) replace the old country-string versions.
 - [x] `GetPatientListQuery`/`GetPractitionerListQuery`/`GetOrganizationListQuery` (and their by-id equivalents) apply the caller's scope — the exact gap the other session's security story flagged.
+- [x] Write paths match read paths (NEO-47, 2026-09-25): `UpdatePatientCommand` and `DeletePatientCommand` run the same `assertTerritoryAccessByTerritoryId` check as `GetPatientByIdQuery`, and a `territory_id` change is also checked against the *target* territory, so a patient can't be moved out of the caller's reach. Practitioner/organization history + documents sub-routes are the remaining read-side gap (NEO-48).
 - [x] A record with no `territory_id` assigned yet stays visible regardless of scope (rollout-safety fallback — zero records have one populated as of this writing; tightening this is a follow-up once backfilled).
 - [x] `userForm.ts` gets a real `territory_id` field, restricted to `kind IN ('country','global')` (`loadScopeTerritoryOptions`) — previously there was no UI at all for setting a user's RBAC scope.
 - [x] Full `apps/api` suite green (201/201) against the real dev DB, `apps/pwa` green except the pre-existing, unrelated `AppLayout.spec.ts` debt.
