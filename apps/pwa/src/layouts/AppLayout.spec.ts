@@ -202,6 +202,16 @@ describe("AppLayout", () => {
       expect(block).not.toContain("VAvatar");
     });
 
+    it("the collapse toggle is hidden behind SIDEBAR_COLLAPSE_ENABLED (off for now)", () => {
+      const block = slotBlock(readLayout(), "drawer-footer");
+      expect(block).toMatch(/v-if="SIDEBAR_COLLAPSE_ENABLED"\s+class="layout-nav-footer"/);
+    });
+
+    it("the account button never locks while a request is in flight (only view controls do)", () => {
+      const block = slotBlock(readLayout(), "app-bar-actions");
+      expect(block).toMatch(/class="layout-user-btn"[\s\S]*?ignore-global-loading/);
+    });
+
     it("no notification bell, role-preview select, or theme panel sneaks into the app bar", () => {
       const source = readLayout();
       expect(source).not.toMatch(/<AppNotificationCenter\b/);

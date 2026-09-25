@@ -44,7 +44,10 @@
 
       <template #drawer-footer>
         <div class="layout-drawer-footer">
-          <div class="layout-nav-footer" :class="{ 'layout-nav-footer--collapsed': sidebarCollapsed }">
+          <div
+            v-if="SIDEBAR_COLLAPSE_ENABLED"
+            class="layout-nav-footer"
+            :class="{ 'layout-nav-footer--collapsed': sidebarCollapsed }">
             <AppButton
               icon
               variant="text"
@@ -97,6 +100,7 @@
               v-bind="menuProps"
               variant="text"
               class="layout-user-btn"
+              ignore-global-loading
               :class="{ 'layout-user-btn--compact': isMobile }"
               :title="t('user.user.menu')"
               :aria-label="t('user.user.menu')"
@@ -220,6 +224,7 @@ import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
 import { useNotificationCenter } from "../composables/useNotificationCenter";
 import { onAppReady, markAppReady } from "../composables/useAppReady";
 import { usePartnerResources } from "../composables/usePartnerResources";
+import { SIDEBAR_COLLAPSE_ENABLED } from "../constants";
 
 const route = useRoute();
 const { t, locale } = useI18n();
@@ -622,20 +627,20 @@ const moduleIcon = computed(() => {
   gap: 2px;
   width: 100%;
   min-width: 0;
-  padding-bottom: 4px;
+  padding-bottom: 0;
 }
 
-/* Quiet footnote, not UI: small and low-contrast, left-aligned with the
-   account button's avatar above it. */
+/* Quiet footnote, not UI: tiny, low-contrast, tucked into the drawer's
+   bottom-left corner. */
 .layout-app-version {
   margin: 0;
-  padding-inline: 12px 0;
-  font-size: 11px;
-  line-height: 1.4;
-  font-weight: 500;
+  padding-inline: 2px 0;
+  font-size: 10px;
+  line-height: 1.3;
+  font-weight: 400;
   letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
-  color: rgba(var(--v-theme-on-surface), 0.45);
+  color: rgba(var(--v-theme-on-surface), 0.32);
   /* Wraps rather than truncating if a long build number ever outgrows the
      ~200px drawer — the number is the point of the line. */
   overflow-wrap: anywhere;
