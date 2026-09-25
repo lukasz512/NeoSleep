@@ -43,9 +43,6 @@
   table.checklist { width: 100%; border-collapse: collapse; margin: 0 0 10px; }
   table.checklist td { padding: 5px 6px 5px 0; border-bottom: 1px solid #eee; font-size: 9.5pt; }
   table.checklist td.q-answer { text-align: right; font-weight: 600; color: var(--primary); width: 120px; white-space: nowrap; }
-  .sig-label { font-weight: 600; color: var(--secondary); margin: 18px 0 6px; }
-  .signature-box { border: 1px solid var(--secondary); height: 80px; width: 60%; padding: 6px; }
-  .signature-box img { max-height: 66px; max-width: 100%; }
   .screen-only.contact-footer { font-size: 8pt; color: var(--secondary); border-top: 1px solid #ccc; padding-top: 8px; margin-top: 24px; }
   .screen-only.contact-footer .doc-ref { text-align: right; margin-top: 2px; }
   @media print { body { padding: 0; max-width: none; } .screen-only { display: none; } }
@@ -88,8 +85,7 @@
   </table>
   <div class="doc-notes"><div class="doc-notes-label">{{documents.historiaEndo.q.other}}</div><div class="doc-notes-body" data-field="medical_history_other"></div></div>
 
-  <div class="sig-label">{{documents.historiaEndo.signatureLabelPatient}}</div>
-  <div class="signature-box" data-field="firma_paciente"></div>
+  <div class="sig-panels"><div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.historiaEndo.signatureLabelPatient}}</div><div class="sig-area" data-field="firma_paciente"></div><div class="sig-e-note">{{documents.signature.eSigned}}</div></div></div></div>
 
   <div class="contact-footer screen-only">
     <div>{{brand:contactLine}}</div>
