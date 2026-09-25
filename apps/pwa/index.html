@@ -6,6 +6,13 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <title>NeoSleep PWA</title>
+    <!-- Cascade-layer order (Vuetify 4). Must be declared before any CSS
+         loads: Vuetify's component styles are imported per component and can
+         otherwise reach the page before vuetify/styles, which would put the
+         reset/core layer above the component layer. `app-base` holds the
+         app's own link defaults (assets/theme.scss): above Vuetify's reset,
+         below its components. -->
+    <style>@layer vuetify-core, app-base, vuetify-components, vuetify-overrides, vuetify-utilities, vuetify-final;</style>
     <!-- Optional: add a font link here and set --pwa-font-sans in theme.scss to use it (see DESIGN_AND_UI.md). -->
   </head>
   <body>

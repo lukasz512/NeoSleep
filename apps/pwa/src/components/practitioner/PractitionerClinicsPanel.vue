@@ -14,7 +14,7 @@
         :loading="loadingOrgOptions"
         class="practitioner-clinics-panel__add-field"
       >
-        <template #item="{ item, props: itemProps }">
+        <template #item="{ internalItem: item, props: itemProps }">
           <VListItem v-bind="itemProps" :title="item.raw.name">
             <template #prepend>
               <AppAvatar :name="item.raw.name" entity-type="hco" :size="28" />

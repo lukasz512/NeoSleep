@@ -2,7 +2,60 @@
  * Vuetify SASS variable overrides.
  * Aligns Vuetify's rounded utilities and component radius with project design tokens (--pwa-radius).
  * See apps/pwa/src/assets/theme.scss for $pwa-radius.
+ *
+ * Vuetify 4 upgrade (NEO-74) — everything below keeps the app looking as it
+ * did on Vuetify 3. Each group can be dropped on its own once the design
+ * deliberately adopts the Vuetify 4 / Material 3 default instead.
+ *
+ * - $grid-breakpoints: Vuetify 4 lowered md/lg/xl/xxl; keep the Vuetify 3
+ *   values so responsive utility classes (d-md-flex, v-col md="6", …) switch at
+ *   the same widths as useDisplay() — see VUETIFY3_THRESHOLDS in
+ *   packages/vuetify/src/index.ts.
+ * - $typography 'body-small': the MD2 `text-caption` class became MD3
+ *   `text-body-small` (same 12px, but line-height 1.333 instead of 1.667).
+ *   Keep the old line-height so migrated meta/caption lines keep their height.
+ * - Component typography: Vuetify 4 moved component text from the MD2 scale
+ *   to MD3 (buttons lost uppercase + wide tracking, card/alert titles changed
+ *   size and weight, list titles tighter tracking). The values here are the
+ *   Vuetify 3 (MD2) ones.
  */
 @use 'vuetify/settings' with (
-  $border-radius-root: 10px
+  $border-radius-root: 10px,
+  $grid-breakpoints: (
+    'xs': 0,
+    'sm': 600px,
+    'md': 960px,
+    'lg': 1280px,
+    'xl': 1920px,
+    'xxl': 2560px,
+  ),
+  $typography: (
+    'body-small': (
+      'line-height': 1.6666666667,
+    ),
+  ),
+
+  // VBtn — MD2 "button" style
+  $button-text-transform: uppercase,
+  $button-text-letter-spacing: .0892857143em,
+
+  // VCard / VAlert titles — MD2 "h6"
+  $card-title-font-size: 1.25rem,
+  $card-title-font-weight: 500,
+  $card-title-letter-spacing: .0125em,
+  $card-title-line-height: 1.6,
+  $alert-title-font-size: 1.25rem,
+  $alert-title-font-weight: 500,
+  $alert-title-letter-spacing: .0125em,
+
+  // VCard text/subtitle — MD2 "body-2" line-height
+  $card-subtitle-line-height: 1.425,
+  $card-text-line-height: 1.425,
+
+  // VList item title — MD2 "subtitle-1" tracking
+  $list-item-title-letter-spacing: .009375em,
+
+  // VBottomNavigation / VBreadcrumbs — MD2 "caption" / "subtitle-2"
+  $bottom-navigation-content-font-size: .75rem,
+  $breadcrumbs-line-height: 1.6,
 );

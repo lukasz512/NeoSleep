@@ -5,9 +5,9 @@
       :subtitle="t('user.dev.subtitle')"
     />
     <VCard class="mt-4">
-      <VCardTitle class="text-subtitle-1">{{ t("user.dev.loader.title") }}</VCardTitle>
+      <VCardTitle class="text-body-large">{{ t("user.dev.loader.title") }}</VCardTitle>
       <VCardText>
-        <p class="text-body-2 text-medium-emphasis mb-3">{{ t("user.dev.loader.hint") }}</p>
+        <p class="text-body-medium text-medium-emphasis mb-3">{{ t("user.dev.loader.hint") }}</p>
         <div class="d-flex gap-2 flex-wrap">
           <AppButton color="primary" variant="outlined" @click="triggerLoader">
             {{ t("user.dev.loader.trigger") }}
@@ -16,9 +16,9 @@
       </VCardText>
     </VCard>
     <VCard class="mt-4">
-      <VCardTitle class="text-subtitle-1">{{ t("user.dev.notifications.title") }}</VCardTitle>
+      <VCardTitle class="text-body-large">{{ t("user.dev.notifications.title") }}</VCardTitle>
       <VCardText>
-        <p class="text-body-2 text-medium-emphasis mb-3">{{ t("user.dev.notifications.hint") }}</p>
+        <p class="text-body-medium text-medium-emphasis mb-3">{{ t("user.dev.notifications.hint") }}</p>
         <div class="d-flex gap-2 flex-wrap">
           <AppButton color="success" variant="outlined" size="small" @click="showNotification('success')">
             {{ t("user.dev.notifications.success") }}

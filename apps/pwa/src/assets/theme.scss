@@ -186,6 +186,19 @@ body {
 [data-theme="dark"] :focus-visible {
   outline-color: var(--pwa-primary, #17b5a5);
 }
+/*
+ * …except on the native <input>/<textarea> inside a Vuetify field: the field
+ * already shows focus with its own colored outline. Vuetify sets
+ * `outline: none` there with a more specific selector, which used to beat
+ * the ring above; on Vuetify 4 its styles sit in cascade layers, and
+ * unlayered CSS like this file always beats layered CSS, so the exception
+ * has to be restated here.
+ */
+.v-field__input:focus-visible,
+.v-field input:focus-visible,
+.v-field textarea:focus-visible {
+  outline: none;
+}
 
 /* Use design font in Vuetify components (they default to Roboto) */
 .v-application,
@@ -257,6 +270,18 @@ body {
 .v-combobox__menu-icon {
   opacity: var(--v-medium-emphasis-opacity, 0.6);
   font-size: 20px;
+}
+
+/*
+ * A size="small" chip inside a field (e.g. FormRenderer's colored status
+ * chip) is 26px tall. Vuetify's `.v-field .v-chip { --v-chip-height: 24px }`
+ * and `.v-chip.v-chip--size-small { --v-chip-height: 26px }` have equal
+ * specificity in the same cascade layer, so which one wins depends on the
+ * order the two component stylesheets happen to load — that order flipped
+ * with Vuetify 4. Pin the height so it no longer depends on load order.
+ */
+.v-field .v-chip.v-chip--size-small {
+  --v-chip-height: 26px;
 }
 
 /* Mobile: min 44px touch target for inputs (SPEC-0042) */
@@ -390,12 +415,20 @@ body {
 #app {
   font-family: var(--pwa-font-sans, system-ui, sans-serif);
 }
-a {
-  color: var(--pwa-primary, #128F83);
-  text-decoration: none;
-}
-a:hover {
-  color: var(--pwa-primary-hover, #10544E);
+/* Plain links. Kept in the `app-base` cascade layer (ordered after Vuetify's
+   reset, before its components — see the @layer statement in index.html):
+   Vuetify 4 ships its styles in layers and unlayered CSS always wins, so as
+   plain rules these would now recolor links rendered by Vuetify components
+   (<a class="v-btn">, <a class="v-list-item">), which they never did on
+   Vuetify 3 where the component's class selector won on specificity. */
+@layer app-base {
+  a {
+    color: var(--pwa-primary, #128F83);
+    text-decoration: none;
+  }
+  a:hover {
+    color: var(--pwa-primary-hover, #10544E);
+  }
 }
 
 /*
