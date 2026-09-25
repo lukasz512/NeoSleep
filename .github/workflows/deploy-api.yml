@@ -61,7 +61,7 @@ jobs:
       - name: Build and push image
         run: |
           gcloud auth configure-docker us-west2-docker.pkg.dev --quiet
-          docker build --platform linux/amd64 -f apps/api/Dockerfile -t "$IMAGE:$GITHUB_SHA" .
+          docker build --platform linux/amd64 -f apps/api/Dockerfile --build-arg "GIT_COMMIT=$GITHUB_SHA" -t "$IMAGE:$GITHUB_SHA" .
           docker push "$IMAGE:$GITHUB_SHA"
 
       - name: Deploy to Cloud Run

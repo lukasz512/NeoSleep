@@ -14,7 +14,7 @@
 # - Same build command as CI and Render: pnpm --filter "@neo/api..." build.
 # =============================================================================
 
-FROM node:20-bookworm-slim AS build
+FROM node:22-bookworm-slim AS build
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 WORKDIR /app
 
@@ -27,8 +27,19 @@ RUN rm -rf node_modules apps/api/node_modules \
  && pnpm install --frozen-lockfile --prod --filter "@neo/api..."
 
 
-FROM node:20-bookworm-slim AS runtime
+FROM node:22-bookworm-slim AS runtime
 ENV NODE_ENV=production
+# The one system library @sparticuz/chromium does not bundle: Chromium's network
+# stack (NSS) loads libsqlite3 as soon as a document fetches a web font (every
+# template loads Poppins from Google Fonts). Without it every real PDF dies with
+# "Connection closed" while a font-less page still renders.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libsqlite3-0 \
+ && rm -rf /var/lib/apt/lists/*
+# The commit this image was built from — /health reports it so the post-deploy
+# smoke test can tell when the new revision is actually serving.
+ARG GIT_COMMIT=""
+ENV GIT_COMMIT=$GIT_COMMIT
 WORKDIR /app
 
 COPY --from=build /app/package.json ./package.json

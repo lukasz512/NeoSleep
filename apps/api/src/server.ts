@@ -65,11 +65,14 @@ export const app: Express = express();
 // Registered before any other middleware (rate limiter, CORS, auth) so Render's
 // health checker never gets rate-limited or blocked by an unrelated dependency —
 // a 429/5xx here makes Render think the whole instance is down.
-// `commit` is the git SHA Render built this instance from (RENDER_GIT_COMMIT,
-// set by Render itself; null locally) — the post-deploy smoke test
+// `commit` is the git SHA this instance was built from — GIT_COMMIT on Cloud Run
+// (baked into the image by deploy-api.yml), RENDER_GIT_COMMIT on Render (set by
+// Render itself), null locally. The post-deploy smoke test
 // (.github/workflows/post-deploy-smoke.yml) polls it to know when the pushed
 // commit is actually live.
-app.get("/health", (_req, res) => res.json({ ok: true, commit: process.env.RENDER_GIT_COMMIT ?? null }));
+app.get("/health", (_req, res) =>
+  res.json({ ok: true, commit: process.env.GIT_COMMIT || process.env.RENDER_GIT_COMMIT || null })
+);
 
 // Render (and any reverse-proxy host) sits in front of this process and sets
 // X-Forwarded-For / X-Forwarded-Proto. Without this, express-rate-limit
