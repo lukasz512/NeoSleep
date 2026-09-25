@@ -228,4 +228,16 @@ describe("API server", () => {
     expect(res.body).toHaveProperty("specialists");
     expect(Array.isArray(res.body.specialists)).toBe(true);
   });
+
+  it("GET /api/v1/public/specialists is briefly cacheable public data, still rate-limited (NEO-79)", async () => {
+    const res = await request(app).get("/api/v1/public/specialists");
+    expect(res.status).toBe(200);
+    expect(res.headers["cache-control"]).toBe("public, max-age=300, stale-while-revalidate=600");
+    expect(res.headers["ratelimit-limit"]).toBe("60");
+  });
+
+  it("other /api/v1 responses keep the no-store default (the public cache header is scoped to the specialists route)", async () => {
+    const res = await request(app).get("/api/v1/lead");
+    expect(res.headers["cache-control"]).toBe("no-store, private");
+  });
 });

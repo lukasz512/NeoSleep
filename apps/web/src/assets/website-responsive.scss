@@ -373,10 +373,39 @@
 
   // ── FindSpecialistView ──────────────────────────────────────────────────────
 
-  @container main (max-width: 600px) {
-    .fs-search       { flex-direction: column; }
-    .fs-search__input { border-radius: 12px; }
-    .fs-map-wrap     { height: 320px; }
+  // Phone / narrow tablet (NEO-79, option A): one column, list first, and a
+  // List / Map toggle decides which half is shown.
+  @container page (max-width: 840px) {
+    .fs-view-toggle { display: grid; }
+    .fs-layout      { grid-template-columns: 1fr; gap: 0; }
+    .fs-layout--list .fs-layout__map  { display: none; }
+    .fs-layout--map  .fs-layout__list { display: none; }
+    .fs-map-wrap    { height: 68svh; min-height: 360px; max-height: none; }
+    .fs-layout--map .fs-map-card {
+      display: block;
+      position: absolute;
+      left: 0.625rem;
+      right: 0.625rem;
+      bottom: 0.625rem;
+      z-index: 2;
+    }
+    .fs-map-card .fs-card { box-shadow: var(--website-shadow-md); padding-right: 3rem; }
+  }
+
+  @container page (max-width: 560px) {
+    .fs-chips { justify-content: flex-start; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 0.25rem; scrollbar-width: none; }
+    .fs-chip  { flex: none; }
+    .fs-card__action { padding: 0 0.75rem; }
+  }
+
+  /* The map column is sticky beside the list on desktop → sticky needs @media */
+  @media (max-width: 900px) {
+    .fs-layout__map { position: relative; top: auto; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .fs-skel,
+    .fs-map-wrap--loading { animation: none; }
   }
 
   @container page (max-width: 560px) {

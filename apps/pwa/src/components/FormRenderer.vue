@@ -468,7 +468,11 @@ function fieldAttrs(f: FormFieldDef): Record<string, unknown> {
         label: labelFor(f),
         color: "primary",
         density: "comfortable",
-        hideDetails: true,
+        // A switch has no validation message, so the details row is only
+        // worth its space when the field carries a helper text (hint).
+        hideDetails: !f.hint,
+        hint: f.hint ? t(f.hint) : undefined,
+        persistentHint: !!f.hint,
         disabled: submitting.value || (!!f.immutableOnEdit && isEditMode.value),
       };
     case "text":
