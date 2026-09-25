@@ -184,6 +184,32 @@ describe("PartnerRegistrationView — documents instead of checkboxes (NEO-51)",
     expect(wrapper.text()).toContain(VALID_PREVIEW.email);
   });
 
+  it("after registering, says the account is active and moves on to login with the email pre-filled", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    try {
+      apiFetch.mockResolvedValueOnce(jsonResponse(true, VALID_PREVIEW));
+      const { wrapper, router } = await mountPartnerRegistrationView();
+      await signAndAcknowledge(wrapper);
+      const passwords = wrapper.findAll('input[type="password"]');
+      await passwords[0]!.setValue("correct-horse-battery");
+      await passwords[1]!.setValue("correct-horse-battery");
+      apiFetch.mockResolvedValueOnce(jsonResponse(true, { success: true, email: VALID_PREVIEW.email }));
+      await wrapper.find("form").trigger("submit");
+      await flushPromises();
+
+      expect(wrapper.text()).toContain(en["user.partnerRegistration.form.successTitle"]);
+      expect(wrapper.text()).toContain("8 s");
+      expect(router.currentRoute.value.path).toBe("/partner-register");
+
+      vi.advanceTimersByTime(8000);
+      // /login's view is a lazy chunk — the navigation settles once it has loaded.
+      await vi.waitFor(() => expect(router.currentRoute.value.path).toBe("/login"), { timeout: 5000 });
+      expect(router.currentRoute.value.query.email).toBe(VALID_PREVIEW.email);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("asks the doctor to read and sign again when a document was updated meanwhile (409 stale)", async () => {
     apiFetch.mockResolvedValueOnce(jsonResponse(true, VALID_PREVIEW));
     const { wrapper } = await mountPartnerRegistrationView();

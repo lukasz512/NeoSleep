@@ -214,8 +214,9 @@ describe("DocumentContentEditorView", () => {
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, HISTORY));
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, ["patient"]));
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, { fillMode: "consent", sortOrder: 10 }));
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, { countersigned: false })); // approval (NEO-51)
     const { wrapper } = await mountEditor();
-    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(4));
+    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(5));
     expect(apiFetch.mock.calls[3]![0]).toBe("/api/v1/document-content/gdprConsent.pl/patient-checklist");
 
     const permissionsTab = wrapper.findAll("button, [role='tab']").find((b) => b.text() === "Permissions");

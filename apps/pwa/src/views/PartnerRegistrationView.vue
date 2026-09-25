@@ -20,14 +20,18 @@
 
       <div v-else-if="step === 'submitted'" class="partner-registration__body">
         <VAlert type="success" variant="tonal" class="partner-registration__alert">
+          <strong class="partner-registration__status-title">{{ t('user.partnerRegistration.form.successTitle') }}</strong>
           {{ t('user.partnerRegistration.form.success', { email: preview?.email ?? '' }) }}
         </VAlert>
+        <p class="partner-registration__subtitle" role="status" aria-live="polite">
+          {{ t('user.partnerRegistration.form.redirecting', { seconds: redirectSeconds }) }}
+        </p>
         <AppButton
           color="primary"
           size="large"
           block
-          :to="{ path: '/login', query: { email: preview?.email ?? '' } }"
           class="partner-registration__submit"
+          @click="goToLogin"
         >
           {{ t('user.partnerRegistration.form.goToLogin') }}
         </AppButton>
@@ -238,8 +242,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from "vue";
-import { useRoute } from "vue-router";
+import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { VRadioGroup, VRadio } from "vuetify/components";
 import { AuthChrome, AuthCard, originDialogTransition } from "@ui";
@@ -269,6 +273,32 @@ import { apiFetch } from "../composables/useApi";
 
 const { t } = useI18n();
 const route = useRoute();
+const router = useRouter();
+
+// After a successful registration the page says what happened (account
+// active, documents emailed) and then moves on to login by itself, with the
+// email pre-filled — the doctor has nothing left to do on this page.
+const REDIRECT_SECONDS = 8;
+const redirectSeconds = ref(REDIRECT_SECONDS);
+let redirectTimer: ReturnType<typeof setInterval> | null = null;
+
+function goToLogin() {
+  if (redirectTimer) clearInterval(redirectTimer);
+  redirectTimer = null;
+  void router.push({ path: "/login", query: { email: preview.value?.email ?? "" } });
+}
+
+function startLoginRedirect() {
+  redirectSeconds.value = REDIRECT_SECONDS;
+  redirectTimer = setInterval(() => {
+    redirectSeconds.value -= 1;
+    if (redirectSeconds.value <= 0) goToLogin();
+  }, 1000);
+}
+
+onBeforeUnmount(() => {
+  if (redirectTimer) clearInterval(redirectTimer);
+});
 
 type Step = "loading" | "invalid" | "form" | "submitted";
 type PracticeRole = "owner" | "staff";
@@ -575,6 +605,7 @@ async function onSubmit() {
     });
     if (res.ok) {
       step.value = "submitted";
+      startLoginRedirect();
       return;
     }
     const body = (await res.json().catch(() => ({}))) as { code?: string };
@@ -599,14 +630,28 @@ async function onSubmit() {
    (this form is taller than the viewport on small screens — login's never
    is, so AuthView doesn't need this) and a wider card. */
 .partner-registration {
-  position: relative;
+  /* The scroller is its own full-viewport layer (fixed, inset 0) rather than
+     a 100%-height child of PublicLayout's <main>, which sits inside a 16px
+     safe-area frame (--layout-public-inset-*). As a child, a wheel/swipe that
+     started in that frame scrolled nothing — and WebKit (Safari) routes
+     wheel scrolling by layer bounds, so even a negative-margin extension
+     under the frame didn't receive it there. The frame is added back as
+     padding so the card keeps its place. */
+  --pr-inset-top: var(--layout-public-inset-top, 16px);
+  --pr-inset-right: var(--layout-public-inset-right, 16px);
+  --pr-inset-bottom: var(--layout-public-inset-bottom, 16px);
+  --pr-inset-left: var(--layout-public-inset-left, 16px);
+  position: fixed;
+  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  height: 100%;
+  box-sizing: border-box;
   overflow-y: auto;
-  padding: 24px 16px 40px;
-  padding-top: clamp(24px, 10vh, 96px);
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: calc(clamp(24px, 10vh, 96px) + var(--pr-inset-top)) calc(16px + var(--pr-inset-right))
+    calc(40px + var(--pr-inset-bottom)) calc(16px + var(--pr-inset-left));
   gap: 16px;
 }
 
@@ -742,6 +787,11 @@ async function onSubmit() {
   margin-top: 24px;
   text-transform: none;
   letter-spacing: normal;
+}
+
+.partner-registration__status-title {
+  display: block;
+  margin-bottom: 4px;
 }
 
 .partner-registration__finish-hint {
