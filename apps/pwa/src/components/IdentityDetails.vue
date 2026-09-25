@@ -1,12 +1,16 @@
 <template>
   <span v-if="details.length || more.length" class="identity-details">
-    <span>{{ details.join(" · ") }}</span>
+    <!-- "+N" belongs to the first value (a doctor's first specialty), so it
+         sits right after it — "Dentist +1 · Clínica Dental Polanco" — not at
+         the end of the line where it would read as belonging to the clinic. -->
+    <span v-if="details[0]">{{ details[0] }}</span>
     <VTooltip v-if="more.length" location="bottom">
       <template #activator="{ props: tooltipProps }">
         <span v-bind="tooltipProps" class="identity-details__more" tabindex="0">+{{ more.length }}</span>
       </template>
       <span>{{ more.join(", ") }}</span>
     </VTooltip>
+    <span v-if="details.length > 1">· {{ details.slice(1).join(" · ") }}</span>
   </span>
 </template>
 
