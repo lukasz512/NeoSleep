@@ -51,7 +51,12 @@ function existingPr() {
       stdio: ["ignore", "pipe", "ignore"],
     });
     const pr = JSON.parse(out)[0];
-    return pr ? { number: pr.number, url: pr.url, state: String(pr.state).toLowerCase() } : null;
+    if (!pr) return null;
+    const state = String(pr.state).toLowerCase();
+    // A merged/closed PR only describes this branch if nothing new was committed on top
+    // of dev since — otherwise the new commits need a new PR ("Create PR").
+    if (state !== "open" && Number(git("rev-list", "--count", "origin/dev..HEAD") || "0") > 0) return null;
+    return { number: pr.number, url: pr.url, state };
   } catch {
     return null;
   }
