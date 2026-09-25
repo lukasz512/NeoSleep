@@ -75,6 +75,9 @@ project).
     `infrastructure/setup/provision.md`.
 - **Database**: **Supabase** (managed PostgreSQL), schema-per-tenant. Connection
   string is `DATABASE_URL` on the Render service, never in frontend code.
+  Supabase Free plan has no restorable backups, so a nightly GitHub Actions job
+  dumps the DB + Storage, encrypts them and uploads them to a Google Cloud Storage
+  bucket (Mexico region, 30-day retention). See `docs/RUNBOOK_BACKUP_RESTORE.md`.
 
 ## Where credentials live
 
