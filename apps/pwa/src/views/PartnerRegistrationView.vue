@@ -720,6 +720,10 @@ async function onSubmit() {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  /* Air between Edit details and the box's top-right corner — 20px top / 24px
+     right in total with the box padding; on the row, not the button, so the
+     heading stays centred with it (Łukasz, NEO-51 review). */
+  padding: 8px 8px 0 0;
 }
 
 .partner-registration__clinic-details-heading {
