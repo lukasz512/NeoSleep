@@ -245,9 +245,20 @@ describe("AppEntityList", () => {
     // nothing at all) and visibly disagreed with each other and with the
     // rest of the app's tables (AppDataTable, RelatedEntityPanel). All of
     // them now share --pwa-table-border.
-    it("table-wrap border uses the shared --pwa-table-border token, not M3 outline-variant", () => {
-      expect(css).toMatch(/\.app-entity-list__table-wrap\s*{[^}]*border:\s*1px solid var\(--pwa-table-border\)/);
-      expect(css).not.toMatch(/\.app-entity-list__table-wrap\s*{[^}]*--v-theme-outline-variant/);
+    // NEO-57 replaced the bordered table box with the "clinical card" look:
+    // no outer border, a paper ground, and each row / feed card as its own
+    // outlined surface, all driven by the shared --pwa-list-* tokens.
+    it("table-wrap has no outer border and sits on the shared --pwa-list-paper ground", () => {
+      expect(css).toMatch(/\.app-entity-list__table-wrap\s*{[^}]*background:\s*var\(--pwa-list-paper\)/);
+      expect(css).not.toMatch(/\.app-entity-list__table-wrap\s*{[^}]*border:\s*1px/);
+    });
+
+    it("table rows and mobile feed cards share the --pwa-list-row-* surface/outline/radius tokens", () => {
+      expect(css).toMatch(/tbody > tr > td\)\s*{[^}]*background:\s*var\(--pwa-list-row-bg\)[^}]*--pwa-list-row-outline/);
+      expect(css).toMatch(/border-spacing:\s*0 var\(--pwa-list-row-gap\)/);
+      expect(css).toMatch(
+        /\.app-entity-list__card\s*{[^}]*border-radius:\s*var\(--pwa-list-row-radius\)[^}]*border:\s*1px solid var\(--pwa-list-row-outline\)[^}]*background:\s*var\(--pwa-list-row-bg\)/,
+      );
     });
 
     it("search field's inactive (unfocused) border uses --pwa-table-border, leaving the focused-state primary color untouched", () => {

@@ -172,7 +172,7 @@
               v-for="(item, index) in mobileItems"
               :key="(item as Record<string, unknown>)[itemValue]"
               variant="flat"
-              elevation="1"
+              elevation="0"
               :class="[
                 'app-entity-list__card',
                 'app-entity-list__card--clickable',
