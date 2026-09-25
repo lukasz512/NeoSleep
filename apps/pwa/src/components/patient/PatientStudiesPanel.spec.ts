@@ -137,17 +137,58 @@ describe("PatientStudiesPanel — the Estudios checklist", () => {
     expect(wrapper.text()).toContain("1 of 6 done");
   });
 
-  it("highlights done items, shows the findings and who filled it; missing ones stay plain", async () => {
+  it("a done item shows its result instead of its buttons (actions move under ⋯); missing ones keep their buttons", async () => {
     const wrapper = await mountPanel();
     const [consent, history, stopBang, oralExam] = rows(wrapper);
     expect(history!.classes()).toContain("studies__item--done");
     expect(history!.text()).toContain("Filled in by the patient");
-    expect(history!.text()).toContain("Yes: Diabetes");
+    // Result: yes/no counts + the positive answers as chips.
+    expect(history!.find(".checklist-result__count--yes").text()).toBe("1Yes");
+    expect(history!.findAll(".checklist-result__chip--yes").map((c) => c.text())).toEqual(["Diabetes"]);
+    expect(button(history!, "Fill in")).toBeUndefined();
+    expect(history!.find('[aria-label="More actions for Medical history"]').exists()).toBe(true);
+
     expect(consent!.classes()).toContain("studies__item--missing");
-    expect(stopBang!.text()).toContain("B-A-N-G missing");
-    expect(button(stopBang!, "Complete B-A-N-G")).toBeTruthy();
+    expect(button(consent!, "QR")).toBeTruthy();
     // QR only on items the patient completes, never on the doctor's oral exam.
     expect(button(oralExam!, "QR")).toBeUndefined();
+    expect(button(oralExam!, "Fill in")).toBeTruthy();
+  });
+
+  it("STOP-Bang with only S-T-O-P in shows the patient's part and keeps 'Complete B-A-N-G' on top", async () => {
+    const wrapper = await mountPanel();
+    const stopBang = rows(wrapper)[2]!;
+    expect(stopBang.text()).toContain("B-A-N-G missing");
+    expect(stopBang.find(".checklist-result__score").text()).toBe("1 / 4 S-T-O-P");
+    // S answered yes; B-A-N-G not asked yet (dashed).
+    expect(stopBang.findAll(".checklist-result__letters span").map((l) => l.classes().filter((c) => c !== "gap").join())).toEqual([
+      "yes", "todo", "todo", "todo", "todo", "todo", "todo", "todo",
+    ]);
+    expect(button(stopBang, "Complete B-A-N-G")).toBeTruthy();
+  });
+
+  it("a done polysomnography shows AHI / SpO₂ / ODI and the OSA severity", async () => {
+    const psg = (checklistBody.items as Record<string, unknown>[])[5]!;
+    Object.assign(psg, {
+      status: "done",
+      history: [
+        {
+          id: "ss-1",
+          type: "sleep_study",
+          created_at: "2026-09-22T10:00:00Z",
+          source: "staff",
+          by: "Dra. López",
+          sleep_study: { id: "ss-1", status: "interpreted", study_date: "2026-09-22", ahi_score: 18.4, spo2_nadir: 84, odi: 16.2, interpretation: null },
+        },
+      ],
+    });
+    const wrapper = await mountPanel();
+    const row = rows(wrapper)[5]!;
+    expect(row.text()).toContain("18.4");
+    expect(row.text()).toContain("84 %");
+    expect(row.text()).toContain("Moderate OSA");
+    expect(row.find('[role="img"][aria-label="AHI 18.4 on the severity scale"]').exists()).toBe(true);
+    expect(button(row, "Upload file")).toBeUndefined();
   });
 
   it("prints an item as a PDF opened in a new tab", async () => {

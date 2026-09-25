@@ -102,74 +102,105 @@
             class="studies__item"
             :class="[`studies__item--${item.status}`, { 'studies__item--focus': focusedKey === item.key }]"
           >
-            <div class="studies__item-main">
-              <ChecklistStatusIcon :status="item.status" />
-              <div class="studies__item-text">
-                <span class="studies__item-title">{{ itemTitle(item) }}</span>
-                <span class="studies__item-status">{{ statusLine(item) }}</span>
-                <span v-if="latestSummary(item)" class="studies__item-summary">{{ latestSummary(item) }}</span>
+            <span class="studies__rail"><ChecklistStatusIcon :status="item.status" /></span>
+            <div class="studies__item-content">
+              <div class="studies__item-main" :class="{ 'studies__item-main--result': resultEntry(item) }">
+                <div class="studies__item-text">
+                  <span class="studies__item-title">{{ itemTitle(item) }}</span>
+                  <span class="studies__item-status">{{ statusLine(item) }}</span>
+                  <span v-if="!resultEntry(item) && latestSummary(item)" class="studies__item-summary">{{ latestSummary(item) }}</span>
+                </div>
+                <!-- Done (or S-T-O-P in): the result replaces the buttons; the rest lives under ⋯. -->
+                <div v-if="resultEntry(item)" class="studies__item-actions">
+                  <AppButton
+                    v-if="item.actions.form === 'stop_bang' && item.status === 'partial'"
+                    color="warning"
+                    variant="tonal"
+                    size="small"
+                    @click="openCompleteBang(item)"
+                  >
+                    {{ t("app.clinical.completeBang") }}
+                  </AppButton>
+                  <AppListItemMenu :aria-label="t('app.clinical.action.more', { item: itemTitle(item) })">
+                    <VListItem :title="t('app.clinical.action.view')" @click="viewResult(item)">
+                      <template #prepend><AppIcon name="eye" /></template>
+                    </VListItem>
+                    <VListItem v-if="item.actions.print" :title="t('app.clinical.action.print')" @click="onPrint(item.key)">
+                      <template #prepend><AppIcon name="printer" /></template>
+                    </VListItem>
+                    <VListItem v-if="item.actions.fill" :title="t('app.clinical.action.newVersion')" @click="onFill(item)">
+                      <template #prepend><AppIcon name="pencil" /></template>
+                    </VListItem>
+                    <VListItem v-if="item.actions.upload" :title="t('app.clinical.action.upload')" @click="openUpload(item.key)">
+                      <template #prepend><AppIcon name="upload" /></template>
+                    </VListItem>
+                    <VListItem :title="t('app.clinical.action.history', { n: item.history.length })" @click="toggle(item.key)">
+                      <template #prepend><AppIcon name="clock" /></template>
+                    </VListItem>
+                  </AppListItemMenu>
+                </div>
+                <div v-else class="studies__item-actions">
+                  <AppButton v-if="item.actions.qr && item.status !== 'done'" variant="text" size="small" @click="resend([item.key])">
+                    <template #prepend><AppIcon name="qr-code" /></template>
+                    {{ t("app.clinical.action.qr") }}
+                  </AppButton>
+                  <AppButton v-if="item.actions.fill" variant="text" size="small" @click="onFill(item)">
+                    <template #prepend><AppIcon name="pencil" /></template>
+                    {{ t("app.clinical.action.fill") }}
+                  </AppButton>
+                  <AppButton v-if="item.actions.print" variant="text" size="small" :loading="printingKey === item.key" @click="onPrint(item.key)">
+                    <template #prepend><AppIcon name="printer" /></template>
+                    {{ t("app.clinical.action.print") }}
+                  </AppButton>
+                  <AppButton v-if="item.actions.upload" variant="text" size="small" @click="openUpload(item.key)">
+                    <template #prepend><AppIcon name="upload" /></template>
+                    {{ t("app.clinical.action.upload") }}
+                  </AppButton>
+                </div>
               </div>
-              <div class="studies__item-actions">
-                <AppButton
-                  v-if="item.actions.form === 'stop_bang' && item.status === 'partial'"
-                  color="warning"
-                  variant="tonal"
-                  size="small"
-                  @click="openCompleteBang(item)"
-                >
-                  {{ t("app.clinical.completeBang") }}
-                </AppButton>
-                <AppButton v-if="item.actions.qr && item.status !== 'done'" variant="text" size="small" @click="resend([item.key])">
-                  <template #prepend><AppIcon name="qr-code" /></template>
-                  {{ t("app.clinical.action.qr") }}
-                </AppButton>
-                <AppButton v-if="item.actions.fill" variant="text" size="small" @click="onFill(item)">
-                  <template #prepend><AppIcon name="pencil" /></template>
-                  {{ t("app.clinical.action.fill") }}
-                </AppButton>
-                <AppButton v-if="item.actions.print" variant="text" size="small" :loading="printingKey === item.key" @click="onPrint(item.key)">
-                  <template #prepend><AppIcon name="printer" /></template>
-                  {{ t("app.clinical.action.print") }}
-                </AppButton>
-                <AppButton v-if="item.actions.upload" variant="text" size="small" @click="openUpload(item.key)">
-                  <template #prepend><AppIcon name="upload" /></template>
-                  {{ t("app.clinical.action.upload") }}
-                </AppButton>
-              </div>
-            </div>
 
-            <template v-if="item.history.length">
-              <button
-                type="button"
-                class="studies__history-toggle"
-                :aria-expanded="expanded.has(item.key)"
-                :aria-controls="`studies-history-${item.key}`"
-                @click="toggle(item.key)"
-              >
-                <AppIcon :name="expanded.has(item.key) ? 'chevron-up' : 'chevron-down'" />
-                {{ t("app.clinical.action.history", { n: item.history.length }) }}
-              </button>
-              <VExpandTransition>
-                <ul v-show="expanded.has(item.key)" :id="`studies-history-${item.key}`" class="studies__history">
-                  <li v-for="entry in item.history" :key="entry.id">
-                    <button type="button" class="studies__history-entry" @click="openEntry(item, entry)">
-                      <span class="studies__history-date">{{ formatDate(entry.created_at) }}</span>
-                      <span>{{ entryLine(entry) }}</span>
-                    </button>
-                    <AppButton
-                      v-if="isAdmin && entry.type === 'upload' && !entry.sleep_study_id"
-                      icon
-                      variant="text"
-                      size="small"
-                      :aria-label="t('app.common.remove')"
-                      @click="checklistApi.deleteUpload(entry.id)"
-                    >
-                      <AppIcon name="trash" />
-                    </AppButton>
-                  </li>
-                </ul>
-              </VExpandTransition>
-            </template>
+              <ChecklistResult
+                v-if="resultEntry(item)"
+                class="studies__result"
+                :entry="resultEntry(item)"
+                @print="onPrint(item.key)"
+                @open-file="(entry) => openEntry(item, entry)"
+              />
+
+              <template v-if="item.history.length">
+                <button
+                  v-if="!resultEntry(item)"
+                  type="button"
+                  class="studies__history-toggle"
+                  :aria-expanded="expanded.has(item.key)"
+                  :aria-controls="`studies-history-${item.key}`"
+                  @click="toggle(item.key)"
+                >
+                  <AppIcon :name="expanded.has(item.key) ? 'chevron-up' : 'chevron-down'" />
+                  {{ t("app.clinical.action.history", { n: item.history.length }) }}
+                </button>
+                <VExpandTransition>
+                  <ul v-show="expanded.has(item.key)" :id="`studies-history-${item.key}`" class="studies__history">
+                    <li v-for="entry in item.history" :key="entry.id">
+                      <button type="button" class="studies__history-entry" @click="openEntry(item, entry)">
+                        <span class="studies__history-date">{{ formatDate(entry.created_at) }}</span>
+                        <span>{{ entryLine(entry) }}</span>
+                      </button>
+                      <AppButton
+                        v-if="isAdmin && entry.type === 'upload' && !entry.sleep_study_id"
+                        icon
+                        variant="text"
+                        size="small"
+                        :aria-label="t('app.common.remove')"
+                        @click="checklistApi.deleteUpload(entry.id)"
+                      >
+                        <AppIcon name="trash" />
+                      </AppButton>
+                    </li>
+                  </ul>
+                </VExpandTransition>
+              </template>
+            </div>
           </li>
         </ul>
       </section>
@@ -178,29 +209,25 @@
         <h3 id="studies-group-other" class="studies__group-title">{{ t("app.clinical.group.other") }}</h3>
         <ul class="studies__list">
           <li v-for="upload in checklist.other_uploads" :key="upload.id" class="studies__item studies__item--done">
-            <div class="studies__item-main">
-              <ChecklistStatusIcon status="done" />
-              <div class="studies__item-text">
-                <span class="studies__item-title">{{ upload.title }}</span>
-                <span class="studies__item-status">{{ formatDate(upload.created_at) }} · {{ upload.filename }}</span>
-                <span v-if="upload.notes" class="studies__item-summary">{{ upload.notes }}</span>
+            <span class="studies__rail"><ChecklistStatusIcon status="done" /></span>
+            <div class="studies__item-content">
+              <div class="studies__item-main studies__item-main--result">
+                <div class="studies__item-text">
+                  <span class="studies__item-title">{{ upload.title }}</span>
+                  <span class="studies__item-status">{{ t("app.clinical.status.doneOn", { date: formatDate(upload.created_at) }) }}<template v-if="upload.by"> · {{ t("app.clinical.recordedBy", { name: upload.by }) }}</template></span>
+                </div>
+                <div class="studies__item-actions">
+                  <AppListItemMenu :aria-label="t('app.clinical.action.more', { item: upload.title ?? upload.filename ?? '' })">
+                    <VListItem :title="t('app.clinical.action.open')" @click="checklistApi.openFile(upload.id)">
+                      <template #prepend><AppIcon name="file" /></template>
+                    </VListItem>
+                    <VListItem v-if="isAdmin" :title="t('app.common.remove')" @click="checklistApi.deleteUpload(upload.id)">
+                      <template #prepend><AppIcon name="trash" /></template>
+                    </VListItem>
+                  </AppListItemMenu>
+                </div>
               </div>
-              <div class="studies__item-actions">
-                <AppButton variant="text" size="small" @click="checklistApi.openFile(upload.id)">
-                  <template #prepend><AppIcon name="file" /></template>
-                  {{ t("app.clinical.action.open") }}
-                </AppButton>
-                <AppButton
-                  v-if="isAdmin"
-                  icon
-                  variant="text"
-                  size="small"
-                  :aria-label="t('app.common.remove')"
-                  @click="checklistApi.deleteUpload(upload.id)"
-                >
-                  <AppIcon name="trash" />
-                </AppButton>
-              </div>
+              <ChecklistResult class="studies__result" :entry="upload" @open-file="checklistApi.openFile(upload.id)" />
             </div>
           </li>
         </ul>
@@ -221,6 +248,8 @@ import ClinicalQuestionnaireDialog from "../questionnaire/ClinicalQuestionnaireD
 import QuestionnaireQrDialog from "../questionnaire/QuestionnaireQrDialog.vue";
 import StudyUploadDialog from "../questionnaire/StudyUploadDialog.vue";
 import ChecklistStatusIcon from "../questionnaire/ChecklistStatusIcon.vue";
+import ChecklistResult from "../questionnaire/ChecklistResult.vue";
+import AppListItemMenu from "../AppListItemMenu.vue";
 import { apiFetch } from "../../composables/useApi";
 import { useNotifications } from "../../composables/useNotifications";
 import { useAuthStore } from "../../stores/auth";
@@ -291,6 +320,7 @@ function statusLine(item: ChecklistItem): string {
     return [t("app.clinical.status.doneOn", { date: formatDate(latest.created_at) }), who].filter(Boolean).join(" · ");
   }
   if (item.key === "polysomnography" && item.status === "partial") return t("app.clinical.status.inProgress");
+  if (item.actions.form === "stop_bang" && item.status === "partial") return t("app.clinical.awaitingBang");
   return t(`app.clinical.status.${item.status}`);
 }
 
@@ -314,6 +344,22 @@ function latestSummary(item: ChecklistItem): string | null {
   if (latest.sleep_study) return latest.sleep_study.ahi_score != null ? `AHI ${latest.sleep_study.ahi_score}` : null;
   if (latest.type === "upload") return [latest.title, latest.notes].filter(Boolean).join(" — ");
   return null;
+}
+
+/**
+ * The entry whose result a row shows in place of its buttons — only once the
+ * item is done, or STOP-Bang with the patient's S-T-O-P in (Łukasz,
+ * 2026-09-25). null → the row keeps its actions.
+ */
+function resultEntry(item: ChecklistItem): ChecklistHistoryEntry | null {
+  const showsResult = item.status === "done" || (item.status === "partial" && item.actions.form === "stop_bang");
+  if (!showsResult) return null;
+  // A structured result (answers, signature, PSG numbers) beats an attached file — the file stays in the history.
+  return (
+    item.history.find((e) => e.record || e.type === "consent" || e.sleep_study?.ahi_score != null) ??
+    item.history.find((e) => e.type === "upload") ??
+    null
+  );
 }
 
 function entryLine(entry: ChecklistHistoryEntry): string {
@@ -387,6 +433,11 @@ async function openEntry(item: ChecklistItem, entry: ChecklistHistoryEntry) {
   } else if (item.actions.print) {
     await onPrint(item.key);
   }
+}
+
+function viewResult(item: ChecklistItem) {
+  const entry = resultEntry(item);
+  if (entry) void openEntry(item, entry);
 }
 
 async function onQuestionnaireSave(answers: Record<string, unknown>) {
@@ -581,23 +632,41 @@ watch(() => props.focusItem, (key) => highlightItem(key));
   gap: 8px;
 }
 
+/* Status rail (Łukasz, 2026-09-25, variant C): the left column carries the
+   status icon and color; the tile itself stays neutral, so a done item reads
+   at a glance without the whole list lighting up. */
 .studies__item {
-  padding: 12px 16px;
+  display: grid;
+  grid-template-columns: 44px 1fr;
   border-radius: var(--pwa-radius);
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  transition: background-color 0.2s ease, box-shadow 0.3s ease;
+  overflow: hidden;
+  transition: box-shadow 0.3s ease;
 }
-/* Done = lightly highlighted, so what's still missing stands out by contrast. */
-.studies__item--done {
-  background: rgba(var(--v-theme-success), 0.07);
-  border-color: rgba(var(--v-theme-success), 0.35);
+.studies__rail {
+  display: grid;
+  place-items: center;
+  border-right: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  background: rgba(var(--v-theme-on-surface), 0.03);
 }
-.studies__item--pending_patient,
-.studies__item--partial {
-  border-color: rgba(var(--v-theme-warning), 0.45);
+.studies__item--done .studies__rail {
+  background: rgba(var(--v-theme-success), 0.1);
+  border-right-color: rgba(var(--v-theme-success), 0.35);
+}
+.studies__item--pending_patient .studies__rail,
+.studies__item--partial .studies__rail {
+  background: rgba(var(--v-theme-warning), 0.12);
+  border-right-color: rgba(var(--v-theme-warning), 0.35);
 }
 .studies__item--focus {
   box-shadow: 0 0 0 3px rgba(var(--v-theme-primary), 0.45);
+}
+.studies__item-content {
+  min-width: 0;
+  padding: 12px 16px;
+}
+.studies__result {
+  margin-top: 8px;
 }
 
 .studies__item-main {
@@ -605,6 +674,13 @@ watch(() => props.focusItem, (key) => highlightItem(key));
   flex-wrap: wrap;
   align-items: flex-start;
   gap: 8px 12px;
+}
+/* With a result the only action is ⋯ (+ "Complete B-A-N-G"): keep it top-right, even on a phone. */
+.studies__item-main--result {
+  flex-wrap: nowrap;
+}
+.studies__item-main--result .studies__item-text {
+  flex-basis: auto;
 }
 .studies__item-text {
   display: flex;
@@ -654,7 +730,7 @@ watch(() => props.focusItem, (key) => highlightItem(key));
 .studies__history {
   list-style: none;
   margin: 4px 0 0;
-  padding: 0 0 0 36px;
+  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;

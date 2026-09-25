@@ -47,6 +47,15 @@
 - **Upload.** "Agregar estudio" either creates a new ad-hoc item (title + notes) or attaches to an existing item and completes it (a PSG report → Polisomnografía; a signed scan → the consent).
 - **Details view.** A "Estudios" card in the Details tab with one status icon per item (not a strip under the name).
 - Removing an item as "not applicable" is deferred.
+- **Done rows (follow-up, 2026-09-25, chosen from a 3-variant mockup: "szyna").**
+  - A done item is no longer filled green. Instead, a status rail on the left carries the icon and the color.
+  - A done row shows its result in place of Llenar / Imprimir / Subir:
+    - yes/no counts, plus chips for the "yes" answers
+    - STOP-Bang score, risk and S-T-O-P-B-A-N-G letters
+    - PSG: AHI / SpO₂ nadir / ODI on the AASM severity scale
+    - signed consent: a link to the PDF
+    - attached file: the file and its notes
+  - Everything else (Ver, Imprimir, Nueva versión, Subir archivo, Historial) moves under "⋯".
 
 ### Open Questions (asked 2026-09-25; answered above)
 - [x] The exact list and order of items, and whether Historia Endo (root-canal consent) belongs in a sleep-dentistry checklist.
