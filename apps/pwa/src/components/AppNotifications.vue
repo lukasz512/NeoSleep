@@ -12,7 +12,7 @@
           @touchend.passive="onTouchEnd(n.id, $event)"
         >
           <AppIcon :name="ICON_BY_TYPE[n.type]" class="notif-toast__icon" />
-          <span class="notif-toast__msg">{{ n.key ? t(n.key) : n.message }}</span>
+          <span class="notif-toast__msg">{{ messageOf(n) }}</span>
           <button
             type="button"
             class="notif-toast__close"
@@ -21,7 +21,7 @@
           >
             <AppIcon name="close" />
           </button>
-          <div class="notif-toast__bar" :style="{ animationDuration: `${DURATION}ms` }" />
+          <div class="notif-toast__bar" :style="{ animationDuration: `${n.countdownMs ?? DURATION}ms` }" />
         </div>
       </TransitionGroup>
     </div>
@@ -33,7 +33,7 @@ import { ref, watch, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useDebounceFn } from "@vueuse/core";
 import AppIcon from "./AppIcon.vue";
-import { useNotifications, type NotificationType } from "../composables/useNotifications";
+import { useNotifications, type Notification, type NotificationType } from "../composables/useNotifications";
 import { MOBILE_BREAKPOINT } from "../constants";
 
 const DURATION = 8000;
@@ -48,6 +48,21 @@ const ICON_BY_TYPE: Record<NotificationType, "check-circle" | "info-circle" | "a
 
 const { t } = useI18n();
 const { notifications, dismiss } = useNotifications();
+
+// Countdown toasts re-render their `{seconds}` once per tick; the clock only
+// runs while at least one of them is on screen.
+const COUNTDOWN_TICK_MS = 250;
+const now = ref(Date.now());
+let countdownClock: ReturnType<typeof setInterval> | null = null;
+
+function secondsLeft(n: Notification): number {
+  return Math.max(0, Math.ceil((n.shownAt + (n.countdownMs ?? 0) - now.value) / 1000));
+}
+
+function messageOf(n: Notification): string {
+  if (!n.key) return n.message;
+  return n.countdownMs === undefined ? t(n.key) : t(n.key, { seconds: secondsLeft(n) });
+}
 
 const isMobile = ref(false);
 const updateMobile = useDebounceFn(() => {
@@ -75,9 +90,18 @@ watch(
       }
     }
     for (const n of list) {
-      if (!timers.has(n.id)) {
+      // A countdown toast stays until what it announces happens (or the user closes it).
+      if (n.countdownMs === undefined && !timers.has(n.id)) {
         timers.set(n.id, setTimeout(() => dismiss(n.id), DURATION));
       }
+    }
+    const counting = list.some((n) => n.countdownMs !== undefined);
+    if (counting && !countdownClock) {
+      now.value = Date.now();
+      countdownClock = setInterval(() => { now.value = Date.now(); }, COUNTDOWN_TICK_MS);
+    } else if (!counting && countdownClock) {
+      clearInterval(countdownClock);
+      countdownClock = null;
     }
   },
   { immediate: true },
@@ -85,6 +109,7 @@ watch(
 onUnmounted(() => {
   for (const timer of timers.values()) clearTimeout(timer);
   timers.clear();
+  if (countdownClock) clearInterval(countdownClock);
 });
 
 const touchStartY = new Map<number, number>();

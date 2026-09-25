@@ -15,7 +15,7 @@ $pwa-font-sans: system-ui, -apple-system, sans-serif;
 $pwa-radius: 10px;
 $pwa-radius-sm: 2px; /* Small elements (e.g. loader bars) */
 $pwa-radius-pill: 9999px; /* M3 pill/stadium shape: primary buttons, status chips */
-$pwa-modal-radius: 16px; /* Modals/dialogs: slightly larger for prominence */
+$pwa-modal-radius: 28px; /* Modals/dialogs: M3 extra-large shape (28dp) */
 $pwa-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
 $pwa-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
 
@@ -110,6 +110,26 @@ $pwa-fib-t-3xl: 987ms;
   --pwa-table-header-text: #424242;
   --pwa-table-border: #e0e0e0;
   --pwa-table-row-hover: color-mix(in srgb, #{brand.$pwa-brand-primary} 8%, transparent);
+  /* "Clinical card" lists (NEO-57, AppEntityList table rows + mobile feed
+     cards): each row/card is its own rounded surface with a hairline
+     teal-tinted outline, no dividers, on the view's own background. Rows
+     reuse the Vuetify surface color so they match every other card. */
+  --pwa-list-row-bg: rgb(var(--v-theme-surface));
+  --pwa-list-row-outline: rgba(18, 80, 74, 0.08);
+  --pwa-list-row-radius: 14px;
+  --pwa-list-row-gap: 8px;
+  /* Identity tints (NEO-57 "wristband"): every person/place carries its
+     type's color on its avatar and tags — patient teal, doctor blue,
+     organization amber, everyone else (users, leads) neutral — so a mixed
+     list reads by kind before anyone reads a name. */
+  --pwa-identity-patient: #{brand.$pwa-brand-primary};
+  --pwa-identity-patient-soft: rgba(18, 143, 131, 0.1);
+  --pwa-identity-doctor: #2f6fcf;
+  --pwa-identity-doctor-soft: rgba(47, 111, 207, 0.09);
+  --pwa-identity-org: #8a6a2a;
+  --pwa-identity-org-soft: rgba(160, 120, 40, 0.1);
+  --pwa-identity-person: #56625f;
+  --pwa-identity-person-soft: rgba(40, 60, 58, 0.07);
   /* Buttons: desktop default; mobile/tablet use larger touch targets */
   --pwa-btn-min-height: #{$pwa-touch-target-desktop};
   --pwa-btn-min-width: #{$pwa-touch-target-desktop};
@@ -138,6 +158,15 @@ $pwa-fib-t-3xl: 987ms;
   --pwa-table-header-text: #e0e0e0;
   --pwa-table-border: #3a3a3a;
   --pwa-table-row-hover: color-mix(in srgb, #{brand.$pwa-brand-primary-on-dark} 12%, transparent);
+  --pwa-list-row-outline: rgba(142, 214, 206, 0.09);
+  --pwa-identity-patient: #{brand.$pwa-brand-primary-on-dark};
+  --pwa-identity-patient-soft: rgba(23, 181, 165, 0.14);
+  --pwa-identity-doctor: #7fb4ff;
+  --pwa-identity-doctor-soft: rgba(127, 180, 255, 0.13);
+  --pwa-identity-org: #c9a86a;
+  --pwa-identity-org-soft: rgba(201, 168, 106, 0.14);
+  --pwa-identity-person: #a3b1ae;
+  --pwa-identity-person-soft: rgba(160, 175, 172, 0.12);
 }
 
 body {
@@ -407,28 +436,66 @@ a:hover {
   background: rgb(var(--v-theme-surface-container-high)) !important;
   box-shadow: var(--pwa-shadow-md) !important;
 }
-.pwa-form-dialog__card .v-card-title {
-  padding: 32px 24px !important;
+/*
+ * M3 dialog spacing (m3.material.io/components/dialogs/specs), one system for
+ * every dialog card: 24dp container padding on all sides, 16dp between the
+ * header (AppDialogHeader.vue, which owns its own 24dp top/side padding) and
+ * the content, 24dp between content and actions, 8dp between action buttons.
+ * Tokens so AppDialogHeader.vue and these rules can't drift apart.
+ *
+ * !important on purpose: Vuetify injects .v-card-text/.v-card-actions CSS
+ * lazily, *after* this file — without it, equal-specificity rules here lose
+ * the cascade (the exact bug that broke the dialog header). Measured by
+ * apps/pwa/e2e/dialog-header.spec.ts in real browsers.
+ */
+:root {
+  --pwa-dialog-pad: 24px;
+  --pwa-dialog-header-gap: 16px;
+  --pwa-dialog-actions-gap: 24px;
+  --pwa-dialog-button-gap: 8px;
+  --pwa-dialog-field-gap: 16px;
 }
-/* AppAvatar preview next to the title, opt-in via FormRenderer's avatarEntityType prop. */
-.pwa-form-dialog__title-row {
+:is(.pwa-form-dialog__card, .pwa-confirm-dialog__card) > .v-card-text {
+  padding: var(--pwa-dialog-pad) var(--pwa-dialog-pad) 0 !important;
+}
+:is(.pwa-form-dialog__card, .pwa-confirm-dialog__card) > .app-dialog-header + .v-card-text {
+  padding-top: var(--pwa-dialog-header-gap) !important;
+}
+:is(.pwa-form-dialog__card, .pwa-confirm-dialog__card) > .v-card-actions {
+  min-height: 0 !important;
+  gap: var(--pwa-dialog-button-gap) !important;
+  padding: var(--pwa-dialog-actions-gap) var(--pwa-dialog-pad) var(--pwa-dialog-pad) !important;
+}
+/* M3 text fields: 16dp between fields. Vuetify reserves an always-present
+   ~22px error-message line under every input, which on top of the old mb-3
+   row margin made fields sit ~34px apart and padded the last field away from
+   the actions. The line now only takes space while it actually shows a
+   message (error or persistent hint) — same as Vuetify's hide-details="auto",
+   but in one place instead of on every field of every dialog. */
+.pwa-form-dialog__card .v-form {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  gap: var(--pwa-dialog-field-gap);
 }
-/* Without an explicit size the raw <svg> falls back to the browser's
-   intrinsic 300x150 default and gets clipped to nothing by the button's
-   overflow — see the identical note on .pwa-form-field-icon below. */
-.pwa-form-dialog__close-icon {
-  width: 20px;
-  height: 20px;
-  color: rgb(var(--v-theme-on-surface));
+.pwa-form-dialog__card .v-form > * {
+  margin-bottom: 0 !important;
 }
-.pwa-form-dialog__card .v-card-text {
-  padding: 24px !important;
+.pwa-form-dialog__card .v-input__details:not(:has(.v-messages__message)) {
+  display: none;
 }
-.pwa-form-dialog__card .v-card-actions {
-  padding: 24px 24px 32px !important;
+/* M3 label-large, sentence case — Vuetify's default uppercase buttons are
+   Material 2. Scoped to dialogs for now; the rest of the app is unchanged. */
+:is(.pwa-form-dialog__card, .pwa-confirm-dialog__card) > .v-card-actions .v-btn {
+  text-transform: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: 0.00625em;
+}
+/* M3 text button: 12dp side padding. The app-wide 24px (sized for the pill
+   ends of filled buttons, see "Button padding" in DESIGN_AND_UI.md) pushed
+   Cancel/Save visually ~56px apart despite the 8dp gap. */
+:is(.pwa-form-dialog__card, .pwa-confirm-dialog__card) > .v-card-actions .v-btn--variant-text {
+  padding-inline: 12px !important;
 }
 
 /*

@@ -8,10 +8,12 @@
     @update:model-value="onDialogUpdate"
   >
     <VCard class="pwa-form-dialog__card">
-      <VCardTitle class="mx-2 mt-2 text-h6 pwa-form-dialog__title-row">
-        <AppAvatar :name="form.title" entity-type="event" :size="40" />
-        <span>{{ formTitle }}</span>
-      </VCardTitle>
+      <AppDialogHeader
+        :title="formTitle"
+        avatar-entity-type="event"
+        :avatar-name="form.title"
+        @close="onCancelClick"
+      />
       <VCardText>
         <VForm ref="formRef" @submit.prevent="onSubmit">
           <VTextField
@@ -197,7 +199,7 @@
           />
         </VForm>
       </VCardText>
-      <VCardActions class="mx-2 mb-2">
+      <VCardActions>
         <VSpacer />
         <AppButton variant="text" @click="onCancelClick">
           {{ t("app.common.cancel") }}
@@ -239,6 +241,7 @@ import { useConfigStore } from "../stores/config";
 import { useEventForm } from "../composables/useEventForm";
 import AppButton from "./AppButton.vue";
 import AppAvatar from "./AppAvatar.vue";
+import AppDialogHeader from "./AppDialogHeader.vue";
 import AppIcon from "./AppIcon.vue";
 
 export interface EventFormData {

@@ -4,7 +4,7 @@ import { useI18n } from "vue-i18n";
 import { useTheme } from "vuetify";
 import { useDebounceFn } from "@vueuse/core";
 import { useThemeStore } from "@stores";
-import { SIDEBAR_DEFAULT_COLLAPSED, MOBILE_BREAKPOINT } from "../constants";
+import { SIDEBAR_DEFAULT_COLLAPSED, SIDEBAR_COLLAPSE_ENABLED, MOBILE_BREAKPOINT } from "../constants";
 import { getUserSettings, setUserSettings } from "../utils/user-settings";
 import { getInitials } from "../utils/initials";
 import { lightTheme, darkTheme } from "../plugins/vuetify";
@@ -102,7 +102,7 @@ export function useLayoutState() {
 
   onMounted(async () => {
     const settings = getUserSettings();
-    if (typeof settings.sidebarCollapsed === "boolean") {
+    if (SIDEBAR_COLLAPSE_ENABLED && typeof settings.sidebarCollapsed === "boolean") {
       sidebarCollapsed.value = settings.sidebarCollapsed;
     }
     const [cfg] = await Promise.all([configStore.load(), configStore.loadOptions(), configStore.loadI18nOverrides()]);

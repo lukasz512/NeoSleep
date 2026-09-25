@@ -59,28 +59,45 @@ describe("AppAvatar (non-hco entity types)", () => {
   });
 });
 
-describe("AppAvatar (patient outlined variant)", () => {
-  it("renders a patient placeholder outlined, with the accent color passed as a CSS var", () => {
-    const wrapper = mountAvatar({ entityType: "patient", name: "Mateusz Dotestowania" });
-    expect(wrapper.classes()).toContain("app-avatar--outlined");
-    expect(wrapper.attributes("style")).toContain("--app-avatar-accent");
-    expect(wrapper.find(".app-avatar__initials").text()).toBe("MD");
+describe("AppAvatar (doctor badge, NEO-57)", () => {
+  it("gives a doctor a stethoscope badge and keeps their initials", () => {
+    const wrapper = mountAvatar({ entityType: "hcp", name: "Lorena González", size: 32 });
+    expect(wrapper.find("[data-testid=app-avatar-doctor-badge]").exists()).toBe(true);
+    expect(wrapper.find(".app-avatar__initials").text()).toBe("LG");
   });
 
-  it("scales the ring with size: ~1px on a 20px chip avatar, ~2px at 40px", () => {
-    const small = mountAvatar({ entityType: "patient", name: "Anna Kowalska", size: 20 });
-    const regular = mountAvatar({ entityType: "patient", name: "Anna Kowalska", size: 40 });
-    expect(small.attributes("style")).toContain("--app-avatar-ring: 1.05px");
-    expect(regular.attributes("style")).toContain("--app-avatar-ring: 2.11px");
+  it("the badge shows the doctor's specialty icon, stethoscope when unknown", () => {
+    const dentist = mount(AppAvatar, {
+      props: { entityType: "hcp", name: "Lorena González", specialty: "dentist" },
+      global: { plugins: [createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives })] },
+    });
+    mountedWrappers.push(dentist);
+    expect(dentist.find("[data-testid=app-avatar-doctor-badge]").findComponent(AppIcon).props("name")).toBe("specialty-dentist");
+
+    const unknown = mountAvatar({ entityType: "hcp", name: "Jan Kowalski" });
+    expect(unknown.find("[data-testid=app-avatar-doctor-badge]").findComponent(AppIcon).props("name")).toBe("nav-hcp");
   });
 
-  it("keeps the solid fill for a doctor (hcp)", () => {
-    expect(mountAvatar({ entityType: "hcp", name: "Mateusz Dotestowania" }).classes()).not.toContain("app-avatar--outlined");
+  it("shows the badge at every size, and never for other identities", () => {
+    expect(mountAvatar({ entityType: "patient", name: "Anna Nowak" }).find("[data-testid=app-avatar-doctor-badge]").exists()).toBe(false);
+    expect(mountAvatar({ entityType: "hco" }).find("[data-testid=app-avatar-doctor-badge]").exists()).toBe(false);
+    expect(mountAvatar({ entityType: "hcp", name: "Jan Kowalski", size: 16 }).find("[data-testid=app-avatar-doctor-badge]").exists()).toBe(true);
+  });
+});
+
+describe("AppAvatar (identity tint, NEO-57)", () => {
+  it("tints each identity type with its own tone class", () => {
+    expect(mountAvatar({ entityType: "patient", name: "Mateusz Dotestowania" }).classes()).toContain("app-avatar--patient");
+    expect(mountAvatar({ entityType: "hcp", name: "Jan Kowalski" }).classes()).toContain("app-avatar--doctor");
+    expect(mountAvatar({ entityType: "hco" }).classes()).toContain("app-avatar--org");
+    expect(mountAvatar({ entityType: "user", name: "Anna Nowak" }).classes()).toContain("app-avatar--person");
+    expect(mountAvatar({ entityType: "lead", name: "Anna Nowak" }).classes()).toContain("app-avatar--person");
   });
 
-  it("does not outline a patient that has a real photo", () => {
+  it("keeps initials for people and drops the tint behind a real photo", () => {
+    expect(mountAvatar({ entityType: "patient", name: "Mateusz Dotestowania" }).find(".app-avatar__initials").text()).toBe("MD");
     expect(
       mountAvatar({ entityType: "patient", name: "Jan Kowalski", avatarUrl: "https://example.com/a.png" }).classes(),
-    ).not.toContain("app-avatar--outlined");
+    ).toContain("app-avatar--photo");
   });
 });

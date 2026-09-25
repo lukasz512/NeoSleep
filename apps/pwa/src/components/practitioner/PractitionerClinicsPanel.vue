@@ -36,10 +36,13 @@
     <ul v-else class="practitioner-clinics-panel__list">
       <li v-for="org in organizations" :key="org.id" class="practitioner-clinics-panel__item">
         <div class="practitioner-clinics-panel__item-main">
-          <EntityLink :to="hcoDetailLink(org.organization_id)" :label="org.name" class="practitioner-clinics-panel__name" />
-          <VChip size="small" :color="hcoTypeColor(org.type ?? undefined)" variant="tonal">
-            {{ hcoTypeLabel(t, org.type ?? undefined) }}
-          </VChip>
+          <EntityLink
+            :to="hcoDetailLink(org.organization_id)"
+            :label="org.name"
+            :details="orgDetails(org).details"
+            :avatar-size="32"
+            class="practitioner-clinics-panel__name"
+          />
         </div>
         <span v-if="org.address_line1 || org.city" class="practitioner-clinics-panel__address">
           {{ [org.address_line1, org.city].filter(Boolean).join(", ") }}
@@ -129,7 +132,7 @@ import { apiFetch } from "../../composables/useApi";
 import { useNotifications } from "../../composables/useNotifications";
 import { useAsyncAction } from "../../composables/useAsyncAction";
 import { useAuthStore } from "../../stores/auth";
-import { hcoTypeLabel, hcoTypeColor } from "../../utils/hcoLabels";
+import { useIdentity } from "../../composables/useIdentity";
 import type { OrganizationAffiliation } from "../../types/practitionerOrganization";
 
 const props = defineProps<{
@@ -143,6 +146,7 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
+const { orgDetails } = useIdentity();
 const notifications = useNotifications();
 const authStore = useAuthStore();
 

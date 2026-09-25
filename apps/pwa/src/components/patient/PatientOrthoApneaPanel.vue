@@ -21,8 +21,8 @@
          only the list view filters it out. Mainly for hiding failed/
          abandoned OrthoApnea orders. -->
     <VDialog v-model="showDeleteConfirm" max-width="380" persistent>
-      <VCard>
-        <VCardTitle>{{ t("app.treatmentPlans.deleteConfirmTitle") }}</VCardTitle>
+      <VCard class="pwa-confirm-dialog__card">
+        <AppDialogHeader :title="t('app.treatmentPlans.deleteConfirmTitle')" :closable="false" />
         <VCardText>{{ t("app.treatmentPlans.deleteConfirmText") }}</VCardText>
         <VCardActions>
           <VSpacer />
@@ -64,7 +64,15 @@
         :class="{ 'patient-orthoapnea-panel__item--static': !isDraft(plan) }"
       >
         <div class="patient-orthoapnea-panel__item-header" @click="isDraft(plan) && onEdit(plan)">
-          <EntityLink class="patient-orthoapnea-panel__dentist" :to="hcpDetailLink(plan.dentist_id)" entity-type="hcp" :label="plan.dentist_name" />
+          <EntityLink
+            class="patient-orthoapnea-panel__dentist"
+            :to="hcpDetailLink(plan.dentist_id)"
+            entity-type="hcp"
+            :specialty="plan.dentist_specialty"
+            :label="plan.dentist_name"
+            :details="specialtySet(plan.dentist_specialty, plan.dentist_specialties).details"
+            :more-details="specialtySet(plan.dentist_specialty, plan.dentist_specialties).more"
+          />
           <VChip v-if="isDraft(plan)" color="warning" size="small" variant="tonal">{{ t("app.orthoApneaOrder.draftBadge") }}</VChip>
           <VChip v-else :color="statusColor(plan.status)" size="small" variant="tonal">{{ statusLabel(plan.status) }}</VChip>
           <VSpacer />
@@ -110,11 +118,13 @@
 import { ref, computed, onMounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import AppButton from "../AppButton.vue";
+import AppDialogHeader from "../AppDialogHeader.vue";
 import AppIcon from "../AppIcon.vue";
 import AppLoadingState from "../AppLoadingState.vue";
 import AppErrorState from "../AppErrorState.vue";
 import AppEmptyState from "../AppEmptyState.vue";
 import EntityLink from "../EntityLink.vue";
+import { useIdentity } from "../../composables/useIdentity";
 import { hcpDetailLink } from "../../utils/entityLinks";
 import { apiFetch } from "../../composables/useApi";
 import { useNotifications } from "../../composables/useNotifications";
@@ -129,6 +139,8 @@ interface TreatmentPlanItem {
   id: string;
   dentist_id: string | null;
   dentist_name: string | null;
+  dentist_specialty?: string | null;
+  dentist_specialties?: string[] | null;
   appointment_at: string | null;
   scan_ordered_at: string | null;
   scan_received_at: string | null;
@@ -148,12 +160,8 @@ function isDraft(plan: TreatmentPlanItem): boolean {
   return !!plan.metadata?.orthoapneaDraft;
 }
 
-interface SleepStudyRef {
-  id: string;
-  created_at: string;
-}
-
 const { t } = useI18n();
+const { specialtySet } = useIdentity();
 const notifications = useNotifications();
 const authStore = useAuthStore();
 const isAdmin = computed(() => authStore.user?.role === "admin");
@@ -227,7 +235,8 @@ async function loadPlans() {
   try {
     const [plansRes, studiesRes] = await Promise.all([
       apiFetch(`/api/v1/treatment-plan?patient_id=${props.patientId}&type=dental_appliance&limit=-1`, { handleErrors: false }),
-      apiFetch(`/api/v1/sleep-study?patient_id=${props.patientId}&limit=1&sortBy=created_at&sortOrder=desc`, { handleErrors: false }),
+      // Id only — sleep-study contents are admin/doctor-only health data.
+      apiFetch(`/api/v1/patient/${props.patientId}/sleep-study-ref`, { handleErrors: false }),
     ]);
     if (plansRes.ok) {
       const data = (await plansRes.json()) as { items: TreatmentPlanItem[] };
@@ -236,8 +245,8 @@ async function loadPlans() {
       loadError.value = true;
     }
     if (studiesRes.ok) {
-      const data = (await studiesRes.json()) as { items: SleepStudyRef[] };
-      latestSleepStudyId.value = data.items[0]?.id ?? null;
+      const data = (await studiesRes.json()) as { id: string | null };
+      latestSleepStudyId.value = data.id;
     }
   } catch {
     loadError.value = true;

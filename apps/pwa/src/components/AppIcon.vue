@@ -97,6 +97,11 @@ const ICONS = {
             <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
             <path d="M16 21h5v-5" />`,
   },
+  "eye": {
+    strokeWidth: 1.8,
+    paths: `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+            <circle cx="12" cy="12" r="3" />`,
+  },
   "logout": {
     strokeWidth: 1.5,
     paths: `<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -185,8 +190,12 @@ const ICONS = {
   // Keyed by the `specialty` lookup's seeded codes (apps/api/migrations/002_seed.sql).
   // A tenant-added or unseeded code falls back to "nav-hcp" — see hcpLabels.ts.
   "specialty-dentist": {
-    strokeWidth: 1.6,
-    paths: `<path d="M12 4C10 4 9 5 7.5 5S5 4 4 4C2.5 4 2 5.5 2.3 8c.3 2.5 1.2 4.5 2 7 .5 1.8 1 3.5 1.8 4.6.4.5.9.9 1.4.9.9 0 1.2-1.1 1.5-3 .2-1.3.5-2.3 1-2.3s.8 1 1 2.3c.3 1.9.6 3 1.5 3 .5 0 1-.4 1.4-.9.8-1.1 1.3-2.8 1.8-4.6.8-2.5 1.7-4.5 2-7C21.7 5.5 21 4 19.6 4c-1 0-1.9 1-3.1 1S14 4 12 4z" stroke-linejoin="round" />`,
+    // A symmetric molar (NEO-57 redraw): two rounded cusps meeting in a soft
+    // dip at the top center, straight flanks, two roots with an arch between
+    // them. Mirrored exactly around x=12 so it reads as a tooth down to the
+    // ~9px doctor badge; the old outline was lopsided on the right.
+    strokeWidth: 1.8,
+    paths: `<path d="M12 4.1C10.3 4.1 9.1 3 7.5 3 5.3 3 4 4.6 4 7c0 1.8.5 3.3 1 4.8.6 1.7.9 3.5 1.2 5.6.3 2 .8 3.6 1.9 3.6 1.2 0 1.5-1.6 1.8-3.4.2-1.4.6-2.6 2.1-2.6s1.9 1.2 2.1 2.6c.3 1.8.6 3.4 1.8 3.4 1.1 0 1.6-1.6 1.9-3.6.3-2.1.6-3.9 1.2-5.6.5-1.5 1-3 1-4.8 0-2.4-1.3-4-3.5-4-1.6 0-2.8 1.1-4.5 1.1z" />`,
   },
   "specialty-ent": {
     strokeWidth: 1.6,
@@ -269,6 +278,30 @@ const ICONS = {
             <line x1="8" y1="17" x2="16" y2="17" />
             <line x1="8" y1="9" x2="10" y2="9" />`,
   },
+  // ── Patient intake form icons (NEO-54, see config/patientIntakeForms.ts) ──
+  "form-consent": {
+    strokeWidth: 2,
+    paths: `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <polyline points="9 15 11 17 15 13" />`,
+  },
+  "form-history": {
+    strokeWidth: 2,
+    paths: `<rect x="5" y="4" width="14" height="18" rx="2" />
+            <path d="M9 4V2.5h6V4" />
+            <line x1="9" y1="10" x2="15" y2="10" />
+            <line x1="9" y1="14" x2="15" y2="14" />
+            <line x1="9" y1="18" x2="12" y2="18" />`,
+  },
+  "form-screening": {
+    strokeWidth: 2,
+    paths: `<line x1="4" y1="6" x2="6" y2="6" />
+            <line x1="4" y1="12" x2="6" y2="12" />
+            <line x1="4" y1="18" x2="6" y2="18" />
+            <line x1="10" y1="6" x2="20" y2="6" />
+            <line x1="10" y1="12" x2="20" y2="12" />
+            <line x1="10" y1="18" x2="20" y2="18" />`,
+  },
   // ── Generic UI icons ──────────────────────────────────────────────────────
   "close": {
     strokeWidth: 2,
@@ -331,6 +364,40 @@ const ICONS = {
             <line x1="16" y1="2" x2="16" y2="6" />
             <line x1="8" y1="2" x2="8" y2="6" />
             <line x1="3" y1="10" x2="21" y2="10" />`,
+  },
+  // Checklist status shapes (Estudios) — shape carries the state, not only color.
+  "circle-outline": {
+    strokeWidth: 2,
+    paths: `<circle cx="12" cy="12" r="9" />`,
+  },
+  "circle-half": {
+    strokeWidth: 2,
+    paths: `<circle cx="12" cy="12" r="9" />
+            <path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" />`,
+  },
+  "clock": {
+    strokeWidth: 2,
+    paths: `<circle cx="12" cy="12" r="9" />
+            <polyline points="12 7 12 12 15.5 14" />`,
+  },
+  "upload": {
+    strokeWidth: 2,
+    paths: `<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="17 8 12 3 7 8" />
+            <line x1="12" y1="3" x2="12" y2="15" />`,
+  },
+  "printer": {
+    strokeWidth: 2,
+    paths: `<polyline points="6 9 6 2 18 2 18 9" />
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+            <rect x="6" y="14" width="12" height="8" />`,
+  },
+  "qr-code": {
+    strokeWidth: 1.75,
+    paths: `<rect x="3" y="3" width="7" height="7" rx="1" />
+            <rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="3" y="14" width="7" height="7" rx="1" />
+            <path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3" />`,
   },
   "pencil": {
     strokeWidth: 2,

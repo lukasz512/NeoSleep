@@ -124,15 +124,15 @@ describe("HCODetailView — avatar icon per org type (NEO-18)", () => {
   // (hcoLabels.spec.ts, AppAvatar.spec.ts) — this closes the one gap flagged
   // when NEO-18 was reopened: nothing exercised the real view's
   // `:org-type="hco.type"` binding end to end, only the helper in isolation.
-  it("renders the hospital-specific icon in the detail header avatar for a hospital organization", async () => {
+  it("renders the hospital-specific icon in the record header avatar for a hospital organization", async () => {
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, { ...HCO, type: "hospital" }));
     const { wrapper } = await mountHCODetail();
 
     await vi.waitFor(() => expect(wrapper.text()).toContain("Acme Clinic"));
 
-    // Scoped through AppAvatar, not a bare findComponent(AppIcon) — the detail
-    // header also renders a back-nav AppIcon ("arrow-left"), and a plain
-    // findComponent grabs the first match in the tree, not the avatar's own.
+    // NEO-56 + NEO-57: the record header's tile is the org's AppAvatar, which
+    // carries the org-type icon. Scoped through AppAvatar, not a bare
+    // findComponent(AppIcon), which would grab the first icon in the tree.
     expect(wrapper.findComponent(AppAvatar).findComponent(AppIcon).props("name")).toBe("hco-hospital");
 
     await flushPromises();

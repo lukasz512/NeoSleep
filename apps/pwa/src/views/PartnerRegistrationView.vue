@@ -149,8 +149,8 @@
     </AuthCard>
 
     <VDialog v-model="showEditDialog" max-width="520" :transition="originDialogTransition">
-      <VCard>
-        <VCardTitle>{{ t('user.partnerRegistration.form.editModal.title') }}</VCardTitle>
+      <VCard class="pwa-form-dialog__card">
+        <AppDialogHeader :title="t('user.partnerRegistration.form.editModal.title')" @close="cancelEditDialog" />
         <VCardText>
           <VForm ref="editFormRef">
             <VRadioGroup
@@ -250,6 +250,7 @@ import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
 import PartnerDocumentRow from "../components/partner/PartnerDocumentRow.vue";
 import PartnerDocumentDialog from "../components/partner/PartnerDocumentDialog.vue";
+import AppDialogHeader from "../components/AppDialogHeader.vue";
 import { apiFetch } from "../composables/useApi";
 
 /**

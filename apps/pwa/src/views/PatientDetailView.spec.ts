@@ -8,6 +8,7 @@ import * as vuetifyDirectives from "vuetify/directives";
 import { createRouter, createMemoryHistory, type Router } from "vue-router";
 import en from "@i18n/en.json";
 import { routes } from "../router/routes";
+import { useAuthStore } from "../stores/auth";
 
 const apiFetch = vi.fn();
 vi.mock("../composables/useApi", async (importOriginal) => ({
@@ -44,8 +45,10 @@ afterEach(() => {
   notify.mockReset();
 });
 
-async function mountPatientDetail(): Promise<{ wrapper: VueWrapper; router: Router }> {
+async function mountPatientDetail(role = "doctor"): Promise<{ wrapper: VueWrapper; router: Router }> {
   setActivePinia(createPinia());
+  // Studies / Documents (health data) are admin/doctor only.
+  useAuthStore().user = { id: "u-1", email: "doc@clinic.test", name: "Test", role } as ReturnType<typeof useAuthStore>["user"];
   const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
   const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
   const router = createRouter({ history: createMemoryHistory(), routes });
@@ -56,6 +59,20 @@ async function mountPatientDetail(): Promise<{ wrapper: VueWrapper; router: Rout
   mountedWrappers.push(wrapper);
   return { wrapper, router };
 }
+
+describe("PatientDetailView — health-data tabs", () => {
+  it("a rep doesn't see Studies or Documents (admin/doctor only), but keeps the other tabs", async () => {
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, PATIENT));
+    const { wrapper } = await mountPatientDetail("rep");
+    await vi.waitFor(() => expect(wrapper.text()).toContain("Jan Kowalski"));
+
+    const tabs = wrapper.findAll('[role="tab"]').map((t) => t.text());
+    expect(tabs).not.toContain("Studies");
+    expect(tabs).not.toContain("Documents");
+    expect(tabs).toContain("Notes");
+    await flushPromises();
+  });
+});
 
 describe("PatientDetailView — Documents tab", () => {
   it("lists 'Documents' among the tabs and wires it to the patient's /documents endpoint", async () => {
@@ -80,25 +97,65 @@ describe("PatientDetailView — Documents tab", () => {
   });
 });
 
-describe("PatientDetailView — Historia Endo tab", () => {
-  it("lists 'Historia Endo' among the tabs and wires its panels to the patient's endo-intake/stop-bang endpoints", async () => {
-    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, PATIENT));
-    const { wrapper } = await mountPatientDetail();
+const CHECKLIST = {
+  items: [
+    { key: "informedConsent", templateKey: "informedConsent", label: "informedConsent", fillMode: "consent", group: "consent", status: "done", completed_at: null, history: [], pending_request_id: null, actions: {} },
+    { key: "polysomnography", templateKey: null, label: "polysomnography", fillMode: "external", group: "results", status: "missing", completed_at: null, history: [], pending_request_id: null, actions: {} },
+  ],
+  other_uploads: [],
+  pending_requests: [],
+  summary: { done: 1, total: 2 },
+};
 
+// jsdom has no scrollIntoView (the Studies tab scrolls the opened item into view).
+Element.prototype.scrollIntoView = vi.fn();
+
+function routeApi() {
+  apiFetch.mockImplementation(async (path: string) => {
+    if (path === "/api/v1/patient/patient-1") return jsonResponse(true, 200, PATIENT);
+    if (path.endsWith("/checklist")) return jsonResponse(true, 200, CHECKLIST);
+    return jsonResponse(true, 200, { items: [] });
+  });
+}
+
+describe("PatientDetailView — Estudios checklist (NEO-36)", () => {
+  it("the Details tab shows one status icon per study; a click opens that item in the Studies tab", async () => {
+    routeApi();
+    const { wrapper, router } = await mountPatientDetail();
+    await vi.waitFor(() => expect(wrapper.find(".studies-summary__item").exists()).toBe(true));
+
+    const icons = wrapper.findAll(".studies-summary__item");
+    expect(icons.map((b) => b.text())).toEqual(["Informed consent", "Polysomnography"]);
+    expect(icons[0]!.classes()).toContain("studies-summary__item--done");
+    expect(wrapper.text()).toContain("1 of 2 done");
+
+    await icons[1]!.trigger("click");
+    await vi.waitFor(() => expect(router.currentRoute.value.query).toMatchObject({ tab: "studies", item: "polysomnography" }));
+    await vi.waitFor(() => expect(wrapper.find(".studies__item").exists()).toBe(true));
+    await flushPromises();
+  });
+
+  it("a rep gets no Estudios card and never requests the checklist", async () => {
+    routeApi();
+    const { wrapper } = await mountPatientDetail("rep");
+    await vi.waitFor(() => expect(wrapper.text()).toContain("Jan Kowalski"));
+    await flushPromises();
+    expect(wrapper.find(".studies-summary").exists()).toBe(false);
+    expect(apiFetch.mock.calls.some(([path]) => String(path).endsWith("/checklist"))).toBe(false);
+  });
+
+  it("has no separate 'Historia Endo' tab; the Studies tab loads the patient's checklist", async () => {
+    routeApi();
+    const { wrapper } = await mountPatientDetail();
     await vi.waitFor(() => expect(wrapper.text()).toContain("Jan Kowalski"));
 
-    const endoIntakeTab = wrapper.findAll('[role="tab"]').find((t) => t.text() === "Historia Endo");
-    expect(endoIntakeTab?.exists()).toBe(true);
+    const tabs = wrapper.findAll('[role="tab"]').map((t) => t.text());
+    expect(tabs).not.toContain("Historia Endo");
+    apiFetch.mockClear();
+    await wrapper.findAll('[role="tab"]').find((t) => t.text() === "Studies")!.trigger("click");
 
-    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, null)); // GET endo-intake
-    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, [])); // GET stop-bang
-    await endoIntakeTab?.trigger("click");
-
-    await vi.waitFor(() =>
-      expect(apiFetch).toHaveBeenCalledWith("/api/v1/patient/patient-1/endo-intake", { handleErrors: false })
-    );
-    expect(apiFetch).toHaveBeenCalledWith("/api/v1/patient/patient-1/stop-bang", { handleErrors: false });
-
+    await vi.waitFor(() => expect(wrapper.find(".studies__item").exists()).toBe(true));
+    expect(apiFetch).toHaveBeenCalledWith("/api/v1/patient/patient-1/checklist", { handleErrors: false });
     await flushPromises();
   });
 });

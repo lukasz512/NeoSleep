@@ -215,7 +215,7 @@ Design decision record: `docs/ADR-023-countersigned-partner-documents.md`. The "
 - **Licence number**
   - PL PWZ (mod-11 check digit) and MX cédula are validated by one shared validator (`@neo/documents` browser entry).
   - They appear on the HCP, lead and invite forms, on the HCP detail view, and in the registration edit dialog (required there).
-  - Migration 028 moves the old `national_ids.primary` value into `pwz` or `cedula`.
+  - Migration 032 moves the old `national_ids.primary` value into `pwz` or `cedula`.
 - **Documents**
   - Three templates, `partnerAgreement` (with the DPA in `{{slot:annex}}`), `partnerDpa` and `partnerPrivacyNotice`, each with `pl` and `mx` locales.
   - The approved v1 texts are seeded by `apps/api/scripts/seedPartnerDocumentContent.ts`.

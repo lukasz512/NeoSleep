@@ -3,6 +3,7 @@ import { getFileAttachmentsForEntity, getFileAttachmentById, getLinkedUserIdForP
 import { NotFoundError } from "../errors.js";
 import { getPartnerDocumentSignedUrl } from "../services/partnerDocuments.js";
 import { toDto, type DocumentDto } from "./documents.js";
+import { GetPatientByIdQuery } from "./patient.js";
 
 /**
  * QUERIES — "Documents" sub-tab on HCP/HCO/Patient detail views (Slice 1 of
@@ -40,7 +41,13 @@ export async function GetOrganizationDocumentsQuery(ctx: TenantContext, organiza
   return rows.map(toDto);
 }
 
+/** Territory-checked patient lookup — patient documents are health data (clinical PDFs, signed consents, uploaded studies). */
+async function requirePatient(ctx: TenantContext, patientId: string): Promise<void> {
+  if (!(await GetPatientByIdQuery(ctx, patientId))) throw new NotFoundError("Patient", patientId);
+}
+
 export async function GetPatientDocumentsQuery(ctx: TenantContext, patientId: string): Promise<DocumentDto[]> {
+  await requirePatient(ctx, patientId);
   const rows = await getFileAttachmentsForEntity(ctx.client, "patient", patientId);
   return rows.map(toDto);
 }
@@ -84,6 +91,7 @@ export async function GetPatientDocumentDownloadUrlQuery(
   patientId: string,
   documentId: string
 ): Promise<string> {
+  await requirePatient(ctx, patientId);
   const attachment = await getFileAttachmentById(ctx.client, documentId);
   if (!attachment || attachment.entity_type !== "patient" || attachment.entity_id !== patientId || !attachment.path) {
     throw new NotFoundError("Document", documentId);

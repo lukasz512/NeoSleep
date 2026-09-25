@@ -22,14 +22,15 @@
       :load-error="loadFailed"
       :back-route="{ name: 'patients' }"
       :back-label="t('app.patients.detail.back')"
+      :record-title="patient?.name ?? ''"
       :not-found-label="t('app.patients.detail.notFound')"
       @retry="loadPatient"
     >
-      <template v-if="patient" #title>
-        <span class="view-item__title-wrap">
-          <AppAvatar :name="patient.name" :first-name="patient.first_name" :last-name="patient.last_name" entity-type="patient" :size="40" />
-          <h1 class="view-item__title">{{ patient.name }}</h1>
-        </span>
+      <template v-if="patient" #record-tile>
+        <AppAvatar :name="patient.name" entity-type="patient" :first-name="patient.first_name" :last-name="patient.last_name" :size="48" />
+      </template>
+      <template v-if="patient" #record-details>
+        <IdentityDetails :details="patientDetails(patient, { long: true }).details" />
       </template>
       <template v-if="patient" #header-actions>
         <VTooltip location="bottom">
@@ -104,6 +105,11 @@
                 <EntityLink
                   :to="patient.practitioner_id ? { name: 'hcp-detail', params: { id: patient.practitioner_id } } : null"
                   :label="patient.practitioner_name"
+                  entity-type="hcp"
+                  :specialty="patient.practitioner_specialty"
+                  :details="specialtySet(patient.practitioner_specialty, patient.practitioner_specialties).details"
+                  :more-details="specialtySet(patient.practitioner_specialty, patient.practitioner_specialties).more"
+                  :avatar-size="32"
                 />
               </dd>
             </div>
@@ -131,23 +137,19 @@
               <dt class="view-item__label">{{ t("app.patients.detail.medicalRecord") }}</dt>
               <dd class="view-item__value">{{ patient.medical_record || "—" }}</dd>
             </div>
+            <PatientStudiesSummary v-if="canSeeClinical" :patient-id="patient.id" @open="openStudy" />
           </template>
           <template #notes>
             <PatientNotesPanel entity-type="patient" :entity-id="patient.id" />
           </template>
           <template #studies>
-            <PatientStudiesPanel :patient-id="patient.id" />
+            <PatientStudiesPanel :patient-id="patient.id" :focus-item="studyItem" />
           </template>
           <template #orthoapnea>
             <PatientOrthoApneaPanel :patient-id="patient.id" />
           </template>
           <template #documents>
             <EntityDocumentsPanel :endpoint="`/api/v1/patient/${patient.id}/documents`" />
-          </template>
-          <template #endoIntake>
-            <PatientEndoIntakePanel :patient-id="patient.id" />
-            <VDivider class="endo-intake-divider" />
-            <PatientStopBangPanel :patient-id="patient.id" />
           </template>
           <template #history>
             <EntityHistoryPanel :endpoint="`/api/v1/patient/${patient.id}/history`" />
@@ -157,7 +159,7 @@
     </ItemDetailLayout>
 
     <VDialog v-model="showDeleteConfirm" max-width="360" :transition="originDialogTransition" persistent>
-      <VCard>
+      <VCard class="pwa-confirm-dialog__card">
         <VCardText>{{ t("app.patients.actions.deleteConfirmText") }}</VCardText>
         <VCardActions>
           <VSpacer />
@@ -186,17 +188,20 @@ import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
-import AppAvatar from "../components/AppAvatar.vue";
 import DetailViewTabs from "../components/DetailViewTabs.vue";
 import EntityLink from "../components/EntityLink.vue";
+import { useIdentity } from "../composables/useIdentity";
+import AppAvatar from "../components/AppAvatar.vue";
+import IdentityDetails from "../components/IdentityDetails.vue";
 import PatientNotesPanel from "../components/patient/PatientNotesPanel.vue";
 import PatientStudiesPanel from "../components/patient/PatientStudiesPanel.vue";
+import PatientStudiesSummary from "../components/patient/PatientStudiesSummary.vue";
 import PatientOrthoApneaPanel from "../components/patient/PatientOrthoApneaPanel.vue";
 import EntityHistoryPanel from "../components/EntityHistoryPanel.vue";
 import EntityDocumentsPanel from "../components/EntityDocumentsPanel.vue";
-import PatientEndoIntakePanel from "../components/patient/PatientEndoIntakePanel.vue";
-import PatientStopBangPanel from "../components/patient/PatientStopBangPanel.vue";
 import { patientFormFields } from "../config/forms/patientForm";
+import { CLINICAL_ROLES } from "../config/questionnaires";
+import { useAuthStore } from "../stores/auth";
 import { entityActionIcon, entityActionBtnClass } from "../config/entityActions";
 import { patientStatusColor, patientStatusLabel } from "../utils/patientStatus";
 
@@ -204,6 +209,7 @@ const FormRenderer = defineAsyncComponent(() => import("../components/FormRender
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
 
 const { canEditPatients, isAdmin } = usePermissions();
+const authStore = useAuthStore();
 
 interface PatientDetail {
   id: string;
@@ -215,6 +221,10 @@ interface PatientDetail {
   phone?: string | null;
   practitioner_id?: string | null;
   practitioner_name?: string | null;
+  practitioner_specialty?: string | null;
+  practitioner_specialties?: string[] | null;
+  gender?: string | null;
+  date_of_birth?: string | null;
   status?: string;
   region?: string;
   territory_id?: string | null;
@@ -228,12 +238,14 @@ interface PatientDetail {
 }
 
 const { t } = useI18n();
+const { patientDetails, specialtySet } = useIdentity();
 const route = useRoute();
 const router = useRouter();
 const notifications = useNotifications();
 const { submit } = useEntitySubmit();
 
 const patient = ref<PatientDetail | null>(null);
+
 
 /** territory_path (when set) as "mx/cdmx/polanco" — each ancestor's own short
  *  `code`, root-first, lowercased. Falls back to the flat identities.region
@@ -255,20 +267,31 @@ const showEventForm = ref(false);
 const eventFormInitial = ref<{ start_at: string; end_at: string; patientIds?: string[] } | undefined>(undefined);
 const showDeleteConfirm = ref(false);
 
-const patientTabs = [
+const ALL_PATIENT_TABS = [
   { value: "details", labelKey: "app.patients.detail.tabs.details" },
   { value: "notes", labelKey: "app.patients.detail.tabs.notes" },
-  { value: "studies", labelKey: "app.patients.detail.tabs.studies" },
+  { value: "studies", labelKey: "app.patients.detail.tabs.studies", clinical: true },
   { value: "orthoapnea", labelKey: "app.patients.detail.tabs.orthoapnea" },
-  { value: "documents", labelKey: "app.patients.detail.tabs.documents" },
-  { value: "endoIntake", labelKey: "app.patients.detail.tabs.endoIntake" },
+  { value: "documents", labelKey: "app.patients.detail.tabs.documents", clinical: true },
   { value: "history", labelKey: "app.patients.detail.tabs.history" },
 ];
+/** Studies and Documents hold health data — shown to admin/doctor only (the API enforces the same). */
+const canSeeClinical = computed(() => CLINICAL_ROLES.includes(authStore.user?.role ?? ""));
+const patientTabs = computed(() => ALL_PATIENT_TABS.filter((tab) => !tab.clinical || canSeeClinical.value));
 /** Deep-linkable via ?tab= — see SleepStudiesView/TreatmentPlansView row clicks. */
 const activeTab = ref((route.query.tab as string) || "details");
-watch(activeTab, (tab) => {
-  router.replace({ query: { ...route.query, tab } });
-});
+/** Details → Estudios card click: open that item in the Estudios tab (?tab=studies&item=…). */
+const studyItem = ref<string | null>((route.query.item as string) || null);
+function syncQuery() {
+  const item = activeTab.value === "studies" ? studyItem.value ?? undefined : undefined;
+  router.replace({ query: { ...route.query, tab: activeTab.value, item } });
+}
+watch(activeTab, syncQuery);
+function openStudy(itemKey: string) {
+  studyItem.value = itemKey;
+  if (activeTab.value === "studies") syncQuery();
+  else activeTab.value = "studies";
+}
 
 function onEdit() {
   showEditModal.value = true;
@@ -380,9 +403,5 @@ watch(() => route.params.id, loadPatient);
      20px from .view-item__title read as cramped, especially for a long
      name that wraps to two lines. */
   margin-bottom: 12px;
-}
-
-.endo-intake-divider {
-  margin: 28px 0;
 }
 </style>

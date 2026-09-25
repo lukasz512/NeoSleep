@@ -59,6 +59,27 @@ export const publicSpecialistsLimiter = rateLimit({
   message: { error: "Too many requests, please try again later" },
 });
 
+/**
+ * Patient self-fill questionnaire (QR link, /public/questionnaire/:token) —
+ * public, unauthenticated. Reads get headroom for page reloads; submits are
+ * tight (a patient submits once, and the token is single-use anyway).
+ */
+export const publicQuestionnaireReadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later" },
+});
+
+export const publicQuestionnaireSubmitLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later" },
+});
+
 /** Applied globally — 200 requests per 15 minutes per IP. */
 export const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

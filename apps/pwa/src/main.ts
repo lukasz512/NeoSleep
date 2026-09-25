@@ -3,11 +3,13 @@ import { createGtag } from "vue-gtag";
 import { createPinia } from "pinia";
 import App from "./App.vue";
 import router from "./router";
+import { installChunkRecovery, browserChunkRecoveryDeps } from "./router/chunkRecovery";
 import vuetify, { lightTheme, darkTheme } from "./plugins/vuetify";
 import { i18n } from "./plugins/i18n";
 import "./assets/theme.scss";
 import "./assets/app-responsive.scss";
 import "./assets/flags.css";
+import "@brand/spacing.css";
 import "@brand/transitions.css";
 import "./assets/transitions.css";
 import { setupDiagnosticReporter } from "./composables/useDiagnosticReporter";
@@ -48,6 +50,9 @@ const app = createApp(App);
 app.use(createPinia());
 app.use(vuetify);
 app.use(router);
+// After a deploy, an already-open tab can't fetch its old lazy chunks —
+// reload into the new version (with a toast) instead of silently ignoring clicks.
+installChunkRecovery(router, browserChunkRecoveryDeps(useNotifications().show));
 app.use(i18n);
 
 useMotionPreferenceStore().startListening();
@@ -65,7 +70,9 @@ app.provide(APP_VERSION_KEY, resolveAppVersion(import.meta.env));
 app.provide("neo:notify", useNotifications().show);
 const gaId = import.meta.env.VITE_GA_ID as string | undefined;
 if (import.meta.env.PROD && gaId) {
-  app.use(createGtag({ tagId: gaId, pageTracker: { router } }));
+  // The patient self-fill page is never tracked: its URL carries a live
+  // single-use credential, and the visit itself is health information.
+  app.use(createGtag({ tagId: gaId, pageTracker: { router, exclude: [{ name: "patient-questionnaire" }] } }));
 }
 
 app.mount("#app");

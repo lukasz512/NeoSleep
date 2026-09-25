@@ -136,3 +136,36 @@ describe("EntityLink — avatar initials and size", () => {
     expect(mountLink({ to: null, label: "A B", avatarSize: 32 }).findComponent(AppAvatar).props("size")).toBe(32);
   });
 });
+
+describe("EntityLink — large identity (NEO-57)", () => {
+  it("renders one plain line under the name, with extras behind a +N", () => {
+    const wrapper = mountLink({
+      to: { name: "hcp-detail", params: { id: "p1" } },
+      label: "Dra. Ana López",
+      details: ["Dentist"],
+      moreDetails: ["Orthodontist"],
+    });
+
+    expect(wrapper.find(".entity-link__label").text()).toBe("Dra. Ana López");
+    expect(wrapper.find(".identity-details").text()).toContain("Dentist");
+    expect(wrapper.find(".identity-details__more").text()).toBe("+1");
+  });
+
+  it("keeps +N next to the first value it belongs to", () => {
+    const wrapper = mountLink({ to: null, label: "Dra. Ana López", entityType: "hcp", details: ["Dentist", "Clínica Polanco"], moreDetails: ["Orthodontist"] });
+    expect(wrapper.find(".identity-details").text()).toMatch(/^Dentist\s*\+1\s*·\s*Clínica Polanco$/);
+  });
+
+  it("joins several details with a middle dot, no labels", () => {
+    const wrapper = mountLink({ to: null, label: "Ana López", entityType: "patient", details: ["F", "47 y"] });
+    expect(wrapper.find(".identity-details").text()).toMatch(/^F\s*·\s*47 y$/);
+  });
+
+  it("is the small identity (name only) when there are no details", () => {
+    const wrapper = mountLink({ to: null, label: "Dra. Ana López", entityType: "hcp" });
+
+    expect(wrapper.find(".identity-details").exists()).toBe(false);
+    expect(wrapper.find(".entity-link--two-line").exists()).toBe(false);
+    expect(wrapper.text()).toContain("Dra. Ana López");
+  });
+});

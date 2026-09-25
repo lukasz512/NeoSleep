@@ -1,7 +1,7 @@
 import { Router, type Router as RouterType, type Request, type Response } from "express";
 import multer from "multer";
 import { asyncHandler } from "../middleware/errorHandler.js";
-import { requireAuth } from "../middleware/requireAuth.js";
+import { requireClinicalRole } from "../middleware/requireClinicalRole.js";
 import { requireRole } from "../middleware/requireRole.js";
 import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
@@ -98,7 +98,7 @@ function parseBody(body: SleepStudyBody) {
 // ---------------------------------------------------------------------------
 sleepStudyRouter.get(
   "/sleep-study",
-  requireAuth,
+  requireClinicalRole,
   asyncHandler(async (req: Request, res: Response) => {
     const slug = tenantSlugFromHost(req.hostname);
     const { page, limit, sortBy, sortOrder } = parsePaginationParams(req);
@@ -127,7 +127,7 @@ sleepStudyRouter.get(
 // ---------------------------------------------------------------------------
 sleepStudyRouter.get(
   "/sleep-study/:id",
-  requireAuth,
+  requireClinicalRole,
   asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id?.trim();
     if (!id) throw new ValidationError("Missing sleep study id");
@@ -148,7 +148,7 @@ sleepStudyRouter.get(
 // ---------------------------------------------------------------------------
 sleepStudyRouter.post(
   "/sleep-study",
-  requireAuth,
+  requireClinicalRole,
   asyncHandler(async (req: Request, res: Response) => {
     const body = req.body as SleepStudyBody;
     const patientId = str(body.patient_id);
@@ -169,7 +169,7 @@ sleepStudyRouter.post(
 // ---------------------------------------------------------------------------
 sleepStudyRouter.patch(
   "/sleep-study/:id",
-  requireAuth,
+  requireClinicalRole,
   asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id?.trim();
     if (!id) throw new ValidationError("Missing sleep study id");
@@ -191,7 +191,7 @@ sleepStudyRouter.patch(
 // ---------------------------------------------------------------------------
 sleepStudyRouter.get(
   "/sleep-study/:id/attachments",
-  requireAuth,
+  requireClinicalRole,
   asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id?.trim();
     if (!id) throw new ValidationError("Missing sleep study id");
@@ -210,7 +210,7 @@ sleepStudyRouter.get(
 // ---------------------------------------------------------------------------
 sleepStudyRouter.post(
   "/sleep-study/:id/attachments",
-  requireAuth,
+  requireClinicalRole,
   upload.single("file"),
   asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id?.trim();
@@ -236,7 +236,7 @@ sleepStudyRouter.post(
 // ---------------------------------------------------------------------------
 sleepStudyRouter.get(
   "/sleep-study/:id/attachments/:attachmentId/download",
-  requireAuth,
+  requireClinicalRole,
   asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id?.trim();
     const attachmentId = req.params.attachmentId?.trim();
@@ -256,7 +256,7 @@ sleepStudyRouter.get(
 // ---------------------------------------------------------------------------
 sleepStudyRouter.delete(
   "/sleep-study/:id/attachments/:attachmentId",
-  requireAuth,
+  requireClinicalRole,
   asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id?.trim();
     const attachmentId = req.params.attachmentId?.trim();

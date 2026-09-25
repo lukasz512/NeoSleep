@@ -1,14 +1,19 @@
 <template>
   <VAvatar
     :size="size"
-    :color="avatarUrl || outlined ? undefined : bgColor"
     class="app-avatar"
-    :class="{ 'app-avatar--outlined': outlined }"
-    :style="outlined ? { '--app-avatar-accent': bgColor, '--app-avatar-ring': ringWidth } : undefined"
+    :class="[`app-avatar--${tone}`, { 'app-avatar--photo': !!avatarUrl }]"
   >
     <VImg v-if="avatarUrl" :src="avatarUrl" :alt="name || ''" cover />
     <span v-else-if="initials" class="app-avatar__initials" :style="{ fontSize: initialsFontSize }">{{ initials }}</span>
     <AppIcon v-else :name="iconName" class="app-avatar__icon" />
+    <!-- Doctor badge (NEO-57): a small disc on the bottom-right corner with
+         the doctor's specialty icon (tooth for a dentist, lungs for a
+         pulmonologist, ...; stethoscope when unknown), so a doctor reads as
+         a doctor — and as which kind — while keeping their initials. -->
+    <span v-if="showDoctorBadge" class="app-avatar__badge" data-testid="app-avatar-doctor-badge" aria-hidden="true">
+      <AppIcon :name="badgeIcon" class="app-avatar__badge-icon" />
+    </span>
   </VAvatar>
 </template>
 
@@ -16,8 +21,9 @@
 import { computed } from "vue";
 import AppIcon, { type AppIconName } from "./AppIcon.vue";
 import { getInitials, getInitialsFromParts } from "../utils/initials";
-import { getAvatarColor } from "../utils/avatarColor";
 import { hcoTypeIcon } from "../utils/hcoLabels";
+import { identityTone } from "../utils/identityTone";
+import { practitionerSpecialtyIcon } from "../utils/hcpLabels";
 
 /**
  * Placeholder identity photo, shared by HCP/HCO/patient/lead/user lists,
@@ -30,10 +36,11 @@ import { hcoTypeIcon } from "../utils/hcoLabels";
  * so every caller gets it right for free, rather than each call site having
  * to remember to withhold `name` for place types.
  *
- * A patient placeholder is drawn as the "negative" of everyone else's: white
- * fill, a ring in the seeded color, and initials/icon in that same color -
- * so a patient is tellable from a doctor/rep at a glance in mixed lists and
- * EntityLink chips. A real photo (avatarUrl) is never outlined.
+ * NEO-57 identity: an organic square (squircle) tinted with its type's color
+ * (theme.scss --pwa-identity-*: patient teal, doctor blue, organization
+ * amber, users/leads neutral), initials/icon in that same color — so a mixed
+ * list reads by kind at a glance. Replaces the earlier per-name seeded
+ * colors and the outlined patient circle. A real photo keeps the same shape.
  */
 export type AppAvatarEntityType = "hcp" | "hco" | "patient" | "lead" | "user" | "event";
 
@@ -64,8 +71,10 @@ const props = withDefaults(
     /** Only meaningful when entityType is "hco" — organization.type (clinic/hospital/pharmacy/practice/other), selects the type-specific icon. */
     orgType?: string | null;
     size?: number | string;
+    /** Only for entityType "hcp": the doctor's (first) specialty code — picks the badge icon. */
+    specialty?: string | null;
   }>(),
-  { entityType: "user", size: 40 },
+  { entityType: "user", size: 40, specialty: null },
 );
 
 const initials = computed(() => {
@@ -75,10 +84,8 @@ const initials = computed(() => {
   }
   return props.name?.trim() ? getInitials(props.name) : "";
 });
-// Falls back to the entity-type string as the color seed so even a nameless
-// placeholder gets a stable, on-brand color instead of Vuetify's flat gray.
-const bgColor = computed(() => getAvatarColor(props.name?.trim() || props.entityType));
-const outlined = computed(() => props.entityType === "patient" && !props.avatarUrl);
+const tone = computed(() => identityTone(props.entityType));
+
 const iconName = computed(() =>
   props.entityType === "hco" ? hcoTypeIcon(props.orgType ?? undefined) : ENTITY_ICONS[props.entityType],
 );
@@ -92,21 +99,85 @@ const FIBONACCI_INITIALS_RATIO = 21 / 55;
 // resolve their real pixel size only via CSS, so callers relying on that
 // must also pass the equivalent numeric size for this calculation.
 const sizePx = computed(() => (typeof props.size === "number" ? props.size : parseFloat(String(props.size)) || 40));
+// Every doctor avatar carries the badge, at every size — the disc has its
+// own minimum size (CSS below), so it stays readable on a 20px mention.
+const showDoctorBadge = computed(() => props.entityType === "hcp");
+const badgeIcon = computed(() => practitionerSpecialtyIcon(props.specialty ?? undefined));
 const initialsFontSize = computed(() => `${Math.max(sizePx.value * FIBONACCI_INITIALS_RATIO, 8)}px`);
-// Outlined ring scales with `size` so it matches the stroke of the bold
-// initials inside it (~1px on a 20px chip avatar, ~2px at the 40px default)
-// instead of a fixed 2px that swamps small avatars.
-const RING_TO_SIZE_RATIO = 1 / 19;
-const ringWidth = computed(() => `${Math.max(sizePx.value * RING_TO_SIZE_RATIO, 1).toFixed(2)}px`);
+
 </script>
 
 <style scoped>
 .app-avatar {
   flex-shrink: 0;
+  /* Organic square (squircle): a superellipse mask instead of VAvatar's
+     circle or a plain rounded rectangle — the corners flow into the sides
+     with no visible arc joint, at every size from an 18px mention to the
+     56px header, because the mask scales with the element. */
+  border-radius: 0 !important;
+  /* The tint and the squircle live on ::before, not on the avatar itself:
+     masking the avatar would also clip the doctor badge that sits over its
+     corner. A photo gets the same mask directly (below). */
+  overflow: visible !important;
+  position: relative;
+  isolation: isolate;
+  background: transparent;
+  color: var(--app-avatar-fg);
+}
+
+.app-avatar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--app-avatar-bg);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 0C88 0 100 12 100 50S88 100 50 100 0 88 0 50 12 0 50 0Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 0C88 0 100 12 100 50S88 100 50 100 0 88 0 50 12 0 50 0Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+}
+
+.app-avatar :deep(.v-img) {
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 0C88 0 100 12 100 50S88 100 50 100 0 88 0 50 12 0 50 0Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 0C88 0 100 12 100 50S88 100 50 100 0 88 0 50 12 0 50 0Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+}
+
+.app-avatar__badge {
+  position: absolute;
+  /* Fixed small overhang (not a % of the avatar): enough to sit on the
+     corner, never so much that a table cell or card clips it. The disc is
+     never smaller than 12px, so the stethoscope stays legible on a 20px
+     mention; on big avatars it scales with them. */
+  right: -3px;
+  bottom: -3px;
+  width: max(44%, 12px);
+  height: max(44%, 12px);
+  z-index: 1;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--pwa-identity-doctor);
+  color: rgb(var(--v-theme-surface));
+  /* Ring in the surface color separates the disc from the avatar under it. */
+  box-shadow: 0 0 0 2px rgb(var(--v-theme-surface));
+}
+
+.app-avatar__badge-icon {
+  width: 72%;
+  height: 72%;
+  /* Thicker than the icon's own stroke so it survives at ~9px. */
+  stroke-width: 2.8 !important;
+}
+
+.app-avatar--patient { --app-avatar-bg: var(--pwa-identity-patient-soft); --app-avatar-fg: var(--pwa-identity-patient); }
+.app-avatar--doctor  { --app-avatar-bg: var(--pwa-identity-doctor-soft);  --app-avatar-fg: var(--pwa-identity-doctor); }
+.app-avatar--org     { --app-avatar-bg: var(--pwa-identity-org-soft);     --app-avatar-fg: var(--pwa-identity-org); }
+.app-avatar--person  { --app-avatar-bg: var(--pwa-identity-person-soft);  --app-avatar-fg: var(--pwa-identity-person); }
+
+.app-avatar--photo::before {
+  background: transparent;
 }
 
 .app-avatar__initials {
-  color: #fff;
+  color: inherit;
   font-weight: 600;
   letter-spacing: 0.02em;
 }
@@ -114,23 +185,6 @@ const ringWidth = computed(() => `${Math.max(sizePx.value * RING_TO_SIZE_RATIO, 
 .app-avatar__icon {
   width: 55%;
   height: 55%;
-  color: #fff;
-}
-
-.app-avatar--outlined {
-  background: #fff;
-  /* Inset shadow instead of border so the ring doesn't grow the avatar past `size`. */
-  box-shadow: inset 0 0 0 var(--app-avatar-ring) var(--app-avatar-accent);
-}
-
-.app-avatar--outlined .app-avatar__initials,
-.app-avatar--outlined .app-avatar__icon {
-  color: var(--app-avatar-accent);
-}
-
-/* Colored letters on white read thinner than white on color - one weight up
-   keeps their stroke equal to the ring. */
-.app-avatar--outlined .app-avatar__initials {
-  font-weight: 700;
+  color: inherit;
 }
 </style>

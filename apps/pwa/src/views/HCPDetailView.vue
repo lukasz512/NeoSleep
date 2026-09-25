@@ -31,6 +31,7 @@
       :load-error="loadFailed"
       :back-route="{ name: 'hcp' }"
       :back-label="t('user.hcp.detail.back')"
+      :record-title="hcp?.name ?? ''"
       :not-found-label="t('user.hcp.detail.notFound')"
       @retry="loadHCP"
     >
@@ -116,14 +117,17 @@
           <span>{{ t("user.hcp.actions.delete") }}</span>
         </VTooltip>
       </template>
-      <template v-if="hcp" #title>
-        <span class="view-item__title-wrap">
-          <AppAvatar :name="hcp.name" :first-name="hcp.first_name" :last-name="hcp.last_name" entity-type="hcp" :size="40" />
-          <h1 class="view-item__title">{{ hcp.name }}</h1>
-          <span v-if="hcp.status === 'invited'" class="hcp-detail__status-badge">
-            {{ t("user.hcp.detail.statusInvited") }}
-          </span>
-        </span>
+      <template v-if="hcp" #record-tile>
+        <AppAvatar :name="hcp.name" entity-type="hcp" :specialty="hcp.primary_specialty || hcp.specialty" :first-name="hcp.first_name" :last-name="hcp.last_name" :size="48" />
+      </template>
+      <template v-if="hcp?.status === 'invited'" #title-extra>
+        <span class="hcp-detail__status-badge">{{ t("user.hcp.detail.statusInvited") }}</span>
+      </template>
+      <template v-if="hcp" #record-details>
+        <IdentityDetails
+          :details="doctorDetails(hcp, { withClinic: true }).details"
+          :more="doctorDetails(hcp, { withClinic: true }).more"
+        />
       </template>
       <template v-if="hcp" #sections>
         <DetailViewTabs v-model="activeTab" :tabs="hcpTabs">
@@ -203,7 +207,7 @@
       :transition="originDialogTransition"
       persistent
     >
-      <VCard>
+      <VCard class="pwa-confirm-dialog__card">
         <VCardText>{{ t("user.hcp.actions.deleteConfirmText") }}</VCardText>
         <VCardActions>
           <VSpacer />
@@ -240,6 +244,8 @@ import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppAvatar from "../components/AppAvatar.vue";
+import IdentityDetails from "../components/IdentityDetails.vue";
+import { useIdentity } from "../composables/useIdentity";
 import DetailViewTabs from "../components/DetailViewTabs.vue";
 import EntityLink from "../components/EntityLink.vue";
 import EntityHistoryPanel from "../components/EntityHistoryPanel.vue";
@@ -272,6 +278,7 @@ interface HCP {
   phone?: string;
   specialty?: string;
   primary_specialty?: string;
+  specialties?: string[];
   organization_id?: string | null;
   institution?: string;
   region?: string;
@@ -288,6 +295,7 @@ interface HCP {
 }
 
 const { t } = useI18n();
+const { doctorDetails } = useIdentity();
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();

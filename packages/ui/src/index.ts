@@ -15,6 +15,7 @@ export { default as AppShell, type AppShellNavItem } from "./components/AppShell
 export { default as MobileNavDrawer } from "./components/MobileNavDrawer.vue";
 export { default as MobileBottomNavBar } from "./components/MobileBottomNavBar.vue";
 export { default as MobileBottomNavItem } from "./components/MobileBottomNavItem.vue";
+export { default as MobileNavPanel, type MobileNavPanelItem } from "./components/MobileNavPanel.vue";
 export { default as AuthOrbs } from "./components/AuthOrbs.vue";
 export { AUTH_BACKDROP_KEY, type AuthBackdrop } from "./composables/authBackdrop";
 export { useAppVersionLabel } from "./composables/useAppVersionLabel";
@@ -23,3 +24,4 @@ export { default as OriginDialogTransition } from "./components/OriginDialogTran
 export { originDialogTransition } from "./components/originDialogTransition";
 export { getDialogOrigin } from "./composables/useDialogOrigin";
 export { default as AppSegmentedTabs, type AppSegmentedTabOption } from "./components/AppSegmentedTabs.vue";
+export { default as AppChipTabs } from "./components/AppChipTabs.vue";

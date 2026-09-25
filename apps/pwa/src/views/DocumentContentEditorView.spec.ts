@@ -208,4 +208,27 @@ describe("DocumentContentEditorView", () => {
     await flushPromises();
     expect(wrapper.text()).toContain("is approved and carries");
   });
+
+  it("Permissions tab: a patient document shows 'who completes it / position' and saves them too", async () => {
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, CURRENT_VERSION));
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, HISTORY));
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, ["patient"]));
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, { fillMode: "consent", sortOrder: 10 }));
+    const { wrapper } = await mountEditor();
+    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(4));
+    expect(apiFetch.mock.calls[3]![0]).toBe("/api/v1/document-content/gdprConsent.pl/patient-checklist");
+
+    const permissionsTab = wrapper.findAll("button, [role='tab']").find((b) => b.text() === "Permissions");
+    await permissionsTab?.trigger("click");
+    await wrapper.vm.$nextTick();
+    expect(wrapper.text()).toContain("Patient studies checklist");
+
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, ["patient"])); // PUT entity-types
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, { fillMode: "consent", sortOrder: 10 })); // PUT patient-checklist
+    await wrapper.findAll("button").find((b) => b.text() === "Save")?.trigger("click");
+
+    await vi.waitFor(() => expect(notify).toHaveBeenCalledWith("Saved", "success"));
+    const checklistPut = apiFetch.mock.calls.find(([path, init]) => String(path).endsWith("/patient-checklist") && (init as RequestInit)?.method === "PUT");
+    expect(JSON.parse((checklistPut![1] as RequestInit).body as string)).toEqual({ fillMode: "consent", sortOrder: 10 });
+  });
 });
