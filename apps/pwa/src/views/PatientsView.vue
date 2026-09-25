@@ -101,6 +101,7 @@
             :label="(item as PatientListItem).practitioner_name"
             :first-name="(item as PatientListItem).practitioner_first_name"
             :last-name="(item as PatientListItem).practitioner_last_name"
+            :avatar-size="24"
           />
         </span>
       </template>

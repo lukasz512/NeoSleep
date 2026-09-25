@@ -77,7 +77,8 @@ withDefaults(
   overflow-wrap: anywhere;
 }
 
-.identity-header__details {
-  font-size: 0.875rem;
+.identity-header__text .identity-header__details {
+  /* 15px under the 22px name. */
+  font-size: 0.9375rem;
 }
 </style>

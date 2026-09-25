@@ -160,6 +160,11 @@ const avatarProps = computed(() => {
 .entity-link--two-line:hover {
   text-decoration: none;
 }
+.entity-link--two-line .entity-link__label {
+  /* Name above the quiet detail line: a touch heavier, so size and weight
+     both say which line is which. */
+  font-weight: 500;
+}
 .entity-link--two-line:hover .entity-link__label {
   text-decoration: underline;
 }

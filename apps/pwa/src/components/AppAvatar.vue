@@ -138,12 +138,12 @@ const initialsFontSize = computed(() => `${Math.max(sizePx.value * FIBONACCI_INI
   position: absolute;
   /* Fixed small overhang (not a % of the avatar): enough to sit on the
      corner, never so much that a table cell or card clips it. The disc is
-     never smaller than 13px, so the stethoscope stays legible on a 20px
+     never smaller than 12px, so the stethoscope stays legible on a 20px
      mention; on big avatars it scales with them. */
   right: -3px;
   bottom: -3px;
-  width: max(44%, 13px);
-  height: max(44%, 13px);
+  width: max(44%, 12px);
+  height: max(44%, 12px);
   z-index: 1;
   border-radius: 50%;
   display: grid;
@@ -152,12 +152,6 @@ const initialsFontSize = computed(() => `${Math.max(sizePx.value * FIBONACCI_INI
   color: rgb(var(--v-theme-surface));
   /* Ring in the surface color separates the disc from the avatar under it. */
   box-shadow: 0 0 0 2px rgb(var(--v-theme-surface));
-}
-
-/* Nudge a doctor's initials up-left, away from the badge in the corner,
-   so neither covers the other on small avatars. */
-.app-avatar--doctor .app-avatar__initials {
-  transform: translate(-10%, -10%);
 }
 
 .app-avatar__badge-icon {
