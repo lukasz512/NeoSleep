@@ -1,7 +1,7 @@
 import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { apiFetch, extractErrorMessage } from "./useApi";
-import { useNotifications } from "./useNotifications";
+import { retryAction, useNotifications, type NotificationIcon } from "./useNotifications";
 import type { ClinicalRecordKind } from "../config/questionnaires";
 
 /**
@@ -11,7 +11,9 @@ import type { ClinicalRecordKind } from "../config/questionnaires";
  *
  * Every call passes handleErrors:false and shows the server's own message
  * (falling back to a translated one), so one failure is one toast that
- * says what actually went wrong.
+ * says what actually went wrong. Fire-and-forget calls (print, open, delete,
+ * cancel) put Retry on that toast; calls whose result a dialog is waiting for
+ * (save, upload, create link) don't — the dialog stays open and is the retry.
  */
 
 export type ChecklistStatus = "missing" | "pending_patient" | "partial" | "done";
@@ -90,9 +92,17 @@ export function usePatientChecklist(patientId: () => string) {
   const loading = ref(false);
   const loadError = ref(false);
 
-  async function failWith(res: Response, fallbackKey: string): Promise<void> {
+  async function failWith(
+    res: Response,
+    fallbackKey: string,
+    icon: NotificationIcon,
+    retry?: () => Promise<unknown>,
+  ): Promise<void> {
     const bodyText = await res.text().catch(() => "");
-    notifications.show(extractErrorMessage(bodyText) || t(fallbackKey), "error");
+    notifications.show(extractErrorMessage(bodyText) || t(fallbackKey), "error", undefined, {
+      icon,
+      action: retry ? retryAction(() => void retry()) : undefined,
+    });
   }
 
   async function load(): Promise<void> {
@@ -112,13 +122,21 @@ export function usePatientChecklist(patientId: () => string) {
     }
   }
 
-  async function send(path: string, init: RequestInit, errorKey: string, successKey?: string): Promise<Response | null> {
+  interface SendToast {
+    icon: NotificationIcon;
+    errorKey: string;
+    successKey?: string;
+    /** Only for calls nobody awaits a result from — see the header comment. */
+    retryable?: boolean;
+  }
+
+  async function send(path: string, init: RequestInit, toast: SendToast): Promise<Response | null> {
     const res = await apiFetch(`/api/v1/patient/${patientId()}${path}`, { ...init, handleErrors: false });
     if (!res.ok) {
-      await failWith(res, errorKey);
+      await failWith(res, toast.errorKey, toast.icon, toast.retryable ? () => send(path, init, toast) : undefined);
       return null;
     }
-    if (successKey) notifications.show(t(successKey), "success");
+    if (toast.successKey) notifications.show(t(toast.successKey), "success", undefined, { icon: toast.icon });
     await load();
     return res;
   }
@@ -130,11 +148,11 @@ export function usePatientChecklist(patientId: () => string) {
   });
 
   function recordQuestionnaire(kind: ClinicalRecordKind, answers: Record<string, unknown>) {
-    return send(`/clinical-records/${kind}`, json(answers), "app.clinical.saveError", "app.clinical.saveSuccess").then(Boolean);
+    return send(`/clinical-records/${kind}`, json(answers), { icon: "form-screening", errorKey: "app.clinical.saveError", successKey: "app.clinical.saveSuccess" }).then(Boolean);
   }
 
   function completeBang(recordId: string, answers: Record<string, unknown>) {
-    return send(`/clinical-records/stop_bang/${recordId}`, { ...json(answers), method: "PATCH" }, "app.clinical.saveError", "app.clinical.saveSuccess").then(Boolean);
+    return send(`/clinical-records/stop_bang/${recordId}`, { ...json(answers), method: "PATCH" }, { icon: "form-screening", errorKey: "app.clinical.saveError", successKey: "app.clinical.saveSuccess" }).then(Boolean);
   }
 
   /**
@@ -148,7 +166,7 @@ export function usePatientChecklist(patientId: () => string) {
     const res = await apiFetch(`/api/v1/patient/${patientId()}/checklist/${key}/print`, { ...json(recordId ? { recordId } : {}), handleErrors: false });
     if (!res.ok) {
       tab?.close();
-      await failWith(res, "app.clinical.generatePdfError");
+      await failWith(res, "app.clinical.generatePdfError", "printer", () => print(key, recordId));
       return;
     }
     const target = res.headers.get("Content-Type")?.includes("application/pdf")
@@ -168,7 +186,7 @@ export function usePatientChecklist(patientId: () => string) {
     const res = await apiFetch(path, { handleErrors: false });
     if (!res.ok) {
       tab?.close();
-      await failWith(res, "app.clinical.openFileError");
+      await failWith(res, "app.clinical.openFileError", "file", () => openFile(fileAttachmentId, sleepStudyId));
       return;
     }
     const { url } = (await res.json()) as { url: string };
@@ -178,21 +196,21 @@ export function usePatientChecklist(patientId: () => string) {
 
   /** No items → one link for everything the patient still has to do. */
   async function createRequest(items?: string[]): Promise<PendingRequest | null> {
-    const res = await send("/questionnaire-requests", json(items ? { items } : {}), "app.clinical.qr.createError");
+    const res = await send("/questionnaire-requests", json(items ? { items } : {}), { icon: "qr-code", errorKey: "app.clinical.qr.createError" });
     return res ? ((await res.json()) as PendingRequest) : null;
   }
 
   async function cancelRequest(requestId: string): Promise<void> {
-    await send(`/questionnaire-requests/${requestId}`, { method: "DELETE" }, "app.clinical.saveError");
+    await send(`/questionnaire-requests/${requestId}`, { method: "DELETE" }, { icon: "qr-code", errorKey: "app.clinical.saveError", retryable: true });
   }
 
   async function upload(form: FormData): Promise<boolean> {
-    const res = await send("/studies/uploads", { method: "POST", body: form }, "app.clinical.upload.error", "app.clinical.upload.success");
+    const res = await send("/studies/uploads", { method: "POST", body: form }, { icon: "upload", errorKey: "app.clinical.upload.error", successKey: "app.clinical.upload.success" });
     return Boolean(res);
   }
 
   async function deleteUpload(attachmentId: string): Promise<void> {
-    await send(`/studies/uploads/${attachmentId}`, { method: "DELETE" }, "app.clinical.upload.deleteError", "app.clinical.upload.deleted");
+    await send(`/studies/uploads/${attachmentId}`, { method: "DELETE" }, { icon: "file", errorKey: "app.clinical.upload.deleteError", successKey: "app.clinical.upload.deleted", retryable: true });
   }
 
   return { checklist, loading, loadError, load, recordQuestionnaire, completeBang, print, openFile, createRequest, cancelRequest, upload, deleteUpload };

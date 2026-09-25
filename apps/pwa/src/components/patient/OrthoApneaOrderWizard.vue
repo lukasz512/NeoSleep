@@ -741,11 +741,11 @@ function discardDraft() {
 const { loading: savingDraft, run: saveDraftAndClose } = useAsyncAction(async () => {
   const ok = await persistDraft(props.patientId, props.sleepStudyId);
   if (ok) {
-    notifications.show(t("app.orthoApneaOrder.draftSaved"), "success");
+    notifications.show(t("app.orthoApneaOrder.draftSaved"), "success", undefined, { icon: "nav-treatment-plans" });
     emit("submitted"); // refresh the panel's list so the new/updated draft shows up
     closeImmediately();
   } else {
-    notifications.show(t("app.orthoApneaOrder.error"), "error");
+    notifications.show(t("app.orthoApneaOrder.error"), "error", undefined, { icon: "nav-treatment-plans" });
   }
 });
 

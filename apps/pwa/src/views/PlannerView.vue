@@ -309,13 +309,14 @@ async function onEventFormSubmit(payload: EventSubmitPayload, done: (ok: boolean
           region: payload.region,
           attendees: payload.attendees,
         }),
+        handleErrors: false, // own error toast below — one failure, one toast
       });
       if (res.ok) {
-        notifications.show(t("user.planner.form.editSuccess"), "success");
+        notifications.show(t("user.planner.form.editSuccess"), "success", undefined, { icon: "nav-planner" });
         await fetchEvents();
         done(true);
       } else {
-        notifications.show(t("user.planner.form.errorSave"), "error");
+        notifications.show(t("user.planner.form.errorSave"), "error", undefined, { icon: "nav-planner" });
         done(false);
       }
     } else {
@@ -334,18 +335,19 @@ async function onEventFormSubmit(payload: EventSubmitPayload, done: (ok: boolean
           region: payload.region,
           attendees: payload.attendees,
         }),
+        handleErrors: false, // own error toast below — one failure, one toast
       });
       if (res.ok) {
-        notifications.show(t("user.planner.form.success"), "success");
+        notifications.show(t("user.planner.form.success"), "success", undefined, { icon: "nav-planner" });
         await fetchEvents();
         done(true);
       } else {
-        notifications.show(t("user.planner.form.errorSave"), "error");
+        notifications.show(t("user.planner.form.errorSave"), "error", undefined, { icon: "nav-planner" });
         done(false);
       }
     }
   } catch {
-    notifications.show(t("user.planner.form.errorSave"), "error");
+    notifications.show(t("user.planner.form.errorSave"), "error", undefined, { icon: "nav-planner" });
     done(false);
   }
 }

@@ -95,10 +95,18 @@ export const smokePdfLimiter = rateLimit({
   message: { error: "Too many requests, please try again later" },
 });
 
-/** Applied globally — 200 requests per 15 minutes per IP. */
+/**
+ * Applied globally — 1000 requests per 15 minutes per IP (~1/s sustained).
+ *
+ * Was 200, which one active PWA user exceeds within minutes (every list view fans out into
+ * several calls, and each 429 triggers a POST /diagnostics that is itself limited). On Render
+ * the counter was reset by frequent restarts, which hid this; on Cloud Run (NEO-45) the
+ * instance lives longer and users started getting 429s. Brute-force-sensitive routes keep
+ * their own much tighter limiters (login, invite accept, public forms).
+ */
 export const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 200,
+  limit: 1000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many requests, please try again later" },

@@ -43,7 +43,7 @@ import { useI18n } from "vue-i18n";
 import AppButton from "../components/AppButton.vue";
 import PageSection from "../components/PageSection.vue";
 import { useGlobalLoaderStore } from "@stores";
-import { useNotifications, type NotificationType } from "../composables/useNotifications";
+import { retryAction, useNotifications, type NotificationType } from "../composables/useNotifications";
 
 const { t } = useI18n();
 const { startLoading, stopLoading } = useGlobalLoaderStore();
@@ -57,7 +57,13 @@ function triggerLoader() {
 function showNotification(type: NotificationType) {
   const key = `user.dev.notifications.sample.${type}`;
   const message = t(key);
-  show(message, type);
+  // Same shape real call sites use: entity icon, record line, and Retry on
+  // the error sample (which "succeeds" when clicked).
+  show(message, type, undefined, {
+    icon: "nav-patients",
+    context: t("user.dev.notifications.sampleContext"),
+    action: type === "error" ? retryAction(() => showNotification("success")) : undefined,
+  });
 }
 </script>
 

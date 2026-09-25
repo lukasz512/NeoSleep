@@ -57,16 +57,27 @@ export function brandAssetsPlugin(appDir: string): Plugin {
   };
 }
 
+/**
+ * Libraries that must exist exactly once in a bundle: each keeps its state in
+ * module-level injection keys / singletons. pnpm can install two copies of the
+ * same version (different optional peers → different store paths, e.g.
+ * vue-router 5 once for apps/pwa and once for packages/ui), and the bundle then
+ * contains both: packages/ui's useRoute() asks its own copy, finds no router,
+ * and the login screen crashes ("reading 'query'"). dedupe resolves every import
+ * from the app root instead.
+ */
+const SINGLETON_DEPS = ["vue", "vue-router", "pinia", "vue-i18n", "vuetify", "@vue/devtools-api"];
+
 /** Base Vite config shared across all apps. Pass import.meta.dirname as appDir. */
 export function sharedViteConfig(appDir: string): Partial<UserConfig> {
   return {
     envDir: rootDir,
     plugins: [brandAssetsPlugin(appDir)],
-    resolve: { alias: workspaceAliases() },
+    resolve: { dedupe: SINGLETON_DEPS, alias: workspaceAliases() },
   };
 }
 
 /** Base Vitest/Vite resolve config shared across all apps (no brand plugin needed for tests). */
 export function sharedVitestResolve(): UserConfig["resolve"] {
-  return { alias: workspaceAliases() };
+  return { dedupe: SINGLETON_DEPS, alias: workspaceAliases() };
 }
