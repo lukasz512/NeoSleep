@@ -76,6 +76,34 @@ describe("GET /api/v1/territory", () => {
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty("items");
   });
+
+  // Express 5 switched the default query parser from "extended" (qs) to "simple"
+  // (node:querystring). The PWA sends multi-value filters as repeated keys
+  // (?kind=a&kind=b, useEntityList.ts); this pins that they still arrive as an array.
+  it("repeated query keys filter by every value (multi-value filter)", async () => {
+    const admin = await withTenant(TENANT_SLUG, (client) => insertTestUser(client, "admin"));
+    const auth = `Bearer ${tokenFor(admin, "admin")}`;
+    const tag = `Qp-${uniqueSuffix()}`;
+    for (const [suffix, kind] of [["a", "region"], ["b", "country"]] as const) {
+      const created = await request(app)
+        .post("/api/v1/territory")
+        .set("Authorization", auth)
+        .send({ name: `${tag}-${suffix}`, country_code: "MX", kind });
+      expect(created.status).toBe(201);
+    }
+
+    const both = await request(app)
+      .get(`/api/v1/territory?search=${tag}&kind=region&kind=country&limit=-1`)
+      .set("Authorization", auth);
+    expect(both.status).toBe(200);
+    expect(both.body.items.map((t: { kind: string }) => t.kind).sort()).toEqual(["country", "region"]);
+
+    const one = await request(app)
+      .get(`/api/v1/territory?search=${tag}&kind=region&limit=-1`)
+      .set("Authorization", auth);
+    expect(one.status).toBe(200);
+    expect(one.body.items.map((t: { kind: string }) => t.kind)).toEqual(["region"]);
+  });
 });
 
 describe("POST /api/v1/territory (admin-only)", () => {

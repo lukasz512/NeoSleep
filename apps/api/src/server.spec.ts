@@ -165,6 +165,50 @@ describe("API server", () => {
     expect(res.body).toHaveProperty("error");
   });
 
+  // Express 5 (body-parser 2) leaves req.body undefined when nothing was parsed;
+  // server.ts restores the Express 4 `{}` default. Without it, every handler that
+  // destructures `req.body as {...}` would 500 on a bodiless or non-JSON request.
+  describe("request body default (Express 5 migration)", () => {
+    it("POST /api/v1/auth/login with no body returns 400, not 500", async () => {
+      const res = await request(app).post("/api/v1/auth/login");
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ error: "Email and password are required." });
+    });
+
+    it("POST /api/v1/auth/login with a non-JSON content type returns 400, not 500", async () => {
+      const res = await request(app).post("/api/v1/auth/login").set("Content-Type", "text/plain").send("hello");
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ error: "Email and password are required." });
+    });
+
+    it("POST /api/v1/auth/forgot-password with no body returns 400, not 500", async () => {
+      const res = await request(app).post("/api/v1/auth/forgot-password");
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ error: "Email is required." });
+    });
+  });
+
+  it("unknown route returns 404 without leaking internals", async () => {
+    const res = await request(app).get("/api/v1/does-not-exist");
+    expect(res.status).toBe(404);
+    expect(res.text).not.toMatch(/at .*\.js:\d+/);
+  });
+
+  it("rejected async handler reaches the JSON error middleware", async () => {
+    // An unusable questionnaire token makes the async handler throw an AppError
+    // (410 LINK_INVALID) after an await — it must come back as the JSON error shape.
+    const res = await request(app).post("/api/v1/public/questionnaire/lookup").send({ token: "not-a-real-token" });
+    expect(res.status).toBe(410);
+    expect(res.headers["content-type"]).toMatch(/application\/json/);
+    expect(res.body).toEqual({ error: "This link is no longer valid", code: "LINK_INVALID" });
+  });
+
+  it("global rate limiter sends standard RateLimit headers with the configured limit", async () => {
+    const res = await request(app).get("/api/v1/lead");
+    expect(res.headers["ratelimit-limit"]).toBe("200");
+    expect(res.headers["x-ratelimit-limit"]).toBeUndefined();
+  });
+
   it("GET /api/v1/public/specialists is public", async () => {
     const res = await request(app).get("/api/v1/public/specialists");
     expect(res.status).not.toBe(401);

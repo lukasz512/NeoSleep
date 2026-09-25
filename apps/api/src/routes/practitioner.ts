@@ -14,7 +14,7 @@ import { GetPractitionerListQuery, GetPractitionerByIdQuery } from "../queries/p
 import { GetHistoryForPractitionerQuery } from "../queries/auditLog.js";
 import { GetPractitionerDocumentsQuery, GetPractitionerDocumentDownloadUrlQuery } from "../queries/entityDocuments.js";
 import { ValidationError } from "../errors.js";
-import { parsePaginationParams, toFilterArray } from "./utils.js";
+import { parsePaginationParams, toFilterArray, routeParam } from "./utils.js";
 
 /**
  * Practitioner routes — thin waiters.
@@ -65,7 +65,7 @@ practitionerRouter.get(
   "/practitioner/:id",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing practitioner id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -86,7 +86,7 @@ practitionerRouter.get(
   "/practitioner/:id/history",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing practitioner id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -106,7 +106,7 @@ practitionerRouter.get(
   "/practitioner/:id/documents",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing practitioner id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -125,8 +125,8 @@ practitionerRouter.get(
   "/practitioner/:id/documents/:documentId/download",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
-    const documentId = req.params.documentId?.trim();
+    const id = routeParam(req, "id")?.trim();
+    const documentId = routeParam(req, "documentId")?.trim();
     if (!id || !documentId) throw new ValidationError("Missing practitioner id or document id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -153,7 +153,7 @@ practitionerRouter.post(
   "/practitioner/:id/organizations",
   requireRole("admin", "manager", "rep"),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing practitioner id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -175,8 +175,8 @@ practitionerRouter.delete(
   "/practitioner/:id/organizations/:orgId",
   requireRole("admin", "manager", "rep"),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
-    const orgId = req.params.orgId?.trim();
+    const id = routeParam(req, "id")?.trim();
+    const orgId = routeParam(req, "orgId")?.trim();
     if (!id || !orgId) throw new ValidationError("Missing practitioner id or organization id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -193,8 +193,8 @@ practitionerRouter.patch(
   "/practitioner/:id/organizations/:orgId/primary",
   requireRole("admin", "manager", "rep"),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
-    const orgId = req.params.orgId?.trim();
+    const id = routeParam(req, "id")?.trim();
+    const orgId = routeParam(req, "orgId")?.trim();
     if (!id || !orgId) throw new ValidationError("Missing practitioner id or organization id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -261,7 +261,7 @@ practitionerRouter.patch(
   "/practitioner/:id",
   requireRole("admin", "manager", "kam", "msl", "rep"),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing practitioner id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -316,7 +316,7 @@ practitionerRouter.post(
   "/practitioner/:id/activate",
   requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing practitioner id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -337,7 +337,7 @@ practitionerRouter.delete(
   "/practitioner/:id",
   requireRole("admin"),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing practitioner id");
 
     const slug = tenantSlugFromHost(req.hostname);

@@ -8,7 +8,7 @@ import { CreateLeadCommand, UpdateLeadCommand, ConvertLeadCommand, DeleteLeadCom
 import { InvitePractitionerCommand } from "../commands/invitePractitioner.js";
 import { GetLeadListQuery, GetLeadByIdQuery } from "../queries/lead.js";
 import { ValidationError } from "../errors.js";
-import { parsePaginationParams, toFilterArray } from "./utils.js";
+import { parsePaginationParams, toFilterArray, routeParam } from "./utils.js";
 import { resolveFrontendOrigin } from "../utils/frontendOrigin.js";
 
 /**
@@ -58,7 +58,7 @@ leadsRouter.get(
   "/lead/:id",
   requireRole("admin", "manager", "kam", "msl", "rep"),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing lead id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -117,7 +117,7 @@ leadsRouter.patch(
   "/lead/:id",
   requireRole("admin", "manager", "kam", "msl", "rep"),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing lead id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -177,7 +177,7 @@ leadsRouter.post(
   "/lead/:id/invite",
   requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing lead id");
 
     const body = req.body as { first_name?: string; last_name?: string; email?: string };
@@ -202,7 +202,7 @@ leadsRouter.post(
   "/lead/:id/send-offer",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing lead id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -223,7 +223,7 @@ leadsRouter.delete(
   "/lead/:id",
   requireRole("admin"),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing lead id");
 
     const slug = tenantSlugFromHost(req.hostname);

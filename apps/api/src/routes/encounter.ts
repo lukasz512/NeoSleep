@@ -9,6 +9,7 @@ import {
   GetEncounterByIdQuery,
 } from "../queries/encounter.js";
 import { ValidationError } from "../errors.js";
+import { routeParam } from "./utils.js";
 
 /**
  * Encounter routes — thin waiters.
@@ -54,7 +55,7 @@ encounterRouter.get(
   "/encounter/:id",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing encounter id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -109,7 +110,7 @@ encounterRouter.patch(
   "/encounter/:id",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing encounter id");
 
     const slug = tenantSlugFromHost(req.hostname);

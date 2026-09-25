@@ -32,6 +32,18 @@ export function toFilterArray(q: unknown): string[] | undefined {
   return s ? [s] : undefined;
 }
 
+/**
+ * A named route param as a plain string. Express 5's types widen every param to
+ * `string | string[]` because a wildcard param (`/*splat`) is an array at runtime;
+ * no route here uses wildcards, so a named `:param` is always a single string —
+ * this narrows it without a type assertion. Returns undefined when the param is
+ * absent (or, defensively, when it is an array).
+ */
+export function routeParam(req: Request, name: string): string | undefined {
+  const value = req.params[name];
+  return typeof value === "string" ? value : undefined;
+}
+
 export function isoDate(val: Date | string | null | undefined): string {
   return val instanceof Date ? val.toISOString() : (val ?? "");
 }
