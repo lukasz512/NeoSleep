@@ -90,9 +90,10 @@
               <h2 class="partner-registration__clinic-details-heading">
                 {{ t('user.partnerRegistration.form.clinicDetailsHeading') }}
               </h2>
-              <!-- Default (not small) size: more air inside the outline (Łukasz, NEO-51 review). -->
+              <!-- Tonal (light brand fill) + pencil icon, default size — Łukasz asked for an
+                   icon and a background so the action can't be missed (NEO-51 review, 2026-09-25). -->
               <AppButton
-                variant="outlined"
+                variant="tonal"
                 color="primary"
                 type="button"
                 class="partner-registration__edit-button"
@@ -727,7 +728,7 @@ async function onSubmit() {
   font-weight: 600;
 }
 
-/* Outlined + pencil icon instead of the old flat text link — Łukasz found
+/* Tonal fill + pencil icon instead of the old flat text link — Łukasz found
    the edit action too easy to miss (NEO-51). */
 .partner-registration__edit-button {
   text-transform: none;
