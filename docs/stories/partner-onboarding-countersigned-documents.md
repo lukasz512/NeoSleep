@@ -249,3 +249,10 @@ Design decision record: `docs/ADR-023-countersigned-partner-documents.md`. The "
 2. `setupPartnerSignatories.ts`, once each for PL and MX, using the PNGs from `secrets/signatures/`.
 3. Łukasz approves the PL versions and Alfred the MX versions in the Documents tab.
 4. Re-send one test invite.
+
+## Addendum — signing review (Łukasz, 2026-09-25)
+
+- **Centred signatures.** Both signatures sit centred over their line in the agreement (preview and PDF). The doctor's drawn signature is cropped to the ink before it is saved, so it centres on the ink, not on the empty pad around it.
+- **Pad width.** The signature pad is no wider than a signature line in the document (max 360px), centred.
+- **Signed preview.** After Sign, the dialog stays open and shows the agreement exactly as it will be saved, with both signatures, scrolled to the signature block. "Change my signature" brings the pad back; "Keep current signature" cancels the change. Reopening a signed agreement opens on this preview.
+- **Privacy notice.** It can be reopened any number of times on the registration page. Once acknowledged, the dialog shows "Done" instead of "I have read it". Decided: registration page only, not inside the app after login.
