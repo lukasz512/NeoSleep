@@ -1,7 +1,7 @@
 # ADR-023: Clinical questionnaires as dated studies + patient self-fill via single-use link
 
 ## Status
-Accepted (2026-09-24, NEO-36 rework). Partially supersedes [ADR-022](ADR-022-endo-intake-and-stop-bang-schema.md).
+Accepted (2026-09-24, NEO-36 rework). Partially supersedes [ADR-022](ADR-022-endo-intake-and-stop-bang-schema.md). Extended by [ADR-024](ADR-024-patient-estudios-checklist.md): Estudios becomes a per-patient checklist, one QR carries several steps (incl. a phone-signed consent), and the per-record PDF route is replaced by a streamed print PDF.
 
 ## Context
 

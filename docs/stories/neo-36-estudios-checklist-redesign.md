@@ -22,14 +22,16 @@
 ### Medical-Industry Trend Check
 - Not applicable. The workflow shape comes from the partner dentist's own paper process; the relevant intake/QR trend check is already in the previous story.
 
-### Acceptance Criteria (draft; finalize after Open Questions)
-- [ ] Estudios lists one row per checklist item, in a fixed clinically logical order, with polysomnography last.
-- [ ] Each row shows its title, a status, "QR for the patient" (only where the patient fills the form) and "PDF to print" (patient data pre-filled, signature space).
-- [ ] A completed row is visibly highlighted; missing rows are not.
-- [ ] Doctor-filled items open a form in place: no QR, printable.
-- [ ] "Agregar estudio" uploads a file with a title and notes. It shows up in the same list with a distinct status.
-- [ ] The Details view shows one icon per checklist item with its done/missing state.
-- [ ] Only admin and doctor see any of this.
+**Status**: implemented 2026-09-25 on `worktree-neo-36-historia-endo-estudios-qr` — design in [ADR-024](../ADR-024-patient-estudios-checklist.md). Not-applicable removal deferred; consent text awaits counsel sign-off.
+
+### Acceptance Criteria
+- [x] Estudios lists one row per checklist item, in a fixed clinically logical order, with polysomnography last.
+- [x] Each row shows its title, a status, "QR for the patient" (only where the patient fills the form) and "PDF to print" (patient data pre-filled, signature space).
+- [x] A completed row is visibly highlighted; missing rows are not.
+- [x] Doctor-filled items open a form in place: no QR, printable.
+- [x] "Agregar estudio" uploads a file with a title and notes. It shows up in the same list with a distinct status.
+- [x] The Details view shows one icon per checklist item with its done/missing state.
+- [x] Only admin and doctor see any of this.
 
 ### Decisions (Łukasz, 2026-09-25)
 - **Scope and order.** Every document assigned to the patient in the Documents admin appears, grouped as:
@@ -47,12 +49,12 @@
 - Removing an item as "not applicable" is deferred.
 
 ### Open Questions (asked 2026-09-25; answered above)
-- [ ] The exact list and order of items, and whether Historia Endo (root-canal consent) belongs in a sleep-dentistry checklist.
-- [ ] How a consent counts as "done": printed, signed and the scan uploaded, signed on the patient's phone, or the doctor ticks it.
-- [ ] One row per item with its history folded underneath, or every fill as its own row.
-- [ ] Where the Details view icons sit, and whether clicking one jumps to the item.
-- [ ] Does an upload always create a new ad-hoc row, or can it also complete an existing item (for example, a PSG report upload completing the "Polisomnografía" row)?
-- [ ] Removing an item as "not applicable" is deferred ("later"). Confirm it's out of scope for this iteration.
+- [x] The exact list and order of items, and whether Historia Endo (root-canal consent) belongs in a sleep-dentistry checklist.
+- [x] How a consent counts as "done": printed, signed and the scan uploaded, signed on the patient's phone, or the doctor ticks it.
+- [x] One row per item with its history folded underneath, or every fill as its own row.
+- [x] Where the Details view icons sit, and whether clicking one jumps to the item.
+- [x] Does an upload always create a new ad-hoc row, or can it also complete an existing item (for example, a PSG report upload completing the "Polisomnografía" row)?
+- [x] Removing an item as "not applicable" is deferred ("later"). Confirm it's out of scope for this iteration.
 
 ### Hand-off
 → `/ux` for the row/tile and Details-icon layout, after the answers
