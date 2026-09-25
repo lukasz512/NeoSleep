@@ -80,7 +80,15 @@ app.set("trust proxy", 1);
 // documents — the most fragile piece on Render (bundled Chromium + system
 // libraries), which /health alone can't vouch for. Used by the post-deploy
 // smoke test; tightly rate-limited because every call launches a render.
-const SMOKE_PDF_HTML = "<!doctype html><html><body><h1>Smoke test</h1><p>Render check.</p></body></html>";
+// Loads Poppins from Google Fonts exactly like packages/documents/templates do:
+// that HTTPS fetch is what pulls in Chromium's network stack (NSS, libsqlite3)
+// — a missing system library there crashes real documents but not a page
+// with no web font. The accented glyphs pull a second font subset.
+const SMOKE_PDF_HTML =
+  '<!doctype html><html><head><meta charset="UTF-8">' +
+  '<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">' +
+  "<style>body{font-family:'Poppins',sans-serif}</style></head>" +
+  "<body><h1>Smoke test</h1><p>Render check, accented glyphs: é ñ ó ł ź</p></body></html>";
 app.get("/health/pdf", smokePdfLimiter, async (_req, res) => {
   const started = Date.now();
   try {
