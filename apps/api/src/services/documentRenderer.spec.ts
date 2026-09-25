@@ -1,7 +1,16 @@
 import { describe, it, expect, afterAll } from "vitest";
 import puppeteer, { type Browser } from "puppeteer-core";
 import { renderDocumentHtml } from "@neo/documents";
-import { renderHtmlToPdf, getRenderBrowser, resolveBrowserLaunch, applyDataFields, applyDataImages, lockDownPage } from "./documentRenderer.js";
+import {
+  renderHtmlToPdf,
+  getRenderBrowser,
+  resolveBrowserLaunch,
+  applyDataFields,
+  applyDataImages,
+  applyVariant,
+  lockDownPage,
+  waitForRenderReady,
+} from "./documentRenderer.js";
 
 /**
  * Real, non-mocked rendering — every other spec mocks renderHtmlToPdf at
@@ -27,6 +36,16 @@ describe.skipIf(!launch)("renderHtmlToPdf (real Chromium)", () => {
   it("renders a real PDF from HTML", { timeout: 60_000 }, async () => {
     const pdf = await renderHtmlToPdf("<html><body><h1>NeoSleep</h1></body></html>");
     expect(pdf.byteLength).toBeGreaterThan(500);
+    expect(Buffer.from(pdf.subarray(0, 5)).toString("latin1")).toBe("%PDF-");
+  });
+
+  it("renders the /health/pdf smoke page shape: Poppins from Google Fonts plus accented glyphs", { timeout: 60_000 }, async () => {
+    const pdf = await renderHtmlToPdf(
+      '<!doctype html><html><head><meta charset="UTF-8">' +
+        '<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">' +
+        "<style>body{font-family:'Poppins',sans-serif}</style></head>" +
+        "<body><h1>Smoke test</h1><p>Render check, accented glyphs: é ñ ó ł ź</p></body></html>"
+    );
     expect(Buffer.from(pdf.subarray(0, 5)).toString("latin1")).toBe("%PDF-");
   });
 
@@ -59,6 +78,54 @@ describe.skipIf(!launch)("renderHtmlToPdf (real Chromium)", () => {
     expect(placed).toEqual({ children: 1, src: onePixel, fits: true });
 
     await expect(applyDataImages(page, { firma_paciente: "https://evil.test/x.png" })).rejects.toThrow(/PNG data URL/);
+  });
+
+  it("waitForRenderReady: after filling fields and images, fonts are settled and every image is decoded", { timeout: 60_000 }, async () => {
+    browser ??= await puppeteer.launch({ ...launch!, headless: true });
+    const page = await browser.newPage();
+    await lockDownPage(page);
+    await page.setContent(renderDocumentHtml("medicalHistory", "mx"), { waitUntil: "load" });
+    await applyDataFields(page, { nombre_paciente: "Ana López Núñez" });
+    await applyDataImages(page, {
+      firma_paciente: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+    });
+
+    await waitForRenderReady(page);
+
+    const state = await page.evaluate(() => ({
+      fonts: document.fonts.status,
+      images: Array.from(document.images).map((img) => img.complete && img.naturalWidth > 0),
+    }));
+    expect(state.fonts).toBe("loaded");
+    expect(state.images.length).toBeGreaterThan(0);
+    expect(state.images.every(Boolean)).toBe(true);
+  });
+
+  it("partner agreement path: variant pruned, data-image signatures decoded and fonts settled before print", { timeout: 60_000 }, async () => {
+    const onePixel = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+    const html = renderDocumentHtml("partnerAgreement", "mx", "<p>Cláusula de prueba.</p>", { annex: "<p>Anexo DPA.</p>" });
+
+    browser ??= await puppeteer.launch({ ...launch!, headless: true });
+    const page = await browser.newPage();
+    await lockDownPage(page);
+    await page.setContent(html, { waitUntil: "load" });
+    await applyVariant(page, "owner");
+    await applyDataImages(page, { counterparty_signature: onePixel, signer_signature: onePixel }, "data-image");
+    await waitForRenderReady(page);
+    const state = await page.evaluate(() => ({
+      fonts: document.fonts.status,
+      staff: document.querySelectorAll("[data-variant='staff']").length,
+      images: Array.from(document.querySelectorAll("[data-image] img")).map((img) => (img as HTMLImageElement).complete && (img as HTMLImageElement).naturalWidth > 0),
+    }));
+    expect(state).toEqual({ fonts: "loaded", staff: 0, images: [true, true] });
+
+    const pdf = await renderHtmlToPdf(html, {
+      marginBottom: "26mm",
+      dataFields: { counterparty_name: "Firma Prueba" },
+      imageFields: { counterparty_signature: onePixel, signer_signature: onePixel },
+      variant: "owner",
+    });
+    expect(Buffer.from(pdf.subarray(0, 5)).toString("latin1")).toBe("%PDF-");
   });
 
   it("renders the medical-history print form with a signature image", { timeout: 60_000 }, async () => {
@@ -101,8 +168,9 @@ describe.skipIf(!launch)("renderHtmlToPdf (real Chromium)", () => {
     await lockDownPage(page);
     await page.setContent(
       `<p data-field="nombre_paciente"></p><img src="https://example.com/track.png"><script>document.body.dataset.ran = "yes";</script>`,
-      { waitUntil: "networkidle0" }
+      { waitUntil: "load" }
     );
+    await waitForRenderReady(page);
 
     await applyDataFields(page, { nombre_paciente: "Ana" });
 
