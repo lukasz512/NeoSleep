@@ -155,7 +155,7 @@ dev_deploy_check() {
   head="$(git rev-parse HEAD 2>/dev/null)" || return 0
   git merge-base --is-ancestor "$head" origin/dev 2>/dev/null || return 0
   if ! jq -e --arg sha "$head" '.devVerified.sha == $sha and .devVerified.ok == true' "$marker" >/dev/null 2>&1; then
-    FAILS+=("'${BRANCH}' is merged into dev (HEAD ${head:0:7} is in origin/dev) but not verified on pwa-dev yet. Wait for the dev 'Deploy NeoSleepCare App' run containing it to finish green (gh run list --workflow deploy-pwa.yml --branch dev), run node infrastructure/scripts/smoke-dev-bundle.mjs --markers <this change's markers> (store them as 'smokeMarkers' in $marker), click through the changed screens on https://pwa-dev.neosleepcare.com if a QA login is available, then record devVerified {sha, ok, at, summary} in $marker and tell Łukasz the result.")
+    FAILS+=("'${BRANCH}' is merged into dev (HEAD ${head:0:7} is in origin/dev) but not verified on pwa-dev yet. Wait for the dev 'Deploy NeoSleepCare App' run containing it to finish green (gh run list --workflow deploy-pwa.yml --branch dev), run node infrastructure/scripts/smoke-dev-bundle.mjs --markers <this change's markers> (store them as 'smokeMarkers' in $marker), then node infrastructure/scripts/smoke-dev-ui.mjs --check '<route>=<selector>' ... (logged-in click-through with the QA account in .claude/local/qa-dev.json; skip only if that file doesn't exist and say so), then record devVerified {sha, ok, at, summary} in $marker and tell Łukasz the result.")
   fi
 }
 
