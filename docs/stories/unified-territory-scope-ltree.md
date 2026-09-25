@@ -38,3 +38,6 @@ Migrations: `022_territory_ltree_scope.sql` (the mechanism), `023_territory_coun
 
 ### Hand-off
 -> Reconcile with the concurrent security-hardening session; then Lead scoping + real backfill as follow-ups.
+
+### Follow-up — sub-routes (NEO-48, 2026-09-25)
+History and documents (list + download URL) for Patient/HCP/HCO go through `queries/entityAccess.ts` (`require{Patient,Practitioner,Organization}InScope`) — the parent is fetched first, 404 if gone, 403 if outside the caller's territory. Before this, `/practitioner|organization/:id/{history,documents}` and `/patient/:id/history` answered for any id regardless of territory.

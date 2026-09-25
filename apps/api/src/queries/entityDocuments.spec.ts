@@ -1,16 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import bcrypt from "bcrypt";
-import { withTenant, insertStaffUser, insertFileAttachment, insertPatient, getGlobalTerritoryId, getLinkedUserIdForPractitioner } from "../db.js";
+import { withTenant, insertStaffUser, insertFileAttachment, insertPatient, getGlobalTerritoryId, getCountryTerritoryId, getLinkedUserIdForPractitioner } from "../db.js";
 import type { TenantContext } from "../context/TenantContext.js";
+import type { StaffRole } from "../db/users.js";
 import { CreatePractitionerCommand, ActivatePractitionerCommand } from "../commands/practitioner.js";
-import { NotFoundError } from "../errors.js";
+import { CreateOrganizationCommand } from "../commands/organization.js";
+import { NotFoundError, ForbiddenError } from "../errors.js";
 import {
   GetPractitionerDocumentsQuery,
   GetOrganizationDocumentsQuery,
   GetPatientDocumentsQuery,
   GetPractitionerDocumentDownloadUrlQuery,
   GetOrganizationDocumentDownloadUrlQuery,
+  GetPatientDocumentDownloadUrlQuery,
 } from "./entityDocuments.js";
+import { GetHistoryForPatientQuery, GetHistoryForPractitionerQuery, GetHistoryForOrganizationQuery } from "./auditLog.js";
 
 // mailer.ts is the external boundary (Resend) — mocked here, same pattern as
 // commands/practitioner.spec.ts, since ActivatePractitionerCommand is only
@@ -30,16 +34,39 @@ function uniqueSuffix(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-async function buildTestContext(client: Parameters<typeof CreatePractitionerCommand>[0]["client"]): Promise<TenantContext> {
+type Client = Parameters<typeof CreatePractitionerCommand>[0]["client"];
+
+async function buildTestContext(client: Client, role: StaffRole = "admin", territoryId?: string): Promise<TenantContext> {
   const email = `qa-entity-docs-${uniqueSuffix()}@neosleepcare.com`;
   const hash = await bcrypt.hash("irrelevant-not-logged-in-with", 4);
-  const user = await insertStaffUser(client, email, "QA", "Pilot", "admin", hash, false);
+  const scope = territoryId ?? (await getGlobalTerritoryId(client));
+  const user = await insertStaffUser(client, email, "QA", "Pilot", role, hash, false, null, null, scope);
   return {
     slug: TENANT_SLUG,
     client,
-    user: { id: user!.id, email, role: "admin", roles: [{ role: "admin", territory_id: await getGlobalTerritoryId(client) }] },
+    user: { id: user!.id, email, role, roles: [{ role, territory_id: scope }] },
     requestId: `test-${uniqueSuffix()}`,
   };
+}
+
+async function createTestPractitioner(ctx: TenantContext, territoryId: string | null = null) {
+  return CreatePractitionerCommand(ctx, {
+    first_name: "Docs",
+    last_name: `Test-${uniqueSuffix()}`,
+    email: `qa-entity-docs-hcp-${uniqueSuffix()}@example.com`,
+    phone: "600100200",
+    territory_id: territoryId,
+  });
+}
+
+async function createTestOrganization(ctx: TenantContext, territoryId: string | null = null) {
+  return CreateOrganizationCommand(ctx, {
+    name: `QA Docs Clinic ${uniqueSuffix()}`,
+    type: "clinic",
+    email: `qa-docs-clinic-${uniqueSuffix()}@example.com`,
+    phone: "600100200",
+    territory_id: territoryId,
+  });
 }
 
 beforeEach(() => {
@@ -50,9 +77,8 @@ describe("GetPractitionerDocumentsQuery", () => {
   it("returns only the practitioner's own rows when there is no linked user account yet", async () => {
     await withTenant(TENANT_SLUG, async (client) => {
       const ctx = await buildTestContext(client);
-      // A random id with no real practitioner row: getLinkedUserIdForPractitioner's
-      // JOIN simply finds nothing, same as a real practitioner never activated.
-      const practitionerId = crypto.randomUUID();
+      // A real practitioner that was never activated has no linked user account.
+      const practitionerId = (await createTestPractitioner(ctx)).id;
       await insertFileAttachment(client, {
         entity_type: "practitioner",
         entity_id: practitionerId,
@@ -106,7 +132,7 @@ describe("GetOrganizationDocumentsQuery / GetPatientDocumentsQuery", () => {
   it("returns file_attachment rows scoped to the given organization", async () => {
     await withTenant(TENANT_SLUG, async (client) => {
       const ctx = await buildTestContext(client);
-      const organizationId = crypto.randomUUID();
+      const organizationId = (await createTestOrganization(ctx)).id;
       await insertFileAttachment(client, {
         entity_type: "organization",
         entity_id: organizationId,
@@ -151,8 +177,9 @@ describe("download URL ownership guards", () => {
         filename: "not-mine.pdf",
       });
 
+      const practitioner = await createTestPractitioner(ctx);
       await expect(
-        GetPractitionerDocumentDownloadUrlQuery(ctx, crypto.randomUUID(), attachment.id)
+        GetPractitionerDocumentDownloadUrlQuery(ctx, practitioner.id, attachment.id)
       ).rejects.toThrow(NotFoundError);
     });
   });
@@ -160,9 +187,88 @@ describe("download URL ownership guards", () => {
   it("GetOrganizationDocumentDownloadUrlQuery throws NotFoundError for a nonexistent document id", async () => {
     await withTenant(TENANT_SLUG, async (client) => {
       const ctx = await buildTestContext(client);
+      const organization = await createTestOrganization(ctx);
       await expect(
-        GetOrganizationDocumentDownloadUrlQuery(ctx, crypto.randomUUID(), "00000000-0000-0000-0000-000000000000")
+        GetOrganizationDocumentDownloadUrlQuery(ctx, organization.id, "00000000-0000-0000-0000-000000000000")
       ).rejects.toThrow(NotFoundError);
     });
   });
+});
+
+describe("territory scoping on history + documents sub-routes (NEO-48)", () => {
+  async function territories(client: Client) {
+    const plId = await getCountryTerritoryId(client, "PL");
+    const mxId = await getCountryTerritoryId(client, "MX");
+    if (!plId || !mxId) throw new Error("PL/MX country territory not seeded");
+    return { plId, mxId };
+  }
+
+  it("denies a rep outside a practitioner's territory its history, documents and download URLs", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const { plId, mxId } = await territories(client);
+      const adminCtx = await buildTestContext(client);
+      const mxRepCtx = await buildTestContext(client, "rep", mxId);
+      const practitioner = await createTestPractitioner(adminCtx, plId);
+      const attachment = await insertFileAttachment(client, {
+        entity_type: "practitioner", entity_id: practitioner.id,
+        url: "https://example.test/pl.pdf", path: "pl.pdf", filename: "pl.pdf",
+      });
+
+      await expect(GetHistoryForPractitionerQuery(mxRepCtx, practitioner.id)).rejects.toThrow(ForbiddenError);
+      await expect(GetPractitionerDocumentsQuery(mxRepCtx, practitioner.id)).rejects.toThrow(ForbiddenError);
+      await expect(GetPractitionerDocumentDownloadUrlQuery(mxRepCtx, practitioner.id, attachment.id)).rejects.toThrow(ForbiddenError);
+    });
+  }, 20000);
+
+  it("denies a rep outside an organization's territory its history, documents and download URLs", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const { plId, mxId } = await territories(client);
+      const adminCtx = await buildTestContext(client);
+      const mxRepCtx = await buildTestContext(client, "rep", mxId);
+      const organization = await createTestOrganization(adminCtx, plId);
+      const attachment = await insertFileAttachment(client, {
+        entity_type: "organization", entity_id: organization.id,
+        url: "https://example.test/pl-org.pdf", path: "pl-org.pdf", filename: "pl-org.pdf",
+      });
+
+      await expect(GetHistoryForOrganizationQuery(mxRepCtx, organization.id)).rejects.toThrow(ForbiddenError);
+      await expect(GetOrganizationDocumentsQuery(mxRepCtx, organization.id)).rejects.toThrow(ForbiddenError);
+      await expect(GetOrganizationDocumentDownloadUrlQuery(mxRepCtx, organization.id, attachment.id)).rejects.toThrow(ForbiddenError);
+    });
+  }, 20000);
+
+  it("denies a rep outside a patient's territory its history (documents were already guarded)", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const { plId, mxId } = await territories(client);
+      const mxRepCtx = await buildTestContext(client, "rep", mxId);
+      const patient = await insertPatient(client, { first_name: "Scope", last_name: `Patient-${uniqueSuffix()}`, territory_id: plId });
+
+      await expect(GetHistoryForPatientQuery(mxRepCtx, patient.id)).rejects.toThrow(ForbiddenError);
+      await expect(GetPatientDocumentsQuery(mxRepCtx, patient.id)).rejects.toThrow(ForbiddenError);
+      await expect(GetPatientDocumentDownloadUrlQuery(mxRepCtx, patient.id, crypto.randomUUID())).rejects.toThrow(ForbiddenError);
+    });
+  }, 20000);
+
+  it("still lets a rep inside the territory read them", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const { plId } = await territories(client);
+      const adminCtx = await buildTestContext(client);
+      const plRepCtx = await buildTestContext(client, "rep", plId);
+      const practitioner = await createTestPractitioner(adminCtx, plId);
+      const organization = await createTestOrganization(adminCtx, plId);
+
+      await expect(GetHistoryForPractitionerQuery(plRepCtx, practitioner.id)).resolves.toBeDefined();
+      await expect(GetPractitionerDocumentsQuery(plRepCtx, practitioner.id)).resolves.toEqual([]);
+      await expect(GetHistoryForOrganizationQuery(plRepCtx, organization.id)).resolves.toBeDefined();
+      await expect(GetOrganizationDocumentsQuery(plRepCtx, organization.id)).resolves.toEqual([]);
+    });
+  }, 20000);
+
+  it("answers NotFoundError (404) for a parent record that doesn't exist", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      await expect(GetHistoryForPractitionerQuery(ctx, crypto.randomUUID())).rejects.toThrow(NotFoundError);
+      await expect(GetOrganizationDocumentsQuery(ctx, crypto.randomUUID())).rejects.toThrow(NotFoundError);
+    });
+  }, 20000);
 });
