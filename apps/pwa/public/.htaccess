@@ -22,8 +22,13 @@ Options -Indexes
 
 # index.html must always be revalidated — it's what points at the current
 # hashed chunks, so a cached copy is exactly what strands a tab on old ones.
+# Same for the service worker and its registration/manifest: Cloudflare kept
+# sw.js for 4 h (max-age=14400), so after a deploy browsers got a worker whose
+# precache list named deleted chunks — install failed ("bad-precaching-
+# response") and the old app stayed in place. no-cache makes Cloudflare pass
+# them through (cf-cache-status: DYNAMIC), like index.html.
 <IfModule mod_headers.c>
-  <FilesMatch "^index\.html$">
+  <FilesMatch "^(index\.html|sw\.js|registerSW\.js|manifest\.webmanifest)$">
     Header set Cache-Control "no-cache, must-revalidate"
   </FilesMatch>
 </IfModule>
