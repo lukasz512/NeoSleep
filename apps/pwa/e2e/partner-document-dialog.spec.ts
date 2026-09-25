@@ -53,13 +53,18 @@ async function openRegistration(page: Page) {
     },
   );
   await page.goto("/partner-register?token=e2e");
-  await expect(page.locator(".partner-registration__documents")).toBeVisible();
+  // First hit on this route makes the Vite dev server compile it cold; under
+  // CI's 3-engine parallel load that alone overran the 5 s default in WebKit.
+  await expect(page.locator(".partner-registration__documents")).toBeVisible({ timeout: 20_000 });
 }
 
 const frameHeight = (page: Page) =>
   page.locator(".partner-doc-dialog__frame").evaluate((f) => Math.round(f.getBoundingClientRect().height));
 
 test("a drawn signature is kept in full and shows on the signed agreement; frame heights don't carry over", async ({ page }) => {
+  // ~75 real pointer moves plus two document renders: ~2 s locally, but CI
+  // WebKit under parallel load ran out of the 30 s default mid-test.
+  test.setTimeout(90_000);
   await openRegistration(page);
   const rows = page.locator(".partner-document-row");
 
