@@ -14,7 +14,10 @@ vi.mock("../../composables/useApi", async (importOriginal) => ({
 }));
 
 const notify = vi.fn();
-vi.mock("../../composables/useNotifications", () => ({ useNotifications: () => ({ show: notify }) }));
+vi.mock("../../composables/useNotifications", () => ({
+  useNotifications: () => ({ show: notify }),
+  retryAction: (run: () => unknown) => ({ labelKey: "notification.action.retry", run }),
+}));
 
 import "../FormRenderer.vue";
 import { useAuthStore } from "../../stores/auth";
@@ -221,7 +224,7 @@ describe("PatientStudiesPanel — the Estudios checklist", () => {
     confirm.click();
     await flushPromises();
     expect(apiFetch).toHaveBeenCalledWith("/api/v1/sleep-study/ss-2", expect.objectContaining({ method: "DELETE" }));
-    expect(notify).toHaveBeenCalledWith("Sleep study deleted", "success");
+    expect(notify).toHaveBeenCalledWith("Sleep study deleted", "success", undefined, expect.objectContaining({ icon: "nav-sleep-studies" }));
   });
 
   it("prints an item as a PDF opened in a new tab", async () => {

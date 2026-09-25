@@ -98,7 +98,7 @@ async function copyLink() {
   if (!props.url) return;
   try {
     await navigator.clipboard.writeText(props.url);
-    notifications.show(t("app.clinical.qr.copied"), "success");
+    notifications.show(t("app.clinical.qr.copied"), "success", undefined, { icon: "qr-code" });
   } catch {
     // Clipboard API unavailable (insecure context / denied) — nothing else to do.
   }

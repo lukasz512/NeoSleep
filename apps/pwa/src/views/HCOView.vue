@@ -223,6 +223,7 @@ async function onAccountSubmit(data: Record<string, unknown>, done: (ok: boolean
           body: JSON.stringify(data),
         }),
       successMessage: t("user.hco.form.success"),
+      icon: "nav-hco",
       errorMessage: t("user.hco.form.errorSave"),
     },
     done,
@@ -248,7 +249,7 @@ const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
   if (res.ok) {
     showDeleteConfirm.value = false;
     deletingHcoId.value = null;
-    notifications.show(t("user.hco.detail.deleteSuccess"), "success");
+    notifications.show(t("user.hco.detail.deleteSuccess"), "success", undefined, { icon: "nav-hco" });
     window.dispatchEvent(new Event("entity-list-refresh"));
   }
 });
@@ -265,6 +266,7 @@ async function onEditSubmit(data: Record<string, unknown>, done: (ok: boolean) =
           body: JSON.stringify(data),
         }),
       successMessage: t("user.hco.form.editSuccess"),
+      icon: "nav-hco",
       errorMessage: t("user.hco.form.errorSave"),
     },
     done,
@@ -296,6 +298,7 @@ async function onEventFormSubmit(
           body: JSON.stringify({ title: payload.title, start_at: payload.start_at, end_at: payload.end_at, type: payload.type, status: payload.status, location: payload.location, video_link: payload.video_link, notes: payload.notes, region: payload.region, attendees: payload.attendees }),
         }),
       successMessage: t("user.planner.form.success"),
+      icon: "nav-planner",
       errorMessage: t("user.planner.form.errorSave"),
       refresh: false,
     },

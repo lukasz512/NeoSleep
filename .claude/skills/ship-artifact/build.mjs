@@ -57,7 +57,8 @@ function prUrl(ticket, prTitle, summary) {
   const slug = repoSlug();
   if (!slug || !BRANCH) return null;
   const title = [ticket, prTitle].filter(Boolean).join(" ");
-  const body = [ticket, summary, "🤖 Generated with [Claude Code](https://claude.com/claude-code)"].filter(Boolean).join("\n\n");
+  const plain = summary?.replace(/<[^>]+>/g, "");
+  const body = [ticket, plain, "🤖 Generated with [Claude Code](https://claude.com/claude-code)"].filter(Boolean).join("\n\n");
   return `https://github.com/${slug}/compare/dev...${BRANCH}?quick_pull=1&title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
 }
 

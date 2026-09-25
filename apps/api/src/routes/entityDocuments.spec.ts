@@ -44,13 +44,12 @@ describe.each([
     expect(res.status).toBe(401);
   });
 
-  it("200s (empty list) for any authenticated staff role, e.g. rep", async () => {
+  it("404s for a parent record that doesn't exist (NEO-48: the parent is fetched and territory-checked first)", async () => {
     const rep = await withTenant(TENANT_SLUG, (client) => insertTestUser(client, "rep"));
     const res = await request(app)
       .get(`${basePath}/${crypto.randomUUID()}/documents`)
       .set("Authorization", `Bearer ${tokenFor(rep, "rep")}`);
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual([]);
+    expect(res.status).toBe(404);
   });
 
   it("404s a download for a nonexistent document id", async () => {

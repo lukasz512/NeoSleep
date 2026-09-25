@@ -29,12 +29,11 @@ RUN rm -rf node_modules apps/api/node_modules \
 
 FROM node:22-bookworm-slim AS runtime
 ENV NODE_ENV=production
-# The one system library @sparticuz/chromium does not bundle: Chromium's network
-# stack (NSS) loads libsqlite3 as soon as a document fetches a web font (every
-# template loads Poppins from Google Fonts). Without it every real PDF dies with
-# "Connection closed" while a font-less page still renders.
+# Chromium's network stack (NSS) needs libsqlite3 the moment a document fetches anything
+# over HTTPS — e.g. the Google Fonts every template loads. It is not in @sparticuz/chromium's
+# bundled libs nor in bookworm-slim; without it Chromium aborts ("Connection closed").
 RUN apt-get update \
- && apt-get install -y --no-install-recommends libsqlite3-0 \
+ && apt-get install -y --no-install-recommends libsqlite3-0 ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 # The commit this image was built from — /health reports it so the post-deploy
 # smoke test can tell when the new revision is actually serving.

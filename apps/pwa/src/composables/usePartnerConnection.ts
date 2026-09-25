@@ -1,5 +1,5 @@
 import { apiFetch } from "./useApi";
-import { useNotifications } from "./useNotifications";
+import { retryAction, useNotifications } from "./useNotifications";
 import { i18n } from "../plugins/i18n";
 
 /**
@@ -51,18 +51,34 @@ async function checkPartnerConnection(partner: string): Promise<ConnectionStatus
  * looks like a real outage — try reloading" since a doctor bouncing
  * between routes deserves to know the difference.
  */
-export async function ensurePartnerConnection(partner: string): Promise<void> {
+export async function ensurePartnerConnection(partner: string, { fromRetry = false } = {}): Promise<void> {
   const status = await checkPartnerConnection(partner);
-  if (status.connected) return;
+  const toast = { icon: "globe" as const, context: partnerDisplayName(partner) };
+  if (status.connected) {
+    // Only a Retry the user clicked gets a confirmation — a silent pass on
+    // every navigation would be noise.
+    if (fromRetry) {
+      useNotifications().show(
+        i18n.global.t("app.partners.connectionRestored", { partner: partnerDisplayName(partner) }),
+        "success",
+        undefined,
+        toast,
+      );
+    }
+    return;
+  }
 
   const now = Date.now();
   const last = lastNotifiedAt.get(partner) ?? 0;
-  if (now - last < NOTIFY_COOLDOWN_MS) return;
+  // The cooldown is for navigation-triggered checks; an explicit Retry always answers.
+  if (!fromRetry && now - last < NOTIFY_COOLDOWN_MS) return;
   lastNotifiedAt.set(partner, now);
 
   const key = status.attemptsExhausted ? "app.partners.connectionErrorPersistent" : "app.partners.connectionError";
   useNotifications().show(
     i18n.global.t(key, { partner: partnerDisplayName(partner) }),
     "warning",
+    undefined,
+    { ...toast, action: retryAction(() => ensurePartnerConnection(partner, { fromRetry: true })) },
   );
 }

@@ -221,7 +221,7 @@ export const apiFetch = createApiFetch({
     // "HTTP <code>" fallback — see extractErrorMessage) is always passed too,
     // as what shows if the key is absent or fails to resolve.
     const toShow = message || `Request failed: ${status} ${path}`;
-    useNotifications().show(toShow, "error", errorMessageKey);
+    useNotifications().show(toShow, "error", errorMessageKey, { icon: "sad-cloud" });
     void sendErrorLog(path, status, message);
   },
 });
