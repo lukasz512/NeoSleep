@@ -27,6 +27,7 @@
     "flag-icons": "^7.5.0",
     "idb": "catalog:",
     "pinia": "catalog:",
+    "@vue/devtools-api": "catalog:",
     "qrcode": "^1.5.4",
     "signature_pad": "^5.1.4",
     "vue": "catalog:",

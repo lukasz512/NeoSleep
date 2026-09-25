@@ -14,6 +14,7 @@
     "vue-i18n": "catalog:",
     "vuetify": "catalog:",
     "pinia": "catalog:",
+    "@vue/devtools-api": "catalog:",
     "motion": "^13.4.4",
     "@neo/stores": "workspace:*",
     "@neo/api-client": "workspace:*"
