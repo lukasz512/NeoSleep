@@ -8,6 +8,7 @@ import {
   GetPartnerDocumentPreviewQuery,
 } from "../commands/invitePractitioner.js";
 import { sendSignedDocumentsEmail } from "../mailer.js";
+import { resolveFrontendOrigin } from "../utils/frontendOrigin.js";
 import type { RequestWithId } from "../middleware/requestId.js";
 
 /**
@@ -112,8 +113,15 @@ inviteRouter.post(
     // id is recorded afterwards as part of the signing evidence trail (best effort).
     sendSignedDocumentsEmail(
       result.email,
-      { language: result.locale },
+      {
+        language: result.locale,
+        title: result.title,
+        firstName: result.firstName,
+        lastName: result.lastName,
+        region: result.region,
+      },
       result.documents.map((d) => ({ filename: d.filename, content: Buffer.from(d.bytes) })),
+      `${resolveFrontendOrigin(req)}/login`,
       result.ccEmail
     )
       .then((messageId) =>
