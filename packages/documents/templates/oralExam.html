@@ -35,12 +35,9 @@
   header.doc-header .doc-label { font-size: 8pt; font-weight: 400; color: var(--secondary); }
   h1 { color: var(--primary); font-size: 14pt; font-weight: 500; margin: 0 0 2px; line-height: 1.3; }
   h2 { color: var(--secondary); font-size: 11pt; font-weight: 400; margin: 0 0 14px; line-height: 1.3; }
-  .field-row { margin: 0 0 6px; }
-  .field-row .field-label { font-weight: 600; color: var(--secondary); }
   table.checklist { width: 100%; border-collapse: collapse; margin: 14px 0 10px; }
   table.checklist td { padding: 5px 6px 5px 0; border-bottom: 1px solid #eee; font-size: 9.5pt; }
   table.checklist td.q-answer { text-align: right; font-weight: 600; color: var(--primary); width: 150px; white-space: nowrap; }
-  .notes { border: 1px solid #ddd; border-radius: 4px; padding: 8px 10px; min-height: 90px; margin: 6px 0 16px; color: var(--secondary); font-size: 8.5pt; }
   .sig-label { font-weight: 600; color: var(--secondary); margin: 18px 0 6px; }
   .signature-box { border: 1px solid var(--secondary); height: 80px; width: 60%; padding: 6px; }
   .screen-only.contact-footer { font-size: 8pt; color: var(--secondary); border-top: 1px solid #ccc; padding-top: 8px; margin-top: 24px; }
@@ -79,8 +76,7 @@
     <tr><td>{{documents.historiaEndo.q.tmjFinding}}</td><td class="q-answer" data-field="q_has_tmj_finding"></td></tr>
   </table>
 
-  <div class="field-row"><span class="field-label">{{documents.oralExam.notes}}</span></div>
-  <div class="notes"></div>
+  <div class="doc-notes"><div class="doc-notes-label">{{documents.oralExam.notes}}</div><div class="doc-notes-body"></div></div>
 
   <div class="sig-label">{{documents.historiaEndo.signatureLabelDoctor}}</div>
   <div class="signature-box" data-field="firma_doctor"></div>
