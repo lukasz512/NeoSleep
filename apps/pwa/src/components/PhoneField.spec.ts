@@ -108,12 +108,15 @@ describe("PhoneField", () => {
   });
 
   it("actually disables both real inputs in the DOM when disabled=true (not just the wrapping div)", () => {
+    // Vuetify 4's VCombobox also renders a hidden <input type="hidden"> form
+    // value before its visible text input — target the visible one.
+    const codeInput = '.pwa-phone-field__code input:not([type="hidden"])';
     const enabled = mountPhoneField({ disabled: false });
-    expect(enabled.find(".pwa-phone-field__code input").attributes("disabled")).toBeUndefined();
+    expect(enabled.find(codeInput).attributes("disabled")).toBeUndefined();
     expect(enabled.find(".pwa-phone-field__number input").attributes("disabled")).toBeUndefined();
 
     const disabled = mountPhoneField({ disabled: true });
-    expect(disabled.find(".pwa-phone-field__code input").attributes("disabled")).toBeDefined();
+    expect(disabled.find(codeInput).attributes("disabled")).toBeDefined();
     expect(disabled.find(".pwa-phone-field__number input").attributes("disabled")).toBeDefined();
   });
 });

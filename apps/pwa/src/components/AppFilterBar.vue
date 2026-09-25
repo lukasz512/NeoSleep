@@ -24,7 +24,7 @@
         <span>{{ t(titleKey) }}</span>
       </VTooltip>
     </template>
-    <VCard min-width="260" class="app-filter-bar__card" elevation="2">
+    <VCard min-width="260" class="app-filter-bar__card" elevation="1">
       <VCardTitle class="app-filter-bar__card-title">
         {{ t(titleKey) }}
       </VCardTitle>
@@ -48,7 +48,7 @@
             class="app-filter-bar__field"
             @update:model-value="(v: string | string[]) => updateField(def.key, v)"
           >
-            <template v-if="hasChipOptions(def)" #chip="{ item }">
+            <template v-if="hasChipOptions(def)" #chip="{ internalItem: item }">
               <span
                 :class="['pwa-lead-status-chip', 'app-filter-bar__chip', item.raw?.chipClass ?? '']"
                 class="app-filter-bar__chip-wrap"
@@ -64,7 +64,7 @@
                 </button>
               </span>
             </template>
-            <template v-if="hasChipOptions(def)" #item="{ item, props: itemProps }">
+            <template v-if="hasChipOptions(def)" #item="{ internalItem: item, props: itemProps }">
               <VListItem v-bind="{ ...itemProps, title: item.raw?.chipClass ? undefined : itemProps.title }">
                 <template v-if="item.raw?.chipClass" #default>
                   <span :class="['pwa-lead-status-chip', item.raw.chipClass]">

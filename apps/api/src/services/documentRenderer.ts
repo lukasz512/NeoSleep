@@ -167,6 +167,13 @@ export interface RenderHtmlToPdfOptions {
    */
   dataFields?: Record<string, string>;
   /**
+   * Blank tick-boxes for a paper form, keyed by data-field: each option
+   * becomes an empty rounded box + its label (e.g. ["Sí", "No"]). Drawn
+   * with CSS, not a "☐" character — Poppins has no such glyph and the PDF
+   * showed a missing-glyph box instead.
+   */
+  choiceFields?: Record<string, readonly string[]>;
+  /**
    * Images placed into `[data-field="key"]` elements — a drawn signature
    * (data:image/png;base64 only: the page lockdown allows data: URLs and
    * nothing else, and callers validate the format first). The element's
@@ -266,6 +273,37 @@ export async function applyDataFields(page: Page, fields: Record<string, string>
   }, fields);
 }
 
+/**
+ * Fills `[data-field="key"]` elements with empty tick-boxes, one per option
+ * — see RenderHtmlToPdfOptions.choiceFields. Labels via textContent, so
+ * they are escaped like data fields. Box colour follows the template's
+ * --primary brand token. Exported for the spec.
+ */
+export async function applyChoiceFields(page: Page, fields: Record<string, readonly string[]>): Promise<void> {
+  await page.evaluate((values) => {
+    for (const [key, options] of Object.entries(values)) {
+      document.querySelectorAll(`[data-field="${CSS.escape(key)}"]`).forEach((el) => {
+        const choices = options.map((option, i) => {
+          const choice = document.createElement("span");
+          choice.className = "choice";
+          choice.style.cssText = `display:inline-flex;align-items:center;gap:6px;vertical-align:middle;${i ? "margin-left:16px;" : ""}`;
+          const box = document.createElement("span");
+          box.className = "choice-box";
+          box.style.cssText =
+            "display:inline-block;width:15px;height:15px;border:1.5px solid var(--primary, #128F83);border-radius:4px;background:#fff;flex:none;";
+          const label = document.createElement("span");
+          label.textContent = option;
+          label.style.cssText = "font-weight:500;color:var(--secondary, #474747);";
+          choice.append(box, label);
+          return choice;
+        });
+        (el as HTMLElement).style.whiteSpace = "nowrap"; // narrow answer cells (STOP-Bang) must not stack the boxes
+        el.replaceChildren(...choices);
+      });
+    }
+  }, fields);
+}
+
 const RENDER_READY_TIMEOUT_MS = 10_000;
 
 /**
@@ -312,6 +350,7 @@ export async function renderHtmlToPdf(html: string, options: RenderHtmlToPdfOpti
       await lockDownPage(page);
       await page.setContent(html, { waitUntil: "load" });
       if (options.dataFields) await applyDataFields(page, options.dataFields);
+      if (options.choiceFields) await applyChoiceFields(page, options.choiceFields);
       if (options.variant) await applyVariant(page, options.variant);
       if (options.dataImages) await applyDataImages(page, options.dataImages);
       if (options.imageFields) await applyDataImages(page, options.imageFields, "data-image");

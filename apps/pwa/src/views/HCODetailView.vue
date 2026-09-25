@@ -353,6 +353,8 @@ async function onEventFormSubmit(
           }),
         }),
       successMessage: t("user.planner.form.success"),
+      icon: "nav-planner",
+      context: hco.value?.name,
       errorMessage: t("user.planner.form.errorSave"),
       refresh: false,
     },
@@ -372,7 +374,7 @@ const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
   });
   if (res.ok) {
     showDeleteConfirm.value = false;
-    notifications.show(t("user.hco.detail.deleteSuccess"), "success");
+    notifications.show(t("user.hco.detail.deleteSuccess"), "success", undefined, { icon: "nav-hco", context: hco.value?.name });
     window.dispatchEvent(new Event("entity-list-refresh"));
     router.push({ name: "hco" });
   }
@@ -390,6 +392,8 @@ async function onAccountSubmit(data: Record<string, unknown>, done: (ok: boolean
           body: JSON.stringify(data),
         }),
       successMessage: t("user.hco.form.editSuccess"),
+      icon: "nav-hco",
+      context: hco.value?.name,
       errorMessage: t("user.hco.form.errorSave"),
       onSuccess: () => loadHCO(),
     },

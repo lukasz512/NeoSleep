@@ -1,5 +1,5 @@
 /**
- * Shared Vuetify 3 factory for NeoSleep apps.
+ * Shared Vuetify 4 factory for NeoSleep apps.
  *
  * Usage in plugins/vuetify.ts:
  *   import { createNeoVuetify } from "@vuetify";
@@ -9,6 +9,7 @@
  *   export default createNeoVuetify({ i18n, useI18n }, { colors: { ... } });
  */
 import "vuetify/styles";
+import "./legacy-reset.css";
 import "@mdi/font/css/materialdesignicons.css";
 import { createVuetify } from "vuetify";
 import { VuetifyDateAdapter } from "vuetify/date/adapters/vuetify";
@@ -21,6 +22,9 @@ export const vuetifyLocales: Record<"en" | "pl" | "mx", Record<string, unknown>>
   pl: vuetifyPl,
   mx: vuetifyEs,
 };
+
+/** Vuetify 3's display breakpoints (px), kept on Vuetify 4 — see createNeoVuetify. */
+export const VUETIFY3_THRESHOLDS = { xs: 0, sm: 600, md: 960, lg: 1280, xl: 1920, xxl: 2560 } as const;
 
 export interface NeoVuetifyColors {
   lightPrimary: string;
@@ -51,9 +55,14 @@ export function createNeoVuetify(
   const dark  = options.darkThemeName  ?? "neoDark";
 
   return createVuetify({
-    display: options.mobileBreakpoint !== undefined
-      ? { mobileBreakpoint: options.mobileBreakpoint }
-      : undefined,
+    display: {
+      // Vuetify 4 lowered md/lg/xl/xxl to 840/1145/1545/2138. Keep the v3
+      // thresholds so useDisplay() flags (smAndUp, md="6" columns, …) flip at
+      // the same widths as before; the matching Sass $grid-breakpoints for the
+      // responsive utility classes live in apps/pwa/src/styles/vuetify-settings.scss.
+      thresholds: VUETIFY3_THRESHOLDS,
+      ...(options.mobileBreakpoint !== undefined ? { mobileBreakpoint: options.mobileBreakpoint } : {}),
+    },
     date: { adapter: VuetifyDateAdapter },
     locale: { adapter: createVueI18nAdapter(adapterInput) },
     defaults: {

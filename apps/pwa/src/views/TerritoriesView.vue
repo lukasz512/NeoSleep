@@ -152,7 +152,7 @@ async function onSubmit(payload: Record<string, unknown>, done: (ok: boolean) =>
       body: JSON.stringify(payload),
     });
     if (res.ok) {
-      notifications.show(t("user.territories.form.success"), "success");
+      notifications.show(t("user.territories.form.success"), "success", undefined, { icon: "nav-territories" });
       window.dispatchEvent(new Event("entity-list-refresh"));
       done(true);
     } else {
@@ -173,7 +173,7 @@ async function onEditSubmit(payload: Record<string, unknown>, done: (ok: boolean
       body: JSON.stringify(payload),
     });
     if (res.ok) {
-      notifications.show(t("user.territories.form.editSuccess"), "success");
+      notifications.show(t("user.territories.form.editSuccess"), "success", undefined, { icon: "nav-territories" });
       window.dispatchEvent(new Event("entity-list-refresh"));
       done(true);
     } else {
@@ -196,7 +196,7 @@ const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
   if (res.ok) {
     showDeleteConfirm.value = false;
     deletingId.value = null;
-    notifications.show(t("user.territories.actions.deleteSuccess"), "success");
+    notifications.show(t("user.territories.actions.deleteSuccess"), "success", undefined, { icon: "nav-territories" });
     window.dispatchEvent(new Event("entity-list-refresh"));
   }
 });

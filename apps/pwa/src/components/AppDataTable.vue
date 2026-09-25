@@ -24,10 +24,10 @@
         variant="outlined"
         class="app-data-table__card"
       >
-        <VCardTitle class="text-body-1 font-weight-medium">
+        <VCardTitle class="text-body-large font-weight-medium">
           {{ getItemCell(item, titleKey) }}
         </VCardTitle>
-        <VCardSubtitle v-if="metaKeys.length" class="text-caption text-medium-emphasis">
+        <VCardSubtitle v-if="metaKeys.length" class="text-body-small text-medium-emphasis">
           {{ formatMeta(item) }}
         </VCardSubtitle>
       </VCard>

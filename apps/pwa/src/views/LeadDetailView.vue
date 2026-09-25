@@ -528,6 +528,8 @@ async function onEventFormSubmit(
           }),
         }),
       successMessage: t("user.planner.form.success"),
+      icon: "nav-planner",
+      context: lead.value?.name,
       errorMessage: t("user.planner.form.errorSave"),
       refresh: false,
     },
@@ -561,6 +563,8 @@ async function onInviteSubmit(
           body: JSON.stringify(data),
         }),
       successMessage: t("user.leads.form.inviteSuccess"),
+      icon: "mail",
+      context: lead.value?.name,
       errorMessage: t("user.leads.form.inviteError"),
       onSuccess: () => loadLead(),
     },
@@ -586,6 +590,8 @@ async function onContactSubmit(
     {
       request: async () => ({ ok: await createPractitionerFromLead(data, leadId) }),
       successMessage: t("user.hcp.form.contactCreated"),
+      icon: "nav-hcp",
+      context: lead.value?.name,
       errorMessage: t("user.hcp.form.contactError"),
       onSuccess: () => loadLead(),
     },
@@ -618,6 +624,8 @@ async function onConvertToPatientSubmit(
           body: JSON.stringify({ ...data, lead_id: leadId }),
         }),
       successMessage: t("app.patients.form.success"),
+      icon: "nav-patients",
+      context: lead.value?.name,
       errorMessage: t("app.patients.form.errorSave"),
       onSuccess: () => loadLead(),
     },
@@ -648,6 +656,8 @@ async function onLeadSubmit(
           body: JSON.stringify(data),
         }),
       successMessage: t("user.leads.form.editSuccess"),
+      icon: "nav-leads",
+      context: lead.value?.name,
       errorMessage: t("user.leads.form.errorSave"),
       onSuccess: () => loadLead(),
     },
@@ -672,7 +682,7 @@ const { loading: sendOfferLoading, run: runSendOffer } = useAsyncAction(
     if (res.ok) {
       lead.value = (await res.json()) as Lead;
       showResendOfferConfirm.value = false;
-      notifications.show(t("user.leads.detail.sendOfferSuccess"), "success");
+      notifications.show(t("user.leads.detail.sendOfferSuccess"), "success", undefined, { icon: "mail", context: lead.value?.name });
     }
   },
 );
@@ -693,7 +703,7 @@ const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
   });
   if (res.ok) {
     showDeleteConfirm.value = false;
-    notifications.show(t("user.leads.actions.deleteSuccess"), "success");
+    notifications.show(t("user.leads.actions.deleteSuccess"), "success", undefined, { icon: "nav-leads", context: lead.value?.name });
     window.dispatchEvent(new Event("entity-list-refresh"));
     router.push({ name: "leads" });
   }

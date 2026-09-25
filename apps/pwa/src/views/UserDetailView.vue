@@ -260,7 +260,7 @@ import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { apiFetch } from "../composables/useApi";
 import { useEntityCacheStore } from "../stores/entityCache";
-import { useNotifications } from "../composables/useNotifications";
+import { retryAction, useNotifications } from "../composables/useNotifications";
 import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
@@ -357,6 +357,8 @@ async function onSubmit(
           body: JSON.stringify(payload),
         }),
       successMessage: t("user.users.form.editSuccess"),
+      icon: "nav-users",
+      context: user.value?.name,
       errorMessage: t("user.users.form.errorSave"),
       onSuccess: () => loadUser(),
     },
@@ -375,6 +377,8 @@ const { loading: resetPasswordLoading, run: onResetPassword } = useAsyncAction(
       notifications.show(
         t("user.users.actions.resetPasswordSuccess"),
         "success",
+        undefined,
+        { icon: "key", context: user.value?.name },
       );
     }
   },
@@ -398,6 +402,8 @@ const { loading: toggleStatusLoading, run: onToggleStatus } = useAsyncAction(
             : "user.users.actions.disableSuccess",
         ),
         "success",
+        undefined,
+        { icon: "nav-users", context: user.value?.name },
       );
       await loadUser();
     }
@@ -412,7 +418,7 @@ const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
   });
   if (res.ok) {
     showDeleteConfirm.value = false;
-    notifications.show(t("user.users.actions.deleteSuccess"), "success");
+    notifications.show(t("user.users.actions.deleteSuccess"), "success", undefined, { icon: "nav-users", context: user.value?.name });
     window.dispatchEvent(new Event("entity-list-refresh"));
     router.push({ name: "users" });
   }
@@ -468,10 +474,10 @@ async function loadDocuments() {
     if (res.ok) {
       documents.value = (await res.json()) as UserDocument[];
     } else {
-      notifications.show(t("user.users.documents.errorLoad"), "error");
+      notifications.show(t("user.users.documents.errorLoad"), "error", undefined, { icon: "file", context: user.value?.name, action: retryAction(loadDocuments) });
     }
   } catch {
-    notifications.show(t("user.users.documents.errorLoad"), "error");
+    notifications.show(t("user.users.documents.errorLoad"), "error", undefined, { icon: "file", context: user.value?.name, action: retryAction(loadDocuments) });
   } finally {
     documentsLoading.value = false;
   }
@@ -488,7 +494,11 @@ async function onDownloadDocument(documentId: string) {
     const { url } = (await res.json()) as { url: string };
     window.open(url, "_blank", "noopener");
   } else {
-    notifications.show(t("user.users.documents.errorLoad"), "error");
+    notifications.show(t("user.users.documents.errorLoad"), "error", undefined, {
+      icon: "file",
+      context: user.value?.name,
+      action: retryAction(() => onDownloadDocument(documentId)),
+    });
   }
 }
 

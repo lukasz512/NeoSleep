@@ -6,24 +6,25 @@ packages:
 # Shared versions across workspaces — one update bumps the version everywhere.
 catalog:
   vue: ^3.5.43
-  vue-router: ^4.6.4
-  vue-i18n: ^10.0.8
-  vuetify: ^3.13.5
+  vue-router: ^5.3.1
+  vue-i18n: ^11.4.12
+  vuetify: ^4.2.2
   "@mdi/font": ^7.4.47
-  pinia: ^3.0.4
+  pinia: ^4.0.3
+  "@vue/devtools-api": ^8.2.1
   "@vitejs/plugin-vue": ^6.0.9
-  "@vueuse/core": ^14.4.0
-  "@unhead/vue": ^2.1.17
+  "@vueuse/core": ^15.0.0
+  "@unhead/vue": ^3.4.1
   "chart.js": ^4.5.1
   vite-plugin-pwa: ^1.3.0
   idb: ^8.0.3
   web-push: ^3.6.7
   "@types/web-push": ^3.6.4
-  vite: ^7.3.6
+  vite: ^8.3.1
   typescript: ^5.9.3
-  vitest: ^4.1.11
-  eslint: ^9.39.5
-  "eslint-plugin-vue": ^9.33.0
+  vitest: ^5.0.2
+  eslint: ^10.11.0
+  "eslint-plugin-vue": ^10.11.1
   sass: ^1.105.0
   "@vue/test-utils": ^2.5.1
   "vite-plugin-vuetify": ^2.1.3

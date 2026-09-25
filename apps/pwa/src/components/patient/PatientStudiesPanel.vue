@@ -551,7 +551,7 @@ async function onSleepStudyAdd(data: Record<string, unknown>, done: (ok: boolean
     body: JSON.stringify({ ...data, patient_id: props.patientId }),
   });
   if (res.ok) {
-    notifications.show(t("app.sleepStudies.form.success"), "success");
+    notifications.show(t("app.sleepStudies.form.success"), "success", undefined, { icon: "nav-sleep-studies" });
     await checklistApi.load();
   }
   done(res.ok);
@@ -566,7 +566,7 @@ async function onSleepStudyEdit(data: Record<string, unknown>, done: (ok: boolea
     body: JSON.stringify(data),
   });
   if (res.ok) {
-    notifications.show(t("app.sleepStudies.form.editSuccess"), "success");
+    notifications.show(t("app.sleepStudies.form.editSuccess"), "success", undefined, { icon: "nav-sleep-studies" });
     await checklistApi.load();
   }
   done(res.ok);
@@ -583,12 +583,13 @@ async function onConfirmDeleteSleepStudy() {
   try {
     const res = await apiFetch(`/api/v1/sleep-study/${deleteSleepStudy.id}`, { method: "DELETE", handleErrors: false });
     if (res.ok) {
-      notifications.show(t("app.sleepStudies.deleteSuccess"), "success");
+      notifications.show(t("app.sleepStudies.deleteSuccess"), "success", undefined, { icon: "nav-sleep-studies" });
       Object.assign(deleteSleepStudy, { open: false, id: null });
       await checklistApi.load();
     } else {
       const bodyText = await res.text().catch(() => "");
-      notifications.show(extractErrorMessage(bodyText) || t("app.sleepStudies.errorDelete"), "error");
+      // The confirm dialog stays open on failure — its button is the retry.
+      notifications.show(extractErrorMessage(bodyText) || t("app.sleepStudies.errorDelete"), "error", undefined, { icon: "nav-sleep-studies" });
     }
   } finally {
     deleteSleepStudy.loading = false;

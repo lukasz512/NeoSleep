@@ -23,7 +23,14 @@ function getSupabase(): SupabaseClient {
     throw new PartnerServiceError("supabase-storage", "not configured — set SUPABASE_URL and SUPABASE_SERVICE_KEY");
   }
   if (!supabase) {
-    supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, { auth: { persistSession: false } });
+    try {
+      supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, { auth: { persistSession: false } });
+    } catch (err) {
+      // Same reason as above: e.g. supabase-js throws "Node.js detected but
+      // native WebSocket not found" on Node < 22 — which is what the Cloud Run
+      // image hit (Node 20) and surfaced only as "Database error: withTenant".
+      throw new PartnerServiceError("supabase-storage", `client init failed: ${err instanceof Error ? err.message : String(err)}`, err);
+    }
   }
   return supabase;
 }

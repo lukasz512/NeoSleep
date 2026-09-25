@@ -5,6 +5,7 @@ import { requireAuth, requirePartnerMediaAuth } from "../../middleware/requireAu
 import { signMediaToken } from "../../utils/jwt.js";
 import { fetchResources, fetchResourceMedia } from "../../services/partners/orthoapnea.js";
 import { ValidationError } from "../../errors.js";
+import { routeParam } from "../utils.js";
 
 /**
  * OrthoApnea resources (documents/videos library) — read-only, no queueing
@@ -35,7 +36,7 @@ orthoapneaResourcesRouter.get(
   "/partners/orthoapnea/resources/:id/media",
   requirePartnerMediaAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing resource id");
     const locale = (req.query.locale as string | undefined) ?? "en";
     const lang = req.query.lang as string | undefined;

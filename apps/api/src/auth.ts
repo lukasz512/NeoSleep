@@ -54,7 +54,7 @@ export const authRouter: import('express').Router = Router();
  *  and every other environment keep the real limit of 10. */
 const loginRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: Number(process.env.LOGIN_RATE_LIMIT_MAX) || 10,
+  limit: Number(process.env.LOGIN_RATE_LIMIT_MAX) || 10,
   message: { error: "Too many login attempts. Try again in 15 minutes." },
   standardHeaders: true,
   legacyHeaders: false,

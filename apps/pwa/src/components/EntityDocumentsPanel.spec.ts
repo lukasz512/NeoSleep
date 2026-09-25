@@ -14,7 +14,10 @@ vi.mock("../composables/useApi", async (importOriginal) => ({
 }));
 
 const notify = vi.fn();
-vi.mock("../composables/useNotifications", () => ({ useNotifications: () => ({ show: notify }) }));
+vi.mock("../composables/useNotifications", () => ({
+  useNotifications: () => ({ show: notify }),
+  retryAction: (run: () => unknown) => ({ labelKey: "notification.action.retry", run }),
+}));
 
 const openMock = vi.fn();
 vi.stubGlobal("open", openMock);
@@ -90,6 +93,20 @@ describe("EntityDocumentsPanel", () => {
     apiFetch.mockResolvedValueOnce(jsonResponse(false, 500, { error: "boom" }));
     mountPanel();
 
-    await vi.waitFor(() => expect(notify).toHaveBeenCalledWith("Could not load documents.", "error"));
+    await vi.waitFor(() => expect(notify).toHaveBeenCalledWith("Could not load documents.", "error", undefined, expect.objectContaining({ icon: "file" })));
+  });
+
+  it("Retry on the load-error toast loads the list again and shows the documents", async () => {
+    apiFetch.mockResolvedValueOnce(jsonResponse(false, 500, { error: "boom" }));
+    const wrapper = mountPanel();
+    await vi.waitFor(() => expect(notify).toHaveBeenCalledTimes(1));
+    const options = notify.mock.calls[0][3] as { action?: { labelKey: string; run: () => unknown } };
+    expect(options.action?.labelKey).toBe("notification.action.retry");
+
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, [{ id: "d1", documentType: "gdpr", filename: "gdpr.pdf", mimeType: "application/pdf", signedAt: "2026-09-01T10:00:00.000Z" }]));
+    await options.action?.run();
+
+    expect(apiFetch).toHaveBeenCalledTimes(2);
+    await vi.waitFor(() => expect(wrapper.text()).toContain("GDPR consent"));
   });
 });

@@ -69,8 +69,13 @@ jobs:
             echo "VITE_APP_CHANNEL=dev" >> $GITHUB_ENV
           fi
 
+      # VITE_GOOGLE_MAPS_BROWSER_API_KEY powers the HCO location map
+      # (components/HCOLocationMap.vue). HTTP-referrer-restricted to the PWA/website
+      # domains, so it is safe in the bundle. Without it the map never loads.
       - name: Build rep-app
         run: pnpm run build:pwa
+        env:
+          VITE_GOOGLE_MAPS_BROWSER_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_BROWSER_API_KEY }}
 
       - name: Deploy to PROD (pwa.neosleepcare.com)
         if: github.ref == 'refs/heads/prod'

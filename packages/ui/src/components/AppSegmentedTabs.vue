@@ -16,7 +16,7 @@
       variant="text"
       size="small"
       role="tab"
-      class="app-segmented-tabs__tab position-relative text-body-2 font-weight-medium"
+      class="app-segmented-tabs__tab position-relative text-body-medium font-weight-medium"
       :class="{ 'app-segmented-tabs__tab--active': option.value === modelValue, 'flex-grow-1': !fit }"
       :aria-selected="option.value === modelValue"
       @click="$emit('update:modelValue', option.value)"
@@ -158,7 +158,9 @@ watch(
   z-index: 1;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   text-transform: none;
-  letter-spacing: normal;
+  /* Tracking comes from the text-body-medium utility class. Vuetify 4 puts
+     utilities in a cascade layer, so any letter-spacing here would now
+     override it (it never did under Vuetify 3's !important utilities). */
   /* Vuetify's flex-grow-1 utility only sets flex-grow — flex-basis stays
      auto, so a long label (e.g. "Estudios de sueño") keeps its content
      width and steals space from neighbors instead of sharing the row

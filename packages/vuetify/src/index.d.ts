@@ -1,5 +1,5 @@
 /**
- * Shared Vuetify 3 factory for NeoSleep apps.
+ * Shared Vuetify 4 factory for NeoSleep apps.
  *
  * Usage in plugins/vuetify.ts:
  *   import { createNeoVuetify } from "@vuetify";
@@ -9,10 +9,20 @@
  *   export default createNeoVuetify({ i18n, useI18n }, { colors: { ... } });
  */
 import "vuetify/styles";
+import "./legacy-reset.css";
 import "@mdi/font/css/materialdesignicons.css";
 import { createVueI18nAdapter } from "vuetify/locale/adapters/vue-i18n";
 /** Vuetify's own built-in translations (dialog labels, pagination, etc.) for NeoSleep's 3 supported locales. */
 export declare const vuetifyLocales: Record<"en" | "pl" | "mx", Record<string, unknown>>;
+/** Vuetify 3's display breakpoints (px), kept on Vuetify 4 — see createNeoVuetify. */
+export declare const VUETIFY3_THRESHOLDS: {
+    readonly xs: 0;
+    readonly sm: 600;
+    readonly md: 960;
+    readonly lg: 1280;
+    readonly xl: 1920;
+    readonly xxl: 2560;
+};
 export interface NeoVuetifyColors {
     lightPrimary: string;
     lightPrimaryDarken: string;
@@ -33,12 +43,12 @@ export interface NeoVuetifyOptions {
     mobileBreakpoint?: number;
 }
 export declare function createNeoVuetify(adapterInput: Parameters<typeof createVueI18nAdapter>[0], options: NeoVuetifyOptions): {
-    install: (app: import("vue").App<any>) => void;
+    install: (app: import("vue").App) => void;
     unmount: () => void;
     defaults: import("vue").Ref<import("vuetify").DefaultsInstance, import("vuetify").DefaultsInstance>;
     display: import("vuetify").DisplayInstance;
     theme: import("vuetify").ThemeInstance & {
-        install: (app: import("vue").App<any>) => void;
+        install: (app: import("vue").App) => void;
     };
     icons: {
         defaultSet: string;
@@ -48,6 +58,7 @@ export declare function createNeoVuetify(adapterInput: Parameters<typeof createV
     locale: {
         name: string;
         decimalSeparator: import("vue").ShallowRef<string>;
+        numericGroupSeparator: import("vue").ShallowRef<string>;
         messages: import("vue").Ref<import("vuetify").LocaleMessages, import("vuetify").LocaleMessages>;
         current: import("vue").Ref<string, string>;
         fallback: import("vue").Ref<string, string>;
@@ -75,7 +86,7 @@ export declare function createNeoVuetify(adapterInput: Parameters<typeof createV
             toISO: (date: unknown) => string;
             startOfDay: (date: unknown) => unknown;
             endOfDay: (date: unknown) => unknown;
-            startOfWeek: (date: unknown, firstDayOfWeek?: string | number | undefined) => unknown;
+            startOfWeek: (date: unknown, firstDayOfWeek?: number | string) => unknown;
             endOfWeek: (date: unknown) => unknown;
             startOfMonth: (date: unknown) => unknown;
             endOfMonth: (date: unknown) => unknown;
@@ -97,10 +108,10 @@ export declare function createNeoVuetify(adapterInput: Parameters<typeof createV
             addMonths: (date: unknown, amount: number) => unknown;
             getYear: (date: unknown) => number;
             setYear: (date: unknown, year: number) => unknown;
-            getDiff: (date: unknown, comparing: unknown, unit?: string | undefined) => number;
-            getWeekArray: (date: unknown, firstDayOfWeek?: string | number | undefined) => unknown[][];
-            getWeekdays: (firstDayOfWeek?: string | number | undefined, weekdayFormat?: "long" | "narrow" | "short" | undefined) => string[];
-            getWeek: (date: unknown, firstDayOfWeek?: string | number | undefined, firstDayOfYear?: string | number | undefined) => number;
+            getDiff: (date: unknown, comparing: unknown, unit?: string) => number;
+            getWeekArray: (date: unknown, firstDayOfWeek?: number | string) => unknown[][];
+            getWeekdays: (firstDayOfWeek?: number | string, weekdayFormat?: "long" | "short" | "narrow") => string[];
+            getWeek: (date: unknown, firstDayOfWeek?: number | string, firstDayOfYear?: number | string) => number;
             getMonth: (date: unknown) => number;
             setMonth: (date: unknown, month: number) => unknown;
             getDate: (date: unknown) => number;

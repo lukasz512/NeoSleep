@@ -1,6 +1,6 @@
 <template>
   <div class="change-password-view">
-    <VCard class="change-password-view__card" elevation="4" rounded="lg">
+    <VCard class="change-password-view__card" elevation="2" rounded="lg">
       <VCardText class="change-password-view__body">
         <h1 class="change-password-view__title">{{ t('user.changePassword.title') }}</h1>
         <p class="change-password-view__subtitle">{{ t('user.changePassword.subtitle') }}</p>

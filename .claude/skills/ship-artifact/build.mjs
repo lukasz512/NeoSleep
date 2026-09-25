@@ -41,6 +41,27 @@ function isPushed() {
   return git("ls-remote", "--heads", "origin", BRANCH) !== "";
 }
 
+/** The PR GitHub already has for this branch (open or merged), via gh — null when none
+ *  or gh is unavailable. A merged PR's branch is usually deleted, so without this the
+ *  page fell back to the "PR link after push" placeholder even though the work shipped. */
+function existingPr() {
+  try {
+    const out = execFileSync("gh", ["pr", "list", "--head", BRANCH, "--state", "all", "--limit", "1", "--json", "number,url,state"], {
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    const pr = JSON.parse(out)[0];
+    if (!pr) return null;
+    const state = String(pr.state).toLowerCase();
+    // A merged/closed PR only describes this branch if nothing new was committed on top
+    // of dev since — otherwise the new commits need a new PR ("Create PR").
+    if (state !== "open" && Number(git("rev-list", "--count", "origin/dev..HEAD") || "0") > 0) return null;
+    return { number: pr.number, url: pr.url, state };
+  } catch {
+    return null;
+  }
+}
+
 function changedFiles() {
   const base = git("merge-base", "HEAD", "origin/dev");
   if (!base) return [];
@@ -57,7 +78,8 @@ function prUrl(ticket, prTitle, summary) {
   const slug = repoSlug();
   if (!slug || !BRANCH) return null;
   const title = [ticket, prTitle].filter(Boolean).join(" ");
-  const body = [ticket, summary, "🤖 Generated with [Claude Code](https://claude.com/claude-code)"].filter(Boolean).join("\n\n");
+  const plain = summary?.replace(/<[^>]+>/g, "");
+  const body = [ticket, plain, "🤖 Generated with [Claude Code](https://claude.com/claude-code)"].filter(Boolean).join("\n\n");
   return `https://github.com/${slug}/compare/dev...${BRANCH}?quick_pull=1&title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
 }
 
@@ -94,11 +116,19 @@ function render(contentPath) {
 
   const sessionId = process.env.CLAUDE_CODE_SESSION_ID ?? "";
   const pushed = isPushed();
-  const pr = pushed ? prUrl(ticket, c.prTitle ?? c.headline, c.summary) : null;
+  const existing = existingPr();
+  const pr = existing?.url ?? (pushed ? prUrl(ticket, c.prTitle ?? c.headline, c.summary) : null);
   const linearUrl = ticket ? `https://linear.app/neosleep/issue/${ticket}` : null;
+  const prLabel = !existing
+    ? "Create PR"
+    : existing.state === "merged"
+      ? `PR #${existing.number} · merged`
+      : existing.state === "closed"
+        ? `PR #${existing.number} · closed`
+        : `Open PR #${existing.number}`;
 
   const links = [
-    pr ? `<a class="btn primary" href="${esc(pr)}">Create PR</a>` : `<span class="btn ghost" title="Branch not pushed yet">PR link after push</span>`,
+    pr ? `<a class="btn primary" href="${esc(pr)}">${esc(prLabel)}</a>` :`<span class="btn ghost" title="Branch not pushed yet">PR link after push</span>`,
     linearUrl ? `<a class="btn" href="${esc(linearUrl)}">Linear ${esc(ticket)}</a>` : "",
     sessionId ? `<a class="btn" href="vscode://anthropic.claude-code/open?session=${esc(sessionId)}">Claude session</a>` : "",
   ].join("");
@@ -156,10 +186,16 @@ function render(contentPath) {
 
   console.log(`page: ${out}`);
   console.log(`marker: ${markerPath(ticket)} (written by finalize)`);
-  console.log(pushed ? "pushed: yes — Create PR button is live" : "pushed: no — re-run render after push to get the Create PR button");
+  console.log(
+    existing
+      ? `PR: #${existing.number} (${existing.state}) — the button links to it`
+      : pushed
+        ? "pushed: yes — Create PR button is live"
+        : "pushed: no — re-run render after push to get the Create PR button"
+  );
   if (ticket) {
     console.log("\n--- Linear comment (post after publishing, replace <ARTIFACT_URL>) ---");
-    console.log(`${c.summary.replace(/<[^>]+>/g, "")}\n\nArtifact: <ARTIFACT_URL>${pr ? `\nCreate PR: ${pr}` : ""}\nBranch: \`${BRANCH}\``);
+    console.log(`${c.summary.replace(/<[^>]+>/g, "")}\n\nArtifact: <ARTIFACT_URL>${pr ? `\n${prLabel}: ${pr}` : ""}\nBranch: \`${BRANCH}\``);
   }
 }
 

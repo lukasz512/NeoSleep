@@ -81,14 +81,14 @@
             :loading="loadingHco"
             :placeholder="t('user.planner.form.fieldHcoPlaceholder')"
           >
-            <template #item="{ item, props: itemProps }">
+            <template #item="{ internalItem: item, props: itemProps }">
               <VListItem v-if="item.value" v-bind="itemProps" :title="item.raw.name">
                 <template #prepend>
                   <AppAvatar :name="item.raw.name" entity-type="hco" :size="28" />
                 </template>
               </VListItem>
             </template>
-            <template #chip="{ item, props: chipProps }">
+            <template #chip="{ internalItem: item, props: chipProps }">
               <VChip v-if="item.value" v-bind="chipProps" :text="item.raw.name">
                 <template #prepend>
                   <AppAvatar :name="item.raw.name" entity-type="hco" :size="18" class="mr-1" />
@@ -114,14 +114,14 @@
             <template #prepend-inner>
               <AppIcon name="nav-hcp" class="pwa-form-field-icon" />
             </template>
-            <template #item="{ item, props: itemProps }">
+            <template #item="{ internalItem: item, props: itemProps }">
               <VListItem v-if="item.value" v-bind="itemProps" :title="item.raw.name">
                 <template #prepend>
                   <AppAvatar :name="item.raw.name" entity-type="hcp" :size="28" />
                 </template>
               </VListItem>
             </template>
-            <template #chip="{ item, props: chipProps }">
+            <template #chip="{ internalItem: item, props: chipProps }">
               <VChip v-if="item.value" v-bind="chipProps" :text="item.raw.name">
                 <template #prepend>
                   <AppAvatar :name="item.raw.name" entity-type="hcp" :size="18" class="mr-1" />
@@ -144,14 +144,14 @@
             :loading="loadingPatient"
             :placeholder="t('user.planner.form.fieldPatientPlaceholder')"
           >
-            <template #item="{ item, props: itemProps }">
+            <template #item="{ internalItem: item, props: itemProps }">
               <VListItem v-if="item.value" v-bind="itemProps" :title="item.raw.name">
                 <template #prepend>
                   <AppAvatar :name="item.raw.name" entity-type="patient" :size="28" />
                 </template>
               </VListItem>
             </template>
-            <template #chip="{ item, props: chipProps }">
+            <template #chip="{ internalItem: item, props: chipProps }">
               <VChip v-if="item.value" v-bind="chipProps" :text="item.raw.name">
                 <template #prepend>
                   <AppAvatar :name="item.raw.name" entity-type="patient" :size="18" class="mr-1" />
@@ -294,7 +294,7 @@ export interface EventSubmitPayload {
 }
 
 const props = withDefaults(
-  defineProps<{ modelValue: boolean; initialData?: EventFormInitialData }>(),
+  defineProps<{ modelValue?: boolean; initialData?: EventFormInitialData }>(),
   { modelValue: false }
 );
 

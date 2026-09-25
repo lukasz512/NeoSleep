@@ -309,13 +309,14 @@ async function onEventFormSubmit(payload: EventSubmitPayload, done: (ok: boolean
           region: payload.region,
           attendees: payload.attendees,
         }),
+        handleErrors: false, // own error toast below — one failure, one toast
       });
       if (res.ok) {
-        notifications.show(t("user.planner.form.editSuccess"), "success");
+        notifications.show(t("user.planner.form.editSuccess"), "success", undefined, { icon: "nav-planner" });
         await fetchEvents();
         done(true);
       } else {
-        notifications.show(t("user.planner.form.errorSave"), "error");
+        notifications.show(t("user.planner.form.errorSave"), "error", undefined, { icon: "nav-planner" });
         done(false);
       }
     } else {
@@ -334,18 +335,19 @@ async function onEventFormSubmit(payload: EventSubmitPayload, done: (ok: boolean
           region: payload.region,
           attendees: payload.attendees,
         }),
+        handleErrors: false, // own error toast below — one failure, one toast
       });
       if (res.ok) {
-        notifications.show(t("user.planner.form.success"), "success");
+        notifications.show(t("user.planner.form.success"), "success", undefined, { icon: "nav-planner" });
         await fetchEvents();
         done(true);
       } else {
-        notifications.show(t("user.planner.form.errorSave"), "error");
+        notifications.show(t("user.planner.form.errorSave"), "error", undefined, { icon: "nav-planner" });
         done(false);
       }
     }
   } catch {
-    notifications.show(t("user.planner.form.errorSave"), "error");
+    notifications.show(t("user.planner.form.errorSave"), "error", undefined, { icon: "nav-planner" });
     done(false);
   }
 }
@@ -375,7 +377,9 @@ async function onEventFormSubmit(payload: EventSubmitPayload, done: (ok: boolean
 /* Segmented control: pill container (grey), selected segment (white + primary border). */
 .view-planner__view-toggle-group {
   background: var(--pwa-bg-secondary, rgba(var(--v-theme-on-surface), 0.04));
-  border-radius: var(--pwa-radius, 10px);
+  /* Corner radius comes from the template's rounded="lg" (a Vuetify utility
+     class): Vuetify 4 puts utilities in a cascade layer, so a border-radius
+     here would now override it instead of being overridden by it. */
   padding: 4px;
   gap: 0;
   box-shadow: none;

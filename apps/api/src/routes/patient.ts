@@ -19,7 +19,7 @@ import { GetLatestSleepStudyRefQuery } from "../queries/sleepStudy.js";
 import { CreateQuestionnaireRequestCommand, CancelQuestionnaireRequestCommand } from "../commands/questionnaireRequest.js";
 import { resolveFrontendOrigin } from "../utils/frontendOrigin.js";
 import { ValidationError } from "../errors.js";
-import { parsePaginationParams, toFilterArray } from "./utils.js";
+import { parsePaginationParams, toFilterArray, routeParam } from "./utils.js";
 
 /**
  * Patient routes — thin waiters.
@@ -72,7 +72,7 @@ patientRouter.get(
   "/patient/:id",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing patient id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -93,7 +93,7 @@ patientRouter.get(
   "/patient/:id/history",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing patient id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -114,7 +114,7 @@ patientRouter.get(
   "/patient/:id/sleep-study-ref",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing patient id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -133,7 +133,7 @@ patientRouter.get(
   "/patient/:id/documents",
   requireClinicalRole,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing patient id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -152,8 +152,8 @@ patientRouter.get(
   "/patient/:id/documents/:documentId/download",
   requireClinicalRole,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
-    const documentId = req.params.documentId?.trim();
+    const id = routeParam(req, "id")?.trim();
+    const documentId = routeParam(req, "documentId")?.trim();
     if (!id || !documentId) throw new ValidationError("Missing patient id or document id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -173,13 +173,13 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 /** 400 for a malformed id instead of letting Postgres reject it as a 500 "invalid input syntax for type uuid". */
 function uuidParam(req: Request, name: string): string {
-  const value = req.params[name]?.trim() ?? "";
+  const value = routeParam(req, name)?.trim() ?? "";
   if (!UUID_RE.test(value)) throw new ValidationError(`Invalid ${name}`);
   return value;
 }
 
 function clinicalKindParam(req: Request): ClinicalRecordKind {
-  const kind = req.params.kind;
+  const kind = routeParam(req, "kind");
   if (!isClinicalRecordKind(kind)) throw new ValidationError(`Unknown clinical record kind "${kind}"`);
   return kind;
 }
@@ -256,7 +256,7 @@ patientRouter.post(
   requireClinicalRole,
   asyncHandler(async (req: Request, res: Response) => {
     const id = uuidParam(req, "id");
-    const key = req.params.key?.trim() ?? "";
+    const key = routeParam(req, "key")?.trim() ?? "";
     const recordId = typeof req.body?.recordId === "string" && UUID_RE.test(req.body.recordId) ? req.body.recordId : undefined;
     const slug = tenantSlugFromHost(req.hostname);
     const result = await withTenant(slug, async (client) => {
@@ -404,7 +404,7 @@ patientRouter.patch(
   "/patient/:id",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing patient id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -456,7 +456,7 @@ patientRouter.delete(
   "/patient/:id",
   requireRole("admin"),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing patient id");
 
     const slug = tenantSlugFromHost(req.hostname);

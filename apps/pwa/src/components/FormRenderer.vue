@@ -49,14 +49,14 @@
                     </button>
                     <AppIcon v-else :name="f.icon" class="pwa-form-field-icon" />
                   </template>
-                  <template v-if="f.avatarEntityType" #item="{ item, props: itemProps }">
+                  <template v-if="f.avatarEntityType" #item="{ internalItem: item, props: itemProps }">
                     <VListItem v-if="item.value" v-bind="itemProps" :title="item.title">
                       <template #prepend>
                         <AppAvatar :name="item.title" :entity-type="f.avatarEntityType" :size="28" />
                       </template>
                     </VListItem>
                   </template>
-                  <template v-if="f.avatarEntityType" #chip="{ item, props: chipProps }">
+                  <template v-if="f.avatarEntityType" #chip="{ internalItem: item, props: chipProps }">
                     <VChip v-if="item.value" v-bind="chipProps" :text="resolvedChipTitle(f, item)" closable>
                       <template #prepend>
                         <AppSpinner v-if="chipIsLoading(f)" :size="14" :width="2" class="mr-1" />
@@ -64,12 +64,12 @@
                       </template>
                     </VChip>
                   </template>
-                  <template v-if="hasColorOptions(f)" #item="{ item, props: itemProps }">
+                  <template v-if="hasColorOptions(f)" #item="{ internalItem: item, props: itemProps }">
                     <VListItem v-bind="itemProps" :title="undefined">
                       <VChip :color="chipColor(item.raw.color)" variant="tonal" size="small">{{ item.title }}</VChip>
                     </VListItem>
                   </template>
-                  <template v-if="hasColorOptions(f)" #chip="{ item, props: chipProps }">
+                  <template v-if="hasColorOptions(f)" #chip="{ internalItem: item, props: chipProps }">
                     <VChip v-bind="chipProps" :color="chipColor(item.raw.color)" variant="tonal" size="small">
                       {{ item.title }}
                     </VChip>
@@ -95,14 +95,14 @@
                   </button>
                   <AppIcon v-else :name="row[0].icon" class="pwa-form-field-icon" />
                 </template>
-                <template v-if="row[0].avatarEntityType" #item="{ item, props: itemProps }">
+                <template v-if="row[0].avatarEntityType" #item="{ internalItem: item, props: itemProps }">
                   <VListItem v-if="item.value" v-bind="itemProps" :title="item.title">
                     <template #prepend>
                       <AppAvatar :name="item.title" :entity-type="row[0].avatarEntityType" :size="28" />
                     </template>
                   </VListItem>
                 </template>
-                <template v-if="row[0].avatarEntityType" #chip="{ item, props: chipProps }">
+                <template v-if="row[0].avatarEntityType" #chip="{ internalItem: item, props: chipProps }">
                   <VChip v-if="item.value" v-bind="chipProps" :text="resolvedChipTitle(row[0], item)" closable>
                     <template #prepend>
                       <AppSpinner v-if="chipIsLoading(row[0])" :size="14" :width="2" class="mr-1" />
@@ -110,12 +110,12 @@
                     </template>
                   </VChip>
                 </template>
-                <template v-if="hasColorOptions(row[0])" #item="{ item, props: itemProps }">
+                <template v-if="hasColorOptions(row[0])" #item="{ internalItem: item, props: itemProps }">
                   <VListItem v-bind="itemProps" :title="undefined">
                     <VChip :color="chipColor(item.raw.color)" variant="tonal" size="small">{{ item.title }}</VChip>
                   </VListItem>
                 </template>
-                <template v-if="hasColorOptions(row[0])" #chip="{ item, props: chipProps }">
+                <template v-if="hasColorOptions(row[0])" #chip="{ internalItem: item, props: chipProps }">
                   <VChip v-bind="chipProps" :color="chipColor(item.raw.color)" variant="tonal" size="small">
                     {{ item.title }}
                   </VChip>
@@ -199,7 +199,7 @@ import type { FormFieldDef, FormFieldType } from "../types/formField";
 
 const props = withDefaults(
   defineProps<{
-    modelValue: boolean;
+    modelValue?: boolean;
     fields: FormFieldDef[];
     initialData?: Record<string, unknown>;
     titleKey: string;

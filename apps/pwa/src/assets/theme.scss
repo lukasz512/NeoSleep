@@ -130,6 +130,23 @@ $pwa-fib-t-3xl: 987ms;
   --pwa-identity-org-soft: rgba(160, 120, 40, 0.1);
   --pwa-identity-person: #56625f;
   --pwa-identity-person-soft: rgba(40, 60, 58, 0.07);
+  /* Toasts (AppNotifications.vue, NEO-76 "record context"): white card, the
+     entity icon on a neutral grey tile, status only on the small badge and
+     the action button. Semantic colors, deliberately not the brand teal. */
+  --pwa-toast-bg: #ffffff;
+  --pwa-toast-border: #e3e6e5;
+  --pwa-toast-shadow: 0 6px 24px rgba(8, 42, 39, 0.12), 0 1px 3px rgba(8, 42, 39, 0.08);
+  --pwa-toast-tile: #eef0f0;
+  --pwa-toast-tile-icon: #5b6664;
+  --pwa-toast-badge-fg: #ffffff;
+  --pwa-toast-success: #1f7a4d;
+  --pwa-toast-success-soft: #e5f3eb;
+  --pwa-toast-info: #1f5fa8;
+  --pwa-toast-info-soft: #e5eef9;
+  --pwa-toast-warning: #a35f00;
+  --pwa-toast-warning-soft: #fcf0da;
+  --pwa-toast-error: #b42323;
+  --pwa-toast-error-soft: #fbe6e6;
   /* Buttons: desktop default; mobile/tablet use larger touch targets */
   --pwa-btn-min-height: #{$pwa-touch-target-desktop};
   --pwa-btn-min-width: #{$pwa-touch-target-desktop};
@@ -167,6 +184,20 @@ $pwa-fib-t-3xl: 987ms;
   --pwa-identity-org-soft: rgba(201, 168, 106, 0.14);
   --pwa-identity-person: #a3b1ae;
   --pwa-identity-person-soft: rgba(160, 175, 172, 0.12);
+  --pwa-toast-bg: #1e1e1e;
+  --pwa-toast-border: #333333;
+  --pwa-toast-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+  --pwa-toast-tile: #2a2c2c;
+  --pwa-toast-tile-icon: #b3bdbb;
+  --pwa-toast-badge-fg: #111111;
+  --pwa-toast-success: #5bc48c;
+  --pwa-toast-success-soft: #16291f;
+  --pwa-toast-info: #7fb1ee;
+  --pwa-toast-info-soft: #14223a;
+  --pwa-toast-warning: #f0b35a;
+  --pwa-toast-warning-soft: #2e2210;
+  --pwa-toast-error: #f08080;
+  --pwa-toast-error-soft: #331616;
 }
 
 body {
@@ -185,6 +216,19 @@ body {
 }
 [data-theme="dark"] :focus-visible {
   outline-color: var(--pwa-primary, #17b5a5);
+}
+/*
+ * …except on the native <input>/<textarea> inside a Vuetify field: the field
+ * already shows focus with its own colored outline. Vuetify sets
+ * `outline: none` there with a more specific selector, which used to beat
+ * the ring above; on Vuetify 4 its styles sit in cascade layers, and
+ * unlayered CSS like this file always beats layered CSS, so the exception
+ * has to be restated here.
+ */
+.v-field__input:focus-visible,
+.v-field input:focus-visible,
+.v-field textarea:focus-visible {
+  outline: none;
 }
 
 /* Use design font in Vuetify components (they default to Roboto) */
@@ -340,6 +384,18 @@ body {
   font-size: 20px;
 }
 
+/*
+ * A size="small" chip inside a field (e.g. FormRenderer's colored status
+ * chip) is 26px tall. Vuetify's `.v-field .v-chip { --v-chip-height: 24px }`
+ * and `.v-chip.v-chip--size-small { --v-chip-height: 26px }` have equal
+ * specificity in the same cascade layer, so which one wins depends on the
+ * order the two component stylesheets happen to load — that order flipped
+ * with Vuetify 4. Pin the height so it no longer depends on load order.
+ */
+.v-field .v-chip.v-chip--size-small {
+  --v-chip-height: 26px;
+}
+
 /* Mobile: min 44px touch target for inputs (SPEC-0042) */
 @media (max-width: #{$pwa-breakpoint-mobile - 1}) {
   .v-input .v-field {
@@ -471,12 +527,20 @@ body {
 #app {
   font-family: var(--pwa-font-sans, system-ui, sans-serif);
 }
-a {
-  color: var(--pwa-primary, #128F83);
-  text-decoration: none;
-}
-a:hover {
-  color: var(--pwa-primary-hover, #10544E);
+/* Plain links. Kept in the `app-base` cascade layer (ordered after Vuetify's
+   reset, before its components — see the @layer statement in index.html):
+   Vuetify 4 ships its styles in layers and unlayered CSS always wins, so as
+   plain rules these would now recolor links rendered by Vuetify components
+   (<a class="v-btn">, <a class="v-list-item">), which they never did on
+   Vuetify 3 where the component's class selector won on specificity. */
+@layer app-base {
+  a {
+    color: var(--pwa-primary, #128F83);
+    text-decoration: none;
+  }
+  a:hover {
+    color: var(--pwa-primary-hover, #10544E);
+  }
 }
 
 /*
