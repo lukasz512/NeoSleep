@@ -4,7 +4,7 @@ pnpm monorepo: 2 Vue 3 + Vite apps + 1 Express API server + PostgreSQL (Supabase
 
 ## Getting Started
 
-**Prerequisites:** Docker Desktop installed, Node 20+
+**Prerequisites:** Docker Desktop installed, Node 22+
 
 ```bash
 pnpm start
@@ -48,7 +48,7 @@ Tests run automatically on pre-commit (Husky).
 
 ## Local dev (manual)
 
-- **Node 20:** `nvm use` (uses `.nvmrc`)
+- **Node 22:** `nvm use` (uses `.nvmrc`)
 - **Everything (no Docker):** `pnpm dev` (api, pwa, web concurrently)
 - **One app only:** `pnpm --filter @neo/pwa dev` / `@neo/web dev` / `@neo/api dev`
 - **DB seed:** `pnpm db:seed` (requires Docker up)
