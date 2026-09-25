@@ -108,7 +108,7 @@ const isLarge = computed(() => props.details.length > 0 || props.moreDetails.len
 
 /* Rows, cards and mentions show the short name — first given name + first
    surname (utils/shortPersonName.ts) — whenever the name parts are known;
-   the full name stays one hover away. Detail headers (IdentityHeader) keep
+   the full name stays one hover away. Detail headers (ItemDetailLayout record header) keep
    the full name. */
 const displayLabel = computed(() => shortPersonName(props.label, props.firstName, props.lastName) || props.label || "");
 const shortened = computed(() => displayLabel.value !== (props.label ?? ""));

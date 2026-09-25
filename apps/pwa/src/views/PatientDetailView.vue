@@ -22,17 +22,15 @@
       :load-error="loadFailed"
       :back-route="{ name: 'patients' }"
       :back-label="t('app.patients.detail.back')"
+      :record-title="patient?.name ?? ''"
       :not-found-label="t('app.patients.detail.notFound')"
       @retry="loadPatient"
     >
-      <template v-if="patient" #title>
-        <IdentityHeader
-          :name="patient.name"
-          entity-type="patient"
-          :first-name="patient.first_name"
-          :last-name="patient.last_name"
-          :details="patientDetails(patient, { long: true }).details"
-        />
+      <template v-if="patient" #record-tile>
+        <AppAvatar :name="patient.name" entity-type="patient" :first-name="patient.first_name" :last-name="patient.last_name" :size="48" />
+      </template>
+      <template v-if="patient" #record-details>
+        <IdentityDetails :details="patientDetails(patient, { long: true }).details" />
       </template>
       <template v-if="patient" #header-actions>
         <VTooltip location="bottom">
@@ -192,7 +190,8 @@ import AppIcon from "../components/AppIcon.vue";
 import DetailViewTabs from "../components/DetailViewTabs.vue";
 import EntityLink from "../components/EntityLink.vue";
 import { useIdentity } from "../composables/useIdentity";
-import IdentityHeader from "../components/IdentityHeader.vue";
+import AppAvatar from "../components/AppAvatar.vue";
+import IdentityDetails from "../components/IdentityDetails.vue";
 import PatientNotesPanel from "../components/patient/PatientNotesPanel.vue";
 import PatientStudiesPanel from "../components/patient/PatientStudiesPanel.vue";
 import PatientStudiesSummary from "../components/patient/PatientStudiesSummary.vue";

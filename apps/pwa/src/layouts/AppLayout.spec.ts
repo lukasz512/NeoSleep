@@ -217,7 +217,9 @@ describe("AppLayout", () => {
     it("desktop page header: back arrow on detail views, module title, and the teleport target for view controls", () => {
       const source = readLayout();
       const header = source.slice(source.indexOf('class="layout-page-header"') - 40, source.indexOf("<RouterView"));
-      expect(header).toContain('v-show="!isMobile"');
+      // NEO-56: also hidden while a detail view's record header replaces it.
+      expect(source).toContain('<div v-show="!isMobile && !recordHeaderClaim" class="layout-page-header">');
+      expect(source).toContain("provideRecordHeaderClaim()");
       expect(header).toMatch(/v-if="parentRoute"[\s\S]*?:to="parentRoute"/);
       expect(header).toContain("{{ moduleTitle }}");
       expect(header).toContain(':id="PAGE_HEADER_ACTIONS_ID"');

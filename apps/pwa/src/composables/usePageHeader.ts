@@ -28,6 +28,24 @@ export function releasePageHeaderForDescendants(): void {
   provide(PAGE_HEADER_ACTIVE, ref(false));
 }
 
+const RECORD_HEADER_CLAIM: InjectionKey<Ref<boolean>> = Symbol("recordHeaderClaim");
+
+/**
+ * AppLayout: true while a detail view shows its own record header (NEO-56,
+ * ItemDetailLayout) — that header's tile + "MODULE ›" eyebrow + name replaces
+ * the desktop "← <Module>" page-header row, so AppLayout hides the row.
+ */
+export function provideRecordHeaderClaim(): Ref<boolean> {
+  const claim = ref(false);
+  provide(RECORD_HEADER_CLAIM, claim);
+  return claim;
+}
+
+/** ItemDetailLayout: set to true while its record header is shown. A no-op ref outside AppLayout (tests). */
+export function useRecordHeaderClaim(): Ref<boolean> {
+  return inject(RECORD_HEADER_CLAIM, ref(false));
+}
+
 /** Props for a <Teleport> into the page header; disabled outside AppLayout (tests) and on mobile. */
 export function usePageHeaderTeleport() {
   const active = inject(PAGE_HEADER_ACTIVE, ref(false));
