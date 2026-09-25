@@ -34,6 +34,8 @@ export interface TreatmentPlan {
   device_purchase_order_id: string | null;
   dentist_id: string | null;
   dentist_name: string | null;
+  /** Dentist's primary_specialty lookup key (NEO-57) */
+  dentist_specialty: string | null;
   dentist_notified_at: string | null;
   dentist_accepted_at: string | null;
   appointment_at: string | null;
@@ -101,6 +103,7 @@ type TreatmentPlanRow = {
   dentist_salutation: string | null;
   dentist_first_name: string | null;
   dentist_last_name: string | null;
+  dentist_specialty: string | null;
   dentist_notified_at: Date | null;
   dentist_accepted_at: Date | null;
   appointment_at: Date | null;
@@ -131,7 +134,8 @@ const TREATMENT_PLAN_SELECT_COLS = `
   t.appliance_ordered_at, t.appliance_delivered_at,
   t.recommended_by, t.notes, t.status, t.metadata, t.created_at, t.updated_at,
   pi.title AS patient_salutation, pi.first_name AS patient_first_name, pi.last_name AS patient_last_name,
-  di.title AS dentist_salutation, di.first_name AS dentist_first_name, di.last_name AS dentist_last_name`.trim();
+  di.title AS dentist_salutation, di.first_name AS dentist_first_name, di.last_name AS dentist_last_name,
+  den.primary_specialty AS dentist_specialty`.trim();
 
 const TREATMENT_PLAN_JOIN = `
   FROM treatment_plan t
@@ -161,6 +165,7 @@ function serialize(row: TreatmentPlanRow): TreatmentPlan {
       first_name: row.dentist_first_name,
       last_name: row.dentist_last_name,
     }),
+    dentist_specialty: row.dentist_specialty,
     dentist_notified_at: row.dentist_notified_at ? isoDate(row.dentist_notified_at) : null,
     dentist_accepted_at: row.dentist_accepted_at ? isoDate(row.dentist_accepted_at) : null,
     appointment_at: row.appointment_at ? isoDate(row.appointment_at) : null,

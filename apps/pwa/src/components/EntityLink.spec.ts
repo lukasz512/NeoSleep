@@ -136,3 +136,20 @@ describe("EntityLink — avatar initials and size", () => {
     expect(mountLink({ to: null, label: "A B", avatarSize: 32 }).findComponent(AppAvatar).props("size")).toBe(32);
   });
 });
+
+describe("EntityLink — subtitle (NEO-57)", () => {
+  it("renders a quiet second line under the name (a doctor's specialty)", () => {
+    const wrapper = mountLink({ to: { name: "hcp-detail", params: { id: "p1" } }, label: "Dra. Ana López", subtitle: "Dentist" });
+
+    expect(wrapper.find(".entity-link__label").text()).toBe("Dra. Ana López");
+    expect(wrapper.find(".entity-link__subtitle").text()).toBe("Dentist");
+    expect(wrapper.find(".entity-link--two-line").exists()).toBe(true);
+  });
+
+  it("keeps the single-line layout when the subtitle is empty", () => {
+    const wrapper = mountLink({ to: null, label: "Dra. Ana López", entityType: "hcp", subtitle: "" });
+
+    expect(wrapper.find(".entity-link__subtitle").exists()).toBe(false);
+    expect(wrapper.text()).toContain("Dra. Ana López");
+  });
+});

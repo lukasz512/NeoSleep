@@ -86,6 +86,11 @@ async function mountEntityList(opts: {
   });
   mountedWrappers.push(wrapper);
   await flushPromises();
+  // Skeleton → list is an out-in <Transition> (NEO-57): Vue only swaps the
+  // entering element in after the leave finishes, which it checks on the next
+  // animation frames — let those run so the list is actually mounted.
+  for (let i = 0; i < 3; i++) await new Promise((r) => requestAnimationFrame(() => r(null)));
+  await flushPromises();
 
   return wrapper;
 }
@@ -248,9 +253,19 @@ describe("AppEntityList", () => {
     // NEO-57 replaced the bordered table box with the "clinical card" look:
     // no outer border, a paper ground, and each row / feed card as its own
     // outlined surface, all driven by the shared --pwa-list-* tokens.
-    it("table-wrap has no outer border and sits on the shared --pwa-list-paper ground", () => {
-      expect(css).toMatch(/\.app-entity-list__table-wrap\s*{[^}]*background:\s*var\(--pwa-list-paper\)/);
+    it("table-wrap has no outer border and a transparent background (blends into the view)", () => {
+      expect(css).toMatch(/\.app-entity-list__table-wrap\s*{[^}]*background:\s*transparent/);
       expect(css).not.toMatch(/\.app-entity-list__table-wrap\s*{[^}]*border:\s*1px/);
+    });
+
+    it("table height follows its rows (no 70vh floor), so the footer sits right under the last row", () => {
+      expect(css).not.toMatch(/\.app-entity-list__table-wrap\s*{[^}]*min-height:\s*70vh/);
+      expect(css).toMatch(/\.app-entity-list__table-wrap\s*{[^}]*flex:\s*0 1 auto/);
+    });
+
+    it("rows animate in, and stop animating under prefers-reduced-motion", () => {
+      expect(css).toMatch(/@keyframes app-entity-list-row-in/);
+      expect(css).toMatch(/prefers-reduced-motion:\s*reduce[\s\S]*animation:\s*none/);
     });
 
     it("table rows and mobile feed cards share the --pwa-list-row-* surface/outline/radius tokens", () => {

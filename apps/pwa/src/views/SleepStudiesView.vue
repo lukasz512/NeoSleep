@@ -41,6 +41,7 @@
           :text="sleepStudyCardMeta(item as SleepStudyRow)"
           :to="hcpDetailLink((item as SleepStudyRow).interpreted_by)"
           :label="(item as SleepStudyRow).interpreted_by_name"
+          :subtitle="specialtyLabel((item as SleepStudyRow).interpreted_by_specialty)"
         />
       </template>
       <template #item.study_date="{ item }">
@@ -50,7 +51,12 @@
         {{ (item as { ahi_score?: number | null }).ahi_score ?? "—" }}
       </template>
       <template #item.interpreted_by_name="{ item }">
-        <EntityLink :to="hcpDetailLink((item as SleepStudyRow).interpreted_by)" :label="(item as SleepStudyRow).interpreted_by_name" />
+        <EntityLink
+          :to="hcpDetailLink((item as SleepStudyRow).interpreted_by)"
+          :label="(item as SleepStudyRow).interpreted_by_name"
+          :subtitle="specialtyLabel((item as SleepStudyRow).interpreted_by_specialty)"
+          :avatar-size="32"
+        />
       </template>
     </AppEntityList>
   </div>
@@ -61,6 +67,7 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
 import EntityLink from "../components/EntityLink.vue";
+import { useSpecialtyLabel } from "../composables/useSpecialtyLabel";
 import EntityMetaLine from "../components/EntityMetaLine.vue";
 import AppAvatar from "../components/AppAvatar.vue";
 import type { FilterDefinition } from "../composables/useFilters";
@@ -74,9 +81,11 @@ interface SleepStudyRow {
   ahi_score?: number | null;
   interpreted_by?: string | null;
   interpreted_by_name?: string | null;
+  interpreted_by_specialty?: string | null;
 }
 
 const { t } = useI18n();
+const specialtyLabel = useSpecialtyLabel();
 
 const STATUSES = ["ordered", "device_shipped", "device_delivered", "study_complete", "results_received", "interpreted", "cancelled"];
 
