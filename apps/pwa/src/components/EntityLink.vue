@@ -1,22 +1,22 @@
 <template>
-  <RouterLink v-if="to && label" :to="to" :class="['entity-link', { 'entity-link--two-line': isLarge }]" @click.stop>
+  <RouterLink v-if="to && label" :to="to" :title="shortened ? label : undefined" :class="['entity-link', { 'entity-link--two-line': isLarge }]" @click.stop>
     <AppAvatar v-bind="avatarProps" class="entity-link__avatar" />
     <slot />
     <span v-if="isLarge" class="entity-link__text">
-      <span class="entity-link__label">{{ label }}</span>
+      <span class="entity-link__label">{{ displayLabel }}</span>
       <IdentityDetails :details="details" :more="moreDetails" />
     </span>
-    <span v-else>{{ label }}</span>
+    <span v-else>{{ displayLabel }}</span>
   </RouterLink>
-  <span v-else-if="label" :class="['entity-link__plain', { 'entity-link--two-line': isLarge }]">
+  <span v-else-if="label" :title="shortened ? label : undefined" :class="['entity-link__plain', { 'entity-link--two-line': isLarge }]">
     <AppAvatar v-bind="avatarProps" class="entity-link__avatar" />
     <!-- Optional decoration between avatar and name (e.g. LeadsView's gender icon). -->
     <slot />
     <span v-if="isLarge" class="entity-link__text">
-      <span class="entity-link__label">{{ label }}</span>
+      <span class="entity-link__label">{{ displayLabel }}</span>
       <IdentityDetails :details="details" :more="moreDetails" />
     </span>
-    <span v-else>{{ label }}</span>
+    <span v-else>{{ displayLabel }}</span>
   </span>
   <span v-else class="entity-link__empty">—</span>
 </template>
@@ -26,6 +26,7 @@ import { computed } from "vue";
 import type { RouteLocationRaw } from "vue-router";
 import AppAvatar, { type AppAvatarEntityType } from "./AppAvatar.vue";
 import IdentityDetails from "./IdentityDetails.vue";
+import { shortPersonName } from "../utils/shortPersonName";
 
 /**
  * THE shared "avatar + display name (+ optional link)" cell — every table/list
@@ -104,6 +105,13 @@ const entityType = computed<AppAvatarEntityType>(() => {
 });
 
 const isLarge = computed(() => props.details.length > 0 || props.moreDetails.length > 0);
+
+/* Rows, cards and mentions show the short name — first given name + first
+   surname (utils/shortPersonName.ts) — whenever the name parts are known;
+   the full name stays one hover away. Detail headers (IdentityHeader) keep
+   the full name. */
+const displayLabel = computed(() => shortPersonName(props.label, props.firstName, props.lastName) || props.label || "");
+const shortened = computed(() => displayLabel.value !== (props.label ?? ""));
 
 const avatarProps = computed(() => {
   const isPlace = PLACE_ENTITY_TYPES.has(entityType.value);

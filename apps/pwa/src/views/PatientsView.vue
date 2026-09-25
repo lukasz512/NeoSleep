@@ -51,13 +51,15 @@
         <AppAvatar v-bind="personAvatarProps(item as PatientListItem)" entity-type="patient" :size="55" />
       </template>
       <template #feed-card-title="{ item }">
-        {{ (item as { name?: string }).name }}
+        {{ shortPersonName((item as PatientListItem).name, (item as PatientListItem).first_name, (item as PatientListItem).last_name) }}
       </template>
       <template #item.practitioner_name="{ item }">
         <EntityLink
           :to="hcpDetailLink((item as PatientListItem).practitioner_id)"
           entity-type="hcp"
           :label="(item as PatientListItem).practitioner_name"
+          :first-name="(item as PatientListItem).practitioner_first_name"
+          :last-name="(item as PatientListItem).practitioner_last_name"
           :details="doctorOf(item as PatientListItem).details"
           :more-details="doctorOf(item as PatientListItem).more"
           :avatar-size="32"
@@ -97,6 +99,8 @@
             :to="hcpDetailLink((item as PatientListItem).practitioner_id)"
             entity-type="hcp"
             :label="(item as PatientListItem).practitioner_name"
+            :first-name="(item as PatientListItem).practitioner_first_name"
+            :last-name="(item as PatientListItem).practitioner_last_name"
           />
         </span>
       </template>
@@ -133,6 +137,7 @@ import type { PatientIntakeFormStatus } from "../types/patientIntakeForm";
 import EntityLink from "../components/EntityLink.vue";
 import { intlLocale } from "@i18n/language-options";
 import IdentityDetails from "../components/IdentityDetails.vue";
+import { shortPersonName } from "../utils/shortPersonName";
 import { useIdentity } from "../composables/useIdentity";
 import { formatDateShort, formatRelativeToNow } from "../utils/relativeDate";
 import { hcpDetailLink } from "../utils/entityLinks";
@@ -161,6 +166,8 @@ interface PatientListItem {
   phone?: string | null;
   practitioner_id?: string | null;
   practitioner_name?: string | null;
+  practitioner_first_name?: string | null;
+  practitioner_last_name?: string | null;
   practitioner_specialty?: string | null;
   practitioner_specialties?: string[] | null;
   gender?: string | null;

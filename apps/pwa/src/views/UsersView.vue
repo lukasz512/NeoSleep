@@ -27,7 +27,7 @@
         <AppAvatar v-bind="personAvatarProps(item as UserListItem)" entity-type="user" :size="55" />
       </template>
       <template #feed-card-title="{ item }">
-        {{ (item as { name?: string }).name }}
+        {{ shortPersonName((item as UserListItem).name, (item as UserListItem).first_name, (item as UserListItem).last_name) }}
       </template>
       <template #item.status="{ item }">
         <span :class="['users-view__status', `users-view__status--${(item as Record<string, unknown>).status}`]">
@@ -109,6 +109,7 @@ import AppEntityList from "../components/AppEntityList.vue";
 import AppAvatar from "../components/AppAvatar.vue";
 import EntityLink from "../components/EntityLink.vue";
 import { useIdentity } from "../composables/useIdentity";
+import { shortPersonName } from "../utils/shortPersonName";
 import { personAvatarProps } from "../utils/personAvatarProps";
 import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";

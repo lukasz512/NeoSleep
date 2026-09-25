@@ -60,7 +60,7 @@
       <AppAvatar v-bind="personAvatarProps(item as HCPListItem)" entity-type="hcp" :size="55" />
     </template>
     <template #feed-card-title="{ item }">
-      {{ (item as { name?: string }).name }}
+      {{ shortPersonName((item as HCPListItem).name, (item as HCPListItem).first_name, (item as HCPListItem).last_name) }}
     </template>
     <template #feed-card-meta="{ item }">
       <EntityMetaLine
@@ -99,6 +99,7 @@ import AppAvatar from "../components/AppAvatar.vue";
 import AppIcon from "../components/AppIcon.vue";
 import EntityLink from "../components/EntityLink.vue";
 import { useIdentity } from "../composables/useIdentity";
+import { shortPersonName } from "../utils/shortPersonName";
 import { personAvatarProps } from "../utils/personAvatarProps";
 import AppListItemMenu from "../components/AppListItemMenu.vue";
 import { entityActionIcon, entityActionMenuIconClass } from "../config/entityActions";

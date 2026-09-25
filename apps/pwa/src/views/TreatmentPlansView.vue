@@ -13,13 +13,20 @@
       :filter-param-keys="['status', 'type']"
     >
       <template #item.patient_name="{ item }">
-        <EntityLink :to="null" entity-type="patient" :label="(item as TreatmentPlanRow).patient_name" :avatar-size="32" />
+        <EntityLink
+          :to="null"
+          entity-type="patient"
+          :label="(item as TreatmentPlanRow).patient_name"
+          :first-name="(item as TreatmentPlanRow).patient_first_name"
+          :last-name="(item as TreatmentPlanRow).patient_last_name"
+          :avatar-size="32"
+        />
       </template>
       <template #feed-card-avatar="{ item }">
         <AppAvatar :name="(item as TreatmentPlanRow).patient_name" entity-type="patient" :size="55" />
       </template>
       <template #feed-card-title="{ item }">
-        {{ (item as { patient_name?: string }).patient_name || "—" }}
+        {{ shortPersonName((item as TreatmentPlanRow).patient_name, (item as TreatmentPlanRow).patient_first_name, (item as TreatmentPlanRow).patient_last_name) || "—" }}
       </template>
       <template #item.type="{ item }">
         {{ typeLabel((item as { type?: string }).type) }}
@@ -39,6 +46,8 @@
           :text="treatmentPlanCardMeta(item as TreatmentPlanRow)"
           :to="hcpDetailLink((item as TreatmentPlanRow).dentist_id)"
           :label="(item as TreatmentPlanRow).dentist_name"
+          :first-name="(item as TreatmentPlanRow).dentist_first_name"
+          :last-name="(item as TreatmentPlanRow).dentist_last_name"
           entity-type="hcp"
         />
       </template>
@@ -46,6 +55,8 @@
         <EntityLink
           :to="hcpDetailLink((item as TreatmentPlanRow).dentist_id)"
           :label="(item as TreatmentPlanRow).dentist_name"
+          :first-name="(item as TreatmentPlanRow).dentist_first_name"
+          :last-name="(item as TreatmentPlanRow).dentist_last_name"
           entity-type="hcp"
           :details="doctorOf(item as TreatmentPlanRow).details"
           :more-details="doctorOf(item as TreatmentPlanRow).more"
@@ -62,6 +73,7 @@ import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
 import EntityLink from "../components/EntityLink.vue";
 import { useIdentity } from "../composables/useIdentity";
+import { shortPersonName } from "../utils/shortPersonName";
 import EntityMetaLine from "../components/EntityMetaLine.vue";
 import AppAvatar from "../components/AppAvatar.vue";
 import type { FilterDefinition } from "../composables/useFilters";
@@ -73,6 +85,10 @@ interface TreatmentPlanRow {
   type?: string;
   dentist_id?: string | null;
   dentist_name?: string | null;
+  dentist_first_name?: string | null;
+  dentist_last_name?: string | null;
+  patient_first_name?: string | null;
+  patient_last_name?: string | null;
   dentist_specialty?: string | null;
   dentist_specialties?: string[] | null;
 }

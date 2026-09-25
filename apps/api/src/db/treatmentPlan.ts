@@ -27,6 +27,9 @@ export interface TreatmentPlan {
   id: string;
   patient_id: string;
   patient_name: string | null;
+  /** Name parts for the PWA's short list name (first given name + first surname). */
+  patient_first_name: string | null;
+  patient_last_name: string | null;
   /** Nullable — set to NULL if the originating sleep_study is later deleted (ON DELETE SET NULL, migration 017); the plan itself survives. */
   sleep_study_id: string | null;
   type: string;
@@ -34,6 +37,8 @@ export interface TreatmentPlan {
   device_purchase_order_id: string | null;
   dentist_id: string | null;
   dentist_name: string | null;
+  dentist_first_name: string | null;
+  dentist_last_name: string | null;
   /** Dentist's primary_specialty lookup key (NEO-57) */
   dentist_specialty: string | null;
   dentist_specialties: string[];
@@ -152,6 +157,10 @@ function serialize(row: TreatmentPlanRow): TreatmentPlan {
   return {
     id: row.id,
     patient_id: row.patient_id,
+    patient_first_name: row.patient_first_name,
+    patient_last_name: row.patient_last_name,
+    dentist_first_name: row.dentist_first_name,
+    dentist_last_name: row.dentist_last_name,
     patient_name: formatOptionalDisplayName({
       salutation: row.patient_salutation,
       first_name: row.patient_first_name,

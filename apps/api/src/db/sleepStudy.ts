@@ -22,6 +22,9 @@ export interface SleepStudy {
   id: string;
   patient_id: string;
   patient_name: string | null;
+  /** Name parts for the PWA's short list name (first given name + first surname). */
+  patient_first_name: string | null;
+  patient_last_name: string | null;
   purchase_order_id: string | null;
   supplier_id: string | null;
   supplier_name: string | null;
@@ -37,6 +40,8 @@ export interface SleepStudy {
   odi: number | null;
   interpreted_by: string | null;
   interpreted_by_name: string | null;
+  interpreted_by_first_name: string | null;
+  interpreted_by_last_name: string | null;
   /** Interpreting practitioner's primary_specialty lookup key (NEO-57) */
   interpreted_by_specialty: string | null;
   interpreted_by_specialties: string[];
@@ -153,6 +158,10 @@ function serialize(row: SleepStudyRow): SleepStudy {
   return {
     id: row.id,
     patient_id: row.patient_id,
+    patient_first_name: row.patient_first_name,
+    patient_last_name: row.patient_last_name,
+    interpreted_by_first_name: row.interpreted_by_first_name,
+    interpreted_by_last_name: row.interpreted_by_last_name,
     patient_name: formatOptionalDisplayName({
       salutation: row.patient_salutation,
       first_name: row.patient_first_name,

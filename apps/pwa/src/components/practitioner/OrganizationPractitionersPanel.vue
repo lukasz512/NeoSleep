@@ -38,7 +38,7 @@
         <AppAvatar :name="asRow(item).name" :first-name="asRow(item).first_name" :last-name="asRow(item).last_name" entity-type="hcp" :size="55" />
       </template>
       <template #feed-card-title="{ item }">
-        {{ asRow(item).name }}
+        {{ shortPersonName(asRow(item).name, asRow(item).first_name, asRow(item).last_name) }}
       </template>
       <template #feed-card-meta="{ item }">
         {{ cardMeta(asRow(item)) }}
@@ -60,6 +60,7 @@ import AppEntityList from "../AppEntityList.vue";
 import AppAvatar from "../AppAvatar.vue";
 import EntityLink from "../EntityLink.vue";
 import { useIdentity } from "../../composables/useIdentity";
+import { shortPersonName } from "../../utils/shortPersonName";
 import { type FilterDefinition } from "../../composables/useFilters";
 import { useFillViewportHeight } from "../../composables/useFillViewportHeight";
 import { useConfigStore } from "../../stores/config";

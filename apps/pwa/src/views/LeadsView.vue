@@ -83,7 +83,7 @@
     <template #feed-card-title="{ item }">
       <span class="leads-name-cell">
         <GenderIcon :gender="getGenderFromName(getLeadFromItem(item).name)" />
-        {{ getLeadFromItem(item).name }}
+        {{ shortPersonName(getLeadFromItem(item).name, getLeadFromItem(item).first_name, getLeadFromItem(item).last_name) }}
       </span>
     </template>
     <template #item.email="{ item }">
@@ -169,6 +169,7 @@ import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
 import AppAvatar from "../components/AppAvatar.vue";
 import EntityLink from "../components/EntityLink.vue";
+import { shortPersonName } from "../utils/shortPersonName";
 import { personAvatarProps } from "../utils/personAvatarProps";
 import GenderIcon from "../components/GenderIcon.vue";
 import AppIcon from "../components/AppIcon.vue";

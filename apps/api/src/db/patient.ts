@@ -42,6 +42,9 @@ export interface Patient {
   // Computed from practitioner + identities JOIN (resolved display name, mirrors
   // practitioner.ts's own organization.name AS institution join for the same need)
   practitioner_name: string | null;
+  /** Name parts for the PWA's short list name (first given name + first surname). */
+  practitioner_first_name: string | null;
+  practitioner_last_name: string | null;
   /** Assigned practitioner's primary_specialty lookup key (e.g. "dentist"),
    *  shown under the doctor's name in lists (NEO-57). */
   practitioner_specialty: string | null;
@@ -198,6 +201,8 @@ function serialize(row: PatientRow): Patient & { name: string } {
     created_at: isoDate(row.created_at),
     updated_at: isoDate(row.updated_at),
     practitioner_name: buildPractitionerName(row),
+    practitioner_first_name: row.practitioner_first_name,
+    practitioner_last_name: row.practitioner_last_name,
     practitioner_specialty: row.practitioner_specialty,
     practitioner_specialties: row.practitioner_specialties ?? [],
     name: buildName(row),
