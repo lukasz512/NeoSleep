@@ -6,6 +6,7 @@ import {
   getRenderBrowser,
   resolveBrowserLaunch,
   applyDataFields,
+  applyChoiceFields,
   applyDataImages,
   applyVariant,
   lockDownPage,
@@ -158,6 +159,26 @@ describe.skipIf(!launch)("renderHtmlToPdf (real Chromium)", () => {
     expect(texts).toEqual(["<b>Ana</b>", "<b>Ana</b>"]);
     expect(html).toBe("&lt;b&gt;Ana&lt;/b&gt;");
     expect(untouched).toBe("keep");
+  });
+
+  it("draws blank tick-boxes as real boxes (no ☐ glyph), one per option, labels escaped", { timeout: 60_000 }, async () => {
+    browser ??= await puppeteer.launch({ ...launch!, headless: true });
+    const page = await browser.newPage();
+    await page.setContent(`<table><tr><td data-field="q_has_anemia"></td><td data-field="q_skeletal_class"></td></tr></table>`);
+
+    await applyChoiceFields(page, { q_has_anemia: ["Sí", "No"], q_skeletal_class: ["I", "<b>II</b>"] });
+
+    const yesNo = await page.$eval("[data-field='q_has_anemia']", (el) => ({
+      text: el.textContent,
+      boxes: el.querySelectorAll(".choice-box").length,
+      boxWidth: el.querySelector<HTMLElement>(".choice-box")!.getBoundingClientRect().width,
+    }));
+    expect(yesNo.text).toBe("SíNo");
+    expect(yesNo.text).not.toContain("☐");
+    expect(yesNo.boxes).toBe(2);
+    expect(yesNo.boxWidth).toBeGreaterThanOrEqual(14);
+    const skeletal = await page.$eval("[data-field='q_skeletal_class']", (el) => el.innerHTML);
+    expect(skeletal).toContain("&lt;b&gt;II&lt;/b&gt;");
   });
 
   it("locked-down page: template scripts don't run, foreign requests are aborted, data fields still fill", { timeout: 60_000 }, async () => {
