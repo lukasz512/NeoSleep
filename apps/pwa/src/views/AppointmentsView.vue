@@ -55,6 +55,7 @@
       </section>
     </div>
 
+    <!-- Week grid is always Mon–Sun, matching windowOf(); en's default Sunday start hid Sunday's visits (NEO-104). -->
     <VCalendar
       v-else
       v-model="focus"
@@ -64,6 +65,7 @@
       :interval-count="26"
       :interval-minutes="30"
       :weekdays="[1, 2, 3, 4, 5, 6, 0]"
+      :first-day-of-week="1"
       class="view-appointments__calendar"
       :event-ripple="false"
       data-testid="appointments-calendar"
