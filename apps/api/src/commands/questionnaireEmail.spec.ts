@@ -47,7 +47,9 @@ describe("SendQuestionnaireEmailCommand", () => {
   it("emails one personal link covering every open questionnaire, in the patient's language, and audits it without health data", async () => {
     await withTenant(TENANT_SLUG, async (client) => {
       const ctx = await buildContext(client);
-      const patient = await insertPatient(client, { first_name: "Lucía", last_name: `Correo-${uniqueSuffix()}`, email: "lucia.correo@example.mx", region: "MX" });
+      // identities.email is unique — every run needs its own address.
+      const email = `lucia.correo.${uniqueSuffix()}@example.mx`;
+      const patient = await insertPatient(client, { first_name: "Lucía", last_name: `Correo-${uniqueSuffix()}`, email, region: "MX" });
 
       const { request, sent_to } = await SendQuestionnaireEmailCommand(ctx, patient.id, ORIGIN);
       expect(sent_to).toBe("l***@example.mx");
@@ -55,7 +57,7 @@ describe("SendQuestionnaireEmailCommand", () => {
 
       expect(sendMock).toHaveBeenCalledTimes(1);
       const [to, link, recipient, , count] = sendMock.mock.calls[0]!;
-      expect(to).toBe("lucia.correo@example.mx");
+      expect(to).toBe(email);
       expect(link).toMatch(new RegExp(`^${ORIGIN}/q#[A-Za-z0-9_-]{43}$`));
       expect(recipient).toMatchObject({ firstName: "Lucía", language: "mx" });
       expect(count).toBe(3);
@@ -65,7 +67,7 @@ describe("SendQuestionnaireEmailCommand", () => {
       const audit = await getAuditLogForEntities(client, ["QuestionnaireRequest"], [request.id]);
       const notify = audit.find((row) => row.action === "notify");
       expect(notify?.entity_after).toMatchObject({ channel: "email", sent_to: "l***@example.mx", items: 3 });
-      expect(JSON.stringify(notify?.entity_after)).not.toContain("lucia.correo");
+      expect(JSON.stringify(notify?.entity_after)).not.toContain(email);
     });
   });
 
@@ -82,7 +84,7 @@ describe("SendQuestionnaireEmailCommand", () => {
     sendMock.mockResolvedValue(false);
     await withTenant(TENANT_SLUG, async (client) => {
       const ctx = await buildContext(client);
-      const patient = await insertPatient(client, { first_name: "Ana", last_name: `Correo-${uniqueSuffix()}`, email: "ana@example.mx" });
+      const patient = await insertPatient(client, { first_name: "Ana", last_name: `Correo-${uniqueSuffix()}`, email: `ana.${uniqueSuffix()}@example.mx` });
       await expect(SendQuestionnaireEmailCommand(ctx, patient.id, ORIGIN)).rejects.toThrow(QuestionnaireEmailUnavailableError);
     });
   });
