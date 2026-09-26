@@ -15,6 +15,10 @@ vi.mock("../composables/useApi", async (importOriginal) => ({
 }));
 
 import PatientQuestionnaireView from "./PatientQuestionnaireView.vue";
+import { useNotifications } from "../composables/useNotifications";
+
+/** Validation feedback is a toast now (NEO-99) — the messages currently queued. */
+const toasts = () => useNotifications().notifications.value.map((n) => ({ message: n.message, type: n.type }));
 
 const TOKEN = "a".repeat(43);
 const SIGNATURE = "data:image/png;base64,iVBORw0KGgo=";
@@ -53,6 +57,7 @@ afterEach(() => {
   for (const w of mounted.splice(0)) w.unmount();
   apiFetch.mockReset();
   signed = false;
+  useNotifications().notifications.value = [];
   localStorage.clear(); // unsent-answer drafts must not leak from one test into the next
 });
 
@@ -112,12 +117,24 @@ describe("PatientQuestionnaireView (public QR self-fill)", () => {
     // The medical history is one list (14 plain yes/no questions), not cards.
     expect(buttonWithText(wrapper, "No")).toHaveLength(14);
 
+    // Send stays locked until every question is answered and consent is ticked; a tap says what's missing.
+    const send = () => wrapper.find("button[type='submit']");
+    expect(send().attributes("aria-disabled")).toBe("true");
     await wrapper.find("input[type='checkbox']").setValue(true);
+    expect(send().attributes("aria-disabled")).toBe("true");
     await wrapper.find("form").trigger("submit");
-    expect(wrapper.text()).toContain("Please answer every question.");
+    expect(toasts()).toEqual([{ message: "Unanswered questions: 14. Answer every one to send.", type: "warning" }]);
+    expect(wrapper.text()).not.toContain("Unanswered questions"); // a toast, not an inline alert
     expect(apiFetch).toHaveBeenCalledTimes(1); // only the initial lookup
 
     for (const no of buttonWithText(wrapper, "No")) await no.trigger("click");
+    await wrapper.find("input[type='checkbox']").setValue(false);
+    await wrapper.find("form").trigger("submit");
+    expect(toasts().at(-1)).toEqual({ message: "Tick the consent box above to send.", type: "warning" });
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+
+    await wrapper.find("input[type='checkbox']").setValue(true);
+    expect(send().attributes("aria-disabled")).toBe("false");
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 201, { step: "medicalHistory", completed: true }));
     await wrapper.find("form").trigger("submit");
     await flushPromises();
@@ -168,7 +185,7 @@ describe("PatientQuestionnaireView (public QR self-fill)", () => {
 
     // No signature yet → nothing is sent.
     await wrapper.find("form").trigger("submit");
-    expect(wrapper.text()).toContain("Sign in the box to continue.");
+    expect(toasts()).toEqual([{ message: "Sign in the box to continue.", type: "warning" }]);
     expect(apiFetch).toHaveBeenCalledTimes(1);
 
     signed = true;

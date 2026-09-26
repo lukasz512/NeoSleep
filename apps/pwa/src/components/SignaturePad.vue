@@ -2,7 +2,7 @@
   <div class="signature-pad">
     <div ref="wrapperRef" class="signature-pad__canvas-wrap">
       <canvas ref="canvasRef" class="signature-pad__canvas" />
-      <span v-if="isEmpty" class="signature-pad__placeholder">{{ placeholder }}</span>
+      <span v-if="isEmpty && !inking" class="signature-pad__placeholder">{{ placeholder }}</span>
       <AppButton
         v-if="clearPlacement === 'overlay'"
         variant="outlined"
@@ -50,6 +50,8 @@ const wrapperRef = ref<HTMLDivElement | null>(null);
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 const pad = shallowRef<SignaturePadLib | null>(null);
 const isEmpty = ref(true);
+/** A stroke is being drawn — the hint goes the moment the finger lands, not when it lifts (NEO-99). */
+const inking = ref(false);
 
 function resizeCanvas() {
   const canvas = canvasRef.value;
@@ -76,7 +78,11 @@ onMounted(() => {
   const canvas = canvasRef.value;
   if (!canvas || !canvas.getContext("2d")) return; // defensive: jsdom/test env stubs getContext to null
   pad.value = new SignaturePadLib(canvas, { backgroundColor: "rgba(255,255,255,0)" });
+  pad.value.addEventListener("beginStroke", () => {
+    inking.value = true;
+  });
   pad.value.addEventListener("endStroke", () => {
+    inking.value = false;
     isEmpty.value = pad.value?.isEmpty() ?? true;
     emit("change", isEmpty.value);
   });
