@@ -39,7 +39,7 @@ describe("PatientIntakeForms", () => {
 
   it("shows the clinical abbreviation on each tile, in order (NEO-57)", () => {
     const wrapper = mountForms(FORMS);
-    expect(wrapper.findAll(".intake-forms__tile").map((d) => d.text())).toEqual(["CI", "HE", "SB", "PSG"]);
+    expect(wrapper.findAll(".intake-forms__tile").map((d) => d.text())).toEqual(["CI", "HC", "SB", "PSG"]);
   });
 
   it("falls back to initials of the form label for a template without an abbreviation", () => {

@@ -24,7 +24,7 @@ export function intakeFormIcon(key: string): AppIconName {
 /**
  * i18n key of the short clinical abbreviation shown in the patient list's
  * Forms cell (NEO-57): CI (consentimiento informado), AM (medical history),
- * EO (oral exam), HE (Historia Endo),
+ * EO (oral exam), HC (Historia Clínica),
  * SB (STOP-BANG), PSG (polysomnography) — terms clinicians already use, so
  * the row reads like a chart, not an icon row. Keys not listed here fall
  * back to initials of the form's own label (see PatientIntakeForms.vue).

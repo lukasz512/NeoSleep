@@ -48,7 +48,7 @@ export const DOCUMENT_MANIFEST: readonly DocumentManifestEntry[] = [
   // picker, kept so already-signed historical records still resolve.
   { templateKey: "gdprConsent.pl", locales: ["pl"], label: "Doctor Data Protection Consent — Poland (GDPR)", refCode: "NSL-GDPR-PL v1", hidden: true },
   { templateKey: "gdprConsent.mx", locales: ["mx"], label: "Doctor Data Protection Consent — Mexico (LFPDPPP)", refCode: "NSL-LFPDPPP-MX v1", hidden: true },
-  { templateKey: "historiaEndo", locales: ["en", "mx"], label: "Historia Endo — Root Canal Informed Consent", refCode: "NSL-HE v1" },
+  { templateKey: "historiaEndo", locales: ["en", "mx"], label: "Clinical History — Informed Consent", refCode: "NSL-HE v1" },
   { templateKey: "stopBang", locales: ["en", "mx"], label: "STOP-Bang OSA Screening", refCode: "NSL-SB v1" },
   { templateKey: "medicalHistory", locales: ["en", "mx"], label: "Antecedentes médicos — Patient Medical History", refCode: "NSL-AM v1" },
   { templateKey: "oralExam", locales: ["en", "mx"], label: "Exploración de cavidad oral — Oral Exam", refCode: "NSL-ECO v1" },

@@ -157,7 +157,7 @@ describe("document system (header, title, banner, sections, signatures, footer)"
       const body = html.slice(html.indexOf("<body>"));
       const afterTitle = body.slice(body.indexOf('<div class="doc-title">'));
       expect(afterTitle.indexOf('<dl class="doc-fields">'), key).toBeGreaterThan(0);
-      expect(afterTitle.indexOf('<dl class="doc-fields">'), key).toBeLessThan(afterTitle.indexOf("</h2>") + 40);
+      expect(afterTitle.indexOf('<dl class="doc-fields">'), key).toBeLessThan(afterTitle.indexOf("</div>") + 40);
     }
   });
 
