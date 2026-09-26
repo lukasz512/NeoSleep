@@ -305,65 +305,38 @@
       </template>
     </ItemDetailLayout>
 
-    <VDialog
+    <AppConfirmDialog
       v-model="showDeleteConfirm"
+      :text="t('user.leads.actions.deleteConfirmText')"
+      :secondary-label="t('app.common.cancel')"
+      :secondary-color="null"
+      :primary-label="t('user.leads.actions.delete')"
+      primary-color="error"
+      primary-variant="text"
+      :loading="deleteLoading"
       max-width="360"
-      :transition="originDialogTransition"
-      persistent
-    >
-      <VCard class="pwa-confirm-dialog__card">
-        <VCardText>{{ t("user.leads.actions.deleteConfirmText") }}</VCardText>
-        <VCardActions>
-          <VSpacer />
-          <AppButton variant="text" @click="showDeleteConfirm = false">
-            {{ t("app.common.cancel") }}
-          </AppButton>
-          <AppButton
-            color="error"
-            variant="text"
-            :loading="deleteLoading"
-            @click="onDelete"
-          >
-            {{ t("user.leads.actions.delete") }}
-          </AppButton>
-        </VCardActions>
-      </VCard>
-    </VDialog>
+      @secondary="showDeleteConfirm = false"
+      @primary="onDelete"
+    />
 
-    <VDialog
+    <AppConfirmDialog
       v-model="showResendOfferConfirm"
+      :text="t('user.leads.detail.sendOfferResendConfirmText', { date: offerSentAtLabel })"
+      :secondary-label="t('app.common.cancel')"
+      :secondary-color="null"
+      :primary-label="t('user.leads.detail.sendOffer')"
+      primary-variant="text"
+      :loading="sendOfferLoading"
       max-width="360"
-      :transition="originDialogTransition"
-      persistent
-    >
-      <VCard class="pwa-confirm-dialog__card">
-        <VCardText>{{
-          t("user.leads.detail.sendOfferResendConfirmText", {
-            date: offerSentAtLabel,
-          })
-        }}</VCardText>
-        <VCardActions>
-          <VSpacer />
-          <AppButton variant="text" @click="showResendOfferConfirm = false">
-            {{ t("app.common.cancel") }}
-          </AppButton>
-          <AppButton
-            variant="text"
-            :loading="sendOfferLoading"
-            @click="runSendOffer"
-          >
-            {{ t("user.leads.detail.sendOffer") }}
-          </AppButton>
-        </VCardActions>
-      </VCard>
-    </VDialog>
+      @secondary="showResendOfferConfirm = false"
+      @primary="runSendOffer"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { isOfflineError, reportCaught, reportFailedResponse } from "@api";
 import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
-import { originDialogTransition } from "@ui";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuthStore } from "../stores/auth";
@@ -374,6 +347,7 @@ import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import AppButton from "../components/AppButton.vue";
+import AppConfirmDialog from "../components/AppConfirmDialog.vue";
 import AppIcon from "../components/AppIcon.vue";
 import GenderIcon from "../components/GenderIcon.vue";
 import { getGenderFromName } from "../utils/genderFromName";

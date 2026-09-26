@@ -1,177 +1,161 @@
 <template>
-  <VDialog
+  <AppFormDialog
     :model-value="modelValue"
-    max-width="680"
-    content-class="pwa-form-dialog__content"
-    class="form-renderer-dialog"
-    :transition="originDialogTransition"
+    :title="formTitle"
+    :avatar-entity-type="avatarEntityType"
+    :avatar-name="avatarName"
     @update:model-value="onDialogUpdate"
+    @close="onCancelClick"
   >
-    <VCard class="pwa-form-dialog__card">
-      <AppDialogHeader
-        :title="formTitle"
-        :avatar-entity-type="avatarEntityType"
-        :avatar-name="avatarName"
-        @close="onCancelClick"
-      />
-      <VCardText>
-        <VAlert
-          v-if="verifyInfoKey"
-          type="info"
-          variant="tonal"
-          density="comfortable"
-          border="start"
-          color="primary"
-          border-color="primary"
-          rounded="lg"
-          class="mb-6"
-        >
-          {{ t(verifyInfoKey) }}
-        </VAlert>
-        <VForm ref="formRef" @submit.prevent="onSubmit">
-          <template v-for="(row, ri) in rows" :key="ri">
-            <div v-if="row.length > 1" class="pwa-form-row mb-3">
-              <div v-for="f in row" :key="f.key" class="pwa-form-row-item pwa-form-col" :style="rowItemStyle(f)">
-                <component
-                  :is="componentFor(f.type)"
-                  :ref="(el: unknown) => setFieldEl(f.key, el)"
-                  v-bind="fieldAttrs(f)"
-                >
-                  <template v-if="f.icon" #prepend-inner>
-                    <button
-                      v-if="f.icon === 'at'"
-                      type="button"
-                      class="pwa-email-at-btn"
-                      :aria-label="t('app.identity.form.emailInsertAt')"
-                      @mousedown.prevent="insertAtSign(f)"
-                    >
-                      <AppIcon name="at" class="pwa-form-field-icon" />
-                    </button>
-                    <AppIcon v-else :name="f.icon" class="pwa-form-field-icon" />
-                  </template>
-                  <template v-if="f.avatarEntityType" #item="{ internalItem: item, props: itemProps }">
-                    <VListItem v-if="item.value" v-bind="itemProps" :title="item.title">
-                      <template #prepend>
-                        <AppAvatar :name="item.title" :entity-type="f.avatarEntityType" :size="28" />
-                      </template>
-                    </VListItem>
-                  </template>
-                  <template v-if="f.avatarEntityType" #chip="{ internalItem: item, props: chipProps }">
-                    <VChip v-if="item.value" v-bind="chipProps" :text="resolvedChipTitle(f, item)" closable>
-                      <template #prepend>
-                        <AppSpinner v-if="chipIsLoading(f)" :size="14" :width="2" class="mr-1" />
-                        <AppAvatar v-else :name="resolvedChipTitle(f, item)" :entity-type="f.avatarEntityType" :size="18" class="mr-1" />
-                      </template>
-                    </VChip>
-                  </template>
-                  <template v-if="hasColorOptions(f)" #item="{ internalItem: item, props: itemProps }">
-                    <VListItem v-bind="itemProps" :title="undefined">
-                      <VChip :color="chipColor(item.raw.color)" variant="tonal" size="small">{{ item.title }}</VChip>
-                    </VListItem>
-                  </template>
-                  <template v-if="hasColorOptions(f)" #chip="{ internalItem: item, props: chipProps }">
-                    <VChip v-bind="chipProps" :color="chipColor(item.raw.color)" variant="tonal" size="small">
-                      {{ item.title }}
-                    </VChip>
-                  </template>
-                </component>
-              </div>
-            </div>
-            <div v-else class="mb-3">
-              <component
-                :is="componentFor(row[0].type)"
-                :ref="(el: unknown) => setFieldEl(row[0].key, el)"
-                v-bind="fieldAttrs(row[0])"
-              >
-                <template v-if="row[0].icon" #prepend-inner>
-                  <button
-                    v-if="row[0].icon === 'at'"
-                    type="button"
-                    class="pwa-email-at-btn"
-                    :aria-label="t('app.identity.form.emailInsertAt')"
-                    @mousedown.prevent="insertAtSign(row[0])"
-                  >
-                    <AppIcon name="at" class="pwa-form-field-icon" />
-                  </button>
-                  <AppIcon v-else :name="row[0].icon" class="pwa-form-field-icon" />
-                </template>
-                <template v-if="row[0].avatarEntityType" #item="{ internalItem: item, props: itemProps }">
-                  <VListItem v-if="item.value" v-bind="itemProps" :title="item.title">
-                    <template #prepend>
-                      <AppAvatar :name="item.title" :entity-type="row[0].avatarEntityType" :size="28" />
-                    </template>
-                  </VListItem>
-                </template>
-                <template v-if="row[0].avatarEntityType" #chip="{ internalItem: item, props: chipProps }">
-                  <VChip v-if="item.value" v-bind="chipProps" :text="resolvedChipTitle(row[0], item)" closable>
-                    <template #prepend>
-                      <AppSpinner v-if="chipIsLoading(row[0])" :size="14" :width="2" class="mr-1" />
-                      <AppAvatar v-else :name="resolvedChipTitle(row[0], item)" :entity-type="row[0].avatarEntityType" :size="18" class="mr-1" />
-                    </template>
-                  </VChip>
-                </template>
-                <template v-if="hasColorOptions(row[0])" #item="{ internalItem: item, props: itemProps }">
-                  <VListItem v-bind="itemProps" :title="undefined">
-                    <VChip :color="chipColor(item.raw.color)" variant="tonal" size="small">{{ item.title }}</VChip>
-                  </VListItem>
-                </template>
-                <template v-if="hasColorOptions(row[0])" #chip="{ internalItem: item, props: chipProps }">
-                  <VChip v-bind="chipProps" :color="chipColor(item.raw.color)" variant="tonal" size="small">
-                    {{ item.title }}
-                  </VChip>
-                </template>
-              </component>
-            </div>
-          </template>
-        </VForm>
-      </VCardText>
-      <VCardActions>
-        <VSpacer />
-        <AppButton variant="text" @click="onCancelClick">
-          {{ t("app.common.cancel") }}
-        </AppButton>
-        <AppButton color="primary" :loading="submitting" @click="onSubmit">
-          {{ formSubmitLabel }}
-        </AppButton>
-      </VCardActions>
-    </VCard>
-
-    <VDialog
-      v-model="showDiscardConfirm"
-      max-width="360"
-      content-class="pwa-form-dialog__content"
-      class="pwa-discard-dialog"
-      :transition="originDialogTransition"
-      persistent
+    <VAlert
+      v-if="verifyInfoKey"
+      type="info"
+      variant="tonal"
+      density="comfortable"
+      border="start"
+      color="primary"
+      border-color="primary"
+      rounded="lg"
+      class="mb-6"
     >
-      <VCard class="pwa-confirm-dialog__card">
-        <VCardText>{{ t("app.common.discardChanges") }}</VCardText>
-        <VCardActions>
-          <VSpacer />
-          <AppButton variant="text" @click="showDiscardConfirm = false">
-            {{ t("app.common.cancel") }}
-          </AppButton>
-          <AppButton color="error" variant="text" @click="confirmDiscard">
-            {{ t("app.common.discard") }}
-          </AppButton>
-        </VCardActions>
-      </VCard>
-    </VDialog>
-  </VDialog>
+      {{ t(verifyInfoKey) }}
+    </VAlert>
+    <VForm ref="formRef" @submit.prevent="onSubmit">
+      <template v-for="(row, ri) in rows" :key="ri">
+        <div v-if="row.length > 1" class="pwa-form-row mb-3">
+          <div v-for="f in row" :key="f.key" class="pwa-form-row-item pwa-form-col" :style="rowItemStyle(f)">
+            <component
+              :is="componentFor(f.type)"
+              :ref="(el: unknown) => setFieldEl(f.key, el)"
+              v-bind="fieldAttrs(f)"
+            >
+              <template v-if="f.icon" #prepend-inner>
+                <button
+                  v-if="f.icon === 'at'"
+                  type="button"
+                  class="pwa-email-at-btn"
+                  :aria-label="t('app.identity.form.emailInsertAt')"
+                  @mousedown.prevent="insertAtSign(f)"
+                >
+                  <AppIcon name="at" class="pwa-form-field-icon" />
+                </button>
+                <AppIcon v-else :name="f.icon" class="pwa-form-field-icon" />
+              </template>
+              <template v-if="f.avatarEntityType" #item="{ internalItem: item, props: itemProps }">
+                <VListItem v-if="item.value" v-bind="itemProps" :title="item.title">
+                  <template #prepend>
+                    <AppAvatar :name="item.title" :entity-type="f.avatarEntityType" :size="28" />
+                  </template>
+                </VListItem>
+              </template>
+              <template v-if="f.avatarEntityType" #chip="{ internalItem: item, props: chipProps }">
+                <VChip v-if="item.value" v-bind="chipProps" :text="resolvedChipTitle(f, item)" closable>
+                  <template #prepend>
+                    <AppSpinner v-if="chipIsLoading(f)" :size="14" :width="2" class="mr-1" />
+                    <AppAvatar v-else :name="resolvedChipTitle(f, item)" :entity-type="f.avatarEntityType" :size="18" class="mr-1" />
+                  </template>
+                </VChip>
+              </template>
+              <template v-if="hasColorOptions(f)" #item="{ internalItem: item, props: itemProps }">
+                <VListItem v-bind="itemProps" :title="undefined">
+                  <VChip :color="chipColor(item.raw.color)" variant="tonal" size="small">{{ item.title }}</VChip>
+                </VListItem>
+              </template>
+              <template v-if="hasColorOptions(f)" #chip="{ internalItem: item, props: chipProps }">
+                <VChip v-bind="chipProps" :color="chipColor(item.raw.color)" variant="tonal" size="small">
+                  {{ item.title }}
+                </VChip>
+              </template>
+            </component>
+          </div>
+        </div>
+        <div v-else class="mb-3">
+          <component
+            :is="componentFor(row[0].type)"
+            :ref="(el: unknown) => setFieldEl(row[0].key, el)"
+            v-bind="fieldAttrs(row[0])"
+          >
+            <template v-if="row[0].icon" #prepend-inner>
+              <button
+                v-if="row[0].icon === 'at'"
+                type="button"
+                class="pwa-email-at-btn"
+                :aria-label="t('app.identity.form.emailInsertAt')"
+                @mousedown.prevent="insertAtSign(row[0])"
+              >
+                <AppIcon name="at" class="pwa-form-field-icon" />
+              </button>
+              <AppIcon v-else :name="row[0].icon" class="pwa-form-field-icon" />
+            </template>
+            <template v-if="row[0].avatarEntityType" #item="{ internalItem: item, props: itemProps }">
+              <VListItem v-if="item.value" v-bind="itemProps" :title="item.title">
+                <template #prepend>
+                  <AppAvatar :name="item.title" :entity-type="row[0].avatarEntityType" :size="28" />
+                </template>
+              </VListItem>
+            </template>
+            <template v-if="row[0].avatarEntityType" #chip="{ internalItem: item, props: chipProps }">
+              <VChip v-if="item.value" v-bind="chipProps" :text="resolvedChipTitle(row[0], item)" closable>
+                <template #prepend>
+                  <AppSpinner v-if="chipIsLoading(row[0])" :size="14" :width="2" class="mr-1" />
+                  <AppAvatar v-else :name="resolvedChipTitle(row[0], item)" :entity-type="row[0].avatarEntityType" :size="18" class="mr-1" />
+                </template>
+              </VChip>
+            </template>
+            <template v-if="hasColorOptions(row[0])" #item="{ internalItem: item, props: itemProps }">
+              <VListItem v-bind="itemProps" :title="undefined">
+                <VChip :color="chipColor(item.raw.color)" variant="tonal" size="small">{{ item.title }}</VChip>
+              </VListItem>
+            </template>
+            <template v-if="hasColorOptions(row[0])" #chip="{ internalItem: item, props: chipProps }">
+              <VChip v-bind="chipProps" :color="chipColor(item.raw.color)" variant="tonal" size="small">
+                {{ item.title }}
+              </VChip>
+            </template>
+          </component>
+        </div>
+      </template>
+    </VForm>
+
+    <template #actions>
+      <VSpacer />
+      <AppButton variant="text" @click="onCancelClick">
+        {{ t("app.common.cancel") }}
+      </AppButton>
+      <AppButton color="primary" :loading="submitting" @click="onSubmit">
+        {{ formSubmitLabel }}
+      </AppButton>
+    </template>
+
+    <template #overlays>
+      <AppConfirmDialog
+        v-model="showDiscardConfirm"
+        :text="t('app.common.discardChanges')"
+        :secondary-label="t('app.common.cancel')"
+        :secondary-color="null"
+        :primary-label="t('app.common.discard')"
+        primary-color="error"
+        primary-variant="text"
+        max-width="360"
+        @secondary="showDiscardConfirm = false"
+        @primary="confirmDiscard"
+      />
+    </template>
+  </AppFormDialog>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { VTextField, VSelect, VAutocomplete, VCombobox, VTextarea, VSwitch } from "vuetify/components";
-import { originDialogTransition } from "@ui";
 import { useFormRenderer } from "../composables/useFormRenderer";
 import { scrollToFormTop } from "../utils/scrollToFormTop";
 import AppButton from "./AppButton.vue";
 import AppIcon from "./AppIcon.vue";
 import AppAvatar, { type AppAvatarEntityType } from "./AppAvatar.vue";
 import AppSpinner from "./AppSpinner.vue";
-import AppDialogHeader from "./AppDialogHeader.vue";
+import AppFormDialog from "./AppFormDialog.vue";
+import AppConfirmDialog from "./AppConfirmDialog.vue";
 import PhoneField from "./PhoneField.vue";
 import EmailField from "./EmailField.vue";
 import type { FormFieldDef, FormFieldType } from "../types/formField";
