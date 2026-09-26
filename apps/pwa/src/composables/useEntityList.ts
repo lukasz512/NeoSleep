@@ -7,6 +7,25 @@ import { apiFetch } from "./useApi";
 import { useFilters, type FilterDefinition } from "./useFilters";
 import { CACHEABLE_ENTITIES, type CacheableEntity } from "../utils/offlineCache";
 import { useEntityCacheStore } from "../stores/entityCache";
+import { useAuthStore } from "../stores/auth";
+import { useRolePreviewStore } from "../stores/rolePreview";
+
+/**
+ * NEO-97: the last page each list showed, kept in memory only — never
+ * persisted, so unlike the ADR-013 offline cache it also applies to `patient`,
+ * and a reload clears it. Coming back from a record, the list renders it at
+ * once (no skeleton) and refreshes quietly, so Back is instant and the
+ * record's avatar + name can fly back into their row. The key includes who is
+ * looking (user + role preview), so another sign-in in the same tab never
+ * sees it.
+ */
+type ListSnapshot = { key: string; items: Record<string, unknown>[]; total: number; mobileHasMore: boolean };
+const lastShown = new Map<string, ListSnapshot>();
+
+/** Test hook: forget every list's last page. */
+export function clearListSnapshots(): void {
+  lastShown.clear();
+}
 
 export interface EntityListOptions {
   viewId: string;
@@ -187,8 +206,15 @@ export function useEntityList(opts: EntityListOptions) {
     return params;
   }
 
-  async function loadData() {
-    loading.value = true;
+  const authStore = useAuthStore();
+  const rolePreview = useRolePreviewStore();
+  function snapshotKey(params: URLSearchParams): string {
+    return `${authStore.user?.id ?? ""}|${rolePreview.previewRole ?? ""}|${params.toString()}`;
+  }
+
+  /** `quiet`: refresh rows already on screen (from the last-shown snapshot) without dimming them. */
+  async function loadData({ quiet = false }: { quiet?: boolean } = {}) {
+    if (!quiet) loading.value = true;
     loadError.value = "";
     loadFailure.value = null;
     const o = tableOptions.value;
@@ -209,7 +235,9 @@ export function useEntityList(opts: EntityListOptions) {
           mobileHasMore.value = data.items.length < data.total;
         }
         if (cacheStore) void cacheStore.cacheList(data.items);
+        lastShown.set(opts.viewId, { key: snapshotKey(params), items: data.items, total: data.total, mobileHasMore: data.items.length < data.total });
       } else {
+        lastShown.delete(opts.viewId);
         // Already logged + reported by apiFetch's onError — only keep it for the error state.
         items.value = [];
         total.value = 0;
@@ -225,6 +253,7 @@ export function useEntityList(opts: EntityListOptions) {
       // fall back to cached data — ADR-013. A bad response body or a bug is not
       // "offline": show the real error instead of stale data. (Offline is still
       // logged — as a warning — so a CORS/API-down case is visible in DevTools.)
+      lastShown.delete(opts.viewId);
       const offline = isOfflineError(err);
       reportCaught(err, { where: `useEntityList.load:${opts.viewId}` });
       const cached = offline && cacheStore && isFreshLoad ? await cacheStore.readList() : [];
@@ -279,8 +308,23 @@ export function useEntityList(opts: EntityListOptions) {
 
   const onRefresh = () => loadData();
 
+  // Restored during setup, before the first render, so the list never shows
+  // its skeleton (whose swap to the table would wait on animation frames the
+  // browser pauses during a page transition).
+  const snapshot = lastShown.get(opts.viewId);
+  const restored = !!snapshot && snapshot.key === snapshotKey(buildParams(tableOptions.value.page));
+  if (snapshot && restored) {
+    items.value = snapshot.items;
+    total.value = snapshot.total;
+    mobileItems.value = snapshot.items;
+    mobilePage.value = 1;
+    mobileHasMore.value = snapshot.mobileHasMore;
+    loading.value = false;
+    hasCompletedInitialLoad.value = true;
+  }
+
   onMounted(() => {
-    loadData();
+    void loadData({ quiet: restored });
     window.addEventListener("entity-list-refresh", onRefresh);
   });
   onUnmounted(() => {
