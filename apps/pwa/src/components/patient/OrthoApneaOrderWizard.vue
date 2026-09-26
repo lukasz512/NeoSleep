@@ -369,7 +369,7 @@
       <AppButton v-if="step < 4" icon size="x-large" variant="text" color="primary" :disabled="!canAdvance" :aria-label="t('app.orthoApneaOrder.actions.next')" @click="goNext">
         <AppIcon name="arrow-right" class="oa-wizard__nav-arrow" />
       </AppButton>
-      <AppButton v-else color="primary" :loading="submitLoading" :disabled="form.products.length === 0" @click="onConfirm">
+      <AppButton v-else color="primary" variant="flat" :loading="submitLoading" :disabled="form.products.length === 0" @click="onConfirm">
         {{ t("app.orthoApneaOrder.actions.confirm") }}
       </AppButton>
     </template>

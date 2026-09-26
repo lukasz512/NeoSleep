@@ -4,9 +4,9 @@
     :max-width="maxWidth"
     :persistent="persistent"
     scrollable
-    class="pwa-form-dialog"
+    :class="['pwa-form-dialog', { 'pwa-form-dialog--sheet': asSheet }]"
     content-class="pwa-form-dialog__content"
-    :transition="originDialogTransition"
+    :transition="asSheet ? sheetDialogTransition : originDialogTransition"
     @update:model-value="(v: boolean) => emit('update:modelValue', v)"
   >
     <VCard class="pwa-form-dialog__card" data-testid="app-form-dialog">
@@ -59,13 +59,17 @@
  * Guarded by AppFormDialog.spec.ts (no raw VDialog outside the shells) and
  * e2e/dialog-scroll.spec.ts (real-browser scrolling, all engines).
  *
+ * On phone widths it is a bottom sheet (sheetDialogTransition, theme.scss
+ * `.pwa-form-dialog--sheet`); elsewhere it grows from the tapped element.
+ *
  * The body also exposes whether it is scrolled / has more below, which draws
  * M3's hairline dividers under the header and above the actions only while
  * content actually runs behind them.
  */
 import { onBeforeUnmount, ref, watch } from "vue";
+import { useDisplay } from "vuetify";
 import { VCardText } from "vuetify/components";
-import { originDialogTransition } from "@ui";
+import { originDialogTransition, sheetDialogTransition } from "@ui";
 import AppDialogHeader from "./AppDialogHeader.vue";
 import type { AppAvatarEntityType } from "./AppAvatar.vue";
 
@@ -95,6 +99,10 @@ const emit = defineEmits<{
   /** The header's X — callers decide (e.g. ask to discard unsaved changes). */
   close: [];
 }>();
+
+// Phones (< 600px, Vuetify xs): an M3 bottom sheet sliding up from the screen
+// edge, within thumb reach, instead of a centred card (NEO-85).
+const { xs: asSheet } = useDisplay();
 
 const bodyRef = ref<InstanceType<typeof VCardText> | null>(null);
 const innerRef = ref<HTMLElement | null>(null);

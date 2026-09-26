@@ -232,7 +232,7 @@
       <template #actions>
         <VSpacer />
         <AppButton variant="text" @click="cancelEditDialog">{{ t('user.partnerRegistration.form.editModal.cancel') }}</AppButton>
-        <AppButton color="primary" @click="saveEditDialog">{{ t('user.partnerRegistration.form.editModal.save') }}</AppButton>
+        <AppButton color="primary" variant="flat" @click="saveEditDialog">{{ t('user.partnerRegistration.form.editModal.save') }}</AppButton>
       </template>
     </AppFormDialog>
 

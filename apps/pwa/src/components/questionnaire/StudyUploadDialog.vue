@@ -54,7 +54,7 @@
     <template #actions>
       <VSpacer />
       <AppButton variant="text" @click="emit('update:modelValue', false)">{{ t("app.common.cancel") }}</AppButton>
-      <AppButton color="primary" type="submit" form="study-upload-form" :loading="saving">{{ t("app.clinical.save") }}</AppButton>
+      <AppButton color="primary" variant="flat" type="submit" form="study-upload-form" :loading="saving">{{ t("app.clinical.save") }}</AppButton>
     </template>
   </AppFormDialog>
 </template>

@@ -79,8 +79,20 @@ describe("AppLayout", () => {
         path.resolve(__dirname, "../../../../packages/ui/src/components/AppShell.vue"),
         "utf-8",
       );
-      const barBlock = appShellSource.match(/<VAppBar\b[\s\S]*?>/)?.[0] ?? "";
-      expect(barBlock).toMatch(/color="surface-container-low"/);
+      // NEO-85: a CSS variable instead of a Vuetify `color` prop, so the app can
+      // tint it from the tenant's runtime primary (AppLayout sets it to the desk).
+      expect(appShellSource).toMatch(
+        /\.app-shell__bar,\s*\.app-shell__nav\s*{[^}]*background:\s*var\(--app-shell-chrome-fill\)/,
+      );
+      expect(appShellSource).toMatch(/--app-shell-chrome-fill:\s*var\(--app-shell-chrome, rgb\(var\(--v-theme-surface-container-low\)\)\)/);
+      const layoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
+      expect(layoutSource).toMatch(/--app-shell-chrome:\s*var\(--pwa-desk\)/);
+    });
+
+    it("routed content is a paper sheet on the desk (NEO-85 record stack)", () => {
+      const layoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
+      expect(layoutSource).toMatch(/<AppShell[\s\S]*?\bsheet\b[\s\S]*?>/);
+      expect(layoutSource).toMatch(/\.layout-main__inner\s*{[^}]*background:\s*var\(--pwa-sheet\)[^}]*box-shadow:\s*var\(--pwa-sheet-shadow\)/);
     });
   });
 

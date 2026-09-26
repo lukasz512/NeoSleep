@@ -122,7 +122,7 @@
       <AppButton variant="text" @click="onCancelClick">
         {{ t("app.common.cancel") }}
       </AppButton>
-      <AppButton color="primary" :loading="submitting" @click="onSubmit">
+      <AppButton color="primary" variant="flat" :loading="submitting" @click="onSubmit">
         {{ formSubmitLabel }}
       </AppButton>
     </template>

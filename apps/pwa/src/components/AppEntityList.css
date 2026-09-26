@@ -264,6 +264,96 @@
   color: var(--pwa-table-border);
 }
 
+/* ── Phone toolbar (NEO-85) ──────────────────────────────────────────────
+   One row, never wrapping: [search] [filter] [add], right-aligned.
+   - at rest the search is just its icon (a 48px circle, like its neighbours);
+   - focused, it grows over the whole row and the other tools step aside
+     (fade + shrink, their width collapsing so the field can slide into it);
+   - blurred with a query, it stays open on the left as a quiet tinted pill
+     showing the query (with its own clear button), tools back on the right.
+   The field is always the real input, so a tap anywhere on it focuses it. */
+/* (The clear-all wrap is a tool too, but keeps its own width rules above.) */
+.app-entity-list__tool:not(.app-entity-list__clear-filters-wrap) {
+  display: flex;
+  flex: 0 0 auto;
+  max-width: 64px;
+  transition:
+    max-width var(--pwa-fib-t-2xl, 377ms) var(--pwa-ease-emphasized-decel, cubic-bezier(0.05, 0.7, 0.1, 1)),
+    margin-left var(--pwa-fib-t-2xl, 377ms) var(--pwa-ease-emphasized-decel, cubic-bezier(0.05, 0.7, 0.1, 1)),
+    opacity var(--pwa-fib-t-lg, 144ms) ease,
+    transform var(--pwa-fib-t-xl, 233ms) var(--pwa-ease-emphasized-decel, cubic-bezier(0.05, 0.7, 0.1, 1));
+}
+
+.app-entity-list__toolbar--mobile {
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+}
+.app-entity-list__toolbar--mobile .app-entity-list__search-group {
+  flex: 1 1 auto;
+  justify-content: flex-end;
+  margin-left: 0;
+}
+.app-entity-list__toolbar--mobile .app-entity-list__search {
+  flex: 0 0 48px;
+  transition:
+    flex-basis var(--pwa-fib-t-2xl, 377ms) var(--pwa-ease-emphasized-decel, cubic-bezier(0.05, 0.7, 0.1, 1)),
+    flex-grow var(--pwa-fib-t-2xl, 377ms) var(--pwa-ease-emphasized-decel, cubic-bezier(0.05, 0.7, 0.1, 1));
+}
+.app-entity-list__toolbar--mobile .app-entity-list__search :deep(.v-input__control) {
+  min-width: 0;
+}
+.app-entity-list__toolbar--mobile .app-entity-list__search :deep(.v-field) {
+  transition: background-color var(--pwa-fib-t-xl, 233ms) ease;
+}
+.app-entity-list__toolbar--mobile .app-entity-list__search :deep(.v-field__outline) {
+  transition: opacity var(--pwa-fib-t-xl, 233ms) ease;
+}
+
+/* At rest, empty: only the icon, no outline, nothing to read. */
+.app-entity-list__toolbar--mobile:not(.app-entity-list__toolbar--search-open):not(.app-entity-list__toolbar--has-query)
+  .app-entity-list__search
+  :deep(.v-field) {
+  cursor: pointer;
+  padding-inline-start: 14px;
+}
+.app-entity-list__toolbar--mobile:not(.app-entity-list__toolbar--search-open)
+  .app-entity-list__search
+  :deep(.v-field__outline) {
+  opacity: 0;
+}
+.app-entity-list__toolbar--mobile:not(.app-entity-list__toolbar--search-open):not(.app-entity-list__toolbar--has-query)
+  .app-entity-list__search
+  :deep(input) {
+  opacity: 0;
+}
+
+/* Open, or holding a query: the field takes the row. */
+.app-entity-list__toolbar--search-open .app-entity-list__search,
+.app-entity-list__toolbar--has-query .app-entity-list__search {
+  flex: 1 1 0%;
+}
+/* Blurred with a query: a soft brand-tinted pill with the query text. */
+.app-entity-list__toolbar--has-query:not(.app-entity-list__toolbar--search-open) .app-entity-list__search :deep(.v-field) {
+  background: color-mix(in srgb, var(--pwa-primary) 8%, transparent);
+}
+
+/* Open: the other tools step aside, and the row gap before each goes with it
+   (a 0-wide flex item still keeps its gap). */
+.app-entity-list__toolbar--search-open .app-entity-list__tool {
+  max-width: 0;
+  margin-left: calc(-1 * var(--pwa-fib-sm, 8px));
+  opacity: 0;
+  transform: scale(0.6);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-entity-list__tool,
+  .app-entity-list__toolbar--mobile .app-entity-list__search {
+    transition: none;
+  }
+}
+
 .app-entity-list__empty-wrap,
 .app-entity-list__error-wrap {
   flex: 1 1 auto;
@@ -289,14 +379,11 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  /* NEO-57 "clinical card": no outer border and no background of its own —
-     the list sits directly on whatever surface the view gives it, and every
-     row is its own rounded card (below), separated by gaps, not rules. */
+  /* NEO-85 "record stack": the list is written on the content sheet itself —
+     no box or background of its own; rows are ruled lines on that paper. */
   background: transparent;
 }
 
-/* The table itself is transparent too so the view's surface shows through
-   the gaps between rows; rows are separated by border-spacing, not dividers. */
 .app-entity-list__table-wrap :deep(.v-table) {
   background: transparent;
   --v-table-header-height: 40px;
@@ -305,61 +392,39 @@
 
 .app-entity-list__table-wrap :deep(.v-table > .v-table__wrapper > table) {
   border-collapse: separate;
-  border-spacing: 0 var(--pwa-list-row-gap);
+  border-spacing: 0;
 }
 
-/* Header: small uppercase labels floating above the rows — no tonal band,
-   no rule underneath. */
+/* Header: small uppercase labels in the brand colour on a stronger rule, like
+   the printed header row of a record form. */
 .app-entity-list__table-wrap :deep(.v-table > .v-table__wrapper > table > thead > tr > th) {
   background: transparent;
   border-bottom: 0;
+  box-shadow: inset 0 -1.5px 0 var(--pwa-rule-strong);
   font-size: 0.65625rem;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  color: var(--pwa-primary);
   vertical-align: bottom;
-  padding-bottom: 2px;
+  padding-bottom: 10px;
 }
 
-/* Each row is one card: the cells share the surface color, the outline is
-   drawn with inset shadows (top/bottom on every cell, plus the outer side on
-   the first/last cell) because table cells can't carry a single border
-   around the whole row. */
+/* Rows: one ruled hairline under each, in a tint of the brand colour. */
 .app-entity-list__table-wrap :deep(.v-table > .v-table__wrapper > table > tbody > tr > td) {
-  background: var(--pwa-list-row-bg);
+  background: transparent;
   border-bottom: 0;
-  box-shadow:
-    inset 0 1px var(--pwa-list-row-outline),
-    inset 0 -1px var(--pwa-list-row-outline);
+  box-shadow: inset 0 -1px 0 var(--pwa-rule);
 }
 
-.app-entity-list__table-wrap :deep(.v-table > .v-table__wrapper > table > tbody > tr > td:first-child) {
-  border-radius: var(--pwa-list-row-radius) 0 0 var(--pwa-list-row-radius);
-  box-shadow:
-    inset 1px 0 var(--pwa-list-row-outline),
-    inset 0 1px var(--pwa-list-row-outline),
-    inset 0 -1px var(--pwa-list-row-outline);
-}
-
-.app-entity-list__table-wrap :deep(.v-table > .v-table__wrapper > table > tbody > tr > td:last-child) {
-  border-radius: 0 var(--pwa-list-row-radius) var(--pwa-list-row-radius) 0;
-  box-shadow:
-    inset -1px 0 var(--pwa-list-row-outline),
-    inset 0 1px var(--pwa-list-row-outline),
-    inset 0 -1px var(--pwa-list-row-outline);
-}
-
-.app-entity-list__table-wrap :deep(.v-table > .v-table__wrapper > table > tbody > tr > td:only-child) {
-  border-radius: var(--pwa-list-row-radius);
-  box-shadow: inset 0 0 0 1px var(--pwa-list-row-outline);
-}
-
-/* Vuetify's hover layer is a ::after on each cell — tint it with the brand
-   hover token and round it with the cell so the corners stay clean. */
+/* Vuetify's hover layer is a ::after on each cell: a faint brand tint on
+   hover, a stronger one while pressed (touch feedback on tablets). */
 .app-entity-list__table-wrap :deep(.v-table.v-table--hover > .v-table__wrapper > table > tbody > tr:hover > td::after) {
-  background: var(--pwa-table-row-hover);
-  border-radius: inherit;
+  background: var(--pwa-row-hover);
+}
+.app-entity-list__table-wrap :deep(.v-table.v-table--hover > .v-table__wrapper > table > tbody > tr:active > td::after) {
+  background: color-mix(in srgb, var(--pwa-primary) 10%, transparent);
+  opacity: 1;
 }
 
 /* With floating rows there is nothing for a rows→footer divider to separate;
@@ -425,7 +490,7 @@
 }
 
 .app-entity-list__table-wrap :deep(.v-data-table tbody tr) {
-  animation: app-entity-list-row-in var(--pwa-fib-t-2xl, 377ms) var(--pwa-ease-out-smooth, cubic-bezier(0.22, 1, 0.36, 1)) both;
+  animation: app-entity-list-row-in var(--pwa-fib-t-2xl, 377ms) var(--pwa-ease-emphasized-decel, cubic-bezier(0.05, 0.7, 0.1, 1)) both;
   animation-delay: calc(var(--row-i, 0) * 35ms);
 }
 
@@ -457,7 +522,6 @@
 .app-entity-list__skeleton {
   display: flex;
   flex-direction: column;
-  gap: var(--pwa-list-row-gap);
   padding-top: 40px;
 }
 
@@ -471,9 +535,7 @@
   gap: 12px;
   height: 64px;
   padding: 0 16px;
-  border-radius: var(--pwa-list-row-radius);
-  background: var(--pwa-list-row-bg);
-  box-shadow: inset 0 0 0 1px var(--pwa-list-row-outline);
+  box-shadow: inset 0 -1px 0 var(--pwa-rule);
   animation: app-entity-list-skeleton-breathe 1.6s ease-in-out infinite;
   animation-delay: calc(var(--row-i, 0) * 90ms);
 }
@@ -547,16 +609,17 @@
   content: "";
   position: absolute;
   inset: 0;
-  background-color: rgb(var(--v-theme-on-surface));
+  background-color: var(--pwa-primary);
   opacity: 0;
   transition: opacity 0.2s ease;
   pointer-events: none;
 }
 .app-entity-list__card--clickable:hover::after {
-  opacity: 0.04;
+  opacity: 0.05;
 }
 .app-entity-list__card--clickable:active::after {
-  opacity: 0.08;
+  opacity: 0.1;
+  transition-duration: 0.08s;
 }
 
 .app-entity-list__no-results-placeholder {
@@ -622,20 +685,14 @@
    rounder shape for the feed's list-item cards specifically. */
 .app-entity-list__card {
   position: relative;
-  margin-bottom: var(--pwa-list-row-gap);
-  /* NEO-57: same "clinical card" recipe as a desktop table row (theme.scss
-     --pwa-list-*) — surface color, hairline teal-tinted outline, no shadow —
-     so a patient looks like the same object on phone and desktop. */
-  border-radius: var(--pwa-list-row-radius);
-  border: 1px solid var(--pwa-list-row-outline);
-  background: var(--pwa-list-row-bg);
-  box-shadow: none;
+  /* NEO-85: the same ruled line as a desktop table row, so a patient looks
+     like the same entry on phone and desktop. */
+  border-radius: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: inset 0 -1px 0 var(--pwa-rule);
   overflow: hidden;
   transition: opacity 0.2s ease, background-color 0.2s ease;
-}
-
-.app-entity-list__card:last-of-type {
-  margin-bottom: 0;
 }
 
 .app-entity-list__card--disabled {

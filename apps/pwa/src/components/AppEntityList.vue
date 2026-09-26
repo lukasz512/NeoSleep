@@ -9,8 +9,12 @@
         {
           'app-entity-list__toolbar--hidden': mobile && toolbarHiddenByScroll,
           'app-entity-list__toolbar--in-header': !pageHeader.disabled.value,
+          'app-entity-list__toolbar--mobile': mobile,
+          'app-entity-list__toolbar--search-open': mobile && searchFocused,
+          'app-entity-list__toolbar--has-query': mobile && !!searchQuery.trim(),
         },
       ]"
+      data-testid="entity-list-toolbar"
     >
       <div class="app-entity-list__search-group">
         <VTextField
@@ -18,6 +22,8 @@
           v-model="searchQuery"
           type="search"
           class="app-entity-list__search"
+          data-testid="entity-list-search"
+          @update:focused="(f: boolean) => (searchFocused = f)"
           :placeholder="t(i18n.searchPlaceholder)"
           :aria-label="t(i18n.searchPlaceholder)"
           autocomplete="off"
@@ -45,6 +51,7 @@
                     :tabindex="searchQuery.trim() ? 0 : -1"
                     class="app-entity-list__search-clear"
                     :aria-label="t(i18n.filtersClear)"
+                    @mousedown.prevent
                     @click="onSearchClearClick"
                   >
                     <AppIcon name="close" class="app-entity-list__icon" />
@@ -55,16 +62,26 @@
             </div>
           </template>
         </VTextField>
-        <AppFilterBar
-          :model-value="filterState"
-          :definitions="props.filterDefinitions"
-          :title-key="i18n.filtersTitle"
-          :clear-key="i18n.filtersClear"
-          :active-filter-count="activeFilterCount"
-          @update:model-value="onFilterStateUpdate"
-          @clear="onFiltersClear"
-        />
-        <div :class="['app-entity-list__clear-filters-wrap', { 'app-entity-list__clear-filters-wrap--hidden': !hasActiveFiltersOrSearch }]">
+        <div class="app-entity-list__tool" data-testid="entity-list-filter">
+          <AppFilterBar
+            :model-value="filterState"
+            :definitions="props.filterDefinitions"
+            :title-key="i18n.filtersTitle"
+            :clear-key="i18n.filtersClear"
+            :active-filter-count="activeFilterCount"
+            @update:model-value="onFilterStateUpdate"
+            @clear="onFiltersClear"
+          />
+        </div>
+        <!-- On a phone the search pill carries its own clear button, so the
+             red clear-all only appears there for active filters. -->
+        <div
+          :class="[
+            'app-entity-list__tool',
+            'app-entity-list__clear-filters-wrap',
+            { 'app-entity-list__clear-filters-wrap--hidden': mobile ? activeFilterCount === 0 : !hasActiveFiltersOrSearch },
+          ]"
+        >
           <VTooltip :disabled="!hasActiveFiltersOrSearch" location="bottom">
             <template #activator="{ props: tooltipProps }">
               <AppButton
@@ -86,22 +103,24 @@
           </VTooltip>
         </div>
       </div>
-      <VTooltip v-if="showAddButton" location="bottom">
-        <template #activator="{ props: tooltipProps }">
-          <AppButton
-            v-bind="tooltipProps"
-            icon
-            variant="flat"
-            size="large"
-            class="app-entity-list__add app-entity-list__add--no-border"
-            :aria-label="t(i18n.add)"
-            @click="$emit('add')"
-          >
-            <AppIcon name="plus" class="app-entity-list__icon" />
-          </AppButton>
-        </template>
-        <span>{{ t(i18n.add) }}</span>
-      </VTooltip>
+      <div v-if="showAddButton" class="app-entity-list__tool" data-testid="entity-list-add">
+        <VTooltip location="bottom">
+          <template #activator="{ props: tooltipProps }">
+            <AppButton
+              v-bind="tooltipProps"
+              icon
+              variant="flat"
+              size="large"
+              class="app-entity-list__add app-entity-list__add--no-border"
+              :aria-label="t(i18n.add)"
+              @click="$emit('add')"
+            >
+              <AppIcon name="plus" class="app-entity-list__icon" />
+            </AppButton>
+          </template>
+          <span>{{ t(i18n.add) }}</span>
+        </VTooltip>
+      </div>
     </div>
     </Teleport>
 
@@ -409,6 +428,10 @@ function onFeedScroll(e: Event) {
 }
 
 const searchFieldRef = ref<{ focus: () => void } | null>(null);
+/* Phone toolbar (NEO-85): three icons at rest; focusing search grows it over
+   the whole row while filter/add step aside, and blurring brings them back
+   (a non-empty query then stays on the left as a quiet pill). */
+const searchFocused = ref(false);
 function onSearchClearClick() {
   onSearchClear();
   searchFieldRef.value?.focus();
