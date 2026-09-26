@@ -9,6 +9,7 @@ import { CACHEABLE_ENTITIES, type CacheableEntity } from "../utils/offlineCache"
 import { useEntityCacheStore } from "../stores/entityCache";
 import { useAuthStore } from "../stores/auth";
 import { useRolePreviewStore } from "../stores/rolePreview";
+import { recordPreviewFromItem, rememberRecordPreview } from "./useRecordPreview";
 
 /**
  * NEO-97: the last page each list showed, kept in memory only — never
@@ -163,6 +164,9 @@ export function useEntityList(opts: EntityListOptions) {
   function navigateToDetail(item: Record<string, unknown>) {
     const id = item[opts.detailRouteParam ?? "id"];
     if (id && opts.detailRouteName) {
+      // NEO-114: the record header shows this row's name + avatar at once.
+      const preview = recordPreviewFromItem(opts.viewId, item);
+      if (preview) rememberRecordPreview(opts.detailRouteName, String(id), preview);
       router.push({
         name: opts.detailRouteName,
         params: { [opts.detailRouteParam ?? "id"]: String(id) },
