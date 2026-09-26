@@ -462,12 +462,16 @@ async function submitQuestionnaire() {
   color: rgba(var(--v-theme-on-surface), 0.72);
 }
 
-/* A small, soft "done" moment: the check pops in with a fading ring behind it. */
+/* A small, soft "done" moment: the check pops in with a fading ring behind it.
+   The ring lives on the round badge, not the <svg>: Safari ignores border-radius
+   on an SVG root, so a box-shadow there rendered as a square. */
 @media (prefers-reduced-motion: no-preference) {
   .patient-questionnaire__done-icon--burst {
-    border-radius: 50%;
-    animation: pq-check-pop 560ms var(--pwa-ease-out-smooth, cubic-bezier(0.22, 1, 0.36, 1)) both,
-      pq-check-ring 900ms ease-out 180ms both;
+    animation: pq-check-pop 560ms var(--pwa-ease-out-smooth, cubic-bezier(0.22, 1, 0.36, 1)) both;
+  }
+
+  .patient-questionnaire__done-badge {
+    animation: pq-check-ring 900ms ease-out 180ms both;
   }
 }
 @keyframes pq-check-pop {
