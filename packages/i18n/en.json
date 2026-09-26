@@ -1062,7 +1062,6 @@
   "app.clinical.qrStatus.retry": "Retry",
   "app.clinical.qrStatus.newQr": "New QR",
   "app.clinical.qrStatus.expired": "Link expired {time}",
-  "app.clinical.qrStatus.details": "Link details",
   "app.clinical.qrStatus.cancelConfirm": "Cancel the link? The patient won't be able to open it any more.",
   "app.clinical.qrStatus.keep": "No, keep it",
   "app.clinical.qrStatus.cancelYes": "Yes, cancel",

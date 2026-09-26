@@ -5,6 +5,8 @@
       class="qr-status__main"
       :aria-label="ariaLabel"
       :aria-busy="state === 'creating'"
+      :aria-haspopup="live ? 'dialog' : undefined"
+      :aria-expanded="live ? menuOpen : undefined"
       :disabled="state === 'creating' || state === 'done'"
       @click="onMain"
     >
@@ -18,13 +20,19 @@
         </Transition>
         <span v-if="subtitle" class="qr-status__subtitle">{{ subtitle }}</span>
       </span>
+      <AppIcon v-if="live" name="chevron-down" class="qr-status__chevron" :class="{ 'qr-status__chevron--open': menuOpen }" />
     </button>
-    <VMenu v-if="live && request" v-model="menuOpen" location="bottom end" :close-on-content-click="false" offset="8">
-      <template #activator="{ props: menuProps }">
-        <button type="button" class="qr-status__more" v-bind="menuProps" :aria-label="t('app.clinical.qrStatus.details')">
-          <AppIcon name="dots-vertical" />
-        </button>
-      </template>
+    <!-- While the link is live the whole button opens the details (Łukasz, 2026-09-26, option B):
+         a new QR kills the link the patient may be filling, so it's a deliberate second tap. -->
+    <VMenu
+      v-if="live && request"
+      v-model="menuOpen"
+      activator="parent"
+      :open-on-click="false"
+      location="bottom end"
+      :close-on-content-click="false"
+      offset="8"
+    >
       <div class="qr-status__menu" role="dialog" :aria-label="t('app.clinical.pending.title')">
         <strong class="qr-status__menu-title">{{ t("app.clinical.pending.title") }} — {{ t("app.clinical.qr.progress", { done, total }) }}</strong>
         <ul class="qr-status__steps">
@@ -63,9 +71,9 @@ import type { PendingRequest } from "../../composables/usePatientChecklist";
  * creating → waiting "x of n · expires in hh:mm:ss" with the background
  * filling as steps come in → "All received" for a moment → hidden once the
  * patient has nothing left. A link that ran out unused turns it into "New
- * QR · link expired …"; a failed create into "Retry". The ⋯
- * segment holds the steps, "Show QR again" and "Cancel link" (confirmed
- * inline). Replaces the separate "Waiting for the patient" banner.
+ * QR · link expired …"; a failed create into "Retry". While the
+ * link is live, tapping the button opens its details: steps, "Show QR
+ * again" and "Cancel link" (confirmed inline). Replaces the separate "Waiting for the patient" banner.
  */
 const props = defineProps<{
   /** The patient's live link (the API keeps at most one). */
@@ -169,7 +177,7 @@ const fillWidth = computed(() => {
 });
 
 function onMain() {
-  if (state.value === "waiting") onShowAgain();
+  if (state.value === "waiting") menuOpen.value = !menuOpen.value;
   else if (isAction.value) emit("create");
 }
 /** A fresh link for what's left — the token of the old one is never stored, so it can't be re-shown. */
@@ -280,8 +288,7 @@ onBeforeUnmount(() => {
 .qr-status__main:disabled {
   cursor: default;
 }
-.qr-status__main:focus-visible,
-.qr-status__more:focus-visible {
+.qr-status__main:focus-visible {
   outline: 2px solid rgb(var(--v-theme-primary));
   outline-offset: -4px;
 }
@@ -355,26 +362,19 @@ onBeforeUnmount(() => {
   font-variant-numeric: tabular-nums;
 }
 
-.qr-status__more {
+/* Details open from the whole button while the link is live — the chevron says so. */
+.qr-status__chevron {
+  width: 18px;
+  height: 18px;
   flex: none;
-  display: grid;
-  place-items: center;
-  width: 40px;
-  color: inherit;
-  background: none;
-  border: 0;
-  border-left: 1.5px dashed rgb(var(--v-theme-warning));
-  cursor: pointer;
-  animation: qr-status-more-in 0.3s ease;
+  margin-left: 4px;
+  transition: transform 0.25s ease;
 }
-.qr-status__more:hover {
-  background: rgba(var(--v-theme-warning), 0.12);
+.qr-status__chevron--open {
+  transform: rotate(180deg);
 }
-@keyframes qr-status-more-in {
-  from {
-    width: 0;
-    opacity: 0;
-  }
+.qr-status--waiting .qr-status__main:hover {
+  background: rgba(var(--v-theme-warning), 0.08);
 }
 
 .qr-status__menu {
@@ -472,15 +472,12 @@ onBeforeUnmount(() => {
   .qr-status--waiting .qr-status__icon {
     display: none;
   }
-  .qr-status__more {
-    width: 36px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .qr-status,
   .qr-status__fill,
-  .qr-status__more {
+  .qr-status__chevron {
     animation: none !important;
     transition: none !important;
   }

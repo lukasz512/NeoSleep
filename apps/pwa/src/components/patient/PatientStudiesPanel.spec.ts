@@ -264,6 +264,25 @@ describe("PatientStudiesPanel — the Estudios checklist", () => {
     expect(wrapper.find(".studies__pending").exists()).toBe(false);
   });
 
+  it("tapping the button while the link is live opens its details, and only 'Show QR again' there issues a new link", async () => {
+    const wrapper = await mountPanel();
+    await button(wrapper, "QR for the patient")!.trigger("click");
+    await flushPromises();
+    const posts = () => apiFetch.mock.calls.filter(([path, i]) => String(path).endsWith("/questionnaire-requests") && (i as RequestInit)?.method === "POST").length;
+    expect(posts()).toBe(1);
+
+    await wrapper.find(".qr-status__main").trigger("click");
+    await flushPromises();
+    await vi.waitFor(() => expect(document.body.querySelector(".qr-status__menu")).not.toBeNull());
+    expect(posts()).toBe(1); // opening the details never kills the patient's link
+    expect(wrapper.find(".qr-status__main").attributes("aria-expanded")).toBe("true");
+
+    const showAgain = [...document.body.querySelectorAll(".qr-status__menu button")].find((b) => b.textContent?.includes("Show QR again")) as HTMLButtonElement;
+    showAgain.click();
+    await flushPromises();
+    expect(posts()).toBe(2);
+  });
+
   it("a link that ran out unused shows 'New QR · Link expired …', and pressing it creates a fresh link", async () => {
     checklistBody.expired_request = { id: "qr-0", items: ["informedConsent", "stopBang"], completed_items: [], expires_at: "2026-09-20T10:00:00Z" };
     const wrapper = await mountPanel();
