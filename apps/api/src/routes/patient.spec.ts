@@ -265,6 +265,21 @@ describe("patient self-fill: doctor → QR link → patient (public) → doctor"
     expect((await pending()).opened_at).toBe(firstOpen); // reopening keeps the first time
   });
 
+  it("the early 'opened' ping (text/plain token) stamps opened_at; a bad token also answers 204 and changes nothing (NEO-123)", async () => {
+    const { auth, patientId } = await authAndPatient();
+    const link = await request(app).post(`/api/v1/patient/${patientId}/questionnaire-requests`).set("Authorization", auth).send({ kind: "medical_history" });
+    const statusUrl = `/api/v1/patient/${patientId}/questionnaire-requests/${link.body.id}`;
+
+    const bogus = await request(app).post("/api/v1/public/questionnaire/opened").set("Content-Type", "text/plain").send("x".repeat(43));
+    expect(bogus.status).toBe(204);
+    expect((await request(app).get(statusUrl).set("Authorization", auth)).body.opened_at).toBeNull();
+
+    const token = String(link.body.url).split("/q#")[1]!;
+    const ping = await request(app).post("/api/v1/public/questionnaire/opened").set("Content-Type", "text/plain").send(token);
+    expect(ping.status).toBe(204);
+    expect((await request(app).get(statusUrl).set("Authorization", auth)).body.opened_at).toEqual(expect.any(String));
+  });
+
   it("GET one link's status: flips to opened after the patient's lookup; 404 for another patient's link, 403 for rep (NEO-117)", async () => {
     const { auth, patientId } = await authAndPatient();
     const link = await request(app).post(`/api/v1/patient/${patientId}/questionnaire-requests`).set("Authorization", auth).send({ kind: "medical_history" });

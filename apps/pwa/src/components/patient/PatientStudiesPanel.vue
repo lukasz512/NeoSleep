@@ -580,10 +580,15 @@ onBeforeUnmount(stopPolling);
 const FAST_CHECK_DELAY_MS = 5_000;
 const FAST_CHECK_MS = 2_000;
 const FAST_CHECK_MAX_MS = 5 * 60_000;
-let fastCheckTimer: ReturnType<typeof setTimeout> | null = null;
+// A steady rhythm (NEO-123): checks start every 2 s on the clock, not 2 s
+// after the previous answer came back — waiting for the answer first made
+// it ~2.7 s. A check still in flight is never doubled up.
+let fastCheckDelay: ReturnType<typeof setTimeout> | null = null;
+let fastCheckTimer: ReturnType<typeof setInterval> | null = null;
 function stopFastCheck() {
-  if (fastCheckTimer) clearTimeout(fastCheckTimer);
-  fastCheckTimer = null;
+  if (fastCheckDelay) clearTimeout(fastCheckDelay);
+  if (fastCheckTimer) clearInterval(fastCheckTimer);
+  fastCheckDelay = fastCheckTimer = null;
 }
 watch(
   () => (qrDialog.open ? qrDialog.requestId : null),
@@ -591,17 +596,22 @@ watch(
     stopFastCheck();
     if (!requestId) return;
     const stopAt = Date.now() + FAST_CHECK_MAX_MS;
+    let inFlight = false;
     const tick = async () => {
-      const status = await checklistApi.requestStatus(requestId);
+      if (Date.now() > stopAt) return stopFastCheck();
+      if (inFlight) return;
+      inFlight = true;
+      const status = await checklistApi.requestStatus(requestId).finally(() => (inFlight = false));
       if (!qrDialog.open || qrDialog.requestId !== requestId) return; // closed or replaced meanwhile
       if (status && (status.opened_at || status.completed_items.length > 0 || status.status !== "pending")) {
-        qrDialog.open = false;
+        qrDialog.open = false; // the watcher's next run stops the checks
         void checklistApi.load(); // the QR status button picks up the new state
-        return;
       }
-      if (Date.now() < stopAt) fastCheckTimer = setTimeout(tick, FAST_CHECK_MS);
     };
-    fastCheckTimer = setTimeout(tick, FAST_CHECK_DELAY_MS);
+    fastCheckDelay = setTimeout(() => {
+      fastCheckTimer = setInterval(tick, FAST_CHECK_MS);
+      void tick();
+    }, FAST_CHECK_DELAY_MS);
   }
 );
 onBeforeUnmount(stopFastCheck);

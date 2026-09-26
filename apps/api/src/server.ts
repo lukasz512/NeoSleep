@@ -127,6 +127,8 @@ app.use(
 // validated in commands/questionnaireRequest.ts) — its own larger parser,
 // mounted first; body-parser then skips the already-parsed body below.
 app.use("/api/v1/public/questionnaire/submit", express.json({ limit: "600kb" }));
+// The early "opened" ping sends its token as text/plain (no CORS preflight, NEO-123).
+app.use("/api/v1/public/questionnaire/opened", express.text({ type: "text/plain", limit: "1kb" }));
 app.use(express.json({ limit: "50kb" }));
 // Express 5 (body-parser 2) leaves req.body undefined when nothing was parsed — a
 // GET, a bodiless POST/DELETE, or a non-JSON content type. Express 4 always set {}.

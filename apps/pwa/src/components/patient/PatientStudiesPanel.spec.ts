@@ -52,9 +52,11 @@ const item = (key: string, group: string, status: string, over: Record<string, u
 
 let checklistBody: Record<string, unknown>;
 let failCreate = false;
+let statusDelayMs = 0;
 
 beforeEach(() => {
   failCreate = false;
+  statusDelayMs = 0;
   checklistBody = {
     items: [
       item("informedConsent", "consent", "missing", { actions: actions({ qr: true }) }),
@@ -102,6 +104,7 @@ beforeEach(() => {
       return jsonResponse(true, 201, { ...created, url: `https://pwa.test/q#${"b".repeat(43)}` });
     }
     if (path.endsWith("/questionnaire-requests/qr-1") && (init?.method ?? "GET") === "GET") {
+      if (statusDelayMs) await new Promise((resolve) => setTimeout(resolve, statusDelayMs));
       const live = (checklistBody.pending_requests as { id: string }[]).find((r) => r.id === "qr-1");
       return jsonResponse(true, 200, live ? { status: "pending", ...live } : { id: "qr-1", status: "completed", items: [], completed_items: [], opened_at: null });
     }
@@ -371,6 +374,29 @@ describe("PatientStudiesPanel — the Estudios checklist", () => {
       const callsWhenClosed = statusCalls();
       await vi.advanceTimersByTimeAsync(10_000);
       expect(statusCalls()).toBe(callsWhenClosed); // no fast checks once the dialog is gone
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a slow server doesn't stretch the rhythm: checks still start every 2 s, never two at once (NEO-123)", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      statusDelayMs = 1_500; // each answer takes 1.5 s
+      const wrapper = await mountPanel();
+      await button(wrapper, "QR for the patient")!.trigger("click");
+      await flushPromises();
+      const statusCalls = () => apiFetch.mock.calls.filter(([path]) => String(path).endsWith("/questionnaire-requests/qr-1")).length;
+
+      await vi.advanceTimersByTimeAsync(5_100);
+      expect(statusCalls()).toBe(1); // at 5 s
+      await vi.advanceTimersByTimeAsync(4_000);
+      expect(statusCalls()).toBe(3); // at 7 s and 9 s — not 8.5 s and 12 s
+
+      statusDelayMs = 3_000; // slower than the rhythm: the 2 s tick is skipped while one is in flight
+      await vi.advanceTimersByTimeAsync(6_000);
+      expect(statusCalls()).toBeLessThanOrEqual(5);
+      expect(wrapper.findComponent(QuestionnaireQrDialog).exists()).toBe(true);
     } finally {
       vi.useRealTimers();
     }

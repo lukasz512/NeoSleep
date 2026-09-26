@@ -10,7 +10,11 @@ import type { RequestWithId } from "../middleware/requestId.js";
 import { withTenant, tenantSlugFromHost } from "../db.js";
 import { GetPublicLeadInfoQuery } from "../queries/lead.js";
 import { GetPublicSpecialistsQuery } from "../queries/organization.js";
-import { GetPublicQuestionnaireQuery, SubmitPublicQuestionnaireCommand } from "../commands/questionnaireRequest.js";
+import {
+  GetPublicQuestionnaireQuery,
+  SubmitPublicQuestionnaireCommand,
+  MarkPublicQuestionnaireOpenedCommand,
+} from "../commands/questionnaireRequest.js";
 import { ValidationError } from "../errors.js";
 import { routeParam } from "./utils.js";
 
@@ -79,6 +83,23 @@ publicRouter.post(
     const locale = (req.body as { locale?: unknown } | undefined)?.locale;
     const questionnaire = await withTenant(slug, async (client) => GetPublicQuestionnaireQuery(client, bodyToken(req), locale));
     res.json(questionnaire);
+  })
+);
+
+/**
+ * "The patient opened the link" — sent by an inline script in the PWA's
+ * index.html before the app bundle loads (NEO-123). The body is the raw
+ * token as text/plain: a CORS "simple request", so the browser skips the
+ * preflight round trip. Always 204, whatever the token.
+ */
+publicRouter.post(
+  "/public/questionnaire/opened",
+  publicQuestionnaireReadLimiter,
+  asyncHandler(async (req: Request, res: Response) => {
+    const token = typeof req.body === "string" ? req.body.trim() : bodyToken(req);
+    const slug = tenantSlugFromHost(req.hostname);
+    await withTenant(slug, (client) => MarkPublicQuestionnaireOpenedCommand(client, token));
+    res.status(204).end();
   })
 );
 

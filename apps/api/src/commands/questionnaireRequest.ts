@@ -351,6 +351,20 @@ export async function GetPublicQuestionnaireQuery(client: PoolClient, token: str
   };
 }
 
+/**
+ * The patient's page says "opened" as soon as its HTML arrives, before the
+ * app bundle has loaded (NEO-123) — about 1.5 s earlier than the lookup, so
+ * the doctor's QR dialog can close sooner. Silent on purpose: an invalid,
+ * used or expired token does nothing and reveals nothing (the route always
+ * answers 204). The lookup stamps opened_at too, so a blocked ping costs
+ * nothing but speed.
+ */
+export async function MarkPublicQuestionnaireOpenedCommand(client: PoolClient, token: string): Promise<void> {
+  if (!validTokenShape(token)) return;
+  const request = await getUsableQuestionnaireRequestByHash(client, hashToken(token), { forUpdate: false });
+  if (request) await markQuestionnaireRequestOpened(client, request.id);
+}
+
 export interface PublicSubmissionMeta {
   ip: string | null;
   userAgent: string | null;

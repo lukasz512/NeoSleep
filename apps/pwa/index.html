@@ -20,6 +20,29 @@
         window.__neoInstallPrompt = e;
       });
     </script>
+    <!-- NEO-123: on the patient's QR page (/q#<token>), tell the API "opened"
+         the moment this HTML arrives, ~1.5 s before the app bundle could, so
+         the doctor's QR dialog closes sooner. text/plain = no CORS preflight.
+         %VITE_API_URL% is filled in at build time; left as-is (dev) = same
+         origin via the Vite proxy. Best effort: the form's own lookup marks
+         the link opened too. -->
+    <script>
+      (function () {
+        var token = location.pathname === "/q" ? location.hash.slice(1) : "";
+        if (!/^[A-Za-z0-9_-]{43}$/.test(token)) return;
+        var api = "%VITE_API_URL%";
+        if (api.charAt(0) === "%") api = "";
+        try {
+          fetch(api + "/api/v1/public/questionnaire/opened", {
+            method: "POST",
+            headers: { "Content-Type": "text/plain" },
+            body: token,
+            credentials: "omit",
+            keepalive: true,
+          }).catch(function () {});
+        } catch (e) {}
+      })();
+    </script>
     <!-- Cascade-layer order (Vuetify 4). Must be declared before any CSS
          loads: Vuetify's component styles are imported per component and can
          otherwise reach the page before vuetify/styles, which would put the
