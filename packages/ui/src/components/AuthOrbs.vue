@@ -610,6 +610,14 @@ defineExpose({ whenEntered, playExit, replay });
   background: color-mix(in srgb, rgb(var(--v-theme-primary)) 55%, white 45%);
 }
 
+/* Phone layout B puts the small orb on top of the big one: in the same teal
+   the two merged into one shape and only the thin ring showed (pwa-dev,
+   build 129). A lighter mint, a step brighter than the medium orb, keeps it
+   reading as its own circle in front of the big one. */
+.auth-orbs--phone .auth-orbs__orb--small {
+  background: color-mix(in srgb, rgb(var(--v-theme-primary)) 20%, white 80%);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .auth-orbs__anchor--small,
   .auth-orbs__anchor--medium {
