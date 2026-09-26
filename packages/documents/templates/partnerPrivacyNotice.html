@@ -28,22 +28,13 @@
     --font: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
   * { box-sizing: border-box; }
-  @page { size: A4; margin: 18mm 14mm 26mm; }
+  @page { size: A4; margin: 18mm 14mm 18mm; }
   body { font-family: var(--font); font-weight: 300; color: var(--text); font-size: 9.5pt; line-height: 1.45; max-width: 800px; margin: 0 auto; padding: 28px 24px 20px; background: #fff; }
-  header.doc-header { display: flex; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 0.5px solid rgba(71, 71, 71, 0.35); padding-bottom: 6px; margin-bottom: 16px; }
-  header.doc-header .logo svg { height: 24px; width: auto; display: block; }
-  header.doc-header .doc-label { font-size: 8pt; font-weight: 400; color: var(--secondary); text-align: right; }
-  h1 { color: var(--primary); font-size: 14pt; font-weight: 500; margin: 0 0 2px; line-height: 1.3; text-align: center; }
-  h2 { color: var(--secondary); font-size: 11pt; font-weight: 400; margin: 0 0 16px; line-height: 1.3; text-align: center; }
   p { margin: 0 0 8px; text-align: justify; }
   ol, ul { margin: 0 0 8px; padding-left: 20px; }
   li { margin-bottom: 6px; text-align: justify; }
   /* Acknowledgement uses the shared sign-off panel (docFields.css) — no drawn
      signature, just who acknowledged and when, side by side. */
-  .ack.sig-panels { grid-template-columns: minmax(0, 1fr); max-width: 420px; margin-top: 28px; }
-  .ack > .sig-panel > .sig-main > .sig-label { color: var(--primary); font-weight: 600; }
-  .ack .sig-details { border: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px; margin-top: 8px; padding: 0; background: none; }
-  .ack .sig-details dd { font-weight: 500; }
   .screen-only.contact-footer { font-size: 8pt; color: var(--secondary); border-top: 1px solid #ccc; padding-top: 8px; margin-top: 24px; }
   .screen-only.contact-footer .doc-ref { text-align: right; margin-top: 2px; }
   @media print { body { padding: 0; max-width: none; } .screen-only { display: none; } }
@@ -53,17 +44,20 @@
     p, li { text-align: left; }
   }
   {{style:docFields}}
+  {{style:docTheme}}
 </style>
 </head>
 <body>
 
   <header class="doc-header">
     <span class="logo">{{brand:logo}}</span>
-    <span class="doc-label">{{documents.partnerPrivacyNotice.title}}</span>
+    <span class="doc-cat">{{documents.common.category.privacy}}</span>
   </header>
 
-  <h1>{{documents.partnerPrivacyNotice.title}}</h1>
-  <h2>{{documents.partnerPrivacyNotice.subtitle}}</h2>
+  <div class="doc-title">
+    <h1>{{documents.partnerPrivacyNotice.title}}</h1>
+    <h2>{{documents.partnerPrivacyNotice.subtitle}}</h2>
+  </div>
 
   <div class="doc-content">{{content}}</div>
 
@@ -81,7 +75,7 @@
 
   <div class="contact-footer screen-only">
     <div>{{brand:contactLine}}</div>
-    <div class="doc-ref">NSL-PN v1</div>
+    <div class="doc-ref" data-field="doc_ref">{{doc:ref}}</div>
   </div>
 
 </body>

@@ -141,6 +141,13 @@ function releaseRenderSlot(): void {
   }
 }
 
+/** A blank set of tick-boxes (just the options), or a recorded answer (options + the selected one). */
+export type ChoiceField = readonly string[] | { options: readonly string[]; selected?: string | null };
+
+function toChoice(field: ChoiceField): { options: readonly string[]; selected: string | null } {
+  return "options" in field ? { options: field.options, selected: field.selected ?? null } : { options: field, selected: null };
+}
+
 export interface RenderHtmlToPdfOptions {
   /** Puppeteer footerTemplate HTML — page.pdf() only paginates a real per-page footer via this option, not repeated CSS in the document body. */
   footerTemplate?: string;
@@ -167,12 +174,15 @@ export interface RenderHtmlToPdfOptions {
    */
   dataFields?: Record<string, string>;
   /**
-   * Blank tick-boxes for a paper form, keyed by data-field: each option
-   * becomes an empty rounded box + its label (e.g. ["Sí", "No"]). Drawn
-   * with CSS, not a "☐" character — Poppins has no such glyph and the PDF
-   * showed a missing-glyph box instead.
+   * Tick-boxes keyed by data-field: each option becomes a small rounded box
+   * + its label (e.g. ["Sí", "No"]). A plain list is a blank paper form (all
+   * boxes empty); `{ options, selected }` is a recorded answer — every
+   * option is still printed, the selected one filled and bold, so a filled
+   * form reads the same way as a blank one (document system, 2026-09-26).
+   * Drawn with CSS, not a "☐" character — Poppins has no such glyph and the
+   * PDF showed a missing-glyph box instead.
    */
-  choiceFields?: Record<string, readonly string[]>;
+  choiceFields?: Record<string, ChoiceField>;
   /**
    * Images placed into `[data-field="key"]` elements — a drawn signature
    * (data:image/png;base64 only: the page lockdown allows data: URLs and
@@ -279,24 +289,31 @@ export async function applyDataFields(page: Page, fields: Record<string, string>
  * they are escaped like data fields. Box colour follows the template's
  * --primary brand token. Exported for the spec.
  */
-export async function applyChoiceFields(page: Page, fields: Record<string, readonly string[]>): Promise<void> {
+export async function applyChoiceFields(page: Page, fields: Record<string, ChoiceField>): Promise<void> {
+  const normalized = Object.fromEntries(Object.entries(fields).map(([key, field]) => [key, toChoice(field)]));
   await page.evaluate((values) => {
-    for (const [key, options] of Object.entries(values)) {
+    for (const [key, { options, selected }] of Object.entries(values)) {
+      const answered = selected != null && options.includes(selected);
       document.querySelectorAll(`[data-field="${CSS.escape(key)}"]`).forEach((el) => {
         const choices = options.map((option) => {
+          const on = answered && option === selected;
           const choice = document.createElement("span");
-          choice.className = "choice";
+          choice.className = on ? "choice choice--on" : "choice";
           // Fixed-width slots (fit "III" / "Sí"): in a right-aligned answer column each row's
           // last option shares one x, so "I / II / III" sits in the same grid as "Sí / No"
           // (III under No, II under Sí, I one slot further left).
           choice.style.cssText = "display:inline-flex;align-items:center;gap:6px;vertical-align:middle;width:52px;";
           const box = document.createElement("span");
           box.className = "choice-box";
-          box.style.cssText =
-            "display:inline-block;width:15px;height:15px;border:1.5px solid var(--primary, #128F83);border-radius:4px;background:#fff;flex:none;";
+          box.style.cssText = on
+            ? "display:inline-block;width:14px;height:14px;border:1.5px solid var(--primary, #128F83);border-radius:3.5px;background:var(--primary, #128F83);box-shadow:inset 0 0 0 2px #fff;flex:none;"
+            : "display:inline-block;width:14px;height:14px;border:1.5px solid #8fa29e;border-radius:3.5px;background:#fff;flex:none;";
           const label = document.createElement("span");
+          label.className = "choice-label";
           label.textContent = option;
-          label.style.cssText = "font-weight:500;color:var(--secondary, #474747);";
+          label.style.cssText = on
+            ? "font-weight:600;color:var(--text, #1a1a1a);"
+            : `font-weight:400;color:${answered ? "#9aa5a3" : "var(--secondary, #474747)"};`;
           choice.append(box, label);
           return choice;
         });
@@ -304,7 +321,7 @@ export async function applyChoiceFields(page: Page, fields: Record<string, reado
         el.replaceChildren(...choices);
       });
     }
-  }, fields);
+  }, normalized);
 }
 
 const RENDER_READY_TIMEOUT_MS = 10_000;
@@ -344,6 +361,94 @@ export async function waitForRenderReady(page: Page, timeoutMs = RENDER_READY_TI
   }
 }
 
+/** Pages in a Chrome-generated PDF: one "/Type /Page" object per page (the "/Pages" tree node doesn't match). Exported for the spec. */
+export function countPdfPages(pdf: Uint8Array): number {
+  return Buffer.from(pdf).toString("latin1").match(/\/Type\s*\/Page(?![s\w])/g)?.length ?? 0;
+}
+
+const PX_PER_MM = 96 / 25.4;
+const A4_MM = { width: 210, height: 297 };
+/** How many extra print passes the signature push may take on a multi-page document, where the DOM estimate can overshoot. */
+const SIGNATURE_PUSH_ATTEMPTS = 4;
+
+/**
+ * Page-aware layout (Łukasz, 2026-09-26), applied to every generated PDF:
+ * - fits on one page → keep the compact layout, only move the signatures
+ *   down to the bottom of the page;
+ * - runs onto more pages → switch to the roomier layout (`doc-roomy` on
+ *   <html>: more air around the title, see docTheme.css), then move the
+ *   signatures to the bottom of the last page.
+ * Orphan control (a heading never ends a page, question rows and signature
+ * blocks never split) is plain CSS in the templates.
+ *
+ * Chrome has no DOM API for where page breaks fall, so the space left on
+ * the last page is estimated from the laid-out height in print media at
+ * the printable width, and every change is checked against the real page
+ * count of a fresh print: a push that would add a page is shrunk, and if
+ * none fits the signatures stay where they were. Returns the final PDF.
+ * Exported for the spec.
+ */
+export async function fitPageLayout(
+  page: Page,
+  print: () => Promise<Uint8Array>,
+  margin: { top: string; bottom: string; left: string; right: string },
+): Promise<Uint8Array> {
+  let pdf = await print();
+  let pages = countPdfPages(pdf);
+  if (pages > 1) {
+    await page.evaluate(() => document.documentElement.classList.add("doc-roomy"));
+    pdf = await print();
+    pages = countPdfPages(pdf);
+  }
+
+  const mm = (value: string) => parseFloat(value);
+  await page.setViewport({ width: Math.round((A4_MM.width - mm(margin.left) - mm(margin.right)) * PX_PER_MM), height: 1000 });
+  await page.emulateMediaType("print");
+  const pageHeight = (A4_MM.height - mm(margin.top) - mm(margin.bottom)) * PX_PER_MM;
+  const measured = await page.evaluate(() => {
+    const blocks = document.querySelectorAll<HTMLElement>(".sig-panels");
+    const last = blocks[blocks.length - 1];
+    if (!last) return null;
+    // The signatures are the last printed block (only screen-only content follows). Not
+    // documentElement.scrollHeight: that never reports less than the viewport height.
+    return { contentHeight: last.getBoundingClientRect().bottom + window.scrollY, marginTop: parseFloat(getComputedStyle(last).marginTop) || 0 };
+  });
+  if (!measured) return pdf;
+
+  const setPush = (push: number) =>
+    page.evaluate((top) => {
+      const blocks = document.querySelectorAll<HTMLElement>(".sig-panels");
+      blocks[blocks.length - 1].style.marginTop = `${top}px`;
+    }, measured.marginTop + push);
+  const tryPush = async (push: number) => {
+    await setPush(push);
+    const candidate = await print();
+    return countPdfPages(candidate) === pages ? candidate : null;
+  };
+
+  // Free space on the last page if nothing were pushed down by break rules (exact on a one-page
+  // document); some slack for rounding. If that overshoots, binary-search the largest push that
+  // keeps the page count.
+  const estimate = Math.floor(pageHeight * pages - measured.contentHeight - 12);
+  if (estimate <= 8) return pdf;
+  const full = await tryPush(estimate);
+  if (full) return full;
+  let best = pdf;
+  let low = 0;
+  let high = estimate;
+  for (let attempt = 0; attempt < SIGNATURE_PUSH_ATTEMPTS; attempt++) {
+    const mid = Math.floor((low + high) / 2);
+    const candidate = await tryPush(mid);
+    if (candidate) {
+      best = candidate;
+      low = mid;
+    } else {
+      high = mid;
+    }
+  }
+  return best;
+}
+
 export async function renderHtmlToPdf(html: string, options: RenderHtmlToPdfOptions = {}): Promise<Uint8Array> {
   await acquireRenderSlot();
   try {
@@ -360,19 +465,22 @@ export async function renderHtmlToPdf(html: string, options: RenderHtmlToPdfOpti
       // After every DOM mutation above: webfonts settled, every image decoded.
       await waitForRenderReady(page);
       const displayHeaderFooter = Boolean(options.headerTemplate || options.footerTemplate);
-      return await page.pdf({
-        format: "A4",
-        printBackground: true,
-        displayHeaderFooter,
-        headerTemplate: options.headerTemplate ?? "<div></div>",
-        footerTemplate: options.footerTemplate ?? "<div></div>",
-        margin: {
-          top: options.marginTop ?? "18mm",
-          bottom: options.marginBottom ?? "14mm",
-          left: options.marginLeft ?? "14mm",
-          right: options.marginRight ?? "14mm",
-        },
-      });
+      const margin = {
+        top: options.marginTop ?? "18mm",
+        bottom: options.marginBottom ?? "14mm",
+        left: options.marginLeft ?? "14mm",
+        right: options.marginRight ?? "14mm",
+      };
+      const print = () =>
+        page.pdf({
+          format: "A4",
+          printBackground: true,
+          displayHeaderFooter,
+          headerTemplate: options.headerTemplate ?? "<div></div>",
+          footerTemplate: options.footerTemplate ?? "<div></div>",
+          margin,
+        });
+      return await fitPageLayout(page, print, margin);
     } finally {
       await page.close();
     }
