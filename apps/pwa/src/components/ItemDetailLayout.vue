@@ -10,6 +10,9 @@
       <!-- A record with an identity (NEO-57) swaps the module tile for its
            avatar via #record-tile; the module icon is the fallback. -->
       <slot v-if="hasContent && $slots['record-tile']" name="record-tile" />
+      <!-- NEO-114: opened from a list, the tapped row's identity stands in
+           until the record loads (same avatar the view renders, so nothing jumps). -->
+      <AppAvatar v-else-if="!hasContent && preview" v-bind="preview.avatar" :size="48" />
       <div v-else class="view-item__tile" aria-hidden="true">
         <AppIcon v-if="tileIcon" :name="tileIcon" class="view-item__tile-icon" />
       </div>
@@ -17,6 +20,7 @@
         <AppBreadcrumbs v-if="parentCrumb" class="view-item__eyebrow" :items="[parentCrumb]" />
         <div class="view-item__record-title-row">
           <h1 v-if="hasContent" class="view-item__record-title">{{ recordTitle }}</h1>
+          <h1 v-else-if="preview" class="view-item__record-title">{{ preview.title }}</h1>
           <span v-else class="view-item__record-title-skeleton" aria-hidden="true" />
           <slot v-if="hasContent" name="title-extra" />
         </div>
@@ -99,10 +103,12 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, watchEffect } from "vue";
 import { useI18n } from "vue-i18n";
-import type { RouteLocationRaw } from "vue-router";
+import { useRoute, type RouteLocationRaw } from "vue-router";
 import { AppStateView, useErrorText } from "@ui";
 import AppButton from "./AppButton.vue";
 import AppIcon from "./AppIcon.vue";
+import AppAvatar from "./AppAvatar.vue";
+import { recordPreviewFor } from "../composables/useRecordPreview";
 import AppLoadingState from "./AppLoadingState.vue";
 import AppBreadcrumbs from "./AppBreadcrumbs.vue";
 import type { BreadcrumbItem } from "./AppBreadcrumbs.types";
@@ -176,6 +182,13 @@ const parentCrumb = computed<BreadcrumbItem | null>(() => {
 });
 
 const tileIcon = computed(() => props.recordIcon ?? parentCrumb.value?.icon);
+
+// NEO-114: the identity of the list row this record was opened from, shown
+// in the header while the record itself is still loading.
+const route = useRoute();
+const preview = computed(() =>
+  props.loading && !props.hasContent ? recordPreviewFor(route?.name, Object.values(route?.params ?? {})[0]) : null,
+);
 
 const showRecordHeader = computed(
   () => !!parentCrumb.value && props.recordTitle !== undefined && (props.hasContent || props.loading),
@@ -496,5 +509,26 @@ defineEmits<{
    a muted, non-destructive action rather than the neutral default. */
 .view-item__header-actions :deep(.view-item__action-btn--inactive) {
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)) !important;
+}
+
+/* NEO-114: the header's name + avatar can already be on screen (from the
+   list row) when the record arrives; its identity line and actions then
+   fade in instead of popping in. */
+.view-item__record-details,
+.view-item__record-header > .view-item__header-actions,
+.view-item > :not(.view-item__record-header, .view-item__header-row) {
+  animation: view-item-fade-in 220ms cubic-bezier(0, 0, 0.2, 1) both;
+}
+@keyframes view-item-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .view-item__record-details,
+  .view-item__record-header > .view-item__header-actions,
+  .view-item > :not(.view-item__record-header, .view-item__header-row) {
+    animation: none;
+  }
 }
 </style>
