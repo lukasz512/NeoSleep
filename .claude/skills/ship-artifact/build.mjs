@@ -191,10 +191,10 @@ function render(contentPath) {
   // The Artifact renders in a sandboxed iframe; GitHub/Linear refuse to be framed,
   // so every link must open a new tab or the click shows a broken-page icon.
   const ext = `target="_blank" rel="noopener noreferrer"`;
-  // Always the same order: PR, then the 3 fixed links (NEO-84) — Artifact, Linear, VS Code.
+  // Always the same order: PR, Linear, VS Code. No "Artifact" button — on the page
+  // itself it would only link to itself (NEO-91); the Linear comment and index keep it.
   const links = [
     pr ? `<a class="btn primary" href="${esc(pr)}" ${ext}>${esc(prLabel)}</a>` :`<span class="btn ghost" title="Branch not pushed yet">PR link after push</span>`,
-    selfUrl ? `<a class="btn" href="${esc(selfUrl)}" ${ext}>Artifact</a>` : `<span class="btn ghost" title="Filled in on the next render, after the first publish">Artifact link after publish</span>`,
     `<a class="btn" href="${esc(linearUrl)}" ${ext}>Linear ${esc(ticket)}</a>`,
     `<a class="btn" href="${esc(vscodeUrlOf(sessionId))}" ${ext}>VS Code session</a>`,
   ].join("");
@@ -224,6 +224,7 @@ function render(contentPath) {
   const slots = {
     TITLE: esc(c.title),
     LINKS: links,
+    TICKET: esc(ticket),
     RESUME: sessionId ? `<p class="mono muted">claude --resume ${esc(sessionId)}</p>` : "",
     EYEBROW: [ticket, c.kind, c.area].filter(Boolean).map(esc).join(" · "),
     HEADLINE: c.headline,
@@ -263,7 +264,7 @@ function render(contentPath) {
         ? "pushed: yes — Create PR button is live"
         : "pushed: no — re-run render after push to get the Create PR button"
   );
-  if (!selfUrl) console.log("first render: publish, run finalize, then render + republish once so the Artifact link is filled in");
+  if (!selfUrl) console.log("first render: after publish + finalize, the Linear comment below gets the Artifact URL filled in");
   console.log("\n--- Linear comment (post after publishing, replace <ARTIFACT_URL>) ---");
   console.log(
     [
