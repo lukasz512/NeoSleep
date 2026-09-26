@@ -146,7 +146,7 @@ describe("PatientQuestionnaireView (public QR self-fill)", () => {
     expect(body.step).toBe("medicalHistory");
     expect(body.consent).toBe(true);
     expect(body.answers.has_diabetes).toBe(false);
-    expect(wrapper.text()).toContain("Thank you!");
+    expect(wrapper.text()).toMatch(/Thank you, (Ana|Lucía)!/);
   });
 
   it("a second link opened in the same tab (only the #fragment changes) loads the new questionnaire", async () => {
@@ -230,6 +230,6 @@ describe("PatientQuestionnaireView (public QR self-fill)", () => {
   it("a link whose steps are all done already shows the thank-you screen", async () => {
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, lookup([step("stopBang", "stop_bang", { done: true })])));
     const wrapper = await mountView();
-    expect(wrapper.text()).toContain("Thank you!");
+    expect(wrapper.text()).toMatch(/Thank you, (Ana|Lucía)!/);
   });
 });

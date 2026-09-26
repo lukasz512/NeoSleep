@@ -17,11 +17,29 @@
       </div>
 
       <div v-else-if="phase === 'submitted'" class="patient-questionnaire__body patient-questionnaire__done" role="status">
-        <span class="patient-questionnaire__done-badge">
-          <AppIcon name="check-circle" class="patient-questionnaire__done-icon patient-questionnaire__done-icon--burst" />
+        <!-- The check draws itself inside a fixed 96px box: the card never changes size while it animates (option C, Łukasz 2026-09-26). -->
+        <span class="patient-questionnaire__done-mark" aria-hidden="true">
+          <svg viewBox="0 0 68 68" class="patient-questionnaire__done-check">
+            <circle class="patient-questionnaire__done-circle" cx="34" cy="34" r="30" pathLength="1" />
+            <path class="patient-questionnaire__done-tick" d="M21 35l9 9 17-19" pathLength="1" />
+          </svg>
         </span>
-        <h1 class="patient-questionnaire__done-title">{{ t("app.questionnaire.thanks.title") }}</h1>
-        <p class="patient-questionnaire__done-text">{{ t("app.questionnaire.thanks.body") }}</p>
+        <h1 class="patient-questionnaire__done-title">
+          {{ questionnaire ? t("app.questionnaire.thanks.titleName", { name: questionnaire.patient_first_name }) : t("app.questionnaire.thanks.title") }}
+        </h1>
+        <p class="patient-questionnaire__done-text">{{ t("app.questionnaire.thanks.sent", { clinic: clinicName }) }}</p>
+        <!-- What happens next — the patient knows nothing else is expected of them. -->
+        <ol class="patient-questionnaire__next">
+          <li class="patient-questionnaire__next-item patient-questionnaire__next-item--done">
+            <span class="patient-questionnaire__next-dot"><AppIcon name="check" /></span>{{ t("app.questionnaire.thanks.next.done") }}
+          </li>
+          <li class="patient-questionnaire__next-item">
+            <span class="patient-questionnaire__next-dot">2</span>{{ t("app.questionnaire.thanks.next.review") }}
+          </li>
+          <li class="patient-questionnaire__next-item">
+            <span class="patient-questionnaire__next-dot">3</span>{{ t("app.questionnaire.thanks.next.close") }}
+          </li>
+        </ol>
       </div>
 
       <div v-else-if="questionnaire && step" class="patient-questionnaire__body">
@@ -480,20 +498,26 @@ async function submitQuestionnaire() {
   padding: 40px 32px 44px;
 }
 
-.patient-questionnaire__done-badge {
+/* Fixed-size stage: whatever animates inside, the card's height stays put. */
+.patient-questionnaire__done-mark {
   display: grid;
   place-items: center;
-  width: 88px;
-  height: 88px;
-  margin-bottom: 24px;
+  width: 96px;
+  height: 96px;
+  flex: none;
+  margin-bottom: 20px;
   border-radius: 50%;
-  background: rgba(var(--v-theme-success), 0.1);
+  background: rgba(var(--v-theme-primary), 0.1);
 }
 
-.patient-questionnaire__done-icon {
-  width: 52px;
-  height: 52px;
-  color: rgb(var(--v-theme-success));
+.patient-questionnaire__done-check {
+  width: 68px;
+  height: 68px;
+  fill: none;
+  stroke: rgb(var(--v-theme-primary));
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .patient-questionnaire__done-title {
@@ -513,22 +537,92 @@ async function submitQuestionnaire() {
   color: rgba(var(--v-theme-on-surface), 0.72);
 }
 
-/* A small, soft "done" moment: the check pops in with a fading ring behind it. */
+.patient-questionnaire__next {
+  list-style: none;
+  width: 100%;
+  max-width: 340px;
+  margin: 20px 0 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(var(--v-theme-primary), 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+}
+
+.patient-questionnaire__next-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  color: rgba(var(--v-theme-on-surface), 0.8);
+}
+
+.patient-questionnaire__next-dot {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1.5px solid rgba(var(--v-theme-on-surface), 0.3);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(var(--v-theme-on-surface), 0.66);
+}
+
+.patient-questionnaire__next-dot :deep(svg) {
+  width: 14px;
+  height: 14px;
+}
+
+.patient-questionnaire__next-item--done .patient-questionnaire__next-dot {
+  border-color: rgb(var(--v-theme-primary));
+  background: rgb(var(--v-theme-primary));
+  color: rgb(var(--v-theme-on-primary));
+}
+
+/* The "done" moment: the disc settles, the circle and the tick draw themselves, then the text and the next steps rise in.
+   Only transform/opacity/stroke move — nothing that changes the card's size. */
 @media (prefers-reduced-motion: no-preference) {
-  .patient-questionnaire__done-icon--burst {
-    border-radius: 50%;
-    animation: pq-check-pop 560ms var(--pwa-ease-out-smooth, cubic-bezier(0.22, 1, 0.36, 1)) both,
-      pq-check-ring 900ms ease-out 180ms both;
+  .patient-questionnaire__done-mark {
+    animation: pq-disc-in 500ms var(--pwa-ease-out-smooth, cubic-bezier(0.22, 1, 0.36, 1)) both;
   }
+  .patient-questionnaire__done-circle,
+  .patient-questionnaire__done-tick {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+  }
+  .patient-questionnaire__done-circle {
+    animation: pq-draw 600ms cubic-bezier(0.65, 0, 0.35, 1) 150ms forwards;
+  }
+  .patient-questionnaire__done-tick {
+    animation: pq-draw 350ms cubic-bezier(0.65, 0, 0.35, 1) 650ms forwards;
+  }
+  .patient-questionnaire__done-title,
+  .patient-questionnaire__done-text {
+    animation: pq-rise 450ms ease-out 850ms both;
+  }
+  .patient-questionnaire__next-item {
+    animation: pq-rise 400ms ease-out both;
+  }
+  .patient-questionnaire__next-item:nth-child(1) { animation-delay: 1000ms; }
+  .patient-questionnaire__next-item:nth-child(2) { animation-delay: 1120ms; }
+  .patient-questionnaire__next-item:nth-child(3) { animation-delay: 1240ms; }
 }
-@keyframes pq-check-pop {
-  from { transform: scale(0.4); opacity: 0; }
-  60% { transform: scale(1.12); opacity: 1; }
-  to { transform: scale(1); }
+@keyframes pq-disc-in {
+  from { transform: scale(0.6); opacity: 0; }
+  to { transform: none; opacity: 1; }
 }
-@keyframes pq-check-ring {
-  from { box-shadow: 0 0 0 0 rgba(var(--v-theme-success), 0.35); }
-  to { box-shadow: 0 0 0 22px rgba(var(--v-theme-success), 0); }
+@keyframes pq-draw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes pq-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
 }
 
 @media (max-width: 480px) {
