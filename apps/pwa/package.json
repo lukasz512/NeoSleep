@@ -23,19 +23,20 @@
     "@tiptap/pm": "^3.31.3",
     "@tiptap/starter-kit": "^3.31.3",
     "@tiptap/vue-3": "^3.31.3",
+    "@vue/devtools-api": "catalog:",
     "@vueuse/core": "catalog:",
     "chart.js": "catalog:",
     "flag-icons": "^7.5.0",
     "idb": "catalog:",
     "pinia": "catalog:",
-    "@vue/devtools-api": "catalog:",
     "qrcode": "^1.5.4",
     "signature_pad": "^5.1.4",
     "vue": "catalog:",
     "vue-gtag": "^3.7.1",
     "vue-i18n": "catalog:",
     "vue-router": "catalog:",
-    "vuetify": "catalog:"
+    "vuetify": "catalog:",
+    "workbox-window": "catalog:"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

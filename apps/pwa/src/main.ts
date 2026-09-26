@@ -23,6 +23,7 @@ import { resolveInitialThemeMode, useMotionPreferenceStore, APP_VERSION_KEY } fr
 import { resolveAppVersion } from "./appVersion";
 import { activateDeferredStyles } from "./boot/bootSplash";
 import { initInstallPrompt } from "./composables/useInstallPrompt";
+import { installServiceWorkerUpdates } from "./boot/registerServiceWorker";
 
 // First thing: apply the bundle CSS that index.html loads as a non-blocking
 // preload (so the static boot splash could paint before it arrived) — see
@@ -71,6 +72,9 @@ app.use(router);
 // After a deploy, an already-open tab can't fetch its old lazy chunks —
 // reload into the new version (with a toast) instead of silently ignoring clicks.
 installChunkRecovery(router, browserChunkRecoveryDeps(useNotifications().show));
+// After a deploy the service worker first serves the cached previous build —
+// reload into the new one as soon as it takes over (NEO-125).
+if (import.meta.env.PROD) installServiceWorkerUpdates(router);
 app.use(i18n);
 
 useMotionPreferenceStore().startListening();
