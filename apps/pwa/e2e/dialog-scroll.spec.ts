@@ -100,9 +100,14 @@ for (const vp of VIEWPORTS) {
     const input = page.getByTestId("app-form-dialog-body").getByRole("textbox").last();
     await input.focus();
     await expect.poll(async () => (await bodyScroll(page)).top).toBeGreaterThan(0);
+    // The field is brought into the visible part of the body. How much of a
+    // tall field (a textarea) gets revealed is up to the engine — WebKit only
+    // scrolls far enough to show its first lines — so require its top edge to
+    // be inside the body, not its whole box.
     const body = await rect(page, "[data-testid=app-form-dialog-body]");
-    const r = await input.evaluate((el) => el.getBoundingClientRect().bottom);
-    expect(r).toBeLessThanOrEqual(body.bottom + 1);
+    const top = await input.evaluate((el) => el.getBoundingClientRect().top);
+    expect(top).toBeGreaterThanOrEqual(body.top - 1);
+    expect(top).toBeLessThan(body.bottom);
   });
 
   for (const dialog of ["form", "wizard", "confirm"] as const) {
