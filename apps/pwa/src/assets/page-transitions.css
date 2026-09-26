@@ -1,16 +1,24 @@
 /*
- * Page-change motion (NEO-85) — keyframes for router/pageTransitions.ts.
- * Only the content sheet (`view-transition-name: pwa-page`, AppLayout) moves;
- * the app bar and side menu stay put (the root group crossfades nothing,
- * they are identical before and after).
+ * Page-change motion (NEO-85, reworked NEO-97) — keyframes for
+ * router/pageTransitions.ts. Only the content sheet
+ * (`view-transition-name: pwa-page`, AppLayout) moves; the app bar and side
+ * menu stay put (the root group crossfades nothing, they are identical before
+ * and after).
  *
  * <html data-page-transition=…>:
- *   open   — list → record: the record slides in from the right over the
- *            list; the list dims and drifts left. 380ms emphasized-decelerate.
- *   back   — record → list: the record slides off to the right (on top),
- *            the list comes forward again. 260ms emphasized-accelerate.
- *   module — menu / bottom nav: M3 fade-through, 90ms out then 210ms in at
- *            96% scale. Modules sit side by side, so nothing slides.
+ *   open   — list → record: M3 "shared axis X". The list drifts 40px left
+ *            and fades out early; the record comes in from 40px right and
+ *            fades in, the two fades overlapping briefly so there is no
+ *            blank frame. 400ms.
+ *   back   — record → list: the same, mirrored. 340ms (leaving is quicker).
+ *   module — menu / bottom nav: M3 fade-through, old page out in 140ms,
+ *            new page in over 260ms from 98% scale. Modules sit side by side,
+ *            so nothing slides.
+ *
+ * NEO-97: movement and opacity are separate animations on each snapshot, so
+ * the slide keeps one smooth ease over the whole duration while the fade runs
+ * on its own shorter clock (a single keyframe list with an early opacity stop
+ * would re-apply the easing per segment and make the slide stutter).
  */
 
 /* The group itself doesn't morph between the two pages' sizes — only the
@@ -26,50 +34,61 @@
 }
 
 html[data-page-transition="open"]::view-transition-old(pwa-page) {
-  animation: pwa-page-under-out 380ms cubic-bezier(0.05, 0.7, 0.1, 1) both;
+  animation:
+    pwa-page-to-left 400ms var(--pwa-page-ease) both,
+    pwa-page-fade-out 160ms linear both;
 }
 html[data-page-transition="open"]::view-transition-new(pwa-page) {
-  animation: pwa-page-slide-in 380ms cubic-bezier(0.05, 0.7, 0.1, 1) both;
+  animation:
+    pwa-page-from-right 400ms var(--pwa-page-ease) both,
+    pwa-page-fade-in 280ms linear 100ms both;
 }
 
 html[data-page-transition="back"]::view-transition-old(pwa-page) {
-  z-index: 1;
-  animation: pwa-page-slide-out 260ms cubic-bezier(0.3, 0, 0.8, 0.15) both;
+  animation:
+    pwa-page-to-right 340ms var(--pwa-page-ease) both,
+    pwa-page-fade-out 140ms linear both;
 }
 html[data-page-transition="back"]::view-transition-new(pwa-page) {
-  animation: pwa-page-under-in 300ms cubic-bezier(0.2, 0, 0, 1) both;
+  animation:
+    pwa-page-from-left 340ms var(--pwa-page-ease) both,
+    pwa-page-fade-in 240ms linear 90ms both;
 }
 
 html[data-page-transition="module"]::view-transition-old(pwa-page) {
-  animation: pwa-page-fade-out 90ms linear both;
+  animation: pwa-page-fade-out 140ms cubic-bezier(0.4, 0, 1, 1) both;
 }
 html[data-page-transition="module"]::view-transition-new(pwa-page) {
-  animation: pwa-page-fade-through-in 210ms cubic-bezier(0.05, 0.7, 0.1, 1) 90ms both;
+  animation:
+    pwa-page-settle 260ms var(--pwa-page-ease) 100ms both,
+    pwa-page-fade-in 220ms linear 100ms both;
 }
 
-@keyframes pwa-page-slide-in {
-  from { transform: translateX(100%); }
-  to { transform: none; }
+/* M3 standard easing — gentle start, long soft landing. */
+:root {
+  --pwa-page-ease: cubic-bezier(0.2, 0, 0, 1);
 }
-@keyframes pwa-page-slide-out {
-  from { transform: none; }
-  to { transform: translateX(100%); }
+
+@keyframes pwa-page-to-left {
+  to { transform: translateX(-40px); }
 }
-@keyframes pwa-page-under-out {
-  from { transform: none; filter: brightness(1); }
-  to { transform: translateX(-12%); filter: brightness(0.88); }
+@keyframes pwa-page-from-right {
+  from { transform: translateX(40px); }
 }
-@keyframes pwa-page-under-in {
-  from { transform: translateX(-12%); filter: brightness(0.88); }
-  to { transform: none; filter: brightness(1); }
+@keyframes pwa-page-to-right {
+  to { transform: translateX(40px); }
+}
+@keyframes pwa-page-from-left {
+  from { transform: translateX(-40px); }
+}
+@keyframes pwa-page-settle {
+  from { transform: scale(0.98); }
 }
 @keyframes pwa-page-fade-out {
-  from { opacity: 1; }
   to { opacity: 0; }
 }
-@keyframes pwa-page-fade-through-in {
-  from { opacity: 0; transform: scale(0.96); }
-  to { opacity: 1; transform: none; }
+@keyframes pwa-page-fade-in {
+  from { opacity: 0; }
 }
 
 /* Reduce motion: a short crossfade, nothing moves. */
@@ -78,6 +97,6 @@ html[data-page-transition="module"]::view-transition-new(pwa-page) {
     animation: pwa-page-fade-out 120ms linear both;
   }
   html[data-page-transition]::view-transition-new(pwa-page) {
-    animation: pwa-page-fade-through-in 120ms linear both;
+    animation: pwa-page-fade-in 160ms linear both;
   }
 }
