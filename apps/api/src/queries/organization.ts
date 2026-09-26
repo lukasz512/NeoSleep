@@ -49,6 +49,8 @@ export interface OrganizationDto {
   longitude: number | null;
   specialties: string[];
   status: string;
+  /** Listed on the public find-a-specialist map (migration 033, NEO-79). */
+  show_on_public_map: boolean;
   metadata: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
@@ -77,6 +79,7 @@ function toDto(o: Organization, territoryPath: TerritoryPathNode[] | null = null
     longitude:     o.longitude ?? null,
     specialties:   o.specialties ?? [],
     status:        o.status,
+    show_on_public_map: o.show_on_public_map ?? true,
     metadata:      o.metadata ?? null,
     created_at:    o.created_at instanceof Date ? o.created_at.toISOString() : String(o.created_at),
     updated_at:    o.updated_at instanceof Date ? o.updated_at.toISOString() : String(o.updated_at),

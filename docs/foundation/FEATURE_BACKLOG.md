@@ -130,6 +130,7 @@
 | PDPA consent flow (TH) | `planned` | same table, jurisdiction='TH' |
 | EFPIA annual disclosure report | `planned` | encounter.transfer_of_value + event_attendee.cost_allocated |
 | Sample audit trail (EFPIA) | `planned` | sample_transaction ledger + signature_url |
+| Document authenticity verification (ID + QR in the PDF footer) | `deferred` | Requested 2026-09-26 with the clinical document theme: a public check page, a PDF hash compared in the browser, and revocation. No Linear ticket yet (connector not authorised). Spec: `docs/stories/document-authenticity-verification.md` |
 | SaaS billing (Stripe) | `planned` | platform.invoice + platform.payment_method; replaces "manual for MVP" |
 | Supabase → Hetzner VPS migration | `deferred` | post-MVP, when cost justifies |
 | Two Supabase projects (platform / client) | `deferred` | Option B; viable at 5+ paying clients |

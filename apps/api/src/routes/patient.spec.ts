@@ -55,7 +55,7 @@ describe("/api/v1/patient/:id/clinical-records", () => {
     expect([read.status, link.status]).toEqual([403, 403]);
   });
 
-  it("manager reads and edits the patient's studies (NEO-83), but not the Documents tab list nor a hard delete", async () => {
+  it("manager reads and edits the patient's studies and reads the Documents tab (NEO-83), but cannot hard delete", async () => {
     const { auth, patientId } = await authAndPatient("manager");
     const records = await request(app).get(`/api/v1/patient/${patientId}/clinical-records`).set("Authorization", auth);
     const checklist = await request(app).get(`/api/v1/patient/${patientId}/checklist`).set("Authorization", auth);
@@ -69,8 +69,32 @@ describe("/api/v1/patient/:id/clinical-records", () => {
     const hardDelete = await request(app).delete(`/api/v1/sleep-study/${created.body.id}`).set("Authorization", auth);
     const docs = await request(app).get(`/api/v1/patient/${patientId}/documents`).set("Authorization", auth);
     expect([records.status, checklist.status, exam.status, created.status, updated.status, listed.status, hardDelete.status, docs.status])
-      .toEqual([200, 200, 201, 201, 200, 200, 403, 403]);
+      .toEqual([200, 200, 201, 201, 200, 200, 403, 200]);
     expect(Number(updated.body.ahi_score)).toBe(12);
+  });
+
+  it("every health-data read leaves an audit_log 'read' row with the role; a 403 leaves none, and History hides reads (NEO-83)", async () => {
+    const { auth, patientId } = await authAndPatient("manager");
+    const created = await request(app).post("/api/v1/sleep-study").set("Authorization", auth).send({ patient_id: patientId });
+    await request(app).get(`/api/v1/patient/${patientId}/checklist`).set("Authorization", auth);
+    await request(app).get(`/api/v1/sleep-study/${created.body.id}`).set("Authorization", auth);
+    const rep = await authAndPatient("rep");
+    await request(app).get(`/api/v1/patient/${patientId}/clinical-records`).set("Authorization", rep.auth);
+
+    const reads = await withTenant(TENANT_SLUG, (client) =>
+      client.query<{ entity_type: string; metadata: { view: string; role: string; patient_id: string } }>(
+        `SELECT entity_type, metadata FROM audit_log WHERE action = 'read' AND metadata->>'patient_id' = $1 ORDER BY created_at`,
+        [patientId],
+      ),
+    );
+    expect(reads.rows.map((r) => [r.entity_type, r.metadata.view, r.metadata.role])).toEqual([
+      ["Patient", "checklist", "manager"],
+      ["SleepStudy", "sleep-study", "manager"],
+    ]);
+
+    const history = await request(app).get(`/api/v1/patient/${patientId}/history`).set("Authorization", auth);
+    expect(history.status).toBe(200);
+    expect(history.body.entries.map((e: { action: string }) => e.action)).not.toContain("read");
   });
 
   it.each(["rep", "kam", "msl"] as const)("403s %s on patient documents and sleep studies (health data), but still gives the latest sleep-study id for device orders", async (role) => {

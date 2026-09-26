@@ -79,8 +79,14 @@ WARNS=()
 branch_artifact_check() {
   [ -z "$BRANCH_CHANGED" ] && return 0
   local ticket marker visual
-  ticket="$(printf '%s' "$BRANCH" | grep -oiE '[a-z]{2,10}-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]' || true)"
-  if [ -n "$ticket" ] && [ -f ".claude/local/artifacts/${ticket}.json" ]; then
+  ticket="$(printf '%s' "$BRANCH" | grep -oiE 'neo-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]' || true)"
+  # 2026-09-26 (Łukasz, NEO-84): every change has a NEO ticket — trivial ones too. The
+  # ticket ID in the branch name is what links branch, PR, Artifact and ticket.
+  if [ -z "$ticket" ]; then
+    FAILS+=("Branch '${BRANCH}' has changes but no NEO ticket in its name. Every change needs a ticket (NEO-84): create one in Linear (template: ## Problem / ## Change / ## Done when, short and only about this change), then move the work to a branch named after it (EnterWorktree name '<neo-n>-<slug>', or git branch -m worktree-neo-<n>-<slug>).")
+    return 0
+  fi
+  if [ -f ".claude/local/artifacts/${ticket}.json" ]; then
     marker=".claude/local/artifacts/${ticket}.json"
   else
     marker=".claude/local/artifacts/branch-$(printf '%s' "$BRANCH" | tr '/' '-').json"
@@ -114,6 +120,12 @@ branch_artifact_check() {
   if [ -n "$ticket" ] && [ "$marker" = ".claude/local/artifacts/${ticket}.json" ]; then
     jq -e '.linearAttached == true and .linearCommented == true' "$marker" >/dev/null 2>&1 \
       || FAILS+=("$marker: the Artifact isn't attached to and commented on ${ticket} yet. Attach it (save_issue links), post the summary comment (save_comment), then record both — see .claude/skills/ship-artifact/SKILL.md Steps 4-5.")
+    # NEO-84: the 3 fixed links (Artifact, Linear, VS Code session) on the Artifact and the
+    # ticket, and the change listed in the shared artifact index.
+    jq -e '(.url // "") != "" and (.linearUrl // "") != "" and ((.vscodeUrl // "") | startswith("vscode://"))' "$marker" >/dev/null 2>&1 \
+      || FAILS+=("$marker is missing one of the 3 links (url = Artifact, linearUrl, vscodeUrl). Re-run .claude/skills/ship-artifact/build.mjs render + finalize from this Claude session.")
+    jq -e '.indexed == true' "$marker" >/dev/null 2>&1 \
+      || FAILS+=("${ticket} isn't in the artifact index yet: node .claude/skills/ship-artifact/build.mjs index, publish the page (url from its output), then build.mjs index --published <url> — ship-artifact Step 5.")
   fi
   dev_mergeable_check
 }

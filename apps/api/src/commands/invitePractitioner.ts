@@ -502,18 +502,18 @@ export async function AcceptPractitionerInviteCommand(
     input.agreementSignatureDataUrl,
   );
   const noticeDoc = buildNoticeDocument(set, signerName, signedAtLabel);
-  // 26mm bottom margin: the shared 3-line contact footer is taller than the
+  // 18mm bottom margin: the shared 2-line footer is taller than the
   // renderer's 14mm default, and body text would otherwise run into it.
   const agreementPdf = await renderHtmlToPdf(agreementDoc.html, {
     footerTemplate: agreementDoc.footerHtml,
-    marginBottom: "26mm",
+    marginBottom: "18mm",
     dataFields: agreementDoc.dataFields,
     imageFields: agreementDoc.imageFields,
     variant: agreementDoc.variant,
   });
   const noticePdf = await renderHtmlToPdf(noticeDoc.html, {
     footerTemplate: noticeDoc.footerHtml,
-    marginBottom: "26mm",
+    marginBottom: "18mm",
     dataFields: noticeDoc.dataFields,
   });
 

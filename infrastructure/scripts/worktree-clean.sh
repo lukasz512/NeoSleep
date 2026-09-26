@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # infrastructure/scripts/worktree-clean.sh
-# Lists git worktrees (and merged remote branches) that look closed, and
-# removes the ones you name. Git-only: the Linear "ticket is Done" condition
-# is checked by the /worktree-clean skill (Linear MCP) between listing and
-# applying — see docs/stories/worktree-cleanup.md (NEO-50).
+# Lists git worktrees, local branches and merged remote branches that look
+# closed, and removes the ones you name — or, with --auto, every one of them.
+# See docs/stories/worktree-cleanup.md (NEO-50) and
+# docs/stories/ship-rules-ticket-links-index-cleanup.md (NEO-84).
 #
 # Usage:
 #   pnpm worktree:clean                       dry-run report (fetches origin first)
@@ -12,7 +12,14 @@
 #   pnpm worktree:clean --apply [--delete-remote] <branch>...
 #                                             remove the named worktrees + local branches
 #                                             (and merged remote branches with --delete-remote)
+#   pnpm worktree:clean --auto                remove every CANDIDATE (worktrees, local and
+#                                             merged remote branches); SessionStart hook
 #   --no-fetch                                skip `git fetch origin --prune`
+#
+# "Merged" means every commit is on origin/dev — by ancestry, or as an identical
+# patch (git cherry: squash/rebase/cherry-pick merges). Anything else is KEEP and
+# only listed, never removed. Before a worktree goes, its Artifact markers
+# (.claude/local/artifacts/*.json) are copied to the main checkout.
 #
 # A worktree is a CANDIDATE only when all hold:
 #   - it has a branch, is not the main worktree, not the one this runs from, not locked
@@ -20,11 +27,14 @@
 #   - 0 commits not on origin/dev
 #   - its tip is NOT on origin/dev's first-parent chain (a fresh, commit-less
 #     branch sits there and would otherwise look "merged")
+# A local branch with no worktree is a CANDIDATE when it is merged, or when it
+# has no own commits at all (nothing to lose). backup/* branches are never touched.
 # Nothing here ever uses --force.
 set -uo pipefail
 
 BASE="origin/dev"
 PROTECTED_BRANCHES="dev prod main"
+PROTECTED_PREFIX="backup/"
 
 MODE="report"
 JSON=0
@@ -37,9 +47,10 @@ while [ $# -gt 0 ]; do
     --json) JSON=1 ;;
     --count) MODE="count"; FETCH=0 ;;
     --apply) MODE="apply" ;;
+    --auto) MODE="auto"; DELETE_REMOTE=1 ;;
     --delete-remote) DELETE_REMOTE=1 ;;
     --no-fetch) FETCH=0 ;;
-    -h|--help) sed -n '2,24p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,33p' "$0"; exit 0 ;;
     -*) echo "Unknown flag: $1" >&2; exit 2 ;;
     *) APPLY_BRANCHES+=("$1") ;;
   esac
@@ -73,6 +84,7 @@ MAIN_TOP="$(git worktree list --porcelain | awk 'NR==1 && /^worktree /{sub(/^wor
 
 is_protected() {
   case " $PROTECTED_BRANCHES " in *" $1 "*) return 0 ;; esac
+  case "$1" in "$PROTECTED_PREFIX"*) return 0 ;; esac
   return 1
 }
 
@@ -80,12 +92,35 @@ ticket_of() {
   printf '%s' "$1" | grep -oiE 'neo-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]'
 }
 
-# Why a commit is not safe to drop, or empty if it is ("merged into BASE with own commits").
+# Why a ref is not safe to drop, or empty if it is. Safe = merged into BASE with own
+# commits, either by ancestry or with every own commit already on BASE as an identical
+# patch (squash/rebase merges). `allow-fresh` also accepts a ref with no own commits —
+# only for a branch with no worktree, where there is no work in progress to protect.
 merge_block_reason() {
-  local ref="$1" ahead
+  local ref="$1" allow_fresh="${2:-}" ahead unique
   ahead="$(git rev-list --count "$BASE..$ref" 2>/dev/null)" || { echo "cannot resolve $ref"; return; }
-  if [ "$ahead" -gt 0 ]; then echo "$ahead commit(s) not on $BASE"; return; fi
+  if [ "$ahead" -gt 0 ]; then
+    # Empty commits all share one patch id, so git cherry would match them to any empty
+    # commit on BASE — count them as unique, never as "already merged".
+    unique="$(( $(git cherry "$BASE" "$ref" 2>/dev/null | grep -c '^+') + $(git rev-list --no-merges "$BASE..$ref" 2>/dev/null | while read -r c; do git diff-tree --quiet "$c^" "$c" 2>/dev/null && echo "$c"; done | wc -l) ))"
+    [ "$unique" -gt 0 ] && echo "$unique commit(s) not on $BASE"
+    return
+  fi
+  [ "$allow_fresh" = "allow-fresh" ] && return
   if grep -qx "$(git rev-parse "$ref")" "$TMP/first-parent"; then echo "no own commits (fresh or unused branch)"; return; fi
+}
+
+# Keep a removed worktree's Artifact markers: the quality gate and the artifact index
+# read them later from the main checkout. The newer copy wins (markers are rewritten
+# on every refresh of their Artifact).
+save_markers() {
+  local src="$1/.claude/local/artifacts" dst="$MAIN_TOP/.claude/local/artifacts" f
+  [ -d "$src" ] || return 0
+  mkdir -p "$dst"
+  for f in "$src"/*.json; do
+    [ -f "$f" ] || continue
+    if [ ! -f "$dst/$(basename "$f")" ] || [ "$f" -nt "$dst/$(basename "$f")" ]; then cp -p "$f" "$dst/"; fi
+  done
 }
 
 # ─── Collect worktrees: path, branch, locked (\x1f-separated) ─────────────────────────
@@ -123,43 +158,52 @@ remote_exists() {
 }
 
 # ─── Apply ─────────────────────────────────────────────────────────────────
+# apply_branch <branch> — removes its worktree, local branch and (with DELETE_REMOTE) its
+# merged remote branch, re-checking safety at every step. Non-zero if anything was refused.
+apply_branch() {
+  local branch="$1" path locked result reason sha
+  echo "── $branch"
+  if is_protected "$branch"; then echo "   REFUSED: protected branch"; return 1; fi
+  path="$(worktree_path_of "$branch")"
+  if [ -n "$path" ] && [ "$path" = "$MAIN_TOP" ]; then echo "   REFUSED: checked out in the main worktree"; return 1; fi
+
+  if [ -n "$path" ]; then
+    locked="$(awk -F"$S" -v b="$branch" '$2==b {print $3; exit}' "$TMP/worktrees")"
+    result="$(classify "$path" "$branch" "$locked")"
+    if [ "$(printf '%s' "$result" | cut -d"$S" -f1)" != "CANDIDATE" ]; then
+      echo "   REFUSED: $(printf '%s' "$result" | cut -d"$S" -f2)"; return 1
+    fi
+    save_markers "$path"
+    if git worktree remove "$path"; then echo "   removed worktree $path"; else echo "   FAILED: git worktree remove"; return 1; fi
+  fi
+
+  if git show-ref --verify --quiet "refs/heads/$branch"; then
+    reason="$(merge_block_reason "refs/heads/$branch" allow-fresh)"
+    if [ -n "$reason" ]; then echo "   REFUSED to delete local branch: $reason"; return 1; fi
+    # update-ref with the old value only deletes if the branch still points at the commit just verified.
+    sha="$(git rev-parse "refs/heads/$branch")"
+    if git update-ref -d "refs/heads/$branch" "$sha"; then
+      git config --remove-section "branch.$branch" 2>/dev/null
+      echo "   deleted local branch (was ${sha:0:7})"
+    else
+      echo "   FAILED: could not delete local branch"; return 1
+    fi
+  elif [ -z "$path" ] && ! remote_exists "$branch"; then
+    echo "   nothing found for this branch"; return 1
+  fi
+
+  if [ "$DELETE_REMOTE" = 1 ] && remote_exists "$branch"; then
+    reason="$(merge_block_reason "refs/remotes/origin/$branch")"
+    if [ -n "$reason" ]; then echo "   REFUSED to delete origin/$branch: $reason"; return 1; fi
+    if git push origin --delete "$branch" --quiet; then echo "   deleted origin/$branch"; else echo "   FAILED: git push origin --delete"; return 1; fi
+  fi
+  return 0
+}
+
 if [ "$MODE" = "apply" ]; then
   rc=0
   for branch in "${APPLY_BRANCHES[@]}"; do
-    echo "── $branch"
-    if is_protected "$branch"; then echo "   REFUSED: protected branch"; rc=1; continue; fi
-    path="$(worktree_path_of "$branch")"
-    if [ -n "$path" ] && [ "$path" = "$MAIN_TOP" ]; then echo "   REFUSED: checked out in the main worktree"; rc=1; continue; fi
-
-    if [ -n "$path" ]; then
-      locked="$(awk -F"$S" -v b="$branch" '$2==b {print $3; exit}' "$TMP/worktrees")"
-      result="$(classify "$path" "$branch" "$locked")"
-      if [ "$(printf '%s' "$result" | cut -d"$S" -f1)" != "CANDIDATE" ]; then
-        echo "   REFUSED: $(printf '%s' "$result" | cut -d"$S" -f2)"; rc=1; continue
-      fi
-      if git worktree remove "$path"; then echo "   removed worktree $path"; else echo "   FAILED: git worktree remove"; rc=1; continue; fi
-    fi
-
-    if git show-ref --verify --quiet "refs/heads/$branch"; then
-      reason="$(merge_block_reason "refs/heads/$branch")"
-      if [ -n "$reason" ]; then echo "   REFUSED to delete local branch: $reason"; rc=1; continue; fi
-      # update-ref with the old value only deletes if the branch still points at the commit just verified.
-      sha="$(git rev-parse "refs/heads/$branch")"
-      if git update-ref -d "refs/heads/$branch" "$sha"; then
-        git config --remove-section "branch.$branch" 2>/dev/null
-        echo "   deleted local branch (was ${sha:0:7})"
-      else
-        echo "   FAILED: could not delete local branch"; rc=1
-      fi
-    elif [ -z "$path" ] && ! remote_exists "$branch"; then
-      echo "   nothing found for this branch"; rc=1; continue
-    fi
-
-    if [ "$DELETE_REMOTE" = 1 ] && remote_exists "$branch"; then
-      reason="$(merge_block_reason "refs/remotes/origin/$branch")"
-      if [ -n "$reason" ]; then echo "   REFUSED to delete origin/$branch: $reason"; rc=1; continue; fi
-      if git push origin --delete "$branch" --quiet; then echo "   deleted origin/$branch"; else echo "   FAILED: git push origin --delete"; rc=1; fi
-    fi
+    apply_branch "$branch" || rc=1
   done
   exit "$rc"
 fi
@@ -173,11 +217,22 @@ while IFS="$S" read -r path branch locked; do
   printf 'worktree\037%s\037%s\037%s\037%s\037%s\n' "$branch" "$path" "$(ticket_of "$branch")" "$remote" "$result" >> "$TMP/rows"
 done < "$TMP/worktrees"
 
-# Merged remote branches with no worktree here (e.g. old worker/* branches).
+# Local branches with no worktree (left behind by removed worktrees or old sessions).
+git for-each-ref --format='%(refname:strip=2)' refs/heads | while read -r lb; do
+  is_protected "$lb" && continue
+  awk -F"$S" -v b="$lb" '$2==b {found=1} END {exit !found}' "$TMP/worktrees" && continue
+  reason="$(merge_block_reason "refs/heads/$lb" allow-fresh)"
+  if [ -z "$reason" ]; then status="CANDIDATE"; reason="merged into $BASE (or no own commits)"; else status="KEEP"; fi
+  remote=0; remote_exists "$lb" && remote=1
+  printf 'local-only\037%s\037\037%s\037%s\037%s\037%s\037\n' "$lb" "$(ticket_of "$lb")" "$remote" "$status" "$reason" >> "$TMP/rows"
+done
+
+# Merged remote branches with no worktree or local branch here (e.g. old worker/* branches).
 git for-each-ref --format='%(refname:strip=3)' refs/remotes/origin | while read -r rb; do
   [ "$rb" = "HEAD" ] && continue
   is_protected "$rb" && continue
   awk -F"$S" -v b="$rb" '$2==b {found=1} END {exit !found}' "$TMP/worktrees" && continue
+  git show-ref --verify --quiet "refs/heads/$rb" && continue
   reason="$(merge_block_reason "refs/remotes/origin/$rb")"
   if [ -z "$reason" ]; then status="CANDIDATE"; reason="merged into $BASE"; else status="KEEP"; fi
   printf 'remote-only\037%s\037\037%s\0371\037%s\037%s\037\n' "$rb" "$(ticket_of "$rb")" "$status" "$reason" >> "$TMP/rows"
@@ -185,6 +240,18 @@ done
 
 if [ "$MODE" = "count" ]; then
   awk -F"$S" '$1=="worktree" && $6=="CANDIDATE"' "$TMP/rows" | wc -l | tr -d ' '
+  exit 0
+fi
+
+if [ "$MODE" = "auto" ]; then
+  awk -F"$S" '$6=="CANDIDATE" {print $2}' "$TMP/rows" | sort -u > "$TMP/auto"
+  removed=0
+  while read -r branch; do
+    [ -z "$branch" ] && continue
+    apply_branch "$branch" && removed=$((removed + 1))
+  done < "$TMP/auto"
+  kept="$(awk -F"$S" '$6=="KEEP"' "$TMP/rows" | wc -l | tr -d ' ')"
+  echo "auto: cleaned $removed branch(es); kept $kept (unmerged, dirty, locked or fresh — pnpm worktree:clean lists them)"
   exit 0
 fi
 
@@ -204,13 +271,14 @@ for status in CANDIDATE KEEP; do
   echo "== $status"
   awk -F"$S" -v s="$status" '$6==s' "$TMP/rows" | sort -t"$S" -k1,1 -k2,2 | while IFS="$S" read -r kind branch path ticket remote st reason dirty; do
     extra=""
-    [ -n "$ticket" ] && extra=" [$ticket — check Linear is Done]"
+    [ -n "$ticket" ] && extra=" [$ticket]"
     [ "$kind" = "remote-only" ] && extra="$extra (remote only)"
+    [ "$kind" = "local-only" ] && extra="$extra (local branch, no worktree)"
     [ "$kind" = "worktree" ] && [ "$remote" = 1 ] && extra="$extra (+ origin/$branch)"
     printf '  %-60s %s%s\n' "$branch" "$reason" "$extra"
     [ -n "$dirty" ] && printf '%s\n' "$dirty" | tr ';' '\n' | sed 's/^/      · /'
   done
 done
 echo
-echo "Dry run — nothing removed. Use /worktree-clean in Claude (checks Linear), or:"
+echo "Dry run — nothing removed. Remove every CANDIDATE: pnpm worktree:clean --auto — or pick:"
 echo "  pnpm worktree:clean --apply [--delete-remote] <branch>..."

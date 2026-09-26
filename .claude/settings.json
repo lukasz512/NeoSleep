@@ -10,7 +10,9 @@
       "Bash(ls .claude/local/artifacts*)",
       "Bash(cat .claude/local/*)",
       "Bash(head)",
-      "Bash(wc -l)"
+      "Bash(wc -l)",
+      "Bash(pnpm worktree:clean*)",
+      "Bash(./infrastructure/scripts/worktree-clean.sh*)"
     ]
   },
   "hooks": {
@@ -27,7 +29,7 @@
             "type": "command",
             "command": "bash .claude/hooks/session-start-stale-worktrees.sh",
             "timeout": 15,
-            "statusMessage": "Counting closed worktrees..."
+            "statusMessage": "Cleaning up merged worktrees in the background..."
           }
         ]
       }
@@ -70,6 +72,17 @@
             "command": "bash .claude/hooks/pre-tool-main-tree-guard.sh",
             "timeout": 10,
             "statusMessage": "Checking edit target is inside a worktree..."
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__claude_ai_Linear__save_issue",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/pre-tool-linear-ticket-format.sh",
+            "timeout": 10,
+            "statusMessage": "Checking Linear ticket format..."
           }
         ]
       }

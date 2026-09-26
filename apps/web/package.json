@@ -11,14 +11,15 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@googlemaps/markerclusterer": "2.6.2",
     "@neo/api-client": "workspace:*",
     "@neo/stores": "workspace:*",
     "@neo/ui": "workspace:*",
     "@unhead/vue": "catalog:",
+    "@vue/devtools-api": "catalog:",
     "@vueuse/core": "catalog:",
     "flag-icons": "^7.5.0",
     "pinia": "catalog:",
-    "@vue/devtools-api": "catalog:",
     "vue": "catalog:",
     "vue-gtag": "^3.7.1",
     "vue-i18n": "catalog:",

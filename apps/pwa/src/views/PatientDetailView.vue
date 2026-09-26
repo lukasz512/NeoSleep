@@ -203,7 +203,7 @@ import PatientOrthoApneaPanel from "../components/patient/PatientOrthoApneaPanel
 import EntityHistoryPanel from "../components/EntityHistoryPanel.vue";
 import EntityDocumentsPanel from "../components/EntityDocumentsPanel.vue";
 import { patientFormFields, patientFormDerive } from "../config/forms/patientForm";
-import { CLINICAL_ROLES, STUDY_ROLES } from "../config/questionnaires";
+import { STUDY_ROLES } from "../config/questionnaires";
 import { useAuthStore } from "../stores/auth";
 import { entityActionIcon, entityActionBtnClass } from "../config/entityActions";
 import { patientStatusColor, patientStatusLabel } from "../utils/patientStatus";
@@ -277,10 +277,10 @@ const ALL_PATIENT_TABS = [
   { value: "notes", labelKey: "app.patients.detail.tabs.notes" },
   { value: "studies", labelKey: "app.patients.detail.tabs.studies", roles: STUDY_ROLES },
   { value: "orthoapnea", labelKey: "app.patients.detail.tabs.orthoapnea" },
-  { value: "documents", labelKey: "app.patients.detail.tabs.documents", roles: CLINICAL_ROLES },
+  { value: "documents", labelKey: "app.patients.detail.tabs.documents", roles: STUDY_ROLES },
   { value: "history", labelKey: "app.patients.detail.tabs.history" },
 ];
-/** Studies and Documents hold health data — Documents admin/doctor only, Studies also manager (NEO-83); the API enforces the same. */
+/** Studies and Documents hold health data — admin, doctor and manager only (NEO-83); the API enforces the same. */
 const userRole = computed(() => authStore.user?.role ?? "");
 const canSeeStudies = computed(() => STUDY_ROLES.includes(userRole.value));
 const patientTabs = computed(() => ALL_PATIENT_TABS.filter((tab) => !tab.roles || tab.roles.includes(userRole.value)));

@@ -127,4 +127,17 @@ export const hcoFormFields: FormFieldDef[] = [
     hidden: () => useAuthStore().user?.role !== "admin",
     cols: 12,
   },
+  {
+    // NEO-79: whether this clinic is listed on the public website's
+    // find-a-specialist map (organization.show_on_public_map, migration 033).
+    // Admin-only, like status — the API also ignores the value from any
+    // other role, since the form submits it with every save.
+    key: "show_on_public_map",
+    type: "boolean",
+    labelKey: "user.hco.form.showOnPublicMap",
+    hint: "user.hco.form.showOnPublicMapHint",
+    default: true,
+    hidden: () => useAuthStore().user?.role !== "admin",
+    cols: 12,
+  },
 ];

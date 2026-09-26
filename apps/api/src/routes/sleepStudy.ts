@@ -9,6 +9,7 @@ import { CreateSleepStudyCommand, UpdateSleepStudyCommand, DeleteSleepStudyComma
 import { UploadSleepStudyAttachmentCommand, DeleteSleepStudyAttachmentCommand } from "../commands/sleepStudyAttachment.js";
 import { GetSleepStudyListQuery, GetSleepStudyByIdQuery } from "../queries/sleepStudy.js";
 import { GetSleepStudyAttachmentsQuery, GetSleepStudyAttachmentDownloadUrlQuery } from "../queries/sleepStudyAttachment.js";
+import { AuditHealthDataReadCommand } from "../commands/healthDataReadAudit.js";
 import { ValidationError } from "../errors.js";
 import { parsePaginationParams, routeParam } from "./utils.js";
 
@@ -108,7 +109,7 @@ sleepStudyRouter.get(
 
     const result = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
-      return GetSleepStudyListQuery(ctx, {
+      const list = await GetSleepStudyListQuery(ctx, {
         patient_id: patientId || undefined,
         status: status || undefined,
         search: search || undefined,
@@ -117,6 +118,8 @@ sleepStudyRouter.get(
         sortBy,
         sortOrder,
       });
+      await AuditHealthDataReadCommand(ctx, { entity_type: "SleepStudy", entity_id: null, patient_id: patientId || null, view: "sleep-study-list" });
+      return list;
     });
     res.json(result);
   })
@@ -135,7 +138,11 @@ sleepStudyRouter.get(
     const slug = tenantSlugFromHost(req.hostname);
     const study = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
-      return GetSleepStudyByIdQuery(ctx, id);
+      const found = await GetSleepStudyByIdQuery(ctx, id);
+      if (found) {
+        await AuditHealthDataReadCommand(ctx, { entity_type: "SleepStudy", entity_id: id, patient_id: found.patient_id, view: "sleep-study" });
+      }
+      return found;
     });
 
     if (!study) { res.status(404).json({ error: "Sleep study not found" }); return; }
@@ -199,7 +206,9 @@ sleepStudyRouter.get(
     const slug = tenantSlugFromHost(req.hostname);
     const attachments = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
-      return GetSleepStudyAttachmentsQuery(ctx, id);
+      const items = await GetSleepStudyAttachmentsQuery(ctx, id);
+      await AuditHealthDataReadCommand(ctx, { entity_type: "SleepStudy", entity_id: id, view: "sleep-study-attachments" });
+      return items;
     });
     res.json({ items: attachments });
   })
@@ -245,7 +254,9 @@ sleepStudyRouter.get(
     const slug = tenantSlugFromHost(req.hostname);
     const url = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
-      return GetSleepStudyAttachmentDownloadUrlQuery(ctx, id, attachmentId);
+      const signedUrl = await GetSleepStudyAttachmentDownloadUrlQuery(ctx, id, attachmentId);
+      await AuditHealthDataReadCommand(ctx, { entity_type: "DocumentReference", entity_id: attachmentId, view: "sleep-study-attachment-download" });
+      return signedUrl;
     });
     res.json({ url });
   })

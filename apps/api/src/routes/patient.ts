@@ -2,7 +2,7 @@ import { Router, type Router as RouterType, type Request, type Response } from "
 import { asyncHandler } from "../middleware/errorHandler.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { requireRole } from "../middleware/requireRole.js";
-import { requireClinicalRole, requireStudyRole } from "../middleware/requireClinicalRole.js";
+import { requireStudyRole } from "../middleware/requireClinicalRole.js";
 import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
 import { CreatePatientCommand, UpdatePatientCommand, DeletePatientCommand } from "../commands/patient.js";
@@ -17,6 +17,7 @@ import { isClinicalRecordKind, type ClinicalRecordKind } from "../commands/clini
 import { ListClinicalRecordsQuery } from "../queries/clinicalRecords.js";
 import { GetLatestSleepStudyRefQuery } from "../queries/sleepStudy.js";
 import { CreateQuestionnaireRequestCommand, CancelQuestionnaireRequestCommand } from "../commands/questionnaireRequest.js";
+import { AuditHealthDataReadCommand } from "../commands/healthDataReadAudit.js";
 import { resolveFrontendOrigin } from "../utils/frontendOrigin.js";
 import { ValidationError } from "../errors.js";
 import { parsePaginationParams, toFilterArray, routeParam } from "./utils.js";
@@ -131,7 +132,7 @@ patientRouter.get(
 // ---------------------------------------------------------------------------
 patientRouter.get(
   "/patient/:id/documents",
-  requireClinicalRole,
+  requireStudyRole,
   asyncHandler(async (req: Request, res: Response) => {
     const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing patient id");
@@ -139,7 +140,9 @@ patientRouter.get(
     const slug = tenantSlugFromHost(req.hostname);
     const documents = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
-      return GetPatientDocumentsQuery(ctx, id);
+      const result = await GetPatientDocumentsQuery(ctx, id);
+      await AuditHealthDataReadCommand(ctx, { entity_type: "Patient", entity_id: id, patient_id: id, view: "documents" });
+      return result;
     });
     res.json(documents);
   })
@@ -159,7 +162,9 @@ patientRouter.get(
     const slug = tenantSlugFromHost(req.hostname);
     const url = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
-      return GetPatientDocumentDownloadUrlQuery(ctx, id, documentId);
+      const signedUrl = await GetPatientDocumentDownloadUrlQuery(ctx, id, documentId);
+      await AuditHealthDataReadCommand(ctx, { entity_type: "DocumentReference", entity_id: documentId, patient_id: id, view: "document-download" });
+      return signedUrl;
     });
     res.json({ url });
   })
@@ -193,7 +198,9 @@ patientRouter.get(
     const slug = tenantSlugFromHost(req.hostname);
     const result = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
-      return ListClinicalRecordsQuery(ctx, id);
+      const records = await ListClinicalRecordsQuery(ctx, id);
+      await AuditHealthDataReadCommand(ctx, { entity_type: "Patient", entity_id: id, patient_id: id, view: "clinical-records" });
+      return records;
     });
     res.json(result);
   })
@@ -243,7 +250,9 @@ patientRouter.get(
     const slug = tenantSlugFromHost(req.hostname);
     const checklist = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
-      return GetPatientChecklistQuery(ctx, id);
+      const result = await GetPatientChecklistQuery(ctx, id);
+      await AuditHealthDataReadCommand(ctx, { entity_type: "Patient", entity_id: id, patient_id: id, view: "checklist" });
+      return result;
     });
     res.json(checklist);
   })
