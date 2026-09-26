@@ -47,6 +47,11 @@
             "type": "command",
             "command": "bash .claude/hooks/prompt-submit-reply-brevity.sh",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/prompt-submit-decision-form.sh",
+            "timeout": 10
           }
         ]
       }
