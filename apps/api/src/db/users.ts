@@ -39,6 +39,9 @@ export interface User {
   territory_id: string | null;
   status: string;
   token_version: number;
+  /** Whether the account can sign in with a password (Google-only accounts can't),
+   *  so the app only offers "Change password" where it would work. */
+  has_password: boolean;
   created_at: Date;
   updated_at: Date;
 }
@@ -66,6 +69,7 @@ const USER_COLS = `
   COALESCE(ur.role, 'rep') AS role,
   ur.territory_id AS scope_territory_id, st.name AS scope_territory_name, st.kind AS scope_territory_kind,
   u.google_sub, i.region, i.country_code, i.language, i.territory_id, u.status, u.token_version,
+  (u.password_hash IS NOT NULL) AS has_password,
   u.created_at, u.updated_at`.trim();
 
 const STAFF_AUTH_COLS = `${USER_COLS}, u.password_hash, u.force_password_change`;

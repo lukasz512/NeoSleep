@@ -3,7 +3,7 @@ export { createUseLoginFlow } from "./composables/useLoginFlow";
 export { createUseForgotPasswordFlow } from "./composables/useForgotPasswordFlow";
 export { createUseResetPasswordFlow } from "./composables/useResetPasswordFlow";
 export { default as ChangePasswordView } from "./views/ChangePasswordView.vue";
-export { createUseChangePasswordFlow } from "./composables/useChangePasswordFlow";
+export { createUseChangePasswordFlow, PASSWORD_CHANGED_NOTICE, CHANGE_PASSWORD_FROM_MENU } from "./composables/useChangePasswordFlow";
 export { default as LazyImg } from "./components/LazyImg.vue";
 export { default as BrandLogo } from "./components/BrandLogo.vue";
 export { default as PersonAvatar } from "./components/PersonAvatar.vue";
@@ -19,7 +19,7 @@ export { default as MobileBottomNavItem } from "./components/MobileBottomNavItem
 export { default as MobileNavPanel, type MobileNavPanelItem } from "./components/MobileNavPanel.vue";
 export { default as AuthOrbs } from "./components/AuthOrbs.vue";
 export { AUTH_BACKDROP_KEY, type AuthBackdrop } from "./composables/authBackdrop";
-export { useAppVersionLabel } from "./composables/useAppVersionLabel";
+export { useAppVersionLabel, useAppVersionParts, type AppVersionParts } from "./composables/useAppVersionLabel";
 export { default as AppStateView } from "./components/AppStateView.vue";
 export { default as OriginDialogTransition } from "./components/OriginDialogTransition.vue";
 export { originDialogTransition, sheetDialogTransition } from "./components/originDialogTransition";

@@ -3,7 +3,7 @@ import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useTheme } from "vuetify";
 import { useDebounceFn } from "@vueuse/core";
-import { useThemeStore } from "@stores";
+import { useThemeStore, type ThemePreference } from "@stores";
 import { SIDEBAR_DEFAULT_COLLAPSED, SIDEBAR_COLLAPSE_ENABLED, MOBILE_BREAKPOINT } from "../constants";
 import { getUserSettings, setUserSettings } from "../utils/user-settings";
 import { getInitials } from "../utils/initials";
@@ -31,12 +31,11 @@ export function useLayoutState() {
     { immediate: true, flush: "sync" }
   );
 
-  function setTheme(id: "light" | "dark") {
-    themeStore.setPreference(id);
-  }
+  /** Light / Dark / Auto ("system") — what the account menu's segment shows. */
+  const themePreference = computed(() => themeStore.preference);
 
-  function toggleTheme() {
-    themeStore.toggleMode();
+  function setThemePreference(preference: ThemePreference) {
+    themeStore.setPreference(preference);
   }
 
   const sidebarCollapsed = ref(SIDEBAR_DEFAULT_COLLAPSED);
@@ -121,12 +120,16 @@ export function useLayoutState() {
 
   const user = computed(() => ({
     displayName: userDisplayName.value,
+    email: authStore.user?.email,
     role: userRole.value,
     initials: userInitials.value,
+    region: authStore.user?.country_code,
+    // Google-only accounts have no password to change (NEO-102).
+    canChangePassword: authStore.user?.hasPassword === true,
   }));
 
   return {
-    theme, toggleTheme, setTheme,
+    theme, themePreference, setThemePreference,
     sidebarCollapsed, toggleSidebar,
     isMobile, mobileDrawerOpen,
     user,

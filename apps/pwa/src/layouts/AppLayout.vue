@@ -27,7 +27,12 @@
            never collapses with the side menu); on mobile no logo at all, the
            leading edge is the back arrow on detail views. -->
       <template #app-bar-start>
-        <AppLogo v-if="!isMobile" :theme="theme" />
+        <div v-if="!isMobile" class="layout-appbar__brand">
+          <AppLogo :theme="theme" />
+          <!-- NEO-102: which environment this is, only on non-prod builds. The
+               version itself lives at the foot of the account menu. -->
+          <span v-if="appVersion.channel" class="layout-env-badge" data-testid="env-badge">{{ appVersion.channel }}</span>
+        </div>
         <AppButton
           v-else-if="parentRoute"
           icon
@@ -63,11 +68,6 @@
               <AppIcon :name="sidebarCollapsed ? 'chevron-right' : 'chevron-left'" class="layout-nav__chevron" />
             </AppButton>
           </div>
-          <!-- Same label as under the login badge (useAppVersionLabel). Only
-               while the menu is expanded — the collapsed rail is too narrow. -->
-          <p v-if="appVersionLabel && !sidebarCollapsed" class="layout-app-version">
-            {{ appVersionLabel }}
-          </p>
         </div>
       </template>
 
@@ -84,19 +84,20 @@
               :style="{ marginInlineStart: `${-barTitleGlyph.inset.value}px` }"
             />
             <span class="layout-appbar__title">{{ moduleTitle }}</span>
+            <span v-if="appVersion.channel" class="layout-env-badge" data-testid="env-badge">{{ appVersion.channel }}</span>
           </div>
         </Transition>
       </template>
 
       <!-- Account: top right on both breakpoints (NEO-55), avatar + name/role
-           on desktop, avatar only on mobile. The menu opens below it. -->
+           on desktop, avatar only on mobile. The menu drops below it on
+           desktop and rises as a bottom sheet on phones (NEO-102), within
+           thumb reach. -->
       <template #app-bar-actions>
-        <VMenu
+        <component
+          :is="isMobile ? VBottomSheet : VMenu"
           v-model="menuOpen"
-          location="bottom end"
-          offset="8"
-          :close-on-content-click="false"
-          min-width="220"
+          v-bind="accountMenuProps"
         >
           <template #activator="{ props: menuProps }">
             <AppButton
@@ -119,14 +120,24 @@
           </template>
 
           <AppUserMenuPanel
-            :theme="theme"
+            :sheet="isMobile"
+            :name="user.displayName"
+            :email="user.email"
+            :role-label="user.role"
+            :initials="user.initials"
+            :region="user.region"
+            :theme-preference="themePreference"
             :locale="(locale as string)"
-            @toggle-theme="toggleTheme"
+            :can-change-password="user.canChangePassword"
+            :version="appVersion.version"
+            :channel="appVersion.channel"
+            @set-theme="setThemePreference"
             @change-locale="(lang) => setLocale(lang as 'en' | 'pl' | 'mx')"
+            @change-password="router.push({ name: 'change-password', query: { from: CHANGE_PASSWORD_FROM_MENU } })"
             @logout="onLogout"
             @close="menuOpen = false"
           />
-        </VMenu>
+        </component>
       </template>
 
       <template #nav-icon="{ item }">
@@ -216,13 +227,15 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
+import { VMenu } from "vuetify/components/VMenu";
+import { VBottomSheet } from "vuetify/components/VBottomSheet";
 import { navTitleKey, navIconName, navParentName } from "../router/routes";
 import { pageTransitionsSupported } from "../router/pageTransitions";
 import { providePageHeader, provideRecordHeaderClaim, PAGE_HEADER_ACTIONS_ID } from "../composables/usePageHeader";
 import { useGlyphInset } from "../composables/useGlyphInset";
 import { useI18n } from "vue-i18n";
-import { AppShell, useAppVersionLabel } from "@ui";
+import { AppShell, useAppVersionParts, CHANGE_PASSWORD_FROM_MENU } from "@ui";
 import { useLayoutState } from "../composables/useLayoutState";
 import { useVisibleNavRoutes } from "../composables/useVisibleNavRoutes";
 import {
@@ -240,6 +253,7 @@ import { usePartnerResources } from "../composables/usePartnerResources";
 import { SIDEBAR_COLLAPSE_ENABLED } from "../constants";
 
 const route = useRoute();
+const router = useRouter();
 const { t, locale } = useI18n();
 
 // See the RouterView Transition below — appear is only meant to fire once,
@@ -249,7 +263,7 @@ const initialAppearDone = ref(false);
 const useViewTransitions = pageTransitionsSupported();
 
 const {
-  theme, toggleTheme,
+  theme, themePreference, setThemePreference,
   sidebarCollapsed, toggleSidebar,
   isMobile,
   user,
@@ -282,7 +296,14 @@ onAppReady(() => void loadPartnerResources(locale.value));
 onMounted(markAppReady);
 
 const menuOpen = ref(false);
-const appVersionLabel = useAppVersionLabel();
+const appVersion = useAppVersionParts();
+/** VMenu placement on desktop. On phones the sheet must rise above the bottom
+ *  nav bar (MobileNavPanel sits at z-index 9998), or it hides the sheet's foot. */
+const accountMenuProps = computed(() =>
+  isMobile.value
+    ? { zIndex: 10000 }
+    :{ location: "bottom end" as const, offset: 8, closeOnContentClick: false },
+);
 
 // Views teleport their controls into the desktop page header only while it is shown.
 providePageHeader(computed(() => !isMobile.value));
@@ -673,29 +694,29 @@ const moduleIcon = computed(() => {
   display: flex;
   flex-direction: column;
 }
-/* Account row with the app version under it, on the grey drawer. */
+/* Only the collapse toggle — the version moved to the account menu (NEO-102). */
 .layout-drawer-footer {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
   width: 100%;
   min-width: 0;
-  padding-bottom: 0;
 }
 
-/* Quiet footnote, not UI: tiny, low-contrast, at the drawer's bottom, its
-   left edge on the menu labels' edge (the footer's own padding subtracted). */
-.layout-app-version {
-  margin: 0;
-  padding-inline: calc(var(--layout-nav-label-inset) - var(--app-shell-nav-footer-pad, 12px)) 0;
+.layout-appbar__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* NEO-102: non-prod builds only ("DEV" / "LOCAL"), so a tester always knows
+   which environment they are in without opening anything. */
+.layout-env-badge {
+  flex-shrink: 0;
   font-size: 10px;
-  line-height: 1.3;
-  font-weight: 400;
-  letter-spacing: 0.02em;
-  font-variant-numeric: tabular-nums;
-  color: rgba(var(--v-theme-on-surface), 0.32);
-  /* Wraps rather than truncating if a long build number ever outgrows the
-     ~200px drawer — the number is the point of the line. */
-  overflow-wrap: anywhere;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  padding: 4px 6px;
+  border-radius: 4px;
+  color: rgb(var(--v-theme-warning));
+  background: rgba(var(--v-theme-warning), 0.14);
 }
 </style>

@@ -56,6 +56,20 @@
           >
             {{ t('user.changePassword.submit') }}
           </VBtn>
+          <!-- Opened from the account menu (NEO-102) the change is optional, so
+               it can be abandoned; after a forced change on login it can't. -->
+          <VBtn
+            v-if="voluntary"
+            variant="text"
+            size="large"
+            block
+            :disabled="loading"
+            class="change-password-view__cancel"
+            data-testid="change-password-cancel"
+            @click="cancel"
+          >
+            {{ t('user.changePassword.cancel') }}
+          </VBtn>
         </VForm>
       </VCardText>
     </VCard>
@@ -66,17 +80,31 @@
 import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { inject } from "vue";
-import { createUseChangePasswordFlow } from "../composables/useChangePasswordFlow";
+import { useRoute, useRouter } from "vue-router";
+import { createUseChangePasswordFlow, CHANGE_PASSWORD_FROM_MENU } from "../composables/useChangePasswordFlow";
 import type { ApiFetchOptions } from "@api";
+import type { AuthTokenStorage } from "@stores";
 import AppInlineAlert from "../components/AppInlineAlert.vue";
 
 type ApiFetchFn = (path: string, options?: ApiFetchOptions) => Promise<Response>;
 
 const { t } = useI18n();
+const route = useRoute();
+const router = useRouter();
 
 const apiFetch = inject<ApiFetchFn>("neo:apiFetch")!;
+const authTokenStorage = inject<AuthTokenStorage>("neo:authTokenStorage")!;
 
-const useChangePasswordFlow = createUseChangePasswordFlow(apiFetch);
+/** Reached from the account menu rather than forced on login. */
+const voluntary = route.query.from === CHANGE_PASSWORD_FROM_MENU;
+
+/** Back to wherever the menu was opened; the app's start page if the URL was opened directly. */
+function cancel() {
+  if (typeof window.history.state?.back === "string") router.back();
+  else void router.push("/");
+}
+
+const useChangePasswordFlow = createUseChangePasswordFlow(apiFetch, authTokenStorage);
 const { currentPassword, newPassword, loading, errorKey, submit } = useChangePasswordFlow();
 
 const showCurrentPassword = ref(false);
@@ -148,5 +176,10 @@ async function handleSubmit() {
   letter-spacing: normal;
   font-weight: 600;
   margin-top: 12px;
+}
+
+.change-password-view__cancel {
+  text-transform: none;
+  letter-spacing: normal;
 }
 </style>

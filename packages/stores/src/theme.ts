@@ -52,13 +52,15 @@ export function resolveInitialThemeMode(): ThemeMode {
  *
  * Resolution priority (highest wins):
  *   1. User's explicit choice ("light"/"dark", persisted in localStorage)
- *   2. Tenant's configured default (app_config.color_scheme, fed in via
- *      setTenantDefault() once the config store has loaded)
- *   3. OS system preference (prefers-color-scheme), tracked live
+ *   2. OS system preference (prefers-color-scheme), tracked live — this is
+ *      "Auto", the default for anyone who never picked (NEO-102)
+ *   3. Tenant's configured default (app_config.color_scheme, fed in via
+ *      setTenantDefault() once the config store has loaded) — only when the
+ *      browser can't report a system preference
  *   4. "light" — final fallback when nothing else can be determined
  *
- * "system" is itself a valid stored preference: it means step 1 defers
- * continuously to step 3 instead of locking to a fixed value.
+ * "system" is itself a valid stored preference and behaves exactly like no
+ * stored preference: follow the OS, continuously.
  */
 export const useThemeStore = defineStore("theme", () => {
   const explicitPreference = ref<ThemePreference | null>(readStoredPreference());
@@ -73,11 +75,8 @@ export const useThemeStore = defineStore("theme", () => {
     if (explicitPreference.value === "light" || explicitPreference.value === "dark") {
       return explicitPreference.value;
     }
-    if (explicitPreference.value === "system" && systemPrefersDark.value !== null) {
-      return systemPrefersDark.value ? "dark" : "light";
-    }
-    if (tenantDefault.value) return tenantDefault.value;
     if (systemPrefersDark.value !== null) return systemPrefersDark.value ? "dark" : "light";
+    if (tenantDefault.value) return tenantDefault.value;
     return "light";
   });
 
@@ -94,7 +93,7 @@ export const useThemeStore = defineStore("theme", () => {
     setPreference(order[(i + 1) % order.length]!);
   }
 
-  /** 2-way toggle for UIs that only expose light/dark (apps/pwa today). */
+  /** 2-way toggle for UIs that only expose light/dark. */
   function toggleMode(): void {
     setPreference(mode.value === "dark" ? "light" : "dark");
   }
