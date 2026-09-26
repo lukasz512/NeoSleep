@@ -88,3 +88,29 @@ export function stopBangRisk(score: number): "low" | "intermediate" | "high" {
   if (score >= 3) return "intermediate";
   return "low";
 }
+
+/**
+ * STOP-Bang measurements the specialist types (migration 034) — the same
+ * plausibility ranges the API enforces. Returns the number, null when the
+ * field is empty, or "invalid" (out of range / not a number). Accepts a
+ * decimal comma ("94,5").
+ */
+export const STOP_BANG_MEASURE_RANGES = { height_cm: [100, 230], weight_kg: [25, 350], neck_cm: [20, 70] } as const;
+export type StopBangMeasureKey = keyof typeof STOP_BANG_MEASURE_RANGES;
+
+export function parseStopBangMeasure(raw: string, key: StopBangMeasureKey): number | null | "invalid" {
+  const text = raw.trim().replace(",", ".");
+  if (!text) return null;
+  const value = Number(text);
+  const [min, max] = STOP_BANG_MEASURE_RANGES[key];
+  return Number.isFinite(value) && value >= min && value <= max ? value : "invalid";
+}
+
+/** Measurements can be saved: every typed value in range, and height + weight together or not at all. */
+export function stopBangMeasuresValid(measures: Record<StopBangMeasureKey, string>): boolean {
+  const height = parseStopBangMeasure(measures.height_cm, "height_cm");
+  const weight = parseStopBangMeasure(measures.weight_kg, "weight_kg");
+  const neck = parseStopBangMeasure(measures.neck_cm, "neck_cm");
+  if (height === "invalid" || weight === "invalid" || neck === "invalid") return false;
+  return (height === null) === (weight === null);
+}

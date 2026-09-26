@@ -24,6 +24,8 @@
       :record="questionnaireDialog.record"
       :saving="saving"
       :pdf-loading="printingKey !== null"
+      :date-of-birth="dateOfBirth"
+      :gender="gender"
       @save="onQuestionnaireSave"
       @pdf="onPrintRecord"
     />
@@ -83,6 +85,10 @@
             <template #prepend><AppIcon name="qr-code" /></template>
             {{ t("app.clinical.bundleQr") }}
           </AppButton>
+          <AppButton v-if="patientCanStillDoSomething" color="primary" variant="tonal" :loading="emailing" @click="sendByEmail">
+            <template #prepend><AppIcon name="mail" /></template>
+            {{ t("app.clinical.email.send") }}
+          </AppButton>
           <AppButton color="primary" variant="tonal" @click="openUpload(null)">
             <template #prepend><AppIcon name="upload" /></template>
             {{ t("app.clinical.addStudy") }}
@@ -120,6 +126,14 @@
                 <div class="studies__item-text">
                   <span class="studies__item-title">{{ itemTitle(item) }}</span>
                   <span class="studies__item-status">{{ statusLine(item) }}</span>
+                  <!-- STOP-Bang is half the patient's, half the specialist's: show each half's own state. -->
+                  <span v-if="item.actions.form === 'stop_bang' && item.status !== 'missing'" class="studies__split" :aria-label="t('app.clinical.split.aria')">
+                    <span v-for="half in stopBangHalves(item)" :key="half.key" class="studies__split-half" :class="`studies__split-half--${half.state}`">
+                      <AppIcon :name="half.state === 'done' ? 'check-circle' : 'clock'" class="studies__split-icon" />
+                      <span>{{ half.label }}</span>
+                      <small v-if="half.date">{{ half.date }}</small>
+                    </span>
+                  </span>
                   <span v-if="!resultEntry(item) && latestSummary(item)" class="studies__item-summary">{{ latestSummary(item) }}</span>
                 </div>
                 <!-- Done (or S-T-O-P in): the result replaces the buttons; the rest lives under ⋯. -->
@@ -302,7 +316,13 @@ const FormRenderer = defineAsyncComponent(() => import("../FormRenderer.vue"));
  * One primary action: a single QR for everything the patient still has to
  * do. Health data — the parent only renders this for admin/doctor.
  */
-const props = defineProps<{ patientId: string; focusItem?: string | null }>();
+const props = defineProps<{
+  patientId: string;
+  focusItem?: string | null;
+  /** From the patient record — STOP-Bang works A (age) and G (sex) out from them. */
+  dateOfBirth?: string | null;
+  gender?: string | null;
+}>();
 
 const { t, locale } = useI18n();
 const notifications = useNotifications();
@@ -324,7 +344,8 @@ const patientCanStillDoSomething = computed(() => items.value.some((item) => ite
 // Labels
 // ---------------------------------------------------------------------------
 const dateLocale = computed(() => intlLocale(locale.value));
-const formatDate = (value: string) => new Date(value).toLocaleDateString(dateLocale.value);
+// Two-digit day and month everywhere (05/09/2026), the same as on the printed forms.
+const formatDate = (value: string) => new Date(value).toLocaleDateString(dateLocale.value, { day: "2-digit", month: "2-digit", year: "numeric" });
 const formatDateTime = (value: string) => new Date(value).toLocaleString(dateLocale.value, { dateStyle: "short", timeStyle: "short" });
 
 /** Known items have their own translated title; documents an admin adds later fall back to their manifest label. */
@@ -343,7 +364,9 @@ function statusLine(item: ChecklistItem): string {
     return [t("app.clinical.status.doneOn", { date: formatDate(latest.created_at) }), who].filter(Boolean).join(" · ");
   }
   if (item.key === "polysomnography" && item.status === "partial") return t("app.clinical.status.inProgress");
-  if (item.actions.form === "stop_bang" && item.status === "partial") return t("app.clinical.awaitingBang");
+  if (item.actions.form === "stop_bang" && item.status === "partial") {
+    return item.history[0]?.source === "patient" ? t("app.clinical.split.waiting") : t("app.clinical.awaitingBang");
+  }
   return t(`app.clinical.status.${item.status}`);
 }
 
@@ -516,6 +539,29 @@ async function openQr(items?: string[]) {
   Object.assign(qrDialog, { open: true, title, url: created.url, requestId: created.id });
 }
 const sendEverything = () => openQr();
+
+/** "Send by email": the same link as the bundle QR, emailed to the patient (all open questionnaires). */
+const emailing = ref(false);
+async function sendByEmail() {
+  emailing.value = true;
+  try {
+    await checklistApi.sendByEmail();
+  } finally {
+    emailing.value = false;
+  }
+}
+
+/** The two halves of a STOP-Bang: S-T-O-P (usually the patient's) and B-A-N-G (always the specialist's). */
+function stopBangHalves(item: ChecklistItem): { key: string; label: string; state: "done" | "waiting"; date: string | null }[] {
+  const latest = item.history.find((entry) => entry.type === "record")?.record;
+  const stopDone = !!latest;
+  const bangDone = latest?.score != null;
+  const stopBy = latest?.source === "patient" ? t("app.clinical.split.patient") : t("app.clinical.split.stopStaff");
+  return [
+    { key: "stop", label: stopBy, state: stopDone ? "done" : "waiting", date: latest ? formatDate(latest.created_at) : null },
+    { key: "bang", label: t("app.clinical.split.specialist"), state: bangDone ? "done" : "waiting", date: bangDone && latest?.updated_at ? formatDate(String(latest.updated_at)) : null },
+  ];
+}
 const resend = (keys: string[]) => openQr(keys);
 
 // Uploads
@@ -810,5 +856,38 @@ watch(() => props.focusItem, (key) => highlightItem(key));
 .studies__history-date {
   font-weight: 600;
   white-space: nowrap;
+}
+
+/* STOP-Bang's two halves (patient S-T-O-P / specialist B-A-N-G), each with its own state. */
+.studies__split {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.studies__split-half {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 10px 2px 6px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+.studies__split-half small {
+  font-weight: 400;
+  opacity: 0.8;
+}
+.studies__split-half--done {
+  background: rgba(var(--v-theme-success), 0.12);
+  color: rgb(var(--v-theme-success));
+}
+.studies__split-half--waiting {
+  background: rgba(var(--v-theme-warning), 0.14);
+  color: rgb(var(--v-theme-on-surface));
+}
+.studies__split-icon {
+  width: 14px;
+  height: 14px;
 }
 </style>

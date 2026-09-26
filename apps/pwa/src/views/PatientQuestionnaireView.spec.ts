@@ -53,6 +53,7 @@ afterEach(() => {
   for (const w of mounted.splice(0)) w.unmount();
   apiFetch.mockReset();
   signed = false;
+  localStorage.clear(); // unsent-answer drafts must not leak from one test into the next
 });
 
 async function mountView(): Promise<VueWrapper> {
@@ -72,6 +73,15 @@ async function mountView(): Promise<VueWrapper> {
 }
 
 const buttonWithText = (wrapper: VueWrapper, text: string) => wrapper.findAll("button").filter((b) => b.text() === text);
+
+/** Card by card: answer the question on screen, then "Next" (the auto-advance timer then does nothing — the patient already moved on). */
+async function answerCards(wrapper: VueWrapper, answer: "Yes" | "No", count: number) {
+  for (let i = 0; i < count; i++) {
+    await buttonWithText(wrapper, answer)[0]!.trigger("click");
+    await buttonWithText(wrapper, "Next →")[0]!.trigger("click");
+  }
+  await flushPromises();
+}
 
 describe("PatientQuestionnaireView (public QR self-fill)", () => {
   it("shows the 'no longer valid' state for a used/expired/unknown link", async () => {
@@ -99,14 +109,19 @@ describe("PatientQuestionnaireView (public QR self-fill)", () => {
 
     expect(wrapper.text()).toContain("Hello, Lucía");
     expect(wrapper.text()).toContain("Clínica Sonrisa asks you");
-    expect(buttonWithText(wrapper, "No")).toHaveLength(14);
+    // One question at a time; consent and send only appear after the last one.
+    expect(wrapper.text()).toContain("Question 1 of 14");
+    expect(buttonWithText(wrapper, "No")).toHaveLength(1);
+    expect(wrapper.find("input[type='checkbox']").exists()).toBe(false);
+    expect(buttonWithText(wrapper, "Next →")[0]!.attributes("disabled")).toBeDefined(); // can't skip an unanswered question
+
+    await answerCards(wrapper, "No", 14);
+    expect(wrapper.text()).toContain("Check your answers");
+    // Consent not given yet → the send button stays disabled, nothing is sent.
+    expect(wrapper.findAll("button").find((b) => b.text() === "Send answers")!.attributes("disabled")).toBeDefined();
+    expect(apiFetch).toHaveBeenCalledTimes(1); // only the initial lookup
 
     await wrapper.find("input[type='checkbox']").setValue(true);
-    await wrapper.find("form").trigger("submit");
-    expect(wrapper.text()).toContain("Please answer every question.");
-    expect(apiFetch).toHaveBeenCalledTimes(1); // only the initial GET
-
-    for (const no of buttonWithText(wrapper, "No")) await no.trigger("click");
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 201, { step: "medicalHistory", completed: true }));
     await wrapper.find("form").trigger("submit");
     await flushPromises();
@@ -136,10 +151,15 @@ describe("PatientQuestionnaireView (public QR self-fill)", () => {
   it("STOP-Bang via QR asks the patient only the four S-T-O-P questions", async () => {
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, lookup([step("stopBang", "stop_bang")])));
     const wrapper = await mountView();
-    expect(buttonWithText(wrapper, "Yes")).toHaveLength(4);
+    // S-T-O-P letters are the progress; the first card asks about snoring.
+    expect(buttonWithText(wrapper, "S")).toHaveLength(1);
+    expect(buttonWithText(wrapper, "G")).toHaveLength(0);
     expect(wrapper.text()).toContain("Do you snore loudly?");
-    expect(wrapper.text()).not.toContain("Are you male?");
     expect(wrapper.text()).toContain("Your clinic asks you");
+
+    await answerCards(wrapper, "Yes", 4);
+    expect(wrapper.text()).toContain("Check your answers");
+    expect(wrapper.text()).not.toContain("Are you male?");
   });
 
   it("a bundle link walks the patient through each step — sign the consent, then the questionnaires — saving each on its own", async () => {
@@ -164,7 +184,24 @@ describe("PatientQuestionnaireView (public QR self-fill)", () => {
 
     expect(wrapper.text()).toContain("Step 2 of 2");
     expect(wrapper.text()).toContain("Do you snore loudly?");
+    await answerCards(wrapper, "No", 4);
     expect(wrapper.text()).toContain("Send answers");
+  });
+
+  it("keeps unsent answers on the device: a reload of the same link resumes where the patient stopped", async () => {
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, lookup([step("stopBang", "stop_bang")])));
+    const first = await mountView();
+    await answerCards(first, "Yes", 2);
+    await flushPromises();
+    first.unmount();
+    mounted.splice(mounted.indexOf(first), 1);
+
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, lookup([step("stopBang", "stop_bang")])));
+    const second = await mountView();
+    await new Promise((resolve) => setTimeout(resolve, 20)); // token hashing (Web Crypto) is async
+    await flushPromises();
+    expect(second.text()).toContain("Question 3 of 4");
+    localStorage.clear();
   });
 
   it("a consent whose text isn't available can be skipped without signing", async () => {
