@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isRoleAllowed, navRoutesForRole, navParentName, routes } from "./routes";
+import { homePathForRole, isRoleAllowed, navRoutesForRole, navParentName, routes } from "./routes";
 
 // NEO-55: AppLayout's back arrow and "← <Module>" title come from this mapping.
 describe("navParentName", () => {
@@ -68,5 +68,22 @@ describe("navRoutesForRole", () => {
   it("manager and admin see /documents", () => {
     expect(navRoutesForRole("manager").some((r) => r.path === "/documents")).toBe(true);
     expect(navRoutesForRole("admin").some((r) => r.path === "/documents")).toBe(true);
+  });
+});
+
+describe("homePathForRole", () => {
+  it("sends admin to the dashboard — the only role that can see it", () => {
+    expect(homePathForRole("admin")).toBe("/dashboard");
+    expect(navRoutesForRole("manager").some((r) => r.path === "/dashboard")).toBe(false);
+    expect(navRoutesForRole("doctor").some((r) => r.path === "/dashboard")).toBe(false);
+  });
+
+  it("lands doctor and manager on patients", () => {
+    expect(homePathForRole("doctor")).toBe("/patients");
+    expect(homePathForRole("manager")).toBe("/patients");
+  });
+
+  it("falls back to the first visible module for field-force roles", () => {
+    expect(homePathForRole("rep")).toBe("/leads");
   });
 });

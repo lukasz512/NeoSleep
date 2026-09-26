@@ -1,6 +1,6 @@
 <template>
   <RouterLink
-    :to="appHomePath"
+    :to="homePath"
     class="layout-app__bar-logo-link"
     aria-label="NeoSleep – Home"
     @click="$emit('close')"
@@ -18,8 +18,10 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { BrandLogo } from "@ui";
-import { appHomePath } from "../../router/routes";
+import { homePathForRole } from "../../router/routes";
+import { useAuthStore } from "../../stores/auth";
 import { useConfigStore } from "../../stores/config";
+import { useRolePreviewStore } from "../../stores/rolePreview";
 
 const props = defineProps<{
   theme?: "light" | "dark";
@@ -27,6 +29,10 @@ const props = defineProps<{
 
 const configStore = useConfigStore();
 const isDark = computed(() => props.theme === "dark");
+
+const authStore = useAuthStore();
+const rolePreviewStore = useRolePreviewStore();
+const homePath = computed(() => homePathForRole(rolePreviewStore.previewRole ?? authStore.user?.role));
 
 defineEmits<{
   close: [];

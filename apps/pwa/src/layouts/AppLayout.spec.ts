@@ -94,24 +94,23 @@ describe("AppLayout", () => {
     });
 
     // /presentations is meta.hidden (see routes.ts) — excluded from appNavRoutes entirely,
-    // superseded by /resources. /dashboard IS a real appNavRoutes entry (ALL_STAFF_ROLES,
-    // not filtered out) — every role sees it first, contrary to this describe block's
-    // original (stale) title claiming otherwise.
+    // superseded by /resources. /dashboard is admin-only (2026-09-26) — every other
+    // role's first entry (and home, see homePathForRole) is its first remaining module.
     it("rep sees every core module (leads, hcp, hco, patients, planner, resources) but not users, sleep-studies, treatment-plans, or territories", () => {
-      const expectedPaths = ["/dashboard", "/leads", "/hcp", "/hco", "/patients", "/planner", "/resources"];
+      const expectedPaths = ["/leads", "/hcp", "/hco", "/patients", "/planner", "/resources"];
       expect(navRoutesForRole("rep").map((r) => r.path)).toEqual(expectedPaths);
     });
 
     it("manager sees users management, leads, sleep studies (NEO-83), treatment plans and documents — not territories", () => {
       const expectedPaths = [
-        "/dashboard", "/leads", "/hcp", "/hco", "/patients", "/sleep-studies",
+        "/leads", "/hcp", "/hco", "/patients", "/sleep-studies",
         "/treatment-plans", "/planner", "/resources", "/users", "/documents",
       ];
       expect(navRoutesForRole("manager").map((r) => r.path)).toEqual(expectedPaths);
     });
 
     it("kam and msl see leads, hcp, hco, patients, planner, resources but not users (same field-force access as rep)", () => {
-      const expectedPaths = ["/dashboard", "/leads", "/hcp", "/hco", "/patients", "/planner", "/resources"];
+      const expectedPaths = ["/leads", "/hcp", "/hco", "/patients", "/planner", "/resources"];
       expect(navRoutesForRole("kam").map((r) => r.path)).toEqual(expectedPaths);
       expect(navRoutesForRole("msl").map((r) => r.path)).toEqual(expectedPaths);
     });
@@ -124,8 +123,8 @@ describe("AppLayout", () => {
       expect(navRoutesForRole("admin").map((r) => r.path)).toEqual(expectedPaths);
     });
 
-    it("doctor sees dashboard, patients, the clinical aggregates, planner, and resources — never leads, hcp, hco, or users", () => {
-      const expectedPaths = ["/dashboard", "/patients", "/sleep-studies", "/treatment-plans", "/planner", "/resources"];
+    it("doctor sees patients, the clinical aggregates, planner, and resources — never leads, hcp, hco, or users", () => {
+      const expectedPaths = ["/patients", "/sleep-studies", "/treatment-plans", "/planner", "/resources"];
       expect(navRoutesForRole("doctor").map((r) => r.path)).toEqual(expectedPaths);
     });
   });
