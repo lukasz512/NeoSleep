@@ -21,6 +21,7 @@ import { getApiUrl } from "./constants";
 import { resolveInitialThemeMode, useMotionPreferenceStore, APP_VERSION_KEY } from "@stores";
 import { resolveAppVersion } from "./appVersion";
 import { activateDeferredStyles } from "./boot/bootSplash";
+import { initInstallPrompt } from "./composables/useInstallPrompt";
 
 // First thing: apply the bundle CSS that index.html loads as a non-blocking
 // preload (so the static boot splash could paint before it arrived) — see
@@ -57,6 +58,10 @@ configureErrorReporting({
   app: "pwa",
   appVersion: (import.meta.env.VITE_APP_VERSION as string | undefined) ?? "dev",
 });
+
+// Catch Chrome's one-shot install event even when it fires on the login
+// screen, before the app bar's Install button exists (NEO-87).
+initInstallPrompt();
 
 const app = createApp(App);
 app.use(createPinia());
