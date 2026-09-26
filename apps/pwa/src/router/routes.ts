@@ -14,11 +14,11 @@ const ALL_STAFF_ROLES: UserRole[] = ["rep", "doctor", "manager", "admin", "kam",
 // bar (AppShell) shows exactly the first 4 of
 // whatever's visible for the current role. appNavRoutes below derives from
 // this array's order — reordering here reorders both the sidebar and the
-// bottom bar. "dashboard" is also the default post-login landing page and
-// logo link target (see appHomePath).
+// bottom bar. The post-login landing page and logo link target is the role's
+// first visible nav entry (see homePathForRole) — /dashboard for admin.
 // Each app-layout route carries a `roles` meta — AppNavLinks.vue filters the
 // sidebar by it, and the router guard (router/index.ts) enforces it: visiting
-// a route directly with the wrong role redirects to /dashboard instead of
+// a route directly with the wrong role redirects to the role's home instead of
 // rendering the view. admin always bypasses this (see isRoleAllowed) — sees
 // every view regardless of what's listed here.
 // /login, /forgot-password and /reset-password all share this one lazy-import
@@ -42,7 +42,7 @@ export const routes: RouteRecordRaw[] = [
   // credential and lives in the URL #fragment (/q#<token>), which browsers never send to any server.
   { path: "/q", name: "patient-questionnaire", component: () => import("../views/PatientQuestionnaireView.vue"), meta: { layout: "public", public: true } },
   { path: "/dev", name: "dev", component: () => import("../views/DevView.vue"), meta: { layout: "app", devOnly: true } },
-  { path: "/dashboard", name: "dashboard", component: () => import("../views/DashboardView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
+  { path: "/dashboard", name: "dashboard", component: () => import("../views/DashboardView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin"] } }, // admin-only for now (2026-09-26); everyone else lands on homePathForRole()
   { path: "/leads", name: "leads", component: () => import("../views/LeadsView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep", "kam", "msl", "manager", "admin"] } },
   { path: "/leads/:id", name: "lead-detail", component: () => import("../views/LeadDetailView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep", "kam", "msl", "manager", "admin"] } },
   { path: "/hcp", name: "hcp", component: () => import("../views/HCPView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep", "kam", "msl", "manager", "admin"] } },
@@ -109,11 +109,16 @@ export function navRoutesForRole(role: UserRole | undefined | null) {
   return appNavRoutes.filter((r) => isRoleAllowed(r.roles, role));
 }
 
-/**
- * Home path for the app layout (logo link) — always the dashboard, independent
- * of nav display order (nav order is a display concern, not a "what is home" one).
- */
+/** Default post-login entry point; the router guard forwards roles that can't see it to homePathForRole(). */
 export const appHomePath = routes.find((r) => (r as { name?: string }).name === "dashboard")?.path ?? "/dashboard";
+
+/** Roles whose home isn't simply their first visible nav entry (2026-09-26: patients for now). */
+const ROLE_HOME_PATHS: Partial<Record<UserRole, string>> = { doctor: "/patients", manager: "/patients" };
+
+/** A role's home (landing page + logo link): /dashboard for admin, ROLE_HOME_PATHS, else the first visible nav entry. */
+export function homePathForRole(role: UserRole | undefined | null): string {
+  return (role && ROLE_HOME_PATHS[role]) || navRoutesForRole(role)[0]?.path || appHomePath;
+}
 
 /** Returns the i18n key for a nav route name. Every entry follows `user.<name>.title`. */
 export function navTitleKey(name: string): string {

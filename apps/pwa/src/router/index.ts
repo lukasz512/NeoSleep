@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from "vue-router";
-import { routes, isRoleAllowed, appHomePath } from "./routes";
+import { routes, isRoleAllowed, homePathForRole } from "./routes";
 import { useAuthStore } from "../stores/auth";
 import { useRolePreviewStore } from "../stores/rolePreview";
 import type { UserRole } from "../stores/auth";
@@ -74,7 +74,7 @@ router.beforeEach(async (to) => {
     const roles = to.meta.roles as UserRole[] | undefined;
     const effectiveRole = rolePreview.previewRole ?? auth.user?.role;
     if (!isRoleAllowed(roles, effectiveRole)) {
-      return { path: appHomePath };
+      return { path: homePathForRole(effectiveRole) };
     }
 
     // Fire-and-forget: retries the partner connection if it's down and
@@ -99,5 +99,5 @@ if (isDev) {
 }
 
 export default router;
-export { routes, appNavRoutes, appHomePath } from "./routes";
+export { routes, appNavRoutes, appHomePath, homePathForRole } from "./routes";
 export { PublicLayout, AppLayout } from "./routes";
