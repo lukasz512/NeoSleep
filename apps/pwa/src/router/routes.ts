@@ -8,7 +8,7 @@ export { PublicLayout, AppLayout };
 const ALL_STAFF_ROLES: UserRole[] = ["rep", "doctor", "manager", "admin", "kam", "msl"];
 
 /** App starts at login; root and unknown paths send unauthenticated users to /login. */
-// Nav order: dashboard, leads, hcp, hco, patients, planner, presentations
+// Nav order: dashboard, leads, hcp, hco, patients, appointments, planner, presentations
 // (hidden — see `hidden` meta below), resources, users, documents,
 // territories — the mobile bottom
 // bar (AppShell) shows exactly the first 4 of
@@ -51,6 +51,9 @@ export const routes: RouteRecordRaw[] = [
   { path: "/hco/:id", name: "hco-detail", component: () => import("../views/HCODetailView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep", "kam", "msl", "manager", "admin"] } },
   { path: "/patients", name: "patients", component: () => import("../views/PatientsView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
   { path: "/patients/:id", name: "patient-detail", component: () => import("../views/PatientDetailView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
+  // Patient↔doctor appointments (NEO-34) — right after patients so a doctor has it in the phone bottom bar.
+  // Every staff role; what each one sees (own / territory / redacted) is decided by the API.
+  { path: "/appointments", name: "appointments", component: () => import("../views/AppointmentsView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
   // Cross-patient clinical aggregates — rep excluded (sees studies/orders only inside their own patient's tabs, not this tenant-wide list).
   { path: "/sleep-studies", name: "sleep-studies", component: () => import("../views/SleepStudiesView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["doctor", "manager", "admin"] } }, // health data: admin + doctor (2026-09-25) + manager (NEO-83)
   { path: "/treatment-plans", name: "treatment-plans", component: () => import("../views/TreatmentPlansView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["doctor", "manager", "admin"] } },

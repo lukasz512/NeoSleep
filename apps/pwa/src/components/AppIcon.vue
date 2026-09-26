@@ -237,6 +237,15 @@ const ICONS = {
             <line x1="8" y1="2" x2="8" y2="6" />
             <line x1="3" y1="10" x2="21" y2="10" />`,
   },
+  // Patient↔doctor appointments (NEO-34) — the planner's calendar with a tick, so the two don't read as the same module.
+  "nav-appointments": {
+    strokeWidth: 2,
+    paths: `<rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+            <line x1="16" y1="2" x2="16" y2="6" />
+            <line x1="8" y1="2" x2="8" y2="6" />
+            <line x1="3" y1="10" x2="21" y2="10" />
+            <path d="M9 15.5l2 2 4-4" />`,
+  },
   "nav-presentations": {
     strokeWidth: 2,
     paths: `<rect x="2" y="3" width="20" height="14" rx="2" />

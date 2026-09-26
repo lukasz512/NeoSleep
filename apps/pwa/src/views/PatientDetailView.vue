@@ -12,10 +12,9 @@
       avatar-entity-type="patient"
       @submit="onPatientSubmit"
     />
-    <EventForm
-      v-model="showEventForm"
-      :initial-data="eventFormInitial"
-      @submit="onEventFormSubmit"
+    <AppointmentDialog
+      v-model="showAppointmentDialog"
+      :patient="appointmentPatient"
     />
     <ItemDetailLayout
       :has-content="!!patient"
@@ -42,14 +41,15 @@
               icon
               variant="flat"
               size="large"
-              :class="entityActionBtnClass('scheduleVisit')"
-              :aria-label="t('user.detail.scheduleVisit')"
-              @click="onScheduleVisit"
+              :class="entityActionBtnClass('bookAppointment')"
+              :aria-label="t('user.detail.bookAppointment')"
+              data-testid="patient-book-appointment"
+              @click="onBookAppointment"
             >
-              <AppIcon :name="entityActionIcon('scheduleVisit')" class="view-item__action-icon" />
+              <AppIcon :name="entityActionIcon('bookAppointment')" class="view-item__action-icon" />
             </AppButton>
           </template>
-          <span>{{ t('user.detail.scheduleVisit') }}</span>
+          <span>{{ t('user.detail.bookAppointment') }}</span>
         </VTooltip>
         <VTooltip v-if="canEditPatients" location="bottom">
           <template #activator="{ props: tooltipProps }">
@@ -209,7 +209,7 @@ import { entityActionIcon, entityActionBtnClass } from "../config/entityActions"
 import { patientStatusColor, patientStatusLabel } from "../utils/patientStatus";
 
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
-const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
+const AppointmentDialog = defineAsyncComponent(() => import("../components/AppointmentDialog.vue"));
 
 const { canEditPatients, isAdmin } = usePermissions();
 const authStore = useAuthStore();
@@ -268,8 +268,11 @@ const loadFailed = ref(false);
 /** The error behind loadFailed (NEO-81) — lets the error state say offline vs. server problem. */
 const loadFailure = ref<unknown>(null);
 const showEditModal = ref(false);
-const showEventForm = ref(false);
-const eventFormInitial = ref<{ start_at: string; end_at: string; patientIds?: string[] } | undefined>(undefined);
+const showAppointmentDialog = ref(false);
+/** "Umów wizytę" books a patient↔doctor appointment (NEO-34), with the patient's assigned doctor pre-selected. */
+const appointmentPatient = computed(() =>
+  patient.value ? { id: patient.value.id, name: patient.value.name, practitioner_id: patient.value.practitioner_id ?? null } : null,
+);
 const showDeleteConfirm = ref(false);
 
 const ALL_PATIENT_TABS = [
@@ -303,38 +306,8 @@ function onEdit() {
   showEditModal.value = true;
 }
 
-function onScheduleVisit() {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  eventFormInitial.value = {
-    start_at: new Date(`${date} 09:00`).toISOString(),
-    end_at: new Date(`${date} 10:00`).toISOString(),
-    patientIds: patient.value?.id ? [patient.value.id] : [],
-  };
-  showEventForm.value = true;
-}
-
-async function onEventFormSubmit(
-  payload: import("../components/EventForm.vue").EventSubmitPayload,
-  done: (ok: boolean) => void,
-) {
-  await submit(
-    {
-      request: () =>
-        apiFetch("/api/v1/encounter", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: payload.title, start_at: payload.start_at, end_at: payload.end_at, type: payload.type, status: payload.status, location: payload.location, video_link: payload.video_link, notes: payload.notes, region: payload.region, attendees: payload.attendees }),
-        }),
-      successMessage: t("user.planner.form.success"),
-      icon: "nav-planner",
-      context: patient.value?.name,
-      errorMessage: t("user.planner.form.errorSave"),
-      refresh: false,
-    },
-    done,
-  );
+function onBookAppointment() {
+  showAppointmentDialog.value = true;
 }
 
 async function onPatientSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {

@@ -21,10 +21,9 @@
       avatar-entity-type="patient"
       @submit="onEditSubmit"
     />
-    <EventForm
-      v-model="showEventForm"
-      :initial-data="eventFormInitial"
-      @submit="onEventFormSubmit"
+    <AppointmentDialog
+      v-model="showAppointmentDialog"
+      :patient="appointmentPatient"
     />
     <AppEntityList
       view-id="patients"
@@ -120,8 +119,8 @@
       </template>
       <template #feed-card-actions="{ item }">
         <AppListItemMenu :aria-label="t('app.common.moreActions')">
-          <VListItem :title="t('user.detail.scheduleVisit')" @click="onScheduleVisit(item as PatientListItem)">
-            <template #prepend><AppIcon :name="entityActionIcon('scheduleVisit')" :class="entityActionMenuIconClass('scheduleVisit')" /></template>
+          <VListItem :title="t('user.detail.bookAppointment')" @click="onBookAppointment(item as PatientListItem)">
+            <template #prepend><AppIcon :name="entityActionIcon('bookAppointment')" :class="entityActionMenuIconClass('bookAppointment')" /></template>
           </VListItem>
           <VListItem v-if="canEditPatients" :title="t('app.patients.detail.edit')" @click="onEditPatient(item as PatientListItem)">
             <template #prepend><AppIcon :name="entityActionIcon('edit')" :class="entityActionMenuIconClass('edit')" /></template>
@@ -160,7 +159,7 @@ import { patientFormFields, patientFormDerive } from "../config/forms/patientFor
 import { patientStatusColor, patientStatusLabel } from "../utils/patientStatus";
 
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
-const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
+const AppointmentDialog = defineAsyncComponent(() => import("../components/AppointmentDialog.vue"));
 
 interface PatientListItem {
   id: string;
@@ -203,9 +202,10 @@ const isDoctor = computed(() => authStore.user?.role === "doctor");
 const { canEditPatients } = usePermissions();
 const showAddModal = ref(false);
 const showEditModal = ref(false);
-const showEventForm = ref(false);
+const showAppointmentDialog = ref(false);
+/** Row menu "Umów wizytę" books a patient↔doctor appointment (NEO-34) for that patient. */
+const appointmentPatient = ref<{ id: string; name: string; practitioner_id: string | null } | null>(null);
 const selectedPatient = ref<PatientListItem | null>(null);
-const eventFormInitial = ref<{ start_at: string; end_at: string; patientIds?: string[] } | undefined>(undefined);
 
 const patientFilterDefs: FilterDefinition[] = [
   { key: "status", labelKey: "app.patients.filters.status", type: "select", default: "" },
@@ -301,37 +301,9 @@ async function onEditSubmit(data: Record<string, unknown>, done: (ok: boolean) =
   );
 }
 
-function onScheduleVisit(patient: PatientListItem) {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  eventFormInitial.value = {
-    start_at: new Date(`${date} 09:00`).toISOString(),
-    end_at: new Date(`${date} 10:00`).toISOString(),
-    patientIds: patient.id ? [patient.id] : [],
-  };
-  showEventForm.value = true;
-}
-
-async function onEventFormSubmit(
-  payload: import("../components/EventForm.vue").EventSubmitPayload,
-  done: (ok: boolean) => void,
-) {
-  await submit(
-    {
-      request: () =>
-        apiFetch("/api/v1/encounter", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: payload.title, start_at: payload.start_at, end_at: payload.end_at, type: payload.type, status: payload.status, location: payload.location, video_link: payload.video_link, notes: payload.notes, region: payload.region, attendees: payload.attendees }),
-        }),
-      successMessage: t("user.planner.form.success"),
-      icon: "nav-planner",
-      errorMessage: t("user.planner.form.errorSave"),
-      refresh: false,
-    },
-    done,
-  );
+function onBookAppointment(patient: PatientListItem) {
+  appointmentPatient.value = { id: patient.id, name: patient.name ?? "", practitioner_id: patient.practitioner_id ?? null };
+  showAppointmentDialog.value = true;
 }
 </script>
 

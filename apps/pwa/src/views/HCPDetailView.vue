@@ -5,6 +5,10 @@
       :initial-data="eventFormInitial"
       @submit="onEventFormSubmit"
     />
+    <AppointmentDialog
+      v-model="showAppointmentDialog"
+      :practitioner="hcp ? { id: hcp.id, name: hcp.name } : null"
+    />
     <FormRenderer
       v-model="showEditModal"
       :fields="hcpFormFields"
@@ -67,8 +71,30 @@
               icon
               variant="flat"
               size="large"
+              :class="entityActionBtnClass('bookAppointment')"
+              :aria-label="t('user.detail.bookPatient')"
+              data-testid="hcp-book-patient"
+              @click="showAppointmentDialog = true"
+            >
+              <AppIcon
+                :name="entityActionIcon('bookAppointment')"
+                class="view-item__action-icon"
+              />
+            </AppButton>
+          </template>
+          <span>{{ t("user.detail.bookPatient") }}</span>
+        </VTooltip>
+        <!-- The rep's own visit to this doctor (encounter, Planner) — renamed from "Umów wizytę" (NEO-34) so it
+             doesn't read as the patient appointment next to it. -->
+        <VTooltip location="bottom">
+          <template #activator="{ props: tooltipProps }">
+            <AppButton
+              v-bind="tooltipProps"
+              icon
+              variant="flat"
+              size="large"
               :class="entityActionBtnClass('scheduleVisit')"
-              :aria-label="t('user.detail.scheduleVisit')"
+              :aria-label="t('user.detail.planRepVisit')"
               @click="onScheduleVisit"
             >
               <AppIcon
@@ -77,7 +103,7 @@
               />
             </AppButton>
           </template>
-          <span>{{ t("user.detail.scheduleVisit") }}</span>
+          <span>{{ t("user.detail.planRepVisit") }}</span>
         </VTooltip>
         <VTooltip v-if="canEditPractitioners" location="bottom">
           <template #activator="{ props: tooltipProps }">
@@ -266,6 +292,7 @@ import {
 const FormRenderer = defineAsyncComponent(
   () => import("../components/FormRenderer.vue"),
 );
+const AppointmentDialog = defineAsyncComponent(() => import("../components/AppointmentDialog.vue"));
 const EventForm = defineAsyncComponent(
   () => import("../components/EventForm.vue"),
 );
@@ -354,6 +381,7 @@ const hcpCache = useEntityCacheStore("hcp");
 const SHOW_CLINICS_PANEL = false;
 
 const hcp = ref<HCP | null>(null);
+const showAppointmentDialog = ref(false);
 const loading = ref(true);
 /** True while `hcp` is being served from the offline cache — see docs/ADR-013-offline-read-cache.md. */
 const isOffline = ref(false);
