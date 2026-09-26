@@ -357,6 +357,14 @@
 .app-entity-list__toolbar--mobile.app-entity-list__toolbar--in-header.app-entity-list__toolbar--has-query {
   flex: 1 1 auto;
 }
+/* NEO-115: 48 px touch buttons in the phone header row (4 px grid). */
+.app-entity-list__toolbar--mobile.app-entity-list__toolbar--in-header :deep(.v-btn--icon.v-btn--size-large) {
+  width: 48px;
+  height: 48px;
+}
+.app-entity-list__toolbar--mobile.app-entity-list__toolbar--in-header .app-entity-list__search {
+  flex-basis: 48px;
+}
 /* Folded: Filter / + / clear-all live in the "⋯" menu instead. */
 .app-entity-list__toolbar--folded .app-entity-list__tool--foldable {
   display: none;
@@ -552,7 +560,7 @@
 }
 
 .app-entity-list__skeleton--mobile {
-  padding-top: var(--pwa-fib-md, 13px);
+  padding-top: 0;
 }
 
 .app-entity-list__skeleton-row {
@@ -567,7 +575,7 @@
 }
 
 .app-entity-list__skeleton--mobile .app-entity-list__skeleton-row {
-  height: var(--pwa-fib-3xl, 89px);
+  height: 72px;
 }
 
 .app-entity-list__skeleton-avatar {
@@ -701,9 +709,12 @@
 
 .app-entity-list__feed {
   display: block;
-  padding: var(--pwa-fib-md, 13px) 0;
+  padding: 0;
   border: none;
   position: relative;
+  /* NEO-115: rows run out to the sheet's 16 px edge; their own 12 px inset
+     (below) brings avatars back onto the page's content line. */
+  margin-inline: calc(-1 * var(--layout-row-inset, 0px));
 }
 
 /* Card shape/rhythm follows the Fibonacci scale (--pwa-fib-*, theme.scss)
@@ -736,7 +747,7 @@
   display: flex;
   align-items: stretch;
   gap: 0;
-  min-height: var(--pwa-fib-3xl, 89px);
+  min-height: 72px;
 }
 
 /* Circular avatar (Material 3's default leading-image shape for a list
@@ -747,9 +758,9 @@
 .app-entity-list__card-avatar {
   flex-shrink: 0;
   align-self: center;
-  width: var(--pwa-fib-xxl, 55px);
-  height: var(--pwa-fib-xxl, 55px);
-  margin-left: var(--pwa-fib-md, 13px);
+  width: 48px;
+  height: 48px;
+  margin-left: var(--layout-row-inset, 12px);
 }
 
 .app-entity-list__card-avatar :deep(.v-avatar) {
@@ -767,7 +778,7 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: var(--pwa-fib-md, 13px) var(--pwa-fib-sm, 8px) var(--pwa-fib-md, 13px) var(--pwa-fib-md, 13px);
+  padding: var(--space-3, 12px) var(--space-2, 8px) var(--space-3, 12px) var(--space-3, 12px);
 }
 
 .app-entity-list__card-title {
@@ -788,8 +799,8 @@
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: var(--pwa-fib-xs, 5px);
-  padding: var(--pwa-fib-sm, 8px) var(--pwa-fib-sm, 8px) var(--pwa-fib-sm, 8px) 0;
+  gap: var(--space-1, 4px);
+  padding: var(--space-2, 8px) var(--space-1, 4px) var(--space-2, 8px) 0;
 }
 
 .app-entity-list__card-status {
