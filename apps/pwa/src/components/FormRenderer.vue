@@ -174,7 +174,8 @@ import AppSpinner from "./AppSpinner.vue";
 import AppDialogHeader from "./AppDialogHeader.vue";
 import PhoneField from "./PhoneField.vue";
 import EmailField from "./EmailField.vue";
-import type { FormFieldDef, FormFieldType } from "../types/formField";
+import ChoiceChipsField from "./ChoiceChipsField.vue";
+import type { FormDerive, FormFieldDef, FormFieldType } from "../types/formField";
 
 /**
  * componentFor() below resolves to these imported component OBJECTS, never
@@ -207,7 +208,7 @@ const props = withDefaults(
     submitLabelKey?: string;
     editSubmitLabelKey?: string;
     /** Entity-specific derived-fields hook — see useFormRenderer.ts's 3rd param. */
-    derive?: (form: Record<string, unknown>) => Partial<Record<string, unknown>> | void;
+    derive?: FormDerive;
     /** i18n key for an info banner shown above the form (e.g. "verify this data"). */
     verifyInfoKey?: string;
     /** Shows an AppAvatar in the dialog header, live-previewing first/last name — opt-in, only for identity-based forms (hcp/lead/patient/user). */
@@ -391,6 +392,7 @@ function componentFor(type: FormFieldType) {
     case "phone": return PhoneField;
     case "email": return EmailField;
     case "boolean": return VSwitch;
+    case "choice": return ChoiceChipsField;
     default: return VTextField;
   }
 }
@@ -470,6 +472,16 @@ function fieldAttrs(f: FormFieldDef): Record<string, unknown> {
         density: "comfortable",
         hideDetails: true,
         disabled: submitting.value || (!!f.immutableOnEdit && isEditMode.value),
+      };
+    case "choice":
+      // Chips, not an outlined input — only the props ChoiceChipsField takes.
+      return {
+        modelValue: form.value[f.key],
+        "onUpdate:modelValue": (v: unknown) => { form.value[f.key] = v; },
+        label: labelFor(f),
+        items: resolvedOptions(f),
+        rules: rulesFor(f),
+        disabled: common.disabled,
       };
     case "text":
     default:

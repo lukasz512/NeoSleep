@@ -36,7 +36,9 @@ export type FormFieldType =
   | "chips"
   | "combobox"
   | "date"
-  | "boolean";
+  | "boolean"
+  /** A few large tappable chips instead of a dropdown — see ChoiceChipsField.vue. */
+  | "choice";
 
 /**
  * One selectable option for 'select'/'autocomplete'/'combobox' fields.
@@ -67,7 +69,21 @@ export interface FormFieldOption {
    * (FormFieldDef.avatarEntityType). Already-resolved text, not an i18n key.
    */
   subtitle?: string;
+  /** 'choice' fields: a short symbol drawn before the label (e.g. "♀"). Not copy — never translated. */
+  symbol?: string;
+  /** 'choice' fields: shown as a small link under the main chips instead of a chip of its own. */
+  secondary?: boolean;
 }
+
+/**
+ * Entity-specific derived-fields hook (FormRenderer's `derive` prop). Runs on
+ * every form change with the form as it was on the previous run, so a hook
+ * can tell which field the user just touched; returns the fields to patch.
+ */
+export type FormDerive = (
+  form: Record<string, unknown>,
+  prev: Record<string, unknown>,
+) => Partial<Record<string, unknown>> | void;
 
 /**
  * A field-level validation rule. Return `true` when valid, or an i18n KEY

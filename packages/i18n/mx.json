@@ -1816,6 +1816,7 @@
   "user.hco.detail.deleteConfirmText": "¿Eliminar esta clínica? Esta acción no se puede deshacer desde aquí.",
   "user.hco.detail.deleteSuccess": "Clínica eliminada",
   "app.formRenderer.unresolvedOption": "Desconocido",
+  "app.formRenderer.choiceMore": "También:",
   "app.orthoApneaOrder.form.incrementValue": "Aumentar valor",
   "app.orthoApneaOrder.form.decrementValue": "Disminuir valor",
   "app.orthoApneaOrder.transactionLog.openButton": "Ver bitácora de transacciones",

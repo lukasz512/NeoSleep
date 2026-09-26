@@ -7,7 +7,7 @@ vi.mock("../../composables/useApi", async (importOriginal) => ({
 }));
 
 import { createPinia, setActivePinia } from "pinia";
-import { patientFormFields } from "./patientForm";
+import { patientFormFields, patientFormDerive } from "./patientForm";
 import { useConfigStore } from "../../stores/config";
 import type { FormFieldOption } from "../../types/formField";
 
@@ -40,6 +40,53 @@ describe("patientFormFields", () => {
     const byKey = Object.fromEntries(patientFormFields.map((f) => [f.key, f]));
     expect(byKey.gender.required).toBe(true);
     expect(byKey.date_of_birth.required).toBe(true);
+  });
+
+  it("sex is two chips (♀/♂) with Otro / Prefiero no decir as secondary links", () => {
+    const gender = patientFormFields.find((f) => f.key === "gender")!;
+    expect(gender.type).toBe("choice");
+    const opts = gender.options as FormFieldOption[];
+    expect(opts.filter((o) => !o.secondary).map((o) => [o.value, o.symbol])).toEqual([["female", "♀"], ["male", "♂"]]);
+    expect(opts.filter((o) => o.secondary).map((o) => o.value)).toEqual(["other", "prefer_not_to_say"]);
+  });
+
+  describe("patientFormDerive — salutation and sex move together", () => {
+    const run = (prev: Record<string, unknown>, form: Record<string, unknown>) => patientFormDerive(form, prev);
+
+    it.each([
+      ["Dr.", "male"], ["Dra.", "female"], ["Sr.", "male"], ["Sra.", "female"], ["dra", "female"],
+    ])("picking salutation %s sets sex to %s", (salutation, gender) => {
+      expect(run({ salutation: null, gender: null }, { salutation, gender: null })).toEqual({ gender });
+    });
+
+    it("switching salutation Dra. → Dr. flips a female patient to male", () => {
+      expect(run({ salutation: "Dra.", gender: "female" }, { salutation: "Dr.", gender: "female" })).toEqual({ gender: "male" });
+    });
+
+    it.each([
+      ["male", "Dra.", "Dr."], ["female", "Dr.", "Dra."], ["male", "Sra.", "Sr."], ["female", "Sr.", "Sra."],
+    ])("picking sex %s turns %s into %s", (gender, salutation, expected) => {
+      expect(run({ salutation, gender: null }, { salutation, gender })).toEqual({ salutation: expected });
+    });
+
+    it("sex never invents a salutation, and leaves Prof./Lic./Mgr. alone", () => {
+      expect(run({ salutation: null, gender: null }, { salutation: null, gender: "female" })).toBeUndefined();
+      expect(run({ salutation: "Prof.", gender: "male" }, { salutation: "Prof.", gender: "female" })).toBeUndefined();
+    });
+
+    it("Otro / Prefiero no decir is a manual choice: the salutation no longer changes sex", () => {
+      expect(run({ salutation: "Dra.", gender: "other" }, { salutation: "Dr.", gender: "other" })).toBeUndefined();
+      expect(run({ salutation: null, gender: "prefer_not_to_say" }, { salutation: "Dra.", gender: "prefer_not_to_say" })).toBeUndefined();
+    });
+
+    it("picking Otro / Prefiero no decir leaves the salutation as it is", () => {
+      expect(run({ salutation: "Dra.", gender: "female" }, { salutation: "Dra.", gender: "other" })).toBeUndefined();
+    });
+
+    it("an already-consistent pair, or both changing at once (record just opened), is left alone", () => {
+      expect(run({ salutation: "Dr.", gender: null }, { salutation: "Dr.", gender: "male" })).toBeUndefined();
+      expect(run({}, { salutation: "Dra.", gender: "male" })).toBeUndefined();
+    });
   });
 
   it("carries the full existing field set (no fields dropped in the migration)", () => {

@@ -3,6 +3,7 @@
     <FormRenderer
       v-model="showAddModal"
       :fields="patientFormFields"
+      :derive="patientFormDerive"
       title-key="app.patients.form.title"
       submit-label-key="app.patients.form.submit"
       avatar-entity-type="patient"
@@ -11,6 +12,7 @@
     <FormRenderer
       v-model="showEditModal"
       :fields="patientFormFields"
+      :derive="patientFormDerive"
       :initial-data="selectedPatient ?? undefined"
       title-key="app.patients.form.title"
       edit-title-key="app.patients.form.editTitle"
@@ -154,7 +156,7 @@ import { usePermissions } from "../composables/usePermissions";
 import { useConfigStore } from "../stores/config";
 import { apiFetch } from "../composables/useApi";
 import { useEntitySubmit } from "../composables/useEntitySubmit";
-import { patientFormFields } from "../config/forms/patientForm";
+import { patientFormFields, patientFormDerive } from "../config/forms/patientForm";
 import { patientStatusColor, patientStatusLabel } from "../utils/patientStatus";
 
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));

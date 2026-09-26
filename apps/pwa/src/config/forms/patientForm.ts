@@ -1,4 +1,4 @@
-import type { FormFieldDef, FormFieldOption } from "../../types/formField";
+import type { FormDerive, FormFieldDef, FormFieldOption } from "../../types/formField";
 import { apiFetch } from "../../composables/useApi";
 import { useConfigStore } from "../../stores/config";
 import { useAuthStore } from "../../stores/auth";
@@ -86,17 +86,52 @@ identity[0] = { ...identity[0], key: "salutation" };
 // Same set as the identities.gender CHECK constraint. Required for patients
 // (the list's "F · 47 y" line depends on it); doctors never ask for either.
 const GENDER_OPTIONS: FormFieldOption[] = [
-  { title: "app.patients.form.genderFemale", value: "female" },
-  { title: "app.patients.form.genderMale", value: "male" },
-  { title: "app.patients.form.genderOther", value: "other" },
-  { title: "app.patients.form.genderPreferNot", value: "prefer_not_to_say" },
+  { title: "app.patients.form.genderFemale", value: "female", symbol: "♀" },
+  { title: "app.patients.form.genderMale", value: "male", symbol: "♂" },
+  { title: "app.patients.form.genderOther", value: "other", secondary: true },
+  { title: "app.patients.form.genderPreferNot", value: "prefer_not_to_say", secondary: true },
 ];
+
+/** Gendered salutations (identityFields' PREFIX_OPTIONS), keyed without case or the trailing dot so a typed "dra" counts too. */
+const SALUTATION_SEX: Record<string, "male" | "female"> = { dr: "male", sr: "male", dra: "female", sra: "female" };
+const SALUTATION_FOR_SEX: Record<"male" | "female", Record<string, string>> = {
+  male: { dra: "Dr.", sra: "Sr." },
+  female: { dr: "Dra.", sr: "Sra." },
+};
+
+function salutationKey(v: unknown): string {
+  return typeof v === "string" ? v.trim().toLowerCase().replace(/\.$/, "") : "";
+}
+
+/**
+ * Keeps salutation and sex in step, both ways: picking Dr./Sr. sets
+ * Masculino, Dra./Sra. sets Femenino, and switching sex flips Dr.<->Dra. /
+ * Sr.<->Sra. Once sex is Otro / Prefiero no decir it is a deliberate manual
+ * choice — the salutation no longer moves it (and picking it leaves the
+ * salutation alone). Salutations without a sex (Prof., Lic., Mgr.) or an
+ * empty one never change anything.
+ */
+export const patientFormDerive: FormDerive = (form, prev) => {
+  const salutationChanged = salutationKey(form.salutation) !== salutationKey(prev.salutation);
+  const sexChanged = form.gender !== prev.gender;
+  if (salutationChanged === sexChanged) return;
+
+  if (sexChanged) {
+    if (form.gender !== "male" && form.gender !== "female") return;
+    const salutation = SALUTATION_FOR_SEX[form.gender][salutationKey(form.salutation)];
+    return salutation ? { salutation } : undefined;
+  }
+
+  if (form.gender === "other" || form.gender === "prefer_not_to_say") return;
+  const sex = SALUTATION_SEX[salutationKey(form.salutation)];
+  return sex ? { gender: sex } : undefined;
+};
 
 export const patientFormFields: FormFieldDef[] = [
   ...identity,
   {
     key: "gender",
-    type: "select",
+    type: "choice",
     labelKey: "app.patients.form.gender",
     options: GENDER_OPTIONS,
     default: null,

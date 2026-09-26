@@ -1,6 +1,6 @@
 import { ref, computed, watch, type Ref } from "vue";
 import { useI18n } from "vue-i18n";
-import type { FormFieldDef, FormFieldOption } from "../types/formField";
+import type { FormDerive, FormFieldDef, FormFieldOption } from "../types/formField";
 
 /**
  * Generic form-state engine behind FormRenderer.vue.
@@ -18,7 +18,7 @@ import type { FormFieldDef, FormFieldOption } from "../types/formField";
 export function useFormRenderer(
   fields: FormFieldDef[],
   initialData: Ref<Record<string, unknown> | undefined>,
-  derive?: (form: Record<string, unknown>) => Partial<Record<string, unknown>> | void,
+  derive?: FormDerive,
 ) {
   const { t } = useI18n();
 
@@ -77,6 +77,7 @@ export function useFormRenderer(
   function resetForm() {
     form.value = buildFormState(initialData.value);
     snapshot.value = { ...form.value };
+    lastSeen = { ...form.value };
   }
 
   /** Dirty-check on close attempt — call before letting the dialog close. */
@@ -145,18 +146,27 @@ export function useFormRenderer(
 
   // Optional entity-specific derived-fields hook (e.g. a hidden field synced
   // live from another field's value, like HCP.region from the selected clinic).
+  // `lastSeen` is the form as of the previous run — fields are edited in
+  // place, so the deep watcher's own oldValue is the same object as the new
+  // one and can't say WHICH field just changed; two-way syncs (patient
+  // salutation <-> sex) need exactly that. resetForm() re-seeds it so a
+  // freshly opened record never reads as "both fields just changed".
+  let lastSeen: Record<string, unknown> = {};
   if (derive) {
     watch(
       form,
       (val) => {
-        const patch = derive(val);
-        if (!patch) return;
-        let changed = false;
-        const next = { ...val };
-        for (const k in patch) {
-          if (next[k] !== patch[k]) { next[k] = patch[k]; changed = true; }
+        const patch = derive(val, lastSeen);
+        let next = val;
+        if (patch) {
+          const merged = { ...val };
+          let changed = false;
+          for (const k in patch) {
+            if (merged[k] !== patch[k]) { merged[k] = patch[k]; changed = true; }
+          }
+          if (changed) { next = merged; form.value = merged; }
         }
-        if (changed) form.value = next;
+        lastSeen = { ...next };
       },
       { deep: true },
     );
