@@ -142,7 +142,7 @@ describe("PatientStudiesPanel — the Estudios checklist", () => {
       "Medical history",
       "STOP-Bang questionnaire",
       "Oral cavity exam",
-      "Historia Endo (endodontic record)",
+      "Clinical history (MAD)",
       "Polysomnography",
     ]);
     expect(wrapper.text()).toContain("1 of 6 done");
