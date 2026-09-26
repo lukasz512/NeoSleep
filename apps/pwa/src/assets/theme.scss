@@ -689,13 +689,128 @@ body {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-/* M3: a divider appears under the header / above the actions only while
-   content is actually scrolled behind it (AppFormDialog toggles these). */
+/*
+ * Content scrolled behind the header / actions fades out over
+ * --pwa-dialog-fade instead of running into a hairline (NEO-92). The old M3
+ * divider sat on the very edge of the scroller, so a scrolled outlined
+ * field's floating label ("Apellido") ended up touching it — and the header
+ * with it. The mask belongs to the scroller's own box, not its content, so
+ * whatever scrolls up is already invisible by the time it reaches the edge.
+ * AppFormDialog toggles the two classes; e2e/dialog-scroll.spec.ts measures.
+ */
+:root {
+  --pwa-dialog-fade: 20px;
+}
 .pwa-form-dialog__body--scrolled {
-  border-top-color: rgb(var(--v-theme-outline-variant)) !important;
+  --pwa-fade-top: var(--pwa-dialog-fade);
 }
 .pwa-form-dialog__body--more {
-  border-bottom-color: rgb(var(--v-theme-outline-variant)) !important;
+  --pwa-fade-bottom: var(--pwa-dialog-fade);
+}
+.pwa-form-dialog__body:is(.pwa-form-dialog__body--scrolled, .pwa-form-dialog__body--more) {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--pwa-fade-top, 0px),
+    #000 calc(100% - var(--pwa-fade-bottom, 0px)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--pwa-fade-top, 0px),
+    #000 calc(100% - var(--pwa-fade-bottom, 0px)),
+    transparent 100%
+  );
+}
+
+/*
+ * "Carpeta" form folder (NEO-92, variant C of the 2026-09-26 proposal): a
+ * form with two or more sections opens as a folder — a spine on the left
+ * (record identity + section index, FormFolderSpine.vue) and the page on the
+ * right (header, one sheet with a heading per section, actions). The card is
+ * a grid so the page keeps the exact header/body/actions rules above; only
+ * the body row flexes, so it alone scrolls. Phones keep the bottom sheet and
+ * show the index as chips (FormSectionChips.vue) instead of a spine.
+ */
+:root {
+  --pwa-folder-spine: 236px;
+}
+.pwa-form-dialog__card--folder {
+  display: grid !important;
+  grid-template-columns: var(--pwa-folder-spine) minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+.pwa-form-dialog__card--folder > * {
+  grid-column: 2;
+}
+.pwa-form-dialog__card--folder > .pwa-form-dialog__spine {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* Mixed here, not on :root — the theme's surface var lives on the themed element. */
+  background: color-mix(in srgb, var(--pwa-primary) 7%, rgb(var(--v-theme-surface)));
+  box-shadow: inset -1px 0 0 var(--pwa-sheet-edge);
+}
+.pwa-form-dialog__card--folder > .app-dialog-header {
+  grid-row: 1;
+}
+.pwa-form-dialog__card--folder > .pwa-form-dialog__body {
+  grid-row: 3;
+}
+.pwa-form-dialog__card--folder > .pwa-form-dialog__actions {
+  grid-row: 4;
+}
+
+/* Sections: fields keep the 16dp rhythm inside, a heading with a ruled line
+   opens each one, and sections sit a clear step further apart. */
+.pwa-form-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pwa-dialog-field-gap);
+}
+.pwa-form-section > * {
+  margin-bottom: 0 !important;
+}
+.pwa-form-section--titled + .pwa-form-section--titled {
+  margin-top: 20px;
+}
+.pwa-form-section__title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.005em;
+  color: rgb(var(--v-theme-on-surface));
+}
+.pwa-form-section__title::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--pwa-rule);
+}
+
+/* "Unsaved changes: 2" on the left of the actions row (NEO-92). */
+.pwa-form-dialog__changes {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+.pwa-form-dialog__changes-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgb(var(--v-theme-warning));
 }
 /*
  * M3 dialog spacing (m3.material.io/components/dialogs/specs), one system for

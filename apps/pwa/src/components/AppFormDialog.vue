@@ -9,11 +9,20 @@
     :transition="asSheet ? sheetDialogTransition : originDialogTransition"
     @update:model-value="(v: boolean) => emit('update:modelValue', v)"
   >
-    <VCard class="pwa-form-dialog__card" data-testid="app-form-dialog">
+    <VCard
+      class="pwa-form-dialog__card"
+      :class="{ 'pwa-form-dialog__card--folder': asFolder }"
+      data-testid="app-form-dialog"
+    >
+      <!-- NEO-92 "Carpeta": the folder's spine (record identity + section
+           index), a left column beside header/body/actions. Not on phones. -->
+      <aside v-if="asFolder" class="pwa-form-dialog__spine" data-testid="app-form-dialog-spine">
+        <slot name="spine" />
+      </aside>
       <AppDialogHeader
         v-if="title"
         :title="title"
-        :avatar-entity-type="avatarEntityType"
+        :avatar-entity-type="asFolder ? undefined : avatarEntityType"
         :avatar-name="avatarName"
         :closable="closable"
         @close="emit('close')"
@@ -66,14 +75,14 @@
  * M3's hairline dividers under the header and above the actions only while
  * content actually runs behind them.
  */
-import { onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useSlots, watch } from "vue";
 import { useDisplay } from "vuetify";
 import { VCardText } from "vuetify/components";
 import { originDialogTransition, sheetDialogTransition } from "@ui";
 import AppDialogHeader from "./AppDialogHeader.vue";
 import type { AppAvatarEntityType } from "./AppAvatar.vue";
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     modelValue: boolean;
     /** Omit only for dialogs that draw their own header (none today). */
@@ -83,6 +92,12 @@ withDefaults(
     closable?: boolean;
     persistent?: boolean;
     maxWidth?: number | string;
+    /**
+     * The folder layout (NEO-92) when a `spine` slot is given: a left spine
+     * column beside the page. Ignored on phones — there the dialog is a
+     * bottom sheet and the caller puts a compact index in `header-extra`.
+     */
+    folder?: boolean;
   }>(),
   {
     title: undefined,
@@ -91,6 +106,7 @@ withDefaults(
     closable: true,
     persistent: false,
     maxWidth: 680,
+    folder: false,
   },
 );
 
@@ -98,11 +114,15 @@ const emit = defineEmits<{
   "update:modelValue": [value: boolean];
   /** The header's X — callers decide (e.g. ask to discard unsaved changes). */
   close: [];
+  /** The body scrolled or resized — the folder's section index follows it. */
+  "body-scroll": [el: HTMLElement];
 }>();
 
 // Phones (< 600px, Vuetify xs): an M3 bottom sheet sliding up from the screen
 // edge, within thumb reach, instead of a centred card (NEO-85).
 const { xs: asSheet } = useDisplay();
+const slots = useSlots();
+const asFolder = computed(() => props.folder && !asSheet.value && !!slots.spine);
 
 const bodyRef = ref<InstanceType<typeof VCardText> | null>(null);
 const innerRef = ref<HTMLElement | null>(null);
@@ -119,6 +139,7 @@ function measure() {
   if (!el) return;
   scrolled.value = el.scrollTop > 0;
   hasMore.value = el.scrollTop + el.clientHeight < el.scrollHeight - 1;
+  emit("body-scroll", el);
 }
 
 // The body's own box is fixed by the flex layout; what changes is the content

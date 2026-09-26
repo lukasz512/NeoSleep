@@ -3,6 +3,7 @@ import { intlLocale } from "@i18n/language-options";
 import { useSpecialtyLabel } from "./useSpecialtyLabel";
 import { ageFromDateOfBirth } from "../utils/patientDemographics";
 import { hcoTypeLabel } from "../utils/hcoLabels";
+import type { AppAvatarEntityType } from "../types/formField";
 
 /** The quiet line under a large identity's name: values joined with " · ", overflow behind "+N". */
 export interface IdentityDetailSet {
@@ -89,5 +90,34 @@ export function useIdentity() {
     return { details: role ? [t(`user.users.role.${role}`)] : [], more: [] };
   }
 
-  return { patientDetails, specialtySet, doctorDetails, orgDetails, userDetails, formatDob };
+  /**
+   * The record header's detail line for any entity type — what the form
+   * folder's spine shows under the name (NEO-92), from the live form values,
+   * so it reads exactly like the header the record will get once saved.
+   */
+  function detailsFor(entityType: AppAvatarEntityType, record: Record<string, unknown>): IdentityDetailSet {
+    const str = (v: unknown) => (typeof v === "string" ? v : null);
+    switch (entityType) {
+      case "patient":
+        return patientDetails({ gender: str(record.gender), date_of_birth: str(record.date_of_birth) }, { long: true });
+      case "hcp":
+      case "lead":
+        return doctorDetails(
+          {
+            primary_specialty: str(record.primary_specialty),
+            specialties: Array.isArray(record.specialties) ? record.specialties.map(String) : null,
+            institution: str(record.institution),
+          },
+          { withClinic: true },
+        );
+      case "hco":
+        return orgDetails({ type: str(record.type), city: str(record.city) }, { withCity: true });
+      case "user":
+        return userDetails(str(record.role));
+      default:
+        return { details: [], more: [] };
+    }
+  }
+
+  return { patientDetails, specialtySet, doctorDetails, orgDetails, userDetails, detailsFor, formatDob };
 }

@@ -2,6 +2,7 @@ import type { FormFieldDef } from "../../types/formField";
 import { useAuthStore } from "../../stores/auth";
 import { identityFields } from "./identityFields";
 import { licenseNumberFields } from "./licenseNumberFields";
+import { inSection } from "./sections";
 import { i18n } from "../../plugins/i18n";
 
 /**
@@ -38,6 +39,7 @@ export const leadFormFields: FormFieldDef[] = [
   ...identity,
   {
     key: "institution",
+    section: "profile",
     type: "text",
     labelKey: "user.leads.form.institution",
     icon: "nav-hco",
@@ -48,9 +50,10 @@ export const leadFormFields: FormFieldDef[] = [
   },
   // Optional on a lead; carried over to practitioner.national_ids when the
   // lead becomes an HCP (moveToDoctorsInitialData / InvitePractitionerCommand).
-  ...licenseNumberFields({ nestUnder: "metadata", hiddenWhen: (form) => !isDoctorType(form) }),
+  ...inSection("profile", ...licenseNumberFields({ nestUnder: "metadata", hiddenWhen: (form) => !isDoctorType(form) })),
   {
     key: "diagnosis",
+    section: "clinical",
     type: "text",
     labelKey: "user.leads.form.diagnosis",
     icon: "nav-patients",
@@ -61,6 +64,7 @@ export const leadFormFields: FormFieldDef[] = [
   },
   {
     key: "type",
+    section: "status",
     type: "select",
     labelKey: "user.leads.filters.type",
     options: [
@@ -79,6 +83,7 @@ export const leadFormFields: FormFieldDef[] = [
   },
   {
     key: "status",
+    section: "status",
     type: "select",
     labelKey: "user.leads.form.status",
     options: [
@@ -93,6 +98,7 @@ export const leadFormFields: FormFieldDef[] = [
   },
   {
     key: "region",
+    section: "territory",
     type: "text",
     labelKey: "user.leads.form.region",
     default: () => useAuthStore().user?.region ?? "",
@@ -102,6 +108,7 @@ export const leadFormFields: FormFieldDef[] = [
   // `region` above (see migration 013's comment), same hidden-default pattern.
   {
     key: "country_code",
+    section: "territory",
     type: "text",
     labelKey: "user.leads.form.countryCode",
     default: () => useAuthStore().user?.country_code ?? "",

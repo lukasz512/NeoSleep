@@ -63,22 +63,24 @@ async function loadSpecialtyOptions(form: Record<string, unknown>): Promise<Form
 }
 
 export const hcoFormFields: FormFieldDef[] = [
-  { key: "name", type: "text", labelKey: "user.hco.form.name", required: true, cols: 12 },
-  { key: "type", type: "select", labelKey: "user.hco.form.type", options: loadInstitutionTypeOptions, cols: 6 },
+  { key: "name", type: "text", labelKey: "user.hco.form.name", required: true, cols: 12, section: "organization" },
+  { key: "type", type: "select", labelKey: "user.hco.form.type", options: loadInstitutionTypeOptions, cols: 6, section: "organization" },
   {
     key: "specialties",
+    section: "organization",
     type: "autocomplete",
     labelKey: "user.hco.form.specialties",
     options: loadSpecialtyOptions,
     multiple: true,
     cols: 6,
   },
-  { key: "address_line1", type: "text", labelKey: "user.hco.form.addressLine1", cols: 12 },
-  { key: "postal_code", type: "text", labelKey: "user.hco.form.postalCode", cols: 6 },
-  { key: "city", type: "text", labelKey: "user.hco.form.city", cols: 6 },
-  { key: "state", type: "text", labelKey: "user.hco.form.state", cols: 6 },
+  { key: "address_line1", type: "text", labelKey: "user.hco.form.addressLine1", cols: 12, section: "contact" },
+  { key: "postal_code", type: "text", labelKey: "user.hco.form.postalCode", cols: 6, section: "contact" },
+  { key: "city", type: "text", labelKey: "user.hco.form.city", cols: 6, section: "contact" },
+  { key: "state", type: "text", labelKey: "user.hco.form.state", cols: 6, section: "contact" },
   {
     key: "territory_id",
+    section: "territory",
     type: "autocomplete",
     labelKey: "user.hco.form.territory",
     default: null,
@@ -88,6 +90,7 @@ export const hcoFormFields: FormFieldDef[] = [
   },
   {
     key: "country_code",
+    section: "territory",
     type: "text",
     labelKey: "user.hco.form.countryCode",
     hidden: true,
@@ -95,15 +98,17 @@ export const hcoFormFields: FormFieldDef[] = [
   },
   {
     key: "phone",
+    section: "contact",
     type: "phone",
     labelKey: "user.hco.form.phone",
     icon: "phone",
     rules: [phoneMinDigitsRule],
     cols: 12,
   },
-  { ...emailField(false), labelKey: "user.hco.form.email" },
+  { ...emailField(false), labelKey: "user.hco.form.email", section: "contact" },
   {
     key: "website",
+    section: "contact",
     type: "text",
     labelKey: "user.hco.form.website",
     icon: "globe",
@@ -112,6 +117,7 @@ export const hcoFormFields: FormFieldDef[] = [
   },
   {
     key: "google_link",
+    section: "contact",
     type: "text",
     labelKey: "user.hco.form.googleLink",
     icon: "map-pin",
@@ -120,6 +126,7 @@ export const hcoFormFields: FormFieldDef[] = [
   },
   {
     key: "status",
+    section: "status",
     type: "select",
     labelKey: "user.hco.form.status",
     options: STATUS_OPTIONS,
@@ -133,6 +140,7 @@ export const hcoFormFields: FormFieldDef[] = [
     // Admin-only, like status — the API also ignores the value from any
     // other role, since the form submits it with every save.
     key: "show_on_public_map",
+    section: "status",
     type: "boolean",
     labelKey: "user.hco.form.showOnPublicMap",
     hint: "user.hco.form.showOnPublicMapHint",
