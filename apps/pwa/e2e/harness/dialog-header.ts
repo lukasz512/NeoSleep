@@ -7,9 +7,11 @@
  * only exist in a real browser with a real CSS cascade — jsdom can't see them.
  *
  * `?dialog=form` (default) mounts FormRenderer in edit mode with an avatar —
- * the shell of every entity edit view. `?dialog=event` mounts EventForm,
- * `?dialog=confirm` AppConfirmDialog, `?dialog=wizard` the OrthoApnea order
- * wizard (visual check only). `?theme=dark` switches the theme.
+ * the shell of every entity edit view; `?dialog=form-long` the same with a
+ * real-length field list. `?dialog=event` mounts EventForm, `?dialog=confirm`
+ * AppConfirmDialog, `?dialog=wizard` the OrthoApnea order wizard,
+ * `?dialog=clinical` the medical-history questionnaire (a long checklist).
+ * `?theme=dark` switches the theme. Also used by e2e/dialog-scroll.spec.ts.
  */
 import { createApp, defineComponent, h } from "vue";
 import { createPinia } from "pinia";
@@ -21,6 +23,7 @@ import FormRenderer from "../../src/components/FormRenderer.vue";
 import EventForm from "../../src/components/EventForm.vue";
 import AppConfirmDialog from "../../src/components/AppConfirmDialog.vue";
 import OrthoApneaOrderWizard from "../../src/components/patient/OrthoApneaOrderWizard.vue";
+import ClinicalQuestionnaireDialog from "../../src/components/questionnaire/ClinicalQuestionnaireDialog.vue";
 import type { FormFieldDef } from "../../src/types/formField";
 
 const params = new URLSearchParams(location.search);
@@ -33,9 +36,37 @@ const fields: FormFieldDef[] = [
   { key: "email", type: "email", labelKey: "app.identity.form.email" },
 ];
 
+// A real-length entity form (a patient/HCP edit is ~15 fields): taller than
+// any phone and most laptop viewports, which is what e2e/dialog-scroll.spec.ts
+// needs to prove the body scrolls and Save stays reachable.
+const longFields: FormFieldDef[] = [
+  ...fields,
+  ...Array.from({ length: 12 }, (_, i): FormFieldDef => ({
+    key: `extra_${i}`,
+    type: "text",
+    labelKey: "app.identity.form.lastName",
+  })),
+  { key: "notes", type: "textarea", labelKey: "app.identity.form.email" },
+];
+
 const Harness = defineComponent({
   setup() {
     return () => {
+      if (dialog === "clinical") {
+        return h(ClinicalQuestionnaireDialog, { modelValue: true, kind: "medical_history", mode: "create" });
+      }
+      if (dialog === "form-long") {
+        return h(FormRenderer, {
+          modelValue: true,
+          fields: longFields,
+          initialData: { id: "p1", first_name: "Maria", last_name: "Diaz", email: "maria.diaz@example.com" },
+          titleKey: "app.patients.form.title",
+          editTitleKey: "app.patients.form.editTitle",
+          submitLabelKey: "app.patients.form.submit",
+          editSubmitLabelKey: "app.patients.form.editSubmit",
+          avatarEntityType: "patient",
+        });
+      }
       if (dialog === "event") {
         return h(EventForm, { modelValue: true, initialData: { id: "e1", title: "Team sync" } });
       }

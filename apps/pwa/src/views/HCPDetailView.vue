@@ -202,37 +202,25 @@
       </template>
     </ItemDetailLayout>
 
-    <VDialog
+    <AppConfirmDialog
       v-model="showDeleteConfirm"
+      :text="t('user.hcp.actions.deleteConfirmText')"
+      :secondary-label="t('app.common.cancel')"
+      :secondary-color="null"
+      :primary-label="t('user.hcp.actions.delete')"
+      primary-color="error"
+      primary-variant="text"
+      :loading="deleteLoading"
       max-width="360"
-      :transition="originDialogTransition"
-      persistent
-    >
-      <VCard class="pwa-confirm-dialog__card">
-        <VCardText>{{ t("user.hcp.actions.deleteConfirmText") }}</VCardText>
-        <VCardActions>
-          <VSpacer />
-          <AppButton variant="text" @click="showDeleteConfirm = false">
-            {{ t("app.common.cancel") }}
-          </AppButton>
-          <AppButton
-            color="error"
-            variant="text"
-            :loading="deleteLoading"
-            @click="onDelete"
-          >
-            {{ t("user.hcp.actions.delete") }}
-          </AppButton>
-        </VCardActions>
-      </VCard>
-    </VDialog>
+      @secondary="showDeleteConfirm = false"
+      @primary="onDelete"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { isOfflineError, reportCaught, reportFailedResponse } from "@api";
 import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
-import { originDialogTransition } from "@ui";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuthStore } from "../stores/auth";
@@ -244,6 +232,7 @@ import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import AppButton from "../components/AppButton.vue";
+import AppConfirmDialog from "../components/AppConfirmDialog.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppAvatar from "../components/AppAvatar.vue";
 import IdentityDetails from "../components/IdentityDetails.vue";

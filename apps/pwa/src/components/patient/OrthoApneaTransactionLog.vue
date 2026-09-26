@@ -1,73 +1,73 @@
 <template>
-  <VDialog :model-value="modelValue" max-width="760" scrollable @update:model-value="(v) => emit('update:modelValue', v)">
-    <VCard class="pwa-form-dialog__card">
-      <AppDialogHeader :title="t('app.orthoApneaOrder.transactionLog.title')" @close="emit('update:modelValue', false)" />
+  <AppFormDialog
+    :model-value="modelValue"
+    max-width="760"
+    :title="t('app.orthoApneaOrder.transactionLog.title')"
+    @update:model-value="(v) => emit('update:modelValue', v)"
+    @close="emit('update:modelValue', false)"
+  >
+    <AppLoadingState v-if="loading && !loaded" />
+    <AppErrorState
+      v-else-if="loadError"
+      :error="loadFailure"
+      :subtitle="t('app.orthoApneaOrder.transactionLog.errorLoad')"
+      :refresh-label="t('app.errorState.refresh')"
+      :loading="loading"
+      @refresh="load"
+    />
+    <template v-else-if="history">
+      <div class="oa-txn-log__summary">
+        <VChip :color="linkStatusColor(history.link?.sync_status)" size="small" variant="tonal">
+          {{ history.link ? t(`app.orthoApneaOrder.transactionLog.linkStatus.${history.link.sync_status}`) : t("app.orthoApneaOrder.transactionLog.notLinked") }}
+        </VChip>
+        <span v-if="history.link?.external_id" class="oa-txn-log__meta">
+          {{ t("app.orthoApneaOrder.transactionLog.externalId") }}: <strong>{{ history.link.external_id }}</strong>
+        </span>
+        <span v-if="history.link?.external_status" class="oa-txn-log__meta">
+          {{ t("app.orthoApneaOrder.transactionLog.externalStatus") }}: <strong>{{ history.link.external_status }}</strong>
+        </span>
+      </div>
 
-      <VCardText>
-        <AppLoadingState v-if="loading && !loaded" />
-        <AppErrorState
-          v-else-if="loadError"
-          :error="loadFailure"
-          :subtitle="t('app.orthoApneaOrder.transactionLog.errorLoad')"
-          :refresh-label="t('app.errorState.refresh')"
-          :loading="loading"
-          @refresh="load"
-        />
-        <template v-else-if="history">
-          <div class="oa-txn-log__summary">
-            <VChip :color="linkStatusColor(history.link?.sync_status)" size="small" variant="tonal">
-              {{ history.link ? t(`app.orthoApneaOrder.transactionLog.linkStatus.${history.link.sync_status}`) : t("app.orthoApneaOrder.transactionLog.notLinked") }}
-            </VChip>
-            <span v-if="history.link?.external_id" class="oa-txn-log__meta">
-              {{ t("app.orthoApneaOrder.transactionLog.externalId") }}: <strong>{{ history.link.external_id }}</strong>
-            </span>
-            <span v-if="history.link?.external_status" class="oa-txn-log__meta">
-              {{ t("app.orthoApneaOrder.transactionLog.externalStatus") }}: <strong>{{ history.link.external_status }}</strong>
-            </span>
-          </div>
+      <AppEmptyState v-if="history.transactions.length === 0" :title="t('app.orthoApneaOrder.transactionLog.empty')" />
+      <VExpansionPanels v-else variant="accordion" class="oa-txn-log__panels">
+        <VExpansionPanel v-for="txn in history.transactions" :key="txn.id">
+          <VExpansionPanelTitle>
+            <div class="oa-txn-log__row">
+              <VChip :color="txn.success ? 'success' : 'error'" size="small" variant="tonal">
+                {{ txn.success ? t("app.orthoApneaOrder.transactionLog.callSucceeded") : t("app.orthoApneaOrder.transactionLog.callFailed") }}
+              </VChip>
+              <span class="oa-txn-log__action">{{ txn.action }}</span>
+              <span v-if="txn.http_status != null" class="oa-txn-log__http">HTTP {{ txn.http_status }}</span>
+              <VIcon v-if="missingFields(txn).length > 0" icon="mdi-alert" color="warning" size="18" class="oa-txn-log__warning-icon" />
+              <VSpacer />
+              <span class="oa-txn-log__timestamp">{{ new Date(txn.created_at).toLocaleString() }}</span>
+            </div>
+          </VExpansionPanelTitle>
+          <VExpansionPanelText>
+            <VAlert v-if="missingFields(txn).length > 0" type="warning" variant="tonal" density="comfortable" class="mb-3">
+              {{ t("app.orthoApneaOrder.transactionLog.missingFieldsWarning", { fields: missingFields(txn).join(", ") }) }}
+            </VAlert>
+            <p v-if="txn.error_message" class="oa-txn-log__error">
+              {{ t("app.orthoApneaOrder.transactionLog.errorMessage") }}: {{ txn.error_message }}
+            </p>
 
-          <AppEmptyState v-if="history.transactions.length === 0" :title="t('app.orthoApneaOrder.transactionLog.empty')" />
-          <VExpansionPanels v-else variant="accordion" class="oa-txn-log__panels">
-            <VExpansionPanel v-for="txn in history.transactions" :key="txn.id">
-              <VExpansionPanelTitle>
-                <div class="oa-txn-log__row">
-                  <VChip :color="txn.success ? 'success' : 'error'" size="small" variant="tonal">
-                    {{ txn.success ? t("app.orthoApneaOrder.transactionLog.callSucceeded") : t("app.orthoApneaOrder.transactionLog.callFailed") }}
-                  </VChip>
-                  <span class="oa-txn-log__action">{{ txn.action }}</span>
-                  <span v-if="txn.http_status != null" class="oa-txn-log__http">HTTP {{ txn.http_status }}</span>
-                  <VIcon v-if="missingFields(txn).length > 0" icon="mdi-alert" color="warning" size="18" class="oa-txn-log__warning-icon" />
-                  <VSpacer />
-                  <span class="oa-txn-log__timestamp">{{ new Date(txn.created_at).toLocaleString() }}</span>
-                </div>
-              </VExpansionPanelTitle>
-              <VExpansionPanelText>
-                <VAlert v-if="missingFields(txn).length > 0" type="warning" variant="tonal" density="comfortable" class="mb-3">
-                  {{ t("app.orthoApneaOrder.transactionLog.missingFieldsWarning", { fields: missingFields(txn).join(", ") }) }}
-                </VAlert>
-                <p v-if="txn.error_message" class="oa-txn-log__error">
-                  {{ t("app.orthoApneaOrder.transactionLog.errorMessage") }}: {{ txn.error_message }}
-                </p>
+            <p class="oa-txn-log__label">{{ t("app.orthoApneaOrder.transactionLog.requestPayload") }}</p>
+            <pre class="oa-txn-log__json">{{ formatJson(txn.request_payload) }}</pre>
 
-                <p class="oa-txn-log__label">{{ t("app.orthoApneaOrder.transactionLog.requestPayload") }}</p>
-                <pre class="oa-txn-log__json">{{ formatJson(txn.request_payload) }}</pre>
-
-                <p class="oa-txn-log__label">{{ t("app.orthoApneaOrder.transactionLog.responsePayload") }}</p>
-                <pre class="oa-txn-log__json">{{ formatJson(txn.response_payload) }}</pre>
-              </VExpansionPanelText>
-            </VExpansionPanel>
-          </VExpansionPanels>
-        </template>
-      </VCardText>
-    </VCard>
-  </VDialog>
+            <p class="oa-txn-log__label">{{ t("app.orthoApneaOrder.transactionLog.responsePayload") }}</p>
+            <pre class="oa-txn-log__json">{{ formatJson(txn.response_payload) }}</pre>
+          </VExpansionPanelText>
+        </VExpansionPanel>
+      </VExpansionPanels>
+    </template>
+  </AppFormDialog>
 </template>
 
 <script setup lang="ts">
 import { reportCaught, reportFailedResponse } from "@api";
 import { ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import AppDialogHeader from "../AppDialogHeader.vue";
+import AppFormDialog from "../AppFormDialog.vue";
 import AppLoadingState from "../AppLoadingState.vue";
 import AppErrorState from "../AppErrorState.vue";
 import AppEmptyState from "../AppEmptyState.vue";

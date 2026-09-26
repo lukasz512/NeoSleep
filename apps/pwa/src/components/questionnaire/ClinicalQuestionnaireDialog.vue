@@ -1,75 +1,74 @@
 <template>
-  <VDialog :model-value="modelValue" max-width="640" scrollable :transition="originDialogTransition" @update:model-value="emit('update:modelValue', $event)">
-    <VCard class="pwa-form-dialog__card">
-      <AppDialogHeader :title="t(KIND_LABEL_KEYS[kind])" @close="emit('update:modelValue', false)" />
+  <AppFormDialog
+    :model-value="modelValue"
+    max-width="640"
+    :title="t(KIND_LABEL_KEYS[kind])"
+    @update:model-value="emit('update:modelValue', $event)"
+    @close="emit('update:modelValue', false)"
+  >
+    <p v-if="record" class="clinical-dialog__subtitle">{{ subtitle }}</p>
+    <template v-if="kind === 'medical_history'">
+      <QuestionnaireChecklist v-model="answers" :questions="MEDICAL_HISTORY_QUESTIONS" :readonly="readonly" />
+      <p v-if="readonly && text.medical_history_other" class="clinical-dialog__other">
+        <strong>{{ t("app.clinical.otherLabel") }}:</strong> {{ text.medical_history_other }}
+      </p>
+      <VTextField
+        v-else-if="!readonly"
+        v-model="text.medical_history_other"
+        :label="t('app.clinical.otherLabel')"
+        variant="outlined"
+        density="comfortable"
+        class="clinical-dialog__field"
+      />
+    </template>
 
-      <VCardText>
-        <p v-if="record" class="clinical-dialog__subtitle">{{ subtitle }}</p>
-        <template v-if="kind === 'medical_history'">
-          <QuestionnaireChecklist v-model="answers" :questions="MEDICAL_HISTORY_QUESTIONS" :readonly="readonly" />
-          <p v-if="readonly && text.medical_history_other" class="clinical-dialog__other">
-            <strong>{{ t("app.clinical.otherLabel") }}:</strong> {{ text.medical_history_other }}
-          </p>
-          <VTextField
-            v-else-if="!readonly"
-            v-model="text.medical_history_other"
-            :label="t('app.clinical.otherLabel')"
-            variant="outlined"
-            density="comfortable"
-            class="clinical-dialog__field"
-          />
-        </template>
+    <template v-else-if="kind === 'oral_exam'">
+      <QuestionnaireChecklist v-model="answers" :questions="ORAL_EXAM_QUESTIONS" :readonly="readonly" />
+      <div class="clinical-dialog__row">
+        <span>{{ t("app.clinical.skeletalClassLabel") }}</span>
+        <strong v-if="readonly">{{ text.skeletal_class || "—" }}</strong>
+        <VBtnToggle v-else v-model="text.skeletal_class" density="comfortable" color="primary" divided>
+          <VBtn v-for="cls in SKELETAL_CLASSES" :key="cls" :value="cls" size="small">{{ cls }}</VBtn>
+        </VBtnToggle>
+      </div>
+      <div class="clinical-dialog__row">
+        <span>{{ t("app.clinical.toothLabel") }}</span>
+        <strong v-if="readonly">{{ text.tooth || "—" }}</strong>
+        <VTextField v-else v-model="text.tooth" variant="outlined" density="compact" hide-details class="clinical-dialog__tooth" />
+      </div>
+    </template>
 
-        <template v-else-if="kind === 'oral_exam'">
-          <QuestionnaireChecklist v-model="answers" :questions="ORAL_EXAM_QUESTIONS" :readonly="readonly" />
-          <div class="clinical-dialog__row">
-            <span>{{ t("app.clinical.skeletalClassLabel") }}</span>
-            <strong v-if="readonly">{{ text.skeletal_class || "—" }}</strong>
-            <VBtnToggle v-else v-model="text.skeletal_class" density="comfortable" color="primary" divided>
-              <VBtn v-for="cls in SKELETAL_CLASSES" :key="cls" :value="cls" size="small">{{ cls }}</VBtn>
-            </VBtnToggle>
-          </div>
-          <div class="clinical-dialog__row">
-            <span>{{ t("app.clinical.toothLabel") }}</span>
-            <strong v-if="readonly">{{ text.tooth || "—" }}</strong>
-            <VTextField v-else v-model="text.tooth" variant="outlined" density="compact" hide-details class="clinical-dialog__tooth" />
-          </div>
-        </template>
+    <template v-else>
+      <h4 class="clinical-dialog__section">{{ t("app.clinical.section.stop") }}</h4>
+      <QuestionnaireChecklist v-model="answers" :questions="STOP_QUESTIONS" :readonly="readonly || mode === 'completeBang'" />
+      <h4 class="clinical-dialog__section">{{ t("app.clinical.section.bang") }}</h4>
+      <QuestionnaireChecklist v-model="answers" :questions="BANG_QUESTIONS" :readonly="readonly" />
+      <p v-if="mode === 'create'" class="clinical-dialog__hint">{{ t("app.clinical.bangOptional") }}</p>
+      <p v-if="record?.score != null" class="clinical-dialog__score">
+        {{ t("app.clinical.score", { score: record.score }) }} · {{ t(`app.clinical.risk.${stopBangRisk(record.score)}`) }}
+      </p>
+    </template>
 
-        <template v-else>
-          <h4 class="clinical-dialog__section">{{ t("app.clinical.section.stop") }}</h4>
-          <QuestionnaireChecklist v-model="answers" :questions="STOP_QUESTIONS" :readonly="readonly || mode === 'completeBang'" />
-          <h4 class="clinical-dialog__section">{{ t("app.clinical.section.bang") }}</h4>
-          <QuestionnaireChecklist v-model="answers" :questions="BANG_QUESTIONS" :readonly="readonly" />
-          <p v-if="mode === 'create'" class="clinical-dialog__hint">{{ t("app.clinical.bangOptional") }}</p>
-          <p v-if="record?.score != null" class="clinical-dialog__score">
-            {{ t("app.clinical.score", { score: record.score }) }} · {{ t(`app.clinical.risk.${stopBangRisk(record.score)}`) }}
-          </p>
-        </template>
-      </VCardText>
-
-      <VCardActions>
-        <AppButton v-if="record" variant="text" :loading="pdfLoading" @click="emit('pdf')">
-          <template #prepend><AppIcon name="printer" /></template>
-          {{ t("app.clinical.action.print") }}
-        </AppButton>
-        <VSpacer />
-        <AppButton variant="text" @click="emit('update:modelValue', false)">
-          {{ t(readonly ? "app.common.close" : "app.common.cancel") }}
-        </AppButton>
-        <AppButton v-if="!readonly" color="primary" :disabled="!canSave" :loading="saving" @click="onSave">
-          {{ t(mode === "completeBang" ? "app.clinical.completeBang" : "app.clinical.save") }}
-        </AppButton>
-      </VCardActions>
-    </VCard>
-  </VDialog>
+    <template #actions>
+      <AppButton v-if="record" variant="text" :loading="pdfLoading" @click="emit('pdf')">
+        <template #prepend><AppIcon name="printer" /></template>
+        {{ t("app.clinical.action.print") }}
+      </AppButton>
+      <VSpacer />
+      <AppButton variant="text" @click="emit('update:modelValue', false)">
+        {{ t(readonly ? "app.common.close" : "app.common.cancel") }}
+      </AppButton>
+      <AppButton v-if="!readonly" color="primary" :disabled="!canSave" :loading="saving" @click="onSave">
+        {{ t(mode === "completeBang" ? "app.clinical.completeBang" : "app.clinical.save") }}
+      </AppButton>
+    </template>
+  </AppFormDialog>
 </template>
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import AppDialogHeader from "../AppDialogHeader.vue";
-import { originDialogTransition } from "@ui";
+import AppFormDialog from "../AppFormDialog.vue";
 import { intlLocale } from "@i18n/language-options";
 import AppButton from "../AppButton.vue";
 import AppIcon from "../AppIcon.vue";
