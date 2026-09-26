@@ -80,6 +80,36 @@ describe("useEntitySubmit", () => {
     dispatchSpy.mockRestore();
   });
 
+  it("on a 400 naming a field: no toast, done(false) with that field's error (NEO-109)", async () => {
+    const { submit } = useEntitySubmit();
+    const { current } = useNotifications();
+    const done = vi.fn();
+    const res = new Response(JSON.stringify({ error: "date_of_birth is out of range", code: "VALIDATION_ERROR", field: "date_of_birth" }), { status: 400 });
+
+    await submit(
+      { request: async () => res, successMessage: "Saved", errorMessage: "Could not save", icon: "nav-patients" },
+      done,
+    );
+
+    expect(current.value).toBeNull();
+    expect(done).toHaveBeenCalledWith(false, { date_of_birth: "app.formRenderer.validation.server.date_of_birth" });
+  });
+
+  it("on a 400 naming no field: falls back to the error toast", async () => {
+    const { submit } = useEntitySubmit();
+    const { current, dismissCurrent } = useNotifications();
+    const done = vi.fn();
+
+    await submit(
+      { request: async () => new Response(JSON.stringify({ error: "Bad" }), { status: 400 }), successMessage: "Saved", errorMessage: "Could not save", icon: "nav-patients" },
+      done,
+    );
+
+    expect(current.value?.message).toBe("Could not save");
+    dismissCurrent();
+    expect(done).toHaveBeenCalledWith(false);
+  });
+
   it("on a thrown network error: shows an error notification and calls done(false)", async () => {
     const { submit } = useEntitySubmit();
     const { current, dismissCurrent } = useNotifications();

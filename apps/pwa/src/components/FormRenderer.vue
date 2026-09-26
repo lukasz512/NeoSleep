@@ -21,6 +21,7 @@
       {{ t(verifyInfoKey) }}
     </AppInlineAlert>
     <VForm ref="formRef" @submit.prevent="onSubmit">
+      <FormErrorSummary :errors="errorList" @select="focusField" />
       <section
         v-for="sec in sections"
         :key="sec.id"
@@ -29,7 +30,15 @@
         :data-section="sec.id"
         :aria-labelledby="isFolder ? `${uid}-${sec.id}` : undefined"
       >
-      <h3 v-if="isFolder" :id="`${uid}-${sec.id}`" class="pwa-form-section__title">{{ sec.label }}</h3>
+      <h3 v-if="isFolder" :id="`${uid}-${sec.id}`" class="pwa-form-section__title">
+        {{ sec.label }}
+        <span
+          v-if="errorCountBySection[sec.id]"
+          class="pwa-form-section__errors"
+          data-testid="section-error-count"
+          :aria-label="t('app.formRenderer.errorSummary.sectionCount', { n: errorCountBySection[sec.id] })"
+        >{{ errorCountBySection[sec.id] }}</span>
+      </h3>
       <template v-for="(row, ri) in sec.rows" :key="ri">
         <div v-if="row.length > 1" class="pwa-form-row mb-3">
           <div v-for="f in row" :key="f.key" class="pwa-form-row-item pwa-form-col" :style="rowItemStyle(f)">
@@ -203,6 +212,9 @@ import AppConfirmDialog from "./AppConfirmDialog.vue";
 import PhoneField from "./PhoneField.vue";
 import EmailField from "./EmailField.vue";
 import ChoiceChipsField from "./ChoiceChipsField.vue";
+import FormErrorSummary, { type FormErrorSummaryItem } from "./FormErrorSummary.vue";
+import { useNotifications } from "../composables/useNotifications";
+import type { FieldErrors, SubmitDone } from "../composables/useEntitySubmit";
 import type { FormDerive, FormFieldDef, FormFieldType } from "../types/formField";
 import { AppInlineAlert } from "@ui";
 
@@ -251,12 +263,13 @@ const emit = defineEmits<{
   /**
    * `done` must be called by the listener once its own async submit work
    * (the actual apiFetch call) settles — true closes the dialog, false
-   * keeps it open (e.g. after a failed request) so the user can retry.
+   * keeps it open (e.g. after a failed request) so the user can retry;
+   * `fieldErrors` (a 400 naming a field, NEO-109) are marked on those fields.
    */
-  submit: [payload: Record<string, unknown>, done: (ok: boolean) => void];
+  submit: [payload: Record<string, unknown>, done: SubmitDone];
 }>();
 
-const { t } = useI18n();
+const { t, te } = useI18n();
 
 const initialDataRef = computed(() => props.initialData);
 const {
@@ -269,6 +282,57 @@ const { detailsFor } = useIdentity();
 
 const submitting = ref(false);
 const showDiscardConfirm = ref(false);
+
+/**
+ * Errors show in the form, never as a toast (NEO-109): under each field, in
+ * the summary box on top and as a count on each section heading. They only
+ * appear after the first Save, so an empty form doesn't open all red.
+ * `serverErrors` are the fields the API rejected; each clears as soon as
+ * that field is edited.
+ */
+const attempted = ref(false);
+const serverErrors = ref<FieldErrors>({});
+
+function serverErrorText(key: string): string | undefined {
+  const messageKey = serverErrors.value[key];
+  if (!messageKey) return undefined;
+  return t(te(messageKey) ? messageKey : "app.formRenderer.validation.invalid");
+}
+
+/** The first thing wrong with a field right now — the API's verdict first, then the field's own rules. */
+function fieldError(f: FormFieldDef): string | undefined {
+  const server = serverErrorText(f.key);
+  if (server) return server;
+  for (const rule of rulesFor(f)) {
+    const result = rule(form.value[f.key]);
+    if (result !== true) return result;
+  }
+  return undefined;
+}
+
+const errorList = computed<FormErrorSummaryItem[]>(() => {
+  if (!attempted.value) return [];
+  return sections.value.flatMap((sec) =>
+    sec.fields.flatMap((f) => {
+      const message = fieldError(f);
+      return message ? [{ key: f.key, label: labelFor(f), message }] : [];
+    }),
+  );
+});
+
+const errorCountBySection = computed<Record<string, number>>(() => {
+  const keys = new Set(errorList.value.map((e) => e.key));
+  return Object.fromEntries(sections.value.map((sec) => [sec.id, sec.fields.filter((f) => keys.has(f.key)).length]));
+});
+
+/** Scrolls a field into view and puts the cursor in it — the summary's links. */
+function focusField(key: string) {
+  const el = (fieldEls[key] as { $el?: HTMLElement } | undefined)?.$el;
+  if (!el) return;
+  const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  el.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
+  el.querySelector<HTMLElement>("input, textarea, button")?.focus({ preventScroll: true });
+}
 
 const formTitle = computed(() =>
   isEditMode.value && props.editTitleKey ? t(props.editTitleKey) : t(props.titleKey),
@@ -539,10 +603,20 @@ function componentFor(type: FormFieldType) {
   }
 }
 
+/** Every field edit goes through here, so a rejected value's server error clears the moment it changes. */
+function setField(f: FormFieldDef, v: unknown) {
+  form.value[f.key] = v;
+  if (serverErrors.value[f.key]) {
+    const rest = { ...serverErrors.value };
+    delete rest[f.key];
+    serverErrors.value = rest;
+  }
+}
+
 function fieldAttrs(f: FormFieldDef): Record<string, unknown> {
   const common: Record<string, unknown> = {
     modelValue: form.value[f.key],
-    "onUpdate:modelValue": (v: unknown) => { form.value[f.key] = normalizeFieldValue(f, v); },
+    "onUpdate:modelValue": (v: unknown) => { setField(f, normalizeFieldValue(f, v)); },
     label: labelFor(f),
     variant: "outlined",
     density: "comfortable",
@@ -552,6 +626,7 @@ function fieldAttrs(f: FormFieldDef): Record<string, unknown> {
     placeholder: f.placeholder ? t(f.placeholder) : undefined,
     disabled: submitting.value || (!!f.immutableOnEdit && isEditMode.value),
     color: colorFor(f),
+    errorMessages: serverErrorText(f.key),
   };
 
   switch (f.type) {
@@ -623,10 +698,11 @@ function fieldAttrs(f: FormFieldDef): Record<string, unknown> {
       // Chips, not an outlined input — only the props ChoiceChipsField takes.
       return {
         modelValue: form.value[f.key],
-        "onUpdate:modelValue": (v: unknown) => { form.value[f.key] = v; },
+        "onUpdate:modelValue": (v: unknown) => { setField(f, v); },
         label: labelFor(f),
         items: resolvedOptions(f),
         rules: rulesFor(f),
+        errorMessages: common.errorMessages,
         disabled: common.disabled,
       };
     case "text":
@@ -656,19 +732,43 @@ function onCancelClick() {
   }
 }
 
+const notifications = useNotifications();
+
 async function onSubmit() {
+  attempted.value = true;
   const valid = await validate();
-  if (!valid) {
+  if (!valid || errorList.value.length) {
     scrollToFormTop(formRef.value?.$el);
     return;
   }
   submitting.value = true;
   try {
     const payload = buildPayload();
-    const ok = await new Promise<boolean>((resolve) => emit("submit", payload, resolve));
-    if (ok) emit("update:modelValue", false);
+    const result = await new Promise<{ ok: boolean; fieldErrors?: FieldErrors }>((resolve) =>
+      emit("submit", payload, (ok, fieldErrors) => resolve({ ok, fieldErrors })),
+    );
+    if (result.ok) {
+      emit("update:modelValue", false);
+    } else if (result.fieldErrors) {
+      showServerErrors(result.fieldErrors);
+    }
   } finally {
     submitting.value = false;
+  }
+}
+
+/**
+ * Marks the fields the API rejected and scrolls up to the summary. A field
+ * this form doesn't show can't be marked, so that one still gets a toast.
+ */
+function showServerErrors(fieldErrors: FieldErrors) {
+  const shown = new Set(sections.value.flatMap((sec) => sec.fields.map((f) => f.key)));
+  const known = Object.fromEntries(Object.entries(fieldErrors).filter(([key]) => shown.has(key)));
+  if (Object.keys(known).length) {
+    serverErrors.value = known;
+    nextTick(() => scrollToFormTop(formRef.value?.$el));
+  } else {
+    notifications.show(t("app.formRenderer.validation.saveRejected"), "error", undefined, { icon: "sad-cloud" });
   }
 }
 
@@ -684,6 +784,8 @@ watch(
   (open, wasOpen) => {
     if (open && !wasOpen) {
       resetForm();
+      attempted.value = false;
+      serverErrors.value = {};
       activeSection.value = sections.value[0]?.id ?? "";
       loadAllAsyncOptions();
     }

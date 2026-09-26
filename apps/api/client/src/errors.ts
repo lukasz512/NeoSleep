@@ -109,14 +109,16 @@ export function isOfflineError(err: unknown): boolean {
 }
 
 /** Reads `.error`/`.message` and `.code` off a parsed JSON body — the shape every route in this API returns errors as. */
-function pickErrorFields(value: unknown): { message?: string; code?: string } {
+function pickErrorFields(value: unknown): { message?: string; code?: string; field?: string } {
   if (typeof value !== "object" || value === null) return {};
   const record = value as Record<string, unknown>;
-  const field = record.error ?? record.message;
+  const text = record.error ?? record.message;
   const code = record.code;
+  const field = record.field;
   return {
-    message: typeof field === "string" && field.trim() ? field.trim() : undefined,
+    message: typeof text === "string" && text.trim() ? text.trim() : undefined,
     code: typeof code === "string" && code.trim() ? code.trim() : undefined,
+    field: typeof field === "string" && field.trim() ? field.trim() : undefined,
   };
 }
 
@@ -137,6 +139,19 @@ export function extractErrorMessage(bodyText: string): string {
 }
 
 /** The API's `code` field from an error body, if the body is JSON and carries one. */
+/**
+ * The payload key a 400 VALIDATION_ERROR names (NEO-109) — e.g. "date_of_birth" —
+ * so a form can mark that field instead of toasting. Null when none is named.
+ */
+export function extractErrorField(bodyText: string): string | null {
+  try {
+    return pickErrorFields(JSON.parse(bodyText)).field ?? null;
+  } catch {
+    // benign: non-JSON error bodies name no field.
+    return null;
+  }
+}
+
 export function extractErrorCode(bodyText: string): string | null {
   try {
     return pickErrorFields(JSON.parse(bodyText)).code ?? null;

@@ -390,6 +390,15 @@ describe("patient date_of_birth (POST / PATCH / GET /api/v1/patient)", () => {
     expect(noSex.status).toBe(400);
   });
 
+  it("names the failing field in a 400, so the form can mark it (NEO-109)", async () => {
+    const auth = await adminAuth();
+    const ancient = await request(app).post("/api/v1/patient").set("Authorization", auth).send({ ...base(), date_of_birth: "0001-10-10" });
+    expect(ancient.status).toBe(400);
+    expect(ancient.body).toMatchObject({ code: "VALIDATION_ERROR", field: "date_of_birth" });
+    const badEmail = await request(app).post("/api/v1/patient").set("Authorization", auth).send({ ...base(), date_of_birth: "1968-03-12", email: "d@wp" });
+    expect(badEmail.body.field).toBe("email");
+  });
+
   it("PATCH changes it, omitting it leaves it alone, clearing it (or sex) 400s", async () => {
     const auth = await adminAuth();
     const post = await request(app).post("/api/v1/patient").set("Authorization", auth).send({ ...base(), date_of_birth: "1990-01-31" });
