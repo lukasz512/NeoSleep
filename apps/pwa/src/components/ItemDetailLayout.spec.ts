@@ -11,6 +11,7 @@ import en from "@i18n/en.json";
 import ItemDetailLayout from "./ItemDetailLayout.vue";
 import AppBreadcrumbs from "./AppBreadcrumbs.vue";
 import { provideRecordHeaderClaim } from "../composables/usePageHeader";
+import { forgetRecordPreview, recordPreviewFromItem, rememberRecordPreview } from "../composables/useRecordPreview";
 
 // NEO-56 record header (Salesforce Lightning / Veeva pattern): module tile,
 // parent eyebrow link, the record's name as the h1, actions inline. The back
@@ -30,13 +31,14 @@ function makeRouter() {
     routes: [
       { path: "/", component: Stub },
       { path: "/patients", name: "patients", component: Stub },
+      { path: "/patients/:id", name: "patient-detail", component: Stub },
     ],
   });
 }
 
 type Props = InstanceType<typeof ItemDetailLayout>["$props"];
 
-function mountLayout(props: Partial<Props>, slots?: Record<string, () => ReturnType<typeof h>>) {
+function mountLayout(props: Partial<Props>, slots?: Record<string, () => ReturnType<typeof h>>, router = makeRouter()) {
   const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
   const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
   let claim!: Ref<boolean>;
@@ -60,7 +62,7 @@ function mountLayout(props: Partial<Props>, slots?: Record<string, () => ReturnT
         );
     },
   });
-  const wrapper = mount(Shell, { global: { plugins: [vuetify, i18n, makeRouter(), createPinia()] } });
+  const wrapper = mount(Shell, { global: { plugins: [vuetify, i18n, router, createPinia()] } });
   mountedWrappers.push(wrapper);
   return { wrapper, claim: () => claim.value };
 }
@@ -122,5 +124,45 @@ describe("ItemDetailLayout — record header", () => {
     const { wrapper, claim } = mountLayout({ backRoute: "/somewhere" });
     expect(header(wrapper).exists()).toBe(false);
     expect(claim()).toBe(false);
+  });
+});
+
+// NEO-114: opened from a list, the header shows the tapped row's name +
+// avatar at once, so the NEO-97 flight has somewhere to land while the
+// record loads.
+describe("ItemDetailLayout — header from the list row while loading", () => {
+  afterEach(() => forgetRecordPreview());
+
+  async function openAt(path: string) {
+    const router = makeRouter();
+    await router.push(path);
+    return router;
+  }
+  const loadingProps = { hasContent: false, loading: true, recordTitle: "" };
+
+  it("shows the row's name and avatar instead of the placeholder", async () => {
+    const preview = recordPreviewFromItem("patients", { id: "7", name: "Sofía Ramírez", first_name: "Sofía", last_name: "Ramírez" })!;
+    rememberRecordPreview("patient-detail", "7", preview);
+    const { wrapper } = mountLayout(loadingProps, undefined, await openAt("/patients/7"));
+    expect(wrapper.find("h1.view-item__record-title").text()).toBe("Sofía Ramírez");
+    expect(header(wrapper).find(".app-avatar").text()).toContain("SR");
+    expect(wrapper.find(".view-item__record-title-skeleton").exists()).toBe(false);
+  });
+
+  it("another record, or a direct visit, keeps the placeholder", async () => {
+    rememberRecordPreview("patient-detail", "7", recordPreviewFromItem("patients", { id: "7", name: "Sofía Ramírez" })!);
+    const { wrapper } = mountLayout(loadingProps, undefined, await openAt("/patients/8"));
+    expect(wrapper.find(".view-item__record-title-skeleton").exists()).toBe(true);
+    expect(wrapper.find("h1").exists()).toBe(false);
+  });
+
+  it("the loaded record replaces the preview", async () => {
+    rememberRecordPreview("patient-detail", "7", recordPreviewFromItem("patients", { id: "7", name: "Sofía R." })!);
+    const { wrapper } = mountLayout({ hasContent: true, loading: false, recordTitle: "Sofía Ramírez" }, undefined, await openAt("/patients/7"));
+    expect(wrapper.find("h1.view-item__record-title").text()).toBe("Sofía Ramírez");
+  });
+
+  it("lists without an identity (e.g. territories) give no preview", () => {
+    expect(recordPreviewFromItem("territories", { id: "1", name: "Norte" })).toBeNull();
   });
 });
