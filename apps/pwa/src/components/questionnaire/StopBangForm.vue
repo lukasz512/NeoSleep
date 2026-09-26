@@ -34,8 +34,8 @@
         </span>
         <template v-if="!readonly">
           <span class="sb-form__inputs">
-            <VTextField v-model="measures.height_cm" :label="t('app.clinical.bang.heightCm')" inputmode="decimal" variant="outlined" density="compact" hide-details class="sb-form__input" />
-            <VTextField v-model="measures.weight_kg" :label="t('app.clinical.bang.weightKg')" inputmode="decimal" variant="outlined" density="compact" hide-details class="sb-form__input" />
+            <VTextField v-model="measures.height_cm" :label="t('app.clinical.bang.heightCm')" :suffix="t('app.clinical.bang.unitCm')" inputmode="decimal" variant="outlined" density="compact" hide-details class="sb-form__input" />
+            <VTextField v-model="measures.weight_kg" :label="t('app.clinical.bang.weightKg')" :suffix="t('app.clinical.bang.unitKg')" inputmode="decimal" variant="outlined" density="compact" hide-details class="sb-form__input" />
           </span>
           <span v-if="bmi != null" class="sb-form__value sb-form__value--auto" :class="valueClass(modelValue.bmi_over_35)">{{ answerText(modelValue.bmi_over_35) }}</span>
           <YesNoToggle v-else :model-value="modelValue.bmi_over_35" labelledby="sb-bmi" @update:model-value="set('bmi_over_35', $event)" />
@@ -68,7 +68,7 @@
         </span>
         <template v-if="!readonly">
           <span class="sb-form__inputs">
-            <VTextField v-model="measures.neck_cm" :label="t('app.clinical.bang.neckCm')" inputmode="decimal" variant="outlined" density="compact" hide-details class="sb-form__input" />
+            <VTextField v-model="measures.neck_cm" :label="t('app.clinical.bang.neckCm')" :suffix="t('app.clinical.bang.unitCm')" inputmode="decimal" variant="outlined" density="compact" hide-details class="sb-form__input" />
           </span>
           <span v-if="neck != null" class="sb-form__value sb-form__value--auto" :class="valueClass(modelValue.neck_circumference_over_40cm)">{{ answerText(modelValue.neck_circumference_over_40cm) }}</span>
           <YesNoToggle v-else :model-value="modelValue.neck_circumference_over_40cm" labelledby="sb-neck" @update:model-value="set('neck_circumference_over_40cm', $event)" />
@@ -293,7 +293,7 @@ const formatNumber = (value: number) => value.toLocaleString(intlLocale(locale.v
   stroke-linejoin: round;
 }
 .sb-form__question {
-  flex: 1 1 180px;
+  flex: 1 1 0;
   min-width: 0;
   font-size: 0.9375rem;
   line-height: 1.35;
@@ -308,7 +308,7 @@ const formatNumber = (value: number) => value.toLocaleString(intlLocale(locale.v
   gap: 8px;
 }
 .sb-form__input {
-  width: 96px;
+  width: 112px;
   flex: none;
 }
 .sb-form__value {

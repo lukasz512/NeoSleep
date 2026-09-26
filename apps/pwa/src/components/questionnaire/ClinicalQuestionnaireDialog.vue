@@ -145,7 +145,7 @@ watch(
 
 const subtitle = computed(() => {
   if (!props.record) return "";
-  const date = new Date(props.record.created_at).toLocaleDateString(intlLocale(locale.value));
+  const date = new Date(props.record.created_at).toLocaleDateString(intlLocale(locale.value), { day: "2-digit", month: "2-digit", year: "numeric" });
   const who = props.record.source === "patient"
     ? t("app.clinical.source.patient")
     : props.record.recorded_by_name ? t("app.clinical.recordedBy", { name: props.record.recorded_by_name }) : "";
