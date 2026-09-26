@@ -1,0 +1,83 @@
+/*
+ * Page-change motion (NEO-85) — keyframes for router/pageTransitions.ts.
+ * Only the content sheet (`view-transition-name: pwa-page`, AppLayout) moves;
+ * the app bar and side menu stay put (the root group crossfades nothing,
+ * they are identical before and after).
+ *
+ * <html data-page-transition=…>:
+ *   open   — list → record: the record slides in from the right over the
+ *            list; the list dims and drifts left. 380ms emphasized-decelerate.
+ *   back   — record → list: the record slides off to the right (on top),
+ *            the list comes forward again. 260ms emphasized-accelerate.
+ *   module — menu / bottom nav: M3 fade-through, 90ms out then 210ms in at
+ *            96% scale. Modules sit side by side, so nothing slides.
+ */
+
+/* The group itself doesn't morph between the two pages' sizes — only the
+   snapshots move — so a long list and a short record don't stretch. */
+::view-transition-group(pwa-page) {
+  animation-duration: 0s;
+}
+/* Snapshots keep their own size, pinned to the sheet's top. */
+::view-transition-old(pwa-page),
+::view-transition-new(pwa-page) {
+  height: auto;
+  mix-blend-mode: normal;
+}
+
+html[data-page-transition="open"]::view-transition-old(pwa-page) {
+  animation: pwa-page-under-out 380ms cubic-bezier(0.05, 0.7, 0.1, 1) both;
+}
+html[data-page-transition="open"]::view-transition-new(pwa-page) {
+  animation: pwa-page-slide-in 380ms cubic-bezier(0.05, 0.7, 0.1, 1) both;
+}
+
+html[data-page-transition="back"]::view-transition-old(pwa-page) {
+  z-index: 1;
+  animation: pwa-page-slide-out 260ms cubic-bezier(0.3, 0, 0.8, 0.15) both;
+}
+html[data-page-transition="back"]::view-transition-new(pwa-page) {
+  animation: pwa-page-under-in 300ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+html[data-page-transition="module"]::view-transition-old(pwa-page) {
+  animation: pwa-page-fade-out 90ms linear both;
+}
+html[data-page-transition="module"]::view-transition-new(pwa-page) {
+  animation: pwa-page-fade-through-in 210ms cubic-bezier(0.05, 0.7, 0.1, 1) 90ms both;
+}
+
+@keyframes pwa-page-slide-in {
+  from { transform: translateX(100%); }
+  to { transform: none; }
+}
+@keyframes pwa-page-slide-out {
+  from { transform: none; }
+  to { transform: translateX(100%); }
+}
+@keyframes pwa-page-under-out {
+  from { transform: none; filter: brightness(1); }
+  to { transform: translateX(-12%); filter: brightness(0.88); }
+}
+@keyframes pwa-page-under-in {
+  from { transform: translateX(-12%); filter: brightness(0.88); }
+  to { transform: none; filter: brightness(1); }
+}
+@keyframes pwa-page-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes pwa-page-fade-through-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Reduce motion: a short crossfade, nothing moves. */
+@media (prefers-reduced-motion: reduce) {
+  html[data-page-transition]::view-transition-old(pwa-page) {
+    animation: pwa-page-fade-out 120ms linear both;
+  }
+  html[data-page-transition]::view-transition-new(pwa-page) {
+    animation: pwa-page-fade-through-in 120ms linear both;
+  }
+}

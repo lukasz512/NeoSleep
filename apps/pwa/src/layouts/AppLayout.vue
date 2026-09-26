@@ -189,8 +189,16 @@
                `mode="out-in"` while :key keeps changing (nav clicks right
                after login) makes Vue's transition state machine drop the
                swap, so a nav click during that ~280ms window re-renders the
-               same screen instead of navigating. -->
+               same screen instead of navigating.
+               NEO-85: where the browser has View Transitions, page changes
+               are animated by router/pageTransitions.ts instead and the view
+               is rendered without this wrapper (a plain swap the browser can
+               snapshot; the shell's own entrance covers the first screen).
+               A CSS-less <Transition> here broke the swap: Vue threw on
+               unmount and the list never re-rendered after Back. -->
+          <component v-if="useViewTransitions" :is="Component" :key="route.path" />
           <Transition
+            v-else
             name="view-fade-lift"
             mode="out-in"
             :appear="!initialAppearDone"
@@ -208,6 +216,7 @@
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRoute } from "vue-router";
 import { navTitleKey, navIconName, navParentName } from "../router/routes";
+import { pageTransitionsSupported } from "../router/pageTransitions";
 import { providePageHeader, provideRecordHeaderClaim, PAGE_HEADER_ACTIONS_ID } from "../composables/usePageHeader";
 import { useGlyphInset } from "../composables/useGlyphInset";
 import { useI18n } from "vue-i18n";
@@ -233,6 +242,8 @@ const { t, locale } = useI18n();
 // See the RouterView Transition below — appear is only meant to fire once,
 // for the very first screen after login.
 const initialAppearDone = ref(false);
+/** Fixed for the session: switching wrappers later would remount the current view. */
+const useViewTransitions = pageTransitionsSupported();
 
 const {
   theme, toggleTheme,
@@ -636,6 +647,8 @@ const moduleIcon = computed(() => {
   background: var(--pwa-sheet);
   border-radius: var(--pwa-sheet-radius);
   box-shadow: var(--pwa-sheet-shadow);
+  /* The one element page changes animate (router/pageTransitions.ts). */
+  view-transition-name: pwa-page;
 }
 /* Phone: the sheet is inset on both sides; the bottom nav already reserves
    its own space (AppShell .app-shell__main--bottom-nav-space). */
