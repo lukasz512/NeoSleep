@@ -90,6 +90,15 @@ test("unsaved changes: a dot on the section and a counter by the actions", async
   ).toHaveCount(0);
 });
 
+test("unsaved changes are edit-only: adding a record shows no counter or dots (NEO-98)", async ({ page }) => {
+  await open(page, "&mode=create", LAPTOP);
+  await body(page).getByLabel("First name").fill("Lucía");
+  await body(page).getByLabel("Medical record").fill("HX-90000");
+  await expect(page.getByTestId("form-spine-name")).toHaveText(/Lucía/);
+  await expect(page.getByTestId("form-changes")).toHaveCount(0);
+  await expect(page.getByTestId("form-spine-index").locator(".form-spine__changed")).toHaveCount(0);
+});
+
 test("create and edit are one view: the spine fills in as you type", async ({ page }) => {
   await open(page, "&mode=create", LAPTOP);
   await expect(spine(page)).toBeVisible();
