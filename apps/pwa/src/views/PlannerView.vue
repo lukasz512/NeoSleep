@@ -244,13 +244,30 @@ function openAddFormForDate(dateStr: string) {
   showEventForm.value = true;
 }
 
-function onDateClick(payload: unknown) {
-  const dateStr = parseDateFromPayload(payload);
+/**
+ * Vuetify 4's VCalendar calls its click handlers as (nativeEvent, data) —
+ * Vuetify 2 passed the data alone. Reading only the first argument got the
+ * MouseEvent, so clicking an event never opened it and clicking a day always
+ * used today (NEO-112). This picks the data argument either way.
+ */
+function calendarData(args: unknown[]): unknown {
+  return args.find((a) => a && typeof a === "object" && !(a instanceof Event)) ?? null;
+}
+
+/** A click on an event also bubbles up to its day — that one is the event's, not "add on this day". */
+function isEventClick(args: unknown[]): boolean {
+  const native = args.find((a): a is Event => a instanceof Event);
+  return native?.target instanceof Element && !!native.target.closest(".v-event, .v-event-timed");
+}
+
+function onDateClick(...args: unknown[]) {
+  if (isEventClick(args)) return;
+  const dateStr = parseDateFromPayload(calendarData(args));
   openAddFormForDate(dateStr || new Date().toISOString().slice(0, 10));
 }
 
-function onEventClick(payload: unknown) {
-  const p = payload as { event?: { id?: string } };
+function onEventClick(...args: unknown[]) {
+  const p = (calendarData(args) ?? {}) as { event?: { id?: string } };
   const eventId = p.event?.id;
   if (!eventId) return;
   const apiEvent = apiEvents.value.find((e) => e.id === eventId);
