@@ -207,6 +207,7 @@
 </template>
 
 <script setup lang="ts">
+import { toEncounterBody } from "../utils/encounterMapping";
 import { isOfflineError, reportCaught, reportFailedResponse } from "@api";
 import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -341,18 +342,7 @@ async function onEventFormSubmit(
         apiFetch("/api/v1/encounter", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: payload.title,
-            start_at: payload.start_at,
-            end_at: payload.end_at,
-            type: payload.type,
-            status: payload.status,
-            location: payload.location,
-            video_link: payload.video_link,
-            notes: payload.notes,
-            region: payload.region,
-            attendees: payload.attendees,
-          }),
+          body: JSON.stringify(toEncounterBody(payload)),
         }),
       successMessage: t("user.planner.form.success"),
       icon: "nav-planner",
