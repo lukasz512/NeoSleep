@@ -3,6 +3,7 @@
     <FormRenderer
       v-model="showEditModal"
       :fields="patientFormFields"
+      :derive="patientFormDerive"
       :initial-data="patient ?? undefined"
       title-key="app.patients.form.title"
       edit-title-key="app.patients.form.editTitle"
@@ -159,27 +160,25 @@
       </template>
     </ItemDetailLayout>
 
-    <VDialog v-model="showDeleteConfirm" max-width="360" :transition="originDialogTransition" persistent>
-      <VCard class="pwa-confirm-dialog__card">
-        <VCardText>{{ t("app.patients.actions.deleteConfirmText") }}</VCardText>
-        <VCardActions>
-          <VSpacer />
-          <AppButton variant="text" @click="showDeleteConfirm = false">
-            {{ t("app.common.cancel") }}
-          </AppButton>
-          <AppButton color="error" variant="text" :loading="deleteLoading" @click="onDelete">
-            {{ t("app.patients.actions.delete") }}
-          </AppButton>
-        </VCardActions>
-      </VCard>
-    </VDialog>
+    <AppConfirmDialog
+      v-model="showDeleteConfirm"
+      :text="t('app.patients.actions.deleteConfirmText')"
+      :secondary-label="t('app.common.cancel')"
+      :secondary-color="null"
+      :primary-label="t('app.patients.actions.delete')"
+      primary-color="error"
+      primary-variant="text"
+      :loading="deleteLoading"
+      max-width="360"
+      @secondary="showDeleteConfirm = false"
+      @primary="onDelete"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { reportCaught, reportFailedResponse } from "@api";
 import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
-import { originDialogTransition } from "@ui";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { usePermissions } from "../composables/usePermissions";
@@ -189,6 +188,7 @@ import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import AppButton from "../components/AppButton.vue";
+import AppConfirmDialog from "../components/AppConfirmDialog.vue";
 import AppIcon from "../components/AppIcon.vue";
 import DetailViewTabs from "../components/DetailViewTabs.vue";
 import EntityLink from "../components/EntityLink.vue";
@@ -201,7 +201,7 @@ import PatientStudiesSummary from "../components/patient/PatientStudiesSummary.v
 import PatientOrthoApneaPanel from "../components/patient/PatientOrthoApneaPanel.vue";
 import EntityHistoryPanel from "../components/EntityHistoryPanel.vue";
 import EntityDocumentsPanel from "../components/EntityDocumentsPanel.vue";
-import { patientFormFields } from "../config/forms/patientForm";
+import { patientFormFields, patientFormDerive } from "../config/forms/patientForm";
 import { STUDY_ROLES } from "../config/questionnaires";
 import { useAuthStore } from "../stores/auth";
 import { entityActionIcon, entityActionBtnClass } from "../config/entityActions";

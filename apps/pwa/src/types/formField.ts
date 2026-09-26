@@ -36,7 +36,9 @@ export type FormFieldType =
   | "chips"
   | "combobox"
   | "date"
-  | "boolean";
+  | "boolean"
+  /** A few large tappable chips instead of a dropdown — see ChoiceChipsField.vue. */
+  | "choice";
 
 /**
  * One selectable option for 'select'/'autocomplete'/'combobox' fields.
@@ -61,7 +63,27 @@ export interface FormFieldOption {
    * pill instead of plain text — see FormRenderer's `hasColorOptions()`.
    */
   color?: string;
+  /**
+   * Secondary line under the title in the dropdown list (e.g. a doctor's
+   * specialty · clinic) — only drawn by the avatar item slot
+   * (FormFieldDef.avatarEntityType). Already-resolved text, not an i18n key.
+   */
+  subtitle?: string;
+  /** 'choice' fields: a short symbol drawn before the label (e.g. "♀"). Not copy — never translated. */
+  symbol?: string;
+  /** 'choice' fields: shown as a small link under the main chips instead of a chip of its own. */
+  secondary?: boolean;
 }
+
+/**
+ * Entity-specific derived-fields hook (FormRenderer's `derive` prop). Runs on
+ * every form change with the form as it was on the previous run, so a hook
+ * can tell which field the user just touched; returns the fields to patch.
+ */
+export type FormDerive = (
+  form: Record<string, unknown>,
+  prev: Record<string, unknown>,
+) => Partial<Record<string, unknown>> | void;
 
 /**
  * A field-level validation rule. Return `true` when valid, or an i18n KEY
@@ -100,6 +122,12 @@ export interface FormFieldDef {
    * `dependsOn` change) and cached.
    */
   options?: FormFieldOption[] | ((form: Record<string, unknown>) => Promise<FormFieldOption[]>);
+  /**
+   * Narrows a STATIC `options` list against the live form (e.g. salutations
+   * offered per market, from the form's country) — keeps the list static, so
+   * titles stay i18n keys, instead of turning it into an async loader.
+   */
+  optionFilter?: (option: FormFieldOption, form: Record<string, unknown>) => boolean;
   /** Allow multiple selections — only meaningful for type 'autocomplete'. */
   multiple?: boolean;
   /**

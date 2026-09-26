@@ -45,26 +45,28 @@
       </li>
     </ul>
 
-    <VDialog v-model="showDeleteConfirm" max-width="360" :transition="originDialogTransition">
-      <VCard class="pwa-confirm-dialog__card">
-        <VCardText>{{ t("app.notes.deleteConfirmText") }}</VCardText>
-        <VCardActions>
-          <VSpacer />
-          <AppButton variant="text" @click="showDeleteConfirm = false">{{ t("app.common.cancel") }}</AppButton>
-          <AppButton color="error" variant="text" :loading="deleteLoading" @click="onConfirmDelete">
-            {{ t("app.common.remove") }}
-          </AppButton>
-        </VCardActions>
-      </VCard>
-    </VDialog>
+    <AppConfirmDialog
+      v-model="showDeleteConfirm"
+      :text="t('app.notes.deleteConfirmText')"
+      :secondary-label="t('app.common.cancel')"
+      :secondary-color="null"
+      :primary-label="t('app.common.remove')"
+      primary-color="error"
+      primary-variant="text"
+      :loading="deleteLoading"
+      :persistent="false"
+      max-width="360"
+      @secondary="showDeleteConfirm = false"
+      @primary="onConfirmDelete"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { originDialogTransition } from "@ui";
 import AppButton from "../AppButton.vue";
+import AppConfirmDialog from "../AppConfirmDialog.vue";
 import AppIcon from "../AppIcon.vue";
 import AppLoadingState from "../AppLoadingState.vue";
 import AppErrorState from "../AppErrorState.vue";
