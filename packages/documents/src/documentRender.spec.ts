@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { renderDocumentHtml, fillContentParams } from "./documentRender.js";
+import { renderDocumentHtml, renderDocumentFooterHtml, fillContentParams } from "./documentRender.js";
+import { DOCUMENT_MANIFEST, getDocumentRefCode } from "./documentManifest.js";
 
 describe("fillContentParams", () => {
   it("substitutes a {name}-style param", () => {
@@ -121,5 +122,85 @@ describe("renderDocumentHtml — partner onboarding templates (NEO-51)", () => {
     const html = renderDocumentHtml("partnerAgreement", "pl", "<p>x</p>");
     expect(html).toContain('data-image="counterparty_signature"');
     expect(html).toContain('data-image="signer_signature"');
+  });
+});
+
+describe("document system (header, title, banner, sections, signatures, footer)", () => {
+  const templates = DOCUMENT_MANIFEST.filter((e) => e.templateKey !== "__test");
+
+  it.each(templates.map((e) => [e.templateKey, e.locales[0]] as const))(
+    "%s: shared CSS inlined, category in the header, plain title, reference code filled from the manifest",
+    (key, locale) => {
+      const html = renderDocumentHtml(key, locale);
+      expect(html).not.toContain("{{style:docTheme}}");
+      expect(html).not.toContain("{{doc:ref}}");
+      expect(html).toContain(".doc-title {");
+      expect(html).toContain('<div class="doc-title">');
+      expect(html).toMatch(/<span class="doc-cat">[^<{]+<\/span>/);
+      expect(html).not.toContain("doc-title-band");
+      expect(html).toContain(`data-field="doc_ref">${getDocumentRefCode(key)}<`);
+      expect(html).not.toContain("documents.common.");
+    },
+  );
+
+  it("names each document's category in the header, localized", () => {
+    expect(renderDocumentHtml("partnerAgreement", "pl")).toContain('<span class="doc-cat">Umowa · Partner medyczny</span>');
+    expect(renderDocumentHtml("informedConsent", "mx")).toContain('<span class="doc-cat">Consentimiento informado</span>');
+    expect(renderDocumentHtml("stopBang", "en")).toContain('<span class="doc-cat">Screening questionnaire</span>');
+  });
+
+  it("puts the patient banner right under the title on every patient document, the consent included", () => {
+    for (const key of ["informedConsent", "historiaEndo", "stopBang", "medicalHistory", "oralExam"]) {
+      const html = renderDocumentHtml(key, "mx");
+      const body = html.slice(html.indexOf("<body>"));
+      const afterTitle = body.slice(body.indexOf('<div class="doc-title">'));
+      expect(afterTitle.indexOf('<dl class="doc-fields">'), key).toBeGreaterThan(0);
+      expect(afterTitle.indexOf('<dl class="doc-fields">'), key).toBeLessThan(afterTitle.indexOf("</h2>") + 40);
+    }
+  });
+
+  it("every signing line has the signer's printed name + date under it", () => {
+    for (const key of ["informedConsent", "historiaEndo", "stopBang", "medicalHistory", "oralExam"]) {
+      const html = renderDocumentHtml(key, "mx");
+      const lines = html.match(/class="sig-area"/g)?.length ?? 0;
+      const details = html.match(/<dl class="sig-details">/g)?.length ?? 0;
+      expect(lines, key).toBeGreaterThan(0);
+      expect(details, key).toBe(lines);
+    }
+  });
+
+  it("STOP-Bang: patient and specialist halves, a score with risk zones, patient stamp + specialist signature", () => {
+    const html = renderDocumentHtml("stopBang", "mx");
+    expect(html).toContain("S-T-O-P · responde el paciente");
+    expect(html).toContain("B-A-N-G · especialista");
+    expect(html).toContain('data-field="score_zone"');
+    expect(html).toContain('data-field="patient_stamp"');
+    expect(html).toContain("Especialista (B-A-N-G y evaluación)");
+  });
+
+  it("footer: who the document is about + 'page X of Y' on line 1, issuer + reference code on line 2", () => {
+    const pl = renderDocumentFooterHtml("NSL-PA-PL v1.1", "pl", { subject: "lek. Andrzej Testerski" });
+    expect(pl).toContain("lek. Andrzej Testerski");
+    expect(pl).toContain('Strona <span class="pageNumber"></span> z <span class="totalPages"></span>');
+    expect(pl).toContain("NSL-PA-PL v1.1");
+    expect(pl).toContain("Łąkowa 3, 77-127 Nakla, Polska");
+    const mx = renderDocumentFooterHtml("NSL-SB v1", "mx", { subject: "María López · F. nac. 12/03/1978", issuer: ["Clínica Dental Polanco", "", "NeoSleep"] });
+    expect(mx).toContain('Página <span class="pageNumber"></span> de <span class="totalPages"></span>');
+    expect(mx).toContain("María López · F. nac. 12/03/1978");
+    expect(mx).toContain("Clínica Dental Polanco · NeoSleep");
+    expect(mx).not.toContain("Ciudad de México"); // the clinic replaces NeoSleep's own contact
+  });
+
+  it("informed consent names the partner manufacturers as plain text, no tick-boxes", () => {
+    const html = renderDocumentHtml("informedConsent", "mx");
+    expect(html).toContain("Los dispositivos que utilizamos son fabricados por los socios de NeoSleep: OrthoApnea y Biologix.");
+    expect(html).not.toContain('type="checkbox"');
+  });
+
+  it("footer escapes names typed into the app", () => {
+    const html = renderDocumentFooterHtml("NSL-SB v1", "mx", { subject: '<img src=x onerror="alert(1)">', issuer: ["A & B <Clinic>"] });
+    expect(html).not.toContain("<img");
+    expect(html).toContain("&lt;img src=x onerror=&quot;alert(1)&quot;&gt;");
+    expect(html).toContain("A &amp; B &lt;Clinic&gt;");
   });
 });

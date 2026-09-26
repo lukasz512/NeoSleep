@@ -11,13 +11,13 @@ import {
 } from "../db/questionnaireRequest.js";
 import { insertMedicalHistory, insertStopBang } from "../db/clinicalRecords.js";
 import { insertConsent } from "../db/consent.js";
-import { getPatientPdfContext, formatBirthDate } from "../db/patientPdfContext.js";
+import { getPatientPdfContext, formatBirthDate, patientDocumentFooter } from "../db/patientPdfContext.js";
 import { withPlatform } from "../db/tenant.js";
 import { listPatientChecklistConfig } from "../db/documentTemplateEntityType.js";
 import { GetPatientChecklistQuery } from "../queries/patientChecklist.js";
 import { GetCurrentDocumentContentQuery } from "../queries/documentContent.js";
 import { sanitizeDocumentContentHtml } from "./documentContent.js";
-import { renderDocumentHtml, fillContentForLocale, DOCUMENT_MANIFEST } from "@neo/documents";
+import { renderDocumentHtml, renderDocumentFooterHtml, getDocumentRefCode, fillContentForLocale, documentT, DOCUMENT_MANIFEST } from "@neo/documents";
 import { renderHtmlToPdf } from "../services/documentRenderer.js";
 import { uploadPartnerDocument, deletePartnerDocument } from "../services/partnerDocuments.js";
 import { hashToken } from "../utils/hashToken.js";
@@ -196,7 +196,10 @@ function documentLocale(templateKey: string, preferred: unknown): string {
 async function consentText(templateKey: string, locale: string): Promise<{ html: string; versionId: string } | null> {
   try {
     const version = await GetCurrentDocumentContentQuery(templateKey, locale);
-    return { html: sanitizeDocumentContentHtml(fillContentForLocale(version.content_html, locale)), versionId: version.id };
+    let html = fillContentForLocale(version.content_html, locale);
+    // The informed consent names NeoSleep's partner manufacturers right after its body — same sentence as the PDF (informedConsent.html).
+    if (templateKey === "informedConsent") html += `<p>${documentT(locale, "documents.informedConsent.manufacturers")}</p>`;
+    return { html: sanitizeDocumentContentHtml(html), versionId: version.id };
   } catch (err) {
     if (err instanceof NotFoundError) return null;
     throw err;
@@ -339,6 +342,8 @@ export async function SubmitPublicQuestionnaireCommand(
   const signedAt = new Date();
   const html = renderDocumentHtml(step, locale, prepared.version.content_html);
   const pdfBytes = await renderHtmlToPdf(html, {
+    footerTemplate: renderDocumentFooterHtml(getDocumentRefCode(step), locale, patientDocumentFooter(prepared.context, locale)),
+    marginBottom: "18mm",
     dataFields: {
       nombre_paciente: prepared.context.patient_name,
       fecha_nacimiento: formatBirthDate(prepared.context.patient_birth_date, locale),

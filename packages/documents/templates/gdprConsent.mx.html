@@ -48,7 +48,7 @@
     --font: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
   * { box-sizing: border-box; }
-  @page { size: A4; margin: 18mm 14mm 14mm; }
+  @page { size: A4; margin: 18mm 14mm 18mm; } /* 18mm: room for the 2-line per-page footer */
   body {
     font-family: var(--font);
     font-weight: 300;
@@ -60,49 +60,40 @@
     padding: 28px 24px 20px;
     background: #fff;
   }
-  header.doc-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    border-bottom: 0.5px solid rgba(71, 71, 71, 0.35);
-    padding-bottom: 6px;
-    margin-bottom: 16px;
-  }
-  header.doc-header .logo { height: 24px; width: auto; display: block; }
-  header.doc-header .logo svg { height: 24px; width: auto; display: block; }
-  header.doc-header .doc-label { font-size: 8pt; font-weight: 400; color: var(--secondary); }
-  h1 { color: var(--primary); font-size: 14pt; font-weight: 500; margin: 0 0 2px; line-height: 1.3; }
-  h2 { color: var(--secondary); font-size: 11pt; font-weight: 400; margin: 0 0 14px; line-height: 1.3; }
   p { margin: 0 0 9px; text-align: justify; text-justify: inter-word; }
   .screen-only.contact-footer { font-size: 8pt; color: var(--secondary); border-top: 1px solid #ccc; padding-top: 8px; margin-top: 24px; }
   .screen-only.contact-footer .doc-ref { text-align: right; margin-top: 2px; }
   @media print { body { padding: 0; max-width: none; } .screen-only { display: none; } }
   {{style:docFields}}
+  {{style:docTheme}}
 </style>
 </head>
 <body>
 
   <header class="doc-header">
     <span class="logo">{{brand:logo}}</span>
-    <span class="doc-label">{{documents.gdprConsentMx.title}}</span>
+    <span class="doc-cat">{{documents.common.category.privacy}}</span>
   </header>
 
-  <h1>{{documents.gdprConsentMx.title}}</h1>
-  <h2>{{documents.gdprConsentMx.subtitle}}</h2>
-
-  <div class="doc-content">{{content}}</div>
+  <div class="doc-title">
+    <h1>{{documents.gdprConsentMx.title}}</h1>
+    <h2>{{documents.gdprConsentMx.subtitle}}</h2>
+  </div>
 
   <dl class="doc-fields">
-    <div class="doc-field"><dt>{{documents.gdprConsentMx.fieldDoctorName}}</dt><dd data-field="doctor_name"></dd></div>
+    <div class="doc-field doc-field--patient"><dt>{{documents.gdprConsentMx.fieldDoctorName}}</dt><dd data-field="doctor_name"></dd></div>
     <div class="doc-field"><dt>{{documents.gdprConsentMx.fieldClinicName}}</dt><dd data-field="clinic_name"></dd></div>
     <div class="doc-field doc-field--short"><dt>{{documents.gdprConsentMx.fieldDate}}</dt><dd data-field="date"></dd></div>
   </dl>
 
-  <div class="sig-panels"><div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.gdprConsentMx.signatureLabel}}</div><div id="signature" class="sig-area" data-field="signature"></div><div class="sig-e-note">{{documents.signature.eSigned}}</div></div></div></div>
+  <div class="doc-content">{{content}}</div>
+
+
+  <div class="sig-panels"><div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.gdprConsentMx.signatureLabel}}</div><div id="signature" class="sig-area" data-field="signature"></div><dl class="sig-details"><div><dt>{{documents.signature.name}}</dt><dd data-field="doctor_name"></dd></div><div><dt>{{documents.signature.date}}</dt><dd data-field="date"></dd></div></dl><div class="sig-e-note">{{documents.signature.eSigned}}</div></div></div></div>
 
   <div class="contact-footer screen-only">
     <div>{{brand:contactLine}}</div>
-    <div class="doc-ref">NSL-LFPDPPP-MX v1</div>
+    <div class="doc-ref" data-field="doc_ref">{{doc:ref}}</div>
   </div>
 
 </body>
