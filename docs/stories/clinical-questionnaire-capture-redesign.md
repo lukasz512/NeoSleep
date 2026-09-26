@@ -29,7 +29,7 @@ Earlier decisions in the same thread:
 - [ ] After a Sí/No tap the flow moves to the next card with an animation. Card transitions and the progress change are animated, and a reduced-motion setting switches animations off.
 - [ ] The patient flow renders correctly from 320 px to desktop width, with no horizontal scroll.
 - [ ] The patient never sees B-A-N-G questions.
-- [ ] The day before an appointment, the patient receives an email with a link to their open questionnaires. No health data appears in the email. The link is single-use, expires, and follows the same rules as the QR link. (Blocked on an appointment date: see Open Questions.)
+- [ ] A "send questionnaires by email" button on the patient emails a link to their open questionnaires. No health data appears in the email. The link is single-use, expires, and follows the same rules as the QR link. The automatic day-before reminder comes later, with the Calendar epic.
 - [ ] Reception can show the QR code for the open questionnaires, or print a blank form, from the patient's record.
 - [ ] The doctor's view of a patient-answered STOP-Bang shows the S-T-O-P answers read-only, with the stamp "Respondido por el paciente vía enlace personal · <date time>".
 - [ ] The doctor enters height (cm), weight (kg) and neck (cm). BMI is computed and shown. B and N become Sí/No automatically. A and G come from the patient's date of birth and sex on record.
@@ -40,7 +40,7 @@ Earlier decisions in the same thread:
 - [ ] Doctor rows use the same row component as Antecedentes médicos and Exploración oral: icon or letter, question, and Sí/No in a fixed right column.
 
 ### Open Questions
-- [ ] **Appointment date for the reminder**: there is no `appointment` entity yet (the Calendar & Scheduling epic, NEO-27..30, is planned). Should the email wait for that epic, or ship first with a manual "send questionnaires by email" button on the patient?
+- [x] **Appointment date for the reminder**: decided (Łukasz, 2026-09-26). Ship first with a manual **"send questionnaires by email" button on the patient**. The automatic day-before reminder follows once the Calendar & Scheduling epic (NEO-27..30) adds an appointment date.
 - [ ] Which questionnaires go in the pre-visit email: always STOP-Bang, Antecedentes médicos and the consent, or a choice per visit type?
 - [ ] Illustrations: are simple line icons in the brand teal enough, or should an illustrator draw a custom set?
 - [ ] Should the reception printout be a blank form with the patient banner pre-filled, or entirely blank?

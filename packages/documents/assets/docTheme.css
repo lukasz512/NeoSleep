@@ -60,6 +60,26 @@ header.doc-header .doc-cat {
   text-align: left;
 }
 
+/*
+ * Page-aware layout (Łukasz, 2026-09-26). A document that fits on one page
+ * keeps the compact layout above. One that runs onto more pages gets
+ * `doc-roomy` on <html> from apps/api's renderer (fitPageLayout) — more air
+ * around the title, since the page count no longer depends on it — and in
+ * both cases the renderer moves the signatures to the bottom of the last
+ * page.
+ */
+.doc-roomy header.doc-header { padding-bottom: 10px; margin-bottom: 26px; }
+.doc-roomy .doc-title { margin: 0 0 22px; padding-block: 3px; }
+.doc-roomy .doc-title h1 { font-size: 19pt; }
+.doc-roomy .doc-title h2,
+.doc-roomy .doc-title .date-line { margin-top: 5px; font-size: 10.5pt; }
+.doc-roomy .doc-fields { margin-bottom: 22px; }
+
+/* Orphan control: no heading alone at the bottom of a page, no lone line of a paragraph at either end, no split question row. */
+p, li { orphans: 3; widows: 3; }
+table.checklist tr { break-inside: avoid; }
+.doc-prompt { break-after: avoid; }
+
 /* 4. Section heading — teal label with a hairline running to the right edge. */
 .doc-sec,
 h3.doc-sec {

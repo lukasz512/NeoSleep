@@ -11,6 +11,8 @@ import {
   applyVariant,
   lockDownPage,
   waitForRenderReady,
+  fitPageLayout,
+  countPdfPages,
 } from "./documentRenderer.js";
 
 /**
@@ -191,6 +193,50 @@ describe.skipIf(!launch)("renderHtmlToPdf (real Chromium)", () => {
     expect(yesNo.boxWidth).toBeGreaterThanOrEqual(14);
     const skeletal = await page.$eval("[data-field='q_skeletal_class']", (el) => el.innerHTML);
     expect(skeletal).toContain("&lt;b&gt;II&lt;/b&gt;");
+  });
+
+  describe("fitPageLayout (page-aware layout)", () => {
+    const margin = { top: "18mm", bottom: "18mm", left: "14mm", right: "14mm" };
+    const doc = (paragraphs: number) =>
+      `<html><head><style>@page { size: A4; margin: 18mm 14mm 18mm; } body { margin: 0; font: 11pt sans-serif; } .sig-panels { margin-top: 20px; height: 60px; }</style></head>` +
+      `<body><h1>Title</h1>${"<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore.</p>".repeat(paragraphs)}<div class="sig-panels">signatures</div></body></html>`;
+    const setUp = async (paragraphs: number) => {
+      browser ??= await puppeteer.launch({ ...launch!, headless: true });
+      const page = await browser.newPage();
+      await page.setContent(doc(paragraphs));
+      const print = () => page.pdf({ format: "A4", margin });
+      return { page, print };
+    };
+
+    it("one page: stays one page, signatures pushed down, compact layout kept", { timeout: 60_000 }, async () => {
+      const { page, print } = await setUp(5);
+      const pdf = await fitPageLayout(page, print, margin);
+      expect(countPdfPages(pdf)).toBe(1);
+      const state = await page.evaluate(() => ({
+        push: parseFloat(document.querySelector<HTMLElement>(".sig-panels")!.style.marginTop),
+        roomy: document.documentElement.classList.contains("doc-roomy"),
+      }));
+      expect(state.push).toBeGreaterThan(400); // most of an A4 page moved above the signatures
+      expect(state.roomy).toBe(false);
+    });
+
+    it("several pages: roomy layout, page count unchanged by the push", { timeout: 60_000 }, async () => {
+      const { page, print } = await setUp(45);
+      expect(countPdfPages(await print())).toBeGreaterThan(1);
+      const pdf = await fitPageLayout(page, print, margin);
+      expect(await page.evaluate(() => document.documentElement.classList.contains("doc-roomy"))).toBe(true);
+      // Same page count as the roomy layout without any push.
+      await page.evaluate(() => (document.querySelector<HTMLElement>(".sig-panels")!.style.marginTop = ""));
+      expect(countPdfPages(pdf)).toBe(countPdfPages(await print()));
+    });
+
+    it("no signature block: returns the first print untouched", { timeout: 60_000 }, async () => {
+      browser ??= await puppeteer.launch({ ...launch!, headless: true });
+      const page = await browser.newPage();
+      await page.setContent("<html><body><p>just text</p></body></html>");
+      const pdf = await fitPageLayout(page, () => page.pdf({ format: "A4", margin }), margin);
+      expect(countPdfPages(pdf)).toBe(1);
+    });
   });
 
   it("a recorded answer still prints every option, only the selected one marked", { timeout: 60_000 }, async () => {
