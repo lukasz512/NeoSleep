@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { mount, type VueWrapper } from "@vue/test-utils";
 import { createVuetify } from "vuetify";
 import * as vuetifyComponents from "vuetify/components";
@@ -103,6 +103,21 @@ describe("ItemDetailLayout — record header", () => {
     expect(wrapper.find("h1").exists()).toBe(false);
     expect(wrapper.find(".act").exists()).toBe(false);
     expect(claim()).toBe(true);
+  });
+
+  it("while loading: a record page shows the skeleton body, not a spinner, and only after 200 ms (NEO-118)", async () => {
+    vi.useFakeTimers();
+    try {
+      const { wrapper } = mountLayout({ hasContent: false, loading: true, recordTitle: "" });
+      const skeleton = wrapper.find("[data-testid=record-skeleton]");
+      expect(skeleton.exists()).toBe(true);
+      expect(wrapper.find(".view-item__loading").exists()).toBe(false);
+      expect(skeleton.classes()).not.toContain("app-record-skeleton--shown");
+      await vi.advanceTimersByTimeAsync(200);
+      expect(skeleton.classes()).toContain("app-record-skeleton--shown");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("not found / load error: no record header, AppLayout's row stays (claim released)", () => {

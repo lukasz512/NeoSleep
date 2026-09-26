@@ -44,6 +44,27 @@ test("desktop: spine with identity and section index beside the page", async ({ 
   expect(s && b && s.x + s.width <= b.x + 1, "spine sits left of the page").toBeTruthy();
 });
 
+test("spine ficha: one labelled fact per line, labels in one column (NEO-118)", async ({ page }) => {
+  await open(page, "", LAPTOP);
+  const facts = page.getByTestId("form-spine-facts");
+  await expect(facts.locator("dt")).toHaveText(["Sex", "Age", "Born", "Status"]);
+  await expect(facts.locator("[data-fact=sex] dd")).toHaveText("Female");
+  await expect(facts.locator("[data-fact=born] dd")).toHaveText("3/14/1979");
+  await expect(facts.locator("[data-fact=status] .v-chip")).toBeVisible();
+  // Every fact stays on one line: no value wraps into a second row.
+  const heights = await facts.locator("dd").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
+  for (const h of heights) expect(h).toBeLessThan(30);
+  const lefts = await facts.locator("dd").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().left)));
+  expect(new Set(lefts).size, "values share one column").toBe(1);
+});
+
+test("spine ficha fills in as you type on create (NEO-118)", async ({ page }) => {
+  await open(page, "&mode=create", LAPTOP);
+  await expect(page.getByTestId("form-spine-facts").locator("[data-fact=sex]")).toHaveCount(0);
+  await body(page).getByText("Male", { exact: true }).click();
+  await expect(page.getByTestId("form-spine-facts").locator("[data-fact=sex] dd")).toHaveText("Male");
+});
+
 test("scrolled content fades out under the header instead of touching a line", async ({ page }) => {
   await open(page, "", LAPTOP);
   const header = await page.getByTestId("app-dialog-header").boundingBox();

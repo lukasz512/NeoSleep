@@ -98,7 +98,7 @@
                questions read faster on one screen (Łukasz, 2026-09-26). -->
           <QuestionnaireCards v-if="useCards" v-model="answers" v-model:cursor="cursor" :questions="questions" letters />
           <QuestionnaireChecklist v-else v-model="answers" :questions="questions" large :highlight-unanswered="showMissing" />
-          <!-- After the last card (or under the list): anything else, the data notice, consent, send. -->
+          <!-- After the last card (or under the list): anything else, consent (its data notice folded under it), send. -->
           <Transition name="view-fade-lift">
             <div v-if="!useCards || cursor >= questions.length" class="patient-questionnaire__finish">
               <VTextarea
@@ -111,10 +111,10 @@
                 maxlength="500"
                 class="patient-questionnaire__other"
               />
-              <ConsentNotice :clinic="clinicName" :clinic-email="questionnaire.clinic_email" :privacy-notice-url="questionnaire.privacy_notice_url" />
               <VCheckbox v-model="consent" hide-details class="patient-questionnaire__consent">
                 <template #label>{{ t("app.questionnaire.consent", { clinic: clinicName }) }}</template>
               </VCheckbox>
+              <ConsentNotice :clinic="clinicName" :clinic-email="questionnaire.clinic_email" :privacy-notice-url="questionnaire.privacy_notice_url" />
               <!-- What still blocks Send, right above it (NEO-105: inline, not a toast — it belongs to this form). -->
               <AppInlineAlert
                 v-if="showMissing && !allAnswered"
@@ -489,7 +489,7 @@ async function submitQuestionnaire() {
 }
 
 .patient-questionnaire__consent {
-  margin: 12px 0 16px;
+  margin: 12px 0 0;
   align-items: flex-start;
 }
 
