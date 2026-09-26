@@ -55,6 +55,7 @@
     v-else
     ref="inlinePadRef"
     class="consent-signature"
+    @change="emit('change', $event)"
     clear-placement="overlay"
     :clear-label="t('app.questionnaire.consentStep.clear')"
     :placeholder="t('app.questionnaire.consentStep.signHere')"
@@ -83,6 +84,9 @@ import SignaturePad from "../SignaturePad.vue";
  */
 
 const { t } = useI18n();
+
+/** Same contract as SignaturePad's: fires when the field goes from empty to signed or back (the view locks Send on it, NEO-99). */
+const emit = defineEmits<{ change: [empty: boolean] }>();
 
 /** Phone = touch-first and small in either dimension (a landscape phone is short, not narrow). */
 const PHONE_QUERY = "(pointer: coarse) and (max-width: 599px), (pointer: coarse) and (max-height: 599px)";
@@ -148,7 +152,10 @@ function close() {
 
 function use() {
   const signature = sheetPadRef.value?.toDataURL({ trim: true }) ?? null;
-  if (signature) preview.value = signature;
+  if (signature) {
+    preview.value = signature;
+    emit("change", false);
+  }
   close();
 }
 

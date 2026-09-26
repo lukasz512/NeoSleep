@@ -44,14 +44,21 @@
             <!-- eslint-disable-next-line vue/no-v-html -->
             <div class="patient-questionnaire__document" tabindex="0" v-html="step.consent_html" />
             <p class="patient-questionnaire__sign-label">{{ t("app.questionnaire.consentStep.signLabel") }}</p>
-            <ConsentSignatureField ref="signaturePadRef" />
-            <VAlert v-if="showMissing" type="warning" variant="tonal" density="compact" class="patient-questionnaire__alert">
-              {{ t("app.questionnaire.consentStep.missingSignature") }}
-            </VAlert>
+            <ConsentSignatureField ref="signaturePadRef" @change="signed = !$event" />
             <VAlert v-if="submitError" type="error" variant="tonal" density="compact" class="patient-questionnaire__alert">
               {{ t("app.questionnaire.error") }}
             </VAlert>
-            <AppButton type="submit" color="primary" size="large" block :loading="submitting">{{ t("app.questionnaire.consentStep.signAndContinue") }}</AppButton>
+            <AppButton
+              type="submit"
+              color="primary"
+              size="large"
+              block
+              :loading="submitting"
+              :class="{ 'patient-questionnaire__send--locked': !signed }"
+              :aria-disabled="!signed"
+            >
+              {{ t("app.questionnaire.consentStep.signAndContinue") }}
+            </AppButton>
           </template>
           <template v-else>
             <VAlert type="info" variant="tonal" class="patient-questionnaire__alert">{{ t("app.questionnaire.consentStep.unavailable") }}</VAlert>
@@ -84,13 +91,19 @@
               <VCheckbox v-model="consent" hide-details class="patient-questionnaire__consent">
                 <template #label>{{ t("app.questionnaire.consent", { clinic: clinicName }) }}</template>
               </VCheckbox>
-              <VAlert v-if="showMissing && !allAnswered" type="warning" variant="tonal" density="compact" class="patient-questionnaire__alert">
-                {{ t("app.questionnaire.answerAll") }}
-              </VAlert>
               <VAlert v-if="submitError" type="error" variant="tonal" density="compact" class="patient-questionnaire__alert">
                 {{ t("app.questionnaire.error") }}
               </VAlert>
-              <AppButton type="submit" color="primary" size="large" block :loading="submitting" :disabled="!consent">
+              <!-- Locked until every question is answered and consent is ticked; a tap while locked says what's missing (toast) instead of doing nothing (NEO-99). -->
+              <AppButton
+                type="submit"
+                color="primary"
+                size="large"
+                block
+                :loading="submitting"
+                :class="{ 'patient-questionnaire__send--locked': !canSend }"
+                :aria-disabled="!canSend"
+              >
                 {{ stepNumber < totalSteps ? t("app.questionnaire.saveAndContinue") : t("app.questionnaire.submit") }}
               </AppButton>
             </div>
@@ -115,6 +128,7 @@ import QuestionnaireCards from "../components/questionnaire/QuestionnaireCards.v
 import QuestionnaireChecklist from "../components/questionnaire/QuestionnaireChecklist.vue";
 import ConsentNotice from "../components/questionnaire/ConsentNotice.vue";
 import { apiFetch } from "../composables/useApi";
+import { useNotifications } from "../composables/useNotifications";
 import { draftKeyFor, purgeExpiredDrafts, useQuestionnaireDraft } from "../composables/useQuestionnaireDraft";
 import { MEDICAL_HISTORY_QUESTIONS, STOP_QUESTIONS, checklistItemTitle } from "../config/questionnaires";
 
@@ -161,6 +175,9 @@ const submitting = ref(false);
 const submitError = ref(false);
 const showMissing = ref(false);
 const signaturePadRef = ref<InstanceType<typeof ConsentSignatureField> | null>(null);
+/** The consent pad has an accepted signature — unlocks "Sign and continue". */
+const signed = ref(false);
+const notifications = useNotifications();
 /** Which card of a questionnaire step is showing; questions.length = the summary. */
 const cursor = ref(0);
 /** Unsent answers kept on this device (see useQuestionnaireDraft) — null when storage/crypto isn't available. */
@@ -175,7 +192,9 @@ const stepKey = computed(() => (phase.value === "steps" ? `step-${step.value?.ke
 const questions = computed(() => (step.value?.type === "stop_bang" ? STOP_QUESTIONS : MEDICAL_HISTORY_QUESTIONS));
 const useCards = computed(() => step.value?.type === "stop_bang");
 const clinicName = computed(() => questionnaire.value?.clinic_name || t("app.questionnaire.yourClinic"));
-const allAnswered = computed(() => questions.value.every((q) => answers.value[q.key] != null));
+const unansweredCount = computed(() => questions.value.filter((q) => answers.value[q.key] == null).length);
+const allAnswered = computed(() => unansweredCount.value === 0);
+const canSend = computed(() => allAnswered.value && consent.value);
 
 function stepTitle(s: PublicStep): string {
   return checklistItemTitle(t, s.key, s.label);
@@ -203,6 +222,7 @@ function resetStepState() {
   other.value = "";
   cursor.value = 0;
   consent.value = false;
+  signed.value = false;
   showMissing.value = false;
   submitError.value = false;
   restoreDraft();
@@ -319,16 +339,35 @@ async function send(body: Record<string, unknown>) {
   }
 }
 
+/** Validation feedback goes through the app's toasts (NEO-99), tagged with the step's own icon. */
+function warn(message: string) {
+  const current = step.value;
+  if (!current) return;
+  const icon = current.type === "consent" ? "form-consent" : current.type === "stop_bang" ? "form-screening" : "form-history";
+  notifications.show(message, "warning", undefined, { icon, context: stepTitle(current) });
+}
+
 async function submitConsent() {
-  showMissing.value = true;
   const signature = signaturePadRef.value?.isEmpty() ? null : signaturePadRef.value?.toDataURL();
-  if (!signature || !step.value) return;
+  if (!signature) {
+    warn(t("app.questionnaire.consentStep.missingSignature"));
+    return;
+  }
+  if (!step.value) return;
   await send({ step: step.value.key, signatureDataUrl: signature });
 }
 
 async function submitQuestionnaire() {
-  showMissing.value = true;
-  if (!allAnswered.value || !consent.value || !step.value) return;
+  if (!allAnswered.value) {
+    showMissing.value = true; // marks the unanswered rows in the list
+    warn(t("app.questionnaire.missing.questions", { n: unansweredCount.value }));
+    return;
+  }
+  if (!consent.value) {
+    warn(t("app.questionnaire.missing.consent"));
+    return;
+  }
+  if (!step.value) return;
   const payload: Record<string, unknown> = { ...answers.value };
   if (step.value.type === "medical_history") payload.medical_history_other = other.value.trim() || null;
   await send({ step: step.value.key, consent: true, answers: payload });
@@ -415,6 +454,13 @@ async function submitQuestionnaire() {
 .patient-questionnaire__consent {
   margin: 12px 0 16px;
   align-items: flex-start;
+}
+
+/* Looks disabled but still takes the tap, so the patient is told what's missing (a truly disabled button just ignores them). */
+.patient-questionnaire__send--locked {
+  background-color: rgba(var(--v-theme-on-surface), 0.12) !important;
+  color: rgba(var(--v-theme-on-surface), 0.38) !important;
+  box-shadow: none !important;
 }
 
 .patient-questionnaire__alert {

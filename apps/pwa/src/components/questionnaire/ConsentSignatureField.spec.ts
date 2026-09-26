@@ -88,6 +88,7 @@ describe("ConsentSignatureField", () => {
     await flushPromises();
 
     expect(sheet()).toBeNull();
+    expect(w.emitted("change")).toEqual([[false]]); // unlocks the view's Send (NEO-99)
     expect(vm.isEmpty()).toBe(false);
     expect(vm.toDataURL()).toBe(SIGNATURE);
     expect(w.find(".consent-signature__preview").attributes("src")).toBe(SIGNATURE);

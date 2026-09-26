@@ -24,7 +24,8 @@
 
 ### Acceptance Criteria
 - [x] Scrolled content fades out over 20px under the header / above the actions instead of touching a hairline. This covers every AppFormDialog, and e2e measures the mask and the header/body seam.
-- [x] Desktop/tablet (≥ 600px): a two-column folder. The spine holds the identity and section index; the page holds the header (title + X), the sections with headings and the actions.
+- [x] Desktop (≥ 960px): a two-column folder. The spine holds the identity and section index; the page holds the header (title + X), the sections with headings and the actions.
+- [x] Tablet (600–959px): like the phone (section chips, avatar in the header, no spine) but still a floating tile with margins and all corners rounded (Łukasz, 2026-09-26).
 - [x] Phone (< 600px): a bottom sheet with section chips under the header, and no spine.
 - [x] The index follows the scroll. A click scrolls to the section, and smooth scrolling is dropped under reduced motion.
 - [x] Changed sections show a dot, and the actions row shows "Unsaved changes: n".

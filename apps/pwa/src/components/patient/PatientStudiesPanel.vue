@@ -83,34 +83,38 @@
           />
         </div>
         <div class="studies__header-actions">
-          <AppButton v-if="patientCanStillDoSomething" color="primary" @click="sendEverything">
-            <template #prepend><AppIcon name="qr-code" /></template>
-            {{ t("app.clinical.bundleQr") }}
-          </AppButton>
-          <AppButton v-if="patientCanStillDoSomething" color="primary" variant="tonal" :loading="emailing" @click="sendByEmail">
+          <!-- The QR button is also the link's status (NEO-93) — no separate "waiting" banner. -->
+          <QrStatusButton
+            class="studies__qr"
+            :request="checklist.pending_requests[0] ?? null"
+            :expired="checklist.expired_request ?? null"
+            :available="patientCanStillDoSomething"
+            :creating="qrCreating"
+            :failed="qrFailed"
+            :item-title="itemTitleByKey"
+            :format-date-time="formatDateTime"
+            @create="sendEverything"
+            @show-again="resend"
+            @cancel="checklistApi.cancelRequest"
+          />
+          <AppButton
+            v-if="patientCanStillDoSomething"
+            class="studies__compact-btn"
+            color="primary"
+            variant="tonal"
+            :loading="emailing"
+            :aria-label="t('app.clinical.email.send')"
+            @click="sendByEmail"
+          >
             <template #prepend><AppIcon name="mail" /></template>
-            {{ t("app.clinical.email.send") }}
+            <span class="studies__btn-label">{{ t("app.clinical.email.send") }}</span>
           </AppButton>
-          <AppButton color="primary" variant="tonal" @click="openUpload(null)">
-            <template #prepend><AppIcon name="upload" /></template>
-            {{ t("app.clinical.addStudy") }}
+          <AppButton class="studies__compact-btn" color="success" variant="tonal" :aria-label="t('app.clinical.addStudy')" @click="openUpload(null)">
+            <template #prepend><AppIcon name="plus" class="studies__add-icon" /></template>
+            <span class="studies__btn-label">{{ t("app.clinical.addStudy") }}</span>
           </AppButton>
         </div>
       </header>
-
-      <section v-for="request in checklist.pending_requests" :key="request.id" class="studies__pending" :aria-label="t('app.clinical.pending.title')">
-        <AppIcon name="clock" class="studies__pending-icon" />
-        <div class="studies__pending-text">
-          <strong>{{ t("app.clinical.pending.title") }}</strong>
-          <span>
-            {{ request.items.map((key) => itemTitleByKey(key)).join(" · ") }} —
-            {{ t("app.clinical.qr.progress", { done: request.completed_items.length, total: request.items.length }) }} ·
-            {{ t("app.clinical.pending.expires", { time: formatDateTime(request.expires_at) }) }}
-          </span>
-        </div>
-        <AppButton variant="text" size="small" @click="resend(request.items)">{{ t("app.clinical.pending.showQr") }}</AppButton>
-        <AppButton variant="text" size="small" color="error" @click="checklistApi.cancelRequest(request.id)">{{ t("app.clinical.pending.cancel") }}</AppButton>
-      </section>
 
       <section v-for="group in groups" :key="group.key" class="studies__group" :aria-labelledby="`studies-group-${group.key}`">
         <h3 :id="`studies-group-${group.key}`" class="studies__group-title">{{ t(`app.clinical.group.${group.key}`) }}</h3>
@@ -285,6 +289,7 @@ import AppLoadingState from "../AppLoadingState.vue";
 import AppErrorState from "../AppErrorState.vue";
 import ClinicalQuestionnaireDialog from "../questionnaire/ClinicalQuestionnaireDialog.vue";
 import QuestionnaireQrDialog from "../questionnaire/QuestionnaireQrDialog.vue";
+import QrStatusButton from "../questionnaire/QrStatusButton.vue";
 import StudyUploadDialog from "../questionnaire/StudyUploadDialog.vue";
 import ChecklistStatusIcon from "../questionnaire/ChecklistStatusIcon.vue";
 import ChecklistResult from "../questionnaire/ChecklistResult.vue";
@@ -533,8 +538,18 @@ const qrProgress = computed(() => (qrRequest.value ? { done: qrRequest.value.com
 /** The link left the pending list while the QR was showing → the patient finished every step. */
 const qrCompleted = computed(() => !!qrDialog.requestId && !qrRequest.value && !checklistApi.loading.value);
 
+const qrCreating = ref(false);
+const qrFailed = ref(false);
 async function openQr(items?: string[]) {
-  const created = await checklistApi.createRequest(items);
+  qrCreating.value = true;
+  qrFailed.value = false;
+  let created: Awaited<ReturnType<typeof checklistApi.createRequest>> = null;
+  try {
+    created = await checklistApi.createRequest(items);
+  } finally {
+    qrCreating.value = false;
+  }
+  qrFailed.value = !created?.url;
   if (!created?.url) return;
   const title =
     created.items.length === 1 ? itemTitleByKey(created.items[0]!) : created.items.map((key) => itemTitleByKey(key)).join(" · ");
@@ -679,30 +694,43 @@ watch(() => props.focusItem, (key) => highlightItem(key));
 .studies__header-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
 }
-
-.studies__pending {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 12px;
-  padding: 10px 14px;
-  border-radius: var(--pwa-radius);
-  border: 1px dashed rgb(var(--v-theme-warning));
-  background: rgba(var(--v-theme-warning), 0.07);
+/* Every header button is one height — the QR status button sets the same token. */
+.studies__compact-btn {
+  height: var(--pwa-btn-min-height, 40px) !important;
 }
-.studies__pending-icon {
-  width: 22px;
-  height: 22px;
-  color: rgb(var(--v-theme-warning));
+.studies__add-icon {
+  stroke-width: 2.6;
 }
-.studies__pending-text {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-width: 200px;
-  font-size: 0.875rem;
+/* Phone (NEO-93): one row — the QR status takes the width, email and "add
+   study" shrink to 44px round icon buttons (their aria-label keeps the name). */
+@media (max-width: 600px) {
+  .studies__header-actions {
+    width: 100%;
+    flex-wrap: nowrap;
+  }
+  .studies__qr {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .studies__compact-btn {
+    flex: none;
+    width: var(--pwa-btn-min-height, 44px);
+    min-width: 0 !important;
+    padding-inline: 0 !important;
+  }
+  .studies__compact-btn .studies__btn-label {
+    display: none;
+  }
+  .studies__compact-btn :deep(.v-btn__prepend) {
+    margin: 0;
+  }
+  /* Nothing left for the patient → no QR button: "add study" moves to the end of the row. */
+  .studies__header-actions:not(:has(.studies__qr)) {
+    justify-content: flex-end;
+  }
 }
 
 .studies__group {
