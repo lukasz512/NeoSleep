@@ -43,9 +43,9 @@
     --font: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
   * { box-sizing: border-box; }
-  /* 22mm bottom: room for the 3-line Puppeteer contact footer (CSS @page
+  /* 18mm bottom: room for the 2-line Puppeteer footer (CSS @page
      margins win over page.pdf()'s own margin option). */
-  @page { size: A4; margin: 18mm 14mm 22mm; }
+  @page { size: A4; margin: 18mm 14mm 18mm; }
   body {
     font-family: var(--font);
     font-weight: 300;
@@ -61,9 +61,16 @@
   p { margin: 0 0 8px; text-align: justify; text-justify: inter-word; }
   ol, ul { margin: 0 0 8px; padding-left: 20px; }
   li { margin-bottom: 4px; text-align: justify; }
-  .doc-content p strong, .annex-content p strong { display: block; text-align: center; margin-top: 14px; color: var(--secondary); font-weight: 600; }
-  /* A "§ n." heading paragraph never ends a page on its own. */
-  .doc-content p:has(> strong:only-child), .annex-content p:has(> strong:only-child) { break-after: avoid; }
+  /* "§ n." heading paragraphs (a paragraph holding only a <strong> — sanitize-html
+     strips classes from admin content) read as the shared section heading
+     (docTheme.css .doc-sec), and never end a page on their own. */
+  .doc-content p:has(> strong:only-child), .annex-content p:has(> strong:only-child) {
+    display: flex; align-items: center; gap: 10px; margin: 14px 0 4px; text-align: left; break-after: avoid;
+  }
+  .doc-content p:has(> strong:only-child)::after, .annex-content p:has(> strong:only-child)::after { content: ""; flex: 1; border-top: 1px solid #dfe6e4; }
+  .doc-content p > strong:only-child, .annex-content p > strong:only-child {
+    font-size: 7.5pt; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--primary); white-space: nowrap;
+  }
   .parties p { text-align: justify; }
   .field-value { font-weight: 500; }
   .annex { break-before: page; margin-top: 28px; }
@@ -85,14 +92,21 @@
 
   <header class="doc-header">
     <span class="logo">{{brand:logo}}</span>
-    <span class="doc-ref" data-field="doc_ref">{{doc:ref}}</span>
+    <span class="doc-cat">{{documents.common.category.agreement}}</span>
   </header>
 
-  <div class="doc-title-band">
-    <div class="doc-eyebrow">{{documents.common.category.agreement}}</div>
+  <div class="doc-title">
     <h1>{{documents.partnerAgreement.title}}</h1>
     <p class="date-line">{{documents.partnerAgreement.dateLine}}</p>
   </div>
+
+  <dl class="doc-fields">
+    <div class="doc-field doc-field--patient"><dt>{{documents.common.field.partner}}</dt><dd data-field="doctor_name"></dd></div>
+    <div class="doc-field doc-field--short"><dt>{{documents.common.field.license}}</dt><dd data-field="license_number"></dd></div>
+    <div class="doc-field"><dt>{{documents.common.field.facility}}</dt><dd data-field="clinic_name"></dd></div>
+    <div class="doc-field"><dt>{{documents.common.field.address}}</dt><dd data-field="clinic_address"></dd></div>
+    <div class="doc-field"><dt>{{documents.common.field.email}}</dt><dd data-field="email"></dd></div>
+  </dl>
 
   <div class="parties">
     <p>{{documents.partnerAgreement.partyNeoSleep}}</p>
@@ -105,8 +119,8 @@
   <div class="doc-content">{{content}}</div>
 
   <section class="annex">
-    <div class="doc-title-band">
-      <div class="doc-eyebrow">{{documents.partnerAgreement.annexHeading}}</div>
+    <p class="doc-sec">{{documents.partnerAgreement.annexHeading}}</p>
+    <div class="doc-title">
       <h1>{{documents.partnerAgreement.annexTitle}}</h1>
       <p class="date-line">{{documents.partnerAgreement.annexSubtitle}}</p>
     </div>

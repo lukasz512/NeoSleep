@@ -48,7 +48,7 @@
     --font: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
   * { box-sizing: border-box; }
-  @page { size: A4; margin: 18mm 14mm 22mm; } /* 22mm: room for the per-page footer */
+  @page { size: A4; margin: 18mm 14mm 18mm; } /* 18mm: room for the 2-line per-page footer */
   body {
     font-family: var(--font);
     font-weight: 300;
@@ -72,24 +72,24 @@
 
   <header class="doc-header">
     <span class="logo">{{brand:logo}}</span>
-    <span class="doc-ref" data-field="doc_ref">{{doc:ref}}</span>
+    <span class="doc-cat">{{documents.common.category.privacy}}</span>
   </header>
 
-  <div class="doc-title-band">
-    <div class="doc-eyebrow">{{documents.common.category.privacy}}</div>
+  <div class="doc-title">
     <h1>{{documents.gdprConsentPl.title}}</h1>
     <h2>{{documents.gdprConsentPl.subtitle}}</h2>
   </div>
 
-  <div class="doc-content">{{content}}</div>
-
   <dl class="doc-fields">
-    <div class="doc-field"><dt>{{documents.gdprConsentPl.fieldDoctorName}}</dt><dd data-field="doctor_name"></dd></div>
+    <div class="doc-field doc-field--patient"><dt>{{documents.gdprConsentPl.fieldDoctorName}}</dt><dd data-field="doctor_name"></dd></div>
     <div class="doc-field"><dt>{{documents.gdprConsentPl.fieldClinicName}}</dt><dd data-field="clinic_name"></dd></div>
     <div class="doc-field doc-field--short"><dt>{{documents.gdprConsentPl.fieldDate}}</dt><dd data-field="date"></dd></div>
   </dl>
 
-  <div class="sig-panels"><div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.gdprConsentPl.signatureLabel}}</div><div id="signature" class="sig-area" data-field="signature"></div><div class="sig-e-note">{{documents.signature.eSigned}}</div></div></div></div>
+  <div class="doc-content">{{content}}</div>
+
+
+  <div class="sig-panels"><div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.gdprConsentPl.signatureLabel}}</div><div id="signature" class="sig-area" data-field="signature"></div><dl class="sig-details"><div><dt>{{documents.signature.name}}</dt><dd data-field="doctor_name"></dd></div><div><dt>{{documents.signature.date}}</dt><dd data-field="date"></dd></div></dl><div class="sig-e-note">{{documents.signature.eSigned}}</div></div></div></div>
 
   <div class="contact-footer screen-only">
     <div>{{brand:contactLine}}</div>

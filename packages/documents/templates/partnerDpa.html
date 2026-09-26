@@ -24,14 +24,17 @@
     --font: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
   * { box-sizing: border-box; }
-  @page { size: A4; margin: 18mm 14mm 22mm; }
+  @page { size: A4; margin: 18mm 14mm 18mm; }
   body { font-family: var(--font); font-weight: 300; color: var(--text); font-size: 9.5pt; line-height: 1.45; max-width: 800px; margin: 0 auto; padding: 28px 24px 20px; background: #fff; }
   p { margin: 0 0 8px; text-align: justify; }
   ol, ul { margin: 0 0 8px; padding-left: 20px; }
   li { margin-bottom: 4px; text-align: justify; }
-  .doc-content p strong { display: block; text-align: center; margin-top: 14px; color: var(--secondary); font-weight: 600; }
-  .doc-content p:has(> strong:only-child) { break-after: avoid; }
+  /* "§ n." heading paragraphs read as the shared section heading — same rule as partnerAgreement.html. */
+  .doc-content p:has(> strong:only-child) { display: flex; align-items: center; gap: 10px; margin: 14px 0 4px; text-align: left; break-after: avoid; }
+  .doc-content p:has(> strong:only-child)::after { content: ""; flex: 1; border-top: 1px solid #dfe6e4; }
+  .doc-content p > strong:only-child { font-size: 7.5pt; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--primary); white-space: nowrap; }
   .screen-only.contact-footer { font-size: 8pt; color: var(--secondary); border-top: 1px solid #ccc; padding-top: 8px; margin-top: 24px; }
+  .screen-only.contact-footer .doc-ref { text-align: right; margin-top: 2px; }
   @media print { body { padding: 0; max-width: none; } .screen-only { display: none; } }
   /* Same phone-width preview rule as partnerAgreement.html. */
   @media screen and (max-width: 600px) {
@@ -45,11 +48,10 @@
 
   <header class="doc-header">
     <span class="logo">{{brand:logo}}</span>
-    <span class="doc-ref" data-field="doc_ref">{{doc:ref}}</span>
+    <span class="doc-cat">{{documents.partnerAgreement.annexHeading}}</span>
   </header>
 
-  <div class="doc-title-band">
-    <div class="doc-eyebrow">{{documents.partnerAgreement.annexHeading}}</div>
+  <div class="doc-title">
     <h1>{{documents.partnerAgreement.annexTitle}}</h1>
   </div>
 
@@ -57,6 +59,7 @@
 
   <div class="contact-footer screen-only">
     <div>{{brand:contactLine}}</div>
+    <div class="doc-ref" data-field="doc_ref">{{doc:ref}}</div>
   </div>
 
 </body>

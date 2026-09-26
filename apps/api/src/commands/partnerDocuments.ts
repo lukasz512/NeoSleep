@@ -189,7 +189,7 @@ export async function buildAgreementDocument(
   const docRef = `NSL-PA-${set.jurisdiction} v${set.agreement.version_number}.${set.dpa.version_number}`;
   return {
     html,
-    footerHtml: renderDocumentFooterHtml(docRef, set.locale),
+    footerHtml: renderDocumentFooterHtml(docRef, set.locale, { subject: party.doctorName }),
     dataFields: {
       doc_ref: docRef,
       doctor_name: party.doctorName,
@@ -215,7 +215,7 @@ export function buildNoticeDocument(
   const docRef = `NSL-PN-${set.jurisdiction} v${set.notice.version_number}`;
   return {
     html: renderDocumentHtml("partnerPrivacyNotice", set.locale, set.notice.content_html),
-    footerHtml: renderDocumentFooterHtml(docRef, set.locale),
+    footerHtml: renderDocumentFooterHtml(docRef, set.locale, { subject: doctorName }),
     dataFields: { doc_ref: docRef, doctor_name: doctorName, acknowledged_at: acknowledgedAt },
     imageFields: {},
     variant: null,

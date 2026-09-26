@@ -28,17 +28,13 @@
     --font: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
   * { box-sizing: border-box; }
-  @page { size: A4; margin: 18mm 14mm 22mm; }
+  @page { size: A4; margin: 18mm 14mm 18mm; }
   body { font-family: var(--font); font-weight: 300; color: var(--text); font-size: 9.5pt; line-height: 1.45; max-width: 800px; margin: 0 auto; padding: 28px 24px 20px; background: #fff; }
   p { margin: 0 0 8px; text-align: justify; }
   ol, ul { margin: 0 0 8px; padding-left: 20px; }
   li { margin-bottom: 6px; text-align: justify; }
   /* Acknowledgement uses the shared sign-off panel (docFields.css) — no drawn
      signature, just who acknowledged and when, side by side. */
-  .ack.sig-panels { grid-template-columns: minmax(0, 1fr); max-width: 420px; margin-top: 28px; }
-  .ack > .sig-panel > .sig-main > .sig-label { color: var(--primary); font-weight: 600; }
-  .ack .sig-details { border: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px; margin-top: 8px; padding: 0; background: none; }
-  .ack .sig-details dd { font-weight: 500; }
   .screen-only.contact-footer { font-size: 8pt; color: var(--secondary); border-top: 1px solid #ccc; padding-top: 8px; margin-top: 24px; }
   .screen-only.contact-footer .doc-ref { text-align: right; margin-top: 2px; }
   @media print { body { padding: 0; max-width: none; } .screen-only { display: none; } }
@@ -55,11 +51,10 @@
 
   <header class="doc-header">
     <span class="logo">{{brand:logo}}</span>
-    <span class="doc-ref" data-field="doc_ref">{{doc:ref}}</span>
+    <span class="doc-cat">{{documents.common.category.privacy}}</span>
   </header>
 
-  <div class="doc-title-band">
-    <div class="doc-eyebrow">{{documents.common.category.privacy}}</div>
+  <div class="doc-title">
     <h1>{{documents.partnerPrivacyNotice.title}}</h1>
     <h2>{{documents.partnerPrivacyNotice.subtitle}}</h2>
   </div>

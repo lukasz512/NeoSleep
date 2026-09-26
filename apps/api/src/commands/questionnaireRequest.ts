@@ -11,7 +11,7 @@ import {
 } from "../db/questionnaireRequest.js";
 import { insertMedicalHistory, insertStopBang } from "../db/clinicalRecords.js";
 import { insertConsent } from "../db/consent.js";
-import { getPatientPdfContext, formatBirthDate } from "../db/patientPdfContext.js";
+import { getPatientPdfContext, formatBirthDate, patientDocumentFooter } from "../db/patientPdfContext.js";
 import { withPlatform } from "../db/tenant.js";
 import { listPatientChecklistConfig } from "../db/documentTemplateEntityType.js";
 import { GetPatientChecklistQuery } from "../queries/patientChecklist.js";
@@ -339,8 +339,8 @@ export async function SubmitPublicQuestionnaireCommand(
   const signedAt = new Date();
   const html = renderDocumentHtml(step, locale, prepared.version.content_html);
   const pdfBytes = await renderHtmlToPdf(html, {
-    footerTemplate: renderDocumentFooterHtml(getDocumentRefCode(step), locale),
-    marginBottom: "22mm",
+    footerTemplate: renderDocumentFooterHtml(getDocumentRefCode(step), locale, patientDocumentFooter(prepared.context, locale)),
+    marginBottom: "18mm",
     dataFields: {
       nombre_paciente: prepared.context.patient_name,
       fecha_nacimiento: formatBirthDate(prepared.context.patient_birth_date, locale),

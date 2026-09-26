@@ -117,7 +117,6 @@ export function fillContentForLocale(contentHtml: string, locale: string | null 
 }
 
 let cachedLogoSvg: string | null = null;
-let cachedIconSvg: string | null = null;
 
 function loadBrandSvg(filename: string): string {
   const raw = fs.readFileSync(path.join(ASSETS_DIR, filename), "utf-8");
@@ -140,20 +139,9 @@ function getBrandLogoSvg(): string {
   return cachedLogoSvg;
 }
 
-/** The compact icon-only mark (no wordmark) — used where space is narrow, e.g. the footer's third column, where the full logo_light.svg wordmark is too wide and overlaps neighboring content. */
-function getBrandIconSvg(): string {
-  if (cachedIconSvg === null) cachedIconSvg = loadBrandSvg("icon_light.svg");
-  return cachedIconSvg;
-}
-
 /** Same cached SVG as getBrandLogoSvg(), with an explicit height forced onto the <svg> root so it scales correctly wherever it's inlined (the source file has a viewBox but no width/height attributes, which browsers size inconsistently by default). */
 function getBrandLogoSvgAtHeight(heightPx: number): string {
   return getBrandLogoSvg().replace("<svg ", `<svg style="height:${heightPx}px;width:auto;display:block;" `);
-}
-
-/** Same purpose as getBrandLogoSvgAtHeight, for the icon-only mark. */
-function getBrandIconSvgAtHeight(heightPx: number): string {
-  return getBrandIconSvg().replace("<svg ", `<svg style="height:${heightPx}px;width:auto;display:block;" `);
 }
 
 let cachedDocFieldsCss: string | null = null;
@@ -294,14 +282,26 @@ export function renderDocumentHtml(
   });
 }
 
-/** Muted gray for the footer specifically — distinct from BRAND.secondary (used for body labels/borders, too dark to read as a footer-quiet tone). Puppeteer's footerTemplate renders in its own isolated frame with no access to the main page's stylesheet/CSS variables, so this has to be a literal inline value, not var(--secondary). */
+/** Muted gray for the footer's second line. Puppeteer's footerTemplate renders in its own isolated frame with no access to the main page's stylesheet/CSS variables, so every footer color is a literal inline value, not var(--secondary). */
 const FOOTER_TEXT_COLOR = "#8A8A89";
 
-/** Faint rule the brand-colored segment sits on. Same isolated-frame constraint as FOOTER_TEXT_COLOR applies (literal value, not a CSS var). */
-const FOOTER_BORDER_COLOR = "#E3E9E8";
+/** The first line (who the document is about, page number) — readable, not loud. */
+const FOOTER_STRONG_COLOR = "#3F4A48";
 
-/** Darker gray for the first contact line (the company name) so the block has one anchor line. */
-const FOOTER_STRONG_COLOR = "#5F6B69";
+/** Hairline above the footer. */
+const FOOTER_BORDER_COLOR = "#DFE6E4";
+
+/** Footer values include people's names typed into the app — escape them before they go into the footer HTML string. */
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+export interface DocumentFooterOptions {
+  /** Who the document is about, printed bold on every page — the patient's name + date of birth, or the partner doctor's name. */
+  subject?: string;
+  /** Who issued it, joined into one short line — e.g. the doctor's clinic (name, address, phone). Defaults to NeoSleep's contact for the locale. */
+  issuer?: readonly string[];
+}
 
 /**
  * Puppeteer page.pdf()'s footerTemplate option is the only reliable way to
@@ -309,28 +309,35 @@ const FOOTER_STRONG_COLOR = "#5F6B69";
  * consistent across browsers, see the informedConsent template's own header
  * comment) — this builds that footer HTML.
  *
- * "Clinical modern" layout (Łukasz, 2026-09-26, option C — matches the
- * title band in assets/docTheme.css): a faint rule with a short
- * brand-colored segment at its left end, then the jurisdiction's contact
- * block (left, wide), a dark "Page X of Y" pill with the doc-ref code under
- * it, and the icon-only brand mark (the full wordmark is too wide here, see
- * getBrandIconSvg). Rules are borders, not backgrounds, so they print even
- * without color-adjust; the pill's fill needs print-color-adjust: exact.
+ * Document system (Łukasz, 2026-09-26): a hairline, then two lines.
+ * Line 1: who the document is about — a loose page must still say whose it
+ * is, which is why the patient's name + date of birth go on every page —
+ * and "Page X of Y". Line 2, smaller: the issuer in one line and the
+ * document code + version. No logo (it heads page 1).
  * pageNumber/totalPages are Puppeteer's own placeholder classes, filled in by
- * Chrome itself. A verification ID + QR code slot here is planned, not built.
+ * Chrome itself. A verification ID + QR code slot is planned here, not built
+ * (docs/stories/document-authenticity-verification.md).
  */
-export function renderDocumentFooterHtml(docRefCode: string, locale: string | null | undefined): string {
+export function renderDocumentFooterHtml(
+  docRefCode: string,
+  locale: string | null | undefined,
+  options: DocumentFooterOptions = {},
+): string {
   const pageWord = documentT(locale, "documents.common.page");
   const ofWord = documentT(locale, "documents.common.of");
-  const contactLinesHtml = getContactLines(locale)
-    .map((line, i) => `<div${i === 0 ? ` style="color:${FOOTER_STRONG_COLOR};"` : ""}>${line}</div>`)
-    .join("");
-  return `<div style="width:100%;box-sizing:border-box;padding:0 14mm;font-family:Arial,sans-serif;font-size:7pt;color:${FOOTER_TEXT_COLOR};line-height:1.45;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-    <div style="display:flex;align-items:center;"><div style="width:16mm;border-top:2px solid ${BRAND.primary};"></div><div style="flex:1;border-top:1px solid ${FOOTER_BORDER_COLOR};"></div></div>
-    <div style="display:flex;align-items:center;gap:5mm;padding-top:5px;">
-      <div style="flex:1;min-width:0;">${contactLinesHtml}</div>
-      <div style="text-align:center;white-space:nowrap;"><div style="display:inline-block;background:${BRAND.secondary};color:#fff;border-radius:8px;padding:1px 8px;">${pageWord} <span class="pageNumber"></span> ${ofWord} <span class="totalPages"></span></div><div style="margin-top:2px;font-size:6.5pt;">${docRefCode}</div></div>
-      <div style="display:flex;align-items:center;">${getBrandIconSvgAtHeight(26)}</div>
+  const issuer = (options.issuer ?? getContactLines(locale))
+    .filter((part) => part.trim() !== "")
+    .map(escapeHtml)
+    .join(" · ");
+  const subject = escapeHtml(options.subject ?? "");
+  return `<div style="width:100%;box-sizing:border-box;padding:0 14mm;font-family:Arial,sans-serif;font-size:7pt;color:${FOOTER_TEXT_COLOR};line-height:1.5;">
+    <div style="border-top:1px solid ${FOOTER_BORDER_COLOR};padding-top:5px;display:flex;justify-content:space-between;gap:6mm;color:${FOOTER_STRONG_COLOR};font-size:7.5pt;">
+      <span style="font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${subject}</span>
+      <span style="font-weight:700;white-space:nowrap;">${pageWord} <span class="pageNumber"></span> ${ofWord} <span class="totalPages"></span></span>
+    </div>
+    <div style="display:flex;justify-content:space-between;gap:6mm;">
+      <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${issuer}</span>
+      <span style="white-space:nowrap;">${escapeHtml(docRefCode)}</span>
     </div>
   </div>`;
 }

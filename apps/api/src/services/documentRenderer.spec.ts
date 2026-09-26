@@ -193,6 +193,24 @@ describe.skipIf(!launch)("renderHtmlToPdf (real Chromium)", () => {
     expect(skeletal).toContain("&lt;b&gt;II&lt;/b&gt;");
   });
 
+  it("a recorded answer still prints every option, only the selected one marked", { timeout: 60_000 }, async () => {
+    browser ??= await puppeteer.launch({ ...launch!, headless: true });
+    const page = await browser.newPage();
+    await page.setContent(`<p data-field="q_snoring"></p><p data-field="q_blank"></p><p data-field="q_bad"></p>`);
+
+    await applyChoiceFields(page, {
+      q_snoring: { options: ["Sí", "No"], selected: "No" },
+      q_blank: ["Sí", "No"],
+      q_bad: { options: ["Sí", "No"], selected: "Maybe" }, // not an option: nothing marked
+    });
+
+    const marked = (key: string) =>
+      page.$$eval(`[data-field='${key}'] .choice`, (els) => els.map((el) => `${el.textContent}:${el.classList.contains("choice--on")}`));
+    expect(await marked("q_snoring")).toEqual(["Sí:false", "No:true"]);
+    expect(await marked("q_blank")).toEqual(["Sí:false", "No:false"]);
+    expect(await marked("q_bad")).toEqual(["Sí:false", "No:false"]);
+  });
+
   it("lines tick-boxes up in one grid across rows: III under No, II under Sí, I one slot left", { timeout: 60_000 }, async () => {
     browser ??= await puppeteer.launch({ ...launch!, headless: true });
     const page = await browser.newPage();

@@ -1,11 +1,11 @@
 import type { TenantContext } from "../context/TenantContext.js";
 import { insertAuditLog, insertFileAttachment, getFileAttachmentById, deleteFileAttachment } from "../db.js";
 import type { MedicalHistoryRecord, OralExamRecord, StopBangRecord } from "../db/clinicalRecords.js";
-import { getPatientPdfContext, formatBirthDate } from "../db/patientPdfContext.js";
+import { getPatientPdfContext, formatBirthDate, patientDocumentFooter } from "../db/patientPdfContext.js";
 import { GetPatientChecklistQuery, POLYSOMNOGRAPHY_KEY, type ChecklistItem } from "../queries/patientChecklist.js";
 import { GetCurrentDocumentContentQuery } from "../queries/documentContent.js";
-import { renderDocumentHtml, renderDocumentFooterHtml, getDocumentRefCode, DOCUMENT_MANIFEST } from "@neo/documents";
-import { renderHtmlToPdf } from "../services/documentRenderer.js";
+import { renderDocumentHtml, renderDocumentFooterHtml, getDocumentRefCode, documentT, DOCUMENT_MANIFEST } from "@neo/documents";
+import { renderHtmlToPdf, type ChoiceField } from "../services/documentRenderer.js";
 import { uploadPartnerDocument, deletePartnerDocument, getPartnerDocumentSignedUrl } from "../services/partnerDocuments.js";
 import { NotFoundError, ValidationError } from "../errors.js";
 import { MEDICAL_HISTORY_QUESTIONS, ORAL_EXAM_QUESTIONS, STOP_QUESTIONS, BANG_QUESTIONS } from "./clinicalRecordFields.js";
@@ -23,20 +23,29 @@ const YES_NO = ["Sí", "No"] as const;
 const SKELETAL_CLASSES = ["I", "II", "III"] as const;
 
 /**
- * Answer from a record into `fields` — or, on a blank form, empty tick-boxes
- * to fill in by hand (drawn by the renderer, see choiceFields).
+ * A yes/no question always prints both tick-boxes (document system,
+ * 2026-09-26): the recorded answer filled, or both empty to fill in by hand
+ * (drawn by the renderer, see choiceFields).
  */
-function setYesNo(
-  fields: Record<string, string>,
-  choices: Record<string, readonly string[]>,
-  key: string,
-  value: boolean | null | undefined,
-  blank: boolean
-): void {
-  if (value === true) fields[key] = "Sí";
-  else if (value === false) fields[key] = "No";
-  else if (blank) choices[key] = YES_NO;
-  else fields[key] = "";
+function setYesNo(choices: Record<string, ChoiceField>, key: string, value: boolean | null | undefined): void {
+  choices[key] = value == null ? YES_NO : { options: YES_NO, selected: value ? "Sí" : "No" };
+}
+
+/** STOP-Bang's official risk zones (0–2 / 3–4 / 5–8), the score's zone marked — same thresholds as the app's stopBangRisk(). */
+function stopBangZones(locale: string, score: number | null): ChoiceField {
+  const zones = (["low", "intermediate", "high"] as const).map((zone) => documentT(locale, `documents.stopBang.risk.${zone}`));
+  if (score == null) return zones;
+  return { options: zones, selected: zones[score >= 5 ? 2 : score >= 3 ? 1 : 0] };
+}
+
+/** Signature model A (Łukasz, 2026-09-26): answers the patient gave through their personal link carry an attribution stamp instead of a drawn signature. */
+function patientStamp(locale: string, source: string | undefined, answeredAt: Date | undefined): string {
+  if (source !== "patient" || !answeredAt) return "";
+  // The clinical templates are Mexican content (printLocale), so the stamp reads in Mexico City time.
+  const when = answeredAt
+    .toLocaleString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "America/Mexico_City" })
+    .replace(",", "");
+  return documentT(locale, "documents.common.patientStamp", { date: when });
 }
 
 /** The dental/sleep clinical templates are Mexican Spanish content; fall back to a template's first locale. */
@@ -81,34 +90,37 @@ export async function PrintChecklistItemCommand(
   const locale = printLocale(key);
   let date = new Date();
   const fields: Record<string, string> = {};
-  const choices: Record<string, readonly string[]> = {};
+  const choices: Record<string, ChoiceField> = {};
 
   if (key === "medicalHistory" || key === "historiaEndo") {
     const history =
       key === "medicalHistory"
         ? recordOf<MedicalHistoryRecord>(item, recordId)
         : (recordOf<MedicalHistoryRecord>(checklist.items.find((i) => i.key === "medicalHistory") ?? item, undefined));
-    for (const q of MEDICAL_HISTORY_QUESTIONS) setYesNo(fields, choices, `q_${q}`, history?.[q], key === "medicalHistory");
+    for (const q of MEDICAL_HISTORY_QUESTIONS) setYesNo(choices, `q_${q}`, history?.[q]);
     fields.medical_history_other = history?.medical_history_other ?? "";
     if (key === "medicalHistory" && history) date = history.created_at;
+    if (key === "medicalHistory") fields.patient_stamp = patientStamp(locale, history?.source, history?.created_at);
   }
   if (key === "oralExam" || key === "historiaEndo") {
     const exam =
       key === "oralExam"
         ? recordOf<OralExamRecord>(item, recordId)
         : recordOf<OralExamRecord>(checklist.items.find((i) => i.key === "oralExam") ?? item, undefined);
-    for (const q of ORAL_EXAM_QUESTIONS) setYesNo(fields, choices, `q_${q}`, exam?.[q], key === "oralExam");
-    if (exam?.skeletal_class) fields.q_skeletal_class = exam.skeletal_class;
-    else if (key === "oralExam") choices.q_skeletal_class = SKELETAL_CLASSES;
-    else fields.q_skeletal_class = "";
+    for (const q of ORAL_EXAM_QUESTIONS) setYesNo(choices, `q_${q}`, exam?.[q]);
+    choices.q_skeletal_class = exam?.skeletal_class ? { options: SKELETAL_CLASSES, selected: exam.skeletal_class } : SKELETAL_CLASSES;
     fields.diente = exam?.tooth ?? "";
     if (key === "oralExam" && exam) date = exam.created_at;
   }
   if (key === "stopBang") {
     const screening = recordOf<StopBangRecord>(item, recordId);
-    for (const q of [...STOP_QUESTIONS, ...BANG_QUESTIONS]) setYesNo(fields, choices, `q_${q}`, screening?.[q], true);
-    fields.score = screening?.score == null ? "—" : String(screening.score);
-    if (screening) date = screening.created_at;
+    for (const q of [...STOP_QUESTIONS, ...BANG_QUESTIONS]) setYesNo(choices, `q_${q}`, screening?.[q]);
+    fields.score = screening?.score == null ? "" : String(screening.score);
+    choices.score_zone = stopBangZones(locale, screening?.score ?? null);
+    fields.patient_stamp = patientStamp(locale, screening?.source, screening?.created_at);
+    // S-T-O-P dates from when it was answered; the specialist's line from when B-A-N-G was completed.
+    fields.fecha_stop = screening ? screening.created_at.toLocaleDateString("es-MX") : "";
+    if (screening) date = screening.source === "patient" && screening.score != null ? screening.updated_at : screening.created_at;
   }
 
   // Admin-authored prose (consents, Historia Endo) — templates without a content slot render as-is.
@@ -127,8 +139,8 @@ export async function PrintChecklistItemCommand(
   if (html.includes("{{content}}")) throw new NotFoundError("Document content", `${key}/${locale}`);
 
   const bytes = await renderHtmlToPdf(html, {
-    footerTemplate: renderDocumentFooterHtml(getDocumentRefCode(key), locale),
-    marginBottom: "22mm",
+    footerTemplate: renderDocumentFooterHtml(getDocumentRefCode(key), locale, patientDocumentFooter(pdfContext, locale)),
+    marginBottom: "18mm",
     dataFields: {
       nombre_paciente: pdfContext.patient_name,
       fecha_nacimiento: formatBirthDate(pdfContext.patient_birth_date, locale),

@@ -32,12 +32,8 @@
     --font: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
   * { box-sizing: border-box; }
-  @page { size: A4; margin: 18mm 14mm 22mm; } /* 22mm: room for the per-page footer */
+  @page { size: A4; margin: 18mm 14mm 18mm; } /* 18mm: room for the 2-line per-page footer */
   body { font-family: var(--font); font-weight: 300; color: var(--text); font-size: 9.5pt; line-height: 1.42; max-width: 800px; margin: 0 auto; padding: 28px 24px 20px; background: #fff; }
-  .prompt { margin: 14px 0 4px; font-weight: 500; }
-  table.checklist { width: 100%; border-collapse: collapse; margin: 0 0 10px; }
-  table.checklist td { padding: 5px 6px 5px 0; border-bottom: 1px solid #eee; font-size: 9.5pt; }
-  table.checklist td.q-answer { text-align: right; font-weight: 600; color: var(--primary); width: 120px; white-space: nowrap; }
   .screen-only.contact-footer { font-size: 8pt; color: var(--secondary); border-top: 1px solid #ccc; padding-top: 8px; margin-top: 24px; }
   .screen-only.contact-footer .doc-ref { text-align: right; margin-top: 2px; }
   @media print { body { padding: 0; max-width: none; } .screen-only { display: none; } }
@@ -49,11 +45,10 @@
 
   <header class="doc-header">
     <span class="logo">{{brand:logo}}</span>
-    <span class="doc-ref" data-field="doc_ref">{{doc:ref}}</span>
+    <span class="doc-cat">{{documents.common.category.clinicalRecord}}</span>
   </header>
 
-  <div class="doc-title-band">
-    <div class="doc-eyebrow">{{documents.common.category.clinicalRecord}}</div>
+  <div class="doc-title">
     <h1>{{documents.medicalHistory.title}}</h1>
     <h2>{{documents.medicalHistory.subtitle}}</h2>
   </div>
@@ -66,7 +61,7 @@
     <div class="doc-field doc-field--short"><dt>{{documents.historiaEndo.fieldDate}}</dt><dd data-field="fecha"></dd></div>
   </dl>
 
-  <p class="prompt">{{documents.medicalHistory.prompt}}</p>
+  <p class="doc-prompt">{{documents.medicalHistory.prompt}}</p>
   <table class="checklist">
     <tr><td>{{documents.historiaEndo.q.anemia}}</td><td class="q-answer" data-field="q_has_anemia"></td></tr>
     <tr><td>{{documents.historiaEndo.q.diabetes}}</td><td class="q-answer" data-field="q_has_diabetes"></td></tr>
@@ -85,7 +80,7 @@
   </table>
   <div class="doc-notes"><div class="doc-notes-label">{{documents.historiaEndo.q.other}}</div><div class="doc-notes-body" data-field="medical_history_other"></div></div>
 
-  <div class="sig-panels"><div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.historiaEndo.signatureLabelPatient}}</div><div class="sig-area" data-field="firma_paciente"></div><div class="sig-e-note">{{documents.signature.eSigned}}</div></div></div></div>
+  <div class="sig-panels"><div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.historiaEndo.signatureLabelPatient}}</div><div class="sig-stamp" data-field="patient_stamp"></div><div class="sig-area" data-field="firma_paciente"></div><dl class="sig-details"><div><dt>{{documents.signature.name}}</dt><dd data-field="nombre_paciente"></dd></div><div><dt>{{documents.signature.date}}</dt><dd data-field="fecha"></dd></div></dl><div class="sig-e-note">{{documents.signature.eSigned}}</div></div></div></div>
 
   <div class="contact-footer screen-only">
     <div>{{brand:contactLine}}</div>

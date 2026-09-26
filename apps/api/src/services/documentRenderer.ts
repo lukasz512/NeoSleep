@@ -141,6 +141,13 @@ function releaseRenderSlot(): void {
   }
 }
 
+/** A blank set of tick-boxes (just the options), or a recorded answer (options + the selected one). */
+export type ChoiceField = readonly string[] | { options: readonly string[]; selected?: string | null };
+
+function toChoice(field: ChoiceField): { options: readonly string[]; selected: string | null } {
+  return "options" in field ? { options: field.options, selected: field.selected ?? null } : { options: field, selected: null };
+}
+
 export interface RenderHtmlToPdfOptions {
   /** Puppeteer footerTemplate HTML — page.pdf() only paginates a real per-page footer via this option, not repeated CSS in the document body. */
   footerTemplate?: string;
@@ -167,12 +174,15 @@ export interface RenderHtmlToPdfOptions {
    */
   dataFields?: Record<string, string>;
   /**
-   * Blank tick-boxes for a paper form, keyed by data-field: each option
-   * becomes an empty rounded box + its label (e.g. ["Sí", "No"]). Drawn
-   * with CSS, not a "☐" character — Poppins has no such glyph and the PDF
-   * showed a missing-glyph box instead.
+   * Tick-boxes keyed by data-field: each option becomes a small rounded box
+   * + its label (e.g. ["Sí", "No"]). A plain list is a blank paper form (all
+   * boxes empty); `{ options, selected }` is a recorded answer — every
+   * option is still printed, the selected one filled and bold, so a filled
+   * form reads the same way as a blank one (document system, 2026-09-26).
+   * Drawn with CSS, not a "☐" character — Poppins has no such glyph and the
+   * PDF showed a missing-glyph box instead.
    */
-  choiceFields?: Record<string, readonly string[]>;
+  choiceFields?: Record<string, ChoiceField>;
   /**
    * Images placed into `[data-field="key"]` elements — a drawn signature
    * (data:image/png;base64 only: the page lockdown allows data: URLs and
@@ -279,24 +289,31 @@ export async function applyDataFields(page: Page, fields: Record<string, string>
  * they are escaped like data fields. Box colour follows the template's
  * --primary brand token. Exported for the spec.
  */
-export async function applyChoiceFields(page: Page, fields: Record<string, readonly string[]>): Promise<void> {
+export async function applyChoiceFields(page: Page, fields: Record<string, ChoiceField>): Promise<void> {
+  const normalized = Object.fromEntries(Object.entries(fields).map(([key, field]) => [key, toChoice(field)]));
   await page.evaluate((values) => {
-    for (const [key, options] of Object.entries(values)) {
+    for (const [key, { options, selected }] of Object.entries(values)) {
+      const answered = selected != null && options.includes(selected);
       document.querySelectorAll(`[data-field="${CSS.escape(key)}"]`).forEach((el) => {
         const choices = options.map((option) => {
+          const on = answered && option === selected;
           const choice = document.createElement("span");
-          choice.className = "choice";
+          choice.className = on ? "choice choice--on" : "choice";
           // Fixed-width slots (fit "III" / "Sí"): in a right-aligned answer column each row's
           // last option shares one x, so "I / II / III" sits in the same grid as "Sí / No"
           // (III under No, II under Sí, I one slot further left).
           choice.style.cssText = "display:inline-flex;align-items:center;gap:6px;vertical-align:middle;width:52px;";
           const box = document.createElement("span");
           box.className = "choice-box";
-          box.style.cssText =
-            "display:inline-block;width:15px;height:15px;border:1.5px solid var(--primary, #128F83);border-radius:4px;background:#fff;flex:none;";
+          box.style.cssText = on
+            ? "display:inline-block;width:14px;height:14px;border:1.5px solid var(--primary, #128F83);border-radius:3.5px;background:var(--primary, #128F83);box-shadow:inset 0 0 0 2px #fff;flex:none;"
+            : "display:inline-block;width:14px;height:14px;border:1.5px solid #8fa29e;border-radius:3.5px;background:#fff;flex:none;";
           const label = document.createElement("span");
+          label.className = "choice-label";
           label.textContent = option;
-          label.style.cssText = "font-weight:500;color:var(--secondary, #474747);";
+          label.style.cssText = on
+            ? "font-weight:600;color:var(--text, #1a1a1a);"
+            : `font-weight:400;color:${answered ? "#9aa5a3" : "var(--secondary, #474747)"};`;
           choice.append(box, label);
           return choice;
         });
@@ -304,7 +321,7 @@ export async function applyChoiceFields(page: Page, fields: Record<string, reado
         el.replaceChildren(...choices);
       });
     }
-  }, fields);
+  }, normalized);
 }
 
 const RENDER_READY_TIMEOUT_MS = 10_000;

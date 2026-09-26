@@ -63,7 +63,7 @@
     --font: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
   * { box-sizing: border-box; }
-  @page { size: A4; margin: 18mm 14mm 22mm; } /* 22mm: room for the per-page footer */
+  @page { size: A4; margin: 18mm 14mm 18mm; } /* 18mm: room for the 2-line per-page footer */
   body {
     font-family: var(--font);
     font-weight: 300;
@@ -76,8 +76,6 @@
     background: #fff;
   }
 
-  h3 { color: var(--primary); font-size: 10pt; font-weight: 600; margin: 16px 0 6px; }
-
   p { margin: 0 0 7px; text-align: justify; text-justify: inter-word; }
   .doc-content > p:first-child { font-style: italic; }
   .doc-content ul { margin: 0 0 10px; padding-left: 1.1em; list-style: none; }
@@ -85,13 +83,8 @@
   .doc-content li::before { content: "•"; color: var(--primary); font-size: 7pt; position: absolute; left: -1.1em; top: 0.15em; }
   .doc-content strong { color: var(--primary); font-weight: 600; }
 
-
-  table.checklist { width: 100%; border-collapse: collapse; margin: 0 0 10px; }
-  table.checklist td { padding: 3px 6px 3px 0; border-bottom: 1px solid #eee; font-size: 9pt; }
-  table.checklist td.q-answer { text-align: right; font-weight: 600; color: var(--primary); width: 60px; }
   .doc-notes { --doc-notes-line: 24px; --doc-notes-font: 9pt; }
   .blank-section { border: 1px solid #ddd; border-radius: 4px; padding: 10px; min-height: 60px; margin: 0 0 10px; color: var(--secondary); font-size: 8.5pt; }
-
 
   .screen-only.contact-footer { font-size: 8pt; color: var(--secondary); border-top: 1px solid #ccc; padding-top: 8px; margin-top: 24px; }
   .screen-only.contact-footer .doc-ref { text-align: right; margin-top: 2px; }
@@ -107,11 +100,10 @@
 
   <header class="doc-header">
     <span class="logo">{{brand:logo}}</span>
-    <span class="doc-ref" data-field="doc_ref">{{doc:ref}}</span>
+    <span class="doc-cat">{{documents.common.category.consent}}</span>
   </header>
 
-  <div class="doc-title-band">
-    <div class="doc-eyebrow">{{documents.common.category.consent}}</div>
+  <div class="doc-title">
     <h1>{{documents.historiaEndo.title}}</h1>
     <h2>{{documents.historiaEndo.subtitle}}</h2>
   </div>
@@ -125,7 +117,7 @@
     <div class="doc-field doc-field--short"><dt>{{documents.historiaEndo.fieldTooth}}</dt><dd data-field="diente"></dd></div>
   </dl>
 
-  <h3>{{documents.historiaEndo.sectionMedicalHistory}}</h3>
+  <h3 class="doc-sec">{{documents.historiaEndo.sectionMedicalHistory}}</h3>
   <table class="checklist">
     <tr><td>{{documents.historiaEndo.q.anemia}}</td><td class="q-answer" data-field="q_has_anemia"></td></tr>
     <tr><td>{{documents.historiaEndo.q.diabetes}}</td><td class="q-answer" data-field="q_has_diabetes"></td></tr>
@@ -144,7 +136,7 @@
   </table>
   <div class="doc-notes"><div class="doc-notes-label">{{documents.historiaEndo.q.other}}</div><div class="doc-notes-body" data-field="medical_history_other"></div></div>
 
-  <h3>{{documents.historiaEndo.sectionOralExam}}</h3>
+  <h3 class="doc-sec">{{documents.historiaEndo.sectionOralExam}}</h3>
   <table class="checklist">
     <tr><td>{{documents.historiaEndo.q.bruxism}}</td><td class="q-answer" data-field="q_has_bruxism"></td></tr>
     <tr><td>{{documents.historiaEndo.q.narrowPalate}}</td><td class="q-answer" data-field="q_has_narrow_palate"></td></tr>
@@ -157,16 +149,16 @@
     <tr><td>{{documents.historiaEndo.q.tmjFinding}}</td><td class="q-answer" data-field="q_has_tmj_finding"></td></tr>
   </table>
 
-  <h3>{{documents.historiaEndo.sectionNotCaptured}}</h3>
+  <h3 class="doc-sec">{{documents.historiaEndo.sectionNotCaptured}}</h3>
   <p style="font-size:8pt;color:var(--secondary);margin:0 0 6px;">{{documents.historiaEndo.sectionNotCapturedHint}}</p>
   <div class="blank-section"></div>
 
-  <h3>{{documents.historiaEndo.sectionConsent}}</h3>
+  <h3 class="doc-sec">{{documents.historiaEndo.sectionConsent}}</h3>
   <div class="doc-content">{{content}}</div>
 
   <div class="sig-panels">
-    <div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.historiaEndo.signatureLabelPatient}}</div><div class="sig-area" data-field="firma_paciente"></div><div class="sig-e-note">{{documents.signature.eSigned}}</div></div></div>
-    <div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.historiaEndo.signatureLabelDoctor}}</div><div class="sig-area" data-field="firma_doctor"></div><div class="sig-e-note">{{documents.signature.eSigned}}</div></div></div>
+    <div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.historiaEndo.signatureLabelPatient}}</div><div class="sig-area" data-field="firma_paciente"></div><dl class="sig-details"><div><dt>{{documents.signature.name}}</dt><dd data-field="nombre_paciente"></dd></div><div><dt>{{documents.signature.date}}</dt><dd data-field="fecha"></dd></div></dl><div class="sig-e-note">{{documents.signature.eSigned}}</div></div></div>
+    <div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.historiaEndo.signatureLabelDoctor}}</div><div class="sig-area" data-field="firma_doctor"></div><dl class="sig-details"><div><dt>{{documents.signature.name}}</dt><dd data-field="nombre_medico"></dd></div><div><dt>{{documents.signature.date}}</dt><dd data-field="fecha"></dd></div></dl><div class="sig-e-note">{{documents.signature.eSigned}}</div></div></div>
   </div>
 
   <div class="contact-footer screen-only">

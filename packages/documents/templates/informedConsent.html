@@ -86,7 +86,7 @@
 
   * { box-sizing: border-box; }
 
-  @page { size: A4; margin: 18mm 14mm 22mm; } /* 22mm: room for the per-page footer */
+  @page { size: A4; margin: 18mm 14mm 18mm; } /* 18mm: room for the 2-line per-page footer */
 
   body {
     font-family: var(--font);
@@ -139,8 +139,6 @@
     font-family: var(--font); font-size: 10.5pt; width: 180px;
   }
 
-
-
   .screen-only.contact-footer {
     font-size: 8pt;
     color: var(--secondary);
@@ -165,14 +163,21 @@
 
   <header class="doc-header">
     <span class="logo">{{brand:logo}}</span>
-    <span class="doc-ref" data-field="doc_ref">{{doc:ref}}</span>
+    <span class="doc-cat">{{documents.common.category.consent}}</span>
   </header>
 
-  <div class="doc-title-band">
-    <div class="doc-eyebrow">{{documents.common.category.consent}}</div>
+  <div class="doc-title">
     <h1>{{documents.informedConsent.title}}</h1>
     <h2>{{documents.informedConsent.subtitle}}</h2>
   </div>
+
+  <dl class="doc-fields">
+    <div class="doc-field doc-field--patient"><dt>{{documents.informedConsent.fieldPatientName}}</dt><dd data-field="nombre_paciente"></dd></div>
+    <div class="doc-field doc-field--short"><dt>{{documents.fieldBirthDate}}</dt><dd data-field="fecha_nacimiento"></dd></div>
+    <div class="doc-field"><dt>{{documents.informedConsent.fieldPractitioner}}</dt><dd data-field="nombre_medico"></dd></div>
+    <div class="doc-field"><dt>{{documents.informedConsent.fieldPlace}}</dt><dd data-field="lugar"></dd></div>
+    <div class="doc-field doc-field--short"><dt>{{documents.informedConsent.fieldDate}}</dt><dd data-field="fecha"></dd></div>
+  </dl>
 
   <div class="doc-content">{{content}}</div>
 
@@ -185,15 +190,8 @@
     </label>
   </div>
 
-  <dl class="doc-fields">
-    <div class="doc-field doc-field--patient"><dt>{{documents.informedConsent.fieldPatientName}}</dt><dd data-field="nombre_paciente"></dd></div>
-    <div class="doc-field doc-field--short"><dt>{{documents.fieldBirthDate}}</dt><dd data-field="fecha_nacimiento"></dd></div>
-    <div class="doc-field"><dt>{{documents.informedConsent.fieldPractitioner}}</dt><dd data-field="nombre_medico"></dd></div>
-    <div class="doc-field"><dt>{{documents.informedConsent.fieldPlace}}</dt><dd data-field="lugar"></dd></div>
-    <div class="doc-field doc-field--short"><dt>{{documents.informedConsent.fieldDate}}</dt><dd data-field="fecha"></dd></div>
-  </dl>
 
-  <div class="sig-panels"><div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.informedConsent.signatureLabel}}</div><div id="firma-paciente" class="sig-area" data-field="firma_paciente"></div><div class="sig-e-note">{{documents.signature.eSigned}}</div></div></div></div>
+  <div class="sig-panels"><div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.informedConsent.signatureLabel}}</div><div id="firma-paciente" class="sig-area" data-field="firma_paciente"></div><dl class="sig-details"><div><dt>{{documents.signature.name}}</dt><dd data-field="nombre_paciente"></dd></div><div><dt>{{documents.signature.date}}</dt><dd data-field="fecha"></dd></div></dl><div class="sig-e-note">{{documents.signature.eSigned}}</div></div></div></div>
 
   <div class="contact-footer screen-only">
     <div>{{brand:contactLine}}</div>
