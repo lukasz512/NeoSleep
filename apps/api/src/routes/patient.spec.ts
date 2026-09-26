@@ -250,6 +250,21 @@ describe("patient self-fill: doctor → QR link → patient (public) → doctor"
     expect(lookup.status).toBe(410);
   });
 
+  it("the patient opening the link stamps opened_at once, and the checklist shows it (NEO-110)", async () => {
+    const { auth, patientId } = await authAndPatient();
+    const link = await request(app).post(`/api/v1/patient/${patientId}/questionnaire-requests`).set("Authorization", auth).send({ kind: "medical_history" });
+    const pending = async () => (await request(app).get(`/api/v1/patient/${patientId}/checklist`).set("Authorization", auth)).body.pending_requests[0];
+    expect((await pending()).opened_at).toBeNull();
+
+    const token = String(link.body.url).split("/q#")[1];
+    expect((await request(app).post("/api/v1/public/questionnaire/lookup").send({ token })).status).toBe(200);
+    const firstOpen = (await pending()).opened_at;
+    expect(firstOpen).toEqual(expect.any(String));
+
+    await request(app).post("/api/v1/public/questionnaire/lookup").send({ token });
+    expect((await pending()).opened_at).toBe(firstOpen); // reopening keeps the first time
+  });
+
   it("the checklist reports a link that ran out unused as expired_request, until a newer link supersedes it (NEO-93)", async () => {
     const { auth, patientId } = await authAndPatient();
     const link = await request(app).post(`/api/v1/patient/${patientId}/questionnaire-requests`).set("Authorization", auth).send({ kind: "medical_history" });

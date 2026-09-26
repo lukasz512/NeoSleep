@@ -80,6 +80,8 @@ export interface PendingRequest {
   id: string;
   items: string[];
   completed_items: string[];
+  /** When the patient first opened the link; null until then (NEO-110). */
+  opened_at: string | null;
   expires_at: string;
   /** Only right after creation — never stored, so it can't be re-shown later. */
   url?: string;

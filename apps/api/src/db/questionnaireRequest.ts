@@ -10,7 +10,9 @@ import { AppError, DatabaseError } from "../errors.js";
  * `items` are the ordered checklist keys (template keys) the link covers —
  * one for a per-item QR, several for "everything the patient has to do".
  * `completed_items` grows as the patient finishes each step; `used_at` is
- * set once every item is done, and only then is the link dead.
+ * set once every item is done, and only then is the link dead. `opened_at`
+ * is when the patient first opened it (migration 036, NEO-110) — the doctor's
+ * QR dialog closes on it.
  */
 
 export type QuestionnaireRequestKind = "medical_history" | "stop_bang" | "bundle";
@@ -22,6 +24,7 @@ export interface QuestionnaireRequest {
   kind: QuestionnaireRequestKind;
   items: string[];
   completed_items: string[];
+  opened_at: Date | null;
   expires_at: Date;
   used_at: Date | null;
   cancelled_at: Date | null;
@@ -30,7 +33,7 @@ export interface QuestionnaireRequest {
   status: QuestionnaireRequestStatus;
 }
 
-const COLS = `id, patient_id, kind, items, completed_items, expires_at, used_at, cancelled_at, created_by, created_at,
+const COLS = `id, patient_id, kind, items, completed_items, opened_at, expires_at, used_at, cancelled_at, created_by, created_at,
   CASE WHEN used_at IS NOT NULL THEN 'completed'
        WHEN cancelled_at IS NOT NULL THEN 'cancelled'
        WHEN expires_at <= now() THEN 'expired'
@@ -116,6 +119,13 @@ export function getUsableQuestionnaireRequestByHash(
       [tokenHash]
     );
     return result.rows[0] ?? null;
+  });
+}
+
+/** Stamps the first time the patient opened the link; later opens keep the first time. */
+export function markQuestionnaireRequestOpened(client: PoolClient, id: string): Promise<void> {
+  return run("markQuestionnaireRequestOpened", async () => {
+    await client.query(`UPDATE questionnaire_request SET opened_at = now() WHERE id = $1 AND opened_at IS NULL`, [id]);
   });
 }
 

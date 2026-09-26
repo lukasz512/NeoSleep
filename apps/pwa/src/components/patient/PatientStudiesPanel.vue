@@ -33,9 +33,6 @@
       v-model="qrDialog.open"
       :title="qrDialog.title"
       :url="qrDialog.url"
-      :progress="qrProgress"
-      :completed="qrCompleted"
-      @poll="checklistApi.load"
     />
     <StudyUploadDialog
       v-model="uploadDialog.open"
@@ -279,7 +276,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, nextTick, onMounted, reactive, ref, watch, type ComponentPublicInstance } from "vue";
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch, type ComponentPublicInstance } from "vue";
 import { useI18n } from "vue-i18n";
 import { intlLocale } from "@i18n/language-options";
 import AppButton from "../AppButton.vue";
@@ -534,9 +531,45 @@ const qrDialog = reactive<{ open: boolean; title: string; url: string | null; re
   requestId: null,
 });
 const qrRequest = computed(() => checklist.value?.pending_requests.find((r) => r.id === qrDialog.requestId) ?? null);
-const qrProgress = computed(() => (qrRequest.value ? { done: qrRequest.value.completed_items.length, total: qrRequest.value.items.length } : null));
-/** The link left the pending list while the QR was showing → the patient finished every step. */
-const qrCompleted = computed(() => !!qrDialog.requestId && !qrRequest.value && !checklistApi.loading.value);
+/**
+ * The patient opened the link (or already saved a step, or finished and the
+ * link left the pending list) → the QR has done its job: close it (NEO-110).
+ * Progress from here on is on the QR status button.
+ */
+const qrPatientStarted = computed(() => {
+  if (!qrDialog.requestId || checklistApi.loading.value) return false;
+  const request = qrRequest.value;
+  return !request || !!request.opened_at || request.completed_items.length > 0;
+});
+watch(qrPatientStarted, (started) => {
+  if (started) qrDialog.open = false;
+});
+
+// Refresh while a link is live, so the dialog closes and the QR status
+// button moves on their own. 15 s, and only for 15 min per link: the
+// doctor's device and a patient's phone usually share the clinic Wi-Fi's one
+// public IP — and so the API's per-IP rate limit; fast polling left open
+// could starve the patient's submit.
+const POLL_MS = 15_000;
+const POLL_MAX_MS = 15 * 60_000;
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+function stopPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = null;
+}
+watch(
+  () => checklist.value?.pending_requests[0]?.id ?? null,
+  (liveId) => {
+    stopPolling();
+    if (!liveId) return;
+    const startedAt = Date.now();
+    pollTimer = setInterval(() => {
+      if (Date.now() - startedAt > POLL_MAX_MS) return stopPolling();
+      void checklistApi.load();
+    }, POLL_MS);
+  }
+);
+onBeforeUnmount(stopPolling);
 
 const qrCreating = ref(false);
 const qrFailed = ref(false);
