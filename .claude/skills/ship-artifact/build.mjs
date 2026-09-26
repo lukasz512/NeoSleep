@@ -127,10 +127,13 @@ function render(contentPath) {
         ? `PR #${existing.number} · closed`
         : `Open PR #${existing.number}`;
 
+  // The Artifact renders in a sandboxed iframe; GitHub/Linear refuse to be framed,
+  // so every link must open a new tab or the click shows a broken-page icon.
+  const ext = `target="_blank" rel="noopener noreferrer"`;
   const links = [
-    pr ? `<a class="btn primary" href="${esc(pr)}">${esc(prLabel)}</a>` :`<span class="btn ghost" title="Branch not pushed yet">PR link after push</span>`,
-    linearUrl ? `<a class="btn" href="${esc(linearUrl)}">Linear ${esc(ticket)}</a>` : "",
-    sessionId ? `<a class="btn" href="vscode://anthropic.claude-code/open?session=${esc(sessionId)}">Claude session</a>` : "",
+    pr ? `<a class="btn primary" href="${esc(pr)}" ${ext}>${esc(prLabel)}</a>` :`<span class="btn ghost" title="Branch not pushed yet">PR link after push</span>`,
+    linearUrl ? `<a class="btn" href="${esc(linearUrl)}" ${ext}>Linear ${esc(ticket)}</a>` : "",
+    sessionId ? `<a class="btn" href="vscode://anthropic.claude-code/open?session=${esc(sessionId)}" ${ext}>Claude session</a>` : "",
   ].join("");
 
   const decisions = c.decisions?.length
