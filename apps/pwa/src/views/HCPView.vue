@@ -243,6 +243,7 @@ async function onContactSubmit(data: Record<string, unknown>, done: (ok: boolean
         });
       },
       successMessage: t("user.hcp.form.success"),
+      openCreated: "hcp-detail",
       icon: "nav-hcp",
       errorMessage: t("user.hcp.form.errorSave"),
     },

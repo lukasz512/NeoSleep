@@ -222,6 +222,7 @@ async function onAccountSubmit(data: Record<string, unknown>, done: (ok: boolean
           body: JSON.stringify(data),
         }),
       successMessage: t("user.hco.form.success"),
+      openCreated: "hco-detail",
       icon: "nav-hco",
       errorMessage: t("user.hco.form.errorSave"),
     },

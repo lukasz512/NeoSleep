@@ -1,3 +1,5 @@
+import { getCurrentInstance } from "vue";
+import { useRouter } from "vue-router";
 import { reportCaught } from "@api";
 import { useNotifications, type NotificationIcon, type ShowOptions } from "./useNotifications";
 import { fieldErrorsFromResponse, type FieldErrors } from "./useFormErrors";
@@ -22,6 +24,25 @@ export interface EntitySubmitOptions {
   icon: NotificationIcon;
   /** Display name of the record the form belongs to, when there is one. */
   context?: string;
+  /**
+   * Create forms opened from an entity's own list (NEO-119): the detail route
+   * to open for the record just created, e.g. "patient-detail". The id comes
+   * from the API's 201 body. Omit it everywhere else — an edit, or a create
+   * made from inside another flow (booking, a doctor card) keeps the user
+   * where they are.
+   */
+  openCreated?: string;
+}
+
+/** The new record's id from a create response body, or null when there is none. */
+async function createdId(result: EntitySubmitResult): Promise<string | null> {
+  try {
+    const body = await result.clone?.().json();
+    const id = body && typeof body === "object" ? (body as { id?: unknown }).id : undefined;
+    return typeof id === "string" && id ? id : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -34,6 +55,9 @@ export interface EntitySubmitOptions {
  */
 export function useEntitySubmit() {
   const notifications = useNotifications();
+  // Only inside a component (the router is injected); plain-function callers
+  // and unit tests have none, and never pass `openCreated`.
+  const router = getCurrentInstance() ? useRouter() : undefined;
 
   /**
    * `opts.request()` is called unconditionally today — this is the one seam
@@ -73,6 +97,12 @@ export function useEntitySubmit() {
     done(true);
     if (opts.refresh !== false) window.dispatchEvent(new Event("entity-list-refresh"));
     if (opts.onSuccess) await opts.onSuccess(result);
+    // Like Salesforce/Veeva and an EHR's registration → chart: the next step
+    // (booking, a questionnaire, a study) happens on the new record's page.
+    if (opts.openCreated && router) {
+      const id = await createdId(result);
+      if (id) await router.push({ name: opts.openCreated, params: { id } });
+    }
   }
 
   return { submit };
