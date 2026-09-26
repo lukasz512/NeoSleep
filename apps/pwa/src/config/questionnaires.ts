@@ -8,6 +8,9 @@
 /** Roles allowed to see clinical questionnaires (health data) — mirrors the API's requireClinicalRole (admin + doctor, 2026-09-25). */
 export const CLINICAL_ROLES: readonly string[] = ["admin", "doctor"];
 
+/** Roles allowed to see and edit the patient's studies (Estudios tab, sleep studies) — mirrors the API's requireStudyRole (+ manager, NEO-83, 2026-09-26). */
+export const STUDY_ROLES: readonly string[] = ["admin", "doctor", "manager"];
+
 export type ClinicalRecordKind ="medical_history" | "oral_exam" | "stop_bang";
 export type PatientFillableKind = "medical_history" | "stop_bang";
 

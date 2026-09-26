@@ -138,7 +138,7 @@
               <dt class="view-item__label">{{ t("app.patients.detail.medicalRecord") }}</dt>
               <dd class="view-item__value">{{ patient.medical_record || "—" }}</dd>
             </div>
-            <PatientStudiesSummary v-if="canSeeClinical" :patient-id="patient.id" @open="openStudy" />
+            <PatientStudiesSummary v-if="canSeeStudies" :patient-id="patient.id" @open="openStudy" />
           </template>
           <template #notes>
             <PatientNotesPanel entity-type="patient" :entity-id="patient.id" />
@@ -202,7 +202,7 @@ import PatientOrthoApneaPanel from "../components/patient/PatientOrthoApneaPanel
 import EntityHistoryPanel from "../components/EntityHistoryPanel.vue";
 import EntityDocumentsPanel from "../components/EntityDocumentsPanel.vue";
 import { patientFormFields } from "../config/forms/patientForm";
-import { CLINICAL_ROLES } from "../config/questionnaires";
+import { CLINICAL_ROLES, STUDY_ROLES } from "../config/questionnaires";
 import { useAuthStore } from "../stores/auth";
 import { entityActionIcon, entityActionBtnClass } from "../config/entityActions";
 import { patientStatusColor, patientStatusLabel } from "../utils/patientStatus";
@@ -274,14 +274,15 @@ const showDeleteConfirm = ref(false);
 const ALL_PATIENT_TABS = [
   { value: "details", labelKey: "app.patients.detail.tabs.details" },
   { value: "notes", labelKey: "app.patients.detail.tabs.notes" },
-  { value: "studies", labelKey: "app.patients.detail.tabs.studies", clinical: true },
+  { value: "studies", labelKey: "app.patients.detail.tabs.studies", roles: STUDY_ROLES },
   { value: "orthoapnea", labelKey: "app.patients.detail.tabs.orthoapnea" },
-  { value: "documents", labelKey: "app.patients.detail.tabs.documents", clinical: true },
+  { value: "documents", labelKey: "app.patients.detail.tabs.documents", roles: CLINICAL_ROLES },
   { value: "history", labelKey: "app.patients.detail.tabs.history" },
 ];
-/** Studies and Documents hold health data — shown to admin/doctor only (the API enforces the same). */
-const canSeeClinical = computed(() => CLINICAL_ROLES.includes(authStore.user?.role ?? ""));
-const patientTabs = computed(() => ALL_PATIENT_TABS.filter((tab) => !tab.clinical || canSeeClinical.value));
+/** Studies and Documents hold health data — Documents admin/doctor only, Studies also manager (NEO-83); the API enforces the same. */
+const userRole = computed(() => authStore.user?.role ?? "");
+const canSeeStudies = computed(() => STUDY_ROLES.includes(userRole.value));
+const patientTabs = computed(() => ALL_PATIENT_TABS.filter((tab) => !tab.roles || tab.roles.includes(userRole.value)));
 /** Deep-linkable via ?tab= — see SleepStudiesView/TreatmentPlansView row clicks. */
 const activeTab = ref((route.query.tab as string) || "details");
 /** Details → Estudios card click: open that item in the Estudios tab (?tab=studies&item=…). */

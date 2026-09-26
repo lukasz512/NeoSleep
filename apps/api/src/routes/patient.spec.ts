@@ -48,14 +48,32 @@ describe("/api/v1/patient/:id/clinical-records", () => {
     expect(res.status).toBe(401);
   });
 
-  it.each(["rep", "kam", "msl", "manager"] as const)("403s for the commercial field-force role %s — health data is admin/doctor only", async (role) => {
+  it.each(["rep", "kam", "msl"] as const)("403s for the commercial field-force role %s — studies are admin/doctor/manager only", async (role) => {
     const { auth, patientId } = await authAndPatient(role);
     const read = await request(app).get(`/api/v1/patient/${patientId}/clinical-records`).set("Authorization", auth);
     const link = await request(app).post(`/api/v1/patient/${patientId}/questionnaire-requests`).set("Authorization", auth).send({ kind: "stop_bang" });
     expect([read.status, link.status]).toEqual([403, 403]);
   });
 
-  it.each(["rep", "kam", "msl", "manager"] as const)("403s %s on patient documents and sleep studies (health data), but still gives the latest sleep-study id for device orders", async (role) => {
+  it("manager reads and edits the patient's studies (NEO-83), but not the Documents tab list nor a hard delete", async () => {
+    const { auth, patientId } = await authAndPatient("manager");
+    const records = await request(app).get(`/api/v1/patient/${patientId}/clinical-records`).set("Authorization", auth);
+    const checklist = await request(app).get(`/api/v1/patient/${patientId}/checklist`).set("Authorization", auth);
+    const exam = await request(app)
+      .post(`/api/v1/patient/${patientId}/clinical-records/oral_exam`)
+      .set("Authorization", auth)
+      .send({ has_bruxism: true });
+    const created = await request(app).post("/api/v1/sleep-study").set("Authorization", auth).send({ patient_id: patientId });
+    const updated = await request(app).patch(`/api/v1/sleep-study/${created.body.id}`).set("Authorization", auth).send({ ahi_score: 12 });
+    const listed = await request(app).get(`/api/v1/sleep-study?patient_id=${patientId}`).set("Authorization", auth);
+    const hardDelete = await request(app).delete(`/api/v1/sleep-study/${created.body.id}`).set("Authorization", auth);
+    const docs = await request(app).get(`/api/v1/patient/${patientId}/documents`).set("Authorization", auth);
+    expect([records.status, checklist.status, exam.status, created.status, updated.status, listed.status, hardDelete.status, docs.status])
+      .toEqual([200, 200, 201, 201, 200, 200, 403, 403]);
+    expect(Number(updated.body.ahi_score)).toBe(12);
+  });
+
+  it.each(["rep", "kam", "msl"] as const)("403s %s on patient documents and sleep studies (health data), but still gives the latest sleep-study id for device orders", async (role) => {
     const { auth, patientId } = await authAndPatient(role);
     const docs = await request(app).get(`/api/v1/patient/${patientId}/documents`).set("Authorization", auth);
     const studies = await request(app).get(`/api/v1/sleep-study?patient_id=${patientId}`).set("Authorization", auth);

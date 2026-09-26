@@ -102,9 +102,9 @@ describe("AppLayout", () => {
       expect(navRoutesForRole("rep").map((r) => r.path)).toEqual(expectedPaths);
     });
 
-    it("manager sees users management, leads, treatment plans and documents — not sleep studies (health data, admin/doctor only since 2026-09-25) nor territories", () => {
+    it("manager sees users management, leads, sleep studies (NEO-83), treatment plans and documents — not territories", () => {
       const expectedPaths = [
-        "/dashboard", "/leads", "/hcp", "/hco", "/patients",
+        "/dashboard", "/leads", "/hcp", "/hco", "/patients", "/sleep-studies",
         "/treatment-plans", "/planner", "/resources", "/users", "/documents",
       ];
       expect(navRoutesForRole("manager").map((r) => r.path)).toEqual(expectedPaths);
