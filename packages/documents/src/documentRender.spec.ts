@@ -147,6 +147,8 @@ describe("document system (header, title, banner, sections, signatures, footer)"
     expect(renderDocumentHtml("partnerAgreement", "pl")).toContain('<span class="doc-cat">Umowa · Partner medyczny</span>');
     expect(renderDocumentHtml("informedConsent", "mx")).toContain('<span class="doc-cat">Consentimiento informado</span>');
     expect(renderDocumentHtml("stopBang", "en")).toContain('<span class="doc-cat">Screening questionnaire</span>');
+    // Historia Endo is a clinical record, not a consent form (NEO-120).
+    expect(renderDocumentHtml("historiaEndo", "mx")).toContain('<span class="doc-cat">Expediente clínico</span>');
   });
 
   it("puts the patient banner right under the title on every patient document, the consent included", () => {
