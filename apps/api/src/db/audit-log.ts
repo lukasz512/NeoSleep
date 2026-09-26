@@ -147,6 +147,7 @@ export async function getAuditLogForEntities(
      LEFT JOIN users u ON a.user_id = u.id
      LEFT JOIN identities ui ON u.identity_id = ui.id
      WHERE a.entity_type = ANY($1) AND a.entity_id = ANY($2)
+       AND a.action <> 'read' -- access trail (NEO-83), not a change: kept out of History timelines
      ORDER BY a.created_at DESC`,
     [entityTypes, entityIds]
   );
