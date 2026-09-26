@@ -46,11 +46,11 @@ function mountPanel(overrides: Partial<{
   return wrapper;
 }
 
-function segmentTabs(wrapper: VueWrapper, testid: string) {
-  return wrapper.get(`[data-testid="${testid}"]`).findAll('[role="tab"]');
+function choices(wrapper: VueWrapper, testid: string) {
+  return wrapper.get(`[data-testid="${testid}"]`).findAll('[role="radio"]');
 }
 
-describe("AppUserMenuPanel — NEO-102 account menu (option C)", () => {
+describe("AppUserMenuPanel — NEO-102 account menu (icon rows + action pair)", () => {
   it("shows who is signed in: name, email, role and region", () => {
     const text = mountPanel().text();
     expect(text).toContain("Ana López");
@@ -59,46 +59,52 @@ describe("AppUserMenuPanel — NEO-102 account menu (option C)", () => {
     expect(text).toContain("MX");
   });
 
-  it("theme is a Light / Dark / Auto segment with the current preference selected", () => {
-    const tabs = segmentTabs(mountPanel({ themePreference: "system" }), "user-menu-theme");
-    expect(tabs.map((t) => t.text())).toEqual(["Light", "Dark", "Auto"]);
-    expect(tabs[2]!.attributes("aria-selected")).toBe("true");
+  it("theme is three icons (Light / Dark / Auto), named for screen readers, the current one checked", () => {
+    const options = choices(mountPanel({ themePreference: "system" }), "user-menu-theme");
+    expect(options.map((o) => o.attributes("aria-label"))).toEqual(["Light", "Dark", "Auto"]);
+    expect(options.every((o) => o.find("svg.app-icon").exists())).toBe(true);
+    expect(options.map((o) => o.attributes("aria-checked"))).toEqual(["false", "false", "true"]);
   });
 
   it("picking a theme emits set-theme and keeps the menu open", async () => {
     const wrapper = mountPanel();
-    await segmentTabs(wrapper, "user-menu-theme")[1]!.trigger("click");
+    await choices(wrapper, "user-menu-theme")[1]!.trigger("click");
     expect(wrapper.emitted("set-theme")?.[0]).toEqual(["dark"]);
     expect(wrapper.emitted("close")).toBeUndefined();
   });
 
-  it("language is a one-tap segment in each language's own name; picking one emits change-locale and close", async () => {
+  it("language is three flags (SVG, not emoji) named in each language's own name; picking one emits change-locale and close", async () => {
     const wrapper = mountPanel();
-    const tabs = segmentTabs(wrapper, "user-menu-language");
-    expect(tabs.map((t) => t.text())).toEqual(["English", "Polski", "Español"]);
-    expect(tabs[0]!.attributes("aria-selected")).toBe("true");
-    await tabs[1]!.trigger("click");
+    const options = choices(wrapper, "user-menu-language");
+    expect(options.map((o) => o.attributes("aria-label"))).toEqual(["English", "Polski", "Español (MX)"]);
+    expect(options.every((o) => o.find("svg.app-flag").exists())).toBe(true);
+    expect(options[0]!.attributes("aria-checked")).toBe("true");
+    await options[1]!.trigger("click");
     expect(wrapper.emitted("change-locale")?.[0]).toEqual(["pl"]);
     expect(wrapper.emitted("close")).toHaveLength(1);
   });
 
-  it("offers Change password only to accounts that have a password", async () => {
-    const withPassword = mountPanel({ canChangePassword: true });
-    await withPassword.get('[data-testid="user-menu-change-password"]').trigger("click");
-    expect(withPassword.emitted("change-password")).toHaveLength(1);
-    expect(withPassword.emitted("close")).toHaveLength(1);
-
-    const googleOnly = mountPanel({ canChangePassword: false });
-    expect(googleOnly.find('[data-testid="user-menu-change-password"]').exists()).toBe(false);
-  });
-
-  it("log out is its own button and emits logout and close", async () => {
-    const wrapper = mountPanel();
+  it("password and log out are a matching pair of buttons", async () => {
+    const wrapper = mountPanel({ canChangePassword: true });
+    const password = wrapper.get('[data-testid="user-menu-change-password"]');
     const logout = wrapper.get('[data-testid="user-menu-logout"]');
+    expect(password.classes()).toContain("user-menu__action");
+    expect(logout.classes()).toContain("user-menu__action");
+    expect(password.text()).toBe("Password");
+    expect(password.attributes("aria-label")).toBe("Change password");
     expect(logout.text()).toContain("Log out");
+
+    await password.trigger("click");
+    expect(wrapper.emitted("change-password")).toHaveLength(1);
     await logout.trigger("click");
     expect(wrapper.emitted("logout")).toHaveLength(1);
-    expect(wrapper.emitted("close")).toHaveLength(1);
+    expect(wrapper.emitted("close")).toHaveLength(2);
+  });
+
+  it("a Google-only account gets no password button, and log out spans the row", () => {
+    const wrapper = mountPanel({ canChangePassword: false });
+    expect(wrapper.find('[data-testid="user-menu-change-password"]').exists()).toBe(false);
+    expect(wrapper.find(".user-menu__actions--single").exists()).toBe(true);
   });
 
   it("ends with the app version, plus the channel tag on non-prod builds only", () => {

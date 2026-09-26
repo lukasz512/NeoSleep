@@ -428,6 +428,7 @@
   "user.settings.theme.switchToDark": "Switch to dark mode",
   "user.settings.logOut": "Log out",
   "user.settings.changePassword": "Change password",
+  "user.settings.password": "Password",
   "app.language.en": "English",
   "app.language.pl": "Polish",
   "app.language.mx": "Spanish (MX)",
