@@ -16,7 +16,7 @@ async function login(page: Page): Promise<void> {
   await page.getByLabel("Email", { exact: true }).fill(EMAIL);
   await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await page.waitForURL("**/dashboard");
+  await page.waitForURL("**/leads");
 }
 
 // Pure app logic (form validation, error display) — not browser-engine-dependent,
@@ -24,9 +24,9 @@ async function login(page: Page): Promise<void> {
 test.describe("login form", () => {
   test.skip(({ browserName }) => browserName !== "chromium", "app logic only, not browser-engine-dependent");
 
-  test("happy path reaches the dashboard", async ({ page }) => {
+  test("happy path reaches the rep home (leads)", async ({ page }) => {
     await login(page);
-    await expect(page).toHaveURL(/\/dashboard/);
+    await expect(page).toHaveURL(/\/leads/);
   });
 
   test("wrong password shows an error and stays on /login", async ({ page }) => {
@@ -48,9 +48,9 @@ test.describe("session persistence across a real reload", () => {
     await login(page);
     await page.reload();
     // A broken silent-refresh would bounce back to /login instead — the URL
-    // check alone is the real assertion; nothing on /dashboard renders a
+    // check alone is the real assertion; nothing on /leads renders a
     // role="alert" at all, so there's no login-error element to check here.
-    await expect(page).toHaveURL(/\/dashboard/);
+    await expect(page).toHaveURL(/\/leads/);
   });
 });
 
@@ -59,12 +59,12 @@ test.describe("back/forward navigation (bfcache)", () => {
     await login(page);
     await page.goto("/login"); // any other in-app navigation would do
     await page.goBack();
-    await expect(page).toHaveURL(/\/dashboard/);
+    await expect(page).toHaveURL(/\/leads/);
     // A page restored from bfcache with a dead in-memory token reference would
     // still show the URL as authenticated but fail the next real API call —
     // force one via a reload-independent action: a fresh navigation attempt.
-    await page.goto("/dashboard");
-    await expect(page).toHaveURL(/\/dashboard/);
+    await page.goto("/leads");
+    await expect(page).toHaveURL(/\/leads/);
   });
 });
 
@@ -97,7 +97,7 @@ test.describe("logout is per-device", () => {
 
     // B must still be able to reload and stay authenticated.
     await pageB.reload();
-    await expect(pageB).toHaveURL(/\/dashboard/);
+    await expect(pageB).toHaveURL(/\/leads/);
 
     await contextA.close();
     await contextB.close();

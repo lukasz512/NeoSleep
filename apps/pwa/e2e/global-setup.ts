@@ -15,7 +15,7 @@ function seedE2EUser(): void {
 }
 
 /**
- * Loads /login and /dashboard once before any test runs. A cold Vite dev
+ * Loads /login and the e2e rep's home (/leads — /dashboard is admin-only) once before any test runs. A cold Vite dev
  * server compiles every module on first request — each Vuetify component's
  * Sass alone took 13-16 s under parallel load — so whichever tests hit a page
  * first spent most of their 30 s budget waiting for the "load" event (NEO-56's
@@ -34,7 +34,7 @@ async function warmUpDevServer(baseURL: string): Promise<void> {
     await page.getByLabel("Email", { exact: true }).fill(EMAIL);
     await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
     await page.getByRole("button", { name: "Sign in" }).click();
-    await page.waitForURL("**/dashboard");
+    await page.waitForURL("**/leads");
     await page.waitForLoadState("networkidle");
     // Public pages outside the logged-in shell compile separately — the
     // partner-registration specs' first page.goto timed out in WebKit on PR #233.
