@@ -9,6 +9,7 @@
     :hint="hint"
     :persistent-hint="persistentHint"
     :rules="rules"
+    :error-messages="errorMessages"
     :variant="variant"
     :density="density"
     :disabled="disabled"
@@ -46,6 +47,8 @@ const props = withDefaults(
     hint?: string;
     persistentHint?: boolean;
     rules?: ((v: unknown) => true | string)[];
+    /** Set from outside the rules, e.g. a field the API rejected (NEO-109). */
+    errorMessages?: string | string[];
     variant?: string;
     density?: string;
     disabled?: boolean;

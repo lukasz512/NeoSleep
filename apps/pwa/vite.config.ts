@@ -28,6 +28,7 @@ interface NeoPwaOptions {
   backgroundColor?: string;
   icon192?: string;
   icon512?: string;
+  iconMaskable512?: string;
 }
 
 function neoPwaPlugin(opts: NeoPwaOptions): ReturnType<typeof VitePWA> {
@@ -36,8 +37,13 @@ function neoPwaPlugin(opts: NeoPwaOptions): ReturnType<typeof VitePWA> {
     // Deferred, so the service-worker registration script in <head> never
     // blocks the HTML parser (and with it the boot splash's first paint).
     injectRegister: "script-defer",
+    // Real files in public/, generated from the brand icon by
+    // scripts/generate-pwa-icons.mjs (NEO-87). Before they existed every icon
+    // URL fell through to the SPA's index.html, so Chrome never offered
+    // "Install app" and iOS used a screenshot as the home-screen icon.
     includeAssets: ["favicon.ico", "apple-touch-icon.png"],
     manifest: {
+      id:               opts.startUrl ?? "/",
       name:             opts.name,
       short_name:       opts.shortName,
       description:      opts.description ?? opts.name,
@@ -50,7 +56,7 @@ function neoPwaPlugin(opts: NeoPwaOptions): ReturnType<typeof VitePWA> {
       icons: [
         { src: opts.icon192 ?? "/icon-192.png", sizes: "192x192", type: "image/png" },
         { src: opts.icon512 ?? "/icon-512.png", sizes: "512x512", type: "image/png" },
-        { src: opts.icon512 ?? "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+        { src: opts.iconMaskable512 ?? "/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
       ],
     },
     workbox: {
@@ -111,7 +117,7 @@ export default defineConfig(mergeConfig(sharedViteConfig(__dirname), {
     vue(),
     bootSplashPlugin(),
     neoPwaPlugin({
-      name:        "NeoSleep Rep",
+      name:        "NeoSleep",
       shortName:   "NeoSleep",
       description: "Sales rep CRM for NeoSleep — manage HCPs, leads, and post-call forms.",
       startUrl:    "/",

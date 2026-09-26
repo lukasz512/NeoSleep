@@ -80,6 +80,8 @@ export interface PendingRequest {
   id: string;
   items: string[];
   completed_items: string[];
+  /** When the patient first opened the link; null until then (NEO-110). */
+  opened_at: string | null;
   expires_at: string;
   /** Only right after creation — never stored, so it can't be re-shown later. */
   url?: string;
@@ -89,6 +91,8 @@ export interface PatientChecklist {
   items: ChecklistItem[];
   other_uploads: ChecklistHistoryEntry[];
   pending_requests: PendingRequest[];
+  /** The newest link when it ran out unused — the QR button's "link expired" state (NEO-93). */
+  expired_request: PendingRequest | null;
   summary: { done: number; total: number };
 }
 

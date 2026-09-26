@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "NODE_OPTIONS='--require=./vitest-crypto-polyfill.cjs' vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "icons:generate": "node scripts/generate-pwa-icons.mjs"
   },
   "dependencies": {
     "@neo/api-client": "workspace:*",

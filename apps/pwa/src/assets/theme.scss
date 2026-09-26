@@ -205,7 +205,8 @@ $pwa-fib-t-3xl: 987ms;
  * The app reads as white record sheets lying on a quiet desk:
  * - desk: the chrome (app bar + side menu) and everything behind the sheet;
  * - sheet: the routed content (AppLayout .layout-main__inner) and dialogs,
- *   with a layered soft shadow and two offset sheets peeking out under it;
+ *   with a layered soft shadow (NEO-97: the two sheets that peeked out
+ *   under it were dropped — one clean sheet reads calmer);
  * - rule: list rows are ruled hairlines, the column header a stronger rule.
  * Every tint mixes from --pwa-primary, which config.ts overrides at runtime
  * with the tenant's own colour, so a white-label tenant gets its own hue.
@@ -214,8 +215,6 @@ $pwa-fib-t-3xl: 987ms;
   --pwa-desk: color-mix(in srgb, var(--pwa-primary) 5%, #ebeeed);
   --pwa-sheet: rgb(var(--v-theme-surface));
   --pwa-sheet-radius: 16px;
-  --pwa-sheet-peek-1: #fbfcfc;
-  --pwa-sheet-peek-2: #f4f7f6;
   --pwa-sheet-edge: rgb(16 48 45 / 0.08);
   --pwa-sheet-ring: rgb(16 48 45 / 0.05);
   --pwa-sheet-soft: 0 1px 1px rgb(16 48 45 / 0.05), 0 10px 28px -12px rgb(16 48 45 / 0.2), 0 36px 24px -24px rgb(16 48 45 / 0.16);
@@ -229,25 +228,14 @@ $pwa-fib-t-3xl: 987ms;
   --pwa-ease-emphasized-decel: cubic-bezier(0.05, 0.7, 0.1, 1);
   --pwa-ease-emphasized-accel: cubic-bezier(0.3, 0, 0.8, 0.15);
 }
-/* The sheets under a sheet are extra box-shadow layers (offset down, negative
-   spread = narrower than the sheet), so they need no extra elements, follow
-   the radius, and can't be clipped or mis-stacked. First layer paints on top:
-   ring, sheet 2 + its edge, sheet 3 + its edge, then the soft drop shadow. */
+/* Ring + soft drop shadow; a dialog uses the same ring with a deeper shadow. */
 :root,
 [data-theme="dark"] {
-  --pwa-sheet-shadow:
-    0 0 0 1px var(--pwa-sheet-ring),
-    0 16px 0 -10px var(--pwa-sheet-peek-1), 0 16px 0 -9px var(--pwa-sheet-edge),
-    0 32px 0 -21px var(--pwa-sheet-peek-2), 0 32px 0 -20px var(--pwa-sheet-edge),
-    var(--pwa-sheet-soft);
-  /* A dialog is a single sheet lifted off the desk — no sheets under it
-     (Łukasz, 2026-09-26: the stack stays on the page only). */
+  --pwa-sheet-shadow: 0 0 0 1px var(--pwa-sheet-ring), var(--pwa-sheet-soft);
   --pwa-dialog-shadow: 0 0 0 1px var(--pwa-sheet-ring), var(--pwa-dialog-soft);
 }
 [data-theme="dark"] {
   --pwa-desk: color-mix(in srgb, var(--pwa-primary) 6%, #0f1211);
-  --pwa-sheet-peek-1: #1c1f1e;
-  --pwa-sheet-peek-2: #181b1a;
   --pwa-sheet-edge: rgb(255 255 255 / 0.06);
   --pwa-sheet-ring: rgb(255 255 255 / 0.05);
   --pwa-sheet-soft: 0 12px 32px -12px rgb(0 0 0 / 0.6);
@@ -423,6 +411,11 @@ body {
 }
 .v-field--variant-outlined.v-field--focused .v-field__outline {
   color: rgb(var(--v-theme-primary));
+}
+/* M3 error state: the border goes `error` too (focused or not). The rule
+   above used to win over Vuetify's own, leaving only the label red (NEO-109). */
+.v-field--variant-outlined.v-field--error .v-field__outline {
+  color: rgb(var(--v-theme-error));
 }
 /* NEO-85: a soft brand halo around the focused field, fading in with it. */
 .v-field--variant-outlined {
@@ -670,8 +663,8 @@ body {
 }
 /* Phone form dialogs (AppFormDialog, < 600px): an M3 bottom sheet — full
    width, attached to the bottom edge, only the top corners rounded, clear of
-   the home indicator. No sheet peeks out under it (it sits on the screen
-   edge), so its shadow only rises upward. max-width must beat VDialog's
+   the home indicator. It sits on the screen edge, so its shadow only rises
+   upward. max-width must beat VDialog's
    inline `max-width`, hence the !important. */
 .pwa-form-dialog--sheet {
   align-items: flex-end;
@@ -689,13 +682,139 @@ body {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-/* M3: a divider appears under the header / above the actions only while
-   content is actually scrolled behind it (AppFormDialog toggles these). */
+/*
+ * Content scrolled behind the header / actions fades out over
+ * --pwa-dialog-fade instead of running into a hairline (NEO-92). The old M3
+ * divider sat on the very edge of the scroller, so a scrolled outlined
+ * field's floating label ("Apellido") ended up touching it — and the header
+ * with it. The mask belongs to the scroller's own box, not its content, so
+ * whatever scrolls up is already invisible by the time it reaches the edge.
+ * AppFormDialog toggles the two classes; e2e/dialog-scroll.spec.ts measures.
+ */
+:root {
+  --pwa-dialog-fade: 20px;
+}
 .pwa-form-dialog__body--scrolled {
-  border-top-color: rgb(var(--v-theme-outline-variant)) !important;
+  --pwa-fade-top: var(--pwa-dialog-fade);
 }
 .pwa-form-dialog__body--more {
-  border-bottom-color: rgb(var(--v-theme-outline-variant)) !important;
+  --pwa-fade-bottom: var(--pwa-dialog-fade);
+}
+.pwa-form-dialog__body:is(.pwa-form-dialog__body--scrolled, .pwa-form-dialog__body--more) {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--pwa-fade-top, 0px),
+    #000 calc(100% - var(--pwa-fade-bottom, 0px)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--pwa-fade-top, 0px),
+    #000 calc(100% - var(--pwa-fade-bottom, 0px)),
+    transparent 100%
+  );
+}
+
+/*
+ * "Carpeta" form folder (NEO-92, variant C of the 2026-09-26 proposal): a
+ * form with two or more sections opens as a folder — a spine on the left
+ * (record identity + section index, FormFolderSpine.vue) and the page on the
+ * right (header, one sheet with a heading per section, actions). The card is
+ * a grid so the page keeps the exact header/body/actions rules above; only
+ * the body row flexes, so it alone scrolls. Phones keep the bottom sheet and
+ * show the index as chips (FormSectionChips.vue) instead of a spine.
+ */
+:root {
+  --pwa-folder-spine: 236px;
+}
+.pwa-form-dialog__card--folder {
+  display: grid !important;
+  grid-template-columns: var(--pwa-folder-spine) minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+.pwa-form-dialog__card--folder > * {
+  grid-column: 2;
+}
+.pwa-form-dialog__card--folder > .pwa-form-dialog__spine {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* Mixed here, not on :root — the theme's surface var lives on the themed element. */
+  background: color-mix(in srgb, var(--pwa-primary) 7%, rgb(var(--v-theme-surface)));
+  box-shadow: inset -1px 0 0 var(--pwa-sheet-edge);
+}
+.pwa-form-dialog__card--folder > .app-dialog-header {
+  grid-row: 1;
+}
+.pwa-form-dialog__card--folder > .pwa-form-dialog__body {
+  grid-row: 3;
+}
+.pwa-form-dialog__card--folder > .pwa-form-dialog__actions {
+  grid-row: 4;
+}
+
+/* Sections: fields keep the 16dp rhythm inside, a heading with a ruled line
+   opens each one, and sections sit a clear step further apart. */
+.pwa-form-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pwa-dialog-field-gap);
+}
+.pwa-form-section > * {
+  margin-bottom: 0 !important;
+}
+.pwa-form-section--titled + .pwa-form-section--titled {
+  margin-top: 20px;
+}
+.pwa-form-section__title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.005em;
+  color: rgb(var(--v-theme-on-surface));
+}
+/* Error count on a section heading, after a failed Save (NEO-109). */
+.pwa-form-section__errors {
+  min-width: 22px;
+  padding: 1px 8px;
+  border-radius: 99px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: center;
+  color: rgb(var(--v-theme-error));
+  background: rgba(var(--v-theme-error), 0.1);
+}
+.pwa-form-section__title::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--pwa-rule);
+}
+
+/* "Unsaved changes: 2" on the left of the actions row (NEO-92). */
+.pwa-form-dialog__changes {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+.pwa-form-dialog__changes-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgb(var(--v-theme-warning));
 }
 /*
  * M3 dialog spacing (m3.material.io/components/dialogs/specs), one system for
@@ -769,8 +888,16 @@ body {
  * together, VDialog's own `class` prop), not `.pwa-form-dialog__content`,
  * which only reaches the inner content div.
  */
-.pwa-form-dialog {
+.pwa-form-dialog,
+.install-card-overlay {
   z-index: 10000 !important;
+}
+
+/* The install card (NEO-87) opens by itself; Vuetify then moves focus into
+   its content wrapper, and the global :focus-visible ring drew a teal frame
+   around a card nobody tabbed to. The buttons inside keep their own ring. */
+.install-card-overlay > .v-overlay__content:focus-visible {
+  outline: none;
 }
 
 /*
@@ -813,6 +940,9 @@ body {
   display: flex;
   gap: 16px;
   flex-wrap: wrap;
+  /* Top-aligned, not stretched: an error message under one field must not
+     grow its neighbour (e.g. the sex toggle beside the birth date, NEO-109). */
+  align-items: flex-start;
 }
 .pwa-form-row-item {
   flex: 1 1 180px;

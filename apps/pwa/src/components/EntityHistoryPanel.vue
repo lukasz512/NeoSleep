@@ -1,10 +1,8 @@
 <template>
   <div class="entity-history-panel">
-    <VAlert
+    <AppInlineAlert
       v-if="history?.lead_source"
       type="info"
-      variant="tonal"
-      density="comfortable"
       class="entity-history-panel__lead-source"
       :text="t('app.patients.detail.history.leadSource', { source: history.lead_source.source || t('app.patients.detail.history.unknownSource') })"
     />
@@ -210,6 +208,7 @@ import {
   type HistoryFieldChange,
   type HistoryValueLookups,
 } from "../utils/historyLabels";
+import { AppInlineAlert } from "@ui";
 
 /**
  * Generic history/audit-trail panel — entity-type-agnostic on purpose (props:

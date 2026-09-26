@@ -221,6 +221,20 @@ whether it's a table cell, a mobile card line, a detail panel or a note author. 
     content sheet named, so the bar and menu never move; browsers without it keep the old
     `view-fade-lift`. Don't wrap the routed view in a CSS-less `<Transition>` where View
     Transitions run: the synchronous swap made Vue throw and the list stayed empty after Back.
+  - "Carpeta" form folder (NEO-92, 2026-09-26, variant C picked from a live proposal): a
+    FormRenderer form whose fields span ≥ 2 sections (`FormFieldDef.section`, labels
+    `app.formRenderer.section.*`) opens as a folder. A tinted spine on the left
+    (`FormFolderSpine.vue`) holds the avatar, the live name, the record header's detail line
+    (`useIdentity().detailsFor`), the status pill and a scroll-spy section index. The page on
+    the right holds the title + X, one sheet with a ruled heading per section, and the actions
+    with an "Unsaved changes: n" counter. Sections with unsaved changes get a warning-colour
+    dot. The spine is desktop-only (≥ 960px). Tablets (600–959px, decided 2026-09-26: "like
+    mobile but still on a tile") keep a floating tile and phones the bottom sheet; both show the
+    index as chips under the header (`FormSectionChips.vue`).
+    Create and edit are the same view. Content scrolled behind the header or the actions fades
+    out over `--pwa-dialog-fade` (20px, a mask on the body) instead of meeting a hairline:
+    the hairline let a floating field label touch the header. No serif (decided); hierarchy
+    comes from weight and size.
   - Phone list toolbar: three icons (search, filter, add); focused search grows over the row
     while the others step aside; a query left behind stays as a tinted pill on the left.
   - Dialog scroll model: the dialog is capped at the viewport, header and actions stay pinned,

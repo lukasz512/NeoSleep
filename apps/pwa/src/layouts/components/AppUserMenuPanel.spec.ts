@@ -1,10 +1,11 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
+import { mount, type VueWrapper } from "@vue/test-utils";
 import { createI18n } from "vue-i18n";
 import { createVuetify } from "vuetify";
 import * as vuetifyComponents from "vuetify/components";
 import * as vuetifyDirectives from "vuetify/directives";
 import en from "@i18n/en.json";
+import type { ThemePreference } from "@stores";
 import AppUserMenuPanel from "./AppUserMenuPanel.vue";
 
 const mountedWrappers: VueWrapper[] = [];
@@ -14,12 +15,30 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-function mountPanel(props: { theme: "light" | "dark"; locale: string; drawer?: boolean }) {
+function mountPanel(overrides: Partial<{
+  themePreference: ThemePreference;
+  canChangePassword: boolean;
+  channel: string | null;
+  version: string;
+  sheet: boolean;
+}> = {}) {
   const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
   const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
 
   const wrapper = mount(AppUserMenuPanel, {
-    props,
+    props: {
+      name: "Ana López",
+      email: "ana.lopez@clinic.mx",
+      roleLabel: "Administrator",
+      initials: "AL",
+      region: "MX",
+      themePreference: "system",
+      locale: "en",
+      canChangePassword: true,
+      version: "Version 1.0.0 (build 105)",
+      channel: "DEV",
+      ...overrides,
+    },
     global: { plugins: [i18n, vuetify] },
     attachTo: document.body,
   });
@@ -27,54 +46,80 @@ function mountPanel(props: { theme: "light" | "dark"; locale: string; drawer?: b
   return wrapper;
 }
 
-describe("AppUserMenuPanel — NEO-9 icon-based account menu", () => {
-  it("renders exactly 3 icon buttons (theme, language, logout), not text rows", () => {
-    const wrapper = mountPanel({ theme: "light", locale: "en" });
-    expect(wrapper.findAll(".layout-app__user-menu-icon-btn")).toHaveLength(3);
-    // No leftover text-row/select markup from the old layout.
-    expect(wrapper.find(".v-select").exists()).toBe(false);
+function choices(wrapper: VueWrapper, testid: string) {
+  return wrapper.get(`[data-testid="${testid}"]`).findAll('[role="radio"]');
+}
+
+describe("AppUserMenuPanel — NEO-102 account menu (icon rows + action pair)", () => {
+  it("shows who is signed in: name, email, role and region", () => {
+    const text = mountPanel().text();
+    expect(text).toContain("Ana López");
+    expect(text).toContain("ana.lopez@clinic.mx");
+    expect(text).toContain("Administrator");
+    expect(text).toContain("MX");
   });
 
-  it("theme button shows the interpolated tooltip text as its aria-label and toggles theme on click", async () => {
-    const wrapper = mountPanel({ theme: "light", locale: "en" });
-    const themeBtn = wrapper.get('[aria-label="Theme: Light. Click for Dark"]');
-    await themeBtn.trigger("click");
-    expect(wrapper.emitted("toggle-theme")).toHaveLength(1);
-    expect(wrapper.emitted("close")).toHaveLength(1);
+  it("theme is three icons (Light / Dark / Auto), named for screen readers, the current one checked", () => {
+    const options = choices(mountPanel({ themePreference: "system" }), "user-menu-theme");
+    expect(options.map((o) => o.attributes("aria-label"))).toEqual(["Light", "Dark", "Auto"]);
+    expect(options.every((o) => o.find("svg.app-icon").exists())).toBe(true);
+    expect(options.map((o) => o.attributes("aria-checked"))).toEqual(["false", "false", "true"]);
   });
 
-  it("logout button emits logout and close on click", async () => {
-    const wrapper = mountPanel({ theme: "light", locale: "en" });
-    const logoutBtn = wrapper.get('[aria-label="Log out"]');
-    await logoutBtn.trigger("click");
-    expect(wrapper.emitted("logout")).toHaveLength(1);
-    expect(wrapper.emitted("close")).toHaveLength(1);
+  it("picking a theme emits set-theme and keeps the menu open", async () => {
+    const wrapper = mountPanel();
+    await choices(wrapper, "user-menu-theme")[1]!.trigger("click");
+    expect(wrapper.emitted("set-theme")?.[0]).toEqual(["dark"]);
+    expect(wrapper.emitted("close")).toBeUndefined();
   });
 
-  it("language button opens a menu listing all 3 languages; picking one emits change-locale and close", async () => {
-    const wrapper = mountPanel({ theme: "light", locale: "en" });
-    const langBtn = wrapper.get('[aria-label="Language"]');
-    await langBtn.trigger("click");
-    await flushPromises();
-
-    const items = Array.from(document.querySelectorAll(".v-list-item")).map((el) => el.textContent ?? "");
-    expect(items).toHaveLength(3);
-    expect(items.some((text) => text.includes("Polish"))).toBe(true);
-    expect(items.some((text) => text.includes("Spanish"))).toBe(true);
-    expect(items.some((text) => text.includes("English"))).toBe(true);
-
-    const plItem = Array.from(document.querySelectorAll(".v-list-item")).find((el) =>
-      (el.textContent ?? "").includes("Polish"),
-    );
-    (plItem as HTMLElement).click();
-    await flushPromises();
-
+  it("language is three flags (SVG, not emoji) named in each language's own name; picking one emits change-locale and close", async () => {
+    const wrapper = mountPanel();
+    const options = choices(wrapper, "user-menu-language");
+    expect(options.map((o) => o.attributes("aria-label"))).toEqual(["English", "Polski", "Español (MX)"]);
+    expect(options.every((o) => o.find("svg.app-flag").exists())).toBe(true);
+    expect(options[0]!.attributes("aria-checked")).toBe("true");
+    await options[1]!.trigger("click");
     expect(wrapper.emitted("change-locale")?.[0]).toEqual(["pl"]);
     expect(wrapper.emitted("close")).toHaveLength(1);
   });
 
-  it("applies the drawer BEM modifier class when the drawer prop is set (mobile usage)", () => {
-    const wrapper = mountPanel({ theme: "dark", locale: "en", drawer: true });
-    expect(wrapper.find(".layout-app__mobile-drawer-user-menu").exists()).toBe(true);
+  it("password and log out are a matching pair of buttons", async () => {
+    const wrapper = mountPanel({ canChangePassword: true });
+    const password = wrapper.get('[data-testid="user-menu-change-password"]');
+    const logout = wrapper.get('[data-testid="user-menu-logout"]');
+    expect(password.classes()).toContain("user-menu__action");
+    expect(logout.classes()).toContain("user-menu__action");
+    expect(password.text()).toBe("Password");
+    expect(password.attributes("aria-label")).toBe("Change password");
+    expect(logout.text()).toContain("Log out");
+
+    await password.trigger("click");
+    expect(wrapper.emitted("change-password")).toHaveLength(1);
+    await logout.trigger("click");
+    expect(wrapper.emitted("logout")).toHaveLength(1);
+    expect(wrapper.emitted("close")).toHaveLength(2);
+  });
+
+  it("a Google-only account gets no password button, and log out spans the row", () => {
+    const wrapper = mountPanel({ canChangePassword: false });
+    expect(wrapper.find('[data-testid="user-menu-change-password"]').exists()).toBe(false);
+    expect(wrapper.find(".user-menu__actions--single").exists()).toBe(true);
+  });
+
+  it("ends with the app version, plus the channel tag on non-prod builds only", () => {
+    const dev = mountPanel().get('[data-testid="user-menu-version"]');
+    expect(dev.text()).toContain("Version 1.0.0 (build 105)");
+    expect(dev.text()).toContain("DEV");
+
+    const prod = mountPanel({ channel: null }).get('[data-testid="user-menu-version"]');
+    expect(prod.text()).not.toContain("DEV");
+
+    expect(mountPanel({ version: "" }).find('[data-testid="user-menu-version"]').exists()).toBe(false);
+  });
+
+  it("uses the full-width bottom-sheet look on phones", () => {
+    expect(mountPanel({ sheet: true }).find(".user-menu--sheet").exists()).toBe(true);
+    expect(mountPanel({ sheet: false }).find(".user-menu--sheet").exists()).toBe(false);
   });
 });

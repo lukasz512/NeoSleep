@@ -22,6 +22,7 @@ vi.mock("../../composables/useNotifications", () => ({
 import "../FormRenderer.vue";
 import { useAuthStore } from "../../stores/auth";
 import PatientStudiesPanel from "./PatientStudiesPanel.vue";
+import QuestionnaireQrDialog from "../questionnaire/QuestionnaireQrDialog.vue";
 
 function jsonResponse(ok: boolean, status: number, body: unknown, contentType = "application/json") {
   return {
@@ -50,8 +51,10 @@ const item = (key: string, group: string, status: string, over: Record<string, u
 });
 
 let checklistBody: Record<string, unknown>;
+let failCreate = false;
 
 beforeEach(() => {
+  failCreate = false;
   checklistBody = {
     items: [
       item("informedConsent", "consent", "missing", { actions: actions({ qr: true }) }),
@@ -93,7 +96,8 @@ beforeEach(() => {
     if (path.endsWith("/checklist")) return jsonResponse(true, 200, structuredClone(checklistBody));
     if (path.endsWith("/print")) return jsonResponse(true, 200, null, "application/pdf");
     if (path.endsWith("/questionnaire-requests") && init?.method === "POST") {
-      const created = { id: "qr-1", items: ["informedConsent", "stopBang"], completed_items: [], expires_at: "2026-09-26T10:00:00Z" };
+      if (failCreate) return jsonResponse(false, 500, { error: "boom" });
+      const created = { id: "qr-1", items: ["informedConsent", "stopBang"], completed_items: [], opened_at: null, expires_at: new Date(Date.now() + 86_400_000).toISOString() };
       (checklistBody.pending_requests as unknown[]).push(created);
       return jsonResponse(true, 201, { ...created, url: `https://pwa.test/q#${"b".repeat(43)}` });
     }
@@ -251,8 +255,112 @@ describe("PatientStudiesPanel — the Estudios checklist", () => {
     const [, init] = apiFetch.mock.calls.find(([path, i]) => String(path).endsWith("/questionnaire-requests") && (i as RequestInit)?.method === "POST")!;
     expect(JSON.parse((init as RequestInit).body as string)).toEqual({}); // no items → everything still missing
     await vi.waitFor(() => expect(document.body.querySelector(".qr-dialog__code")).not.toBeNull());
-    expect(document.body.textContent).toContain("0 of 2 steps done");
-    expect(wrapper.text()).toContain("Waiting for the patient");
+    // The dialog carries no tracking of its own (NEO-110) — only the button does.
+    expect(document.body.querySelector(".qr-dialog__body")?.textContent).not.toContain("steps done");
+    // The QR button itself now carries the status (NEO-93) — no separate banner.
+    const status = wrapper.find(".qr-status");
+    expect(status.attributes("data-state")).toBe("waiting");
+    expect(status.text()).toContain("Waiting for the patient");
+    expect(status.text()).toMatch(/0 of 2 · expires in (23:59:5\d|24:00:00)/);
+    expect(wrapper.find(".studies__pending").exists()).toBe(false);
+  });
+
+  it("tapping the button while the link is live opens its details, and only 'Show QR again' there issues a new link", async () => {
+    const wrapper = await mountPanel();
+    await button(wrapper, "QR for the patient")!.trigger("click");
+    await flushPromises();
+    const posts = () => apiFetch.mock.calls.filter(([path, i]) => String(path).endsWith("/questionnaire-requests") && (i as RequestInit)?.method === "POST").length;
+    expect(posts()).toBe(1);
+
+    await wrapper.find(".qr-status__main").trigger("click");
+    await flushPromises();
+    await vi.waitFor(() => expect(document.body.querySelector(".qr-status__menu")).not.toBeNull());
+    expect(posts()).toBe(1); // opening the details never kills the patient's link
+    expect(wrapper.find(".qr-status__main").attributes("aria-expanded")).toBe("true");
+
+    const showAgain = [...document.body.querySelectorAll(".qr-status__menu button")].find((b) => b.textContent?.includes("Show QR again")) as HTMLButtonElement;
+    showAgain.click();
+    await flushPromises();
+    expect(posts()).toBe(2);
+  });
+
+  it("a link that ran out unused shows 'New QR · Link expired …', and pressing it creates a fresh link", async () => {
+    checklistBody.expired_request = { id: "qr-0", items: ["informedConsent", "stopBang"], completed_items: [], expires_at: "2026-09-20T10:00:00Z" };
+    const wrapper = await mountPanel();
+    const status = wrapper.find(".qr-status");
+    expect(status.attributes("data-state")).toBe("expired");
+    expect(status.text()).toContain("New QR");
+    expect(status.text()).toContain("Link expired");
+
+    checklistBody.expired_request = null;
+    await button(wrapper, "New QR")!.trigger("click");
+    await flushPromises();
+    expect(apiFetch.mock.calls.some(([path, i]) => String(path).endsWith("/questionnaire-requests") && (i as RequestInit)?.method === "POST")).toBe(true);
+    expect(wrapper.find(".qr-status").attributes("data-state")).toBe("waiting");
+  });
+
+  it("a failed link turns the QR button into Retry, and Retry creates the link", async () => {
+    failCreate = true;
+    const wrapper = await mountPanel();
+    await button(wrapper, "QR for the patient")!.trigger("click");
+    await flushPromises();
+    expect(wrapper.find(".qr-status").attributes("data-state")).toBe("error");
+    expect(wrapper.find(".qr-status").text()).toContain("Retry");
+
+    failCreate = false;
+    await button(wrapper, "Retry")!.trigger("click");
+    await flushPromises();
+    expect(wrapper.find(".qr-status").attributes("data-state")).toBe("waiting");
+  });
+
+  it("the QR dialog closes itself once the patient opens the link, and the button keeps refreshing (NEO-110)", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const wrapper = await mountPanel();
+      await button(wrapper, "QR for the patient")!.trigger("click");
+      await flushPromises();
+      expect(wrapper.findComponent(QuestionnaireQrDialog).props("modelValue")).toBe(true);
+
+      await vi.advanceTimersByTimeAsync(15_000);
+      await flushPromises();
+      expect(wrapper.findComponent(QuestionnaireQrDialog).props("modelValue")).toBe(true); // not opened yet
+
+      const pending = checklistBody.pending_requests as { opened_at: string | null; completed_items: string[] }[];
+      pending[0]!.opened_at = new Date().toISOString();
+      await vi.advanceTimersByTimeAsync(15_000);
+      await flushPromises();
+      expect(wrapper.findComponent(QuestionnaireQrDialog).props("modelValue")).toBe(false);
+
+      pending[0]!.completed_items = ["informedConsent"];
+      await vi.advanceTimersByTimeAsync(15_000);
+      await flushPromises();
+      expect(wrapper.find(".qr-status").text()).toContain("1 of 2");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("the link leaving the pending list (patient finished) shows 'All received', then the button hides when nothing is left", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const wrapper = await mountPanel();
+      await button(wrapper, "QR for the patient")!.trigger("click");
+      await flushPromises();
+
+      // The patient completes both steps: the link is used, and nothing is left to send.
+      const body = checklistBody as { items: { key: string; status: string }[]; pending_requests: unknown[] };
+      body.pending_requests = [];
+      for (const it of body.items) if (it.status === "missing" || it.status === "pending_patient") it.status = "done";
+      await vi.advanceTimersByTimeAsync(15_000); // the panel's own refresh while the link is live
+      await flushPromises();
+      expect(wrapper.find(".qr-status").attributes("data-state")).toBe("done");
+      expect(wrapper.find(".qr-status").text()).toContain("All received");
+
+      await vi.advanceTimersByTimeAsync(2300);
+      expect(wrapper.find(".qr-status").exists()).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("'Upload file' on a row preselects that item in the Add-study dialog", async () => {

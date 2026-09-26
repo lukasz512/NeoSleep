@@ -6,6 +6,20 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <title>NeoSleep PWA</title>
+    <link rel="icon" href="/favicon.ico" sizes="32x32 48x48" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="theme-color" content="#128F83" />
+    <meta name="apple-mobile-web-app-title" content="NeoSleep" />
+    <!-- NEO-87: Chrome fires beforeinstallprompt once per page load, and on a
+         repeat visit (service worker already active) it can fire before the
+         app bundle has run. Catch it here, first thing; main.ts picks it up
+         (composables/useInstallPrompt.ts). -->
+    <script>
+      window.addEventListener("beforeinstallprompt", function (e) {
+        e.preventDefault();
+        window.__neoInstallPrompt = e;
+      });
+    </script>
     <!-- Cascade-layer order (Vuetify 4). Must be declared before any CSS
          loads: Vuetify's component styles are imported per component and can
          otherwise reach the page before vuetify/styles, which would put the

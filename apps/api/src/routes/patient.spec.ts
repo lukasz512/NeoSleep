@@ -235,6 +235,80 @@ describe("patient self-fill: doctor → QR link → patient (public) → doctor"
       .send({ token, step: "medicalHistory", consent: true, answers: Object.fromEntries(MEDICAL_HISTORY_QUESTIONS.map((q) => [q, false])) });
     expect(submit.status).toBe(410);
   });
+
+  it("a new link retires every other pending link of the patient, even for different items (NEO-93)", async () => {
+    const { auth, patientId } = await authAndPatient();
+    const first = await request(app).post(`/api/v1/patient/${patientId}/questionnaire-requests`).set("Authorization", auth).send({ kind: "medical_history" });
+    const second = await request(app).post(`/api/v1/patient/${patientId}/questionnaire-requests`).set("Authorization", auth).send({ kind: "stop_bang" });
+    expect([first.status, second.status]).toEqual([201, 201]);
+
+    const checklist = await request(app).get(`/api/v1/patient/${patientId}/checklist`).set("Authorization", auth);
+    expect(checklist.body.pending_requests.map((r: { id: string }) => r.id)).toEqual([second.body.id]);
+
+    const oldToken = String(first.body.url).split("/q#")[1];
+    const lookup = await request(app).post("/api/v1/public/questionnaire/lookup").send({ token: oldToken });
+    expect(lookup.status).toBe(410);
+  });
+
+  it("the patient opening the link stamps opened_at once, and the checklist shows it (NEO-110)", async () => {
+    const { auth, patientId } = await authAndPatient();
+    const link = await request(app).post(`/api/v1/patient/${patientId}/questionnaire-requests`).set("Authorization", auth).send({ kind: "medical_history" });
+    const pending = async () => (await request(app).get(`/api/v1/patient/${patientId}/checklist`).set("Authorization", auth)).body.pending_requests[0];
+    expect((await pending()).opened_at).toBeNull();
+
+    const token = String(link.body.url).split("/q#")[1];
+    expect((await request(app).post("/api/v1/public/questionnaire/lookup").send({ token })).status).toBe(200);
+    const firstOpen = (await pending()).opened_at;
+    expect(firstOpen).toEqual(expect.any(String));
+
+    await request(app).post("/api/v1/public/questionnaire/lookup").send({ token });
+    expect((await pending()).opened_at).toBe(firstOpen); // reopening keeps the first time
+  });
+
+  it("the checklist reports a link that ran out unused as expired_request, until a newer link supersedes it (NEO-93)", async () => {
+    const { auth, patientId } = await authAndPatient();
+    const link = await request(app).post(`/api/v1/patient/${patientId}/questionnaire-requests`).set("Authorization", auth).send({ kind: "medical_history" });
+    await withTenant(TENANT_SLUG, (client) => client.query(`UPDATE questionnaire_request SET expires_at = now() - interval '1 hour' WHERE id = $1`, [link.body.id]));
+
+    const expired = await request(app).get(`/api/v1/patient/${patientId}/checklist`).set("Authorization", auth);
+    expect(expired.body.pending_requests).toEqual([]);
+    expect(expired.body.expired_request).toMatchObject({ id: link.body.id, status: "expired" });
+
+    const fresh = await request(app).post(`/api/v1/patient/${patientId}/questionnaire-requests`).set("Authorization", auth).send({ kind: "medical_history" });
+    const after = await request(app).get(`/api/v1/patient/${patientId}/checklist`).set("Authorization", auth);
+    expect(after.body.expired_request).toBeNull();
+    expect(after.body.pending_requests.map((r: { id: string }) => r.id)).toEqual([fresh.body.id]);
+  });
+
+  it("a cancelled link is not reported as expired", async () => {
+    const { auth, patientId } = await authAndPatient();
+    const link = await request(app).post(`/api/v1/patient/${patientId}/questionnaire-requests`).set("Authorization", auth).send({ kind: "medical_history" });
+    await request(app).delete(`/api/v1/patient/${patientId}/questionnaire-requests/${link.body.id}`).set("Authorization", auth);
+    await withTenant(TENANT_SLUG, (client) => client.query(`UPDATE questionnaire_request SET expires_at = now() - interval '1 hour' WHERE id = $1`, [link.body.id]));
+
+    const checklist = await request(app).get(`/api/v1/patient/${patientId}/checklist`).set("Authorization", auth);
+    expect(checklist.body.expired_request).toBeNull();
+  });
+
+  it("creating a link deletes the tenant's links that died over 30 days ago, and keeps younger ones (NEO-93)", async () => {
+    const old = await authAndPatient();
+    const recent = await authAndPatient();
+    const oldLink = await request(app).post(`/api/v1/patient/${old.patientId}/questionnaire-requests`).set("Authorization", old.auth).send({ kind: "medical_history" });
+    const recentLink = await request(app).post(`/api/v1/patient/${recent.patientId}/questionnaire-requests`).set("Authorization", recent.auth).send({ kind: "medical_history" });
+    await withTenant(TENANT_SLUG, async (client) => {
+      await client.query(`UPDATE questionnaire_request SET expires_at = now() - interval '31 days' WHERE id = $1`, [oldLink.body.id]);
+      await client.query(`UPDATE questionnaire_request SET expires_at = now() - interval '29 days' WHERE id = $1`, [recentLink.body.id]);
+    });
+
+    const other = await authAndPatient();
+    const created = await request(app).post(`/api/v1/patient/${other.patientId}/questionnaire-requests`).set("Authorization", other.auth).send({ kind: "medical_history" });
+    expect(created.status).toBe(201);
+
+    const left = await withTenant(TENANT_SLUG, (client) =>
+      client.query<{ id: string }>(`SELECT id FROM questionnaire_request WHERE id = ANY($1::uuid[])`, [[oldLink.body.id, recentLink.body.id]])
+    );
+    expect(left.rows.map((r) => r.id)).toEqual([recentLink.body.id]);
+  });
 });
 
 describe("/api/v1/patient/:id/checklist + print + uploads (Estudios, ADR-024)", () => {
@@ -329,6 +403,15 @@ describe("patient date_of_birth (POST / PATCH / GET /api/v1/patient)", () => {
     expect(noDob.status).toBe(400);
     const noSex = await request(app).post("/api/v1/patient").set("Authorization", auth).send({ ...base(), gender: "", date_of_birth: "1968-03-12" });
     expect(noSex.status).toBe(400);
+  });
+
+  it("names the failing field in a 400, so the form can mark it (NEO-109)", async () => {
+    const auth = await adminAuth();
+    const ancient = await request(app).post("/api/v1/patient").set("Authorization", auth).send({ ...base(), date_of_birth: "0001-10-10" });
+    expect(ancient.status).toBe(400);
+    expect(ancient.body).toMatchObject({ code: "VALIDATION_ERROR", field: "date_of_birth" });
+    const badEmail = await request(app).post("/api/v1/patient").set("Authorization", auth).send({ ...base(), date_of_birth: "1968-03-12", email: "d@wp" });
+    expect(badEmail.body.field).toBe("email");
   });
 
   it("PATCH changes it, omitting it leaves it alone, clearing it (or sex) 400s", async () => {

@@ -15,6 +15,11 @@ vi.mock("../composables/useApi", async (importOriginal) => ({
 }));
 
 import PatientQuestionnaireView from "./PatientQuestionnaireView.vue";
+import { useNotifications } from "../composables/useNotifications";
+
+/** The inline alerts on screen (NEO-105) — validation lives in the form, never in a toast. */
+const alerts = (wrapper: VueWrapper) => wrapper.findAll(".app-inline-alert").map((a) => a.text());
+const toastCount = () => useNotifications().notifications.value.length;
 
 const TOKEN = "a".repeat(43);
 const SIGNATURE = "data:image/png;base64,iVBORw0KGgo=";
@@ -53,6 +58,7 @@ afterEach(() => {
   for (const w of mounted.splice(0)) w.unmount();
   apiFetch.mockReset();
   signed = false;
+  useNotifications().notifications.value = [];
   localStorage.clear(); // unsent-answer drafts must not leak from one test into the next
 });
 
@@ -112,12 +118,24 @@ describe("PatientQuestionnaireView (public QR self-fill)", () => {
     // The medical history is one list (14 plain yes/no questions), not cards.
     expect(buttonWithText(wrapper, "No")).toHaveLength(14);
 
+    // Send stays locked until every question is answered and consent is ticked; a tap says what's missing.
+    const send = () => wrapper.find("button[type='submit']");
+    expect(send().attributes("aria-disabled")).toBe("true");
     await wrapper.find("input[type='checkbox']").setValue(true);
+    expect(send().attributes("aria-disabled")).toBe("true");
     await wrapper.find("form").trigger("submit");
-    expect(wrapper.text()).toContain("Please answer every question.");
+    expect(alerts(wrapper)).toEqual(["Unanswered questions: 14Answer every question to send.Go to the first one"]);
+    expect(toastCount()).toBe(0); // inline in the form, not a toast
     expect(apiFetch).toHaveBeenCalledTimes(1); // only the initial lookup
 
     for (const no of buttonWithText(wrapper, "No")) await no.trigger("click");
+    await wrapper.find("input[type='checkbox']").setValue(false);
+    await wrapper.find("form").trigger("submit");
+    expect(alerts(wrapper)).toEqual(["Tick the consent box above to send."]);
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+
+    await wrapper.find("input[type='checkbox']").setValue(true);
+    expect(send().attributes("aria-disabled")).toBe("false");
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 201, { step: "medicalHistory", completed: true }));
     await wrapper.find("form").trigger("submit");
     await flushPromises();
@@ -129,7 +147,7 @@ describe("PatientQuestionnaireView (public QR self-fill)", () => {
     expect(body.step).toBe("medicalHistory");
     expect(body.consent).toBe(true);
     expect(body.answers.has_diabetes).toBe(false);
-    expect(wrapper.text()).toContain("Thank you!");
+    expect(wrapper.text()).toMatch(/Thank you, (Ana|Lucía)!/);
   });
 
   it("a second link opened in the same tab (only the #fragment changes) loads the new questionnaire", async () => {
@@ -168,7 +186,7 @@ describe("PatientQuestionnaireView (public QR self-fill)", () => {
 
     // No signature yet → nothing is sent.
     await wrapper.find("form").trigger("submit");
-    expect(wrapper.text()).toContain("Sign in the box to continue.");
+    expect(alerts(wrapper)).toEqual(["Sign in the box to continue."]);
     expect(apiFetch).toHaveBeenCalledTimes(1);
 
     signed = true;
@@ -213,6 +231,6 @@ describe("PatientQuestionnaireView (public QR self-fill)", () => {
   it("a link whose steps are all done already shows the thank-you screen", async () => {
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, lookup([step("stopBang", "stop_bang", { done: true })])));
     const wrapper = await mountView();
-    expect(wrapper.text()).toContain("Thank you!");
+    expect(wrapper.text()).toMatch(/Thank you, (Ana|Lucía)!/);
   });
 });

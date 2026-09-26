@@ -2,6 +2,7 @@
   <VInput
     :model-value="modelValue"
     :rules="rules"
+    :error-messages="errorMessages"
     :disabled="disabled"
     hide-details="auto"
     class="choice-chips-field"
@@ -87,6 +88,8 @@ const props = withDefaults(
     label: string;
     items: FormFieldOption[];
     rules?: ((v: unknown) => true | string)[];
+    /** Set from outside the rules, e.g. a field the API rejected (NEO-109). */
+    errorMessages?: string | string[];
     disabled?: boolean;
   }>(),
   { modelValue: null, rules: () => [], disabled: false },

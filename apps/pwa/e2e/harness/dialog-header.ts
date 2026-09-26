@@ -11,7 +11,9 @@
  * real-length field list. `?dialog=event` mounts EventForm, `?dialog=confirm`
  * AppConfirmDialog, `?dialog=wizard` the OrthoApnea order wizard,
  * `?dialog=clinical` the medical-history questionnaire (a long checklist).
- * `?theme=dark` switches the theme. Also used by e2e/dialog-scroll.spec.ts.
+ * `?theme=dark` switches the theme. `&reject=<field>`
+ * makes the folder form's Save come back as if the API rejected that field
+ * (NEO-109, e2e/form-errors.spec.ts). Also used by e2e/dialog-scroll.spec.ts.
  */
 import { createApp, defineComponent, h } from "vue";
 import { createPinia } from "pinia";
@@ -25,10 +27,13 @@ import AppConfirmDialog from "../../src/components/AppConfirmDialog.vue";
 import OrthoApneaOrderWizard from "../../src/components/patient/OrthoApneaOrderWizard.vue";
 import ClinicalQuestionnaireDialog from "../../src/components/questionnaire/ClinicalQuestionnaireDialog.vue";
 import type { FormFieldDef } from "../../src/types/formField";
+import type { SubmitDone } from "../../src/composables/useEntitySubmit";
+import { identityFields } from "../../src/config/forms/identityFields";
 
 const params = new URLSearchParams(location.search);
 const dialog = params.get("dialog") ?? "form";
 vuetify.theme.change(params.get("theme") === "dark" ? darkTheme : lightTheme);
+const reject = params.get("reject");
 
 const fields: FormFieldDef[] = [
   { key: "first_name", type: "text", labelKey: "app.identity.form.firstName", cols: 6 },
@@ -49,9 +54,78 @@ const longFields: FormFieldDef[] = [
   { key: "notes", type: "textarea", labelKey: "app.identity.form.email" },
 ];
 
+// The "Carpeta" folder (NEO-92): a patient-shaped form spread over four
+// sections, with the real shared identity fields and static options only
+// (the API isn't running here). `?dialog=folder` edits María, `&mode=create`
+// opens the same view empty.
+const folderFields: FormFieldDef[] = [
+  ...identityFields(),
+  {
+    key: "gender",
+    type: "choice",
+    labelKey: "app.patients.form.gender",
+    section: "identity",
+    options: [
+      { title: "app.patients.form.genderFemale", value: "female" },
+      { title: "app.patients.form.genderMale", value: "male" },
+    ],
+    cols: 6,
+  },
+  { key: "date_of_birth", type: "date", labelKey: "app.patients.form.dateOfBirth", section: "identity", cols: 6 },
+  {
+    key: "status",
+    type: "select",
+    labelKey: "app.patients.form.status",
+    section: "clinical",
+    options: [
+      { title: "app.patients.filters.statusActive", value: "active", color: "success" },
+      { title: "app.patients.filters.statusFollowUp", value: "follow_up", color: "warning" },
+    ],
+    default: "active",
+    cols: 6,
+  },
+  { key: "ahi_baseline", type: "number", labelKey: "app.patients.form.ahiBaseline", section: "clinical", cols: 6 },
+  { key: "medical_record", type: "text", labelKey: "app.patients.form.medicalRecord", section: "clinical" },
+  { key: "cpap_device", type: "boolean", labelKey: "app.patients.form.cpapDevice", section: "clinical", trueValue: "CPAP", falseValue: "" },
+  { key: "region", type: "text", labelKey: "app.patients.form.region", section: "territory", cols: 6 },
+  { key: "city", type: "text", labelKey: "user.hco.form.city", section: "territory", cols: 6 },
+];
+
 const Harness = defineComponent({
   setup() {
     return () => {
+      if (dialog === "folder") {
+        const create = params.get("mode") === "create";
+        return h(FormRenderer, {
+          modelValue: true,
+          fields: folderFields,
+          initialData: create
+            ? undefined
+            : {
+                id: "p1",
+                title: "Sra.",
+                first_name: "María",
+                last_name: "Delgado Ruiz",
+                email: "maria.delgado@example.com",
+                phone: "+525512345678",
+                gender: "female",
+                date_of_birth: "1979-03-14",
+                status: "active",
+                ahi_baseline: 23.4,
+                medical_record: "HX-88213",
+                region: "CDMX",
+                city: "Benito Juárez",
+              },
+          titleKey: "app.patients.form.title",
+          editTitleKey: "app.patients.form.editTitle",
+          submitLabelKey: "app.patients.form.submit",
+          editSubmitLabelKey: "app.patients.form.editSubmit",
+          avatarEntityType: "patient",
+          // The API isn't running: Save either names a rejected field or fails plainly.
+          onSubmit: (_payload: Record<string, unknown>, done: SubmitDone) =>
+            reject ? done(false, { [reject]: `app.formRenderer.validation.server.${reject}` }) : done(false),
+        });
+      }
       if (dialog === "clinical") {
         return h(ClinicalQuestionnaireDialog, { modelValue: true, kind: "medical_history", mode: "create" });
       }

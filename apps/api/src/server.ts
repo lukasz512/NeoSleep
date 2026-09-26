@@ -26,6 +26,7 @@ import { orthoapneaStatusRouter } from "./routes/partners/orthoapnea-status.js";
 import { orthoapneaTreatmentsRouter } from "./routes/partners/orthoapnea-treatments.js";
 import { noteRouter } from "./routes/note.js";
 import { sleepStudyRouter } from "./routes/sleepStudy.js";
+import { appointmentRouter } from "./routes/appointment.js";
 import { treatmentPlanRouter } from "./routes/treatmentPlan.js";
 import { territoryRouter } from "./routes/territory.js";
 import { runMigrations, getDb } from "./db.js";
@@ -174,6 +175,7 @@ app.use("/api/v1", orthoapneaStatusRouter);
 app.use("/api/v1", orthoapneaTreatmentsRouter);
 app.use("/api/v1", noteRouter);
 app.use("/api/v1", sleepStudyRouter);
+app.use("/api/v1", appointmentRouter);
 app.use("/api/v1", treatmentPlanRouter);
 app.use("/api/v1", territoryRouter);
 

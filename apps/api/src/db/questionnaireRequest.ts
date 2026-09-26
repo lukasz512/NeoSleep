@@ -10,7 +10,9 @@ import { AppError, DatabaseError } from "../errors.js";
  * `items` are the ordered checklist keys (template keys) the link covers —
  * one for a per-item QR, several for "everything the patient has to do".
  * `completed_items` grows as the patient finishes each step; `used_at` is
- * set once every item is done, and only then is the link dead.
+ * set once every item is done, and only then is the link dead. `opened_at`
+ * is when the patient first opened it (migration 036, NEO-110) — the doctor's
+ * QR dialog closes on it.
  */
 
 export type QuestionnaireRequestKind = "medical_history" | "stop_bang" | "bundle";
@@ -22,6 +24,7 @@ export interface QuestionnaireRequest {
   kind: QuestionnaireRequestKind;
   items: string[];
   completed_items: string[];
+  opened_at: Date | null;
   expires_at: Date;
   used_at: Date | null;
   cancelled_at: Date | null;
@@ -30,7 +33,7 @@ export interface QuestionnaireRequest {
   status: QuestionnaireRequestStatus;
 }
 
-const COLS = `id, patient_id, kind, items, completed_items, expires_at, used_at, cancelled_at, created_by, created_at,
+const COLS = `id, patient_id, kind, items, completed_items, opened_at, expires_at, used_at, cancelled_at, created_by, created_at,
   CASE WHEN used_at IS NOT NULL THEN 'completed'
        WHEN cancelled_at IS NOT NULL THEN 'cancelled'
        WHEN expires_at <= now() THEN 'expired'
@@ -67,16 +70,17 @@ export function insertQuestionnaireRequest(
 }
 
 /**
- * One live link per checklist item: issuing a new link retires every
- * pending one that covers any of the same items ("show QR again" — the raw
- * token is never stored, so it can't be re-shown).
+ * One live link per patient (Łukasz, 2026-09-26, NEO-93): issuing a new
+ * link retires every pending one, whatever items it covers — the Estudios
+ * QR button shows a single link's status. Also how "show QR again" works:
+ * the raw token is never stored, so it can't be re-shown.
  */
-export function cancelPendingQuestionnaireRequests(client: PoolClient, patientId: string, items: string[]): Promise<number> {
+export function cancelPendingQuestionnaireRequests(client: PoolClient, patientId: string): Promise<number> {
   return run("cancelPendingQuestionnaireRequests", async () => {
     const result = await client.query(
       `UPDATE questionnaire_request SET cancelled_at = now()
-        WHERE patient_id = $1 AND items && $2::text[] AND used_at IS NULL AND cancelled_at IS NULL AND expires_at > now()`,
-      [patientId, items]
+        WHERE patient_id = $1 AND used_at IS NULL AND cancelled_at IS NULL AND expires_at > now()`,
+      [patientId]
     );
     return result.rowCount ?? 0;
   });
@@ -118,6 +122,13 @@ export function getUsableQuestionnaireRequestByHash(
   });
 }
 
+/** Stamps the first time the patient opened the link; later opens keep the first time. */
+export function markQuestionnaireRequestOpened(client: PoolClient, id: string): Promise<void> {
+  return run("markQuestionnaireRequestOpened", async () => {
+    await client.query(`UPDATE questionnaire_request SET opened_at = now() WHERE id = $1 AND opened_at IS NULL`, [id]);
+  });
+}
+
 /** Marks one step done; sets used_at (the link dies) once every item is done. */
 export function completeQuestionnaireStep(client: PoolClient, id: string, item: string): Promise<QuestionnaireRequest> {
   return run("completeQuestionnaireStep", async () => {
@@ -130,6 +141,37 @@ export function completeQuestionnaireStep(client: PoolClient, id: string, item: 
       [id, item]
     );
     return result.rows[0]!;
+  });
+}
+
+/**
+ * The patient's newest link, when it simply ran out (not used, not
+ * cancelled) — the Estudios QR button shows "link expired" for it (NEO-93).
+ * A newer link of any status supersedes it.
+ */
+export function getLatestExpiredQuestionnaireRequestForPatient(client: PoolClient, patientId: string): Promise<QuestionnaireRequest | null> {
+  return run("getLatestExpiredQuestionnaireRequestForPatient", async () => {
+    const result = await client.query<QuestionnaireRequest & { status: QuestionnaireRequestStatus }>(
+      `SELECT ${COLS} FROM questionnaire_request WHERE patient_id = $1 ORDER BY created_at DESC LIMIT 1`,
+      [patientId]
+    );
+    const latest = result.rows[0];
+    return latest?.status === "expired" ? latest : null;
+  });
+}
+
+/**
+ * Garbage collection (NEO-93): a link is dead 24 h after creation at the
+ * latest; keep dead rows `retentionDays` past expiry (the "expired" state,
+ * debugging), then delete them. The audit_log keeps who created which link
+ * for whom; records that came in through one keep their data (request_id →
+ * NULL). Runs tenant-wide on every new link, so garbage can only build up
+ * while links are being made — no external scheduler needed.
+ */
+export function purgeDeadQuestionnaireRequests(client: PoolClient, retentionDays: number): Promise<number> {
+  return run("purgeDeadQuestionnaireRequests", async () => {
+    const result = await client.query(`DELETE FROM questionnaire_request WHERE expires_at < now() - make_interval(days => $1)`, [retentionDays]);
+    return result.rowCount ?? 0;
   });
 }
 
