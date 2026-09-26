@@ -35,15 +35,15 @@
           </template>
         </dl>
 
-        <VAlert v-if="appointment.status === 'completed' && canBookNext" type="info" variant="tonal" density="compact" class="mt-4">
+        <AppInlineAlert v-if="appointment.status === 'completed' && canBookNext" type="info" class="mt-4">
           <div class="appointment-detail__next">
             <span>{{ t('user.appointments.detail.bookNextPrompt') }}</span>
             <AppButton size="small" color="primary" variant="flat" data-testid="appointment-book-next" @click="emit('bookNext', appointment)">
               {{ t('user.appointments.detail.bookNext') }}
             </AppButton>
           </div>
-        </VAlert>
-        <VAlert v-if="error" type="warning" variant="tonal" density="compact" class="mt-4">{{ error }}</VAlert>
+        </AppInlineAlert>
+        <AppInlineAlert v-if="error" type="warning" class="mt-4">{{ error }}</AppInlineAlert>
     </div>
 
     <!-- One layout for phone and desktop: the main outcome as a full-width button, the other three as
@@ -136,6 +136,7 @@ import AppButton from "./AppButton.vue";
 import AppIcon from "./AppIcon.vue";
 import AppFormDialog from "./AppFormDialog.vue";
 import AppConfirmDialog from "./AppConfirmDialog.vue";
+import { AppInlineAlert } from "@ui";
 
 const props = defineProps<{ modelValue: boolean; appointment: Appointment | null }>();
 const emit = defineEmits<{

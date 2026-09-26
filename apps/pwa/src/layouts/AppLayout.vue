@@ -383,10 +383,10 @@ const moduleIcon = computed(() => {
   /* NEO-85 "record stack": the chrome and everything behind the content
      sheet is the desk (theme.scss --pwa-desk); the sheet sits
      --app-shell-sheet-gap off the right edge and leaves --layout-sheet-foot
-     below itself for the two sheets peeking out under it. */
+     of desk below itself. */
   --app-shell-chrome: var(--pwa-desk);
   --app-shell-sheet-gap: 0px;
-  --layout-sheet-foot: 20px;
+  --layout-sheet-foot: 12px;
   background: var(--pwa-desk);
 }
 
@@ -659,8 +659,8 @@ const moduleIcon = computed(() => {
 /* The content sheet. Page scroll stays on the window, so the sheet's top edge
    scrolls away under the fixed app bar like paper under a ruler; on desktop
    AppShell's fixed corner masks keep its top corners round. Its min-height
-   fills the viewport, so on a short page the peeking sheets sit just above
-   the bottom edge; on a long one they appear at the end of the scroll. */
+   fills the viewport, so on a short page its bottom edge sits just above the
+   screen's; on a long one it appears at the end of the scroll. */
 .layout-main__inner {
   padding: var(--layout-card-inset);
   min-height: calc(100dvh - var(--v-layout-top, 64px) - var(--v-layout-bottom, 0px) - var(--layout-sheet-foot));

@@ -12,9 +12,9 @@
     <div class="oa-comments__notify">
       <VCheckbox v-model="notifyOrthoApnea" :label="t('app.orthoApneaOrder.comments.notifyOrthoApnea')" color="primary" hide-details density="compact" />
     </div>
-    <VAlert v-if="notifyOrthoApnea" type="warning" variant="tonal" density="comfortable" class="mb-2">
+    <AppInlineAlert v-if="notifyOrthoApnea" type="warning" class="mb-2">
       {{ t("app.orthoApneaOrder.comments.notifyWarning") }}
-    </VAlert>
+    </AppInlineAlert>
     <AppButton color="primary" class="oa-comments__submit" :loading="addLoading" :disabled="!draft.trim()" @click="onAdd">
       {{ t("app.notes.add") }}
     </AppButton>
@@ -56,6 +56,7 @@ import { useNotes } from "../../composables/useNotes";
 import { useAuthStore } from "../../stores/auth";
 import EntityLink from "../EntityLink.vue";
 import { userDetailLink } from "../../utils/entityLinks";
+import { AppInlineAlert } from "@ui";
 
 /**
  * Comments on an OrthoApnea order — same underlying `note` table as

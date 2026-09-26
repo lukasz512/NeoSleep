@@ -63,6 +63,17 @@ describe("AppointmentsView (NEO-34)", () => {
     expect(Math.round(days)).toBe(7);
   });
 
+  it("the week grid starts on the Monday the data is loaded from, also in English (NEO-104)", async () => {
+    apiFetch.mockResolvedValue(jsonResponse(true, 200, { items: [] }));
+    const wrapper = await mountView("manager");
+    const url = new URL(String(apiFetch.mock.calls[0]![0]), "http://x");
+    const monday = new Date(url.searchParams.get("start")!);
+    expect(monday.getDay()).toBe(1);
+    const labels = wrapper.findAll(".v-calendar-daily_head-day-label").map((l) => l.text());
+    expect(labels).toHaveLength(7);
+    expect(labels[0]).toBe(String(monday.getDate()));
+  });
+
   it("is in every staff role's menu, right after Patients", () => {
     for (const role of ["doctor", "manager", "rep", "kam", "msl", "admin"] as const) {
       const names = navRoutesForRole(role).map((r) => r.name);

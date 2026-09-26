@@ -124,11 +124,9 @@
     </div>
     </Teleport>
 
-    <VAlert
+    <AppInlineAlert
       v-if="isOffline"
       type="warning"
-      variant="tonal"
-      density="compact"
       class="app-entity-list__offline-banner"
       :text="t('app.common.offlineShowingCached')"
     />
@@ -235,6 +233,7 @@
                 { 'app-entity-list__card--disabled': isOtherItemLoading(item) },
               ]"
               :style="{ '--stagger-delay': `${index * 40}ms` }"
+              :data-page-hero-key="heroKey(item)"
               @click="onRowClick(item)"
             >
               <div class="app-entity-list__card-body">
@@ -242,7 +241,7 @@
                   <slot name="feed-card-avatar" :item="item" />
                 </div>
                 <div class="app-entity-list__card-main">
-                  <div class="text-body-large font-weight-medium app-entity-list__card-title">
+                  <div class="text-body-large font-weight-medium app-entity-list__card-title" data-page-hero-name>
                     <slot name="feed-card-title" :item="item">
                       {{ getCell(item, titleKey) }}
                     </slot>
@@ -270,16 +269,14 @@
                 class="app-entity-list__card-loader"
               />
             </VCard>
-            <VAlert
+            <AppInlineAlert
               v-if="!loading && mobileItems.length === 0"
               key="_empty"
               type="info"
-              variant="tonal"
-              density="comfortable"
               class="app-entity-list__feed-empty"
             >
               {{ t(i18n.tableNoResults) }}
-            </VAlert>
+            </AppInlineAlert>
             <div v-if="mobileHasMore" key="_load-more" ref="loadMoreSentinelRef" class="app-entity-list__load-more">
               <AppSpinner v-if="loadingMore" size="24" width="2" />
             </div>
@@ -305,6 +302,7 @@ import AppSpinner from "./AppSpinner.vue";
 import { useEntityList } from "../composables/useEntityList";
 import type { FilterDefinition } from "../composables/useFilters";
 import { usePageHeaderTeleport } from "../composables/usePageHeader";
+import { AppInlineAlert } from "@ui";
 
 export interface AppEntityListHeader {
   title: string;
@@ -456,7 +454,7 @@ const SKELETON_ROWS = 6;
    (AppEntityList.css, app-entity-list-row-in); capped so a long page doesn't
    take seconds to finish arriving. */
 function tableRowProps(data: { item: Record<string, unknown>; index: number }) {
-  return { ...rowProps(data), style: { "--row-i": Math.min(data.index, 10) } };
+  return { ...rowProps(data), "data-page-hero-key": heroKey(data.item), style: { "--row-i": Math.min(data.index, 10) } };
 }
 const titleKey = computed(() => (props.headers.length > 0 ? props.headers[0].key : "name"));
 const metaKeys = computed(() => props.headers.slice(1).map((h) => h.key));
@@ -475,6 +473,13 @@ function formatMeta(item: Record<string, unknown>): string {
 
 function rawItemId(item: unknown): unknown {
   return (item as Record<string, unknown>)[itemValue];
+}
+
+/* NEO-97: marks the row whose avatar + name fly into the record header
+   (router/pageTransitionHero.ts) — the id the detail route is opened with. */
+function heroKey(item: unknown): string | undefined {
+  const id = (item as Record<string, unknown>)[props.detailRouteParam];
+  return props.detailRouteName && id != null ? String(id) : undefined;
 }
 
 function isItemLoading(item: unknown): boolean {

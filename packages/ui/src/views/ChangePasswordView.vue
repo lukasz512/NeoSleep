@@ -5,17 +5,15 @@
         <h1 class="change-password-view__title">{{ t('user.changePassword.title') }}</h1>
         <p class="change-password-view__subtitle">{{ t('user.changePassword.subtitle') }}</p>
 
-        <VAlert
+        <AppInlineAlert
           v-if="errorKey"
           type="error"
-          variant="tonal"
-          density="compact"
           class="change-password-view__alert"
-          closable
-          @click:close="errorKey = null"
+          :close-label="t('app.common.close')"
+          @close="errorKey = null"
         >
           {{ t(errorKey) }}
-        </VAlert>
+        </AppInlineAlert>
 
         <VForm ref="form" class="change-password-view__form" @submit.prevent="handleSubmit">
           <VTextField
@@ -86,6 +84,7 @@ import { useRoute, useRouter } from "vue-router";
 import { createUseChangePasswordFlow, CHANGE_PASSWORD_FROM_MENU } from "../composables/useChangePasswordFlow";
 import type { ApiFetchOptions } from "@api";
 import type { AuthTokenStorage } from "@stores";
+import AppInlineAlert from "../components/AppInlineAlert.vue";
 
 type ApiFetchFn = (path: string, options?: ApiFetchOptions) => Promise<Response>;
 

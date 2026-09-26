@@ -4,6 +4,7 @@ import {
   detectDevice,
   initInstallPrompt,
   INSTALL_REMIND_AFTER_MS,
+  isEdge,
   isStandalone,
   resolveInstallMethod,
   shouldShowInstallCard,
@@ -58,10 +59,19 @@ describe("resolveInstallMethod", () => {
     expect(resolveInstallMethod(d(nav(UA.winFirefox)), false, false)).toBe("other-browser");
   });
 
-  it("offers nothing when installed, or on Chromium before its install event", () => {
+  it("still offers Chrome/Edge's own menu steps when the browser never fired its install event", () => {
+    // Regression (pwa-dev, 2026-09-26): Chrome held the event back and the
+    // first version showed nothing at all — no card, no menu entry.
+    expect(resolveInstallMethod(d(nav(UA.winEdge)), false, false)).toBe("desktop-menu");
+    expect(resolveInstallMethod(d(nav(UA.macChrome)), false, false)).toBe("desktop-menu");
+    expect(resolveInstallMethod(d(nav(UA.androidPhone, 5)), false, false)).toBe("android-menu");
+    expect(isEdge(nav(UA.winEdge))).toBe(true);
+    expect(isEdge(nav(UA.macChrome))).toBe(false);
+  });
+
+  it("offers nothing when already running installed", () => {
     expect(resolveInstallMethod(d(nav(UA.iPhone, 5)), false, true)).toBeNull();
     expect(resolveInstallMethod(d(nav(UA.winEdge)), true, true)).toBeNull();
-    expect(resolveInstallMethod(d(nav(UA.winEdge)), false, false)).toBeNull();
   });
 });
 
@@ -163,6 +173,14 @@ describe("useInstallPrompt", () => {
     maybeOpenCard();
     expect(method.value).toBeNull();
     expect(cardOpen.value).toBe(false);
+  });
+
+  it("picks up an install event caught by index.html before the bundle ran", () => {
+    const win = fakeWindow();
+    const { event } = installEvent("accepted");
+    Object.assign(win, { __neoInstallPrompt: event });
+    initInstallPrompt(win);
+    expect(useInstallPrompt(nav(UA.winEdge)).method.value).toBe("prompt");
   });
 
   it("hides everything after appinstalled", () => {

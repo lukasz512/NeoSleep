@@ -1,26 +1,33 @@
 <template>
-  <!-- Purely decorative — three semi-transparent brand-teal circles that sit
-       behind the auth card and "breathe" (see the rAF loop in <script>).
-       Rendered by the public layout, not the auth view, so they are on screen
-       from the very first paint alongside the medical background — including
-       while the router is still checking the session (see AuthBackdrop).
-       Three nested layers per orb, each owning exactly one transform so none
-       of them ever fight over the same property:
-         anchor → static position + pop-in / exit-expand keyframes (CSS)
-         breath → per-frame scale + opacity from the breathing loop (JS)
-         orb    → per-frame magnetic-pointer translate (useMagneticPointer) -->
-  <div ref="rootEl" class="auth-orbs" aria-hidden="true">
-    <div class="auth-orbs__frame" :style="frameStyle">
-      <div
-        v-for="(orb, index) in ORBS"
-        :key="orb.key"
-        class="auth-orbs__anchor"
-        :class="[`auth-orbs__anchor--${orb.key}`, anchorPhaseClass(phases[index])]"
-      >
-        <div :ref="(el) => setElement(breathRefs[index], el)" class="auth-orbs__breath">
-          <span :ref="(el) => setElement(magnetRefs[index], el)" class="auth-orbs__orb" :class="`auth-orbs__orb--${orb.key}`">
-            <span :ref="(el) => setElement(rippleRefs[index], el)" class="auth-orbs__ripple" />
-          </span>
+  <!-- Purely decorative — three semi-transparent brand-teal circles that
+       "breathe" (see the rAF loop in <script>). Rendered by the public layout,
+       not the auth view, so they are on screen from the very first paint
+       alongside the medical background — including while the router is still
+       checking the session (see AuthBackdrop).
+       Composition (NEO-103, "Fale delta"): asymmetric, rule of thirds — the big
+       orb bleeds off the bottom-right corner, the medium one sits under the
+       logo, only the small one follows the card (its lower-left corner).
+       Layers per orb, each owning exactly one transform so none of them ever
+       fight over the same property:
+         anchor  → static position + pop-in / exit-expand keyframes (CSS)
+         drift   → slow elliptical sway, x and y as two layers (CSS)
+         breath  → per-frame scale + opacity from the breathing loop (JS)
+         orb     → per-frame magnetic-pointer translate (useMagneticPointer) -->
+  <div ref="rootEl" class="auth-orbs" :style="rootStyle" aria-hidden="true">
+    <div
+      v-for="(orb, index) in ORBS"
+      :key="orb.key"
+      class="auth-orbs__anchor"
+      :class="[`auth-orbs__anchor--${orb.key}`, anchorPhaseClass(phases[index])]"
+    >
+      <div class="auth-orbs__drift-x">
+        <div class="auth-orbs__drift-y">
+          <div :ref="(el) => setElement(breathRefs[index], el)" class="auth-orbs__breath">
+            <span :ref="(el) => setElement(magnetRefs[index], el)" class="auth-orbs__orb" :class="`auth-orbs__orb--${orb.key}`">
+              <span :ref="(el) => setElement(rippleRefs[index], el)" class="auth-orbs__ripple" />
+              <span class="auth-orbs__ring" />
+            </span>
+          </div>
         </div>
       </div>
     </div>
@@ -242,8 +249,9 @@ onMounted(() => {
 onBeforeUnmount(() => cancelAnimationFrame(rafId));
 
 // ── Alignment behind the anchor ─────────────────────────────────────────────
-// The anchors below are positioned in % of the frame, so the frame follows
-// the anchor element's box — but only its position/width live. Its height is
+// Only the small orb follows the card: its anchor is positioned from the
+// --auth-orbs-card-* variables set here from the anchor element's box — but
+// only its position/width live. Its height is
 // frozen at the first non-zero reading: the auth card animates its own height
 // on every step change (signin ↔ forgot ↔ reset), and tracking that live would
 // drag the orbs along with each transition instead of leaving them planted.
@@ -303,14 +311,14 @@ onBeforeUnmount(() => {
   window.clearTimeout(settleTimer);
 });
 
-const frameStyle = computed(() => {
+const rootStyle = computed(() => {
   const rect = frameRect.value;
   if (!rect) return undefined;
   return {
-    top: `${rect.top}px`,
-    left: `${rect.centerX}px`,
-    width: `${rect.width}px`,
-    height: `${rect.height}px`,
+    "--auth-orbs-card-top": `${rect.top}px`,
+    "--auth-orbs-card-center-x": `${rect.centerX}px`,
+    "--auth-orbs-card-width": `${rect.width}px`,
+    "--auth-orbs-card-height": `${rect.height}px`,
   };
 });
 
@@ -326,61 +334,105 @@ defineExpose({ whenEntered, playExit, replay });
   pointer-events: none;
 }
 
-/* Default spot (before/without an anchor) mirrors where AuthView's card slot
-   lands: layout padding + the view's own top offset + the logo block above
-   the card (AuthChrome: 20px margin + 90px + -11px, then the 16px gap), 420px
-   wide at most — so the orbs are already where the card will appear while
-   the session check runs, and barely move once the real anchor is measured.
-   Horizontally centered via left + translateX(-50%) in both modes, so
-   switching to the measured position is a plain top/left/size transition. */
-.auth-orbs__frame {
-  position: absolute;
-  top: calc(max(16px, env(safe-area-inset-top)) + clamp(24px, 10vh, 96px) + 115px);
-  left: 50%;
-  width: min(420px, calc(100% - 64px));
-  height: 440px;
-  transform: translateX(-50%);
-  transition:
-    top 0.7s cubic-bezier(0.22, 1, 0.36, 1),
-    left 0.7s cubic-bezier(0.22, 1, 0.36, 1),
-    width 0.7s cubic-bezier(0.22, 1, 0.36, 1),
-    height 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+/* Card geometry the small orb follows (set live from the anchor, see
+   rootStyle). The defaults (before/without an anchor) mirror where AuthView's
+   card slot lands: layout padding + the view's own top offset + the logo block
+   above the card (AuthChrome: 20px margin + 90px + -11px, then the 16px gap),
+   420px wide at most — so the small orb is already where the card will appear
+   while the session check runs, and barely moves once the real anchor is
+   measured. Same numbers as the boot splash (apps/pwa/src/boot/splash.ts). */
+.auth-orbs {
+  --auth-orbs-card-top: calc(max(16px, env(safe-area-inset-top)) + clamp(24px, 10vh, 96px) + 115px);
+  --auth-orbs-card-center-x: 50%;
+  --auth-orbs-card-width: min(420px, calc(100% - 64px));
+  --auth-orbs-card-height: 440px;
 }
 
+/* Every anchor is centered on its left/top point via the standalone
+   `translate` property, so the pop-in / exit keyframes below only ever touch
+   `transform: scale()` and compose with it. Sizes in vmax (the big orb is
+   0.8 × the longer screen side, the others 0.42 and 0.2 of that) keep the
+   composition the same shape on a phone and a wide monitor. */
 .auth-orbs__anchor {
   position: absolute;
   aspect-ratio: 1;
+  translate: -50% -50%;
   transform: scale(0);
 }
 
 .auth-orbs__anchor--big {
-  width: 150%;
-  top: 56%;
-  left: 70%;
-  transform: translate(-50%, -50%) scale(0);
+  width: 80vmax;
+  left: 80%;
+  top: 90%;
+  --auth-orbs-drift-x: 30px;
+  --auth-orbs-drift-y: 22px;
+  --auth-orbs-drift-period: 40s;
 }
 
 .auth-orbs__anchor--medium {
-  width: 78%;
-  bottom: 35%;
-  left: -17%;
+  width: 33.6vmax;
+  left: 20%;
+  top: 18%;
+  --auth-orbs-drift-x: 22px;
+  --auth-orbs-drift-y: 16px;
+  --auth-orbs-drift-period: 55s;
 }
 
+/* Hugs the card's lower-left corner — the one orb that follows the card. */
 .auth-orbs__anchor--small {
-  width: 102%;
-  top: -11%;
-  left: -48%;
+  width: 16vmax;
+  left: calc(var(--auth-orbs-card-center-x) - var(--auth-orbs-card-width) * 0.62);
+  top: calc(var(--auth-orbs-card-top) + var(--auth-orbs-card-height) * 0.82);
+  --auth-orbs-drift-x: 14px;
+  --auth-orbs-drift-y: 12px;
+  --auth-orbs-drift-period: 33s;
+  transition:
+    left 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    top 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    width 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Slow elliptical sway: x and y are separate layers, each a sine-eased
+   back-and-forth, a quarter period apart — together an ellipse, so the
+   picture never exactly repeats between the three orbs. Starts at
+   (0, -drift-y), the spot the static boot splash paints them at. */
+.auth-orbs__drift-x,
+.auth-orbs__drift-y {
+  position: absolute;
+  inset: 0;
+}
+
+.auth-orbs__drift-x {
+  animation: auth-orbs-sway-x calc(var(--auth-orbs-drift-period) / 2) cubic-bezier(0.37, 0, 0.63, 1) infinite alternate;
+  animation-delay: calc(var(--auth-orbs-drift-period) / -4);
+}
+
+.auth-orbs__drift-y {
+  animation: auth-orbs-sway-y calc(var(--auth-orbs-drift-period) / 2) cubic-bezier(0.37, 0, 0.63, 1) infinite alternate;
+}
+
+@keyframes auth-orbs-sway-x {
+  from {
+    translate: calc(var(--auth-orbs-drift-x) * -1) 0;
+  }
+  to {
+    translate: var(--auth-orbs-drift-x) 0;
+  }
+}
+
+@keyframes auth-orbs-sway-y {
+  from {
+    translate: 0 calc(var(--auth-orbs-drift-y) * -1);
+  }
+  to {
+    translate: 0 var(--auth-orbs-drift-y);
+  }
 }
 
 /* Grows past its resting size (105%) before settling back to 100% — a small
-   bounce rather than a flat fade. --big carries its own centering translate,
-   so it gets its own keyframes that keep that translate at every step. */
+   bounce rather than a flat fade. */
 .auth-orbs__anchor--enter {
   animation: auth-orbs-pop-in 610ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-}
-
-.auth-orbs__anchor--big.auth-orbs__anchor--enter {
-  animation-name: auth-orbs-pop-in-centered;
 }
 
 /* Post-login exit: the orbs come *at the user* — they grow with accelerating
@@ -396,22 +448,10 @@ defineExpose({ whenEntered, playExit, replay });
     auth-orbs-dissolve 1400ms linear forwards;
 }
 
-.auth-orbs__anchor--big.auth-orbs__anchor--exit {
-  animation-name: auth-orbs-grow-centered, auth-orbs-dissolve;
-}
-
 /* Taking over from the static boot splash — already at rest, no pop. */
-.auth-orbs__anchor--instant,
-.auth-orbs__anchor--big.auth-orbs__anchor--instant {
-  animation: none;
-}
-
 .auth-orbs__anchor--instant {
+  animation: none;
   transform: scale(1);
-}
-
-.auth-orbs__anchor--big.auth-orbs__anchor--instant {
-  transform: translate(-50%, -50%) scale(1);
 }
 
 @keyframes auth-orbs-pop-in {
@@ -426,33 +466,12 @@ defineExpose({ whenEntered, playExit, replay });
   }
 }
 
-@keyframes auth-orbs-pop-in-centered {
-  0% {
-    transform: translate(-50%, -50%) scale(0);
-  }
-  65% {
-    transform: translate(-50%, -50%) scale(1.05);
-  }
-  100% {
-    transform: translate(-50%, -50%) scale(1);
-  }
-}
-
 @keyframes auth-orbs-grow {
   from {
     transform: scale(1);
   }
   to {
     transform: scale(9);
-  }
-}
-
-@keyframes auth-orbs-grow-centered {
-  from {
-    transform: translate(-50%, -50%) scale(1);
-  }
-  to {
-    transform: translate(-50%, -50%) scale(9);
   }
 }
 
@@ -505,6 +524,17 @@ defineExpose({ whenEntered, playExit, replay });
   will-change: transform, opacity;
 }
 
+/* Thin orbit line just outside the rim — a drawn edge that keeps the orb
+   reading as a deliberate shape against the photo. Inside the breath layer,
+   so it breathes and fades with the orb (its ~0.5 opacity halves this). */
+.auth-orbs__ring {
+  position: absolute;
+  inset: -4%;
+  border: 1px solid rgb(255 255 255 / 0.7);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
 /* Lighter than the other two so the three don't read as one flat,
    same-toned shape. */
 .auth-orbs__orb--medium {
@@ -512,17 +542,18 @@ defineExpose({ whenEntered, playExit, replay });
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .auth-orbs__frame {
+  .auth-orbs__anchor--small {
     transition: none;
+  }
+
+  .auth-orbs__drift-x,
+  .auth-orbs__drift-y {
+    animation: none;
   }
 
   .auth-orbs__anchor--enter {
     animation: none;
     transform: scale(1);
-  }
-
-  .auth-orbs__anchor--big.auth-orbs__anchor--enter {
-    transform: translate(-50%, -50%) scale(1);
   }
 
   .auth-orbs__anchor--exit {
