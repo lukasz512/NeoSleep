@@ -1,14 +1,14 @@
 <template>
   <div class="form-spine">
     <div class="form-spine__identity">
-      <AppAvatar
-        :name="name || null"
-        :first-name="firstName || null"
-        :last-name="lastName || null"
-        :entity-type="entityType"
-        :size="64"
-      />
       <div class="form-spine__who">
+        <AppAvatar
+          :name="name || null"
+          :first-name="firstName || null"
+          :last-name="lastName || null"
+          :entity-type="entityType"
+          :size="48"
+        />
         <p
           class="form-spine__name"
           :class="{ 'form-spine__name--pending': !name }"
@@ -16,11 +16,29 @@
         >
           {{ name || namePending }}
         </p>
-        <IdentityDetails v-if="details.details.length" :details="details.details" :more="details.more" />
       </div>
-      <VChip v-if="status" :color="status.color" variant="tonal" size="small" class="form-spine__status">
-        {{ status.label }}
-      </VChip>
+      <!-- NEO-118 ficha: one labelled fact per line, so nothing wraps into
+           the next fact ("nac." used to end one line, the date start the next). -->
+      <dl v-if="facts.length || status" class="form-spine__facts" data-testid="form-spine-facts">
+        <div v-for="f in facts" :key="f.key" class="form-spine__fact" :data-fact="f.key">
+          <dt>{{ f.label }}</dt>
+          <dd>
+            {{ f.value }}
+            <VTooltip v-if="f.more?.length" location="bottom">
+              <template #activator="{ props: tooltipProps }">
+                <span v-bind="tooltipProps" class="form-spine__more" tabindex="0">+{{ f.more.length }}</span>
+              </template>
+              <span>{{ f.more.join(", ") }}</span>
+            </VTooltip>
+          </dd>
+        </div>
+        <div v-if="status" class="form-spine__fact" data-fact="status">
+          <dt>{{ statusLabel }}</dt>
+          <dd>
+            <VChip :color="status.color" variant="tonal" size="small">{{ status.label }}</VChip>
+          </dd>
+        </div>
+      </dl>
     </div>
 
     <nav class="form-spine__index" :aria-label="indexLabel" data-testid="form-spine-index">
@@ -45,15 +63,14 @@
 <script setup lang="ts">
 /**
  * The spine of the "Carpeta" form folder (NEO-92): the record's identity
- * (avatar, name, the record header's detail line, status) above an index of
+ * (avatar and name, then a ficha of labelled facts and the status) above an index of
  * the form's sections. The name fills in live as the user types, so creating
  * and editing a record read as the same view. The index follows the sheet's
  * scroll (FormRenderer passes `active`) and marks sections with unsaved
  * changes. Phones get FormSectionChips instead.
  */
 import AppAvatar from "./AppAvatar.vue";
-import IdentityDetails from "./IdentityDetails.vue";
-import type { IdentityDetailSet } from "../composables/useIdentity";
+import type { IdentityFact } from "../composables/useIdentity";
 import type { AppAvatarEntityType } from "../types/formField";
 
 export interface FormSpineSection {
@@ -69,8 +86,11 @@ defineProps<{
   lastName?: string;
   /** Shown in place of the name until one is typed (create mode). */
   namePending: string;
-  details: IdentityDetailSet;
+  /** Labelled facts under the name (sex, age, born — or specialty, clinic, ...). */
+  facts: IdentityFact[];
   status: { label: string; color?: string } | null;
+  /** Label for the status row ("Estado"). */
+  statusLabel: string;
   sections: FormSpineSection[];
   active: string;
   indexLabel: string;
@@ -91,21 +111,62 @@ const emit = defineEmits<{ select: [id: string] }>();
 .form-spine__identity {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 12px;
+  gap: 14px;
   padding-inline-start: 4px;
 }
 
 .form-spine__who {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  gap: 12px;
   min-width: 0;
+}
+
+.form-spine__facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 12px;
+  margin: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--pwa-rule);
+  font-size: 0.8125rem;
+  line-height: 1.35;
+}
+
+/* Each row is a real dt/dd pair; the grid lines the labels up in one column. */
+.form-spine__fact {
+  display: contents;
+}
+
+.form-spine__fact dt {
+  align-self: center;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+.form-spine__fact dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+  color: rgb(var(--v-theme-on-surface));
+}
+
+.form-spine__more {
+  margin-inline-start: 4px;
+  cursor: help;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
 .form-spine__name {
   margin: 0;
-  font-size: 1.25rem;
+  min-width: 0;
+  font-size: 1.0625rem;
   font-weight: 600;
   line-height: 1.2;
   letter-spacing: -0.01em;

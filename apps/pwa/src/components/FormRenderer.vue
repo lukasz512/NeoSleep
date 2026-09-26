@@ -143,8 +143,9 @@
         :first-name="String(form.first_name ?? '')"
         :last-name="String(form.last_name ?? '')"
         :name-pending="t('app.formRenderer.namePending')"
-        :details="spineDetails"
+        :facts="spineFacts"
         :status="statusChip"
+        :status-label="t('app.formRenderer.fact.status')"
         :sections="indexSections"
         :active="activeSection"
         :index-label="t('app.formRenderer.sectionsLabel')"
@@ -278,7 +279,7 @@ const {
   rulesFor, validate, buildPayload,
   resetForm, hasChanged, changedKeys,
 } = useFormRenderer(props.fields, initialDataRef, props.derive);
-const { detailsFor } = useIdentity();
+const { factsFor } = useIdentity();
 
 const submitting = ref(false);
 const showDiscardConfirm = ref(false);
@@ -392,11 +393,9 @@ const indexSections = computed<FormSpineSection[]>(() =>
   sections.value.map((s) => ({ id: s.id, label: s.label, changed: s.fields.some((f) => changedSet.value.has(f.key)) })),
 );
 
-/** The spine's detail line reads the live form over the record, so create and edit fill it the same way. */
-const spineDetails = computed(() =>
-  props.avatarEntityType
-    ? detailsFor(props.avatarEntityType, { ...(props.initialData ?? {}), ...form.value })
-    : { details: [], more: [] },
+/** The spine's ficha reads the live form over the record, so create and edit fill it the same way. */
+const spineFacts = computed(() =>
+  props.avatarEntityType ? factsFor(props.avatarEntityType, { ...(props.initialData ?? {}), ...form.value }) : [],
 );
 
 /** A `status` select with coloured options shows as the same tonal pill on the spine as in lists. */
