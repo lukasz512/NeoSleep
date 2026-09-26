@@ -146,6 +146,14 @@ describe("useInstallPrompt", () => {
     expect(cardOpen.value).toBe(false);
   });
 
+  it("never opens the card by itself in an automated browser (e2e/smoke scripts)", () => {
+    initInstallPrompt(fakeWindow());
+    const { method, cardOpen, maybeOpenCard } = useInstallPrompt({ ...nav(UA.winFirefox), webdriver: true });
+    maybeOpenCard();
+    expect(method.value).toBe("other-browser");
+    expect(cardOpen.value).toBe(false);
+  });
+
   it("never offers anything inside the installed app", () => {
     const win = fakeWindow(true);
     initInstallPrompt(win);

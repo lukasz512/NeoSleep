@@ -37,7 +37,7 @@ export interface DeviceInfo {
   browser: DeviceBrowser;
 }
 
-type NavigatorLike = Pick<Navigator, "userAgent" | "maxTouchPoints">;
+type NavigatorLike = Pick<Navigator, "userAgent" | "maxTouchPoints"> & { webdriver?: boolean };
 
 export function detectDevice(nav: NavigatorLike): DeviceInfo {
   const ua = nav.userAgent;
@@ -181,8 +181,15 @@ export function useInstallPrompt(nav: NavigatorLike = navigator) {
     return outcome === "accepted";
   }
 
-  /** Opens the card automatically after login, if the schedule allows. */
+  /**
+   * Opens the card automatically after login, if the schedule allows. Never
+   * for an automated browser (Playwright e2e, smoke-dev-ui.mjs): an unasked
+   * dialog over the app would block whatever the script clicks next — it hid
+   * the avatar menu from auth.spec's logout test on Firefox. The avatar-menu
+   * entry still opens the card there.
+   */
   function maybeOpenCard(now: number = Date.now()): void {
+    if (nav.webdriver === true) return;
     if (method.value && shouldShowInstallCard(readCardState(), now)) cardOpen.value = true;
   }
 
