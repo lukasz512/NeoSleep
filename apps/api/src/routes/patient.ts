@@ -2,7 +2,7 @@ import { Router, type Router as RouterType, type Request, type Response } from "
 import { asyncHandler } from "../middleware/errorHandler.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { requireRole } from "../middleware/requireRole.js";
-import { requireClinicalRole, requireStudyRole } from "../middleware/requireClinicalRole.js";
+import { requireStudyRole } from "../middleware/requireClinicalRole.js";
 import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
 import { CreatePatientCommand, UpdatePatientCommand, DeletePatientCommand } from "../commands/patient.js";
@@ -132,7 +132,7 @@ patientRouter.get(
 // ---------------------------------------------------------------------------
 patientRouter.get(
   "/patient/:id/documents",
-  requireClinicalRole,
+  requireStudyRole,
   asyncHandler(async (req: Request, res: Response) => {
     const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing patient id");
