@@ -214,6 +214,15 @@ whether it's a table cell, a mobile card line, a detail panel or a note author. 
     faster (180ms emphasized-accelerate); on phones (< 600px) form dialogs are a bottom sheet
     (`sheetDialogTransition`); focused fields get a brand halo; all of it honours
     `prefers-reduced-motion`.
+  - Page changes (NEO-85, picked from a live proposal): list → record slides the record in
+    from the right over the list (which dims and drifts left), Back slides it off again, and
+    every other move (menu / bottom nav) is a 90/210ms M3 fade-through. Built on the View
+    Transitions API (`router/pageTransitions.ts` + `assets/page-transitions.css`) with only the
+    content sheet named, so the bar and menu never move; browsers without it keep the old
+    `view-fade-lift`. Don't wrap the routed view in a CSS-less `<Transition>` where View
+    Transitions run: the synchronous swap made Vue throw and the list stayed empty after Back.
+  - Phone list toolbar: three icons (search, filter, add); focused search grows over the row
+    while the others step aside; a query left behind stays as a tinted pill on the left.
   - Dialog scroll model: the dialog is capped at the viewport, header and actions stay pinned,
     only the body scrolls, and a hairline divider shows under the header / above the actions
     only while content runs behind them (M3). **Bugfix** (Vuetify 4): Vuetify ships all of its
