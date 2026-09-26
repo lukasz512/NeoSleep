@@ -17,7 +17,7 @@
 - 🏢 **Client.** The checklist comes from the Documents admin (ADR-021 template → entity-type assignment), so each tenant or clinic decides what appears. Nothing is hardcoded. Architecture rule 2 (config-driven) holds.
 - 🩺 **Patient.** Direct effect: missing consent or medical history before a procedure is a patient-safety and liability gap. A visible "missing" state lowers that risk. Print PDFs with a signature line keep paper consent valid.
 - 🚀 **NeoCRM/Platform.** A generic "checklist of assigned document/study types per entity" pattern that other tenants could reuse, for example onboarding documents for a lead.
-- ⚖️ **Compliance.** Consent PDFs signed on paper need their signed copy stored against the patient. The upload flow covers that. Health data is admin/doctor only (decided 2026-09-25). Doctor-uploaded files are health data too, so the same role restriction applies. `/legal` was consulted about the patient consent text (see ADR-023 follow-up).
+- ⚖️ **Compliance.** Consent PDFs signed on paper need their signed copy stored against the patient. The upload flow covers that. Health data is admin/doctor only (decided 2026-09-25; since 2026-09-26 managers see and edit the studies too, with every read audited — NEO-83, ADR-024 §6). Doctor-uploaded files are health data too, so the same role restriction applies. `/legal` was consulted about the patient consent text (see ADR-023 follow-up).
 
 ### Medical-Industry Trend Check
 - Not applicable. The workflow shape comes from the partner dentist's own paper process; the relevant intake/QR trend check is already in the previous story.
@@ -31,7 +31,7 @@
 - [x] Doctor-filled items open a form in place: no QR, printable.
 - [x] "Agregar estudio" uploads a file with a title and notes. It shows up in the same list with a distinct status.
 - [x] The Details view shows one icon per checklist item with its done/missing state.
-- [x] Only admin and doctor see any of this.
+- [x] Only admin and doctor see any of this. (Changed by NEO-83: managers too, read-audited.)
 
 ### Decisions (Łukasz, 2026-09-25)
 - **Scope and order.** Every document assigned to the patient in the Documents admin appears, grouped as:

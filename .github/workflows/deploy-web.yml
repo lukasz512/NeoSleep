@@ -57,6 +57,11 @@ jobs:
         run: pnpm run build:web
         env:
           VITE_GOOGLE_MAPS_BROWSER_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_BROWSER_API_KEY }}
+          # Map ID for Advanced Markers (NEO-79). Optional: while the secret is
+          # unset the map falls back to Google's DEMO_MAP_ID (see
+          # apps/web/src/composables/useGoogleMaps.ts). Not a secret value, but
+          # kept next to the key so both are configured in one place.
+          VITE_GOOGLE_MAPS_MAP_ID: ${{ secrets.VITE_GOOGLE_MAPS_MAP_ID }}
 
       - name: Deploy to PROD (neosleepcare.com)
         if: github.ref == 'refs/heads/prod'

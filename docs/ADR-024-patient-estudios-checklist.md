@@ -20,9 +20,8 @@ glance: *what is still missing for this patient?* His requirements:
 - "Agregar estudio" uploads a file from the doctor's disk, with a title and notes. It becomes a new
   item or completes an existing one (a PSG report, a scanned paper consent).
 - The Details tab shows one status icon per item.
-- Health data is visible to **admin and doctor only**. Amended 2026-09-26 (NEO-83): **managers
-  can also see and edit the patient's studies** (Estudios tab, sleep studies, /sleep-studies —
-  `requireStudyRole`); the Documents tab list and hard deletes stay admin/doctor resp. admin-only.
+- Health data is visible to **admin and doctor only** (2026-09-25). Superseded 2026-09-26 (NEO-83):
+  **managers also see and edit the patient's studies**, and every read is audited — see §6.
 
 ## Decision
 
@@ -111,11 +110,21 @@ If tx2 fails, or a concurrent submit already signed the step, the upload is dele
 signed PDF is left behind.
 
 ### 6. Roles and schema
-- Every checklist, print, upload and patient-document route requires `requireClinicalRole` (admin +
-  doctor). The patient must also pass the territory check in `GetPatientByIdQuery`.
+- Every checklist, print, upload, questionnaire, sleep-study and document-download route requires
+  `requireStudyRole` (admin + doctor + **manager**, Łukasz 2026-09-26, NEO-83). Only the Documents
+  tab list (`GET /patient/:id/documents`) keeps `requireClinicalRole` (admin + doctor), and a sleep
+  study's hard delete stays admin-only. Rep, KAM and MSL get none of it. The patient must also pass
+  the territory check in `GetPatientByIdQuery`.
+- **Every read is audited.** Managers are not clinicians, so opening Art. 9 data to them needs an
+  access trail (GDPR Art. 5(2) accountability, Art. 32; LFPDPPP). Each successful health-data read
+  writes an `audit_log` row (`action = 'read'`, `metadata = {view, patient_id, role}`) via
+  `AuditHealthDataReadCommand`, for every role. A 403/404 writes nothing. Changes were already
+  audited by their commands. `read` rows are an access trail, not a change, so the History tab
+  leaves them out (`getAuditLogForEntities`).
 - The OrthoApnea tab needs a sleep-study id for other roles. It gets one from
   `GET /patient/:id/sleep-study-ref`, which returns the id only.
-- The PWA hides the Studies and Documents tabs and the Details "Estudios" card from other roles.
+- The PWA mirrors this per tab: Studies and the Details "Estudios" card for `STUDY_ROLES`, Documents
+  for `CLINICAL_ROLES` (`apps/pwa/src/config/questionnaires.ts`).
 - `create_tenant_schema()` is regenerated with `scripts/generate-create-tenant-schema.ts`, as in
   ADR-023 §4. The CI parity job enforces this.
 
@@ -135,3 +144,9 @@ signed PDF is left behind.
   written consent for sensitive data; GDPR Art. 9(2)(a) for PL). Counsel still has to sign it off
   before real patients use it, and the clinic, as data controller, needs its own aviso de
   privacidad.
+- **Open (legal, NEO-83).** In the same counsel review: manager access to patient studies. What
+  counsel has to confirm: (1) the purpose and legal basis for a non-clinician processing Art. 9 data
+  (GDPR Art. 9(2)(h) + 9(3) requires a person under a duty of secrecy; LFPDPPP needs the purpose
+  named in the aviso de privacidad); (2) a written confidentiality obligation for every manager
+  account; (3) the patient consent / aviso text naming this recipient. The technical side
+  (role-limited, territory-checked, read-audited) is done.
