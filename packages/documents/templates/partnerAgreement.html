@@ -43,9 +43,9 @@
     --font: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
   * { box-sizing: border-box; }
-  /* 26mm bottom: room for the 3-line Puppeteer contact footer (CSS @page
+  /* 18mm bottom: room for the 2-line Puppeteer footer (CSS @page
      margins win over page.pdf()'s own margin option). */
-  @page { size: A4; margin: 18mm 14mm 26mm; }
+  @page { size: A4; margin: 18mm 14mm 18mm; }
   body {
     font-family: var(--font);
     font-weight: 300;
@@ -57,33 +57,23 @@
     padding: 28px 24px 20px;
     background: #fff;
   }
-  header.doc-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    /* A logo-height square of space between the logo and the title, so a
-       wrapped title never sits tight against the mark. */
-    gap: 24px;
-    border-bottom: 0.5px solid rgba(71, 71, 71, 0.35);
-    padding-bottom: 6px;
-    margin-bottom: 16px;
-  }
-  header.doc-header .doc-label { text-align: right; }
-  header.doc-header .logo svg { height: 24px; width: auto; display: block; }
-  header.doc-header .doc-label { font-size: 8pt; font-weight: 400; color: var(--secondary); }
-  h1 { color: var(--primary); font-size: 14pt; font-weight: 500; margin: 0 0 2px; line-height: 1.3; text-align: center; }
-  h2 { color: var(--secondary); font-size: 11pt; font-weight: 400; margin: 0 0 16px; line-height: 1.3; text-align: center; }
   .date-line { text-align: center; color: var(--secondary); margin: 0 0 16px; }
   p { margin: 0 0 8px; text-align: justify; text-justify: inter-word; }
   ol, ul { margin: 0 0 8px; padding-left: 20px; }
   li { margin-bottom: 4px; text-align: justify; }
-  .doc-content p strong, .annex-content p strong { display: block; text-align: center; margin-top: 14px; color: var(--secondary); font-weight: 600; }
-  /* A "§ n." heading paragraph never ends a page on its own. */
-  .doc-content p:has(> strong:only-child), .annex-content p:has(> strong:only-child) { break-after: avoid; }
+  /* "§ n." heading paragraphs (a paragraph holding only a <strong> — sanitize-html
+     strips classes from admin content) read as the shared section heading
+     (docTheme.css .doc-sec), and never end a page on their own. */
+  .doc-content p:has(> strong:only-child), .annex-content p:has(> strong:only-child) {
+    display: flex; align-items: center; gap: 10px; margin: 14px 0 4px; text-align: left; break-after: avoid;
+  }
+  .doc-content p:has(> strong:only-child)::after, .annex-content p:has(> strong:only-child)::after { content: ""; flex: 1; border-top: 1px solid #dfe6e4; }
+  .doc-content p > strong:only-child, .annex-content p > strong:only-child {
+    font-size: 7.5pt; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--primary); white-space: nowrap;
+  }
   .parties p { text-align: justify; }
   .field-value { font-weight: 500; }
   .annex { break-before: page; margin-top: 28px; }
-  .annex .annex-heading { text-align: center; color: var(--secondary); font-weight: 500; margin: 0; }
   .screen-only.contact-footer { font-size: 8pt; color: var(--secondary); border-top: 1px solid #ccc; padding-top: 8px; margin-top: 24px; }
   .screen-only.contact-footer .doc-ref { text-align: right; margin-top: 2px; }
   @media print { body { padding: 0; max-width: none; } .screen-only { display: none; } }
@@ -95,17 +85,28 @@
     p, li, .parties p { text-align: left; }
   }
   {{style:docFields}}
+  {{style:docTheme}}
 </style>
 </head>
 <body>
 
   <header class="doc-header">
     <span class="logo">{{brand:logo}}</span>
-    <span class="doc-label">{{documents.partnerAgreement.title}}</span>
+    <span class="doc-cat">{{documents.common.category.agreement}}</span>
   </header>
 
-  <h1>{{documents.partnerAgreement.title}}</h1>
-  <p class="date-line">{{documents.partnerAgreement.dateLine}}</p>
+  <div class="doc-title">
+    <h1>{{documents.partnerAgreement.title}}</h1>
+    <p class="date-line">{{documents.partnerAgreement.dateLine}}</p>
+  </div>
+
+  <dl class="doc-fields">
+    <div class="doc-field doc-field--patient"><dt>{{documents.common.field.partner}}</dt><dd data-field="doctor_name"></dd></div>
+    <div class="doc-field doc-field--short"><dt>{{documents.common.field.license}}</dt><dd data-field="license_number"></dd></div>
+    <div class="doc-field"><dt>{{documents.common.field.facility}}</dt><dd data-field="clinic_name"></dd></div>
+    <div class="doc-field"><dt>{{documents.common.field.address}}</dt><dd data-field="clinic_address"></dd></div>
+    <div class="doc-field"><dt>{{documents.common.field.email}}</dt><dd data-field="email"></dd></div>
+  </dl>
 
   <div class="parties">
     <p>{{documents.partnerAgreement.partyNeoSleep}}</p>
@@ -118,9 +119,11 @@
   <div class="doc-content">{{content}}</div>
 
   <section class="annex">
-    <p class="annex-heading">{{documents.partnerAgreement.annexHeading}}</p>
-    <h1>{{documents.partnerAgreement.annexTitle}}</h1>
-    <p class="date-line">{{documents.partnerAgreement.annexSubtitle}}</p>
+    <p class="doc-sec">{{documents.partnerAgreement.annexHeading}}</p>
+    <div class="doc-title">
+      <h1>{{documents.partnerAgreement.annexTitle}}</h1>
+      <p class="date-line">{{documents.partnerAgreement.annexSubtitle}}</p>
+    </div>
     <div class="annex-content">{{slot:annex}}</div>
   </section>
 
@@ -136,7 +139,7 @@
       <div class="sig-main"><div class="sig-label">{{documents.partnerAgreement.signPartner}}</div><div class="sig-area" data-image="signer_signature"></div><div class="sig-e-note">{{documents.signature.eSigned}}</div></div>
       <dl class="sig-details">
         <div><dt>{{documents.signature.name}}</dt><dd data-field="doctor_name"></dd></div>
-        <div><dt>{{documents.signature.license}}</dt><dd data-field="license_number"></dd></div>
+        <div><dt>{{documents.common.field.license}}</dt><dd data-field="license_number"></dd></div>
         <div><dt>{{documents.signature.date}}</dt><dd data-field="signer_signed_at"></dd></div>
       </dl>
     </div>
@@ -144,7 +147,7 @@
 
   <div class="contact-footer screen-only">
     <div>{{brand:contactLine}}</div>
-    <div class="doc-ref">NSL-PA v1</div>
+    <div class="doc-ref" data-field="doc_ref">{{doc:ref}}</div>
   </div>
 
 </body>

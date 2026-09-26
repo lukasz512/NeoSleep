@@ -1,0 +1,135 @@
+/*
+ * NeoSleep document system (Łukasz, 2026-09-26): one "grammar" for every
+ * generated document — header, title, patient banner, sections, form rows,
+ * signatures, footer — always in that order, always the same look; a
+ * document that doesn't need a block simply leaves it out. Inlined into
+ * every template via the style:docTheme token (documentRender.ts), placed
+ * last in each template's <style> so it is the one source for these rules.
+ * The banner, notes and signature blocks live in docFields.css; the
+ * per-page footer is renderDocumentFooterHtml (a separate Puppeteer frame).
+ *
+ * Only one tinted block per page: the patient banner (and the STOP-Bang
+ * result, which is part of the same "about this patient" reading). The
+ * title stands out by size and a brand-colored edge, not by a box.
+ */
+
+/* 1. Header — who issued it (logo) and what it is (category). */
+header.doc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding-bottom: 8px;
+  margin: 0 0 14px;
+  border-bottom: 1px solid #dfe6e4;
+}
+header.doc-header .logo { display: block; }
+header.doc-header .logo svg { height: 22px; width: auto; display: block; }
+header.doc-header .doc-cat {
+  font-size: 7.5pt;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--primary);
+  text-align: right;
+}
+
+/* 2. Title. */
+.doc-title {
+  margin: 0 0 12px;
+  padding: 1px 0 1px 12px;
+  border-left: 3px solid var(--primary);
+  break-after: avoid;
+}
+.doc-title h1 {
+  font-size: 16pt;
+  font-weight: 500;
+  color: var(--text, #1a1a1a);
+  line-height: 1.2;
+  margin: 0;
+  text-align: left;
+  text-wrap: balance;
+}
+.doc-title h2,
+.doc-title .date-line {
+  font-size: 9.5pt;
+  font-weight: 400;
+  color: var(--secondary);
+  line-height: 1.4;
+  margin: 2px 0 0;
+  text-align: left;
+}
+
+/*
+ * Page-aware layout (Łukasz, 2026-09-26). A document that fits on one page
+ * keeps the compact layout above. One that runs onto more pages gets
+ * `doc-roomy` on <html> from apps/api's renderer (fitPageLayout) — more air
+ * around the title, since the page count no longer depends on it — and in
+ * both cases the renderer moves the signatures to the bottom of the last
+ * page.
+ */
+.doc-roomy header.doc-header { padding-bottom: 10px; margin-bottom: 26px; }
+.doc-roomy .doc-title { margin: 0 0 22px; padding-block: 3px; }
+.doc-roomy .doc-title h1 { font-size: 19pt; }
+.doc-roomy .doc-title h2,
+.doc-roomy .doc-title .date-line { margin-top: 5px; font-size: 10.5pt; }
+.doc-roomy .doc-fields { margin-bottom: 22px; }
+
+/* Orphan control: no heading alone at the bottom of a page, no lone line of a paragraph at either end, no split question row. */
+p, li { orphans: 3; widows: 3; }
+table.checklist tr { break-inside: avoid; }
+.doc-prompt { break-after: avoid; }
+
+/* 4. Section heading — teal label with a hairline running to the right edge. */
+.doc-sec,
+h3.doc-sec {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 4px;
+  font-size: 7.5pt;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--primary);
+  line-height: 1.4;
+  break-after: avoid;
+}
+.doc-sec::after { content: ""; flex: 1; border-top: 1px solid #dfe6e4; }
+.doc-sec small { font-size: 7pt; font-weight: 400; letter-spacing: 0.02em; text-transform: none; color: #6b7573; white-space: nowrap; }
+.doc-prompt { margin: 2px 0 2px; font-size: 9.5pt; font-weight: 400; color: var(--secondary); }
+
+/* 5. Form rows — question left, answer options in one fixed right column on every form. */
+table.checklist { width: 100%; border-collapse: collapse; margin: 0 0 10px; }
+table.checklist td {
+  padding: 4px 8px 4px 0;
+  border-bottom: 1px solid #eef2f1;
+  font-size: 9.5pt;
+  vertical-align: middle;
+}
+table.checklist td.letter { width: 18px; font-weight: 600; color: var(--primary); }
+table.checklist td.q-answer { width: 160px; padding-right: 0; text-align: right; white-space: nowrap; }
+
+/* Answer options are drawn by apps/api's applyChoiceFields with their own inline
+   styles (an empty box per option, the recorded one filled + bold), so they
+   look the same in every template; only the result zones below restyle them. */
+table.checklist td.q-answer .choice { font-size: 9pt; }
+
+/* Result (STOP-Bang score) — number, then the official risk zones as a choice row. */
+.doc-result {
+  margin: 10px 0 0;
+  padding: 8px 12px 10px;
+  border-radius: 6px;
+  background: #f2f8f7;
+  break-inside: avoid;
+}
+.doc-result-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.doc-result-label { font-size: 9.5pt; font-weight: 500; }
+.doc-result-score { font-size: 15pt; font-weight: 600; font-variant-numeric: tabular-nums; }
+.doc-result-score::after { content: " / 8"; font-size: 9pt; font-weight: 400; color: #6b7573; }
+.doc-result-score:empty::after { content: "__ / 8"; }
+.doc-result-zones { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 6px; }
+.doc-result-zones > .choice { width: auto !important; min-width: 0; padding: 3px 6px; border: 1px solid #c9d4d2; border-radius: 4px; background: #fff; font-size: 8pt; white-space: nowrap; }
+.doc-result-zones > .choice--on { border: 1.5px solid var(--text, #1a1a1a); }
+.doc-result-zones:not(:has(.choice)) { display: none; }
+.doc-result-note { margin: 5px 0 0; font-size: 7pt; color: #6b7573; }

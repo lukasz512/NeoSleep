@@ -87,7 +87,51 @@ git -C ../wt-dirty clean -fdq
 check "worktree removed once clean"                   test ! -d ../wt-dirty
 check "remote branch kept"                            test -n "$(git ls-remote --heads origin dirty)"
 
+echo "auto (NEO-84): local branches, squash merges, markers"
+# squashed: its commit lands on dev as an identical patch, not by ancestry.
+git worktree add -q -b squashed ../wt-squashed dev
+echo squash > ../wt-squashed/squash.txt
+git -C ../wt-squashed add squash.txt
+git -C ../wt-squashed commit -q -m "squashed work"
+git -C ../wt-squashed push -q origin squashed
+# dev moves first, so the cherry-pick is a new commit with the same patch (a real squash merge).
+git commit -q --allow-empty -m "other dev work"
+git cherry-pick squashed > /dev/null
+git push -q origin dev
+mkdir -p ../wt-squashed/.claude/local/artifacts
+echo '{"url":"https://claude.ai/artifact/x"}' > ../wt-squashed/.claude/local/artifacts/NEO-1.json
+printf '.claude/local/\n' >> .git/info/exclude
+# Local branches with no worktree: merged, unmerged, fresh, backup.
+git checkout -q -b localmerged dev && git commit -q --allow-empty -m "local merged work" && git checkout -q dev
+git merge -q --no-ff localmerged -m "merge localmerged"
+git checkout -q -b localunmerged dev && git commit -q --allow-empty -m "local unmerged work" && git checkout -q dev
+git branch -q localfresh dev~1
+git branch -q backup/dev-snapshot dev~1
+git push -q origin dev
+
+"$SCRIPT" --json --no-fetch > "$SANDBOX/report.json"
+check "squash-merged worktree is CANDIDATE"          is_status squashed CANDIDATE
+check "merged local branch without worktree is CANDIDATE" is_status localmerged CANDIDATE
+check "unmerged local branch without worktree is KEEP"    is_status localunmerged KEEP
+check "fresh local branch without worktree is CANDIDATE"  is_status localfresh CANDIDATE
+check "backup/* branch is not listed"                test -z "$(status_of backup/dev-snapshot)"
+
+"$SCRIPT" --auto --no-fetch > "$SANDBOX/auto.log" 2>&1
+check "--auto exits zero"                            test $? -eq 0
+check "--auto removed the squash-merged worktree"    test ! -d ../wt-squashed
+check "--auto deleted its remote branch"             test -z "$(git ls-remote --heads origin squashed)"
+check "--auto kept its Artifact marker"              test -f .claude/local/artifacts/NEO-1.json
+check "--auto deleted the merged local branch"       test -z "$(git branch --list localmerged)"
+check "--auto deleted the fresh local branch"        test -z "$(git branch --list localfresh)"
+check "--auto kept the unmerged local branch"        test -n "$(git branch --list localunmerged)"
+check "--auto kept the backup branch"                test -n "$(git branch --list backup/dev-snapshot)"
+check "--auto kept the unmerged worktree"            test -d ../wt-unmerged
+check "--auto kept the fresh worktree"               test -d ../wt-fresh
+check "--auto kept the locked worktree"              test -d ../wt-locked
+check "--auto kept dev"                              test -n "$(git ls-remote --heads origin dev)"
+
 if [ "$FAILS" -gt 0 ]; then
+  cat "$SANDBOX/auto.log" 2>/dev/null
   echo "$FAILS check(s) failed. Apply log:"; cat "$SANDBOX/apply.log"; exit 1
 fi
 echo "all checks passed"

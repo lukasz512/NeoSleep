@@ -1,5 +1,6 @@
 import type { FormFieldDef } from "../../types/formField";
 import { PHONE_MIN_DIGITS, phoneDigitCount } from "../../utils/phone";
+import { useAuthStore } from "../../stores/auth";
 
 /**
  * Shared "Identity" field group — prefix+first name, last name, email, phone —
@@ -57,11 +58,49 @@ const PREFIX_OPTIONS = [
   { title: "app.identity.form.prefixDr", value: "Dr." },
   { title: "app.identity.form.prefixDra", value: "Dra." },
   { title: "app.identity.form.prefixProf", value: "Prof." },
+  { title: "app.identity.form.prefixProfa", value: "Profa." },
   { title: "app.identity.form.prefixLic", value: "Lic." },
+  { title: "app.identity.form.prefixLicda", value: "Licda." },
   { title: "app.identity.form.prefixMgr", value: "Mgr." },
   { title: "app.identity.form.prefixSr", value: "Sr." },
   { title: "app.identity.form.prefixSra", value: "Sra." },
+  { title: "app.identity.form.prefixPan", value: "Pan" },
+  { title: "app.identity.form.prefixPani", value: "Pani" },
 ];
+
+/**
+ * Salutations follow the person's market, not the UI language: Polish ones
+ * for PL (where Dr./Prof./Mgr. are the same for women and men, and only
+ * Pan/Pani carry a sex), Spanish ones everywhere else (MX today).
+ */
+export type SalutationMarket = "pl" | "es";
+
+const SALUTATIONS_BY_MARKET: Record<SalutationMarket, readonly string[]> = {
+  pl: ["Pan", "Pani", "Dr.", "Prof.", "Mgr."],
+  es: ["Dr.", "Dra.", "Prof.", "Profa.", "Lic.", "Licda.", "Sr.", "Sra."],
+};
+
+/**
+ * Masculine/feminine forms of the same salutation, per market — the patient
+ * form keeps salutation and sex in step through these (patientForm.ts's
+ * patientFormDerive). Salutations missing here are the same for both sexes.
+ */
+export const GENDERED_SALUTATIONS: Record<SalutationMarket, readonly { male: string; female: string }[]> = {
+  pl: [{ male: "Pan", female: "Pani" }],
+  es: [
+    { male: "Dr.", female: "Dra." },
+    { male: "Prof.", female: "Profa." },
+    { male: "Lic.", female: "Licda." },
+    { male: "Sr.", female: "Sra." },
+  ],
+};
+
+/** The form's own country (patient/lead carry `country_code`), else the signed-in user's. */
+export function salutationMarket(form: Record<string, unknown>): SalutationMarket {
+  const own = typeof form.country_code === "string" ? form.country_code : "";
+  const country = own || useAuthStore().user?.country_code || "";
+  return country.toUpperCase() === "PL" ? "pl" : "es";
+}
 
 /** Raw prefix values only — utils/initials.ts strips these before deriving
  *  avatar initials from a full "Dra. Lorena González" identity name. */
@@ -74,6 +113,7 @@ export function identityFields(): FormFieldDef[] {
       type: "combobox",
       labelKey: "app.identity.form.prefix",
       options: PREFIX_OPTIONS,
+      optionFilter: (o, form) => SALUTATIONS_BY_MARKET[salutationMarket(form)].includes(String(o.value)),
       cols: 2,
     },
     {
