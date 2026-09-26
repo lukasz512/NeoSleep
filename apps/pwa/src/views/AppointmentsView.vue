@@ -65,10 +65,25 @@
       :interval-minutes="30"
       :weekdays="[1, 2, 3, 4, 5, 6, 0]"
       class="view-appointments__calendar"
+      :event-ripple="false"
       data-testid="appointments-calendar"
       @click:time="onSlotClick"
       @click:event="onEventClick"
-    />
+    >
+      <!-- Apple Calendar look (Łukasz, 2026-09-26): tinted block, status-colored bar, name then time. -->
+      <template #event="{ event }">
+        <div
+          class="appt-event"
+          :class="`appt-event--${event.status}`"
+          :style="{ '--appt-color': event.tint }"
+          data-testid="appointment-event"
+        >
+          <span class="appt-event__title">{{ event.name }}</span>
+          <span class="appt-event__meta">{{ event.time }}</span>
+          <span v-if="event.doctor" class="appt-event__meta">{{ event.doctor }}</span>
+        </div>
+      </template>
+    </VCalendar>
 
     <AppointmentDialog
       v-model="showBooking"
@@ -167,7 +182,8 @@ function goToday() {
   focus.value = new Date();
 }
 
-const COLOR_HEX: Record<Appointment["status"], string> = { scheduled: "#128F83", completed: "#4CAF50", cancelled: "#9E9E9E", no_show: "#FF7043" };
+/** Status → tint, Apple Calendar-style: brand teal for booked, system green/orange/grey for the outcomes. */
+const STATUS_TINT: Record<Appointment["status"], string> = { scheduled: "#128F83", completed: "#34C759", cancelled: "#8E8E93", no_show: "#FF9500" };
 
 /** Positioned in each appointment's clinic zone, so 10:00 in the clinic sits on the 10:00 line. */
 const calendarEvents = computed(() =>
@@ -176,7 +192,12 @@ const calendarEvents = computed(() =>
     name: a.patient_name ?? "",
     start: toZonedCalendarDateTime(a.start_at, a.timezone),
     end: toZonedCalendarDateTime(a.end_at, a.timezone),
-    color: COLOR_HEX[a.status],
+    // The block paints itself (#event slot) — VCalendar's own fill stays out of the way.
+    color: "transparent",
+    tint: STATUS_TINT[a.status],
+    status: a.status,
+    time: formatTimeRange(a.start_at, a.end_at, a.timezone, lang.value),
+    doctor: a.practitioner_name ?? "",
   })),
 );
 
@@ -215,6 +236,9 @@ function openBooking(opts: { start?: string | null; appointment?: Appointment | 
 }
 
 function onSlotClick(_e: unknown, scope?: { date?: string; time?: string }) {
+  // A click on an appointment bubbles up to the day column's click:time too — that one opens the detail, not a new booking.
+  const target = (_e as { target?: unknown } | undefined)?.target;
+  if (target instanceof Element && target.closest(".v-event-timed")) return;
   const s = scope ?? (_e as { date?: string; time?: string });
   if (!s?.date || !s.time) return;
   const [h, m] = s.time.split(":").map(Number);
@@ -330,6 +354,55 @@ function onBookNext(a: Appointment) {
   border-radius: var(--pwa-radius);
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   overflow: hidden;
+}
+
+/* VCalendar's event wrapper: no fill, border or padding of its own — .appt-event draws the block. */
+.view-appointments__calendar :deep(.v-event-timed) {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none;
+  padding: 0 1px;
+  overflow: hidden;
+}
+
+.appt-event {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 3px 6px 3px 7px;
+  border-left: 3px solid var(--appt-color);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--appt-color) 16%, rgb(var(--v-theme-surface)));
+  color: color-mix(in srgb, var(--appt-color) 62%, rgb(var(--v-theme-on-surface)));
+  font-size: 0.75rem;
+  line-height: 1.25;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.appt-event:hover {
+  background: color-mix(in srgb, var(--appt-color) 24%, rgb(var(--v-theme-surface)));
+}
+
+.appt-event__title {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.appt-event__meta {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.appt-event--cancelled .appt-event__title {
+  text-decoration: line-through;
 }
 
 .view-appointments__list {

@@ -346,6 +346,7 @@
   "user.appointments.detail.title": "Wizyta",
   "user.appointments.detail.clinic": "Klinika",
   "user.appointments.detail.cancel": "Odwołaj wizytę",
+  "user.appointments.detail.cancelShort": "Odwołaj",
   "user.appointments.detail.cancelConfirm": "Odwołać tę wizytę? Termin znów będzie wolny.",
   "user.appointments.detail.noShow": "Nieobecność",
   "user.appointments.detail.reschedule": "Przełóż",

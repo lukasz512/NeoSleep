@@ -46,21 +46,64 @@
         <VAlert v-if="error" type="warning" variant="tonal" density="compact" class="mt-4">{{ error }}</VAlert>
     </div>
 
+    <!-- One layout for phone and desktop: the main outcome as a full-width button, the other three as
+         equal icon tiles under it (Łukasz, 2026-09-26: the text-only row was unreadable). -->
     <template v-if="appointment?.status === 'scheduled'" #actions>
-      <!-- Wraps into two rows on a phone: the status buttons stay together, cancel sits apart. -->
       <div class="appointment-detail__actions">
-        <AppButton v-if="changeable" variant="text" color="error" :loading="busy === 'cancelled'" data-testid="appointment-cancel" @click="confirmCancel = true">
-          {{ t('user.appointments.detail.cancel') }}
+        <AppButton
+          v-if="canClose"
+          block
+          size="large"
+          color="primary"
+          variant="flat"
+          class="appointment-detail__primary"
+          :loading="busy === 'completed'"
+          data-testid="appointment-complete"
+          @click="setStatus('completed')"
+        >
+          <AppIcon name="check-circle" class="appointment-detail__primary-icon" />
+          {{ t('user.appointments.detail.complete') }}
         </AppButton>
-        <div class="appointment-detail__actions-main">
-          <AppButton v-if="canClose" variant="text" :loading="busy === 'no_show'" data-testid="appointment-no-show" @click="setStatus('no_show')">
-            {{ t('user.appointments.detail.noShow') }}
+        <div class="appointment-detail__tiles">
+          <AppButton
+            v-if="changeable"
+            variant="tonal"
+            class="appointment-detail__tile"
+            data-testid="appointment-reschedule"
+            @click="emit('reschedule', appointment!)"
+          >
+            <span class="appointment-detail__tile-inner">
+              <AppIcon name="calendar-clock" class="appointment-detail__tile-icon" />
+              {{ t('user.appointments.detail.reschedule') }}
+            </span>
           </AppButton>
-          <AppButton v-if="changeable" variant="text" data-testid="appointment-reschedule" @click="emit('reschedule', appointment)">
-            {{ t('user.appointments.detail.reschedule') }}
+          <AppButton
+            v-if="canClose"
+            variant="tonal"
+            color="warning"
+            class="appointment-detail__tile"
+            :loading="busy === 'no_show'"
+            data-testid="appointment-no-show"
+            @click="setStatus('no_show')"
+          >
+            <span class="appointment-detail__tile-inner">
+              <AppIcon name="user-x" class="appointment-detail__tile-icon" />
+              {{ t('user.appointments.detail.noShow') }}
+            </span>
           </AppButton>
-          <AppButton v-if="canClose" color="primary" variant="flat" :loading="busy === 'completed'" data-testid="appointment-complete" @click="setStatus('completed')">
-            {{ t('user.appointments.detail.complete') }}
+          <AppButton
+            v-if="changeable"
+            variant="tonal"
+            color="error"
+            class="appointment-detail__tile"
+            :loading="busy === 'cancelled'"
+            data-testid="appointment-cancel"
+            @click="confirmCancel = true"
+          >
+            <span class="appointment-detail__tile-inner">
+              <AppIcon name="x-circle" class="appointment-detail__tile-icon" />
+              {{ t('user.appointments.detail.cancelShort') }}
+            </span>
           </AppButton>
         </div>
       </div>
@@ -90,6 +133,7 @@ import { useNotifications } from "../composables/useNotifications";
 import { useAppointments, APPOINTMENT_STATUS_COLOR, type Appointment, type AppointmentStatus } from "../composables/useAppointments";
 import { formatTimeRange, formatDayLabel, timeZoneLabel } from "../utils/appointmentTime";
 import AppButton from "./AppButton.vue";
+import AppIcon from "./AppIcon.vue";
 import AppFormDialog from "./AppFormDialog.vue";
 import AppConfirmDialog from "./AppConfirmDialog.vue";
 
@@ -210,19 +254,47 @@ async function onConfirmCancel() {
 }
 
 .appointment-detail__actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
   gap: 8px;
   width: 100%;
 }
 
-.appointment-detail__actions-main {
+.appointment-detail__primary {
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.appointment-detail__primary-icon {
+  margin-right: 8px;
+}
+
+.appointment-detail__tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  grid-auto-flow: column;
+  gap: 8px;
+}
+
+.appointment-detail__tile {
+  height: 72px !important;
+  min-width: 0;
+  border-radius: 14px !important;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.8125rem;
+}
+
+.appointment-detail__tile-inner {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 4px;
-  margin-left: auto;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  white-space: normal;
+  line-height: 1.2;
+}
+
+.appointment-detail__tile-icon {
+  width: 22px;
+  height: 22px;
 }
 </style>

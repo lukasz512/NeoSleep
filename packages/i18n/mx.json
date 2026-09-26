@@ -346,6 +346,7 @@
   "user.appointments.detail.title": "Cita",
   "user.appointments.detail.clinic": "Clínica",
   "user.appointments.detail.cancel": "Cancelar cita",
+  "user.appointments.detail.cancelShort": "Cancelar",
   "user.appointments.detail.cancelConfirm": "¿Cancelar esta cita? El horario quedará libre.",
   "user.appointments.detail.noShow": "No asistió",
   "user.appointments.detail.reschedule": "Reprogramar",

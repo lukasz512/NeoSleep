@@ -343,6 +343,7 @@
   "user.appointments.detail.title": "Appointment",
   "user.appointments.detail.clinic": "Clinic",
   "user.appointments.detail.cancel": "Cancel appointment",
+  "user.appointments.detail.cancelShort": "Cancel",
   "user.appointments.detail.cancelConfirm": "Cancel this appointment? The time becomes free again.",
   "user.appointments.detail.noShow": "No-show",
   "user.appointments.detail.reschedule": "Reschedule",
