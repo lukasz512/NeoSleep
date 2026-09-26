@@ -22,6 +22,7 @@ vi.mock("../../composables/useNotifications", () => ({
 import "../FormRenderer.vue";
 import { useAuthStore } from "../../stores/auth";
 import PatientStudiesPanel from "./PatientStudiesPanel.vue";
+import QuestionnaireQrDialog from "../questionnaire/QuestionnaireQrDialog.vue";
 
 function jsonResponse(ok: boolean, status: number, body: unknown, contentType = "application/json") {
   return {
@@ -50,8 +51,10 @@ const item = (key: string, group: string, status: string, over: Record<string, u
 });
 
 let checklistBody: Record<string, unknown>;
+let failCreate = false;
 
 beforeEach(() => {
+  failCreate = false;
   checklistBody = {
     items: [
       item("informedConsent", "consent", "missing", { actions: actions({ qr: true }) }),
@@ -93,7 +96,8 @@ beforeEach(() => {
     if (path.endsWith("/checklist")) return jsonResponse(true, 200, structuredClone(checklistBody));
     if (path.endsWith("/print")) return jsonResponse(true, 200, null, "application/pdf");
     if (path.endsWith("/questionnaire-requests") && init?.method === "POST") {
-      const created = { id: "qr-1", items: ["informedConsent", "stopBang"], completed_items: [], expires_at: "2026-09-26T10:00:00Z" };
+      if (failCreate) return jsonResponse(false, 500, { error: "boom" });
+      const created = { id: "qr-1", items: ["informedConsent", "stopBang"], completed_items: [], expires_at: new Date(Date.now() + 86_400_000).toISOString() };
       (checklistBody.pending_requests as unknown[]).push(created);
       return jsonResponse(true, 201, { ...created, url: `https://pwa.test/q#${"b".repeat(43)}` });
     }
@@ -252,7 +256,49 @@ describe("PatientStudiesPanel — the Estudios checklist", () => {
     expect(JSON.parse((init as RequestInit).body as string)).toEqual({}); // no items → everything still missing
     await vi.waitFor(() => expect(document.body.querySelector(".qr-dialog__code")).not.toBeNull());
     expect(document.body.textContent).toContain("0 of 2 steps done");
-    expect(wrapper.text()).toContain("Waiting for the patient");
+    // The QR button itself now carries the status (NEO-93) — no separate banner.
+    const status = wrapper.find(".qr-status");
+    expect(status.attributes("data-state")).toBe("waiting");
+    expect(status.text()).toContain("Waiting for the patient");
+    expect(status.text()).toMatch(/0 of 2 · expires in (23:59:5\d|24:00:00)/);
+    expect(wrapper.find(".studies__pending").exists()).toBe(false);
+  });
+
+  it("a failed link turns the QR button into Retry, and Retry creates the link", async () => {
+    failCreate = true;
+    const wrapper = await mountPanel();
+    await button(wrapper, "QR for the patient")!.trigger("click");
+    await flushPromises();
+    expect(wrapper.find(".qr-status").attributes("data-state")).toBe("error");
+    expect(wrapper.find(".qr-status").text()).toContain("Retry");
+
+    failCreate = false;
+    await button(wrapper, "Retry")!.trigger("click");
+    await flushPromises();
+    expect(wrapper.find(".qr-status").attributes("data-state")).toBe("waiting");
+  });
+
+  it("the link leaving the pending list (patient finished) shows 'All received', then the button hides when nothing is left", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const wrapper = await mountPanel();
+      await button(wrapper, "QR for the patient")!.trigger("click");
+      await flushPromises();
+
+      // The patient completes both steps: the link is used, and nothing is left to send.
+      const body = checklistBody as { items: { key: string; status: string }[]; pending_requests: unknown[] };
+      body.pending_requests = [];
+      for (const it of body.items) if (it.status === "missing" || it.status === "pending_patient") it.status = "done";
+      wrapper.findComponent(QuestionnaireQrDialog).vm.$emit("poll"); // the open QR dialog's own refresh
+      await flushPromises();
+      expect(wrapper.find(".qr-status").attributes("data-state")).toBe("done");
+      expect(wrapper.find(".qr-status").text()).toContain("All received");
+
+      await vi.advanceTimersByTimeAsync(2300);
+      expect(wrapper.find(".qr-status").exists()).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("'Upload file' on a row preselects that item in the Add-study dialog", async () => {

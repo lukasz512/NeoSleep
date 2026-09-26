@@ -67,16 +67,17 @@ export function insertQuestionnaireRequest(
 }
 
 /**
- * One live link per checklist item: issuing a new link retires every
- * pending one that covers any of the same items ("show QR again" — the raw
- * token is never stored, so it can't be re-shown).
+ * One live link per patient (Łukasz, 2026-09-26, NEO-93): issuing a new
+ * link retires every pending one, whatever items it covers — the Estudios
+ * QR button shows a single link's status. Also how "show QR again" works:
+ * the raw token is never stored, so it can't be re-shown.
  */
-export function cancelPendingQuestionnaireRequests(client: PoolClient, patientId: string, items: string[]): Promise<number> {
+export function cancelPendingQuestionnaireRequests(client: PoolClient, patientId: string): Promise<number> {
   return run("cancelPendingQuestionnaireRequests", async () => {
     const result = await client.query(
       `UPDATE questionnaire_request SET cancelled_at = now()
-        WHERE patient_id = $1 AND items && $2::text[] AND used_at IS NULL AND cancelled_at IS NULL AND expires_at > now()`,
-      [patientId, items]
+        WHERE patient_id = $1 AND used_at IS NULL AND cancelled_at IS NULL AND expires_at > now()`,
+      [patientId]
     );
     return result.rowCount ?? 0;
   });

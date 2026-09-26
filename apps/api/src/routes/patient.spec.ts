@@ -235,6 +235,20 @@ describe("patient self-fill: doctor → QR link → patient (public) → doctor"
       .send({ token, step: "medicalHistory", consent: true, answers: Object.fromEntries(MEDICAL_HISTORY_QUESTIONS.map((q) => [q, false])) });
     expect(submit.status).toBe(410);
   });
+
+  it("a new link retires every other pending link of the patient, even for different items (NEO-93)", async () => {
+    const { auth, patientId } = await authAndPatient();
+    const first = await request(app).post(`/api/v1/patient/${patientId}/questionnaire-requests`).set("Authorization", auth).send({ kind: "medical_history" });
+    const second = await request(app).post(`/api/v1/patient/${patientId}/questionnaire-requests`).set("Authorization", auth).send({ kind: "stop_bang" });
+    expect([first.status, second.status]).toEqual([201, 201]);
+
+    const checklist = await request(app).get(`/api/v1/patient/${patientId}/checklist`).set("Authorization", auth);
+    expect(checklist.body.pending_requests.map((r: { id: string }) => r.id)).toEqual([second.body.id]);
+
+    const oldToken = String(first.body.url).split("/q#")[1];
+    const lookup = await request(app).post("/api/v1/public/questionnaire/lookup").send({ token: oldToken });
+    expect(lookup.status).toBe(410);
+  });
 });
 
 describe("/api/v1/patient/:id/checklist + print + uploads (Estudios, ADR-024)", () => {

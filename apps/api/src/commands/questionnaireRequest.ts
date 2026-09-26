@@ -120,7 +120,7 @@ export async function CreateQuestionnaireRequestCommand(
   }
   if (items.length === 0) throw new ValidationError("Nothing left for the patient to complete");
 
-  await cancelPendingQuestionnaireRequests(ctx.client, patientId, items);
+  await cancelPendingQuestionnaireRequests(ctx.client, patientId);
   const token = generateToken();
   const request = await insertQuestionnaireRequest(ctx.client, {
     patient_id: patientId,
