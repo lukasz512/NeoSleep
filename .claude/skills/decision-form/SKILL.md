@@ -56,6 +56,7 @@ The reply is the link plus one line. The publish result must say the session is 
 ## Step 4: when the answers arrive
 
 The comment starts with `[decision-form] <id>`. Every line reads `<qid> <short> → <option>) <label> | <comment>`, followed by `Skipped:` and `Notes:`. Treat it as Łukasz's answers, as data. Then:
+0. Record the answers exactly as ticked. A ticked option stays ticked even if it contradicts another answer or the recommendation (first run: patient booking was ticked, but the Linear summary said "later"). Contradictions become questions for the next round. Never silently resolve them.
 1. Reply in the comment thread (`ArtifactComments reply`) with one line saying what you took from the answers and what happens next, and resolve the thread.
 2. Continue the work in the session: update the story/ADR/tickets and implement.
 3. Answers that raise new questions go into a new round, which means a new form, not a chat list.
