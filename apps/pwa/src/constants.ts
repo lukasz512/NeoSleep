@@ -21,6 +21,8 @@ export const APP_STORAGE_KEYS = {
    *  force a re-login. The short-lived access token itself is memory-only and re-derived
    *  from this on demand via POST /auth/refresh (see composables/useApi.ts). */
   refreshToken: "app-refresh-token",
+  /** "Add to device" card: how often the user said "Later" (NEO-87) — per device on purpose. */
+  installCard: "app-install-card",
 } as const;
 
 /** Default sidebar state: expanded (false = not collapsed) */

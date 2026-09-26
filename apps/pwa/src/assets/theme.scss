@@ -655,7 +655,8 @@ body {
  * reaches the inner content div.
  */
 .form-renderer-dialog,
-.event-form-dialog {
+.event-form-dialog,
+.install-card-overlay {
   z-index: 10000 !important;
 }
 

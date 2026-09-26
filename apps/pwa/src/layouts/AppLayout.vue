@@ -10,6 +10,8 @@
     </a>
 
     <AppOfflineBar />
+    <!-- NEO-87: "Add NeoSleep to this device" — opens once after login, and from the avatar menu. -->
+    <AppInstallCard />
 
     <AppShell
       :rail-collapsed="sidebarCollapsed"
@@ -88,7 +90,6 @@
       <!-- Account: top right on both breakpoints (NEO-55), avatar + name/role
            on desktop, avatar only on mobile. The menu opens below it. -->
       <template #app-bar-actions>
-        <AppInstallButton :compact="isMobile" />
         <VMenu
           v-model="menuOpen"
           location="bottom end"
@@ -219,7 +220,7 @@ import {
   AppNavLinks,
   AppUserMenuPanel,
   AppOfflineBar,
-  AppInstallButton,
+  AppInstallCard,
 } from "./components";
 import AppButton from "../components/AppButton.vue";
 import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
