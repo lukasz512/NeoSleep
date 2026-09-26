@@ -265,6 +265,30 @@ describe("patient self-fill: doctor → QR link → patient (public) → doctor"
     expect((await pending()).opened_at).toBe(firstOpen); // reopening keeps the first time
   });
 
+  it("GET one link's status: flips to opened after the patient's lookup; 404 for another patient's link, 403 for rep (NEO-117)", async () => {
+    const { auth, patientId } = await authAndPatient();
+    const link = await request(app).post(`/api/v1/patient/${patientId}/questionnaire-requests`).set("Authorization", auth).send({ kind: "medical_history" });
+    const statusUrl = `/api/v1/patient/${patientId}/questionnaire-requests/${link.body.id}`;
+
+    const before = await request(app).get(statusUrl).set("Authorization", auth);
+    expect(before.status).toBe(200);
+    expect(before.body).toMatchObject({ id: link.body.id, status: "pending", opened_at: null, completed_items: [] });
+    expect(before.body).not.toHaveProperty("token_hash");
+
+    const token = String(link.body.url).split("/q#")[1];
+    await request(app).post("/api/v1/public/questionnaire/lookup").send({ token });
+    const after = await request(app).get(statusUrl).set("Authorization", auth);
+    expect(after.body.opened_at).toEqual(expect.any(String));
+
+    const other = await authAndPatient();
+    const foreign = await request(app).get(`/api/v1/patient/${other.patientId}/questionnaire-requests/${link.body.id}`).set("Authorization", other.auth);
+    expect(foreign.status).toBe(404);
+
+    const rep = await authAndPatient("rep");
+    const denied = await request(app).get(`/api/v1/patient/${rep.patientId}/questionnaire-requests/${link.body.id}`).set("Authorization", rep.auth);
+    expect(denied.status).toBe(403);
+  });
+
   it("the checklist reports a link that ran out unused as expired_request, until a newer link supersedes it (NEO-93)", async () => {
     const { auth, patientId } = await authAndPatient();
     const link = await request(app).post(`/api/v1/patient/${patientId}/questionnaire-requests`).set("Authorization", auth).send({ kind: "medical_history" });
