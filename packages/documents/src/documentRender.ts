@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { documentT, normalizeLocale } from "./documentI18n.js";
+import { getDocumentRefCode } from "./documentManifest.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Both live at the package root (sibling to src/ and dist/), not under src/
@@ -163,6 +164,14 @@ function getDocFieldsCss(): string {
   return cachedDocFieldsCss;
 }
 
+let cachedDocThemeCss: string | null = null;
+
+/** Shared header + title-band CSS (clinical theme) — one source for every template, see assets/docTheme.css. */
+function getDocThemeCss(): string {
+  if (cachedDocThemeCss === null) cachedDocThemeCss = fs.readFileSync(path.join(ASSETS_DIR, "docTheme.css"), "utf-8").trim();
+  return cachedDocThemeCss;
+}
+
 function loadTemplate(name: string): string {
   return fs.readFileSync(path.join(TEMPLATES_DIR, `${name}.html`), "utf-8");
 }
@@ -172,6 +181,7 @@ function loadTemplate(name: string): string {
  *   {{brand:primary}} / {{brand:secondary}} / {{brand:logo}} — same for
  *     every render, sourced from BRAND/getBrandLogoSvg() above.
  *   {{style:docFields}} — shared field-grid CSS (assets/docFields.css).
+ *   {{style:docTheme}} — shared header + title-band CSS (assets/docTheme.css).
  *   {{documents.<template>.<key>}} — locale-driven prose, sourced from
  *     packages/i18n/{en,pl,mx}.json via documentT().
  *
@@ -196,7 +206,8 @@ function fillStaticTokens(html: string, locale: string | null | undefined): stri
     .replaceAll("{{brand:secondary}}", BRAND.secondary)
     .replaceAll("{{brand:logo}}", getBrandLogoSvg())
     .replaceAll("{{brand:contactLine}}", getContactLines(locale).join(" · "))
-    .replaceAll("{{style:docFields}}", getDocFieldsCss());
+    .replaceAll("{{style:docFields}}", getDocFieldsCss())
+    .replaceAll("{{style:docTheme}}", getDocThemeCss());
 
   const params = getLegalEntityParams(locale);
   const i18nTokenPattern = /\{\{(documents\.[a-zA-Z0-9_.]+)\}\}/g;
@@ -248,7 +259,7 @@ export function renderDocumentHtml(
   contentHtml?: string,
   slots?: Record<string, string>,
 ): string {
-  const html = fillStaticTokens(loadTemplate(templateName), locale);
+  const html = fillStaticTokens(loadTemplate(templateName).replaceAll("{{doc:ref}}", getDocumentRefCode(templateName)), locale);
   if (contentHtml === undefined) return html;
   const params = getLegalEntityParams(locale);
   const filledContent = fillContentParams(contentHtml, params);
@@ -286,32 +297,41 @@ export function renderDocumentHtml(
 /** Muted gray for the footer specifically — distinct from BRAND.secondary (used for body labels/borders, too dark to read as a footer-quiet tone). Puppeteer's footerTemplate renders in its own isolated frame with no access to the main page's stylesheet/CSS variables, so this has to be a literal inline value, not var(--secondary). */
 const FOOTER_TEXT_COLOR = "#8A8A89";
 
-/** Thin separator line above the footer — deliberately lighter than FOOTER_TEXT_COLOR (that's tuned for readable small text, this just needs to be a faint rule). Same isolated-frame constraint as FOOTER_TEXT_COLOR applies (literal value, not a CSS var). */
-const FOOTER_BORDER_COLOR = "#DADADA";
+/** Faint rule the brand-colored segment sits on. Same isolated-frame constraint as FOOTER_TEXT_COLOR applies (literal value, not a CSS var). */
+const FOOTER_BORDER_COLOR = "#E3E9E8";
+
+/** Darker gray for the first contact line (the company name) so the block has one anchor line. */
+const FOOTER_STRONG_COLOR = "#5F6B69";
 
 /**
  * Puppeteer page.pdf()'s footerTemplate option is the only reliable way to
  * repeat a footer on every page (CSS repeated-per-page footers aren't
  * consistent across browsers, see the informedConsent template's own header
- * comment) — this builds that footer HTML. Three-column layout (~2:9:1,
- * confirmed by Łukasz 2026-09-16): doc-ref code + page count on the left
- * (narrow), the contact block right-aligned in the middle (wide), the
- * icon-only brand mark (not the full wordmark — too wide for this column,
- * see getBrandIconSvg) on the right, sized to span the contact block's own
- * 3-line height.
- * "documents.common.page" carries just the localized word
- * ("Page"/"Página"/"Strona"); pageNumber/totalPages are Puppeteer's own
- * placeholder classes, filled in by Chrome itself.
+ * comment) — this builds that footer HTML.
+ *
+ * "Clinical modern" layout (Łukasz, 2026-09-26, option C — matches the
+ * title band in assets/docTheme.css): a faint rule with a short
+ * brand-colored segment at its left end, then the jurisdiction's contact
+ * block (left, wide), a dark "Page X of Y" pill with the doc-ref code under
+ * it, and the icon-only brand mark (the full wordmark is too wide here, see
+ * getBrandIconSvg). Rules are borders, not backgrounds, so they print even
+ * without color-adjust; the pill's fill needs print-color-adjust: exact.
+ * pageNumber/totalPages are Puppeteer's own placeholder classes, filled in by
+ * Chrome itself. A verification ID + QR code slot here is planned, not built.
  */
 export function renderDocumentFooterHtml(docRefCode: string, locale: string | null | undefined): string {
   const pageWord = documentT(locale, "documents.common.page");
+  const ofWord = documentT(locale, "documents.common.of");
   const contactLinesHtml = getContactLines(locale)
-    .map((line) => `<div>${line}</div>`)
+    .map((line, i) => `<div${i === 0 ? ` style="color:${FOOTER_STRONG_COLOR};"` : ""}>${line}</div>`)
     .join("");
-  return `<div style="display:flex;justify-content:space-between;align-items:center;width:100%;box-sizing:border-box;padding:6px 15mm 0;border-top:1px solid ${FOOTER_BORDER_COLOR};font-family:Arial,sans-serif;font-size:7.5pt;color:${FOOTER_TEXT_COLOR};line-height:1.5;">
-    <div style="width:16.66%;">${docRefCode} · ${pageWord} <span class="pageNumber"></span> / <span class="totalPages"></span></div>
-    <div style="width:75%;text-align:right;">${contactLinesHtml}</div>
-    <div style="width:8.33%;display:flex;justify-content:flex-end;align-items:center;">${getBrandIconSvgAtHeight(32)}</div>
+  return `<div style="width:100%;box-sizing:border-box;padding:0 14mm;font-family:Arial,sans-serif;font-size:7pt;color:${FOOTER_TEXT_COLOR};line-height:1.45;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+    <div style="display:flex;align-items:center;"><div style="width:16mm;border-top:2px solid ${BRAND.primary};"></div><div style="flex:1;border-top:1px solid ${FOOTER_BORDER_COLOR};"></div></div>
+    <div style="display:flex;align-items:center;gap:5mm;padding-top:5px;">
+      <div style="flex:1;min-width:0;">${contactLinesHtml}</div>
+      <div style="text-align:center;white-space:nowrap;"><div style="display:inline-block;background:${BRAND.secondary};color:#fff;border-radius:8px;padding:1px 8px;">${pageWord} <span class="pageNumber"></span> ${ofWord} <span class="totalPages"></span></div><div style="margin-top:2px;font-size:6.5pt;">${docRefCode}</div></div>
+      <div style="display:flex;align-items:center;">${getBrandIconSvgAtHeight(26)}</div>
+    </div>
   </div>`;
 }
 

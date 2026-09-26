@@ -4,7 +4,7 @@ import type { MedicalHistoryRecord, OralExamRecord, StopBangRecord } from "../db
 import { getPatientPdfContext, formatBirthDate } from "../db/patientPdfContext.js";
 import { GetPatientChecklistQuery, POLYSOMNOGRAPHY_KEY, type ChecklistItem } from "../queries/patientChecklist.js";
 import { GetCurrentDocumentContentQuery } from "../queries/documentContent.js";
-import { renderDocumentHtml, DOCUMENT_MANIFEST } from "@neo/documents";
+import { renderDocumentHtml, renderDocumentFooterHtml, getDocumentRefCode, DOCUMENT_MANIFEST } from "@neo/documents";
 import { renderHtmlToPdf } from "../services/documentRenderer.js";
 import { uploadPartnerDocument, deletePartnerDocument, getPartnerDocumentSignedUrl } from "../services/partnerDocuments.js";
 import { NotFoundError, ValidationError } from "../errors.js";
@@ -127,6 +127,8 @@ export async function PrintChecklistItemCommand(
   if (html.includes("{{content}}")) throw new NotFoundError("Document content", `${key}/${locale}`);
 
   const bytes = await renderHtmlToPdf(html, {
+    footerTemplate: renderDocumentFooterHtml(getDocumentRefCode(key), locale),
+    marginBottom: "22mm",
     dataFields: {
       nombre_paciente: pdfContext.patient_name,
       fecha_nacimiento: formatBirthDate(pdfContext.patient_birth_date, locale),

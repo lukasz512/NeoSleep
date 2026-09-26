@@ -17,7 +17,7 @@ import { listPatientChecklistConfig } from "../db/documentTemplateEntityType.js"
 import { GetPatientChecklistQuery } from "../queries/patientChecklist.js";
 import { GetCurrentDocumentContentQuery } from "../queries/documentContent.js";
 import { sanitizeDocumentContentHtml } from "./documentContent.js";
-import { renderDocumentHtml, fillContentForLocale, DOCUMENT_MANIFEST } from "@neo/documents";
+import { renderDocumentHtml, renderDocumentFooterHtml, getDocumentRefCode, fillContentForLocale, DOCUMENT_MANIFEST } from "@neo/documents";
 import { renderHtmlToPdf } from "../services/documentRenderer.js";
 import { uploadPartnerDocument, deletePartnerDocument } from "../services/partnerDocuments.js";
 import { hashToken } from "../utils/hashToken.js";
@@ -339,6 +339,8 @@ export async function SubmitPublicQuestionnaireCommand(
   const signedAt = new Date();
   const html = renderDocumentHtml(step, locale, prepared.version.content_html);
   const pdfBytes = await renderHtmlToPdf(html, {
+    footerTemplate: renderDocumentFooterHtml(getDocumentRefCode(step), locale),
+    marginBottom: "22mm",
     dataFields: {
       nombre_paciente: prepared.context.patient_name,
       fecha_nacimiento: formatBirthDate(prepared.context.patient_birth_date, locale),

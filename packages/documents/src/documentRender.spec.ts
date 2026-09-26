@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { renderDocumentHtml, fillContentParams } from "./documentRender.js";
+import { renderDocumentHtml, renderDocumentFooterHtml, fillContentParams } from "./documentRender.js";
+import { DOCUMENT_MANIFEST, getDocumentRefCode } from "./documentManifest.js";
 
 describe("fillContentParams", () => {
   it("substitutes a {name}-style param", () => {
@@ -121,5 +122,38 @@ describe("renderDocumentHtml — partner onboarding templates (NEO-51)", () => {
     const html = renderDocumentHtml("partnerAgreement", "pl", "<p>x</p>");
     expect(html).toContain('data-image="counterparty_signature"');
     expect(html).toContain('data-image="signer_signature"');
+  });
+});
+
+describe("clinical document theme (header, title band, footer)", () => {
+  const templates = DOCUMENT_MANIFEST.filter((e) => e.templateKey !== "__test");
+
+  it.each(templates.map((e) => [e.templateKey, e.locales[0]] as const))(
+    "%s: shared theme CSS is inlined, title band present, reference code filled from the manifest",
+    (key, locale) => {
+      const html = renderDocumentHtml(key, locale);
+      expect(html).not.toContain("{{style:docTheme}}");
+      expect(html).not.toContain("{{doc:ref}}");
+      expect(html).toContain(".doc-title-band {");
+      expect(html).toContain('<div class="doc-title-band">');
+      expect(html).toContain(`data-field="doc_ref">${getDocumentRefCode(key)}<`);
+      expect(html).not.toContain("documents.common.category.");
+    },
+  );
+
+  it("labels each title band with a localized category", () => {
+    expect(renderDocumentHtml("partnerAgreement", "pl")).toContain('<div class="doc-eyebrow">Umowa · Partner medyczny</div>');
+    expect(renderDocumentHtml("informedConsent", "mx")).toContain('<div class="doc-eyebrow">Consentimiento informado</div>');
+    expect(renderDocumentHtml("stopBang", "en")).toContain('<div class="doc-eyebrow">Screening questionnaire</div>');
+  });
+
+  it("footer shows a localized 'page X of Y' pill, the reference code and the jurisdiction's contact block", () => {
+    const pl = renderDocumentFooterHtml("NSL-PA-PL v1.1", "pl");
+    expect(pl).toContain('Strona <span class="pageNumber"></span> z <span class="totalPages"></span>');
+    expect(pl).toContain("NSL-PA-PL v1.1");
+    expect(pl).toContain("Łąkowa 3, 77-127 Nakla, Polska");
+    const mx = renderDocumentFooterHtml("NSL-SB v1", "mx");
+    expect(mx).toContain('Página <span class="pageNumber"></span> de <span class="totalPages"></span>');
+    expect(mx).toContain("Ciudad de México");
   });
 });

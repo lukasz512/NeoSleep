@@ -1,0 +1,66 @@
+/*
+ * Shared "clinical modern" header + title block for every generated document
+ * (Łukasz, 2026-09-26 — option C of the three proposals: NHS / Mayo Clinic /
+ * patient-portal style). Inlined into every template via the style:docTheme
+ * token (documentRender.ts), placed last in each template's <style> so it
+ * is the one source for these rules.
+ *
+ * Page 1 top: logo left, document reference code right, no rule between
+ * them. Below it the title band: a brand-colored left edge on a faint tint,
+ * a small uppercase category line ("Informed consent", "Agreement · Medical
+ * partner"), the title left-aligned, then the subtitle / date line.
+ * The per-page footer is separate (renderDocumentFooterHtml).
+ */
+header.doc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 0 0 12px;
+}
+header.doc-header .logo { display: block; }
+header.doc-header .logo svg { height: 24px; width: auto; display: block; }
+header.doc-header .doc-ref {
+  font-size: 7.5pt;
+  font-weight: 400;
+  color: #7a8583;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.doc-title-band {
+  margin: 0 0 14px;
+  padding: 9px 16px 10px 14px;
+  border-left: 4px solid var(--primary);
+  background: #f2f8f7;
+  break-inside: avoid;
+  break-after: avoid;
+}
+.doc-title-band .doc-eyebrow {
+  font-size: 7.5pt;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--primary);
+  margin: 0 0 2px;
+  text-align: left;
+}
+.doc-title-band h1 {
+  font-size: 15pt;
+  font-weight: 500;
+  color: var(--text, #1a1a1a);
+  line-height: 1.25;
+  margin: 0;
+  text-align: left;
+  text-wrap: balance;
+}
+.doc-title-band h2,
+.doc-title-band .date-line {
+  font-size: 9.5pt;
+  font-weight: 400;
+  color: var(--secondary);
+  line-height: 1.4;
+  margin: 2px 0 0;
+  text-align: left;
+}
