@@ -3,20 +3,20 @@
     <AppAvatar v-bind="avatarProps" class="entity-link__avatar" />
     <slot />
     <span v-if="isLarge" class="entity-link__text">
-      <span class="entity-link__label">{{ displayLabel }}</span>
+      <span class="entity-link__label" data-page-hero-name>{{ displayLabel }}</span>
       <IdentityDetails :details="details" :more="moreDetails" />
     </span>
-    <span v-else>{{ displayLabel }}</span>
+    <span v-else data-page-hero-name>{{ displayLabel }}</span>
   </RouterLink>
   <span v-else-if="label" :title="shortened ? label : undefined" :class="['entity-link__plain', { 'entity-link--two-line': isLarge }]">
     <AppAvatar v-bind="avatarProps" class="entity-link__avatar" />
     <!-- Optional decoration between avatar and name (e.g. LeadsView's gender icon). -->
     <slot />
     <span v-if="isLarge" class="entity-link__text">
-      <span class="entity-link__label">{{ displayLabel }}</span>
+      <span class="entity-link__label" data-page-hero-name>{{ displayLabel }}</span>
       <IdentityDetails :details="details" :more="moreDetails" />
     </span>
-    <span v-else>{{ displayLabel }}</span>
+    <span v-else data-page-hero-name>{{ displayLabel }}</span>
   </span>
   <span v-else class="entity-link__empty">—</span>
 </template>

@@ -11,6 +11,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import en from "@i18n/en.json";
 import AppEntityList from "./AppEntityList.vue";
+import { clearListSnapshots } from "../composables/useEntityList";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -50,6 +51,7 @@ const mountedWrappers: VueWrapper[] = [];
 afterEach(() => {
   for (const w of mountedWrappers.splice(0)) w.unmount();
   document.body.innerHTML = "";
+  clearListSnapshots();
 });
 
 async function mountEntityList(opts: {
@@ -106,6 +108,31 @@ function vi_stubFetch(impl: () => Promise<Response>) {
 }
 
 describe("AppEntityList", () => {
+  // NEO-97: coming back to a list (e.g. Back from a record) shows its last
+  // page at once and refreshes quietly — no skeleton, so the page transition
+  // can fly the record's avatar + name straight back into its row.
+  describe("last-shown page", () => {
+    async function remount(opts: Parameters<typeof mountEntityList>[0]) {
+      for (const w of mountedWrappers.splice(0)) w.unmount();
+      return mountEntityList(opts);
+    }
+
+    it("a remount renders the previous rows immediately, before its refresh answers", async () => {
+      const first = await mountEntityList({ items: [{ id: "7", name: "Sofía Ramírez" }] });
+      expect(first.text()).toContain("Sofía Ramírez");
+      const second = await remount({ fetchImpl: () => new Promise<Response>(() => {}) });
+      expect(second.find(".app-entity-list__skeleton").exists()).toBe(false);
+      expect(second.text()).toContain("Sofía Ramírez");
+    });
+
+    it("a failed load forgets the page, so the next visit starts from the skeleton again", async () => {
+      await mountEntityList({ items: [{ id: "7", name: "Sofía Ramírez" }] });
+      await remount({ fetchImpl: () => Promise.reject(new TypeError("Failed to fetch")) });
+      const third = await remount({ fetchImpl: () => new Promise<Response>(() => {}) });
+      expect(third.find(".app-entity-list__skeleton").exists()).toBe(true);
+    });
+  });
+
   // NEO-81: the list's error state says what actually went wrong — a server
   // failure is not a "network problem", and gets a support reference.
   describe("error state by error class", () => {
