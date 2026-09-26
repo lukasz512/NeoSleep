@@ -288,6 +288,7 @@ import { brandColors } from "@brand/colors";
 import { BRAND_PWA_BADGE_URL, BRAND_PWA_BADGE_DARK_URL } from "@brand/logos";
 import { createUseLoginFlow } from "../composables/useLoginFlow";
 import { createUseForgotPasswordFlow } from "../composables/useForgotPasswordFlow";
+import { PASSWORD_CHANGED_NOTICE } from "../composables/useChangePasswordFlow";
 import { createUseResetPasswordFlow } from "../composables/useResetPasswordFlow";
 import { useMagneticPointer } from "../composables/useMagneticPointer";
 import { AUTH_BACKDROP_KEY } from "../composables/authBackdrop";
@@ -357,6 +358,15 @@ if (googleErrorKey) {
   notify(t(googleErrorKey), "error", googleErrorKey);
   void router.replace({
     query: Object.fromEntries(Object.entries(route.query).filter(([key]) => key !== "error")),
+  });
+}
+
+// After a password change the account is signed out everywhere, this device
+// included (NEO-102) — say so once, then drop the flag from the URL.
+if (route.query.notice === PASSWORD_CHANGED_NOTICE) {
+  notify(t("user.changePassword.success"), "success", "user.changePassword.success");
+  void router.replace({
+    query: Object.fromEntries(Object.entries(route.query).filter(([key]) => key !== "notice")),
   });
 }
 

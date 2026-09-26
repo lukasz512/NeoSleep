@@ -32,6 +32,8 @@ export interface AuthTokenPayload {
   region?: string;
   language?: string;
   forcePasswordChange?: boolean;
+  /** Absent on tokens issued before NEO-102 — read as false until the next refresh. */
+  hasPassword?: boolean;
   /** Compared against users.token_version in TenantContext.buildContext() — bumping the DB
    *  column (incrementUserTokenVersion) invalidates every outstanding token for that user,
    *  e.g. on password change. Not checked here or in requireAuth — see buildContext's doc
@@ -52,6 +54,7 @@ export interface SignableUser {
   region?: string | null;
   language?: string | null;
   forcePasswordChange?: boolean;
+  has_password?: boolean;
   token_version: number;
 }
 
@@ -68,6 +71,7 @@ export function signAuthToken(user: SignableUser): string {
     region: user.region ?? undefined,
     language: user.language ?? undefined,
     forcePasswordChange: user.forcePasswordChange ?? false,
+    hasPassword: user.has_password ?? false,
     tokenVersion: user.token_version,
   };
   return jwt.sign(payload, JWT_SECRET, {

@@ -184,7 +184,7 @@ describe("AppLayout", () => {
 
     it("app bar's leading slot renders the logo on desktop only and a back arrow on mobile detail views", () => {
       const block = slotBlock(readLayout(), "app-bar-start");
-      expect(block).toMatch(/<AppLogo v-if="!isMobile"/);
+      expect(block).toMatch(/<div v-if="!isMobile" class="layout-appbar__brand">\s*<AppLogo/);
       expect(block).toMatch(/v-else-if="parentRoute"/);
       expect(block).toContain('name="arrow-left"');
     });
@@ -196,19 +196,23 @@ describe("AppLayout", () => {
       expect(shell).toContain('<slot name="app-bar-start"');
     });
 
-    it("the account menu lives in the app bar's actions slot, opening below the avatar", () => {
-      const block = slotBlock(readLayout(), "app-bar-actions");
+    it("the account menu lives in the app bar's actions slot: a drop-down on desktop, a bottom sheet on phones (NEO-102)", () => {
+      const layout = readLayout();
+      const block = slotBlock(layout, "app-bar-actions");
       expect(block.match(/<AppUserMenuPanel\b/g)).toHaveLength(1);
-      expect(block).toMatch(/<VMenu[\s\S]*?location="bottom end"/);
+      expect(block).toContain(':is="isMobile ? VBottomSheet : VMenu"');
+      expect(layout).toMatch(/location: "bottom end"/);
       expect(block).toContain("user.initials");
+      expect(block).toContain(':can-change-password="user.canChangePassword"');
+      expect(block).toContain(':version="appVersion.version"');
       // Name + role next to the avatar on desktop only.
       expect(block).toMatch(/v-if="!isMobile" class="layout-user-info"/);
     });
 
-    it("the drawer footer holds only the collapse toggle and version label — no account button", () => {
+    it("the drawer footer holds only the collapse toggle — no version label (moved to the account menu, NEO-102), no account button", () => {
       const block = slotBlock(readLayout(), "drawer-footer");
       expect(block).toContain("toggleSidebar");
-      expect(block).toContain("appVersionLabel");
+      expect(block).not.toContain("appVersion");
       expect(block).not.toContain("AppUserMenuPanel");
       expect(block).not.toContain("VAvatar");
     });
