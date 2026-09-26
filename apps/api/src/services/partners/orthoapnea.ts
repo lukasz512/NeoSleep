@@ -568,7 +568,31 @@ function mediaFrom(res: Response): ResourceMedia {
 }
 
 /**
- * `range` is the browser's own Range header, forwarded untouched: webinars
+ * Upper bound for one media response. Cloud Run rejects a non-streamed
+ * response over 32 MiB ("Response size was too large" → 500), and Chrome
+ * opens a `<video>` with `Range: bytes=0-` — i.e. "the whole 580 MB". A 206
+ * for a shorter slice is valid HTTP; the player just asks for the next one,
+ * and apneadock.es never streams more than a slice nobody may watch.
+ */
+export const MAX_MEDIA_SLICE_BYTES = 8 * 1024 * 1024;
+
+/** Caps a single `bytes=` range to MAX_MEDIA_SLICE_BYTES; anything else (no range, multi-range) passes through. */
+export function boundedRange(range: string | undefined): string | undefined {
+  if (!range) return range;
+  const open = /^bytes=(\d+)-(\d*)$/.exec(range.trim());
+  if (open) {
+    const start = Number(open[1]);
+    const lastAllowed = start + MAX_MEDIA_SLICE_BYTES - 1;
+    const end = open[2] === "" ? lastAllowed : Math.min(Number(open[2]), lastAllowed);
+    return `bytes=${start}-${end}`;
+  }
+  const suffix = /^bytes=-(\d+)$/.exec(range.trim());
+  if (suffix) return `bytes=-${Math.min(Number(suffix[1]), MAX_MEDIA_SLICE_BYTES)}`;
+  return range;
+}
+
+/**
+ * `range` is the browser's own Range header, capped by boundedRange(): webinars
  * are hundreds of MB (id 26 is ~580 MB), Safari/iPadOS refuses to play
  * `<video>` without 206 responses, and seeking must not re-download from
  * byte 0. apneadock.es answers Range with 206 (verified 2026-09-25).
@@ -596,7 +620,8 @@ export async function fetchResourceMedia(
     );
   }
 
-  const init: RequestInit = range ? { headers: { Range: range } } : {};
+  const upstreamRange = boundedRange(range);
+  const init: RequestInit = upstreamRange ? { headers: { Range: upstreamRange } } : {};
 
   if (raw.type === VIDEO_TYPE) {
     return mediaFrom(await tryVideoPaths(resourceId, filename, init));

@@ -93,7 +93,7 @@ async function startFakeOrthoApnea(): Promise<FakeOrthoApnea> {
       // Same shape apneadock.es answers with for Range (verified 2026-09-25).
       const match = /^bytes=(\d+)-(\d+)$/.exec(req.headers.range ?? "");
       if (match) {
-        const [start, end] = [Number(match[1]), Number(match[2])];
+        const [start, end] = [Number(match[1]), Math.min(Number(match[2]), VIDEO_BYTES.length - 1)];
         res.writeHead(206, {
           "Content-Type": "video/mp4",
           "Content-Length": String(end - start + 1),
@@ -230,5 +230,23 @@ describe("OrthoApnea webinar streaming (fake apneadock.es over real HTTP)", () =
     const media = await fetchResourceMedia("26", "es");
     expect(media.status).toBe(200);
     expect(await readAll(media.body)).toBe("0123456789abcdef");
+  });
+});
+
+describe("Cloud Run response cap (32 MiB): never ask OrthoApnea for the whole webinar", () => {
+  it("turns Chrome's opening `bytes=0-` into one bounded slice", async () => {
+    const { fetchResourceMedia, MAX_MEDIA_SLICE_BYTES } = await importService(fake);
+    const media = await fetchResourceMedia("26", "es", undefined, "bytes=0-");
+    expect(fake.lastRange).toBe(`bytes=0-${MAX_MEDIA_SLICE_BYTES - 1}`);
+    expect(media.status).toBe(206);
+  });
+
+  it("boundedRange caps open, oversized and suffix ranges, and leaves small ones alone", async () => {
+    const { boundedRange, MAX_MEDIA_SLICE_BYTES: max } = await importService(fake);
+    expect(boundedRange("bytes=100-")).toBe(`bytes=100-${100 + max - 1}`);
+    expect(boundedRange("bytes=0-580428530")).toBe(`bytes=0-${max - 1}`);
+    expect(boundedRange("bytes=290000000-290000001")).toBe("bytes=290000000-290000001");
+    expect(boundedRange("bytes=-999999999")).toBe(`bytes=-${max}`);
+    expect(boundedRange(undefined)).toBeUndefined();
   });
 });

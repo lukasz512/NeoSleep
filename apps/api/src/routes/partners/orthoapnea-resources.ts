@@ -15,6 +15,9 @@ import { routeParam } from "../utils.js";
  */
 export const orthoapneaResourcesRouter: RouterType = Router();
 
+/** Cloud Run's cap on a response that declares its size (HTTP/1, non-streamed). */
+const CLOUD_RUN_MAX_BUFFERED_BYTES = 32 * 1024 * 1024;
+
 // ---------------------------------------------------------------------------
 // GET /api/v1/partners/orthoapnea/resources — list, locale-mapped
 // ---------------------------------------------------------------------------
@@ -49,6 +52,11 @@ orthoapneaResourcesRouter.get(
     for (const [name, value] of Object.entries(media.headers)) {
       if (value) res.setHeader(name, value);
     }
+    // Always advertise ranges so players switch to 206 slices, and never
+    // declare a length Cloud Run would refuse (>32 MiB): without it, Node
+    // streams chunked, which Cloud Run allows (a request with no Range at all).
+    res.setHeader("Accept-Ranges", "bytes");
+    if (Number(media.headers["content-length"]) > CLOUD_RUN_MAX_BUFFERED_BYTES) res.removeHeader("Content-Length");
     // Player seeks/pauses abort their request; destroying our stream cancels
     // the upstream body too, so apneadock.es doesn't keep sending hundreds
     // of MB nobody will read.
