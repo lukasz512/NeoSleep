@@ -2,7 +2,8 @@ import { describe, it, expect, beforeAll } from "vitest";
 import request from "supertest";
 import bcrypt from "bcrypt";
 import { app } from "./server.js";
-import { withTenant, insertStaffUser } from "./db.js";
+import { withTenant, insertStaffUser, getStaffUserByEmail, getUserById } from "./db.js";
+import { signAuthToken } from "./utils/jwt.js";
 
 // Single-tenant stage — tenant isolation is intentionally out of scope here.
 // TODO(multi-tenant): once a second tenant schema is live, add a test proving
@@ -106,7 +107,7 @@ describe("Auth routes", () => {
         .set("X-Forwarded-For", freshIp())
         .send({ email, password: TEST_PASSWORD });
       expect(res.status).toBe(200);
-      expect(res.body.user).toMatchObject({ email });
+      expect(res.body.user).toMatchObject({ email, hasPassword: true });
       expect(typeof res.body.token).toBe("string");
       expect(res.body.token.split(".")).toHaveLength(3);
       // Opaque, not a JWT (ADR-020) — nothing to decode, just a random value.
@@ -177,7 +178,26 @@ describe("Auth routes", () => {
         .set("X-Forwarded-For", ip)
         .set("Authorization", `Bearer ${loginRes.body.token}`);
       expect(res.status).toBe(200);
-      expect(res.body.user).toMatchObject({ email });
+      expect(res.body.user).toMatchObject({ email, hasPassword: true });
+    });
+
+    // NEO-102: the account menu only offers "Change password" when this is true,
+    // so a Google-only account (no password_hash) must read false.
+    it("reports hasPassword=false for an account without a password (Google-only)", async () => {
+      const googleEmail = testEmail("google-only");
+      const user = await withTenant(TENANT_SLUG, async (client) => {
+        await insertStaffUser(client, googleEmail, "QA", "Google", "rep", null, false);
+        const row = await getStaffUserByEmail(client, googleEmail);
+        return row ? await getUserById(client, row.id) : null;
+      });
+      expect(user?.has_password).toBe(false);
+      const token = signAuthToken(user!);
+      const res = await request(app)
+        .get("/api/v1/auth/session")
+        .set("X-Forwarded-For", freshIp())
+        .set("Authorization", `Bearer ${token}`);
+      expect(res.status).toBe(200);
+      expect(res.body.user).toMatchObject({ email: googleEmail, hasPassword: false });
     });
   });
 

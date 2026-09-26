@@ -166,6 +166,7 @@ authRouter.post(
             region: staff.region ?? undefined,
             language: staff.language ?? undefined,
             forcePasswordChange: staff.force_password_change,
+            hasPassword: staff.has_password,
           },
           forcePasswordChange: staff.force_password_change,
         },
@@ -198,6 +199,7 @@ authRouter.get(
         region: user.region,
         language: user.language,
         forcePasswordChange: user.forcePasswordChange ?? false,
+        hasPassword: user.hasPassword ?? false,
       },
     });
   }
@@ -647,6 +649,7 @@ authRouter.post("/auth/google/exchange", asyncHandler(async (req: Request, res: 
           region: user.region ?? undefined,
           language: user.language ?? undefined,
           forcePasswordChange: false,
+          hasPassword: user.has_password,
         },
         forcePasswordChange: false,
       },
