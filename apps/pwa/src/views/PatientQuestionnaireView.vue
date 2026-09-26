@@ -17,7 +17,7 @@
       </div>
 
       <div v-else-if="phase === 'submitted'" class="patient-questionnaire__body patient-questionnaire__done" role="status">
-        <AppIcon name="check-circle" class="patient-questionnaire__done-icon" />
+        <AppIcon name="check-circle" class="patient-questionnaire__done-icon patient-questionnaire__done-icon--burst" />
         <p>{{ t("app.questionnaire.thanks.body") }}</p>
       </div>
 
@@ -60,30 +60,38 @@
         <form v-else novalidate @submit.prevent="submitQuestionnaire">
           <h2 v-if="totalSteps > 1" class="patient-questionnaire__step-title">{{ stepTitle(step) }}</h2>
           <p v-if="step.type === 'medical_history'" class="patient-questionnaire__prompt">{{ t("app.questionnaire.prompt.medicalHistory") }}</p>
-          <QuestionnaireChecklist v-model="answers" :questions="questions" large :highlight-unanswered="showMissing" />
-          <VTextarea
-            v-if="step.type === 'medical_history'"
-            v-model="other"
-            :label="t('app.questionnaire.otherPlaceholder')"
-            variant="outlined"
-            rows="2"
-            auto-grow
-            maxlength="500"
-            class="patient-questionnaire__other"
-          />
-          <ConsentNotice :clinic="clinicName" :clinic-email="questionnaire.clinic_email" :privacy-notice-url="questionnaire.privacy_notice_url" />
-          <VCheckbox v-model="consent" hide-details class="patient-questionnaire__consent">
-            <template #label>{{ t("app.questionnaire.consent", { clinic: clinicName }) }}</template>
-          </VCheckbox>
-          <VAlert v-if="showMissing && !allAnswered" type="warning" variant="tonal" density="compact" class="patient-questionnaire__alert">
-            {{ t("app.questionnaire.answerAll") }}
-          </VAlert>
-          <VAlert v-if="submitError" type="error" variant="tonal" density="compact" class="patient-questionnaire__alert">
-            {{ t("app.questionnaire.error") }}
-          </VAlert>
-          <AppButton type="submit" color="primary" size="large" block :loading="submitting" :disabled="!consent">
-            {{ stepNumber < totalSteps ? t("app.questionnaire.saveAndContinue") : t("app.questionnaire.submit") }}
-          </AppButton>
+          <!-- STOP-Bang: card by card (4 questions, illustrated). Medical history: one list — 14 plain yes/no
+               questions read faster on one screen (Łukasz, 2026-09-26). -->
+          <QuestionnaireCards v-if="useCards" v-model="answers" v-model:cursor="cursor" :questions="questions" letters />
+          <QuestionnaireChecklist v-else v-model="answers" :questions="questions" large :highlight-unanswered="showMissing" />
+          <!-- After the last card (or under the list): anything else, the data notice, consent, send. -->
+          <Transition name="view-fade-lift">
+            <div v-if="!useCards || cursor >= questions.length" class="patient-questionnaire__finish">
+              <VTextarea
+                v-if="step.type === 'medical_history'"
+                v-model="other"
+                :label="t('app.questionnaire.otherPlaceholder')"
+                variant="outlined"
+                rows="2"
+                auto-grow
+                maxlength="500"
+                class="patient-questionnaire__other"
+              />
+              <ConsentNotice :clinic="clinicName" :clinic-email="questionnaire.clinic_email" :privacy-notice-url="questionnaire.privacy_notice_url" />
+              <VCheckbox v-model="consent" hide-details class="patient-questionnaire__consent">
+                <template #label>{{ t("app.questionnaire.consent", { clinic: clinicName }) }}</template>
+              </VCheckbox>
+              <VAlert v-if="showMissing && !allAnswered" type="warning" variant="tonal" density="compact" class="patient-questionnaire__alert">
+                {{ t("app.questionnaire.answerAll") }}
+              </VAlert>
+              <VAlert v-if="submitError" type="error" variant="tonal" density="compact" class="patient-questionnaire__alert">
+                {{ t("app.questionnaire.error") }}
+              </VAlert>
+              <AppButton type="submit" color="primary" size="large" block :loading="submitting" :disabled="!consent">
+                {{ stepNumber < totalSteps ? t("app.questionnaire.saveAndContinue") : t("app.questionnaire.submit") }}
+              </AppButton>
+            </div>
+          </Transition>
         </form>
       </div>
     </AuthCard>
@@ -100,9 +108,11 @@ import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppLoadingState from "../components/AppLoadingState.vue";
 import SignaturePad from "../components/SignaturePad.vue";
+import QuestionnaireCards from "../components/questionnaire/QuestionnaireCards.vue";
 import QuestionnaireChecklist from "../components/questionnaire/QuestionnaireChecklist.vue";
 import ConsentNotice from "../components/questionnaire/ConsentNotice.vue";
 import { apiFetch } from "../composables/useApi";
+import { draftKeyFor, purgeExpiredDrafts, useQuestionnaireDraft } from "../composables/useQuestionnaireDraft";
 import { MEDICAL_HISTORY_QUESTIONS, STOP_QUESTIONS, checklistItemTitle } from "../config/questionnaires";
 
 /**
@@ -148,6 +158,10 @@ const submitting = ref(false);
 const submitError = ref(false);
 const showMissing = ref(false);
 const signaturePadRef = ref<InstanceType<typeof SignaturePad> | null>(null);
+/** Which card of a questionnaire step is showing; questions.length = the summary. */
+const cursor = ref(0);
+/** Unsent answers kept on this device (see useQuestionnaireDraft) — null when storage/crypto isn't available. */
+const draft = ref<ReturnType<typeof useQuestionnaireDraft> | null>(null);
 
 const steps = computed(() => questionnaire.value?.steps ?? []);
 const totalSteps = computed(() => steps.value.length);
@@ -156,6 +170,7 @@ const stepNumber = computed(() => (step.value ? steps.value.indexOf(step.value) 
 const stepKey = computed(() => (phase.value === "steps" ? `step-${step.value?.key ?? "none"}` : phase.value));
 
 const questions = computed(() => (step.value?.type === "stop_bang" ? STOP_QUESTIONS : MEDICAL_HISTORY_QUESTIONS));
+const useCards = computed(() => step.value?.type === "stop_bang");
 const clinicName = computed(() => questionnaire.value?.clinic_name || t("app.questionnaire.yourClinic"));
 const allAnswered = computed(() => questions.value.every((q) => answers.value[q.key] != null));
 
@@ -182,9 +197,40 @@ function post(path: "lookup" | "submit", body: Record<string, unknown>): Promise
 function resetStepState() {
   answers.value = Object.fromEntries(questions.value.map((q) => [q.key, null]));
   other.value = "";
+  cursor.value = 0;
   consent.value = false;
   showMissing.value = false;
   submitError.value = false;
+  restoreDraft();
+}
+
+/** Picks up where the patient left off on this device (same link, same step). Consent is never restored — it's given at send time. */
+function restoreDraft() {
+  const current = step.value;
+  if (!draft.value || !current || current.type === "consent") return;
+  const saved = draft.value.load(current.key);
+  if (!saved) return;
+  const known = new Set(questions.value.map((q) => q.key));
+  answers.value = { ...answers.value, ...Object.fromEntries(Object.entries(saved.answers).filter(([key]) => known.has(key))) };
+  other.value = saved.other ?? "";
+  cursor.value = Math.min(Math.max(0, saved.cursor), questions.value.length);
+}
+
+watch([answers, other, cursor], () => {
+  const current = step.value;
+  if (phase.value !== "steps" || !draft.value || !current || current.type === "consent") return;
+  if (!Object.values(answers.value).some((value) => value != null) && !other.value) return;
+  draft.value.save(current.key, { answers: answers.value, other: other.value, cursor: cursor.value });
+}, { deep: true });
+
+/** This link's device draft (see useQuestionnaireDraft). */
+async function openDraft() {
+  try {
+    draft.value = useQuestionnaireDraft(await draftKeyFor(token.value));
+  } catch {
+    // benign: no Web Crypto (insecure context, old browser) — the page works, answers just aren't kept on the device.
+    draft.value = null;
+  }
 }
 
 async function load() {
@@ -195,10 +241,13 @@ async function load() {
   phase.value = "loading";
   questionnaire.value = null;
   skipped.value = new Set();
+  purgeExpiredDrafts();
+  draft.value = null;
   try {
     const res = await post("lookup", {});
     if (res.status === 410) {
       phase.value = "invalid";
+      void openDraft().then(() => draft.value?.clearAll()); // the link is dead — nothing of it stays on the device
       return;
     }
     if (!res.ok) {
@@ -209,6 +258,10 @@ async function load() {
     questionnaire.value = (await res.json()) as PublicQuestionnaire;
     phase.value = step.value ? "steps" : "submitted";
     resetStepState();
+    // Hashing the token is async; the page is usable meanwhile, and a draft is only restored onto an untouched step.
+    void openDraft().then(() => {
+      if (!Object.values(answers.value).some((value) => value != null)) restoreDraft();
+    });
   } catch (err) {
     reportCaught(err, { where: "PatientQuestionnaireView.load" });
     phase.value = "unreachable";
@@ -219,6 +272,8 @@ onMounted(load);
 watch(token, load);
 
 function advance(completedKey: string, linkCompleted: boolean) {
+  draft.value?.clearStep(completedKey);
+  if (linkCompleted) draft.value?.clearAll();
   const done = steps.value.find((s) => s.key === completedKey);
   if (done) done.done = true;
   if (linkCompleted || !step.value) phase.value = "submitted";
@@ -240,6 +295,7 @@ async function send(body: Record<string, unknown>) {
   try {
     const res = await post("submit", body);
     if (res.status === 410) {
+      draft.value?.clearAll();
       phase.value = "invalid";
       return;
     }
@@ -348,6 +404,10 @@ async function submitQuestionnaire() {
   margin-top: 16px;
 }
 
+.patient-questionnaire__finish {
+  margin-top: 20px;
+}
+
 .patient-questionnaire__consent {
   margin: 12px 0 16px;
   align-items: flex-start;
@@ -369,6 +429,24 @@ async function submitQuestionnaire() {
   width: 56px;
   height: 56px;
   color: rgb(var(--v-theme-success));
+}
+
+/* A small, soft "done" moment: the check pops in with a fading ring behind it. */
+@media (prefers-reduced-motion: no-preference) {
+  .patient-questionnaire__done-icon--burst {
+    border-radius: 50%;
+    animation: pq-check-pop 560ms var(--pwa-ease-out-smooth, cubic-bezier(0.22, 1, 0.36, 1)) both,
+      pq-check-ring 900ms ease-out 180ms both;
+  }
+}
+@keyframes pq-check-pop {
+  from { transform: scale(0.4); opacity: 0; }
+  60% { transform: scale(1.12); opacity: 1; }
+  to { transform: scale(1); }
+}
+@keyframes pq-check-ring {
+  from { box-shadow: 0 0 0 0 rgba(var(--v-theme-success), 0.35); }
+  to { box-shadow: 0 0 0 22px rgba(var(--v-theme-success), 0); }
 }
 
 @media (max-width: 480px) {

@@ -16,7 +16,7 @@ import multer from "multer";
 import { isClinicalRecordKind, type ClinicalRecordKind } from "../commands/clinicalRecordFields.js";
 import { ListClinicalRecordsQuery } from "../queries/clinicalRecords.js";
 import { GetLatestSleepStudyRefQuery } from "../queries/sleepStudy.js";
-import { CreateQuestionnaireRequestCommand, CancelQuestionnaireRequestCommand } from "../commands/questionnaireRequest.js";
+import { CreateQuestionnaireRequestCommand, CancelQuestionnaireRequestCommand, SendQuestionnaireEmailCommand } from "../commands/questionnaireRequest.js";
 import { AuditHealthDataReadCommand } from "../commands/healthDataReadAudit.js";
 import { resolveFrontendOrigin } from "../utils/frontendOrigin.js";
 import { ValidationError } from "../errors.js";
@@ -336,6 +336,22 @@ patientRouter.post(
       return CreateQuestionnaireRequestCommand(ctx, id, (req.body ?? {}) as { items?: unknown; kind?: unknown }, origin);
     });
     res.status(201).json({ ...request, url });
+  })
+);
+
+// Same link, emailed to the patient instead of shown as a QR — every questionnaire they can still fill.
+patientRouter.post(
+  "/patient/:id/questionnaire-requests/email",
+  requireStudyRole,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = uuidParam(req, "id");
+    const slug = tenantSlugFromHost(req.hostname);
+    const origin = resolveFrontendOrigin(req);
+    const result = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return SendQuestionnaireEmailCommand(ctx, id, origin);
+    });
+    res.status(201).json({ ...result.request, sent_to: result.sent_to });
   })
 );
 

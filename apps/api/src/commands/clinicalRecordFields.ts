@@ -133,6 +133,56 @@ export function validateBang(input: Record<string, unknown>, { required }: { req
   return answers;
 }
 
+/** What the specialist measured for B and N (migration 034). BMI is always computed here, never taken from the client. */
+export interface BangMeasurements {
+  height_cm: number | null;
+  weight_kg: number | null;
+  neck_cm: number | null;
+  bmi: number | null;
+}
+
+/** Plausibility ranges — the same as migration 034's CHECK, with a readable message instead of a DB error. */
+const MEASUREMENT_RANGES = {
+  height_cm: [100, 230],
+  weight_kg: [25, 350],
+  neck_cm: [20, 70],
+} as const;
+
+function optionalMeasurement(input: Record<string, unknown>, key: keyof typeof MEASUREMENT_RANGES): number | null {
+  const value = input[key];
+  if (value === undefined || value === null || value === "") return null;
+  const number = typeof value === "number" ? value : typeof value === "string" ? Number(value.replace(",", ".")) : Number.NaN;
+  const [min, max] = MEASUREMENT_RANGES[key];
+  if (!Number.isFinite(number) || number < min || number > max) {
+    throw new ValidationError(`${key} must be a number between ${min} and ${max}`);
+  }
+  return Math.round(number * 10) / 10;
+}
+
+/**
+ * B-A-N-G with the specialist's measurements (docs/stories/clinical-questionnaire-capture-redesign.md):
+ * when height + weight are given, BMI is computed here and decides bmi_over_35;
+ * when the neck is given, it decides neck_circumference_over_40cm. Measurements
+ * win over any yes/no the client sent for those two letters — the API is the
+ * trust boundary, a client can't send "BMI 40" with "not over 35". Letters
+ * without a measurement keep the plain yes/no rules of validateBang.
+ */
+export function validateBangWithMeasurements(
+  input: Record<string, unknown>,
+  { required }: { required: boolean }
+): { bang: BangAnswers; measurements: BangMeasurements } {
+  const height = optionalMeasurement(input, "height_cm");
+  const weight = optionalMeasurement(input, "weight_kg");
+  if ((height === null) !== (weight === null)) throw new ValidationError("height_cm and weight_kg must be given together");
+  const neck = optionalMeasurement(input, "neck_cm");
+  const bmi = height !== null && weight !== null ? Math.round((weight / (height / 100) ** 2) * 10) / 10 : null;
+
+  const derived: Record<string, unknown> = { ...input };
+  if (bmi !== null) derived.bmi_over_35 = bmi > 35;
+  if (neck !== null) derived.neck_circumference_over_40cm = neck > 40;
+  return { bang: validateBang(derived, { required }), measurements: { height_cm: height, weight_kg: weight, neck_cm: neck, bmi } };
+}
+
 export function isClinicalRecordKind(value: unknown): value is ClinicalRecordKind {
   return typeof value === "string" && (CLINICAL_RECORD_KINDS as readonly string[]).includes(value);
 }

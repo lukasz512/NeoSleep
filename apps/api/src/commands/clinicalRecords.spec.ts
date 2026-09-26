@@ -131,3 +131,45 @@ describe("CompleteStopBangCommand", () => {
     });
   });
 });
+
+describe("STOP-Bang measurements (migration 034)", () => {
+  it("computes BMI on the server and lets the measurements decide B and N", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const patient = await newPatient(client);
+      const partial = await RecordClinicalQuestionnaireCommand(ctx, patient.id, "stop_bang", ALL_STOP);
+
+      // The client claims "not over 35" / "not over 40" — the measurements say otherwise and win.
+      const done = await CompleteStopBangCommand(ctx, patient.id, partial.id, {
+        ...ALL_BANG,
+        bmi_over_35: false,
+        neck_circumference_over_40cm: false,
+        height_cm: 162,
+        weight_kg: "94,5",
+        neck_cm: 42,
+      });
+      expect(done).toMatchObject({ height_cm: 162, weight_kg: 94.5, neck_cm: 42, bmi: 36, bmi_over_35: true, neck_circumference_over_40cm: true });
+      expect(done.score).toBe(2 + 4); // S, O answered yes + B, A, N, G
+    });
+  });
+
+  it("keeps plain yes/no when nothing was measured, and stores no measurements", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const patient = await newPatient(client);
+      const record = await RecordClinicalQuestionnaireCommand(ctx, patient.id, "stop_bang", { ...ALL_STOP, ...ALL_BANG });
+      expect(record).toMatchObject({ bmi_over_35: true, height_cm: null, weight_kg: null, neck_cm: null, bmi: null });
+    });
+  });
+
+  it("rejects implausible values and a height without a weight", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const patient = await newPatient(client);
+      const partial = await RecordClinicalQuestionnaireCommand(ctx, patient.id, "stop_bang", ALL_STOP);
+      await expect(CompleteStopBangCommand(ctx, patient.id, partial.id, { ...ALL_BANG, height_cm: 1620, weight_kg: 94 })).rejects.toThrow(ValidationError);
+      await expect(CompleteStopBangCommand(ctx, patient.id, partial.id, { ...ALL_BANG, height_cm: 162 })).rejects.toThrow(ValidationError);
+      await expect(CompleteStopBangCommand(ctx, patient.id, partial.id, { ...ALL_BANG, neck_cm: "abc" })).rejects.toThrow(ValidationError);
+    });
+  });
+});
