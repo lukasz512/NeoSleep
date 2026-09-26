@@ -5,7 +5,6 @@
        right of a full-height drawer. -->
   <VAppBar
     flat
-    color="surface-container-low"
     :border="false"
     :height="mobile ? 56 : 64"
     class="app-shell__bar"
@@ -42,7 +41,6 @@
     :width="width"
     :rail-width="railWidth"
     :aria-label="menuLabel"
-    color="surface-container-low"
     class="app-shell__nav"
     :class="enterClass"
     :style="{ '--app-shell-enter-order': 1 }"
@@ -60,6 +58,7 @@
     class="app-shell__main"
     :class="{
       'app-shell__main--inset': !mobile,
+      'app-shell__main--sheet': sheet && !mobile,
       'app-shell__main--bottom-nav-space': mobile && showBottomNav,
       ...enterClass,
     }"
@@ -134,6 +133,13 @@ const props = withDefaults(
     closeLabel?: string;
     width?: number;
     railWidth?: number;
+    /**
+     * Desktop: the routed content is a separate sheet lying on the chrome,
+     * inset by --app-shell-sheet-gap on the right (the app draws the sheet
+     * itself; the shell only moves its fixed corner masks to match and adds
+     * the top-right one).
+     */
+    sheet?: boolean;
   }>(),
   {
     railCollapsed: false,
@@ -145,6 +151,7 @@ const props = withDefaults(
     closeLabel: "Close",
     width: 220,
     railWidth: 56,
+    sheet: false,
   },
 );
 
@@ -206,10 +213,17 @@ onMounted(() => {
   }
 }
 
-/* Bar + drawer read as one continuous chrome frame (same surface-container-low
-   fill, no dividing lines) with the routed content set into it as an inset
-   card, instead of two hard-bordered strips. Vuetify gives a left drawer a thin
-   border-right by default; the bar's own border is off via its :border prop. */
+/* Bar + drawer read as one continuous chrome frame (same fill, no dividing
+   lines) with the routed content set into it as an inset card, instead of two
+   hard-bordered strips. The fill is a CSS variable (not a Vuetify `color`
+   prop) so the app can derive it from the tenant's runtime primary colour;
+   default is the theme's surface-container-low. Vuetify gives a left drawer a
+   thin border-right by default; the bar's own border is off via :border. */
+.app-shell__bar,
+.app-shell__nav {
+  --app-shell-chrome-fill: var(--app-shell-chrome, rgb(var(--v-theme-surface-container-low)));
+  background: var(--app-shell-chrome-fill);
+}
 .app-shell__nav {
   border: none;
 }
@@ -233,11 +247,30 @@ onMounted(() => {
   background: radial-gradient(
     circle at 100% 100%,
     transparent calc(var(--app-shell-card-radius) - 0.5px),
-    rgb(var(--v-theme-surface-container-low)) var(--app-shell-card-radius)
+    var(--app-shell-chrome, rgb(var(--v-theme-surface-container-low))) var(--app-shell-card-radius)
   );
   /* Same timing as Vuetify's own .v-main padding transition, so the corner
      tracks the drawer edge during rail collapse/expand. */
   transition: left 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Sheet mode: the content is a sheet with its own right edge, so it also
+   gets a rounded top-right corner, masked the same way. */
+.app-shell__main--sheet::after {
+  --app-shell-card-radius: 16px;
+  content: "";
+  position: fixed;
+  top: var(--v-layout-top);
+  right: var(--app-shell-sheet-gap, 0px);
+  width: var(--app-shell-card-radius);
+  height: var(--app-shell-card-radius);
+  z-index: 1003;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at 0% 100%,
+    transparent calc(var(--app-shell-card-radius) - 0.5px),
+    var(--app-shell-chrome, rgb(var(--v-theme-surface-container-low))) var(--app-shell-card-radius)
+  );
 }
 
 /* No divider/border above this footer — removed per explicit feedback ("ta linia

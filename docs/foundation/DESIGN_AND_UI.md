@@ -202,6 +202,18 @@ whether it's a table cell, a mobile card line, a detail panel or a note author. 
     exempt). Surface is plain white (`surface`), not the `surface-container-high` grey tone
     used before — forms read as paper, the scrim already separates them from the page;
     `--pwa-shadow-md` stays as a supporting cue.
+  - "Record stack" paper look (NEO-85, 2026-09-26, variant C picked from a live proposal): the
+    chrome and everything behind the content is a teal-grey desk (`--pwa-desk`); the routed
+    content is one white sheet (`AppLayout .layout-main__inner`, AppShell `sheet` mode keeps its
+    top corners round) with two more sheets peeking out under its bottom edge; list rows are
+    ruled lines (`--pwa-rule`) under a brand-coloured header rule; dialogs are a sheet with one
+    sheet under it, the main action a filled pill. The peeking sheets are extra `box-shadow`
+    layers (offset down, negative spread), not elements, so nothing can clip or mis-stack them.
+    Every tint mixes from `--pwa-primary`, which the tenant config overrides at runtime.
+    Motion: rows stagger in with M3 emphasized-decelerate; dialogs grow from the tap and close
+    faster (180ms emphasized-accelerate); on phones (< 600px) form dialogs are a bottom sheet
+    (`sheetDialogTransition`); focused fields get a brand halo; all of it honours
+    `prefers-reduced-motion`.
   - Dialog scroll model: the dialog is capped at the viewport, header and actions stay pinned,
     only the body scrolls, and a hairline divider shows under the header / above the actions
     only while content runs behind them (M3). **Bugfix** (Vuetify 4): Vuetify ships all of its

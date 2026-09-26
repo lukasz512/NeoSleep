@@ -134,6 +134,24 @@ test("form dialogs stack above the fixed mobile bottom nav (z-index 9998)", asyn
   }
 });
 
+// NEO-85: on a phone a form dialog is an M3 bottom sheet — full width and
+// attached to the bottom edge; from tablet width up it stays a centred card.
+test("form dialogs are a bottom sheet on a phone and a centred card on a laptop", async ({ page }) => {
+  await open(page, "form-long", VIEWPORTS[0]);
+  const vw = VIEWPORTS[0].width;
+  const vh = VIEWPORTS[0].height;
+  const sheet = await rect(page, ".v-dialog .v-card");
+  expect(Math.abs(sheet.bottom - vh), `sheet bottom ${sheet.bottom} vs ${vh}`).toBeLessThanOrEqual(1);
+  expect(sheet.left).toBeLessThanOrEqual(0.5);
+  expect(sheet.right).toBeGreaterThanOrEqual(vw - 0.5);
+
+  await open(page, "form", VIEWPORTS[1]);
+  const card = await rect(page, ".v-dialog .v-card");
+  const lw = VIEWPORTS[1].width;
+  expect(Math.abs(card.left - (lw - card.right)), "centred horizontally").toBeLessThanOrEqual(1);
+  expect(card.bottom).toBeLessThan(VIEWPORTS[1].height - 8);
+});
+
 test("the page behind an open dialog does not scroll", async ({ page }) => {
   await open(page, "form-long", VIEWPORTS[0]);
   const body = await rect(page, "[data-testid=app-form-dialog-body]");

@@ -58,7 +58,7 @@
       <AppButton variant="text" @click="emit('update:modelValue', false)">
         {{ t(readonly ? "app.common.close" : "app.common.cancel") }}
       </AppButton>
-      <AppButton v-if="!readonly" color="primary" :disabled="!canSave" :loading="saving" @click="onSave">
+      <AppButton v-if="!readonly" color="primary" variant="flat" :disabled="!canSave" :loading="saving" @click="onSave">
         {{ t(mode === "completeBang" ? "app.clinical.completeBang" : "app.clinical.save") }}
       </AppButton>
     </template>

@@ -308,12 +308,18 @@ describe("AppEntityList", () => {
       expect(css).toMatch(/prefers-reduced-motion:\s*reduce[\s\S]*animation:\s*none/);
     });
 
-    it("table rows and mobile feed cards share the --pwa-list-row-* surface/outline/radius tokens", () => {
-      expect(css).toMatch(/tbody > tr > td\)\s*{[^}]*background:\s*var\(--pwa-list-row-bg\)[^}]*--pwa-list-row-outline/);
-      expect(css).toMatch(/border-spacing:\s*0 var\(--pwa-list-row-gap\)/);
+    // NEO-85 "record stack": rows are ruled lines on the content sheet, the
+    // same line on desktop and phone, in a tint of the (tenant) primary.
+    it("table rows and mobile feed cards are the same ruled --pwa-rule line, with no box of their own", () => {
+      expect(css).toMatch(/tbody > tr > td\)\s*{[^}]*background:\s*transparent[^}]*box-shadow:\s*inset 0 -1px 0 var\(--pwa-rule\)/);
+      expect(css).toMatch(/border-spacing:\s*0;/);
       expect(css).toMatch(
-        /\.app-entity-list__card\s*{[^}]*border-radius:\s*var\(--pwa-list-row-radius\)[^}]*border:\s*1px solid var\(--pwa-list-row-outline\)[^}]*background:\s*var\(--pwa-list-row-bg\)/,
+        /\.app-entity-list__card\s*{[^}]*border-radius:\s*0[^}]*background:\s*transparent[^}]*box-shadow:\s*inset 0 -1px 0 var\(--pwa-rule\)/,
       );
+    });
+
+    it("the column header is in the brand colour on a stronger rule", () => {
+      expect(css).toMatch(/thead > tr > th\)\s*{[^}]*box-shadow:\s*inset 0 -1\.5px 0 var\(--pwa-rule-strong\)[^}]*color:\s*var\(--pwa-primary\)/);
     });
 
     it("search field's inactive (unfocused) border uses --pwa-table-border, leaving the focused-state primary color untouched", () => {
