@@ -151,9 +151,9 @@
             </VCol>
           </VRow>
           <Transition name="oa-wizard__validation">
-            <VAlert v-if="mrMpTouched && !mrMpValid" type="error" variant="tonal" density="comfortable" class="mt-4">
+            <AppInlineAlert v-if="mrMpTouched && !mrMpValid" type="error" class="mt-4">
               {{ mrMpErrorMessage }}
-            </VAlert>
+            </AppInlineAlert>
           </Transition>
 
           <p class="text-subtitle2 mt-6 mb-3 text-primary">{{ t("app.orthoApneaOrder.form.deviationSectionTitle") }}</p>
@@ -318,9 +318,9 @@
             <TeethDiagram v-model="form.teethStatus" class="mb-4" />
           </div>
           <VTextarea v-model="form.observations" :label="t('app.orthoApneaOrder.form.observations')" variant="outlined" density="comfortable" auto-grow rows="2" />
-          <VAlert type="info" variant="tonal" density="comfortable" class="mt-2">
+          <AppInlineAlert type="info" class="mt-2">
             {{ t("app.orthoApneaOrder.photoUploadDeferredNotice") }}
-          </VAlert>
+          </AppInlineAlert>
         </div>
 
         <!-- Step 3 — Registro dental -->
@@ -338,9 +338,9 @@
               variant="outlined"
               density="comfortable"
             />
-            <VAlert type="info" variant="tonal" density="comfortable">
+            <AppInlineAlert type="info">
               {{ t("app.orthoApneaOrder.fileUploadDeferredNotice") }}
-            </VAlert>
+            </AppInlineAlert>
           </template>
         </div>
 
@@ -353,9 +353,9 @@
           </div>
           <VCheckbox v-model="form.noContactDoctorForRedesign" color="primary" :label="t('app.orthoApneaOrder.form.noContactDoctorForRedesign')" />
 
-          <VAlert v-if="form.products.length === 0" type="warning" variant="tonal" density="comfortable">
+          <AppInlineAlert v-if="form.products.length === 0" type="warning">
             {{ t("app.orthoApneaOrder.missingProduct") }}
-          </VAlert>
+          </AppInlineAlert>
         </div>
       </div>
       </Transition>
@@ -413,6 +413,7 @@ import {
   type OrthoApneaProduct,
   type OrthoApneaDraftPlan,
 } from "../../composables/useOrthoApneaOrderWizard";
+import { AppInlineAlert } from "@ui";
 
 /**
  * Full-fidelity replica of OrthoApnea's own 3-step order wizard (Envío →
@@ -425,7 +426,7 @@ import {
  * NeoSleep's own redrawn icons (TeethDiagram.vue, IconOptionPicker.vue) —
  * OrthoApnea's own icon/tooth artwork isn't ours to embed, see those files'
  * own comments. Deliberately still deferred for a fast-follow (flagged
- * inline via VAlerts, not silently dropped): the dynamic "+" secondary
+ * inline via AppInlineAlert, not silently dropped): the dynamic "+" secondary
  * splints list, and both file upload widgets (photo/CBCT here, digital scan
  * files in step 3) — their OrthoApnea-side request shape is still
  * unconfirmed (see the consolidated live-capture round in the project plan).

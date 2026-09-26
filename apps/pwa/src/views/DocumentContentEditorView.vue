@@ -27,11 +27,9 @@
 
             <!-- NEO-51: partner agreement / DPA carry a NeoSleep signatory's
                  signature — only on a version that signatory approved. -->
-            <VAlert
+            <AppInlineAlert
               v-if="approval?.countersigned && currentVersionNumber !== null"
               :type="!approval.signatoryName ? 'error' : isCurrentApproved ? 'success' : 'warning'"
-              variant="tonal"
-              density="compact"
               class="doc-editor__approval"
             >
               <template v-if="!approval.signatoryName">{{ t("user.document-content.approval.noSignatory") }}</template>
@@ -46,7 +44,7 @@
                   {{ t("user.document-content.approval.approve") }}
                 </AppButton>
               </template>
-            </VAlert>
+            </AppInlineAlert>
 
             <div class="doc-editor__layout">
               <div class="doc-editor__main">
@@ -192,7 +190,7 @@ import { useRoute, useRouter } from "vue-router";
 import { useEditor, EditorContent } from "@tiptap/vue-3";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
-import { VTextField, VAutocomplete, VAlert } from "vuetify/components";
+import { VTextField, VAutocomplete } from "vuetify/components";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import DetailViewTabs, { type DetailViewTab } from "../components/DetailViewTabs.vue";
 import AppButton from "../components/AppButton.vue";
@@ -200,6 +198,7 @@ import ProtectedToken, { htmlToEditorHtml, editorHtmlToPlainHtml } from "../comp
 import { apiFetch } from "../composables/useApi";
 import { useNotifications } from "../composables/useNotifications";
 import { documentLabelKey } from "../utils/documentLabels";
+import { AppInlineAlert } from "@ui";
 
 interface DocumentContentVersion {
   id: string;

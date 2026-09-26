@@ -5,17 +5,15 @@
         <h1 class="change-password-view__title">{{ t('user.changePassword.title') }}</h1>
         <p class="change-password-view__subtitle">{{ t('user.changePassword.subtitle') }}</p>
 
-        <VAlert
+        <AppInlineAlert
           v-if="errorKey"
           type="error"
-          variant="tonal"
-          density="compact"
           class="change-password-view__alert"
-          closable
-          @click:close="errorKey = null"
+          :close-label="t('app.common.close')"
+          @close="errorKey = null"
         >
           {{ t(errorKey) }}
-        </VAlert>
+        </AppInlineAlert>
 
         <VForm ref="form" class="change-password-view__form" @submit.prevent="handleSubmit">
           <VTextField
@@ -70,6 +68,7 @@ import { useI18n } from "vue-i18n";
 import { inject } from "vue";
 import { createUseChangePasswordFlow } from "../composables/useChangePasswordFlow";
 import type { ApiFetchOptions } from "@api";
+import AppInlineAlert from "../components/AppInlineAlert.vue";
 
 type ApiFetchFn = (path: string, options?: ApiFetchOptions) => Promise<Response>;
 

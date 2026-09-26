@@ -16,11 +16,9 @@
       avatar-entity-type="hcp"
       @submit="onContactSubmit"
     />
-    <VAlert
+    <AppInlineAlert
       v-if="isOffline"
       type="warning"
-      variant="tonal"
-      density="compact"
       class="view-detail__offline-banner"
       :text="t('app.common.offlineShowingCached')"
     />
@@ -251,6 +249,7 @@ import {
   entityActionIcon,
   entityActionBtnClass,
 } from "../config/entityActions";
+import { AppInlineAlert } from "@ui";
 
 const FormRenderer = defineAsyncComponent(
   () => import("../components/FormRenderer.vue"),

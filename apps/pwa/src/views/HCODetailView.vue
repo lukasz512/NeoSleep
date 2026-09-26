@@ -16,11 +16,9 @@
       avatar-entity-type="hco"
       @submit="onAccountSubmit"
     />
-    <VAlert
+    <AppInlineAlert
       v-if="isOffline"
       type="warning"
-      variant="tonal"
-      density="compact"
       class="view-detail__offline-banner"
       :text="t('app.common.offlineShowingCached')"
     />
@@ -239,6 +237,7 @@ import {
   hcoStatusLabel as hcoStatusLabelFor,
   hcoStatusColor,
 } from "../utils/hcoLabels";
+import { AppInlineAlert } from "@ui";
 
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
