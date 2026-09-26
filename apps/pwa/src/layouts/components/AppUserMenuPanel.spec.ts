@@ -75,7 +75,7 @@ describe("AppUserMenuPanel — NEO-102 account menu (option C)", () => {
   it("language is a one-tap segment in each language's own name; picking one emits change-locale and close", async () => {
     const wrapper = mountPanel();
     const tabs = segmentTabs(wrapper, "user-menu-language");
-    expect(tabs.map((t) => t.text())).toEqual(["English", "Polski", "Español (MX)"]);
+    expect(tabs.map((t) => t.text())).toEqual(["English", "Polski", "Español"]);
     expect(tabs[0]!.attributes("aria-selected")).toBe("true");
     await tabs[1]!.trigger("click");
     expect(wrapper.emitted("change-locale")?.[0]).toEqual(["pl"]);

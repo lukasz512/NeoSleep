@@ -70,17 +70,19 @@
       </button>
     </div>
 
-    <VBtn
-      variant="outlined"
-      color="error"
-      block
-      class="user-menu__logout"
-      data-testid="user-menu-logout"
-      @click="$emit('logout'); $emit('close')"
-    >
-      <AppIcon name="logout" class="user-menu__row-icon" />
-      {{ t('user.settings.logOut') }}
-    </VBtn>
+    <div class="user-menu__logout-wrap">
+      <VBtn
+        variant="outlined"
+        color="error"
+        block
+        class="user-menu__logout"
+        data-testid="user-menu-logout"
+        @click="$emit('logout'); $emit('close')"
+      >
+        <AppIcon name="logout" class="user-menu__row-icon" />
+        {{ t('user.settings.logOut') }}
+      </VBtn>
+    </div>
 
     <div v-if="version" class="user-menu__version" data-testid="user-menu-version">
       <span>{{ version }}</span>
@@ -137,8 +139,12 @@ const themeOptions = computed(() => [
 ]);
 
 // Native names on purpose: someone who switched to a language they can't
-// read must still be able to find their own.
-const languageOptions = LANGUAGE_OPTIONS.map((lang) => ({ value: lang.id, label: lang.nativeLabel }));
+// read must still be able to find their own. The "(MX)" suffix is dropped —
+// a third of a 340px menu can't hold "Español (MX)" whole.
+const languageOptions = LANGUAGE_OPTIONS.map((lang) => ({
+  value: lang.id,
+  label: lang.nativeLabel.replace(/\s*\(.*\)$/, ""),
+}));
 
 function isThemePreference(value: string): value is ThemePreference {
   return value === "light" || value === "dark" || value === "system";
@@ -158,7 +164,7 @@ function onLocaleChange(value: string) {
 
 <style scoped>
 .user-menu {
-  width: 300px;
+  width: 340px;
   max-width: 100%;
   display: flex;
   flex-direction: column;
@@ -284,9 +290,11 @@ function onLocaleChange(value: string) {
 
 /* theme.scss pads every button 24px as a pill CTA; this one is a full-width
    menu action, set apart from the rows above so it isn't hit by accident. */
+.user-menu__logout-wrap {
+  padding: 12px 16px 0;
+}
+
 .user-menu__logout.v-btn {
-  margin: 12px 16px 0;
-  width: auto;
   min-height: 44px;
   gap: 8px;
   text-transform: none;

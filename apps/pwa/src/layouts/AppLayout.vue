@@ -297,11 +297,12 @@ onMounted(markAppReady);
 
 const menuOpen = ref(false);
 const appVersion = useAppVersionParts();
-/** VMenu placement on desktop; the phone's bottom sheet needs none. */
+/** VMenu placement on desktop. On phones the sheet must rise above the bottom
+ *  nav bar (MobileNavPanel sits at z-index 9998), or it hides the sheet's foot. */
 const accountMenuProps = computed(() =>
   isMobile.value
-    ? {}
-    : { location: "bottom end" as const, offset: 8, closeOnContentClick: false },
+    ? { zIndex: 10000 }
+    :{ location: "bottom end" as const, offset: 8, closeOnContentClick: false },
 );
 
 // Views teleport their controls into the desktop page header only while it is shown.
