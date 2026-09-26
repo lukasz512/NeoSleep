@@ -1,5 +1,6 @@
 import { computed, ref, type Ref } from "vue";
 import { useI18n } from "vue-i18n";
+import { isFieldErrorStatus } from "@api";
 
 /**
  * How every form in the app shows its errors (NEO-109, variant B): under the
@@ -10,23 +11,28 @@ import { useI18n } from "vue-i18n";
  * hand-written form (EventForm, AppointmentDialog, the OrthoApnea wizard, …).
  */
 
-/** Why the API rejected a field — picks the fallback message when there's no field-specific one. */
-export type ServerFieldReason = "required" | "invalid";
+/**
+ * Why the API rejected a field — picks the fallback message when there's no
+ * field-specific one. "taken": the value (an email) already belongs to
+ * someone else (409 EMAIL_IN_USE, NEO-111).
+ */
+export type ServerFieldReason = "required" | "invalid" | "taken";
 
 /** Field key → why the API rejected it. */
 export type FieldErrors = Record<string, ServerFieldReason>;
 
 /**
- * The field a 400 VALIDATION_ERROR names (`{ error, code, field, reason }`,
- * see apps/api/src/errors.ts), or null for any other failure. Reads a clone,
- * so the caller can still read the body itself.
+ * The field a 400 VALIDATION_ERROR or 409 EMAIL_IN_USE names (`{ error, code,
+ * field, reason }`, see apps/api/src/errors.ts), or null for any other
+ * failure. Reads a clone, so the caller can still read the body itself.
  */
 export async function fieldErrorsFromResponse(res: { status?: number; clone?: () => { json: () => Promise<unknown> } }): Promise<FieldErrors | null> {
-  if (res.status !== 400 || !res.clone) return null;
+  if (!isFieldErrorStatus(res.status) || !res.clone) return null;
   try {
     const body = (await res.clone().json()) as { field?: unknown; reason?: unknown };
     if (typeof body.field !== "string" || !body.field) return null;
-    return { [body.field]: body.reason === "required" ? "required" : "invalid" };
+    const reason: ServerFieldReason = body.reason === "required" || body.reason === "taken" ? body.reason : "invalid";
+    return { [body.field]: reason };
   } catch {
     // benign: a non-JSON 400 names no field — the caller's own toast covers it.
     return null;
@@ -68,6 +74,8 @@ export function useFormErrors() {
   function serverError(key: string): string | undefined {
     const reason = serverErrors.value[key];
     if (!reason) return undefined;
+    // "Already used by someone else" beats the field's own format message.
+    if (reason === "taken") return t("app.formRenderer.validation.taken");
     const specific = `app.formRenderer.validation.server.${key}`;
     if (te(specific)) return t(specific);
     return t(reason === "required" ? "app.formRenderer.validation.required" : "app.formRenderer.validation.invalid");

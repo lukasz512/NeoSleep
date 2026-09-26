@@ -108,3 +108,26 @@ export function describeErrorInline(
   const text = describeError(err, t);
   return [`${text.title}.`, text.body, text.reference].filter(Boolean).join(" ");
 }
+
+/**
+ * API error codes (AppError.code) that say something more precise than any
+ * form's own "couldn't save" message — the toast shows this key instead of
+ * the server's English text (NEO-111). Keys live in packages/i18n.
+ */
+const CODE_MESSAGE_KEYS: Readonly<Record<string, string>> = {
+  EMAIL_IN_USE: "common.error.emailInUse",
+};
+
+/** The i18n key for an API error code, or null when the code has no dedicated message. */
+export function messageKeyForCode(code: string | null | undefined): string | null {
+  if (!code) return null;
+  return CODE_MESSAGE_KEYS[code] ?? null;
+}
+
+/**
+ * Statuses whose error body may name a form field the form should mark
+ * instead of toasting: 400 VALIDATION_ERROR (NEO-109), 409 EMAIL_IN_USE (NEO-111).
+ */
+export function isFieldErrorStatus(status: number | undefined): boolean {
+  return status === 400 || status === 409;
+}

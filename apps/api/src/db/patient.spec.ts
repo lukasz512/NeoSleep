@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { withTenant, insertPractitioner, insertPatient, updatePatient, softDeletePractitioner, softDeletePatient } from "../db.js";
+import { withTenant, insertPractitioner, updatePractitioner, insertPatient, updatePatient, insertLead, softDeletePractitioner, softDeletePatient } from "../db.js";
 
 const TENANT_SLUG = process.env.DEFAULT_TENANT_SLUG ?? "neosleep";
 
@@ -91,6 +91,70 @@ describe("patient demographics + doctor specialty (NEO-57)", () => {
 
       await softDeletePatient(client, patient.id);
       await softDeletePractitioner(client, practitioner.id);
+    });
+  }, 15000);
+});
+
+describe("shared emails: patients may share, users/doctors/leads may not (NEO-111)", () => {
+  it("saves two patients with one email, and a patient with a doctor's email", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const family = `qa-family-${uniqueSuffix()}@example.com`;
+      const doctorEmail = `qa-hcp-${uniqueSuffix()}@example.com`;
+      const practitioner = await insertPractitioner(client, { first_name: "Taken", last_name: "Email", email: doctorEmail });
+
+      const parent = await insertPatient(client, { first_name: "Parent", last_name: "Family", email: family });
+      const child = await insertPatient(client, { first_name: "Child", last_name: "Family", email: family });
+      const sameAsDoctor = await insertPatient(client, { first_name: "Doctor", last_name: "AsPatient", email: doctorEmail });
+      expect(child.email).toBe(family);
+      expect(sameAsDoctor.email).toBe(doctorEmail);
+
+      const moved = await updatePatient(client, parent.id, { email: doctorEmail });
+      expect(moved?.email).toBe(doctorEmail);
+
+      for (const p of [parent, child, sameAsDoctor]) await softDeletePatient(client, p.id);
+      await softDeletePractitioner(client, practitioner.id);
+    });
+  }, 15000);
+
+  it("rejects a lead or a doctor taking a doctor's email with 409 EMAIL_IN_USE on the email field", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const taken = `qa-taken-${uniqueSuffix()}@example.com`;
+      const first = await insertPractitioner(client, { first_name: "First", last_name: "Doctor", email: taken });
+      const second = await insertPractitioner(client, { first_name: "Second", last_name: "Doctor", email: `qa-hcp-${uniqueSuffix()}@example.com` });
+
+      const inUse = { code: "EMAIL_IN_USE", statusCode: 409, field: "email" };
+      await expect(insertLead(client, { first_name: "New", last_name: "Lead", email: taken })).rejects.toMatchObject(inUse);
+      await expect(updatePractitioner(client, second.id, { email: taken })).rejects.toMatchObject(inUse);
+
+      await softDeletePractitioner(client, first.id);
+      await softDeletePractitioner(client, second.id);
+    });
+  }, 15000);
+
+  it("lets a doctor take an email only a patient has", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const email = `qa-patient-${uniqueSuffix()}@example.com`;
+      const patient = await insertPatient(client, { first_name: "Only", last_name: "Patient", email });
+      const practitioner = await insertPractitioner(client, { first_name: "Later", last_name: "Doctor", email: `qa-hcp-${uniqueSuffix()}@example.com` });
+
+      const updated = await updatePractitioner(client, practitioner.id, { email });
+      expect(updated?.email).toBe(email);
+      // A separate identity — the doctor did not take over the patient's record.
+      expect(updated?.identity_id).not.toBe(patient.identity_id);
+
+      await softDeletePatient(client, patient.id);
+      await softDeletePractitioner(client, practitioner.id);
+    });
+  }, 15000);
+
+  it("the database itself still refuses two non-patient identities with one email", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const email = `qa-raw-${uniqueSuffix()}@example.com`;
+      await client.query("SAVEPOINT raw_dup");
+      await client.query("INSERT INTO identities (first_name, last_name, email) VALUES ('A', 'One', $1)", [email]);
+      await expect(client.query("INSERT INTO identities (first_name, last_name, email) VALUES ('B', 'Two', $1)", [email]))
+        .rejects.toMatchObject({ code: "23505" });
+      await client.query("ROLLBACK TO SAVEPOINT raw_dup");
     });
   }, 15000);
 });

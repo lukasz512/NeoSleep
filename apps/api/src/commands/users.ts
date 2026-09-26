@@ -15,7 +15,7 @@ import {
 } from "../db.js";
 import { insertAuditLog } from "../db.js";
 import { assertTerritoryAccess } from "../middleware/requireScope.js";
-import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../errors.js";
+import { EmailInUseError, ForbiddenError, NotFoundError, ValidationError } from "../errors.js";
 import { hashToken } from "../utils/hashToken.js";
 import { sendPasswordResetEmail } from "../mailer.js";
 
@@ -83,7 +83,7 @@ export async function CreateUserCommand(ctx: TenantContext, input: CreateUserInp
   if (input.territory_id) await assertValidScopeKind(ctx, input.territory_id);
 
   const existingId = await getUserIdByEmail(ctx.client, email);
-  if (existingId) throw new ConflictError("A user with this email already exists");
+  if (existingId) throw new EmailInUseError(email);
 
   const passwordHash = input.password ? await bcrypt.hash(input.password, BCRYPT_ROUNDS) : null;
   const role = input.role ?? "rep";
@@ -102,7 +102,7 @@ export async function CreateUserCommand(ctx: TenantContext, input: CreateUserInp
     ctx.user.id,
     input.country_code ?? null
   );
-  if (!user) throw new ConflictError("A user with this email already exists");
+  if (!user) throw new EmailInUseError(email);
 
   await insertAuditLog(ctx.client, {
     user_id: ctx.user.id,
