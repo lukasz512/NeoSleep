@@ -323,7 +323,7 @@ export async function getLinkedUserIdForPractitioner(client: PoolClient, practit
 export async function insertPractitioner(client: PoolClient, input: InsertPractitionerInput): Promise<Practitioner> {
   const firstName = trimOrEmpty(input.first_name);
   const lastName = trimOrEmpty(input.last_name);
-  if (!firstName || !lastName) throw new ValidationError("Practitioner first_name and last_name are required");
+  if (!firstName || !lastName) throw new ValidationError("Practitioner first_name and last_name are required", "first_name");
 
   const region = trimOrEmpty(input.region);
 

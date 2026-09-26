@@ -21,7 +21,7 @@
       {{ t(verifyInfoKey) }}
     </AppInlineAlert>
     <VForm ref="formRef" @submit.prevent="onSubmit">
-      <FormErrorSummary :errors="errorList" @select="focusField" />
+      <FormErrorSummary :errors="errorList" :title="t('app.formRenderer.errorSummary.title', { n: errorList.length })" @select="focusField" />
       <section
         v-for="sec in sections"
         :key="sec.id"
@@ -212,11 +212,11 @@ import AppConfirmDialog from "./AppConfirmDialog.vue";
 import PhoneField from "./PhoneField.vue";
 import EmailField from "./EmailField.vue";
 import ChoiceChipsField from "./ChoiceChipsField.vue";
-import FormErrorSummary, { type FormErrorSummaryItem } from "./FormErrorSummary.vue";
 import { useNotifications } from "../composables/useNotifications";
-import type { FieldErrors, SubmitDone } from "../composables/useEntitySubmit";
+import type { SubmitDone } from "../composables/useEntitySubmit";
+import { useFormErrors, focusFormField, type FieldErrors } from "../composables/useFormErrors";
 import type { FormDerive, FormFieldDef, FormFieldType } from "../types/formField";
-import { AppInlineAlert } from "@ui";
+import { AppInlineAlert, FormErrorSummary } from "@ui";
 
 /**
  * componentFor() below resolves to these imported component OBJECTS, never
@@ -269,7 +269,7 @@ const emit = defineEmits<{
   submit: [payload: Record<string, unknown>, done: SubmitDone];
 }>();
 
-const { t, te } = useI18n();
+const { t } = useI18n();
 
 const initialDataRef = computed(() => props.initialData);
 const {
@@ -284,54 +284,25 @@ const submitting = ref(false);
 const showDiscardConfirm = ref(false);
 
 /**
- * Errors show in the form, never as a toast (NEO-109): under each field, in
- * the summary box on top and as a count on each section heading. They only
- * appear after the first Save, so an empty form doesn't open all red.
- * `serverErrors` are the fields the API rejected; each clears as soon as
- * that field is edited.
+ * Errors show in the form, never as a toast (NEO-109) — see useFormErrors:
+ * under each field, in the summary box on top and as a count on each section
+ * heading, only after the first Save. A field the API rejected clears as
+ * soon as it's edited (setField).
  */
-const attempted = ref(false);
-const serverErrors = ref<FieldErrors>({});
+const { attempted, serverError: serverErrorText, clearServerError, setServerErrors, reset: resetErrors, errorListFor } = useFormErrors();
 
-function serverErrorText(key: string): string | undefined {
-  const messageKey = serverErrors.value[key];
-  if (!messageKey) return undefined;
-  return t(te(messageKey) ? messageKey : "app.formRenderer.validation.invalid");
-}
-
-/** The first thing wrong with a field right now — the API's verdict first, then the field's own rules. */
-function fieldError(f: FormFieldDef): string | undefined {
-  const server = serverErrorText(f.key);
-  if (server) return server;
-  for (const rule of rulesFor(f)) {
-    const result = rule(form.value[f.key]);
-    if (result !== true) return result;
-  }
-  return undefined;
-}
-
-const errorList = computed<FormErrorSummaryItem[]>(() => {
-  if (!attempted.value) return [];
-  return sections.value.flatMap((sec) =>
-    sec.fields.flatMap((f) => {
-      const message = fieldError(f);
-      return message ? [{ key: f.key, label: labelFor(f), message }] : [];
-    }),
-  );
-});
+const errorList = errorListFor(() =>
+  sections.value.flatMap((sec) => sec.fields.map((f) => ({ key: f.key, label: labelFor(f), value: form.value[f.key], rules: rulesFor(f) }))),
+);
 
 const errorCountBySection = computed<Record<string, number>>(() => {
   const keys = new Set(errorList.value.map((e) => e.key));
   return Object.fromEntries(sections.value.map((sec) => [sec.id, sec.fields.filter((f) => keys.has(f.key)).length]));
 });
 
-/** Scrolls a field into view and puts the cursor in it — the summary's links. */
+/** The summary's links jump to their field. */
 function focusField(key: string) {
-  const el = (fieldEls[key] as { $el?: HTMLElement } | undefined)?.$el;
-  if (!el) return;
-  const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-  el.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
-  el.querySelector<HTMLElement>("input, textarea, button")?.focus({ preventScroll: true });
+  focusFormField((fieldEls[key] as { $el?: Element } | undefined)?.$el);
 }
 
 const formTitle = computed(() =>
@@ -606,11 +577,7 @@ function componentFor(type: FormFieldType) {
 /** Every field edit goes through here, so a rejected value's server error clears the moment it changes. */
 function setField(f: FormFieldDef, v: unknown) {
   form.value[f.key] = v;
-  if (serverErrors.value[f.key]) {
-    const rest = { ...serverErrors.value };
-    delete rest[f.key];
-    serverErrors.value = rest;
-  }
+  clearServerError(f.key);
 }
 
 function fieldAttrs(f: FormFieldDef): Record<string, unknown> {
@@ -762,10 +729,7 @@ async function onSubmit() {
  * this form doesn't show can't be marked, so that one still gets a toast.
  */
 function showServerErrors(fieldErrors: FieldErrors) {
-  const shown = new Set(sections.value.flatMap((sec) => sec.fields.map((f) => f.key)));
-  const known = Object.fromEntries(Object.entries(fieldErrors).filter(([key]) => shown.has(key)));
-  if (Object.keys(known).length) {
-    serverErrors.value = known;
+  if (setServerErrors(fieldErrors, sections.value.flatMap((sec) => sec.fields.map((f) => f.key)))) {
     nextTick(() => scrollToFormTop(formRef.value?.$el));
   } else {
     notifications.show(t("app.formRenderer.validation.saveRejected"), "error", undefined, { icon: "sad-cloud" });
@@ -784,8 +748,7 @@ watch(
   (open, wasOpen) => {
     if (open && !wasOpen) {
       resetForm();
-      attempted.value = false;
-      serverErrors.value = {};
+      resetErrors();
       activeSection.value = sections.value[0]?.id ?? "";
       loadAllAsyncOptions();
     }

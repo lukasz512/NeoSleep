@@ -550,6 +550,13 @@ describe("Practitioner licence number (national_ids.pwz / cedula, NEO-51)", () =
       await expect(
         UpdatePractitionerCommand(ctx, practitioner.id, { national_ids: { pwz: "1234567" } }),
       ).rejects.toBeInstanceOf(ValidationError);
+      // NEO-109: names the form's own field key, so the HCP form marks the PWZ field.
+      await expect(
+        UpdatePractitionerCommand(ctx, practitioner.id, { national_ids: { pwz: "1234567" } }),
+      ).rejects.toMatchObject({ field: "pwz" });
+      await expect(
+        UpdatePractitionerCommand(ctx, practitioner.id, { national_ids: { cedula: "12" } }),
+      ).rejects.toMatchObject({ field: "cedula" });
     });
   }, 15000);
 });

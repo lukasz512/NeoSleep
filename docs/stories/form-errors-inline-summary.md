@@ -23,6 +23,13 @@ so I can fix it without guessing from a generic "Error al guardar" toast.
 - **Platform:** a generic `ValidationError(message, field?)` in the API and one `field` in the api-client's error info. Other entities can adopt this by passing `field`.
 - **Compliance / accessibility:** the summary is `role="alert"` (screen readers announce it). Links are real buttons with a focus outline. The section count has an aria-label.
 
-## Out of scope / follow-ups
-- Only the patient commands name their fields so far. Other entities (HCP, HCO, lead) still fall back to the toast until their `ValidationError`s pass `field`.
-- Hand-written (non-FormRenderer) forms, such as the OrthoApnea wizard, are unchanged.
+## Extension (Łukasz, 2026-09-26): every form in the app
+"All forms in the app must behave this way." Same PR:
+- **API:** `ValidationError` reads the field from its own message (`first_name is required` → `first_name`, `Invalid email format` → `email`) and also sends a `reason` (`required` / `invalid`), so all ~350 existing validations name their field without editing each one. Explicit field only where the message doesn't lead with the key.
+- **App:** one composable (`useFormErrors`) and one box (`FormErrorSummary` in `@ui`) are used by FormRenderer and every hand-written form: event, appointment, OrthoApnea order wizard (per step), partner registration, login / forgot / reset / change password.
+- **Login:** "wrong email or password" moves from a toast into the form's summary box (reverses the earlier decision to show it as a toast).
+- A field without its own server message falls back to "This field is required" or "Check this field", depending on `reason`.
+
+## Not changed
+- Note and comment boxes (one textarea, Add disabled while empty): nothing a server can reject per field.
+- The patient's QR questionnaire: the pending inline-alert PR already moved its validation into the form.

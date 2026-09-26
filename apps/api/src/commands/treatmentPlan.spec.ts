@@ -59,6 +59,29 @@ describe("CreateTreatmentPlanCommand", () => {
     });
   });
 
+  // NEO-109: the order wizard marks its Doctor field from `field`, so the
+  // error has to name dentist_id, not surface as an opaque database error.
+  it.each([
+    ["an unknown practitioner", "00000000-0000-0000-0000-000000000000"],
+    ["a malformed id", "not-a-uuid"],
+  ])("rejects a dentist_id of %s, naming the field", async (_label, dentistId) => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const patient = await createTestPatient(ctx);
+      const study = await CreateSleepStudyCommand(ctx, { patient_id: patient.id });
+
+      const error = await CreateTreatmentPlanCommand(ctx, {
+        patient_id: patient.id,
+        sleep_study_id: study.id,
+        type: "dental_appliance",
+        dentist_id: dentistId,
+      }).catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(ValidationError);
+      expect((error as ValidationError).field).toBe("dentist_id");
+    });
+  });
+
   it("creates a dental_appliance plan linked to the patient's own sleep study", async () => {
     await withTenant(TENANT_SLUG, async (client) => {
       const ctx = await buildTestContext(client);

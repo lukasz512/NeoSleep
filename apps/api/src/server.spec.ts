@@ -184,19 +184,19 @@ describe("API server", () => {
     it("POST /api/v1/auth/login with no body returns 400, not 500", async () => {
       const res = await request(app).post("/api/v1/auth/login");
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: "Email and password are required." });
+      expect(res.body).toEqual({ error: "Email and password are required.", code: "VALIDATION_ERROR", field: "email", reason: "required" });
     });
 
     it("POST /api/v1/auth/login with a non-JSON content type returns 400, not 500", async () => {
       const res = await request(app).post("/api/v1/auth/login").set("Content-Type", "text/plain").send("hello");
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: "Email and password are required." });
+      expect(res.body).toEqual({ error: "Email and password are required.", code: "VALIDATION_ERROR", field: "email", reason: "required" });
     });
 
     it("POST /api/v1/auth/forgot-password with no body returns 400, not 500", async () => {
       const res = await request(app).post("/api/v1/auth/forgot-password");
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: "Email is required." });
+      expect(res.body).toEqual({ error: "Email is required.", code: "VALIDATION_ERROR", field: "email", reason: "required" });
     });
   });
 

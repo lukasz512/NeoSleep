@@ -292,6 +292,8 @@ import ChecklistStatusIcon from "../questionnaire/ChecklistStatusIcon.vue";
 import ChecklistResult from "../questionnaire/ChecklistResult.vue";
 import AppListItemMenu from "../AppListItemMenu.vue";
 import { apiFetch, extractErrorMessage } from "../../composables/useApi";
+import { fieldErrorsFromResponse } from "../../composables/useFormErrors";
+import type { SubmitDone } from "../../composables/useEntitySubmit";
 import { useNotifications } from "../../composables/useNotifications";
 import { useAuthStore } from "../../stores/auth";
 import {
@@ -640,7 +642,7 @@ async function editSleepStudy(id: string) {
   showSleepStudyEdit.value = true;
 }
 
-async function onSleepStudyAdd(data: Record<string, unknown>, done: (ok: boolean) => void) {
+async function onSleepStudyAdd(data: Record<string, unknown>, done: SubmitDone) {
   const res = await apiFetch("/api/v1/sleep-study", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -650,10 +652,11 @@ async function onSleepStudyAdd(data: Record<string, unknown>, done: (ok: boolean
     notifications.show(t("app.sleepStudies.form.success"), "success", undefined, { icon: "nav-sleep-studies" });
     await checklistApi.load();
   }
-  done(res.ok);
+  // A 400 naming a field is marked in the form (NEO-109); anything else was already toasted by apiFetch.
+  done(res.ok, res.ok ? undefined : (await fieldErrorsFromResponse(res)) ?? undefined);
 }
 
-async function onSleepStudyEdit(data: Record<string, unknown>, done: (ok: boolean) => void) {
+async function onSleepStudyEdit(data: Record<string, unknown>, done: SubmitDone) {
   const id = editingSleepStudy.value?.id;
   if (typeof id !== "string") return done(false);
   const res = await apiFetch(`/api/v1/sleep-study/${id}`, {
@@ -665,7 +668,8 @@ async function onSleepStudyEdit(data: Record<string, unknown>, done: (ok: boolea
     notifications.show(t("app.sleepStudies.form.editSuccess"), "success", undefined, { icon: "nav-sleep-studies" });
     await checklistApi.load();
   }
-  done(res.ok);
+  // A 400 naming a field is marked in the form (NEO-109); anything else was already toasted by apiFetch.
+  done(res.ok, res.ok ? undefined : (await fieldErrorsFromResponse(res)) ?? undefined);
 }
 
 // Deleting a sleep study (kept from the pre-checklist panel) — from its history entry, confirmed first.

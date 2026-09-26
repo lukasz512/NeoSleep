@@ -129,7 +129,7 @@ export async function InvitePractitionerCommand(
   const firstName = input.first_name?.trim() || lead.first_name;
   const lastName = input.last_name?.trim() || lead.last_name;
   const email = input.email?.trim() || lead.email;
-  if (!email) throw new ValidationError("An email address is required");
+  if (!email) throw new ValidationError("An email address is required", "email");
   if (!lead.phone) throw new ValidationError("A phone number is required — add it to the lead before inviting");
 
   const leadLicense: Record<string, string> = {};
@@ -433,25 +433,28 @@ export async function AcceptPractitionerInviteCommand(
   input: AcceptInviteInput,
   meta: AcceptInviteRequestMeta
 ): Promise<AcceptInviteResult> {
+  // Each ValidationError names the request-body key the registration page
+  // sends (camelCase), so the page marks that field instead of a toast
+  // (NEO-109); "token" means the link itself — shown as a form-level line.
   const tokenStr = input.token?.trim();
-  if (!tokenStr) throw new ValidationError("Invitation token is required");
-  if (!input.password || input.password.length < 8) throw new ValidationError("Password must be at least 8 characters");
-  if (!input.clinicName?.trim()) throw new ValidationError("Clinic name is required");
-  if (!input.clinicEmail?.trim()) throw new ValidationError("Clinic email is required");
-  if (!input.clinicPhone?.trim()) throw new ValidationError("Clinic phone is required");
-  if (!input.billingAddress?.trim()) throw new ValidationError("Billing address is required");
+  if (!tokenStr) throw new ValidationError("Invitation token is required", "token");
+  if (!input.password || input.password.length < 8) throw new ValidationError("Password must be at least 8 characters", "password");
+  if (!input.clinicName?.trim()) throw new ValidationError("Clinic name is required", "clinicName");
+  if (!input.clinicEmail?.trim()) throw new ValidationError("Clinic email is required", "clinicEmail");
+  if (!input.clinicPhone?.trim()) throw new ValidationError("Clinic phone is required", "clinicPhone");
+  if (!input.billingAddress?.trim()) throw new ValidationError("Billing address is required", "billingAddress");
   if (input.practiceRole !== "owner" && input.practiceRole !== "staff") {
-    throw new ValidationError("Choose whether you own the practice or work there");
+    throw new ValidationError("Choose whether you own the practice or work there", "practiceRole");
   }
   const practiceRole: PracticeRole = input.practiceRole;
-  if (practiceRole === "owner" && !input.taxId?.trim()) throw new ValidationError("Tax ID is required");
+  if (practiceRole === "owner" && !input.taxId?.trim()) throw new ValidationError("Tax ID is required", "taxId");
   if (!input.agreementSignatureDataUrl || !SIGNATURE_DATA_URL_RE.test(input.agreementSignatureDataUrl)) {
     throw new ValidationError("A handwritten signature on the partner agreement is required");
   }
   if (!input.noticeAcknowledged) throw new ValidationError("Please confirm you have read the privacy notice");
 
   const invite = await getInviteTokenByHash(client, hashToken(tokenStr));
-  if (!invite) throw new ValidationError("Invalid or expired invitation link. Ask staff to send a new one.");
+  if (!invite) throw new ValidationError("Invalid or expired invitation link. Ask staff to send a new one.", "token");
 
   const user = await getUserById(client, invite.user_id);
   if (!user) throw new NotFoundError("User", invite.user_id);
@@ -461,7 +464,10 @@ export async function AcceptPractitionerInviteCommand(
   if (!jurisdiction) throw new PartnerDocumentsNotReadyError("No partner jurisdiction for this invitation");
 
   if (!isValidLicenseNumber(jurisdiction, input.licenseNumber ?? "")) {
-    throw new ValidationError(jurisdiction === "PL" ? "Invalid PWZ licence number" : "Invalid cédula profesional");
+    throw new ValidationError(
+      jurisdiction === "PL" ? "Invalid PWZ licence number" : "Invalid cédula profesional",
+      "licenseNumber",
+    );
   }
   const licenseNumber =
     jurisdiction === "PL" ? input.licenseNumber.replace(/\s/g, "") : normalizeLicenseNumber(input.licenseNumber);

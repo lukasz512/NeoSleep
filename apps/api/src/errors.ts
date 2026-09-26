@@ -26,14 +26,51 @@ export class DatabaseError extends AppError {
   }
 }
 
+/** Why a field was rejected — the PWA picks its message from this when it has no field-specific one. */
+export type ValidationReason = "required" | "invalid";
+
+// "first_name is required", "email cannot be blank", "notes must be at most …" — a lower-case
+// payload key (snake_case or one word) that leads the message and is followed by a verdict.
+const LEADING_KEY = /^([a-z][a-z0-9_]*) (?:is|must|cannot|does|should)\b/i;
+// "Invalid email format", "Invalid organization type: x", "Invalid study_type 'x' — …"
+// (one optional word between "Invalid" and the key, tried last).
+const INVALID_KEY = /^Invalid (?:[a-z]+ )??([a-z][a-z0-9_]*)(?= format\b|:| '|$)/i;
+// A message led by an id ("patient id is required", "Missing lead id") is about the URL, not a form field.
+const NOT_A_FIELD = new Set([
+  "id", "missing", "uploaded", "unknown", "unsupported", "an", "no", "only",
+  // "Practitioner must have an email …" — a record, not a payload key.
+  "practitioner", "patient", "lead", "organization", "user", "territory", "appointment",
+]);
+
+/**
+ * The payload key a validation message is about, read from the message itself —
+ * every command already writes them key-first ("first_name is required"), so this
+ * names the field for the ~350 existing throws without touching each one (NEO-109).
+ */
+export function inferValidationField(message: string): string | undefined {
+  const match = LEADING_KEY.exec(message) ?? INVALID_KEY.exec(message);
+  const key = match?.[1].toLowerCase();
+  return key && !NOT_A_FIELD.has(key) ? key : undefined;
+}
+
+export function inferValidationReason(message: string): ValidationReason {
+  return /\b(?:is required|cannot be (?:blank|empty)|required$)/i.test(message) ? "required" : "invalid";
+}
+
 export class ValidationError extends AppError {
   /**
-   * `field` names the payload key that failed (e.g. "date_of_birth"), when
-   * one does — the PWA's FormRenderer marks that field instead of showing a
-   * toast (NEO-109). Leave it out for errors no single field can fix.
+   * The payload key that failed (e.g. "date_of_birth"), so the PWA marks that
+   * field in the form instead of showing a toast (NEO-109). Pass it when the
+   * message doesn't start with the key; otherwise it's read from the message.
+   * Undefined for errors no single field can fix.
    */
-  constructor(message: string, public readonly field?: string) {
+  public readonly field?: string;
+  public readonly reason: ValidationReason;
+
+  constructor(message: string, field?: string) {
     super(message, "VALIDATION_ERROR", 400);
+    this.field = field ?? inferValidationField(message);
+    this.reason = inferValidationReason(message);
   }
 }
 

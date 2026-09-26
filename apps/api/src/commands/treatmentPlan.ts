@@ -4,6 +4,7 @@ import {
   updateTreatmentPlan,
   getTreatmentPlanById,
   getSleepStudyById,
+  getPractitionerById,
   softDeleteTreatmentPlan,
   restoreTreatmentPlan,
   type TreatmentPlan,
@@ -40,6 +41,22 @@ function assertValidStatus(status: string | undefined): void {
   }
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The OrthoApnea order wizard's "Doctor" field sets dentist_id — a doctor
+ * soft-deleted since the draft was saved (or a malformed id) used to surface
+ * as an opaque database error. Named explicitly so the wizard can mark its
+ * doctor field instead of showing a toast (NEO-109). Checked before the
+ * lookup so a non-UUID never reaches Postgres and aborts the transaction.
+ */
+async function assertDentistExists(ctx: TenantContext, dentistId: string | undefined): Promise<void> {
+  if (dentistId === undefined) return;
+  if (!UUID_RE.test(dentistId) || !(await getPractitionerById(ctx.client, dentistId))) {
+    throw new ValidationError("dentist_id does not reference an existing practitioner", "dentist_id");
+  }
+}
+
 export type CreateTreatmentPlanInput = TreatmentPlanInsert;
 
 export async function CreateTreatmentPlanCommand(
@@ -50,6 +67,7 @@ export async function CreateTreatmentPlanCommand(
   if (!input.sleep_study_id?.trim()) throw new ValidationError("sleep_study_id is required");
   assertValidType(input.type);
   assertValidStatus(input.status);
+  await assertDentistExists(ctx, input.dentist_id);
 
   const study = await getSleepStudyById(ctx.client, input.sleep_study_id);
   if (!study) throw new ValidationError("sleep_study_id does not reference an existing sleep study");
@@ -81,6 +99,7 @@ export async function UpdateTreatmentPlanCommand(
   if (!id?.trim()) throw new ValidationError("treatment plan id is required");
   if (input.type !== undefined) assertValidType(input.type);
   assertValidStatus(input.status);
+  await assertDentistExists(ctx, input.dentist_id);
 
   const before = await getTreatmentPlanById(ctx.client, id);
   if (!before) return null;

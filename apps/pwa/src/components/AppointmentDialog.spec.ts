@@ -89,6 +89,39 @@ describe("AppointmentDialog (NEO-34)", () => {
     expect(wrapper.emitted("update:modelValue")).toBeUndefined();
   });
 
+  it("a 400 naming a field marks that field and the summary — no toast, no problem box (NEO-109)", async () => {
+    apiFetch.mockResolvedValue(jsonResponse(true, 200, { items: [] }));
+    const wrapper = await open("admin");
+    const body = { error: "An appointment must last between 15 and 480 minutes", code: "VALIDATION_ERROR", field: "duration_minutes", reason: "invalid" };
+    apiFetch.mockResolvedValueOnce({ ...jsonResponse(false, 400, body), clone: () => jsonResponse(false, 400, body) } as Response);
+    byTestId("appointment-submit")!.click();
+    await flushPromises();
+
+    const summary = byTestId("form-error-summary");
+    expect(summary?.textContent).toContain("Fields to fix: 1");
+    expect(summary?.textContent).toContain("Length — Check this field");
+    expect(byTestId("appointment-problem")).toBeNull();
+    expect(notify).not.toHaveBeenCalled();
+    expect(wrapper.emitted("update:modelValue")).toBeUndefined();
+
+    // Editing the rejected field clears its error (and the summary with it).
+    wrapper.findComponent(vuetifyComponents.VSelect).vm.$emit("update:modelValue", 30);
+    await flushPromises();
+    expect(byTestId("form-error-summary")).toBeNull();
+  });
+
+  it("a 400 naming a field the dialog doesn't show falls back to the problem box", async () => {
+    apiFetch.mockResolvedValue(jsonResponse(true, 200, { items: [] }));
+    await open("admin");
+    const body = { error: "sleep_study_id does not belong to this patient", code: "VALIDATION_ERROR", field: "sleep_study_id", reason: "invalid" };
+    apiFetch.mockResolvedValueOnce({ ...jsonResponse(false, 400, body), clone: () => jsonResponse(false, 400, body) } as Response);
+    byTestId("appointment-submit")!.click();
+    await flushPromises();
+
+    expect(byTestId("form-error-summary")).toBeNull();
+    expect(byTestId("appointment-problem")).not.toBeNull();
+  });
+
   it("a rep books without a notes field (no health data for the field force)", async () => {
     apiFetch.mockResolvedValue(jsonResponse(true, 200, { items: [] }));
     await open("rep");

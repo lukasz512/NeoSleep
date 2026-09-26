@@ -105,7 +105,7 @@ export async function UpdateTerritoryCommand(
   if (!before) return null;
 
   if (input.parent_id !== undefined && input.parent_id !== null) {
-    if (input.parent_id === id) throw new ValidationError("A territory cannot be its own parent");
+    if (input.parent_id === id) throw new ValidationError("A territory cannot be its own parent", "parent_id");
     const parent = await getTerritoryById(ctx.client, input.parent_id);
     if (!parent) throw new ValidationError("parent_id does not reference an existing territory");
 
@@ -116,7 +116,7 @@ export async function UpdateTerritoryCommand(
     // CTE has no built-in protection against.
     const proposedAncestry = await getTerritoryPath(ctx.client, input.parent_id);
     if (proposedAncestry.some((node) => node.id === id)) {
-      throw new ValidationError("This parent assignment would create a cycle in the territory hierarchy");
+      throw new ValidationError("This parent assignment would create a cycle in the territory hierarchy", "parent_id");
     }
   }
 

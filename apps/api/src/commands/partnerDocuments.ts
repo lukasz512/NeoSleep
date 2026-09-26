@@ -233,7 +233,8 @@ export async function ApprovePartnerDocumentVersionCommand(
   versionId: string,
 ): Promise<{ versionId: string; versionNumber: number }> {
   if (!(COUNTERSIGNED_TEMPLATES as readonly string[]).includes(templateKey)) {
-    throw new ValidationError(`${templateKey} is not a countersigned document`);
+    // Worded so no field is inferred — the template key comes from the URL, not a form.
+    throw new ValidationError(`Not a countersigned document: ${templateKey}`);
   }
   const jurisdiction = localeJurisdiction(locale);
   if (!jurisdiction) throw new ValidationError(`No partner jurisdiction for locale "${locale}"`);

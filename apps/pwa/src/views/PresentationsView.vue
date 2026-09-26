@@ -272,6 +272,8 @@ import AppIcon from "../components/AppIcon.vue";
 import AppFilterBar from "../components/AppFilterBar.vue";
 import { useAuthStore } from "../stores/auth";
 import { apiFetch } from "../composables/useApi";
+import { fieldErrorsFromResponse } from "../composables/useFormErrors";
+import type { SubmitDone } from "../composables/useEntitySubmit";
 import { useNotifications } from "../composables/useNotifications";
 import { useEntityList } from "../composables/useEntityList";
 import type { FilterDefinition } from "../composables/useFilters";
@@ -387,7 +389,7 @@ function onEdit(p: Record<string, unknown>) {
   showForm.value = true;
 }
 
-async function onSubmit(payload: Record<string, unknown>, done: (ok: boolean) => void) {
+async function onSubmit(payload: Record<string, unknown>, done: SubmitDone) {
   const isEdit = typeof payload.id === "string" && payload.id;
   const url = isEdit ? `/api/v1/presentation/${payload.id}` : "/api/v1/presentation";
   const method = isEdit ? "PATCH" : "POST";
@@ -410,7 +412,8 @@ async function onSubmit(payload: Record<string, unknown>, done: (ok: boolean) =>
       window.dispatchEvent(new Event("entity-list-refresh"));
       done(true);
     } else {
-      done(false);
+      // A 400 naming a field is marked in the form (NEO-109); anything else was already toasted by apiFetch.
+      done(false, (await fieldErrorsFromResponse(res)) ?? undefined);
     }
   } catch (err) {
     reportCaught(err, { where: "PresentationsView.onSubmit" });

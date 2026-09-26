@@ -117,7 +117,13 @@ authRouter.post(
     const emailStr = typeof email === "string" ? email.trim().toLowerCase() : "";
     const passwordStr = typeof password === "string" ? password : "";
     if (!emailStr || !passwordStr) {
-      res.status(400).json({ error: "Email and password are required." });
+      // `field`/`reason` let the sign-in form mark the empty field (NEO-109).
+      res.status(400).json({
+        error: "Email and password are required.",
+        code: "VALIDATION_ERROR",
+        field: emailStr ? "password" : "email",
+        reason: "required",
+      });
       return;
     }
     if (passwordStr.length < 8) {
@@ -301,7 +307,12 @@ authRouter.post("/auth/change-password", requireAuth, asyncHandler(async (req: R
   };
   const newStr = typeof new_password === "string" ? new_password : "";
   if (newStr.length < 8) {
-    res.status(400).json({ error: "New password must be at least 8 characters." });
+    res.status(400).json({
+      error: "New password must be at least 8 characters.",
+      code: "VALIDATION_ERROR",
+      field: "new_password",
+      reason: "invalid",
+    });
     return;
   }
   const slug = tenantSlugFromHost(req.hostname);
@@ -340,7 +351,7 @@ authRouter.post("/auth/forgot-password", asyncHandler(async (req: Request, res: 
   const { email } = req.body as { email?: string };
   const emailStr = typeof email === "string" ? email.trim().toLowerCase() : "";
   if (!emailStr) {
-    res.status(400).json({ error: "Email is required." });
+    res.status(400).json({ error: "Email is required.", code: "VALIDATION_ERROR", field: "email", reason: "required" });
     return;
   }
   const slug = tenantSlugFromHost(req.hostname);
@@ -410,11 +421,17 @@ authRouter.post("/auth/reset-password", asyncHandler(async (req: Request, res: R
   const tokenStr = typeof token === "string" ? token : "";
   const newStr = typeof new_password === "string" ? new_password : "";
   if (!tokenStr) {
-    res.status(400).json({ error: "Reset token is required." });
+    // The token comes from the emailed link, not a form field — so no `field`.
+    res.status(400).json({ error: "Reset token is required.", code: "VALIDATION_ERROR", reason: "required" });
     return;
   }
   if (newStr.length < 8) {
-    res.status(400).json({ error: "New password must be at least 8 characters." });
+    res.status(400).json({
+      error: "New password must be at least 8 characters.",
+      code: "VALIDATION_ERROR",
+      field: "new_password",
+      reason: "invalid",
+    });
     return;
   }
   const tokenHash = hashToken(tokenStr);
