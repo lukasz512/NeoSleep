@@ -44,9 +44,9 @@
             </div>
           </VExpansionPanelTitle>
           <VExpansionPanelText>
-            <VAlert v-if="missingFields(txn).length > 0" type="warning" variant="tonal" density="comfortable" class="mb-3">
+            <AppInlineAlert v-if="missingFields(txn).length > 0" type="warning" variant="tonal" density="comfortable" class="mb-3">
               {{ t("app.orthoApneaOrder.transactionLog.missingFieldsWarning", { fields: missingFields(txn).join(", ") }) }}
-            </VAlert>
+            </AppInlineAlert>
             <p v-if="txn.error_message" class="oa-txn-log__error">
               {{ t("app.orthoApneaOrder.transactionLog.errorMessage") }}: {{ txn.error_message }}
             </p>
@@ -72,6 +72,7 @@ import AppLoadingState from "../AppLoadingState.vue";
 import AppErrorState from "../AppErrorState.vue";
 import AppEmptyState from "../AppEmptyState.vue";
 import { apiFetch } from "../../composables/useApi";
+import { AppInlineAlert } from "@ui";
 
 /**
  * Admin-only debugging view over `partner_link`/`partner_transaction`

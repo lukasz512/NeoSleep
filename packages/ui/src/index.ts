@@ -11,6 +11,7 @@ export { default as ThemeLocaleSwitcher } from "./components/ThemeLocaleSwitcher
 export { default as AuthChrome } from "./components/AuthChrome.vue";
 export { default as AuthCard } from "./components/AuthCard.vue";
 export { default as AnimatedCard } from "./components/AnimatedCard.vue";
+export { default as AppInlineAlert } from "./components/AppInlineAlert.vue";
 export { default as AppShell, type AppShellNavItem } from "./components/AppShell.vue";
 export { default as MobileNavDrawer } from "./components/MobileNavDrawer.vue";
 export { default as MobileBottomNavBar } from "./components/MobileBottomNavBar.vue";

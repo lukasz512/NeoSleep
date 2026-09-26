@@ -48,11 +48,9 @@
       @submit="onEventFormSubmit"
     />
 
-    <VAlert
+    <AppInlineAlert
       v-if="isOffline"
       type="warning"
-      variant="tonal"
-      density="compact"
       class="view-detail__offline-banner"
       :text="t('app.common.offlineShowingCached')"
     />
@@ -371,6 +369,7 @@ import {
   entityActionBtnClass,
 } from "../config/entityActions";
 import type { Lead } from "./LeadsView.vue";
+import { AppInlineAlert } from "@ui";
 
 const FormRenderer = defineAsyncComponent(
   () => import("../components/FormRenderer.vue"),

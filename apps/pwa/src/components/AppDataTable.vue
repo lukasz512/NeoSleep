@@ -11,9 +11,9 @@
       >
         <template #bottom></template>
       </VDataTable>
-      <VAlert v-if="items.length === 0 && noResultsText" type="info" variant="tonal" density="comfortable" class="app-data-table__empty">
+      <AppInlineAlert v-if="items.length === 0 && noResultsText" type="info" class="app-data-table__empty">
         {{ noResultsText }}
-      </VAlert>
+      </AppInlineAlert>
     </div>
 
     <!-- Mobile: feed of cards -->
@@ -31,9 +31,9 @@
           {{ formatMeta(item) }}
         </VCardSubtitle>
       </VCard>
-      <VAlert v-if="items.length === 0 && noResultsText" type="info" variant="tonal" density="comfortable" class="app-data-table__empty">
+      <AppInlineAlert v-if="items.length === 0 && noResultsText" type="info" class="app-data-table__empty">
         {{ noResultsText }}
-      </VAlert>
+      </AppInlineAlert>
     </div>
   </div>
 </template>
@@ -41,6 +41,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useDisplay } from "vuetify";
+import { AppInlineAlert } from "@ui";
 
 const { mobile } = useDisplay();
 

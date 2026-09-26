@@ -9,9 +9,9 @@
     @close="close"
   >
         <VForm ref="formRef" @submit.prevent="onSubmit">
-          <VAlert v-if="problem" type="warning" variant="tonal" density="compact" class="mb-4" data-testid="appointment-problem">
+          <AppInlineAlert v-if="problem" type="warning" class="mb-4" data-testid="appointment-problem">
             {{ problem }}
-          </VAlert>
+          </AppInlineAlert>
 
           <p v-if="isEdit || fixedPatient" class="appointment-dialog__fixed mb-3">
             <span class="appointment-dialog__label">{{ t('user.appointments.form.fieldPatient') }}</span>
@@ -127,6 +127,7 @@ import AppButton from "./AppButton.vue";
 import AppAvatar from "./AppAvatar.vue";
 import AppIcon from "./AppIcon.vue";
 import AppFormDialog from "./AppFormDialog.vue";
+import { AppInlineAlert } from "@ui";
 
 interface NamedRef {
   id: string;
