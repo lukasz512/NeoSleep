@@ -22,7 +22,7 @@
  * setAuthInterceptor() — called from stores/auth.ts after store creation.
  */
 import { useLocalStorage } from "@vueuse/core";
-import { ApiError, classifyStatus, createApiFetch, extractErrorMessage, reportCaught, type ApiFetchOptions } from "@api";
+import { ApiError, classifyStatus, createApiFetch, extractErrorMessage, isFieldErrorStatus, messageKeyForCode, reportCaught, type ApiFetchOptions } from "@api";
 import { useGlobalLoaderStore } from "@stores";
 import { getApiUrl, APP_STORAGE_KEYS } from "../constants";
 import { useNotifications } from "../composables/useNotifications";
@@ -188,10 +188,13 @@ export const apiFetch = createApiFetch({
     // "HTTP <code>" fallback — see extractErrorMessage) is always passed too,
     // as what shows if the key is absent or fails to resolve.
     const toShow = message || `Request failed: ${status} ${path}`;
-    // A 400 naming a field is the form's to show, on that field (NEO-109) —
-    // useEntitySubmit hands it to FormRenderer instead of a toast.
-    if (!(status === 400 && info?.field)) {
-      useNotifications().show(toShow, "error", errorMessageKey, { icon: "sad-cloud" });
+    // An error naming a field (400 VALIDATION_ERROR, 409 EMAIL_IN_USE) is the
+    // form's to show, on that field (NEO-109/NEO-111) — useEntitySubmit hands
+    // it to FormRenderer instead of a toast.
+    if (!(isFieldErrorStatus(status) && info?.field)) {
+      // A code with its own message beats the caller's generic key (NEO-111).
+      const key = messageKeyForCode(info?.code) ?? errorMessageKey;
+      useNotifications().show(toShow, "error", key, { icon: "sad-cloud" });
     }
     // Every non-2xx apiFetch response is reported here, exactly once (NEO-81) —
     // callers' own `!res.ok` branches don't need to report the same failure again.

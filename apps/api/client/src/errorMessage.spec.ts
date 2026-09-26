@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { ApiError, type ApiErrorKind } from "./errors";
-import { describeErrorInline, errorBodyKeyOr, errorClassOf, errorMessageKeys, shortRequestId } from "./errorMessage";
+import { describeErrorInline, errorBodyKeyOr, errorClassOf, errorMessageKeys, isFieldErrorStatus, messageKeyForCode, shortRequestId } from "./errorMessage";
 import en from "../../../../packages/i18n/en.json";
 import pl from "../../../../packages/i18n/pl.json";
 import mx from "../../../../packages/i18n/mx.json";
@@ -78,5 +78,28 @@ describe("shortRequestId", () => {
     expect(shortRequestId("edge-abc")).toBe("edge");
     expect(shortRequestId(null)).toBeNull();
     expect(shortRequestId("")).toBeNull();
+  });
+});
+
+describe("messageKeyForCode", () => {
+  it("maps EMAIL_IN_USE to a key present in every language (NEO-111)", () => {
+    const key = messageKeyForCode("EMAIL_IN_USE");
+    expect(key).toBe("common.error.emailInUse");
+    for (const dict of [en, pl, mx] as Record<string, string>[]) expect(dict[key!]).toBeTruthy();
+  });
+
+  it("returns null for codes without a dedicated message", () => {
+    expect(messageKeyForCode("CONFLICT")).toBeNull();
+    expect(messageKeyForCode(null)).toBeNull();
+    expect(messageKeyForCode(undefined)).toBeNull();
+  });
+});
+
+describe("field errors (NEO-109 / NEO-111)", () => {
+  it("400 and 409 may name a field; other statuses don't", () => {
+    expect(isFieldErrorStatus(400)).toBe(true);
+    expect(isFieldErrorStatus(409)).toBe(true);
+    expect(isFieldErrorStatus(500)).toBe(false);
+    expect(isFieldErrorStatus(undefined)).toBe(false);
   });
 });

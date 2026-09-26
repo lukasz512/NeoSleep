@@ -87,8 +87,24 @@ export class ForbiddenError extends AppError {
 }
 
 export class ConflictError extends AppError {
-  constructor(message: string) {
-    super(message, "CONFLICT", 409);
+  constructor(message: string, code = "CONFLICT") {
+    super(message, code, 409);
+  }
+}
+
+/**
+ * NEO-111: identities.email is unique among everyone except patients (users,
+ * doctors, leads — migration 037), so saving one of those with an email
+ * another of them already has would otherwise surface as an opaque 23505
+ * "Database error". The code + field let the form mark the Email field with a
+ * translated message instead.
+ */
+export class EmailInUseError extends ConflictError {
+  readonly field = "email";
+  readonly reason = "taken";
+
+  constructor(email: string) {
+    super(`Email "${email}" is already in use by another person.`, "EMAIL_IN_USE");
   }
 }
 

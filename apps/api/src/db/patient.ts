@@ -303,8 +303,10 @@ export async function getPatientById(client: PoolClient, id: string): Promise<(P
 export async function insertPatient(client: PoolClient, data: PatientInsert): Promise<Patient & { name: string }> {
   try {
     const identityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (title, first_name, last_name, email, phone, region, territory_id, country_code, gender, date_of_birth)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      // email_shared: patients may share an email (families) — excluded from
+      // the unique index that keeps users/doctors/leads one-per-email (NEO-111).
+      `INSERT INTO identities (title, first_name, last_name, email, phone, region, territory_id, country_code, gender, date_of_birth, email_shared)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)
        RETURNING id`,
       [
         data.salutation ?? null,
