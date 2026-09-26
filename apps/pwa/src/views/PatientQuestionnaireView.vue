@@ -59,11 +59,14 @@
         <!-- Health questionnaires: layered notice + yes/no + express consent. -->
         <form v-else novalidate @submit.prevent="submitQuestionnaire">
           <h2 v-if="totalSteps > 1" class="patient-questionnaire__step-title">{{ stepTitle(step) }}</h2>
-          <p v-if="step.type === 'medical_history' && cursor === 0" class="patient-questionnaire__prompt">{{ t("app.questionnaire.prompt.medicalHistory") }}</p>
-          <QuestionnaireCards v-model="answers" v-model:cursor="cursor" :questions="questions" :letters="step.type === 'stop_bang'" />
-          <!-- After the last card: anything else, the data notice, consent, send. -->
+          <p v-if="step.type === 'medical_history'" class="patient-questionnaire__prompt">{{ t("app.questionnaire.prompt.medicalHistory") }}</p>
+          <!-- STOP-Bang: card by card (4 questions, illustrated). Medical history: one list — 14 plain yes/no
+               questions read faster on one screen (Łukasz, 2026-09-26). -->
+          <QuestionnaireCards v-if="useCards" v-model="answers" v-model:cursor="cursor" :questions="questions" letters />
+          <QuestionnaireChecklist v-else v-model="answers" :questions="questions" large :highlight-unanswered="showMissing" />
+          <!-- After the last card (or under the list): anything else, the data notice, consent, send. -->
           <Transition name="view-fade-lift">
-            <div v-if="cursor >= questions.length" class="patient-questionnaire__finish">
+            <div v-if="!useCards || cursor >= questions.length" class="patient-questionnaire__finish">
               <VTextarea
                 v-if="step.type === 'medical_history'"
                 v-model="other"
@@ -106,6 +109,7 @@ import AppIcon from "../components/AppIcon.vue";
 import AppLoadingState from "../components/AppLoadingState.vue";
 import SignaturePad from "../components/SignaturePad.vue";
 import QuestionnaireCards from "../components/questionnaire/QuestionnaireCards.vue";
+import QuestionnaireChecklist from "../components/questionnaire/QuestionnaireChecklist.vue";
 import ConsentNotice from "../components/questionnaire/ConsentNotice.vue";
 import { apiFetch } from "../composables/useApi";
 import { draftKeyFor, purgeExpiredDrafts, useQuestionnaireDraft } from "../composables/useQuestionnaireDraft";
@@ -166,6 +170,7 @@ const stepNumber = computed(() => (step.value ? steps.value.indexOf(step.value) 
 const stepKey = computed(() => (phase.value === "steps" ? `step-${step.value?.key ?? "none"}` : phase.value));
 
 const questions = computed(() => (step.value?.type === "stop_bang" ? STOP_QUESTIONS : MEDICAL_HISTORY_QUESTIONS));
+const useCards = computed(() => step.value?.type === "stop_bang");
 const clinicName = computed(() => questionnaire.value?.clinic_name || t("app.questionnaire.yourClinic"));
 const allAnswered = computed(() => questions.value.every((q) => answers.value[q.key] != null));
 

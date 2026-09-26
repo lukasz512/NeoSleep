@@ -109,19 +109,15 @@ describe("PatientQuestionnaireView (public QR self-fill)", () => {
 
     expect(wrapper.text()).toContain("Hello, Lucía");
     expect(wrapper.text()).toContain("Clínica Sonrisa asks you");
-    // One question at a time; consent and send only appear after the last one.
-    expect(wrapper.text()).toContain("Question 1 of 14");
-    expect(buttonWithText(wrapper, "No")).toHaveLength(1);
-    expect(wrapper.find("input[type='checkbox']").exists()).toBe(false);
-    expect(buttonWithText(wrapper, "Next →")[0]!.attributes("disabled")).toBeDefined(); // can't skip an unanswered question
-
-    await answerCards(wrapper, "No", 14);
-    expect(wrapper.text()).toContain("Check your answers");
-    // Consent not given yet → the send button stays disabled, nothing is sent.
-    expect(wrapper.findAll("button").find((b) => b.text() === "Send answers")!.attributes("disabled")).toBeDefined();
-    expect(apiFetch).toHaveBeenCalledTimes(1); // only the initial lookup
+    // The medical history is one list (14 plain yes/no questions), not cards.
+    expect(buttonWithText(wrapper, "No")).toHaveLength(14);
 
     await wrapper.find("input[type='checkbox']").setValue(true);
+    await wrapper.find("form").trigger("submit");
+    expect(wrapper.text()).toContain("Please answer every question.");
+    expect(apiFetch).toHaveBeenCalledTimes(1); // only the initial lookup
+
+    for (const no of buttonWithText(wrapper, "No")) await no.trigger("click");
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 201, { step: "medicalHistory", completed: true }));
     await wrapper.find("form").trigger("submit");
     await flushPromises();

@@ -25,6 +25,7 @@ Earlier decisions in the same thread:
 - The published STOP-Bang forms split the questions the same way: S-T-O-P is self-reported, and B-A-N-G is measured by the clinician (BMI > 35, age > 50, neck > 40 cm, male). Source: [AASM sleepeducation.org STOP-Bang PDF](https://sleepeducation.org/wp-content/uploads/2023/01/Stop-Bang-Questionnaire.pdf).
 
 ### Acceptance Criteria
+- [ ] The medical history stays one list of Sí/No rows on the patient's phone (Łukasz, 2026-09-26, after comparing three options).
 - [ ] Patient flow (QR link and email link) shows S-T-O-P one question per screen, with an illustration, large Sí/No buttons (≥ 56 px), and S-T-O-P letters as progress that can be tapped to go back.
 - [ ] After a Sí/No tap the flow moves to the next card with an animation. Card transitions and the progress change are animated, and a reduced-motion setting switches animations off.
 - [ ] The patient flow renders correctly from 320 px to desktop width, with no horizontal scroll.
