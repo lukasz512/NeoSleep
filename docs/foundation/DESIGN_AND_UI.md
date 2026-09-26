@@ -196,9 +196,22 @@ whether it's a table cell, a mobile card line, a detail panel or a note author. 
     on-surface `currentColor`) was still applying on top of the already-light `outline-variant`
     gray, double-dimming it. Forced to full opacity at rest since the color itself is already
     the subtle element; hover/error still layer their own opacity bump on top unchanged.
-  - Dialogs: `.pwa-form-dialog__card` and the new shared `.pwa-confirm-dialog__card` (nested
-    discard/confirm dialogs, previously a bare `elevation="8"` VCard) both use
-    `surface-container-high` tone + `--pwa-shadow-md` as a supporting cue only.
+  - Dialogs (2026-09-26): exactly two shells — `AppFormDialog.vue` for every form-style dialog
+    and `AppConfirmDialog.vue` for every two-option confirm. A raw `<VDialog>` anywhere else
+    fails `AppFormDialog.spec.ts` (only the full-screen presentation/legal-document viewers are
+    exempt). Surface is plain white (`surface`), not the `surface-container-high` grey tone
+    used before — forms read as paper, the scrim already separates them from the page;
+    `--pwa-shadow-md` stays as a supporting cue.
+  - Dialog scroll model: the dialog is capped at the viewport, header and actions stay pinned,
+    only the body scrolls, and a hairline divider shows under the header / above the actions
+    only while content runs behind them (M3). **Bugfix** (Vuetify 4): Vuetify ships all of its
+    CSS in cascade layers, so our unlayered `overflow: hidden` on the card beat Vuetify's own
+    `overflow-y: auto` and no form taller than the screen could scroll or reach Save. The scroll
+    model now lives only in `theme.scss`'s `.pwa-form-dialog*` rules + `AppFormDialog.vue`;
+    measured at real phone/laptop heights by `apps/pwa/e2e/dialog-scroll.spec.ts` on all three
+    engines. General rule after Vuetify 4: any unlayered app CSS on a Vuetify class wins over
+    Vuetify regardless of specificity — never set layout properties (overflow, display,
+    height) on Vuetify elements outside a shell that owns the whole model.
   - Dialog headers: every titled dialog uses `AppDialogHeader.vue` — optional avatar, 16px gap,
     title, close X pinned right (`closable=false` only for confirm dialogs). Never a hand-built
     `VCardTitle`: Vuetify injects its component CSS after `theme.scss`, so a global flex rule on

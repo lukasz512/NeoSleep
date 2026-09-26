@@ -20,17 +20,18 @@
          partner_transaction audit trail (migration 018) survive untouched,
          only the list view filters it out. Mainly for hiding failed/
          abandoned OrthoApnea orders. -->
-    <VDialog v-model="showDeleteConfirm" max-width="380" persistent>
-      <VCard class="pwa-confirm-dialog__card">
-        <AppDialogHeader :title="t('app.treatmentPlans.deleteConfirmTitle')" :closable="false" />
-        <VCardText>{{ t("app.treatmentPlans.deleteConfirmText") }}</VCardText>
-        <VCardActions>
-          <VSpacer />
-          <AppButton variant="text" @click="showDeleteConfirm = false">{{ t("app.common.cancel") }}</AppButton>
-          <AppButton color="error" :loading="deleting" @click="confirmDelete">{{ t("app.treatmentPlans.delete") }}</AppButton>
-        </VCardActions>
-      </VCard>
-    </VDialog>
+    <AppConfirmDialog
+      v-model="showDeleteConfirm"
+      :title="t('app.treatmentPlans.deleteConfirmTitle')"
+      :text="t('app.treatmentPlans.deleteConfirmText')"
+      :secondary-label="t('app.common.cancel')"
+      :secondary-color="null"
+      :primary-label="t('app.treatmentPlans.delete')"
+      primary-color="error"
+      :loading="deleting"
+      @secondary="showDeleteConfirm = false"
+      @primary="confirmDelete"
+    />
 
     <div class="patient-orthoapnea-panel__toolbar">
       <VTooltip :disabled="!!latestSleepStudyId" location="top">
@@ -119,7 +120,7 @@ import { reportCaught, reportFailedResponse } from "@api";
 import { ref, computed, onMounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import AppButton from "../AppButton.vue";
-import AppDialogHeader from "../AppDialogHeader.vue";
+import AppConfirmDialog from "../AppConfirmDialog.vue";
 import AppIcon from "../AppIcon.vue";
 import AppLoadingState from "../AppLoadingState.vue";
 import AppErrorState from "../AppErrorState.vue";

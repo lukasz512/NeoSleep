@@ -73,7 +73,9 @@ function vueFiles(dir: string): string[] {
 }
 
 describe("dialog headers — one shared component, everywhere", () => {
-  const dialogFiles = vueFiles(SRC).filter((f) => readFileSync(f, "utf-8").includes("<VDialog"));
+  // Raw VDialogs plus everything built on the two shells (AppFormDialog.spec.ts
+  // keeps raw VDialogs out of everything but the shells themselves).
+  const dialogFiles = vueFiles(SRC).filter((f) => /<(VDialog|AppFormDialog|AppConfirmDialog)\b/.test(readFileSync(f, "utf-8")));
 
   it("finds the dialogs it is guarding (sanity check on the scan itself)", () => {
     const names = dialogFiles.map((f) => path.basename(f));
