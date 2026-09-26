@@ -3,7 +3,7 @@ export { createUseLoginFlow } from "./composables/useLoginFlow";
 export { createUseForgotPasswordFlow } from "./composables/useForgotPasswordFlow";
 export { createUseResetPasswordFlow } from "./composables/useResetPasswordFlow";
 export { default as ChangePasswordView } from "./views/ChangePasswordView.vue";
-export { createUseChangePasswordFlow } from "./composables/useChangePasswordFlow";
+export { createUseChangePasswordFlow, PASSWORD_CHANGED_NOTICE, CHANGE_PASSWORD_FROM_MENU } from "./composables/useChangePasswordFlow";
 export { default as LazyImg } from "./components/LazyImg.vue";
 export { default as BrandLogo } from "./components/BrandLogo.vue";
 export { default as BrandWordmarkFold } from "./components/BrandWordmarkFold.vue";
@@ -12,6 +12,7 @@ export { default as ThemeLocaleSwitcher } from "./components/ThemeLocaleSwitcher
 export { default as AuthChrome } from "./components/AuthChrome.vue";
 export { default as AuthCard } from "./components/AuthCard.vue";
 export { default as AnimatedCard } from "./components/AnimatedCard.vue";
+export { default as AppInlineAlert } from "./components/AppInlineAlert.vue";
 export { default as AppShell, type AppShellNavItem } from "./components/AppShell.vue";
 export { default as MobileNavDrawer } from "./components/MobileNavDrawer.vue";
 export { default as MobileBottomNavBar } from "./components/MobileBottomNavBar.vue";
@@ -19,7 +20,7 @@ export { default as MobileBottomNavItem } from "./components/MobileBottomNavItem
 export { default as MobileNavPanel, type MobileNavPanelItem } from "./components/MobileNavPanel.vue";
 export { default as AuthOrbs } from "./components/AuthOrbs.vue";
 export { AUTH_BACKDROP_KEY, type AuthBackdrop } from "./composables/authBackdrop";
-export { useAppVersionLabel } from "./composables/useAppVersionLabel";
+export { useAppVersionLabel, useAppVersionParts, type AppVersionParts } from "./composables/useAppVersionLabel";
 export { default as AppStateView } from "./components/AppStateView.vue";
 export { default as OriginDialogTransition } from "./components/OriginDialogTransition.vue";
 export { originDialogTransition, sheetDialogTransition } from "./components/originDialogTransition";

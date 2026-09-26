@@ -362,12 +362,13 @@ onBeforeUnmount(() => {
   font-variant-numeric: tabular-nums;
 }
 
-/* Details open from the whole button while the link is live — the chevron says so. */
+/* Details open from the whole button while the link is live — the chevron says so.
+   It sits at the trailing edge: on phones the pill stretches to the row (NEO-107). */
 .qr-status__chevron {
   width: 18px;
   height: 18px;
   flex: none;
-  margin-left: 4px;
+  margin-left: auto;
   transition: transform 0.25s ease;
 }
 .qr-status__chevron--open {

@@ -13,19 +13,13 @@
     @close="onCancelClick"
     @body-scroll="followScroll"
   >
-    <VAlert
+    <AppInlineAlert
       v-if="verifyInfoKey"
       type="info"
-      variant="tonal"
-      density="comfortable"
-      border="start"
-      color="primary"
-      border-color="primary"
-      rounded="lg"
       class="mb-6"
     >
       {{ t(verifyInfoKey) }}
-    </VAlert>
+    </AppInlineAlert>
     <VForm ref="formRef" @submit.prevent="onSubmit">
       <section
         v-for="sec in sections"
@@ -210,6 +204,7 @@ import PhoneField from "./PhoneField.vue";
 import EmailField from "./EmailField.vue";
 import ChoiceChipsField from "./ChoiceChipsField.vue";
 import type { FormDerive, FormFieldDef, FormFieldType } from "../types/formField";
+import { AppInlineAlert } from "@ui";
 
 /**
  * componentFor() below resolves to these imported component OBJECTS, never

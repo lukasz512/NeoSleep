@@ -124,11 +124,9 @@
     </div>
     </Teleport>
 
-    <VAlert
+    <AppInlineAlert
       v-if="isOffline"
       type="warning"
-      variant="tonal"
-      density="compact"
       class="app-entity-list__offline-banner"
       :text="t('app.common.offlineShowingCached')"
     />
@@ -271,16 +269,14 @@
                 class="app-entity-list__card-loader"
               />
             </VCard>
-            <VAlert
+            <AppInlineAlert
               v-if="!loading && mobileItems.length === 0"
               key="_empty"
               type="info"
-              variant="tonal"
-              density="comfortable"
               class="app-entity-list__feed-empty"
             >
               {{ t(i18n.tableNoResults) }}
-            </VAlert>
+            </AppInlineAlert>
             <div v-if="mobileHasMore" key="_load-more" ref="loadMoreSentinelRef" class="app-entity-list__load-more">
               <AppSpinner v-if="loadingMore" size="24" width="2" />
             </div>
@@ -306,6 +302,7 @@ import AppSpinner from "./AppSpinner.vue";
 import { useEntityList } from "../composables/useEntityList";
 import type { FilterDefinition } from "../composables/useFilters";
 import { usePageHeaderTeleport } from "../composables/usePageHeader";
+import { AppInlineAlert } from "@ui";
 
 export interface AppEntityListHeader {
   title: string;

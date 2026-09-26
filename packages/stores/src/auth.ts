@@ -14,6 +14,8 @@ export interface AuthUser {
   country_code?: string;
   region?: string;
   language?: string;
+  /** False for accounts that sign in with Google only (NEO-102). */
+  hasPassword?: boolean;
 }
 
 type ApiFetchFn = (path: string, options?: ApiFetchOptions) => Promise<Response>;

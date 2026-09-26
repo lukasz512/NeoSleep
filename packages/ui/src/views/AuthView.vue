@@ -160,14 +160,14 @@
 
       <div v-else-if="step === 'sent'" class="auth-view__body">
         <template v-if="forgotFlow.submitted.value">
-          <VAlert type="success" variant="tonal" density="comfortable" class="auth-view__result-alert">
+          <AppInlineAlert type="success" class="auth-view__result-alert">
             {{ t('user.forgotPassword.successMessage') }}
-          </VAlert>
+          </AppInlineAlert>
         </template>
         <template v-else>
-          <VAlert type="error" variant="tonal" density="comfortable" class="auth-view__result-alert">
+          <AppInlineAlert type="error" class="auth-view__result-alert">
             {{ t(forgotFlow.errorKey.value ?? 'user.forgotPassword.error.network') }}
-          </VAlert>
+          </AppInlineAlert>
           <VBtn variant="outlined" color="primary" size="large" block class="auth-view__submit auth-view__retry" @click="retryForgot">
             {{ t('user.forgotPassword.tryAgain') }}
           </VBtn>
@@ -185,17 +185,15 @@
         <template v-else-if="resetFlow.tokenValid.value === true">
           <p class="auth-view__subtitle">{{ t('user.resetPassword.subtitle') }}</p>
 
-          <VAlert
+          <AppInlineAlert
             v-if="resetFlow.errorKey.value"
             type="error"
-            variant="tonal"
-            density="compact"
             class="auth-view__alert"
-            closable
-            @click:close="resetFlow.errorKey.value = null"
+            :close-label="t('app.common.close')"
+            @close="resetFlow.errorKey.value = null"
           >
             {{ t(resetFlow.errorKey.value) }}
-          </VAlert>
+          </AppInlineAlert>
 
           <VForm ref="resetForm" class="auth-view__form" @submit.prevent="handleResetSubmit">
             <VTextField
@@ -288,6 +286,7 @@ import { brandColors } from "@brand/colors";
 import { BRAND_PWA_BADGE_URL, BRAND_PWA_BADGE_DARK_URL } from "@brand/logos";
 import { createUseLoginFlow } from "../composables/useLoginFlow";
 import { createUseForgotPasswordFlow } from "../composables/useForgotPasswordFlow";
+import { PASSWORD_CHANGED_NOTICE } from "../composables/useChangePasswordFlow";
 import { createUseResetPasswordFlow } from "../composables/useResetPasswordFlow";
 import { useMagneticPointer } from "../composables/useMagneticPointer";
 import { AUTH_BACKDROP_KEY } from "../composables/authBackdrop";
@@ -299,6 +298,7 @@ import AuthCard from "../components/AuthCard.vue";
 import AuthHalo from "../components/AuthHalo.vue";
 import GoogleSignInButton from "../components/GoogleSignInButton.vue";
 import { API_URL_KEY, googleSignInErrorKey, useGoogleSignIn } from "../composables/useGoogleSignIn";
+import AppInlineAlert from "../components/AppInlineAlert.vue";
 
 // White badge in light mode, dark badge in dark mode (NEO-12) — same theme
 // source AuthChrome uses for its logo.
@@ -357,6 +357,15 @@ if (googleErrorKey) {
   notify(t(googleErrorKey), "error", googleErrorKey);
   void router.replace({
     query: Object.fromEntries(Object.entries(route.query).filter(([key]) => key !== "error")),
+  });
+}
+
+// After a password change the account is signed out everywhere, this device
+// included (NEO-102) — say so once, then drop the flag from the URL.
+if (route.query.notice === PASSWORD_CHANGED_NOTICE) {
+  notify(t("user.changePassword.success"), "success", "user.changePassword.success");
+  void router.replace({
+    query: Object.fromEntries(Object.entries(route.query).filter(([key]) => key !== "notice")),
   });
 }
 

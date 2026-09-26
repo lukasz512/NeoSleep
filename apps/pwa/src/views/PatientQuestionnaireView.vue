@@ -63,9 +63,15 @@
             <div class="patient-questionnaire__document" tabindex="0" v-html="step.consent_html" />
             <p class="patient-questionnaire__sign-label">{{ t("app.questionnaire.consentStep.signLabel") }}</p>
             <ConsentSignatureField ref="signaturePadRef" @change="signed = !$event" />
-            <VAlert v-if="submitError" type="error" variant="tonal" density="compact" class="patient-questionnaire__alert">
+            <AppInlineAlert
+              v-if="showMissing && !signed"
+              type="warning"
+              class="patient-questionnaire__alert"
+              :title="t('app.questionnaire.consentStep.missingSignature')"
+            />
+            <AppInlineAlert v-if="submitError" type="error" class="patient-questionnaire__alert">
               {{ t("app.questionnaire.error") }}
-            </VAlert>
+            </AppInlineAlert>
             <AppButton
               type="submit"
               color="primary"
@@ -79,7 +85,7 @@
             </AppButton>
           </template>
           <template v-else>
-            <VAlert type="info" variant="tonal" class="patient-questionnaire__alert">{{ t("app.questionnaire.consentStep.unavailable") }}</VAlert>
+            <AppInlineAlert type="info" class="patient-questionnaire__alert">{{ t("app.questionnaire.consentStep.unavailable") }}</AppInlineAlert>
             <AppButton color="primary" size="large" block @click="skip">{{ t("app.questionnaire.next") }}</AppButton>
           </template>
         </form>
@@ -109,10 +115,26 @@
               <VCheckbox v-model="consent" hide-details class="patient-questionnaire__consent">
                 <template #label>{{ t("app.questionnaire.consent", { clinic: clinicName }) }}</template>
               </VCheckbox>
-              <VAlert v-if="submitError" type="error" variant="tonal" density="compact" class="patient-questionnaire__alert">
+              <!-- What still blocks Send, right above it (NEO-105: inline, not a toast — it belongs to this form). -->
+              <AppInlineAlert
+                v-if="showMissing && !allAnswered"
+                type="warning"
+                class="patient-questionnaire__alert"
+                :title="t('app.questionnaire.missing.questions', { n: unansweredCount })"
+                :text="t('app.questionnaire.missing.questionsHint')"
+                :action-label="t('app.questionnaire.missing.goToFirst')"
+                @action="goToFirstMissing"
+              />
+              <AppInlineAlert
+                v-else-if="showMissing && !consent"
+                type="warning"
+                class="patient-questionnaire__alert"
+                :title="t('app.questionnaire.missing.consent')"
+              />
+              <AppInlineAlert v-if="submitError" type="error" class="patient-questionnaire__alert">
                 {{ t("app.questionnaire.error") }}
-              </VAlert>
-              <!-- Locked until every question is answered and consent is ticked; a tap while locked says what's missing (toast) instead of doing nothing (NEO-99). -->
+              </AppInlineAlert>
+              <!-- Locked until every question is answered and consent is ticked; a tap while locked shows what's missing above (NEO-99). -->
               <AppButton
                 type="submit"
                 color="primary"
@@ -146,9 +168,9 @@ import QuestionnaireCards from "../components/questionnaire/QuestionnaireCards.v
 import QuestionnaireChecklist from "../components/questionnaire/QuestionnaireChecklist.vue";
 import ConsentNotice from "../components/questionnaire/ConsentNotice.vue";
 import { apiFetch } from "../composables/useApi";
-import { useNotifications } from "../composables/useNotifications";
 import { draftKeyFor, purgeExpiredDrafts, useQuestionnaireDraft } from "../composables/useQuestionnaireDraft";
 import { MEDICAL_HISTORY_QUESTIONS, STOP_QUESTIONS, checklistItemTitle } from "../config/questionnaires";
+import { AppInlineAlert } from "@ui";
 
 /**
  * Public patient page, opened from the QR code a doctor shows (route
@@ -195,7 +217,6 @@ const showMissing = ref(false);
 const signaturePadRef = ref<InstanceType<typeof ConsentSignatureField> | null>(null);
 /** The consent pad has an accepted signature — unlocks "Sign and continue". */
 const signed = ref(false);
-const notifications = useNotifications();
 /** Which card of a questionnaire step is showing; questions.length = the summary. */
 const cursor = ref(0);
 /** Unsent answers kept on this device (see useQuestionnaireDraft) — null when storage/crypto isn't available. */
@@ -357,18 +378,21 @@ async function send(body: Record<string, unknown>) {
   }
 }
 
-/** Validation feedback goes through the app's toasts (NEO-99), tagged with the step's own icon. */
-function warn(message: string) {
-  const current = step.value;
-  if (!current) return;
-  const icon = current.type === "consent" ? "form-consent" : current.type === "stop_bang" ? "form-screening" : "form-history";
-  notifications.show(message, "warning", undefined, { icon, context: stepTitle(current) });
+/** "Go to the first one": scrolls the list to the first unanswered question (cards: jumps to it). */
+function goToFirstMissing() {
+  const index = questions.value.findIndex((q) => answers.value[q.key] == null);
+  if (index < 0) return;
+  if (useCards.value) {
+    cursor.value = index;
+    return;
+  }
+  document.getElementById(`q-${questions.value[index]!.key}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 async function submitConsent() {
   const signature = signaturePadRef.value?.isEmpty() ? null : signaturePadRef.value?.toDataURL();
   if (!signature) {
-    warn(t("app.questionnaire.consentStep.missingSignature"));
+    showMissing.value = true;
     return;
   }
   if (!step.value) return;
@@ -376,13 +400,8 @@ async function submitConsent() {
 }
 
 async function submitQuestionnaire() {
-  if (!allAnswered.value) {
-    showMissing.value = true; // marks the unanswered rows in the list
-    warn(t("app.questionnaire.missing.questions", { n: unansweredCount.value }));
-    return;
-  }
-  if (!consent.value) {
-    warn(t("app.questionnaire.missing.consent"));
+  if (!canSend.value) {
+    showMissing.value = true; // the alert above Send + the unanswered rows marked in the list
     return;
   }
   if (!step.value) return;

@@ -37,6 +37,23 @@ describe("useBarLogoFit (NEO-108)", () => {
     expect(folded.value).toBe(true);
   });
 
+  it("counts the DEV badge after the logo towards the room it needs", async () => {
+    const badge = at(0);
+    badge.getBoundingClientRect = () => ({ ...at(0).getBoundingClientRect(), width: 30 });
+    let result: ReturnType<typeof useBarLogoFit> | undefined;
+    mount(
+      defineComponent({
+        setup() {
+          // Fits without the badge (room 107), not with it (107 + 30 + 10).
+          result = useBarLogoFit(ref(at(8)), ref(at(8 + 107 + BAR_LOGO_MIN_GAP)), ref(107), ref(true), { el: ref(badge), gap: 10 });
+          return () => h("div");
+        },
+      }),
+    );
+    await nextTick();
+    expect(result!.folded.value).toBe(true);
+  });
+
   it("never folds when disabled (desktop)", async () => {
     const { folded } = run(8, 20, 107, false);
     await nextTick();

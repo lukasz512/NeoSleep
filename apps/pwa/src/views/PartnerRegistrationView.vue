@@ -26,10 +26,12 @@
       </div>
 
       <div v-else-if="step === 'submitted'" class="partner-registration__body">
-        <VAlert type="success" variant="tonal" class="partner-registration__alert">
-          <strong class="partner-registration__status-title">{{ t('user.partnerRegistration.form.successTitle') }}</strong>
-          {{ t('user.partnerRegistration.form.success', { email: preview?.email ?? '' }) }}
-        </VAlert>
+        <AppInlineAlert
+          type="success"
+          class="partner-registration__alert"
+          :title="t('user.partnerRegistration.form.successTitle')"
+          :text="t('user.partnerRegistration.form.success', { email: preview?.email ?? '' })"
+        />
         <p class="partner-registration__subtitle" role="status" aria-live="polite">
           {{ t('user.partnerRegistration.form.redirecting', { seconds: redirectSeconds }) }}
         </p>
@@ -47,28 +49,24 @@
       <div v-else class="partner-registration__body">
         <p class="partner-registration__subtitle">{{ t('user.partnerRegistration.subtitle') }}</p>
 
-        <VAlert
+        <AppInlineAlert
           v-if="errorKey"
           type="error"
-          variant="tonal"
-          density="compact"
-          closable
+          :close-label="t('app.common.close')"
           class="partner-registration__alert"
-          @click:close="errorKey = null"
+          @close="errorKey = null"
         >
           {{ t(errorKey) }}
-        </VAlert>
-        <VAlert
+        </AppInlineAlert>
+        <AppInlineAlert
           v-if="infoKey"
           type="info"
-          variant="tonal"
-          density="compact"
-          closable
+          :close-label="t('app.common.close')"
           class="partner-registration__alert"
-          @click:close="infoKey = null"
+          @close="infoKey = null"
         >
           {{ t(infoKey) }}
-        </VAlert>
+        </AppInlineAlert>
 
         <VForm ref="formRef" @submit.prevent="onSubmit">
           <div class="partner-registration__grid">
@@ -268,6 +266,7 @@ import PartnerDocumentRow from "../components/partner/PartnerDocumentRow.vue";
 import PartnerDocumentDialog from "../components/partner/PartnerDocumentDialog.vue";
 import AppFormDialog from "../components/AppFormDialog.vue";
 import { apiFetch } from "../composables/useApi";
+import { AppInlineAlert } from "@ui";
 
 /**
  * Public registration page reached via the doctor-invite email link
@@ -828,11 +827,6 @@ async function onSubmit() {
   margin-top: 24px;
   text-transform: none;
   letter-spacing: normal;
-}
-
-.partner-registration__status-title {
-  display: block;
-  margin-bottom: 4px;
 }
 
 .partner-registration__finish-hint {

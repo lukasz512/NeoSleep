@@ -16,7 +16,14 @@ const toElement = (value: ComponentPublicInstance | Element | null): Element | n
  * never flip the result back and make it oscillate. Re-measured whenever the
  * bar or its icons change size (rotation, an icon added or removed).
  */
-export function useBarLogoFit(logo: ElRef, actions: ElRef, wordmarkWidth: Ref<number>, enabled: Ref<boolean>) {
+export function useBarLogoFit(
+  logo: ElRef,
+  actions: ElRef,
+  wordmarkWidth: Ref<number>,
+  enabled: Ref<boolean>,
+  /** Something shown right after the logo (the DEV env badge), and its gap to the logo. */
+  trailing?: { el: ElRef; gap: number },
+) {
   const folded = ref(false);
   let observer: ResizeObserver | null = null;
 
@@ -27,8 +34,10 @@ export function useBarLogoFit(logo: ElRef, actions: ElRef, wordmarkWidth: Ref<nu
       folded.value = false;
       return;
     }
+    const trailingEl = trailing ? toElement(trailing.el.value) : null;
+    const trailingWidth = trailingEl ? trailingEl.getBoundingClientRect().width + trailing!.gap : 0;
     const room = actionsEl.getBoundingClientRect().left - logoEl.getBoundingClientRect().left - BAR_LOGO_MIN_GAP;
-    folded.value = room < wordmarkWidth.value;
+    folded.value = room < wordmarkWidth.value + trailingWidth;
   }
 
   function observe() {
@@ -49,7 +58,7 @@ export function useBarLogoFit(logo: ElRef, actions: ElRef, wordmarkWidth: Ref<nu
     measure();
   }
 
-  watch([logo, actions, enabled, wordmarkWidth], observe, { flush: "post", immediate: true });
+  watch([logo, actions, enabled, wordmarkWidth, () => trailing?.el.value], observe, { flush: "post", immediate: true });
   onBeforeUnmount(() => observer?.disconnect());
 
   return { folded, measure };
