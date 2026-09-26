@@ -482,6 +482,86 @@
   font-size: 0.8125rem;
 }
 
+/* NEO-121 — the table runs 16 px out into the sheet's padding, so its cells'
+   own 16 px padding puts the content (and the footer) on the page title's
+   line; dividers reach past it, as list rows do on phones (NEO-115). */
+.app-entity-list__table-wrap:not(.app-entity-list__table-wrap--flat) {
+  margin-inline: -16px;
+}
+
+/* NEO-121 — minimal footer on the 4 px grid: "10" (plain, as theme.scss
+   styles it), "1–10 de 47" and two hairline arrows, one 48 px row, 8 px
+   below the last row. The rows-per-page words stay only as the select's
+   aria-label (Vuetify sets it). */
+.app-entity-list__table-wrap :deep(.v-data-table-footer) {
+  min-height: 48px;
+  margin-top: var(--space-2, 8px);
+  padding: 0 16px;
+  gap: 0;
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+.app-entity-list__table-wrap :deep(.v-data-table-footer__items-per-page > span) {
+  display: none;
+}
+.app-entity-list__table-wrap :deep(.v-data-table-footer__info) {
+  padding: 0 var(--space-6, 24px);
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+}
+.app-entity-list__table-wrap :deep(.v-pagination__first),
+.app-entity-list__table-wrap :deep(.v-pagination__last) {
+  display: none;
+}
+.app-entity-list__table-wrap :deep(.v-pagination__list) {
+  gap: var(--space-2, 8px);
+}
+.app-entity-list__table-wrap :deep(.v-pagination__list) {
+  margin: 0;
+  padding: 0;
+}
+.app-entity-list__table-wrap :deep(.v-pagination__item),
+.app-entity-list__table-wrap :deep(.v-pagination__prev),
+.app-entity-list__table-wrap :deep(.v-pagination__next) {
+  margin: 0;
+}
+.app-entity-list__table-wrap :deep(.v-pagination) {
+  margin: 0;
+}
+.app-entity-list__table-wrap :deep(.v-pagination .v-btn) {
+  width: 40px;
+  height: 40px;
+  color: var(--pwa-primary);
+}
+/* Hairline chevrons (1.25 px stroke) in place of the MDI glyphs. */
+.app-entity-list__table-wrap :deep(.v-pagination__prev .v-icon),
+.app-entity-list__table-wrap :deep(.v-pagination__next .v-icon) {
+  width: 20px;
+  height: 20px;
+  background: currentColor;
+  mask: var(--footer-chevron) center / 20px 20px no-repeat;
+  -webkit-mask: var(--footer-chevron) center / 20px 20px no-repeat;
+}
+.app-entity-list__table-wrap :deep(.v-pagination__prev .v-icon::before),
+.app-entity-list__table-wrap :deep(.v-pagination__next .v-icon::before) {
+  content: none;
+}
+.app-entity-list__table-wrap :deep(.v-pagination__prev .v-icon) {
+  --footer-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M14.5 6.5L9 12l5.5 5.5' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.app-entity-list__table-wrap :deep(.v-pagination__next .v-icon) {
+  --footer-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9.5 6.5L15 12l-5.5 5.5' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+/* The last arrow's box ends on the rows' right content line (cell padding). */
+.app-entity-list__table-wrap :deep(.v-data-table-footer__pagination) {
+  margin-inline-end: 0;
+}
+@media (hover: none) and (pointer: coarse) {
+  .app-entity-list__table-wrap :deep(.v-pagination .v-btn) {
+    width: 48px;
+    height: 48px;
+  }
+}
+
 /* Mobile: the feed cards (below) are the surfaces, on the same paper
    ground as the desktop table — a flat wrap so the cards run the full
    content width instead of sitting in a padded box-around-cards. */
@@ -826,8 +906,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: var(--pwa-fib-xl, 34px);
-  padding: 1rem 0;
+  /* NEO-121: 48 px end-of-list loader, 16 px clear of the bottom bar. */
+  min-height: 48px;
+  padding: 0;
+  margin-bottom: var(--space-4, 16px);
 }
 
 .app-entity-list__cell-empty {
