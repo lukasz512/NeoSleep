@@ -1,39 +1,42 @@
 <template>
-  <VDialog :model-value="modelValue" max-width="420" :transition="originDialogTransition" @update:model-value="emit('update:modelValue', $event)">
-    <VCard class="qr-dialog pwa-form-dialog__card">
-      <AppDialogHeader :title="t('app.clinical.qr.title')" @close="emit('update:modelValue', false)" />
-      <VCardText class="qr-dialog__body">
-        <p class="qr-dialog__kind">{{ title }}</p>
+  <AppFormDialog
+    :model-value="modelValue"
+    max-width="420"
+    :title="t('app.clinical.qr.title')"
+    @update:model-value="emit('update:modelValue', $event)"
+    @close="emit('update:modelValue', false)"
+  >
+    <div class="qr-dialog__body">
+      <p class="qr-dialog__kind">{{ title }}</p>
 
-        <div v-if="completed" class="qr-dialog__done" role="status">
-          <AppIcon name="check-circle" class="qr-dialog__done-icon" />
-          <p>{{ t("app.clinical.qr.completed") }}</p>
-        </div>
-        <template v-else>
-          <img v-if="qrDataUrl" :src="qrDataUrl" :alt="t('app.clinical.qr.title')" class="qr-dialog__code" width="264" height="264" />
-          <p class="qr-dialog__instructions">{{ t("app.clinical.qr.instructions") }}</p>
-          <p class="qr-dialog__waiting" role="status">
-            <VProgressCircular indeterminate size="16" width="2" />
-            {{ progress && progress.total > 1 ? t("app.clinical.qr.progress", progress) : t("app.clinical.qr.waiting") }}
-          </p>
-        </template>
-      </VCardText>
-      <VCardActions>
-        <AppButton v-if="!completed && url" variant="text" @click="copyLink">{{ t("app.clinical.qr.copyLink") }}</AppButton>
-        <VSpacer />
-        <AppButton variant="text" @click="emit('update:modelValue', false)">{{ t("app.common.close") }}</AppButton>
-      </VCardActions>
-    </VCard>
-  </VDialog>
+      <div v-if="completed" class="qr-dialog__done" role="status">
+        <AppIcon name="check-circle" class="qr-dialog__done-icon" />
+        <p>{{ t("app.clinical.qr.completed") }}</p>
+      </div>
+      <template v-else>
+        <img v-if="qrDataUrl" :src="qrDataUrl" :alt="t('app.clinical.qr.title')" class="qr-dialog__code" width="264" height="264" />
+        <p class="qr-dialog__instructions">{{ t("app.clinical.qr.instructions") }}</p>
+        <p class="qr-dialog__waiting" role="status">
+          <VProgressCircular indeterminate size="16" width="2" />
+          {{ progress && progress.total > 1 ? t("app.clinical.qr.progress", progress) : t("app.clinical.qr.waiting") }}
+        </p>
+      </template>
+    </div>
+
+    <template #actions>
+      <AppButton v-if="!completed && url" variant="text" @click="copyLink">{{ t("app.clinical.qr.copyLink") }}</AppButton>
+      <VSpacer />
+      <AppButton variant="text" @click="emit('update:modelValue', false)">{{ t("app.common.close") }}</AppButton>
+    </template>
+  </AppFormDialog>
 </template>
 
 <script setup lang="ts">
 import { reportCaught } from "@api";
 import { onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import AppDialogHeader from "../AppDialogHeader.vue";
+import AppFormDialog from "../AppFormDialog.vue";
 import QRCode from "qrcode";
-import { originDialogTransition } from "@ui";
 import AppButton from "../AppButton.vue";
 import AppIcon from "../AppIcon.vue";
 import { useNotifications } from "../../composables/useNotifications";

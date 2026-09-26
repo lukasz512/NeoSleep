@@ -19,6 +19,7 @@
       :more-label="t('layout.nav.more')"
       :close-label="t('layout.nav.close')"
       bottom-nav-show-labels
+      sheet
     >
       <!-- NEO-55: logo on the left of the full-width app bar on desktop (it
            never collapses with the side menu); on mobile no logo at all, the
@@ -188,8 +189,16 @@
                `mode="out-in"` while :key keeps changing (nav clicks right
                after login) makes Vue's transition state machine drop the
                swap, so a nav click during that ~280ms window re-renders the
-               same screen instead of navigating. -->
+               same screen instead of navigating.
+               NEO-85: where the browser has View Transitions, page changes
+               are animated by router/pageTransitions.ts instead and the view
+               is rendered without this wrapper (a plain swap the browser can
+               snapshot; the shell's own entrance covers the first screen).
+               A CSS-less <Transition> here broke the swap: Vue threw on
+               unmount and the list never re-rendered after Back. -->
+          <component v-if="useViewTransitions" :is="Component" :key="route.path" />
           <Transition
+            v-else
             name="view-fade-lift"
             mode="out-in"
             :appear="!initialAppearDone"
@@ -207,6 +216,7 @@
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRoute } from "vue-router";
 import { navTitleKey, navIconName, navParentName } from "../router/routes";
+import { pageTransitionsSupported } from "../router/pageTransitions";
 import { providePageHeader, provideRecordHeaderClaim, PAGE_HEADER_ACTIONS_ID } from "../composables/usePageHeader";
 import { useGlyphInset } from "../composables/useGlyphInset";
 import { useI18n } from "vue-i18n";
@@ -232,6 +242,8 @@ const { t, locale } = useI18n();
 // See the RouterView Transition below — appear is only meant to fire once,
 // for the very first screen after login.
 const initialAppearDone = ref(false);
+/** Fixed for the session: switching wrappers later would remount the current view. */
+const useViewTransitions = pageTransitionsSupported();
 
 const {
   theme, toggleTheme,
@@ -341,11 +353,21 @@ const moduleIcon = computed(() => {
 
   --app-shell-bar-end-inset: calc(
     var(--layout-card-inset) + var(--layout-action-icon-inset) + var(--layout-icon-ink-inset)
-      - var(--layout-user-btn-pad-end)
+      - var(--layout-user-btn-pad-end) + var(--app-shell-sheet-gap)
   );
+
+  /* NEO-85 "record stack": the chrome and everything behind the content
+     sheet is the desk (theme.scss --pwa-desk); the sheet sits
+     --app-shell-sheet-gap off the right edge and leaves --layout-sheet-foot
+     below itself for the two sheets peeking out under it. */
+  --app-shell-chrome: var(--pwa-desk);
+  --app-shell-sheet-gap: 0px;
+  --layout-sheet-foot: 20px;
+  background: var(--pwa-desk);
 }
 
 .layout-root--desktop {
+  --app-shell-sheet-gap: 12px;
   --app-shell-bar-start-inset: calc(
     var(--layout-nav-inset) + var(--layout-nav-item-inset) + var(--layout-icon-ink-inset)
   );
@@ -610,12 +632,32 @@ const moduleIcon = computed(() => {
   transition: opacity 180ms ease;
 }
 
+/* The content sheet. Page scroll stays on the window, so the sheet's top edge
+   scrolls away under the fixed app bar like paper under a ruler; on desktop
+   AppShell's fixed corner masks keep its top corners round. Its min-height
+   fills the viewport, so on a short page the peeking sheets sit just above
+   the bottom edge; on a long one they appear at the end of the scroll. */
 .layout-main__inner {
   padding: var(--layout-card-inset);
-  min-height: 100%;
+  min-height: calc(100dvh - var(--v-layout-top, 64px) - var(--v-layout-bottom, 0px) - var(--layout-sheet-foot));
+  margin: 0 var(--app-shell-sheet-gap) var(--layout-sheet-foot) 0;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  background: var(--pwa-sheet);
+  border-radius: var(--pwa-sheet-radius);
+  box-shadow: var(--pwa-sheet-shadow);
+  /* The one element page changes animate (router/pageTransitions.ts). */
+  view-transition-name: pwa-page;
+}
+/* Phone: the sheet is inset on both sides; the bottom nav already reserves
+   its own space (AppShell .app-shell__main--bottom-nav-space). */
+.layout-root:not(.layout-root--desktop) .layout-main__inner {
+  margin-inline: 8px;
+  min-height: calc(
+    100dvh - var(--v-layout-top, 56px) - var(--mobile-bottom-nav-height, 56px) - env(safe-area-inset-bottom)
+      - var(--layout-sheet-foot)
+  );
 }
 
 .layout-main__inner:focus {

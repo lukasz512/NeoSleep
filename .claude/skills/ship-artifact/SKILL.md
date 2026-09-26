@@ -52,7 +52,7 @@ Rules for the content:
 - **decisions**: open questions, risks, skipped steps. Never pad it; omit the key when empty.
 - **Before/after is mandatory.** Backend-only → `beforeAfter` behavior table (request → status per role/territory; `hole` = the bug, `deny`/`allow` = correct). UI (`.vue/.css/.scss` changed) → real screenshots in `images` (the script refuses to render without them), or `mockupHtml` clearly labeled as a mockup when no live render is possible. Real PWA screenshots without a DB: see memory `feedback-always-worktree-always-artifact` (vite + Playwright with `/api/v1/` stubbed).
 - **verify** mirrors the acceptance criteria 1:1.
-- Everything else (ticket, branch, changed files, Create PR URL, the 3 links — Artifact, Linear, VS Code session — `claude --resume`, git checkout line) is filled in by the script — don't write it.
+- Everything else (ticket, branch, changed files, Create PR URL, the links — Linear, VS Code session (and the Artifact URL in the Linear comment) — `claude --resume`, git checkout line) is filled in by the script — don't write it.
 
 ## Step 2 — Render
 
@@ -60,7 +60,7 @@ Rules for the content:
 node .claude/skills/ship-artifact/build.mjs render <scratchpad>/artifact-content.json
 ```
 
-Prints the page path and a ready Linear comment (summary + the 3 links + PR). The Artifact's own link appears from the second render on — after the first publish + finalize, render and republish once more. Render **after** `git push` so the Create PR button is live; before the push it shows a dashed "PR link after push" placeholder (fine for a mid-session preview, not for handover).
+Prints the page path and a ready Linear comment (summary + the 3 links + PR). The page itself has no Artifact button (it would link to itself, NEO-91); the Artifact URL goes into the Linear comment and the index. The page opens with the neoCRM brand band (NeoSleep palette + mark until neoCRM has its own kit). Render **after** `git push` so the Create PR button is live; before the push it shows a dashed "PR link after push" placeholder (fine for a mid-session preview, not for handover).
 
 ## Step 3 — Publish
 

@@ -15,6 +15,9 @@ import { getDialogOrigin } from "../composables/useDialogOrigin";
 // prop as `{ component: OriginDialogTransition }` — see originDialogTransition
 // in the sibling module for the ready-to-use constant.
 const SPRING = { type: "spring", stiffness: 500, damping: 34, mass: 0.9 } as const;
+// Closing is quicker than opening (NEO-85): a short M3 emphasized-accelerate
+// tween instead of the spring, so a dismissed dialog gets out of the way.
+const LEAVE = { duration: 0.18, ease: [0.3, 0, 0.8, 0.15] } as const;
 
 const motionPreference = useMotionPreferenceStore();
 
@@ -45,7 +48,7 @@ function onLeave(el: Element, done: () => void): void {
     done();
     return;
   }
-  animate(htmlEl, { opacity: [1, 0], transform: ["scale(1)", "scale(0.96)"] }, SPRING)
+  animate(htmlEl, { opacity: [1, 0], transform: ["scale(1)", "scale(0.94)"] }, LEAVE)
     .finished.then(done)
     .catch(done);
 }

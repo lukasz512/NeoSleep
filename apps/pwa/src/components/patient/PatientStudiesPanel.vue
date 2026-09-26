@@ -43,18 +43,20 @@
       :saving="saving"
       @submit="onUpload"
     />
-    <VDialog v-model="deleteSleepStudy.open" max-width="400" :transition="originDialogTransition">
-      <VCard class="pwa-confirm-dialog__card">
-        <VCardText>{{ t("app.sleepStudies.deleteConfirmText") }}</VCardText>
-        <VCardActions>
-          <VSpacer />
-          <AppButton variant="text" @click="deleteSleepStudy.open = false">{{ t("app.common.cancel") }}</AppButton>
-          <AppButton color="error" variant="text" :loading="deleteSleepStudy.loading" @click="onConfirmDeleteSleepStudy">
-            {{ t("app.common.remove") }}
-          </AppButton>
-        </VCardActions>
-      </VCard>
-    </VDialog>
+    <AppConfirmDialog
+      v-model="deleteSleepStudy.open"
+      :text="t('app.sleepStudies.deleteConfirmText')"
+      :secondary-label="t('app.common.cancel')"
+      :secondary-color="null"
+      :primary-label="t('app.common.remove')"
+      primary-color="error"
+      primary-variant="text"
+      :loading="deleteSleepStudy.loading"
+      :persistent="false"
+      max-width="400"
+      @secondary="deleteSleepStudy.open = false"
+      @primary="onConfirmDeleteSleepStudy"
+    />
 
     <AppLoadingState v-if="checklistApi.loading.value && !checklist" />
     <AppErrorState
@@ -262,8 +264,8 @@
 import { computed, defineAsyncComponent, nextTick, onMounted, reactive, ref, watch, type ComponentPublicInstance } from "vue";
 import { useI18n } from "vue-i18n";
 import { intlLocale } from "@i18n/language-options";
-import { originDialogTransition } from "@ui";
 import AppButton from "../AppButton.vue";
+import AppConfirmDialog from "../AppConfirmDialog.vue";
 import AppIcon from "../AppIcon.vue";
 import AppLoadingState from "../AppLoadingState.vue";
 import AppErrorState from "../AppErrorState.vue";

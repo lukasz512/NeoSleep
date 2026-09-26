@@ -1,67 +1,68 @@
 <template>
-  <VDialog :model-value="modelValue" max-width="520" :transition="originDialogTransition" @update:model-value="emit('update:modelValue', $event)">
-    <VCard class="pwa-form-dialog__card">
-      <AppDialogHeader :title="t('app.clinical.upload.title')" @close="emit('update:modelValue', false)" />
-      <VCardText>
-        <form id="study-upload-form" class="study-upload" novalidate @submit.prevent="onSubmit">
-          <VFileInput
-            id="study-upload-file"
-            v-model="file"
-            :label="t('app.clinical.upload.file')"
-            accept="application/pdf,image/jpeg,image/png"
-            prepend-icon=""
-            variant="outlined"
-            density="comfortable"
-            show-size
-            :error-messages="showErrors && !file ? t('app.clinical.upload.fileRequired') : ''"
-          />
-          <VTextField
-            id="study-upload-title"
-            v-model="title"
-            :label="t('app.clinical.upload.titleField')"
-            variant="outlined"
-            density="comfortable"
-            maxlength="200"
-            :error-messages="showErrors && !title.trim() ? t('app.clinical.upload.titleRequired') : ''"
-          />
-          <VTextarea
-            id="study-upload-notes"
-            v-model="notes"
-            :label="t('app.clinical.upload.notes')"
-            variant="outlined"
-            density="comfortable"
-            rows="3"
-            auto-grow
-            maxlength="2000"
-          />
-          <VSelect
-            id="study-upload-attach"
-            v-model="attachTo"
-            :items="attachOptions"
-            item-title="title"
-            item-value="value"
-            :label="t('app.clinical.upload.attachTo')"
-            :hint="t('app.clinical.upload.attachHint')"
-            persistent-hint
-            variant="outlined"
-            density="comfortable"
-          />
-        </form>
-      </VCardText>
-      <VCardActions>
-        <VSpacer />
-        <AppButton variant="text" @click="emit('update:modelValue', false)">{{ t("app.common.cancel") }}</AppButton>
-        <AppButton color="primary" type="submit" form="study-upload-form" :loading="saving">{{ t("app.clinical.save") }}</AppButton>
-      </VCardActions>
-    </VCard>
-  </VDialog>
+  <AppFormDialog
+    :model-value="modelValue"
+    max-width="520"
+    :title="t('app.clinical.upload.title')"
+    @update:model-value="emit('update:modelValue', $event)"
+    @close="emit('update:modelValue', false)"
+  >
+    <form id="study-upload-form" class="study-upload" novalidate @submit.prevent="onSubmit">
+      <VFileInput
+        id="study-upload-file"
+        v-model="file"
+        :label="t('app.clinical.upload.file')"
+        accept="application/pdf,image/jpeg,image/png"
+        prepend-icon=""
+        variant="outlined"
+        density="comfortable"
+        show-size
+        :error-messages="showErrors && !file ? t('app.clinical.upload.fileRequired') : ''"
+      />
+      <VTextField
+        id="study-upload-title"
+        v-model="title"
+        :label="t('app.clinical.upload.titleField')"
+        variant="outlined"
+        density="comfortable"
+        maxlength="200"
+        :error-messages="showErrors && !title.trim() ? t('app.clinical.upload.titleRequired') : ''"
+      />
+      <VTextarea
+        id="study-upload-notes"
+        v-model="notes"
+        :label="t('app.clinical.upload.notes')"
+        variant="outlined"
+        density="comfortable"
+        rows="3"
+        auto-grow
+        maxlength="2000"
+      />
+      <VSelect
+        id="study-upload-attach"
+        v-model="attachTo"
+        :items="attachOptions"
+        item-title="title"
+        item-value="value"
+        :label="t('app.clinical.upload.attachTo')"
+        :hint="t('app.clinical.upload.attachHint')"
+        persistent-hint
+        variant="outlined"
+        density="comfortable"
+      />
+    </form>
+
+    <template #actions>
+      <VSpacer />
+      <AppButton variant="text" @click="emit('update:modelValue', false)">{{ t("app.common.cancel") }}</AppButton>
+      <AppButton color="primary" variant="flat" type="submit" form="study-upload-form" :loading="saving">{{ t("app.clinical.save") }}</AppButton>
+    </template>
+  </AppFormDialog>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import AppDialogHeader from "../AppDialogHeader.vue";
-import { originDialogTransition } from "@ui";
+import AppFormDialog from "../AppFormDialog.vue";
 import AppButton from "../AppButton.vue";
 import type { ChecklistItem } from "../../composables/usePatientChecklist";
 

@@ -1,8 +1,13 @@
 <template>
-  <VDialog :model-value="modelValue" max-width="880" :transition="originDialogTransition" persistent @update:model-value="onDialogUpdate">
-    <VCard class="pwa-form-dialog__card oa-wizard__card">
-      <AppDialogHeader :title="t('app.orthoApneaOrder.title')" @close="onCancelClick" />
-
+  <AppFormDialog
+    :model-value="modelValue"
+    max-width="880"
+    persistent
+    :title="t('app.orthoApneaOrder.title')"
+    @update:model-value="onDialogUpdate"
+    @close="onCancelClick"
+  >
+    <template #header-extra>
       <VStepper v-model="step" flat class="oa-wizard__stepper" hide-actions>
         <VStepperHeader>
           <VStepperItem
@@ -41,8 +46,8 @@
           />
         </VStepperHeader>
       </VStepper>
+    </template>
 
-      <VCardText class="oa-wizard__body">
       <Transition :name="stepTransitionName" mode="out-in">
       <div :key="step">
         <!-- Step 1 — Envío -->
@@ -354,41 +359,40 @@
         </div>
       </div>
       </Transition>
-      </VCardText>
 
-      <VCardActions class="oa-wizard__actions">
-        <AppButton v-if="step > 1" icon size="x-large" variant="text" color="primary" :aria-label="t('app.orthoApneaOrder.actions.back')" @click="goBack">
-          <AppIcon name="arrow-left" class="oa-wizard__nav-arrow" />
-        </AppButton>
-        <VSpacer />
-        <AppButton variant="text" @click="onCancelClick">{{ t("app.common.cancel") }}</AppButton>
-        <AppButton v-if="step < 4" icon size="x-large" variant="text" color="primary" :disabled="!canAdvance" :aria-label="t('app.orthoApneaOrder.actions.next')" @click="goNext">
-          <AppIcon name="arrow-right" class="oa-wizard__nav-arrow" />
-        </AppButton>
-        <AppButton v-else color="primary" :loading="submitLoading" :disabled="form.products.length === 0" @click="onConfirm">
-          {{ t("app.orthoApneaOrder.actions.confirm") }}
-        </AppButton>
-      </VCardActions>
-    </VCard>
+    <template #actions>
+      <AppButton v-if="step > 1" icon size="x-large" variant="text" color="primary" :aria-label="t('app.orthoApneaOrder.actions.back')" @click="goBack">
+        <AppIcon name="arrow-left" class="oa-wizard__nav-arrow" />
+      </AppButton>
+      <VSpacer />
+      <AppButton variant="text" @click="onCancelClick">{{ t("app.common.cancel") }}</AppButton>
+      <AppButton v-if="step < 4" icon size="x-large" variant="text" color="primary" :disabled="!canAdvance" :aria-label="t('app.orthoApneaOrder.actions.next')" @click="goNext">
+        <AppIcon name="arrow-right" class="oa-wizard__nav-arrow" />
+      </AppButton>
+      <AppButton v-else color="primary" variant="flat" :loading="submitLoading" :disabled="form.products.length === 0" @click="onConfirm">
+        {{ t("app.orthoApneaOrder.actions.confirm") }}
+      </AppButton>
+    </template>
 
-    <AppConfirmDialog
-      v-model="showDraftPrompt"
-      :title="t('app.orthoApneaOrder.draftPromptTitle')"
-      :text="t('app.orthoApneaOrder.draftPromptText')"
-      :secondary-label="t('app.orthoApneaOrder.discardDraft')"
-      :primary-label="t('app.orthoApneaOrder.saveDraft')"
-      :loading="savingDraft"
-      @secondary="discardDraft"
-      @primary="saveDraftAndClose"
-    />
-  </VDialog>
+    <template #overlays>
+      <AppConfirmDialog
+        v-model="showDraftPrompt"
+        :title="t('app.orthoApneaOrder.draftPromptTitle')"
+        :text="t('app.orthoApneaOrder.draftPromptText')"
+        :secondary-label="t('app.orthoApneaOrder.discardDraft')"
+        :primary-label="t('app.orthoApneaOrder.saveDraft')"
+        :loading="savingDraft"
+        @secondary="discardDraft"
+        @primary="saveDraftAndClose"
+      />
+    </template>
+  </AppFormDialog>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useDisplay } from "vuetify";
-import { originDialogTransition } from "@ui";
 import AppButton from "../AppButton.vue";
 import AppIcon from "../AppIcon.vue";
 import IconOptionPicker, { type IconOption } from "./IconOptionPicker.vue";
@@ -400,7 +404,7 @@ import NumberStepperField from "./NumberStepperField.vue";
 import PhoneField from "../PhoneField.vue";
 import EmailField from "../EmailField.vue";
 import AppConfirmDialog from "../AppConfirmDialog.vue";
-import AppDialogHeader from "../AppDialogHeader.vue";
+import AppFormDialog from "../AppFormDialog.vue";
 import { useNotifications } from "../../composables/useNotifications";
 import { useAsyncAction } from "../../composables/useAsyncAction";
 import { emailFormatRule } from "../../config/forms/identityFields";
@@ -783,16 +787,11 @@ watch(
 </script>
 
 <style scoped>
-/* Transparent so the stepper sits on the dialog's own M3 surface tone
-   (pwa-form-dialog__card) instead of painting a separate surface band. */
+/* Transparent so the stepper sits on the dialog's own surface (AppFormDialog)
+   instead of painting a separate surface band. */
 .oa-wizard__stepper {
   box-shadow: none;
   background: transparent;
-}
-
-.oa-wizard__body {
-  max-height: 55vh;
-  overflow-y: auto;
 }
 
 /* Right half of the MR/MP row — "Rango avance mandibular" filling the

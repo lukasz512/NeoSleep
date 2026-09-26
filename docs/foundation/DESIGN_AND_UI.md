@@ -196,9 +196,43 @@ whether it's a table cell, a mobile card line, a detail panel or a note author. 
     on-surface `currentColor`) was still applying on top of the already-light `outline-variant`
     gray, double-dimming it. Forced to full opacity at rest since the color itself is already
     the subtle element; hover/error still layer their own opacity bump on top unchanged.
-  - Dialogs: `.pwa-form-dialog__card` and the new shared `.pwa-confirm-dialog__card` (nested
-    discard/confirm dialogs, previously a bare `elevation="8"` VCard) both use
-    `surface-container-high` tone + `--pwa-shadow-md` as a supporting cue only.
+  - Dialogs (2026-09-26): exactly two shells — `AppFormDialog.vue` for every form-style dialog
+    and `AppConfirmDialog.vue` for every two-option confirm. A raw `<VDialog>` anywhere else
+    fails `AppFormDialog.spec.ts` (only the full-screen presentation/legal-document viewers are
+    exempt). Surface is plain white (`surface`), not the `surface-container-high` grey tone
+    used before — forms read as paper, the scrim already separates them from the page;
+    `--pwa-shadow-md` stays as a supporting cue.
+  - "Record stack" paper look (NEO-85, 2026-09-26, variant C picked from a live proposal): the
+    chrome and everything behind the content is a teal-grey desk (`--pwa-desk`); the routed
+    content is one white sheet (`AppLayout .layout-main__inner`, AppShell `sheet` mode keeps its
+    top corners round) with two more sheets peeking out under its bottom edge; list rows are
+    ruled lines (`--pwa-rule`) under a brand-coloured header rule; dialogs are a single lifted
+    sheet with no stack under it (decided 2026-09-26), the main action a filled pill. The peeking sheets are extra `box-shadow`
+    layers (offset down, negative spread), not elements, so nothing can clip or mis-stack them.
+    Every tint mixes from `--pwa-primary`, which the tenant config overrides at runtime.
+    Motion: rows stagger in with M3 emphasized-decelerate; dialogs grow from the tap and close
+    faster (180ms emphasized-accelerate); on phones (< 600px) form dialogs are a bottom sheet
+    (`sheetDialogTransition`); focused fields get a brand halo; all of it honours
+    `prefers-reduced-motion`.
+  - Page changes (NEO-85, picked from a live proposal): list → record slides the record in
+    from the right over the list (which dims and drifts left), Back slides it off again, and
+    every other move (menu / bottom nav) is a 90/210ms M3 fade-through. Built on the View
+    Transitions API (`router/pageTransitions.ts` + `assets/page-transitions.css`) with only the
+    content sheet named, so the bar and menu never move; browsers without it keep the old
+    `view-fade-lift`. Don't wrap the routed view in a CSS-less `<Transition>` where View
+    Transitions run: the synchronous swap made Vue throw and the list stayed empty after Back.
+  - Phone list toolbar: three icons (search, filter, add); focused search grows over the row
+    while the others step aside; a query left behind stays as a tinted pill on the left.
+  - Dialog scroll model: the dialog is capped at the viewport, header and actions stay pinned,
+    only the body scrolls, and a hairline divider shows under the header / above the actions
+    only while content runs behind them (M3). **Bugfix** (Vuetify 4): Vuetify ships all of its
+    CSS in cascade layers, so our unlayered `overflow: hidden` on the card beat Vuetify's own
+    `overflow-y: auto` and no form taller than the screen could scroll or reach Save. The scroll
+    model now lives only in `theme.scss`'s `.pwa-form-dialog*` rules + `AppFormDialog.vue`;
+    measured at real phone/laptop heights by `apps/pwa/e2e/dialog-scroll.spec.ts` on all three
+    engines. General rule after Vuetify 4: any unlayered app CSS on a Vuetify class wins over
+    Vuetify regardless of specificity — never set layout properties (overflow, display,
+    height) on Vuetify elements outside a shell that owns the whole model.
   - Dialog headers: every titled dialog uses `AppDialogHeader.vue` — optional avatar, 16px gap,
     title, close X pinned right (`closable=false` only for confirm dialogs). Never a hand-built
     `VCardTitle`: Vuetify injects its component CSS after `theme.scss`, so a global flex rule on

@@ -200,6 +200,63 @@ $pwa-fib-t-3xl: 987ms;
   --pwa-toast-error-soft: #331616;
 }
 
+/*
+ * "Record stack" paper look (NEO-85, variant C of the 2026-09-26 proposal).
+ * The app reads as white record sheets lying on a quiet desk:
+ * - desk: the chrome (app bar + side menu) and everything behind the sheet;
+ * - sheet: the routed content (AppLayout .layout-main__inner) and dialogs,
+ *   with a layered soft shadow and two offset sheets peeking out under it;
+ * - rule: list rows are ruled hairlines, the column header a stronger rule.
+ * Every tint mixes from --pwa-primary, which config.ts overrides at runtime
+ * with the tenant's own colour, so a white-label tenant gets its own hue.
+ */
+:root {
+  --pwa-desk: color-mix(in srgb, var(--pwa-primary) 5%, #ebeeed);
+  --pwa-sheet: rgb(var(--v-theme-surface));
+  --pwa-sheet-radius: 16px;
+  --pwa-sheet-peek-1: #fbfcfc;
+  --pwa-sheet-peek-2: #f4f7f6;
+  --pwa-sheet-edge: rgb(16 48 45 / 0.08);
+  --pwa-sheet-ring: rgb(16 48 45 / 0.05);
+  --pwa-sheet-soft: 0 1px 1px rgb(16 48 45 / 0.05), 0 10px 28px -12px rgb(16 48 45 / 0.2), 0 36px 24px -24px rgb(16 48 45 / 0.16);
+  --pwa-dialog-soft: 0 2px 6px rgb(16 48 45 / 0.08), 0 28px 64px -16px rgb(16 48 45 / 0.38);
+  --pwa-rule: color-mix(in srgb, var(--pwa-primary) 15%, transparent);
+  --pwa-rule-strong: color-mix(in srgb, var(--pwa-primary) 40%, transparent);
+  --pwa-row-hover: color-mix(in srgb, var(--pwa-primary) 5%, transparent);
+  --pwa-focus-halo: 0 0 0 3px color-mix(in srgb, var(--pwa-primary) 16%, transparent);
+  /* M3 emphasized easing: decelerate for things arriving, accelerate for
+     things leaving (m3.material.io/styles/motion/easing-and-duration). */
+  --pwa-ease-emphasized-decel: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --pwa-ease-emphasized-accel: cubic-bezier(0.3, 0, 0.8, 0.15);
+}
+/* The sheets under a sheet are extra box-shadow layers (offset down, negative
+   spread = narrower than the sheet), so they need no extra elements, follow
+   the radius, and can't be clipped or mis-stacked. First layer paints on top:
+   ring, sheet 2 + its edge, sheet 3 + its edge, then the soft drop shadow. */
+:root,
+[data-theme="dark"] {
+  --pwa-sheet-shadow:
+    0 0 0 1px var(--pwa-sheet-ring),
+    0 16px 0 -10px var(--pwa-sheet-peek-1), 0 16px 0 -9px var(--pwa-sheet-edge),
+    0 32px 0 -21px var(--pwa-sheet-peek-2), 0 32px 0 -20px var(--pwa-sheet-edge),
+    var(--pwa-sheet-soft);
+  /* A dialog is a single sheet lifted off the desk — no sheets under it
+     (Łukasz, 2026-09-26: the stack stays on the page only). */
+  --pwa-dialog-shadow: 0 0 0 1px var(--pwa-sheet-ring), var(--pwa-dialog-soft);
+}
+[data-theme="dark"] {
+  --pwa-desk: color-mix(in srgb, var(--pwa-primary) 6%, #0f1211);
+  --pwa-sheet-peek-1: #1c1f1e;
+  --pwa-sheet-peek-2: #181b1a;
+  --pwa-sheet-edge: rgb(255 255 255 / 0.06);
+  --pwa-sheet-ring: rgb(255 255 255 / 0.05);
+  --pwa-sheet-soft: 0 12px 32px -12px rgb(0 0 0 / 0.6);
+  --pwa-dialog-soft: 0 28px 64px -16px rgb(0 0 0 / 0.7);
+  --pwa-rule: color-mix(in srgb, var(--pwa-primary) 20%, transparent);
+  --pwa-rule-strong: color-mix(in srgb, var(--pwa-primary) 50%, transparent);
+  --pwa-row-hover: color-mix(in srgb, var(--pwa-primary) 8%, transparent);
+}
+
 body {
   font-family: var(--pwa-font-sans);
   background: var(--pwa-bg);
@@ -366,6 +423,13 @@ body {
 }
 .v-field--variant-outlined.v-field--focused .v-field__outline {
   color: rgb(var(--v-theme-primary));
+}
+/* NEO-85: a soft brand halo around the focused field, fading in with it. */
+.v-field--variant-outlined {
+  transition: box-shadow 0.15s ease;
+}
+.v-field--variant-outlined.v-field--focused {
+  box-shadow: var(--pwa-focus-halo);
 }
 
 /*
@@ -544,42 +608,94 @@ body {
 }
 
 /*
- * Shared shell for the create/edit form dialogs (EventForm, LeadForm,
- * PractitionerForm, OrganizationForm, PatientForm, ...). One definition
- * instead of a copy per component.
- */
-/*
- * No `overflow` here (deliberately): this content-class is shared by every
- * dialog built on this shell, including small ones like the discard-changes
- * confirm — box-shadow (elevation) is painted outside a card's own box, so
- * `overflow: hidden`/`auto` on this wrapper clipped it away to invisible.
- * Corner-rounding + its own clip happens per-card below on
- * `.pwa-form-dialog__card` instead, which the small confirm dialogs don't
- * use, so they're unaffected.
+ * Dialog shells: AppFormDialog.vue (every form-style dialog) and
+ * AppConfirmDialog.vue (every two-option confirm). Raw <VDialog> anywhere else
+ * is blocked by AppFormDialog.spec.ts — these rules are the only place the
+ * dialog box model is defined.
+ *
+ * Scroll model (why these rules exist): the dialog is capped at the viewport
+ * (.v-overlay__content's max-height), the card fills that cap as a flex
+ * column, header/actions keep their size and the body (.v-card-text) takes
+ * the rest and scrolls. The card's own `overflow: hidden` is only there to
+ * clip the rounded corners — it is safe *because* the body is the scroller.
+ * Vuetify 4 ships all of its CSS in cascade layers and these rules are
+ * unlayered, so they win over Vuetify's regardless of specificity or load
+ * order: that is what broke scrolling after the Vuetify 4 upgrade (the old
+ * `overflow: hidden` here beat Vuetify's `overflow-y: auto` on the card and
+ * nothing scrolled any more). Measured in real browsers by
+ * e2e/dialog-scroll.spec.ts.
+ *
+ * No `overflow` on the content wrapper (deliberately): box-shadow is painted
+ * outside the card's own box, so clipping the wrapper hid the elevation.
  */
 .pwa-form-dialog__content {
+  display: flex;
+  flex-direction: column;
   border-radius: var(--pwa-modal-radius, 16px) !important;
 }
-/* M3: depth via tone (surface-container-high, the highest tonal layer),
-   not Vuetify's default elevated box-shadow — --pwa-shadow-md stays only as
-   a supporting cue, per docs/foundation/DESIGN_AND_UI.md principle 1. */
-.pwa-form-dialog__card {
+/* VDialog focuses its content box on open (focus trap). That box is not a
+   control, so the global :focus-visible ring drew a teal frame around the
+   whole dialog; fields and buttons inside still show theirs. */
+.pwa-form-dialog__content:focus-visible {
+  outline: none;
+}
+/* White (theme surface), not a tinted container tone: forms read as paper,
+   the scrim behind them already separates them from the page. */
+:is(.pwa-form-dialog__card, .pwa-confirm-dialog__card) {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 100%;
   border-radius: var(--pwa-modal-radius, 16px) !important;
   overflow: hidden;
-  background: rgb(var(--v-theme-surface-container-high)) !important;
-  box-shadow: var(--pwa-shadow-md) !important;
+  background: rgb(var(--v-theme-surface)) !important;
+  /* NEO-85: a single paper sheet lifted off the desk (theme tokens above). */
+  box-shadow: var(--pwa-dialog-shadow) !important;
+}
+:is(.pwa-form-dialog__card, .pwa-confirm-dialog__card) > * {
+  flex: 0 0 auto;
+}
+:is(.pwa-form-dialog__card, .pwa-confirm-dialog__card) > .v-card-text {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  /* Divider slots (see below); the -1px margins give the 2px back so the M3
+     spacing measured by e2e/dialog-header.spec.ts is unchanged. */
+  border-block: 1px solid transparent;
+  margin-block: -1px;
+  transition: border-color 0.15s ease;
+}
+/* Phone form dialogs (AppFormDialog, < 600px): an M3 bottom sheet — full
+   width, attached to the bottom edge, only the top corners rounded, clear of
+   the home indicator. No sheet peeks out under it (it sits on the screen
+   edge), so its shadow only rises upward. max-width must beat VDialog's
+   inline `max-width`, hence the !important. */
+.pwa-form-dialog--sheet {
+  align-items: flex-end;
+}
+.pwa-form-dialog--sheet > .v-overlay__content {
+  margin: 0;
+  width: 100%;
+  max-width: 100% !important;
+  max-height: calc(100% - 24px);
+  border-radius: var(--pwa-modal-radius, 28px) var(--pwa-modal-radius, 28px) 0 0 !important;
+}
+.pwa-form-dialog--sheet .pwa-form-dialog__card {
+  border-radius: var(--pwa-modal-radius, 28px) var(--pwa-modal-radius, 28px) 0 0 !important;
+  box-shadow: 0 0 0 1px var(--pwa-sheet-ring), 0 -12px 40px -12px rgb(0 0 0 / 0.28) !important;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-/* Small confirm/discard dialogs nested inside a form dialog (see the
-   .pwa-discard-dialog z-index note below) previously stayed at Vuetify's
-   default `elevation="8"` card — heavy shadow, no tone, no modal radius.
-   Shares the same tonal + radius treatment as the parent form dialog so the
-   two don't read as two different dialog systems. */
-.pwa-confirm-dialog__card {
-  border-radius: var(--pwa-modal-radius, 16px) !important;
-  overflow: hidden;
-  background: rgb(var(--v-theme-surface-container-high)) !important;
-  box-shadow: var(--pwa-shadow-md) !important;
+/* M3: a divider appears under the header / above the actions only while
+   content is actually scrolled behind it (AppFormDialog toggles these). */
+.pwa-form-dialog__body--scrolled {
+  border-top-color: rgb(var(--v-theme-outline-variant)) !important;
+}
+.pwa-form-dialog__body--more {
+  border-bottom-color: rgb(var(--v-theme-outline-variant)) !important;
 }
 /*
  * M3 dialog spacing (m3.material.io/components/dialogs/specs), one system for
@@ -647,15 +763,13 @@ body {
  * MobileBottomNavBar (packages/ui) is fixed to the viewport bottom with
  * z-index: 9998, and Vuetify's own overlay stacking (VOverlay's useStack)
  * only guarantees a dialog's z-index beats *other Vuetify overlays* — it
- * knows nothing about that plain fixed nav bar. Force these top-level entity
- * dialogs above it with !important so they cover the nav instead of the nav
- * covering their bottom (action buttons). Targets the `.v-overlay` root
- * (scrim + content together, see VDialog's own `class` prop) via the class
- * each dialog sets on itself, not `.pwa-form-dialog__content`, which only
- * reaches the inner content div.
+ * knows nothing about that plain fixed nav bar. Force every AppFormDialog
+ * above it with !important so it covers the nav instead of the nav covering
+ * its bottom (action buttons). Targets the `.v-overlay` root (scrim + content
+ * together, VDialog's own `class` prop), not `.pwa-form-dialog__content`,
+ * which only reaches the inner content div.
  */
-.form-renderer-dialog,
-.event-form-dialog {
+.pwa-form-dialog {
   z-index: 10000 !important;
 }
 

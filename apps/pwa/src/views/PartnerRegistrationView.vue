@@ -160,80 +160,81 @@
       </div>
     </AuthCard>
 
-    <VDialog v-model="showEditDialog" max-width="520" :transition="originDialogTransition">
-      <VCard class="pwa-form-dialog__card">
-        <AppDialogHeader :title="t('user.partnerRegistration.form.editModal.title')" @close="cancelEditDialog" />
-        <VCardText>
-          <VForm ref="editFormRef">
-            <VRadioGroup
-              v-model="draftPracticeRole"
-              :label="t('user.partnerRegistration.form.practiceRole')"
-              :hint="t('user.partnerRegistration.form.practiceRoleHint')"
-              persistent-hint
-              class="mb-3"
-            >
-              <VRadio :label="t('user.partnerRegistration.form.practiceRoleOwner')" value="owner" />
-              <VRadio :label="t('user.partnerRegistration.form.practiceRoleStaff')" value="staff" />
-            </VRadioGroup>
-            <VTextField
-              v-model="draftLicenseNumber"
-              :label="licenseLabel"
-              :hint="licenseHint"
-              persistent-hint
-              variant="outlined"
-              density="comfortable"
-              class="mb-3"
-              inputmode="numeric"
-              :rules="[ruleLicenseNumber]"
-            />
-            <VTextField
-              v-model="draftClinicName"
-              :label="t('user.partnerRegistration.form.clinicName')"
-              variant="outlined"
-              density="comfortable"
-              class="mb-3"
-              :rules="[ruleClinicNameRequired]"
-            />
-            <VTextField
-              v-model="draftClinicEmail"
-              :label="t('user.partnerRegistration.form.clinicEmail')"
-              variant="outlined"
-              density="comfortable"
-              class="mb-3"
-              :rules="[ruleClinicEmailRequired]"
-            />
-            <VTextField
-              v-model="draftClinicPhone"
-              :label="t('user.partnerRegistration.form.clinicPhone')"
-              variant="outlined"
-              density="comfortable"
-              class="mb-3"
-              :rules="[ruleClinicPhoneRequired]"
-            />
-            <VTextField
-              v-model="draftTaxId"
-              :label="draftPracticeRole === 'owner' ? t('user.partnerRegistration.form.taxId') : t('user.partnerRegistration.form.taxIdOptional')"
-              variant="outlined"
-              density="comfortable"
-              class="mb-3"
-              :rules="[ruleTaxId]"
-            />
-            <VTextField
-              v-model="draftBillingAddress"
-              :label="t('user.partnerRegistration.form.billingAddress')"
-              variant="outlined"
-              density="comfortable"
-              :rules="[ruleBillingAddressRequired]"
-            />
-          </VForm>
-        </VCardText>
-        <VCardActions>
-          <VSpacer />
-          <AppButton variant="text" @click="cancelEditDialog">{{ t('user.partnerRegistration.form.editModal.cancel') }}</AppButton>
-          <AppButton color="primary" @click="saveEditDialog">{{ t('user.partnerRegistration.form.editModal.save') }}</AppButton>
-        </VCardActions>
-      </VCard>
-    </VDialog>
+    <AppFormDialog
+      v-model="showEditDialog"
+      max-width="520"
+      :title="t('user.partnerRegistration.form.editModal.title')"
+      @close="cancelEditDialog"
+>
+      <VForm ref="editFormRef">
+        <VRadioGroup
+          v-model="draftPracticeRole"
+          :label="t('user.partnerRegistration.form.practiceRole')"
+          :hint="t('user.partnerRegistration.form.practiceRoleHint')"
+          persistent-hint
+          class="mb-3"
+        >
+          <VRadio :label="t('user.partnerRegistration.form.practiceRoleOwner')" value="owner" />
+          <VRadio :label="t('user.partnerRegistration.form.practiceRoleStaff')" value="staff" />
+        </VRadioGroup>
+        <VTextField
+          v-model="draftLicenseNumber"
+          :label="licenseLabel"
+          :hint="licenseHint"
+          persistent-hint
+          variant="outlined"
+          density="comfortable"
+          class="mb-3"
+          inputmode="numeric"
+          :rules="[ruleLicenseNumber]"
+        />
+        <VTextField
+          v-model="draftClinicName"
+          :label="t('user.partnerRegistration.form.clinicName')"
+          variant="outlined"
+          density="comfortable"
+          class="mb-3"
+          :rules="[ruleClinicNameRequired]"
+        />
+        <VTextField
+          v-model="draftClinicEmail"
+          :label="t('user.partnerRegistration.form.clinicEmail')"
+          variant="outlined"
+          density="comfortable"
+          class="mb-3"
+          :rules="[ruleClinicEmailRequired]"
+        />
+        <VTextField
+          v-model="draftClinicPhone"
+          :label="t('user.partnerRegistration.form.clinicPhone')"
+          variant="outlined"
+          density="comfortable"
+          class="mb-3"
+          :rules="[ruleClinicPhoneRequired]"
+        />
+        <VTextField
+          v-model="draftTaxId"
+          :label="draftPracticeRole === 'owner' ? t('user.partnerRegistration.form.taxId') : t('user.partnerRegistration.form.taxIdOptional')"
+          variant="outlined"
+          density="comfortable"
+          class="mb-3"
+          :rules="[ruleTaxId]"
+        />
+        <VTextField
+          v-model="draftBillingAddress"
+          :label="t('user.partnerRegistration.form.billingAddress')"
+          variant="outlined"
+          density="comfortable"
+          :rules="[ruleBillingAddressRequired]"
+        />
+      </VForm>
+
+      <template #actions>
+        <VSpacer />
+        <AppButton variant="text" @click="cancelEditDialog">{{ t('user.partnerRegistration.form.editModal.cancel') }}</AppButton>
+        <AppButton color="primary" variant="flat" @click="saveEditDialog">{{ t('user.partnerRegistration.form.editModal.save') }}</AppButton>
+      </template>
+    </AppFormDialog>
 
     <PartnerDocumentDialog
       v-model="documentDialogOpen"
@@ -257,7 +258,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { VRadioGroup, VRadio } from "vuetify/components";
-import { AuthChrome, AuthCard, originDialogTransition, useErrorTextFor } from "@ui";
+import { AuthChrome, AuthCard, useErrorTextFor } from "@ui";
 import { brandColors } from "@brand/colors";
 import { isValidLicenseNumber, type LicenseCountry } from "@documents-browser";
 import AppLoadingState from "../components/AppLoadingState.vue";
@@ -265,7 +266,7 @@ import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
 import PartnerDocumentRow from "../components/partner/PartnerDocumentRow.vue";
 import PartnerDocumentDialog from "../components/partner/PartnerDocumentDialog.vue";
-import AppDialogHeader from "../components/AppDialogHeader.vue";
+import AppFormDialog from "../components/AppFormDialog.vue";
 import { apiFetch } from "../composables/useApi";
 
 /**
