@@ -264,6 +264,96 @@
   color: var(--pwa-table-border);
 }
 
+/* ── Phone toolbar (NEO-85) ──────────────────────────────────────────────
+   One row, never wrapping: [search] [filter] [add], right-aligned.
+   - at rest the search is just its icon (a 48px circle, like its neighbours);
+   - focused, it grows over the whole row and the other tools step aside
+     (fade + shrink, their width collapsing so the field can slide into it);
+   - blurred with a query, it stays open on the left as a quiet tinted pill
+     showing the query (with its own clear button), tools back on the right.
+   The field is always the real input, so a tap anywhere on it focuses it. */
+/* (The clear-all wrap is a tool too, but keeps its own width rules above.) */
+.app-entity-list__tool:not(.app-entity-list__clear-filters-wrap) {
+  display: flex;
+  flex: 0 0 auto;
+  max-width: 64px;
+  transition:
+    max-width var(--pwa-fib-t-2xl, 377ms) var(--pwa-ease-emphasized-decel, cubic-bezier(0.05, 0.7, 0.1, 1)),
+    margin-left var(--pwa-fib-t-2xl, 377ms) var(--pwa-ease-emphasized-decel, cubic-bezier(0.05, 0.7, 0.1, 1)),
+    opacity var(--pwa-fib-t-lg, 144ms) ease,
+    transform var(--pwa-fib-t-xl, 233ms) var(--pwa-ease-emphasized-decel, cubic-bezier(0.05, 0.7, 0.1, 1));
+}
+
+.app-entity-list__toolbar--mobile {
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+}
+.app-entity-list__toolbar--mobile .app-entity-list__search-group {
+  flex: 1 1 auto;
+  justify-content: flex-end;
+  margin-left: 0;
+}
+.app-entity-list__toolbar--mobile .app-entity-list__search {
+  flex: 0 0 48px;
+  transition:
+    flex-basis var(--pwa-fib-t-2xl, 377ms) var(--pwa-ease-emphasized-decel, cubic-bezier(0.05, 0.7, 0.1, 1)),
+    flex-grow var(--pwa-fib-t-2xl, 377ms) var(--pwa-ease-emphasized-decel, cubic-bezier(0.05, 0.7, 0.1, 1));
+}
+.app-entity-list__toolbar--mobile .app-entity-list__search :deep(.v-input__control) {
+  min-width: 0;
+}
+.app-entity-list__toolbar--mobile .app-entity-list__search :deep(.v-field) {
+  transition: background-color var(--pwa-fib-t-xl, 233ms) ease;
+}
+.app-entity-list__toolbar--mobile .app-entity-list__search :deep(.v-field__outline) {
+  transition: opacity var(--pwa-fib-t-xl, 233ms) ease;
+}
+
+/* At rest, empty: only the icon, no outline, nothing to read. */
+.app-entity-list__toolbar--mobile:not(.app-entity-list__toolbar--search-open):not(.app-entity-list__toolbar--has-query)
+  .app-entity-list__search
+  :deep(.v-field) {
+  cursor: pointer;
+  padding-inline-start: 14px;
+}
+.app-entity-list__toolbar--mobile:not(.app-entity-list__toolbar--search-open)
+  .app-entity-list__search
+  :deep(.v-field__outline) {
+  opacity: 0;
+}
+.app-entity-list__toolbar--mobile:not(.app-entity-list__toolbar--search-open):not(.app-entity-list__toolbar--has-query)
+  .app-entity-list__search
+  :deep(input) {
+  opacity: 0;
+}
+
+/* Open, or holding a query: the field takes the row. */
+.app-entity-list__toolbar--search-open .app-entity-list__search,
+.app-entity-list__toolbar--has-query .app-entity-list__search {
+  flex: 1 1 0%;
+}
+/* Blurred with a query: a soft brand-tinted pill with the query text. */
+.app-entity-list__toolbar--has-query:not(.app-entity-list__toolbar--search-open) .app-entity-list__search :deep(.v-field) {
+  background: color-mix(in srgb, var(--pwa-primary) 8%, transparent);
+}
+
+/* Open: the other tools step aside, and the row gap before each goes with it
+   (a 0-wide flex item still keeps its gap). */
+.app-entity-list__toolbar--search-open .app-entity-list__tool {
+  max-width: 0;
+  margin-left: calc(-1 * var(--pwa-fib-sm, 8px));
+  opacity: 0;
+  transform: scale(0.6);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-entity-list__tool,
+  .app-entity-list__toolbar--mobile .app-entity-list__search {
+    transition: none;
+  }
+}
+
 .app-entity-list__empty-wrap,
 .app-entity-list__error-wrap {
   flex: 1 1 auto;

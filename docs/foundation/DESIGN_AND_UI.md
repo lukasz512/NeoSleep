@@ -206,8 +206,8 @@ whether it's a table cell, a mobile card line, a detail panel or a note author. 
     chrome and everything behind the content is a teal-grey desk (`--pwa-desk`); the routed
     content is one white sheet (`AppLayout .layout-main__inner`, AppShell `sheet` mode keeps its
     top corners round) with two more sheets peeking out under its bottom edge; list rows are
-    ruled lines (`--pwa-rule`) under a brand-coloured header rule; dialogs are a sheet with one
-    sheet under it, the main action a filled pill. The peeking sheets are extra `box-shadow`
+    ruled lines (`--pwa-rule`) under a brand-coloured header rule; dialogs are a single lifted
+    sheet with no stack under it (decided 2026-09-26), the main action a filled pill. The peeking sheets are extra `box-shadow`
     layers (offset down, negative spread), not elements, so nothing can clip or mis-stack them.
     Every tint mixes from `--pwa-primary`, which the tenant config overrides at runtime.
     Motion: rows stagger in with M3 emphasized-decelerate; dialogs grow from the tap and close

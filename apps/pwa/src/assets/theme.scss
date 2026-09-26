@@ -240,11 +240,9 @@ $pwa-fib-t-3xl: 987ms;
     0 16px 0 -10px var(--pwa-sheet-peek-1), 0 16px 0 -9px var(--pwa-sheet-edge),
     0 32px 0 -21px var(--pwa-sheet-peek-2), 0 32px 0 -20px var(--pwa-sheet-edge),
     var(--pwa-sheet-soft);
-  /* A dialog is one sheet with one sheet under it. */
-  --pwa-dialog-shadow:
-    0 0 0 1px var(--pwa-sheet-ring),
-    0 14px 0 -8px var(--pwa-sheet-peek-1), 0 14px 0 -7px var(--pwa-sheet-edge),
-    var(--pwa-dialog-soft);
+  /* A dialog is a single sheet lifted off the desk — no sheets under it
+     (Łukasz, 2026-09-26: the stack stays on the page only). */
+  --pwa-dialog-shadow: 0 0 0 1px var(--pwa-sheet-ring), var(--pwa-dialog-soft);
 }
 [data-theme="dark"] {
   --pwa-desk: color-mix(in srgb, var(--pwa-primary) 6%, #0f1211);
@@ -652,7 +650,7 @@ body {
   border-radius: var(--pwa-modal-radius, 16px) !important;
   overflow: hidden;
   background: rgb(var(--v-theme-surface)) !important;
-  /* NEO-85: a record sheet with one more sheet under it (theme tokens above). */
+  /* NEO-85: a single paper sheet lifted off the desk (theme tokens above). */
   box-shadow: var(--pwa-dialog-shadow) !important;
 }
 :is(.pwa-form-dialog__card, .pwa-confirm-dialog__card) > * {

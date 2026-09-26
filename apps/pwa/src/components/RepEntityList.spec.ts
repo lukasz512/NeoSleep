@@ -57,8 +57,11 @@ async function mountEntityList(opts: {
   showAddButton?: boolean;
   /** Replace the default successful list response (NEO-81 error-state tests). */
   fetchImpl?: () => Promise<Response>;
+  /** Viewport width useDisplay() sees; this test Vuetify keeps its default mobile breakpoint (1280). */
+  width?: number;
 } = {}) {
   setActivePinia(createPinia());
+  Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: opts.width ?? 1440 });
   const router = createTestRouter();
   await router.push("/");
   await router.isReady();
@@ -234,6 +237,48 @@ describe("AppEntityList", () => {
     });
   });
 
+  describe("phone toolbar: three icons, search expands over the row (NEO-85)", () => {
+    const toolbar = () => document.querySelector("[data-testid=entity-list-toolbar]") as HTMLElement;
+    const input = () => document.querySelector("[data-testid=entity-list-search] input") as HTMLInputElement;
+
+    it("rests as search + filter + add in one row, search not open", async () => {
+      await mountEntityList({ width: 375 });
+      expect(toolbar().classList.contains("app-entity-list__toolbar--mobile")).toBe(true);
+      expect(toolbar().classList.contains("app-entity-list__toolbar--search-open")).toBe(false);
+      expect(document.querySelector("[data-testid=entity-list-filter]")).not.toBeNull();
+      expect(document.querySelector("[data-testid=entity-list-add]")).not.toBeNull();
+    });
+
+    it("opens while the search is focused, and on blur keeps a typed query as the pill", async () => {
+      await mountEntityList({ width: 375 });
+      input().focus();
+      input().dispatchEvent(new FocusEvent("focus"));
+      await flushPromises();
+      expect(toolbar().classList.contains("app-entity-list__toolbar--search-open")).toBe(true);
+
+      input().value = "mar";
+      input().dispatchEvent(new Event("input"));
+      input().blur();
+      input().dispatchEvent(new FocusEvent("blur"));
+      await flushPromises();
+      expect(toolbar().classList.contains("app-entity-list__toolbar--search-open")).toBe(false);
+      expect(toolbar().classList.contains("app-entity-list__toolbar--has-query")).toBe(true);
+    });
+
+    it("the in-field clear button doesn't steal focus (so the search stays open while clearing)", async () => {
+      await mountEntityList({ width: 375 });
+      const clear = document.querySelector(".app-entity-list__search-clear") as HTMLElement;
+      const down = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
+      clear.dispatchEvent(down);
+      expect(down.defaultPrevented).toBe(true);
+    });
+
+    it("desktop never gets the phone classes", async () => {
+      await mountEntityList({ width: 1440 });
+      expect(toolbar().classList.contains("app-entity-list__toolbar--mobile")).toBe(false);
+    });
+  });
+
   describe("mobile feed list", () => {
     it("renders one card per item, keyed and ordered the same as the API response", async () => {
       const wrapper = await mountEntityList({
@@ -359,10 +404,16 @@ describe("AppEntityList", () => {
       expect(css).not.toMatch(/search-group--active/);
     });
 
-    it("search field has a static width with no flex-basis transition or mobile collapse state", () => {
-      expect(css).not.toMatch(/transition:\s*flex-basis/);
+    // NEO-85 brought a collapse back on phones only, on request (three icons,
+    // search grows over the row while the others step aside). Desktop keeps
+    // the NEO-49 rule: a static width, nothing animating next to filter/add.
+    it("desktop search field has a static width; the flex-basis animation exists only in the phone toolbar", () => {
       expect(css).not.toMatch(/search--collapsed/);
       expect(css).toMatch(/\.app-entity-list__search\s*{[^}]*flex:\s*0 1 610px/);
+      expect(css).not.toMatch(/^\.app-entity-list__search\s*{[^}]*transition/m);
+      const flexBasisTransitions = [...css.matchAll(/([^{}]+)\{[^}]*transition:[^}]*flex-basis/g)].map((m) => m[1]!.trim());
+      expect(flexBasisTransitions.length).toBeGreaterThan(0);
+      for (const selector of flexBasisTransitions) expect(selector).toContain("app-entity-list__toolbar--mobile");
     });
   });
 
