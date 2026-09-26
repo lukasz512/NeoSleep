@@ -5,8 +5,10 @@
     :title="formTitle"
     :avatar-entity-type="avatarEntityType"
     :avatar-name="avatarName"
+    :avatar-first-name="String(form.first_name ?? '')"
+    :avatar-last-name="String(form.last_name ?? '')"
     :folder="isFolder"
-    :max-width="isFolder ? 900 : undefined"
+    :max-width="isFolder && mdAndUp ? 900 : undefined"
     @update:model-value="onDialogUpdate"
     @close="onCancelClick"
     @body-scroll="followScroll"
@@ -147,7 +149,7 @@
         @select="goToSection"
       />
     </template>
-    <template v-if="isFolder && asSheet" #header-extra>
+    <template v-if="isFolder && !mdAndUp" #header-extra>
       <FormSectionChips
         :sections="indexSections"
         :active="activeSection"
@@ -343,7 +345,9 @@ const sections = computed(() => {
 /** Two or more sections make the "Carpeta" folder: spine + section headings. Shorter forms stay one plain sheet. */
 const isFolder = computed(() => sections.value.length >= 2);
 
-const { xs: asSheet } = useDisplay();
+// Desktop (≥ 960px) gets the spine; tablets (a tile) and phones (a bottom
+// sheet) get the same index as a row of chips under the header.
+const { mdAndUp } = useDisplay();
 const uid = useId();
 
 const changedSet = computed(() => new Set(changedKeys.value));

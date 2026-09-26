@@ -4,6 +4,8 @@
       <AppAvatar
         v-if="avatarEntityType"
         :name="avatarName"
+        :first-name="avatarFirstName || null"
+        :last-name="avatarLastName || null"
         :entity-type="avatarEntityType"
         :size="40"
         class="app-dialog-header__avatar"
@@ -53,10 +55,13 @@ withDefaults(
     /** Shows an AppAvatar before the title; pair with avatarName for the initials. */
     avatarEntityType?: AppAvatarEntityType;
     avatarName?: string;
+    /** Exact initials when the name has several words (see AppAvatar). */
+    avatarFirstName?: string;
+    avatarLastName?: string;
     /** false only for confirm dialogs, whose Cancel action already is the way out. */
     closable?: boolean;
   }>(),
-  { avatarEntityType: undefined, avatarName: "", closable: true },
+  { avatarEntityType: undefined, avatarName: "", avatarFirstName: "", avatarLastName: "", closable: true },
 );
 
 const emit = defineEmits<{ close: [] }>();

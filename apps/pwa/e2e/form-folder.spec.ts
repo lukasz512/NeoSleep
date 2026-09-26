@@ -12,6 +12,8 @@ import { test, expect, type Page } from "@playwright/test";
 
 const LAPTOP = { width: 1280, height: 640 };
 const PHONE = { width: 390, height: 780 };
+/** iPad Air portrait — between Vuetify's sm and md breakpoints. */
+const TABLET = { width: 820, height: 1180 };
 
 async function open(page: Page, query: string, size: { width: number; height: number }) {
   await page.setViewportSize(size);
@@ -105,6 +107,24 @@ test("phone: a bottom sheet with section chips instead of a spine", async ({ pag
   await chips.getByRole("button", { name: "Clinical" }).click();
   await expect(chips.getByRole("button", { name: "Clinical" })).toHaveAttribute("aria-current", "location");
   await expect(body(page).locator("[data-section=clinical] .pwa-form-section__title")).toBeInViewport();
+});
+
+test("tablet: phone-style chips, but still a floating tile", async ({ page }) => {
+  await open(page, "", TABLET);
+  await expect(spine(page)).toHaveCount(0);
+  await expect(page.getByTestId("form-section-chips")).toBeVisible();
+  // A centred tile with margins on every side and all four corners rounded,
+  // not the phone's edge-to-edge bottom sheet.
+  await expect(page.locator(".v-overlay.pwa-form-dialog--sheet")).toHaveCount(0);
+  const card = page.locator(".v-dialog .v-card").first();
+  const box = await card.boundingBox();
+  expect(box && box.x).toBeGreaterThan(16);
+  expect(box && TABLET.width - (box.x + box.width)).toBeGreaterThan(16);
+  expect(box && TABLET.height - (box.y + box.height)).toBeGreaterThan(16);
+  const radius = await card.evaluate((el) => getComputedStyle(el).borderBottomLeftRadius);
+  expect(parseFloat(radius)).toBeGreaterThan(8);
+  await page.getByTestId("form-section-chips").getByRole("button", { name: "Territory" }).click();
+  await expect(body(page).locator("[data-section=territory] .pwa-form-section__title")).toBeInViewport();
 });
 
 test("a form with one section stays a single sheet", async ({ page }) => {
