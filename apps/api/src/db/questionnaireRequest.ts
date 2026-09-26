@@ -67,16 +67,17 @@ export function insertQuestionnaireRequest(
 }
 
 /**
- * One live link per checklist item: issuing a new link retires every
- * pending one that covers any of the same items ("show QR again" — the raw
- * token is never stored, so it can't be re-shown).
+ * One live link per patient (Łukasz, 2026-09-26, NEO-93): issuing a new
+ * link retires every pending one, whatever items it covers — the Estudios
+ * QR button shows a single link's status. Also how "show QR again" works:
+ * the raw token is never stored, so it can't be re-shown.
  */
-export function cancelPendingQuestionnaireRequests(client: PoolClient, patientId: string, items: string[]): Promise<number> {
+export function cancelPendingQuestionnaireRequests(client: PoolClient, patientId: string): Promise<number> {
   return run("cancelPendingQuestionnaireRequests", async () => {
     const result = await client.query(
       `UPDATE questionnaire_request SET cancelled_at = now()
-        WHERE patient_id = $1 AND items && $2::text[] AND used_at IS NULL AND cancelled_at IS NULL AND expires_at > now()`,
-      [patientId, items]
+        WHERE patient_id = $1 AND used_at IS NULL AND cancelled_at IS NULL AND expires_at > now()`,
+      [patientId]
     );
     return result.rowCount ?? 0;
   });
@@ -130,6 +131,37 @@ export function completeQuestionnaireStep(client: PoolClient, id: string, item: 
       [id, item]
     );
     return result.rows[0]!;
+  });
+}
+
+/**
+ * The patient's newest link, when it simply ran out (not used, not
+ * cancelled) — the Estudios QR button shows "link expired" for it (NEO-93).
+ * A newer link of any status supersedes it.
+ */
+export function getLatestExpiredQuestionnaireRequestForPatient(client: PoolClient, patientId: string): Promise<QuestionnaireRequest | null> {
+  return run("getLatestExpiredQuestionnaireRequestForPatient", async () => {
+    const result = await client.query<QuestionnaireRequest & { status: QuestionnaireRequestStatus }>(
+      `SELECT ${COLS} FROM questionnaire_request WHERE patient_id = $1 ORDER BY created_at DESC LIMIT 1`,
+      [patientId]
+    );
+    const latest = result.rows[0];
+    return latest?.status === "expired" ? latest : null;
+  });
+}
+
+/**
+ * Garbage collection (NEO-93): a link is dead 24 h after creation at the
+ * latest; keep dead rows `retentionDays` past expiry (the "expired" state,
+ * debugging), then delete them. The audit_log keeps who created which link
+ * for whom; records that came in through one keep their data (request_id →
+ * NULL). Runs tenant-wide on every new link, so garbage can only build up
+ * while links are being made — no external scheduler needed.
+ */
+export function purgeDeadQuestionnaireRequests(client: PoolClient, retentionDays: number): Promise<number> {
+  return run("purgeDeadQuestionnaireRequests", async () => {
+    const result = await client.query(`DELETE FROM questionnaire_request WHERE expires_at < now() - make_interval(days => $1)`, [retentionDays]);
+    return result.rowCount ?? 0;
   });
 }
 

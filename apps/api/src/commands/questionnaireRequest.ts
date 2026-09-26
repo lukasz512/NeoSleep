@@ -5,6 +5,7 @@ import {
   insertQuestionnaireRequest,
   cancelPendingQuestionnaireRequests,
   cancelQuestionnaireRequest,
+  purgeDeadQuestionnaireRequests,
   getUsableQuestionnaireRequestByHash,
   completeQuestionnaireStep,
   type QuestionnaireRequest,
@@ -41,6 +42,8 @@ import { validateMedicalHistory, validateStop } from "./clinicalRecordFields.js"
  */
 
 export const QUESTIONNAIRE_LINK_TTL_MS = 24 * 60 * 60 * 1000;
+/** Dead links are deleted this many days after they expire (purgeDeadQuestionnaireRequests). */
+export const QUESTIONNAIRE_LINK_RETENTION_DAYS = 30;
 
 /**
  * Bumped whenever the health-data notice/consent wording shown before a
@@ -120,7 +123,8 @@ export async function CreateQuestionnaireRequestCommand(
   }
   if (items.length === 0) throw new ValidationError("Nothing left for the patient to complete");
 
-  await cancelPendingQuestionnaireRequests(ctx.client, patientId, items);
+  await cancelPendingQuestionnaireRequests(ctx.client, patientId);
+  await purgeDeadQuestionnaireRequests(ctx.client, QUESTIONNAIRE_LINK_RETENTION_DAYS);
   const token = generateToken();
   const request = await insertQuestionnaireRequest(ctx.client, {
     patient_id: patientId,
