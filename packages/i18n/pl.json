@@ -2174,5 +2174,14 @@
   "app.formRenderer.validation.server.new_password": "Użyj co najmniej 8 znaków",
   "app.formRenderer.validation.server.pwz": "Wpisz poprawny numer PWZ",
   "app.formRenderer.validation.server.cedula": "Wpisz poprawną cédula profesional",
-  "app.formRenderer.validation.server.licenseNumber": "Wpisz poprawny numer prawa wykonywania zawodu"
+  "app.formRenderer.validation.server.licenseNumber": "Wpisz poprawny numer prawa wykonywania zawodu",
+  "app.formRenderer.fact.sex": "Płeć",
+  "app.formRenderer.fact.age": "Wiek",
+  "app.formRenderer.fact.born": "Ur.",
+  "app.formRenderer.fact.status": "Status",
+  "app.formRenderer.fact.specialty": "Specjalizacja",
+  "app.formRenderer.fact.clinic": "Klinika",
+  "app.formRenderer.fact.type": "Typ",
+  "app.formRenderer.fact.city": "Miasto",
+  "app.formRenderer.fact.role": "Rola"
 }

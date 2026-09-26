@@ -11,6 +11,14 @@ export interface IdentityDetailSet {
   more: string[];
 }
 
+/** One labelled fact for the form folder's ficha (NEO-118): "Sexo — Masculino"; `more` collapses behind "+N". */
+export interface IdentityFact {
+  key: string;
+  label: string;
+  value: string;
+  more?: string[];
+}
+
 interface PatientLike {
   gender?: string | null;
   date_of_birth?: string | null;
@@ -91,33 +99,50 @@ export function useIdentity() {
   }
 
   /**
-   * The record header's detail line for any entity type — what the form
-   * folder's spine shows under the name (NEO-92), from the live form values,
-   * so it reads exactly like the header the record will get once saved.
+   * The record's key facts, one per line with a label (NEO-118): the
+   * form folder's spine lists them as a ficha, so no fact ever wraps into the
+   * next one. Empty values are left out.
    */
-  function detailsFor(entityType: AppAvatarEntityType, record: Record<string, unknown>): IdentityDetailSet {
-    const str = (v: unknown) => (typeof v === "string" ? v : null);
+  function factsFor(entityType: AppAvatarEntityType, record: Record<string, unknown>): IdentityFact[] {
+    const str = (v: unknown) => (typeof v === "string" && v ? v : null);
+    const facts: IdentityFact[] = [];
+    const add = (key: string, value: string | null | undefined, more?: string[]) => {
+      if (value) facts.push({ key, label: t(`app.formRenderer.fact.${key}`), value, ...(more?.length ? { more } : {}) });
+    };
     switch (entityType) {
-      case "patient":
-        return patientDetails({ gender: str(record.gender), date_of_birth: str(record.date_of_birth) }, { long: true });
+      case "patient": {
+        const gender = str(record.gender);
+        const dob = str(record.date_of_birth);
+        const age = ageFromDateOfBirth(dob);
+        add("sex", gender && GENDER_LABEL_KEYS[gender] ? t(GENDER_LABEL_KEYS[gender]) : null);
+        add("age", age != null ? t("app.patients.ageShort", { age }) : null);
+        add("born", formatDob(dob));
+        break;
+      }
       case "hcp":
-      case "lead":
-        return doctorDetails(
-          {
-            primary_specialty: str(record.primary_specialty),
-            specialties: Array.isArray(record.specialties) ? record.specialties.map(String) : null,
-            institution: str(record.institution),
-          },
-          { withClinic: true },
+      case "lead": {
+        const set = specialtySet(
+          str(record.primary_specialty),
+          Array.isArray(record.specialties) ? record.specialties.map(String) : null,
         );
-      case "hco":
-        return orgDetails({ type: str(record.type), city: str(record.city) }, { withCity: true });
-      case "user":
-        return userDetails(str(record.role));
-      default:
-        return { details: [], more: [] };
+        add("specialty", set.details[0], set.more);
+        add("clinic", str(record.institution));
+        break;
+      }
+      case "hco": {
+        const type = str(record.type);
+        add("type", type ? hcoTypeLabel(t, type) : null);
+        add("city", str(record.city));
+        break;
+      }
+      case "user": {
+        const role = str(record.role);
+        add("role", role ? t(`user.users.role.${role}`) : null);
+        break;
+      }
     }
+    return facts;
   }
 
-  return { patientDetails, specialtySet, doctorDetails, orgDetails, userDetails, detailsFor, formatDob };
+  return { patientDetails, specialtySet, doctorDetails, orgDetails, userDetails, factsFor, formatDob };
 }

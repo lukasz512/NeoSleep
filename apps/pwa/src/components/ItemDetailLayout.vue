@@ -94,6 +94,7 @@
         </template>
       </AppStateView>
     </div>
+    <AppRecordSkeleton v-else-if="showRecordHeader" />
     <div v-else class="view-item__loading">
       <AppLoadingState />
     </div>
@@ -110,6 +111,7 @@ import AppIcon from "./AppIcon.vue";
 import AppAvatar from "./AppAvatar.vue";
 import { recordPreviewFor } from "../composables/useRecordPreview";
 import AppLoadingState from "./AppLoadingState.vue";
+import AppRecordSkeleton from "./AppRecordSkeleton.vue";
 import AppBreadcrumbs from "./AppBreadcrumbs.vue";
 import type { BreadcrumbItem } from "./AppBreadcrumbs.types";
 import type { AppIconName } from "./AppIcon.vue";
