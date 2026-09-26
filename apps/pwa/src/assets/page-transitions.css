@@ -6,13 +6,13 @@
  * and after).
  *
  * <html data-page-transition=…>:
- *   open   — list → record: M3 "shared axis X". The list drifts 40px left
- *            and fades out early; the record comes in from 40px right and
- *            fades in, the two fades overlapping briefly so there is no
- *            blank frame. 400ms.
- *   back   — record → list: the same, mirrored. 340ms (leaving is quicker).
- *   module — menu / bottom nav: M3 fade-through, old page out in 140ms,
- *            new page in over 260ms from 98% scale. Modules sit side by side,
+ *   open   — list → record: M3 "shared axis X". The list drifts 30px left
+ *            and is gone in 120ms; the record follows from 30px right and
+ *            fades in from 100ms — one after the other, so text never
+ *            double-exposes. 360ms.
+ *   back   — record → list: the same, mirrored. 320ms (leaving is quicker).
+ *   module — menu / bottom nav: M3 fade-through, old page out in 120ms,
+ *            new page in over 220ms from 98% scale. Modules sit side by side,
  *            so nothing slides.
  *
  * NEO-97: movement and opacity are separate animations on each snapshot, so
@@ -22,9 +22,17 @@
  */
 
 /* The group itself doesn't morph between the two pages' sizes — only the
-   snapshots move — so a long list and a short record don't stretch. */
+   snapshots move — so a long list and a short record don't stretch.
+   NEO-97: the group paints the paper itself (sheet colour, radius, shadow)
+   and clips to it, so the sheet stays still and only its content slides and
+   fades inside it — no desk showing through mid-fade, nothing drawn over the
+   side menu. */
 ::view-transition-group(pwa-page) {
   animation-duration: 0s;
+  overflow: clip;
+  background: var(--pwa-sheet);
+  border-radius: var(--pwa-sheet-radius);
+  box-shadow: var(--pwa-sheet-shadow);
 }
 /* Snapshots keep their own size, pinned to the sheet's top. */
 ::view-transition-old(pwa-page),
@@ -35,33 +43,33 @@
 
 html[data-page-transition="open"]::view-transition-old(pwa-page) {
   animation:
-    pwa-page-to-left 400ms var(--pwa-page-ease) both,
-    pwa-page-fade-out 160ms linear both;
+    pwa-page-to-left 360ms var(--pwa-page-ease) both,
+    pwa-page-fade-out 120ms cubic-bezier(0.4, 0, 1, 1) both;
 }
 html[data-page-transition="open"]::view-transition-new(pwa-page) {
   animation:
-    pwa-page-from-right 400ms var(--pwa-page-ease) both,
-    pwa-page-fade-in 280ms linear 100ms both;
+    pwa-page-from-right 360ms var(--pwa-page-ease) both,
+    pwa-page-fade-in 240ms cubic-bezier(0, 0, 0.2, 1) 100ms both;
 }
 
 html[data-page-transition="back"]::view-transition-old(pwa-page) {
   animation:
-    pwa-page-to-right 340ms var(--pwa-page-ease) both,
-    pwa-page-fade-out 140ms linear both;
+    pwa-page-to-right 320ms var(--pwa-page-ease) both,
+    pwa-page-fade-out 110ms cubic-bezier(0.4, 0, 1, 1) both;
 }
 html[data-page-transition="back"]::view-transition-new(pwa-page) {
   animation:
-    pwa-page-from-left 340ms var(--pwa-page-ease) both,
-    pwa-page-fade-in 240ms linear 90ms both;
+    pwa-page-from-left 320ms var(--pwa-page-ease) both,
+    pwa-page-fade-in 220ms cubic-bezier(0, 0, 0.2, 1) 90ms both;
 }
 
 html[data-page-transition="module"]::view-transition-old(pwa-page) {
-  animation: pwa-page-fade-out 140ms cubic-bezier(0.4, 0, 1, 1) both;
+  animation: pwa-page-fade-out 120ms cubic-bezier(0.4, 0, 1, 1) both;
 }
 html[data-page-transition="module"]::view-transition-new(pwa-page) {
   animation:
-    pwa-page-settle 260ms var(--pwa-page-ease) 100ms both,
-    pwa-page-fade-in 220ms linear 100ms both;
+    pwa-page-settle 280ms var(--pwa-page-ease) 100ms both,
+    pwa-page-fade-in 220ms cubic-bezier(0, 0, 0.2, 1) 100ms both;
 }
 
 /* M3 standard easing — gentle start, long soft landing. */
@@ -70,16 +78,16 @@ html[data-page-transition="module"]::view-transition-new(pwa-page) {
 }
 
 @keyframes pwa-page-to-left {
-  to { transform: translateX(-40px); }
+  to { transform: translateX(-30px); }
 }
 @keyframes pwa-page-from-right {
-  from { transform: translateX(40px); }
+  from { transform: translateX(30px); }
 }
 @keyframes pwa-page-to-right {
-  to { transform: translateX(40px); }
+  to { transform: translateX(30px); }
 }
 @keyframes pwa-page-from-left {
-  from { transform: translateX(-40px); }
+  from { transform: translateX(-30px); }
 }
 @keyframes pwa-page-settle {
   from { transform: scale(0.98); }
