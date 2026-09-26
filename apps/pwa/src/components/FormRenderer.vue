@@ -50,9 +50,9 @@
                     <AppIcon v-else :name="f.icon" class="pwa-form-field-icon" />
                   </template>
                   <template v-if="f.avatarEntityType" #item="{ internalItem: item, props: itemProps }">
-                    <VListItem v-if="item.value" v-bind="itemProps" :title="item.title">
+                    <VListItem v-if="item.value" v-bind="itemProps" :title="item.title" :subtitle="item.raw.subtitle">
                       <template #prepend>
-                        <AppAvatar :name="item.title" :entity-type="f.avatarEntityType" :size="28" />
+                        <AppAvatar :name="item.title" :entity-type="f.avatarEntityType" :size="item.raw.subtitle ? 36 : 28" />
                       </template>
                     </VListItem>
                   </template>
@@ -96,9 +96,9 @@
                   <AppIcon v-else :name="row[0].icon" class="pwa-form-field-icon" />
                 </template>
                 <template v-if="row[0].avatarEntityType" #item="{ internalItem: item, props: itemProps }">
-                  <VListItem v-if="item.value" v-bind="itemProps" :title="item.title">
+                  <VListItem v-if="item.value" v-bind="itemProps" :title="item.title" :subtitle="item.raw.subtitle">
                     <template #prepend>
-                      <AppAvatar :name="item.title" :entity-type="row[0].avatarEntityType" :size="28" />
+                      <AppAvatar :name="item.title" :entity-type="row[0].avatarEntityType" :size="item.raw.subtitle ? 36 : 28" />
                     </template>
                   </VListItem>
                 </template>

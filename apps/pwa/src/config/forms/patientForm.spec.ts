@@ -1,5 +1,19 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const apiFetch = vi.fn();
+vi.mock("../../composables/useApi", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../composables/useApi")>()),
+  apiFetch: (...args: unknown[]) => apiFetch(...args),
+}));
+
+import { createPinia, setActivePinia } from "pinia";
 import { patientFormFields } from "./patientForm";
+import { useConfigStore } from "../../stores/config";
+import type { FormFieldOption } from "../../types/formField";
+
+function jsonResponse(ok: boolean, body: unknown) {
+  return { ok, json: async () => body } as Response;
+}
 
 describe("patientFormFields", () => {
   it("leads with the shared Identity block, prefix key renamed to 'salutation'", () => {
@@ -48,5 +62,47 @@ describe("patientFormFields", () => {
     const territory = patientFormFields.find((f) => f.key === "territory_id")!;
     expect(territory.type).toBe("autocomplete");
     expect(typeof territory.options).toBe("function");
+  });
+
+  describe("practitioner_id options", () => {
+    const load = patientFormFields.find((f) => f.key === "practitioner_id")!.options as (
+      form: Record<string, unknown>,
+    ) => Promise<FormFieldOption[]>;
+
+    beforeEach(() => {
+      apiFetch.mockReset();
+      setActivePinia(createPinia());
+      useConfigStore().options = {
+        regions: [],
+        specialties: [{ key: "dentist", value: "Odontólogo", locale: "mx", sort_order: 0, locked: false, custom: false }],
+        organization_types: [],
+      };
+    });
+
+    it("subtitles each doctor with translated specialty · clinic, so similar names can be told apart", async () => {
+      apiFetch.mockResolvedValueOnce(jsonResponse(true, { items: [
+        { id: "d1", name: "Dra. Laura Cuicas", primary_specialty: "dentist", institution: "Clínica Dental Sur" },
+        { id: "d2", name: "Dr. Anna Kowalska", primary_specialty: "", institution: "" },
+        { id: "d3", name: "Dr. Andrzej Testerski", primary_specialty: "ent", institution: "" },
+      ] }));
+
+      const options = await load({});
+
+      expect(options).toEqual([
+        { title: "Dra. Laura Cuicas", value: "d1", subtitle: "Odontólogo · Clínica Dental Sur" },
+        { title: "Dr. Anna Kowalska", value: "d2" },
+        { title: "Dr. Andrzej Testerski", value: "d3", subtitle: "ent" },
+      ]);
+    });
+
+    it("the saved doctor fetched on its own (outside the bulk page) gets the same subtitle", async () => {
+      apiFetch
+        .mockResolvedValueOnce(jsonResponse(true, { items: [] }))
+        .mockResolvedValueOnce(jsonResponse(true, { id: "old", name: "Dr. Old", primary_specialty: "dentist", institution: "HCO" }));
+
+      const options = await load({ practitioner_id: "old" });
+
+      expect(options).toEqual([{ title: "Dr. Old", value: "old", subtitle: "Odontólogo · HCO" }]);
+    });
   });
 });

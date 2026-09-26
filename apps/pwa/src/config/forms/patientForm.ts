@@ -4,6 +4,7 @@ import { useConfigStore } from "../../stores/config";
 import { useAuthStore } from "../../stores/auth";
 import { identityFields } from "./identityFields";
 import { loadTerritoryOptions } from "./territoryOptions";
+import { useSpecialtyLabel } from "../../composables/useSpecialtyLabel";
 
 /**
  * Patient entity config for the generic FormRenderer. Reuses the shared
@@ -42,19 +43,37 @@ async function loadRegionOptions() {
  * already contain it keeps the display correct regardless of how many HCPs
  * exist (see the identical fix for organization_id in hcpForm.ts).
  */
+interface PractitionerOptionRow {
+  id: string;
+  name: string;
+  primary_specialty?: string | null;
+  institution?: string | null;
+}
+
+/** "Specialty · Clinic" under each doctor in the picker, so two similar names can be told apart. */
+function practitionerOption(p: PractitionerOptionRow, specialtyLabel: (code?: string | null) => string): FormFieldOption {
+  const subtitle = [specialtyLabel(p.primary_specialty), p.institution ?? ""].filter(Boolean).join(" · ");
+  return { title: p.name, value: p.id, ...(subtitle ? { subtitle } : {}) };
+}
+
 async function loadPractitionerOptions(form?: Record<string, unknown>): Promise<FormFieldOption[]> {
+  const configStore = useConfigStore();
+  if (configStore.options.specialties.length === 0) {
+    await configStore.loadOptions();
+  }
+  const specialtyLabel = useSpecialtyLabel();
   const res = await apiFetch("/api/v1/practitioner?limit=-1", { handleErrors: false });
   const json = res.ok
-    ? ((await res.json()) as { items?: { id: string; name: string }[] })
+    ? ((await res.json()) as { items?: PractitionerOptionRow[] })
     : { items: [] };
-  const options = (json.items ?? []).map((p) => ({ title: p.name, value: p.id }));
+  const options = (json.items ?? []).map((p) => practitionerOption(p, specialtyLabel));
 
   const currentId = typeof form?.practitioner_id === "string" ? form.practitioner_id.trim() : "";
   if (currentId && !options.some((o) => o.value === currentId)) {
     const hcpRes = await apiFetch(`/api/v1/practitioner/${currentId}`, { handleErrors: false });
     if (hcpRes.ok) {
-      const hcp = (await hcpRes.json()) as { id: string; name: string };
-      options.push({ title: hcp.name, value: hcp.id });
+      const hcp = (await hcpRes.json()) as PractitionerOptionRow;
+      options.push(practitionerOption(hcp, specialtyLabel));
     }
   }
 

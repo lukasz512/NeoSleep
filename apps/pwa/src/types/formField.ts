@@ -61,6 +61,12 @@ export interface FormFieldOption {
    * pill instead of plain text — see FormRenderer's `hasColorOptions()`.
    */
   color?: string;
+  /**
+   * Secondary line under the title in the dropdown list (e.g. a doctor's
+   * specialty · clinic) — only drawn by the avatar item slot
+   * (FormFieldDef.avatarEntityType). Already-resolved text, not an i18n key.
+   */
+  subtitle?: string;
 }
 
 /**
