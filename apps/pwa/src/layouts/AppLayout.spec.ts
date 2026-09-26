@@ -209,12 +209,15 @@ describe("AppLayout", () => {
       expect(shell).toContain('<slot name="app-bar-start"');
     });
 
-    it("the account menu lives in the app bar's actions slot: a drop-down on desktop, a bottom sheet on phones (NEO-102)", () => {
+    it("the account menu lives in the app bar's actions slot and grows out of the avatar button (NEO-102, NEO-122)", () => {
       const layout = readLayout();
       const block = slotBlock(layout, "app-bar-actions");
       expect(block.match(/<AppUserMenuPanel\b/g)).toHaveLength(1);
-      expect(block).toContain(':is="isMobile ? VBottomSheet : VMenu"');
-      expect(layout).toMatch(/location: "bottom end"/);
+      expect(block).toMatch(/<AppAccountMenu v-model:open="menuOpen" :mobile="isMobile"/);
+      // the motion reads these marks on the button
+      expect(block).toContain('data-motion="trigger-avatar"');
+      expect(block).toContain('data-motion="trigger-name"');
+      expect(block).toContain(':aria-expanded="accountMenuOpen"');
       expect(block).toContain("user.initials");
       expect(block).toContain(':can-change-password="user.canChangePassword"');
       expect(block).toContain(':version="appVersion.version"');

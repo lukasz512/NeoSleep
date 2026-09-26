@@ -78,26 +78,26 @@
            thumb reach. -->
       <template #app-bar-actions>
         <div ref="barActions" class="layout-bar-actions">
-          <component
-            :is="isMobile ? VBottomSheet : VMenu"
-            v-model="menuOpen"
-            v-bind="accountMenuProps"
-          >
-          <template #activator="{ props: menuProps }">
+          <!-- NEO-122: the avatar button turns into the menu (desktop: the card
+               blooms out of the avatar; phone: a sheet rises and the avatar flies
+               into it) — see AppAccountMenu + useAccountMenuMotion. -->
+          <AppAccountMenu v-model:open="menuOpen" :mobile="isMobile" :label="t('user.user.menu')">
+          <template #trigger="{ open: accountMenuOpen }">
             <AppButton
-              v-bind="menuProps"
               variant="text"
               class="layout-user-btn"
               ignore-global-loading
               :class="{ 'layout-user-btn--compact': isMobile }"
               :title="t('user.user.menu')"
               :aria-label="t('user.user.menu')"
+              aria-haspopup="dialog"
+              :aria-expanded="accountMenuOpen"
             >
               <div v-if="!isMobile" class="layout-user-info">
-                <span class="layout-user-name">{{ user.displayName }}</span>
-                <span class="layout-user-role">{{ user.role }}</span>
+                <span class="layout-user-name" data-motion="trigger-name">{{ user.displayName }}</span>
+                <span class="layout-user-role" data-motion="trigger-role">{{ user.role }}</span>
               </div>
-              <VAvatar :size="AVATAR_SIZE" color="primary">
+              <VAvatar :size="AVATAR_SIZE" color="primary" data-motion="trigger-avatar">
                 <span class="text-body-small font-weight-bold">{{ user.initials }}</span>
               </VAvatar>
             </AppButton>
@@ -121,7 +121,7 @@
             @logout="onLogout"
             @close="menuOpen = false"
           />
-          </component>
+          </AppAccountMenu>
         </div>
       </template>
 
@@ -225,8 +225,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, type ComponentPublicInstance } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { VMenu } from "vuetify/components/VMenu";
-import { VBottomSheet } from "vuetify/components/VBottomSheet";
 import { navTitleKey, navIconName, navParentName } from "../router/routes";
 import { pageTransitionsSupported } from "../router/pageTransitions";
 import {
@@ -245,6 +243,7 @@ import {
   AppLogo,
   AppNavLinks,
   AppUserMenuPanel,
+  AppAccountMenu,
   AppOfflineBar,
   AppInstallCard,
 } from "./components";
@@ -300,13 +299,6 @@ onMounted(markAppReady);
 
 const menuOpen = ref(false);
 const appVersion = useAppVersionParts();
-/** VMenu placement on desktop. On phones the sheet must rise above the bottom
- *  nav bar (MobileNavPanel sits at z-index 9998), or it hides the sheet's foot. */
-const accountMenuProps = computed(() =>
-  isMobile.value
-    ? { zIndex: 10000 }
-    :{ location: "bottom end" as const, offset: 8, closeOnContentClick: false },
-);
 
 // Views teleport their controls into the desktop page header only while it is shown.
 // NEO-113: on phones too — the header row is the card's first line (NEO-108),
