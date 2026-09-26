@@ -20,8 +20,8 @@
      user input):
        the brand-primary, brand-secondary, brand-logo, and brand-contactLine
        tokens — brand tokens, same for every render.
-       the documents.informedConsent.* tokens — title/subtitle/field labels/
-         manufacturer-checkbox labels, sourced from
+       the documents.informedConsent.* tokens — title/subtitle/field labels
+         and the partner-manufacturers sentence, sourced from
          packages/i18n/{en,pl,mx}.json via documentT() — structural copy,
          not the consent body itself.
        the content slot (.doc-content div below) — the consent body
@@ -31,11 +31,11 @@
          (p/br/strong/em/u/ul/ol/li, no attributes — see
          apps/api/src/commands/documentContent.ts). May contain a literal
          {legalEntityName}-style token, filled by fillContentParams.
-         NOTE: the manufacturer-choices checkbox block below is
-         deliberately NOT part of this content — it's structure (real
-         <input> elements), not prose — and sits directly after the content
-         block rather than mid-paragraph as in the original static layout,
-         so the whole consent body can be one contiguous edit surface.
+         NOTE: the sentence naming NeoSleep's partner manufacturers
+         (OrthoApnea, Biologix) sits right after this content, from i18n,
+         not in the admin-edited body (Łukasz, 2026-09-26: plain text, no
+         tick-boxes, no "other" option). apps/api appends the same sentence
+         to the consent text the patient reads on their phone.
 
   2. apps/api's services/documentRenderer.ts — INSIDE the real Chrome DOM,
      via page.evaluate(), once this already-localized HTML is loaded. Fills
@@ -47,8 +47,7 @@
        data-field fecha             — date
      via element.textContent (auto-escaping — safer than a string
      substitution here, since these values come from real patient/doctor
-     records, not our own authored copy). This pass also toggles the
-     manufacturer checkboxes' checked state the same way.
+     records, not our own authored copy).
 
   Firma: the sig-area element further down (data-field firma_paciente)
   is left empty for a printed copy (signed on paper). When the patient signs
@@ -131,13 +130,6 @@
 
   .doc-content strong { color: var(--primary); font-weight: 600; }
 
-  .manufacturer-choices { margin: 6px 0 14px 8px; }
-  .manufacturer-choices label { margin-right: 20px; white-space: nowrap; }
-  .manufacturer-choices input[type="checkbox"] { accent-color: var(--primary); margin-right: 4px; }
-  .manufacturer-choices input[type="text"] {
-    border: none; border-bottom: 1px solid var(--secondary);
-    font-family: var(--font); font-size: 10.5pt; width: 180px;
-  }
 
   .screen-only.contact-footer {
     font-size: 8pt;
@@ -181,14 +173,7 @@
 
   <div class="doc-content">{{content}}</div>
 
-  <div class="manufacturer-choices">
-    <label><input type="checkbox" name="fabricante" value="OrthoApnea" checked /> {{documents.informedConsent.manufacturerOrthoApnea}}</label>
-    <label><input type="checkbox" name="fabricante" value="Biologix" checked /> {{documents.informedConsent.manufacturerBiologix}}</label>
-    <label>
-      <input type="checkbox" name="fabricante" value="otro" />
-      {{documents.informedConsent.manufacturerOther}} <input type="text" name="fabricante_otro" />
-    </label>
-  </div>
+  <p class="doc-manufacturers">{{documents.informedConsent.manufacturers}}</p>
 
 
   <div class="sig-panels"><div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.informedConsent.signatureLabel}}</div><div id="firma-paciente" class="sig-area" data-field="firma_paciente"></div><dl class="sig-details"><div><dt>{{documents.signature.name}}</dt><dd data-field="nombre_paciente"></dd></div><div><dt>{{documents.signature.date}}</dt><dd data-field="fecha"></dd></div></dl><div class="sig-e-note">{{documents.signature.eSigned}}</div></div></div></div>

@@ -17,7 +17,7 @@ import { listPatientChecklistConfig } from "../db/documentTemplateEntityType.js"
 import { GetPatientChecklistQuery } from "../queries/patientChecklist.js";
 import { GetCurrentDocumentContentQuery } from "../queries/documentContent.js";
 import { sanitizeDocumentContentHtml } from "./documentContent.js";
-import { renderDocumentHtml, renderDocumentFooterHtml, getDocumentRefCode, fillContentForLocale, DOCUMENT_MANIFEST } from "@neo/documents";
+import { renderDocumentHtml, renderDocumentFooterHtml, getDocumentRefCode, fillContentForLocale, documentT, DOCUMENT_MANIFEST } from "@neo/documents";
 import { renderHtmlToPdf } from "../services/documentRenderer.js";
 import { uploadPartnerDocument, deletePartnerDocument } from "../services/partnerDocuments.js";
 import { hashToken } from "../utils/hashToken.js";
@@ -196,7 +196,10 @@ function documentLocale(templateKey: string, preferred: unknown): string {
 async function consentText(templateKey: string, locale: string): Promise<{ html: string; versionId: string } | null> {
   try {
     const version = await GetCurrentDocumentContentQuery(templateKey, locale);
-    return { html: sanitizeDocumentContentHtml(fillContentForLocale(version.content_html, locale)), versionId: version.id };
+    let html = fillContentForLocale(version.content_html, locale);
+    // The informed consent names NeoSleep's partner manufacturers right after its body — same sentence as the PDF (informedConsent.html).
+    if (templateKey === "informedConsent") html += `<p>${documentT(locale, "documents.informedConsent.manufacturers")}</p>`;
+    return { html: sanitizeDocumentContentHtml(html), versionId: version.id };
   } catch (err) {
     if (err instanceof NotFoundError) return null;
     throw err;

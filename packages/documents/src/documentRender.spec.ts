@@ -191,6 +191,12 @@ describe("document system (header, title, banner, sections, signatures, footer)"
     expect(mx).not.toContain("Ciudad de México"); // the clinic replaces NeoSleep's own contact
   });
 
+  it("informed consent names the partner manufacturers as plain text, no tick-boxes", () => {
+    const html = renderDocumentHtml("informedConsent", "mx");
+    expect(html).toContain("Los dispositivos que utilizamos son fabricados por los socios de NeoSleep: OrthoApnea y Biologix.");
+    expect(html).not.toContain('type="checkbox"');
+  });
+
   it("footer escapes names typed into the app", () => {
     const html = renderDocumentFooterHtml("NSL-SB v1", "mx", { subject: '<img src=x onerror="alert(1)">', issuer: ["A & B <Clinic>"] });
     expect(html).not.toContain("<img");
