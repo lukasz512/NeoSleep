@@ -54,9 +54,11 @@ describe("ChoiceChipsField", () => {
     expect(w.emitted("update:modelValue")).toEqual([["male"], ["other"]]);
   });
 
-  it("a picked secondary option replaces the 'more' button as the checked chip, the others shrink to their symbol", () => {
+  it("a picked secondary option shows in the same 'more' segment (so its growth animates), the others shrink to their symbol", () => {
     const w = mountField("prefer_not_to_say");
-    expect(w.find(".choice-chips-field__more").exists()).toBe(false);
+    const more = w.find(".choice-chips-field__more");
+    expect(more.classes()).toContain("is-selected");
+    expect(more.attributes("aria-label")).toBeUndefined();
     const checked = w.findAll("[role=radio][aria-checked=true]");
     expect(checked).toHaveLength(1);
     expect(checked[0].text()).toBe("Prefer not to say");
