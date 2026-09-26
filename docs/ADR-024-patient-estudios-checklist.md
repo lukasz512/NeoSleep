@@ -110,10 +110,10 @@ If tx2 fails, or a concurrent submit already signed the step, the upload is dele
 signed PDF is left behind.
 
 ### 6. Roles and schema
-- Every checklist, print, upload, questionnaire, sleep-study and document-download route requires
-  `requireStudyRole` (admin + doctor + **manager**, Łukasz 2026-09-26, NEO-83). Only the Documents
-  tab list (`GET /patient/:id/documents`) keeps `requireClinicalRole` (admin + doctor), and a sleep
-  study's hard delete stays admin-only. Rep, KAM and MSL get none of it. The patient must also pass
+- Every checklist, print, upload, questionnaire, sleep-study and document route, including the
+  Documents tab list (`GET /patient/:id/documents`), requires `requireStudyRole` (admin + doctor +
+  **manager**, Łukasz 2026-09-26, NEO-83; he chose to open the Documents tab too). A sleep study's
+  hard delete stays admin-only. Rep, KAM and MSL get none of it. The patient must also pass
   the territory check in `GetPatientByIdQuery`.
 - **Every read is audited.** Managers are not clinicians, so opening Art. 9 data to them needs an
   access trail (GDPR Art. 5(2) accountability, Art. 32; LFPDPPP). Each successful health-data read
@@ -123,8 +123,8 @@ signed PDF is left behind.
   leaves them out (`getAuditLogForEntities`).
 - The OrthoApnea tab needs a sleep-study id for other roles. It gets one from
   `GET /patient/:id/sleep-study-ref`, which returns the id only.
-- The PWA mirrors this per tab: Studies and the Details "Estudios" card for `STUDY_ROLES`, Documents
-  for `CLINICAL_ROLES` (`apps/pwa/src/config/questionnaires.ts`).
+- The PWA mirrors this per tab: Studies, Documents and the Details "Estudios" card for `STUDY_ROLES`
+  (`apps/pwa/src/config/questionnaires.ts`).
 - `create_tenant_schema()` is regenerated with `scripts/generate-create-tenant-schema.ts`, as in
   ADR-023 §4. The CI parity job enforces this.
 
@@ -144,7 +144,7 @@ signed PDF is left behind.
   written consent for sensitive data; GDPR Art. 9(2)(a) for PL). Counsel still has to sign it off
   before real patients use it, and the clinic, as data controller, needs its own aviso de
   privacidad.
-- **Open (legal, NEO-83).** In the same counsel review: manager access to patient studies. What
+- **Open (legal, NEO-83).** In the same counsel review: manager access to patient studies and documents (Łukasz confirmed he wants it, 2026-09-26). What
   counsel has to confirm: (1) the purpose and legal basis for a non-clinician processing Art. 9 data
   (GDPR Art. 9(2)(h) + 9(3) requires a person under a duty of secrecy; LFPDPPP needs the purpose
   named in the aviso de privacidad); (2) a written confidentiality obligation for every manager
