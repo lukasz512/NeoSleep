@@ -68,12 +68,6 @@ const css = `
   background-size: 400% 400%;
   opacity: 0.72;
 }
-/* Card box the small orb hugs — same defaults as AuthOrbs' --auth-orbs-card-* variables. */
-#${BOOT_SPLASH_ID} {
-  --bs-card-top: calc(max(16px, env(safe-area-inset-top)) + clamp(24px, 10vh, 96px) + 115px);
-  --bs-card-width: min(420px, calc(100% - 64px));
-  --bs-card-height: 440px;
-}
 .boot-splash__orb {
   position: absolute;
   aspect-ratio: 1;
@@ -99,18 +93,14 @@ const css = `
   border: 1px solid rgb(255 255 255 / 0.7);
   border-radius: 50%;
 }
-/* Asymmetric composition (NEO-103) — same geometry as AuthOrbs.vue, keep the two in sync. */
+/* Asymmetric composition (NEO-103) — same geometry as AuthOrbs.vue, keep the two in sync.
+   No small orb: its spot on the big orb's ring is computed in JS, so AuthOrbs
+   pops it in after the takeover. */
 .boot-splash__orb--big { --bs-size: 80vmax; left: 80%; top: 90%; --bs-drift-y: 22px; }
 .boot-splash__orb--medium {
   --bs-size: 33.6vmax; left: 20%; top: 18%; --bs-drift-y: 16px;
   background: color-mix(in srgb, var(--bs-primary) 55%, white 45%);
   animation-duration: 610ms, 1.3s; animation-delay: 89ms, -0.45s;
-}
-.boot-splash__orb--small {
-  --bs-size: 16vmax; --bs-drift-y: 12px;
-  left: calc(50% - var(--bs-card-width) * 0.62);
-  top: calc(var(--bs-card-top) + var(--bs-card-height) * 0.82);
-  animation-duration: 610ms, 1.1s; animation-delay: 233ms, -0.75s;
 }
 @keyframes boot-splash-pop {
   from { transform: scale(0); }
@@ -153,7 +143,6 @@ const markup = `
   </div>
   <span class="boot-splash__orb boot-splash__orb--big"></span>
   <span class="boot-splash__orb boot-splash__orb--medium"></span>
-  <span class="boot-splash__orb boot-splash__orb--small"></span>
 </div>`;
 
 /** Marks bundle stylesheets that were turned into non-blocking preloads (see deferBundleCss). */

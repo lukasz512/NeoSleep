@@ -6,10 +6,13 @@
        checking the session (see AuthBackdrop).
        Composition (NEO-103, "Fale delta"): asymmetric, rule of thirds — the big
        orb bleeds off the bottom-right corner, the medium one sits under the
-       logo, only the small one follows the card (its lower-left corner).
+       logo, and the small one is the big one's "moon": it sits on the big
+       orb's orbit ring just past the card's right edge (authOrbGeometry.ts)
+       and sways along it. Dropped where the ring doesn't reach (phones).
        Layers per orb, each owning exactly one transform so none of them ever
        fight over the same property:
          anchor  → static position + pop-in / exit-expand keyframes (CSS)
+         orbit   → per-frame sway along the big orb's ring, moon only (JS)
          drift   → slow elliptical sway, x and y as two layers (CSS)
          breath  → per-frame scale + opacity from the breathing loop (JS)
          orb     → per-frame magnetic-pointer translate (useMagneticPointer) -->
@@ -18,8 +21,13 @@
       v-for="(orb, index) in ORBS"
       :key="orb.key"
       class="auth-orbs__anchor"
-      :class="[`auth-orbs__anchor--${orb.key}`, anchorPhaseClass(phases[index])]"
+      :class="[
+        `auth-orbs__anchor--${orb.key}`,
+        anchorPhaseClass(phases[index], orb.key),
+        { 'auth-orbs__anchor--absent': orb.key === 'small' && !moon.visible },
+      ]"
     >
+      <div :ref="(el) => orb.key === 'small' && setElement(orbitRef, el)" class="auth-orbs__orbit">
       <div class="auth-orbs__drift-x">
         <div class="auth-orbs__drift-y">
           <div :ref="(el) => setElement(breathRefs[index], el)" class="auth-orbs__breath">
@@ -30,6 +38,7 @@
           </div>
         </div>
       </div>
+      </div>
     </div>
   </div>
 </template>
@@ -37,6 +46,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance, type Ref } from "vue";
 import { useMagneticPointer } from "../composables/useMagneticPointer";
+import { moonOffset, placeMoon, type MoonPlacement } from "../composables/authOrbGeometry";
 
 const { busy = false, anchor = null, instant = false } = defineProps<{
   /** Any loading in progress (session check, sign-in, reset…) — breathing speeds up while true. */
@@ -127,10 +137,12 @@ function setElement(target: Ref<HTMLElement | null>, el: Element | ComponentPubl
 // ── Pop-in / exit ───────────────────────────────────────────────────────────
 const phases = ref<OrbPhase[]>(ORBS.map(() => "hidden"));
 
-function anchorPhaseClass(phase: OrbPhase): Record<string, boolean> {
+// The boot splash paints only the big and medium orbs (the moon's spot needs
+// JS), so on a takeover the moon still pops in rather than starting at rest.
+function anchorPhaseClass(phase: OrbPhase, key: OrbKey): Record<string, boolean> {
   return {
     "auth-orbs__anchor--enter": phase === "enter",
-    "auth-orbs__anchor--instant": phase === "enter" && instant,
+    "auth-orbs__anchor--instant": phase === "enter" && instant && key !== "small",
     "auth-orbs__anchor--exit": phase === "exit",
   };
 }
@@ -199,6 +211,12 @@ function nextJitter(): number {
 }
 
 const breathState = ORBS.map((orb) => ({ phase: orb.phaseOffset, jitter: nextJitter() }));
+
+// The moon sways ±MOON_SWAY radians along the ring, one swing per
+// MOON_SWAY_PERIOD, and follows the big orb's breath so it stays on the ring.
+const MOON_SWAY = (4 * Math.PI) / 180;
+const MOON_SWAY_PERIOD = 33000;
+const orbitRef = ref<HTMLElement | null>(null);
 let mix = busy ? 1 : 0;
 let lastFrame = 0;
 let rafId = 0;
@@ -211,6 +229,7 @@ function tick(now: number): void {
   const amplitude = lerp(SCALE_AMPLITUDE.idle, SCALE_AMPLITUDE.busy, mix);
   const opacityLow = lerp(OPACITY_RANGE.idle[0], OPACITY_RANGE.busy[0], mix);
   const opacityHigh = lerp(OPACITY_RANGE.idle[1], OPACITY_RANGE.busy[1], mix);
+  let bigScale = 1;
 
   ORBS.forEach((orb, index) => {
     const state = breathState[index];
@@ -225,6 +244,7 @@ function tick(now: number): void {
     if (!el) return;
     const f = breathCurve(state.phase);
     el.style.transform = `scale(${(1 + amplitude * f).toFixed(4)})`;
+    if (orb.key === "big") bigScale = 1 + amplitude * f;
     el.style.opacity = lerp(opacityLow, opacityHigh, f).toFixed(3);
 
     // One wave per beat, launched at the start of each inhale, fading out as
@@ -238,6 +258,13 @@ function tick(now: number): void {
     ripple.style.opacity = (strength * RIPPLE_OPACITY * (1 - state.phase) ** 2).toFixed(3);
   });
 
+  const orbit = orbitRef.value;
+  if (orbit && moon.value.visible) {
+    const sway = MOON_SWAY * Math.sin((now / MOON_SWAY_PERIOD) * Math.PI * 2);
+    const offset = moonOffset(moon.value, sway, bigScale);
+    orbit.style.transform = `translate(${offset.x.toFixed(2)}px, ${offset.y.toFixed(2)}px)`;
+  }
+
   rafId = requestAnimationFrame(tick);
 }
 
@@ -249,9 +276,8 @@ onMounted(() => {
 onBeforeUnmount(() => cancelAnimationFrame(rafId));
 
 // ── Alignment behind the anchor ─────────────────────────────────────────────
-// Only the small orb follows the card: its anchor is positioned from the
-// --auth-orbs-card-* variables set here from the anchor element's box — but
-// only its position/width live. Its height is
+// The moon (small orb) is placed next to the card's right edge, from the
+// anchor element's box measured here — but only its position/width live. Its height is
 // frozen at the first non-zero reading: the auth card animates its own height
 // on every step change (signin ↔ forgot ↔ reset), and tracking that live would
 // drag the orbs along with each transition instead of leaving them planted.
@@ -263,6 +289,7 @@ interface FrameRect {
 }
 
 const frameRect = ref<FrameRect | null>(null);
+const viewport = ref({ width: 0, height: 0 });
 let frozenHeight: number | null = null;
 let anchorObserver: ResizeObserver | null = null;
 let settleTimer = 0;
@@ -271,12 +298,14 @@ let settleTimer = 0;
 const SETTLE_REMEASURE_DELAY = 450;
 
 function measure(): void {
-  const el = anchor;
   const root = rootEl.value;
-  if (!el || !root) return;
+  if (!root) return;
+  const rootRect = root.getBoundingClientRect();
+  viewport.value = { width: rootRect.width, height: rootRect.height };
+  const el = anchor;
+  if (!el) return;
   const rect = el.getBoundingClientRect();
   if (!rect.height) return;
-  const rootRect = root.getBoundingClientRect();
   frozenHeight ??= rect.height;
   frameRect.value = {
     top: rect.top - rootRect.top,
@@ -304,21 +333,38 @@ watch(
   { flush: "post" },
 );
 
-onMounted(() => window.addEventListener("resize", measure));
+onMounted(() => {
+  measure();
+  window.addEventListener("resize", measure);
+});
 onBeforeUnmount(() => {
   window.removeEventListener("resize", measure);
   anchorObserver?.disconnect();
   window.clearTimeout(settleTimer);
 });
 
-const rootStyle = computed(() => {
+// Before the card is measured, the moon uses the same default card box as
+// the boot splash / the view's layout: 420px wide at most, under the logo block.
+const DEFAULT_CARD_TOP = 16 + 115;
+const DEFAULT_CARD_MAX_WIDTH = 420;
+
+const moon = computed<MoonPlacement>(() => {
+  const { width, height } = viewport.value;
   const rect = frameRect.value;
-  if (!rect) return undefined;
+  const card = rect
+    ? { top: rect.top, right: rect.centerX + rect.width / 2 }
+    : {
+        top: DEFAULT_CARD_TOP + Math.min(96, Math.max(24, height * 0.1)),
+        right: width / 2 + Math.min(DEFAULT_CARD_MAX_WIDTH, width - 64) / 2,
+      };
+  return placeMoon(width, height, card);
+});
+
+const rootStyle = computed(() => {
+  if (!moon.value.visible) return undefined;
   return {
-    "--auth-orbs-card-top": `${rect.top}px`,
-    "--auth-orbs-card-center-x": `${rect.centerX}px`,
-    "--auth-orbs-card-width": `${rect.width}px`,
-    "--auth-orbs-card-height": `${rect.height}px`,
+    "--auth-orbs-moon-x": `${moon.value.x}px`,
+    "--auth-orbs-moon-y": `${moon.value.y}px`,
   };
 });
 
@@ -332,20 +378,6 @@ defineExpose({ whenEntered, playExit, replay });
   z-index: 0;
   overflow: hidden;
   pointer-events: none;
-}
-
-/* Card geometry the small orb follows (set live from the anchor, see
-   rootStyle). The defaults (before/without an anchor) mirror where AuthView's
-   card slot lands: layout padding + the view's own top offset + the logo block
-   above the card (AuthChrome: 20px margin + 90px + -11px, then the 16px gap),
-   420px wide at most — so the small orb is already where the card will appear
-   while the session check runs, and barely moves once the real anchor is
-   measured. Same numbers as the boot splash (apps/pwa/src/boot/splash.ts). */
-.auth-orbs {
-  --auth-orbs-card-top: calc(max(16px, env(safe-area-inset-top)) + clamp(24px, 10vh, 96px) + 115px);
-  --auth-orbs-card-center-x: 50%;
-  --auth-orbs-card-width: min(420px, calc(100% - 64px));
-  --auth-orbs-card-height: 440px;
 }
 
 /* Every anchor is centered on its left/top point by negative margins of half
@@ -382,17 +414,29 @@ defineExpose({ whenEntered, playExit, replay });
   --auth-orbs-drift-period: 55s;
 }
 
-/* Hugs the card's lower-left corner — the one orb that follows the card. */
+/* The big orb's moon, on its orbit ring next to the card's right edge (spot
+   computed in JS, see `moon`). Same drift as the big orb, in lockstep, so the
+   two sway as one body and the moon never slides off the ring. */
 .auth-orbs__anchor--small {
   --auth-orbs-size: 16vmax;
-  left: calc(var(--auth-orbs-card-center-x) - var(--auth-orbs-card-width) * 0.62);
-  top: calc(var(--auth-orbs-card-top) + var(--auth-orbs-card-height) * 0.82);
-  --auth-orbs-drift-x: 14px;
-  --auth-orbs-drift-y: 12px;
-  --auth-orbs-drift-period: 33s;
+  left: var(--auth-orbs-moon-x, 70%);
+  top: var(--auth-orbs-moon-y, 14%);
+  --auth-orbs-drift-x: 30px;
+  --auth-orbs-drift-y: 22px;
+  --auth-orbs-drift-period: 40s;
   transition:
     left 0.7s cubic-bezier(0.22, 1, 0.36, 1),
     top 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.auth-orbs__anchor--absent {
+  display: none;
+}
+
+.auth-orbs__orbit {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
 }
 
 /* Slow elliptical sway: x and y are separate layers, each a sine-eased
