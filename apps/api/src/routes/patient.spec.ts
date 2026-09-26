@@ -249,6 +249,51 @@ describe("patient self-fill: doctor → QR link → patient (public) → doctor"
     const lookup = await request(app).post("/api/v1/public/questionnaire/lookup").send({ token: oldToken });
     expect(lookup.status).toBe(410);
   });
+
+  it("the checklist reports a link that ran out unused as expired_request, until a newer link supersedes it (NEO-93)", async () => {
+    const { auth, patientId } = await authAndPatient();
+    const link = await request(app).post(`/api/v1/patient/${patientId}/questionnaire-requests`).set("Authorization", auth).send({ kind: "medical_history" });
+    await withTenant(TENANT_SLUG, (client) => client.query(`UPDATE questionnaire_request SET expires_at = now() - interval '1 hour' WHERE id = $1`, [link.body.id]));
+
+    const expired = await request(app).get(`/api/v1/patient/${patientId}/checklist`).set("Authorization", auth);
+    expect(expired.body.pending_requests).toEqual([]);
+    expect(expired.body.expired_request).toMatchObject({ id: link.body.id, status: "expired" });
+
+    const fresh = await request(app).post(`/api/v1/patient/${patientId}/questionnaire-requests`).set("Authorization", auth).send({ kind: "medical_history" });
+    const after = await request(app).get(`/api/v1/patient/${patientId}/checklist`).set("Authorization", auth);
+    expect(after.body.expired_request).toBeNull();
+    expect(after.body.pending_requests.map((r: { id: string }) => r.id)).toEqual([fresh.body.id]);
+  });
+
+  it("a cancelled link is not reported as expired", async () => {
+    const { auth, patientId } = await authAndPatient();
+    const link = await request(app).post(`/api/v1/patient/${patientId}/questionnaire-requests`).set("Authorization", auth).send({ kind: "medical_history" });
+    await request(app).delete(`/api/v1/patient/${patientId}/questionnaire-requests/${link.body.id}`).set("Authorization", auth);
+    await withTenant(TENANT_SLUG, (client) => client.query(`UPDATE questionnaire_request SET expires_at = now() - interval '1 hour' WHERE id = $1`, [link.body.id]));
+
+    const checklist = await request(app).get(`/api/v1/patient/${patientId}/checklist`).set("Authorization", auth);
+    expect(checklist.body.expired_request).toBeNull();
+  });
+
+  it("creating a link deletes the tenant's links that died over 30 days ago, and keeps younger ones (NEO-93)", async () => {
+    const old = await authAndPatient();
+    const recent = await authAndPatient();
+    const oldLink = await request(app).post(`/api/v1/patient/${old.patientId}/questionnaire-requests`).set("Authorization", old.auth).send({ kind: "medical_history" });
+    const recentLink = await request(app).post(`/api/v1/patient/${recent.patientId}/questionnaire-requests`).set("Authorization", recent.auth).send({ kind: "medical_history" });
+    await withTenant(TENANT_SLUG, async (client) => {
+      await client.query(`UPDATE questionnaire_request SET expires_at = now() - interval '31 days' WHERE id = $1`, [oldLink.body.id]);
+      await client.query(`UPDATE questionnaire_request SET expires_at = now() - interval '29 days' WHERE id = $1`, [recentLink.body.id]);
+    });
+
+    const other = await authAndPatient();
+    const created = await request(app).post(`/api/v1/patient/${other.patientId}/questionnaire-requests`).set("Authorization", other.auth).send({ kind: "medical_history" });
+    expect(created.status).toBe(201);
+
+    const left = await withTenant(TENANT_SLUG, (client) =>
+      client.query<{ id: string }>(`SELECT id FROM questionnaire_request WHERE id = ANY($1::uuid[])`, [[oldLink.body.id, recentLink.body.id]])
+    );
+    expect(left.rows.map((r) => r.id)).toEqual([recentLink.body.id]);
+  });
 });
 
 describe("/api/v1/patient/:id/checklist + print + uploads (Estudios, ADR-024)", () => {

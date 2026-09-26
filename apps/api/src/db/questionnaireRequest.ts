@@ -134,6 +134,37 @@ export function completeQuestionnaireStep(client: PoolClient, id: string, item: 
   });
 }
 
+/**
+ * The patient's newest link, when it simply ran out (not used, not
+ * cancelled) — the Estudios QR button shows "link expired" for it (NEO-93).
+ * A newer link of any status supersedes it.
+ */
+export function getLatestExpiredQuestionnaireRequestForPatient(client: PoolClient, patientId: string): Promise<QuestionnaireRequest | null> {
+  return run("getLatestExpiredQuestionnaireRequestForPatient", async () => {
+    const result = await client.query<QuestionnaireRequest & { status: QuestionnaireRequestStatus }>(
+      `SELECT ${COLS} FROM questionnaire_request WHERE patient_id = $1 ORDER BY created_at DESC LIMIT 1`,
+      [patientId]
+    );
+    const latest = result.rows[0];
+    return latest?.status === "expired" ? latest : null;
+  });
+}
+
+/**
+ * Garbage collection (NEO-93): a link is dead 24 h after creation at the
+ * latest; keep dead rows `retentionDays` past expiry (the "expired" state,
+ * debugging), then delete them. The audit_log keeps who created which link
+ * for whom; records that came in through one keep their data (request_id →
+ * NULL). Runs tenant-wide on every new link, so garbage can only build up
+ * while links are being made — no external scheduler needed.
+ */
+export function purgeDeadQuestionnaireRequests(client: PoolClient, retentionDays: number): Promise<number> {
+  return run("purgeDeadQuestionnaireRequests", async () => {
+    const result = await client.query(`DELETE FROM questionnaire_request WHERE expires_at < now() - make_interval(days => $1)`, [retentionDays]);
+    return result.rowCount ?? 0;
+  });
+}
+
 /** Pending links only — completed ones already show up as their resulting records, expired/cancelled ones are noise. */
 export function listPendingQuestionnaireRequestsForPatient(client: PoolClient, patientId: string): Promise<QuestionnaireRequest[]> {
   return run("listPendingQuestionnaireRequestsForPatient", async () => {

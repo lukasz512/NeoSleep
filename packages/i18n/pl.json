@@ -979,6 +979,8 @@
   "app.clinical.qrStatus.waiting": "{done} z {total} · wygasa za {time}",
   "app.clinical.qrStatus.done": "Wszystko odebrane",
   "app.clinical.qrStatus.retry": "Spróbuj ponownie",
+  "app.clinical.qrStatus.newQr": "Nowy QR",
+  "app.clinical.qrStatus.expired": "Link wygasł {time}",
   "app.clinical.qrStatus.details": "Szczegóły linku",
   "app.clinical.qrStatus.cancelConfirm": "Anulować link? Pacjent nie będzie mógł go już otworzyć.",
   "app.clinical.qrStatus.keep": "Nie, zostaw",

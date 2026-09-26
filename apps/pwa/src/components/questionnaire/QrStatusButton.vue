@@ -62,13 +62,16 @@ import type { PendingRequest } from "../../composables/usePatientChecklist";
  * patient's one live link (NEO-93, variant B — Łukasz, 2026-09-26): idle →
  * creating → waiting "x of n · expires in hh:mm:ss" with the background
  * filling as steps come in → "All received" for a moment → hidden once the
- * patient has nothing left. A failed create turns it into "Retry". The ⋯
+ * patient has nothing left. A link that ran out unused turns it into "New
+ * QR · link expired …"; a failed create into "Retry". The ⋯
  * segment holds the steps, "Show QR again" and "Cancel link" (confirmed
  * inline). Replaces the separate "Waiting for the patient" banner.
  */
 const props = defineProps<{
   /** The patient's live link (the API keeps at most one). */
   request: PendingRequest | null;
+  /** The newest link when it ran out unused. */
+  expired: PendingRequest | null;
   /** Something is still the patient's to fill — otherwise the button hides. */
   available: boolean;
   creating: boolean;
@@ -97,16 +100,20 @@ let ticker: ReturnType<typeof setInterval> | undefined;
 const remainingMs = computed(() => (props.request ? new Date(props.request.expires_at).getTime() - now.value : 0));
 const liveRequest = computed(() => (props.request && remainingMs.value > 0 ? props.request : null));
 
-type State = "hidden" | "idle" | "creating" | "waiting" | "done" | "error";
+/** Ran out unused — from the API, or the live link's countdown just hit zero on screen. */
+const expiredRequest = computed(() => props.expired ?? (props.request && remainingMs.value <= 0 ? props.request : null));
+
+type State = "hidden" | "idle" | "creating" | "waiting" | "done" | "error" | "expired";
 const state = computed<State>(() => {
   if (props.creating) return "creating";
   if (liveRequest.value) return "waiting";
   if (doneFlash.value) return "done";
   if (props.failed) return "error";
-  return props.available ? "idle" : "hidden";
+  if (!props.available) return "hidden";
+  return expiredRequest.value ? "expired" : "idle";
 });
 const live = computed(() => state.value === "waiting");
-const isAction = computed(() => state.value === "idle" || state.value === "error");
+const isAction = computed(() => state.value === "idle" || state.value === "error" || state.value === "expired");
 
 const total = computed(() => props.request?.items.length ?? 0);
 const done = computed(() => props.request?.completed_items.length ?? 0);
@@ -124,6 +131,7 @@ const ICONS: Record<Exclude<State, "hidden">, AppIconName> = {
   waiting: "clock",
   done: "check",
   error: "alert-circle",
+  expired: "refresh",
 };
 const icon = computed(() => ICONS[state.value === "hidden" ? "idle" : state.value]);
 
@@ -137,6 +145,8 @@ const title = computed(() => {
       return t("app.clinical.qrStatus.done");
     case "error":
       return t("app.clinical.qrStatus.retry");
+    case "expired":
+      return t("app.clinical.qrStatus.newQr");
     default:
       return t("app.clinical.bundleQr");
   }
@@ -144,6 +154,9 @@ const title = computed(() => {
 const subtitle = computed(() => {
   if (state.value === "waiting") return t("app.clinical.qrStatus.waiting", { done: done.value, total: total.value, time: countdown.value });
   if (state.value === "error") return t("app.clinical.qr.createError");
+  if (state.value === "expired" && expiredRequest.value) {
+    return t("app.clinical.qrStatus.expired", { time: props.formatDateTime(expiredRequest.value.expires_at) });
+  }
   return "";
 });
 const ariaLabel = computed(() => [title.value, subtitle.value].filter(Boolean).join(" — "));
@@ -157,7 +170,7 @@ const fillWidth = computed(() => {
 
 function onMain() {
   if (state.value === "waiting") onShowAgain();
-  else if (state.value === "idle" || state.value === "error") emit("create");
+  else if (isAction.value) emit("create");
 }
 /** A fresh link for what's left — the token of the old one is never stored, so it can't be re-shown. */
 function onShowAgain() {
@@ -236,6 +249,12 @@ onBeforeUnmount(() => {
   --qr-bg: rgb(var(--v-theme-success));
   --qr-fg: rgb(var(--v-theme-on-success));
   --qr-border: rgb(var(--v-theme-success));
+}
+.qr-status--expired {
+  --qr-bg: rgb(var(--v-theme-surface));
+  --qr-fg: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  --qr-border: rgba(var(--v-theme-on-surface), 0.35);
+  --qr-border-style: dashed;
 }
 .qr-status--error {
   --qr-bg: rgba(var(--v-theme-error), 0.08);

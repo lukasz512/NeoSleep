@@ -89,6 +89,8 @@ export interface PatientChecklist {
   items: ChecklistItem[];
   other_uploads: ChecklistHistoryEntry[];
   pending_requests: PendingRequest[];
+  /** The newest link when it ran out unused — the QR button's "link expired" state (NEO-93). */
+  expired_request: PendingRequest | null;
   summary: { done: number; total: number };
 }
 

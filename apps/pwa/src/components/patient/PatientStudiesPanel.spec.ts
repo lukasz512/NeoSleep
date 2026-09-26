@@ -264,6 +264,21 @@ describe("PatientStudiesPanel — the Estudios checklist", () => {
     expect(wrapper.find(".studies__pending").exists()).toBe(false);
   });
 
+  it("a link that ran out unused shows 'New QR · Link expired …', and pressing it creates a fresh link", async () => {
+    checklistBody.expired_request = { id: "qr-0", items: ["informedConsent", "stopBang"], completed_items: [], expires_at: "2026-09-20T10:00:00Z" };
+    const wrapper = await mountPanel();
+    const status = wrapper.find(".qr-status");
+    expect(status.attributes("data-state")).toBe("expired");
+    expect(status.text()).toContain("New QR");
+    expect(status.text()).toContain("Link expired");
+
+    checklistBody.expired_request = null;
+    await button(wrapper, "New QR")!.trigger("click");
+    await flushPromises();
+    expect(apiFetch.mock.calls.some(([path, i]) => String(path).endsWith("/questionnaire-requests") && (i as RequestInit)?.method === "POST")).toBe(true);
+    expect(wrapper.find(".qr-status").attributes("data-state")).toBe("waiting");
+  });
+
   it("a failed link turns the QR button into Retry, and Retry creates the link", async () => {
     failCreate = true;
     const wrapper = await mountPanel();

@@ -979,6 +979,8 @@
   "app.clinical.qrStatus.waiting": "{done} de {total} · vence en {time}",
   "app.clinical.qrStatus.done": "Todo recibido",
   "app.clinical.qrStatus.retry": "Reintentar",
+  "app.clinical.qrStatus.newQr": "Nuevo QR",
+  "app.clinical.qrStatus.expired": "El enlace venció {time}",
   "app.clinical.qrStatus.details": "Detalles del enlace",
   "app.clinical.qrStatus.cancelConfirm": "¿Cancelar el enlace? El paciente ya no podrá abrirlo.",
   "app.clinical.qrStatus.keep": "No, mantener",

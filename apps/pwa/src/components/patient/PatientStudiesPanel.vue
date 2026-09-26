@@ -87,6 +87,7 @@
           <QrStatusButton
             class="studies__qr"
             :request="checklist.pending_requests[0] ?? null"
+            :expired="checklist.expired_request ?? null"
             :available="patientCanStillDoSomething"
             :creating="qrCreating"
             :failed="qrFailed"
