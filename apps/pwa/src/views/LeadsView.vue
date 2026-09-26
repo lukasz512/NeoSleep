@@ -491,6 +491,7 @@ async function onLeadSubmit(data: Record<string, unknown>, done: (ok: boolean) =
           body: JSON.stringify(data),
         }),
       successMessage: t("user.leads.form.success"),
+      openCreated: "lead-detail",
       icon: "nav-leads",
       errorMessage: t("user.leads.form.errorSave"),
     },

@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
-import { useEntitySubmit } from "./useEntitySubmit";
+import { defineComponent, h } from "vue";
+import { mount } from "@vue/test-utils";
+import { createMemoryHistory, createRouter } from "vue-router";
+import { useEntitySubmit, type EntitySubmitResult } from "./useEntitySubmit";
 import { useNotifications } from "./useNotifications";
 
 function okResponse(): Response {
@@ -146,5 +149,62 @@ describe("useEntitySubmit", () => {
     expect(current.value?.type).toBe("error");
     dismissCurrent();
     expect(done).toHaveBeenCalledWith(false);
+  });
+});
+
+describe("useEntitySubmit — openCreated (NEO-119)", () => {
+  function createdResponse(body: unknown): EntitySubmitResult {
+    return { ok: true, status: 201, clone: () => ({ json: async () => body }) };
+  }
+
+  async function mountWithRouter() {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: "/patients", name: "patients", component: { render: () => h("div") } },
+        { path: "/patients/:id", name: "patient-detail", component: { render: () => h("div") } },
+      ],
+    });
+    await router.push("/patients");
+    let api!: ReturnType<typeof useEntitySubmit>;
+    mount(
+      defineComponent({
+        setup() {
+          api = useEntitySubmit();
+          return () => h("div");
+        },
+      }),
+      { global: { plugins: [router] } },
+    );
+    return { router, submit: api.submit };
+  }
+
+  const base = { successMessage: "Saved", errorMessage: "Failed", icon: "nav-patients" as const };
+
+  it("opens the new record's page after a successful create, after done(true)", async () => {
+    const { router, submit } = await mountWithRouter();
+    const seen: string[] = [];
+    await submit(
+      { ...base, openCreated: "patient-detail", request: async () => createdResponse({ id: "p-42", name: "María" }) },
+      (ok) => seen.push(`done:${ok}:${router.currentRoute.value.fullPath}`),
+    );
+    expect(seen).toEqual(["done:true:/patients"]);
+    expect(router.currentRoute.value.fullPath).toBe("/patients/p-42");
+    useNotifications().dismissCurrent();
+  });
+
+  it("stays put without openCreated (edits, creates from other flows)", async () => {
+    const { router, submit } = await mountWithRouter();
+    await submit({ ...base, request: async () => createdResponse({ id: "p-42" }) }, vi.fn());
+    expect(router.currentRoute.value.fullPath).toBe("/patients");
+    useNotifications().dismissCurrent();
+  });
+
+  it("stays put when the save fails or the response has no id", async () => {
+    const { router, submit } = await mountWithRouter();
+    await submit({ ...base, openCreated: "patient-detail", request: async () => ({ ok: false }) }, vi.fn());
+    await submit({ ...base, openCreated: "patient-detail", request: async () => createdResponse({ saved: true }) }, vi.fn());
+    expect(router.currentRoute.value.fullPath).toBe("/patients");
+    useNotifications().dismissCurrent();
   });
 });

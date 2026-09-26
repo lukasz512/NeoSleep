@@ -270,6 +270,7 @@ async function onPatientSubmit(data: Record<string, unknown>, done: (ok: boolean
           body: JSON.stringify(data),
         }),
       successMessage: t("app.patients.form.success"),
+      openCreated: "patient-detail",
       icon: "nav-patients",
       errorMessage: t("app.patients.form.errorSave"),
     },
