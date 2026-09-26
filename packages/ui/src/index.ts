@@ -6,6 +6,7 @@ export { default as ChangePasswordView } from "./views/ChangePasswordView.vue";
 export { createUseChangePasswordFlow } from "./composables/useChangePasswordFlow";
 export { default as LazyImg } from "./components/LazyImg.vue";
 export { default as BrandLogo } from "./components/BrandLogo.vue";
+export { default as BrandWordmarkFold } from "./components/BrandWordmarkFold.vue";
 export { default as PersonAvatar } from "./components/PersonAvatar.vue";
 export { default as ThemeLocaleSwitcher } from "./components/ThemeLocaleSwitcher.vue";
 export { default as AuthChrome } from "./components/AuthChrome.vue";
