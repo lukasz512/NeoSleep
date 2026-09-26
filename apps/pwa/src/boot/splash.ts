@@ -19,7 +19,7 @@ import { BRAND_AUTH_BACKGROUND_URL } from "../../../../packages/brand/logos";
 
 export const BOOT_SPLASH_ID = "boot-splash";
 
-// Geometry mirrors AuthOrbs' default frame (packages/ui/src/components/AuthOrbs.vue)
+// Geometry mirrors AuthOrbs' default layout (packages/ui/src/components/AuthOrbs.vue)
 // so the Vue orbs land exactly where these were. Keep the two in sync.
 const css = `
 #${BOOT_SPLASH_ID} {
@@ -68,13 +68,11 @@ const css = `
   background-size: 400% 400%;
   opacity: 0.72;
 }
-.boot-splash__frame {
-  position: absolute;
-  top: calc(max(16px, env(safe-area-inset-top)) + clamp(24px, 10vh, 96px) + 115px);
-  left: 50%;
-  width: min(420px, calc(100% - 64px));
-  height: 440px;
-  transform: translateX(-50%);
+/* Card box the small orb hugs — same defaults as AuthOrbs' --auth-orbs-card-* variables. */
+#${BOOT_SPLASH_ID} {
+  --bs-card-top: calc(max(16px, env(safe-area-inset-top)) + clamp(24px, 10vh, 96px) + 115px);
+  --bs-card-width: min(420px, calc(100% - 64px));
+  --bs-card-height: 440px;
 }
 .boot-splash__orb {
   position: absolute;
@@ -82,18 +80,35 @@ const css = `
   border-radius: 50%;
   background: var(--bs-primary);
   opacity: 0.5;
+  /* Centered on left/top, lifted by the orb's drift amplitude — AuthOrbs'
+     slow sway starts from exactly there, so the hand-over doesn't jump. */
+  translate: -50% calc(-50% - var(--bs-drift-y));
   /* Pop-in (transform) and breathing (the separate scale property) compose
      instead of fighting over one property. Same Fibonacci stagger as AuthOrbs. */
   transform: scale(0);
   animation: boot-splash-pop 610ms cubic-bezier(0.34, 1.56, 0.64, 1) both, boot-splash-breath 1.5s ease-in-out infinite;
 }
-.boot-splash__orb--big { width: 150%; top: 56%; left: 70%; translate: -50% -50%; }
+/* Thin orbit line just outside the rim, as on AuthOrbs. */
+.boot-splash__orb::after {
+  content: "";
+  position: absolute;
+  inset: -4%;
+  border: 1px solid rgb(255 255 255 / 0.7);
+  border-radius: 50%;
+}
+/* Asymmetric composition (NEO-103) — same geometry as AuthOrbs.vue, keep the two in sync. */
+.boot-splash__orb--big { width: 80vmax; left: 80%; top: 90%; --bs-drift-y: 22px; }
 .boot-splash__orb--medium {
-  width: 78%; bottom: 35%; left: -17%;
+  width: 33.6vmax; left: 20%; top: 18%; --bs-drift-y: 16px;
   background: color-mix(in srgb, var(--bs-primary) 55%, white 45%);
   animation-duration: 610ms, 1.3s; animation-delay: 89ms, -0.45s;
 }
-.boot-splash__orb--small { width: 102%; top: -11%; left: -48%; animation-duration: 610ms, 1.1s; animation-delay: 233ms, -0.75s; }
+.boot-splash__orb--small {
+  width: 16vmax; --bs-drift-y: 12px;
+  left: calc(50% - var(--bs-card-width) * 0.62);
+  top: calc(var(--bs-card-top) + var(--bs-card-height) * 0.82);
+  animation-duration: 610ms, 1.1s; animation-delay: 233ms, -0.75s;
+}
 @keyframes boot-splash-pop {
   from { transform: scale(0); }
   65% { transform: scale(1.05); }
@@ -120,7 +135,8 @@ const css = `
   opacity: 0.7;
 }
 @media (prefers-reduced-motion: reduce) {
-  .boot-splash__orb { animation: none; transform: none; }
+  /* AuthOrbs doesn't sway under reduced motion, so no drift lift here either. */
+  .boot-splash__orb { animation: none; transform: none; --bs-drift-y: 0px; }
   .boot-splash__bg { animation: none; }
   #${BOOT_SPLASH_ID} { transition: none; }
 }
@@ -132,11 +148,9 @@ const markup = `
     <div class="boot-splash__image"></div>
     <div class="boot-splash__gradient"></div>
   </div>
-  <div class="boot-splash__frame">
-    <span class="boot-splash__orb boot-splash__orb--big"></span>
-    <span class="boot-splash__orb boot-splash__orb--medium"></span>
-    <span class="boot-splash__orb boot-splash__orb--small"></span>
-  </div>
+  <span class="boot-splash__orb boot-splash__orb--big"></span>
+  <span class="boot-splash__orb boot-splash__orb--medium"></span>
+  <span class="boot-splash__orb boot-splash__orb--small"></span>
 </div>`;
 
 /** Marks bundle stylesheets that were turned into non-blocking preloads (see deferBundleCss). */
