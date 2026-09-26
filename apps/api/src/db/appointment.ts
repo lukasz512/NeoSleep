@@ -3,7 +3,7 @@ import { AppError, ConflictError, DatabaseError } from "../errors.js";
 import { isoDate } from "../routes/utils.js";
 import { formatOptionalDisplayName } from "../utils/personName.js";
 
-// DB CHECK constraints — see migrations/034_appointment.sql.
+// DB CHECK constraints — see migrations/035_appointment.sql.
 export const APPOINTMENT_STATUSES = ["scheduled", "completed", "cancelled", "no_show"] as const;
 export type AppointmentStatus = (typeof APPOINTMENT_STATUSES)[number];
 export const APPOINTMENT_TYPES = ["visit"] as const;

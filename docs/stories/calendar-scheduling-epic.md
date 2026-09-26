@@ -96,7 +96,7 @@ The first pass of this doc assumed "visit" meant the rep→HCP detailing call al
 - **Delivery** in two PRs: (1) migration + API + tests, (2) screen + dialog + buttons.
 
 ### Acceptance criteria (v1 = NEO-27 + NEO-34)
-- [ ] Migration 034 creates `appointment` with the no-double-booking constraint. `create_tenant_schema()` is regenerated and the CI parity check is green.
+- [ ] Migration 035 creates `appointment` with the no-double-booking constraint. `create_tenant_schema()` is regenerated and the CI parity check is green.
 - [ ] The role matrix in ADR-026 is enforced by the API and covered by real-DB tests.
 - [ ] An overlapping booking returns 409, while back-to-back bookings and bookings over a cancelled appointment succeed.
 - [ ] rep/KAM/MSL never receive notes or clinical links.

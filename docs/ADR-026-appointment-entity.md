@@ -17,7 +17,7 @@ FHIR R4 calls this resource `Appointment`, consistent with `encounter`, `practit
 
 ## Decision
 
-A new tenant table `appointment`, created in migration `034_appointment.sql`:
+A new tenant table `appointment`, created in migration `035_appointment.sql`:
 
 | Column | Notes |
 |---|---|
