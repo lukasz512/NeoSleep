@@ -1,6 +1,6 @@
 <template>
   <div class="auth-view" :class="{ 'auth-view--backdrop-exiting': backdropExiting }">
-    <AuthChrome ref="authChromeRef" :auto-play="false" />
+    <AuthChrome ref="authChromeRef" :auto-play="false" :dots-busy="isLoading" :dots-anchor="cardSlotEl" />
 
     <div ref="cardSlotEl" class="auth-view__card-slot">
       <!-- The breathing orbs behind this card live in the public layout

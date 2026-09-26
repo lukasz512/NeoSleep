@@ -1,5 +1,5 @@
 <template>
-  <AuthDotGridBackground :dark="theme === 'dark'" />
+  <AuthDotGridBackground :dark="theme === 'dark'" :busy="dotsBusy" :anchor="dotsAnchor" />
 
   <div class="auth-chrome__topbar">
     <VMenu
@@ -120,7 +120,17 @@ const configStore = useConfigStore();
 
 // autoPlay=false lets a parent (see AuthView) stage this logo's entrance
 // alongside other elements instead of it firing the moment this mounts.
-const { autoPlay = true } = defineProps<{ autoPlay?: boolean }>();
+const {
+  autoPlay = true,
+  dotsBusy = false,
+  dotsAnchor = null,
+} = defineProps<{
+  autoPlay?: boolean;
+  /** A sign-in is in flight — the dot field is inhaled into the card (see AuthDotGridBackground). */
+  dotsBusy?: boolean;
+  /** The card the dots are inhaled into. */
+  dotsAnchor?: HTMLElement | null;
+}>();
 
 // Entrance/exit choreography for the logo, mirroring AnimatedCard's
 // pattern: emerges from below on mount; playExit() (called by the auth view
