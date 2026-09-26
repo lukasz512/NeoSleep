@@ -2,7 +2,7 @@ import { Router, type Router as RouterType, type Request, type Response } from "
 import { asyncHandler } from "../middleware/errorHandler.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { requireRole } from "../middleware/requireRole.js";
-import { requireClinicalRole } from "../middleware/requireClinicalRole.js";
+import { requireClinicalRole, requireStudyRole } from "../middleware/requireClinicalRole.js";
 import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
 import { CreatePatientCommand, UpdatePatientCommand, DeletePatientCommand } from "../commands/patient.js";
@@ -150,7 +150,7 @@ patientRouter.get(
 // ---------------------------------------------------------------------------
 patientRouter.get(
   "/patient/:id/documents/:documentId/download",
-  requireClinicalRole,
+  requireStudyRole,
   asyncHandler(async (req: Request, res: Response) => {
     const id = routeParam(req, "id")?.trim();
     const documentId = routeParam(req, "documentId")?.trim();
@@ -186,7 +186,7 @@ function clinicalKindParam(req: Request): ClinicalRecordKind {
 
 patientRouter.get(
   "/patient/:id/clinical-records",
-  requireClinicalRole,
+  requireStudyRole,
   asyncHandler(async (req: Request, res: Response) => {
     const id = uuidParam(req, "id");
 
@@ -201,7 +201,7 @@ patientRouter.get(
 
 patientRouter.post(
   "/patient/:id/clinical-records/:kind",
-  requireClinicalRole,
+  requireStudyRole,
   asyncHandler(async (req: Request, res: Response) => {
     const id = uuidParam(req, "id");
     const kind = clinicalKindParam(req);
@@ -218,7 +218,7 @@ patientRouter.post(
 // The doctor completes B-A-N-G after the patient self-reported S-T-O-P.
 patientRouter.patch(
   "/patient/:id/clinical-records/stop_bang/:recordId",
-  requireClinicalRole,
+  requireStudyRole,
   asyncHandler(async (req: Request, res: Response) => {
     const id = uuidParam(req, "id");
     const recordId = uuidParam(req, "recordId");
@@ -237,7 +237,7 @@ patientRouter.patch(
 // ---------------------------------------------------------------------------
 patientRouter.get(
   "/patient/:id/checklist",
-  requireClinicalRole,
+  requireStudyRole,
   asyncHandler(async (req: Request, res: Response) => {
     const id = uuidParam(req, "id");
     const slug = tenantSlugFromHost(req.hostname);
@@ -253,7 +253,7 @@ patientRouter.get(
 // patient already signed — returns { url } to the stored signed document.
 patientRouter.post(
   "/patient/:id/checklist/:key/print",
-  requireClinicalRole,
+  requireStudyRole,
   asyncHandler(async (req: Request, res: Response) => {
     const id = uuidParam(req, "id");
     const key = routeParam(req, "key")?.trim() ?? "";
@@ -275,7 +275,7 @@ patientRouter.post(
 
 patientRouter.post(
   "/patient/:id/studies/uploads",
-  requireClinicalRole,
+  requireStudyRole,
   studyUpload.single("file"),
   asyncHandler(async (req: Request, res: Response) => {
     const id = uuidParam(req, "id");
@@ -316,7 +316,7 @@ patientRouter.delete(
 // ---------------------------------------------------------------------------
 patientRouter.post(
   "/patient/:id/questionnaire-requests",
-  requireClinicalRole,
+  requireStudyRole,
   asyncHandler(async (req: Request, res: Response) => {
     const id = uuidParam(req, "id");
 
@@ -332,7 +332,7 @@ patientRouter.post(
 
 patientRouter.delete(
   "/patient/:id/questionnaire-requests/:requestId",
-  requireClinicalRole,
+  requireStudyRole,
   asyncHandler(async (req: Request, res: Response) => {
     const id = uuidParam(req, "id");
     const requestId = uuidParam(req, "requestId");

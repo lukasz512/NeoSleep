@@ -20,7 +20,9 @@ glance: *what is still missing for this patient?* His requirements:
 - "Agregar estudio" uploads a file from the doctor's disk, with a title and notes. It becomes a new
   item or completes an existing one (a PSG report, a scanned paper consent).
 - The Details tab shows one status icon per item.
-- Health data is visible to **admin and doctor only**.
+- Health data is visible to **admin and doctor only**. Amended 2026-09-26 (NEO-83): **managers
+  can also see and edit the patient's studies** (Estudios tab, sleep studies, /sleep-studies —
+  `requireStudyRole`); the Documents tab list and hard deletes stay admin/doctor resp. admin-only.
 
 ## Decision
 
