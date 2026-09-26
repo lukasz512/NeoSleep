@@ -1,34 +1,47 @@
 <template>
-  <section class="consent-notice" :aria-labelledby="titleId">
-    <h2 :id="titleId" class="consent-notice__title">
+  <section class="consent-notice" :class="{ 'consent-notice--open': open }">
+    <button
+      type="button"
+      class="consent-notice__toggle"
+      :aria-expanded="open"
+      :aria-controls="bodyId"
+      @click="open = !open"
+    >
       <AppIcon name="info-circle" class="consent-notice__icon" />
-      {{ t("app.questionnaire.consentNotice.title") }}
-    </h2>
-    <dl class="consent-notice__list">
-      <div v-for="item in items" :key="item.key" class="consent-notice__item">
-        <dt>{{ t(`app.questionnaire.consentNotice.${item.key}.label`) }}</dt>
-        <dd>{{ item.text }}</dd>
+      <span class="consent-notice__toggle-label">{{ t("app.questionnaire.consentNotice.toggle") }}</span>
+      <AppIcon name="chevron-down" class="consent-notice__chevron" />
+    </button>
+    <!-- Collapsed on first view (NEO-116): the notice is part of the consent, one tap away, not a wall of text before Send. -->
+    <div :id="bodyId" class="consent-notice__body" :inert="!open">
+      <div class="consent-notice__inner">
+        <dl class="consent-notice__list">
+          <div v-for="item in items" :key="item.key" class="consent-notice__item">
+            <dt>{{ t(`app.questionnaire.consentNotice.${item.key}.label`) }}</dt>
+            <dd>{{ item.text }}</dd>
+          </div>
+        </dl>
+        <a :href="privacyNoticeUrl" target="_blank" rel="noopener noreferrer" class="consent-notice__link">
+          {{ t("app.questionnaire.consentNotice.fullNotice") }}
+        </a>
       </div>
-    </dl>
-    <a :href="privacyNoticeUrl" target="_blank" rel="noopener noreferrer" class="consent-notice__link">
-      {{ t("app.questionnaire.consentNotice.fullNotice") }}
-    </a>
+    </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import AppIcon from "../AppIcon.vue";
 
 /**
- * Layered privacy notice shown before a patient consents to sharing health
- * data (GDPR Art.9 / LFPDPPP datos sensibles): the essentials up front —
- * who is responsible, what, why, who sees it, where and how long, rights —
- * and the full notice one link away. Wording reviewed via /legal
- * (2026-09-25); the consent version stored with each submission is
- * PATIENT_CONSENT_VERSION in apps/api/src/commands/questionnaireRequest.ts —
- * bump it whenever these texts change.
+ * Layered privacy notice attached to the patient's health-data consent
+ * checkbox (GDPR Art.9 / LFPDPPP datos sensibles): the essentials — who is
+ * responsible, what, why, who sees it, where and how long, rights — behind a
+ * disclosure right under the checkbox, and the full notice one link away.
+ * Wording reviewed via /legal (2026-09-25); the consent version stored with
+ * each submission is PATIENT_CONSENT_VERSION in
+ * apps/api/src/commands/questionnaireRequest.ts — bump it whenever these
+ * texts change.
  */
 const props = defineProps<{
   clinic: string;
@@ -36,7 +49,8 @@ const props = defineProps<{
   privacyNoticeUrl: string;
 }>();
 const { t } = useI18n();
-const titleId = "consent-notice-title";
+const bodyId = "consent-notice-body";
+const open = ref(false);
 
 const items = computed(() => [
   { key: "who", text: t("app.questionnaire.consentNotice.who.text", { clinic: props.clinic }) },
@@ -55,25 +69,63 @@ const items = computed(() => [
 
 <style scoped>
 .consent-notice {
-  margin-top: 24px;
-  padding: 16px;
+  /* Icon lines up with the checkbox label above (label indent 40px − toggle padding 12px). */
+  margin: 0 0 16px 28px;
   border-radius: var(--pwa-radius);
-  background: rgba(var(--v-theme-primary), 0.08);
-  border: 1px solid rgba(var(--v-theme-primary), 0.25);
+  transition: background-color 0.2s ease;
 }
-.consent-notice__title {
+.consent-notice--open {
+  background: rgba(var(--v-theme-primary), 0.06);
+}
+.consent-notice__toggle {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 0 0 12px;
-  font-size: 1rem;
-  font-weight: 600;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: var(--pwa-radius);
+  background: none;
+  color: rgb(var(--v-theme-primary));
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  text-align: start;
+  cursor: pointer;
 }
-.consent-notice__icon {
+.consent-notice__toggle:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 2px;
+}
+.consent-notice__toggle-label {
+  flex: 1;
+}
+.consent-notice__icon,
+.consent-notice__chevron {
   width: 20px;
   height: 20px;
-  color: rgb(var(--v-theme-primary));
   flex-shrink: 0;
+}
+.consent-notice__chevron {
+  transition: transform 0.25s ease;
+}
+.consent-notice--open .consent-notice__chevron {
+  transform: rotate(180deg);
+}
+/* Height animates via grid rows (0fr → 1fr), so no measured max-height. */
+.consent-notice__body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.25s ease;
+}
+.consent-notice--open .consent-notice__body {
+  grid-template-rows: 1fr;
+}
+.consent-notice__inner {
+  overflow: hidden;
+  min-height: 0;
+  padding: 0 12px;
 }
 .consent-notice__list {
   display: grid;
@@ -94,8 +146,15 @@ const items = computed(() => [
 }
 .consent-notice__link {
   display: inline-block;
-  margin-top: 12px;
+  margin: 12px 0 14px;
   font-size: 0.875rem;
   color: rgb(var(--v-theme-primary));
+}
+@media (prefers-reduced-motion: reduce) {
+  .consent-notice,
+  .consent-notice__chevron,
+  .consent-notice__body {
+    transition: none;
+  }
 }
 </style>

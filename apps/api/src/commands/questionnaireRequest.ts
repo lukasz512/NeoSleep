@@ -51,7 +51,7 @@ export const QUESTIONNAIRE_LINK_RETENTION_DAYS = 30;
  * questionnaire changes (packages/i18n app.questionnaire.consentNotice.* /
  * app.questionnaire.consent) — stored on every patient-submitted record.
  */
-export const PATIENT_CONSENT_VERSION = "patient-self-fill-2026-09-25";
+export const PATIENT_CONSENT_VERSION = "patient-self-fill-2026-09-26";
 
 /** Largest accepted drawn signature (a PNG data URL) — a finger signature on a phone is ~10-60 KB. */
 const MAX_SIGNATURE_DATA_URL_LENGTH = 400_000;
