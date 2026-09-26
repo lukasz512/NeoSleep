@@ -103,7 +103,9 @@ export function useFormRenderer(
       // Static options: `title` is an i18n key (see formField.ts's doc
       // comment on FormFieldOption) — resolve it here so it stays reactive
       // to locale switches without the config file needing a translator.
-      return field.options.map((o) => ({ ...o, title: t(o.title) }));
+      const filter = field.optionFilter;
+      const options = filter ? field.options.filter((o) => filter(o, form.value)) : field.options;
+      return options.map((o) => ({ ...o, title: t(o.title) }));
     }
     // Async-loaded options (API-fetched names, etc.) are already final
     // display strings — never routed through t().

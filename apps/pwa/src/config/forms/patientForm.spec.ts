@@ -50,8 +50,9 @@ describe("patientFormFields", () => {
     expect(opts.filter((o) => o.secondary).map((o) => o.value)).toEqual(["other", "prefer_not_to_say"]);
   });
 
-  describe("patientFormDerive — salutation and sex move together", () => {
-    const run = (prev: Record<string, unknown>, form: Record<string, unknown>) => patientFormDerive(form, prev);
+  describe("patientFormDerive — salutation and sex move together (MX patient)", () => {
+    const run = (prev: Record<string, unknown>, form: Record<string, unknown>) =>
+      patientFormDerive({ country_code: "MX", ...form }, { country_code: "MX", ...prev });
 
     it.each([
       ["Dr.", "male"], ["Dra.", "female"], ["Sr.", "male"], ["Sra.", "female"], ["dra", "female"],
@@ -88,7 +89,27 @@ describe("patientFormFields", () => {
 
     it("an already-consistent pair, or both changing at once (record just opened), is left alone", () => {
       expect(run({ salutation: "Dr.", gender: null }, { salutation: "Dr.", gender: "male" })).toBeUndefined();
-      expect(run({}, { salutation: "Dra.", gender: "male" })).toBeUndefined();
+      expect(run({ country_code: "MX" }, { salutation: "Dra.", gender: "male" })).toBeUndefined();
+    });
+  });
+
+  describe("patientFormDerive — PL patient: only Pan/Pani carry a sex", () => {
+    const run = (prev: Record<string, unknown>, form: Record<string, unknown>) =>
+      patientFormDerive({ country_code: "PL", ...form }, { country_code: "PL", ...prev });
+
+    it("Pan sets male, Pani sets female", () => {
+      expect(run({ salutation: null, gender: null }, { salutation: "Pan", gender: null })).toEqual({ gender: "male" });
+      expect(run({ salutation: null, gender: null }, { salutation: "Pani", gender: null })).toEqual({ gender: "female" });
+    });
+
+    it("switching sex flips Pan ↔ Pani", () => {
+      expect(run({ salutation: "Pan", gender: "male" }, { salutation: "Pan", gender: "female" })).toEqual({ salutation: "Pani" });
+      expect(run({ salutation: "Pani", gender: "female" }, { salutation: "Pani", gender: "male" })).toEqual({ salutation: "Pan" });
+    });
+
+    it.each(["Dr.", "Prof.", "Mgr."])("%s is the same for women and men: it neither sets sex nor turns into a Spanish form", (salutation) => {
+      expect(run({ salutation: null, gender: null }, { salutation, gender: null })).toBeUndefined();
+      expect(run({ salutation, gender: "male" }, { salutation, gender: "female" })).toBeUndefined();
     });
   });
 

@@ -2,7 +2,7 @@ import type { FormDerive, FormFieldDef, FormFieldOption } from "../../types/form
 import { apiFetch } from "../../composables/useApi";
 import { useConfigStore } from "../../stores/config";
 import { useAuthStore } from "../../stores/auth";
-import { identityFields, GENDERED_SALUTATIONS } from "./identityFields";
+import { identityFields, GENDERED_SALUTATIONS, salutationMarket, type SalutationMarket } from "./identityFields";
 import { loadTerritoryOptions } from "./territoryOptions";
 import { useSpecialtyLabel } from "../../composables/useSpecialtyLabel";
 
@@ -97,37 +97,47 @@ function salutationKey(v: unknown): string {
   return typeof v === "string" ? v.trim().toLowerCase().replace(/\.$/, "") : "";
 }
 
-const SALUTATION_SEX: Record<string, "male" | "female"> = {};
-const SALUTATION_FOR_SEX: Record<"male" | "female", Record<string, string>> = { male: {}, female: {} };
-for (const { male, female } of GENDERED_SALUTATIONS) {
-  SALUTATION_SEX[salutationKey(male)] = "male";
-  SALUTATION_SEX[salutationKey(female)] = "female";
-  SALUTATION_FOR_SEX.male[salutationKey(female)] = male;
-  SALUTATION_FOR_SEX.female[salutationKey(male)] = female;
+interface SalutationSexMaps {
+  sexOf: Record<string, "male" | "female">;
+  forSex: Record<"male" | "female", Record<string, string>>;
+}
+
+const SALUTATION_MAPS = {} as Record<SalutationMarket, SalutationSexMaps>;
+for (const market of Object.keys(GENDERED_SALUTATIONS) as SalutationMarket[]) {
+  const maps: SalutationSexMaps = { sexOf: {}, forSex: { male: {}, female: {} } };
+  for (const { male, female } of GENDERED_SALUTATIONS[market]) {
+    maps.sexOf[salutationKey(male)] = "male";
+    maps.sexOf[salutationKey(female)] = "female";
+    maps.forSex.male[salutationKey(female)] = male;
+    maps.forSex.female[salutationKey(male)] = female;
+  }
+  SALUTATION_MAPS[market] = maps;
 }
 
 /**
- * Keeps salutation and sex in step, both ways, for every gendered salutation
- * (identityFields' GENDERED_SALUTATIONS): picking Dr./Prof./Lic./Sr. sets
- * Masculino, Dra./Profa./Licda./Sra. sets Femenino, and switching sex flips
- * the salutation to its other form. Once sex is Otro / Prefiero no decir it
- * is a deliberate manual choice — the salutation no longer moves it (and
- * picking it leaves the salutation alone). Mgr. or an empty salutation
- * never change anything.
+ * Keeps salutation and sex in step, both ways, for the patient's market
+ * (identityFields' GENDERED_SALUTATIONS): in MX Dr./Prof./Lic./Sr. ↔
+ * Masculino and Dra./Profa./Licda./Sra. ↔ Femenino; in PL Pan ↔ Mężczyzna
+ * and Pani ↔ Kobieta, while Dr./Prof./Mgr. stay as they are for both sexes.
+ * Switching sex flips the salutation to its other form. Once sex is Otro /
+ * Prefiero no decir it is a deliberate manual choice — the salutation no
+ * longer moves it (and picking it leaves the salutation alone). A salutation
+ * without a sex, or an empty one, never changes anything.
  */
 export const patientFormDerive: FormDerive = (form, prev) => {
   const salutationChanged = salutationKey(form.salutation) !== salutationKey(prev.salutation);
   const sexChanged = form.gender !== prev.gender;
   if (salutationChanged === sexChanged) return;
+  const maps = SALUTATION_MAPS[salutationMarket(form)];
 
   if (sexChanged) {
     if (form.gender !== "male" && form.gender !== "female") return;
-    const salutation = SALUTATION_FOR_SEX[form.gender][salutationKey(form.salutation)];
+    const salutation = maps.forSex[form.gender][salutationKey(form.salutation)];
     return salutation ? { salutation } : undefined;
   }
 
   if (form.gender === "other" || form.gender === "prefer_not_to_say") return;
-  const sex = SALUTATION_SEX[salutationKey(form.salutation)];
+  const sex = maps.sexOf[salutationKey(form.salutation)];
   return sex ? { gender: sex } : undefined;
 };
 

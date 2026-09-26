@@ -78,11 +78,11 @@ import AppIcon from "./AppIcon.vue";
 import type { FormFieldOption } from "../types/formField";
 
 /**
- * FormRenderer's 'choice' field, one row the height of an outlined input:
- * the common options as tappable chips (with an optional symbol), the rare
- * ones (`secondary: true`) behind a "more" button. Once a secondary option
- * is picked the common chips shrink to their symbol and the pick takes their
- * room, so the row never wraps. No visible label — the options name
+ * FormRenderer's 'choice' field, one segmented row looking like an outlined
+ * input: the common options as segments (with an optional symbol), the rare
+ * ones (`secondary: true`) behind a "more" segment. Once a secondary option
+ * is picked the common segments shrink to their symbol and the pick takes
+ * their room, so the row never wraps. No visible label — the options name
  * themselves; the label stays as the radiogroup's accessible name. Wrapped
  * in VInput so `rules` (e.g. required) validate with the rest of the VForm.
  */
@@ -107,37 +107,58 @@ const selectedSecondary = computed(() => secondary.value.find((o) => o.value ===
 </script>
 
 <style scoped>
+/*
+ * Styled as one outlined input split into segments — same height, border and
+ * radius as the text fields around it — so it reads as an ordinary form
+ * question, not a call to action. The pick gets a light primary tint only.
+ */
 .choice-chips-field__row {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  align-items: stretch;
   width: 100%;
-  min-height: 48px;
+  height: 48px;
+  overflow: hidden;
+  border: 1px solid rgb(var(--v-theme-outline));
+  border-radius: var(--pwa-radius, 10px);
 }
 
-.choice-chips-field__chip {
+.choice-chips-field.v-input--error .choice-chips-field__row {
+  border-color: rgb(var(--v-theme-error));
+}
+
+.choice-chips-field__chip,
+.choice-chips-field__more {
   display: inline-flex;
-  flex: 1 1 auto;
   align-items: center;
   justify-content: center;
   gap: 6px;
   min-width: 0;
-  height: 48px;
-  padding: 0 12px;
-  border: 1.5px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  border-radius: 999px;
-  background: rgb(var(--v-theme-surface));
   color: rgb(var(--v-theme-on-surface));
-  font-size: 0.9375rem;
+  font-size: 1rem;
   white-space: nowrap;
   cursor: pointer;
-  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, flex-basis 0.2s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.choice-chips-field__chip {
+  flex: 1 1 auto;
+  padding: 0 10px;
+}
+
+.choice-chips-field__chip + .choice-chips-field__chip,
+.choice-chips-field__chip + .choice-chips-field__more {
+  border-left: 1px solid rgba(var(--v-theme-outline), 0.6);
+}
+
+.choice-chips-field__chip:hover,
+.choice-chips-field__more:hover {
+  background: rgba(var(--v-theme-on-surface), 0.04);
 }
 
 .choice-chips-field__chip.is-selected {
-  border-color: rgb(var(--v-theme-primary));
-  background: rgb(var(--v-theme-primary));
-  color: rgb(var(--v-theme-on-primary));
+  background: rgba(var(--v-theme-primary), 0.1);
+  color: rgb(var(--v-theme-primary));
+  font-weight: 500;
 }
 
 .choice-chips-field__text {
@@ -145,19 +166,24 @@ const selectedSecondary = computed(() => secondary.value.find((o) => o.value ===
   text-overflow: ellipsis;
 }
 
-/* A secondary pick is showing — the common chips give up their room and keep only the symbol. */
+.choice-chips-field__symbol {
+  font-size: 1.125rem;
+  line-height: 1;
+  opacity: 0.7;
+}
+
+.choice-chips-field__chip.is-selected .choice-chips-field__symbol {
+  opacity: 1;
+}
+
+/* A secondary pick is showing — the common segments give up their room and keep only the symbol. */
 .has-secondary-value .choice-chips-field__chip:not(.choice-chips-field__secondary-value) {
-  flex: 0 0 48px;
+  flex: 0 0 44px;
   padding: 0;
 }
 
 .has-secondary-value .choice-chips-field__chip:not(.choice-chips-field__secondary-value) .choice-chips-field__text {
   display: none;
-}
-
-.choice-chips-field__symbol {
-  font-size: 1.25rem;
-  line-height: 1;
 }
 
 .choice-chips-field__chevron {
@@ -166,26 +192,15 @@ const selectedSecondary = computed(() => secondary.value.find((o) => o.value ===
   height: 18px;
 }
 
-/* Quiet on purpose: the rare options shouldn't compete with the two chips for room or attention. */
 .choice-chips-field__more {
-  display: inline-flex;
-  flex: 0 0 32px;
-  align-items: center;
-  justify-content: center;
-  height: 48px;
-  border-radius: 999px;
+  flex: 0 0 40px;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  cursor: pointer;
-}
-
-.choice-chips-field__more:hover {
-  background: rgba(var(--v-theme-on-surface), 0.06);
 }
 
 .choice-chips-field__chip:focus-visible,
 .choice-chips-field__more:focus-visible {
   outline: 2px solid rgb(var(--v-theme-primary));
-  outline-offset: 2px;
+  outline-offset: -2px;
 }
 
 .choice-chips-field__chip:disabled,

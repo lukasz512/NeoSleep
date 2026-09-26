@@ -1847,6 +1847,8 @@
   "app.identity.form.prefixMgr": "Mgr.",
   "app.identity.form.prefixSr": "Sr.",
   "app.identity.form.prefixSra": "Sra.",
+  "app.identity.form.prefixPan": "Pan",
+  "app.identity.form.prefixPani": "Pani",
   "user.hco.form.googleLink": "Link do Google Maps",
   "user.hco.form.specialties": "Specjalizacje",
   "user.hcp.form.clinic": "Klinika",

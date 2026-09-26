@@ -122,6 +122,12 @@ export interface FormFieldDef {
    * `dependsOn` change) and cached.
    */
   options?: FormFieldOption[] | ((form: Record<string, unknown>) => Promise<FormFieldOption[]>);
+  /**
+   * Narrows a STATIC `options` list against the live form (e.g. salutations
+   * offered per market, from the form's country) — keeps the list static, so
+   * titles stay i18n keys, instead of turning it into an async loader.
+   */
+  optionFilter?: (option: FormFieldOption, form: Record<string, unknown>) => boolean;
   /** Allow multiple selections — only meaningful for type 'autocomplete'. */
   multiple?: boolean;
   /**
