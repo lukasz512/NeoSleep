@@ -4,8 +4,8 @@
          with the entity's icon, the parent list as a small eyebrow link above
          the record's name, actions on the right. On desktop it replaces
          AppLayout's "← <Module>" page-header row (claimRecordHeader); on
-         phones AppLayout's app bar keeps "← <Module>", so the eyebrow is
-         hidden there. The name is never truncated — it is the record's identity. -->
+         phones that row stays as the card's first line (NEO-108), so the
+         eyebrow is hidden there. The name is never truncated — it is the record's identity. -->
     <header v-if="showRecordHeader" class="view-item__record-header">
       <!-- A record with an identity (NEO-57) swaps the module tile for its
            avatar via #record-tile; the module icon is the fallback. -->
@@ -31,7 +31,7 @@
     </header>
     <!-- NEO-55 row for views without a record header (and for not-found /
          load error): the back arrow is AppLayout's ("← <Module>" in the
-         desktop page header / mobile app bar); this row keeps only the view's
+         page header, the card's first line); this row keeps only the view's
          own title and actions, the actions teleported up into the page header
          on desktop. -->
     <div
@@ -311,7 +311,7 @@ defineEmits<{
   .view-item__record-header .view-item__tile,
   .view-item__record-header > .app-avatar { grid-area: tile; }
   .view-item__record-header .view-item__record-text { display: contents; }
-  /* AppLayout's mobile app bar already shows "← <Module>" (NEO-55). */
+  /* AppLayout's page-header row already shows "← <Module>" above it on phones (NEO-108). */
   .view-item__record-header .view-item__eyebrow { display: none; }
   .view-item__record-header .view-item__record-title-row { grid-area: title; }
   .view-item__record-header .view-item__record-details { grid-area: details; }

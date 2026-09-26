@@ -347,6 +347,32 @@
   pointer-events: none;
 }
 
+/* NEO-113 — phone toolbar in the header row, next to the module title:
+   content-sized, so the title gets the rest of the row; an open search (or a
+   kept query) takes the whole row (AppLayout hides the title then). */
+.app-entity-list__toolbar--mobile.app-entity-list__toolbar--in-header {
+  flex: 0 0 auto;
+}
+.app-entity-list__toolbar--mobile.app-entity-list__toolbar--in-header.app-entity-list__toolbar--search-open,
+.app-entity-list__toolbar--mobile.app-entity-list__toolbar--in-header.app-entity-list__toolbar--has-query {
+  flex: 1 1 auto;
+}
+/* Folded: Filter / + / clear-all live in the "⋯" menu instead. */
+.app-entity-list__toolbar--folded .app-entity-list__tool--foldable {
+  display: none;
+}
+.app-entity-list__more-anchor {
+  display: inline-flex;
+}
+.app-entity-list__more-menu .app-entity-list__icon {
+  margin-inline-end: 12px;
+}
+.app-entity-list__more-count {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: rgb(var(--v-theme-primary));
+}
+
 @media (prefers-reduced-motion: reduce) {
   .app-entity-list__tool,
   .app-entity-list__toolbar--mobile .app-entity-list__search {

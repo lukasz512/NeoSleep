@@ -1,7 +1,14 @@
 <template>
-  <VMenu v-model="menuOpen" :close-on-content-click="false" location="bottom start" class="app-filter-bar">
+  <VMenu
+    v-model="menuOpen"
+    :close-on-content-click="false"
+    :activator="anchor ?? undefined"
+    :open-on-click="!anchor"
+    :location="anchor ? 'bottom end' : 'bottom start'"
+    class="app-filter-bar"
+  >
     <template #activator="{ props: menuProps }">
-      <VTooltip location="bottom">
+      <VTooltip v-if="!anchor" location="bottom">
         <template #activator="{ props: tooltipProps }">
           <VBadge
             :content="activeFilterCount"
@@ -108,6 +115,8 @@ const props = defineProps<{
   clearKey: string;
   /** Number of filters currently active (for badge). */
   activeFilterCount: number;
+  /** NEO-113: opened from another element (the list's "⋯" menu) instead of its own button, which is then not shown. */
+  anchor?: HTMLElement | null;
 }>();
 
 const emit = defineEmits<{
@@ -117,6 +126,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const menuOpen = ref(false);
+defineExpose({ open: () => (menuOpen.value = true) });
 
 function hasChipOptions(def: { options?: { chipClass?: string }[] }): boolean {
   return (def.options ?? []).some((o) => o.chipClass);

@@ -7,8 +7,8 @@ import { computed, inject, provide, ref, type InjectionKey, type Ref } from "vue
  * controls (a list's search/filter toolbar, a detail view's actions), so
  * title and controls share one row instead of stacking.
  *
- * Only on desktop: on mobile the title and back arrow live in the app bar and
- * views keep their controls inline, so the teleport is disabled there.
+ * NEO-108/113: phones have the same row (the card's first line), and views
+ * teleport into it there too.
  */
 export const PAGE_HEADER_ACTIONS_ID = "layout-page-actions";
 
@@ -46,7 +46,32 @@ export function useRecordHeaderClaim(): Ref<boolean> {
   return inject(RECORD_HEADER_CLAIM, ref(false));
 }
 
-/** Props for a <Teleport> into the page header; disabled outside AppLayout (tests) and on mobile. */
+/**
+ * NEO-113: what a view's teleported toolbar needs to know about the header row
+ * it sits in, on phones — the title element (to tell whether the module name
+ * is being cut, see AppEntityList's fold into "⋯"), and a flag the toolbar
+ * raises while its search takes the whole row, so AppLayout hides the title.
+ */
+export interface PageHeaderRow {
+  title: Ref<HTMLElement | null>;
+  searchTakesRow: Ref<boolean>;
+}
+
+const PAGE_HEADER_ROW: InjectionKey<PageHeaderRow> = Symbol("pageHeaderRow");
+
+/** AppLayout: the header row's title element and search-open flag. */
+export function providePageHeaderRow(): PageHeaderRow {
+  const row: PageHeaderRow = { title: ref(null), searchTakesRow: ref(false) };
+  provide(PAGE_HEADER_ROW, row);
+  return row;
+}
+
+/** A view's toolbar in the header row. Inert refs outside AppLayout (tests). */
+export function usePageHeaderRow(): PageHeaderRow {
+  return inject(PAGE_HEADER_ROW, { title: ref(null), searchTakesRow: ref(false) });
+}
+
+/** Props for a <Teleport> into the page header; disabled outside AppLayout (tests). */
 export function usePageHeaderTeleport() {
   const active = inject(PAGE_HEADER_ACTIVE, ref(false));
   return {

@@ -23,27 +23,28 @@
       bottom-nav-show-labels
       sheet
     >
-      <!-- NEO-55: logo on the left of the full-width app bar on desktop (it
-           never collapses with the side menu); on mobile no logo at all, the
-           leading edge is the back arrow on detail views. -->
+      <!-- NEO-55: logo on the left of the full-width app bar (it never
+           collapses with the side menu). NEO-108: on phones too, smaller;
+           when the bar's icons leave it too little room it folds into its
+           O (useBarLogoFit). "← <Module>" lives in the content card. -->
       <template #app-bar-start>
-        <div v-if="!isMobile" class="layout-appbar__brand">
-          <AppLogo :theme="theme" />
+        <div class="layout-appbar__brand">
+          <AppLogo
+            ref="barLogo"
+            :theme="theme"
+            :height="isMobile ? MOBILE_LOGO_HEIGHT : DESKTOP_LOGO_HEIGHT"
+            :folded="logoFolded"
+            :mark-size="AVATAR_SIZE"
+          />
           <!-- NEO-102: which environment this is, only on non-prod builds. The
                version itself lives at the foot of the account menu. -->
-          <span v-if="appVersion.channel" class="layout-env-badge" data-testid="env-badge">{{ appVersion.channel }}</span>
+          <span
+            v-if="appVersion.channel"
+            ref="envBadge"
+            class="layout-env-badge"
+            data-testid="env-badge"
+          >{{ appVersion.channel }}</span>
         </div>
-        <AppButton
-          v-else-if="parentRoute"
-          icon
-          variant="text"
-          :to="parentRoute"
-          ignore-global-loading
-          :title="backLabel"
-          :aria-label="backLabel"
-        >
-          <AppIcon name="arrow-left" class="layout-back-icon" />
-        </AppButton>
       </template>
 
       <template #nav>
@@ -71,34 +72,17 @@
         </div>
       </template>
 
-      <!-- Mobile only: on desktop the title lives in the content card's own
-           header row instead (see .layout-page-header below). -->
-      <template #app-bar-title>
-        <Transition v-if="isMobile" name="title-fade" mode="out-in">
-          <div :key="moduleTitle" class="layout-appbar__title-group">
-            <AppIcon
-              v-if="moduleIcon && !parentRoute"
-              :ref="(el) => (barTitleGlyph.el.value = el)"
-              :name="moduleIcon"
-              class="layout-appbar__icon"
-              :style="{ marginInlineStart: `${-barTitleGlyph.inset.value}px` }"
-            />
-            <span class="layout-appbar__title">{{ moduleTitle }}</span>
-            <span v-if="appVersion.channel" class="layout-env-badge" data-testid="env-badge">{{ appVersion.channel }}</span>
-          </div>
-        </Transition>
-      </template>
-
       <!-- Account: top right on both breakpoints (NEO-55), avatar + name/role
            on desktop, avatar only on mobile. The menu drops below it on
            desktop and rises as a bottom sheet on phones (NEO-102), within
            thumb reach. -->
       <template #app-bar-actions>
-        <component
-          :is="isMobile ? VBottomSheet : VMenu"
-          v-model="menuOpen"
-          v-bind="accountMenuProps"
-        >
+        <div ref="barActions" class="layout-bar-actions">
+          <component
+            :is="isMobile ? VBottomSheet : VMenu"
+            v-model="menuOpen"
+            v-bind="accountMenuProps"
+          >
           <template #activator="{ props: menuProps }">
             <AppButton
               v-bind="menuProps"
@@ -113,7 +97,7 @@
                 <span class="layout-user-name">{{ user.displayName }}</span>
                 <span class="layout-user-role">{{ user.role }}</span>
               </div>
-              <VAvatar size="32" color="primary">
+              <VAvatar :size="AVATAR_SIZE" color="primary">
                 <span class="text-body-small font-weight-bold">{{ user.initials }}</span>
               </VAvatar>
             </AppButton>
@@ -137,7 +121,8 @@
             @logout="onLogout"
             @close="menuOpen = false"
           />
-        </component>
+          </component>
+        </div>
       </template>
 
       <template #nav-icon="{ item }">
@@ -162,9 +147,17 @@
              teleports its own controls into (usePageHeader.ts). v-show, not
              v-if: the teleport target must never be removed from under a
              view that is still teleporting into it. -->
-        <!-- NEO-56: hidden while a detail view shows its record header, whose
-             "MODULE ›" eyebrow above the record's name replaces this row. -->
-        <div v-show="!isMobile && !recordHeaderClaim" class="layout-page-header">
+        <!-- NEO-56: hidden on desktop while a detail view shows its record
+             header, whose "MODULE ›" eyebrow above the record's name replaces
+             this row. NEO-108: phones always show it — it is the card's first
+             line ("← Pacientes" / module icon + title), the eyebrow is hidden
+             there. -->
+        <!-- NEO-113: a view's open phone search takes the whole row, title included. -->
+        <div
+          v-show="pageHeaderVisible"
+          class="layout-page-header"
+          :class="{ 'layout-page-header--search': pageHeaderRow.searchTakesRow.value }"
+        >
           <AppButton
             v-if="parentRoute"
             icon
@@ -187,7 +180,11 @@
                 class="layout-appbar__icon"
                 :style="{ marginInlineStart: `${-headerTitleGlyph.inset.value}px` }"
               />
-              <span class="layout-appbar__title">{{ moduleTitle }}</span>
+              <span
+                :ref="setHeaderTitleEl"
+                class="layout-appbar__title"
+                :title="moduleTitle"
+              >{{ moduleTitle }}</span>
             </div>
           </Transition>
           <div :id="PAGE_HEADER_ACTIONS_ID" class="layout-page-header__actions" />
@@ -226,14 +223,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed, onMounted, onUnmounted, type ComponentPublicInstance } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { VMenu } from "vuetify/components/VMenu";
 import { VBottomSheet } from "vuetify/components/VBottomSheet";
 import { navTitleKey, navIconName, navParentName } from "../router/routes";
 import { pageTransitionsSupported } from "../router/pageTransitions";
-import { providePageHeader, provideRecordHeaderClaim, PAGE_HEADER_ACTIONS_ID } from "../composables/usePageHeader";
+import {
+  providePageHeader,
+  providePageHeaderRow,
+  provideRecordHeaderClaim,
+  PAGE_HEADER_ACTIONS_ID,
+} from "../composables/usePageHeader";
 import { useGlyphInset } from "../composables/useGlyphInset";
+import { useBarLogoFit } from "../composables/useBarLogoFit";
 import { useI18n } from "vue-i18n";
 import { AppShell, useAppVersionParts, CHANGE_PASSWORD_FROM_MENU } from "@ui";
 import { useLayoutState } from "../composables/useLayoutState";
@@ -306,8 +309,30 @@ const accountMenuProps = computed(() =>
 );
 
 // Views teleport their controls into the desktop page header only while it is shown.
-providePageHeader(computed(() => !isMobile.value));
+// NEO-113: on phones too — the header row is the card's first line (NEO-108),
+// and a list's search / filter / + sit on it next to the module title.
+providePageHeader(computed(() => true));
+const pageHeaderRow = providePageHeaderRow();
+function setHeaderTitleEl(el: Element | ComponentPublicInstance | null) {
+  pageHeaderRow.title.value = el instanceof HTMLElement ? el : null;
+}
 const recordHeaderClaim = provideRecordHeaderClaim();
+// Desktop: hidden while a record header replaces it; phones: always the card's first line.
+const pageHeaderVisible = computed(() => isMobile.value || !recordHeaderClaim.value);
+
+// NEO-108: logo sizes. The folded O is exactly the avatar's size, so both
+// corners of the phone bar match.
+const DESKTOP_LOGO_HEIGHT = 28;
+const MOBILE_LOGO_HEIGHT = 18;
+const AVATAR_SIZE = 32;
+/** Unfolded wordmark width at its current height (viewBox 536 × 90). */
+const wordmarkWidth = computed(() => ((isMobile.value ? MOBILE_LOGO_HEIGHT : DESKTOP_LOGO_HEIGHT) * 536) / 90);
+const barLogo = ref<ComponentPublicInstance | null>(null);
+const barActions = ref<HTMLElement | null>(null);
+const envBadge = ref<HTMLElement | null>(null);
+/** .layout-appbar__brand's gap between the logo and the env badge. */
+const BRAND_GAP = 10;
+const { folded: logoFolded } = useBarLogoFit(barLogo, barActions, wordmarkWidth, isMobile, { el: envBadge, gap: BRAND_GAP });
 
 /** Detail views (patient-detail, …) point back at their list; undefined on top-level modules. */
 const parentName = computed(() => {
@@ -326,10 +351,8 @@ const moduleTitle = computed(() => {
 const backLabel = computed(() => t("layout.backTo", { module: moduleTitle.value }));
 
 // The title's module icon is pulled back by its own glyph margin so the
-// visible drawing — not the icon box — sits on the content edge (mobile app
-// bar and desktop page header each measure their own, visible, instance).
-const barTitleGlyph = useGlyphInset(isMobile);
-const headerTitleGlyph = useGlyphInset(computed(() => !isMobile.value));
+// visible drawing — not the icon box — sits on the content edge.
+const headerTitleGlyph = useGlyphInset(pageHeaderVisible);
 
 const moduleIcon = computed(() => {
   const name = route.name;
@@ -397,19 +420,14 @@ const moduleIcon = computed(() => {
   );
 }
 
-/* Mobile has no side menu: the bar's leading element lines up with the page
-   content's left edge (--layout-card-inset) instead — the module icon on a
-   list, the back arrow on a detail view (which then carries the title). */
+/* Mobile (NEO-108): no side menu, and the title lives in the card, so the
+   bar's two outer elements sit on the content sheet's own outer edges — the
+   logo on its left edge, the avatar circle on its right edge (the account
+   button's end padding subtracted). */
 .layout-root:not(.layout-root--desktop) {
-  /* Back arrow: 24px icon centred in the app bar's 48px icon button. */
-  --layout-back-btn-icon-inset: 12px;
-
-  /* The module icon's own glyph margin is measured at runtime and pulled
-     back (useGlyphInset), so the title starts exactly at the card inset. */
-  --app-shell-title-inset: var(--layout-card-inset);
-  --app-shell-bar-start-inset: calc(
-    var(--layout-card-inset) - var(--layout-back-btn-icon-inset) - var(--layout-back-arrow-ink-inset)
-  );
+  --layout-sheet-margin: 8px;
+  --app-shell-bar-start-inset: var(--layout-sheet-margin);
+  --app-shell-bar-end-inset: calc(var(--layout-sheet-margin) - var(--layout-user-btn-pad-end));
 }
 
 .layout-skip-link {
@@ -590,7 +608,13 @@ const moduleIcon = computed(() => {
   margin-inline-end: 10px;
 }
 
-/* Desktop page header: first row of the content card. min-height matches the
+/* Account slot wrapper: useBarLogoFit measures where the bar's icons start. */
+.layout-bar-actions {
+  display: flex;
+  align-items: center;
+}
+
+/* Page header: first row of the content card (desktop; phones too since NEO-108). min-height matches the
    list toolbar's search field, so the row doesn't jump between a list (toolbar
    teleported in) and a view with nothing on the right. Child-combinator
    selector so it outranks `.layout-main__inner > *` below (which makes every
@@ -603,6 +627,13 @@ const moduleIcon = computed(() => {
   min-height: 48px;
   margin-bottom: var(--space-6, 24px);
   flex: 0 0 auto;
+}
+
+/* Phone: the row is the card's first line, a notch tighter than desktop's. */
+.layout-root:not(.layout-root--desktop) .layout-main__inner > .layout-page-header {
+  min-height: 40px;
+  margin-top: calc(-1 * var(--space-2, 8px));
+  margin-bottom: var(--space-3, 12px);
 }
 
 /* No inline padding: the module icon's glyph (pulled back by its own
@@ -619,6 +650,31 @@ const moduleIcon = computed(() => {
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
+}
+
+/* NEO-113, phones: the title shares the row with the list's icons and gives
+   way first — one line, cut with "…" only once the list has already folded
+   Filter / + into "⋯" (AppEntityList) and it still does not fit. */
+.layout-root:not(.layout-root--desktop) .layout-page-header__title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.layout-root:not(.layout-root--desktop) .layout-page-header__title .layout-appbar__title {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.layout-root:not(.layout-root--desktop) .layout-page-header__actions {
+  flex: 0 0 auto;
+}
+/* Open search (or a kept query) takes the whole row, title included. */
+.layout-page-header--search .layout-page-header__title,
+.layout-page-header--search .layout-page-header__back {
+  display: none;
+}
+.layout-root:not(.layout-root--desktop) .layout-page-header--search .layout-page-header__actions {
+  flex: 1 1 auto;
 }
 
 /* Pulled back by the icon's inset in the 56px button plus the arrow glyph's
@@ -677,7 +733,7 @@ const moduleIcon = computed(() => {
 /* Phone: the sheet is inset on both sides; the bottom nav already reserves
    its own space (AppShell .app-shell__main--bottom-nav-space). */
 .layout-root:not(.layout-root--desktop) .layout-main__inner {
-  margin-inline: 8px;
+  margin-inline: var(--layout-sheet-margin);
   min-height: calc(
     100dvh - var(--v-layout-top, 56px) - var(--mobile-bottom-nav-height, 56px) - env(safe-area-inset-bottom)
       - var(--layout-sheet-foot)

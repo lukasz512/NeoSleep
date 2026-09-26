@@ -182,11 +182,24 @@ describe("AppLayout", () => {
       return source.slice(start, source.indexOf("\n      </template>", start));
     };
 
-    it("app bar's leading slot renders the logo on desktop only and a back arrow on mobile detail views", () => {
+    // NEO-108: the logo is back on phones (smaller, folding into its O when
+    // the bar's icons need the room); the back arrow moved into the card.
+    it("app bar's leading slot renders the logo on both breakpoints, never a back arrow", () => {
       const block = slotBlock(readLayout(), "app-bar-start");
-      expect(block).toMatch(/<div v-if="!isMobile" class="layout-appbar__brand">\s*<AppLogo/);
-      expect(block).toMatch(/v-else-if="parentRoute"/);
-      expect(block).toContain('name="arrow-left"');
+      expect(block).toMatch(/<div class="layout-appbar__brand">\s*<AppLogo\s+ref="barLogo"/);
+      expect(block).not.toContain('v-if="!isMobile"');
+      expect(block).toContain(':height="isMobile ? MOBILE_LOGO_HEIGHT : DESKTOP_LOGO_HEIGHT"');
+      expect(block).toContain(':folded="logoFolded"');
+      expect(block).not.toContain('name="arrow-left"');
+    });
+
+    it("the folded logo is the avatar's size, and folding is measured from the bar, not a breakpoint", () => {
+      const layout = readLayout();
+      expect(slotBlock(layout, "app-bar-start")).toContain(':mark-size="AVATAR_SIZE"');
+      expect(slotBlock(layout, "app-bar-actions")).toContain('<VAvatar :size="AVATAR_SIZE"');
+      // The DEV badge after the logo counts towards the room the logo needs.
+      expect(layout).toMatch(/useBarLogoFit\(barLogo, barActions, wordmarkWidth, isMobile, \{ el: envBadge, gap: BRAND_GAP \}\)/);
+      expect(slotBlock(layout, "app-bar-actions")).toContain('ref="barActions"');
     });
 
     it("the logo is no longer rendered inside the side menu or on the right of the app bar", () => {
@@ -239,11 +252,16 @@ describe("AppLayout", () => {
       expect(readLayout()).toContain("prefers-reduced-motion");
     });
 
-    it("desktop page header: back arrow on detail views, module title, and the teleport target for view controls", () => {
+    it("page header: back arrow on detail views, module title, and the teleport target for view controls", () => {
       const source = readLayout();
       const header = source.slice(source.indexOf('class="layout-page-header"') - 40, source.indexOf("<RouterView"));
-      // NEO-56: also hidden while a detail view's record header replaces it.
-      expect(source).toContain('<div v-show="!isMobile && !recordHeaderClaim" class="layout-page-header">');
+      // NEO-56: hidden on desktop while a detail view's record header replaces
+      // it; NEO-108: always shown on phones as the card's first line.
+      expect(source).toMatch(/<div\s+v-show="pageHeaderVisible"\s+class="layout-page-header"/);
+      // NEO-113: views teleport into it on phones too, and an open phone search hides the title.
+      expect(source).toContain("providePageHeader(computed(() => true))");
+      expect(source).toContain("'layout-page-header--search': pageHeaderRow.searchTakesRow.value");
+      expect(source).toContain("const pageHeaderVisible = computed(() => isMobile.value || !recordHeaderClaim.value)");
       expect(source).toContain("provideRecordHeaderClaim()");
       expect(header).toMatch(/v-if="parentRoute"[\s\S]*?:to="parentRoute"/);
       expect(header).toContain("{{ moduleTitle }}");
@@ -251,8 +269,8 @@ describe("AppLayout", () => {
       expect(source).toContain("providePageHeader(");
     });
 
-    it("the app bar title is mobile-only (desktop shows it in the page header instead)", () => {
-      expect(slotBlock(readLayout(), "app-bar-title")).toMatch(/<Transition v-if="isMobile"/);
+    it("the app bar has no title on either breakpoint (NEO-108: it lives in the card)", () => {
+      expect(readLayout()).not.toContain("<template #app-bar-title");
     });
 
     it("detail views show the parent module's title, not the detail route's own", () => {
@@ -303,20 +321,25 @@ describe("AppLayout", () => {
       expect(logo).toMatch(/\.layout-app__bar-logo-link\s*\{[\s\S]*?padding:\s*8px 0;/);
     });
 
-    // Mobile: the bar's leading element (module icon / back arrow) and the
-    // desktop page-header title start on the content edge (card inset).
+    // Page-header title icon and back arrow start on the content edge (card inset).
     it("title icon and back arrow are placed from the card inset, the icon's glyph margin measured, not guessed", () => {
       const layout = readLayout();
-      expect(layout).toMatch(/--app-shell-title-inset:\s*var\(--layout-card-inset\)/);
-      expect(layout).toMatch(
-        /--app-shell-bar-start-inset:\s*calc\(\s*var\(--layout-card-inset\)\s*-\s*var\(--layout-back-btn-icon-inset\)\s*-\s*var\(--layout-back-arrow-ink-inset\)/,
-      );
       expect(layout).toMatch(
         /\.layout-page-header__back\s*\{[\s\S]*?margin-inline-start:\s*calc\(-1 \* \(var\(--layout-action-icon-inset\) \+ var\(--layout-back-arrow-ink-inset\)\)\)/,
       );
-      expect(layout).toContain("useGlyphInset(isMobile)");
-      expect(layout.match(/marginInlineStart: `\$\{-\w+TitleGlyph\.inset\.value\}px`/g)).toHaveLength(2);
-      expect(readShell()).toContain("margin-inline-start: var(--app-shell-title-inset");
+      expect(layout).toContain("useGlyphInset(pageHeaderVisible)");
+      expect(layout.match(/marginInlineStart: `\$\{-\w+TitleGlyph\.inset\.value\}px`/g)).toHaveLength(1);
+    });
+
+    // NEO-108: on phones the logo and the avatar circle sit on the sheet's own
+    // outer edges — one token for the sheet margin and both bar insets.
+    it("phone bar edges are the content sheet's outer edges", () => {
+      const layout = readLayout();
+      expect(layout).toMatch(/--app-shell-bar-start-inset:\s*var\(--layout-sheet-margin\)/);
+      expect(layout).toMatch(
+        /--app-shell-bar-end-inset:\s*calc\(var\(--layout-sheet-margin\) - var\(--layout-user-btn-pad-end\)\)/,
+      );
+      expect(layout).toMatch(/\.layout-main__inner\s*\{\s*margin-inline:\s*var\(--layout-sheet-margin\)/);
     });
 
     it("collapse chevron button is 32px with right-edge margin", () => {
