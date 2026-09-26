@@ -8,7 +8,9 @@
        orb bleeds off the bottom-right corner, the medium one sits under the
        logo, and the small one is the big one's "moon": it sits on the big
        orb's orbit ring just past the card's right edge (authOrbGeometry.ts)
-       and sways along it. Dropped where the ring doesn't reach (phones).
+       and sways along it. On a phone that ring is behind the card, so there
+       it takes layout B: low on the left under the card, overlapping the big
+       orb, with the medium one pushed further left — one diagonal of three.
        Layers per orb, each owning exactly one transform so none of them ever
        fight over the same property:
          anchor  → static position + pop-in / exit-expand keyframes (CSS)
@@ -16,7 +18,13 @@
          drift   → slow elliptical sway, x and y as two layers (CSS)
          breath  → per-frame scale + opacity from the breathing loop (JS)
          orb     → per-frame magnetic-pointer translate (useMagneticPointer) -->
-  <div ref="rootEl" class="auth-orbs" :style="rootStyle" aria-hidden="true">
+  <div
+    ref="rootEl"
+    class="auth-orbs"
+    :class="{ 'auth-orbs--phone': moon.layout === 'phone' }"
+    :style="rootStyle"
+    aria-hidden="true"
+  >
     <div
       v-for="(orb, index) in ORBS"
       :key="orb.key"
@@ -24,7 +32,6 @@
       :class="[
         `auth-orbs__anchor--${orb.key}`,
         anchorPhaseClass(phases[index], orb.key),
-        { 'auth-orbs__anchor--absent': orb.key === 'small' && !moon.visible },
       ]"
     >
       <div :ref="(el) => orb.key === 'small' && setElement(orbitRef, el)" class="auth-orbs__orbit">
@@ -229,7 +236,7 @@ function tick(now: number): void {
   const amplitude = lerp(SCALE_AMPLITUDE.idle, SCALE_AMPLITUDE.busy, mix);
   const opacityLow = lerp(OPACITY_RANGE.idle[0], OPACITY_RANGE.busy[0], mix);
   const opacityHigh = lerp(OPACITY_RANGE.idle[1], OPACITY_RANGE.busy[1], mix);
-  let bigScale = 1;
+  let ringScale = 1;
 
   ORBS.forEach((orb, index) => {
     const state = breathState[index];
@@ -244,7 +251,7 @@ function tick(now: number): void {
     if (!el) return;
     const f = breathCurve(state.phase);
     el.style.transform = `scale(${(1 + amplitude * f).toFixed(4)})`;
-    if (orb.key === "big") bigScale = 1 + amplitude * f;
+    if (orb.key === "big") ringScale = 1 + amplitude * f;
     el.style.opacity = lerp(opacityLow, opacityHigh, f).toFixed(3);
 
     // One wave per beat, launched at the start of each inhale, fading out as
@@ -259,9 +266,9 @@ function tick(now: number): void {
   });
 
   const orbit = orbitRef.value;
-  if (orbit && moon.value.visible) {
+  if (orbit) {
     const sway = MOON_SWAY * Math.sin((now / MOON_SWAY_PERIOD) * Math.PI * 2);
-    const offset = moonOffset(moon.value, sway, bigScale);
+    const offset = moonOffset(moon.value, sway, ringScale);
     orbit.style.transform = `translate(${offset.x.toFixed(2)}px, ${offset.y.toFixed(2)}px)`;
   }
 
@@ -361,7 +368,6 @@ const moon = computed<MoonPlacement>(() => {
 });
 
 const rootStyle = computed(() => {
-  if (!moon.value.visible) return undefined;
   return {
     "--auth-orbs-moon-x": `${moon.value.x}px`,
     "--auth-orbs-moon-y": `${moon.value.y}px`,
@@ -429,8 +435,24 @@ defineExpose({ whenEntered, playExit, replay });
     top 0.7s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.auth-orbs__anchor--absent {
-  display: none;
+/* Phone layout B (the big orb's ring is behind the card there): the small orb
+   sits low on the left, bigger, overlapping the big orb's edge; the medium
+   one slides further left so the three read as one diagonal. The medium's
+   move is a transition, so the hand-over from the boot splash (which paints
+   the desktop spot) glides instead of jumping. */
+.auth-orbs--phone .auth-orbs__anchor--small {
+  --auth-orbs-size: 26vmax;
+}
+
+.auth-orbs--phone .auth-orbs__anchor--medium {
+  left: 6%;
+  top: 14%;
+}
+
+.auth-orbs__anchor--medium {
+  transition:
+    left 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    top 0.7s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .auth-orbs__orbit {
@@ -589,7 +611,8 @@ defineExpose({ whenEntered, playExit, replay });
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .auth-orbs__anchor--small {
+  .auth-orbs__anchor--small,
+  .auth-orbs__anchor--medium {
     transition: none;
   }
 
