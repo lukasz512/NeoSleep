@@ -1,7 +1,8 @@
 import { ref } from "vue";
 import { useRouter } from "vue-router";
-import { errorBodyKeyOr, reportCaught, reportFailedResponse, type ApiFetchOptions } from "@api";
+import { reportCaught, reportFailedResponse, type ApiFetchOptions } from "@api";
 import type { AuthTokenStorage } from "@stores";
+import { applyCaughtError, applyFailedResponse, clearFlowErrors, createFlowErrors } from "./flowErrors";
 
 type ApiFetchFn = (path: string, options?: ApiFetchOptions) => Promise<Response>;
 
@@ -19,10 +20,12 @@ export function createUseChangePasswordFlow(apiFetch: ApiFetchFn, tokenStorage: 
     const currentPassword = ref("");
     const newPassword = ref("");
     const loading = ref(false);
-    const errorKey = ref<string | null>(null);
+    // NEO-109: errorKey = a line in the form's summary box, toastKey = a toast
+    // (connection / server only), fieldErrors = fields the API rejected.
+    const errors = createFlowErrors();
 
     async function submit(): Promise<void> {
-      errorKey.value = null;
+      clearFlowErrors(errors);
       loading.value = true;
       try {
         const res = await apiFetch("/api/v1/auth/change-password", {
@@ -36,12 +39,13 @@ export function createUseChangePasswordFlow(apiFetch: ApiFetchFn, tokenStorage: 
         });
 
         if (res.status === 401) {
-          errorKey.value = "user.changePassword.error.incorrectCurrent";
+          // The wrong current password is that field's problem — marked on it.
+          errors.errorKey.value = "user.changePassword.error.incorrectCurrent";
           return;
         }
         if (!res.ok) {
           const failure = await reportFailedResponse(res, { where: "useChangePasswordFlow.submit" });
-          errorKey.value = errorBodyKeyOr(failure, "user.changePassword.error.network");
+          await applyFailedResponse(errors, res, failure, "user.changePassword.error.network");
           return;
         }
 
@@ -55,12 +59,20 @@ export function createUseChangePasswordFlow(apiFetch: ApiFetchFn, tokenStorage: 
         window.location.assign(router.resolve({ path: "/login", query: { notice: PASSWORD_CHANGED_NOTICE } }).href);
       } catch (err) {
         reportCaught(err, { where: "useChangePasswordFlow.submit" });
-        errorKey.value = errorBodyKeyOr(err, "user.changePassword.error.network");
+        applyCaughtError(errors, err, "user.changePassword.error.network");
       } finally {
         loading.value = false;
       }
     }
 
-    return { currentPassword, newPassword, loading, errorKey, submit };
+    return {
+      currentPassword,
+      newPassword,
+      loading,
+      errorKey: errors.errorKey,
+      toastKey: errors.toastKey,
+      fieldErrors: errors.fieldErrors,
+      submit,
+    };
   };
 }

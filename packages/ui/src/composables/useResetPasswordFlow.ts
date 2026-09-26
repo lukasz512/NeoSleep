@@ -1,6 +1,7 @@
 import { ref } from "vue";
 import { useRouter, useRoute } from "vue-router";
-import { apiErrorFromResponse, errorBodyKeyOr, reportCaught, type ApiFetchOptions } from "@api";
+import { apiErrorFromResponse, reportCaught, type ApiFetchOptions } from "@api";
+import { applyCaughtError, applyFailedResponse, clearFlowErrors, createFlowErrors } from "./flowErrors";
 
 type ApiFetchFn = (path: string, options?: ApiFetchOptions) => Promise<Response>;
 
@@ -14,7 +15,9 @@ export function createUseResetPasswordFlow(apiFetch: ApiFetchFn) {
     const newPassword = ref("");
     const confirmPassword = ref("");
     const loading = ref(false);
-    const errorKey = ref<string | null>(null);
+    // NEO-109: errorKey = a line in the form's summary box, toastKey = a toast
+    // (connection / server only), fieldErrors = fields the API rejected.
+    const errors = createFlowErrors();
     const tokenValid = ref<boolean | null>(null);
 
     async function validateToken(): Promise<void> {
@@ -37,7 +40,7 @@ export function createUseResetPasswordFlow(apiFetch: ApiFetchFn) {
           // Our side failed (5xx / 429) — never tell the user their link is invalid for
           // that. Let them try: submit re-checks the token and says so if it's really bad.
           reportCaught(failure, { where: "useResetPasswordFlow.validateToken" });
-          errorKey.value = errorBodyKeyOr(failure, "user.resetPassword.error.network");
+          applyCaughtError(errors, failure, "user.resetPassword.error.network");
           tokenValid.value = true;
           return;
         }
@@ -45,7 +48,7 @@ export function createUseResetPasswordFlow(apiFetch: ApiFetchFn) {
         tokenValid.value = !!data.valid;
       } catch (err) {
         reportCaught(err, { where: "useResetPasswordFlow.validateToken" });
-        errorKey.value = errorBodyKeyOr(err, "user.resetPassword.error.network");
+        applyCaughtError(errors, err, "user.resetPassword.error.network");
         tokenValid.value = true;
       } finally {
         loading.value = false;
@@ -53,7 +56,7 @@ export function createUseResetPasswordFlow(apiFetch: ApiFetchFn) {
     }
 
     async function submit(): Promise<void> {
-      errorKey.value = null;
+      clearFlowErrors(errors);
       loading.value = true;
       try {
         const res = await apiFetch("/api/v1/auth/reset-password", {
@@ -66,22 +69,31 @@ export function createUseResetPasswordFlow(apiFetch: ApiFetchFn) {
         if (!res.ok) {
           const failure = await apiErrorFromResponse(res);
           if (failure.kind !== "client") reportCaught(failure, { where: "useResetPasswordFlow.submit" });
-          // A 4xx here is the token (expired / used); anything else is not the user's link.
-          errorKey.value = failure.kind === "client"
-            ? "user.resetPassword.error.invalidToken"
-            : errorBodyKeyOr(failure, "user.resetPassword.error.network");
+          // A 4xx naming a field is that field; any other 4xx is the token
+          // (expired / used) — a form-level line; the rest is not the user's link.
+          await applyFailedResponse(errors, res, failure, "user.resetPassword.error.invalidToken");
           return;
         }
 
         await router.push("/login");
       } catch (err) {
         reportCaught(err, { where: "useResetPasswordFlow.submit" });
-        errorKey.value = errorBodyKeyOr(err, "user.resetPassword.error.network");
+        applyCaughtError(errors, err, "user.resetPassword.error.network");
       } finally {
         loading.value = false;
       }
     }
 
-    return { newPassword, confirmPassword, loading, errorKey, tokenValid, validateToken, submit };
+    return {
+      newPassword,
+      confirmPassword,
+      loading,
+      errorKey: errors.errorKey,
+      toastKey: errors.toastKey,
+      fieldErrors: errors.fieldErrors,
+      tokenValid,
+      validateToken,
+      submit,
+    };
   };
 }

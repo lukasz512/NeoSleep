@@ -84,6 +84,8 @@ import AppIcon from "../components/AppIcon.vue";
 import AppListItemMenu from "../components/AppListItemMenu.vue";
 import { entityActionIcon, entityActionMenuIconClass } from "../config/entityActions";
 import { apiFetch } from "../composables/useApi";
+import { fieldErrorsFromResponse } from "../composables/useFormErrors";
+import type { SubmitDone } from "../composables/useEntitySubmit";
 import { useNotifications } from "../composables/useNotifications";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import { territoryFormFields } from "../config/forms/territoryForm";
@@ -144,7 +146,7 @@ function onEdit(territory: TerritoryListItem) {
   showEditModal.value = true;
 }
 
-async function onSubmit(payload: Record<string, unknown>, done: (ok: boolean) => void) {
+async function onSubmit(payload: Record<string, unknown>, done: SubmitDone) {
   try {
     const res = await apiFetch("/api/v1/territory", {
       method: "POST",
@@ -156,7 +158,8 @@ async function onSubmit(payload: Record<string, unknown>, done: (ok: boolean) =>
       window.dispatchEvent(new Event("entity-list-refresh"));
       done(true);
     } else {
-      done(false);
+      // A 400 naming a field is marked in the form (NEO-109); anything else was already toasted by apiFetch.
+      done(false, (await fieldErrorsFromResponse(res)) ?? undefined);
     }
   } catch (err) {
     reportCaught(err, { where: "TerritoriesView.onSubmit" });
@@ -166,7 +169,7 @@ async function onSubmit(payload: Record<string, unknown>, done: (ok: boolean) =>
   }
 }
 
-async function onEditSubmit(payload: Record<string, unknown>, done: (ok: boolean) => void) {
+async function onEditSubmit(payload: Record<string, unknown>, done: SubmitDone) {
   const id = selectedTerritory.value?.id;
   if (!id) { done(false); return; }
   try {
@@ -180,7 +183,8 @@ async function onEditSubmit(payload: Record<string, unknown>, done: (ok: boolean
       window.dispatchEvent(new Event("entity-list-refresh"));
       done(true);
     } else {
-      done(false);
+      // A 400 naming a field is marked in the form (NEO-109); anything else was already toasted by apiFetch.
+      done(false, (await fieldErrorsFromResponse(res)) ?? undefined);
     }
   } catch (err) {
     reportCaught(err, { where: "TerritoriesView.onEditSubmit" });

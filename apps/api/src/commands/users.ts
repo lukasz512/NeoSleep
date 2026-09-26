@@ -73,7 +73,7 @@ export async function CreateUserCommand(ctx: TenantContext, input: CreateUserInp
 
   if (!firstName) throw new ValidationError("first_name is required");
   if (!lastName) throw new ValidationError("last_name is required");
-  if (!email || !EMAIL_REGEX.test(email)) throw new ValidationError("A valid email is required");
+  if (!email || !EMAIL_REGEX.test(email)) throw new ValidationError("A valid email is required", "email");
   if (input.role && !VALID_ROLES.includes(input.role)) {
     throw new ValidationError(`role must be one of: ${VALID_ROLES.join(", ")}`);
   }

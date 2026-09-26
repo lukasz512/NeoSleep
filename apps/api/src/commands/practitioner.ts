@@ -271,7 +271,7 @@ export async function ActivatePractitionerCommand(
   if (practitioner.status === "active" || practitioner.status === "inactive") {
     throw new ConflictError(`Practitioner is already ${practitioner.status}`);
   }
-  if (!practitioner.email) throw new ValidationError("Practitioner must have an email address before activation");
+  if (!practitioner.email) throw new ValidationError("Practitioner must have an email address before activation", "email");
 
   // NEO-51: never send an invite the doctor can't complete — their country's
   // partner documents must exist, have a NeoSleep signatory, and be approved

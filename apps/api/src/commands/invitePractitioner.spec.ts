@@ -306,6 +306,32 @@ describe("AcceptPractitionerInviteCommand", () => {
       ).rejects.toBeInstanceOf(ValidationError);
     });
   }, 30000);
+
+  // NEO-109: each rejection names the request-body key the registration page
+  // sends, so the page marks that field instead of showing a generic alert.
+  it("names the rejected field by the key the registration page submits", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const { token } = await activateAndCaptureToken(ctx, `qa-accept-fields-${uniqueSuffix()}@example.com`, { region: "PL" });
+
+      const cases: [Partial<AcceptInviteInput>, string][] = [
+        [{ password: "short" }, "password"],
+        [{ clinicName: " " }, "clinicName"],
+        [{ clinicEmail: "" }, "clinicEmail"],
+        [{ clinicPhone: "" }, "clinicPhone"],
+        [{ billingAddress: "" }, "billingAddress"],
+        [{ practiceRole: "boss" }, "practiceRole"],
+        [{ practiceRole: "owner", taxId: "" }, "taxId"],
+        [{ licenseNumber: "4123456" }, "licenseNumber"],
+        [{ token: "not-a-real-token" }, "token"],
+      ];
+      for (const [override, field] of cases) {
+        await expect(
+          AcceptPractitionerInviteCommand(client, await acceptInput(client, token, override), META()),
+        ).rejects.toMatchObject({ code: "VALIDATION_ERROR", field });
+      }
+    });
+  }, 30000);
 });
 
 describe("GetPartnerDocumentPreviewQuery", () => {

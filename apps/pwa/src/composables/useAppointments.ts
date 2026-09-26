@@ -1,5 +1,6 @@
 import { computed } from "vue";
 import { apiFetch } from "./useApi";
+import { fieldErrorsFromResponse, type FieldErrors } from "./useFormErrors";
 import { useAuthStore } from "../stores/auth";
 
 /** GET/POST/PATCH /api/v1/appointments — see apps/api/src/db/appointment.ts (NEO-27, ADR-026). */
@@ -47,6 +48,8 @@ export interface AppointmentWriteResult {
   conflict: boolean;
   forbidden: boolean;
   appointment: Appointment | null;
+  /** A 400 naming a payload key (e.g. `duration_minutes`) — the form marks that field (NEO-109). */
+  fieldErrors: FieldErrors | null;
 }
 
 async function write(path: string, method: "POST" | "PATCH", body: Record<string, unknown>): Promise<AppointmentWriteResult> {
@@ -57,7 +60,8 @@ async function write(path: string, method: "POST" | "PATCH", body: Record<string
     handleErrors: false, // callers show one toast/inline message per failure
   });
   const appointment = res.ok ? ((await res.json()) as Appointment) : null;
-  return { ok: res.ok, conflict: res.status === 409, forbidden: res.status === 403, appointment };
+  const fieldErrors = res.ok ? null : await fieldErrorsFromResponse(res);
+  return { ok: res.ok, conflict: res.status === 409, forbidden: res.status === 403, appointment, fieldErrors };
 }
 
 /**
