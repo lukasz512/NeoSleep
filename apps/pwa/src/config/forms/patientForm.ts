@@ -80,6 +80,17 @@ async function loadPractitionerOptions(form?: Record<string, unknown>): Promise<
   return options;
 }
 
+/**
+ * Same range the API enforces (commands/patient.ts normalizeDateOfBirth):
+ * 1900-01-01 up to today, so a typo like year 0001 is caught before Save.
+ * The date input hands over "YYYY-MM-DD", which compares as a string.
+ */
+function dateOfBirthInRange(v: unknown): true | string {
+  if (typeof v !== "string" || !v) return true;
+  const today = new Date().toISOString().slice(0, 10);
+  return v >= "1900-01-01" && v <= today ? true : "app.formRenderer.validation.server.date_of_birth";
+}
+
 const identity = identityFields();
 identity[0] = { ...identity[0], key: "salutation" };
 
@@ -160,6 +171,7 @@ export const patientFormFields: FormFieldDef[] = [
     labelKey: "app.patients.form.dateOfBirth",
     default: null,
     required: true,
+    rules: [dateOfBirthInRange],
     cols: 6,
   },
   {

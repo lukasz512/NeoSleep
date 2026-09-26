@@ -123,3 +123,16 @@ export function messageKeyForCode(code: string | null | undefined): string | nul
   if (!code) return null;
   return CODE_MESSAGE_KEYS[code] ?? null;
 }
+
+/**
+ * Statuses whose error body may name a form field the form should mark
+ * instead of toasting: 400 VALIDATION_ERROR (NEO-109), 409 EMAIL_IN_USE (NEO-111).
+ */
+export function isFieldErrorStatus(status: number | undefined): boolean {
+  return status === 400 || status === 409;
+}
+
+/** The message key shown under `field`: the code's own message when it has one, else the field's generic server message. */
+export function fieldErrorMessageKey(field: string, code: string | null | undefined): string {
+  return messageKeyForCode(code) ?? `app.formRenderer.validation.server.${field}`;
+}

@@ -9,22 +9,12 @@
     <div class="qr-dialog__body">
       <p class="qr-dialog__kind">{{ title }}</p>
 
-      <div v-if="completed" class="qr-dialog__done" role="status">
-        <AppIcon name="check-circle" class="qr-dialog__done-icon" />
-        <p>{{ t("app.clinical.qr.completed") }}</p>
-      </div>
-      <template v-else>
-        <img v-if="qrDataUrl" :src="qrDataUrl" :alt="t('app.clinical.qr.title')" class="qr-dialog__code" width="264" height="264" />
-        <p class="qr-dialog__instructions">{{ t("app.clinical.qr.instructions") }}</p>
-        <p class="qr-dialog__waiting" role="status">
-          <VProgressCircular indeterminate size="16" width="2" />
-          {{ progress && progress.total > 1 ? t("app.clinical.qr.progress", progress) : t("app.clinical.qr.waiting") }}
-        </p>
-      </template>
+      <img v-if="qrDataUrl" :src="qrDataUrl" :alt="t('app.clinical.qr.title')" class="qr-dialog__code" width="264" height="264" />
+      <p class="qr-dialog__instructions">{{ t("app.clinical.qr.instructions") }}</p>
     </div>
 
     <template #actions>
-      <AppButton v-if="!completed && url" variant="text" @click="copyLink">{{ t("app.clinical.qr.copyLink") }}</AppButton>
+      <AppButton v-if="url" variant="text" @click="copyLink">{{ t("app.clinical.qr.copyLink") }}</AppButton>
       <VSpacer />
       <AppButton variant="text" @click="emit('update:modelValue', false)">{{ t("app.common.close") }}</AppButton>
     </template>
@@ -33,40 +23,30 @@
 
 <script setup lang="ts">
 import { reportCaught } from "@api";
-import { onBeforeUnmount, ref, watch } from "vue";
+import { ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import AppFormDialog from "../AppFormDialog.vue";
 import QRCode from "qrcode";
 import AppButton from "../AppButton.vue";
-import AppIcon from "../AppIcon.vue";
 import { useNotifications } from "../../composables/useNotifications";
 
 /**
  * Shows the patient self-fill link as a QR code (rendered locally — the
- * link is a credential, it never goes to a third-party QR service) and
- * polls while open, so the doctor sees the moment the patient submits.
+ * link is a credential, it never goes to a third-party QR service). Nothing
+ * else: the parent closes it once the patient has opened the link (NEO-110),
+ * and progress is followed on the Estudios QR status button (NEO-93).
  */
-// 15 s, and only for 15 min: the doctor's device and a patient's phone
-// usually share the clinic Wi-Fi's one public IP — and so the API's per-IP
-// rate limit; fast polling left open could starve the patient's submit.
-const POLL_MS = 15_000;
-const POLL_MAX_MS = 15 * 60_000;
-
 const props = defineProps<{
   modelValue: boolean;
   /** What the link covers — one item's title, or "everything still missing". */
   title: string;
   url: string | null;
-  /** Steps done so far on a multi-step link (the patient saves each step on its own). */
-  progress?: { done: number; total: number } | null;
-  completed: boolean;
 }>();
-const emit = defineEmits<{ "update:modelValue": [open: boolean]; poll: [] }>();
+const emit = defineEmits<{ "update:modelValue": [open: boolean] }>();
 const { t } = useI18n();
 const notifications = useNotifications();
 
 const qrDataUrl = ref<string | null>(null);
-let timer: ReturnType<typeof setInterval> | null = null;
 
 watch(
   () => props.url,
@@ -77,26 +57,6 @@ watch(
   },
   { immediate: true }
 );
-
-function stopPolling() {
-  if (timer) clearInterval(timer);
-  timer = null;
-}
-
-watch(
-  () => [props.modelValue, props.completed] as const,
-  ([open, completed]) => {
-    stopPolling();
-    if (!open || completed) return;
-    const startedAt = Date.now();
-    timer = setInterval(() => {
-      if (Date.now() - startedAt > POLL_MAX_MS) return stopPolling();
-      emit("poll");
-    }, POLL_MS);
-  },
-  { immediate: true }
-);
-onBeforeUnmount(stopPolling);
 
 async function copyLink() {
   if (!props.url) return;
@@ -133,29 +93,5 @@ async function copyLink() {
 .qr-dialog__instructions {
   margin: 0;
   font-size: 0.875rem;
-}
-.qr-dialog__waiting {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  font-size: 0.8125rem;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-}
-.qr-dialog__done {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  color: rgb(var(--v-theme-success));
-}
-.qr-dialog__done-icon {
-  width: 48px;
-  height: 48px;
-  font-size: 48px;
-}
-.qr-dialog__done p {
-  margin: 0;
-  color: rgb(var(--v-theme-on-surface));
 }
 </style>

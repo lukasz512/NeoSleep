@@ -11,7 +11,9 @@
  * real-length field list. `?dialog=event` mounts EventForm, `?dialog=confirm`
  * AppConfirmDialog, `?dialog=wizard` the OrthoApnea order wizard,
  * `?dialog=clinical` the medical-history questionnaire (a long checklist).
- * `?theme=dark` switches the theme. Also used by e2e/dialog-scroll.spec.ts.
+ * `?theme=dark` switches the theme. `&reject=<field>`
+ * makes the folder form's Save come back as if the API rejected that field
+ * (NEO-109, e2e/form-errors.spec.ts). Also used by e2e/dialog-scroll.spec.ts.
  */
 import { createApp, defineComponent, h } from "vue";
 import { createPinia } from "pinia";
@@ -25,11 +27,13 @@ import AppConfirmDialog from "../../src/components/AppConfirmDialog.vue";
 import OrthoApneaOrderWizard from "../../src/components/patient/OrthoApneaOrderWizard.vue";
 import ClinicalQuestionnaireDialog from "../../src/components/questionnaire/ClinicalQuestionnaireDialog.vue";
 import type { FormFieldDef } from "../../src/types/formField";
+import type { SubmitDone } from "../../src/composables/useEntitySubmit";
 import { identityFields } from "../../src/config/forms/identityFields";
 
 const params = new URLSearchParams(location.search);
 const dialog = params.get("dialog") ?? "form";
 vuetify.theme.change(params.get("theme") === "dark" ? darkTheme : lightTheme);
+const reject = params.get("reject");
 
 const fields: FormFieldDef[] = [
   { key: "first_name", type: "text", labelKey: "app.identity.form.firstName", cols: 6 },
@@ -117,6 +121,9 @@ const Harness = defineComponent({
           submitLabelKey: "app.patients.form.submit",
           editSubmitLabelKey: "app.patients.form.editSubmit",
           avatarEntityType: "patient",
+          // The API isn't running: Save either names a rejected field or fails plainly.
+          onSubmit: (_payload: Record<string, unknown>, done: SubmitDone) =>
+            reject ? done(false, { [reject]: `app.formRenderer.validation.server.${reject}` }) : done(false),
         });
       }
       if (dialog === "clinical") {

@@ -219,7 +219,7 @@ export async function insertStaffUser(
   try {
     const identityResult = await client.query<{ id: string }>(
       `INSERT INTO identities (email, title, first_name, last_name, phone, country_code) VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
+       ON CONFLICT (email) WHERE NOT email_shared DO UPDATE SET email = EXCLUDED.email
        RETURNING id`,
       [normalizedEmail, salutation?.trim() || null, firstName, lastName, phone ?? null, countryCode ?? null]
     );

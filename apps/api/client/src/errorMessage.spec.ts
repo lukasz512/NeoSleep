@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { ApiError, type ApiErrorKind } from "./errors";
-import { describeErrorInline, errorBodyKeyOr, errorClassOf, errorMessageKeys, messageKeyForCode, shortRequestId } from "./errorMessage";
+import { describeErrorInline, errorBodyKeyOr, errorClassOf, errorMessageKeys, fieldErrorMessageKey, isFieldErrorStatus, messageKeyForCode, shortRequestId } from "./errorMessage";
 import en from "../../../../packages/i18n/en.json";
 import pl from "../../../../packages/i18n/pl.json";
 import mx from "../../../../packages/i18n/mx.json";
@@ -92,5 +92,19 @@ describe("messageKeyForCode", () => {
     expect(messageKeyForCode("CONFLICT")).toBeNull();
     expect(messageKeyForCode(null)).toBeNull();
     expect(messageKeyForCode(undefined)).toBeNull();
+  });
+});
+
+describe("field errors (NEO-109 / NEO-111)", () => {
+  it("400 and 409 may name a field; other statuses don't", () => {
+    expect(isFieldErrorStatus(400)).toBe(true);
+    expect(isFieldErrorStatus(409)).toBe(true);
+    expect(isFieldErrorStatus(500)).toBe(false);
+    expect(isFieldErrorStatus(undefined)).toBe(false);
+  });
+
+  it("uses the code's own message when it has one, else the field's server message", () => {
+    expect(fieldErrorMessageKey("email", "EMAIL_IN_USE")).toBe("common.error.emailInUse");
+    expect(fieldErrorMessageKey("date_of_birth", "VALIDATION_ERROR")).toBe("app.formRenderer.validation.server.date_of_birth");
   });
 });

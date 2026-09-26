@@ -1,8 +1,36 @@
-import { reportCaught } from "@api";
+import { fieldErrorMessageKey, isFieldErrorStatus, reportCaught } from "@api";
 import { useNotifications, type NotificationIcon, type ShowOptions } from "./useNotifications";
 
 export interface EntitySubmitResult {
   ok: boolean;
+  /** HTTP status and a body reader — a fetch Response has both; read only on a 400 (NEO-109). */
+  status?: number;
+  clone?: () => { json: () => Promise<unknown> };
+}
+
+/** Field key → message key the form shows under that field (NEO-109). */
+export type FieldErrors = Record<string, string>;
+
+/** The form's resolver: true closes the dialog; false keeps it open, marking `fieldErrors` when the API named a field. */
+export type SubmitDone = (ok: boolean, fieldErrors?: FieldErrors) => void;
+
+/**
+ * The field a 400 VALIDATION_ERROR (NEO-109) or 409 EMAIL_IN_USE (NEO-111)
+ * names, as `{ [field]: messageKey }` — the code's own message when it has
+ * one, else `app.formRenderer.validation.server.<field>` (falling back to a
+ * generic "check this field"). Null for any other failure.
+ */
+async function fieldErrorsOf(result: EntitySubmitResult): Promise<FieldErrors | null> {
+  if (!isFieldErrorStatus(result.status) || !result.clone) return null;
+  try {
+    const body = (await result.clone().json()) as { field?: unknown; code?: unknown };
+    if (typeof body.field !== "string" || !body.field) return null;
+    const code = typeof body.code === "string" ? body.code : null;
+    return { [body.field]: fieldErrorMessageKey(body.field, code) };
+  } catch {
+    // benign: a non-JSON error names no field — the generic toast covers it.
+    return null;
+  }
 }
 
 export interface EntitySubmitOptions {
@@ -38,7 +66,7 @@ export function useEntitySubmit() {
    * is already disabled while a request is in flight, via AppButton's global
    * loader) — so no other change would be needed to add that branch later.
    */
-  async function submit(opts: EntitySubmitOptions, done: (ok: boolean) => void) {
+  async function submit(opts: EntitySubmitOptions, done: SubmitDone) {
     // No Retry on a failed save: the form stays open with its own Save
     // button, which is the retry — a second one in the toast would race it.
     const toast: ShowOptions = { icon: opts.icon, context: opts.context };
@@ -52,6 +80,12 @@ export function useEntitySubmit() {
       return;
     }
     if (!result.ok) {
+      // A rejected field is marked in the form itself, not toasted (NEO-109).
+      const fieldErrors = await fieldErrorsOf(result);
+      if (fieldErrors) {
+        done(false, fieldErrors);
+        return;
+      }
       notifications.show(opts.errorMessage, "error", undefined, toast);
       done(false);
       return;

@@ -27,7 +27,12 @@ export class DatabaseError extends AppError {
 }
 
 export class ValidationError extends AppError {
-  constructor(message: string) {
+  /**
+   * `field` names the payload key that failed (e.g. "date_of_birth"), when
+   * one does — the PWA's FormRenderer marks that field instead of showing a
+   * toast (NEO-109). Leave it out for errors no single field can fix.
+   */
+  constructor(message: string, public readonly field?: string) {
     super(message, "VALIDATION_ERROR", 400);
   }
 }
@@ -51,12 +56,15 @@ export class ConflictError extends AppError {
 }
 
 /**
- * NEO-111: identities.email is unique across every identity (patient, doctor,
- * user, lead), so saving a record with an email another person already has
- * would otherwise surface as an opaque 23505 "Database error". The dedicated
- * code lets the app show a translated message instead of the raw text.
+ * NEO-111: identities.email is unique among everyone except patients (users,
+ * doctors, leads — migration 037), so saving one of those with an email
+ * another of them already has would otherwise surface as an opaque 23505
+ * "Database error". The code + field let the form mark the Email field with a
+ * translated message instead.
  */
 export class EmailInUseError extends ConflictError {
+  readonly field = "email";
+
   constructor(email: string) {
     super(`Email "${email}" is already in use by another person.`, "EMAIL_IN_USE");
   }

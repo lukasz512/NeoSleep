@@ -8,6 +8,7 @@ import {
   purgeDeadQuestionnaireRequests,
   getUsableQuestionnaireRequestByHash,
   completeQuestionnaireStep,
+  markQuestionnaireRequestOpened,
   type QuestionnaireRequest,
 } from "../db/questionnaireRequest.js";
 import { insertMedicalHistory, insertStopBang } from "../db/clinicalRecords.js";
@@ -297,6 +298,8 @@ export async function GetPublicQuestionnaireQuery(client: PoolClient, token: str
   if (!request) throw new QuestionnaireLinkInvalidError();
   const context = await getPatientPdfContext(client, request.patient_id);
   if (!context) throw new QuestionnaireLinkInvalidError();
+  // The doctor's QR dialog closes on this (NEO-110).
+  await markQuestionnaireRequestOpened(client, request.id);
 
   const types = await stepTypes();
   const steps: PublicStep[] = [];

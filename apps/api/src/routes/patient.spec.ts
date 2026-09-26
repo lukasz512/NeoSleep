@@ -250,6 +250,21 @@ describe("patient self-fill: doctor → QR link → patient (public) → doctor"
     expect(lookup.status).toBe(410);
   });
 
+  it("the patient opening the link stamps opened_at once, and the checklist shows it (NEO-110)", async () => {
+    const { auth, patientId } = await authAndPatient();
+    const link = await request(app).post(`/api/v1/patient/${patientId}/questionnaire-requests`).set("Authorization", auth).send({ kind: "medical_history" });
+    const pending = async () => (await request(app).get(`/api/v1/patient/${patientId}/checklist`).set("Authorization", auth)).body.pending_requests[0];
+    expect((await pending()).opened_at).toBeNull();
+
+    const token = String(link.body.url).split("/q#")[1];
+    expect((await request(app).post("/api/v1/public/questionnaire/lookup").send({ token })).status).toBe(200);
+    const firstOpen = (await pending()).opened_at;
+    expect(firstOpen).toEqual(expect.any(String));
+
+    await request(app).post("/api/v1/public/questionnaire/lookup").send({ token });
+    expect((await pending()).opened_at).toBe(firstOpen); // reopening keeps the first time
+  });
+
   it("the checklist reports a link that ran out unused as expired_request, until a newer link supersedes it (NEO-93)", async () => {
     const { auth, patientId } = await authAndPatient();
     const link = await request(app).post(`/api/v1/patient/${patientId}/questionnaire-requests`).set("Authorization", auth).send({ kind: "medical_history" });
@@ -388,6 +403,15 @@ describe("patient date_of_birth (POST / PATCH / GET /api/v1/patient)", () => {
     expect(noDob.status).toBe(400);
     const noSex = await request(app).post("/api/v1/patient").set("Authorization", auth).send({ ...base(), gender: "", date_of_birth: "1968-03-12" });
     expect(noSex.status).toBe(400);
+  });
+
+  it("names the failing field in a 400, so the form can mark it (NEO-109)", async () => {
+    const auth = await adminAuth();
+    const ancient = await request(app).post("/api/v1/patient").set("Authorization", auth).send({ ...base(), date_of_birth: "0001-10-10" });
+    expect(ancient.status).toBe(400);
+    expect(ancient.body).toMatchObject({ code: "VALIDATION_ERROR", field: "date_of_birth" });
+    const badEmail = await request(app).post("/api/v1/patient").set("Authorization", auth).send({ ...base(), date_of_birth: "1968-03-12", email: "d@wp" });
+    expect(badEmail.body.field).toBe("email");
   });
 
   it("PATCH changes it, omitting it leaves it alone, clearing it (or sex) 400s", async () => {

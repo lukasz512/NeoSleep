@@ -1,6 +1,7 @@
 import type { PoolClient } from "pg";
 import { toArray, trimOrNull, trimOrEmpty } from "./helpers.js";
-import { AppError, DatabaseError, EmailInUseError, ValidationError } from "../errors.js";
+import { AppError, DatabaseError, ValidationError } from "../errors.js";
+import { assertEmailNotTaken } from "./identityEmail.js";
 
 export interface Practitioner {
   id: string;
@@ -342,7 +343,7 @@ export async function insertPractitioner(client: PoolClient, input: InsertPracti
     const identityResult = await client.query<{ id: string }>(
       `INSERT INTO identities (title, first_name, last_name, email, phone, language, social_links, region, territory_id, country_code)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-       ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
+       ON CONFLICT (email) WHERE NOT email_shared DO UPDATE SET email = EXCLUDED.email
        RETURNING id`,
       [
         trimOrNull(input.salutation),
@@ -428,20 +429,12 @@ export async function updatePractitioner(client: PoolClient, id: string, input: 
       orgId = institutionInput ? (await resolveOrganizationId(client, institutionInput, region)).id : null;
     }
 
-    // Pre-check rather than letting the UPDATE hit identities_email_key —
+    // Pre-check rather than letting the UPDATE hit identities_email_unique_not_shared —
     // a plain UPDATE has no ON CONFLICT clause to fall back to like
     // insertPractitioner's upsert above, so a collision here would otherwise
     // surface as an opaque 23505 (see getOrganizationIdByName for the same
     // pre-check pattern against organization_name_unique_idx).
-    if (email && email !== existing.email) {
-      const conflict = await client.query<{ id: string }>(
-        `SELECT id FROM identities WHERE email = $1 AND id != $2 LIMIT 1`,
-        [email, existing.identity_id]
-      );
-      if (conflict.rows[0]) {
-        throw new EmailInUseError(email);
-      }
-    }
+    if (email && email !== existing.email) await assertEmailNotTaken(client, email, existing.identity_id);
 
     await client.query(
       `UPDATE identities SET title = $1, first_name = $2, last_name = $3, email = $4, phone = $5, language = $6, social_links = $7, region = $8, territory_id = $9, updated_at = now()
