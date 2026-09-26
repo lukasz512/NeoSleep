@@ -117,7 +117,7 @@ export default defineConfig(mergeConfig(sharedViteConfig(__dirname), {
     vue(),
     bootSplashPlugin(),
     neoPwaPlugin({
-      name:        "NeoSleep Rep",
+      name:        "NeoSleep",
       shortName:   "NeoSleep",
       description: "Sales rep CRM for NeoSleep — manage HCPs, leads, and post-call forms.",
       startUrl:    "/",
