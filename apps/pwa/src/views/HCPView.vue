@@ -21,10 +21,9 @@
       avatar-entity-type="hcp"
       @submit="onEditSubmit"
     />
-    <EventForm
-      v-model="showEventForm"
-      :initial-data="eventFormInitial"
-      @submit="onEventFormSubmit"
+    <AppointmentDialog
+      v-model="showAppointmentDialog"
+      :practitioner="appointmentPractitioner"
     />
     <!-- Reps still add HCPs only through the lead -> invite-to-partner / move-to-doctors pipeline (see LeadDetailView.vue) -->
     <AppEntityList
@@ -80,8 +79,8 @@
     </template>
     <template #feed-card-actions="{ item }">
       <AppListItemMenu :aria-label="t('app.common.moreActions')">
-        <VListItem :title="t('user.detail.scheduleVisit')" @click="onScheduleVisit(item as HCPListItem)">
-          <template #prepend><AppIcon :name="entityActionIcon('scheduleVisit')" :class="entityActionMenuIconClass('scheduleVisit')" /></template>
+        <VListItem :title="t('user.detail.bookPatient')" @click="onBookPatient(item as HCPListItem)">
+          <template #prepend><AppIcon :name="entityActionIcon('bookAppointment')" :class="entityActionMenuIconClass('bookAppointment')" /></template>
         </VListItem>
         <VListItem v-if="canEditPractitioners" :title="t('user.hcp.detail.edit')" @click="onEditContact(item as HCPListItem)">
           <template #prepend><AppIcon :name="entityActionIcon('edit')" :class="entityActionMenuIconClass('edit')" /></template>
@@ -117,7 +116,7 @@ import { hcoDetailLink } from "../utils/entityLinks";
 import EntityMetaLine from "../components/EntityMetaLine.vue";
 
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
-const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
+const AppointmentDialog = defineAsyncComponent(() => import("../components/AppointmentDialog.vue"));
 
 interface HCPListItem {
   id: string;
@@ -150,9 +149,10 @@ const canAdd = computed(() => authStore.user?.role === "admin" || authStore.user
 const { canEditPractitioners } = usePermissions();
 const showAddModal = ref(false);
 const showEditModal = ref(false);
-const showEventForm = ref(false);
+const showAppointmentDialog = ref(false);
+/** Row menu "Umów pacjenta" (NEO-34): a patient↔doctor appointment with this doctor. */
+const appointmentPractitioner = ref<{ id: string; name: string } | null>(null);
 const selectedHcp = ref<HCPListItem | null>(null);
-const eventFormInitial = ref<{ start_at: string; end_at: string; hcpIds?: string[] } | undefined>(undefined);
 const { submit } = useEntitySubmit();
 
 /** Stable reference — see HCPDetailView.vue's identical computed for why an
@@ -277,37 +277,9 @@ async function onEditSubmit(data: Record<string, unknown>, done: (ok: boolean) =
   );
 }
 
-function onScheduleVisit(hcp: HCPListItem) {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  eventFormInitial.value = {
-    start_at: new Date(`${date} 09:00`).toISOString(),
-    end_at: new Date(`${date} 10:00`).toISOString(),
-    hcpIds: hcp.id ? [hcp.id] : [],
-  };
-  showEventForm.value = true;
-}
-
-async function onEventFormSubmit(
-  payload: import("../components/EventForm.vue").EventSubmitPayload,
-  done: (ok: boolean) => void,
-) {
-  await submit(
-    {
-      request: () =>
-        apiFetch("/api/v1/encounter", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: payload.title, start_at: payload.start_at, end_at: payload.end_at, type: payload.type, status: payload.status, location: payload.location, video_link: payload.video_link, notes: payload.notes, region: payload.region, attendees: payload.attendees }),
-        }),
-      successMessage: t("user.planner.form.success"),
-      icon: "nav-planner",
-      errorMessage: t("user.planner.form.errorSave"),
-      refresh: false,
-    },
-    done,
-  );
+function onBookPatient(hcp: HCPListItem) {
+  appointmentPractitioner.value = { id: hcp.id, name: hcp.name ?? "" };
+  showAppointmentDialog.value = true;
 }
 </script>
 
