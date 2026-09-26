@@ -1,17 +1,20 @@
 <template>
   <div class="app-entity-list">
-    <!-- NEO-55: on desktop the toolbar sits in AppLayout's page header, on the
-         same row as the module title (usePageHeader.ts); inline on mobile. -->
+    <!-- NEO-55: the toolbar sits in AppLayout's page header, on the same row
+         as the module title (usePageHeader.ts) — on phones too since NEO-113,
+         where Filter / + fold into "⋯" when the title would be cut. -->
     <Teleport v-if="!isTrulyEmpty && !loadError && !isInitialLoading" :to="pageHeader.to" defer :disabled="pageHeader.disabled.value">
     <div
+      ref="toolbarRef"
       :class="[
         'app-entity-list__toolbar',
         {
-          'app-entity-list__toolbar--hidden': mobile && toolbarHiddenByScroll,
+          'app-entity-list__toolbar--hidden': mobile && toolbarHiddenByScroll && pageHeader.disabled.value,
           'app-entity-list__toolbar--in-header': !pageHeader.disabled.value,
           'app-entity-list__toolbar--mobile': mobile,
           'app-entity-list__toolbar--search-open': mobile && searchFocused,
           'app-entity-list__toolbar--has-query': mobile && !!searchQuery.trim(),
+          'app-entity-list__toolbar--folded': toolsFolded,
         },
       ]"
       data-testid="entity-list-toolbar"
@@ -62,8 +65,10 @@
             </div>
           </template>
         </VTextField>
-        <div class="app-entity-list__tool" data-testid="entity-list-filter">
+        <div class="app-entity-list__tool app-entity-list__tool--foldable" data-testid="entity-list-filter">
           <AppFilterBar
+            ref="filterBarRef"
+            :anchor="toolsFolded ? moreAnchorRef : null"
             :model-value="filterState"
             :definitions="props.filterDefinitions"
             :title-key="i18n.filtersTitle"
@@ -78,6 +83,7 @@
         <div
           :class="[
             'app-entity-list__tool',
+            'app-entity-list__tool--foldable',
             'app-entity-list__clear-filters-wrap',
             { 'app-entity-list__clear-filters-wrap--hidden': mobile ? activeFilterCount === 0 : !hasActiveFiltersOrSearch },
           ]"
@@ -103,7 +109,7 @@
           </VTooltip>
         </div>
       </div>
-      <div v-if="showAddButton" class="app-entity-list__tool" data-testid="entity-list-add">
+      <div v-if="showAddButton" class="app-entity-list__tool app-entity-list__tool--foldable" data-testid="entity-list-add">
         <VTooltip location="bottom">
           <template #activator="{ props: tooltipProps }">
             <AppButton
@@ -120,6 +126,46 @@
           </template>
           <span>{{ t(i18n.add) }}</span>
         </VTooltip>
+      </div>
+      <!-- NEO-113: Filter / + / clear-all folded into one menu when the module
+           title next to them would otherwise be cut. The filter panel opens
+           anchored to this button (AppFilterBar :anchor). -->
+      <div v-if="toolsFolded" class="app-entity-list__tool" data-testid="entity-list-more">
+        <VMenu location="bottom end">
+          <template #activator="{ props: menuProps }">
+            <span ref="moreAnchorRef" class="app-entity-list__more-anchor">
+              <VBadge dot color="primary" :model-value="activeFilterCount > 0">
+                <AppButton
+                  v-bind="menuProps"
+                  icon
+                  variant="flat"
+                  size="large"
+                  class="app-entity-list__more app-entity-list__add--no-border"
+                  :aria-label="t('app.common.moreActions')"
+                >
+                  <AppIcon name="dots-vertical" class="app-entity-list__icon" />
+                </AppButton>
+              </VBadge>
+            </span>
+          </template>
+          <VList density="comfortable" class="app-entity-list__more-menu">
+            <VListItem data-testid="entity-list-more-filter" @click="filterBarRef?.open()">
+              <template #prepend><AppIcon name="filter" class="app-entity-list__icon" /></template>
+              <VListItemTitle>{{ t(i18n.filtersTitle) }}</VListItemTitle>
+              <template v-if="activeFilterCount > 0" #append>
+                <span class="app-entity-list__more-count">{{ activeFilterCount }}</span>
+              </template>
+            </VListItem>
+            <VListItem v-if="activeFilterCount > 0" data-testid="entity-list-more-clear" @click="onFiltersClear">
+              <template #prepend><AppIcon name="close" class="app-entity-list__icon" /></template>
+              <VListItemTitle>{{ t(i18n.filtersClear) }}</VListItemTitle>
+            </VListItem>
+            <VListItem v-if="showAddButton" data-testid="entity-list-more-add" @click="$emit('add')">
+              <template #prepend><AppIcon name="plus" class="app-entity-list__icon" /></template>
+              <VListItemTitle>{{ t(i18n.add) }}</VListItemTitle>
+            </VListItem>
+          </VList>
+        </VMenu>
       </div>
     </div>
     </Teleport>
@@ -289,7 +335,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, useSlots } from "vue";
+import { computed, onBeforeUnmount, ref, useSlots, watch } from "vue";
 import { useDisplay } from "vuetify";
 import { useI18n } from "vue-i18n";
 import { useIntersectionObserver } from "@vueuse/core";
@@ -301,7 +347,8 @@ import AppFilterBar from "./AppFilterBar.vue";
 import AppSpinner from "./AppSpinner.vue";
 import { useEntityList } from "../composables/useEntityList";
 import type { FilterDefinition } from "../composables/useFilters";
-import { usePageHeaderTeleport } from "../composables/usePageHeader";
+import { usePageHeaderTeleport, usePageHeaderRow } from "../composables/usePageHeader";
+import { useHeaderToolsFold } from "../composables/useHeaderToolsFold";
 import { AppInlineAlert } from "@ui";
 
 export interface AppEntityListHeader {
@@ -430,6 +477,22 @@ const searchFieldRef = ref<{ focus: () => void } | null>(null);
    the whole row while filter/add step aside, and blurring brings them back
    (a non-empty query then stays on the left as a quiet pill). */
 const searchFocused = ref(false);
+
+/* NEO-113, phones: the toolbar shares the header row with the module title.
+   An open search (or a kept query) takes the whole row, title included;
+   otherwise Filter / + / clear-all fold into "⋯" whenever the title would be
+   cut (useHeaderToolsFold). */
+const headerRow = usePageHeaderRow();
+const inPhoneHeader = computed(() => mobile.value && !pageHeader.disabled.value);
+const searchTakesRow = computed(() => inPhoneHeader.value && (searchFocused.value || !!searchQuery.value.trim()));
+watch(searchTakesRow, (v) => (headerRow.searchTakesRow.value = v), { immediate: true });
+onBeforeUnmount(() => (headerRow.searchTakesRow.value = false));
+const toolbarRef = ref<HTMLElement | null>(null);
+const moreAnchorRef = ref<HTMLElement | null>(null);
+const filterBarRef = ref<{ open: () => void } | null>(null);
+const { folded: headerFolded } = useHeaderToolsFold(headerRow.title, toolbarRef, inPhoneHeader, searchTakesRow);
+const toolsFolded = computed(() => inPhoneHeader.value && headerFolded.value);
+
 function onSearchClearClick() {
   onSearchClear();
   searchFieldRef.value?.focus();

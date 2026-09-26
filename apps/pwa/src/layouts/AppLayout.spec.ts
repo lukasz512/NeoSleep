@@ -257,7 +257,10 @@ describe("AppLayout", () => {
       const header = source.slice(source.indexOf('class="layout-page-header"') - 40, source.indexOf("<RouterView"));
       // NEO-56: hidden on desktop while a detail view's record header replaces
       // it; NEO-108: always shown on phones as the card's first line.
-      expect(source).toContain('<div v-show="pageHeaderVisible" class="layout-page-header">');
+      expect(source).toMatch(/<div\s+v-show="pageHeaderVisible"\s+class="layout-page-header"/);
+      // NEO-113: views teleport into it on phones too, and an open phone search hides the title.
+      expect(source).toContain("providePageHeader(computed(() => true))");
+      expect(source).toContain("'layout-page-header--search': pageHeaderRow.searchTakesRow.value");
       expect(source).toContain("const pageHeaderVisible = computed(() => isMobile.value || !recordHeaderClaim.value)");
       expect(source).toContain("provideRecordHeaderClaim()");
       expect(header).toMatch(/v-if="parentRoute"[\s\S]*?:to="parentRoute"/);

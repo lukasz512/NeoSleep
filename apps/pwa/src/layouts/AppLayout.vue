@@ -152,7 +152,12 @@
              this row. NEO-108: phones always show it — it is the card's first
              line ("← Pacientes" / module icon + title), the eyebrow is hidden
              there. -->
-        <div v-show="pageHeaderVisible" class="layout-page-header">
+        <!-- NEO-113: a view's open phone search takes the whole row, title included. -->
+        <div
+          v-show="pageHeaderVisible"
+          class="layout-page-header"
+          :class="{ 'layout-page-header--search': pageHeaderRow.searchTakesRow.value }"
+        >
           <AppButton
             v-if="parentRoute"
             icon
@@ -175,7 +180,11 @@
                 class="layout-appbar__icon"
                 :style="{ marginInlineStart: `${-headerTitleGlyph.inset.value}px` }"
               />
-              <span class="layout-appbar__title">{{ moduleTitle }}</span>
+              <span
+                :ref="setHeaderTitleEl"
+                class="layout-appbar__title"
+                :title="moduleTitle"
+              >{{ moduleTitle }}</span>
             </div>
           </Transition>
           <div :id="PAGE_HEADER_ACTIONS_ID" class="layout-page-header__actions" />
@@ -220,7 +229,12 @@ import { VMenu } from "vuetify/components/VMenu";
 import { VBottomSheet } from "vuetify/components/VBottomSheet";
 import { navTitleKey, navIconName, navParentName } from "../router/routes";
 import { pageTransitionsSupported } from "../router/pageTransitions";
-import { providePageHeader, provideRecordHeaderClaim, PAGE_HEADER_ACTIONS_ID } from "../composables/usePageHeader";
+import {
+  providePageHeader,
+  providePageHeaderRow,
+  provideRecordHeaderClaim,
+  PAGE_HEADER_ACTIONS_ID,
+} from "../composables/usePageHeader";
 import { useGlyphInset } from "../composables/useGlyphInset";
 import { useBarLogoFit } from "../composables/useBarLogoFit";
 import { useI18n } from "vue-i18n";
@@ -295,7 +309,13 @@ const accountMenuProps = computed(() =>
 );
 
 // Views teleport their controls into the desktop page header only while it is shown.
-providePageHeader(computed(() => !isMobile.value));
+// NEO-113: on phones too — the header row is the card's first line (NEO-108),
+// and a list's search / filter / + sit on it next to the module title.
+providePageHeader(computed(() => true));
+const pageHeaderRow = providePageHeaderRow();
+function setHeaderTitleEl(el: Element | ComponentPublicInstance | null) {
+  pageHeaderRow.title.value = el instanceof HTMLElement ? el : null;
+}
 const recordHeaderClaim = provideRecordHeaderClaim();
 // Desktop: hidden while a record header replaces it; phones: always the card's first line.
 const pageHeaderVisible = computed(() => isMobile.value || !recordHeaderClaim.value);
@@ -630,6 +650,31 @@ const moduleIcon = computed(() => {
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
+}
+
+/* NEO-113, phones: the title shares the row with the list's icons and gives
+   way first — one line, cut with "…" only once the list has already folded
+   Filter / + into "⋯" (AppEntityList) and it still does not fit. */
+.layout-root:not(.layout-root--desktop) .layout-page-header__title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.layout-root:not(.layout-root--desktop) .layout-page-header__title .layout-appbar__title {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.layout-root:not(.layout-root--desktop) .layout-page-header__actions {
+  flex: 0 0 auto;
+}
+/* Open search (or a kept query) takes the whole row, title included. */
+.layout-page-header--search .layout-page-header__title,
+.layout-page-header--search .layout-page-header__back {
+  display: none;
+}
+.layout-root:not(.layout-root--desktop) .layout-page-header--search .layout-page-header__actions {
+  flex: 1 1 auto;
 }
 
 /* Pulled back by the icon's inset in the 56px button plus the arrow glyph's
