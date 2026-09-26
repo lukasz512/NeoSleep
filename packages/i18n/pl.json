@@ -1816,7 +1816,7 @@
   "user.hco.detail.deleteConfirmText": "Usunąć tę klinikę? Tej operacji nie można cofnąć z tego miejsca.",
   "user.hco.detail.deleteSuccess": "Klinika usunięta",
   "app.formRenderer.unresolvedOption": "Nieznane",
-  "app.formRenderer.choiceMore": "Także:",
+  "app.formRenderer.choiceMore": "Więcej opcji",
   "app.orthoApneaOrder.form.incrementValue": "Zwiększ wartość",
   "app.orthoApneaOrder.form.decrementValue": "Zmniejsz wartość",
   "app.orthoApneaOrder.transactionLog.openButton": "Zobacz dziennik transakcji",

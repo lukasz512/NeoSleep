@@ -1816,7 +1816,7 @@
   "user.hco.detail.deleteConfirmText": "Delete this clinic? This can't be undone from here.",
   "user.hco.detail.deleteSuccess": "Clinic deleted",
   "app.formRenderer.unresolvedOption": "Unknown",
-  "app.formRenderer.choiceMore": "Also:",
+  "app.formRenderer.choiceMore": "More options",
   "app.orthoApneaOrder.form.incrementValue": "Increase value",
   "app.orthoApneaOrder.form.decrementValue": "Decrease value",
   "app.orthoApneaOrder.transactionLog.openButton": "View transaction log",
