@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { moonOffset, placeMoon } from "./authOrbGeometry";
+import { PHONE_SPOT, moonOffset, placeMoon } from "./authOrbGeometry";
 
 // Card boxes as AuthView lays them out: 420px wide, centered, ~210px from the top.
 const desktop = { width: 1441, height: 786, card: { top: 210, right: 1441 / 2 + 210 } };
@@ -14,7 +14,7 @@ describe("placeMoon", () => {
     ["tablet", tablet],
   ])("puts the moon on the big orb's ring, just right of the card (%s)", (_, s) => {
     const moon = placeMoon(s.width, s.height, s.card);
-    expect(moon.visible).toBe(true);
+    expect(moon.layout).toBe("ring");
     // Exactly on the ring.
     expect(Math.hypot(moon.x - moon.orbitX, moon.y - moon.orbitY)).toBeCloseTo(moon.orbitRadius, 6);
     // Center past the card's right edge, above the ring's center.
@@ -25,19 +25,11 @@ describe("placeMoon", () => {
     expect(moon.y).toBeGreaterThan(0);
   });
 
-  it("moves the moon to the medium orb's ring on a phone, above the logo", () => {
+  it("uses layout B on a phone: low on the left, under the card", () => {
     const moon = placeMoon(phone.width, phone.height, phone.card);
-    expect(moon.visible).toBe(true);
-    expect(moon.host).toBe("medium");
-    expect(Math.hypot(moon.x - moon.orbitX, moon.y - moon.orbitY)).toBeCloseTo(moon.orbitRadius, 6);
-    // Its whole disc stays above the logo block over the card.
-    const radius = 0.08 * phone.height;
-    expect(moon.y + radius).toBeLessThanOrEqual(phone.card.top - 75 + 1e-6);
-    expect(moon.x).toBeGreaterThan(moon.orbitX);
-  });
-
-  it("keeps the moon on the big orb's ring wherever that ring reaches the card", () => {
-    for (const s of [desktop, wide, tablet]) expect(placeMoon(s.width, s.height, s.card).host).toBe("big");
+    expect(moon.layout).toBe("phone");
+    expect(moon.x).toBeCloseTo(phone.width * PHONE_SPOT.x, 6);
+    expect(moon.y).toBeCloseTo(phone.height * PHONE_SPOT.y, 6);
   });
 });
 
@@ -54,5 +46,11 @@ describe("moonOffset", () => {
     const offset = moonOffset(moon, 0.05, 1.03);
     const distance = Math.hypot(moon.x + offset.x - moon.orbitX, moon.y + offset.y - moon.orbitY);
     expect(distance).toBeCloseTo(moon.orbitRadius * 1.03, 6);
+  });
+
+  it("never sways in the phone layout", () => {
+    const offset = moonOffset(placeMoon(phone.width, phone.height, phone.card), 0.05, 1.03);
+    expect(offset.x).toBeCloseTo(0, 6);
+    expect(offset.y).toBeCloseTo(0, 6);
   });
 });
