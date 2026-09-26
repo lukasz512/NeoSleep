@@ -660,6 +660,13 @@ body {
   z-index: 10000 !important;
 }
 
+/* The install card (NEO-87) opens by itself; Vuetify then moves focus into
+   its content wrapper, and the global :focus-visible ring drew a teal frame
+   around a card nobody tabbed to. The buttons inside keep their own ring. */
+.install-card-overlay > .v-overlay__content:focus-visible {
+  outline: none;
+}
+
 /*
  * Nested discard-changes confirm dialog: Vuetify's stack composable computes
  * a fresh overlay's z-index from its *own* JS-tracked global stack (parent's
