@@ -9,21 +9,24 @@
     :class="{ 'user-menu--sheet': sheet }"
     :aria-label="t('user.user.menu')"
   >
-    <div class="user-menu__identity">
-      <VAvatar size="44" color="primary" rounded="lg">
-        <span class="text-body-large font-weight-bold">{{ initials }}</span>
-      </VAvatar>
+    <!-- NEO-122: text left, avatar right — the avatar sits exactly where the
+         app bar's avatar button was, so the menu reads as that button opened
+         up (data-motion marks what useAccountMenuMotion moves). -->
+    <div class="user-menu__identity" data-motion="header">
       <div class="user-menu__who">
-        <span class="user-menu__name">{{ name }}</span>
-        <span v-if="email && email !== name" class="user-menu__email">{{ email }}</span>
+        <span class="user-menu__name" data-motion="name">{{ name }}</span>
+        <span v-if="email && email !== name" class="user-menu__email" data-motion="extra">{{ email }}</span>
         <span class="user-menu__role">
-          {{ roleLabel }}
-          <span v-if="region" class="user-menu__region">{{ region }}</span>
+          <span data-motion="role">{{ roleLabel }}</span>
+          <span v-if="region" class="user-menu__region" data-motion="extra">{{ region }}</span>
         </span>
       </div>
+      <VAvatar size="40" color="primary" rounded="lg" class="user-menu__avatar" data-motion="avatar">
+        <span class="text-body-medium font-weight-bold">{{ initials }}</span>
+      </VAvatar>
     </div>
 
-    <div class="user-menu__settings">
+    <div class="user-menu__settings" data-motion="row">
       <div class="user-menu__setting">
         <span :id="themeLabelId" class="user-menu__setting-name">{{ t('user.settings.theme') }}</span>
         <div
@@ -82,6 +85,7 @@
       v-if="installMethod"
       type="button"
       class="user-menu__row"
+      data-motion="row"
       data-testid="app-install-menu-item"
       @click="cardOpen = true; $emit('close')"
     >
@@ -89,7 +93,7 @@
       {{ t(`layout.install.title.${device.form}`) }}
     </button>
 
-    <div class="user-menu__actions" :class="{ 'user-menu__actions--single': !canChangePassword }">
+    <div class="user-menu__actions" :class="{ 'user-menu__actions--single': !canChangePassword }" data-motion="row">
       <button
         v-if="canChangePassword"
         type="button"
@@ -113,7 +117,7 @@
       </button>
     </div>
 
-    <div v-if="version" class="user-menu__version" data-testid="user-menu-version">
+    <div v-if="version" class="user-menu__version" data-motion="row" data-testid="user-menu-version">
       <span>{{ version }}</span>
       <span v-if="channel" class="user-menu__channel">{{ channel }}</span>
     </div>
@@ -195,14 +199,16 @@ function onLocaleChange(value: string) {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* Tight top/right padding so the avatar lands on the app bar button's avatar. */
 .user-menu__identity {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 18px 16px 14px;
+  gap: 12px;
+  padding: 10px 10px 12px 16px;
 }
 
 .user-menu__who {
+  flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
