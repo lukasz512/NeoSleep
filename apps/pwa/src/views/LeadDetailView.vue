@@ -325,6 +325,7 @@
       :secondary-label="t('app.common.cancel')"
       :secondary-color="null"
       :primary-label="t('user.leads.detail.sendOffer')"
+      :primary-color="null"
       primary-variant="text"
       :loading="sendOfferLoading"
       max-width="360"

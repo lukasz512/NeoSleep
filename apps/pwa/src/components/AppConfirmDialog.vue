@@ -15,7 +15,7 @@
       <VCardActions>
         <VSpacer />
         <AppButton variant="text" :color="secondaryColor ?? undefined" @click="emit('secondary')">{{ secondaryLabel }}</AppButton>
-        <AppButton :color="primaryColor" :variant="primaryVariant" :loading="loading" @click="emit('primary')">{{ primaryLabel }}</AppButton>
+        <AppButton :color="primaryColor ?? undefined" :variant="primaryVariant" :loading="loading" @click="emit('primary')">{{ primaryLabel }}</AppButton>
       </VCardActions>
     </VCard>
   </VDialog>
@@ -33,8 +33,8 @@
  * "Secondary" is the left/text-styled button, "primary" the right one.
  * Neither name is hardcoded to a meaning since callers use it both ways
  * (Cancel/Delete on a delete confirm, Discard/Save draft on the order
- * wizard). `secondaryColor: null` gives a neutral Cancel; `primaryVariant:
- * "text"` keeps a destructive action as a quiet text button.
+ * wizard). `secondaryColor: null` / `primaryColor: null` give a neutral
+ * (grey) button; `primaryVariant: "text"` keeps an action a quiet text button.
  */
 import { originDialogTransition } from "@ui";
 import type { VBtn } from "vuetify/components";
@@ -51,7 +51,7 @@ withDefaults(
     secondaryLabel: string;
     primaryLabel: string;
     secondaryColor?: string | null;
-    primaryColor?: string;
+    primaryColor?: string | null;
     primaryVariant?: BtnVariant;
     loading?: boolean;
     persistent?: boolean;
