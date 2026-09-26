@@ -1,5 +1,7 @@
 ## Refined User Story: Worktree cleanup
 
+> **Superseded in part by NEO-84 (2026-09-26)** — see [ship-rules-ticket-links-index-cleanup.md](ship-rules-ticket-links-index-cleanup.md): merged work is now removed automatically at session start (`--auto`), without the Linear "Done" check; local branches without a worktree and squash merges are covered. The safety rules below (never `--force`, never unmerged/dirty/locked) still hold.
+
 **Classification**: feature — changes the dev workflow and deletes local worktrees, local branches and remote branches; "what counts as closed" is a judgment call worth getting right.
 **Raw input**: "we need to think about better cleanup of closed worktrees — we don't have it in the project at all. We must add it, now." (Łukasz, 2026-09-24, NEO-50)
 

@@ -8,7 +8,15 @@
 //     → writes the HTML page, prints its path + the Linear comment text
 //   node .claude/skills/ship-artifact/build.mjs finalize --url <artifact-url>
 //        [--linear-attached] [--linear-commented] [--linear-status "<name>"]
-//     → writes .claude/local/artifacts/<TICKET>.json (or branch-<branch>.json)
+//     → writes .claude/local/artifacts/<TICKET>.json and upserts the artifact index
+//   node .claude/skills/ship-artifact/build.mjs index
+//     → renders the artifact index page (one line per change), prints its path + URL
+//   node .claude/skills/ship-artifact/build.mjs index --published <index-url>
+//     → records the index URL and marks this ticket's marker "indexed"
+//
+// NEO-84 (Łukasz, 2026-09-26): every change has a NEO ticket; every Artifact and ticket
+// carries the same 3 links (Artifact, Linear, VS Code session); texts are short — the
+// limits below reject padded content instead of rendering it.
 //
 // No dependencies beyond Node. English only (CLAUDE.md).
 
@@ -31,6 +39,52 @@ const BRANCH = git("rev-parse", "--abbrev-ref", "HEAD");
 const TICKET_FROM_BRANCH = (BRANCH.match(/\b(neo-\d+)\b/i)?.[1] ?? "").toUpperCase() || null;
 const MARKER_DIR = join(ROOT, ".claude/local/artifacts");
 const DRAFT = join(MARKER_DIR, ".draft.json");
+// The index is shared by every worktree, so it lives in the main checkout's .claude/local.
+const COMMON_LOCAL = join(dirname(git("rev-parse", "--path-format=absolute", "--git-common-dir") || join(ROOT, ".git")), ".claude/local");
+const INDEX_JSON = join(COMMON_LOCAL, "artifact-index.json");
+const INDEX_HTML = join(COMMON_LOCAL, "artifact-index.html");
+const INDEX_URL_FILE = join(COMMON_LOCAL, "artifact-index-url.txt");
+const SESSION_ID = process.env.CLAUDE_CODE_SESSION_ID ?? "";
+const linearUrlOf = (ticket) => `https://linear.app/neosleep/issue/${ticket}`;
+const vscodeUrlOf = (id) => `vscode://anthropic.claude-code/open?session=${id}`;
+
+// Short on purpose: Łukasz reads these after every session (NEO-84, "no AI slop").
+const LIMITS = {
+  headline: 110,
+  summaryChars: 320,
+  summarySentences: 2,
+  prTitle: 80,
+  list: { decisions: [4, 220], notes: [4, 220], verify: [8, 160] },
+};
+const plainText = (html) => String(html ?? "").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+
+function checkLimits(c) {
+  const problems = [];
+  const headline = plainText(c.headline);
+  if (headline.length > LIMITS.headline) problems.push(`headline is ${headline.length} chars (max ${LIMITS.headline})`);
+  const summary = plainText(c.summary);
+  if (summary.length > LIMITS.summaryChars) problems.push(`summary is ${summary.length} chars (max ${LIMITS.summaryChars})`);
+  const sentences = summary.split(/(?<=[.!?])\s+(?=[A-Z0-9"„(])/).filter(Boolean).length;
+  if (sentences > LIMITS.summarySentences) problems.push(`summary has ${sentences} sentences (max ${LIMITS.summarySentences})`);
+  if (c.prTitle && plainText(c.prTitle).length > LIMITS.prTitle) problems.push(`prTitle is longer than ${LIMITS.prTitle} chars`);
+  for (const [key, [maxItems, maxChars]] of Object.entries(LIMITS.list)) {
+    const items = c[key] ?? [];
+    if (items.length > maxItems) problems.push(`${key} has ${items.length} items (max ${maxItems})`);
+    items.forEach((item, i) => {
+      const len = plainText(item).length;
+      if (len > maxChars) problems.push(`${key}[${i}] is ${len} chars (max ${maxChars})`);
+    });
+  }
+  if (problems.length) throw new Error(`content too long — cut it down, don't pad it:\n  - ${problems.join("\n  - ")}`);
+}
+
+function readJson(path, fallback) {
+  try {
+    return JSON.parse(readFileSync(path, "utf-8"));
+  } catch {
+    return fallback;
+  }
+}
 
 function repoSlug() {
   const url = git("remote", "get-url", "origin");
@@ -113,12 +167,19 @@ function render(contentPath) {
   for (const key of ["title", "headline", "summary", "verify"]) {
     if (!c[key] || (Array.isArray(c[key]) && !c[key].length)) throw new Error(`content.${key} is required`);
   }
+  if (!ticket) {
+    throw new Error("every change needs a NEO ticket (NEO-84): create it in Linear first and work on a branch named after it (worktree-neo-<n>-<slug>)");
+  }
+  if (!SESSION_ID) throw new Error("CLAUDE_CODE_SESSION_ID is not set — run this from the Claude Code session that made the change (needed for the VS Code link)");
+  checkLimits(c);
 
-  const sessionId = process.env.CLAUDE_CODE_SESSION_ID ?? "";
+  const sessionId = SESSION_ID;
   const pushed = isPushed();
   const existing = existingPr();
   const pr = existing?.url ?? (pushed ? prUrl(ticket, c.prTitle ?? c.headline, c.summary) : null);
-  const linearUrl = ticket ? `https://linear.app/neosleep/issue/${ticket}` : null;
+  const linearUrl = linearUrlOf(ticket);
+  // The Artifact's own URL is known from the second render on (finalize stores it).
+  const selfUrl = readJson(markerPath(ticket), {}).url ?? null;
   const prLabel = !existing
     ? "Create PR"
     : existing.state === "merged"
@@ -130,10 +191,12 @@ function render(contentPath) {
   // The Artifact renders in a sandboxed iframe; GitHub/Linear refuse to be framed,
   // so every link must open a new tab or the click shows a broken-page icon.
   const ext = `target="_blank" rel="noopener noreferrer"`;
+  // Always the same order: PR, then the 3 fixed links (NEO-84) — Artifact, Linear, VS Code.
   const links = [
     pr ? `<a class="btn primary" href="${esc(pr)}" ${ext}>${esc(prLabel)}</a>` :`<span class="btn ghost" title="Branch not pushed yet">PR link after push</span>`,
-    linearUrl ? `<a class="btn" href="${esc(linearUrl)}" ${ext}>Linear ${esc(ticket)}</a>` : "",
-    sessionId ? `<a class="btn" href="vscode://anthropic.claude-code/open?session=${esc(sessionId)}" ${ext}>Claude session</a>` : "",
+    selfUrl ? `<a class="btn" href="${esc(selfUrl)}" ${ext}>Artifact</a>` : `<span class="btn ghost" title="Filled in on the next render, after the first publish">Artifact link after publish</span>`,
+    `<a class="btn" href="${esc(linearUrl)}" ${ext}>Linear ${esc(ticket)}</a>`,
+    `<a class="btn" href="${esc(vscodeUrlOf(sessionId))}" ${ext}>VS Code session</a>`,
   ].join("");
 
   const decisions = c.decisions?.length
@@ -184,7 +247,11 @@ function render(contentPath) {
   mkdirSync(MARKER_DIR, { recursive: true });
   writeFileSync(
     DRAFT,
-    JSON.stringify({ ticket, prUrl: pr, uiChanged, hoisting: c.hoisting, testCoverageMap: c.testCoverageMap, visualComparison: c.visualComparison }, null, 2)
+    JSON.stringify(
+      { ticket, title: c.title, headline: plainText(c.headline), sessionId, prUrl: pr, uiChanged, hoisting: c.hoisting, testCoverageMap: c.testCoverageMap, visualComparison: c.visualComparison },
+      null,
+      2
+    )
   );
 
   console.log(`page: ${out}`);
@@ -196,10 +263,19 @@ function render(contentPath) {
         ? "pushed: yes — Create PR button is live"
         : "pushed: no — re-run render after push to get the Create PR button"
   );
-  if (ticket) {
-    console.log("\n--- Linear comment (post after publishing, replace <ARTIFACT_URL>) ---");
-    console.log(`${c.summary.replace(/<[^>]+>/g, "")}\n\nArtifact: <ARTIFACT_URL>${pr ? `\n${prLabel}: ${pr}` : ""}\nBranch: \`${BRANCH}\``);
-  }
+  if (!selfUrl) console.log("first render: publish, run finalize, then render + republish once so the Artifact link is filled in");
+  console.log("\n--- Linear comment (post after publishing, replace <ARTIFACT_URL>) ---");
+  console.log(
+    [
+      plainText(c.summary),
+      "",
+      `Artifact: ${selfUrl ?? "<ARTIFACT_URL>"}`,
+      `Linear: ${linearUrl}`,
+      `VS Code: ${vscodeUrlOf(sessionId)}`,
+      ...(pr ? [`${prLabel}: ${pr}`] : []),
+      `Branch: \`${BRANCH}\``,
+    ].join("\n")
+  );
 }
 
 function finalize(argv) {
@@ -222,6 +298,12 @@ function finalize(argv) {
     ...(draft.testCoverageMap ? { testCoverageMap: draft.testCoverageMap } : {}),
     ...(draft.uiChanged && draft.visualComparison ? { visualComparison: draft.visualComparison } : {}),
     ...(draft.prUrl ? { prUrl: draft.prUrl } : {}),
+    ticket: draft.ticket,
+    sessionId: draft.sessionId,
+    linearUrl: linearUrlOf(draft.ticket),
+    vscodeUrl: vscodeUrlOf(draft.sessionId),
+    // Set again by `index --published` once the index page shows this version.
+    indexed: false,
   };
   if (draft.ticket) {
     if (argv.includes("--linear-attached")) marker.linearAttached = true;
@@ -230,15 +312,74 @@ function finalize(argv) {
   }
   writeFileSync(path, JSON.stringify(marker, null, 2) + "\n");
   console.log(`marker written: ${path}`);
-  const missing = draft.ticket ? ["linearAttached", "linearCommented"].filter((k) => !marker[k]) : [];
+
+  // One line per ticket in the shared index; a refresh replaces the ticket's line.
+  const index = readJson(INDEX_JSON, []).filter((e) => e.ticket !== draft.ticket);
+  index.push({
+    ticket: draft.ticket,
+    title: draft.title,
+    headline: draft.headline,
+    status: marker.linearStatus ?? previous.linearStatus ?? "In Progress",
+    updated: new Date().toISOString(),
+    branch: BRANCH,
+    artifact: url,
+    linear: marker.linearUrl,
+    vscode: marker.vscodeUrl,
+    pr: marker.prUrl ?? null,
+  });
+  mkdirSync(COMMON_LOCAL, { recursive: true });
+  writeFileSync(INDEX_JSON, JSON.stringify(index, null, 2) + "\n");
+  console.log(`index updated: ${INDEX_JSON} — next: build.mjs index, publish it, build.mjs index --published <url>`);
+
+  const missing = ["linearAttached", "linearCommented", "indexed"].filter((k) => !marker[k]);
   if (missing.length) console.log(`still missing for the quality gate: ${missing.join(", ")}`);
+}
+
+function renderIndex(argv) {
+  const i = argv.indexOf("--published");
+  if (i !== -1) {
+    const url = argv[i + 1];
+    if (!url) throw new Error("--published <index url> is required");
+    mkdirSync(COMMON_LOCAL, { recursive: true });
+    writeFileSync(INDEX_URL_FILE, url + "\n");
+    if (TICKET_FROM_BRANCH && existsSync(markerPath(TICKET_FROM_BRANCH))) {
+      const marker = readJson(markerPath(TICKET_FROM_BRANCH), {});
+      marker.indexed = true;
+      marker.indexUrl = url;
+      writeFileSync(markerPath(TICKET_FROM_BRANCH), JSON.stringify(marker, null, 2) + "\n");
+      console.log(`marker ${TICKET_FROM_BRANCH}: indexed`);
+    }
+    return;
+  }
+  const entries = readJson(INDEX_JSON, []).sort((a, b) => String(b.updated).localeCompare(String(a.updated)));
+  const ext = `target="_blank" rel="noopener noreferrer"`;
+  const link = (href, label) => (href ? `<a href="${esc(href)}" ${ext}>${label}</a>` : "");
+  const rows = entries
+    .map(
+      (e) => `<li class="row">
+  <div class="head"><span class="ticket">${esc(e.ticket)}</span><span class="status s-${esc(String(e.status).toLowerCase().replace(/\s+/g, "-"))}">${esc(e.status)}</span><time datetime="${esc(e.updated)}">${esc(String(e.updated).slice(0, 10))}</time></div>
+  <p class="title">${esc(e.title)}</p>
+  <p class="line">${esc(e.headline)}</p>
+  <p class="links">${[link(e.artifact, "Artifact"), link(e.linear, "Linear"), link(e.vscode, "VS Code"), link(e.pr, "PR")].filter(Boolean).join("")}</p>
+</li>`
+    )
+    .join("\n");
+  const html = readFileSync(join(HERE, "index-template.html"), "utf-8")
+    .split("{{COUNT}}").join(String(entries.length))
+    .split("{{ROWS}}").join(rows || `<li class="row"><p class="line">No changes shipped yet.</p></li>`);
+  mkdirSync(COMMON_LOCAL, { recursive: true });
+  writeFileSync(INDEX_HTML, html);
+  const url = existsSync(INDEX_URL_FILE) ? readFileSync(INDEX_URL_FILE, "utf-8").trim() : "";
+  console.log(`index page: ${INDEX_HTML}`);
+  console.log(url ? `publish with url: ${url} (read it first with the Artifact tool if this conversation hasn't)` : "first publish: no url yet — publish as a new Artifact, then run index --published <url>");
 }
 
 const [cmd, ...rest] = process.argv.slice(2);
 try {
   if (cmd === "render") render(rest[0] ?? "");
   else if (cmd === "finalize") finalize(rest);
-  else throw new Error("usage: build.mjs render <content.json> | finalize --url <artifact-url> [--linear-attached] [--linear-commented] [--linear-status <name>]");
+  else if (cmd === "index") renderIndex(rest);
+  else throw new Error("usage: build.mjs render <content.json> | finalize --url <artifact-url> [--linear-attached] [--linear-commented] [--linear-status <name>] | index [--published <url>]");
 } catch (err) {
   console.error(`ship-artifact: ${err.message}`);
   process.exit(1);
