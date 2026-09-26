@@ -234,6 +234,9 @@ describe("/api/v1/appointments", () => {
     const noDoctor = await request(app).post("/api/v1/appointments").set("Authorization", admin.auth).send({ patient_id: await patient(null), start_at: futureSlot() });
     const badStatus = await request(app).get(`/api/v1/appointments/${crypto.randomUUID()}`).set("Authorization", admin.auth);
     expect([badId.status, noStart.status, tooLong.status, noDoctor.status, badStatus.status]).toEqual([400, 400, 400, 400, 404]);
+    // NEO-109: each 400 names the field the booking form marks.
+    expect(noStart.body).toMatchObject({ code: "VALIDATION_ERROR", field: "start_at", reason: "required" });
+    expect(tooLong.body).toMatchObject({ code: "VALIDATION_ERROR", field: "duration_minutes", reason: "invalid" });
   });
 
   it("clinical reads are audited (not the field force's redacted ones); only admin deletes", async () => {

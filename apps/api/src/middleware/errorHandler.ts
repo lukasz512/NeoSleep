@@ -25,8 +25,11 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     }
 
     if (!res.headersSent) {
-      const field = err instanceof ValidationError || err instanceof EmailInUseError ? err.field : undefined;
-      res.status(err.statusCode).json({ error: err.message, code: err.code, ...(field ? { field } : {}) });
+      const field =
+        err instanceof ValidationError && err.field ? { field: err.field, reason: err.reason }
+        : err instanceof EmailInUseError ? { field: err.field, reason: err.reason }
+        : {};
+      res.status(err.statusCode).json({ error: err.message, code: err.code, ...field });
     }
     return;
   }

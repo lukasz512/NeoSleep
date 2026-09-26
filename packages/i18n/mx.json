@@ -2031,6 +2031,7 @@
   "app.formRenderer.errorSummary.title": "Campos por corregir: {n}",
   "app.formRenderer.errorSummary.sectionCount": "Errores en esta sección: {n}",
   "app.formRenderer.validation.invalid": "Revisa este campo",
+  "app.formRenderer.validation.taken": "Ya lo usa otro usuario o médico",
   "app.formRenderer.validation.saveRejected": "No se pudo guardar — revisa los datos del formulario",
   "app.formRenderer.validation.server.date_of_birth": "Fecha entre 1900 y hoy",
   "app.formRenderer.validation.server.email": "Introduce un correo válido",
@@ -2163,5 +2164,15 @@
   "app.sleepStudies.type.polysomnography": "Polisomnografía",
   "app.sleepStudies.type.other": "Otro",
   "app.sleepStudies.form.studyType": "Tipo de estudio",
-  "app.sleepStudies.table.studyType": "Tipo"
+  "app.sleepStudies.table.studyType": "Tipo",
+  "user.login.errorSummary.title": "No se pudo iniciar sesión",
+  "user.forgotPassword.errorSummary.title": "No se pudo enviar el enlace",
+  "user.resetPassword.errorSummary.title": "No se pudo establecer la nueva contraseña",
+  "user.changePassword.errorSummary.title": "No se pudo cambiar la contraseña",
+  "user.partnerRegistration.form.errorInvalidLink": "Este enlace de invitación ya no es válido. Pide a NeoSleep que te envíe uno nuevo.",
+  "app.formRenderer.validation.server.password": "Usa al menos 8 caracteres",
+  "app.formRenderer.validation.server.new_password": "Usa al menos 8 caracteres",
+  "app.formRenderer.validation.server.pwz": "Ingresa un número PWZ válido",
+  "app.formRenderer.validation.server.cedula": "Ingresa una cédula profesional válida",
+  "app.formRenderer.validation.server.licenseNumber": "Ingresa un número de cédula válido"
 }

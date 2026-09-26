@@ -76,6 +76,9 @@ import { reportCaught } from "@api";
 import { ref, computed, watch, defineAsyncComponent } from "vue";
 import { useI18n } from "vue-i18n";
 import { apiFetch } from "../composables/useApi";
+import { toEncounterBody, fromEncounter, type PlannerEvent } from "../utils/encounterMapping";
+import { fieldErrorsFromResponse } from "../composables/useFormErrors";
+import type { SubmitDone } from "../composables/useEntitySubmit";
 import { useNotifications } from "../composables/useNotifications";
 import type { EventFormInitialData } from "../components/EventForm.vue";
 import type { EventSubmitPayload } from "../components/EventForm.vue";
@@ -92,19 +95,8 @@ const calendarValue = ref(new Date());
 const showEventForm = ref(false);
 const eventFormInitial = ref<EventFormInitialData | undefined>(undefined);
 
-interface ApiEvent {
-  id: string;
-  title: string;
-  start_at: string;
-  end_at: string;
-  type: "f2f" | "video";
-  status: "scheduled" | "completed" | "cancelled" | "no_show";
-  location?: string;
-  video_link?: string;
-  notes?: string;
-  region?: string;
-  attendees?: { attendee_type: "doctor" | "hco" | "lead"; attendee_id: string; is_primary?: boolean }[];
-}
+/** An encounter as the planner shows it (NEO-112: read through fromEncounter). */
+type ApiEvent = PlannerEvent;
 
 const apiEvents = ref<ApiEvent[]>([]);
 const loadingEvents = ref(false);
@@ -123,7 +115,7 @@ const nextLoading = computed(() => loadingEvents.value && pendingNavAction.value
 const todayLoading = computed(() => loadingEvents.value && pendingNavAction.value === "today");
 
 /** Map event type+status to a warm/varied color for visual richness. */
-function eventColor(type: "f2f" | "video", status: "scheduled" | "completed" | "cancelled" | "no_show"): string {
+function eventColor(type: "f2f" | "video", status: string): string {
   if (status === "cancelled") return "#9E9E9E";
   if (status === "completed") return "#4CAF50";
   if (status === "no_show")   return "#FF7043";
@@ -183,8 +175,8 @@ async function fetchEvents() {
       errorMessageKey: "user.planner.form.errorLoad",
     });
     if (res.ok) {
-      const json = (await res.json()) as { items?: ApiEvent[] };
-      apiEvents.value = json.items ?? [];
+      const json = (await res.json()) as { items?: Parameters<typeof fromEncounter>[0][] };
+      apiEvents.value = (json.items ?? []).map(fromEncounter);
     }
   } finally {
     loadingEvents.value = false;
@@ -292,24 +284,24 @@ function onAdd() {
   showEventForm.value = true;
 }
 
-async function onEventFormSubmit(payload: EventSubmitPayload, done: (ok: boolean) => void) {
+/** A 400 naming a field is marked in the event form itself (NEO-109); anything else gets the toast. */
+async function rejectEventSave(res: Response, done: SubmitDone) {
+  const fieldErrors = await fieldErrorsFromResponse(res);
+  if (fieldErrors) {
+    done(false, fieldErrors);
+    return;
+  }
+  notifications.show(t("user.planner.form.errorSave"), "error", undefined, { icon: "nav-planner" });
+  done(false);
+}
+
+async function onEventFormSubmit(payload: EventSubmitPayload, done: SubmitDone) {
   try {
     if (payload.id) {
       const res = await apiFetch(`/api/v1/encounter/${payload.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: payload.title,
-          start_at: payload.start_at,
-          end_at: payload.end_at,
-          type: payload.type,
-          status: payload.status,
-          location: payload.location,
-          video_link: payload.video_link,
-          notes: payload.notes,
-          region: payload.region,
-          attendees: payload.attendees,
-        }),
+        body: JSON.stringify(toEncounterBody(payload)),
         handleErrors: false, // own error toast below — one failure, one toast
       });
       if (res.ok) {
@@ -317,25 +309,13 @@ async function onEventFormSubmit(payload: EventSubmitPayload, done: (ok: boolean
         await fetchEvents();
         done(true);
       } else {
-        notifications.show(t("user.planner.form.errorSave"), "error", undefined, { icon: "nav-planner" });
-        done(false);
+        await rejectEventSave(res, done);
       }
     } else {
       const res = await apiFetch("/api/v1/encounter", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: payload.title,
-          start_at: payload.start_at,
-          end_at: payload.end_at,
-          type: payload.type,
-          status: payload.status,
-          location: payload.location,
-          video_link: payload.video_link,
-          notes: payload.notes,
-          region: payload.region,
-          attendees: payload.attendees,
-        }),
+        body: JSON.stringify(toEncounterBody(payload)),
         handleErrors: false, // own error toast below — one failure, one toast
       });
       if (res.ok) {
@@ -343,8 +323,7 @@ async function onEventFormSubmit(payload: EventSubmitPayload, done: (ok: boolean
         await fetchEvents();
         done(true);
       } else {
-        notifications.show(t("user.planner.form.errorSave"), "error", undefined, { icon: "nav-planner" });
-        done(false);
+        await rejectEventSave(res, done);
       }
     }
   } catch (err) {

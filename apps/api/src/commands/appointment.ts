@@ -58,7 +58,8 @@ function resolveEnd(start: Date, endAt: string | undefined, durationMinutes: num
     : new Date(start.getTime() + (durationMinutes ?? DEFAULT_DURATION_MINUTES) * 60_000);
   const minutes = (end.getTime() - start.getTime()) / 60_000;
   if (minutes < MIN_DURATION_MINUTES || minutes > MAX_DURATION_MINUTES) {
-    throw new ValidationError(`An appointment must last between ${MIN_DURATION_MINUTES} and ${MAX_DURATION_MINUTES} minutes`);
+    // Names the field the caller sent, so the form marks it (NEO-109) — the message leads with neither.
+    throw new ValidationError(`An appointment must last between ${MIN_DURATION_MINUTES} and ${MAX_DURATION_MINUTES} minutes`, endAt ? "end_at" : "duration_minutes");
   }
   return end;
 }

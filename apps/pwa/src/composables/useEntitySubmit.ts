@@ -1,5 +1,6 @@
-import { fieldErrorMessageKey, isFieldErrorStatus, reportCaught } from "@api";
+import { reportCaught } from "@api";
 import { useNotifications, type NotificationIcon, type ShowOptions } from "./useNotifications";
+import { fieldErrorsFromResponse, type FieldErrors } from "./useFormErrors";
 
 export interface EntitySubmitResult {
   ok: boolean;
@@ -8,30 +9,8 @@ export interface EntitySubmitResult {
   clone?: () => { json: () => Promise<unknown> };
 }
 
-/** Field key → message key the form shows under that field (NEO-109). */
-export type FieldErrors = Record<string, string>;
-
 /** The form's resolver: true closes the dialog; false keeps it open, marking `fieldErrors` when the API named a field. */
 export type SubmitDone = (ok: boolean, fieldErrors?: FieldErrors) => void;
-
-/**
- * The field a 400 VALIDATION_ERROR (NEO-109) or 409 EMAIL_IN_USE (NEO-111)
- * names, as `{ [field]: messageKey }` — the code's own message when it has
- * one, else `app.formRenderer.validation.server.<field>` (falling back to a
- * generic "check this field"). Null for any other failure.
- */
-async function fieldErrorsOf(result: EntitySubmitResult): Promise<FieldErrors | null> {
-  if (!isFieldErrorStatus(result.status) || !result.clone) return null;
-  try {
-    const body = (await result.clone().json()) as { field?: unknown; code?: unknown };
-    if (typeof body.field !== "string" || !body.field) return null;
-    const code = typeof body.code === "string" ? body.code : null;
-    return { [body.field]: fieldErrorMessageKey(body.field, code) };
-  } catch {
-    // benign: a non-JSON error names no field — the generic toast covers it.
-    return null;
-  }
-}
 
 export interface EntitySubmitOptions {
   request: () => Promise<EntitySubmitResult>;
@@ -81,7 +60,7 @@ export function useEntitySubmit() {
     }
     if (!result.ok) {
       // A rejected field is marked in the form itself, not toasted (NEO-109).
-      const fieldErrors = await fieldErrorsOf(result);
+      const fieldErrors = await fieldErrorsFromResponse(result);
       if (fieldErrors) {
         done(false, fieldErrors);
         return;

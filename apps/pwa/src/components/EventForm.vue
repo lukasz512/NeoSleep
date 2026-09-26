@@ -8,8 +8,11 @@
     @close="onCancelClick"
   >
     <VForm ref="formRef" @submit.prevent="onSubmit">
+      <FormErrorSummary :errors="errorList" :title="t('app.formRenderer.errorSummary.title', { n: errorList.length })" @select="focusField" />
       <VTextField
+        :ref="(el) => setFieldEl('title', el)"
         v-model="form.title"
+        :error-messages="serverError('title')"
         :label="t('user.planner.form.fieldTitle')"
         variant="outlined"
         density="comfortable"
@@ -18,7 +21,9 @@
       />
       <div class="pwa-form-row mb-3">
         <VTextField
-          v-model="form.start"
+          :ref="(el) => setFieldEl('start', el)"
+        v-model="form.start"
+        :error-messages="serverError('start')"
           :label="t('user.planner.form.fieldStart')"
           type="datetime-local"
           variant="outlined"
@@ -27,7 +32,9 @@
           :rules="startRules"
         />
         <VTextField
-          v-model="form.end"
+          :ref="(el) => setFieldEl('end', el)"
+        v-model="form.end"
+        :error-messages="serverError('end')"
           :label="t('user.planner.form.fieldEnd')"
           type="datetime-local"
           variant="outlined"
@@ -38,7 +45,9 @@
       </div>
       <div class="pwa-form-row mb-3">
         <VSelect
-          v-model="form.type"
+          :ref="(el) => setFieldEl('type', el)"
+        v-model="form.type"
+        :error-messages="serverError('type')"
           :label="t('user.planner.form.fieldType')"
           :items="typeItems"
           item-title="title"
@@ -48,7 +57,9 @@
           class="pwa-form-row-item"
         />
         <VSelect
-          v-model="form.status"
+          :ref="(el) => setFieldEl('status', el)"
+        v-model="form.status"
+        :error-messages="serverError('status')"
           :label="t('user.planner.form.fieldStatus')"
           :items="statusItems"
           item-title="title"
@@ -153,7 +164,9 @@
       </VAutocomplete>
       <VTextField
         v-if="form.type === 'f2f'"
+        :ref="(el) => setFieldEl('location', el)"
         v-model="form.location"
+        :error-messages="serverError('location')"
         :label="t('user.planner.form.fieldLocation')"
         variant="outlined"
         density="comfortable"
@@ -162,7 +175,9 @@
       />
       <VTextField
         v-if="form.type === 'video'"
+        :ref="(el) => setFieldEl('videoLink', el)"
         v-model="form.videoLink"
+        :error-messages="serverError('videoLink')"
         :label="t('user.planner.form.fieldVideoLink')"
         variant="outlined"
         density="comfortable"
@@ -171,7 +186,9 @@
         autocomplete="off"
       />
       <VTextField
+        :ref="(el) => setFieldEl('notes', el)"
         v-model="form.notes"
+        :error-messages="serverError('notes')"
         :label="t('user.planner.form.fieldNotes')"
         variant="outlined"
         density="comfortable"
@@ -181,7 +198,9 @@
         rows="2"
       />
       <VSelect
+        :ref="(el) => setFieldEl('region', el)"
         v-model="form.region"
+        :error-messages="serverError('region')"
         :label="t('user.planner.form.fieldRegion')"
         :items="configStore.regionItems"
         variant="outlined"
@@ -227,6 +246,8 @@ import AppAvatar from "./AppAvatar.vue";
 import AppFormDialog from "./AppFormDialog.vue";
 import AppConfirmDialog from "./AppConfirmDialog.vue";
 import AppIcon from "./AppIcon.vue";
+import { FormErrorSummary } from "@ui";
+import type { SubmitDone } from "../composables/useEntitySubmit";
 
 export interface EventFormData {
   title: string;
@@ -284,8 +305,11 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   "update:modelValue": [value: boolean];
-  /** `done` must be called once the caller's apiFetch settles — true closes the dialog, false keeps it open to retry. */
-  submit: [payload: EventSubmitPayload, done: (ok: boolean) => void];
+  /**
+   * `done` must be called once the caller's apiFetch settles — true closes the dialog, false keeps it
+   * open to retry; `fieldErrors` (a 400 naming a payload key) marks that field in the form (NEO-109).
+   */
+  submit: [payload: EventSubmitPayload, done: SubmitDone];
 }>();
 
 const { t } = useI18n();
@@ -297,6 +321,7 @@ const {
   typeItems, statusItems,
   formTitle, formSubmitLabel,
   startRules, endRules,
+  errorList, serverError, setFieldEl, focusField,
   onDialogUpdate, confirmDiscard, onCancelClick, onSubmit,
 } = useEventForm(props, emit as (event: string, ...args: unknown[]) => void);
 </script>

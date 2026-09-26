@@ -49,26 +49,32 @@
     </template>
 
       <Transition :name="stepTransitionName" mode="out-in">
-      <div :key="step">
+      <div :key="step" ref="stepEl">
+        <!-- NEO-109: this step's errors, only after a Next/Confirm attempt on it. -->
+        <FormErrorSummary :errors="errorList" :title="t('app.formRenderer.errorSummary.title', { n: errorList.length })" @select="focusField" />
+
         <!-- Step 1 — Envío -->
         <div v-if="step === 1">
-          <VAutocomplete
-            v-model="form.doctorId"
-            :items="doctorOptions"
-            item-title="title"
-            item-value="value"
-            :label="t('app.orthoApneaOrder.form.doctor')"
-            :loading="loadingDoctors"
-            variant="outlined"
-            density="comfortable"
-          />
+          <div data-field="doctorId">
+            <VAutocomplete
+              v-model="form.doctorId"
+              :items="doctorOptions"
+              item-title="title"
+              item-value="value"
+              :label="t('app.orthoApneaOrder.form.doctor')"
+              :loading="loadingDoctors"
+              :error-messages="fieldError('doctorId')"
+              variant="outlined"
+              density="comfortable"
+            />
+          </div>
           <VRadioGroup v-model="form.addressSend" color="primary" :label="t('app.orthoApneaOrder.form.addressSend')" inline>
             <VRadio value="clinic" :label="t('app.orthoApneaOrder.form.addressSendClinic')" />
             <VRadio value="alternative" :label="t('app.orthoApneaOrder.form.addressSendAlternative')" />
           </VRadioGroup>
 
           <VRow v-if="form.addressSend === 'alternative'" class="mt-2">
-            <VCol cols="6">
+            <VCol cols="6" data-field="altCountryId">
               <VSelect
                 v-model="form.altCountryId"
                 :items="countryOptions"
@@ -76,36 +82,38 @@
                 item-value="value"
                 :label="t('app.orthoApneaOrder.form.country')"
                 :loading="loadingCountries"
+                :error-messages="fieldError('altCountryId')"
                 variant="outlined"
                 density="comfortable"
               />
             </VCol>
-            <VCol cols="6">
-              <VTextField v-model="form.altPostalCode" :label="t('app.orthoApneaOrder.form.postalCode')" variant="outlined" density="comfortable" />
+            <VCol cols="6" data-field="altPostalCode">
+              <VTextField v-model="form.altPostalCode" :label="t('app.orthoApneaOrder.form.postalCode')" :error-messages="fieldError('altPostalCode')" variant="outlined" density="comfortable" />
             </VCol>
-            <VCol cols="12">
-              <VTextField v-model="form.altCity" :label="t('app.orthoApneaOrder.form.city')" variant="outlined" density="comfortable" />
+            <VCol cols="12" data-field="altCity">
+              <VTextField v-model="form.altCity" :label="t('app.orthoApneaOrder.form.city')" :error-messages="fieldError('altCity')" variant="outlined" density="comfortable" />
             </VCol>
-            <VCol cols="12">
-              <VTextField v-model="form.altAddress" :label="t('app.orthoApneaOrder.form.address')" variant="outlined" density="comfortable" />
+            <VCol cols="12" data-field="altAddress">
+              <VTextField v-model="form.altAddress" :label="t('app.orthoApneaOrder.form.address')" :error-messages="fieldError('altAddress')" variant="outlined" density="comfortable" />
             </VCol>
-            <VCol cols="12">
-              <VTextField v-model="form.altName" :label="t('app.orthoApneaOrder.form.name')" maxlength="40" variant="outlined" density="comfortable" />
+            <VCol cols="12" data-field="altName">
+              <VTextField v-model="form.altName" :label="t('app.orthoApneaOrder.form.name')" maxlength="40" :error-messages="fieldError('altName')" variant="outlined" density="comfortable" />
             </VCol>
-            <VCol cols="12">
+            <VCol cols="12" data-field="altEmail">
               <EmailField
                 v-model="form.altEmail"
                 :label="t('app.orthoApneaOrder.form.email')"
-                :rules="[translatedEmailRule]"
+                :error-messages="fieldError('altEmail')"
                 variant="outlined"
                 density="comfortable"
               />
             </VCol>
-            <VCol cols="6">
+            <VCol cols="6" data-field="altPhone">
               <PhoneField
                 v-model="form.altPhone"
                 :label="t('app.orthoApneaOrder.form.phone')"
                 :default-country-code="patientRegion"
+                :error-messages="fieldError('altPhone')"
                 variant="outlined"
                 density="comfortable"
               />
@@ -115,35 +123,38 @@
 
         <!-- Step 2 — Datos de construcción -->
         <div v-else-if="step === 2">
-          <VAutocomplete
-            v-model="selectedProductIds"
-            :items="sortedProductOptions"
-            item-title="title"
-            item-value="value"
-            :label="t('app.orthoApneaOrder.selectProduct')"
-            :loading="loadingProducts"
-            variant="outlined"
-            density="comfortable"
-            multiple
-            chips
-            closable-chips
-            hide-selected
-          >
-            <template #chip="{ internalItem: item, props: chipProps }">
-              <VChip v-bind="chipProps" :color="productChipColor(item.title)" />
-            </template>
-          </VAutocomplete>
+          <div data-field="products">
+            <VAutocomplete
+              v-model="selectedProductIds"
+              :items="sortedProductOptions"
+              item-title="title"
+              item-value="value"
+              :label="t('app.orthoApneaOrder.selectProduct')"
+              :loading="loadingProducts"
+              :error-messages="fieldError('products')"
+              variant="outlined"
+              density="comfortable"
+              multiple
+              chips
+              closable-chips
+              hide-selected
+            >
+              <template #chip="{ internalItem: item, props: chipProps }">
+                <VChip v-bind="chipProps" :color="productChipColor(item.title)" />
+              </template>
+            </VAutocomplete>
+          </div>
 
           <p class="text-subtitle2 mt-6 mb-3 text-primary">{{ t("app.orthoApneaOrder.paso1.title") }}</p>
           <VRow>
             <VCol cols="6">
               <p class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.form.retrusionMax") }}<FieldTooltip :text="t('app.orthoApneaOrder.tooltip.retrusionMax')" /></p>
-              <NumberStepperField v-model="form.retrusionMax" class="mb-4" />
+              <NumberStepperField v-model="form.retrusionMax" data-field="retrusionMax" :error="!!fieldError('retrusionMax')" class="mb-4" />
               <!-- No tooltip icon here — confirmed via live capture that
                    Máxima protrusión has no (i) at all on the real site,
                    unlike Máxima retrusión right above it. -->
               <p class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.form.protrusionMax") }}</p>
-              <NumberStepperField v-model="form.protrusionMax" />
+              <NumberStepperField v-model="form.protrusionMax" data-field="protrusionMax" :error="!!fieldError('protrusionMax')" />
             </VCol>
             <VCol cols="6" class="oa-wizard__range-col">
               <span class="text-body-small text-medium-emphasis">{{ t("app.orthoApneaOrder.form.mandibularRange") }}</span>
@@ -151,8 +162,8 @@
             </VCol>
           </VRow>
           <Transition name="oa-wizard__validation">
-            <AppInlineAlert v-if="mrMpTouched && !mrMpValid" type="error" class="mt-4">
-              {{ mrMpErrorMessage }}
+            <AppInlineAlert v-if="mrMpMessage" type="error" class="mt-4">
+              {{ mrMpMessage }}
             </AppInlineAlert>
           </Transition>
 
@@ -366,10 +377,10 @@
       </AppButton>
       <VSpacer />
       <AppButton variant="text" @click="onCancelClick">{{ t("app.common.cancel") }}</AppButton>
-      <AppButton v-if="step < 4" icon size="x-large" variant="text" color="primary" :disabled="!canAdvance" :aria-label="t('app.orthoApneaOrder.actions.next')" @click="goNext">
+      <AppButton v-if="step < 4" icon size="x-large" variant="text" color="primary" :aria-label="t('app.orthoApneaOrder.actions.next')" @click="goNext">
         <AppIcon name="arrow-right" class="oa-wizard__nav-arrow" />
       </AppButton>
-      <AppButton v-else color="primary" variant="flat" :loading="submitLoading" :disabled="form.products.length === 0" @click="onConfirm">
+      <AppButton v-else color="primary" variant="flat" :loading="submitLoading" @click="onConfirm">
         {{ t("app.orthoApneaOrder.actions.confirm") }}
       </AppButton>
     </template>
@@ -390,7 +401,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useDisplay } from "vuetify";
 import AppButton from "../AppButton.vue";
@@ -408,12 +419,15 @@ import AppFormDialog from "../AppFormDialog.vue";
 import { useNotifications } from "../../composables/useNotifications";
 import { useAsyncAction } from "../../composables/useAsyncAction";
 import { emailFormatRule } from "../../config/forms/identityFields";
+import { useFormErrors, focusFormField, type FieldErrors, type FormErrorField } from "../../composables/useFormErrors";
+import { scrollToFormTop } from "../../utils/scrollToFormTop";
 import {
   useOrthoApneaOrderWizard,
+  WIZARD_FIELD_FOR_API_FIELD,
   type OrthoApneaProduct,
   type OrthoApneaDraftPlan,
 } from "../../composables/useOrthoApneaOrderWizard";
-import { AppInlineAlert } from "@ui";
+import { AppInlineAlert, FormErrorSummary } from "@ui";
 
 /**
  * Full-fidelity replica of OrthoApnea's own 3-step order wizard (Envío →
@@ -577,6 +591,7 @@ const {
   loadCountries,
   confirmOrder,
   persistDraft,
+  rejectedFields,
 } = useOrthoApneaOrderWizard();
 
 const sortedProductOptions = computed(() =>
@@ -633,24 +648,6 @@ function translatedEmailRule(v: unknown): true | string {
   return result === true ? true : t(result);
 }
 
-/** Step 1 is only valid once the alternative-address sub-form (when shown) is
- * fully filled in — OrthoApnea's own required-field set isn't confirmed yet
- * (pending live capture), so this requires everything shown as a safe
- * default rather than guessing which fields are actually optional. */
-const step1Valid = computed(() => {
-  if (!form.doctorId) return false;
-  if (form.addressSend !== "alternative") return true;
-  return !!(
-    form.altCountryId &&
-    form.altPostalCode.trim() &&
-    form.altCity.trim() &&
-    form.altAddress.trim() &&
-    form.altName.trim() &&
-    form.altEmail.trim() &&
-    emailFormatRule(form.altEmail) === true
-  );
-});
-
 /** Confirmed real OA constraints (live-captured): MR and MP must each fall
  * within [-20, 20]mm, and MR must be strictly less than MP — their form
  * blocks advancing with an inline error otherwise. */
@@ -680,34 +677,133 @@ const mrMpErrorMessage = computed(() => {
 const mrMpTouched = ref(false);
 watch(() => [form.retrusionMax, form.protrusionMax], () => { mrMpTouched.value = true; });
 
-/** Step 2 requires at least one product (a real order needs one) and the
- * MR/MP constraints above to hold. */
-const step2Valid = computed(() => form.products.length > 0 && mrMpValid.value);
+const WIZARD_STEPS = [1, 2, 3, 4] as const;
 
-const canAdvance = computed(() => {
-  if (step.value === 1) return step1Valid.value;
-  if (step.value === 2) return step2Valid.value;
+/**
+ * NEO-109 — errors show in the form, never as a toast: under the field, and
+ * in the summary box on top of the step (only that step's errors). Each step
+ * shows them only after a Next/Confirm attempt on it, so a step you just
+ * arrived at never opens red. A field the API rejected clears on its first
+ * edit (see the watchers below).
+ */
+const { attempted, clearServerError, setServerErrors, reset: resetErrors, firstError, errorListFor } = useFormErrors();
+const attemptedSteps = reactive(new Set<number>());
+watch(step, (n) => { attempted.value = attemptedSteps.has(n); }, { flush: "sync" });
+
+function requiredRule(v: unknown): true | string {
+  const filled = Array.isArray(v) ? v.length > 0 : v != null && String(v).trim() !== "";
+  return filled || t("app.formRenderer.validation.required");
+}
+
+/**
+ * The fields each step validates, in on-screen order. OrthoApnea's own
+ * required set for the alternative address isn't confirmed (pending live
+ * capture), so everything shown there except the phone is required as a
+ * safe default. Step 2 needs a product (a real order needs one) and the
+ * confirmed MR/MP constraints; steps 3–4 have nothing to block on.
+ * protrusionMax / altPhone carry no rule of their own — they're listed so an
+ * API rejection of them can still be marked.
+ */
+function stepFields(n: number): FormErrorField[] {
+  if (n === 1) {
+    const fields: FormErrorField[] = [
+      { key: "doctorId", label: t("app.orthoApneaOrder.form.doctor"), value: form.doctorId, rules: [requiredRule] },
+    ];
+    if (form.addressSend === "alternative") {
+      fields.push(
+        { key: "altCountryId", label: t("app.orthoApneaOrder.form.country"), value: form.altCountryId, rules: [requiredRule] },
+        { key: "altPostalCode", label: t("app.orthoApneaOrder.form.postalCode"), value: form.altPostalCode, rules: [requiredRule] },
+        { key: "altCity", label: t("app.orthoApneaOrder.form.city"), value: form.altCity, rules: [requiredRule] },
+        { key: "altAddress", label: t("app.orthoApneaOrder.form.address"), value: form.altAddress, rules: [requiredRule] },
+        { key: "altName", label: t("app.orthoApneaOrder.form.name"), value: form.altName, rules: [requiredRule] },
+        { key: "altEmail", label: t("app.orthoApneaOrder.form.email"), value: form.altEmail, rules: [requiredRule, translatedEmailRule] },
+        { key: "altPhone", label: t("app.orthoApneaOrder.form.phone"), value: form.altPhone },
+      );
+    }
+    return fields;
+  }
+  if (n === 2) {
+    return [
+      { key: "products", label: t("app.orthoApneaOrder.selectProduct"), value: form.products, rules: [requiredRule] },
+      { key: "retrusionMax", label: t("app.orthoApneaOrder.form.retrusionMax"), value: form.retrusionMax, rules: [() => mrMpValid.value || mrMpErrorMessage.value] },
+      { key: "protrusionMax", label: t("app.orthoApneaOrder.form.protrusionMax"), value: form.protrusionMax },
+    ];
+  }
+  return [];
+}
+
+function stepValid(n: number): boolean {
+  return stepFields(n).every((f) => !firstError(f));
+}
+
+/** The summary's lines for the step on screen — empty until that step's first attempt. */
+const errorList = errorListFor(() => stepFields(step.value));
+
+function fieldError(key: string): string | undefined {
+  return errorList.value.find((e) => e.key === key)?.message;
+}
+
+/** Under MR/MP: the attempted step's error, or — as before — the live check once MR/MP were edited. */
+const mrMpMessage = computed(() =>
+  fieldError("retrusionMax") ?? fieldError("protrusionMax") ?? (mrMpTouched.value && !mrMpValid.value ? mrMpErrorMessage.value : undefined),
+);
+
+// An API-rejected value's error goes the moment that field is edited.
+for (const key of new Set(Object.values(WIZARD_FIELD_FOR_API_FIELD))) {
+  watch(() => form[key], () => clearServerError(key), { deep: true });
+}
+
+const stepEl = ref<HTMLElement | null>(null);
+
+/** The summary's links jump to their field. */
+function focusField(key: string) {
+  focusFormField(stepEl.value?.querySelector(`[data-field="${key}"]`));
+}
+
+function moveTo(target: number) {
+  stepTransitionName.value = target >= step.value ? "oa-wizard-step-slide-forward" : "oa-wizard-step-slide-back";
+  step.value = target;
+  if (target > maxReachedStep.value) maxReachedStep.value = target;
+}
+
+/** Shows a step's errors (moving there first) and scrolls up to its summary. */
+function showStepErrors(n: number) {
+  if (n !== step.value) moveTo(n);
+  attemptedSteps.add(n);
+  attempted.value = true;
+  nextTick(() => scrollToFormTop(stepEl.value));
+}
+
+/**
+ * Marks the fields a save was rejected on and opens the first step holding
+ * one. False when none of them is on the wizard — the caller then toasts.
+ */
+function showServerErrors(errors: FieldErrors): boolean {
+  const target = WIZARD_STEPS.find((n) => stepFields(n).some((f) => f.key in errors));
+  if (target === undefined) return false;
+  setServerErrors(errors, WIZARD_STEPS.flatMap((n) => stepFields(n).map((f) => f.key)));
+  showStepErrors(target);
   return true;
-});
+}
 
 function goNext() {
-  if (!canAdvance.value) return;
-  stepTransitionName.value = "oa-wizard-step-slide-forward";
-  step.value += 1;
-  if (step.value > maxReachedStep.value) maxReachedStep.value = step.value;
+  if (!stepValid(step.value)) {
+    showStepErrors(step.value);
+    return;
+  }
+  moveTo(step.value + 1);
 }
 
 function goBack() {
-  stepTransitionName.value = "oa-wizard-step-slide-back";
-  step.value -= 1;
+  moveTo(step.value - 1);
 }
 
-/** Only steps already reached (and, implicitly, validated on the way there via goNext) are clickable. */
+/** Only steps already reached are clickable; jumping forward still stops at the first step with something to fix. */
 function goToStep(target: number) {
-  if (target <= maxReachedStep.value) {
-    stepTransitionName.value = target >= step.value ? "oa-wizard-step-slide-forward" : "oa-wizard-step-slide-back";
-    step.value = target;
-  }
+  if (target > maxReachedStep.value) return;
+  const blocking = target > step.value ? WIZARD_STEPS.find((n) => n >= step.value && n < target && !stepValid(n)) : undefined;
+  if (blocking !== undefined) showStepErrors(blocking);
+  else moveTo(target);
 }
 
 function onSequenceTypeStandard(value: boolean | null) {
@@ -718,10 +814,19 @@ function onSequenceTypePersonalized(value: boolean | null) {
 }
 
 const { loading: submitLoading, run: onConfirm } = useAsyncAction(async () => {
+  // A step passed earlier can have been broken since (e.g. products removed
+  // after jumping back) — the review step reopens the first one to fix.
+  const invalid = WIZARD_STEPS.find((n) => n < 4 && !stepValid(n));
+  if (invalid !== undefined) {
+    showStepErrors(invalid);
+    return;
+  }
   const shouldClose = await confirmOrder(props.patientId, props.sleepStudyId);
   if (shouldClose) {
     emit("submitted");
     emit("update:modelValue", false);
+  } else if (rejectedFields.value) {
+    showServerErrors(rejectedFields.value);
   }
 });
 
@@ -749,6 +854,9 @@ const { loading: savingDraft, run: saveDraftAndClose } = useAsyncAction(async ()
     notifications.show(t("app.orthoApneaOrder.draftSaved"), "success", undefined, { icon: "nav-treatment-plans" });
     emit("submitted"); // refresh the panel's list so the new/updated draft shows up
     closeImmediately();
+  } else if (rejectedFields.value && showServerErrors(rejectedFields.value)) {
+    // The rep fixes the marked field in the wizard instead of reading a toast (NEO-109).
+    showDraftPrompt.value = false;
   } else {
     notifications.show(t("app.orthoApneaOrder.error"), "error", undefined, { icon: "nav-treatment-plans" });
   }
@@ -770,6 +878,8 @@ watch(
       step.value = 1;
       maxReachedStep.value = 1;
       showDraftPrompt.value = false;
+      attemptedSteps.clear();
+      resetErrors();
       loadProducts();
       loadClinic();
       loadDoctorsAndDefault(props.patientId);

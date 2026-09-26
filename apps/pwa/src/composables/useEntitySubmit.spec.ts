@@ -92,14 +92,14 @@ describe("useEntitySubmit", () => {
     );
 
     expect(current.value).toBeNull();
-    expect(done).toHaveBeenCalledWith(false, { date_of_birth: "app.formRenderer.validation.server.date_of_birth" });
+    expect(done).toHaveBeenCalledWith(false, { date_of_birth: "invalid" });
   });
 
   it("on a 409 EMAIL_IN_USE: no toast, the email field gets the taken-email message (NEO-111)", async () => {
     const { submit } = useEntitySubmit();
     const { current } = useNotifications();
     const done = vi.fn();
-    const res = new Response(JSON.stringify({ error: "Email in use", code: "EMAIL_IN_USE", field: "email" }), { status: 409 });
+    const res = new Response(JSON.stringify({ error: "Email in use", code: "EMAIL_IN_USE", field: "email", reason: "taken" }), { status: 409 });
 
     await submit(
       { request: async () => res, successMessage: "Saved", errorMessage: "Could not save", icon: "nav-patients" },
@@ -107,7 +107,7 @@ describe("useEntitySubmit", () => {
     );
 
     expect(current.value).toBeNull();
-    expect(done).toHaveBeenCalledWith(false, { email: "common.error.emailInUse" });
+    expect(done).toHaveBeenCalledWith(false, { email: "taken" });
   });
 
   it("on a 400 naming no field: falls back to the error toast", async () => {

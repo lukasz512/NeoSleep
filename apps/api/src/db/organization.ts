@@ -222,7 +222,7 @@ export async function getOrganizationIdByName(
  */
 export async function insertOrganization(client: PoolClient, input: InsertOrganizationInput): Promise<Organization> {
   const name = trimOrEmpty(input.name);
-  if (!name) throw new ValidationError("Organization name is required");
+  if (!name) throw new ValidationError("Organization name is required", "name");
 
   try {
     const result = await client.query<{ id: string }>(

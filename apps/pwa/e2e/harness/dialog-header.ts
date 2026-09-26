@@ -11,7 +11,7 @@
  * real-length field list. `?dialog=event` mounts EventForm, `?dialog=confirm`
  * AppConfirmDialog, `?dialog=wizard` the OrthoApnea order wizard,
  * `?dialog=clinical` the medical-history questionnaire (a long checklist).
- * `?theme=dark` switches the theme. `&reject=<field>`
+ * `?theme=dark` switches the theme. `&reject=<field>[&reason=required]`
  * makes the folder form's Save come back as if the API rejected that field
  * (NEO-109, e2e/form-errors.spec.ts). Also used by e2e/dialog-scroll.spec.ts.
  */
@@ -123,7 +123,7 @@ const Harness = defineComponent({
           avatarEntityType: "patient",
           // The API isn't running: Save either names a rejected field or fails plainly.
           onSubmit: (_payload: Record<string, unknown>, done: SubmitDone) =>
-            reject ? done(false, { [reject]: `app.formRenderer.validation.server.${reject}` }) : done(false),
+            reject ? done(false, { [reject]: params.get("reason") === "required" ? "required" : "invalid" }) : done(false),
         });
       }
       if (dialog === "clinical") {

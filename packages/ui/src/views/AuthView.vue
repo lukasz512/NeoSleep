@@ -26,17 +26,22 @@
         <p class="auth-view__heading">{{ t('user.login.heading') }}</p>
 
         <VForm ref="signinForm" class="auth-view__form" @submit.prevent="handleSignIn">
+          <FormErrorSummary :errors="signinSummary.lines.value" :title="signinSummary.title.value" @select="focusField" />
+
           <VTextField
             ref="loginEmailFieldRef"
             v-model="loginFlow.email.value"
+            data-field="email"
             type="email"
             :label="t('user.login.email')"
             variant="outlined"
             density="comfortable"
             autocomplete="email"
             :rules="[ruleEmailRequired, ruleEmailFormat]"
+            :error-messages="signinSummary.serverError('email')"
             class="auth-view__field"
             :disabled="loginFlow.loading.value"
+            @update:model-value="signinSummary.clearServerError('email')"
           >
             <template #prepend-inner>
               <button
@@ -52,6 +57,7 @@
 
           <VTextField
             v-model="loginFlow.password.value"
+            data-field="password"
             :type="showPassword ? 'text' : 'password'"
             :label="t('user.login.password')"
             variant="outlined"
@@ -59,10 +65,12 @@
             autocomplete="current-password"
             prepend-inner-icon="mdi-lock-outline"
             :rules="[rulePasswordRequired]"
+            :error-messages="signinSummary.serverError('password')"
             class="auth-view__field"
             :disabled="loginFlow.loading.value"
             :append-inner-icon="showPassword ? 'mdi-eye-off' : 'mdi-eye'"
             @click:append-inner="showPassword = !showPassword"
+            @update:model-value="signinSummary.clearServerError('password')"
           />
 
           <div class="auth-view__row">
@@ -121,17 +129,22 @@
         <p class="auth-view__subtitle">{{ t('user.forgotPassword.subtitle') }}</p>
 
         <VForm ref="forgotForm" class="auth-view__form" @submit.prevent="handleForgotSubmit">
+          <FormErrorSummary :errors="forgotSummary.lines.value" :title="forgotSummary.title.value" @select="focusField" />
+
           <VTextField
             ref="forgotEmailFieldRef"
             v-model="forgotFlow.email.value"
+            data-field="email"
             type="email"
             :label="t('user.login.email')"
             variant="outlined"
             density="comfortable"
             autocomplete="email"
             :rules="[ruleEmailRequired, ruleEmailFormat]"
+            :error-messages="forgotSummary.serverError('email')"
             class="auth-view__field"
             :disabled="forgotFlow.loading.value"
+            @update:model-value="forgotSummary.clearServerError('email')"
           >
             <template #prepend-inner>
               <button
@@ -158,20 +171,12 @@
         </VForm>
       </div>
 
+      <!-- Only ever reached on success (NEO-109): a failure keeps the form
+           open with its error in the form (or a toast for no connection). -->
       <div v-else-if="step === 'sent'" class="auth-view__body">
-        <template v-if="forgotFlow.submitted.value">
-          <AppInlineAlert type="success" class="auth-view__result-alert">
-            {{ t('user.forgotPassword.successMessage') }}
-          </AppInlineAlert>
-        </template>
-        <template v-else>
-          <AppInlineAlert type="error" class="auth-view__result-alert">
-            {{ t(forgotFlow.errorKey.value ?? 'user.forgotPassword.error.network') }}
-          </AppInlineAlert>
-          <VBtn variant="outlined" color="primary" size="large" block class="auth-view__submit auth-view__retry" @click="retryForgot">
-            {{ t('user.forgotPassword.tryAgain') }}
-          </VBtn>
-        </template>
+        <AppInlineAlert type="success" class="auth-view__result-alert">
+          {{ t('user.forgotPassword.successMessage') }}
+        </AppInlineAlert>
       </div>
 
       <div v-else class="auth-view__body">
@@ -185,19 +190,12 @@
         <template v-else-if="resetFlow.tokenValid.value === true">
           <p class="auth-view__subtitle">{{ t('user.resetPassword.subtitle') }}</p>
 
-          <AppInlineAlert
-            v-if="resetFlow.errorKey.value"
-            type="error"
-            class="auth-view__alert"
-            :close-label="t('app.common.close')"
-            @close="resetFlow.errorKey.value = null"
-          >
-            {{ t(resetFlow.errorKey.value) }}
-          </AppInlineAlert>
-
           <VForm ref="resetForm" class="auth-view__form" @submit.prevent="handleResetSubmit">
+            <FormErrorSummary :errors="resetSummary.lines.value" :title="resetSummary.title.value" @select="focusField" />
+
             <VTextField
               v-model="resetFlow.newPassword.value"
+              data-field="new_password"
               :type="showResetPassword ? 'text' : 'password'"
               :label="t('user.resetPassword.newPassword')"
               variant="outlined"
@@ -205,14 +203,17 @@
               autocomplete="new-password"
               prepend-inner-icon="mdi-lock-outline"
               :rules="[ruleResetPasswordRequired, ruleResetPasswordLength]"
+              :error-messages="resetSummary.serverError('new_password')"
               class="auth-view__field"
               :disabled="resetFlow.loading.value"
               :append-inner-icon="showResetPassword ? 'mdi-eye-off' : 'mdi-eye'"
               @click:append-inner="showResetPassword = !showResetPassword"
+              @update:model-value="resetSummary.clearServerError('new_password')"
             />
 
             <VTextField
               v-model="resetFlow.confirmPassword.value"
+              data-field="confirm_password"
               :type="showResetConfirmPassword ? 'text' : 'password'"
               :label="t('user.resetPassword.confirmPassword')"
               variant="outlined"
@@ -299,6 +300,8 @@ import AuthHalo from "../components/AuthHalo.vue";
 import GoogleSignInButton from "../components/GoogleSignInButton.vue";
 import { API_URL_KEY, googleSignInErrorKey, useGoogleSignIn } from "../composables/useGoogleSignIn";
 import AppInlineAlert from "../components/AppInlineAlert.vue";
+import FormErrorSummary from "../components/FormErrorSummary.vue";
+import { focusFormField, useFormErrorSummary, type FieldErrors, type FormErrorSummaryState } from "../composables/useFormErrorSummary";
 
 // White badge in light mode, dark badge in dark mode (NEO-12) — same theme
 // source AuthChrome uses for its logo.
@@ -336,25 +339,31 @@ if (typeof route.query.email === "string" && !loginFlow.email.value) {
   loginFlow.email.value = route.query.email;
 }
 
-// The sign-in error used to render inline (a VAlert above the form) — moved
-// onto the app's native toast/notification system instead (NEO-10), matching
-// every other error surface in the app. loginFlow.errorKey itself is
-// untouched (still reset at the top of every submit()), just no longer read
-// for inline display.
-watch(loginFlow.errorKey, (key) => {
-  if (key) notify(t(key), "error", key);
-});
+// NEO-109 reverses the earlier move of the sign-in error onto a toast:
+// every form shows its errors in the form — under the field and in the summary
+// box on top — so "wrong email or password" (loginFlow.errorKey) is a line in
+// the sign-in summary. Only what no field or form can fix (no connection,
+// server error — loginFlow.toastKey) is still a toast.
+function toastOn(key: Ref<string | null>) {
+  watch(key, (k) => {
+    if (k) notify(t(k), "error", k);
+  });
+}
+toastOn(loginFlow.toastKey);
 
 // "Sign in with Google" (NEO-78): shown only when the API says it's configured.
 const googleSignIn = useGoogleSignIn(apiFetch, inject<string | null>(API_URL_KEY, null));
 onMounted(() => googleSignIn.load());
 
 // The Google callback sends refusals/failures back as /login?error=<code>
-// (e.g. an email no admin has invited). Shown once as a toast, then dropped
-// from the URL so a reload or back-navigation doesn't repeat it.
-const googleErrorKey = googleSignInErrorKey(route.query.error);
-if (googleErrorKey) {
-  notify(t(googleErrorKey), "error", googleErrorKey);
+// (e.g. an email no admin has invited). Shown once — as a line in the sign-in
+// form's summary (NEO-109; a toast only if the sign-in form isn't on screen) —
+// then dropped from the URL so a reload or back-navigation doesn't repeat it.
+const initialGoogleErrorKey = googleSignInErrorKey(route.query.error);
+const googleErrorKey = ref<string | null>(null);
+if (initialGoogleErrorKey) {
+  if (stepFromPath(route.path) === "signin") googleErrorKey.value = initialGoogleErrorKey;
+  else notify(t(initialGoogleErrorKey), "error", initialGoogleErrorKey);
   void router.replace({
     query: Object.fromEntries(Object.entries(route.query).filter(([key]) => key !== "error")),
   });
@@ -374,6 +383,8 @@ const forgotFlow = useForgotPasswordFlow();
 
 const useResetPasswordFlow = createUseResetPasswordFlow(apiFetch);
 const resetFlow = useResetPasswordFlow();
+toastOn(forgotFlow.toastKey);
+toastOn(resetFlow.toastKey);
 
 // /login, /forgot-password and /reset-password share one route component
 // (see routes.ts), so this instance — and the AuthChrome/AuthCard it
@@ -520,18 +531,74 @@ function insertAtSign(emailModel: Ref<string>, fieldRef: Ref<{ $el?: HTMLElement
   });
 }
 
-const ruleEmailRequired = (v: string) =>
+const ruleEmailRequired = (v: string): true | string =>
   !!v.trim() || t("user.login.validation.emailRequired");
-const ruleEmailFormat = (v: string) =>
+const ruleEmailFormat = (v: string): true | string =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()) || t("user.login.validation.emailInvalid");
-const rulePasswordRequired = (v: string) =>
+const rulePasswordRequired = (v: string): true | string =>
   !!v || t("user.login.validation.passwordRequired");
-const ruleResetPasswordRequired = (v: string) =>
+const ruleResetPasswordRequired = (v: string): true | string =>
   !!v || t("user.resetPassword.validation.passwordRequired");
-const ruleResetPasswordLength = (v: string) =>
+const ruleResetPasswordLength = (v: string): true | string =>
   v.length >= 8 || t("user.resetPassword.validation.passwordTooShort");
-const ruleResetPasswordsMatch = (v: string) =>
+const ruleResetPasswordsMatch = (v: string): true | string =>
   v === resetFlow.newPassword.value || t("user.resetPassword.validation.passwordMismatch");
+
+// Errors live in the form (NEO-109, see FormErrorSummary): each form's summary
+// box lists its field errors (after the first submit) and any form-level one.
+const signinSummary = useFormErrorSummary({
+  fields: () => [
+    { key: "email", label: t("user.login.email"), value: loginFlow.email.value, rules: [ruleEmailRequired, ruleEmailFormat] },
+    { key: "password", label: t("user.login.password"), value: loginFlow.password.value, rules: [rulePasswordRequired] },
+  ],
+  formErrorKeys: () => [loginFlow.errorKey.value, googleErrorKey.value],
+  formTitleKey: "user.login.errorSummary.title",
+});
+const forgotSummary = useFormErrorSummary({
+  fields: () => [
+    { key: "email", label: t("user.login.email"), value: forgotFlow.email.value, rules: [ruleEmailRequired, ruleEmailFormat] },
+  ],
+  formErrorKeys: () => [forgotFlow.errorKey.value],
+  formTitleKey: "user.forgotPassword.errorSummary.title",
+});
+const resetSummary = useFormErrorSummary({
+  fields: () => [
+    {
+      key: "new_password",
+      label: t("user.resetPassword.newPassword"),
+      value: resetFlow.newPassword.value,
+      rules: [ruleResetPasswordRequired, ruleResetPasswordLength],
+    },
+    {
+      key: "confirm_password",
+      label: t("user.resetPassword.confirmPassword"),
+      value: resetFlow.confirmPassword.value,
+      rules: [ruleResetPasswordRequired, ruleResetPasswordsMatch],
+    },
+  ],
+  formErrorKeys: () => [resetFlow.errorKey.value],
+  formTitleKey: "user.resetPassword.errorSummary.title",
+});
+
+/** A 400 naming a field marks it; one this form doesn't show falls back to the form's own line. */
+function markFieldErrors(
+  fieldErrors: Ref<FieldErrors | null>,
+  summary: FormErrorSummaryState,
+  errorKey: Ref<string | null>,
+  fallbackKey: string,
+) {
+  watch(fieldErrors, (errors) => {
+    if (errors && !summary.setServerErrors(errors)) errorKey.value = fallbackKey;
+  });
+}
+markFieldErrors(loginFlow.fieldErrors, signinSummary, loginFlow.errorKey, "user.login.error.network");
+markFieldErrors(forgotFlow.fieldErrors, forgotSummary, forgotFlow.errorKey, "user.forgotPassword.error.network");
+markFieldErrors(resetFlow.fieldErrors, resetSummary, resetFlow.errorKey, "user.resetPassword.error.invalidToken");
+
+/** The summary's links: scroll to the field and put the cursor in it. */
+function focusField(key: string) {
+  focusFormField(cardSlotEl.value?.querySelector(`[data-field="${key}"]`));
+}
 
 // Carries whatever's already typed in the sign-in form over to the
 // forgot-password step, so the user isn't asked to retype their email.
@@ -539,13 +606,10 @@ function goToForgot() {
   forgotFlow.email.value = loginFlow.email.value.trim();
 }
 
-function retryForgot() {
-  forgotFlow.errorKey.value = null;
-  step.value = "forgot";
-}
-
 async function handleSignIn() {
   if (!signinForm.value) return;
+  signinSummary.attempted.value = true;
+  googleErrorKey.value = null;
   const { valid } = await signinForm.value.validate();
   if (!valid) return;
   // Retract everything (see playExitSequence) before router.push actually
@@ -558,17 +622,18 @@ async function handleSignIn() {
 
 async function handleForgotSubmit() {
   if (!forgotForm.value) return;
+  forgotSummary.attempted.value = true;
   const { valid } = await forgotForm.value.validate();
   if (!valid) return;
   await forgotFlow.submit();
+  if (!forgotFlow.submitted.value) return;
   step.value = "sent";
-  if (forgotFlow.submitted.value) {
-    window.setTimeout(() => router.push("/login"), 3000);
-  }
+  window.setTimeout(() => router.push("/login"), 3000);
 }
 
 async function handleResetSubmit() {
   if (!resetForm.value) return;
+  resetSummary.attempted.value = true;
   const { valid } = await resetForm.value.validate();
   if (valid) await resetFlow.submit();
 }
@@ -739,10 +804,6 @@ const cardAccentStyle = {
   white-space: pre-line;
 }
 
-.auth-view__alert {
-  margin-bottom: 20px;
-}
-
 .auth-view__result-alert {
   margin-bottom: 4px;
 }
@@ -821,16 +882,13 @@ const cardAccentStyle = {
 /* Flat text buttons (not the block submit) — same reasoning: the app-wide
    hover/active scale reads as a stray zoom on a small flat button, so these
    stay plain and just take the standard text-button hover tint instead. */
-.auth-view__forgot,
-.auth-view__retry {
+.auth-view__forgot {
   text-transform: none;
   letter-spacing: normal;
 }
 
 .auth-view__forgot:hover,
-.auth-view__forgot:active,
-.auth-view__retry:hover,
-.auth-view__retry:active {
+.auth-view__forgot:active {
   transform: none !important;
 }
 

@@ -131,8 +131,3 @@ export function messageKeyForCode(code: string | null | undefined): string | nul
 export function isFieldErrorStatus(status: number | undefined): boolean {
   return status === 400 || status === 409;
 }
-
-/** The message key shown under `field`: the code's own message when it has one, else the field's generic server message. */
-export function fieldErrorMessageKey(field: string, code: string | null | undefined): string {
-  return messageKeyForCode(code) ?? `app.formRenderer.validation.server.${field}`;
-}
