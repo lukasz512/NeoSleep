@@ -28,6 +28,8 @@ export interface Organization {
   longitude: number | null;
   specialties: string[];
   status: string;
+  /** Listed on the public website's find-a-specialist map (migration 033, NEO-79). */
+  show_on_public_map: boolean;
   metadata: Record<string, unknown> | null;
   created_at: Date;
   updated_at: Date;
@@ -61,6 +63,7 @@ export interface InsertOrganizationInput {
   longitude?: number | null;
   specialties?: string[];
   status?: string;
+  show_on_public_map?: boolean;
   metadata?: Record<string, unknown> | null;
 }
 
@@ -83,6 +86,7 @@ export interface UpdateOrganizationInput {
   longitude?: number | null;
   specialties?: string[];
   status?: string;
+  show_on_public_map?: boolean;
   metadata?: Record<string, unknown> | null;
 }
 
@@ -95,7 +99,7 @@ function isOrgSortColumn(s: string): s is (typeof ORG_SORT_COLUMNS)[number] {
 const ORG_SELECT_COLS = `
   o.id, o.name, o.type, o.identifiers, o.address_line1, o.city, o.state, o.postal_code,
   o.country_code, o.region, o.territory_id, t.name AS territory_name, o.phone, o.email, o.website, o.google_link,
-  o.latitude, o.longitude, o.specialties, o.status, o.metadata, o.created_at, o.updated_at`.trim();
+  o.latitude, o.longitude, o.specialties, o.status, o.show_on_public_map, o.metadata, o.created_at, o.updated_at`.trim();
 
 export async function getOrganizationPaginated(
   client: PoolClient,
@@ -223,8 +227,8 @@ export async function insertOrganization(client: PoolClient, input: InsertOrgani
   try {
     const result = await client.query<{ id: string }>(
       `INSERT INTO organization
-         (name, type, address_line1, city, state, postal_code, country_code, region, territory_id, phone, email, website, google_link, latitude, longitude, specialties, status, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+         (name, type, address_line1, city, state, postal_code, country_code, region, territory_id, phone, email, website, google_link, latitude, longitude, specialties, status, metadata, show_on_public_map)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
        RETURNING id`,
       [
         name,
@@ -245,6 +249,7 @@ export async function insertOrganization(client: PoolClient, input: InsertOrgani
         input.specialties ?? [],
         trimOrEmpty(input.status) || "active",
         input.metadata ? JSON.stringify(input.metadata) : null,
+        input.show_on_public_map ?? true,
       ]
     );
     const id = result.rows[0]!.id;
@@ -343,6 +348,10 @@ export async function updateOrganization(client: PoolClient, id: string, input: 
       params.push(input.metadata ? JSON.stringify(input.metadata) : null);
       sets.push(`metadata = $${idx++}`);
     }
+    if (input.show_on_public_map !== undefined) {
+      params.push(input.show_on_public_map);
+      sets.push(`show_on_public_map = $${idx++}`);
+    }
 
     params.push(id);
     await client.query(`UPDATE organization SET ${sets.join(", ")} WHERE id = $${idx}`, params);
@@ -396,10 +405,17 @@ export interface PublicSpecialistRow {
 
 /**
  * Only `active` organizations that have been geocoded (latitude/longitude
- * not null) — never exposes pending_approval/inactive records or ones
+ * not null) and are flagged `show_on_public_map` (migration 033, NEO-79) —
+ * never exposes pending_approval/inactive records, test clinics, or ones
  * without a pin yet. `search`, if given, matches the organization's own
- * name/city/specialties OR an affiliated practitioner's name/specialty — a
- * doctor's name should surface the clinic they work at.
+ * name/city/state/specialties OR an affiliated practitioner's name/specialty
+ * — a doctor's name should surface the clinic they work at.
+ *
+ * Specialties are stored as codes (`dentist`), but a patient types the word
+ * in their own language ("dentista", "Stomatolog"). The search therefore
+ * also matches a specialty code whose translated label — the global
+ * platform.lookups vocabulary or the tenant's own lookup override, any
+ * locale — contains the search text (NEO-79).
  *
  * Affiliation is the union of `practitioner.organization_id` (primary
  * workplace) and the `practitioner_organization` junction table (full
@@ -425,6 +441,13 @@ export async function getPublicSpecialists(
          JOIN practitioner p ON p.id = po.practitioner_id
          JOIN identities i ON i.id = p.identity_id
          WHERE p.deleted_at IS NULL AND p.status = 'active'
+       ),
+       matched_specialty AS (
+         SELECT key FROM platform.lookups
+         WHERE $1::text IS NOT NULL AND type = 'specialty' AND (LOWER(key) LIKE $1 OR LOWER(value) LIKE $1)
+         UNION
+         SELECT key FROM lookup
+         WHERE $1::text IS NOT NULL AND type = 'specialty' AND enabled AND (LOWER(key) LIKE $1 OR LOWER(value) LIKE $1)
        )
        SELECT
          o.id, o.name, o.address_line1, o.city, o.state, o.country_code,
@@ -439,15 +462,17 @@ export async function getPublicSpecialists(
          AND o.status = 'active'
          AND o.latitude IS NOT NULL
          AND o.longitude IS NOT NULL
+         AND o.show_on_public_map
          AND ($1::text IS NULL OR (
            LOWER(o.name) LIKE $1 OR
            LOWER(COALESCE(o.city, '')) LIKE $1 OR
-           EXISTS (SELECT 1 FROM unnest(o.specialties) s WHERE LOWER(s) LIKE $1) OR
+           LOWER(COALESCE(o.state, '')) LIKE $1 OR
+           EXISTS (SELECT 1 FROM unnest(o.specialties) s WHERE LOWER(s) LIKE $1 OR s IN (SELECT key FROM matched_specialty)) OR
            EXISTS (
              SELECT 1 FROM org_practitioners op
              WHERE op.organization_id = o.id
                AND (LOWER(op.first_name || ' ' || op.last_name) LIKE $1
-                 OR EXISTS (SELECT 1 FROM unnest(op.specialties) ps WHERE LOWER(ps) LIKE $1))
+                 OR EXISTS (SELECT 1 FROM unnest(op.specialties) ps WHERE LOWER(ps) LIKE $1 OR ps IN (SELECT key FROM matched_specialty)))
            )
          ))
        ORDER BY o.name ASC

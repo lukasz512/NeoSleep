@@ -46,6 +46,12 @@ publicRouter.get(
     const slug = tenantSlugFromHost(req.hostname);
     const specialists = await withTenant(slug, async (client) => GetPublicSpecialistsQuery(client, search));
 
+    // Public, non-personal directory data (NEO-79): let browsers and shared
+    // caches keep it briefly instead of the global /api/v1 "no-store, private"
+    // default (server.ts), which exists for per-credential responses. Five
+    // minutes bounds how long a clinic an admin just hid can still show up;
+    // the rate limiter above stays as the abuse guard.
+    res.set("Cache-Control", "public, max-age=300, stale-while-revalidate=600");
     res.json({ specialists });
   })
 );
