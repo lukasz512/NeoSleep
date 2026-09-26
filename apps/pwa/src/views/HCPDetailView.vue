@@ -1,9 +1,8 @@
 <template>
   <div class="view-detail">
-    <EventForm
-      v-model="showEventForm"
-      :initial-data="eventFormInitial"
-      @submit="onEventFormSubmit"
+    <AppointmentDialog
+      v-model="showAppointmentDialog"
+      :practitioner="hcp ? { id: hcp.id, name: hcp.name } : null"
     />
     <FormRenderer
       v-model="showEditModal"
@@ -67,17 +66,18 @@
               icon
               variant="flat"
               size="large"
-              :class="entityActionBtnClass('scheduleVisit')"
-              :aria-label="t('user.detail.scheduleVisit')"
-              @click="onScheduleVisit"
+              :class="entityActionBtnClass('bookAppointment')"
+              :aria-label="t('user.detail.bookPatient')"
+              data-testid="hcp-book-patient"
+              @click="showAppointmentDialog = true"
             >
               <AppIcon
-                :name="entityActionIcon('scheduleVisit')"
+                :name="entityActionIcon('bookAppointment')"
                 class="view-item__action-icon"
               />
             </AppButton>
           </template>
-          <span>{{ t("user.detail.scheduleVisit") }}</span>
+          <span>{{ t("user.detail.bookPatient") }}</span>
         </VTooltip>
         <VTooltip v-if="canEditPractitioners" location="bottom">
           <template #activator="{ props: tooltipProps }">
@@ -255,9 +255,7 @@ import {
 const FormRenderer = defineAsyncComponent(
   () => import("../components/FormRenderer.vue"),
 );
-const EventForm = defineAsyncComponent(
-  () => import("../components/EventForm.vue"),
-);
+const AppointmentDialog = defineAsyncComponent(() => import("../components/AppointmentDialog.vue"));
 
 interface HCP {
   id: string;
@@ -343,6 +341,7 @@ const hcpCache = useEntityCacheStore("hcp");
 const SHOW_CLINICS_PANEL = false;
 
 const hcp = ref<HCP | null>(null);
+const showAppointmentDialog = ref(false);
 const loading = ref(true);
 /** True while `hcp` is being served from the offline cache — see docs/ADR-013-offline-read-cache.md. */
 const isOffline = ref(false);
@@ -352,10 +351,6 @@ const loadFailed = ref(false);
 const loadFailure = ref<unknown>(null);
 const showEditModal = ref(false);
 const showDeleteConfirm = ref(false);
-const showEventForm = ref(false);
-const eventFormInitial = ref<
-  { start_at: string; end_at: string; hcpIds?: string[] } | undefined
->(undefined);
 
 /**
  * Must stay a computed (stable reference until `hcp.value` itself changes),
@@ -389,53 +384,6 @@ const hcpFormInitialData = computed(() =>
       }
     : undefined,
 );
-
-function onScheduleVisit() {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  const start = `${date} 09:00`;
-  const end = `${date} 10:00`;
-  eventFormInitial.value = {
-    start_at: new Date(start).toISOString(),
-    end_at: new Date(end).toISOString(),
-    hcpIds: hcp.value?.id ? [hcp.value.id] : [],
-  };
-  showEventForm.value = true;
-}
-
-async function onEventFormSubmit(
-  payload: import("../components/EventForm.vue").EventSubmitPayload,
-  done: (ok: boolean) => void,
-) {
-  await submit(
-    {
-      request: () =>
-        apiFetch("/api/v1/encounter", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: payload.title,
-            start_at: payload.start_at,
-            end_at: payload.end_at,
-            type: payload.type,
-            status: payload.status,
-            location: payload.location,
-            video_link: payload.video_link,
-            notes: payload.notes,
-            region: payload.region,
-            attendees: payload.attendees,
-          }),
-        }),
-      successMessage: t("user.planner.form.success"),
-      icon: "nav-planner",
-      context: hcp.value?.name,
-      errorMessage: t("user.planner.form.errorSave"),
-      refresh: false,
-    },
-    done,
-  );
-}
 
 function onEdit() {
   showEditModal.value = true;
