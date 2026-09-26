@@ -115,6 +115,7 @@ export function identityFields(): FormFieldDef[] {
       options: PREFIX_OPTIONS,
       optionFilter: (o, form) => SALUTATIONS_BY_MARKET[salutationMarket(form)].includes(String(o.value)),
       cols: 2,
+      section: "identity",
     },
     {
       key: "first_name",
@@ -122,6 +123,7 @@ export function identityFields(): FormFieldDef[] {
       labelKey: "app.identity.form.firstName",
       required: true,
       cols: 10,
+      section: "identity",
     },
     {
       key: "last_name",
@@ -129,8 +131,9 @@ export function identityFields(): FormFieldDef[] {
       labelKey: "app.identity.form.lastName",
       required: true,
       cols: 12,
+      section: "identity",
     },
-    emailField(),
+    { ...emailField(), section: "contact" },
     {
       key: "phone",
       type: "phone",
@@ -138,6 +141,7 @@ export function identityFields(): FormFieldDef[] {
       required: true,
       rules: [phoneMinDigitsRule],
       cols: 12,
+      section: "contact",
     },
   ];
 }
