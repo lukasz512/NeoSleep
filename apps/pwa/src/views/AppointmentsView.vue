@@ -311,6 +311,19 @@ function onBookNext(a: Appointment) {
   text-transform: none;
 }
 
+/* Phone: the period gets its own line under the arrows instead of wrapping mid-date. */
+@media (max-width: 599px) {
+  .view-appointments__nav {
+    flex-wrap: wrap;
+  }
+
+  .view-appointments__period {
+    flex-basis: 100%;
+    margin-left: 0;
+    padding-inline: 4px;
+  }
+}
+
 .view-appointments__calendar {
   flex: 1 1 auto;
   min-height: 420px;
