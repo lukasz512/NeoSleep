@@ -346,8 +346,14 @@ const isFolder = computed(() => sections.value.length >= 2);
 const { xs: asSheet } = useDisplay();
 const uid = useId();
 
-const changedSet = computed(() => new Set(changedKeys.value));
-const changedCount = computed(() => changedKeys.value.length);
+/**
+ * Change markers (section dots + counter) are an edit-only feature (NEO-98):
+ * on create every typed field is "new", so marking them is just noise. The
+ * discard confirm on close still uses hasChanged() in both modes.
+ */
+const shownChangedKeys = computed(() => (isEditMode.value ? changedKeys.value : []));
+const changedSet = computed(() => new Set(shownChangedKeys.value));
+const changedCount = computed(() => shownChangedKeys.value.length);
 const indexSections = computed<FormSpineSection[]>(() =>
   sections.value.map((s) => ({ id: s.id, label: s.label, changed: s.fields.some((f) => changedSet.value.has(f.key)) })),
 );
