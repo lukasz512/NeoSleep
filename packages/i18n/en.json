@@ -1111,8 +1111,6 @@
   "app.clinical.qr.instructions": "Ask the patient to scan this code with their phone camera. The link works once and expires in 24 hours.",
   "app.clinical.qr.copyLink": "Copy link",
   "app.clinical.qr.copied": "Link copied",
-  "app.clinical.qr.waiting": "Waiting for the patient to submit…",
-  "app.clinical.qr.completed": "Received — the answers are now in the patient's studies.",
   "app.clinical.qr.createError": "Could not create the link",
   "app.clinical.item.informedConsent": "Informed consent",
   "app.clinical.item.medicalHistory": "Medical history",

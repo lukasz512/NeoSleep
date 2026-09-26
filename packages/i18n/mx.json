@@ -1030,8 +1030,6 @@
   "app.clinical.qr.instructions": "Pida al paciente que escanee este código con la cámara de su teléfono. El enlace funciona una sola vez y vence en 24 horas.",
   "app.clinical.qr.copyLink": "Copiar enlace",
   "app.clinical.qr.copied": "Enlace copiado",
-  "app.clinical.qr.waiting": "Esperando a que el paciente envíe sus respuestas…",
-  "app.clinical.qr.completed": "Recibido — las respuestas ya están en los estudios del paciente.",
   "app.clinical.qr.createError": "No se pudo crear el enlace",
   "app.clinical.item.informedConsent": "Consentimiento informado",
   "app.clinical.item.medicalHistory": "Antecedentes médicos",

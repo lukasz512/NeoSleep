@@ -1030,8 +1030,6 @@
   "app.clinical.qr.instructions": "Poproś pacjenta o zeskanowanie kodu aparatem telefonu. Link działa jednorazowo i wygasa po 24 godzinach.",
   "app.clinical.qr.copyLink": "Kopiuj link",
   "app.clinical.qr.copied": "Skopiowano link",
-  "app.clinical.qr.waiting": "Czekam, aż pacjent wyśle odpowiedzi…",
-  "app.clinical.qr.completed": "Odebrano — odpowiedzi są już w badaniach pacjenta.",
   "app.clinical.qr.createError": "Nie udało się utworzyć linku",
   "app.clinical.item.informedConsent": "Świadoma zgoda",
   "app.clinical.item.medicalHistory": "Wywiad medyczny",

@@ -97,7 +97,7 @@ beforeEach(() => {
     if (path.endsWith("/print")) return jsonResponse(true, 200, null, "application/pdf");
     if (path.endsWith("/questionnaire-requests") && init?.method === "POST") {
       if (failCreate) return jsonResponse(false, 500, { error: "boom" });
-      const created = { id: "qr-1", items: ["informedConsent", "stopBang"], completed_items: [], expires_at: new Date(Date.now() + 86_400_000).toISOString() };
+      const created = { id: "qr-1", items: ["informedConsent", "stopBang"], completed_items: [], opened_at: null, expires_at: new Date(Date.now() + 86_400_000).toISOString() };
       (checklistBody.pending_requests as unknown[]).push(created);
       return jsonResponse(true, 201, { ...created, url: `https://pwa.test/q#${"b".repeat(43)}` });
     }
@@ -255,7 +255,8 @@ describe("PatientStudiesPanel — the Estudios checklist", () => {
     const [, init] = apiFetch.mock.calls.find(([path, i]) => String(path).endsWith("/questionnaire-requests") && (i as RequestInit)?.method === "POST")!;
     expect(JSON.parse((init as RequestInit).body as string)).toEqual({}); // no items → everything still missing
     await vi.waitFor(() => expect(document.body.querySelector(".qr-dialog__code")).not.toBeNull());
-    expect(document.body.textContent).toContain("0 of 2 steps done");
+    // The dialog carries no tracking of its own (NEO-110) — only the button does.
+    expect(document.body.querySelector(".qr-dialog__body")?.textContent).not.toContain("steps done");
     // The QR button itself now carries the status (NEO-93) — no separate banner.
     const status = wrapper.find(".qr-status");
     expect(status.attributes("data-state")).toBe("waiting");
@@ -312,6 +313,33 @@ describe("PatientStudiesPanel — the Estudios checklist", () => {
     expect(wrapper.find(".qr-status").attributes("data-state")).toBe("waiting");
   });
 
+  it("the QR dialog closes itself once the patient opens the link, and the button keeps refreshing (NEO-110)", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const wrapper = await mountPanel();
+      await button(wrapper, "QR for the patient")!.trigger("click");
+      await flushPromises();
+      expect(wrapper.findComponent(QuestionnaireQrDialog).props("modelValue")).toBe(true);
+
+      await vi.advanceTimersByTimeAsync(15_000);
+      await flushPromises();
+      expect(wrapper.findComponent(QuestionnaireQrDialog).props("modelValue")).toBe(true); // not opened yet
+
+      const pending = checklistBody.pending_requests as { opened_at: string | null; completed_items: string[] }[];
+      pending[0]!.opened_at = new Date().toISOString();
+      await vi.advanceTimersByTimeAsync(15_000);
+      await flushPromises();
+      expect(wrapper.findComponent(QuestionnaireQrDialog).props("modelValue")).toBe(false);
+
+      pending[0]!.completed_items = ["informedConsent"];
+      await vi.advanceTimersByTimeAsync(15_000);
+      await flushPromises();
+      expect(wrapper.find(".qr-status").text()).toContain("1 of 2");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("the link leaving the pending list (patient finished) shows 'All received', then the button hides when nothing is left", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
@@ -323,7 +351,7 @@ describe("PatientStudiesPanel — the Estudios checklist", () => {
       const body = checklistBody as { items: { key: string; status: string }[]; pending_requests: unknown[] };
       body.pending_requests = [];
       for (const it of body.items) if (it.status === "missing" || it.status === "pending_patient") it.status = "done";
-      wrapper.findComponent(QuestionnaireQrDialog).vm.$emit("poll"); // the open QR dialog's own refresh
+      await vi.advanceTimersByTimeAsync(15_000); // the panel's own refresh while the link is live
       await flushPromises();
       expect(wrapper.find(".qr-status").attributes("data-state")).toBe("done");
       expect(wrapper.find(".qr-status").text()).toContain("All received");
