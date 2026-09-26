@@ -386,6 +386,27 @@ const ICONS = {
             <polyline points="17 8 12 3 7 8" />
             <line x1="12" y1="3" x2="12" y2="15" />`,
   },
+  // Install app (NEO-87): arrow down into a phone — "put this on your device".
+  "install": {
+    strokeWidth: 2,
+    paths: `<rect x="6" y="2" width="12" height="20" rx="2.5" />
+            <polyline points="9 10 12 13 15 10" />
+            <line x1="12" y1="6" x2="12" y2="13" />
+            <line x1="10.5" y1="18" x2="13.5" y2="18" />`,
+  },
+  // iOS Share glyph — the button the install how-to points at.
+  "share-ios": {
+    strokeWidth: 2,
+    paths: `<path d="M8 9H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2h-2" />
+            <polyline points="8 6 12 2 16 6" />
+            <line x1="12" y1="2" x2="12" y2="15" />`,
+  },
+  "add-square": {
+    strokeWidth: 2,
+    paths: `<rect x="3" y="3" width="18" height="18" rx="3" />
+            <line x1="12" y1="8" x2="12" y2="16" />
+            <line x1="8" y1="12" x2="16" y2="12" />`,
+  },
   "printer": {
     strokeWidth: 2,
     paths: `<polyline points="6 9 6 2 18 2 18 9" />
@@ -443,6 +464,12 @@ const ICONS = {
   "phone": {
     strokeWidth: 2,
     paths: `<path d="M4 3h4l2 6-3 2a12 12 0 0 0 6 6l2-3 6 2v4a2 2 0 0 1-2 2A17 17 0 0 1 2 5a2 2 0 0 1 2-2z" />`,
+  },
+  "phone-rotate": {
+    strokeWidth: 2,
+    paths: `<rect x="5" y="8" width="8" height="14" rx="2" transform="rotate(-45 9 15)" />
+            <path d="M14 3a7 7 0 0 1 7 7" />
+            <polyline points="19 8 21 10 23 8" />`,
   },
   "globe": {
     strokeWidth: 1.5,

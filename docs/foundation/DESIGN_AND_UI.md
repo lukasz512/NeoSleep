@@ -228,7 +228,9 @@ whether it's a table cell, a mobile card line, a detail panel or a note author. 
     (`useIdentity().detailsFor`), the status pill and a scroll-spy section index. The page on
     the right holds the title + X, one sheet with a ruled heading per section, and the actions
     with an "Unsaved changes: n" counter. Sections with unsaved changes get a warning-colour
-    dot. Phones keep the bottom sheet and show the index as chips (`FormSectionChips.vue`).
+    dot. The spine is desktop-only (≥ 960px). Tablets (600–959px, decided 2026-09-26: "like
+    mobile but still on a tile") keep a floating tile and phones the bottom sheet; both show the
+    index as chips under the header (`FormSectionChips.vue`).
     Create and edit are the same view. Content scrolled behind the header or the actions fades
     out over `--pwa-dialog-fade` (20px, a mask on the body) instead of meeting a hairline:
     the hairline let a floating field label touch the header. No serif (decided); hierarchy

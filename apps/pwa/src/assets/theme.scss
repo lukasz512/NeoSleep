@@ -872,8 +872,16 @@ body {
  * together, VDialog's own `class` prop), not `.pwa-form-dialog__content`,
  * which only reaches the inner content div.
  */
-.pwa-form-dialog {
+.pwa-form-dialog,
+.install-card-overlay {
   z-index: 10000 !important;
+}
+
+/* The install card (NEO-87) opens by itself; Vuetify then moves focus into
+   its content wrapper, and the global :focus-visible ring drew a teal frame
+   around a card nobody tabbed to. The buttons inside keep their own ring. */
+.install-card-overlay > .v-overlay__content:focus-visible {
+  outline: none;
 }
 
 /*

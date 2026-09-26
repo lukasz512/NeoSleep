@@ -10,6 +10,8 @@
     </a>
 
     <AppOfflineBar />
+    <!-- NEO-87: "Add NeoSleep to this device" — opens once after login, and from the avatar menu. -->
+    <AppInstallCard />
 
     <AppShell
       :rail-collapsed="sidebarCollapsed"
@@ -228,6 +230,7 @@ import {
   AppNavLinks,
   AppUserMenuPanel,
   AppOfflineBar,
+  AppInstallCard,
 } from "./components";
 import AppButton from "../components/AppButton.vue";
 import AppIcon, { type AppIconName } from "../components/AppIcon.vue";

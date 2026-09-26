@@ -24,6 +24,8 @@
         :title="title"
         :avatar-entity-type="asFolder ? undefined : avatarEntityType"
         :avatar-name="avatarName"
+        :avatar-first-name="avatarFirstName"
+        :avatar-last-name="avatarLastName"
         :closable="closable"
         @close="emit('close')"
       />
@@ -89,13 +91,16 @@ const props = withDefaults(
     title?: string;
     avatarEntityType?: AppAvatarEntityType;
     avatarName?: string;
+    avatarFirstName?: string;
+    avatarLastName?: string;
     closable?: boolean;
     persistent?: boolean;
     maxWidth?: number | string;
     /**
      * The folder layout (NEO-92) when a `spine` slot is given: a left spine
-     * column beside the page. Ignored on phones — there the dialog is a
-     * bottom sheet and the caller puts a compact index in `header-extra`.
+     * column beside the page. Desktop only (≥ 960px): on tablets (a tile)
+     * and phones (a bottom sheet) the caller puts a compact index in
+     * `header-extra` instead.
      */
     folder?: boolean;
   }>(),
@@ -103,6 +108,8 @@ const props = withDefaults(
     title: undefined,
     avatarEntityType: undefined,
     avatarName: "",
+    avatarFirstName: "",
+    avatarLastName: "",
     closable: true,
     persistent: false,
     maxWidth: 680,
@@ -120,9 +127,11 @@ const emit = defineEmits<{
 
 // Phones (< 600px, Vuetify xs): an M3 bottom sheet sliding up from the screen
 // edge, within thumb reach, instead of a centred card (NEO-85).
-const { xs: asSheet } = useDisplay();
+const { xs: asSheet, mdAndUp } = useDisplay();
 const slots = useSlots();
-const asFolder = computed(() => props.folder && !asSheet.value && !!slots.spine);
+// The spine needs room beside the page: desktop only (≥ 960px). Tablets keep
+// the single tile and phones the bottom sheet; both show the index as chips.
+const asFolder = computed(() => props.folder && mdAndUp.value && !!slots.spine);
 
 const bodyRef = ref<InstanceType<typeof VCardText> | null>(null);
 const innerRef = ref<HTMLElement | null>(null);

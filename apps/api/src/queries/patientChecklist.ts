@@ -14,7 +14,7 @@ import {
 import { listConsentsForEntity } from "../db/consent.js";
 import { getFileAttachmentsForEntity, type FileAttachment } from "../db/fileAttachment.js";
 import { getSleepStudiesPaginated, type SleepStudy } from "../db/sleepStudy.js";
-import { listPendingQuestionnaireRequestsForPatient, type QuestionnaireRequest } from "../db/questionnaireRequest.js";
+import { listPendingQuestionnaireRequestsForPatient, getLatestExpiredQuestionnaireRequestForPatient, type QuestionnaireRequest } from "../db/questionnaireRequest.js";
 import { GetPatientByIdQuery } from "./patient.js";
 import { NotFoundError } from "../errors.js";
 import type { ClinicalRecordKind } from "../commands/clinicalRecordFields.js";
@@ -95,6 +95,8 @@ export interface PatientChecklist {
   /** Files uploaded without being attached to an item. */
   other_uploads: ChecklistHistoryEntry[];
   pending_requests: QuestionnaireRequest[];
+  /** The patient's newest link when it ran out unused — the QR button's "link expired" state (NEO-93). */
+  expired_request: QuestionnaireRequest | null;
   summary: { done: number; total: number };
 }
 
@@ -131,11 +133,12 @@ async function loadSources(client: PoolClient, patientId: string) {
   const files = await getFileAttachmentsForEntity(client, "patient", patientId);
   const { rows: sleepStudies } = await getSleepStudiesPaginated(client, { patient_id: patientId }, 1, 500, "created_at", "desc");
   const pending = await listPendingQuestionnaireRequestsForPatient(client, patientId);
+  const expired = pending.length ? null : await getLatestExpiredQuestionnaireRequestForPatient(client, patientId);
   const sleepStudyFiles: Array<FileAttachment & { sleep_study_id: string }> = [];
   for (const study of sleepStudies) {
     for (const file of await getFileAttachmentsForEntity(client, "sleep_study", study.id)) sleepStudyFiles.push({ ...file, sleep_study_id: study.id });
   }
-  return { histories, exams, screenings, consents, files, sleepStudies, pending, sleepStudyFiles };
+  return { histories, exams, screenings, consents, files, sleepStudies, pending, expired, sleepStudyFiles };
 }
 
 export async function GetPatientChecklistQuery(ctx: TenantContext, patientId: string): Promise<PatientChecklist> {
@@ -270,6 +273,7 @@ export async function GetPatientChecklistQuery(ctx: TenantContext, patientId: st
     items,
     other_uploads: otherUploads,
     pending_requests: src.pending,
+    expired_request: src.expired,
     summary: { done: items.filter((i) => i.status === "done").length, total: items.length },
   };
 }
