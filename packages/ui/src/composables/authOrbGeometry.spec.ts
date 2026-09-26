@@ -25,8 +25,19 @@ describe("placeMoon", () => {
     expect(moon.y).toBeGreaterThan(0);
   });
 
-  it("drops the moon on a phone, where the spot next to the card is off-screen", () => {
-    expect(placeMoon(phone.width, phone.height, phone.card).visible).toBe(false);
+  it("moves the moon to the medium orb's ring on a phone, above the logo", () => {
+    const moon = placeMoon(phone.width, phone.height, phone.card);
+    expect(moon.visible).toBe(true);
+    expect(moon.host).toBe("medium");
+    expect(Math.hypot(moon.x - moon.orbitX, moon.y - moon.orbitY)).toBeCloseTo(moon.orbitRadius, 6);
+    // Its whole disc stays above the logo block over the card.
+    const radius = 0.08 * phone.height;
+    expect(moon.y + radius).toBeLessThanOrEqual(phone.card.top - 75 + 1e-6);
+    expect(moon.x).toBeGreaterThan(moon.orbitX);
+  });
+
+  it("keeps the moon on the big orb's ring wherever that ring reaches the card", () => {
+    for (const s of [desktop, wide, tablet]) expect(placeMoon(s.width, s.height, s.card).host).toBe("big");
   });
 });
 
