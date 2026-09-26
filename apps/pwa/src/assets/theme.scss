@@ -412,6 +412,11 @@ body {
 .v-field--variant-outlined.v-field--focused .v-field__outline {
   color: rgb(var(--v-theme-primary));
 }
+/* M3 error state: the border goes `error` too (focused or not). The rule
+   above used to win over Vuetify's own, leaving only the label red (NEO-109). */
+.v-field--variant-outlined.v-field--error .v-field__outline {
+  color: rgb(var(--v-theme-error));
+}
 /* NEO-85: a soft brand halo around the focused field, fading in with it. */
 .v-field--variant-outlined {
   transition: box-shadow 0.15s ease;
@@ -776,6 +781,17 @@ body {
   letter-spacing: -0.005em;
   color: rgb(var(--v-theme-on-surface));
 }
+/* Error count on a section heading, after a failed Save (NEO-109). */
+.pwa-form-section__errors {
+  min-width: 22px;
+  padding: 1px 8px;
+  border-radius: 99px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: center;
+  color: rgb(var(--v-theme-error));
+  background: rgba(var(--v-theme-error), 0.1);
+}
 .pwa-form-section__title::after {
   content: "";
   flex: 1;
@@ -924,6 +940,9 @@ body {
   display: flex;
   gap: 16px;
   flex-wrap: wrap;
+  /* Top-aligned, not stretched: an error message under one field must not
+     grow its neighbour (e.g. the sex toggle beside the birth date, NEO-109). */
+  align-items: flex-start;
 }
 .pwa-form-row-item {
   flex: 1 1 180px;

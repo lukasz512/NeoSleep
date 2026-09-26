@@ -148,7 +148,21 @@ describe("createApiFetch", () => {
       code: "DB_ERROR",
       requestId: "req-1",
       method: "GET",
+      field: null,
     });
+  });
+
+  it("passes the field a 400 names to onError (NEO-109)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const onError = vi.fn();
+    const apiFetch = createApiFetch({
+      getApiBase: () => "",
+      onError,
+      fetchFn: async () =>
+        jsonResponse(400, { error: "date_of_birth is out of range", code: "VALIDATION_ERROR", field: "date_of_birth" }),
+    });
+    await apiFetch("/api/v1/patient", { method: "POST" });
+    expect(onError.mock.calls[0]?.[4]).toMatchObject({ code: "VALIDATION_ERROR", field: "date_of_birth" });
   });
 
   it("does not wrap a non-transport error thrown by a custom fetchFn", async () => {

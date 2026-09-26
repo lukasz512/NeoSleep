@@ -1,4 +1,4 @@
-import { extractErrorCode, extractErrorMessage, responseHeader, stripQuery, toApiError } from "./errors";
+import { extractErrorCode, extractErrorField, extractErrorMessage, responseHeader, stripQuery, toApiError } from "./errors";
 
 export * from "./errors";
 export * from "./report";
@@ -17,6 +17,8 @@ export interface ApiErrorInfo {
   /** Server-side correlation id from the `X-Request-ID` response header. */
   requestId: string | null;
   method: string;
+  /** The form field a 400 VALIDATION_ERROR names (NEO-109), when it names one. */
+  field: string | null;
 }
 
 export interface ApiClientConfig {
@@ -71,6 +73,7 @@ export function createApiFetch(config: ApiClientConfig) {
           code: extractErrorCode(bodyText),
           requestId,
           method,
+          field: extractErrorField(bodyText),
         });
       }
     }

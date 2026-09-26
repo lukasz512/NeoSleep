@@ -27,7 +27,12 @@ export class DatabaseError extends AppError {
 }
 
 export class ValidationError extends AppError {
-  constructor(message: string) {
+  /**
+   * `field` names the payload key that failed (e.g. "date_of_birth"), when
+   * one does — the PWA's FormRenderer marks that field instead of showing a
+   * toast (NEO-109). Leave it out for errors no single field can fix.
+   */
+  constructor(message: string, public readonly field?: string) {
     super(message, "VALIDATION_ERROR", 400);
   }
 }

@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import type { RequestWithId } from "./requestId.js";
-import { AppError } from "../errors.js";
+import { AppError, ValidationError } from "../errors.js";
 import { insertDiagnostic } from "../db.js";
 
 function isDiagnosticsEnabled(): boolean {
@@ -25,7 +25,8 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     }
 
     if (!res.headersSent) {
-      res.status(err.statusCode).json({ error: err.message, code: err.code });
+      const field = err instanceof ValidationError ? err.field : undefined;
+      res.status(err.statusCode).json({ error: err.message, code: err.code, ...(field ? { field } : {}) });
     }
     return;
   }
