@@ -73,14 +73,14 @@ describe("PatientDetailView — health-data tabs", () => {
     await flushPromises();
   });
 
-  it("a manager sees Studies (NEO-83) but not Documents", async () => {
+  it("a manager sees Studies and Documents (NEO-83)", async () => {
     apiFetch.mockResolvedValue(jsonResponse(true, 200, PATIENT));
     const { wrapper } = await mountPatientDetail("manager");
     await vi.waitFor(() => expect(wrapper.text()).toContain("Jan Kowalski"));
 
     const tabs = wrapper.findAll('[role="tab"]').map((t) => t.text());
     expect(tabs).toContain("Studies");
-    expect(tabs).not.toContain("Documents");
+    expect(tabs).toContain("Documents");
     await flushPromises();
   });
 });
