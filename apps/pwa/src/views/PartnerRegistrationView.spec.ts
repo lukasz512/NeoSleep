@@ -249,3 +249,113 @@ describe("PartnerRegistrationView — documents instead of checkboxes (NEO-51)",
     expect(finishButton(wrapper).attributes("disabled")).toBeDefined();
   });
 });
+
+describe("PartnerRegistrationView — errors in the form, not as an alert (NEO-109)", () => {
+  /** Some keys are proposed in the NEO-109 i18n batch — until they land, vue-i18n prints the key itself. */
+  const msg = (key: string) => (en as Record<string, string>)[key] ?? key;
+
+  async function readyToFinish(password = "correct-horse-battery") {
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, VALID_PREVIEW));
+    const { wrapper } = await mountPartnerRegistrationView();
+    await signAndAcknowledge(wrapper);
+    const passwords = wrapper.findAll('input[type="password"]');
+    await passwords[0]!.setValue(password);
+    await passwords[1]!.setValue(password);
+    return wrapper;
+  }
+
+  const summary = (wrapper: VueWrapper) => wrapper.find('[data-testid="form-error-summary"]');
+
+  // jsdom has no scrollIntoView (a summary link scrolls its field into view).
+  Element.prototype.scrollIntoView = vi.fn();
+
+  it("shows no summary before the first submit", async () => {
+    const wrapper = await readyToFinish();
+    expect(summary(wrapper).exists()).toBe(false);
+  });
+
+  it("a password too short is listed in the summary on submit, and nothing is sent", async () => {
+    const wrapper = await readyToFinish("short");
+    const calls = apiFetch.mock.calls.length;
+    await wrapper.find("form").trigger("submit");
+    await flushPromises();
+
+    expect(summary(wrapper).exists()).toBe(true);
+    expect(summary(wrapper).text()).toContain(en["user.partnerRegistration.form.validation.passwordMin"]);
+    expect(apiFetch.mock.calls.length).toBe(calls);
+  });
+
+  it("a practice detail the API rejects is marked on its row and in the summary — no red alert", async () => {
+    const wrapper = await readyToFinish();
+    apiFetch.mockResolvedValueOnce(
+      jsonResponse(false, { error: "Clinic email is required", code: "VALIDATION_ERROR", field: "clinicEmail", reason: "required" }),
+    );
+    await wrapper.find("form").trigger("submit");
+    await flushPromises();
+
+    expect(summary(wrapper).text()).toContain(en["user.partnerRegistration.form.clinicEmail"]);
+    expect(summary(wrapper).text()).toContain(en["app.formRenderer.validation.required"]);
+    expect(wrapper.find('[data-field="clinicEmail"] [data-testid="clinic-detail-error"]').exists()).toBe(true);
+    expect(wrapper.text()).not.toContain(en["user.partnerRegistration.form.errorSubmit"]);
+    // Still on the form — the doctor fixes it and submits again.
+    expect(finishButton(wrapper).exists()).toBe(true);
+  });
+
+  it("the summary's line for a rejected detail opens the details dialog with that field marked, and changing it clears the mark", async () => {
+    const wrapper = await readyToFinish();
+    apiFetch.mockResolvedValueOnce(
+      jsonResponse(false, { error: "Invalid cédula profesional", code: "VALIDATION_ERROR", field: "licenseNumber", reason: "invalid" }),
+    );
+    await wrapper.find("form").trigger("submit");
+    await flushPromises();
+
+    await summary(wrapper).find("button").trigger("click");
+    await flushPromises();
+    // The dialog is teleported to <body> (the page itself isn't attached), so this is the dialog's own summary.
+    const dialogSummary = document.querySelector('[data-testid="form-error-summary"]');
+    expect(dialogSummary?.textContent).toContain(en["app.formRenderer.validation.server.licenseNumber"]);
+    expect(document.activeElement?.getAttribute("inputmode")).toBe("numeric");
+
+    // A new value for the rejected field → Save → the page no longer marks it.
+    const license = Array.from(document.querySelectorAll<HTMLInputElement>("input")).find((i) => i.value === VALID_PREVIEW.licenseNumber)!;
+    license.value = "7654321";
+    license.dispatchEvent(new Event("input"));
+    await flushPromises();
+    const save = Array.from(document.querySelectorAll("button")).find(
+      (b) => b.textContent?.trim() === en["user.partnerRegistration.form.editModal.save"],
+    )!;
+    save.click();
+    await flushPromises();
+    expect(wrapper.find('[data-field="licenseNumber"] [data-testid="clinic-detail-error"]').exists()).toBe(false);
+    expect(summary(wrapper).exists()).toBe(false);
+  });
+
+  it("an expired / already-used link at submit is a line about the whole form", async () => {
+    const wrapper = await readyToFinish();
+    apiFetch.mockResolvedValueOnce(
+      jsonResponse(false, { error: "Invalid or expired invitation link.", code: "VALIDATION_ERROR", field: "token", reason: "invalid" }),
+    );
+    await wrapper.find("form").trigger("submit");
+    await flushPromises();
+
+    expect(summary(wrapper).text()).toContain(msg("user.partnerRegistration.form.errorInvalidLink"));
+    expect(summary(wrapper).find("button").exists()).toBe(false);
+  });
+
+  it("a stale document is said in the summary box", async () => {
+    const wrapper = await readyToFinish();
+    apiFetch.mockResolvedValueOnce(jsonResponse(false, { code: "DOCUMENT_VERSION_STALE" }, 409));
+    await wrapper.find("form").trigger("submit");
+    await flushPromises();
+    expect(summary(wrapper).text()).toContain(en["user.partnerRegistration.form.errorStale"]);
+  });
+
+  it("a server failure stays the red alert — nothing in the form to fix", async () => {
+    const wrapper = await readyToFinish();
+    apiFetch.mockResolvedValueOnce(jsonResponse(false, { error: "boom" }, 500));
+    await wrapper.find("form").trigger("submit");
+    await flushPromises();
+    expect(wrapper.text()).toContain(en["user.partnerRegistration.form.errorSubmit"]);
+    expect(summary(wrapper).exists()).toBe(false);
+  });
+});

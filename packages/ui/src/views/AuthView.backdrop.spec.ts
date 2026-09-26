@@ -125,12 +125,9 @@ describe("AuthView — shared auth backdrop", () => {
     await flushPromises();
     await flushPromises();
 
-    // Sign-in errors surface through the app's toast system (NEO-10), not inline.
-    expect(notify).toHaveBeenCalledWith(
-      en["user.login.error.invalidCredentials"],
-      "error",
-      "user.login.error.invalidCredentials",
-    );
+    // Sign-in errors show in the form's summary box (NEO-109), not as a toast.
+    expect(wrapper.find('[data-testid="form-error-summary"]').text()).toContain(en["user.login.error.invalidCredentials"]);
+    expect(notify).not.toHaveBeenCalled();
     expect(busyLog.at(-1)).toEqual(["auth-view", false]);
     expect(backdrop.playExit).not.toHaveBeenCalled();
   });

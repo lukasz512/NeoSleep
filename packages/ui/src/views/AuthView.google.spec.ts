@@ -71,6 +71,7 @@ async function mountAuthView(opts: {
 }
 
 const googleButton = (w: VueWrapper) => w.find('[data-testid="google-sign-in"]');
+const summary = (w: VueWrapper) => w.find('[data-testid="form-error-summary"]');
 
 describe("AuthView — Sign in with Google button", () => {
   it("is shown when the API reports Google login as configured, linking to /auth/google with this origin", async () => {
@@ -139,29 +140,32 @@ describe("AuthView — Sign in with Google button", () => {
 describe("AuthView — Google callback errors", () => {
   it("explains an unknown Google account with the 'ask your administrator' message and clears ?error", async () => {
     const apiFetch = vi.fn().mockResolvedValue(providersResponse({ google: true }));
-    const { notify, router } = await mountAuthView({ apiFetch, apiUrl: API_URL, path: "/login?error=google_no_account" });
+    const { wrapper, notify, router } = await mountAuthView({ apiFetch, apiUrl: API_URL, path: "/login?error=google_no_account" });
 
-    expect(notify).toHaveBeenCalledWith(en["user.login.google.error.noAccount"], "error", "user.login.google.error.noAccount");
+    // In the sign-in form's summary box (NEO-109), not a toast.
+    expect(summary(wrapper).text()).toContain(en["user.login.google.error.noAccount"]);
+    expect(notify).not.toHaveBeenCalled();
     await vi.waitFor(() => expect(router.currentRoute.value.query.error).toBeUndefined());
     expect(router.currentRoute.value.path).toBe("/login");
   });
 
   it("shows the inactive-account message for google_account_inactive", async () => {
     const apiFetch = vi.fn().mockResolvedValue(providersResponse({ google: true }));
-    const { notify } = await mountAuthView({ apiFetch, apiUrl: API_URL, path: "/login?error=google_account_inactive" });
-    expect(notify).toHaveBeenCalledWith(en["user.login.google.error.inactive"], "error", "user.login.google.error.inactive");
+    const { wrapper } = await mountAuthView({ apiFetch, apiUrl: API_URL, path: "/login?error=google_account_inactive" });
+    expect(summary(wrapper).text()).toContain(en["user.login.google.error.inactive"]);
   });
 
   it("shows the generic Google failure message for any technical callback error", async () => {
     const apiFetch = vi.fn().mockResolvedValue(providersResponse({ google: true }));
-    const { notify } = await mountAuthView({ apiFetch, apiUrl: API_URL, path: "/login?error=token_exchange" });
-    expect(notify).toHaveBeenCalledWith(en["user.login.google.error.failed"], "error", "user.login.google.error.failed");
+    const { wrapper } = await mountAuthView({ apiFetch, apiUrl: API_URL, path: "/login?error=token_exchange" });
+    expect(summary(wrapper).text()).toContain(en["user.login.google.error.failed"]);
   });
 
   it("shows nothing on a plain /login", async () => {
     const apiFetch = vi.fn().mockResolvedValue(providersResponse({ google: true }));
-    const { notify } = await mountAuthView({ apiFetch, apiUrl: API_URL });
+    const { wrapper, notify } = await mountAuthView({ apiFetch, apiUrl: API_URL });
     expect(notify).not.toHaveBeenCalled();
+    expect(summary(wrapper).exists()).toBe(false);
   });
 });
 

@@ -92,7 +92,7 @@ describe("useEntitySubmit", () => {
     );
 
     expect(current.value).toBeNull();
-    expect(done).toHaveBeenCalledWith(false, { date_of_birth: "app.formRenderer.validation.server.date_of_birth" });
+    expect(done).toHaveBeenCalledWith(false, { date_of_birth: "invalid" });
   });
 
   it("on a 400 naming no field: falls back to the error toast", async () => {

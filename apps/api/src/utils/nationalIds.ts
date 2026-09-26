@@ -22,10 +22,10 @@ export function normalizeNationalIds(
     const value = typeof raw === "string" ? raw.trim() : "";
     if (!value) continue;
     if (key === "pwz") {
-      if (!isValidLicenseNumber("PL", value)) throw new ValidationError("Invalid PWZ licence number");
+      if (!isValidLicenseNumber("PL", value)) throw new ValidationError("Invalid PWZ licence number", "pwz");
       out.pwz = value.replace(/\s/g, "");
     } else if (key === "cedula") {
-      if (!isValidLicenseNumber("MX", value)) throw new ValidationError("Invalid cédula profesional");
+      if (!isValidLicenseNumber("MX", value)) throw new ValidationError("Invalid cédula profesional", "cedula");
       out.cedula = normalizeLicenseNumber(value);
     } else {
       out[key] = value;

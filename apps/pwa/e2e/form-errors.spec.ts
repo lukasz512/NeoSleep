@@ -53,6 +53,12 @@ for (const [name, size] of [["laptop", LAPTOP], ["phone", PHONE]] as const) {
   });
 }
 
+test("a rejected field without its own message falls back to the reason's message", async ({ page }) => {
+  await open(page, "&reject=last_name&reason=required", LAPTOP);
+  await save(page).click();
+  await expect(summary(page).getByRole("button")).toHaveText(["Last name — This field is required"]);
+});
+
 test("an empty form lists every required field; a line jumps to its field", async ({ page }) => {
   await open(page, "&mode=create", LAPTOP);
   await expect(summary(page)).toHaveCount(0);

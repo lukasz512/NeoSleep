@@ -76,6 +76,8 @@ import { reportCaught } from "@api";
 import { ref, computed, watch, defineAsyncComponent } from "vue";
 import { useI18n } from "vue-i18n";
 import { apiFetch } from "../composables/useApi";
+import { fieldErrorsFromResponse } from "../composables/useFormErrors";
+import type { SubmitDone } from "../composables/useEntitySubmit";
 import { useNotifications } from "../composables/useNotifications";
 import type { EventFormInitialData } from "../components/EventForm.vue";
 import type { EventSubmitPayload } from "../components/EventForm.vue";
@@ -292,7 +294,18 @@ function onAdd() {
   showEventForm.value = true;
 }
 
-async function onEventFormSubmit(payload: EventSubmitPayload, done: (ok: boolean) => void) {
+/** A 400 naming a field is marked in the event form itself (NEO-109); anything else gets the toast. */
+async function rejectEventSave(res: Response, done: SubmitDone) {
+  const fieldErrors = await fieldErrorsFromResponse(res);
+  if (fieldErrors) {
+    done(false, fieldErrors);
+    return;
+  }
+  notifications.show(t("user.planner.form.errorSave"), "error", undefined, { icon: "nav-planner" });
+  done(false);
+}
+
+async function onEventFormSubmit(payload: EventSubmitPayload, done: SubmitDone) {
   try {
     if (payload.id) {
       const res = await apiFetch(`/api/v1/encounter/${payload.id}`, {
@@ -317,8 +330,7 @@ async function onEventFormSubmit(payload: EventSubmitPayload, done: (ok: boolean
         await fetchEvents();
         done(true);
       } else {
-        notifications.show(t("user.planner.form.errorSave"), "error", undefined, { icon: "nav-planner" });
-        done(false);
+        await rejectEventSave(res, done);
       }
     } else {
       const res = await apiFetch("/api/v1/encounter", {
@@ -343,8 +355,7 @@ async function onEventFormSubmit(payload: EventSubmitPayload, done: (ok: boolean
         await fetchEvents();
         done(true);
       } else {
-        notifications.show(t("user.planner.form.errorSave"), "error", undefined, { icon: "nav-planner" });
-        done(false);
+        await rejectEventSave(res, done);
       }
     }
   } catch (err) {

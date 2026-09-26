@@ -239,7 +239,7 @@ export async function findLeadConvertedToPatient(client: PoolClient, patientId: 
 export async function insertLead(client: PoolClient, input: InsertLeadInput): Promise<Lead> {
   const firstName = trimOrEmpty(input.first_name);
   const lastName = trimOrEmpty(input.last_name);
-  if (!firstName || !lastName) throw new ValidationError("Lead first_name and last_name are required");
+  if (!firstName || !lastName) throw new ValidationError("Lead first_name and last_name are required", "first_name");
 
   try {
     const identityResult = await client.query<{ id: string }>(

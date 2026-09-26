@@ -96,6 +96,8 @@ async function waitForPath(router: Router, path: string): Promise<void> {
   await flushPromises();
 }
 
+const summaryBox = (wrapper: VueWrapper) => wrapper.find('[data-testid="form-error-summary"]');
+
 async function clickForgotPasswordLink(wrapper: VueWrapper, router: Router): Promise<void> {
   const forgotLink = wrapper.findAll("a").find((a) => a.text() === en["user.login.forgotPassword"]);
   await forgotLink!.trigger("click");
@@ -165,6 +167,43 @@ describe("AuthView — sign in", () => {
     expect(apiFetch).not.toHaveBeenCalled();
   });
 
+  // NEO-109: every form lists its errors in a summary box on top — only after the first submit.
+  it("lists both field errors in the summary box after the first submit, each one a link to its field", async () => {
+    const { wrapper } = await mountAuthView(apiFetch);
+    expect(summaryBox(wrapper).exists()).toBe(false);
+
+    await wrapper.find("form").trigger("submit");
+    await flushPromises();
+    await flushPromises();
+
+    const links = summaryBox(wrapper).findAll("button");
+    expect(links).toHaveLength(2);
+    expect(links[0]!.text()).toContain(en["user.login.validation.emailRequired"]);
+    expect(links[1]!.text()).toContain(en["user.login.validation.passwordRequired"]);
+
+    await links[1]!.trigger("click");
+    expect(document.activeElement).toBe(wrapper.find('input[type="password"]').element);
+
+    await wrapper.find('input[type="email"]').setValue("rep@neosleepcare.com");
+    await wrapper.find('input[type="password"]').setValue("correcthorse");
+    await flushPromises();
+    expect(summaryBox(wrapper).exists()).toBe(false);
+  });
+
+  it("marks the field the API names in a 400 VALIDATION_ERROR, under it and in the summary", async () => {
+    apiFetch.mockResolvedValue(
+      new Response(JSON.stringify({ error: "Email and password are required.", code: "VALIDATION_ERROR", field: "password", reason: "required" }), { status: 400 }),
+    );
+    const { wrapper, notify } = await mountAuthView(apiFetch);
+
+    await fillAndSubmit(wrapper, "rep@neosleepcare.com", "correcthorse");
+
+    const link = summaryBox(wrapper).find("button");
+    expect(link.text()).toContain(en["user.login.password"]);
+    expect(link.text()).toContain(en["app.formRenderer.validation.required"]);
+    expect(notify).not.toHaveBeenCalled();
+  });
+
   it("blocks submit and shows a validation message for a malformed email", async () => {
     const { wrapper } = await mountAuthView(apiFetch);
 
@@ -222,31 +261,28 @@ describe("AuthView — sign in", () => {
     }, { timeout: 3000 });
   });
 
-  it("shows the invalid-credentials message via the native notification on a 401 response, not an inline alert", async () => {
+  // NEO-109: the sign-in error is in the form again, never a toast.
+  it("shows the invalid-credentials message as a form-level line in the summary box on a 401, not a toast", async () => {
     apiFetch.mockResolvedValue(new Response(JSON.stringify({ error: "Invalid email or password." }), { status: 401 }));
     const { wrapper, notify } = await mountAuthView(apiFetch);
 
     await fillAndSubmit(wrapper, "rep@neosleepcare.com", "wrongpassword");
 
-    expect(notify).toHaveBeenCalledWith(
-      en["user.login.error.invalidCredentials"],
-      "error",
-      "user.login.error.invalidCredentials",
-    );
-    expect(wrapper.find(".auth-view__alert").exists()).toBe(false);
+    const box = summaryBox(wrapper);
+    expect(box.text()).toContain(en["user.login.error.invalidCredentials"]);
+    // Key-less line: plain text, not a link to a field.
+    expect(box.find("button").exists()).toBe(false);
+    expect(notify).not.toHaveBeenCalled();
   });
 
-  it("shows the too-many-attempts message via the native notification on a 429 response", async () => {
+  it("shows the too-many-attempts message in the summary box on a 429 response", async () => {
     apiFetch.mockResolvedValue(new Response(JSON.stringify({ error: "Too many login attempts." }), { status: 429 }));
     const { wrapper, notify } = await mountAuthView(apiFetch);
 
     await fillAndSubmit(wrapper, "rep@neosleepcare.com", "correcthorse");
 
-    expect(notify).toHaveBeenCalledWith(
-      en["user.login.error.tooManyAttempts"],
-      "error",
-      "user.login.error.tooManyAttempts",
-    );
+    expect(summaryBox(wrapper).text()).toContain(en["user.login.error.tooManyAttempts"]);
+    expect(notify).not.toHaveBeenCalled();
   });
 
   // NEO-81: a 5xx is "a problem on our side", not a vague "something went wrong".
@@ -259,17 +295,14 @@ describe("AuthView — sign in", () => {
     expect(notify).toHaveBeenCalledWith(en["common.error.server.body"], "error", "common.error.server.body");
   });
 
-  it("keeps the generic sign-in message for an unexpected 4xx", async () => {
+  it("keeps the generic sign-in message, in the summary box, for an unexpected 4xx naming no field", async () => {
     apiFetch.mockResolvedValue(new Response(JSON.stringify({ error: "Bad request." }), { status: 400 }));
     const { wrapper, notify } = await mountAuthView(apiFetch);
 
     await fillAndSubmit(wrapper, "rep@neosleepcare.com", "correcthorse");
 
-    expect(notify).toHaveBeenCalledWith(
-      en["user.login.error.network"],
-      "error",
-      "user.login.error.network",
-    );
+    expect(summaryBox(wrapper).text()).toContain(en["user.login.error.network"]);
+    expect(notify).not.toHaveBeenCalled();
   });
 
   it("says to check the connection when the request never reached the server", async () => {
@@ -294,14 +327,15 @@ describe("AuthView — sign in", () => {
     );
   });
 
-  it("fires a fresh notification for a second consecutive failure with the same error key", async () => {
-    apiFetch.mockResolvedValue(new Response(JSON.stringify({ error: "Invalid email or password." }), { status: 401 }));
+  it("fires a fresh notification for a second consecutive connection failure with the same error key", async () => {
+    apiFetch.mockRejectedValue(new ApiError({ kind: "network", message: "Failed to fetch" }));
     const { wrapper, notify } = await mountAuthView(apiFetch);
 
-    await fillAndSubmit(wrapper, "rep@neosleepcare.com", "wrongpassword");
-    await fillAndSubmit(wrapper, "rep@neosleepcare.com", "stillwrong");
+    await fillAndSubmit(wrapper, "rep@neosleepcare.com", "correcthorse");
+    await fillAndSubmit(wrapper, "rep@neosleepcare.com", "correcthorse2");
 
     expect(notify).toHaveBeenCalledTimes(2);
+    expect(summaryBox(wrapper).exists()).toBe(false);
   });
 
   it("redirects to /dashboard on success when there is no redirect query param", async () => {
@@ -413,9 +447,9 @@ describe("AuthView — forgot password (same card, in-place step)", () => {
     vi.useRealTimers();
   });
 
-  it("shows an error alert with a try-again action that returns to the form on failure", async () => {
+  it("keeps the form open and shows a server failure as a toast (nothing in the form can fix it)", async () => {
     apiFetch.mockResolvedValue(new Response(JSON.stringify({ error: "Server error." }), { status: 500 }));
-    const { wrapper, router } = await mountAuthView(apiFetch);
+    const { wrapper, router, notify } = await mountAuthView(apiFetch);
 
     await clickForgotPasswordLink(wrapper, router);
     await wrapper.find('input[type="email"]').setValue("rep@neosleepcare.com");
@@ -423,15 +457,27 @@ describe("AuthView — forgot password (same card, in-place step)", () => {
     await flushPromises();
     await flushPromises();
 
-    expect(wrapper.text()).toContain(en["common.error.server.body"]);
-    const retryBtn = wrapper.findAll("button").find((b) => b.text() === en["user.forgotPassword.tryAgain"]);
-    expect(retryBtn).toBeTruthy();
+    expect(notify).toHaveBeenCalledWith(en["common.error.server.body"], "error", "common.error.server.body");
+    expect(wrapper.find('input[type="email"]').exists()).toBe(true);
+    expect(wrapper.text()).not.toContain(en["user.forgotPassword.successMessage"]);
+    expect(summaryBox(wrapper).exists()).toBe(false);
+  });
 
-    await retryBtn!.trigger("click");
+  it("marks the email field when the API rejects it (400 VALIDATION_ERROR)", async () => {
+    apiFetch.mockResolvedValue(
+      new Response(JSON.stringify({ error: "Email is required.", code: "VALIDATION_ERROR", field: "email", reason: "required" }), { status: 400 }),
+    );
+    const { wrapper, router, notify } = await mountAuthView(apiFetch);
+
+    await clickForgotPasswordLink(wrapper, router);
+    await wrapper.find('input[type="email"]').setValue("rep@neosleepcare.com");
+    await wrapper.find("form").trigger("submit");
+    await flushPromises();
     await flushPromises();
 
-    expect(wrapper.find('input[type="email"]').exists()).toBe(true);
-    expect(wrapper.find("form").exists()).toBe(true);
+    const link = summaryBox(wrapper).find("button");
+    expect(link.text()).toContain(en["app.formRenderer.validation.required"]);
+    expect(notify).not.toHaveBeenCalled();
   });
 });
 
@@ -488,6 +534,30 @@ describe("AuthView — reset password (same persistent card and chrome)", () => 
     await vi.waitFor(() => {
       expect(router.currentRoute.value.path).toBe("/login");
     });
+  });
+
+  it("shows an expired/used link as a form-level line in the summary box, not an alert or toast", async () => {
+    apiFetch.mockImplementation((path: string) => {
+      if (path.includes("/validate")) {
+        return Promise.resolve(new Response(JSON.stringify({ valid: true }), { status: 200 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ error: "Invalid or expired reset link. Request a new one." }), { status: 400 }));
+    });
+    const { wrapper, notify } = await mountAuthView(apiFetch, "/reset-password?token=good-token");
+
+    await vi.waitFor(() => {
+      expect(wrapper.findAll('input[type="password"]')).toHaveLength(2);
+    });
+    const passwordInputs = wrapper.findAll('input[type="password"]');
+    await passwordInputs[0]!.setValue("newpassword123");
+    await passwordInputs[1]!.setValue("newpassword123");
+    await wrapper.find("form").trigger("submit");
+
+    await vi.waitFor(() => {
+      expect(summaryBox(wrapper).exists()).toBe(true);
+    });
+    expect(summaryBox(wrapper).text()).toContain(en["user.resetPassword.error.invalidToken"].split("\n")[0]!);
+    expect(notify).not.toHaveBeenCalled();
   });
 
   it("blocks submit when the confirm-password field doesn't match", async () => {

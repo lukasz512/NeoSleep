@@ -57,6 +57,8 @@ describe("Auth routes", () => {
         .send({ password: TEST_PASSWORD });
       expect(res.status).toBe(400);
       expect(res.body).toHaveProperty("error");
+      // NEO-109: names the field so the sign-in form can mark it.
+      expect(res.body).toMatchObject({ code: "VALIDATION_ERROR", field: "email", reason: "required" });
     });
 
     it("400s when password is missing", async () => {
@@ -66,6 +68,7 @@ describe("Auth routes", () => {
         .send({ email });
       expect(res.status).toBe(400);
       expect(res.body).toHaveProperty("error");
+      expect(res.body).toMatchObject({ code: "VALIDATION_ERROR", field: "password", reason: "required" });
     });
 
     it("400s when password is under 8 characters, with the same generic message used for invalid credentials", async () => {
@@ -75,6 +78,8 @@ describe("Auth routes", () => {
         .send({ email, password: "short" });
       expect(res.status).toBe(400);
       expect(res.body.error).toBe("Invalid email or password.");
+      // A credentials verdict, not a field one — never says which part was wrong.
+      expect(res.body).not.toHaveProperty("field");
     });
 
     it("401s for an unknown email with the generic message", async () => {
@@ -225,6 +230,7 @@ describe("Auth routes", () => {
         .set("Authorization", `Bearer ${loginRes.body.token}`)
         .send({ current_password: TEST_PASSWORD, new_password: "short" });
       expect(res.status).toBe(400);
+      expect(res.body).toMatchObject({ code: "VALIDATION_ERROR", field: "new_password", reason: "invalid" });
     });
 
     it("401s when the current password is wrong", async () => {
@@ -283,6 +289,15 @@ describe("Auth routes", () => {
   });
 
   describe("POST /api/v1/auth/forgot-password", () => {
+    it("400s without an email, naming the field (NEO-109)", async () => {
+      const res = await request(app)
+        .post("/api/v1/auth/forgot-password")
+        .set("X-Forwarded-For", freshIp())
+        .send({});
+      expect(res.status).toBe(400);
+      expect(res.body).toMatchObject({ code: "VALIDATION_ERROR", field: "email", reason: "required" });
+    });
+
     it("always 200s with the same generic message, whether or not the email exists", async () => {
       const existingRes = await request(app)
         .post("/api/v1/auth/forgot-password")
@@ -339,6 +354,7 @@ describe("Auth routes", () => {
         .set("X-Forwarded-For", freshIp())
         .send({ token, new_password: "short" });
       expect(shortRes.status).toBe(400);
+      expect(shortRes.body).toMatchObject({ code: "VALIDATION_ERROR", field: "new_password", reason: "invalid" });
 
       const resetRes = await request(app)
         .post("/api/v1/auth/reset-password")

@@ -2159,5 +2159,15 @@
   "app.sleepStudies.type.polysomnography": "Polisomnografia",
   "app.sleepStudies.type.other": "Inne",
   "app.sleepStudies.form.studyType": "Rodzaj badania",
-  "app.sleepStudies.table.studyType": "Rodzaj"
+  "app.sleepStudies.table.studyType": "Rodzaj",
+  "user.login.errorSummary.title": "Nie udało się zalogować",
+  "user.forgotPassword.errorSummary.title": "Nie udało się wysłać linku",
+  "user.resetPassword.errorSummary.title": "Nie udało się ustawić nowego hasła",
+  "user.changePassword.errorSummary.title": "Nie udało się zmienić hasła",
+  "user.partnerRegistration.form.errorInvalidLink": "Ten link z zaproszeniem jest już nieważny. Poproś NeoSleep o nowy.",
+  "app.formRenderer.validation.server.password": "Użyj co najmniej 8 znaków",
+  "app.formRenderer.validation.server.new_password": "Użyj co najmniej 8 znaków",
+  "app.formRenderer.validation.server.pwz": "Wpisz poprawny numer PWZ",
+  "app.formRenderer.validation.server.cedula": "Wpisz poprawną cédula profesional",
+  "app.formRenderer.validation.server.licenseNumber": "Wpisz poprawny numer prawa wykonywania zawodu"
 }

@@ -335,6 +335,19 @@ describe("PatientStudiesPanel — the Estudios checklist", () => {
     }
   });
 
+  it("a 400 naming a field hands it to the Add-study form to mark, instead of a toast (NEO-109)", async () => {
+    const wrapper = await mountPanel();
+    const body = { error: "Invalid study_type 'x'", code: "VALIDATION_ERROR", field: "study_type", reason: "invalid" };
+    const rejected = { ...jsonResponse(false, 400, body), clone: () => jsonResponse(false, 400, body) } as Response;
+    apiFetch.mockImplementation(async () => rejected);
+    const done = vi.fn();
+    wrapper.findAllComponents({ name: "FormRenderer" })[0]!.vm.$emit("submit", { study_type: "x" }, done);
+    await flushPromises();
+
+    expect(done).toHaveBeenCalledWith(false, { study_type: "invalid" });
+    expect(notify).not.toHaveBeenCalled();
+  });
+
   it("'Upload file' on a row preselects that item in the Add-study dialog", async () => {
     const wrapper = await mountPanel();
     await button(rows(wrapper)[5]!, "Upload file")!.trigger("click");

@@ -2159,5 +2159,15 @@
   "app.sleepStudies.type.polysomnography": "Polisomnografía",
   "app.sleepStudies.type.other": "Otro",
   "app.sleepStudies.form.studyType": "Tipo de estudio",
-  "app.sleepStudies.table.studyType": "Tipo"
+  "app.sleepStudies.table.studyType": "Tipo",
+  "user.login.errorSummary.title": "No se pudo iniciar sesión",
+  "user.forgotPassword.errorSummary.title": "No se pudo enviar el enlace",
+  "user.resetPassword.errorSummary.title": "No se pudo establecer la nueva contraseña",
+  "user.changePassword.errorSummary.title": "No se pudo cambiar la contraseña",
+  "user.partnerRegistration.form.errorInvalidLink": "Este enlace de invitación ya no es válido. Pide a NeoSleep que te envíe uno nuevo.",
+  "app.formRenderer.validation.server.password": "Usa al menos 8 caracteres",
+  "app.formRenderer.validation.server.new_password": "Usa al menos 8 caracteres",
+  "app.formRenderer.validation.server.pwz": "Ingresa un número PWZ válido",
+  "app.formRenderer.validation.server.cedula": "Ingresa una cédula profesional válida",
+  "app.formRenderer.validation.server.licenseNumber": "Ingresa un número de cédula válido"
 }
