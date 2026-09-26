@@ -11,8 +11,9 @@
       <span class="consent-notice__toggle-label">{{ t("app.questionnaire.consentNotice.toggle") }}</span>
       <AppIcon name="chevron-down" class="consent-notice__chevron" />
     </button>
-    <!-- Collapsed on first view (NEO-116): the notice is part of the consent, one tap away, not a wall of text before Send. -->
-    <div :id="bodyId" class="consent-notice__body" :inert="!open">
+    <!-- Collapsed on first view (NEO-116): the notice is part of the consent, one tap away, not a wall of text before Send.
+         inert must be removed, not set to "false" — the bare attribute alone keeps the link untappable. -->
+    <div :id="bodyId" class="consent-notice__body" :inert="open ? undefined : true">
       <div class="consent-notice__inner">
         <dl class="consent-notice__list">
           <div v-for="item in items" :key="item.key" class="consent-notice__item">
@@ -68,26 +69,28 @@ const items = computed(() => [
 </script>
 
 <style scoped>
+/* Accordion card (NEO-116, option A): full width of the form, same left edge as every field above. */
 .consent-notice {
-  /* Icon lines up with the checkbox label above (label indent 40px − toggle padding 12px). */
-  margin: 0 0 16px 28px;
+  margin: 12px 0 20px;
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
   border-radius: var(--pwa-radius);
-  transition: background-color 0.2s ease;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 .consent-notice--open {
-  background: rgba(var(--v-theme-primary), 0.06);
+  border-color: rgba(var(--v-theme-primary), 0.3);
+  background: rgba(var(--v-theme-primary), 0.04);
 }
 .consent-notice__toggle {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
-  min-height: 44px;
-  padding: 8px 12px;
+  min-height: 52px;
+  padding: 12px 16px;
   border: 0;
   border-radius: var(--pwa-radius);
   background: none;
-  color: rgb(var(--v-theme-primary));
+  color: rgb(var(--v-theme-on-surface));
   font: inherit;
   font-size: 0.9375rem;
   font-weight: 500;
@@ -107,7 +110,11 @@ const items = computed(() => [
   height: 20px;
   flex-shrink: 0;
 }
+.consent-notice__icon {
+  color: rgb(var(--v-theme-primary));
+}
 .consent-notice__chevron {
+  color: rgba(var(--v-theme-on-surface), 0.6);
   transition: transform 0.25s ease;
 }
 .consent-notice--open .consent-notice__chevron {
@@ -125,12 +132,14 @@ const items = computed(() => [
 .consent-notice__inner {
   overflow: hidden;
   min-height: 0;
-  padding: 0 12px;
+  padding: 0 16px;
 }
 .consent-notice__list {
   display: grid;
-  gap: 10px;
+  gap: 14px;
   margin: 0;
+  padding-top: 14px;
+  border-top: 1px solid rgba(var(--v-theme-on-surface), 0.08);
 }
 .consent-notice__item dt {
   font-size: 0.75rem;
@@ -146,7 +155,7 @@ const items = computed(() => [
 }
 .consent-notice__link {
   display: inline-block;
-  margin: 12px 0 14px;
+  margin: 14px 0 16px;
   font-size: 0.875rem;
   color: rgb(var(--v-theme-primary));
 }

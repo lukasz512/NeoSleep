@@ -1228,7 +1228,7 @@
   "app.questionnaire.consentNotice.rights.text": "You can access, correct or delete your data, object to its use or withdraw this consent at any time — ask at the clinic or write to {email}.",
   "app.questionnaire.consentNotice.rights.textNoEmail": "You can access, correct or delete your data, object to its use or withdraw this consent at any time — just ask at the clinic.",
   "app.questionnaire.consentNotice.fullNotice": "Read the full privacy notice",
-  "app.questionnaire.consent": "I give my express consent for {clinic} to process the health information I provide here for my medical care, as described below.",
+  "app.questionnaire.consent": "I give my express consent for {clinic} to process the health information I provide here for my medical care, as described below. I can withdraw it at any time.",
   "app.questionnaire.submit": "Send answers",
   "app.questionnaire.missing.questions": "Unanswered questions: {n}",
   "app.questionnaire.missing.questionsHint": "Answer every question to send.",

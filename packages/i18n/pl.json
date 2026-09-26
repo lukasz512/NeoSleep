@@ -1147,7 +1147,7 @@
   "app.questionnaire.consentNotice.rights.text": "Możesz w każdej chwili uzyskać dostęp do danych, poprawić je, usunąć, sprzeciwić się ich wykorzystaniu lub wycofać tę zgodę — zapytaj w klinice albo napisz na {email}.",
   "app.questionnaire.consentNotice.rights.textNoEmail": "Możesz w każdej chwili uzyskać dostęp do danych, poprawić je, usunąć, sprzeciwić się ich wykorzystaniu lub wycofać tę zgodę — wystarczy poprosić w klinice.",
   "app.questionnaire.consentNotice.fullNotice": "Przeczytaj pełną informację o prywatności",
-  "app.questionnaire.consent": "Wyrażam wyraźną zgodę na przetwarzanie przez {clinic} podanych tu danych o moim zdrowiu w celu mojej opieki medycznej, na zasadach opisanych poniżej.",
+  "app.questionnaire.consent": "Wyrażam wyraźną zgodę na przetwarzanie przez {clinic} podanych tu danych o moim zdrowiu w celu mojej opieki medycznej, na zasadach opisanych poniżej. Mogę ją w każdej chwili wycofać.",
   "app.questionnaire.submit": "Wyślij odpowiedzi",
   "app.questionnaire.missing.questions": "Pytania bez odpowiedzi: {n}",
   "app.questionnaire.missing.questionsHint": "Odpowiedz na wszystkie, aby wysłać.",
