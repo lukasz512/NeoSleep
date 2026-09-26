@@ -175,6 +175,17 @@ export function purgeDeadQuestionnaireRequests(client: PoolClient, retentionDays
   });
 }
 
+/** One of the patient's links, any status — the doctor's QR dialog polls it (NEO-117). */
+export function getQuestionnaireRequestForPatient(client: PoolClient, id: string, patientId: string): Promise<QuestionnaireRequest | null> {
+  return run("getQuestionnaireRequestForPatient", async () => {
+    const result = await client.query<QuestionnaireRequest>(
+      `SELECT ${COLS} FROM questionnaire_request WHERE id = $1 AND patient_id = $2`,
+      [id, patientId]
+    );
+    return result.rows[0] ?? null;
+  });
+}
+
 /** Pending links only — completed ones already show up as their resulting records, expired/cancelled ones are noise. */
 export function listPendingQuestionnaireRequestsForPatient(client: PoolClient, patientId: string): Promise<QuestionnaireRequest[]> {
   return run("listPendingQuestionnaireRequestsForPatient", async () => {

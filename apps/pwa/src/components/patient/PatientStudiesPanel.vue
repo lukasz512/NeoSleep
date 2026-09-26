@@ -547,8 +547,8 @@ watch(qrPatientStarted, (started) => {
   if (started) qrDialog.open = false;
 });
 
-// Refresh while a link is live, so the dialog closes and the QR status
-// button moves on their own. 15 s, and only for 15 min per link: the
+// Refresh while a link is live, so the QR status button moves on its own
+// (the open QR dialog has its own faster check, below). 15 s, and only for 15 min per link: the
 // doctor's device and a patient's phone usually share the clinic Wi-Fi's one
 // public IP — and so the API's per-IP rate limit; fast polling left open
 // could starve the patient's submit.
@@ -572,6 +572,39 @@ watch(
   }
 );
 onBeforeUnmount(stopPolling);
+
+// Fast check while the QR is on screen (NEO-117): wait 5 s — the patient
+// first has to point the camera and open the link — then ask every 2 s
+// about this one link, for at most 5 min. Stops the moment the dialog
+// closes, so the extra requests only happen while someone is scanning.
+const FAST_CHECK_DELAY_MS = 5_000;
+const FAST_CHECK_MS = 2_000;
+const FAST_CHECK_MAX_MS = 5 * 60_000;
+let fastCheckTimer: ReturnType<typeof setTimeout> | null = null;
+function stopFastCheck() {
+  if (fastCheckTimer) clearTimeout(fastCheckTimer);
+  fastCheckTimer = null;
+}
+watch(
+  () => (qrDialog.open ? qrDialog.requestId : null),
+  (requestId) => {
+    stopFastCheck();
+    if (!requestId) return;
+    const stopAt = Date.now() + FAST_CHECK_MAX_MS;
+    const tick = async () => {
+      const status = await checklistApi.requestStatus(requestId);
+      if (!qrDialog.open || qrDialog.requestId !== requestId) return; // closed or replaced meanwhile
+      if (status && (status.opened_at || status.completed_items.length > 0 || status.status !== "pending")) {
+        qrDialog.open = false;
+        void checklistApi.load(); // the QR status button picks up the new state
+        return;
+      }
+      if (Date.now() < stopAt) fastCheckTimer = setTimeout(tick, FAST_CHECK_MS);
+    };
+    fastCheckTimer = setTimeout(tick, FAST_CHECK_DELAY_MS);
+  }
+);
+onBeforeUnmount(stopFastCheck);
 
 const qrCreating = ref(false);
 const qrFailed = ref(false);

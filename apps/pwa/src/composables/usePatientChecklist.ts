@@ -87,6 +87,15 @@ export interface PendingRequest {
   url?: string;
 }
 
+export interface RequestStatus {
+  id: string;
+  status: "pending" | "completed" | "cancelled" | "expired";
+  items: string[];
+  completed_items: string[];
+  opened_at: string | null;
+  expires_at: string;
+}
+
 export interface PatientChecklist {
   items: ChecklistItem[];
   other_uploads: ChecklistHistoryEntry[];
@@ -246,6 +255,19 @@ export function usePatientChecklist(patientId: () => string) {
     await send(`/questionnaire-requests/${requestId}`, { method: "DELETE" }, { icon: "qr-code", errorKey: "app.clinical.saveError", retryable: true });
   }
 
+  /**
+   * One link's status for the open QR dialog's fast check (NEO-117). Silent:
+   * a failed poll just waits for the next one, never a toast every 2 s.
+   */
+  async function requestStatus(requestId: string): Promise<RequestStatus | null> {
+    try {
+      const res = await apiFetch(`/api/v1/patient/${patientId()}/questionnaire-requests/${requestId}`, { handleErrors: false });
+      return res.ok ? ((await res.json()) as RequestStatus) : null;
+    } catch {
+      return null; // offline / network blip — the next poll retries
+    }
+  }
+
   async function upload(form: FormData): Promise<boolean> {
     const res = await send("/studies/uploads", { method: "POST", body: form }, { icon: "upload", errorKey: "app.clinical.upload.error", successKey: "app.clinical.upload.success" });
     return Boolean(res);
@@ -255,5 +277,5 @@ export function usePatientChecklist(patientId: () => string) {
     await send(`/studies/uploads/${attachmentId}`, { method: "DELETE" }, { icon: "file", errorKey: "app.clinical.upload.deleteError", successKey: "app.clinical.upload.deleted", retryable: true });
   }
 
-  return { checklist, loading, loadError, loadFailure, load, recordQuestionnaire, completeBang, print, openFile, createRequest, sendByEmail, cancelRequest, upload, deleteUpload };
+  return { checklist, loading, loadError, loadFailure, load, recordQuestionnaire, completeBang, print, openFile, createRequest, requestStatus, sendByEmail, cancelRequest, upload, deleteUpload };
 }

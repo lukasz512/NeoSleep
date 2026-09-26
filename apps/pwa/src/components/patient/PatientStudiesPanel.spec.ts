@@ -101,6 +101,10 @@ beforeEach(() => {
       (checklistBody.pending_requests as unknown[]).push(created);
       return jsonResponse(true, 201, { ...created, url: `https://pwa.test/q#${"b".repeat(43)}` });
     }
+    if (path.endsWith("/questionnaire-requests/qr-1") && (init?.method ?? "GET") === "GET") {
+      const live = (checklistBody.pending_requests as { id: string }[]).find((r) => r.id === "qr-1");
+      return jsonResponse(true, 200, live ? { status: "pending", ...live } : { id: "qr-1", status: "completed", items: [], completed_items: [], opened_at: null });
+    }
     if (path.endsWith("/studies/uploads")) return jsonResponse(true, 201, { id: "up-1" });
     return jsonResponse(false, 404, { error: "unexpected" });
   });
@@ -340,6 +344,38 @@ describe("PatientStudiesPanel — the Estudios checklist", () => {
     }
   });
 
+  it("while the QR is open: no check for 5 s, then every 2 s, closing within one check of the patient opening the link (NEO-117)", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const wrapper = await mountPanel();
+      await button(wrapper, "QR for the patient")!.trigger("click");
+      await flushPromises();
+      const statusCalls = () => apiFetch.mock.calls.filter(([path]) => String(path).endsWith("/questionnaire-requests/qr-1")).length;
+      const dialogOpen = () => wrapper.findComponent(QuestionnaireQrDialog).props("modelValue");
+
+      await vi.advanceTimersByTimeAsync(4_900);
+      expect(statusCalls()).toBe(0); // the patient is still pointing the camera
+      await vi.advanceTimersByTimeAsync(200);
+      await flushPromises();
+      expect(statusCalls()).toBe(1);
+      await vi.advanceTimersByTimeAsync(4_000);
+      await flushPromises();
+      expect(statusCalls()).toBe(3);
+      expect(dialogOpen()).toBe(true);
+
+      (checklistBody.pending_requests as { opened_at: string | null }[])[0]!.opened_at = new Date().toISOString();
+      await vi.advanceTimersByTimeAsync(2_000);
+      await flushPromises();
+      expect(dialogOpen()).toBe(false);
+
+      const callsWhenClosed = statusCalls();
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(statusCalls()).toBe(callsWhenClosed); // no fast checks once the dialog is gone
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("the link leaving the pending list (patient finished) shows 'All received', then the button hides when nothing is left", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
@@ -351,7 +387,7 @@ describe("PatientStudiesPanel — the Estudios checklist", () => {
       const body = checklistBody as { items: { key: string; status: string }[]; pending_requests: unknown[] };
       body.pending_requests = [];
       for (const it of body.items) if (it.status === "missing" || it.status === "pending_patient") it.status = "done";
-      await vi.advanceTimersByTimeAsync(15_000); // the panel's own refresh while the link is live
+      await vi.advanceTimersByTimeAsync(5_000); // the open QR dialog's first fast check (NEO-117)
       await flushPromises();
       expect(wrapper.find(".qr-status").attributes("data-state")).toBe("done");
       expect(wrapper.find(".qr-status").text()).toContain("All received");

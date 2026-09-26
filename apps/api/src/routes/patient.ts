@@ -16,7 +16,12 @@ import multer from "multer";
 import { isClinicalRecordKind, type ClinicalRecordKind } from "../commands/clinicalRecordFields.js";
 import { ListClinicalRecordsQuery } from "../queries/clinicalRecords.js";
 import { GetLatestSleepStudyRefQuery } from "../queries/sleepStudy.js";
-import { CreateQuestionnaireRequestCommand, CancelQuestionnaireRequestCommand, SendQuestionnaireEmailCommand } from "../commands/questionnaireRequest.js";
+import {
+  CreateQuestionnaireRequestCommand,
+  CancelQuestionnaireRequestCommand,
+  SendQuestionnaireEmailCommand,
+  GetQuestionnaireRequestStatusQuery,
+} from "../commands/questionnaireRequest.js";
 import { AuditHealthDataReadCommand } from "../commands/healthDataReadAudit.js";
 import { resolveFrontendOrigin } from "../utils/frontendOrigin.js";
 import { ValidationError } from "../errors.js";
@@ -352,6 +357,22 @@ patientRouter.post(
       return SendQuestionnaireEmailCommand(ctx, id, origin);
     });
     res.status(201).json({ ...result.request, sent_to: result.sent_to });
+  })
+);
+
+patientRouter.get(
+  "/patient/:id/questionnaire-requests/:requestId",
+  requireStudyRole,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = uuidParam(req, "id");
+    const requestId = uuidParam(req, "requestId");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    const status = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return GetQuestionnaireRequestStatusQuery(ctx, id, requestId);
+    });
+    res.json(status);
   })
 );
 

@@ -9,6 +9,7 @@ import {
   getUsableQuestionnaireRequestByHash,
   completeQuestionnaireStep,
   markQuestionnaireRequestOpened,
+  getQuestionnaireRequestForPatient,
   type QuestionnaireRequest,
 } from "../db/questionnaireRequest.js";
 import { insertMedicalHistory, insertStopBang } from "../db/clinicalRecords.js";
@@ -18,6 +19,7 @@ import { formatFormDate } from "../utils/formDate.js";
 import { withPlatform } from "../db/tenant.js";
 import { listPatientChecklistConfig } from "../db/documentTemplateEntityType.js";
 import { GetPatientChecklistQuery } from "../queries/patientChecklist.js";
+import { requirePatientInScope } from "../queries/entityAccess.js";
 import { GetCurrentDocumentContentQuery } from "../queries/documentContent.js";
 import { sanitizeDocumentContentHtml } from "./documentContent.js";
 import { renderDocumentHtml, renderDocumentFooterHtml, getDocumentRefCode, fillContentForLocale, documentT, DOCUMENT_MANIFEST } from "@neo/documents";
@@ -226,6 +228,29 @@ export async function CancelQuestionnaireRequestCommand(ctx: TenantContext, pati
     entity_after: { status: "cancelled" },
     request_id: ctx.requestId,
   });
+}
+
+export type QuestionnaireRequestStatusView = Pick<
+  QuestionnaireRequest,
+  "id" | "status" | "items" | "completed_items" | "opened_at" | "expires_at"
+>;
+
+/**
+ * Just the state of one link — polled every 2 s by the open QR dialog so it
+ * can close as soon as the patient opens the link (NEO-117). A plain row
+ * lookup behind the territory guard: no checklist build, no health data, so
+ * no audit_log 'read' row per poll.
+ */
+export async function GetQuestionnaireRequestStatusQuery(
+  ctx: TenantContext,
+  patientId: string,
+  requestId: string
+): Promise<QuestionnaireRequestStatusView> {
+  await requirePatientInScope(ctx, patientId);
+  const request = await getQuestionnaireRequestForPatient(ctx.client, requestId, patientId);
+  if (!request) throw new NotFoundError("QuestionnaireRequest", requestId);
+  const { id, status, items, completed_items, opened_at, expires_at } = request;
+  return { id, status, items, completed_items, opened_at, expires_at };
 }
 
 // ---------------------------------------------------------------------------
