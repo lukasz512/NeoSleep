@@ -348,20 +348,24 @@ defineExpose({ whenEntered, playExit, replay });
   --auth-orbs-card-height: 440px;
 }
 
-/* Every anchor is centered on its left/top point via the standalone
-   `translate` property, so the pop-in / exit keyframes below only ever touch
-   `transform: scale()` and compose with it. Sizes in vmax (the big orb is
-   0.8 × the longer screen side, the others 0.42 and 0.2 of that) keep the
-   composition the same shape on a phone and a wide monitor. */
+/* Every anchor is centered on its left/top point by negative margins of half
+   its size, so the pop-in / exit keyframes below only ever touch
+   `transform: scale()`. Not the standalone `translate` property: the
+   production CSS minifier drops `translate` when `transform` sits next to it,
+   which left every orb uncentered and pushed the big one off-screen on
+   pwa-dev (NEO-103). Sizes in vmax (the big orb is 0.8 × the longer screen
+   side, the others 0.42 and 0.2 of that) keep the composition the same shape
+   on a phone and a wide monitor. */
 .auth-orbs__anchor {
   position: absolute;
+  width: var(--auth-orbs-size);
   aspect-ratio: 1;
-  translate: -50% -50%;
+  margin: calc(var(--auth-orbs-size) / -2) 0 0 calc(var(--auth-orbs-size) / -2);
   transform: scale(0);
 }
 
 .auth-orbs__anchor--big {
-  width: 80vmax;
+  --auth-orbs-size: 80vmax;
   left: 80%;
   top: 90%;
   --auth-orbs-drift-x: 30px;
@@ -370,7 +374,7 @@ defineExpose({ whenEntered, playExit, replay });
 }
 
 .auth-orbs__anchor--medium {
-  width: 33.6vmax;
+  --auth-orbs-size: 33.6vmax;
   left: 20%;
   top: 18%;
   --auth-orbs-drift-x: 22px;
@@ -380,7 +384,7 @@ defineExpose({ whenEntered, playExit, replay });
 
 /* Hugs the card's lower-left corner — the one orb that follows the card. */
 .auth-orbs__anchor--small {
-  width: 16vmax;
+  --auth-orbs-size: 16vmax;
   left: calc(var(--auth-orbs-card-center-x) - var(--auth-orbs-card-width) * 0.62);
   top: calc(var(--auth-orbs-card-top) + var(--auth-orbs-card-height) * 0.82);
   --auth-orbs-drift-x: 14px;
@@ -388,8 +392,7 @@ defineExpose({ whenEntered, playExit, replay });
   --auth-orbs-drift-period: 33s;
   transition:
     left 0.7s cubic-bezier(0.22, 1, 0.36, 1),
-    top 0.7s cubic-bezier(0.22, 1, 0.36, 1),
-    width 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+    top 0.7s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* Slow elliptical sway: x and y are separate layers, each a sine-eased

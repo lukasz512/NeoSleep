@@ -80,9 +80,12 @@ const css = `
   border-radius: 50%;
   background: var(--bs-primary);
   opacity: 0.5;
-  /* Centered on left/top, lifted by the orb's drift amplitude — AuthOrbs'
-     slow sway starts from exactly there, so the hand-over doesn't jump. */
-  translate: -50% calc(-50% - var(--bs-drift-y));
+  /* Centered on left/top by negative margins (as AuthOrbs — not \`translate\`,
+     which the CSS minifier drops next to \`transform\`), lifted by the orb's
+     drift amplitude: AuthOrbs' slow sway starts from exactly there, so the
+     hand-over doesn't jump. */
+  width: var(--bs-size);
+  margin: calc(var(--bs-size) / -2 - var(--bs-drift-y)) 0 0 calc(var(--bs-size) / -2);
   /* Pop-in (transform) and breathing (the separate scale property) compose
      instead of fighting over one property. Same Fibonacci stagger as AuthOrbs. */
   transform: scale(0);
@@ -97,14 +100,14 @@ const css = `
   border-radius: 50%;
 }
 /* Asymmetric composition (NEO-103) — same geometry as AuthOrbs.vue, keep the two in sync. */
-.boot-splash__orb--big { width: 80vmax; left: 80%; top: 90%; --bs-drift-y: 22px; }
+.boot-splash__orb--big { --bs-size: 80vmax; left: 80%; top: 90%; --bs-drift-y: 22px; }
 .boot-splash__orb--medium {
-  width: 33.6vmax; left: 20%; top: 18%; --bs-drift-y: 16px;
+  --bs-size: 33.6vmax; left: 20%; top: 18%; --bs-drift-y: 16px;
   background: color-mix(in srgb, var(--bs-primary) 55%, white 45%);
   animation-duration: 610ms, 1.3s; animation-delay: 89ms, -0.45s;
 }
 .boot-splash__orb--small {
-  width: 16vmax; --bs-drift-y: 12px;
+  --bs-size: 16vmax; --bs-drift-y: 12px;
   left: calc(50% - var(--bs-card-width) * 0.62);
   top: calc(var(--bs-card-top) + var(--bs-card-height) * 0.82);
   animation-duration: 610ms, 1.1s; animation-delay: 233ms, -0.75s;
