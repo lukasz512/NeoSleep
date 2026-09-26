@@ -12,6 +12,7 @@ import {
 import { insertMedicalHistory, insertStopBang } from "../db/clinicalRecords.js";
 import { insertConsent } from "../db/consent.js";
 import { getPatientPdfContext, formatBirthDate, patientDocumentFooter } from "../db/patientPdfContext.js";
+import { formatFormDate } from "../utils/formDate.js";
 import { withPlatform } from "../db/tenant.js";
 import { listPatientChecklistConfig } from "../db/documentTemplateEntityType.js";
 import { GetPatientChecklistQuery } from "../queries/patientChecklist.js";
@@ -23,6 +24,7 @@ import { uploadPartnerDocument, deletePartnerDocument } from "../services/partne
 import { hashToken } from "../utils/hashToken.js";
 import { generateToken } from "../utils/generateToken.js";
 import { AppError, NotFoundError, ValidationError } from "../errors.js";
+import { sendQuestionnaireLinkEmail } from "../mailer.js";
 import { PRIVACY_NOTICE_URL } from "../env.js";
 import { validateMedicalHistory, validateStop } from "./clinicalRecordFields.js";
 
@@ -55,6 +57,20 @@ const SIGNATURE_DATA_URL_RE = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/;
 export class QuestionnaireLinkInvalidError extends AppError {
   constructor() {
     super("This link is no longer valid", "LINK_INVALID", 410);
+  }
+}
+
+/** The patient record has no email address to send the questionnaire link to. */
+export class PatientHasNoEmailError extends AppError {
+  constructor() {
+    super("This patient has no email address", "PATIENT_NO_EMAIL", 422);
+  }
+}
+
+/** Email sending isn't configured (or Resend refused the message) — never report "sent" when nothing left. */
+export class QuestionnaireEmailUnavailableError extends AppError {
+  constructor() {
+    super("The email could not be sent right now", "EMAIL_UNAVAILABLE", 503);
   }
 }
 
@@ -126,6 +142,70 @@ export async function CreateQuestionnaireRequestCommand(
   // Token in the #fragment: browsers never send it to any server (not the
   // PWA host's access log, not analytics, not a Referer header).
   return { request, url: `${frontendOrigin}/q#${token}` };
+}
+
+/** "maria.lopez@example.mx" → "m***@example.mx" — enough for staff to recognise the address, nothing more in logs or toasts. */
+export function maskEmail(email: string): string {
+  const [local, domain] = email.split("@");
+  return domain ? `${local.slice(0, 1)}***@${domain}` : "***";
+}
+
+/** Email language from the patient's own settings: Polish, Mexican Spanish, else by region, else English. */
+function patientEmailLocale(language: string | null, region: string | null): string {
+  const lang = (language ?? "").toLowerCase();
+  if (lang.startsWith("pl")) return "pl";
+  if (lang.startsWith("es") || lang === "mx") return "mx";
+  const reg = (region ?? "").toUpperCase();
+  if (reg === "PL") return "pl";
+  if (reg === "MX") return "mx";
+  return "en";
+}
+
+/**
+ * "Send questionnaires by email" on the patient (Łukasz, 2026-09-26): one
+ * personal link covering every questionnaire the patient can still fill —
+ * the same link a QR code carries (CreateQuestionnaireRequestCommand with
+ * no items), emailed instead of shown. Runs inside the tenant transaction:
+ * if the email can't be sent, the request is rolled back rather than left
+ * as a link nobody received. The audit row names the recipient masked and
+ * holds no health data.
+ */
+export async function SendQuestionnaireEmailCommand(
+  ctx: TenantContext,
+  patientId: string,
+  frontendOrigin: string
+): Promise<{ request: CreatedQuestionnaireRequest["request"]; sent_to: string }> {
+  const created = await CreateQuestionnaireRequestCommand(ctx, patientId, {}, frontendOrigin); // territory-checked
+  const context = await getPatientPdfContext(ctx.client, patientId, ctx.user.id);
+  if (!context) throw new NotFoundError("Patient", patientId);
+  const email = context.patient_email?.trim();
+  if (!email) throw new PatientHasNoEmailError();
+
+  const sent = await sendQuestionnaireLinkEmail(
+    email,
+    created.url,
+    {
+      title: context.patient_salutation,
+      firstName: context.patient_first_name,
+      lastName: context.patient_last_name,
+      language: patientEmailLocale(context.patient_language, context.patient_region),
+      region: context.patient_region,
+    },
+    { name: context.organization_name, email: context.organization_email },
+    created.request.items.length
+  );
+  if (!sent) throw new QuestionnaireEmailUnavailableError();
+
+  const sentTo = maskEmail(email);
+  await insertAuditLog(ctx.client, {
+    user_id: ctx.user.id,
+    action: "notify",
+    entity_type: "QuestionnaireRequest",
+    entity_id: created.request.id,
+    entity_after: { patient_id: patientId, channel: "email", sent_to: sentTo, items: created.request.items.length },
+    request_id: ctx.requestId,
+  });
+  return { request: created.request, sent_to: sentTo };
 }
 
 export async function CancelQuestionnaireRequestCommand(ctx: TenantContext, patientId: string, requestId: string): Promise<void> {
@@ -350,7 +430,7 @@ export async function SubmitPublicQuestionnaireCommand(
       nombre_medico: prepared.context.practitioner_name ?? "",
       nombre_clinica: prepared.context.organization_name ?? "",
       lugar: prepared.context.organization_name ?? "",
-      fecha: signedAt.toLocaleDateString(locale === "pl" ? "pl-PL" : "es-MX"),
+      fecha: formatFormDate(signedAt, locale),
     },
     dataImages: { firma_paciente: signature },
   });

@@ -108,6 +108,9 @@ table.checklist td {
   vertical-align: middle;
 }
 table.checklist td.letter { width: 18px; font-weight: 600; color: var(--primary); }
+/* A measured value under a question (STOP-Bang B and N: "IMC 35,8 kg/m² · 162 cm · 94 kg"). */
+table.checklist .q-detail { display: block; font-size: 8pt; color: #6b7573; }
+table.checklist .q-detail:empty { display: none; }
 table.checklist td.q-answer { width: 160px; padding-right: 0; text-align: right; white-space: nowrap; }
 
 /* Answer options are drawn by apps/api's applyChoiceFields with their own inline

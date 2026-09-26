@@ -6,6 +6,7 @@ import { GetPatientChecklistQuery, POLYSOMNOGRAPHY_KEY, type ChecklistItem } fro
 import { GetCurrentDocumentContentQuery } from "../queries/documentContent.js";
 import { renderDocumentHtml, renderDocumentFooterHtml, getDocumentRefCode, documentT, DOCUMENT_MANIFEST } from "@neo/documents";
 import { renderHtmlToPdf, type ChoiceField } from "../services/documentRenderer.js";
+import { formatFormDate, formatFormDateTime } from "../utils/formDate.js";
 import { uploadPartnerDocument, deletePartnerDocument, getPartnerDocumentSignedUrl } from "../services/partnerDocuments.js";
 import { NotFoundError, ValidationError } from "../errors.js";
 import { MEDICAL_HISTORY_QUESTIONS, ORAL_EXAM_QUESTIONS, STOP_QUESTIONS, BANG_QUESTIONS } from "./clinicalRecordFields.js";
@@ -41,11 +42,28 @@ function stopBangZones(locale: string, score: number | null): ChoiceField {
 /** Signature model A (Łukasz, 2026-09-26): answers the patient gave through their personal link carry an attribution stamp instead of a drawn signature. */
 function patientStamp(locale: string, source: string | undefined, answeredAt: Date | undefined): string {
   if (source !== "patient" || !answeredAt) return "";
-  // The clinical templates are Mexican content (printLocale), so the stamp reads in Mexico City time.
-  const when = answeredAt
-    .toLocaleString("es-MX", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "America/Mexico_City" })
-    .replace(",", "");
-  return documentT(locale, "documents.common.patientStamp", { date: when });
+  return documentT(locale, "documents.common.patientStamp", { date: formatFormDateTime(answeredAt, locale) });
+}
+
+/** A measurement as printed on the form: one decimal, dropped when whole, decimal comma except for English. */
+function formatMeasure(value: number, locale: string): string {
+  const text = Number.isInteger(value) ? String(value) : value.toFixed(1);
+  return locale === "en" ? text : text.replace(".", ",");
+}
+
+/** What the specialist measured for B and N, printed under those two questions (migration 034). Empty when answered as a plain yes/no. */
+function measurementDetails(locale: string, screening: StopBangRecord | null): Record<string, string> {
+  const fields = { bmi_detail: "", neck_detail: "" };
+  if (!screening) return fields;
+  if (screening.bmi != null && screening.height_cm != null && screening.weight_kg != null) {
+    fields.bmi_detail = documentT(locale, "documents.stopBang.bmiDetail", {
+      bmi: formatMeasure(screening.bmi, locale),
+      height: formatMeasure(screening.height_cm, locale),
+      weight: formatMeasure(screening.weight_kg, locale),
+    });
+  }
+  if (screening.neck_cm != null) fields.neck_detail = documentT(locale, "documents.stopBang.neckDetail", { neck: formatMeasure(screening.neck_cm, locale) });
+  return fields;
 }
 
 /** The dental/sleep clinical templates are Mexican Spanish content; fall back to a template's first locale. */
@@ -119,7 +137,8 @@ export async function PrintChecklistItemCommand(
     choices.score_zone = stopBangZones(locale, screening?.score ?? null);
     fields.patient_stamp = patientStamp(locale, screening?.source, screening?.created_at);
     // S-T-O-P dates from when it was answered; the specialist's line from when B-A-N-G was completed.
-    fields.fecha_stop = screening ? screening.created_at.toLocaleDateString("es-MX") : "";
+    fields.fecha_stop = screening ? formatFormDate(screening.created_at, locale) : "";
+    Object.assign(fields, measurementDetails(locale, screening));
     if (screening) date = screening.source === "patient" && screening.score != null ? screening.updated_at : screening.created_at;
   }
 
@@ -147,7 +166,7 @@ export async function PrintChecklistItemCommand(
       nombre_medico: pdfContext.practitioner_name ?? "",
       nombre_clinica: pdfContext.organization_name ?? "",
       lugar: pdfContext.organization_name ?? "",
-      fecha: date.toLocaleDateString("es-MX"),
+      fecha: formatFormDate(date, locale),
       ...fields,
     },
     choiceFields: choices,

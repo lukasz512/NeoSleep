@@ -16,6 +16,13 @@ export interface PatientPdfContext {
   /** Street + city and phone — the issuer line in the PDF footer (document system, 2026-09-26: the clinic, not NeoSleep). */
   organization_address: string | null;
   organization_phone: string | null;
+  /** Where the questionnaire link email goes (never printed on a form). */
+  patient_email: string | null;
+  /** identities.language / region — pick the email's language. */
+  patient_language: string | null;
+  patient_region: string | null;
+  patient_salutation: string | null;
+  patient_last_name: string;
 }
 
 /**
@@ -49,10 +56,14 @@ export async function getPatientPdfContext(
       organization_address_line1: string | null;
       organization_city: string | null;
       organization_phone: string | null;
+      patient_email: string | null;
+      patient_language: string | null;
+      patient_region: string | null;
     }>(
       `SELECT
          pi.title AS patient_salutation, pi.first_name AS patient_first_name, pi.last_name AS patient_last_name,
          to_char(pi.date_of_birth, 'YYYY-MM-DD') AS patient_birth_date,
+         pi.email AS patient_email, pi.language AS patient_language, pi.region AS patient_region,
          pri.title AS practitioner_salutation, pri.first_name AS practitioner_first_name, pri.last_name AS practitioner_last_name,
          o.name AS organization_name, o.email AS organization_email,
          o.address_line1 AS organization_address_line1, o.city AS organization_city, o.phone AS organization_phone
@@ -90,6 +101,11 @@ export async function getPatientPdfContext(
       organization_email: row.organization_email,
       organization_address: [row.organization_address_line1, row.organization_city].filter(Boolean).join(", ") || null,
       organization_phone: row.organization_phone,
+      patient_email: row.patient_email,
+      patient_language: row.patient_language,
+      patient_region: row.patient_region,
+      patient_salutation: row.patient_salutation,
+      patient_last_name: row.patient_last_name,
     };
   } catch (err) {
     if (err instanceof AppError) throw err;
