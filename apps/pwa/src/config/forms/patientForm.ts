@@ -2,7 +2,7 @@ import type { FormDerive, FormFieldDef, FormFieldOption } from "../../types/form
 import { apiFetch } from "../../composables/useApi";
 import { useConfigStore } from "../../stores/config";
 import { useAuthStore } from "../../stores/auth";
-import { identityFields } from "./identityFields";
+import { identityFields, GENDERED_SALUTATIONS } from "./identityFields";
 import { loadTerritoryOptions } from "./territoryOptions";
 import { useSpecialtyLabel } from "../../composables/useSpecialtyLabel";
 
@@ -92,24 +92,28 @@ const GENDER_OPTIONS: FormFieldOption[] = [
   { title: "app.patients.form.genderPreferNot", value: "prefer_not_to_say", secondary: true },
 ];
 
-/** Gendered salutations (identityFields' PREFIX_OPTIONS), keyed without case or the trailing dot so a typed "dra" counts too. */
-const SALUTATION_SEX: Record<string, "male" | "female"> = { dr: "male", sr: "male", dra: "female", sra: "female" };
-const SALUTATION_FOR_SEX: Record<"male" | "female", Record<string, string>> = {
-  male: { dra: "Dr.", sra: "Sr." },
-  female: { dr: "Dra.", sr: "Sra." },
-};
-
+/** Keyed without case or the trailing dot, so a typed "dra" counts as "Dra." too. */
 function salutationKey(v: unknown): string {
   return typeof v === "string" ? v.trim().toLowerCase().replace(/\.$/, "") : "";
 }
 
+const SALUTATION_SEX: Record<string, "male" | "female"> = {};
+const SALUTATION_FOR_SEX: Record<"male" | "female", Record<string, string>> = { male: {}, female: {} };
+for (const { male, female } of GENDERED_SALUTATIONS) {
+  SALUTATION_SEX[salutationKey(male)] = "male";
+  SALUTATION_SEX[salutationKey(female)] = "female";
+  SALUTATION_FOR_SEX.male[salutationKey(female)] = male;
+  SALUTATION_FOR_SEX.female[salutationKey(male)] = female;
+}
+
 /**
- * Keeps salutation and sex in step, both ways: picking Dr./Sr. sets
- * Masculino, Dra./Sra. sets Femenino, and switching sex flips Dr.<->Dra. /
- * Sr.<->Sra. Once sex is Otro / Prefiero no decir it is a deliberate manual
- * choice — the salutation no longer moves it (and picking it leaves the
- * salutation alone). Salutations without a sex (Prof., Lic., Mgr.) or an
- * empty one never change anything.
+ * Keeps salutation and sex in step, both ways, for every gendered salutation
+ * (identityFields' GENDERED_SALUTATIONS): picking Dr./Prof./Lic./Sr. sets
+ * Masculino, Dra./Profa./Licda./Sra. sets Femenino, and switching sex flips
+ * the salutation to its other form. Once sex is Otro / Prefiero no decir it
+ * is a deliberate manual choice — the salutation no longer moves it (and
+ * picking it leaves the salutation alone). Mgr. or an empty salutation
+ * never change anything.
  */
 export const patientFormDerive: FormDerive = (form, prev) => {
   const salutationChanged = salutationKey(form.salutation) !== salutationKey(prev.salutation);

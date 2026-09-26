@@ -55,6 +55,7 @@ describe("patientFormFields", () => {
 
     it.each([
       ["Dr.", "male"], ["Dra.", "female"], ["Sr.", "male"], ["Sra.", "female"], ["dra", "female"],
+      ["Prof.", "male"], ["Profa.", "female"], ["Lic.", "male"], ["Licda.", "female"],
     ])("picking salutation %s sets sex to %s", (salutation, gender) => {
       expect(run({ salutation: null, gender: null }, { salutation, gender: null })).toEqual({ gender });
     });
@@ -65,13 +66,15 @@ describe("patientFormFields", () => {
 
     it.each([
       ["male", "Dra.", "Dr."], ["female", "Dr.", "Dra."], ["male", "Sra.", "Sr."], ["female", "Sr.", "Sra."],
+      ["female", "Prof.", "Profa."], ["male", "Profa.", "Prof."], ["female", "Lic.", "Licda."], ["male", "Licda.", "Lic."],
     ])("picking sex %s turns %s into %s", (gender, salutation, expected) => {
       expect(run({ salutation, gender: null }, { salutation, gender })).toEqual({ salutation: expected });
     });
 
-    it("sex never invents a salutation, and leaves Prof./Lic./Mgr. alone", () => {
+    it("sex never invents a salutation, and leaves the gender-neutral Mgr. alone (both ways)", () => {
       expect(run({ salutation: null, gender: null }, { salutation: null, gender: "female" })).toBeUndefined();
-      expect(run({ salutation: "Prof.", gender: "male" }, { salutation: "Prof.", gender: "female" })).toBeUndefined();
+      expect(run({ salutation: "Mgr.", gender: "male" }, { salutation: "Mgr.", gender: "female" })).toBeUndefined();
+      expect(run({ salutation: null, gender: null }, { salutation: "Mgr.", gender: null })).toBeUndefined();
     });
 
     it("Otro / Prefiero no decir is a manual choice: the salutation no longer changes sex", () => {

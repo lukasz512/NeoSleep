@@ -57,10 +57,24 @@ const PREFIX_OPTIONS = [
   { title: "app.identity.form.prefixDr", value: "Dr." },
   { title: "app.identity.form.prefixDra", value: "Dra." },
   { title: "app.identity.form.prefixProf", value: "Prof." },
+  { title: "app.identity.form.prefixProfa", value: "Profa." },
   { title: "app.identity.form.prefixLic", value: "Lic." },
+  { title: "app.identity.form.prefixLicda", value: "Licda." },
   { title: "app.identity.form.prefixMgr", value: "Mgr." },
   { title: "app.identity.form.prefixSr", value: "Sr." },
   { title: "app.identity.form.prefixSra", value: "Sra." },
+];
+
+/**
+ * Masculine/feminine forms of the same salutation — the patient form keeps
+ * salutation and sex in step through these (patientForm.ts's
+ * patientFormDerive). Mgr. has no gendered form, so it is not listed.
+ */
+export const GENDERED_SALUTATIONS: readonly { male: string; female: string }[] = [
+  { male: "Dr.", female: "Dra." },
+  { male: "Prof.", female: "Profa." },
+  { male: "Lic.", female: "Licda." },
+  { male: "Sr.", female: "Sra." },
 ];
 
 /** Raw prefix values only — utils/initials.ts strips these before deriving
