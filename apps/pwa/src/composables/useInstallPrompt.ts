@@ -68,21 +68,34 @@ export function detectDevice(nav: NavigatorLike): DeviceInfo {
  * - "prompt"        native dialog (Chromium, any OS)
  * - "ios-share"     Share → Add to Home Screen (every iOS browser uses the Share sheet)
  * - "mac-dock"      Safari on macOS: File → Add to Dock
- * - "android-menu"  Firefox on Android: menu ⋮ → Install
+ * - "android-menu"  Android without the native dialog (Firefox, or Chrome that
+ *                   hasn't offered it): menu ⋮ → Install / Add to Home screen
+ * - "desktop-menu"  Chrome/Edge on a computer that hasn't offered the native
+ *                   dialog (yet): the install icon in the address bar / browser menu
  * - "other-browser" desktop browser that can't install (Firefox) → suggest Edge/Chrome
- * - null            nothing to offer (already installed, or not installable here)
+ * - null            nothing to offer (already running installed)
+ *
+ * Chromium doesn't always fire beforeinstallprompt — its own heuristics can
+ * hold it back, and it never fires while the app is already installed but
+ * opened in a tab. Showing nothing then (the first NEO-87 version) left users
+ * with no way to install at all, so those cases get the browser's own steps.
  */
-export type InstallMethod = "prompt" | "ios-share" | "mac-dock" | "android-menu" | "other-browser";
+export type InstallMethod = "prompt" | "ios-share" | "mac-dock" | "android-menu" | "desktop-menu" | "other-browser";
 
 export function resolveInstallMethod(device: DeviceInfo, hasPrompt: boolean, installed: boolean): InstallMethod | null {
   if (installed) return null;
   if (hasPrompt) return "prompt";
   if (device.os === "ios") return "ios-share";
   if (device.os === "mac" && device.browser === "safari") return "mac-dock";
-  if (device.os === "android" && device.browser === "firefox") return "android-menu";
-  if (device.form === "desktop" && device.browser === "firefox") return "other-browser";
-  // Chromium without the event: already installed or not eligible yet — stay quiet.
+  if (device.os === "android") return "android-menu";
+  if (device.form === "desktop" && device.browser === "chromium") return "desktop-menu";
+  if (device.form === "desktop") return "other-browser";
   return null;
+}
+
+/** Microsoft Edge words its menu differently from Chrome ("Apps" vs "Cast, save and share"). */
+export function isEdge(nav: Pick<Navigator, "userAgent">): boolean {
+  return /Edg\//.test(nav.userAgent);
 }
 
 // ── "Later" schedule ────────────────────────────────────────────────────────
@@ -148,6 +161,10 @@ export function initInstallPrompt(win: Window = window): void {
   if (listening) return;
   listening = true;
   installed.value = isStandalone(win);
+  // Caught by the inline script in index.html when Chrome fired it before
+  // this bundle ran (repeat visits, service worker already active).
+  const early: unknown = Reflect.get(win, "__neoInstallPrompt");
+  if (early instanceof Event && isBeforeInstallPromptEvent(early)) deferredPrompt.value = early;
   win.addEventListener("beforeinstallprompt", (e) => {
     if (!isBeforeInstallPromptEvent(e)) return;
     // Suppress Chrome's own mini-infobar: our card/menu is the entry point.

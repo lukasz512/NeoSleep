@@ -86,10 +86,11 @@ import { VDialog } from "vuetify/components/VDialog";
 import { originDialogTransition } from "@ui";
 import AppButton from "../../components/AppButton.vue";
 import AppIcon, { type AppIconName } from "../../components/AppIcon.vue";
-import { useInstallPrompt } from "../../composables/useInstallPrompt";
+import { isEdge, useInstallPrompt } from "../../composables/useInstallPrompt";
 
 const { t } = useI18n();
 const { device, method, cardOpen, promptInstall, maybeOpenCard, postpone } = useInstallPrompt();
+const edge = isEdge(navigator);
 
 /** Bottom sheet on phones and tablets, centred dialog on computers. */
 const sheet = device.form !== "desktop";
@@ -121,6 +122,10 @@ const steps = computed<Step[]>(() => {
         { key: "layout.install.steps.androidMenu", icon: "dots-vertical" },
         { key: "layout.install.steps.androidInstall" },
       ];
+    case "desktop-menu":
+      return edge
+        ? [{ key: "layout.install.steps.edgeMenu" }, { key: "layout.install.steps.edgeInstall" }]
+        : [{ key: "layout.install.steps.chromeIcon", icon: "install" }, { key: "layout.install.steps.chromeMenu", icon: "dots-vertical" }];
     default:
       return [];
   }
