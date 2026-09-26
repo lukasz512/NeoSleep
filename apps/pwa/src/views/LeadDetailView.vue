@@ -34,6 +34,7 @@
     <FormRenderer
       v-model="showConvertToPatientModal"
       :fields="patientFormFields"
+      :derive="patientFormDerive"
       :initial-data="convertToPatientInitialData"
       title-key="app.patients.form.title"
       submit-label-key="app.patients.form.submit"
@@ -363,7 +364,7 @@ import EntityLink from "../components/EntityLink.vue";
 import { leadFormFields } from "../config/forms/leadForm";
 import { hcpFormFields, hcpFormDerive } from "../config/forms/hcpForm";
 import { partnerInviteFormFields } from "../config/forms/partnerInviteForm";
-import { patientFormFields } from "../config/forms/patientForm";
+import { patientFormFields, patientFormDerive } from "../config/forms/patientForm";
 import { createPractitionerFromLead } from "../utils/leadConversion";
 import {
   entityActionIcon,
