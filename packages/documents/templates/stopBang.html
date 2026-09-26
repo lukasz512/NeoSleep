@@ -18,6 +18,9 @@
       (a Postgres GENERATED ALWAYS ... STORED column, not recomputed here)
     score_zone — the three official risk zones as choice boxes, the one the
       score falls in marked (Łukasz, 2026-09-26)
+    bmi_detail / neck_detail — the specialist's measurements under B and N
+      ("IMC 35,8 kg/m² · 162 cm · 94 kg", "Cuello 42 cm"), empty when B/N
+      were answered as a plain yes/no (migration 034)
     patient_stamp — "answered by the patient via personal link · date" when
       S-T-O-P came from the QR/email link; empty on a blank form, which then
       shows a line for the patient to sign (signature model A)
@@ -90,9 +93,9 @@
 
   <h3 class="doc-sec">{{documents.stopBang.sectionBang}}</h3>
   <table class="checklist">
-    <tr><td class="letter">B</td><td>{{documents.stopBang.q.bmiOver35}}</td><td class="q-answer" data-field="q_bmi_over_35"></td></tr>
+    <tr><td class="letter">B</td><td>{{documents.stopBang.q.bmiOver35}}<span class="q-detail" data-field="bmi_detail"></span></td><td class="q-answer" data-field="q_bmi_over_35"></td></tr>
     <tr><td class="letter">A</td><td>{{documents.stopBang.q.ageOver50}}</td><td class="q-answer" data-field="q_age_over_50"></td></tr>
-    <tr><td class="letter">N</td><td>{{documents.stopBang.q.neckCircumference}}</td><td class="q-answer" data-field="q_neck_circumference_over_40cm"></td></tr>
+    <tr><td class="letter">N</td><td>{{documents.stopBang.q.neckCircumference}}<span class="q-detail" data-field="neck_detail"></span></td><td class="q-answer" data-field="q_neck_circumference_over_40cm"></td></tr>
     <tr><td class="letter">G</td><td>{{documents.stopBang.q.isMale}}</td><td class="q-answer" data-field="q_is_male"></td></tr>
   </table>
 

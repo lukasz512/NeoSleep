@@ -30,30 +30,25 @@
       </button>
 
       <VMenu v-if="secondary.length" location="bottom end">
+        <!-- One element for both "more" and the picked secondary option, so the switch
+             between them animates its width instead of swapping boxes. -->
         <template #activator="{ props: menuProps }">
           <button
-            v-if="selectedSecondary"
             v-bind="menuProps"
             type="button"
-            role="radio"
-            aria-checked="true"
-            :disabled="disabled"
-            class="choice-chips-field__chip is-selected choice-chips-field__secondary-value"
-          >
-            <span v-if="selectedSecondary.symbol" class="choice-chips-field__symbol" aria-hidden="true">{{ selectedSecondary.symbol }}</span>
-            <span class="choice-chips-field__text">{{ selectedSecondary.title }}</span>
-            <AppIcon name="chevron-down" class="choice-chips-field__chevron" />
-          </button>
-          <button
-            v-else
-            v-bind="menuProps"
-            type="button"
-            :aria-label="t('app.formRenderer.choiceMore')"
-            :title="t('app.formRenderer.choiceMore')"
+            :role="selectedSecondary ? 'radio' : undefined"
+            :aria-checked="selectedSecondary ? 'true' : undefined"
+            :aria-label="selectedSecondary ? undefined : t('app.formRenderer.choiceMore')"
+            :title="selectedSecondary ? undefined : t('app.formRenderer.choiceMore')"
             :disabled="disabled"
             class="choice-chips-field__more"
+            :class="{ 'is-selected': selectedSecondary }"
           >
-            <AppIcon name="dots-vertical" />
+            <template v-if="selectedSecondary">
+              <span class="choice-chips-field__text">{{ selectedSecondary.title }}</span>
+              <AppIcon name="chevron-down" class="choice-chips-field__chevron" />
+            </template>
+            <AppIcon v-else name="dots-vertical" />
           </button>
         </template>
         <VList density="compact" class="choice-chips-field__menu">
@@ -126,22 +121,34 @@ const selectedSecondary = computed(() => secondary.value.find((o) => o.value ===
   border-color: rgb(var(--v-theme-error));
 }
 
+/*
+ * Segment widths never depend on their text or on which one is picked
+ * (equal flex-basis 0, same font weight selected or not), so the dividers
+ * stay put while clicking. The only width change is the deliberate one —
+ * a secondary pick (Otro…) taking the room — and that one is animated.
+ */
 .choice-chips-field__chip,
 .choice-chips-field__more {
+  --choice-motion: var(--pwa-transition-duration, 280ms) var(--pwa-ease-out-smooth, cubic-bezier(0.22, 1, 0.36, 1));
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
   min-width: 0;
+  overflow: hidden;
   color: rgb(var(--v-theme-on-surface));
   font-size: 1rem;
   white-space: nowrap;
   cursor: pointer;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  transition:
+    flex-grow var(--choice-motion),
+    flex-basis var(--choice-motion),
+    padding var(--choice-motion),
+    background-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .choice-chips-field__chip {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   padding: 0 10px;
 }
 
@@ -155,15 +162,22 @@ const selectedSecondary = computed(() => secondary.value.find((o) => o.value ===
   background: rgba(var(--v-theme-on-surface), 0.04);
 }
 
-.choice-chips-field__chip.is-selected {
+.choice-chips-field__chip.is-selected,
+.choice-chips-field__more.is-selected {
   background: rgba(var(--v-theme-primary), 0.1);
   color: rgb(var(--v-theme-primary));
-  font-weight: 500;
 }
 
 .choice-chips-field__text {
+  max-width: 14em;
+  margin-left: 6px;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: max-width var(--choice-motion), margin var(--choice-motion), opacity 0.2s ease;
+}
+
+.choice-chips-field__more .choice-chips-field__text {
+  margin-left: 0;
 }
 
 .choice-chips-field__symbol {
@@ -176,25 +190,43 @@ const selectedSecondary = computed(() => secondary.value.find((o) => o.value ===
   opacity: 1;
 }
 
-/* A secondary pick is showing — the common segments give up their room and keep only the symbol. */
-.has-secondary-value .choice-chips-field__chip:not(.choice-chips-field__secondary-value) {
+/* A secondary pick is showing — the common segments slide down to just their symbol. */
+.has-secondary-value .choice-chips-field__chip {
   flex: 0 0 44px;
   padding: 0;
 }
 
-.has-secondary-value .choice-chips-field__chip:not(.choice-chips-field__secondary-value) .choice-chips-field__text {
-  display: none;
+.has-secondary-value .choice-chips-field__chip .choice-chips-field__text {
+  max-width: 0;
+  margin-left: 0;
+  opacity: 0;
 }
 
 .choice-chips-field__chevron {
   flex: 0 0 auto;
   width: 18px;
   height: 18px;
+  margin-left: 4px;
 }
 
 .choice-chips-field__more {
   flex: 0 0 40px;
+  padding: 0;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+/* …and the "more" segment grows into the room they gave up, showing the pick. */
+.choice-chips-field__more.is-selected {
+  flex: 1 1 0;
+  padding: 0 10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .choice-chips-field__chip,
+  .choice-chips-field__more,
+  .choice-chips-field__text {
+    transition: none;
+  }
 }
 
 .choice-chips-field__chip:focus-visible,

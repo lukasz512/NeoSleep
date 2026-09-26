@@ -25,6 +25,7 @@ Earlier decisions in the same thread:
 - The published STOP-Bang forms split the questions the same way: S-T-O-P is self-reported, and B-A-N-G is measured by the clinician (BMI > 35, age > 50, neck > 40 cm, male). Source: [AASM sleepeducation.org STOP-Bang PDF](https://sleepeducation.org/wp-content/uploads/2023/01/Stop-Bang-Questionnaire.pdf).
 
 ### Acceptance Criteria
+- [ ] The medical history stays one list of Sí/No rows on the patient's phone (Łukasz, 2026-09-26, after comparing three options).
 - [ ] Patient flow (QR link and email link) shows S-T-O-P one question per screen, with an illustration, large Sí/No buttons (≥ 56 px), and S-T-O-P letters as progress that can be tapped to go back.
 - [ ] After a Sí/No tap the flow moves to the next card with an animation. Card transitions and the progress change are animated, and a reduced-motion setting switches animations off.
 - [ ] The patient flow renders correctly from 320 px to desktop width, with no horizontal scroll.
@@ -37,15 +38,17 @@ Earlier decisions in the same thread:
 - [ ] The score is shown as 0–8 with zones 0–2 low, 3–4 intermediate and 5–8 high, the same in the app and on the PDF.
 - [ ] The study list shows STOP-Bang in two halves (patient / doctor), with statuses: not started, "filled in by the patient, waiting for the doctor", and complete.
 - [ ] The PDF shows the patient stamp plus the specialist's signature line (signature model A). Antecedentes médicos uses the same patient stamp.
+- [ ] While answering, the patient's answers survive a closed tab or a reload on the same device. They are gone after submit, after link expiry, or after 24 h.
+- [ ] Every date printed on a PDF reads dd/mm/yyyy (dd.mm.yyyy for Polish documents), in the clinic's time zone.
 - [ ] Doctor rows use the same row component as Antecedentes médicos and Exploración oral: icon or letter, question, and Sí/No in a fixed right column.
 
 ### Open Questions
 - [x] **Appointment date for the reminder**: decided (Łukasz, 2026-09-26). Ship first with a manual **"send questionnaires by email" button on the patient**. The automatic day-before reminder follows once the Calendar & Scheduling epic (NEO-27..30) adds an appointment date.
-- [ ] Which questionnaires go in the pre-visit email: always STOP-Bang, Antecedentes médicos and the consent, or a choice per visit type?
-- [ ] Illustrations: are simple line icons in the brand teal enough, or should an illustrator draw a custom set?
-- [ ] Should the reception printout be a blank form with the patient banner pre-filled, or entirely blank?
-- [ ] Sex for G: is `patient.sex` reliably set in the MX data today? If it is empty, should the doctor answer G manually?
-- [ ] If the patient answers only 2 of the 4 S-T-O-P questions and closes the page, do we save partial answers and resume, or restart?
+- [x] Which questionnaires go in the email: **all open questionnaires** the patient can fill (no per-send selection). (Łukasz, 2026-09-26)
+- [x] Illustrations: **simple line icons** in the brand teal, drawn in-house, replaceable later.
+- [x] Reception printout: printing from the patient view prints the **filled** form (patient data + answers). Blank forms will get their own left-nav tab later (all blank documents, the informed consent included). That tab is out of scope here.
+- [x] Sex for G: taken from the patient record. When the record has no sex, the doctor ticks G by hand, and that answer does **not** update the record.
+- [x] Partial answers: the patient's in-progress answers stay **on the patient's device** (browser storage) until they submit. The saved draft is cleared on submit, when the link is invalid or expired, and after 24 h. The storage key is derived from a hash of the link token, never the token itself.
 
 ### Hand-off
 → `/arch assess clinical-questionnaire-capture`: the measurement columns (migration), the per-half status model on the checklist, and the email-link token reuse.

@@ -74,6 +74,7 @@ export const userFormFields: FormFieldDef[] = [
   ...identity,
   {
     key: "role",
+    section: "access",
     type: "select",
     labelKey: "user.users.form.fieldRole",
     options: ROLE_OPTIONS,
@@ -88,6 +89,7 @@ export const userFormFields: FormFieldDef[] = [
   },
   {
     key: "region",
+    section: "territory",
     type: "autocomplete",
     labelKey: "user.users.form.fieldRegion",
     options: loadRegionOptions,
@@ -95,6 +97,7 @@ export const userFormFields: FormFieldDef[] = [
   },
   {
     key: "territory_id",
+    section: "territory",
     type: "autocomplete",
     labelKey: "user.users.form.fieldTerritory",
     hint: "user.users.form.fieldTerritoryHint",
@@ -105,6 +108,7 @@ export const userFormFields: FormFieldDef[] = [
   },
   {
     key: "status",
+    section: "access",
     type: "select",
     labelKey: "user.users.form.fieldStatus",
     options: STATUS_OPTIONS,

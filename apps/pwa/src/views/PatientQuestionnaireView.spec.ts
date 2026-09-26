@@ -15,6 +15,10 @@ vi.mock("../composables/useApi", async (importOriginal) => ({
 }));
 
 import PatientQuestionnaireView from "./PatientQuestionnaireView.vue";
+import { useNotifications } from "../composables/useNotifications";
+
+/** Validation feedback is a toast now (NEO-99) — the messages currently queued. */
+const toasts = () => useNotifications().notifications.value.map((n) => ({ message: n.message, type: n.type }));
 
 const TOKEN = "a".repeat(43);
 const SIGNATURE = "data:image/png;base64,iVBORw0KGgo=";
@@ -53,6 +57,8 @@ afterEach(() => {
   for (const w of mounted.splice(0)) w.unmount();
   apiFetch.mockReset();
   signed = false;
+  useNotifications().notifications.value = [];
+  localStorage.clear(); // unsent-answer drafts must not leak from one test into the next
 });
 
 async function mountView(): Promise<VueWrapper> {
@@ -72,6 +78,15 @@ async function mountView(): Promise<VueWrapper> {
 }
 
 const buttonWithText = (wrapper: VueWrapper, text: string) => wrapper.findAll("button").filter((b) => b.text() === text);
+
+/** Card by card: answer the question on screen, then "Next" (the auto-advance timer then does nothing — the patient already moved on). */
+async function answerCards(wrapper: VueWrapper, answer: "Yes" | "No", count: number) {
+  for (let i = 0; i < count; i++) {
+    await buttonWithText(wrapper, answer)[0]!.trigger("click");
+    await buttonWithText(wrapper, "Next →")[0]!.trigger("click");
+  }
+  await flushPromises();
+}
 
 describe("PatientQuestionnaireView (public QR self-fill)", () => {
   it("shows the 'no longer valid' state for a used/expired/unknown link", async () => {
@@ -99,14 +114,27 @@ describe("PatientQuestionnaireView (public QR self-fill)", () => {
 
     expect(wrapper.text()).toContain("Hello, Lucía");
     expect(wrapper.text()).toContain("Clínica Sonrisa asks you");
+    // The medical history is one list (14 plain yes/no questions), not cards.
     expect(buttonWithText(wrapper, "No")).toHaveLength(14);
 
+    // Send stays locked until every question is answered and consent is ticked; a tap says what's missing.
+    const send = () => wrapper.find("button[type='submit']");
+    expect(send().attributes("aria-disabled")).toBe("true");
     await wrapper.find("input[type='checkbox']").setValue(true);
+    expect(send().attributes("aria-disabled")).toBe("true");
     await wrapper.find("form").trigger("submit");
-    expect(wrapper.text()).toContain("Please answer every question.");
-    expect(apiFetch).toHaveBeenCalledTimes(1); // only the initial GET
+    expect(toasts()).toEqual([{ message: "Unanswered questions: 14. Answer every one to send.", type: "warning" }]);
+    expect(wrapper.text()).not.toContain("Unanswered questions"); // a toast, not an inline alert
+    expect(apiFetch).toHaveBeenCalledTimes(1); // only the initial lookup
 
     for (const no of buttonWithText(wrapper, "No")) await no.trigger("click");
+    await wrapper.find("input[type='checkbox']").setValue(false);
+    await wrapper.find("form").trigger("submit");
+    expect(toasts().at(-1)).toEqual({ message: "Tick the consent box above to send.", type: "warning" });
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+
+    await wrapper.find("input[type='checkbox']").setValue(true);
+    expect(send().attributes("aria-disabled")).toBe("false");
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 201, { step: "medicalHistory", completed: true }));
     await wrapper.find("form").trigger("submit");
     await flushPromises();
@@ -136,10 +164,15 @@ describe("PatientQuestionnaireView (public QR self-fill)", () => {
   it("STOP-Bang via QR asks the patient only the four S-T-O-P questions", async () => {
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, lookup([step("stopBang", "stop_bang")])));
     const wrapper = await mountView();
-    expect(buttonWithText(wrapper, "Yes")).toHaveLength(4);
+    // S-T-O-P letters are the progress; the first card asks about snoring.
+    expect(buttonWithText(wrapper, "S")).toHaveLength(1);
+    expect(buttonWithText(wrapper, "G")).toHaveLength(0);
     expect(wrapper.text()).toContain("Do you snore loudly?");
-    expect(wrapper.text()).not.toContain("Are you male?");
     expect(wrapper.text()).toContain("Your clinic asks you");
+
+    await answerCards(wrapper, "Yes", 4);
+    expect(wrapper.text()).toContain("Check your answers");
+    expect(wrapper.text()).not.toContain("Are you male?");
   });
 
   it("a bundle link walks the patient through each step — sign the consent, then the questionnaires — saving each on its own", async () => {
@@ -152,7 +185,7 @@ describe("PatientQuestionnaireView (public QR self-fill)", () => {
 
     // No signature yet → nothing is sent.
     await wrapper.find("form").trigger("submit");
-    expect(wrapper.text()).toContain("Sign in the box to continue.");
+    expect(toasts()).toEqual([{ message: "Sign in the box to continue.", type: "warning" }]);
     expect(apiFetch).toHaveBeenCalledTimes(1);
 
     signed = true;
@@ -164,7 +197,24 @@ describe("PatientQuestionnaireView (public QR self-fill)", () => {
 
     expect(wrapper.text()).toContain("Step 2 of 2");
     expect(wrapper.text()).toContain("Do you snore loudly?");
+    await answerCards(wrapper, "No", 4);
     expect(wrapper.text()).toContain("Send answers");
+  });
+
+  it("keeps unsent answers on the device: a reload of the same link resumes where the patient stopped", async () => {
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, lookup([step("stopBang", "stop_bang")])));
+    const first = await mountView();
+    await answerCards(first, "Yes", 2);
+    await flushPromises();
+    first.unmount();
+    mounted.splice(mounted.indexOf(first), 1);
+
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, lookup([step("stopBang", "stop_bang")])));
+    const second = await mountView();
+    await new Promise((resolve) => setTimeout(resolve, 20)); // token hashing (Web Crypto) is async
+    await flushPromises();
+    expect(second.text()).toContain("Question 3 of 4");
+    localStorage.clear();
   });
 
   it("a consent whose text isn't available can be skipped without signing", async () => {

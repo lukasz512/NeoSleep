@@ -30,6 +30,13 @@ export interface ChecklistRecord {
   medical_history_other?: string | null;
   skeletal_class?: "I" | "II" | "III" | null;
   tooth?: string | null;
+  /** STOP-Bang measurements (migration 034) — null when B/N were answered as a plain yes/no. */
+  height_cm?: number | null;
+  weight_kg?: number | null;
+  neck_cm?: number | null;
+  bmi?: number | null;
+  /** STOP-Bang: when B-A-N-G was completed (equals created_at when both halves were filled at once). */
+  updated_at?: string;
   [question: string]: unknown;
 }
 
@@ -82,6 +89,8 @@ export interface PatientChecklist {
   items: ChecklistItem[];
   other_uploads: ChecklistHistoryEntry[];
   pending_requests: PendingRequest[];
+  /** The newest link when it ran out unused — the QR button's "link expired" state (NEO-93). */
+  expired_request: PendingRequest | null;
   summary: { done: number; total: number };
 }
 
@@ -210,6 +219,27 @@ export function usePatientChecklist(patientId: () => string) {
     return res ? ((await res.json()) as PendingRequest) : null;
   }
 
+  /**
+   * Emails the patient one personal link to everything they can still fill.
+   * A patient without an email gets a clear "add one to the record" message,
+   * not a generic failure. Returns the masked address it went to, or null.
+   */
+  async function sendByEmail(): Promise<string | null> {
+    const res = await apiFetch(`/api/v1/patient/${patientId()}/questionnaire-requests/email`, { ...json({}), handleErrors: false });
+    if (res.status === 422) {
+      notifications.show(t("app.clinical.email.noEmail"), "warning", undefined, { icon: "mail" });
+      return null;
+    }
+    if (!res.ok) {
+      await failWith(res, "app.clinical.email.failed", "mail", () => sendByEmail());
+      return null;
+    }
+    const { sent_to } = (await res.json()) as { sent_to: string };
+    notifications.show(t("app.clinical.email.sent", { email: sent_to }), "success", undefined, { icon: "mail" });
+    await load();
+    return sent_to;
+  }
+
   async function cancelRequest(requestId: string): Promise<void> {
     await send(`/questionnaire-requests/${requestId}`, { method: "DELETE" }, { icon: "qr-code", errorKey: "app.clinical.saveError", retryable: true });
   }
@@ -223,5 +253,5 @@ export function usePatientChecklist(patientId: () => string) {
     await send(`/studies/uploads/${attachmentId}`, { method: "DELETE" }, { icon: "file", errorKey: "app.clinical.upload.deleteError", successKey: "app.clinical.upload.deleted", retryable: true });
   }
 
-  return { checklist, loading, loadError, loadFailure, load, recordQuestionnaire, completeBang, print, openFile, createRequest, cancelRequest, upload, deleteUpload };
+  return { checklist, loading, loadError, loadFailure, load, recordQuestionnaire, completeBang, print, openFile, createRequest, sendByEmail, cancelRequest, upload, deleteUpload };
 }
