@@ -123,16 +123,18 @@ table.checklist:has(+ .doc-notes) { margin-bottom: 0; }
   color: #6b7573;
   margin: 0;
 }
+/* 26mm: at 15mm a phone signature shrank to an unreadable scribble (Łukasz, NEO-100 2026-09-26). */
 .sig-area {
   order: 1;
-  height: 15mm;
+  height: 26mm;
   display: flex;
   align-items: flex-end;
   justify-content: center;
   border-bottom: 1px solid #9fb0ad;
 }
 /* Each signature sits centred over its line (Łukasz, NEO-51 review 2026-09-25). */
-.sig-area img { display: block; max-height: 100%; max-width: 100%; object-fit: contain; object-position: center bottom; }
+/* 80% width: a full-width signature ran into the line's ends (Łukasz, NEO-100). max-width also caps the renderer's inline width:100%. */
+.sig-area img { display: block; max-height: 100%; max-width: 80%; object-fit: contain; object-position: center bottom; }
 .sig-e-note { order: 3; display: none; margin-top: 2px; font-size: 7pt; font-weight: 500; color: var(--primary); }
 .sig-panel:has(.sig-area img) .sig-e-note { display: block; }
 .sig-stamp {
