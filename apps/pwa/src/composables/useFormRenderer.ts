@@ -80,22 +80,25 @@ export function useFormRenderer(
     lastSeen = { ...form.value };
   }
 
+  /** Whether one field differs from its value when the dialog opened (trimmed strings, arrays by content). */
+  function isFieldChanged(key: string): boolean {
+    const a = form.value[key];
+    const b = snapshot.value[key];
+    if (Array.isArray(a) || Array.isArray(b)) {
+      return JSON.stringify(Array.isArray(a) ? a : []) !== JSON.stringify(Array.isArray(b) ? b : []);
+    }
+    if (typeof a === "string" || typeof b === "string") {
+      return (a ?? "").toString().trim() !== (b ?? "").toString().trim();
+    }
+    return a !== b;
+  }
+
+  /** Keys of the fields changed since the dialog opened — the folder's section dots and change counter (NEO-92). */
+  const changedKeys = computed(() => fields.filter((f) => isFieldChanged(f.key)).map((f) => f.key));
+
   /** Dirty-check on close attempt — call before letting the dialog close. */
   function hasChanged(): boolean {
-    for (const f of fields) {
-      const a = form.value[f.key];
-      const b = snapshot.value[f.key];
-      if (Array.isArray(a) || Array.isArray(b)) {
-        const aArr = Array.isArray(a) ? a : [];
-        const bArr = Array.isArray(b) ? b : [];
-        if (JSON.stringify(aArr) !== JSON.stringify(bArr)) return true;
-      } else if (typeof a === "string" || typeof b === "string") {
-        if ((a ?? "").toString().trim() !== (b ?? "").toString().trim()) return true;
-      } else if (a !== b) {
-        return true;
-      }
-    }
-    return false;
+    return fields.some((f) => isFieldChanged(f.key));
   }
 
   function resolvedOptions(field: FormFieldDef): FormFieldOption[] {
@@ -256,5 +259,6 @@ export function useFormRenderer(
     buildPayload,
     resetForm,
     hasChanged,
+    changedKeys,
   };
 }

@@ -1,11 +1,17 @@
 <template>
   <AppFormDialog
+    ref="dialogRef"
     :model-value="modelValue"
     :title="formTitle"
     :avatar-entity-type="avatarEntityType"
     :avatar-name="avatarName"
+    :avatar-first-name="String(form.first_name ?? '')"
+    :avatar-last-name="String(form.last_name ?? '')"
+    :folder="isFolder"
+    :max-width="isFolder && mdAndUp ? 900 : undefined"
     @update:model-value="onDialogUpdate"
     @close="onCancelClick"
+    @body-scroll="followScroll"
   >
     <VAlert
       v-if="verifyInfoKey"
@@ -21,7 +27,16 @@
       {{ t(verifyInfoKey) }}
     </VAlert>
     <VForm ref="formRef" @submit.prevent="onSubmit">
-      <template v-for="(row, ri) in rows" :key="ri">
+      <section
+        v-for="sec in sections"
+        :key="sec.id"
+        class="pwa-form-section"
+        :class="{ 'pwa-form-section--titled': isFolder }"
+        :data-section="sec.id"
+        :aria-labelledby="isFolder ? `${uid}-${sec.id}` : undefined"
+      >
+      <h3 v-if="isFolder" :id="`${uid}-${sec.id}`" class="pwa-form-section__title">{{ sec.label }}</h3>
+      <template v-for="(row, ri) in sec.rows" :key="ri">
         <div v-if="row.length > 1" class="pwa-form-row mb-3">
           <div v-for="f in row" :key="f.key" class="pwa-form-row-item pwa-form-col" :style="rowItemStyle(f)">
             <component
@@ -115,14 +130,45 @@
           </component>
         </div>
       </template>
+      </section>
     </VForm>
 
+    <template v-if="isFolder" #spine>
+      <FormFolderSpine
+        :entity-type="avatarEntityType"
+        :name="avatarName"
+        :first-name="String(form.first_name ?? '')"
+        :last-name="String(form.last_name ?? '')"
+        :name-pending="t('app.formRenderer.namePending')"
+        :details="spineDetails"
+        :status="statusChip"
+        :sections="indexSections"
+        :active="activeSection"
+        :index-label="t('app.formRenderer.sectionsLabel')"
+        :changed-label="t('app.formRenderer.sectionChanged')"
+        @select="goToSection"
+      />
+    </template>
+    <template v-if="isFolder && !mdAndUp" #header-extra>
+      <FormSectionChips
+        :sections="indexSections"
+        :active="activeSection"
+        :index-label="t('app.formRenderer.sectionsLabel')"
+        :changed-label="t('app.formRenderer.sectionChanged')"
+        @select="goToSection"
+      />
+    </template>
+
     <template #actions>
+      <span v-if="changedCount" class="pwa-form-dialog__changes" data-testid="form-changes" aria-live="polite">
+        <span class="pwa-form-dialog__changes-dot" aria-hidden="true" />
+        {{ t("app.formRenderer.unsavedChanges", { n: changedCount }) }}
+      </span>
       <VSpacer />
       <AppButton variant="text" @click="onCancelClick">
         {{ t("app.common.cancel") }}
       </AppButton>
-      <AppButton color="primary" :loading="submitting" @click="onSubmit">
+      <AppButton color="primary" variant="flat" :loading="submitting" @click="onSubmit">
         {{ formSubmitLabel }}
       </AppButton>
     </template>
@@ -145,8 +191,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { useDisplay } from "vuetify";
+import { useIdentity } from "../composables/useIdentity";
+import FormFolderSpine, { type FormSpineSection } from "./FormFolderSpine.vue";
+import FormSectionChips from "./FormSectionChips.vue";
 import { VTextField, VSelect, VAutocomplete, VCombobox, VTextarea, VSwitch } from "vuetify/components";
 import { useFormRenderer } from "../composables/useFormRenderer";
 import { scrollToFormTop } from "../utils/scrollToFormTop";
@@ -218,8 +268,9 @@ const {
   formRef, form, isEditMode,
   resolvedOptions, loadingOptions, loadAllAsyncOptions,
   rulesFor, validate, buildPayload,
-  resetForm, hasChanged,
+  resetForm, hasChanged, changedKeys,
 } = useFormRenderer(props.fields, initialDataRef, props.derive);
+const { detailsFor } = useIdentity();
 
 const submitting = ref(false);
 const showDiscardConfirm = ref(false);
@@ -251,9 +302,8 @@ function colorFor(f: FormFieldDef): string | undefined {
   return typeof f.color === "function" ? f.color(form.value) : f.color;
 }
 
-const rows = computed(() => {
+function pairRows(fields: FormFieldDef[]): FormFieldDef[][] {
   const result: FormFieldDef[][] = [];
-  const fields = props.fields.filter((f) => !isFieldHidden(f));
   let i = 0;
   while (i < fields.length) {
     const f = fields[i];
@@ -269,7 +319,114 @@ const rows = computed(() => {
     }
   }
   return result;
+}
+
+/**
+ * Visible fields grouped by `section` (NEO-92), sections in the order of
+ * their first field, so a config keeps its natural field order; a field
+ * without one joins the first section. Pairing into rows happens per section.
+ */
+const sections = computed(() => {
+  const groups = new Map<string, FormFieldDef[]>();
+  const visible = props.fields.filter((f) => !isFieldHidden(f));
+  const fallback = visible.find((f) => f.section)?.section ?? "default";
+  for (const f of visible) {
+    const id = f.section ?? fallback;
+    groups.set(id, [...(groups.get(id) ?? []), f]);
+  }
+  return [...groups].map(([id, fields]) => ({
+    id,
+    label: t(`app.formRenderer.section.${id}`),
+    fields,
+    rows: pairRows(fields),
+  }));
 });
+
+/** Two or more sections make the "Carpeta" folder: spine + section headings. Shorter forms stay one plain sheet. */
+const isFolder = computed(() => sections.value.length >= 2);
+
+// Desktop (≥ 960px) gets the spine; tablets (a tile) and phones (a bottom
+// sheet) get the same index as a row of chips under the header.
+const { mdAndUp } = useDisplay();
+const uid = useId();
+
+const changedSet = computed(() => new Set(changedKeys.value));
+const changedCount = computed(() => changedKeys.value.length);
+const indexSections = computed<FormSpineSection[]>(() =>
+  sections.value.map((s) => ({ id: s.id, label: s.label, changed: s.fields.some((f) => changedSet.value.has(f.key)) })),
+);
+
+/** The spine's detail line reads the live form over the record, so create and edit fill it the same way. */
+const spineDetails = computed(() =>
+  props.avatarEntityType
+    ? detailsFor(props.avatarEntityType, { ...(props.initialData ?? {}), ...form.value })
+    : { details: [], more: [] },
+);
+
+/** A `status` select with coloured options shows as the same tonal pill on the spine as in lists. */
+const statusChip = computed(() => {
+  const f = props.fields.find((x) => x.key === "status" && x.type === "select");
+  if (!f) return null;
+  const option = resolvedOptions(f).find((o) => o.value === form.value.status);
+  return option?.color ? { label: option.title, color: chipColor(option.color) } : null;
+});
+
+// Scroll-spy: the active section is the last one whose top has passed the
+// top of the sheet (plus a little slack); at the very bottom, the last one.
+const dialogRef = ref<InstanceType<typeof AppFormDialog> | null>(null);
+const activeSection = ref("");
+const SPY_SLACK_PX = 48;
+
+function sectionEls(body: HTMLElement): HTMLElement[] {
+  return Array.from(body.querySelectorAll<HTMLElement>(".pwa-form-section[data-section]"));
+}
+
+let spyPausedUntil = 0;
+let spyResume: ReturnType<typeof setTimeout> | undefined;
+
+function followScroll(body: HTMLElement) {
+  if (!isFolder.value) return;
+  const wait = spyPausedUntil - performance.now();
+  if (wait > 0) {
+    // Catch up once the pause ends, in case the user scrolled meanwhile.
+    clearTimeout(spyResume);
+    spyResume = setTimeout(() => followScroll(body), wait + 20);
+    return;
+  }
+  const els = sectionEls(body);
+  if (!els.length) return;
+  const top = body.getBoundingClientRect().top;
+  const atBottom = body.scrollTop + body.clientHeight >= body.scrollHeight - 1 && body.scrollTop > 0;
+  let current = els[0];
+  for (const el of els) {
+    if (el.getBoundingClientRect().top - top <= SPY_SLACK_PX) current = el;
+  }
+  activeSection.value = (atBottom ? els[els.length - 1] : current).dataset.section ?? "";
+}
+
+function goToSection(id: string) {
+  const body = dialogRef.value?.bodyEl();
+  const el = body ? sectionEls(body).find((s) => s.dataset.section === id) : undefined;
+  if (!body || !el) return;
+  const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const offset = el.getBoundingClientRect().top - body.getBoundingClientRect().top;
+  // The first section scrolls back to the very top (its own padding included).
+  const target = el === sectionEls(body)[0] ? 0 : body.scrollTop + offset - 16;
+  // Hold the picked section while the smooth scroll passes the ones between.
+  spyPausedUntil = reduce ? 0 : performance.now() + 600;
+  body.scrollTo({ top: target, behavior: reduce ? "auto" : "smooth" });
+  activeSection.value = id;
+}
+
+onBeforeUnmount(() => clearTimeout(spyResume));
+
+watch(
+  sections,
+  (list) => {
+    if (!list.some((s) => s.id === activeSection.value)) activeSection.value = list[0]?.id ?? "";
+  },
+  { immediate: true },
+);
 
 /**
  * Sets --pwa-form-col rather than `flex` directly — theme.scss's
@@ -526,6 +683,7 @@ watch(
   (open, wasOpen) => {
     if (open && !wasOpen) {
       resetForm();
+      activeSection.value = sections.value[0]?.id ?? "";
       loadAllAsyncOptions();
     }
   },

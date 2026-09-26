@@ -4,17 +4,28 @@
     :max-width="maxWidth"
     :persistent="persistent"
     scrollable
-    class="pwa-form-dialog"
+    :class="['pwa-form-dialog', { 'pwa-form-dialog--sheet': asSheet }]"
     content-class="pwa-form-dialog__content"
-    :transition="originDialogTransition"
+    :transition="asSheet ? sheetDialogTransition : originDialogTransition"
     @update:model-value="(v: boolean) => emit('update:modelValue', v)"
   >
-    <VCard class="pwa-form-dialog__card" data-testid="app-form-dialog">
+    <VCard
+      class="pwa-form-dialog__card"
+      :class="{ 'pwa-form-dialog__card--folder': asFolder }"
+      data-testid="app-form-dialog"
+    >
+      <!-- NEO-92 "Carpeta": the folder's spine (record identity + section
+           index), a left column beside header/body/actions. Not on phones. -->
+      <aside v-if="asFolder" class="pwa-form-dialog__spine" data-testid="app-form-dialog-spine">
+        <slot name="spine" />
+      </aside>
       <AppDialogHeader
         v-if="title"
         :title="title"
-        :avatar-entity-type="avatarEntityType"
+        :avatar-entity-type="asFolder ? undefined : avatarEntityType"
         :avatar-name="avatarName"
+        :avatar-first-name="avatarFirstName"
+        :avatar-last-name="avatarLastName"
         :closable="closable"
         @close="emit('close')"
       />
@@ -59,34 +70,50 @@
  * Guarded by AppFormDialog.spec.ts (no raw VDialog outside the shells) and
  * e2e/dialog-scroll.spec.ts (real-browser scrolling, all engines).
  *
+ * On phone widths it is a bottom sheet (sheetDialogTransition, theme.scss
+ * `.pwa-form-dialog--sheet`); elsewhere it grows from the tapped element.
+ *
  * The body also exposes whether it is scrolled / has more below, which draws
  * M3's hairline dividers under the header and above the actions only while
  * content actually runs behind them.
  */
-import { onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useSlots, watch } from "vue";
+import { useDisplay } from "vuetify";
 import { VCardText } from "vuetify/components";
-import { originDialogTransition } from "@ui";
+import { originDialogTransition, sheetDialogTransition } from "@ui";
 import AppDialogHeader from "./AppDialogHeader.vue";
 import type { AppAvatarEntityType } from "./AppAvatar.vue";
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     modelValue: boolean;
     /** Omit only for dialogs that draw their own header (none today). */
     title?: string;
     avatarEntityType?: AppAvatarEntityType;
     avatarName?: string;
+    avatarFirstName?: string;
+    avatarLastName?: string;
     closable?: boolean;
     persistent?: boolean;
     maxWidth?: number | string;
+    /**
+     * The folder layout (NEO-92) when a `spine` slot is given: a left spine
+     * column beside the page. Desktop only (≥ 960px): on tablets (a tile)
+     * and phones (a bottom sheet) the caller puts a compact index in
+     * `header-extra` instead.
+     */
+    folder?: boolean;
   }>(),
   {
     title: undefined,
     avatarEntityType: undefined,
     avatarName: "",
+    avatarFirstName: "",
+    avatarLastName: "",
     closable: true,
     persistent: false,
     maxWidth: 680,
+    folder: false,
   },
 );
 
@@ -94,7 +121,17 @@ const emit = defineEmits<{
   "update:modelValue": [value: boolean];
   /** The header's X — callers decide (e.g. ask to discard unsaved changes). */
   close: [];
+  /** The body scrolled or resized — the folder's section index follows it. */
+  "body-scroll": [el: HTMLElement];
 }>();
+
+// Phones (< 600px, Vuetify xs): an M3 bottom sheet sliding up from the screen
+// edge, within thumb reach, instead of a centred card (NEO-85).
+const { xs: asSheet, mdAndUp } = useDisplay();
+const slots = useSlots();
+// The spine needs room beside the page: desktop only (≥ 960px). Tablets keep
+// the single tile and phones the bottom sheet; both show the index as chips.
+const asFolder = computed(() => props.folder && mdAndUp.value && !!slots.spine);
 
 const bodyRef = ref<InstanceType<typeof VCardText> | null>(null);
 const innerRef = ref<HTMLElement | null>(null);
@@ -111,6 +148,7 @@ function measure() {
   if (!el) return;
   scrolled.value = el.scrollTop > 0;
   hasMore.value = el.scrollTop + el.clientHeight < el.scrollHeight - 1;
+  emit("body-scroll", el);
 }
 
 // The body's own box is fixed by the flex layout; what changes is the content

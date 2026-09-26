@@ -1,7 +1,7 @@
 <template>
   <AppFormDialog
     :model-value="modelValue"
-    max-width="640"
+    :max-width="kind === 'stop_bang' ? '880' : '640'"
     :title="t(KIND_LABEL_KEYS[kind])"
     @update:model-value="emit('update:modelValue', $event)"
     @close="emit('update:modelValue', false)"
@@ -39,14 +39,8 @@
     </template>
 
     <template v-else>
-      <h4 class="clinical-dialog__section">{{ t("app.clinical.section.stop") }}</h4>
-      <QuestionnaireChecklist v-model="answers" :questions="STOP_QUESTIONS" :readonly="readonly || mode === 'completeBang'" />
-      <h4 class="clinical-dialog__section">{{ t("app.clinical.section.bang") }}</h4>
-      <QuestionnaireChecklist v-model="answers" :questions="BANG_QUESTIONS" :readonly="readonly" />
+      <StopBangForm v-model="answers" :measures="measures" :mode="mode" :record="record" :date-of-birth="dateOfBirth" :gender="gender" />
       <p v-if="mode === 'create'" class="clinical-dialog__hint">{{ t("app.clinical.bangOptional") }}</p>
-      <p v-if="record?.score != null" class="clinical-dialog__score">
-        {{ t("app.clinical.score", { score: record.score }) }} · {{ t(`app.clinical.risk.${stopBangRisk(record.score)}`) }}
-      </p>
     </template>
 
     <template #actions>
@@ -58,7 +52,7 @@
       <AppButton variant="text" @click="emit('update:modelValue', false)">
         {{ t(readonly ? "app.common.close" : "app.common.cancel") }}
       </AppButton>
-      <AppButton v-if="!readonly" color="primary" :disabled="!canSave" :loading="saving" @click="onSave">
+      <AppButton v-if="!readonly" color="primary" variant="flat" :disabled="!canSave" :loading="saving" @click="onSave">
         {{ t(mode === "completeBang" ? "app.clinical.completeBang" : "app.clinical.save") }}
       </AppButton>
     </template>
@@ -73,6 +67,7 @@ import { intlLocale } from "@i18n/language-options";
 import AppButton from "../AppButton.vue";
 import AppIcon from "../AppIcon.vue";
 import QuestionnaireChecklist from "./QuestionnaireChecklist.vue";
+import StopBangForm, { type StopBangMeasures } from "./StopBangForm.vue";
 import {
   MEDICAL_HISTORY_QUESTIONS,
   ORAL_EXAM_QUESTIONS,
@@ -80,7 +75,7 @@ import {
   BANG_QUESTIONS,
   SKELETAL_CLASSES,
   KIND_LABEL_KEYS,
-  stopBangRisk,
+  stopBangMeasuresValid,
   type ClinicalRecordKind,
   type QuestionDef,
 } from "../../config/questionnaires";
@@ -100,6 +95,9 @@ const props = defineProps<{
   record?: ClinicalRecord | null;
   saving?: boolean;
   pdfLoading?: boolean;
+  /** Patient's date of birth (YYYY-MM-DD) and sex — STOP-Bang works A and G out from them. */
+  dateOfBirth?: string | null;
+  gender?: string | null;
 }>();
 const emit = defineEmits<{
   "update:modelValue": [open: boolean];
@@ -116,6 +114,8 @@ const text = reactive<{ medical_history_other: string; skeletal_class: string | 
 });
 
 const readonly = computed(() => props.mode === "view");
+/** STOP-Bang measurements as typed (strings: "94,5" is a valid weight while typing). */
+const measures = reactive<StopBangMeasures>({ height_cm: "", weight_kg: "", neck_cm: "" });
 
 const questionsForKind = computed<QuestionDef[]>(() => {
   if (props.kind === "medical_history") return MEDICAL_HISTORY_QUESTIONS;
@@ -135,13 +135,16 @@ watch(
     text.medical_history_other = (props.record?.medical_history_other as string | null) ?? "";
     text.skeletal_class = props.record?.skeletal_class ?? null;
     text.tooth = (props.record?.tooth as string | null) ?? "";
+    measures.height_cm = props.record?.height_cm != null ? String(props.record.height_cm) : "";
+    measures.weight_kg = props.record?.weight_kg != null ? String(props.record.weight_kg) : "";
+    measures.neck_cm = props.record?.neck_cm != null ? String(props.record.neck_cm) : "";
   },
   { immediate: true }
 );
 
 const subtitle = computed(() => {
   if (!props.record) return "";
-  const date = new Date(props.record.created_at).toLocaleDateString(intlLocale(locale.value));
+  const date = new Date(props.record.created_at).toLocaleDateString(intlLocale(locale.value), { day: "2-digit", month: "2-digit", year: "numeric" });
   const who = props.record.source === "patient"
     ? t("app.clinical.source.patient")
     : props.record.recorded_by_name ? t("app.clinical.recordedBy", { name: props.record.recorded_by_name }) : "";
@@ -153,7 +156,7 @@ const canSave = computed(() => {
     const stopDone = STOP_QUESTIONS.every((q) => answers.value[q.key] != null);
     const bangAnswered = BANG_QUESTIONS.filter((q) => answers.value[q.key] != null).length;
     // B-A-N-G: all or nothing — and required when completing.
-    return stopDone && (props.mode === "completeBang" ? bangAnswered === 4 : bangAnswered === 0 || bangAnswered === 4);
+    return stopDone && stopBangMeasuresValid(measures) && (props.mode === "completeBang" ? bangAnswered === 4 : bangAnswered === 0 || bangAnswered === 4);
   }
   const anyAnswer = Object.values(answers.value).some((v) => v != null);
   return anyAnswer || (props.kind === "medical_history" ? !!text.medical_history_other.trim() : !!text.skeletal_class);
@@ -161,7 +164,7 @@ const canSave = computed(() => {
 
 function onSave() {
   if (props.mode === "completeBang") {
-    emit("save", Object.fromEntries(BANG_QUESTIONS.map((q) => [q.key, answers.value[q.key]])));
+    emit("save", { ...Object.fromEntries(BANG_QUESTIONS.map((q) => [q.key, answers.value[q.key]])), ...measurementPayload() });
     return;
   }
   const payload: Record<string, unknown> = { ...answers.value };
@@ -170,7 +173,17 @@ function onSave() {
     payload.skeletal_class = text.skeletal_class;
     payload.tooth = text.tooth.trim() || null;
   }
+  if (props.kind === "stop_bang") Object.assign(payload, measurementPayload());
   emit("save", payload);
+}
+
+/** Measurements the specialist typed — the API recomputes BMI and B/N from them. Empty fields are left out. */
+function measurementPayload(): Record<string, string> {
+  return Object.fromEntries(
+    (Object.entries(measures) as [keyof StopBangMeasures, string][])
+      .map(([key, value]) => [key, value.trim().replace(",", ".")] as const)
+      .filter(([, value]) => value !== "")
+  );
 }
 </script>
 

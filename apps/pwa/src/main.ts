@@ -8,6 +8,7 @@ import vuetify, { lightTheme, darkTheme } from "./plugins/vuetify";
 import { i18n } from "./plugins/i18n";
 import "./assets/theme.scss";
 import "./assets/app-responsive.scss";
+import "./assets/page-transitions.css";
 import "./assets/flags.css";
 import "@brand/spacing.css";
 import "@brand/transitions.css";

@@ -16,7 +16,7 @@ import {
   validateMedicalHistory,
   validateOralExam,
   validateStop,
-  validateBang,
+  validateBangWithMeasurements,
   type ClinicalRecordKind,
 } from "./clinicalRecordFields.js";
 
@@ -56,7 +56,8 @@ export async function RecordClinicalQuestionnaireCommand(
   } else if (kind === "oral_exam") {
     record = await insertOralExam(ctx.client, meta, validateOralExam(input));
   } else {
-    record = await insertStopBang(ctx.client, meta, validateStop(input), validateBang(input, { required: false }));
+    const { bang, measurements } = validateBangWithMeasurements(input, { required: false });
+    record = await insertStopBang(ctx.client, meta, validateStop(input), bang, measurements);
   }
 
   await insertAuditLog(ctx.client, {
@@ -81,7 +82,8 @@ export async function CompleteStopBangCommand(
   const existing = await getStopBangById(ctx.client, screeningId);
   if (!existing || existing.patient_id !== patientId) throw new NotFoundError("StopBangScreening", screeningId);
 
-  const completed = await completeStopBang(ctx.client, screeningId, ctx.user.id, validateBang(input, { required: true }));
+  const { bang, measurements } = validateBangWithMeasurements(input, { required: true });
+  const completed = await completeStopBang(ctx.client, screeningId, ctx.user.id, bang, measurements);
   if (!completed) throw new ConflictError("This STOP-Bang screening is already complete");
 
   await insertAuditLog(ctx.client, {

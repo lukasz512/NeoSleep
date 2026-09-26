@@ -145,6 +145,7 @@ export const patientFormFields: FormFieldDef[] = [
   ...identity,
   {
     key: "gender",
+    section: "identity",
     type: "choice",
     labelKey: "app.patients.form.gender",
     options: GENDER_OPTIONS,
@@ -154,6 +155,7 @@ export const patientFormFields: FormFieldDef[] = [
   },
   {
     key: "date_of_birth",
+    section: "identity",
     type: "date",
     labelKey: "app.patients.form.dateOfBirth",
     default: null,
@@ -162,6 +164,7 @@ export const patientFormFields: FormFieldDef[] = [
   },
   {
     key: "practitioner_id",
+    section: "clinical",
     type: "autocomplete",
     labelKey: "app.patients.form.practitioner",
     placeholder: "app.patients.form.practitionerPlaceholder",
@@ -178,6 +181,7 @@ export const patientFormFields: FormFieldDef[] = [
   },
   {
     key: "status",
+    section: "clinical",
     type: "select",
     labelKey: "app.patients.form.status",
     options: STATUS_OPTIONS,
@@ -186,6 +190,7 @@ export const patientFormFields: FormFieldDef[] = [
   },
   {
     key: "region",
+    section: "territory",
     type: "autocomplete",
     labelKey: "app.patients.form.region",
     options: loadRegionOptions,
@@ -193,6 +198,7 @@ export const patientFormFields: FormFieldDef[] = [
   },
   {
     key: "territory_id",
+    section: "territory",
     type: "autocomplete",
     labelKey: "app.patients.form.territory",
     hint: "app.patients.form.territoryHint",
@@ -208,6 +214,7 @@ export const patientFormFields: FormFieldDef[] = [
   // (middleware/requireScope.ts) actually filters on.
   {
     key: "country_code",
+    section: "territory",
     type: "text",
     labelKey: "app.patients.form.countryCode",
     hidden: true,
@@ -215,6 +222,7 @@ export const patientFormFields: FormFieldDef[] = [
   },
   {
     key: "ahi_baseline",
+    section: "clinical",
     type: "number",
     labelKey: "app.patients.form.ahiBaseline",
     cols: 6,
@@ -224,6 +232,7 @@ export const patientFormFields: FormFieldDef[] = [
     // falseValue) — a rep just needs to record whether the patient has CPAP,
     // not the specific device model.
     key: "cpap_device",
+    section: "clinical",
     type: "boolean",
     labelKey: "app.patients.form.cpapDevice",
     trueValue: "CPAP",
@@ -232,6 +241,7 @@ export const patientFormFields: FormFieldDef[] = [
   },
   {
     key: "medical_record",
+    section: "clinical",
     type: "text",
     labelKey: "app.patients.form.medicalRecord",
     cols: 12,

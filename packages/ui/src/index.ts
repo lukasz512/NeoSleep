@@ -21,7 +21,7 @@ export { AUTH_BACKDROP_KEY, type AuthBackdrop } from "./composables/authBackdrop
 export { useAppVersionLabel } from "./composables/useAppVersionLabel";
 export { default as AppStateView } from "./components/AppStateView.vue";
 export { default as OriginDialogTransition } from "./components/OriginDialogTransition.vue";
-export { originDialogTransition } from "./components/originDialogTransition";
+export { originDialogTransition, sheetDialogTransition } from "./components/originDialogTransition";
 export { getDialogOrigin } from "./composables/useDialogOrigin";
 export { default as AppSegmentedTabs, type AppSegmentedTabOption } from "./components/AppSegmentedTabs.vue";
 export { default as AppChipTabs } from "./components/AppChipTabs.vue";

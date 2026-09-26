@@ -21,7 +21,7 @@
 import type AppIcon from "../components/AppIcon.vue";
 import type AppAvatar from "../components/AppAvatar.vue";
 type AppIconName = InstanceType<typeof AppIcon>["$props"]["name"];
-type AppAvatarEntityType = NonNullable<InstanceType<typeof AppAvatar>["$props"]["entityType"]>;
+export type AppAvatarEntityType = NonNullable<InstanceType<typeof AppAvatar>["$props"]["entityType"]>;
 
 /** Supported input types the renderer knows how to draw. */
 export type FormFieldType =
@@ -91,6 +91,25 @@ export type FormDerive = (
  * `t()` at render time, so config files never need access to a translator.
  */
 export type FormFieldRule = (v: unknown) => true | string;
+
+/**
+ * The shared set of form sections (NEO-92). A form whose fields span two or
+ * more sections renders as the "Carpeta" folder: a spine with the record's
+ * identity and a section index, and one sheet with a heading per section.
+ * Labels: `app.formRenderer.section.<id>` in packages/i18n.
+ */
+export const FORM_SECTION_IDS = [
+  "identity",
+  "contact",
+  "organization",
+  "profile",
+  "clinical",
+  "status",
+  "access",
+  "territory",
+  "links",
+] as const;
+export type FormSectionId = (typeof FORM_SECTION_IDS)[number];
 
 export interface FormFieldDef {
   /** Payload field name — also the key form state is stored/read under. */
@@ -215,4 +234,11 @@ export interface FormFieldDef {
    */
   trueValue?: unknown;
   falseValue?: unknown;
+  /**
+   * Which section this field belongs to (NEO-92). FormRenderer groups fields
+   * by section in order of each section's first field, so a config can keep
+   * its field order; fields without one join the first section. Use
+   * config/forms/sections.ts's `inSection()` to tag a run of fields.
+   */
+  section?: FormSectionId;
 }

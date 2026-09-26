@@ -9,6 +9,7 @@ import {
   type OralExamAnswers,
   type StopAnswers,
   type BangAnswers,
+  type BangMeasurements,
 } from "../commands/clinicalRecordFields.js";
 
 /**
@@ -36,7 +37,11 @@ export type MedicalHistoryRecord = RecordMeta & MedicalHistoryAnswers & { consen
 export type OralExamRecord = Omit<RecordMeta, "source" | "request_id"> & OralExamAnswers;
 export type StopBangRecord = RecordMeta &
   StopAnswers &
-  BangAnswers & { score: number | null; consent_accepted_at: Date | null; updated_at: Date };
+  BangAnswers &
+  BangMeasurements & { score: number | null; consent_accepted_at: Date | null; updated_at: Date };
+
+/** No measurements — a patient's S-T-O-P-only screening, or B-A-N-G answered as plain yes/no. */
+export const NO_MEASUREMENTS: BangMeasurements = { height_cm: null, weight_kg: null, neck_cm: null, bmi: null };
 
 /** Patient-submitted consent, stored on the record itself (GDPR Art.9 — who agreed to what, when). */
 export interface ConsentStamp {
@@ -67,7 +72,9 @@ function selectList(cols: string[], extra: string[]): string {
 
 const MEDICAL_HISTORY_SELECT = selectList(MEDICAL_HISTORY_COLS, ["t.source", "t.request_id", "t.consent_accepted_at"]);
 const ORAL_EXAM_SELECT = selectList(ORAL_EXAM_COLS, []);
-const STOP_BANG_SELECT = selectList(STOP_BANG_COLS, ["t.source", "t.request_id", "t.consent_accepted_at", "t.score", "t.updated_at"]);
+// NUMERIC comes back from pg as a string; the measurements are read as float8 so the record type holds numbers.
+const STOP_BANG_MEASUREMENT_SELECT = ["height_cm", "weight_kg", "neck_cm", "bmi"].map((c) => `t.${c}::float8 AS ${c}`);
+const STOP_BANG_SELECT = selectList(STOP_BANG_COLS, ["t.source", "t.request_id", "t.consent_accepted_at", "t.score", "t.updated_at", ...STOP_BANG_MEASUREMENT_SELECT]);
 
 async function run<T>(operation: string, fn: () => Promise<T>): Promise<T> {
   try {
@@ -164,23 +171,39 @@ export function listOralExamsForPatient(client: PoolClient, patientId: string): 
 // all eight answers exist; never computed in application code.
 // ---------------------------------------------------------------------------
 
-export function insertStopBang(client: PoolClient, meta: InsertMeta, stop: StopAnswers, bang: BangAnswers): Promise<StopBangRecord> {
+export function insertStopBang(
+  client: PoolClient,
+  meta: InsertMeta,
+  stop: StopAnswers,
+  bang: BangAnswers,
+  measurements: BangMeasurements = NO_MEASUREMENTS
+): Promise<StopBangRecord> {
   return run("insertStopBang", async () => {
-    const id = await insertRow(client, "stop_bang_screening", { ...metaValues(meta, { withSource: true }), ...stop, ...bang });
+    const id = await insertRow(client, "stop_bang_screening", { ...metaValues(meta, { withSource: true }), ...stop, ...bang, ...measurements });
     return (await getStopBangById(client, id))!;
   });
 }
 
 /** Fills in B-A-N-G on a screening whose patient answered only S-T-O-P. Only ever fills blanks — returns null if the row is already complete. */
-export function completeStopBang(client: PoolClient, id: string, recordedBy: string, bang: BangAnswers): Promise<StopBangRecord | null> {
+export function completeStopBang(
+  client: PoolClient,
+  id: string,
+  recordedBy: string,
+  bang: BangAnswers,
+  measurements: BangMeasurements = NO_MEASUREMENTS
+): Promise<StopBangRecord | null> {
   return run("completeStopBang", async () => {
     const result = await client.query<{ id: string }>(
       `UPDATE stop_bang_screening
           SET bmi_over_35 = $2, age_over_50 = $3, neck_circumference_over_40cm = $4, is_male = $5,
+              height_cm = $7, weight_kg = $8, neck_cm = $9, bmi = $10,
               recorded_by = COALESCE(recorded_by, $6), updated_at = now()
         WHERE id = $1 AND score IS NULL
         RETURNING id`,
-      [id, bang.bmi_over_35, bang.age_over_50, bang.neck_circumference_over_40cm, bang.is_male, recordedBy]
+      [
+        id, bang.bmi_over_35, bang.age_over_50, bang.neck_circumference_over_40cm, bang.is_male, recordedBy,
+        measurements.height_cm, measurements.weight_kg, measurements.neck_cm, measurements.bmi,
+      ]
     );
     return result.rows[0] ? getStopBangById(client, id) : null;
   });

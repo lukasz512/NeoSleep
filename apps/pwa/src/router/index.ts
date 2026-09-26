@@ -4,6 +4,7 @@ import { useAuthStore } from "../stores/auth";
 import { useRolePreviewStore } from "../stores/rolePreview";
 import type { UserRole } from "../stores/auth";
 import { ensurePartnerConnection } from "../composables/usePartnerConnection";
+import { installPageTransitions } from "./pageTransitions";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -88,6 +89,9 @@ router.beforeEach(async (to) => {
 
   return true;
 });
+
+// NEO-85: list → record → back slides, module switches fade through.
+installPageTransitions(router);
 
 /** Trace view navigation in dev (from → to, route name). */
 if (isDev) {
