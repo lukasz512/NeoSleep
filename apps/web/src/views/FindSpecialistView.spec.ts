@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createI18n } from "vue-i18n";
 import { createRouter, createMemoryHistory } from "vue-router";
@@ -133,6 +133,16 @@ async function mountView() {
   await flushPromises();
   return wrapper;
 }
+
+// The first import() transforms the whole view (and its Maps code) — seconds
+// on a loaded pre-push run with every workspace testing in parallel, which
+// pushed whichever test came first past the 5 s default. Pay it once here,
+// with room to spare, so each test only measures its own work.
+// fetch is stubbed first because the module graph captures it at import time.
+beforeAll(async () => {
+  vi.stubGlobal("fetch", fetchMock);
+  await import("./FindSpecialistView.vue");
+}, 60_000);
 
 beforeEach(() => {
   // Only setTimeout is faked (the view's retry delays); setImmediate stays real so
