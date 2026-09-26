@@ -45,8 +45,8 @@ export class ForbiddenError extends AppError {
 }
 
 export class ConflictError extends AppError {
-  constructor(message: string) {
-    super(message, "CONFLICT", 409);
+  constructor(message: string, code = "CONFLICT") {
+    super(message, code, 409);
   }
 }
 
@@ -56,9 +56,9 @@ export class ConflictError extends AppError {
  * would otherwise surface as an opaque 23505 "Database error". The dedicated
  * code lets the app show a translated message instead of the raw text.
  */
-export class EmailInUseError extends AppError {
+export class EmailInUseError extends ConflictError {
   constructor(email: string) {
-    super(`Email "${email}" is already in use by another person.`, "EMAIL_IN_USE", 409);
+    super(`Email "${email}" is already in use by another person.`, "EMAIL_IN_USE");
   }
 }
 
