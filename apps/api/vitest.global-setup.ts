@@ -14,11 +14,17 @@ import { Client } from "pg";
  * until they timed out on every run (12 leaked links ≈ 30s against the
  * remote dev DB). The "test" schema holds only test-created data, so
  * clearing the whole table is safe.
+ *
+ * appointment rows go first: appointment.created_by_user_id is ON DELETE
+ * RESTRICT (a booking must never lose who made it), so a qa-% user who
+ * booked one can't be deleted until the appointment is. Same "test holds
+ * only test data" reasoning — clear the whole table.
  */
 async function sweepTestData(): Promise<void> {
   const client = new Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
   try {
+    await client.query(`DELETE FROM test.appointment`);
     await client.query(`DELETE FROM test.identities WHERE email LIKE 'qa-%'`);
     await client.query(`DELETE FROM test.partner_link`);
   } finally {
