@@ -1,20 +1,13 @@
 <template>
-  <VDialog
+  <AppFormDialog
     :model-value="modelValue"
-    max-width="560"
-    content-class="pwa-form-dialog__content"
-    class="appointment-dialog"
-    :transition="originDialogTransition"
+    :max-width="560"
+    :title="isEdit ? t('user.appointments.form.editTitle') : t('user.appointments.form.title')"
+    avatar-entity-type="patient"
+    :avatar-name="patientName"
     @update:model-value="close"
+    @close="close"
   >
-    <VCard class="pwa-form-dialog__card">
-      <AppDialogHeader
-        :title="isEdit ? t('user.appointments.form.editTitle') : t('user.appointments.form.title')"
-        avatar-entity-type="patient"
-        :avatar-name="patientName"
-        @close="close"
-      />
-      <VCardText>
         <VForm ref="formRef" @submit.prevent="onSubmit">
           <VAlert v-if="problem" type="warning" variant="tonal" density="compact" class="mb-4" data-testid="appointment-problem">
             {{ problem }}
@@ -105,23 +98,20 @@
           />
           <p class="appointment-dialog__tz">{{ t('user.appointments.form.timeZoneHint', { zone: zoneLabel }) }}</p>
         </VForm>
-      </VCardText>
-      <VCardActions>
-        <VSpacer />
-        <AppButton variant="text" @click="close">{{ t('app.common.cancel') }}</AppButton>
-        <AppButton color="primary" :loading="submitting" data-testid="appointment-submit" @click="onSubmit">
-          {{ isEdit ? t('user.appointments.form.editSubmit') : t('user.appointments.form.submit') }}
-        </AppButton>
-      </VCardActions>
-    </VCard>
-  </VDialog>
+    <template #actions>
+      <VSpacer />
+      <AppButton variant="text" @click="close">{{ t('app.common.cancel') }}</AppButton>
+      <AppButton color="primary" :loading="submitting" data-testid="appointment-submit" @click="onSubmit">
+        {{ isEdit ? t('user.appointments.form.editSubmit') : t('user.appointments.form.submit') }}
+      </AppButton>
+    </template>
+  </AppFormDialog>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { reportCaught } from "@api";
-import { originDialogTransition } from "@ui";
 import { apiFetch } from "../composables/useApi";
 import { useNotifications } from "../composables/useNotifications";
 import {
@@ -136,7 +126,7 @@ import { intlLocale } from "@i18n/language-options";
 import AppButton from "./AppButton.vue";
 import AppAvatar from "./AppAvatar.vue";
 import AppIcon from "./AppIcon.vue";
-import AppDialogHeader from "./AppDialogHeader.vue";
+import AppFormDialog from "./AppFormDialog.vue";
 
 interface NamedRef {
   id: string;

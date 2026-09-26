@@ -1,20 +1,14 @@
 <template>
-  <VDialog
+  <AppFormDialog
     :model-value="modelValue && !!appointment"
-    max-width="480"
-    content-class="pwa-form-dialog__content"
-    class="appointment-detail"
-    :transition="originDialogTransition"
+    :max-width="480"
+    :title="t('user.appointments.detail.title')"
+    avatar-entity-type="patient"
+    :avatar-name="appointment?.patient_name ?? ''"
     @update:model-value="close"
+    @close="close"
   >
-    <VCard v-if="appointment" class="pwa-form-dialog__card">
-      <AppDialogHeader
-        :title="t('user.appointments.detail.title')"
-        avatar-entity-type="patient"
-        :avatar-name="appointment.patient_name ?? ''"
-        @close="close"
-      />
-      <VCardText class="appointment-detail__body">
+    <div v-if="appointment" class="appointment-detail__body">
         <div class="appointment-detail__when">
           <span class="appointment-detail__time">{{ timeRange }}</span>
           <span class="appointment-detail__day">{{ dayLabel }} · {{ zoneLabel }}</span>
@@ -50,51 +44,54 @@
           </div>
         </VAlert>
         <VAlert v-if="error" type="warning" variant="tonal" density="compact" class="mt-4">{{ error }}</VAlert>
-      </VCardText>
+    </div>
 
-      <VCardActions v-if="appointment.status === 'scheduled'" class="appointment-detail__actions">
+    <template v-if="appointment?.status === 'scheduled'" #actions>
+      <!-- Wraps into two rows on a phone: the status buttons stay together, cancel sits apart. -->
+      <div class="appointment-detail__actions">
         <AppButton v-if="changeable" variant="text" color="error" :loading="busy === 'cancelled'" data-testid="appointment-cancel" @click="confirmCancel = true">
           {{ t('user.appointments.detail.cancel') }}
         </AppButton>
-        <VSpacer />
-        <AppButton v-if="canClose" variant="text" :loading="busy === 'no_show'" data-testid="appointment-no-show" @click="setStatus('no_show')">
-          {{ t('user.appointments.detail.noShow') }}
-        </AppButton>
-        <AppButton v-if="changeable" variant="text" data-testid="appointment-reschedule" @click="emit('reschedule', appointment)">
-          {{ t('user.appointments.detail.reschedule') }}
-        </AppButton>
-        <AppButton v-if="canClose" color="primary" variant="flat" :loading="busy === 'completed'" data-testid="appointment-complete" @click="setStatus('completed')">
-          {{ t('user.appointments.detail.complete') }}
-        </AppButton>
-      </VCardActions>
-    </VCard>
-
-    <VDialog v-model="confirmCancel" max-width="360" content-class="pwa-form-dialog__content" :transition="originDialogTransition" persistent>
-      <VCard class="pwa-confirm-dialog__card">
-        <VCardText>{{ t('user.appointments.detail.cancelConfirm') }}</VCardText>
-        <VCardActions>
-          <VSpacer />
-          <AppButton variant="text" @click="confirmCancel = false">{{ t('app.common.no') }}</AppButton>
-          <AppButton color="error" variant="text" data-testid="appointment-cancel-confirm" @click="onConfirmCancel">
-            {{ t('user.appointments.detail.cancel') }}
+        <div class="appointment-detail__actions-main">
+          <AppButton v-if="canClose" variant="text" :loading="busy === 'no_show'" data-testid="appointment-no-show" @click="setStatus('no_show')">
+            {{ t('user.appointments.detail.noShow') }}
           </AppButton>
-        </VCardActions>
-      </VCard>
-    </VDialog>
-  </VDialog>
+          <AppButton v-if="changeable" variant="text" data-testid="appointment-reschedule" @click="emit('reschedule', appointment)">
+            {{ t('user.appointments.detail.reschedule') }}
+          </AppButton>
+          <AppButton v-if="canClose" color="primary" variant="flat" :loading="busy === 'completed'" data-testid="appointment-complete" @click="setStatus('completed')">
+            {{ t('user.appointments.detail.complete') }}
+          </AppButton>
+        </div>
+      </div>
+    </template>
+
+    <template #overlays>
+      <AppConfirmDialog
+        v-model="confirmCancel"
+        :text="t('user.appointments.detail.cancelConfirm')"
+        :secondary-label="t('app.common.no')"
+        :secondary-color="null"
+        :primary-label="t('user.appointments.detail.cancel')"
+        primary-color="error"
+        @secondary="confirmCancel = false"
+        @primary="onConfirmCancel"
+      />
+    </template>
+  </AppFormDialog>
 </template>
 
 <script setup lang="ts">
 import { ref, computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { reportCaught } from "@api";
-import { originDialogTransition } from "@ui";
 import { intlLocale } from "@i18n/language-options";
 import { useNotifications } from "../composables/useNotifications";
 import { useAppointments, APPOINTMENT_STATUS_COLOR, type Appointment, type AppointmentStatus } from "../composables/useAppointments";
 import { formatTimeRange, formatDayLabel, timeZoneLabel } from "../utils/appointmentTime";
 import AppButton from "./AppButton.vue";
-import AppDialogHeader from "./AppDialogHeader.vue";
+import AppFormDialog from "./AppFormDialog.vue";
+import AppConfirmDialog from "./AppConfirmDialog.vue";
 
 const props = defineProps<{ modelValue: boolean; appointment: Appointment | null }>();
 const emit = defineEmits<{
@@ -213,6 +210,19 @@ async function onConfirmCancel() {
 }
 
 .appointment-detail__actions {
+  display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.appointment-detail__actions-main {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-left: auto;
 }
 </style>
