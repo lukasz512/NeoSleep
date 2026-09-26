@@ -44,7 +44,7 @@
             <!-- eslint-disable-next-line vue/no-v-html -->
             <div class="patient-questionnaire__document" tabindex="0" v-html="step.consent_html" />
             <p class="patient-questionnaire__sign-label">{{ t("app.questionnaire.consentStep.signLabel") }}</p>
-            <SignaturePad ref="signaturePadRef" :placeholder="t('app.questionnaire.consentStep.signHere')" :clear-label="t('app.questionnaire.consentStep.clear')" />
+            <ConsentSignatureField ref="signaturePadRef" />
             <VAlert v-if="showMissing" type="warning" variant="tonal" density="compact" class="patient-questionnaire__alert">
               {{ t("app.questionnaire.consentStep.missingSignature") }}
             </VAlert>
@@ -110,7 +110,7 @@ import { AuthChrome, AuthCard } from "@ui";
 import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppLoadingState from "../components/AppLoadingState.vue";
-import SignaturePad from "../components/SignaturePad.vue";
+import ConsentSignatureField from "../components/questionnaire/ConsentSignatureField.vue";
 import QuestionnaireCards from "../components/questionnaire/QuestionnaireCards.vue";
 import QuestionnaireChecklist from "../components/questionnaire/QuestionnaireChecklist.vue";
 import ConsentNotice from "../components/questionnaire/ConsentNotice.vue";
@@ -160,7 +160,7 @@ const consent = ref(false);
 const submitting = ref(false);
 const submitError = ref(false);
 const showMissing = ref(false);
-const signaturePadRef = ref<InstanceType<typeof SignaturePad> | null>(null);
+const signaturePadRef = ref<InstanceType<typeof ConsentSignatureField> | null>(null);
 /** Which card of a questionnaire step is showing; questions.length = the summary. */
 const cursor = ref(0);
 /** Unsent answers kept on this device (see useQuestionnaireDraft) — null when storage/crypto isn't available. */

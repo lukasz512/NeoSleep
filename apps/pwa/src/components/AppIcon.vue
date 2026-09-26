@@ -444,6 +444,12 @@ const ICONS = {
     strokeWidth: 2,
     paths: `<path d="M4 3h4l2 6-3 2a12 12 0 0 0 6 6l2-3 6 2v4a2 2 0 0 1-2 2A17 17 0 0 1 2 5a2 2 0 0 1 2-2z" />`,
   },
+  "phone-rotate": {
+    strokeWidth: 2,
+    paths: `<rect x="5" y="8" width="8" height="14" rx="2" transform="rotate(-45 9 15)" />
+            <path d="M14 3a7 7 0 0 1 7 7" />
+            <polyline points="19 8 21 10 23 8" />`,
+  },
   "globe": {
     strokeWidth: 1.5,
     paths: `<circle cx="12" cy="12" r="10" />

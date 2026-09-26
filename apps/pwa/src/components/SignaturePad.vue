@@ -1,5 +1,5 @@
 <template>
-  <div class="signature-pad">
+  <div class="signature-pad" :class="{ 'signature-pad--fill': fill }">
     <div ref="wrapperRef" class="signature-pad__canvas-wrap">
       <canvas ref="canvasRef" class="signature-pad__canvas" />
       <span v-if="isEmpty" class="signature-pad__placeholder">{{ placeholder }}</span>
@@ -15,7 +15,7 @@
         {{ clearLabel }}
       </AppButton>
     </div>
-    <div v-if="clearPlacement !== 'overlay'" class="signature-pad__actions">
+    <div v-if="clearPlacement === 'below'" class="signature-pad__actions">
       <AppButton variant="text" size="small" @click="clear">{{ clearLabel }}</AppButton>
     </div>
   </div>
@@ -36,11 +36,16 @@ import AppIcon from "./AppIcon.vue";
  * parent decides when to read the signature (on submit), not on every stroke.
  */
 
-const { clearPlacement = "below" } = defineProps<{
+const { clearPlacement = "below", fill = false } = defineProps<{
   placeholder?: string;
   clearLabel: string;
-  /** "overlay" puts Clear on the pad's own top-right corner, right where the signer is looking (NEO-51). */
-  clearPlacement?: "below" | "overlay";
+  /**
+   * "overlay" puts Clear on the pad's own top-right corner, right where the signer is looking (NEO-51).
+   * "none" renders no Clear at all — the parent places its own and calls the exposed clear() (NEO-100 full-screen signing).
+   */
+  clearPlacement?: "below" | "overlay" | "none";
+  /** Fill the parent's height instead of the fixed 160px pad (full-screen signing, NEO-100). */
+  fill?: boolean;
 }>();
 
 /** Fires whenever the pad goes from empty to signed or back — lets a parent enable/disable its own "Sign" action. */
@@ -174,6 +179,11 @@ defineExpose({ isEmpty: isEmptyValue, clear, toDataURL, trimmedInkRect });
   border-radius: var(--pwa-radius, 8px);
   background: rgba(var(--v-theme-surface), 1);
   touch-action: none;
+}
+
+.signature-pad--fill,
+.signature-pad--fill .signature-pad__canvas-wrap {
+  height: 100%;
 }
 
 .signature-pad__canvas {
