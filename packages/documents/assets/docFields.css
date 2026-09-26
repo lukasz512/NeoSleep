@@ -6,13 +6,19 @@
  * row is the person (name largest, then date of birth / licence number);
  * the rows below are the visit context (specialist, clinic, date, tooth).
  * A filled value is plain text; an empty one (blank paper form) gets a
- * write-in line. Items share each row evenly and wrap when they no longer
- * fit; .doc-field--short gets less room (date, tooth), .doc-field--wide a
- * full row.
+ * write-in line.
+ * A grid, not a wrapping row, so columns line up from row to row: the last
+ * column is the date column — .doc-field--short (date of birth on the
+ * person row, the document's date below it) always lands there, one above
+ * the other (Łukasz, NEO-94). .doc-field--patient spans everything left of
+ * it; .doc-field--tooth sits just left of the dates (keep it before the date
+ * in the markup); .doc-field--wide takes a full row. The date column grows
+ * for a longer value (the partner agreement's licence number) but never
+ * shrinks below a date and its label.
  */
 .doc-fields {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr) minmax(30mm, max-content);
   column-gap: 18px;
   row-gap: 7px;
   margin: 0 0 14px;
@@ -21,13 +27,22 @@
   background: #f2f8f7;
   break-inside: avoid;
 }
-.doc-field { flex: 1 1 140px; min-width: 0; display: flex; flex-direction: column; }
-.doc-field--short { flex: 0.6 1 90px; }
-.doc-field--wide { flex-basis: 100%; }
-/* The person row: name + date of birth share it, a hairline separates it from the visit context below. */
-.doc-field--patient { flex: 1 1 calc(100% - 200px); }
+.doc-fields:has(> .doc-field--tooth) { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr) 16mm minmax(30mm, max-content); }
+.doc-field { min-width: 0; display: flex; flex-direction: column; }
+.doc-field--patient { grid-column: 1 / -2; }
+.doc-field--short { grid-column: -2 / -1; }
+.doc-field--tooth { grid-column: -3 / -2; }
+.doc-field--wide { grid-column: 1 / -1; }
+/* The person row: a hairline separates it from the visit context below. */
 .doc-field--patient,
 .doc-field--patient + .doc-field--short { padding-bottom: 6px; border-bottom: 1px solid #dbe8e5; }
+/* A person followed by another field instead of a date (GDPR consent: doctor, clinic, date) is a single row: no span, no hairline. */
+.doc-field--patient:has(+ .doc-field:not(.doc-field--short)) { grid-column: auto; padding-bottom: 0; border-bottom: 0; }
+/* Phone-width preview (PWA signing dialog): one field per row. */
+@media screen and (max-width: 560px) {
+  .doc-fields, .doc-fields:has(> .doc-field--tooth) { grid-template-columns: minmax(0, 1fr); }
+  .doc-field--patient, .doc-field--short, .doc-field--tooth, .doc-field--wide { grid-column: auto; }
+}
 .doc-field dt {
   font-size: 6.5pt;
   font-weight: 500;
