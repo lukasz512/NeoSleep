@@ -3,6 +3,7 @@
     <FormRenderer
       v-model="showEditModal"
       :fields="patientFormFields"
+      :derive="patientFormDerive"
       :initial-data="patient ?? undefined"
       title-key="app.patients.form.title"
       edit-title-key="app.patients.form.editTitle"
@@ -201,7 +202,7 @@ import PatientStudiesSummary from "../components/patient/PatientStudiesSummary.v
 import PatientOrthoApneaPanel from "../components/patient/PatientOrthoApneaPanel.vue";
 import EntityHistoryPanel from "../components/EntityHistoryPanel.vue";
 import EntityDocumentsPanel from "../components/EntityDocumentsPanel.vue";
-import { patientFormFields } from "../config/forms/patientForm";
+import { patientFormFields, patientFormDerive } from "../config/forms/patientForm";
 import { STUDY_ROLES } from "../config/questionnaires";
 import { useAuthStore } from "../stores/auth";
 import { entityActionIcon, entityActionBtnClass } from "../config/entityActions";

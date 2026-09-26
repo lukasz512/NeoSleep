@@ -1,9 +1,10 @@
-import type { FormFieldDef, FormFieldOption } from "../../types/formField";
+import type { FormDerive, FormFieldDef, FormFieldOption } from "../../types/formField";
 import { apiFetch } from "../../composables/useApi";
 import { useConfigStore } from "../../stores/config";
 import { useAuthStore } from "../../stores/auth";
-import { identityFields } from "./identityFields";
+import { identityFields, GENDERED_SALUTATIONS, salutationMarket, type SalutationMarket } from "./identityFields";
 import { loadTerritoryOptions } from "./territoryOptions";
+import { useSpecialtyLabel } from "../../composables/useSpecialtyLabel";
 
 /**
  * Patient entity config for the generic FormRenderer. Reuses the shared
@@ -42,19 +43,37 @@ async function loadRegionOptions() {
  * already contain it keeps the display correct regardless of how many HCPs
  * exist (see the identical fix for organization_id in hcpForm.ts).
  */
+interface PractitionerOptionRow {
+  id: string;
+  name: string;
+  primary_specialty?: string | null;
+  institution?: string | null;
+}
+
+/** "Specialty · Clinic" under each doctor in the picker, so two similar names can be told apart. */
+function practitionerOption(p: PractitionerOptionRow, specialtyLabel: (code?: string | null) => string): FormFieldOption {
+  const subtitle = [specialtyLabel(p.primary_specialty), p.institution ?? ""].filter(Boolean).join(" · ");
+  return { title: p.name, value: p.id, ...(subtitle ? { subtitle } : {}) };
+}
+
 async function loadPractitionerOptions(form?: Record<string, unknown>): Promise<FormFieldOption[]> {
+  const configStore = useConfigStore();
+  if (configStore.options.specialties.length === 0) {
+    await configStore.loadOptions();
+  }
+  const specialtyLabel = useSpecialtyLabel();
   const res = await apiFetch("/api/v1/practitioner?limit=-1", { handleErrors: false });
   const json = res.ok
-    ? ((await res.json()) as { items?: { id: string; name: string }[] })
+    ? ((await res.json()) as { items?: PractitionerOptionRow[] })
     : { items: [] };
-  const options = (json.items ?? []).map((p) => ({ title: p.name, value: p.id }));
+  const options = (json.items ?? []).map((p) => practitionerOption(p, specialtyLabel));
 
   const currentId = typeof form?.practitioner_id === "string" ? form.practitioner_id.trim() : "";
   if (currentId && !options.some((o) => o.value === currentId)) {
     const hcpRes = await apiFetch(`/api/v1/practitioner/${currentId}`, { handleErrors: false });
     if (hcpRes.ok) {
-      const hcp = (await hcpRes.json()) as { id: string; name: string };
-      options.push({ title: hcp.name, value: hcp.id });
+      const hcp = (await hcpRes.json()) as PractitionerOptionRow;
+      options.push(practitionerOption(hcp, specialtyLabel));
     }
   }
 
@@ -67,17 +86,66 @@ identity[0] = { ...identity[0], key: "salutation" };
 // Same set as the identities.gender CHECK constraint. Required for patients
 // (the list's "F · 47 y" line depends on it); doctors never ask for either.
 const GENDER_OPTIONS: FormFieldOption[] = [
-  { title: "app.patients.form.genderFemale", value: "female" },
-  { title: "app.patients.form.genderMale", value: "male" },
-  { title: "app.patients.form.genderOther", value: "other" },
-  { title: "app.patients.form.genderPreferNot", value: "prefer_not_to_say" },
+  { title: "app.patients.form.genderFemale", value: "female", symbol: "♀" },
+  { title: "app.patients.form.genderMale", value: "male", symbol: "♂" },
+  { title: "app.patients.form.genderOther", value: "other", secondary: true },
+  { title: "app.patients.form.genderPreferNot", value: "prefer_not_to_say", secondary: true },
 ];
+
+/** Keyed without case or the trailing dot, so a typed "dra" counts as "Dra." too. */
+function salutationKey(v: unknown): string {
+  return typeof v === "string" ? v.trim().toLowerCase().replace(/\.$/, "") : "";
+}
+
+interface SalutationSexMaps {
+  sexOf: Record<string, "male" | "female">;
+  forSex: Record<"male" | "female", Record<string, string>>;
+}
+
+const SALUTATION_MAPS = {} as Record<SalutationMarket, SalutationSexMaps>;
+for (const market of Object.keys(GENDERED_SALUTATIONS) as SalutationMarket[]) {
+  const maps: SalutationSexMaps = { sexOf: {}, forSex: { male: {}, female: {} } };
+  for (const { male, female } of GENDERED_SALUTATIONS[market]) {
+    maps.sexOf[salutationKey(male)] = "male";
+    maps.sexOf[salutationKey(female)] = "female";
+    maps.forSex.male[salutationKey(female)] = male;
+    maps.forSex.female[salutationKey(male)] = female;
+  }
+  SALUTATION_MAPS[market] = maps;
+}
+
+/**
+ * Keeps salutation and sex in step, both ways, for the patient's market
+ * (identityFields' GENDERED_SALUTATIONS): in MX Dr./Prof./Lic./Sr. ↔
+ * Masculino and Dra./Profa./Licda./Sra. ↔ Femenino; in PL Pan ↔ Mężczyzna
+ * and Pani ↔ Kobieta, while Dr./Prof./Mgr. stay as they are for both sexes.
+ * Switching sex flips the salutation to its other form. Once sex is Otro /
+ * Prefiero no decir it is a deliberate manual choice — the salutation no
+ * longer moves it (and picking it leaves the salutation alone). A salutation
+ * without a sex, or an empty one, never changes anything.
+ */
+export const patientFormDerive: FormDerive = (form, prev) => {
+  const salutationChanged = salutationKey(form.salutation) !== salutationKey(prev.salutation);
+  const sexChanged = form.gender !== prev.gender;
+  if (salutationChanged === sexChanged) return;
+  const maps = SALUTATION_MAPS[salutationMarket(form)];
+
+  if (sexChanged) {
+    if (form.gender !== "male" && form.gender !== "female") return;
+    const salutation = maps.forSex[form.gender][salutationKey(form.salutation)];
+    return salutation ? { salutation } : undefined;
+  }
+
+  if (form.gender === "other" || form.gender === "prefer_not_to_say") return;
+  const sex = maps.sexOf[salutationKey(form.salutation)];
+  return sex ? { gender: sex } : undefined;
+};
 
 export const patientFormFields: FormFieldDef[] = [
   ...identity,
   {
     key: "gender",
-    type: "select",
+    type: "choice",
     labelKey: "app.patients.form.gender",
     options: GENDER_OPTIONS,
     default: null,

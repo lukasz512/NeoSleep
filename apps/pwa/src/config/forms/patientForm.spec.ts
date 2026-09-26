@@ -1,5 +1,19 @@
-import { describe, it, expect } from "vitest";
-import { patientFormFields } from "./patientForm";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const apiFetch = vi.fn();
+vi.mock("../../composables/useApi", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../composables/useApi")>()),
+  apiFetch: (...args: unknown[]) => apiFetch(...args),
+}));
+
+import { createPinia, setActivePinia } from "pinia";
+import { patientFormFields, patientFormDerive } from "./patientForm";
+import { useConfigStore } from "../../stores/config";
+import type { FormFieldOption } from "../../types/formField";
+
+function jsonResponse(ok: boolean, body: unknown) {
+  return { ok, json: async () => body } as Response;
+}
 
 describe("patientFormFields", () => {
   it("leads with the shared Identity block, prefix key renamed to 'salutation'", () => {
@@ -28,6 +42,77 @@ describe("patientFormFields", () => {
     expect(byKey.date_of_birth.required).toBe(true);
   });
 
+  it("sex is two chips (♀/♂) with Otro / Prefiero no decir as secondary links", () => {
+    const gender = patientFormFields.find((f) => f.key === "gender")!;
+    expect(gender.type).toBe("choice");
+    const opts = gender.options as FormFieldOption[];
+    expect(opts.filter((o) => !o.secondary).map((o) => [o.value, o.symbol])).toEqual([["female", "♀"], ["male", "♂"]]);
+    expect(opts.filter((o) => o.secondary).map((o) => o.value)).toEqual(["other", "prefer_not_to_say"]);
+  });
+
+  describe("patientFormDerive — salutation and sex move together (MX patient)", () => {
+    const run = (prev: Record<string, unknown>, form: Record<string, unknown>) =>
+      patientFormDerive({ country_code: "MX", ...form }, { country_code: "MX", ...prev });
+
+    it.each([
+      ["Dr.", "male"], ["Dra.", "female"], ["Sr.", "male"], ["Sra.", "female"], ["dra", "female"],
+      ["Prof.", "male"], ["Profa.", "female"], ["Lic.", "male"], ["Licda.", "female"],
+    ])("picking salutation %s sets sex to %s", (salutation, gender) => {
+      expect(run({ salutation: null, gender: null }, { salutation, gender: null })).toEqual({ gender });
+    });
+
+    it("switching salutation Dra. → Dr. flips a female patient to male", () => {
+      expect(run({ salutation: "Dra.", gender: "female" }, { salutation: "Dr.", gender: "female" })).toEqual({ gender: "male" });
+    });
+
+    it.each([
+      ["male", "Dra.", "Dr."], ["female", "Dr.", "Dra."], ["male", "Sra.", "Sr."], ["female", "Sr.", "Sra."],
+      ["female", "Prof.", "Profa."], ["male", "Profa.", "Prof."], ["female", "Lic.", "Licda."], ["male", "Licda.", "Lic."],
+    ])("picking sex %s turns %s into %s", (gender, salutation, expected) => {
+      expect(run({ salutation, gender: null }, { salutation, gender })).toEqual({ salutation: expected });
+    });
+
+    it("sex never invents a salutation, and leaves the gender-neutral Mgr. alone (both ways)", () => {
+      expect(run({ salutation: null, gender: null }, { salutation: null, gender: "female" })).toBeUndefined();
+      expect(run({ salutation: "Mgr.", gender: "male" }, { salutation: "Mgr.", gender: "female" })).toBeUndefined();
+      expect(run({ salutation: null, gender: null }, { salutation: "Mgr.", gender: null })).toBeUndefined();
+    });
+
+    it("Otro / Prefiero no decir is a manual choice: the salutation no longer changes sex", () => {
+      expect(run({ salutation: "Dra.", gender: "other" }, { salutation: "Dr.", gender: "other" })).toBeUndefined();
+      expect(run({ salutation: null, gender: "prefer_not_to_say" }, { salutation: "Dra.", gender: "prefer_not_to_say" })).toBeUndefined();
+    });
+
+    it("picking Otro / Prefiero no decir leaves the salutation as it is", () => {
+      expect(run({ salutation: "Dra.", gender: "female" }, { salutation: "Dra.", gender: "other" })).toBeUndefined();
+    });
+
+    it("an already-consistent pair, or both changing at once (record just opened), is left alone", () => {
+      expect(run({ salutation: "Dr.", gender: null }, { salutation: "Dr.", gender: "male" })).toBeUndefined();
+      expect(run({ country_code: "MX" }, { salutation: "Dra.", gender: "male" })).toBeUndefined();
+    });
+  });
+
+  describe("patientFormDerive — PL patient: only Pan/Pani carry a sex", () => {
+    const run = (prev: Record<string, unknown>, form: Record<string, unknown>) =>
+      patientFormDerive({ country_code: "PL", ...form }, { country_code: "PL", ...prev });
+
+    it("Pan sets male, Pani sets female", () => {
+      expect(run({ salutation: null, gender: null }, { salutation: "Pan", gender: null })).toEqual({ gender: "male" });
+      expect(run({ salutation: null, gender: null }, { salutation: "Pani", gender: null })).toEqual({ gender: "female" });
+    });
+
+    it("switching sex flips Pan ↔ Pani", () => {
+      expect(run({ salutation: "Pan", gender: "male" }, { salutation: "Pan", gender: "female" })).toEqual({ salutation: "Pani" });
+      expect(run({ salutation: "Pani", gender: "female" }, { salutation: "Pani", gender: "male" })).toEqual({ salutation: "Pan" });
+    });
+
+    it.each(["Dr.", "Prof.", "Mgr."])("%s is the same for women and men: it neither sets sex nor turns into a Spanish form", (salutation) => {
+      expect(run({ salutation: null, gender: null }, { salutation, gender: null })).toBeUndefined();
+      expect(run({ salutation, gender: "male" }, { salutation, gender: "female" })).toBeUndefined();
+    });
+  });
+
   it("carries the full existing field set (no fields dropped in the migration)", () => {
     expect(patientFormFields.map((f) => f.key)).toEqual([
       "salutation", "first_name", "last_name", "email", "phone", "gender", "date_of_birth",
@@ -48,5 +133,47 @@ describe("patientFormFields", () => {
     const territory = patientFormFields.find((f) => f.key === "territory_id")!;
     expect(territory.type).toBe("autocomplete");
     expect(typeof territory.options).toBe("function");
+  });
+
+  describe("practitioner_id options", () => {
+    const load = patientFormFields.find((f) => f.key === "practitioner_id")!.options as (
+      form: Record<string, unknown>,
+    ) => Promise<FormFieldOption[]>;
+
+    beforeEach(() => {
+      apiFetch.mockReset();
+      setActivePinia(createPinia());
+      useConfigStore().options = {
+        regions: [],
+        specialties: [{ key: "dentist", value: "Odontólogo", locale: "mx", sort_order: 0, locked: false, custom: false }],
+        organization_types: [],
+      };
+    });
+
+    it("subtitles each doctor with translated specialty · clinic, so similar names can be told apart", async () => {
+      apiFetch.mockResolvedValueOnce(jsonResponse(true, { items: [
+        { id: "d1", name: "Dra. Laura Cuicas", primary_specialty: "dentist", institution: "Clínica Dental Sur" },
+        { id: "d2", name: "Dr. Anna Kowalska", primary_specialty: "", institution: "" },
+        { id: "d3", name: "Dr. Andrzej Testerski", primary_specialty: "ent", institution: "" },
+      ] }));
+
+      const options = await load({});
+
+      expect(options).toEqual([
+        { title: "Dra. Laura Cuicas", value: "d1", subtitle: "Odontólogo · Clínica Dental Sur" },
+        { title: "Dr. Anna Kowalska", value: "d2" },
+        { title: "Dr. Andrzej Testerski", value: "d3", subtitle: "ent" },
+      ]);
+    });
+
+    it("the saved doctor fetched on its own (outside the bulk page) gets the same subtitle", async () => {
+      apiFetch
+        .mockResolvedValueOnce(jsonResponse(true, { items: [] }))
+        .mockResolvedValueOnce(jsonResponse(true, { id: "old", name: "Dr. Old", primary_specialty: "dentist", institution: "HCO" }));
+
+      const options = await load({ practitioner_id: "old" });
+
+      expect(options).toEqual([{ title: "Dr. Old", value: "old", subtitle: "Odontólogo · HCO" }]);
+    });
   });
 });

@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { identityFields } from "./identityFields";
+import { createPinia, setActivePinia } from "pinia";
+import { identityFields, salutationMarket } from "./identityFields";
+import { useAuthStore } from "../../stores/auth";
+import type { FormFieldOption } from "../../types/formField";
 
 describe("identityFields", () => {
   it("returns title, first_name, last_name, email, phone in that order", () => {
@@ -45,6 +48,23 @@ describe("identityFields", () => {
     const values = (title.options as { value: unknown }[]).map((o) => o.value);
     expect(values).toContain("Dr.");
     expect(values).toContain("Dra.");
+  });
+
+  it("title offers the salutations of the person's market — Polish for PL, Spanish otherwise", () => {
+    const title = identityFields().find((f) => f.key === "title")!;
+    const offered = (country: string) =>
+      (title.options as FormFieldOption[])
+        .filter((o) => title.optionFilter!(o, { country_code: country }))
+        .map((o) => o.value);
+    expect(offered("PL")).toEqual(["Dr.", "Prof.", "Mgr.", "Pan", "Pani"]);
+    expect(offered("MX")).toEqual(["Dr.", "Dra.", "Prof.", "Profa.", "Lic.", "Licda.", "Sr.", "Sra."]);
+  });
+
+  it("a form without its own country falls back to the signed-in user's", () => {
+    setActivePinia(createPinia());
+    useAuthStore().user = { country_code: "PL" } as NonNullable<ReturnType<typeof useAuthStore>["user"]>;
+    expect(salutationMarket({})).toBe("pl");
+    expect(salutationMarket({ country_code: "MX" })).toBe("es");
   });
 
   it("each call returns a fresh array (no shared object identity across consumers)", () => {
