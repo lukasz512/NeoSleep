@@ -35,6 +35,7 @@
   "common.error.unexpected.title": "Wystąpił nieoczekiwany błąd",
   "common.error.unexpected.body": "Spróbuj ponownie. Jeśli problem się powtarza, skontaktuj się z pomocą techniczną.",
   "common.error.reference": "Numer zgłoszenia: {id}",
+  "common.error.emailInUse": "Ten adres e-mail jest już przypisany do innej osoby (pacjenta, lekarza lub użytkownika). Użyj innego adresu.",
   "user.leads.form.title": "Dodaj leada",
   "user.leads.form.name": "Nazwa",
   "user.leads.form.salutation": "Tytuł",

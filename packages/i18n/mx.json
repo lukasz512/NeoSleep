@@ -35,6 +35,7 @@
   "common.error.unexpected.title": "Ocurrió un error inesperado",
   "common.error.unexpected.body": "Inténtalo de nuevo. Si el problema continúa, contacta a soporte.",
   "common.error.reference": "Referencia: {id}",
+  "common.error.emailInUse": "Este correo ya está registrado para otra persona (paciente, médico o usuario). Usa un correo diferente.",
   "user.leads.form.title": "Añadir lead",
   "user.leads.form.name": "Nombre",
   "user.leads.form.salutation": "Tratamiento",

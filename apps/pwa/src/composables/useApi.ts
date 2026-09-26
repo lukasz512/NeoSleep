@@ -22,7 +22,7 @@
  * setAuthInterceptor() — called from stores/auth.ts after store creation.
  */
 import { useLocalStorage } from "@vueuse/core";
-import { ApiError, classifyStatus, createApiFetch, extractErrorMessage, reportCaught, type ApiFetchOptions } from "@api";
+import { ApiError, classifyStatus, createApiFetch, extractErrorMessage, messageKeyForCode, reportCaught, type ApiFetchOptions } from "@api";
 import { useGlobalLoaderStore } from "@stores";
 import { getApiUrl, APP_STORAGE_KEYS } from "../constants";
 import { useNotifications } from "../composables/useNotifications";
@@ -187,8 +187,11 @@ export const apiFetch = createApiFetch({
     // translates it. `message` (the server's own error text, or a generic
     // "HTTP <code>" fallback — see extractErrorMessage) is always passed too,
     // as what shows if the key is absent or fails to resolve.
+    // A code with its own message (e.g. EMAIL_IN_USE) beats the caller's
+    // generic key — it says what's actually wrong (NEO-111).
     const toShow = message || `Request failed: ${status} ${path}`;
-    useNotifications().show(toShow, "error", errorMessageKey, { icon: "sad-cloud" });
+    const key = messageKeyForCode(info?.code) ?? errorMessageKey;
+    useNotifications().show(toShow, "error", key, { icon: "sad-cloud" });
     // Every non-2xx apiFetch response is reported here, exactly once (NEO-81) —
     // callers' own `!res.ok` branches don't need to report the same failure again.
     reportCaught(

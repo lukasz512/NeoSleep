@@ -51,6 +51,18 @@ export class ConflictError extends AppError {
 }
 
 /**
+ * NEO-111: identities.email is unique across every identity (patient, doctor,
+ * user, lead), so saving a record with an email another person already has
+ * would otherwise surface as an opaque 23505 "Database error". The dedicated
+ * code lets the app show a translated message instead of the raw text.
+ */
+export class EmailInUseError extends AppError {
+  constructor(email: string) {
+    super(`Email "${email}" is already in use by another person.`, "EMAIL_IN_USE", 409);
+  }
+}
+
+/**
  * NEO-51: the partner onboarding documents can't be countersigned for this
  * jurisdiction yet — no NeoSleep signatory configured, or the current
  * agreement/DPA version hasn't been approved by that signatory. Raised at

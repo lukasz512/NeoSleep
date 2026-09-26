@@ -35,6 +35,7 @@
   "common.error.unexpected.title": "Something unexpected happened",
   "common.error.unexpected.body": "Try again. If it keeps happening, contact support.",
   "common.error.reference": "Reference: {id}",
+  "common.error.emailInUse": "This email is already used by another person (patient, doctor or user). Use a different email.",
   "user.leads.form.title": "Add lead",
   "user.leads.form.name": "Name",
   "user.leads.form.salutation": "Salutation",

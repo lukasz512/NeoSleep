@@ -1,5 +1,5 @@
 import type { PoolClient } from "pg";
-import { AppError, DatabaseError } from "../errors.js";
+import { AppError, DatabaseError, EmailInUseError } from "../errors.js";
 import { formatDisplayName, formatOptionalDisplayName } from "../utils/personName.js";
 
 function isoDate(val: Date | string | null | undefined): string {
@@ -296,12 +296,27 @@ export async function getPatientById(client: PoolClient, id: string): Promise<(P
 }
 
 /**
+ * NEO-111: identities.email is unique across all identities. Checked up front
+ * (same pattern as updatePractitioner) so a taken email becomes a 409
+ * EMAIL_IN_USE the form can explain, instead of an opaque 23505.
+ */
+async function assertEmailFree(client: PoolClient, email: string | null | undefined, ownIdentityId: string | null): Promise<void> {
+  if (!email) return;
+  const conflict = await client.query<{ id: string }>(
+    `SELECT id FROM identities WHERE email = $1 AND ($2::uuid IS NULL OR id != $2) LIMIT 1`,
+    [email, ownIdentityId]
+  );
+  if (conflict.rows[0]) throw new EmailInUseError(email);
+}
+
+/**
  * Inserts a patient + identity record using the provided client.
  * The client must already be in a transaction (withTenant handles this).
  * No BEGIN/COMMIT here — the caller owns the transaction boundary.
  */
 export async function insertPatient(client: PoolClient, data: PatientInsert): Promise<Patient & { name: string }> {
   try {
+    await assertEmailFree(client, data.email, null);
     const identityResult = await client.query<{ id: string }>(
       `INSERT INTO identities (title, first_name, last_name, email, phone, region, territory_id, country_code, gender, date_of_birth)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -360,6 +375,8 @@ export async function updatePatient(
   if (!existing) return null;
 
   try {
+    if (data.email && data.email !== existing.email) await assertEmailFree(client, data.email, existing.identity_id);
+
     // Update identities row
     const identitySets: string[] = ["updated_at = now()"];
     const identityParams: unknown[] = [];

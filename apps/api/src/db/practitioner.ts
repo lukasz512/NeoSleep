@@ -1,6 +1,6 @@
 import type { PoolClient } from "pg";
 import { toArray, trimOrNull, trimOrEmpty } from "./helpers.js";
-import { AppError, ConflictError, DatabaseError, ValidationError } from "../errors.js";
+import { AppError, DatabaseError, EmailInUseError, ValidationError } from "../errors.js";
 
 export interface Practitioner {
   id: string;
@@ -439,7 +439,7 @@ export async function updatePractitioner(client: PoolClient, id: string, input: 
         [email, existing.identity_id]
       );
       if (conflict.rows[0]) {
-        throw new ConflictError(`Email "${email}" is already in use by another contact.`);
+        throw new EmailInUseError(email);
       }
     }
 

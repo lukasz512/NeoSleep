@@ -94,3 +94,34 @@ describe("patient demographics + doctor specialty (NEO-57)", () => {
     });
   }, 15000);
 });
+
+describe("patient email already used by another identity (NEO-111)", () => {
+  it("insertPatient rejects with a 409 EMAIL_IN_USE instead of an opaque database error", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const email = `qa-taken-${uniqueSuffix()}@example.com`;
+      const practitioner = await insertPractitioner(client, { first_name: "Taken", last_name: "Email", email });
+
+      await expect(insertPatient(client, { first_name: "Second", last_name: "Person", email }))
+        .rejects.toMatchObject({ code: "EMAIL_IN_USE", statusCode: 409 });
+
+      await softDeletePractitioner(client, practitioner.id);
+    });
+  }, 15000);
+
+  it("updatePatient rejects a taken email but still accepts the patient's own", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const takenEmail = `qa-taken-${uniqueSuffix()}@example.com`;
+      const ownEmail = `qa-own-${uniqueSuffix()}@example.com`;
+      const practitioner = await insertPractitioner(client, { first_name: "Taken", last_name: "Email", email: takenEmail });
+      const patient = await insertPatient(client, { first_name: "Own", last_name: "Email", email: ownEmail });
+
+      await expect(updatePatient(client, patient.id, { email: takenEmail }))
+        .rejects.toMatchObject({ code: "EMAIL_IN_USE", statusCode: 409 });
+      const renamed = await updatePatient(client, patient.id, { email: ownEmail, first_name: "Renamed" });
+      expect(renamed?.first_name).toBe("Renamed");
+
+      await softDeletePatient(client, patient.id);
+      await softDeletePractitioner(client, practitioner.id);
+    });
+  }, 15000);
+});
