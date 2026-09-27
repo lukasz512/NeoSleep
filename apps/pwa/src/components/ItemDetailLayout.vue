@@ -306,35 +306,30 @@ defineEmits<{
   }
 }
 
-/* Phone (Salesforce Mobile pattern): tile + actions on the first row, the
-   name on its own full-width row below — three 56px actions next to the name
-   would otherwise wrap even a short name onto two lines. */
+/* Phone (NEO-152): the same header as on desktop — tile, then the "MODULE ›"
+   link over the name over the identity line — so a record looks the same
+   everywhere and the avatar lands in the same place when it flies in from
+   the list. The link is the way back (AppLayout drops its "← Module" row on
+   phones too). Only the actions move: three 56 px buttons beside the name
+   would squeeze it, so they wrap onto their own row under the header. */
 @media (max-width: 767.98px) {
   .view-item__record-header {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    grid-template-rows: minmax(56px, auto) auto auto;
-    grid-template-areas:
-      "tile . actions"
-      "title title title"
-      "details details details";
-    align-items: center;
+    flex-wrap: wrap;
     column-gap: var(--space-3, 12px);
-    /* NEO-115 (4 px grid): tile → name 12, name → meta 4, meta → tabs 16. */
-    row-gap: 0;
+    row-gap: var(--space-3, 12px);
     min-height: 0;
     margin-bottom: var(--space-4, 16px);
   }
-  .view-item__record-header .view-item__record-title-row { margin-top: var(--space-3, 12px); }
-  .view-item__record-header .view-item__record-details { margin-top: var(--space-1, 4px); }
-  .view-item__record-header .view-item__tile,
-  .view-item__record-header > .app-avatar { grid-area: tile; }
-  .view-item__record-header .view-item__record-text { display: contents; }
-  /* AppLayout's page-header row already shows "← <Module>" above it on phones (NEO-108). */
-  .view-item__record-header .view-item__eyebrow { display: none; }
-  .view-item__record-header .view-item__record-title-row { grid-area: title; }
-  .view-item__record-header .view-item__record-details { grid-area: details; }
-  .view-item__record-header .view-item__header-actions { grid-area: actions; }
+  .view-item__record-header .view-item__header-actions {
+    order: 3;
+    flex: 1 0 100%;
+    margin-left: 0;
+  }
+  /* A 44 px tall touch target around the small link, without growing the line. */
+  .view-item__record-header .view-item__eyebrow {
+    padding-block: 12px;
+    margin-block: -12px;
+  }
   .view-item__tile {
     width: 40px;
     height: 40px;

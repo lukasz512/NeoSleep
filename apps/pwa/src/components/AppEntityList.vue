@@ -12,14 +12,21 @@
           'app-entity-list__toolbar--hidden': mobile && toolbarHiddenByScroll && pageHeader.disabled.value,
           'app-entity-list__toolbar--in-header': !pageHeader.disabled.value,
           'app-entity-list__toolbar--mobile': mobile,
-          'app-entity-list__toolbar--search-open': mobile && searchFocused,
-          'app-entity-list__toolbar--has-query': mobile && !!searchQuery.trim(),
+          'app-entity-list__toolbar--compact-search': compactSearch,
+          'app-entity-list__toolbar--search-open': compactSearch && !overlayMode && searchFocused,
+          'app-entity-list__toolbar--has-query': compactSearch && !overlayMode && !!searchQuery.trim(),
+          'app-entity-list__toolbar--overlay-open': overlayOpen,
           'app-entity-list__toolbar--folded': toolsFolded,
         },
       ]"
       data-testid="entity-list-toolbar"
     >
       <div class="app-entity-list__search-group">
+        <!-- NEO-152: holds the search's place in the row. When the icon-only
+             search opens in the page header, the field lifts out over the
+             whole row (position: absolute, clip-path growing from this icon)
+             while this slot keeps its 48 px, so nothing beside it moves. -->
+        <div ref="searchSlotRef" class="app-entity-list__search-slot">
         <VTextField
           ref="searchFieldRef"
           v-model="searchQuery"
@@ -65,6 +72,7 @@
             </div>
           </template>
         </VTextField>
+        </div>
         <div class="app-entity-list__tool app-entity-list__tool--foldable" data-testid="entity-list-filter">
           <AppFilterBar
             ref="filterBarRef"
@@ -200,8 +208,11 @@
       />
     </div>
 
-    <!-- First load: quiet skeleton rows in the same card shape the data will
-         take, so the list fills in instead of a spinner swapping for a table. -->
+    <!-- First load: quiet skeleton rows in the same shape the data will take,
+         so the list fills in instead of a spinner swapping for a table.
+         NEO-152, desktop: it carries the table's header row (its rule, same
+         40 px) and the same 52 px rows at the same bleed, so the green rule
+         stays exactly where it is when the real rows arrive. -->
     <div
       v-else-if="isInitialLoading"
       key="skeleton"
@@ -210,6 +221,7 @@
       aria-live="polite"
       :aria-label="t('layout.loader.label')"
     >
+      <div v-if="!mobile" class="app-entity-list__skeleton-head" data-testid="entity-list-skeleton-head" aria-hidden="true" />
       <div v-for="n in SKELETON_ROWS" :key="n" class="app-entity-list__skeleton-row" :style="{ '--row-i': n - 1 }">
         <span class="app-entity-list__skeleton-avatar" />
         <span class="app-entity-list__skeleton-lines">
@@ -229,6 +241,7 @@
           'app-entity-list__table-wrap--flat': mobile,
           'app-entity-list__table-wrap--fit': !mobile,
           'app-entity-list__table-wrap--busy': isRefreshing,
+          'app-entity-list__table-wrap--from-skeleton': skeletonWasShown,
         },
       ]"
       :style="mobile ? undefined : { '--entity-list-top': `${tableTop}px` }"
@@ -342,7 +355,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, useSlots, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, useSlots, watch } from "vue";
 import { useDisplay } from "vuetify";
 import { useI18n } from "vue-i18n";
 import { useElementBounding, useIntersectionObserver, useWindowScroll } from "@vueuse/core";
@@ -356,6 +369,8 @@ import { useEntityList } from "../composables/useEntityList";
 import type { FilterDefinition } from "../composables/useFilters";
 import { usePageHeaderTeleport, usePageHeaderRow } from "../composables/usePageHeader";
 import { useHeaderToolsFold } from "../composables/useHeaderToolsFold";
+import { useCompactSearch } from "../composables/useCompactSearch";
+import { listCountKey } from "../utils/listCountLabel";
 import { AppInlineAlert } from "@ui";
 
 export interface AppEntityListHeader {
@@ -413,7 +428,7 @@ const props = withDefaults(
 
 defineEmits<{ add: [] }>();
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const { mobile } = useDisplay();
 const pageHeader = usePageHeaderTeleport();
 const slots = useSlots();
@@ -479,7 +494,7 @@ function onFeedScroll(e: Event) {
   lastScrollTop = scrollTop;
 }
 
-const searchFieldRef = ref<{ focus: () => void } | null>(null);
+const searchFieldRef = ref<{ focus: () => void; $el?: unknown } | null>(null);
 /* Phone toolbar (NEO-85): three icons at rest; focusing search grows it over
    the whole row while filter/add step aside, and blurring brings them back
    (a non-empty query then stays on the left as a quiet pill). */
@@ -490,15 +505,101 @@ const searchFocused = ref(false);
    otherwise Filter / + / clear-all fold into "⋯" whenever the title would be
    cut (useHeaderToolsFold). */
 const headerRow = usePageHeaderRow();
-const inPhoneHeader = computed(() => mobile.value && !pageHeader.disabled.value);
-const searchTakesRow = computed(() => inPhoneHeader.value && (searchFocused.value || !!searchQuery.value.trim()));
-watch(searchTakesRow, (v) => (headerRow.searchTakesRow.value = v), { immediate: true });
-onBeforeUnmount(() => (headerRow.searchTakesRow.value = false));
+const inHeader = computed(() => !pageHeader.disabled.value);
+const inPhoneHeader = computed(() => mobile.value && inHeader.value);
 const toolbarRef = ref<HTMLElement | null>(null);
 const moreAnchorRef = ref<HTMLElement | null>(null);
 const filterBarRef = ref<{ open: () => void } | null>(null);
+const searchSlotRef = ref<HTMLElement | null>(null);
+
+/* NEO-152, desktop: the search field yields to the list's title (and its
+   subtitle) — once less than 200 px is left for it, it becomes its icon,
+   like on phones (useCompactSearch). */
+const { compact: desktopCompact } = useCompactSearch(
+  headerRow.title,
+  toolbarRef,
+  () => searchSlotRef.value,
+  computed(() => !mobile.value && inHeader.value),
+);
+const compactSearch = computed(() => mobile.value || desktopCompact.value);
+
+/* NEO-152 "opens in place": an icon-only search in the page header opens as
+   an overlay over the whole row — its clip grows from the icon's circle —
+   while the title and the other tools only fade. Nothing in the row changes
+   size, so there is no layout work per frame and no jump (the old version
+   grew the field's flex-basis and took the title out of the layout). */
+const overlayMode = computed(() => compactSearch.value && inHeader.value);
+const searchWanted = computed(() => searchFocused.value || !!searchQuery.value.trim());
+const overlayOpen = ref(false);
+const OVERLAY_EASE = "cubic-bezier(0.2, 0, 0, 1)";
+
+function prefersReducedMotion(): boolean {
+  return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+/** Plays the overlay's clip from the icon's circle to the full row (or back). */
+function playOverlay(direction: "open" | "close"): Promise<void> {
+  const field = searchFieldRef.value?.$el;
+  const slot = searchSlotRef.value;
+  const row = toolbarRef.value?.closest<HTMLElement>(".layout-page-header");
+  if (!(field instanceof HTMLElement) || !slot || !row || typeof field.animate !== "function" || prefersReducedMotion()) {
+    return Promise.resolve();
+  }
+  const r = row.getBoundingClientRect();
+  const s = slot.getBoundingClientRect();
+  const icon = `inset(0px ${Math.max(0, r.right - s.right)}px 0px ${Math.max(0, s.left - r.left)}px round 24px)`;
+  const full = "inset(0px 0px 0px 0px round 24px)";
+  const frames = direction === "open" ? [{ clipPath: icon }, { clipPath: full }] : [{ clipPath: full }, { clipPath: icon }];
+  const animation = field.animate(frames, { duration: direction === "open" ? 320 : 240, easing: OVERLAY_EASE });
+  return animation.finished.then(() => undefined, () => undefined);
+}
+
+watch(
+  [searchWanted, overlayMode],
+  async ([wanted, mode]) => {
+    if (!mode) {
+      overlayOpen.value = false;
+      return;
+    }
+    if (wanted && !overlayOpen.value) {
+      overlayOpen.value = true;
+      await nextTick();
+      await playOverlay("open");
+    } else if (!wanted && overlayOpen.value) {
+      await playOverlay("close");
+      if (!searchWanted.value) overlayOpen.value = false;
+    }
+  },
+);
+
+/* NEO-113/152: while the overlay is open AppLayout fades the title (its space
+   stays, so the row keeps its size). Off-header phone lists keep the old
+   in-row growth. */
+const searchTakesRow = computed(() => (overlayMode.value ? overlayOpen.value : false));
+watch(searchTakesRow, (v) => (headerRow.searchTakesRow.value = v), { immediate: true });
+onBeforeUnmount(() => (headerRow.searchTakesRow.value = false));
 const { folded: headerFolded } = useHeaderToolsFold(headerRow.title, toolbarRef, inPhoneHeader, searchTakesRow);
 const toolsFolded = computed(() => inPhoneHeader.value && headerFolded.value);
+
+/* NEO-152: the record count under the list's title (desktop; AppLayout
+   leaves it out on phones). "" while the first page loads keeps the line's
+   height, so the title doesn't move when the number arrives. */
+let ownSubtitle: string | null = null;
+watch(
+  [inHeader, total, hasCompletedInitialLoad, locale],
+  () => {
+    if (!inHeader.value) return;
+    ownSubtitle = hasCompletedInitialLoad.value
+      ? t(listCountKey(total.value, String(locale.value)), { count: total.value })
+      : "";
+    headerRow.subtitle.value = ownSubtitle;
+  },
+  { immediate: true },
+);
+onBeforeUnmount(() => {
+  // The next list may already have written its own line — only clear ours.
+  if (inHeader.value && headerRow.subtitle.value === ownSubtitle) headerRow.subtitle.value = null;
+});
 
 function onSearchClearClick() {
   onSearchClear();
@@ -524,6 +625,10 @@ const itemValue = "id";
    skeleton mid-keystroke, which flashed away the very input being typed
    into. */
 const isInitialLoading = computed(() => loading.value && !hasCompletedInitialLoad.value);
+/* NEO-152: rows that replace the skeleton fill in where they stand — the list
+   itself doesn't fade or rise in after it (that nudge moved the header rule). */
+const skeletonWasShown = ref(false);
+watch(isInitialLoading, (v) => { if (v) skeletonWasShown.value = true; }, { immediate: true });
 /* Any reload after the first one (search, filter, page, sort): the current
    rows stay in place and dim until the new ones land, instead of the table
    being torn down. */

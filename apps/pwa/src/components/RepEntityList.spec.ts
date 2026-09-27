@@ -108,6 +108,39 @@ function vi_stubFetch(impl: () => Promise<Response>) {
 }
 
 describe("AppEntityList", () => {
+  // NEO-152: the skeleton has the table's header row (its green rule) so the
+  // rule stays exactly where it is when the rows arrive, and the list that
+  // replaces it doesn't fade or rise in.
+  describe("skeleton → rows in place (NEO-152)", () => {
+    it("desktop skeleton carries the header row; the phone one doesn't", async () => {
+      const desktop = await mountEntityList({ fetchImpl: () => new Promise<Response>(() => {}) });
+      expect(desktop.find(".app-entity-list__skeleton").exists()).toBe(true);
+      expect(desktop.find("[data-testid='entity-list-skeleton-head']").exists()).toBe(true);
+      for (const w of mountedWrappers.splice(0)) w.unmount();
+      const phone = await mountEntityList({ fetchImpl: () => new Promise<Response>(() => {}), width: 390 });
+      expect(phone.find(".app-entity-list__skeleton--mobile").exists()).toBe(true);
+      expect(phone.find("[data-testid='entity-list-skeleton-head']").exists()).toBe(false);
+    });
+
+    it("the list that replaces the skeleton is marked to swap in place", async () => {
+      const wrapper = await mountEntityList({ items: [{ id: "1", name: "Ana" }] });
+      expect(wrapper.find(".app-entity-list__table-wrap").classes()).toContain("app-entity-list__table-wrap--from-skeleton");
+    });
+
+    it("the search field sits in its own slot, so an icon search can lift out without moving its neighbours", async () => {
+      const wrapper = await mountEntityList({ width: 390 });
+      const slot = wrapper.find(".app-entity-list__search-slot");
+      expect(slot.exists()).toBe(true);
+      expect(slot.find(".app-entity-list__search").exists()).toBe(true);
+      expect(wrapper.find("[data-testid='entity-list-toolbar']").classes()).toContain("app-entity-list__toolbar--compact-search");
+    });
+
+    it("a wide desktop keeps the full search field", async () => {
+      const wrapper = await mountEntityList({ width: 1440 });
+      expect(wrapper.find("[data-testid='entity-list-toolbar']").classes()).not.toContain("app-entity-list__toolbar--compact-search");
+    });
+  });
+
   // NEO-97: coming back to a list (e.g. Back from a record) shows its last
   // page at once and refreshes quietly — no skeleton, so the page transition
   // can fly the record's avatar + name straight back into its row.

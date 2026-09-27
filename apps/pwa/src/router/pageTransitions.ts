@@ -1,17 +1,17 @@
 /**
  * Page-change motion (NEO-85; open/back reworked in NEO-97, Łukasz picked
  * variant C "row grows into the record" from the live prototype 2026-09-26):
- * - open:   list → one of its records. The tapped row's avatar and name fly
- *           into the record header while the rest of the record rises in.
- * - back:   record → its list. The avatar and name fly back into their row.
- * - module: anything else (menu / bottom nav). A quick M3 fade-through, since
+ * - open:   list → one of its records. The tapped row's avatar travels into
+ *           the record header like a drop (NEO-152) while the record fades in.
+ * - back:   record → its list. The avatar travels back into its row.
+ * - module: anything else (menu / bottom nav). A quick crossfade, since
  *           modules sit side by side and have no direction.
  *
  * Driven by the View Transitions API: the browser snapshots the old and the new
  * page and plays them over each other, without both views being mounted at
  * once (page scroll stays on the window). The content sheet has a
  * view-transition-name (AppLayout), so the app bar and side menu stay still;
- * the flying avatar/name get theirs from pageTransitionHero.ts for the length
+ * the travelling avatar gets its name from pageTransitionHero.ts for the length
  * of one transition. The keyframes live in assets/page-transitions.css, keyed
  * on <html data-page-transition="open|back|module">.
  *
@@ -22,10 +22,14 @@
 import { nextTick } from "vue";
 import type { RouteLocationNormalized, Router } from "vue-router";
 import { navParentName } from "./routes";
-import { findHeroRow, recordHeaderReady, tagHeroRecord, tagHeroRow, untagHero, waitFor, type HeroTags } from "./pageTransitionHero";
+import { findHeroRow, recordHeaderReady, resetHero, tagHeroRecord, tagHeroRow, untagHero, waitFor, type HeroTags } from "./pageTransitionHero";
 
-/** Longest the new page's snapshot waits for the other end of the hero to render (NEO-97). */
-const HERO_WAIT_MS = 450;
+/**
+ * Longest the new page's snapshot waits for the other end of the hero to
+ * render. The screen is frozen meanwhile, so NEO-152 cut it from 450 ms to
+ * 120 ms: a record not ready by then opens without the avatar's flight.
+ */
+export const HERO_WAIT_MS = 120;
 
 /** The record's id: its route's single param (/patients/:id, /hcp/:id, …). */
 function recordId(loc: RouteLocationNormalized): string | undefined {
@@ -82,7 +86,7 @@ export function installPageTransitions(router: Router): void {
     const root = document.documentElement;
     const kind = pageTransitionKind(from, to);
     root.dataset.pageTransition = kind;
-    untagHero(tags);
+    resetHero(tags);
     tagNewEnd = null;
     const main = document.querySelector("main") ?? document.body;
     const id = kind === "open" ? recordId(to) : kind === "back" ? recordId(from) : undefined;
@@ -107,7 +111,7 @@ export function installPageTransitions(router: Router): void {
       );
       vt.finished.finally(() => {
         if (root.dataset.pageTransition) delete root.dataset.pageTransition;
-        untagHero(tags);
+        resetHero(tags);
       });
     });
   });
