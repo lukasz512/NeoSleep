@@ -60,9 +60,13 @@ test("spine ficha: one labelled fact per line, labels in one column (NEO-118)", 
 
 test("spine ficha fills in as you type on create (NEO-118)", async ({ page }) => {
   await open(page, "&mode=create", LAPTOP);
-  await expect(page.getByTestId("form-spine-facts").locator("[data-fact=sex]")).toHaveCount(0);
+  // NEO-128: every fact is drawn from the start, with a still bar for its value.
+  const facts = page.getByTestId("form-spine-facts");
+  await expect(facts.locator("dt")).toHaveText(["Sex", "Age", "Born", "Status"]);
+  await expect(facts.locator("[data-fact=sex] .form-spine__bar")).toHaveCount(1);
   await body(page).getByText("Male", { exact: true }).click();
-  await expect(page.getByTestId("form-spine-facts").locator("[data-fact=sex] dd")).toHaveText("Male");
+  await expect(facts.locator("[data-fact=sex] dd")).toHaveText("Male");
+  await expect(facts.locator("[data-fact=sex] .form-spine__bar")).toHaveCount(0);
 });
 
 test("scrolled content fades out under the header instead of touching a line", async ({ page }) => {
@@ -124,9 +128,18 @@ test("create and edit are one view: the spine fills in as you type", async ({ pa
   await open(page, "&mode=create", LAPTOP);
   await expect(spine(page)).toBeVisible();
   await expect(page.getByTestId("form-spine-name")).toHaveClass(/form-spine__name--pending/);
+  // NEO-128: a still skeleton (avatar + two bars) instead of a sentence, and nothing animates.
+  await expect(spine(page).locator(".form-spine__avatar-skeleton")).toBeVisible();
+  await expect(page.getByTestId("form-spine-name").locator(".form-spine__bar")).toHaveCount(2);
+  expect(await spine(page).evaluate((el) => el.getAnimations({ subtree: true }).length)).toBe(0);
+  const emptyHeight = (await spine(page).locator(".form-spine__identity").boundingBox())?.height ?? 0;
   await body(page).getByLabel("First name").fill("Lucía");
   await body(page).getByLabel("Last name").fill("Herrera");
   await expect(page.getByTestId("form-spine-name")).toHaveText("Lucía Herrera");
+  await expect(spine(page).locator(".form-spine__avatar-skeleton")).toHaveCount(0);
+  // Bars turn into values in place: the identity block keeps its height.
+  const typedHeight = (await spine(page).locator(".form-spine__identity").boundingBox())?.height ?? 0;
+  expect(Math.abs(typedHeight - emptyHeight)).toBeLessThanOrEqual(4);
 });
 
 test("phone: a bottom sheet with section chips instead of a spine", async ({ page }) => {
