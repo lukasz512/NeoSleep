@@ -1130,6 +1130,7 @@
   "app.clinical.status.doneOn": "Done {date}",
   "app.clinical.status.inProgress": "In progress",
   "app.clinical.progress": "{done} of {total} done",
+  "app.clinical.progressWaiting": "{n} waiting",
   "app.clinical.bundleQr": "QR for the patient",
   "app.clinical.qrStatus.creating": "Creating link…",
   "app.clinical.qrStatus.waiting": "{done} of {total} · expires in {time}",
