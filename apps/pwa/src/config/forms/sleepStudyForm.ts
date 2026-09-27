@@ -28,7 +28,8 @@ const TYPE_OPTIONS: FormFieldOption[] = [
 ];
 
 export const sleepStudyFormFields: FormFieldDef[] = [
-  { key: "study_date", type: "date", labelKey: "app.sleepStudies.form.studyDate", cols: 6 },
+  // A study can't be dated in the future (Łukasz, NEO-132) — the API rejects it too.
+  { key: "study_date", type: "date", labelKey: "app.sleepStudies.form.studyDate", date: { max: "today", quickPicks: "past" }, cols: 6 },
   { key: "status", type: "select", labelKey: "app.sleepStudies.form.status", options: STATUS_OPTIONS, default: "ordered", cols: 6 },
   { key: "study_type", type: "select", labelKey: "app.sleepStudies.form.studyType", options: TYPE_OPTIONS, default: "polysomnography", cols: 6 },
   { key: "device_serial", type: "text", labelKey: "app.sleepStudies.form.deviceSerial", cols: 6 },

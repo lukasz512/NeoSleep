@@ -63,7 +63,9 @@ export function createNeoVuetify(
       thresholds: VUETIFY3_THRESHOLDS,
       ...(options.mobileBreakpoint !== undefined ? { mobileBreakpoint: options.mobileBreakpoint } : {}),
     },
-    date: { adapter: VuetifyDateAdapter },
+    // "mx" is the app's key for es-MX, not a BCP 47 tag Intl knows — without
+    // this map the date picker's month and weekday names fall back to English.
+    date: { adapter: VuetifyDateAdapter, locale: { en: "en-US", pl: "pl-PL", mx: "es-MX" } },
     locale: { adapter: createVueI18nAdapter(adapterInput) },
     defaults: {
       // The data-table footer's items-per-page VSelect exposes no props of

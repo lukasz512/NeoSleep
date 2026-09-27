@@ -77,3 +77,29 @@ export function timeZoneLabel(iso: string, timeZone: string, locale: string): st
   const parts = new Intl.DateTimeFormat(locale, { timeZone, timeZoneName: "short" }).formatToParts(new Date(iso));
   return parts.find((p) => p.type === "timeZoneName")?.value ?? timeZone;
 }
+
+/**
+ * The doctor's other bookings on `dayIso` as wall-clock "HH:mm" intervals in
+ * `timeZone` — AppDateField strikes through the slots a new booking would
+ * overlap (NEO-132). Cancelled visits free their slot; the visit being edited
+ * doesn't block itself. A booking crossing midnight is clipped to the day.
+ */
+export function takenIntervalsOnDay(
+  appointments: { id: string; status: string; start_at: string; end_at: string }[],
+  dayIso: string,
+  timeZone: string,
+  excludeId?: string | null,
+): { start: string; end: string }[] {
+  const out: { start: string; end: string }[] = [];
+  for (const a of appointments) {
+    if (a.status === "cancelled" || a.id === excludeId) continue;
+    const start = toZonedCalendarDateTime(a.start_at, timeZone);
+    const end = toZonedCalendarDateTime(a.end_at, timeZone);
+    if (start.slice(0, 10) > dayIso || end.slice(0, 10) < dayIso) continue;
+    out.push({
+      start: start.slice(0, 10) < dayIso ? "00:00" : start.slice(11),
+      end: end.slice(0, 10) > dayIso ? "23:59" : end.slice(11),
+    });
+  }
+  return out;
+}

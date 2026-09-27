@@ -19,30 +19,29 @@
         class="mb-3"
         autocomplete="off"
       />
-      <div class="pwa-form-row mb-3">
-        <VTextField
-          :ref="(el) => setFieldEl('start', el)"
+      <!-- Start and end: Date | Time side by side (NEO-132, T2). -->
+      <AppDateField
+        :ref="(el) => setFieldEl('start', el)"
         v-model="form.start"
+        mode="datetime"
         :error-messages="serverError('start')"
-          :label="t('user.planner.form.fieldStart')"
-          type="datetime-local"
-          variant="outlined"
-          density="comfortable"
-          class="pwa-form-row-item"
-          :rules="startRules"
-        />
-        <VTextField
-          :ref="(el) => setFieldEl('end', el)"
+        :label="t('user.planner.form.fieldStart')"
+        quick-picks="future"
+        class="mb-3"
+        :rules="startRules"
+        test-id="event-start"
+      />
+      <AppDateField
+        :ref="(el) => setFieldEl('end', el)"
         v-model="form.end"
+        mode="datetime"
         :error-messages="serverError('end')"
-          :label="t('user.planner.form.fieldEnd')"
-          type="datetime-local"
-          variant="outlined"
-          density="comfortable"
-          class="pwa-form-row-item"
-          :rules="endRules"
-        />
-      </div>
+        :label="t('user.planner.form.fieldEnd')"
+        quick-picks="future"
+        class="mb-3"
+        :rules="endRules"
+        test-id="event-end"
+      />
       <div class="pwa-form-row mb-3">
         <VSelect
           :ref="(el) => setFieldEl('type', el)"
@@ -246,6 +245,7 @@ import AppAvatar from "./AppAvatar.vue";
 import AppFormDialog from "./AppFormDialog.vue";
 import AppConfirmDialog from "./AppConfirmDialog.vue";
 import AppIcon from "./AppIcon.vue";
+import AppDateField from "./AppDateField.vue";
 import { FormErrorSummary } from "@ui";
 import type { SubmitDone } from "../composables/useEntitySubmit";
 

@@ -241,4 +241,15 @@ export interface FormFieldDef {
    * config/forms/sections.ts's `inSection()` to tag a run of fields.
    */
   section?: FormSectionId;
+  /**
+   * 'date' fields only (NEO-132, AppDateField): allowed range — "YYYY-MM-DD"
+   * or the live token "today" — which day the calendar opens on, and the
+   * shortcut chips above it ("past": Today/Yesterday/A week ago).
+   */
+  date?: {
+    min?: string;
+    max?: string;
+    openAt?: "day" | "year";
+    quickPicks?: "past" | "future" | "none";
+  };
 }
