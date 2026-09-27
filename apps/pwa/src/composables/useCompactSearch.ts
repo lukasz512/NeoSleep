@@ -1,7 +1,7 @@
 import { onBeforeUnmount, ref, watch, type Ref } from "vue";
 
-/** Narrowest search field worth showing as a field; below this it becomes its icon. */
-export const MIN_SEARCH_WIDTH = 200;
+/** Narrowest search field worth showing as a field; below this it becomes its icon (Łukasz: 400 px). */
+export const MIN_SEARCH_WIDTH = 400;
 /** Extra room required before a collapsed search grows back, so it can't flip on its own width. */
 export const REOPEN_SLACK = 24;
 
@@ -53,11 +53,13 @@ export function useCompactSearch(
     // The toolbar itself stretches to fill the row, so its own width says
     // nothing — add up the tools beside the field and the gaps they need.
     const tools = [...toolbarEl.querySelectorAll<HTMLElement>(".app-entity-list__tool")].filter((el) => el.offsetWidth > 0);
-    const gap = parseFloat(getComputedStyle(toolbarEl).columnGap || "0") || 0;
+    const toolbarStyle = getComputedStyle(toolbarEl);
+    const gap = parseFloat(toolbarStyle.columnGap || "0") || 0;
     const rest =
       tools.reduce((sum, el) => sum + el.getBoundingClientRect().width, 0) +
       gap * (tools.length + 1) +
-      (parseFloat(rowStyle.columnGap || "0") || 0);
+      (parseFloat(rowStyle.columnGap || "0") || 0) +
+      (parseFloat(toolbarStyle.marginLeft || "0") || 0);
     compact.value = nextCompact({ compact: compact.value, row: inner, title: titleEl.getBoundingClientRect().width, rest });
   }
 

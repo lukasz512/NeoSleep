@@ -5,6 +5,11 @@ import { MIN_SEARCH_WIDTH, REOPEN_SLACK, nextCompact } from "./useCompactSearch"
 describe("nextCompact (desktop search yields to the title)", () => {
   const rest = 140; // filter + add + gaps
 
+  it("a field narrower than 400 px becomes its icon (Łukasz, NEO-152)", () => {
+    expect(MIN_SEARCH_WIDTH).toBe(400);
+    expect(nextCompact({ compact: false, row: 300 + rest + 399, title: 300, rest })).toBe(true);
+  });
+
   it("keeps the full field while at least MIN_SEARCH_WIDTH is left for it", () => {
     expect(nextCompact({ compact: false, row: 300 + rest + MIN_SEARCH_WIDTH, title: 300, rest })).toBe(false);
   });
