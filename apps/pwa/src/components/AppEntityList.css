@@ -421,7 +421,21 @@
 .app-entity-list__table-wrap :deep(.v-table) {
   background: transparent;
   --v-table-header-height: 40px;
-  --v-table-row-height: 64px;
+  /* NEO-130: two-line rows (name over its quiet details line), as tight as
+     those two lines allow, so a page of 10 plus headers and the pagination
+     footer fits a 13" MacBook browser window (~1265×843) without scrolling. */
+  --v-table-row-height: 52px;
+}
+
+/* NEO-130, desktop: capped at the bottom of the screen (minus the sheet's own
+   inset and foot, AppLayout.vue); past that the rows scroll inside under the
+   sticky headers. The 240px floor keeps a few rows usable on a very short
+   window instead of collapsing the table to its header. */
+.app-entity-list__table-wrap--fit {
+  max-height: max(
+    240px,
+    calc(100dvh - var(--entity-list-top, 0px) - var(--layout-card-inset, 16px) - var(--layout-sheet-foot, 12px))
+  );
 }
 
 .app-entity-list__table-wrap :deep(.v-table > .v-table__wrapper > table) {
@@ -432,7 +446,9 @@
 /* Header: small uppercase labels in the brand colour on a stronger rule, like
    the printed header row of a record form. */
 .app-entity-list__table-wrap :deep(.v-table > .v-table__wrapper > table > thead > tr > th) {
-  background: transparent;
+  /* Opaque sheet colour: the header row is sticky (fixed-header, NEO-130),
+     so rows scroll underneath it and must not show through. */
+  background: var(--pwa-sheet);
   border-bottom: 0;
   box-shadow: inset 0 -1.5px 0 var(--pwa-rule-strong);
   font-size: 0.65625rem;
@@ -647,7 +663,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  height: 64px;
+  height: 52px;
   padding: 0 16px;
   box-shadow: inset 0 -1px 0 var(--pwa-rule);
   animation: app-entity-list-skeleton-breathe 1.6s ease-in-out infinite;
