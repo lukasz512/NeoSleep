@@ -272,10 +272,19 @@ export interface PublicStep {
 
 export interface PublicQuestionnaire {
   patient_first_name: string;
+  /**
+   * Full name, shown next to the signature pad ("You are signing as …", NEO-126).
+   * Only while the link still holds a consent to sign — a questionnaire-only
+   * link keeps showing the first name alone.
+   */
+  patient_name: string | null;
   clinic_name: string | null;
   /** Where the patient exercises data rights — the clinic, as controller. */
   clinic_email: string | null;
+  clinic_phone: string | null;
   privacy_notice_url: string;
+  /** The platform's public site (the privacy notice's origin) — linked from the patient's menu. */
+  website_url: string;
   expires_at: Date;
   steps: PublicStep[];
 }
@@ -316,7 +325,11 @@ async function consentText(templateKey: string, locale: string): Promise<{ html:
   }
 }
 
-/** What the page may show: first name and clinic only — the link could be scanned by someone other than the patient. */
+/**
+ * What the page may show: first name and clinic — the link could be scanned
+ * by someone other than the patient. The full name is added only while a
+ * consent is still to be signed (the signer must see whose name they sign in).
+ */
 export async function GetPublicQuestionnaireQuery(client: PoolClient, token: string, locale?: unknown): Promise<PublicQuestionnaire> {
   if (!validTokenShape(token)) throw new QuestionnaireLinkInvalidError();
   const request = await getUsableQuestionnaireRequestByHash(client, hashToken(token), { forUpdate: false });
@@ -341,11 +354,15 @@ export async function GetPublicQuestionnaireQuery(client: PoolClient, token: str
     steps.push(step);
   }
 
+  const consentOpen = steps.some((s) => s.type === "consent" && !s.done);
   return {
     patient_first_name: context.patient_first_name,
+    patient_name: consentOpen ? context.patient_name : null,
     clinic_name: context.organization_name,
     clinic_email: context.organization_email,
+    clinic_phone: context.organization_phone,
     privacy_notice_url: PRIVACY_NOTICE_URL,
+    website_url: new URL(PRIVACY_NOTICE_URL).origin,
     expires_at: request.expires_at,
     steps,
   };
@@ -375,6 +392,12 @@ export interface PublicStepResult {
   step: string;
   /** True once every step of the link is done (the link is now dead). */
   completed: boolean;
+  /**
+   * Consent steps: the signed PDF, handed back once to the person who just
+   * signed it (NEO-126 "download a copy") — the bytes are already in memory,
+   * so no second endpoint has to accept the (soon dead) token again.
+   */
+  signed_copy?: { filename: string; signed_at: string; pdf_base64: string };
 }
 
 async function lockOpenStep(client: PoolClient, token: string, step: string): Promise<QuestionnaireRequest> {
@@ -454,6 +477,9 @@ export async function SubmitPublicQuestionnaireCommand(
     throw new ValidationError("A drawn signature (PNG) is required");
   }
   const locale = documentLocale(step, body.locale);
+  // The page unlocks "sign" only after the document was scrolled to its end;
+  // recorded as evidence of an informed consent, never trusted for anything else.
+  const readToEnd = body.readToEnd === true;
 
   // (1) lock + validate + prepare
   const prepared = await run(async (client) => {
@@ -466,6 +492,7 @@ export async function SubmitPublicQuestionnaireCommand(
 
   // (2) render with the signature + upload, no DB connection held
   const signedAt = new Date();
+  const filename = `${step}-${signedAt.toISOString().slice(0, 10)}.pdf`;
   const html = renderDocumentHtml(step, locale, prepared.version.content_html);
   const pdfBytes = await renderHtmlToPdf(html, {
     footerTemplate: renderDocumentFooterHtml(getDocumentRefCode(step), locale, patientDocumentFooter(prepared.context, locale)),
@@ -497,7 +524,7 @@ export async function SubmitPublicQuestionnaireCommand(
         storage_provider: "supabase",
         bucket: uploaded.bucket,
         path: uploaded.path,
-        filename: `${step}-${signedAt.toISOString().slice(0, 10)}.pdf`,
+        filename,
         mime_type: "application/pdf",
         size_bytes: pdfBytes.byteLength,
         is_public: false,
@@ -524,6 +551,7 @@ export async function SubmitPublicQuestionnaireCommand(
           file_attachment_id: attachment.id,
           questionnaire_request_id: request.id,
           signature_method: "drawn",
+          read_to_end: readToEnd,
           locale,
         },
       });
@@ -539,9 +567,17 @@ export async function SubmitPublicQuestionnaireCommand(
         user_ip: meta.ip,
         user_agent: meta.userAgent,
         request_id: meta.requestId,
-        metadata: { actor: "patient", content_version_id: prepared.version.id, signature_method: "drawn" },
+        metadata: { actor: "patient", content_version_id: prepared.version.id, signature_method: "drawn", read_to_end: readToEnd },
       });
-      return { step, completed: updated.used_at !== null };
+      return {
+        step,
+        completed: updated.used_at !== null,
+        signed_copy: {
+          filename,
+          signed_at: signedAt.toISOString(),
+          pdf_base64: Buffer.from(pdfBytes).toString("base64"),
+        },
+      };
     });
   } catch (err) {
     await deletePartnerDocument(uploaded.path).catch((cleanupErr: unknown) =>

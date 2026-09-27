@@ -100,7 +100,8 @@ describe("patient QR link — one link for everything the patient has to do", ()
 
       const view = await GetPublicQuestionnaireQuery(client, tokenOf(url), "mx");
       expect(view.patient_first_name).toBe("Lucía");
-      expect(JSON.stringify(view)).not.toContain("Secreto");
+      // A consent is still to be signed: the full name shows next to the pad (NEO-126).
+      expect(view.patient_name).toContain("Secreto");
       expect(view.steps.map((s) => [s.key, s.type, s.done])).toEqual([
         ["informedConsent", "consent", false],
         ["medicalHistory", "medical_history", false],
@@ -114,12 +115,16 @@ describe("patient QR link — one link for everything the patient has to do", ()
       const first = await SubmitPublicQuestionnaireCommand(inTx(client), tokenOf(url), { step: "medicalHistory", consent: true, answers: { ...ALL_NO, has_diabetes: true } }, META);
       expect(first.completed).toBe(false);
       await SubmitPublicQuestionnaireCommand(inTx(client), tokenOf(url), { step: "stopBang", consent: true, answers: STOP }, META);
+      expect(first).not.toHaveProperty("signed_copy");
       // Still alive: the consent isn't signed yet.
       await expect(GetPublicQuestionnaireQuery(client, tokenOf(url))).resolves.toBeTruthy();
 
       const before = uploadMock.mock.calls.length;
-      const last = await SubmitPublicQuestionnaireCommand(inTx(client), tokenOf(url), { step: "informedConsent", signatureDataUrl: SIGNATURE, locale: "mx" }, META);
+      const last = await SubmitPublicQuestionnaireCommand(inTx(client), tokenOf(url), { step: "informedConsent", signatureDataUrl: SIGNATURE, locale: "mx", readToEnd: true }, META);
       expect(last.completed).toBe(true);
+      // The signer gets the signed PDF back once, to download (NEO-126).
+      expect(last.signed_copy!.filename).toMatch(/^informedConsent-\d{4}-\d{2}-\d{2}\.pdf$/);
+      expect(Buffer.from(last.signed_copy!.pdf_base64, "base64").subarray(0, 5).toString("latin1")).toBe("%PDF-");
       const [path, bytes] = uploadMock.mock.calls[before] as unknown as [string, Uint8Array];
       expect(path).toMatch(new RegExp(`^patient/${patient.id}/consent-informedConsent-`));
       expect(Buffer.from(bytes.subarray(0, 5)).toString("latin1")).toBe("%PDF-"); // real render, signature embedded
@@ -133,7 +138,7 @@ describe("patient QR link — one link for everything the patient has to do", ()
       const { rows } = await client.query(`SELECT purpose, legal_basis, metadata FROM consent WHERE entity_type = 'patient' AND entity_id = $1`, [patient.id]);
       expect(rows).toHaveLength(1);
       expect(rows[0]).toMatchObject({ purpose: "informedConsent", legal_basis: "consent" });
-      expect(rows[0].metadata).toMatchObject({ signature_method: "drawn", template_key: "informedConsent" });
+      expect(rows[0].metadata).toMatchObject({ signature_method: "drawn", template_key: "informedConsent", read_to_end: true });
 
       const history = checklist.items.find((i) => i.key === "medicalHistory")!.history[0]!;
       const { rows: mh } = await client.query(`SELECT consent_version FROM medical_history_questionnaire WHERE id = $1`, [history.id]);
@@ -209,6 +214,10 @@ describe("patient QR link — one link for everything the patient has to do", ()
       await expect(CreateQuestionnaireRequestCommand(ctx, patient.id, { items: ["oralExam"] }, ORIGIN)).rejects.toThrow(ValidationError);
 
       const first = await CreateQuestionnaireRequestCommand(ctx, patient.id, { items: ["medicalHistory"] }, ORIGIN);
+      // No consent on the link: the page gets the first name only, never the full name (NEO-126).
+      const questionnaireOnly = await GetPublicQuestionnaireQuery(client, tokenOf(first.url));
+      expect(questionnaireOnly.patient_name).toBeNull();
+      expect(JSON.stringify(questionnaireOnly)).not.toContain("Links-");
       const bundle = await CreateQuestionnaireRequestCommand(ctx, patient.id, {}, ORIGIN);
       await expect(GetPublicQuestionnaireQuery(client, tokenOf(first.url))).rejects.toThrow(QuestionnaireLinkInvalidError);
 
