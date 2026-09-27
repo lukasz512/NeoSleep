@@ -25,18 +25,22 @@ describe("useThemeColorMeta (NEO-131)", () => {
     expect(metas()).toHaveLength(0);
   });
 
-  it("takes over an existing tag (vite-plugin-pwa's) and restores it on unmount", () => {
-    const pluginTag = document.createElement("meta");
-    pluginTag.setAttribute("name", "theme-color");
-    pluginTag.setAttribute("content", "#128F83");
-    document.head.appendChild(pluginTag);
+  it("takes over index.html's light + dark tags and restores both on unmount", () => {
+    const staticTags = [["light", "#e0e9e8"], ["dark", "#0f1a18"]].map(([scheme, content]) => {
+      const tag = document.createElement("meta");
+      tag.setAttribute("name", "theme-color");
+      tag.setAttribute("media", `(prefers-color-scheme: ${scheme})`);
+      tag.setAttribute("content", content!);
+      document.head.appendChild(tag);
+      return tag;
+    });
 
     const wrapper = mountWith(() => "#112233");
-    expect(metas()).toHaveLength(1);
-    expect(pluginTag.getAttribute("content")).toBe("rgb(17, 34, 51)");
+    expect(metas()).toHaveLength(2);
+    expect(staticTags.map((t) => t.getAttribute("content"))).toEqual(["rgb(17, 34, 51)", "rgb(17, 34, 51)"]);
     wrapper.unmount();
-    expect(metas()).toHaveLength(1);
-    expect(pluginTag.getAttribute("content")).toBe("#128F83");
+    expect(metas()).toHaveLength(2);
+    expect(staticTags.map((t) => t.getAttribute("content"))).toEqual(["#e0e9e8", "#0f1a18"]);
   });
 
   it("re-resolves the color when the theme on <html> changes", async () => {

@@ -30,32 +30,36 @@ function resolveColor(css: string): string {
  *
  * Re-resolved whenever <html> changes theme (data-theme, set by the theme
  * store — also inside a view transition) or the tenant's runtime colors
- * (inline style, set by the config store). Browsers use the *first*
- * theme-color tag, and vite-plugin-pwa already writes one into index.html
- * (the manifest's teal), so this takes that tag over while the layout is
- * mounted and puts its original value back on unmount — the next layout
- * starts from its own color, never a leftover.
+ * (inline style, set by the config store). index.html ships one static tag
+ * per OS theme (media="(prefers-color-scheme: …)") so the first frame is
+ * already right; while the layout is mounted this sets every theme-color tag
+ * to its own color — an explicit in-app theme can differ from the OS one —
+ * and puts the original values back on unmount, so the next layout starts
+ * from its own color, never a leftover.
  */
 export function useThemeColorMeta(color: () => string): void {
-  let meta: HTMLMetaElement | null = null;
-  let original: string | null = null;
+  let metas: HTMLMetaElement[] = [];
+  let originals: (string | null)[] = [];
+  let created = false;
   let observer: MutationObserver | null = null;
 
   function apply() {
-    if (!meta) return;
     const next = resolveColor(color());
-    if (meta.getAttribute("content") !== next) meta.setAttribute("content", next);
+    for (const meta of metas) {
+      if (meta.getAttribute("content") !== next) meta.setAttribute("content", next);
+    }
   }
 
   onMounted(() => {
-    meta = document.head.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
-    if (meta) {
-      original = meta.getAttribute("content");
-    } else {
-      meta = document.createElement("meta");
+    metas = [...document.head.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')];
+    created = metas.length === 0;
+    if (created) {
+      const meta = document.createElement("meta");
       meta.setAttribute("name", "theme-color");
       document.head.appendChild(meta);
+      metas = [meta];
     }
+    originals = metas.map((m) => m.getAttribute("content"));
     apply();
     observer = new MutationObserver(apply);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "style"] });
@@ -64,9 +68,9 @@ export function useThemeColorMeta(color: () => string): void {
   onBeforeUnmount(() => {
     observer?.disconnect();
     observer = null;
-    if (original !== null) meta?.setAttribute("content", original);
-    else meta?.remove();
-    meta = null;
-    original = null;
+    if (created) metas.forEach((m) => m.remove());
+    else metas.forEach((m, i) => m.setAttribute("content", originals[i] ?? ""));
+    metas = [];
+    originals = [];
   });
 }
