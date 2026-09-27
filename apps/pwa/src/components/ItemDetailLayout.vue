@@ -401,6 +401,10 @@ defineEmits<{
 .view-item__aside {
   position: sticky;
   top: var(--space-4, 16px);
+  /* A tall panel scrolls inside itself instead of hanging below the fold. */
+  max-height: calc(100dvh - var(--space-8, 32px));
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 
 .view-item__title {

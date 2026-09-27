@@ -165,6 +165,7 @@
           :active-tab="activeTab"
           @open-notes="activeTab = 'notes'"
           @open-study="openStudy"
+          @open-tab="(tab: string) => (activeTab = tab)"
           @qr="onAsideQr"
         />
       </template>
@@ -248,6 +249,8 @@ interface PatientDetail {
   ahi_baseline?: number | null;
   cpap_device?: string | null;
   medical_record?: string | null;
+  /** ICD-10 JSONB — nothing writes it yet; the side panel shows it when present (NEO-153). */
+  diagnosis_code?: Record<string, unknown> | null;
 }
 
 const { t } = useI18n();
