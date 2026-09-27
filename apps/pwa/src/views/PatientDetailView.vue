@@ -158,6 +158,9 @@
           </template>
         </DetailViewTabs>
       </template>
+      <template v-if="patient" #aside>
+        <PatientAsidePanel :patient="patient" @open-notes="activeTab = 'notes'" />
+      </template>
     </ItemDetailLayout>
 
     <AppConfirmDialog
@@ -196,6 +199,7 @@ import { useIdentity } from "../composables/useIdentity";
 import AppAvatar from "../components/AppAvatar.vue";
 import IdentityDetails from "../components/IdentityDetails.vue";
 import PatientNotesPanel from "../components/patient/PatientNotesPanel.vue";
+import PatientAsidePanel from "../components/patient/PatientAsidePanel.vue";
 import PatientStudiesPanel from "../components/patient/PatientStudiesPanel.vue";
 import PatientStudiesSummary from "../components/patient/PatientStudiesSummary.vue";
 import PatientOrthoApneaPanel from "../components/patient/PatientOrthoApneaPanel.vue";

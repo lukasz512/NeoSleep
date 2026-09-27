@@ -53,16 +53,24 @@
       </Teleport>
     </div>
     <slot v-if="hasContent && $slots.body" name="body" />
-    <div v-else-if="hasContent" class="view-item__card">
-      <slot v-if="!showRecordHeader" name="title">
-        <h1 v-if="title" class="view-item__title">{{ title }}</h1>
-      </slot>
-      <div v-if="$slots.sections" class="view-item__sections">
-        <slot name="sections" />
+    <div v-else-if="hasContent" class="view-item__card" :class="{ 'view-item__card--with-aside': showAside }">
+      <div class="view-item__main">
+        <slot v-if="!showRecordHeader" name="title">
+          <h1 v-if="title" class="view-item__title">{{ title }}</h1>
+        </slot>
+        <div v-if="$slots.sections" class="view-item__sections">
+          <slot name="sections" />
+        </div>
+        <div v-if="$slots.actions" class="view-item__actions">
+          <slot name="actions" />
+        </div>
       </div>
-      <div v-if="$slots.actions" class="view-item__actions">
-        <slot name="actions" />
-      </div>
+      <!-- NEO-153: optional side panel next to the tabs — desktop with a mouse
+           only; on tablets and phones it is not mounted at all (so it fetches
+           nothing there) and its content stays reachable through the tabs. -->
+      <aside v-if="showAside" class="view-item__aside">
+        <slot name="aside" />
+      </aside>
     </div>
     <div v-else-if="!loading && loadError" class="view-item__state-wrap">
       <AppStateView :title="loadErrorTitle" :subtitle="loadErrorSubtitle">
@@ -102,7 +110,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, watchEffect } from "vue";
+import { computed, onBeforeUnmount, useSlots, watchEffect } from "vue";
+import { useMediaQuery } from "@vueuse/core";
 import { useI18n } from "vue-i18n";
 import { useRoute, type RouteLocationRaw } from "vue-router";
 import { AppStateView, useErrorText } from "@ui";
@@ -198,6 +207,13 @@ const showRecordHeader = computed(
 
 // While the record header is shown it replaces AppLayout's desktop
 // "← <Module>" page-header row (NEO-55) — the eyebrow link is the way back.
+/** NEO-153: the #aside panel is a desktop affordance — wide enough for a 720px
+ *  column plus the panel, and a precise pointer, which keeps it off tablets
+ *  even when a landscape iPad is as wide as a laptop. */
+const slots = useSlots();
+const isDesktopPointer = useMediaQuery("(min-width: 1280px) and (hover: hover) and (pointer: fine)");
+const showAside = computed(() => !!slots.aside && isDesktopPointer.value);
+
 const recordHeaderClaim = useRecordHeaderClaim();
 watchEffect(() => {
   recordHeaderClaim.value = showRecordHeader.value;
@@ -368,6 +384,24 @@ defineEmits<{
 .view-item__card {
   background: transparent;
   border: none;
+}
+
+.view-item__main {
+  min-width: 0;
+}
+
+/* NEO-153: 720px content column (DetailViewTabs caps itself there) + a 320px
+   side panel that stays in view while the column scrolls. */
+.view-item__card--with-aside {
+  display: grid;
+  grid-template-columns: minmax(0, 720px) 320px;
+  gap: var(--space-8, 32px);
+  align-items: start;
+}
+
+.view-item__aside {
+  position: sticky;
+  top: var(--space-4, 16px);
 }
 
 .view-item__title {
