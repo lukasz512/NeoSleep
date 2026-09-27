@@ -28,7 +28,7 @@ function mountMenu(mobile = false) {
               ]),
             default: () =>
               h("div", { class: "panel" }, [
-                h("div", { "data-motion": "header" }, [
+                h("div", {}, [
                   h("span", { "data-motion": "name" }, "Ana López"),
                   h("span", { "data-motion": "avatar" }, "AL"),
                 ]),
@@ -89,11 +89,13 @@ describe("AppAccountMenu — NEO-122 avatar button turns into the menu", () => {
     expect(open.value).toBe(false);
   });
 
-  it("on phones renders the bottom sheet above the bottom nav bar", async () => {
+  // NEO-154: phone and desktop open the same card; the phone one sits above the bottom nav.
+  it("on phones opens the same card as on desktop, above the bottom nav bar", async () => {
     const { wrapper } = mountMenu(true);
     await wrapper.get('[data-testid="trigger"]').trigger("click");
     await flushPromises();
-    expect(dialog()?.classList.contains("account-menu__sheet")).toBe(true);
-    expect(document.querySelector(".account-menu--sheet")).not.toBeNull();
+    expect(dialog()?.classList.contains("account-menu__card")).toBe(true);
+    expect(document.querySelector(".account-menu--phone")).not.toBeNull();
+    expect(document.querySelector(".account-menu__sheet")).toBeNull();
   });
 });

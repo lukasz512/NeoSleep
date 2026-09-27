@@ -1,4 +1,7 @@
 import { describe, it, expect, afterEach } from "vitest";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { mount, type VueWrapper } from "@vue/test-utils";
 import { createI18n } from "vue-i18n";
 import { createVuetify } from "vuetify";
@@ -20,7 +23,6 @@ function mountPanel(overrides: Partial<{
   canChangePassword: boolean;
   channel: string | null;
   version: string;
-  sheet: boolean;
 }> = {}) {
   const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
   const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
@@ -118,8 +120,12 @@ describe("AppUserMenuPanel — NEO-102 account menu (icon rows + action pair)", 
     expect(mountPanel({ version: "" }).find('[data-testid="user-menu-version"]').exists()).toBe(false);
   });
 
-  it("uses the full-width bottom-sheet look on phones", () => {
-    expect(mountPanel({ sheet: true }).find(".user-menu--sheet").exists()).toBe(true);
-    expect(mountPanel({ sheet: false }).find(".user-menu--sheet").exists()).toBe(false);
+  // NEO-154: the chosen language is told apart by its tile only, no ring on the flag.
+  it("marks the chosen language by its tile, without a ring around the flag", () => {
+    const panelSource = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "AppUserMenuPanel.vue"), "utf-8");
+    expect(panelSource).not.toMatch(/user-menu__choice--on\s*:deep\(\.app-flag\)/);
+    const on = mountPanel().findAll('[data-testid="user-menu-language"] [role="radio"]').filter((o) => o.attributes("aria-checked") === "true");
+    expect(on).toHaveLength(1);
+    expect(on[0].classes()).toContain("user-menu__choice--on");
   });
 });
