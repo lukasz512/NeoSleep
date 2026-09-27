@@ -105,6 +105,12 @@ export interface PatientChecklist {
   summary: { done: number; total: number };
 }
 
+/** NEO-127: checklist items → AppSegmentProgress segments, in checklist order. */
+const SEGMENT_BY_STATUS = { done: "done", pending_patient: "waiting", partial: "partial", missing: "todo" } as const;
+export function checklistSegments(items: ChecklistItem[]): Array<(typeof SEGMENT_BY_STATUS)[ChecklistStatus]> {
+  return items.map((item) => SEGMENT_BY_STATUS[item.status]);
+}
+
 export function usePatientChecklist(patientId: () => string) {
   const { t } = useI18n();
   const notifications = useNotifications();

@@ -43,10 +43,13 @@
       </div>
 
       <div v-else-if="questionnaire && step" class="patient-questionnaire__body">
-        <div v-if="totalSteps > 1" class="patient-questionnaire__progress">
-          <span>{{ t("app.questionnaire.step", { n: stepNumber, total: totalSteps }) }} · {{ stepTitle(step) }}</span>
-          <VProgressLinear :model-value="(stepNumber - 1) / totalSteps * 100" color="primary" height="6" rounded :aria-label="t('app.questionnaire.step', { n: stepNumber, total: totalSteps })" />
-        </div>
+        <AppSegmentProgress
+          v-if="totalSteps > 1"
+          class="patient-questionnaire__progress"
+          :segments="stepSegments"
+          :label="t('app.questionnaire.step', { n: stepNumber, total: totalSteps })"
+          :meta="stepTitle(step)"
+        />
         <p v-if="stepNumber === 1" class="patient-questionnaire__intro">
           {{ totalSteps > 1
             ? t("app.questionnaire.intro.bundle", { clinic: clinicName, n: totalSteps })
@@ -163,6 +166,7 @@ import { AuthChrome, AuthCard } from "@ui";
 import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppLoadingState from "../components/AppLoadingState.vue";
+import AppSegmentProgress, { type SegmentState } from "../components/AppSegmentProgress.vue";
 import ConsentSignatureField from "../components/questionnaire/ConsentSignatureField.vue";
 import QuestionnaireCards from "../components/questionnaire/QuestionnaireCards.vue";
 import QuestionnaireChecklist from "../components/questionnaire/QuestionnaireChecklist.vue";
@@ -226,6 +230,9 @@ const steps = computed(() => questionnaire.value?.steps ?? []);
 const totalSteps = computed(() => steps.value.length);
 const step = computed(() => steps.value.find((s) => !s.done && !skipped.value.has(s.key)) ?? null);
 const stepNumber = computed(() => (step.value ? steps.value.indexOf(step.value) + 1 : totalSteps.value));
+const stepSegments = computed<SegmentState[]>(() =>
+  steps.value.map((s) => (s.done ? "done" : s === step.value ? "current" : "todo")),
+);
 const stepKey = computed(() => (phase.value === "steps" ? `step-${step.value?.key ?? "none"}` : phase.value));
 
 const questions = computed(() => (step.value?.type === "stop_bang" ? STOP_QUESTIONS : MEDICAL_HISTORY_QUESTIONS));
@@ -435,13 +442,8 @@ async function submitQuestionnaire() {
 }
 
 .patient-questionnaire__progress {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
   margin-bottom: 16px;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: rgba(var(--v-theme-on-surface), 0.72);
+  font-size: 0.875rem;
 }
 
 .patient-questionnaire__intro {

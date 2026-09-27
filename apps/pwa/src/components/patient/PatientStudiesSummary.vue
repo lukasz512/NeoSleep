@@ -6,22 +6,30 @@
     </header>
     <VSkeletonLoader v-if="checklistApi.loading.value && !checklist" type="chip@4" />
     <p v-else-if="checklistApi.loadError.value" class="studies-summary__error">{{ t("app.clinical.errorLoad") }}</p>
-    <ul v-else-if="checklist" class="studies-summary__grid">
-      <li v-for="item in checklist.items" :key="item.key">
-        <button type="button" class="studies-summary__item" :class="`studies-summary__item--${item.status}`" @click="emit('open', item.key)">
-          <ChecklistStatusIcon :status="item.status" />
-          <span class="studies-summary__label">{{ itemTitle(item) }}</span>
-        </button>
-      </li>
-    </ul>
+    <template v-else-if="checklist">
+      <AppSegmentProgress
+        class="studies-summary__bar"
+        :segments="checklistSegments(checklist.items)"
+        :aria-label="t('app.clinical.progress', checklist.summary)"
+      />
+      <ul class="studies-summary__grid">
+        <li v-for="item in checklist.items" :key="item.key">
+          <button type="button" class="studies-summary__item" :class="`studies-summary__item--${item.status}`" @click="emit('open', item.key)">
+            <ChecklistStatusIcon :status="item.status" />
+            <span class="studies-summary__label">{{ itemTitle(item) }}</span>
+          </button>
+        </li>
+      </ul>
+    </template>
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted } from "vue";
 import { useI18n } from "vue-i18n";
+import AppSegmentProgress from "../AppSegmentProgress.vue";
 import ChecklistStatusIcon from "../questionnaire/ChecklistStatusIcon.vue";
-import { usePatientChecklist, type ChecklistItem } from "../../composables/usePatientChecklist";
+import { checklistSegments, usePatientChecklist, type ChecklistItem } from "../../composables/usePatientChecklist";
 import { checklistItemTitle } from "../../config/questionnaires";
 
 /**
@@ -66,6 +74,9 @@ onMounted(checklistApi.load);
 .studies-summary__count {
   font-size: 0.8125rem;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+.studies-summary__bar {
+  margin-bottom: 12px;
 }
 .studies-summary__error {
   margin: 0;
