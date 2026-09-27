@@ -101,13 +101,20 @@ export function useIdentity() {
   /**
    * The record's key facts, one per line with a label (NEO-118): the
    * form folder's spine lists them as a ficha, so no fact ever wraps into the
-   * next one. Empty values are left out.
+   * next one. Empty values are left out, unless `placeholders` is set: then
+   * they come back with an empty value, so a create form can draw the whole
+   * ficha as a still skeleton that fills in as the user types (NEO-128).
    */
-  function factsFor(entityType: AppAvatarEntityType, record: Record<string, unknown>): IdentityFact[] {
+  function factsFor(
+    entityType: AppAvatarEntityType,
+    record: Record<string, unknown>,
+    { placeholders = false }: { placeholders?: boolean } = {},
+  ): IdentityFact[] {
     const str = (v: unknown) => (typeof v === "string" && v ? v : null);
     const facts: IdentityFact[] = [];
     const add = (key: string, value: string | null | undefined, more?: string[]) => {
-      if (value) facts.push({ key, label: t(`app.formRenderer.fact.${key}`), value, ...(more?.length ? { more } : {}) });
+      if (!value && !placeholders) return;
+      facts.push({ key, label: t(`app.formRenderer.fact.${key}`), value: value ?? "", ...(more?.length ? { more } : {}) });
     };
     switch (entityType) {
       case "patient": {

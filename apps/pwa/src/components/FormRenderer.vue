@@ -395,7 +395,9 @@ const indexSections = computed<FormSpineSection[]>(() =>
 
 /** The spine's ficha reads the live form over the record, so create and edit fill it the same way. */
 const spineFacts = computed(() =>
-  props.avatarEntityType ? factsFor(props.avatarEntityType, { ...(props.initialData ?? {}), ...form.value }) : [],
+  props.avatarEntityType
+    ? factsFor(props.avatarEntityType, { ...(props.initialData ?? {}), ...form.value }, { placeholders: !isEditMode.value })
+    : [],
 );
 
 /** A `status` select with coloured options shows as the same tonal pill on the spine as in lists. */
