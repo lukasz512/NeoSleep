@@ -276,14 +276,16 @@ watch(
 
 .patient-aside__facts {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  /* Labels take their own width on one line; values get the rest and wrap (a long diagnosis). */
+  grid-template-columns: auto minmax(0, 1fr);
   gap: var(--space-2, 8px) var(--space-3, 12px);
-  align-items: center;
+  align-items: baseline;
   margin: 0;
   font-size: 0.875rem;
 }
 
 .patient-aside__facts dt {
+  white-space: nowrap;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
