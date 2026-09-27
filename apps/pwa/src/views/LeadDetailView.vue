@@ -62,6 +62,7 @@
       :back-route="backRoute"
       :back-label="t('user.leads.detail.back')"
       :record-title="lead?.name ?? ''"
+      :details-skeleton="false"
       :not-found-label="t('user.leads.detail.notFound')"
       @retry="loadLead"
     >

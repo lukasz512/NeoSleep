@@ -30,14 +30,14 @@
         </div>
         <!-- NEO-152: while loading, the identity line and the actions keep
              their place as skeletons, so the header doesn't grow when they arrive. -->
-        <div v-else-if="!hasContent" class="view-item__record-details view-item__record-details--skeleton" aria-hidden="true">
+        <div v-else-if="!hasContent && detailsSkeleton" class="view-item__record-details view-item__record-details--skeleton" aria-hidden="true">
           <span class="view-item__skeleton-bar" data-testid="record-details-skeleton" />
         </div>
       </div>
       <div v-if="hasContent && $slots['header-actions']" class="view-item__header-actions">
         <slot name="header-actions" />
       </div>
-      <div v-else-if="!hasContent" class="view-item__header-actions view-item__header-actions--skeleton" aria-hidden="true" data-testid="record-actions-skeleton">
+      <div v-else-if="!hasContent && actionSkeletons > 0" class="view-item__header-actions view-item__header-actions--skeleton" aria-hidden="true" data-testid="record-actions-skeleton">
         <span v-for="n in actionSkeletons" :key="n" class="view-item__action-skeleton" />
       </div>
     </header>
@@ -169,9 +169,11 @@ const props = withDefaults(defineProps<{
   recordTitle?: string;
   /** Tile icon override — e.g. the org-type icon for an HCO (NEO-18). Defaults to the module icon. */
   recordIcon?: AppIconName;
-  /** How many header actions the loaded record shows — the loading header keeps that many placeholders (NEO-152). */
+  /** How many header actions the loaded record shows — the loading header keeps that many placeholders (NEO-152). 0 = none. */
   actionSkeletons?: number;
-}>(), { title: "", loadError: false, loadErrorCause: undefined, recordTitle: undefined, recordIcon: undefined, actionSkeletons: 3 });
+  /** Whether the loaded record has an identity line (#record-details) — the loading header keeps its place (NEO-152). */
+  detailsSkeleton?: boolean;
+}>(), { title: "", loadError: false, loadErrorCause: undefined, recordTitle: undefined, recordIcon: undefined, actionSkeletons: 3, detailsSkeleton: true });
 
 const describeError = useErrorText();
 const loadErrorText = computed(() => (props.loadErrorCause == null ? null : describeError(props.loadErrorCause)));

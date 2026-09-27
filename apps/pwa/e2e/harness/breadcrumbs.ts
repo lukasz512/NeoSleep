@@ -56,6 +56,8 @@ const Harness = defineComponent({
           },
           {
             "header-actions": actions,
+            // The identity line every person record has (NEO-57), e.g. "M · 46 y".
+            "record-details": () => h("span", "M · 46 y"),
             sections: () => h("p", "Details"),
           },
         ),

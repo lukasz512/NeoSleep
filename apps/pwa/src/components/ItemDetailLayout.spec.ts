@@ -114,6 +114,12 @@ describe("ItemDetailLayout — record header", () => {
     expect(users.findAll(".view-item__action-skeleton")).toHaveLength(4);
   });
 
+  it("NEO-152 a record without an identity line or actions (lead, document) reserves no space for them", () => {
+    const { wrapper } = mountLayout({ hasContent: false, loading: true, recordTitle: "", detailsSkeleton: false, actionSkeletons: 0 });
+    expect(wrapper.find("[data-testid=record-details-skeleton]").exists()).toBe(false);
+    expect(wrapper.find("[data-testid=record-actions-skeleton]").exists()).toBe(false);
+  });
+
   it("NEO-152 loaded: the real actions replace the skeletons", () => {
     const { wrapper } = mountLayout({});
     expect(wrapper.find("[data-testid=record-actions-skeleton]").exists()).toBe(false);

@@ -7,6 +7,8 @@
     :back-route="{ name: 'document-content' }"
     :back-label="t('user.document-content.editor.back')"
     :record-title="documentLabel"
+    :action-skeletons="0"
+    :details-skeleton="false"
     :not-found-label="t('user.document-content.editor.notFound')"
     @retry="load"
   >
