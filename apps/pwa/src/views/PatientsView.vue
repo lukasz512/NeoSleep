@@ -309,9 +309,12 @@ function onBookAppointment(patient: PatientListItem) {
 </script>
 
 <style scoped>
+/* One line, like every table row (NEO-130): the date, then how long ago. */
 .patients-view__updated {
   display: inline-flex;
-  flex-direction: column;
+  align-items: baseline;
+  gap: 8px;
+  white-space: nowrap;
   line-height: 1.3;
 }
 

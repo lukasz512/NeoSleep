@@ -222,10 +222,16 @@
     <div
       v-else
       key="list"
+      ref="tableWrapRef"
       :class="[
         'app-entity-list__table-wrap',
-        { 'app-entity-list__table-wrap--flat': mobile, 'app-entity-list__table-wrap--busy': isRefreshing },
+        {
+          'app-entity-list__table-wrap--flat': mobile,
+          'app-entity-list__table-wrap--fit': !mobile,
+          'app-entity-list__table-wrap--busy': isRefreshing,
+        },
       ]"
+      :style="mobile ? undefined : { '--entity-list-top': `${tableTop}px` }"
     >
       <!-- No rows at all → only the message, never an empty table body.
            Stays up while a follow-up search is still loading, so typing into
@@ -253,6 +259,7 @@
           :items-length="total"
           :item-value="itemValue"
           class="app-entity-list__table"
+          fixed-header
           hover
           :row-props="tableRowProps"
           @update:options="onOptionsUpdate"
@@ -338,7 +345,7 @@
 import { computed, onBeforeUnmount, ref, useSlots, watch } from "vue";
 import { useDisplay } from "vuetify";
 import { useI18n } from "vue-i18n";
-import { useIntersectionObserver } from "@vueuse/core";
+import { useElementBounding, useIntersectionObserver, useWindowScroll } from "@vueuse/core";
 import AppButton from "./AppButton.vue";
 import AppEmptyState from "./AppEmptyState.vue";
 import AppErrorState from "./AppErrorState.vue";
@@ -498,6 +505,16 @@ function onSearchClearClick() {
   searchFieldRef.value?.focus();
 }
 
+/* NEO-130, desktop: the table never grows past the bottom of the screen — its
+   rows scroll inside, under the sticky column headers, with the pagination
+   footer always in view. CSS caps it at 100dvh minus this: the wrap's
+   distance from the top of the page (not of the viewport, so scrolling the
+   page doesn't change it). */
+const tableWrapRef = ref<HTMLElement | null>(null);
+const { top: tableWrapViewportTop } = useElementBounding(tableWrapRef);
+const { y: windowScrollY } = useWindowScroll();
+const tableTop = computed(() => Math.max(0, Math.round(tableWrapViewportTop.value + windowScrollY.value)));
+
 const itemValue = "id";
 /* Only the very first load for this view (nothing fetched yet) shows the
    full-page skeleton. A search/filter-triggered reload sets `loading` too,
@@ -511,7 +528,7 @@ const isInitialLoading = computed(() => loading.value && !hasCompletedInitialLoa
    rows stay in place and dim until the new ones land, instead of the table
    being torn down. */
 const isRefreshing = computed(() => loading.value && hasCompletedInitialLoad.value);
-const SKELETON_ROWS = 6;
+const SKELETON_ROWS = 10;
 
 /* Row index as a CSS variable drives the staggered row entrance
    (AppEntityList.css, app-entity-list-row-in); capped so a long page doesn't
