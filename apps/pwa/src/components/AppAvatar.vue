@@ -2,7 +2,12 @@
   <VAvatar
     :size="size"
     class="app-avatar"
-    :class="[`app-avatar--${tone}`, { 'app-avatar--photo': !!avatarUrl }]"
+    :class="[
+      `app-avatar--${tone}`,
+      hueClass,
+      { 'app-avatar--photo': !!avatarUrl, 'app-avatar--lead': entityType === 'lead' },
+    ]"
+    :style="orderProgress === null ? undefined : { '--app-avatar-order-progress': orderProgress }"
   >
     <VImg v-if="avatarUrl" :src="avatarUrl" :alt="name || ''" cover />
     <span v-else-if="initials" class="app-avatar__initials" :style="{ fontSize: initialsFontSize }">{{ initials }}</span>
@@ -14,6 +19,11 @@
     <span v-if="showDoctorBadge" class="app-avatar__badge" data-testid="app-avatar-doctor-badge" aria-hidden="true">
       <AppIcon :name="badgeIcon" class="app-avatar__badge-icon" />
     </span>
+    <!-- Patient device-order ring (NEO-155): an arc around the avatar filled
+         to the order's step (pending -> delivered), only while an order is
+         live; the status itself is spelled out wherever the order is shown. -->
+    <span v-if="orderProgress !== null" class="app-avatar__order-ring" data-testid="app-avatar-order-ring" aria-hidden="true" />
+
   </VAvatar>
 </template>
 
@@ -23,6 +33,8 @@ import AppIcon, { type AppIconName } from "./AppIcon.vue";
 import { getInitials, getInitialsFromParts } from "../utils/initials";
 import { hcoTypeIcon } from "../utils/hcoLabels";
 import { identityTone } from "../utils/identityTone";
+import { avatarHueIndex } from "../utils/avatarHue";
+import { deviceOrderProgress } from "../utils/deviceOrderStage";
 import { practitionerSpecialtyIcon } from "../utils/hcpLabels";
 
 /**
@@ -36,11 +48,12 @@ import { practitionerSpecialtyIcon } from "../utils/hcpLabels";
  * so every caller gets it right for free, rather than each call site having
  * to remember to withhold `name` for place types.
  *
- * NEO-57 identity: an organic square (squircle) tinted with its type's color
- * (theme.scss --pwa-identity-*: patient teal, doctor blue, organization
- * amber, users/leads neutral), initials/icon in that same color — so a mixed
- * list reads by kind at a glance. Replaces the earlier per-name seeded
- * colors and the outlined patient circle. A real photo keeps the same shape.
+ * NEO-155 identity: a circle whose tint is seeded from the person's name
+ * (utils/avatarHue.ts, theme.scss --pwa-avatar-<n>-*), so a list reads varied
+ * and a person keeps one color everywhere. The *kind* is carried by marks,
+ * not by color: a doctor gets the specialty badge, a lead a dashed ring, a
+ * patient with a live device order a progress ring; users get nothing.
+ * Places (hco) and events keep their type tint (--pwa-identity-*).
  */
 export type AppAvatarEntityType = "hcp" | "hco" | "patient" | "lead" | "user" | "event";
 
@@ -73,9 +86,20 @@ const props = withDefaults(
     size?: number | string;
     /** Only for entityType "hcp": the doctor's (first) specialty code — picks the badge icon. */
     specialty?: string | null;
+    /** Only for entityType "patient": latest device purchase_order.status — draws the order ring. */
+    orderStatus?: string | null;
   }>(),
-  { entityType: "user", size: 40, specialty: null },
+  { entityType: "user", size: 40, specialty: null, orderStatus: null },
 );
+
+// People get a name-seeded tint; places and events keep their type tint.
+const SEEDED_TYPES: ReadonlySet<AppAvatarEntityType> = new Set(["hcp", "patient", "lead", "user"]);
+const hueClass = computed(() => {
+  if (!SEEDED_TYPES.has(props.entityType)) return null;
+  const seed = props.name?.trim() || [props.firstName, props.lastName].filter(Boolean).join(" ");
+  return `app-avatar--hue-${avatarHueIndex(seed)}`;
+});
+const orderProgress = computed(() => (props.entityType === "patient" ? deviceOrderProgress(props.orderStatus) : null));
 
 const initials = computed(() => {
   if (props.entityType === "hco") return "";
@@ -110,34 +134,41 @@ const initialsFontSize = computed(() => `${Math.max(sizePx.value * FIBONACCI_INI
 <style scoped>
 .app-avatar {
   flex-shrink: 0;
-  /* Organic square (squircle): a superellipse mask instead of VAvatar's
-     circle or a plain rounded rectangle — the corners flow into the sides
-     with no visible arc joint, at every size from an 18px mention to the
-     56px header, because the mask scales with the element. */
-  border-radius: 0 !important;
-  /* The tint and the squircle live on ::before, not on the avatar itself:
-     masking the avatar would also clip the doctor badge that sits over its
-     corner. A photo gets the same mask directly (below). */
+  /* Circle (NEO-155). overflow stays visible so the doctor badge and the
+     lead / order rings can sit over the edge; the photo clips itself. */
   overflow: visible !important;
   position: relative;
   isolation: isolate;
-  background: transparent;
+  background: var(--app-avatar-bg);
   color: var(--app-avatar-fg);
 }
 
-.app-avatar::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background: var(--app-avatar-bg);
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 0C88 0 100 12 100 50S88 100 50 100 0 88 0 50 12 0 50 0Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 0C88 0 100 12 100 50S88 100 50 100 0 88 0 50 12 0 50 0Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+.app-avatar :deep(.v-img) {
+  border-radius: 50%;
 }
 
-.app-avatar :deep(.v-img) {
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 0C88 0 100 12 100 50S88 100 50 100 0 88 0 50 12 0 50 0Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 0C88 0 100 12 100 50S88 100 50 100 0 88 0 50 12 0 50 0Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+/* Lead: dashed ring (not a patient yet). Same 2px gap + 2px stroke as the
+   order ring, so both marks read as one family. */
+.app-avatar--lead::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px dashed var(--pwa-identity-lead);
+  pointer-events: none;
+}
+
+.app-avatar__order-ring {
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: conic-gradient(
+    var(--pwa-identity-patient) calc(var(--app-avatar-order-progress) * 1turn),
+    color-mix(in srgb, var(--pwa-identity-patient) 22%, transparent) 0
+  );
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
 }
 
 .app-avatar__badge {
@@ -172,7 +203,20 @@ const initialsFontSize = computed(() => `${Math.max(sizePx.value * FIBONACCI_INI
 .app-avatar--org     { --app-avatar-bg: var(--pwa-identity-org-soft);     --app-avatar-fg: var(--pwa-identity-org); }
 .app-avatar--person  { --app-avatar-bg: var(--pwa-identity-person-soft);  --app-avatar-fg: var(--pwa-identity-person); }
 
-.app-avatar--photo::before {
+/* Name-seeded tints (NEO-155) — declared after the type tones so a person's
+   own color wins; places/events never get a hue class. */
+.app-avatar--hue-0 { --app-avatar-bg: var(--pwa-avatar-0-bg); --app-avatar-fg: var(--pwa-avatar-0-fg); }
+.app-avatar--hue-1 { --app-avatar-bg: var(--pwa-avatar-1-bg); --app-avatar-fg: var(--pwa-avatar-1-fg); }
+.app-avatar--hue-2 { --app-avatar-bg: var(--pwa-avatar-2-bg); --app-avatar-fg: var(--pwa-avatar-2-fg); }
+.app-avatar--hue-3 { --app-avatar-bg: var(--pwa-avatar-3-bg); --app-avatar-fg: var(--pwa-avatar-3-fg); }
+.app-avatar--hue-4 { --app-avatar-bg: var(--pwa-avatar-4-bg); --app-avatar-fg: var(--pwa-avatar-4-fg); }
+.app-avatar--hue-5 { --app-avatar-bg: var(--pwa-avatar-5-bg); --app-avatar-fg: var(--pwa-avatar-5-fg); }
+.app-avatar--hue-6 { --app-avatar-bg: var(--pwa-avatar-6-bg); --app-avatar-fg: var(--pwa-avatar-6-fg); }
+.app-avatar--hue-7 { --app-avatar-bg: var(--pwa-avatar-7-bg); --app-avatar-fg: var(--pwa-avatar-7-fg); }
+.app-avatar--hue-8 { --app-avatar-bg: var(--pwa-avatar-8-bg); --app-avatar-fg: var(--pwa-avatar-8-fg); }
+.app-avatar--hue-9 { --app-avatar-bg: var(--pwa-avatar-9-bg); --app-avatar-fg: var(--pwa-avatar-9-fg); }
+
+.app-avatar--photo {
   background: transparent;
 }
 

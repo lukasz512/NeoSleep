@@ -219,14 +219,13 @@ const emit = defineEmits<{ select: [id: string] }>();
   vertical-align: middle;
 }
 
-/* AppAvatar's squircle, filled with the skeleton grey. */
+/* AppAvatar's circle (NEO-155), filled with the skeleton grey. */
 .form-spine__avatar-skeleton {
   flex: none;
   width: 48px;
   height: 48px;
+  border-radius: 50%;
   background: rgba(var(--v-theme-on-surface), 0.07);
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 0C88 0 100 12 100 50S88 100 50 100 0 88 0 50 12 0 50 0Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 0C88 0 100 12 100 50S88 100 50 100 0 88 0 50 12 0 50 0Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
 }
 
 .form-spine__index {
