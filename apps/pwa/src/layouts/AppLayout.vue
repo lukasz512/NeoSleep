@@ -73,14 +73,13 @@
       </template>
 
       <!-- Account: top right on both breakpoints (NEO-55), avatar + name/role
-           on desktop, avatar only on mobile. The menu drops below it on
-           desktop and rises as a bottom sheet on phones (NEO-102), within
-           thumb reach. -->
+           on desktop, avatar only on mobile. The menu opens as a card around
+           that avatar on both (NEO-154 replaced the phone bottom sheet). -->
       <template #app-bar-actions>
         <div ref="barActions" class="layout-bar-actions">
-          <!-- NEO-122: the avatar button turns into the menu (desktop: the card
-               blooms out of the avatar; phone: a sheet rises and the avatar flies
-               into it) — see AppAccountMenu + useAccountMenuMotion. -->
+          <!-- NEO-122 / NEO-154: the avatar button turns into the menu — the
+               avatar stays put and grows, the card pours out of it (same on
+               desktop and phone); see AppAccountMenu + useAccountMenuMotion. -->
           <AppAccountMenu v-model:open="menuOpen" :mobile="isMobile" :label="t('user.user.menu')">
           <template #trigger="{ open: accountMenuOpen }">
             <AppButton
@@ -104,7 +103,6 @@
           </template>
 
           <AppUserMenuPanel
-            :sheet="isMobile"
             :name="user.displayName"
             :email="user.email"
             :role-label="user.role"

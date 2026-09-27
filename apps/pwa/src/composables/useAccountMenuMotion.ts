@@ -1,17 +1,16 @@
 /**
- * Motion for the account menu (NEO-122): the avatar button turns into the menu.
- *
- * Desktop — the card opens in place of the button, its header avatar exactly on
- * the button's avatar: a soft-edged bloom out of the avatar (mask radius, the
- * `--r` custom property), name and role travel from the button into the header,
- * rows arrive one by one and sharpen, shadow and a light page dim come in last.
- * Phone — a bottom sheet rises while the avatar flies in an arc from the app bar
- * into the sheet header.
+ * Motion for the account menu, NEO-154 variant A "Kropla" (Łukasz picked it
+ * from the live prototype, 2026-09-27). The avatar is a nail: it never moves,
+ * it only grows from the app bar size to the menu size around its own centre,
+ * while the card surface pours out of it like water (a blob behind a gooey
+ * threshold filter), overshoots a little and settles. The name and role blur
+ * out of the button and sharpen in the card header. Desktop and phone share
+ * all of it; on the phone the card spans the screen from the top edge.
  *
  * Everything here is Web Animations API on plain elements, so the component
  * decides *when* and this file only decides *how*. With prefers-reduced-motion
  * (or no WAAPI, e.g. jsdom) every function resolves immediately and the menu
- * simply appears/disappears. Timings and easings match the approved prototype.
+ * simply appears/disappears.
  */
 
 /** Material 3 "emphasized decelerate" — fast start, very soft landing. */
@@ -19,14 +18,36 @@ const EMPHASIZED = "cubic-bezier(0.05, 0.7, 0.1, 1)";
 /** Material 3 "emphasized accelerate" — for exits. */
 const ACCELERATE = "cubic-bezier(0.3, 0, 0.8, 0.15)";
 const STANDARD = "cubic-bezier(0.2, 0, 0, 1)";
-/** Page dim while the desktop card is open. */
+/** Page dim behind the card (phone dims more: the card covers most of the screen). */
 export const DESKTOP_DIM_OPACITY = 0.06;
-/** Scrim behind the phone sheet. */
-export const SHEET_SCRIM_OPACITY = 0.38;
+export const PHONE_DIM_OPACITY = 0.38;
+/** The header avatar is this much bigger than the app bar one (40 / 32). */
+export const AVATAR_GROWTH = 40 / 32;
+/** Desktop: gap between the card edge and the header avatar (top and end). */
+const AVATAR_INSET = 4;
+/** Desktop card border width — the header padding sits inside it. */
+const CARD_BORDER = 1;
 
 export function motionAllowed(): boolean {
   if (typeof window === "undefined" || typeof Element.prototype.animate !== "function") return false;
   return !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+}
+
+/**
+ * A damped spring sampled into a CSS `linear()` easing (zeta < 1 overshoots),
+ * or `fallback` where the browser has no `linear()`.
+ */
+export function springEasing(zeta: number, fallback: string): string {
+  if (typeof CSS === "undefined" || !CSS.supports?.("transition-timing-function", "linear(0, 1)")) return fallback;
+  const w = 6.9 / zeta; // settles to 0.1% by t = 1
+  const wd = w * Math.sqrt(1 - zeta * zeta);
+  const points: number[] = [];
+  for (let i = 0; i <= 60; i++) {
+    const t = i / 60;
+    const x = 1 - Math.exp(-zeta * w * t) * (Math.cos(wd * t) + ((zeta * w) / wd) * Math.sin(wd * t));
+    points.push(i === 60 ? 1 : Math.round(x * 10000) / 10000);
+  }
+  return `linear(${points.join(", ")})`;
 }
 
 /** Resolves when the animation ends, whether it finished or was cancelled. */
@@ -36,24 +57,22 @@ function ended(a: Animation): Promise<unknown> {
 }
 const settled = (list: Animation[]) => Promise.all(list.map(ended));
 
-/** Transform that puts `to` where `from` is (FLIP "invert" step), scaled by height. */
-function invert(from: Element, to: Element): string {
-  const f = from.getBoundingClientRect();
-  const t = to.getBoundingClientRect();
-  if (!t.height) return "none";
-  return `translate(${f.left - t.left}px, ${f.top - t.top}px) scale(${f.height / t.height})`;
-}
-
 export interface CardParts {
-  /** The avatar inside the trigger button. */
+  /** The avatar inside the trigger button — the nail everything turns around. */
   triggerAvatar: Element;
   /** Name / role text inside the trigger button (desktop shows them, phone doesn't). */
   triggerName: Element | null;
   triggerRole: Element | null;
-  /** Fixed-position wrapper of the menu panel; it carries the mask. */
+  /** Fixed-position card that wraps the menu panel and paints its surface. */
   card: HTMLElement;
   shadow: HTMLElement;
   dim: HTMLElement;
+  /** Fixed layer behind the card, filtered so its shapes merge like liquid. */
+  liquid: HTMLElement;
+  /** The card surface while it pours out of the avatar. */
+  blob: HTMLElement;
+  /** A drop that trails from the avatar into the blob, so the two stay joined. */
+  drop: HTMLElement;
   avatar: Element;
   name: Element | null;
   role: Element | null;
@@ -61,200 +80,140 @@ export interface CardParts {
   extras: Element[];
   /** Everything under the header, animated one after another. */
   rows: Element[];
+  /** Phone: full-width card from the top edge; desktop: 340px card. */
+  phone: boolean;
 }
 
 /**
- * Positions the fixed card so its header avatar's centre sits on the trigger
- * avatar's centre, sizes the shadow to it, and aims the bloom at the avatar.
+ * Positions the fixed card so its header avatar's centre sits exactly on the
+ * trigger avatar's centre, and sizes the shadow to it. Desktop: the avatar
+ * keeps a fixed inset from the card's top and end edge, so the card follows
+ * the avatar. Phone: the card is pinned to the top edge and the header padding
+ * (--account-menu-avatar-top / -end) follows the avatar instead.
  */
-export function placeCard(parts: Pick<CardParts, "triggerAvatar" | "card" | "shadow" | "avatar">): void {
-  const { triggerAvatar, card, shadow, avatar } = parts;
-  card.style.top = "0px";
-  card.style.right = "0px";
+export function placeCard(parts: Pick<CardParts, "triggerAvatar" | "card" | "shadow" | "phone">): void {
+  const { triggerAvatar, card, shadow, phone } = parts;
   const a = triggerAvatar.getBoundingClientRect();
-  const b = avatar.getBoundingClientRect();
-  card.style.top = `${Math.max(4, a.top + a.height / 2 - (b.top + b.height / 2))}px`;
-  card.style.right = `${b.left + b.width / 2 - (a.left + a.width / 2)}px`;
+  const half = (a.height * AVATAR_GROWTH) / 2;
+  const top = a.top + a.height / 2 - half;
+  const end = document.documentElement.clientWidth - (a.left + a.width / 2 + half);
+  if (phone) {
+    Object.assign(card.style, { top: "0px", left: "0px", right: "0px" });
+    card.style.setProperty("--account-menu-avatar-top", `${Math.max(0, top)}px`);
+    card.style.setProperty("--account-menu-avatar-end", `${Math.max(0, end)}px`);
+  } else {
+    Object.assign(card.style, { top: `${top - AVATAR_INSET}px`, right: `${end - AVATAR_INSET}px`, left: "" });
+    card.style.setProperty("--account-menu-avatar-top", `${AVATAR_INSET - CARD_BORDER}px`);
+    card.style.setProperty("--account-menu-avatar-end", `${AVATAR_INSET - CARD_BORDER}px`);
+  }
   const c = card.getBoundingClientRect();
   Object.assign(shadow.style, { top: `${c.top}px`, left: `${c.left}px`, width: `${c.width}px`, height: `${c.height}px` });
-  const av = avatar.getBoundingClientRect();
-  card.style.setProperty("--bloom-x", `${av.left - c.left + av.width / 2}px`);
-  card.style.setProperty("--bloom-y", `${av.top - c.top + av.height / 2}px`);
 }
 
-/** Soft edge width of the bloom (matches the `- 36px` in the card's mask). */
-const BLOOM_EDGE = 36;
+type Box = { left: number; top: number; width: number; height: number };
+const px = (b: Box, radius: number | string): Keyframe => ({
+  left: `${b.left}px`, top: `${b.top}px`, width: `${b.width}px`, height: `${b.height}px`,
+  borderRadius: typeof radius === "number" ? `${radius}px` : radius,
+});
 
-function bloomRadius(card: HTMLElement): number {
-  const c = card.getBoundingClientRect();
-  return Math.hypot(c.width, c.height) + 40;
-}
-
-/** Radius that already covers the whole button, so the name and role never
- *  blink out while they travel into the header. */
-function buttonRadius(trigger: Element, avatar: Element): number {
-  const t = trigger.getBoundingClientRect();
-  const a = avatar.getBoundingClientRect();
+/** The shapes the liquid passes through: the avatar dot, a stretched drop, the card. */
+function liquidShapes(parts: CardParts) {
+  const a = parts.triggerAvatar.getBoundingClientRect();
+  const c = parts.card.getBoundingClientRect();
   const cx = a.left + a.width / 2;
   const cy = a.top + a.height / 2;
-  const far = Math.max(Math.hypot(cx - t.left, cy - t.top), Math.hypot(cx - t.left, t.bottom - cy));
-  return far + BLOOM_EDGE;
+  const r = a.width / 2;
+  // the card's own corners (all round on desktop, bottom only on the phone)
+  const radius = getComputedStyle(parts.card).borderRadius || "24px";
+  return {
+    dot: { left: cx - r, top: cy - r, width: 2 * r, height: 2 * r },
+    // height leads, width follows: the surface runs down before it spreads
+    stretched: { left: c.left + c.width * 0.5, top: c.top, width: c.width * 0.5, height: c.height * 0.72 },
+    card: { left: c.left, top: c.top, width: c.width, height: c.height },
+    // where the trailing drop sinks into the surface
+    sink: { left: c.left + c.width * 0.55, top: c.top + c.height * 0.4, width: 8, height: 8 },
+    lift: { left: cx - r - 6, top: cy - r - 6, width: 2 * r + 12, height: 2 * r + 12 },
+    r,
+    radius,
+  };
 }
 
-/** Desktop open, ~0.6 s. `beforeReveal` runs after the button's press, right before the card shows. */
-export async function openCard(parts: CardParts, trigger: HTMLElement, beforeReveal: () => void): Promise<void> {
+const FLUID = springEasing(0.74, EMPHASIZED);
+const POP = springEasing(0.62, EMPHASIZED);
+
+/** Desktop and phone open, ~0.62 s. `reveal` runs once the card has settled. */
+export async function openCard(parts: CardParts, reveal: () => void): Promise<void> {
+  const { card, shadow, dim, liquid, blob, drop, avatar, name, role, extras, rows, triggerName, triggerRole } = parts;
+  const dimTo = String(parts.phone ? PHONE_DIM_OPACITY : DESKTOP_DIM_OPACITY);
   if (!motionAllowed()) {
-    beforeReveal();
-    parts.dim.style.opacity = String(DESKTOP_DIM_OPACITY);
-    parts.shadow.style.opacity = "1";
+    reveal();
+    dim.style.opacity = dimTo;
+    shadow.style.opacity = "1";
     return;
   }
-  // 1. the button gives a little under the click
-  await ended(trigger.animate([{ transform: "scale(1)" }, { transform: "scale(.965)" }], { duration: 90, easing: STANDARD }));
-  beforeReveal();
-  const { card, shadow, dim, avatar, name, role, extras, rows, triggerName, triggerRole } = parts;
+  const s = liquidShapes(parts);
+  card.classList.add("account-menu__card--fluid");
+  liquid.style.visibility = "visible";
   const anims: Animation[] = [
-    // 2. soft-edged bloom out of the avatar
-    card.animate([{ "--r": `${buttonRadius(trigger, avatar)}px` }, { "--r": `${bloomRadius(card)}px` }], { duration: 520, easing: STANDARD }),
-    // the avatar turns from a circle into the panel's rounded square
-    avatar.animate([{ borderRadius: "999px", transform: "scale(.9)" }, { borderRadius: "12px", transform: "none" }], { duration: 380, easing: EMPHASIZED }),
-    ...extras.map((el, i) =>
-      el.animate([{ opacity: 0, transform: "translateY(-4px)" }, { opacity: 1, transform: "none" }], { duration: 260, delay: 60 + i * 60, easing: EMPHASIZED, fill: "backwards" })),
-    // 4. rows arrive one after another and sharpen
+    // 1. the surface pours out of the avatar, runs down, spreads and settles
+    blob.animate([px(s.dot, s.r), { ...px(s.stretched, 30), offset: 0.38 }, px(s.card, s.radius)], { duration: 620, easing: FLUID, fill: "both" }),
+    drop.animate([px(s.lift, s.r + 6), px(s.sink, 4)], { duration: 460, easing: EMPHASIZED, fill: "both" }),
+    // 2. the nail: the avatar only grows, around its own centre
+    avatar.animate([{ transform: `scale(${1 / AVATAR_GROWTH})` }, { transform: "none" }], { duration: 520, easing: POP }),
+    // 3. the header text sharpens in, the rows follow one by one
+    ...[name, role, ...extras].filter((el): el is Element => el !== null).map((el, i) =>
+      el.animate([{ opacity: 0, filter: "blur(5px)" }, { opacity: 1, filter: "blur(0)" }], { duration: 300, delay: 150 + i * 40, easing: EMPHASIZED, fill: "backwards" })),
     ...rows.map((el, i) =>
       el.animate(
         [{ opacity: 0, transform: "translateY(10px)", filter: "blur(3px)" }, { opacity: 1, transform: "none", filter: "blur(0)" }],
-        { duration: 300, delay: 50 + i * 35, easing: EMPHASIZED, fill: "backwards" })),
-    // 5. the card lifts off the bar
-    shadow.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260, delay: 160, easing: STANDARD, fill: "forwards" }),
-    dim.animate([{ opacity: 0 }, { opacity: DESKTOP_DIM_OPACITY }], { duration: 300, easing: STANDARD, fill: "forwards" }),
+        { duration: 320, delay: 190 + i * 45, easing: EMPHASIZED, fill: "backwards" })),
+    ...[triggerName, triggerRole].filter((el): el is Element => el !== null).map((el) =>
+      el.animate([{ opacity: 1, filter: "blur(0)" }, { opacity: 0, filter: "blur(5px)" }], { duration: 200, easing: STANDARD, fill: "forwards" })),
+    dim.animate([{ opacity: 0 }, { opacity: dimTo }], { duration: 300, easing: STANDARD, fill: "forwards" }),
+    // 4. the card lifts off once it has landed
+    shadow.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, delay: 420, easing: STANDARD, fill: "forwards" }),
   ];
-  // 3. name and role travel from the button into the header
-  if (name && triggerName) anims.push(name.animate([{ transform: invert(triggerName, name) }, { transform: "none" }], { duration: 420, easing: EMPHASIZED }));
-  if (role && triggerRole) anims.push(role.animate([{ transform: invert(triggerRole, role) }, { transform: "none" }], { duration: 420, easing: EMPHASIZED }));
   await settled(anims);
+  reveal();
+  card.classList.remove("account-menu__card--fluid");
+  liquid.style.visibility = "";
   shadow.style.opacity = "1";
-  dim.style.opacity = String(DESKTOP_DIM_OPACITY);
+  dim.style.opacity = dimTo;
   anims.forEach((a) => a.cancel());
 }
 
-/** Desktop close, ~0.35 s: content first, then the card folds back into the avatar. `revealTrigger` shows the button again under the last of it. */
-export async function closeCard(parts: CardParts, revealTrigger: () => void, trigger: HTMLElement): Promise<void> {
+/**
+ * Close, ~0.4 s: the content fades, then the surface drains back into the
+ * avatar and the avatar shrinks to the bar size. `reveal` shows the button
+ * again (its name blurs back in) as the liquid starts to drain.
+ */
+export async function closeCard(parts: CardParts, reveal: () => void): Promise<void> {
+  const { card, shadow, dim, liquid, blob, drop, avatar, name, role, extras, rows, triggerName, triggerRole } = parts;
   if (!motionAllowed()) {
-    revealTrigger();
+    reveal();
     return;
   }
-  const { card, shadow, dim, avatar, name, role, extras, rows, triggerName, triggerRole } = parts;
-  const anims: Animation[] = [
-    ...rows.map((el) => el.animate([{ opacity: 1 }, { opacity: 0, transform: "translateY(-4px)" }], { duration: 120, easing: ACCELERATE, fill: "forwards" })),
-    ...extras.map((el) => el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 100, fill: "forwards" })),
-    shadow.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 140, fill: "forwards" }),
-    dim.animate([{ opacity: DESKTOP_DIM_OPACITY }, { opacity: 0 }], { duration: 240, fill: "forwards" }),
-    avatar.animate([{ borderRadius: "12px", transform: "none" }, { borderRadius: "999px", transform: "scale(.9)" }], { duration: 280, easing: STANDARD, fill: "forwards" }),
-    card.animate([{ "--r": `${bloomRadius(card)}px` }, { "--r": `${buttonRadius(trigger, avatar)}px` }], { duration: 300, delay: 40, easing: ACCELERATE, fill: "forwards" }),
+  const dimFrom = String(parts.phone ? PHONE_DIM_OPACITY : DESKTOP_DIM_OPACITY);
+  const fade: Animation[] = [
+    ...rows.map((el) => el.animate([{ opacity: 1 }, { opacity: 0, transform: "translateY(-4px)" }], { duration: 110, easing: ACCELERATE, fill: "forwards" })),
+    ...[name, role, ...extras].filter((el): el is Element => el !== null).map((el) =>
+      el.animate([{ opacity: 1 }, { opacity: 0, filter: "blur(4px)" }], { duration: 140, fill: "forwards" })),
+    shadow.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 120, fill: "forwards" }),
   ];
-  if (name && triggerName) anims.push(name.animate([{ transform: "none" }, { transform: invert(triggerName, name) }], { duration: 280, easing: STANDARD, fill: "forwards" }));
-  if (role && triggerRole) anims.push(role.animate([{ transform: "none" }, { transform: invert(triggerRole, role) }], { duration: 280, easing: STANDARD, fill: "forwards" }));
-  // the button comes back under the last of the card and settles
-  const reveal = window.setTimeout(() => {
-    revealTrigger();
-    trigger.animate(
-      [{ opacity: 0, transform: "scale(.97)" }, { opacity: 1, transform: "scale(1.015)", offset: 0.7 }, { opacity: 1, transform: "none" }],
-      { duration: 220, easing: STANDARD });
-  }, 200);
-  await settled(anims);
-  window.clearTimeout(reveal);
-  revealTrigger();
-}
-
-export interface SheetParts {
-  triggerAvatar: HTMLElement;
-  sheet: HTMLElement;
-  scrim: HTMLElement;
-  /** The avatar in the sheet header, where the flying avatar lands. */
-  avatar: HTMLElement;
-  header: Element | null;
-  rows: Element[];
-}
-
-/** A copy of the trigger avatar that flies between the app bar and the sheet header. */
-function flyingAvatar(parts: SheetParts, reverse: boolean): { ghost: HTMLElement; frames: Keyframe[] } {
-  const { triggerAvatar, sheet, avatar } = parts;
-  const from = triggerAvatar.getBoundingClientRect();
-  const previous = sheet.style.transform;
-  sheet.style.transform = "none";
-  const to = avatar.getBoundingClientRect();
-  sheet.style.transform = previous;
-  const ghost = triggerAvatar.cloneNode(true) as HTMLElement;
-  Object.assign(ghost.style, {
-    position: "fixed", left: `${from.left}px`, top: `${from.top}px`, width: `${from.width}px`, height: `${from.height}px`,
-    margin: "0", zIndex: "10002", pointerEvents: "none",
-  });
-  ghost.setAttribute("aria-hidden", "true");
-  document.body.appendChild(ghost);
-  const dx = to.left + to.width / 2 - (from.left + from.width / 2);
-  const dy = to.top + to.height / 2 - (from.top + from.height / 2);
-  const s = to.width / from.width;
-  // a gentle arc: sideways first, then down
-  const frames: Keyframe[] = [
-    { transform: "translate(0, 0) scale(1)", borderRadius: "999px" },
-    { transform: `translate(${dx * 0.55}px, ${dy * 0.28}px) scale(${1 + (s - 1) * 0.5})`, offset: 0.45 },
-    { transform: `translate(${dx}px, ${dy}px) scale(${s})`, borderRadius: "12px" },
+  await settled(fade);
+  const s = liquidShapes(parts);
+  card.classList.add("account-menu__card--fluid");
+  liquid.style.visibility = "visible";
+  reveal();
+  const drain: Animation[] = [
+    blob.animate([px(s.card, s.radius), { ...px(s.stretched, 30), offset: 0.55 }, px(s.dot, s.r)], { duration: 300, easing: ACCELERATE, fill: "forwards" }),
+    drop.animate([px(s.sink, 4), px(s.lift, s.r + 6)], { duration: 300, easing: STANDARD, fill: "forwards" }),
+    avatar.animate([{ transform: "none" }, { transform: `scale(${1 / AVATAR_GROWTH})` }], { duration: 280, easing: STANDARD, fill: "forwards" }),
+    dim.animate([{ opacity: dimFrom }, { opacity: 0 }], { duration: 260, easing: STANDARD, fill: "forwards" }),
+    ...[triggerName, triggerRole].filter((el): el is Element => el !== null).map((el) =>
+      el.animate([{ opacity: 0, filter: "blur(5px)" }, { opacity: 1, filter: "blur(0)" }], { duration: 220, delay: 160, easing: EMPHASIZED, fill: "both" })),
   ];
-  if (!reverse) return { ghost, frames };
-  // same arc flown backwards; the middle stop mirrors to 0.55, the ends are automatic
-  return { ghost, frames: frames.slice().reverse().map((f, i) => ({ ...f, offset: i === 1 ? 0.55 : null })) };
-}
-
-/** Phone open, ~0.55 s. */
-export async function openSheet(parts: SheetParts, hideTrigger: () => void): Promise<void> {
-  const { sheet, scrim, avatar, header, rows, triggerAvatar } = parts;
-  if (!motionAllowed()) {
-    hideTrigger();
-    scrim.style.opacity = String(SHEET_SCRIM_OPACITY);
-    return;
-  }
-  await ended(triggerAvatar.animate([{ transform: "scale(1)" }, { transform: "scale(.92)" }], { duration: 90, easing: STANDARD }));
-  const { ghost, frames } = flyingAvatar(parts, false);
-  hideTrigger();
-  avatar.style.visibility = "hidden";
-  const anims: Animation[] = [
-    sheet.animate([{ transform: "translateY(105%)" }, { transform: "translateY(-1.5%)", offset: 0.72 }, { transform: "none" }], { duration: 460, easing: EMPHASIZED }),
-    scrim.animate([{ opacity: 0 }, { opacity: SHEET_SCRIM_OPACITY }], { duration: 300, easing: STANDARD, fill: "forwards" }),
-    ghost.animate(frames, { duration: 440, easing: EMPHASIZED, fill: "forwards" }),
-  ];
-  const content: Animation[] = [
-    ...(header ? [header.animate([{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }], { duration: 280, delay: 100, easing: EMPHASIZED, fill: "backwards" })] : []),
-    ...rows.map((el, i) =>
-      el.animate(
-        [{ opacity: 0, transform: "translateY(12px)", filter: "blur(3px)" }, { opacity: 1, transform: "none", filter: "blur(0)" }],
-        { duration: 300, delay: 120 + i * 35, easing: EMPHASIZED, fill: "backwards" })),
-  ];
-  await settled(anims);
-  avatar.style.visibility = "";
-  ghost.remove();
-  scrim.style.opacity = String(SHEET_SCRIM_OPACITY);
-  anims.forEach((a) => a.cancel());
-  await settled(content);
-}
-
-/** Phone close, ~0.35 s: rows fade, the sheet drops, the avatar flies back up. */
-export async function closeSheet(parts: SheetParts, showTrigger: () => void): Promise<void> {
-  const { sheet, scrim, avatar, rows, triggerAvatar } = parts;
-  if (!motionAllowed()) {
-    showTrigger();
-    return;
-  }
-  const { ghost, frames } = flyingAvatar(parts, true);
-  avatar.style.visibility = "hidden";
-  const anims: Animation[] = [
-    ...rows.map((el) => el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 110, fill: "forwards" })),
-    sheet.animate([{ transform: "none" }, { transform: "translateY(105%)" }], { duration: 300, delay: 40, easing: ACCELERATE, fill: "forwards" }),
-    scrim.animate([{ opacity: SHEET_SCRIM_OPACITY }, { opacity: 0 }], { duration: 300, fill: "forwards" }),
-    ghost.animate(frames, { duration: 320, easing: STANDARD, fill: "forwards" }),
-  ];
-  await settled(anims);
-  ghost.remove();
-  showTrigger();
-  triggerAvatar.animate([{ transform: "scale(.94)" }, { transform: "scale(1.04)", offset: 0.7 }, { transform: "none" }], { duration: 200, easing: STANDARD });
+  await settled(drain);
+  // The overlay unmounts next, so only the button's own text needs its styles back.
+  for (const a of drain.slice(4)) a.cancel();
 }
