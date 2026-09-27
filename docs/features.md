@@ -143,10 +143,11 @@
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Push notifications (Web Push) | **Complete** | `push_subscriptions`, `/api/push` |
-| Email (Resend) | **Complete** | Password reset, partner invites, lead offers, demo booking, contact form (see ADR-016) |
-| SMS | **Missing** | |
-| In-app notifications | **Missing** | |
+| In-app notifications | **Partial** | Inbox + bell (ADR-012); bell only on admin-only Dashboard; 2 producers. Engine: ADR-027, epic P-NEO-3 (NEO-133…150) |
+| Push notifications (Web Push) | **Partial** | Subscribe route only; no service-worker handler, no sender, route not tenant-scoped — NEO-138 |
+| Email (Resend) | **Complete** (system emails) | Password reset, partner invites, lead offers, demo booking, contact form (ADR-016). Notification emails: NEO-139 |
+| Preferences, quiet hours, digest, reminders | **Missing** | NEO-135/140/145/147 |
+| SMS / WhatsApp | **Missing** | Later: NEO-148 / NEO-149 |
 
 ---
 

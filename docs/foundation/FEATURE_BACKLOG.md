@@ -62,9 +62,9 @@
 | SMS via Twilio | `planned` | same webhook_event queue |
 | Inbound message sync (webhook workers) | `planned` | webhook_event → conversation → message |
 | Notification Center (bell + badge, in-app inbox) | `in_progress` | `notification`/`notification_delivery` tables, GET/PATCH routes, Dashboard-only bell with pulsing unread dot on nav — see ADR-012. Inbox is empty until real event producers are wired (see next two rows). **No tests yet** — see memory `project_test_suite_weak` for the concrete file list, deferred to a dedicated session |
-| Push notifications | `planned` | push_subscription schema fixed to match routes/push.ts (ADR-012 §1); still no real send call wired to a domain event |
-| Notification preferences | `planned` | app_config.notification_defaults exists; per-user category opt-out not built — MVP-only for now per user, revisit as needs get concrete. Non-optional categories (security, legal, operational) classified in ADR-012 |
-| First real event producer (sleep_study → pulmonologist notification) | `planned` | assign practitioner (reuse `interpreted_by`/`interpreted_at` as assign+complete) → notify; on complete → notify their manager. sleep_study has zero app code today (schema only) |
+| Push notifications | `planned` | NEO-138 (epic P-NEO-3, ADR-027). push_subscription schema fixed to match routes/push.ts (ADR-012 §1); still no real send call wired to a domain event |
+| Notification preferences | `planned` | NEO-135/NEO-140 (epic P-NEO-3, ADR-027). app_config.notification_defaults exists; per-user category opt-out not built — MVP-only for now per user, revisit as needs get concrete. Non-optional categories (security, legal, operational) classified in ADR-012 |
+| First real event producer (sleep_study → pulmonologist notification) | `planned` | Covered by NEO-141 (doctor events). assign practitioner (reuse `interpreted_by`/`interpreted_at` as assign+complete) → notify; on complete → notify their manager. sleep_study has zero app code today (schema only) |
 | Marketing consent toggle (in-app) | `planned` | user-confirmed: in-app toggle first, email unsubscribe link later |
 
 ---
