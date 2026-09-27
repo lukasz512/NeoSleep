@@ -313,7 +313,7 @@ defineEmits<{
   .view-item__record-header {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
-    grid-template-rows: minmax(48px, auto) auto auto;
+    grid-template-rows: minmax(56px, auto) auto auto;
     grid-template-areas:
       "tile . actions"
       "title title title"
@@ -350,6 +350,13 @@ defineEmits<{
     font-size: 1.5rem;
     font-weight: 700;
     letter-spacing: -0.01em;
+    line-height: 32px;
+  }
+  /* The name row is 32 px tall while loading too (skeleton) — the header must
+     not jump when the record arrives (e2e breadcrumbs "nothing jumps"). */
+  .view-item__record-header .view-item__record-title-row {
+    min-height: 32px;
+    align-items: center;
   }
 }
 
