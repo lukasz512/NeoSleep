@@ -156,7 +156,7 @@
         <div
           v-show="pageHeaderVisible"
           class="layout-page-header"
-          :class="{ 'layout-page-header--search': pageHeaderRow.searchTakesRow.value }"
+          :class="{ 'layout-page-header--search': pageHeaderRow.searchTakesRow.value, 'layout-page-header--child': !!parentRoute }"
         >
           <AppButton
             v-if="parentRoute"
@@ -420,6 +420,12 @@ const moduleIcon = computed(() => {
   --layout-sheet-margin: 8px;
   --app-shell-bar-start-inset: var(--layout-sheet-margin);
   --app-shell-bar-end-inset: calc(var(--layout-sheet-margin) - var(--layout-user-btn-pad-end));
+  /* NEO-115 (4 px grid): list rows run 16 px in from the sheet's edge and
+     keep a 12 px inset of their own; everything else (title, back link,
+     record header, fields) starts on that same inner line, 16 + 12 = 28. */
+  --layout-sheet-pad: 16px;
+  --layout-row-inset: 12px;
+  --layout-card-inset: calc(var(--layout-sheet-pad) + var(--layout-row-inset));
 }
 
 .layout-skip-link {
@@ -621,11 +627,51 @@ const moduleIcon = computed(() => {
   flex: 0 0 auto;
 }
 
-/* Phone: the row is the card's first line, a notch tighter than desktop's. */
+/* Phone: the row is the card's first line — 16 px from the sheet's top edge
+   (card padding minus the row inset), 48 px tall (touch size), 8 px above
+   the content (NEO-115). */
 .layout-root:not(.layout-root--desktop) .layout-main__inner > .layout-page-header {
-  min-height: 40px;
-  margin-top: calc(-1 * var(--space-2, 8px));
-  margin-bottom: var(--space-3, 12px);
+  min-height: 48px;
+  margin-top: calc(-1 * var(--layout-row-inset));
+  margin-bottom: var(--space-2, 8px);
+}
+
+/* NEO-115 title steps on phones: 1 — a main page title, 24 px bold. */
+.layout-root:not(.layout-root--desktop) .layout-page-header__title .layout-appbar__title {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 32px;
+}
+.layout-root:not(.layout-root--desktop) .layout-page-header__title .layout-appbar__icon {
+  width: 24px;
+  height: 24px;
+}
+/* 2 — on an item page "← Module" is the way back, not a heading: a small
+   grey link (the record name below is the heading, ItemDetailLayout). */
+.layout-root:not(.layout-root--desktop) .layout-main__inner > .layout-page-header--child {
+  min-height: 32px;
+  gap: 0;
+}
+.layout-root:not(.layout-root--desktop) .layout-page-header--child .layout-appbar__title {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  letter-spacing: 0;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+/* 32 px button around an 18 px arrow; pulled back by its own inset plus the
+   arrow's ink margin (4/24 of its size) so the arrow starts on the line. */
+.layout-root:not(.layout-root--desktop) .layout-page-header--child .layout-page-header__back {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  margin-inline-start: -10px;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+.layout-root:not(.layout-root--desktop) .layout-page-header--child .layout-back-icon {
+  width: 18px;
+  height: 18px;
 }
 
 /* No inline padding: the module icon's glyph (pulled back by its own

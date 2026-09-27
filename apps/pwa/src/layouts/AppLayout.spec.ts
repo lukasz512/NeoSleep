@@ -345,6 +345,21 @@ describe("AppLayout", () => {
       expect(layout).toMatch(/\.layout-main__inner\s*\{\s*margin-inline:\s*var\(--layout-sheet-margin\)/);
     });
 
+    // NEO-115: one content line on phones (sheet padding 16 + row inset 12),
+    // a 48 px header row and three title steps (page 24 bold, back link 14 grey).
+    it("phone content line, header height and title steps are on the 4 px grid", () => {
+      const layout = readLayout();
+      expect(layout).toMatch(/--layout-sheet-pad:\s*16px/);
+      expect(layout).toMatch(/--layout-row-inset:\s*12px/);
+      expect(layout).toMatch(/--layout-card-inset:\s*calc\(var\(--layout-sheet-pad\) \+ var\(--layout-row-inset\)\)/);
+      expect(layout).toContain("'layout-page-header--child': !!parentRoute");
+      expect(layout).toMatch(/\.layout-page-header__title \.layout-appbar__title \{\s*font-size: 24px;\s*font-weight: 700;/);
+      expect(layout).toMatch(/\.layout-page-header--child \.layout-appbar__title \{\s*font-size: 14px;/);
+      const list = readFileSync(path.resolve(__dirname, "../components/AppEntityList.css"), "utf-8");
+      expect(list).toContain("margin-inline: calc(-1 * var(--layout-row-inset, 0px));");
+      expect(list).toContain("margin-left: var(--layout-row-inset, 12px);");
+    });
+
     it("collapse chevron button is 32px with right-edge margin", () => {
       const rule = readLayout().match(/\.layout-collapse-btn\s*\{[\s\S]*?\}/)?.[0] ?? "";
       expect(rule).toMatch(/width:\s*32px/);

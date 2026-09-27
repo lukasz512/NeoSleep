@@ -320,9 +320,13 @@ defineEmits<{
       "details details details";
     align-items: center;
     column-gap: var(--space-3, 12px);
-    row-gap: var(--space-3, 12px);
+    /* NEO-115 (4 px grid): tile → name 12, name → meta 4, meta → tabs 16. */
+    row-gap: 0;
     min-height: 0;
+    margin-bottom: var(--space-4, 16px);
   }
+  .view-item__record-header .view-item__record-title-row { margin-top: var(--space-3, 12px); }
+  .view-item__record-header .view-item__record-details { margin-top: var(--space-1, 4px); }
   .view-item__record-header .view-item__tile,
   .view-item__record-header > .app-avatar { grid-area: tile; }
   .view-item__record-header .view-item__record-text { display: contents; }
@@ -340,8 +344,19 @@ defineEmits<{
     width: 22px;
     height: 22px;
   }
+  /* NEO-115 step 3: the record name is this page's heading — same 24 px bold
+     as a main page title; "← Module" above it is a small grey link. */
   .view-item__record-title {
-    font-size: 1.25rem;
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 32px;
+  }
+  /* The name row is 32 px tall while loading too (skeleton) — the header must
+     not jump when the record arrives (e2e breadcrumbs "nothing jumps"). */
+  .view-item__record-header .view-item__record-title-row {
+    min-height: 32px;
+    align-items: center;
   }
 }
 
