@@ -8,7 +8,13 @@
     <title>NeoSleep PWA</title>
     <link rel="icon" href="/favicon.ico" sizes="32x32 48x48" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <meta name="theme-color" content="#128F83" />
+    <!-- NEO-131: title bar / status bar color from the very first frame, one
+         per OS theme — the app bar's desk color (theme.scss --pwa-desk with
+         the default brand teal). Once the app runs, useThemeColorMeta takes
+         both tags over, so an explicit in-app theme or a tenant's own color
+         wins. -->
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#e0e9e8" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f1a18" />
     <meta name="apple-mobile-web-app-title" content="NeoSleep" />
     <!-- NEO-87: Chrome fires beforeinstallprompt once per page load, and on a
          repeat visit (service worker already active) it can fire before the
