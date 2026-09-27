@@ -74,7 +74,8 @@ describe("PatientDetailView — health-data tabs", () => {
   });
 
   it("a manager sees Studies and Documents (NEO-83)", async () => {
-    apiFetch.mockResolvedValue(jsonResponse(true, 200, PATIENT));
+    // The Details tab's Estudios card fetches /checklist too — answer it with a real checklist, not the patient.
+    routeApi();
     const { wrapper } = await mountPatientDetail("manager");
     await vi.waitFor(() => expect(wrapper.text()).toContain("Jan Kowalski"));
 
