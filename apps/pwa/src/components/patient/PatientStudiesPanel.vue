@@ -325,6 +325,8 @@ const props = defineProps<{
   /** From the patient record — STOP-Bang works A (age) and G (sex) out from them. */
   dateOfBirth?: string | null;
   gender?: string | null;
+  /** NEO-153: bumped by the side panel's "QR for the patient" button — opens the everything-QR here, where its status and polling live. */
+  qrRequestNonce?: number;
 }>();
 
 const { t, locale } = useI18n();
@@ -632,6 +634,13 @@ async function openQr(items?: string[]) {
   Object.assign(qrDialog, { open: true, title, url: created.url, requestId: created.id });
 }
 const sendEverything = () => openQr();
+watch(
+  () => props.qrRequestNonce,
+  (nonce, previous) => {
+    if (nonce && nonce !== previous) void openQr();
+  },
+  { immediate: true },
+);
 
 /** "Send by email": the same link as the bundle QR, emailed to the patient (all open questionnaires). */
 const emailing = ref(false);

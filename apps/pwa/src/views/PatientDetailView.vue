@@ -145,7 +145,7 @@
             <PatientNotesPanel entity-type="patient" :entity-id="patient.id" />
           </template>
           <template #studies>
-            <PatientStudiesPanel :patient-id="patient.id" :focus-item="studyItem" :date-of-birth="patient.date_of_birth" :gender="patient.gender" />
+            <PatientStudiesPanel :patient-id="patient.id" :focus-item="studyItem" :date-of-birth="patient.date_of_birth" :gender="patient.gender" :qr-request-nonce="qrRequestNonce" />
           </template>
           <template #orthoapnea>
             <PatientOrthoApneaPanel :patient-id="patient.id" />
@@ -159,7 +159,14 @@
         </DetailViewTabs>
       </template>
       <template v-if="patient" #aside>
-        <PatientAsidePanel :patient="patient" @open-notes="activeTab = 'notes'" />
+        <PatientAsidePanel
+          :patient="patient"
+          :can-see-studies="canSeeStudies"
+          :active-tab="activeTab"
+          @open-notes="activeTab = 'notes'"
+          @open-study="openStudy"
+          @qr="onAsideQr"
+        />
       </template>
     </ItemDetailLayout>
 
@@ -303,6 +310,14 @@ function openStudy(itemKey: string) {
   studyItem.value = itemKey;
   if (activeTab.value === "studies") syncQuery();
   else activeTab.value = "studies";
+}
+
+/** Side panel "QR for the patient" (NEO-153): the Estudios tab owns the QR flow (status button, polling), so open it there. */
+const qrRequestNonce = ref(0);
+function onAsideQr() {
+  studyItem.value = null;
+  activeTab.value = "studies";
+  qrRequestNonce.value += 1;
 }
 
 function onEdit() {

@@ -65,9 +65,9 @@
           <slot name="actions" />
         </div>
       </div>
-      <!-- NEO-153: optional side panel next to the tabs — desktop with a mouse
-           only; on tablets and phones it is not mounted at all (so it fetches
-           nothing there) and its content stays reachable through the tabs. -->
+      <!-- NEO-153: optional side panel next to the tabs, from 1280px; below
+           that it is not mounted at all (so it fetches nothing there) and its
+           content stays reachable through the tabs. -->
       <aside v-if="showAside" class="view-item__aside">
         <slot name="aside" />
       </aside>
@@ -207,12 +207,11 @@ const showRecordHeader = computed(
 
 // While the record header is shown it replaces AppLayout's desktop
 // "← <Module>" page-header row (NEO-55) — the eyebrow link is the way back.
-/** NEO-153: the #aside panel is a desktop affordance — wide enough for a 720px
- *  column plus the panel, and a precise pointer, which keeps it off tablets
- *  even when a landscape iPad is as wide as a laptop. */
+/** NEO-153: the #aside panel needs room for the 720px column plus itself, so
+ *  it follows the breakpoint only — a large landscape tablet gets it too. */
 const slots = useSlots();
-const isDesktopPointer = useMediaQuery("(min-width: 1280px) and (hover: hover) and (pointer: fine)");
-const showAside = computed(() => !!slots.aside && isDesktopPointer.value);
+const isWide = useMediaQuery("(min-width: 1280px)");
+const showAside = computed(() => !!slots.aside && isWide.value);
 
 const recordHeaderClaim = useRecordHeaderClaim();
 watchEffect(() => {

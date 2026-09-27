@@ -28,8 +28,34 @@
       </dl>
     </section>
 
-    <section class="patient-aside__card" :aria-label="t('app.patients.detail.aside.recentNotes')">
-      <h2 class="patient-aside__heading">{{ t("app.patients.detail.aside.recentNotes") }}</h2>
+    <section v-if="canSeeStudies" class="patient-aside__card" :aria-label="t('app.clinical.summary.title')">
+      <h2 class="patient-aside__heading">{{ t("app.clinical.summary.title") }}</h2>
+      <p v-if="checklistApi.loadError.value" class="patient-aside__muted">{{ t("app.clinical.errorLoad") }}</p>
+      <template v-else-if="checklist">
+        <AppSegmentProgress :segments="checklistSegments(checklist.items)" :label="t('app.clinical.progress', checklist.summary)" />
+        <ul class="patient-aside__studies">
+          <li v-for="item in checklist.items" :key="item.key">
+            <button type="button" class="patient-aside__study" @click="$emit('open-study', item.key)">
+              <ChecklistStatusIcon :status="item.status" />
+              <span>{{ checklistItemTitle(t, item.key, item.label) }}</span>
+            </button>
+          </li>
+        </ul>
+      </template>
+      <AppButton
+        color="primary"
+        variant="tonal"
+        class="patient-aside__qr text-none"
+        :disabled="!canSendQr"
+        @click="$emit('qr')"
+      >
+        <template #prepend><AppIcon name="qr-code" /></template>
+        {{ t("app.patients.detail.aside.qr") }}
+      </AppButton>
+    </section>
+
+    <section class="patient-aside__card" :aria-label="t('app.patients.detail.aside.lastNote')">
+      <h2 class="patient-aside__heading">{{ t("app.patients.detail.aside.lastNote") }}</h2>
       <NoteComposer
         v-model="draft"
         :placeholder="t('app.patients.detail.aside.quickNote')"
@@ -57,22 +83,30 @@
 
 <script setup lang="ts">
 /**
- * NEO-153 desktop side panel for PatientDetailView (ItemDetailLayout #aside):
- * key facts plus the latest notes with a quick-add box, so a rep can jot a
- * note without leaving the tab they are on. Desktop only — ItemDetailLayout
- * does not mount it on tablets or phones, where the Details and Notes tabs
- * carry the same content. A note added here reloads an open Notes tab (and
- * vice versa) through useNotes' change event.
+ * NEO-153 side panel for PatientDetailView (ItemDetailLayout #aside, from
+ * 1280px): key facts, the Estudios status with a "QR for the patient" button,
+ * and the latest note with a quick-add box — what a rep needs without
+ * leaving the tab they are on. Below 1280px ItemDetailLayout does not mount
+ * it; the Details, Estudios and Notes tabs carry the same content. A note
+ * added here reloads an open Notes tab (and vice versa) through useNotes'
+ * change event. The QR itself runs in the Estudios tab (its status button
+ * and polling live there), so the button asks the parent to open it.
  */
 import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { VChip } from "vuetify/components";
+import AppButton from "../AppButton.vue";
+import AppIcon from "../AppIcon.vue";
+import AppSegmentProgress from "../AppSegmentProgress.vue";
 import NoteComposer from "../NoteComposer.vue";
+import ChecklistStatusIcon from "../questionnaire/ChecklistStatusIcon.vue";
+import { checklistSegments, usePatientChecklist } from "../../composables/usePatientChecklist";
+import { checklistItemTitle } from "../../config/questionnaires";
 import { useNotes } from "../../composables/useNotes";
 import { useAsyncAction } from "../../composables/useAsyncAction";
 import { patientStatusColor, patientStatusLabel } from "../../utils/patientStatus";
 
-const RECENT_NOTES = 3;
+const RECENT_NOTES = 1;
 
 const props = defineProps<{
   patient: {
@@ -83,16 +117,32 @@ const props = defineProps<{
     practitioner_id?: string | null;
     practitioner_name?: string | null;
   };
+  /** Estudios holds health data — admin, doctor and manager only (NEO-83), same rule as the tab. */
+  canSeeStudies: boolean;
+  /** The detail view's open tab — the Estudios status is reloaded on every switch, so it catches up with what was done there. */
+  activeTab: string;
 }>();
 
 defineEmits<{
   "open-notes": [];
+  "open-study": [itemKey: string];
+  qr: [];
 }>();
 
 const { t, locale } = useI18n();
 
 const { notes, loaded, loadError, loadNotes, addNote } = useNotes("patient", () => props.patient.id);
 const recent = computed(() => notes.value.slice(0, RECENT_NOTES));
+
+const checklistApi = usePatientChecklist(() => props.patient.id);
+const checklist = computed(() => checklistApi.checklist.value);
+/** Same rule as the Estudios tab's QR button: something the patient can still fill in. */
+const canSendQr = computed(
+  () => checklist.value?.items.some((item) => item.actions.qr && (item.status === "missing" || item.status === "pending_patient")) ?? false,
+);
+function loadStudies(): void {
+  if (props.canSeeStudies) void checklistApi.load();
+}
 
 const draft = ref("");
 const { loading: addLoading, run: onAdd } = useAsyncAction(async () => {
@@ -104,11 +154,18 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(locale.value, { day: "numeric", month: "short" });
 }
 
-onMounted(loadNotes);
+onMounted(() => {
+  void loadNotes();
+  loadStudies();
+});
 watch(
   () => props.patient.id,
-  () => loadNotes(),
+  () => {
+    void loadNotes();
+    loadStudies();
+  },
 );
+watch(() => props.activeTab, loadStudies);
 </script>
 
 <style scoped>
@@ -197,6 +254,42 @@ watch(
   -webkit-box-orient: vertical;
   overflow: hidden;
   white-space: pre-wrap;
+}
+
+.patient-aside__studies {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.patient-aside__study {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  width: 100%;
+  min-height: 36px;
+  padding: 2px 6px;
+  margin: 0 -6px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.patient-aside__study:hover,
+.patient-aside__study:focus-visible {
+  background: rgba(var(--v-theme-on-surface), 0.06);
+}
+
+.patient-aside__qr {
+  align-self: stretch;
+  letter-spacing: normal;
 }
 
 .patient-aside__muted {
