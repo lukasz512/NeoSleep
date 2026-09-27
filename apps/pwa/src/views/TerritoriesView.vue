@@ -125,6 +125,7 @@ const territoriesI18n = computed(() => ({
   add: "user.territories.add",
   emptyTitle: "user.territories.emptyTitle",
   emptySubtitle: "user.territories.emptySubtitle",
+  countNoun: "territories" as const,
   noResultsForCriteria: "user.territories.noResultsForCriteria",
   noResultsForCriteriaSubtitle: "user.territories.noResultsForCriteriaSubtitle",
   tableNoResults: "user.territories.table.noResults",

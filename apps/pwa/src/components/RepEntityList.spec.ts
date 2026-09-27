@@ -12,6 +12,8 @@ import { fileURLToPath } from "url";
 import en from "@i18n/en.json";
 import AppEntityList from "./AppEntityList.vue";
 import { clearListSnapshots } from "../composables/useEntityList";
+import { defineComponent, h, ref } from "vue";
+import { PAGE_HEADER_ACTIONS_ID, providePageHeader, providePageHeaderRow, type PageHeaderRow } from "../composables/usePageHeader";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -133,6 +135,47 @@ describe("AppEntityList", () => {
       expect(slot.exists()).toBe(true);
       expect(slot.find(".app-entity-list__search").exists()).toBe(true);
       expect(wrapper.find("[data-testid='entity-list-toolbar']").classes()).toContain("app-entity-list__toolbar--compact-search");
+    });
+
+    it("in the page header the count names what it counts, and says when a search narrows it", async () => {
+      setActivePinia(createPinia());
+      Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1440 });
+      const router = createTestRouter();
+      await router.push("/");
+      await router.isReady();
+      const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
+      const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
+      vi_stubFetch(() => Promise.resolve(fakeListResponse([{ id: "1", name: "Ana" }, { id: "2", name: "Bo" }])));
+      const slot = document.createElement("div");
+      slot.id = PAGE_HEADER_ACTIONS_ID;
+      document.body.appendChild(slot);
+      let row!: PageHeaderRow;
+      const Shell = defineComponent({
+        setup() {
+          providePageHeader(ref(true));
+          row = providePageHeaderRow();
+          return () =>
+            h(AppEntityList, {
+              viewId: "leads",
+              apiEndpoint: "/api/v1/leads",
+              headers: [{ title: "Name", key: "name" }],
+              filterDefinitions: [],
+              i18n: { ...I18N, countNoun: "leads" },
+              cacheable: false,
+            });
+        },
+      });
+      const wrapper = mount(Shell, { attachTo: document.body.appendChild(document.createElement("div")), global: { plugins: [i18n, vuetify, router] } });
+      mountedWrappers.push(wrapper);
+      await flushPromises();
+      expect(row.subtitle.value).toBe("2 leads");
+      // The toolbar is teleported into the page header's slot.
+      const input = slot.querySelector<HTMLInputElement>(".app-entity-list__search input")!;
+      input.value = "an";
+      input.dispatchEvent(new Event("input"));
+      await new Promise((r) => setTimeout(r, 400));
+      await flushPromises();
+      expect(row.subtitle.value).toBe("2 leads · filtered");
     });
 
     it("a wide desktop keeps the full search field", async () => {

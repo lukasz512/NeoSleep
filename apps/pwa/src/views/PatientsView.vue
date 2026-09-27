@@ -245,6 +245,7 @@ const patientsI18n = computed(() => ({
   add:                          "app.patients.add",
   emptyTitle:                   "app.patients.emptyTitle",
   emptySubtitle:                "app.patients.emptySubtitle",
+  countNoun: "patients" as const,
   noResultsForCriteria:         "app.patients.noResultsForCriteria",
   noResultsForCriteriaSubtitle: "app.patients.noResultsForCriteriaSubtitle",
   tableNoResults:               "app.patients.table.noResults",

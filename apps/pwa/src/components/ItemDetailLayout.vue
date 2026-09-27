@@ -250,6 +250,10 @@ defineEmits<{
   display: flex;
   align-items: center;
   gap: var(--space-2, 8px);
+  /* Centred on the name, not on the whole text block: the eyebrow (16 px)
+     + 4 px gap + half the 32 px name row = 36 px, minus half a 56 px button. */
+  align-self: flex-start;
+  margin-top: 8px;
 }
 .view-item__action-skeleton {
   width: 56px;
@@ -368,12 +372,14 @@ defineEmits<{
     min-height: 0;
     margin-bottom: var(--space-4, 16px);
   }
-  /* 48 px buttons as in the phone list header; the first glyph lines up with
-     the avatar's left edge, the card's content line (48 − 22 = 2 × 13). */
-  .view-item__record-header .view-item__header-actions {
+  /* 48 px buttons on their own row, on the right like the phone list's
+     toolbar: the last button ends on the card's content edge. */
+  .view-item__record-header > .view-item__header-actions {
     order: 3;
     flex: 1 0 100%;
-    margin-left: -13px;
+    justify-content: flex-end;
+    align-self: auto;
+    margin: 0;
   }
   .view-item__header-actions :deep(.v-btn--icon.v-btn--size-large),
   .view-item__action-skeleton {

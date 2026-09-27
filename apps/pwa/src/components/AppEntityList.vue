@@ -370,7 +370,7 @@ import type { FilterDefinition } from "../composables/useFilters";
 import { usePageHeaderTeleport, usePageHeaderRow } from "../composables/usePageHeader";
 import { useHeaderToolsFold } from "../composables/useHeaderToolsFold";
 import { useCompactSearch } from "../composables/useCompactSearch";
-import { listCountKey } from "../utils/listCountLabel";
+import { listCountKey, type ListCountNoun } from "../utils/listCountLabel";
 import { AppInlineAlert } from "@ui";
 
 export interface AppEntityListHeader {
@@ -390,6 +390,8 @@ export interface AppEntityListI18n {
   noResultsForCriteriaSubtitle: string;
   tableNoResults: string;
   errorLoad: string;
+  /** What the count under the title names ("8 patients"); without it, "8 records" (NEO-152). */
+  countNoun?: ListCountNoun;
 }
 
 const props = withDefaults(
@@ -586,11 +588,14 @@ const toolsFolded = computed(() => inPhoneHeader.value && headerFolded.value);
    height, so the title doesn't move when the number arrives. */
 let ownSubtitle: string | null = null;
 watch(
-  [inHeader, total, hasCompletedInitialLoad, locale],
+  [inHeader, total, hasCompletedInitialLoad, locale, hasActiveFiltersOrSearch, () => props.i18n.countNoun],
   () => {
     if (!inHeader.value) return;
+    // "8 patients" — or "3 patients · filtered" while a search or filter
+    // narrows the list, so the number is never read as the whole list.
+    const count = t(listCountKey(total.value, String(locale.value), props.i18n.countNoun), { count: total.value });
     ownSubtitle = hasCompletedInitialLoad.value
-      ? t(listCountKey(total.value, String(locale.value)), { count: total.value })
+      ? hasActiveFiltersOrSearch.value ? `${count} · ${t("app.list.filtered")}` : count
       : "";
     headerRow.subtitle.value = ownSubtitle;
   },

@@ -37,6 +37,9 @@ describe("AppEntityList styles (NEO-152)", () => {
     expect(detail).toMatch(/\.view-item__header-actions :deep\(\.view-item__action-icon\) \{\s*width: 22px;\s*height: 22px;/);
     expect(detail).toMatch(/\.view-item__record-header > \.view-item__header-actions \{\s*display: flex;\s*align-items: center;\s*gap: var\(--space-2, 8px\);/);
     expect(detail).toMatch(/\.view-item__header-actions :deep\(\.v-btn--icon\.v-btn--size-large\),\s*\.view-item__action-skeleton \{\s*width: 48px;\s*height: 48px;/);
-    expect(detail).toMatch(/order: 3;\s*flex: 1 0 100%;\s*margin-left: -13px;/);
+    // Desktop: centred on the name row (eyebrow 16 + gap 4 + 32/2 − 56/2 = 8).
+    expect(detail).toMatch(/gap: var\(--space-2, 8px\);[^}]*align-self: flex-start;\s*margin-top: 8px;/);
+    // Phone: own row, on the right like the list toolbar.
+    expect(detail).toMatch(/order: 3;\s*flex: 1 0 100%;\s*justify-content: flex-end;\s*align-self: auto;\s*margin: 0;/);
   });
 });

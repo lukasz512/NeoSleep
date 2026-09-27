@@ -32,4 +32,29 @@ describe("listCountKey", () => {
     }
     expect(load("pl")["app.list.count.many"]).toBe("{count} rekordów");
   });
+
+  it("lists name what they count, in every language and plural form", () => {
+    const nouns = ["patients", "doctors", "clinics", "leads", "users", "territories", "studies", "devices"] as const;
+    for (const noun of nouns) {
+      expect(listCountKey(1, "en", noun)).toBe(`app.list.count.${noun}.one`);
+      expect(listCountKey(5, "pl", noun)).toBe(`app.list.count.${noun}.many`);
+      for (const lang of ["en", "pl", "mx"]) {
+        const messages = load(lang);
+        for (const category of ["one", "few", "many", "other"]) {
+          expect(messages[`app.list.count.${noun}.${category}`], `${lang} ${noun} ${category}`).toContain("{count}");
+        }
+        expect(messages["app.list.filtered"], lang).toBeTruthy();
+      }
+    }
+    expect(load("pl")["app.list.count.patients.few"]).toBe("{count} pacjentów");
+    expect(load("pl")["app.list.count.studies.many"]).toBe("{count} badań");
+    expect(load("en")["app.list.count.patients.other"]).toBe("{count} patients");
+  });
+
+  it("every list view names its count", () => {
+    for (const view of ["PatientsView", "HCPView", "HCOView", "LeadsView", "UsersView", "TerritoriesView", "SleepStudiesView", "TreatmentPlansView"]) {
+      const src = readFileSync(path.resolve(__dirname, `../views/${view}.vue`), "utf-8");
+      expect(src, view).toMatch(/countNoun: "[a-z]+" as const,/);
+    }
+  });
 });
