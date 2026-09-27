@@ -31,4 +31,12 @@ describe("AppEntityList styles (NEO-152)", () => {
     expect(icons).toContain('points="20 5 4 5 10.5 12.4 10.5 18.2 13.5 19.7 13.5 12.4 20 5"');
     expect(icons).toContain('<circle cx="11" cy="11" r="7" pathLength="1" />');
   });
+
+  it("the record header's actions match the list toolbar: 22 px glyphs, 8 px apart, 48 px on phones", () => {
+    const detail = readFileSync(path.resolve(__dirname, "ItemDetailLayout.vue"), "utf-8");
+    expect(detail).toMatch(/\.view-item__header-actions :deep\(\.view-item__action-icon\) \{\s*width: 22px;\s*height: 22px;/);
+    expect(detail).toMatch(/\.view-item__record-header > \.view-item__header-actions \{\s*display: flex;\s*align-items: center;\s*gap: var\(--space-2, 8px\);/);
+    expect(detail).toMatch(/\.view-item__header-actions :deep\(\.v-btn--icon\.v-btn--size-large\),\s*\.view-item__action-skeleton \{\s*width: 48px;\s*height: 48px;/);
+    expect(detail).toMatch(/order: 3;\s*flex: 1 0 100%;\s*margin-left: -13px;/);
+  });
 });

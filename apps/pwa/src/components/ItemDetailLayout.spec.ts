@@ -105,6 +105,21 @@ describe("ItemDetailLayout — record header", () => {
     expect(claim()).toBe(true);
   });
 
+  it("NEO-152 while loading: the identity line and the actions keep their place as skeletons", () => {
+    const { wrapper } = mountLayout({ hasContent: false, loading: true, recordTitle: "" });
+    expect(wrapper.find("[data-testid=record-details-skeleton]").exists()).toBe(true);
+    const actions = wrapper.find("[data-testid=record-actions-skeleton]");
+    expect(actions.findAll(".view-item__action-skeleton")).toHaveLength(3);
+    const users = mountLayout({ hasContent: false, loading: true, recordTitle: "", actionSkeletons: 4 }).wrapper;
+    expect(users.findAll(".view-item__action-skeleton")).toHaveLength(4);
+  });
+
+  it("NEO-152 loaded: the real actions replace the skeletons", () => {
+    const { wrapper } = mountLayout({});
+    expect(wrapper.find("[data-testid=record-actions-skeleton]").exists()).toBe(false);
+    expect(wrapper.find("[data-testid=record-details-skeleton]").exists()).toBe(false);
+  });
+
   it("while loading: a record page shows the skeleton body, not a spinner, and only after 200 ms (NEO-118)", async () => {
     vi.useFakeTimers();
     try {

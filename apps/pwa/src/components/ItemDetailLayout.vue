@@ -28,9 +28,17 @@
         <div v-if="hasContent && $slots['record-details']" class="view-item__record-details">
           <slot name="record-details" />
         </div>
+        <!-- NEO-152: while loading, the identity line and the actions keep
+             their place as skeletons, so the header doesn't grow when they arrive. -->
+        <div v-else-if="!hasContent" class="view-item__record-details view-item__record-details--skeleton" aria-hidden="true">
+          <span class="view-item__skeleton-bar" data-testid="record-details-skeleton" />
+        </div>
       </div>
       <div v-if="hasContent && $slots['header-actions']" class="view-item__header-actions">
         <slot name="header-actions" />
+      </div>
+      <div v-else-if="!hasContent" class="view-item__header-actions view-item__header-actions--skeleton" aria-hidden="true" data-testid="record-actions-skeleton">
+        <span v-for="n in actionSkeletons" :key="n" class="view-item__action-skeleton" />
       </div>
     </header>
     <!-- NEO-55 row for views without a record header (and for not-found /
@@ -161,7 +169,9 @@ const props = withDefaults(defineProps<{
   recordTitle?: string;
   /** Tile icon override — e.g. the org-type icon for an HCO (NEO-18). Defaults to the module icon. */
   recordIcon?: AppIconName;
-}>(), { title: "", loadError: false, loadErrorCause: undefined, recordTitle: undefined, recordIcon: undefined });
+  /** How many header actions the loaded record shows — the loading header keeps that many placeholders (NEO-152). */
+  actionSkeletons?: number;
+}>(), { title: "", loadError: false, loadErrorCause: undefined, recordTitle: undefined, recordIcon: undefined, actionSkeletons: 3 });
 
 const describeError = useErrorText();
 const loadErrorText = computed(() => (props.loadErrorCause == null ? null : describeError(props.loadErrorCause)));
@@ -233,6 +243,42 @@ defineEmits<{
   margin-left: auto;
 }
 
+/* NEO-152: the record's actions read like the list toolbar above it — the
+   same 56 px buttons 8 px apart with 22 px glyphs, the last one on the same
+   right edge. */
+.view-item__record-header > .view-item__header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+}
+.view-item__action-skeleton {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.view-item__action-skeleton::before {
+  content: "";
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: rgba(var(--v-theme-on-surface), 0.08);
+}
+.view-item__record-details--skeleton {
+  display: flex;
+  align-items: center;
+  height: 1.3125rem;
+}
+.view-item__skeleton-bar {
+  display: block;
+  width: 160px;
+  max-width: 60%;
+  height: 0.75rem;
+  border-radius: 6px;
+  background: rgba(var(--v-theme-on-surface), 0.08);
+}
+
 /* NEO-56 record header. */
 .view-item__record-header {
   display: flex;
@@ -298,7 +344,9 @@ defineEmits<{
   background: rgba(var(--v-theme-on-surface), 0.08);
 }
 @media (prefers-reduced-motion: no-preference) {
-  .view-item__record-title-skeleton {
+  .view-item__record-title-skeleton,
+  .view-item__skeleton-bar,
+  .view-item__action-skeleton::before {
     animation: view-item-pulse 1.4s ease-in-out infinite;
   }
   @keyframes view-item-pulse {
@@ -320,10 +368,17 @@ defineEmits<{
     min-height: 0;
     margin-bottom: var(--space-4, 16px);
   }
+  /* 48 px buttons as in the phone list header; the first glyph lines up with
+     the avatar's left edge, the card's content line (48 − 22 = 2 × 13). */
   .view-item__record-header .view-item__header-actions {
     order: 3;
     flex: 1 0 100%;
-    margin-left: 0;
+    margin-left: -13px;
+  }
+  .view-item__header-actions :deep(.v-btn--icon.v-btn--size-large),
+  .view-item__action-skeleton {
+    width: 48px;
+    height: 48px;
   }
   /* A 44 px tall touch target around the small link, without growing the line. */
   .view-item__record-header .view-item__eyebrow {
@@ -486,8 +541,8 @@ defineEmits<{
 }
 
 .view-item__header-actions :deep(.view-item__action-icon) {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   display: block;
   color: inherit !important;
   stroke: currentColor !important;
