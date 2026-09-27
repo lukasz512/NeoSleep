@@ -220,6 +220,7 @@ const hcpI18n = computed(() => ({
   add: "user.hcp.add",
   emptyTitle: "user.hcp.emptyTitle",
   emptySubtitle: "user.hcp.emptySubtitle",
+  countNoun: "doctors" as const,
   noResultsForCriteria: "user.hcp.noResultsForCriteria",
   noResultsForCriteriaSubtitle: "user.hcp.noResultsForCriteriaSubtitle",
   tableNoResults: "user.hcp.table.noResults",

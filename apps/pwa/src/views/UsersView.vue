@@ -183,6 +183,7 @@ const usersI18n = computed(() => ({
   add: "user.users.add",
   emptyTitle: "user.users.emptyTitle",
   emptySubtitle: "user.users.emptySubtitle",
+  countNoun: "users" as const,
   noResultsForCriteria: "user.users.noResultsForCriteria",
   noResultsForCriteriaSubtitle: "user.users.noResultsForCriteriaSubtitle",
   tableNoResults: "user.users.table.noResults",

@@ -167,6 +167,7 @@ const listI18n = computed(() => ({
   add: "app.sleepStudies.title",
   emptyTitle: "app.sleepStudies.emptyTitle",
   emptySubtitle: "app.sleepStudies.emptySubtitle",
+  countNoun: "studies" as const,
   noResultsForCriteria: "app.patients.noResultsForCriteria",
   noResultsForCriteriaSubtitle: "app.patients.noResultsForCriteriaSubtitle",
   tableNoResults: "app.sleepStudies.table.noResults",

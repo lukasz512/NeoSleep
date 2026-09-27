@@ -28,9 +28,17 @@
         <div v-if="hasContent && $slots['record-details']" class="view-item__record-details">
           <slot name="record-details" />
         </div>
+        <!-- NEO-152: while loading, the identity line and the actions keep
+             their place as skeletons, so the header doesn't grow when they arrive. -->
+        <div v-else-if="!hasContent && detailsSkeleton" class="view-item__record-details view-item__record-details--skeleton" aria-hidden="true">
+          <span class="view-item__skeleton-bar" data-testid="record-details-skeleton" />
+        </div>
       </div>
       <div v-if="hasContent && $slots['header-actions']" class="view-item__header-actions">
         <slot name="header-actions" />
+      </div>
+      <div v-else-if="!hasContent && actionSkeletons > 0" class="view-item__header-actions view-item__header-actions--skeleton" aria-hidden="true" data-testid="record-actions-skeleton">
+        <span v-for="n in actionSkeletons" :key="n" class="view-item__action-skeleton" />
       </div>
     </header>
     <!-- NEO-55 row for views without a record header (and for not-found /
@@ -170,7 +178,11 @@ const props = withDefaults(defineProps<{
   recordTitle?: string;
   /** Tile icon override — e.g. the org-type icon for an HCO (NEO-18). Defaults to the module icon. */
   recordIcon?: AppIconName;
-}>(), { title: "", loadError: false, loadErrorCause: undefined, recordTitle: undefined, recordIcon: undefined });
+  /** How many header actions the loaded record shows — the loading header keeps that many placeholders (NEO-152). 0 = none. */
+  actionSkeletons?: number;
+  /** Whether the loaded record has an identity line (#record-details) — the loading header keeps its place (NEO-152). */
+  detailsSkeleton?: boolean;
+}>(), { title: "", loadError: false, loadErrorCause: undefined, recordTitle: undefined, recordIcon: undefined, actionSkeletons: 3, detailsSkeleton: true });
 
 const describeError = useErrorText();
 const loadErrorText = computed(() => (props.loadErrorCause == null ? null : describeError(props.loadErrorCause)));
@@ -248,6 +260,46 @@ defineEmits<{
   margin-left: auto;
 }
 
+/* NEO-152: the record's actions read like the list toolbar above it — the
+   same 56 px buttons 8 px apart with 22 px glyphs, the last one on the same
+   right edge. */
+.view-item__record-header > .view-item__header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  /* Centred on the name, not on the whole text block: the eyebrow (16 px)
+     + 4 px gap + half the 32 px name row = 36 px, minus half a 56 px button. */
+  align-self: flex-start;
+  margin-top: 8px;
+}
+.view-item__action-skeleton {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.view-item__action-skeleton::before {
+  content: "";
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: rgba(var(--v-theme-on-surface), 0.08);
+}
+.view-item__record-details--skeleton {
+  display: flex;
+  align-items: center;
+  height: 1.3125rem;
+}
+.view-item__skeleton-bar {
+  display: block;
+  width: 160px;
+  max-width: 60%;
+  height: 0.75rem;
+  border-radius: 6px;
+  background: rgba(var(--v-theme-on-surface), 0.08);
+}
+
 /* NEO-56 record header. */
 .view-item__record-header {
   display: flex;
@@ -313,7 +365,9 @@ defineEmits<{
   background: rgba(var(--v-theme-on-surface), 0.08);
 }
 @media (prefers-reduced-motion: no-preference) {
-  .view-item__record-title-skeleton {
+  .view-item__record-title-skeleton,
+  .view-item__skeleton-bar,
+  .view-item__action-skeleton::before {
     animation: view-item-pulse 1.4s ease-in-out infinite;
   }
   @keyframes view-item-pulse {
@@ -321,35 +375,39 @@ defineEmits<{
   }
 }
 
-/* Phone (Salesforce Mobile pattern): tile + actions on the first row, the
-   name on its own full-width row below — three 56px actions next to the name
-   would otherwise wrap even a short name onto two lines. */
+/* Phone (NEO-152): the same header as on desktop — tile, then the "MODULE ›"
+   link over the name over the identity line — so a record looks the same
+   everywhere and the avatar lands in the same place when it flies in from
+   the list. The link is the way back (AppLayout drops its "← Module" row on
+   phones too). Only the actions move: three 56 px buttons beside the name
+   would squeeze it, so they wrap onto their own row under the header. */
 @media (max-width: 767.98px) {
   .view-item__record-header {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    grid-template-rows: minmax(56px, auto) auto auto;
-    grid-template-areas:
-      "tile . actions"
-      "title title title"
-      "details details details";
-    align-items: center;
+    flex-wrap: wrap;
     column-gap: var(--space-3, 12px);
-    /* NEO-115 (4 px grid): tile → name 12, name → meta 4, meta → tabs 16. */
-    row-gap: 0;
+    row-gap: var(--space-3, 12px);
     min-height: 0;
     margin-bottom: var(--space-4, 16px);
   }
-  .view-item__record-header .view-item__record-title-row { margin-top: var(--space-3, 12px); }
-  .view-item__record-header .view-item__record-details { margin-top: var(--space-1, 4px); }
-  .view-item__record-header .view-item__tile,
-  .view-item__record-header > .app-avatar { grid-area: tile; }
-  .view-item__record-header .view-item__record-text { display: contents; }
-  /* AppLayout's page-header row already shows "← <Module>" above it on phones (NEO-108). */
-  .view-item__record-header .view-item__eyebrow { display: none; }
-  .view-item__record-header .view-item__record-title-row { grid-area: title; }
-  .view-item__record-header .view-item__record-details { grid-area: details; }
-  .view-item__record-header .view-item__header-actions { grid-area: actions; }
+  /* 48 px buttons on their own row, on the right like the phone list's
+     toolbar: the last button ends on the card's content edge. */
+  .view-item__record-header > .view-item__header-actions {
+    order: 3;
+    flex: 1 0 100%;
+    justify-content: flex-end;
+    align-self: auto;
+    margin: 0;
+  }
+  .view-item__header-actions :deep(.v-btn--icon.v-btn--size-large),
+  .view-item__action-skeleton {
+    width: 48px;
+    height: 48px;
+  }
+  /* A 44 px tall touch target around the small link, without growing the line. */
+  .view-item__record-header .view-item__eyebrow {
+    padding-block: 12px;
+    margin-block: -12px;
+  }
   .view-item__tile {
     width: 40px;
     height: 40px;
@@ -528,8 +586,8 @@ defineEmits<{
 }
 
 .view-item__header-actions :deep(.view-item__action-icon) {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   display: block;
   color: inherit !important;
   stroke: currentColor !important;

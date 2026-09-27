@@ -258,13 +258,13 @@ describe("AppLayout", () => {
     it("page header: back arrow on detail views, module title, and the teleport target for view controls", () => {
       const source = readLayout();
       const header = source.slice(source.indexOf('class="layout-page-header"') - 40, source.indexOf("<RouterView"));
-      // NEO-56: hidden on desktop while a detail view's record header replaces
-      // it; NEO-108: always shown on phones as the card's first line.
+      // NEO-56: hidden while a detail view's record header replaces it —
+      // NEO-152: on phones too (no separate "← Module" row there any more).
       expect(source).toMatch(/<div\s+v-show="pageHeaderVisible"\s+class="layout-page-header"/);
-      // NEO-113: views teleport into it on phones too, and an open phone search hides the title.
+      // NEO-113: views teleport into it on phones too, and an open icon search covers it.
       expect(source).toContain("providePageHeader(computed(() => true))");
       expect(source).toContain("'layout-page-header--search': pageHeaderRow.searchTakesRow.value");
-      expect(source).toContain("const pageHeaderVisible = computed(() => isMobile.value || !recordHeaderClaim.value)");
+      expect(source).toContain("const pageHeaderVisible = computed(() => !recordHeaderClaim.value)");
       expect(source).toContain("provideRecordHeaderClaim()");
       expect(header).toMatch(/v-if="parentRoute"[\s\S]*?:to="parentRoute"/);
       expect(header).toContain("{{ moduleTitle }}");
@@ -358,6 +358,22 @@ describe("AppLayout", () => {
       const list = readFileSync(path.resolve(__dirname, "../components/AppEntityList.css"), "utf-8");
       expect(list).toContain("margin-inline: calc(-1 * var(--layout-row-inset, 0px));");
       expect(list).toContain("margin-left: var(--layout-row-inset, 12px);");
+    });
+
+    // NEO-152: a list's name is the page heading (28 px bold), its record count
+    // sits 4 px under it on desktop only, and an open icon search covers the
+    // row while the title only fades (no layout jump).
+    it("NEO-152 list header: 28 px title, desktop-only count line 4 px under it, search fades the title", () => {
+      const layout = readLayout();
+      expect(layout).toMatch(/\.layout-appbar__title \{\s*font-size: 28px;\s*font-weight: 700;/);
+      expect(layout).toMatch(/\.layout-page-header__titles \{\s*display: flex;\s*flex-direction: column;\s*gap: var\(--space-1, 4px\);/);
+      expect(layout).toMatch(/v-if="!isMobile && !parentRoute && pageHeaderRow\.subtitle\.value !== null"/);
+      expect(layout).toMatch(/\.layout-page-header__subtitle \{[^}]*height: 18px;/);
+      expect(layout).toMatch(/\.layout-page-header--search \.layout-page-header__back \{\s*opacity: 0;\s*pointer-events: none;/);
+      expect(layout).not.toMatch(/\.layout-page-header--search[^{]*\{\s*display: none;/);
+      expect(layout).toMatch(/\.layout-main__inner > \.layout-page-header \{[^}]*position: relative;/);
+      // The title changes with the page (view transition), no animation of its own.
+      expect(layout).not.toContain('<Transition name="title-fade"');
     });
 
     it("collapse chevron button is 32px with right-edge margin", () => {
