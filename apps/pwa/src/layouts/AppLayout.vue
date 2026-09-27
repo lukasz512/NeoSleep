@@ -235,6 +235,7 @@ import {
 } from "../composables/usePageHeader";
 import { useGlyphInset } from "../composables/useGlyphInset";
 import { useBarLogoFit } from "../composables/useBarLogoFit";
+import { useThemeColorMeta } from "../composables/useThemeColorMeta";
 import { useI18n } from "vue-i18n";
 import { AppShell, useAppVersionParts, CHANGE_PASSWORD_FROM_MENU } from "@ui";
 import { useLayoutState } from "../composables/useLayoutState";
@@ -273,6 +274,11 @@ const {
   onLogout,
   focusMainContent,
 } = useLayoutState();
+
+// NEO-131: the installed app's title bar (and the phone status bar) takes the
+// desk color the app bar and side menu are painted with, instead of the
+// manifest's teal, so the top of the window reads as one surface.
+useThemeColorMeta(() => "var(--pwa-desk)");
 
 const { visibleNavItems } = useVisibleNavRoutes();
 

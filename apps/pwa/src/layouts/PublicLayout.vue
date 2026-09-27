@@ -45,13 +45,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick, provide } from "vue";
+import { ref, reactive, computed, watch, onMounted, nextTick, provide } from "vue";
 import { useRouter } from "vue-router";
 import { useThemeStore } from "@stores";
 import { brandColors } from "@brand/colors";
 import { BRAND_AUTH_BACKGROUND_URL } from "@brand/logos";
 import { AuthOrbs, AUTH_BACKDROP_KEY, type AuthBackdrop } from "@ui";
 import { useAuthStore } from "../stores/auth";
+import { useThemeColorMeta } from "../composables/useThemeColorMeta";
 import { bootedWithSplash, whenSplashLifts, whenSplashGone } from "../boot/bootSplash";
 
 const authBackgroundUrl = BRAND_AUTH_BACKGROUND_URL;
@@ -199,30 +200,12 @@ const gradientAccentStyle = {
 // Tints the iOS Safari toolbar (and, if the app is added to the home screen,
 // the surrounding status-bar area) to match this layout's own background —
 // see .layout-public below, same two hex values. Scoped to this layout via
-// mount/unmount so app-layout routes aren't affected by a leftover tag.
+// mount/unmount (useThemeColorMeta) so app-layout routes aren't affected by a
+// leftover tag.
 const THEME_COLOR = { light: "#e8f5f4", dark: "#111111" } as const;
 
 const themeStore = useThemeStore();
-let metaEl: HTMLMetaElement | null = null;
-
-watch(
-  () => themeStore.mode,
-  (mode) => {
-    if (typeof document === "undefined") return;
-    if (!metaEl) {
-      metaEl = document.createElement("meta");
-      metaEl.setAttribute("name", "theme-color");
-      document.head.appendChild(metaEl);
-    }
-    metaEl.setAttribute("content", THEME_COLOR[mode]);
-  },
-  { immediate: true, flush: "sync" },
-);
-
-onBeforeUnmount(() => {
-  metaEl?.remove();
-  metaEl = null;
-});
+useThemeColorMeta(() => THEME_COLOR[themeStore.mode]);
 </script>
 
 <style scoped>
