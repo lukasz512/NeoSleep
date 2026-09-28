@@ -1002,6 +1002,15 @@ async function submitQuestionnaire() {
 }
 
 @media (max-width: 480px) {
+  /* Phones: the bar hugs the top edge and the card follows close under it — no dead band above the content. */
+  .patient-questionnaire {
+    margin-top: calc(-1 * var(--layout-public-inset-top, 16px) + max(8px, env(safe-area-inset-top)));
+  }
+
+  .patient-questionnaire__card {
+    margin-top: 12px;
+  }
+
   .patient-questionnaire__body {
     padding: 8px 16px 24px;
   }
