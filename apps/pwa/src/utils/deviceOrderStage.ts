@@ -2,6 +2,9 @@
  * Device-order progress for the patient avatar's stage ring (NEO-155).
  * Steps follow purchase_order.status in order; cancelled/refunded (and any
  * unknown value) get no ring — only a live order is shown.
+ *
+ * Not fed yet: purchase_order will be filled from OrthoApnea, how is still
+ * open — see docs/stories/neo-155-patient-order-ring.md.
  */
 export const DEVICE_ORDER_STEPS = ["pending", "paid", "processing", "shipped", "delivered"] as const;
 
