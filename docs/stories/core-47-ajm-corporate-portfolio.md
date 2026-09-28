@@ -247,6 +247,14 @@ Not yet: Privalia timeline, Mendel reel, Capacidades, Cómo trabajamos, Clientes
 - Photo audit: the renamed neon1-8 set is the eFashion Day 2019 set, so the neon lounge joined 2019 and the separate Privalia chapter was dropped. platena1-6 are re-exports of existing Planeta photos, which confirms Vesubio is Planeta.
 - Still hidden (fewer than 2 photos): Hugo Boss × Privalia and «Algún día, hoy».
 
+## Round 7 (2026-09-28)
+
+- The marker is now a slanted chisel-tip stroke, with a different one for each partner.
+- Pen, then marker, runs on a clock rather than on scroll: 0.55 s for the line to land, 1.1 s of writing, a 0.12 s pause and 0.65 s of marker, played once. With scroll, a word was left half-written wherever the reader stopped.
+- The script word is never clipped: the line mask has room around it, and the pen's clip ends outside the glyphs.
+- The AJ monogram is extruded in CSS 3D (16 layers). It turns with scroll and leans toward the mouse.
+- Open questions: M2 (the marker on the verb rather than the closing phrase) and V1 (which extra videos to use).
+
 ## Next (remaining)
 
 Scaffold `clients/ajm/portfolio` (Vite + Vue + TS, GSAP/Lenis, own ES/EN locales, lint rule blocking `@neo/*`), then build the vertical slice: entry (QR + link) → hero montage → Qué hacemos → Universal walk-through, in ES + EN, weak-network rules on.
