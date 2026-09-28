@@ -57,7 +57,7 @@ describe("AppDateField — date (NEO-132)", () => {
   it("31 February → says how many days the month has, and emits nothing", async () => {
     const w = mountField();
     await typeAndLeave(w, dateInput(w), "31022026");
-    expect(w.text()).toContain("luty 2026 ma 28 dni");
+    expect(w.text()).toContain("Luty 2026 ma 28 dni");
     expect(w.emitted("update:modelValue")).toBeUndefined();
   });
 

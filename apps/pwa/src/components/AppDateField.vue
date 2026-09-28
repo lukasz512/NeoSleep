@@ -75,7 +75,7 @@
       :is="isPhone ? VBottomSheet : VMenu"
       v-if="mode !== 'time'"
       v-model="dateOpen"
-      v-bind="isPhone ? {} : { target: dateTarget, location: 'bottom start', offset: 4, closeOnContentClick: false }"
+      v-bind="isPhone ? { class: 'app-date-field-sheet' } : { target: dateTarget, location: 'bottom start', offset: 4, closeOnContentClick: false }"
     >
       <div class="app-date-field__panel" data-testid="date-field-calendar">
         <div v-if="quickPicks.length" class="app-date-field__chips">
@@ -94,6 +94,7 @@
           :min="minDate"
           :max="maxDate"
           :first-day-of-week="1"
+          color="primary"
           show-adjacent-months
           hide-header
           width="100%"
@@ -115,7 +116,7 @@
       :is="isPhone ? VBottomSheet : VMenu"
       v-if="mode !== 'date'"
       v-model="timeOpen"
-      v-bind="isPhone ? {} : { target: timeTarget, location: 'bottom end', offset: 4, closeOnContentClick: false }"
+      v-bind="isPhone ? { class: 'app-date-field-sheet' } : { target: timeTarget, location: 'bottom start', offset: 4, minWidth: timeTarget?.offsetWidth, closeOnContentClick: false }"
     >
       <div class="app-date-field__panel app-date-field__panel--times" data-testid="date-field-times">
         <div ref="slotList" class="app-date-field__slots" role="listbox" :aria-label="t('app.dateField.openTimes')">
@@ -244,8 +245,11 @@ const { xs } = useDisplay();
 const isPhone = computed(() => xs.value);
 
 const fmt = computed(() => dateFormatFor(intlLocale(locale.value)));
-const monthName = (month: number, year: number) =>
-  new Intl.DateTimeFormat(intlLocale(locale.value), { month: "long" }).format(new Date(year, month - 1, 1));
+/** "Luty" / "Febrero" — it opens the sentence ("Luty 2026 ma 28 dni"), so capitalized. */
+function monthName(month: number, year: number): string {
+  const name = new Intl.DateTimeFormat(intlLocale(locale.value), { month: "long" }).format(new Date(year, month - 1, 1));
+  return name.charAt(0).toLocaleUpperCase(intlLocale(locale.value)) + name.slice(1);
+}
 
 const minDate = computed(() => resolveBound(props.min));
 const maxDate = computed(() => resolveBound(props.max));
@@ -303,11 +307,25 @@ watch(value, (v) => {
 const dateText = computed(() => formatDateDigits(dateDigits.value, fmt.value));
 const timeText = computed(() => formatTimeDigits(timeDigits.value));
 
+/**
+ * A refused keystroke (a 5th year digit, a letter) leaves the digits — and so
+ * the rendered text — unchanged, and Vue then skips the DOM update, so the
+ * browser would keep showing what was typed. Write the mask back by hand.
+ */
+function enforceMask(field: typeof dateInput, text: string) {
+  void nextTick(() => {
+    const input = field.value?.$el.querySelector("input");
+    if (input && input.value !== text) input.value = text;
+  });
+}
+
 function onDateInput(v: string | null) {
   dateDigits.value = onlyDigits(v ?? "", DATE_DIGITS);
+  enforceMask(dateInput, dateText.value);
 }
 function onTimeInput(v: string | null) {
   timeDigits.value = onlyDigits(v ?? "", TIME_DIGITS);
+  enforceMask(timeInput, timeText.value);
 }
 
 // ── Validation ────────────────────────────────────────────────────────────
@@ -441,8 +459,16 @@ const datePlaceholder = computed(() =>
 </script>
 
 <style scoped>
+/* Date | Time stay on one line even on a phone (T2): the date takes 3/5, the time 2/5. */
 .app-date-field--pair {
-  align-items: flex-start;
+  flex-wrap: nowrap;
+  gap: 12px;
+}
+.app-date-field--pair .app-date-field__date {
+  flex: 3 1 0;
+}
+.app-date-field--pair .app-date-field__time {
+  flex: 2 1 0;
 }
 .app-date-field__open {
   display: grid;
@@ -515,7 +541,7 @@ const datePlaceholder = computed(() =>
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 .app-date-field__panel--times {
-  width: 200px;
+  width: 100%;
   padding: 8px;
 }
 .app-date-field__slots {
