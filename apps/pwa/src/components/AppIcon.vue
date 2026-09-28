@@ -335,6 +335,10 @@ const ICONS = {
             <line x1="10" y1="18" x2="20" y2="18" />`,
   },
   // ── Generic UI icons ──────────────────────────────────────────────────────
+  "play": {
+    strokeWidth: 2,
+    paths: `<path d="M7 4.5v15l12.5-7.5z" fill="currentColor" />`,
+  },
   "close": {
     strokeWidth: 2,
     paths: `<path d="M18 6L6 18M6 6l12 12" />`,

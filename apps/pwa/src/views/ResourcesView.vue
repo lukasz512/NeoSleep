@@ -12,12 +12,21 @@
     </div>
 
     <template v-else>
-      <div class="view-resources__tabs-bar">
+      <div v-if="tabOptions.length > 1" class="view-resources__tabs-bar">
         <AppSegmentedTabs v-model="tab" :options="tabOptions" :compact="scrolled" class="view-resources__tabs" />
       </div>
 
       <div class="view-resources__window">
-        <div v-if="loading" class="view-resources__grid" aria-hidden="true">
+        <div v-if="loading && tab === 'videos'" aria-hidden="true">
+          <div class="view-resources__heading">
+            <VSkeletonLoader type="text" color="surface-container-high" width="140" />
+          </div>
+          <div class="view-resources__video-grid">
+            <div v-for="n in 6" :key="n" class="view-resources__video-skeleton" />
+          </div>
+        </div>
+
+        <div v-else-if="loading" class="view-resources__grid" aria-hidden="true">
           <VCard
             v-for="n in 8"
             :key="n"
@@ -98,41 +107,25 @@
               <AppEmptyState :title="t('user.resources.emptyVideos')" />
             </div>
             <template v-else>
-              <section v-for="group in videoGroups" :key="group.category" class="view-resources__group">
-                <h2 class="text-body-large font-weight-bold mb-3">{{ group.category }}</h2>
-                <div v-for="subgroup in group.subgroups" :key="subgroup.subcategory ?? ''" class="view-resources__grid view-resources__grid--videos">
-                  <VCard v-for="video in subgroup.items" :key="video.id" variant="flat" rounded="lg" class="bg-surface-container-low pa-3">
-                    <video controls preload="none" class="view-resources__video rounded-lg" :src="video.mediaUrl" />
-                    <VTooltip location="bottom" :text="video.title" open-delay="400" :disabled="!truncatedTitles[video.id]">
-                      <template #activator="{ props: tooltipProps }">
-                        <div v-bind="tooltipProps" class="d-flex flex-column w-100 mt-2">
-                          <span :ref="(el) => registerTitleEl(video.id, el as Element | null)" class="view-resources__card-title text-body-medium font-weight-bold">
-                            {{ video.title }}
-                          </span>
-                          <span v-if="video.description" class="text-body-small text-medium-emphasis">{{ video.description }}</span>
-                        </div>
-                      </template>
-                    </VTooltip>
-                    <div class="view-resources__lang-row d-flex flex-wrap justify-end ga-2 mt-2">
-                      <a
-                        v-for="lang in video.languages"
-                        :key="lang.code"
-                        class="view-resources__lang-chip text-body-small font-weight-bold rounded-pill px-2 py-1"
-                        :href="lang.mediaUrl"
-                        target="_blank"
-                        rel="noopener"
-                        :aria-label="lang.code.toUpperCase()"
-                      >
-                        {{ lang.code.toUpperCase() }}
-                      </a>
-                    </div>
-                  </VCard>
-                </div>
-              </section>
+              <!-- One label only (NEO-151): the tab bar and the "Webinar" category heading said the same thing twice. -->
+              <h2 class="view-resources__heading">
+                {{ t("user.resources.tabs.videos") }}
+                <span class="view-resources__count">{{ videos.length }}</span>
+              </h2>
+              <div class="view-resources__video-grid">
+                <ResourceVideoTile
+                  v-for="(video, i) in videos"
+                  :key="video.id"
+                  :video="video"
+                  :index="i"
+                  @open="openVideo = video"
+                />
+              </div>
             </template>
           </div>
         </Transition>
       </div>
+      <ResourceVideoSheet :video="openVideo" @close="openVideo = null" />
     </template>
   </div>
 </template>
@@ -144,12 +137,14 @@ import { AppSegmentedTabs } from "@ui";
 import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
 import AppErrorState from "../components/AppErrorState.vue";
 import AppEmptyState from "../components/AppEmptyState.vue";
-import { usePartnerResources, type PartnerResourceFileType } from "../composables/usePartnerResources";
+import ResourceVideoTile from "../components/resources/ResourceVideoTile.vue";
+import ResourceVideoSheet from "../components/resources/ResourceVideoSheet.vue";
+import { usePartnerResources, type PartnerResourceFileType, type PartnerResourceItem } from "../composables/usePartnerResources";
 import { useAuthStore } from "../stores/auth";
 import { SUPPORT_EMAIL } from "../constants";
 
 const { t, locale } = useI18n();
-const { items, documents, videos, documentGroups, videoGroups, loading, loadError, loadFailure, load } = usePartnerResources();
+const { documents, videos, documentGroups, loading, loadError, loadFailure, load } = usePartnerResources();
 const authStore = useAuthStore();
 
 // Documents tab hidden per product decision — only Webinars (the renamed
@@ -160,6 +155,9 @@ const tab = ref<"documents" | "videos">("videos");
 const tabOptions = computed(() => [{ value: "videos", label: t("user.resources.tabs.videos") }]);
 
 watch(locale, (l) => load(l), { immediate: true });
+
+/** The video playing in the cinema sheet — one at a time, so only one download runs. */
+const openVideo = ref<PartnerResourceItem | null>(null);
 
 const FILE_TYPE_ICONS: Record<PartnerResourceFileType, AppIconName> = {
   pdf: "file-pdf",
@@ -379,10 +377,64 @@ const incidentMailtoHref = computed(() => {
   background: rgba(var(--v-theme-primary), 0.18);
 }
 
-.view-resources__video {
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  background: #000;
-  display: block;
+.view-resources__heading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 4px 0 16px;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.view-resources__count {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(var(--v-theme-on-surface), 0.6);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 3 per row on desktop, 2 on tablet, 1 on phone (NEO-151) — Vuetify's md/sm breakpoints. */
+.view-resources__video-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  padding-bottom: 16px;
+}
+@media (min-width: 600px) {
+  .view-resources__video-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 960px) {
+  .view-resources__video-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 20px;
+  }
+}
+
+.view-resources__video-skeleton {
+  aspect-ratio: 4 / 3;
+  border-radius: 16px;
+  background: linear-gradient(
+    100deg,
+    rgb(var(--v-theme-surface-container-high)) 30%,
+    rgba(var(--v-theme-on-surface), 0.08) 50%,
+    rgb(var(--v-theme-surface-container-high)) 70%
+  );
+  background-size: 220% 100%;
+  animation: view-resources-shimmer 1.4s linear infinite;
+}
+@keyframes view-resources-shimmer {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -120% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .view-resources__video-skeleton {
+    animation: none;
+  }
 }
 </style>
