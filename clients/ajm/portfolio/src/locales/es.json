@@ -27,15 +27,15 @@
   },
   "hero": {
     "line1": "Creamos experiencias",
-    "line2": "que [conectan] a las personas.",
+    "line2": "que [conectan] a las personas",
     "kicker": "Eventos Corporativos · Experiencias · Producción",
     "body": "Desde el concepto hasta la ejecución, planeamos, producimos y operamos eventos corporativos diseñados alrededor de las personas, las marcas y los objetivos de negocio.",
     "places": "Ciudad de México · Madrid · Internacional",
     "cta": "Conoce nuestro trabajo"
   },
   "what": {
-    "title1": "Grandes ideas.",
-    "title2": "Ejecución [impecable].",
+    "title1": "Grandes ideas",
+    "title2": "Ejecución [impecable]",
     "body1": "AJ Management es una agencia independiente especializada en la planeación, producción, coordinación y ejecución de eventos y experiencias corporativas.",
     "body2": "Trabajamos como una extensión del equipo de nuestros clientes, gestionando cada etapa del proceso: desde la idea inicial y la selección del espacio hasta la producción, los proveedores, la logística y la operación en sitio.",
     "words": [
@@ -49,8 +49,8 @@
   },
   "capabilities": {
     "eyebrow": "Capacidades",
-    "title1": "Un solo partner.",
-    "title2": "De la planeación a la [ejecución].",
+    "title1": "Un solo partner",
+    "title2": "De la planeación a la [ejecución]",
     "items": [
       {
         "title": "Eventos Corporativos",
@@ -85,7 +85,7 @@
   "universal": {
     "number": "Caso 01",
     "client": "Universal Products & Experiences",
-    "title": "Dando vida a ~marcas [globales.]~",
+    "title": "~Dando vida~ a marcas [globales]",
     "tags": "Producción · Experiencias · Contenido",
     "body": "AJ Management colabora en proyectos que transforman propiedades de entretenimiento reconocidas globalmente en experiencias y producciones relevantes para el mercado local.",
     "rooms": [
@@ -98,7 +98,7 @@
   "planeta": {
     "number": "Caso 02",
     "client": "Grupo Planeta",
-    "title": "Creamos experiencias alrededor de ~las [historias.]~",
+    "title": "~Creamos~ experiencias alrededor de las [historias]",
     "tags": "Eventos Corporativos · Lanzamientos · Producción · Experiencia de Invitados",
     "body": "AJ Management trabaja junto a Grupo Planeta desarrollando y produciendo eventos que conectan autores, medios, aliados y audiencias a través de experiencias cuidadosamente diseñadas.",
     "city": "Ciudad de México",
@@ -117,7 +117,7 @@
   "privalia": {
     "number": "Caso 03",
     "client": "Privalia",
-    "title": "Una colaboración construida ~a través del [tiempo.]~",
+    "title": "Una colaboración ~construida~ a través del [tiempo]",
     "tags": "Eventos Corporativos · Experiencias · Producción",
     "body": "Una relación de largo plazo construida a través de la consistencia en la ejecución, la confianza operativa y el entendimiento de las necesidades cambiantes del cliente.",
     "photoAlt": "eFashion Day 2019: montaje y asistentes",
@@ -132,18 +132,24 @@
         "name": "eFashion Day Live",
         "body": "Cuando no era posible reunir a nadie, el evento se volvió transmisión en vivo: un set propio, speakers en remoto y producción técnica completa."
       },
+      "beauty": {
+        "mark": "2024",
+        "name": "Privalia Beauty Week × Glamour",
+        "body": "Una semana de belleza con Glamour en el Brick Hotel de la Ciudad de México: espacios de marca, estaciones de maquillaje y contenido capturado en vivo para redes."
+      },
       "live": {
         "mark": "Live",
         "name": "Hugo Boss × Privalia",
         "body": "Producción de live shopping para Hugo Boss en Privalia México, con cobertura de GQ México & Latinoamérica."
       }
     },
-    "photoAlt2020": "eFashion Day Live 2020: el set de transmisión"
+    "photoAlt2020": "eFashion Day Live 2020: el set de transmisión",
+    "photoAltBeauty": "Privalia Beauty Week × Glamour en el Brick Hotel"
   },
   "mendel": {
     "number": "Caso 04",
     "client": "Mendel",
-    "title": "Experiencias corporativas diseñadas alrededor de ~las [personas.]~",
+    "title": "Experiencias corporativas ~diseñadas~ alrededor de las [personas]",
     "tags": "Evento Corporativo · Producción · Logística",
     "body": "Desde la planeación y coordinación de proveedores hasta la producción y operación en sitio, AJ Management desarrolló una experiencia corporativa pensada para reunir a la comunidad de Mendel.",
     "videoLabel": "Evento de Mendel en Ciudad de México",
@@ -153,9 +159,24 @@
       "team": "Equipo de Producción Dedicado"
     }
   },
+  "more": {
+    "eyebrow": "Más proyectos",
+    "lead": "Otras historias que hemos producido.",
+    "photoAlt": "{event}: un momento del evento",
+    "items": {
+      "minions": {
+        "kind": "Universal Products & Experiences · Activación de marca",
+        "place": "São Paulo"
+      },
+      "wedding": {
+        "kind": "Evento social · Producción",
+        "place": "Ciudad de México"
+      }
+    }
+  },
   "process": {
     "eyebrow": "Cómo trabajamos",
-    "title": "Un solo punto de [contacto] durante todo el proceso.",
+    "title": "Un solo punto de [contacto] durante todo el proceso",
     "steps": [
       {
         "name": "Brief",
@@ -190,8 +211,8 @@
   },
   "about": {
     "eyebrow": "Sobre AJ Management",
-    "title1": "Experiencia local.",
-    "title2": "Perspectiva [internacional].",
+    "title1": "Experiencia local",
+    "title2": "Perspectiva [internacional]",
     "body1": "Fundada en México, AJ Management crea y produce eventos y experiencias para empresas y marcas en distintos mercados.",
     "body2": "Nuestra red de productores, venues, aliados técnicos y proveedores especializados nos permite construir el equipo adecuado para cada proyecto, manteniendo un único punto central de coordinación.",
     "cities": [

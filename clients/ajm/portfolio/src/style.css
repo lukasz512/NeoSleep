@@ -72,10 +72,18 @@
   font-family: var(--ajm-script);
   font-weight: 400;
   font-style: normal;
-  font-size: 1.55em;
-  line-height: 0.7;
+  /* round 7b: bigger and more slanted than the face itself, and allowed to run into the letters
+     either side (negative margins, drawn above them), like a signature across a printed line */
+  display: inline-block;
+  position: relative;
+  z-index: 1;
+  font-size: 1.95em;
+  line-height: 0.55;
   letter-spacing: 0;
   padding: 0 0.06em;
+  margin: 0 -0.1em 0 -0.22em;
+  transform: skewX(-12deg);
+  transform-origin: 0 100%;
   /* the pen moves left to right; at rest the clip sits well outside the glyphs, so Italianno's
      tall loops and end swashes are never cut (round 7: "always fully visible") */
   clip-path: inset(-0.9em calc((1 - var(--write, 1)) * (100% + 0.6em) - 0.6em) -0.7em -0.6em);
@@ -193,13 +201,13 @@ a {
   overflow: hidden;
   /* room inside the mask for descenders and for the script word's tall loops and swashes, which
      reach far above, below and past the line (round 7: they were being cut) */
-  padding: 0.5em 0.4em 0.3em;
-  margin: -0.5em -0.4em -0.3em;
+  padding: 0.8em 0.5em 0.45em;
+  margin: -0.8em -0.5em -0.45em;
 }
 .mask-line > span {
   display: block;
   /* fully below the (padded) mask, not peeking into its bottom padding */
-  transform: translateY(calc(100% + 0.9em));
+  transform: translateY(calc(100% + 1.3em));
   transition: transform 0.9s var(--ajm-ease);
 }
 .is-in .mask-line > span {
@@ -269,4 +277,18 @@ a {
   .mask-line > span {
     transform: none;
   }
+}
+
+/* Glide (lib/glide.ts): while an in-page link carries the reader, the page is lifted a touch and
+   set down again on arrival: "pick it up and drop it" (Łukasz, 2026-09-29). Only <main> moves,
+   so the fixed header and overlays stay put. */
+main {
+  transition: transform 0.55s var(--ajm-ease);
+}
+/* translate only: a scale on a page this tall would shift far sections by ~100 px on landing */
+html.gliding main {
+  transform: translateY(-10px);
+}
+html.lite main {
+  transition: none;
 }

@@ -119,9 +119,9 @@ loop "$TMP/reel.mp4" 0 5 "null" 720 28 "$OUT/mendel/reel-720.mp4"
 loop "$TMP/reel.mp4" 0 5 "null" 360 30 "$OUT/mendel/reel-360.mp4"
 still "$TMP/reel.mp4" 3.5 1280 "$OUT/mendel/poster"
 still "$TMP/reel.mp4" 3.5 640 "$OUT/mendel/poster-640"
-still "$MENDEL" 35   640 "$OUT/mendel/f1" "$MENDEL_CROP"
-still "$MENDEL" 46   640 "$OUT/mendel/f2" "$MENDEL_CROP"
-still "$MENDEL" 47.5 640 "$OUT/mendel/f3" "$MENDEL_CROP"
+still "$MENDEL" 3.5  640 "$OUT/mendel/f1" "$MENDEL_CROP"
+still "$MENDEL" 4.8  640 "$OUT/mendel/f2" "$MENDEL_CROP"
+still "$MENDEL" 58.5 640 "$OUT/mendel/f3" "$MENDEL_CROP"
 rm -rf "$TMP"
 
 # ---- Contacto: the strongest stage (eFashion Day Live 2020 studio), Łukasz: "a beautiful stage,

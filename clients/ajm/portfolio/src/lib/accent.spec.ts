@@ -53,7 +53,26 @@ describe("accent › house rules in the copy", () => {
   it.each([
     ["es", es],
     ["en", en],
+  ])("%s: the marker sits on the verb, apart from the pen word (M2: two beats per title)", (_l, loc) => {
+    for (const c of cases) {
+      const title: string = loc[c].title;
+      const marked = title.match(/~([^~]+)~/)?.[1] ?? "";
+      expect(marked).not.toContain("[");
+      // the marker comes first in the line, the pen word closes it
+      expect(title.indexOf("~")).toBeLessThan(title.indexOf("["));
+    }
+  });
+  it.each([
+    ["es", es],
+    ["en", en],
   ])("%s: no headline has more than one italic word", (_l, loc) => {
     for (const s of all(loc)) expect((s.match(/\[/g) ?? []).length).toBeLessThanOrEqual(1);
+  });
+  it.each([
+    ["es", es],
+    ["en", en],
+  ])("%s: headlines end without a period (Łukasz, 2026-09-29)", (_l, loc) => {
+    const heads = all(loc).filter((s) => /[[~]/.test(s));
+    for (const s of heads) expect(s.replace(/[\]~]+$/, "")).not.toMatch(/\.$/);
   });
 });

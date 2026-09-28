@@ -47,7 +47,7 @@
             />
           </div>
 
-          <div v-if="ch.photos" class="mosaic" :class="{ 'mosaic--single': ch.photos.length === 1, 'mosaic--pair': ch.photos.length === 2 }">
+          <div v-if="ch.photos" class="mosaic" :class="{ 'mosaic--single': ch.photos.length === 1, 'mosaic--pair': ch.photos.length === 2, 'mosaic--portrait': ch.portrait }">
             <button
               v-for="(p, j) in ch.photos"
               :key="p.id"
@@ -98,6 +98,7 @@ function photoSrc(p: { id: string; large: boolean }): string {
 }
 function altFor(id: string): string {
   if (id === "y2020") return t("privalia.photoAlt2020");
+  if (id === "beauty") return t("privalia.photoAltBeauty");
   return t("privalia.photoAlt");
 }
 
@@ -326,6 +327,16 @@ onBeforeUnmount(() => io?.disconnect());
 .mosaic--single .mosaic__item--0 {
   grid-column: 1 / 4;
   aspect-ratio: 3 / 4;
+}
+/* reel stills (vertical): three portraits a row, the middle one set lower like a contact sheet */
+.mosaic--portrait .mosaic__item {
+  grid-column: span 2;
+  grid-row: auto;
+  aspect-ratio: 4 / 5;
+  margin-top: 0;
+}
+.mosaic--portrait .mosaic__item:nth-child(3n + 2) {
+  margin-top: clamp(16px, 3vw, 48px);
 }
 .mosaic__item--4 {
   grid-column: 1 / 4;

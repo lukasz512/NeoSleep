@@ -10,6 +10,7 @@ import "@fontsource-variable/montserrat/wght.css";
 import "@fontsource/bodoni-moda/latin-400-italic.css";
 import "@fontsource/italianno/latin-400.css";
 import "./style.css";
+import { installGlide } from "./lib/glide";
 
 const { locale, redirectTo } = resolveLocale(
   window.location.pathname,
@@ -28,3 +29,4 @@ document.documentElement.classList.toggle("lite", lite);
 applyTheme(initialTheme(readStoredTheme(), window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false));
 
 createApp(App, { locale, lite }).use(makeI18n(locale)).mount("#app");
+installGlide();

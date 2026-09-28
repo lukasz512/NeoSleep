@@ -18,7 +18,9 @@ export const CLIENTS = [
 ] as const;
 
 export interface PrivaliaChapter {
-  id: "y2019" | "y2020" | "live";
+  id: "y2019" | "y2020" | "beauty" | "live";
+  /** vertical source (reels): the mosaic lays the photos out as portraits */
+  portrait?: boolean;
   /** silent loop base under media/, or none when the chapter is type only */
   loop?: string;
   poster?: string;
@@ -51,6 +53,14 @@ export const PRIVALIA_CHAPTERS: PrivaliaChapter[] = [
       { id: "y2020a", large: true },
       { id: "y2020b", large: true },
     ],
+  },
+  // Privalia Beauty Week × Glamour at Brick Hotel CDMX: stills from the Glamour reels, cropped below
+  // the magazine wordmark (encode-extra.sh). Vertical 1080 px sources, so 640 px only. Year from the
+  // files' creation date (2024); to confirm with AJM.
+  {
+    id: "beauty",
+    portrait: true,
+    photos: [1, 2, 3, 4, 5, 6].map((n) => ({ id: `beauty${n}`, large: false })),
   },
   // Hugo Boss × Privalia live shopping: no photos yet.
   { id: "live" },

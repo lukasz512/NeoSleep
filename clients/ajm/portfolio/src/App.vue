@@ -19,6 +19,7 @@
     <CasePlaneta />
     <CasePrivalia :lite="lite" />
     <CaseMendel :lite="lite" />
+    <MoreWork />
     <ProcessSection :lite="lite" />
     <ScrollMonogram />
     <ClientsSection />
@@ -43,6 +44,7 @@ import CaseUniversal from "./components/CaseUniversal.vue";
 import CasePlaneta from "./components/CasePlaneta.vue";
 import CasePrivalia from "./components/CasePrivalia.vue";
 import CaseMendel from "./components/CaseMendel.vue";
+import MoreWork from "./components/MoreWork.vue";
 import ProcessSection from "./components/ProcessSection.vue";
 import ClientsSection from "./components/ClientsSection.vue";
 import ScrollMonogram from "./components/ScrollMonogram.vue";
