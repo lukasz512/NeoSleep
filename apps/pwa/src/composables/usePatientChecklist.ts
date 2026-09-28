@@ -1,5 +1,5 @@
 import { reportCaught, reportFailedResponse } from "@api";
-import { ref } from "vue";
+import { onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { apiFetch, extractErrorMessage } from "./useApi";
 import { retryAction, useNotifications, type NotificationIcon } from "./useNotifications";
@@ -120,6 +120,12 @@ export function checklistSegments(items: ChecklistItem[]): Array<(typeof SEGMENT
   return items.map((item) => SEGMENT_BY_STATUS[item.status]);
 }
 
+const CHECKLIST_UPDATED = "patient-checklist-updated";
+interface ChecklistUpdated {
+  patientId: string;
+  version: string;
+}
+
 export function usePatientChecklist(patientId: () => string) {
   const { t } = useI18n();
   const notifications = useNotifications();
@@ -146,6 +152,31 @@ export function usePatientChecklist(patientId: () => string) {
     });
   }
 
+  /**
+   * One patient's checklist is on screen in up to three places at once (the
+   * Estudios tab, the Details card, the side panel), each with its own copy.
+   * Whichever sees a new version first tells the others, so they never show
+   * different counts side by side (NEO-173).
+   */
+  function accept(next: PatientChecklist) {
+    const changed = checklist.value?.version !== next.version;
+    checklist.value = next;
+    if (changed) window.dispatchEvent(new CustomEvent<ChecklistUpdated>(CHECKLIST_UPDATED, { detail: { patientId: patientId(), version: next.version } }));
+  }
+
+  async function reloadSilently(): Promise<void> {
+    const res = await apiFetch(`/api/v1/patient/${patientId()}/checklist`, { handleErrors: false });
+    if (res.ok) accept((await res.json()) as PatientChecklist);
+  }
+
+  function onOtherUpdated(event: Event) {
+    const { patientId: id, version } = (event as CustomEvent<ChecklistUpdated>).detail;
+    if (id !== patientId() || !checklist.value || checklist.value.version === version || loading.value) return;
+    reloadSilently().catch((err: unknown) => reportCaught(err, { where: "usePatientChecklist.onOtherUpdated", level: "warn" }));
+  }
+  onMounted(() => window.addEventListener(CHECKLIST_UPDATED, onOtherUpdated));
+  onBeforeUnmount(() => window.removeEventListener(CHECKLIST_UPDATED, onOtherUpdated));
+
   async function load(): Promise<void> {
     loading.value = true;
     loadError.value = false;
@@ -157,7 +188,7 @@ export function usePatientChecklist(patientId: () => string) {
         loadError.value = true;
         return;
       }
-      checklist.value = (await res.json()) as PatientChecklist;
+      accept((await res.json()) as PatientChecklist);
     } catch (err) {
       reportCaught(err, { where: "usePatientChecklist.load" });
       loadFailure.value = err;
@@ -181,8 +212,7 @@ export function usePatientChecklist(patientId: () => string) {
       if (!res.ok) return;
       const { version } = (await res.json()) as { version: string };
       if (version === shown) return;
-      const full = await apiFetch(`/api/v1/patient/${patientId()}/checklist`, { handleErrors: false });
-      if (full.ok) checklist.value = (await full.json()) as PatientChecklist;
+      await reloadSilently();
     } catch {
       // benign: offline / network blip — the next check retries, what's on screen stays
     }
