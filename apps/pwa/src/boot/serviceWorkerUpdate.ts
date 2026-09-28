@@ -10,30 +10,34 @@ import type { Router } from "vue-router";
  * their next visit.
  *
  * When the new worker takes control:
- *  - within BOOT_WINDOW_MS of page load → reload right away. That's the
- *    "just opened the app / the QR link after a deploy" case, and nobody has
- *    typed anything yet.
- *  - later → never yank the page mid-form: the next route change becomes a
+ *  - nobody has touched the page yet (no tap, click or key since it loaded)
+ *    → reload right away. That's the "just opened the app / the QR link
+ *    after a deploy" case. Not a fixed time window: on pwa-dev the new
+ *    worker needed ~22 s to download a real deploy, past the 15 s window
+ *    the first version used, so the page stayed on the old build.
+ *  - touched → never yank the page mid-form: the next route change becomes a
  *    full page load of that route instead (unsaved-changes guards have
  *    already run by then). chunkRecovery.ts still covers a lazy chunk that
  *    vanished in between.
  */
 
-export const BOOT_WINDOW_MS = 15_000;
+/** What counts as "someone is using this page" — scrolling alone does not. */
+export const INTERACTION_EVENTS = ["pointerdown", "keydown", "input"] as const;
 /** A reload inside this window already happened — don't loop if the new worker keeps reactivating. */
 export const RELOAD_GUARD_KEY = "neo:sw-reload-at";
 export const RELOAD_GUARD_MS = 30_000;
 
 export type UpdateAction = "reload-now" | "reload-on-next-navigation" | "none";
 
-export function decideUpdateAction(msSinceBoot: number, lastReloadAt: number | null, now: number): UpdateAction {
+export function decideUpdateAction(interacted: boolean, lastReloadAt: number | null, now: number): UpdateAction {
   if (lastReloadAt !== null && now - lastReloadAt < RELOAD_GUARD_MS) return "none";
-  return msSinceBoot <= BOOT_WINDOW_MS ? "reload-now" : "reload-on-next-navigation";
+  return interacted ? "reload-on-next-navigation" : "reload-now";
 }
 
 export interface ServiceWorkerUpdateDeps {
   now: () => number;
-  bootAt: number;
+  /** True once the user has tapped, clicked or typed on this page. */
+  hasInteracted: () => boolean;
   readGuard: () => number | null;
   writeGuard: (at: number) => void;
   reload: () => void;
@@ -52,7 +56,7 @@ export function createNeedReloadHandler(router: Pick<Router, "afterEach" | "reso
   });
   return () => {
     const now = deps.now();
-    const action = decideUpdateAction(now - deps.bootAt, deps.readGuard(), now);
+    const action = decideUpdateAction(deps.hasInteracted(), deps.readGuard(), now);
     if (action === "reload-now") {
       deps.writeGuard(now);
       deps.reload();
@@ -62,10 +66,16 @@ export function createNeedReloadHandler(router: Pick<Router, "afterEach" | "reso
   };
 }
 
-export function browserDeps(bootAt: number): ServiceWorkerUpdateDeps {
+export function browserDeps(): ServiceWorkerUpdateDeps {
+  let interacted = false;
+  const mark = () => {
+    interacted = true;
+    for (const type of INTERACTION_EVENTS) window.removeEventListener(type, mark, true);
+  };
+  for (const type of INTERACTION_EVENTS) window.addEventListener(type, mark, { capture: true, passive: true });
   return {
     now: () => Date.now(),
-    bootAt,
+    hasInteracted: () => interacted,
     readGuard: () => {
       try {
         const v = sessionStorage.getItem(RELOAD_GUARD_KEY);
