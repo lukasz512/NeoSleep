@@ -609,10 +609,10 @@
   margin-inline: calc(-1 * var(--layout-card-inset, 16px));
 }
 
-/* NEO-121 — minimal footer on the 4 px grid: "10" (plain, as theme.scss
-   styles it), "1–10 de 47" and two hairline arrows, one 48 px row, 8 px
-   below the last row. The rows-per-page words stay only as the select's
-   aria-label (Vuetify sets it). */
+/* NEO-121 — minimal footer on the 4 px grid: "Rows: 10" (the value plain,
+   as theme.scss styles it), "1–10 de 47" and two arrows, one 48 px row, 8 px
+   below the last row. NEO-176: the short "Rows:" label is back — a bare "10"
+   read as an unexplained number. */
 .app-entity-list__table-wrap :deep(.v-data-table-footer) {
   min-height: 48px;
   margin-top: var(--space-2, 8px);
@@ -622,7 +622,8 @@
   font-variant-numeric: tabular-nums;
 }
 .app-entity-list__table-wrap :deep(.v-data-table-footer__items-per-page > span) {
-  display: none;
+  padding-inline-end: 0;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 .app-entity-list__table-wrap :deep(.v-data-table-footer__info) {
   padding: 0 var(--space-6, 24px);
@@ -647,12 +648,20 @@
 .app-entity-list__table-wrap :deep(.v-pagination) {
   margin: 0;
 }
+/* NEO-176 — the arrows were teal at Vuetify's plain-variant opacity (0.62,
+   0.26 disabled): too faint, and enabled vs disabled looked alike. Now full
+   text color when clickable, clearly grey when not; opacity stays at 1 so
+   the color alone carries the state. */
 .app-entity-list__table-wrap :deep(.v-pagination .v-btn) {
   width: 40px;
   height: 40px;
-  color: var(--pwa-primary);
+  color: var(--pwa-text);
+  opacity: 1;
 }
-/* Hairline chevrons (1.25 px stroke) in place of the MDI glyphs. */
+.app-entity-list__table-wrap :deep(.v-pagination .v-btn--disabled) {
+  color: rgba(var(--v-theme-on-surface), var(--v-disabled-opacity));
+}
+/* Thin chevrons (1.75 px stroke) in place of the MDI glyphs. */
 .app-entity-list__table-wrap :deep(.v-pagination__prev .v-icon),
 .app-entity-list__table-wrap :deep(.v-pagination__next .v-icon) {
   width: 20px;
@@ -666,10 +675,10 @@
   content: none;
 }
 .app-entity-list__table-wrap :deep(.v-pagination__prev .v-icon) {
-  --footer-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M14.5 6.5L9 12l5.5 5.5' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --footer-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M14.5 6.5L9 12l5.5 5.5' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 .app-entity-list__table-wrap :deep(.v-pagination__next .v-icon) {
-  --footer-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9.5 6.5L15 12l-5.5 5.5' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --footer-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9.5 6.5L15 12l-5.5 5.5' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 /* The last arrow's box ends on the rows' right content line (cell padding). */
 .app-entity-list__table-wrap :deep(.v-data-table-footer__pagination) {

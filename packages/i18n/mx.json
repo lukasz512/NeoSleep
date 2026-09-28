@@ -9,6 +9,7 @@
   "app.common.remove": "Quitar",
   "app.common.discardChanges": "¿Descartar cambios sin guardar?",
   "app.common.moreActions": "Más acciones",
+  "app.list.rowsPerPage": "Filas:",
   "app.list.count.one": "{count} registro",
   "app.list.count.few": "{count} registros",
   "app.list.count.many": "{count} registros",

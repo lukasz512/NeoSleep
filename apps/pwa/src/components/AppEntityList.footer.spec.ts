@@ -23,13 +23,22 @@ describe("AppEntityList table footer (NEO-121)", () => {
     expect(css).toMatch(/font-size: 0\.875rem;\s*font-variant-numeric: tabular-nums;/);
   });
 
-  it("shows only previous / next, 8 px apart, as hairline chevrons", () => {
+  it("shows only previous / next, 8 px apart, as thin chevrons", () => {
     expect(css).toMatch(/:deep\(\.v-pagination__first\),\s*\.app-entity-list__table-wrap :deep\(\.v-pagination__last\) \{\s*display: none;/);
     expect(css).toMatch(/:deep\(\.v-pagination__list\) \{\s*gap: var\(--space-2, 8px\);/);
-    expect(css).toContain("stroke-width='1.25'");
+    expect(css).toContain("stroke-width='1.75'");
   });
 
-  it("hides the rows-per-page words (the select keeps them as its aria-label)", () => {
-    expect(css).toMatch(/:deep\(\.v-data-table-footer__items-per-page > span\) \{\s*display: none;/);
+  // NEO-176: the arrows were teal at Vuetify's plain opacity — too faint, and
+  // enabled vs disabled looked alike.
+  it("draws enabled arrows in text color and disabled ones grey, both at full opacity", () => {
+    expect(css).toMatch(/:deep\(\.v-pagination \.v-btn\) \{[^}]*color: var\(--pwa-text\);\s*opacity: 1;/);
+    expect(css).toMatch(/:deep\(\.v-pagination \.v-btn--disabled\) \{\s*color: rgba\(var\(--v-theme-on-surface\), var\(--v-disabled-opacity\)\);/);
+  });
+
+  it("labels the rows-per-page value with a short i18n'd \"Rows:\"", () => {
+    expect(css).not.toMatch(/:deep\(\.v-data-table-footer__items-per-page > span\) \{\s*display: none;/);
+    const vue = readFileSync(path.resolve(__dirname, "AppEntityList.vue"), "utf-8");
+    expect(vue).toContain('items-per-page-text="app.list.rowsPerPage"');
   });
 });

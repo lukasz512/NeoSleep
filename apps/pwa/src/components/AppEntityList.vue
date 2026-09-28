@@ -274,6 +274,7 @@
           class="app-entity-list__table"
           fixed-header
           hover
+          items-per-page-text="app.list.rowsPerPage"
           :row-props="tableRowProps"
           @update:options="onOptionsUpdate"
         >

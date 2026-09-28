@@ -9,6 +9,7 @@
   "app.common.remove": "Remove",
   "app.common.discardChanges": "Discard unsaved changes?",
   "app.common.moreActions": "More actions",
+  "app.list.rowsPerPage": "Rows:",
   "app.list.count.one": "{count} record",
   "app.list.count.few": "{count} records",
   "app.list.count.many": "{count} records",
