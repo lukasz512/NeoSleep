@@ -25,6 +25,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { dirname, join, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ticketFromBranch, ticketTeams } from "./ticket.mjs";
+import { validateQuestions, widget } from "../decision-form/decisions.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const git = (...args) => {
@@ -55,7 +56,7 @@ const LIMITS = {
   summaryChars: 320,
   summarySentences: 2,
   prTitle: 80,
-  list: { decisions: [4, 220], notes: [4, 220], verify: [8, 160] },
+  list: { notes: [4, 220], verify: [8, 160] },
 };
 const plainText = (html) => String(html ?? "").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
 
@@ -76,6 +77,9 @@ function checkLimits(c) {
       if (len > maxChars) problems.push(`${key}[${i}] is ${len} chars (max ${maxChars})`);
     });
   }
+  // Decisions are 3-button questions (CORE-44), validated by the shared widget.
+  problems.push(...validateQuestions(c.decisions ?? []));
+  for (const d of c.defaults ?? []) if (!d?.text || !d?.test) problems.push("defaults: each item needs text + test (the test that proves it)");
   if (problems.length) throw new Error(`content too long — cut it down, don't pad it:\n  - ${problems.join("\n  - ")}`);
 }
 
@@ -209,8 +213,12 @@ function render(contentPath) {
     `<a class="btn" href="${esc(vscodeUrlOf(sessionId))}" ${ext}>${icon("vscode")}VS Code</a>`,
   ].join("");
 
-  const decisions = c.decisions?.length
-    ? `<div class="decide"><h2>Needs your decision</h2><ol>${c.decisions.map((d) => `<li>${d}</li>`).join("")}</ol></div>`
+  // One click per question: yes · no · expanded variant (CORE-44). The answers come
+  // back as an artifact comment, so the page must be published with comments on.
+  const dw = c.decisions?.length ? widget({ id: `${ticket.toLowerCase()}-decisions`, ticket, title: c.title, questions: c.decisions, ui: c.decisionsUi }) : null;
+  const decisions = dw ? `<div class="decide"><h2>${esc(c.decisionsUi?.title ?? "Needs your decision")}</h2>${dw.html}</div>` : "";
+  const defaults = c.defaults?.length
+    ? `<div class="defaults"><h2>Decided without asking — the test proves it</h2><ul>${c.defaults.map((d) => `<li>${d.text} <code>${esc(d.test)}</code></li>`).join("")}</ul></div>`
     : "";
 
   const ba = c.beforeAfter;
@@ -239,7 +247,9 @@ function render(contentPath) {
     EYEBROW: [ticket, c.kind, c.area].filter(Boolean).map(esc).join(" · "),
     HEADLINE: c.headline,
     SUMMARY: c.summary,
-    DECISIONS: decisions,
+    DECISIONS: decisions + defaults,
+    DECISION_CSS: dw?.css ?? "",
+    DECISION_SCRIPT: dw?.script ?? "",
     WHAT_CHANGED: [table, images, mockup, code, notes, fileList].join("\n"),
     RUN: esc(run.join("\n")),
     RUN_NOTE: c.runNote ? `<p class="muted">${c.runNote}</p>` : "",
@@ -266,6 +276,7 @@ function render(contentPath) {
   );
 
   console.log(`page: ${out}`);
+  if (dw) console.log('decisions: publish with capabilities {"comments": {}} so "Send to Claude" works');
   console.log(`marker: ${markerPath(ticket)} (written by finalize)`);
   console.log(
     existing

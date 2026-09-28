@@ -34,7 +34,7 @@ beforeEach(() => {
 async function importMailer(configured: boolean, overrides: Record<string, string | undefined> = {}) {
   vi.doMock("./env.js", () => ({
     RESEND_API_KEY: configured ? "re_test_key" : undefined,
-    RESEND_FROM_EMAIL: configured ? "noreply@mail.neosleepcare.com" : undefined,
+    RESEND_FROM_EMAIL: configured ? "notifications@mail.neosleepcare.com" : undefined,
     RESEND_NOTIFY_TO: configured ? "admin@neosleepcare.com" : undefined,
     PARTNER_DOCS_CC_EMAIL: undefined,
     ...overrides,
@@ -78,10 +78,30 @@ describe("mailer — configured", () => {
     expect(sendMock).toHaveBeenCalledTimes(1);
     const call = sendMock.mock.calls[0]![0];
     expect(call.to).toBe("doctor@example.com");
-    expect(call.from).toContain("noreply@mail.neosleepcare.com");
+    expect(call.from).toContain("notifications@mail.neosleepcare.com");
     expect(call.subject).toBeTruthy();
     expect(call.html).toContain(resetLink);
     expect(call.attachments.length).toBeGreaterThan(0);
+  });
+
+  it("sendQuestionnaireLinkEmail is from '<clinic> | NeoSleep' with Reply-To the clinic (NEO-162)", async () => {
+    const { sendQuestionnaireLinkEmail } = await importMailer(true);
+
+    await sendQuestionnaireLinkEmail("patient@example.com", "https://pwa.neosleepcare.com/q/abc", RECIPIENT, { name: "Clínica Sonrisa, S.C.", email: "hola@sonrisa.mx" }, 2);
+
+    const call = sendMock.mock.calls[0]![0];
+    expect(call.from).toBe('"Clínica Sonrisa, S.C. | NeoSleep" <notifications@mail.neosleepcare.com>');
+    expect(call.replyTo).toBe("hola@sonrisa.mx");
+  });
+
+  it("sendQuestionnaireLinkEmail strips header-breaking characters from the clinic name and falls back to NeoSleep", async () => {
+    const { sendQuestionnaireLinkEmail } = await importMailer(true);
+
+    await sendQuestionnaireLinkEmail("patient@example.com", "https://x", RECIPIENT, { name: 'Evil\r\nBcc: a@b.c <"x">', email: null }, 1);
+    await sendQuestionnaireLinkEmail("patient@example.com", "https://x", RECIPIENT, { name: null, email: null }, 1);
+
+    expect(sendMock.mock.calls[0]![0].from).toBe('"Evil Bcc: a@b.c \\"x\\" | NeoSleep" <notifications@mail.neosleepcare.com>');
+    expect(sendMock.mock.calls[1]![0].from).toBe('"NeoSleep" <notifications@mail.neosleepcare.com>');
   });
 
   it("sendContactEmail sends to RESEND_NOTIFY_TO with the given subject and rows rendered in the HTML", async () => {

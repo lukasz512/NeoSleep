@@ -4,6 +4,7 @@ import { asyncHandler } from "../../middleware/errorHandler.js";
 import { requireAuth, requirePartnerMediaAuth } from "../../middleware/requireAuth.js";
 import { signMediaToken } from "../../utils/jwt.js";
 import { fetchResources, fetchResourceMedia } from "../../services/partners/orthoapnea.js";
+import { getPoster, warmPosters, knownDurationSec, posterSupported } from "../../services/partners/resourcePosters.js";
 import { ValidationError } from "../../errors.js";
 import { routeParam } from "../utils.js";
 
@@ -26,9 +27,42 @@ orthoapneaResourcesRouter.get(
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
     const locale = (req.query.locale as string | undefined) ?? "en";
-    const resources = await fetchResources(locale);
+    const withPosters = posterSupported();
+    const resources = (await fetchResources(locale)).map((r) =>
+      r.kind === "video"
+        ? {
+            ...r,
+            posterUrl: withPosters ? `/api/v1/partners/orthoapnea/resources/${r.id}/poster?locale=${locale}` : null,
+            durationSec: knownDurationSec(r.id),
+          }
+        : r
+    );
+    if (withPosters) warmPosters(resources.filter((r) => r.kind === "video").map((r) => r.id), locale);
     // For the `?t=` on each mediaUrl — see signMediaToken for why.
     res.json({ resources, mediaToken: signMediaToken(req.user!.sub) });
+  })
+);
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/partners/orthoapnea/resources/:id/poster — one JPEG frame (NEO-151)
+// ---------------------------------------------------------------------------
+orthoapneaResourcesRouter.get(
+  "/partners/orthoapnea/resources/:id/poster",
+  requirePartnerMediaAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = routeParam(req, "id")?.trim();
+    if (!id) throw new ValidationError("Missing resource id");
+    const locale = (req.query.locale as string | undefined) ?? "en";
+    const poster = await getPoster(id, locale);
+    // 404, not 5xx: a missing poster is expected (no ffmpeg on this host, odd file) and the tile has a fallback cover.
+    if (!poster) {
+      res.status(404).json({ error: "No poster for this video" });
+      return;
+    }
+    res.setHeader("Content-Type", "image/jpeg");
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    res.setHeader("Cache-Control", "private, max-age=86400");
+    res.end(Buffer.from(poster.jpeg));
   })
 );
 

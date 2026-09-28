@@ -3,26 +3,28 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ticketFromBranch, ticketTeams } from "./ticket.mjs";
 
-test("reads NEO and CORE from .claude/ticket-teams", () => {
+test("reads NEO, CORE and AJM from .claude/ticket-teams", () => {
   const teams = ticketTeams();
   assert.ok(teams.includes("NEO"));
   assert.ok(teams.includes("CORE"));
+  assert.ok(teams.includes("AJM"));
 });
 
 test("finds the ticket for each team key", () => {
   assert.equal(ticketFromBranch("worktree-neo-163-linking"), "NEO-163");
   assert.equal(ticketFromBranch("worktree-core-23-team-split"), "CORE-23");
   assert.equal(ticketFromBranch("worker/CORE-7-prefs"), "CORE-7");
+  assert.equal(ticketFromBranch("worktree-ajm-4-intake"), "AJM-4");
 });
 
 test("ignores unknown keys and look-alikes", () => {
   assert.equal(ticketFromBranch("claude/laughing-fermat-w6onh8"), null);
-  assert.equal(ticketFromBranch("worktree-ajm-4-x"), null);
+  assert.equal(ticketFromBranch("worktree-fs-4-x"), null);
   assert.equal(ticketFromBranch("worktree-neosleep-9"), null);
 });
 
 test("a new team key only needs the file", () => {
-  assert.equal(ticketFromBranch("worktree-ajm-4-x", ["NEO", "CORE", "AJM"]), "AJM-4");
+  assert.equal(ticketFromBranch("worktree-fs-4-x", ["NEO", "CORE", "FS"]), "FS-4");
 });
 
 test("falls back to NEO when the file is missing", () => {

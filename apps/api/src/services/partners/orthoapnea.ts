@@ -636,6 +636,41 @@ export async function fetchResourceMedia(
   return mediaFrom(mediaRes);
 }
 
+/**
+ * Where a video really lives upstream, for server-side tools that need to
+ * seek in it themselves (the poster grabber, NEO-151). ffmpeg does its own
+ * Range requests, so it gets apneadock.es's URL plus the session header —
+ * both stay inside apps/api. `version` changes whenever OrthoApnea swaps the
+ * file (different name or size), so a cached poster is never stale.
+ */
+export interface VideoSource {
+  url: string;
+  headers: Record<string, string>;
+  version: string;
+}
+
+export async function resolveVideoSource(resourceId: string, locale: string): Promise<VideoSource> {
+  const rows = await fetchRawResources();
+  const raw = rows.find((r) => String(r.id) === resourceId && !r.deleted && r.type === VIDEO_TYPE);
+  if (!raw) throw new PartnerServiceError("orthoapnea", `video '${resourceId}' not found`);
+  const filename = pickLocalized(raw, "url", locale);
+  if (!filename) throw new PartnerServiceError("orthoapnea", `video '${resourceId}' has no file for locale '${locale}'`);
+
+  // One byte is enough to learn which folder serves it and the file's total size.
+  const probe = await tryVideoPaths(resourceId, filename, { headers: { Range: "bytes=0-0" } });
+  await probe.body?.cancel();
+  const total = /\/(\d+)$/.exec(probe.headers.get("content-range") ?? "")?.[1] ?? probe.headers.get("content-length") ?? "?";
+  const path = resolvedVideoPathCache.get(resourceId);
+  if (!path) throw new PartnerServiceError("orthoapnea", `video '${resourceId}' path not resolved`);
+
+  const { token } = await ensureSession();
+  return {
+    url: `${ORTHOAPNEA_BASE_URL}${path}`,
+    headers: { Authorization: `Bearer ${token}` },
+    version: `${filename}:${total}`,
+  };
+}
+
 // =============================================================================
 // Order submission — patient create, treatment create, status polling.
 // =============================================================================

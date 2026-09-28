@@ -10,7 +10,9 @@ argument-hint: "[content.json path]"
 
 Łukasz's standing rule (2026-09-25): after every session the Artifact is **the** deliverable — on the Linear ticket and in the chat. He needs nothing else. This skill makes it the same shape every time, so he learns where to look. Rules behind it: CLAUDE.md "Standing decisions"; `.claude/hooks/quality-gate.sh` enforces the marker.
 
-**Before anything: a Linear ticket and a branch named after it (NEO-84).** No ticket → create one in CORE (platform) or NEO (NeoSleep-only) (`## Problem` / `## Change` / `## Done when`, ≤1500 chars — the PreToolUse hook rejects anything else) and rename the branch. `render` refuses a branch without `<key>-<n>` (keys in `.claude/ticket-teams`).
+**Before anything: a Linear ticket and a branch named after it (NEO-84).** No ticket → create one in CORE (platform), NEO (NeoSleep-only) or AJM (`## Problem` / `## Change` / `## Done when`, ≤1500 chars — the PreToolUse hook rejects anything else) and rename the branch. `render` refuses a branch without `<key>-<n>` (keys in `.claude/ticket-teams`).
+
+**TDD is the first rule of every Artifact (Łukasz, 2026-09-28, CORE-44).** The acceptance criteria become failing tests before the code, `verify` mirrors them, and `testCoverageMap` points at them. Anything a test settles is **not** a question for Łukasz: decide it, prove it with the test, and list it in `defaults`.
 
 ## Step 1 — Write the content JSON (the only judgment part)
 
@@ -24,7 +26,16 @@ Save it to the session scratchpad (not the repo), for example `<scratchpad>/arti
   "prTitle": "Territory-scope patient update and delete",
   "kind": "security fix",
   "area": "apps/api",
-  "decisions": ["Only what truly needs Łukasz. Omit the key when nothing does."],
+  "decisions": [{
+    "id": "D1", "short": "Retry in dialogs", "text": "Show Retry in form dialogs too?",
+    "options": [
+      {"kind": "yes", "label": "Yes, everywhere"},
+      {"kind": "no", "label": "Lists only", "recommended": true},
+      {"kind": "more", "label": "Retry + keep the draft", "expert": "UX", "detail": "The draft survives the failed save."}
+    ]
+  }],
+  "decisionsUi": {"title": "Needs your decision", "send": "Send to Claude"},
+  "defaults": [{"text": "Empty list shows the empty state, not an error", "test": "PatientsView.spec › empty state"}],
   "beforeAfter": {
     "caption": "Example: a rep who only covers <b>MX</b> acts on a patient in <b>PL</b>.",
     "columns": ["Action", "Before", "After"],
@@ -47,9 +58,10 @@ Save it to the session scratchpad (not the repo), for example `<scratchpad>/arti
 ```
 
 Rules for the content:
-- **Hard limits, enforced by `render`** (it fails, listing what's too long): headline ≤ 110 chars, summary ≤ 2 sentences and ≤ 320 chars, prTitle ≤ 80, decisions ≤ 4 × 220 chars, notes ≤ 4 × 220, verify ≤ 8 × 160. Cut words, never split one thought over more items to fit.
+- **Hard limits, enforced by `render`** (it fails, listing what's too long): headline ≤ 110 chars, summary ≤ 2 sentences and ≤ 320 chars, prTitle ≤ 80, decisions ≤ 5 questions, notes ≤ 4 × 220, verify ≤ 8 × 160. Cut words, never split one thought over more items to fit.
 - **summary** — what changed for the user and why it matters, written for Łukasz (smart non-specialist), no file lists, no process narration.
-- **decisions**: open questions, risks, skipped steps. Never pad it; omit the key when empty.
+- **decisions**: only what a test can't settle, max 5. Each one is **3 buttons**, same contract as `/decision-form` (`../decision-form/decisions.mjs`): `yes` · `no` · `more`. `more` is an expanded variant with the `expert` who recommends it and a `detail` line, and exactly one option is `recommended`. Plain strings are rejected. Risks and skipped steps go in `notes`. Omit the key when there's nothing to decide. His click comes back as a `[decision-form]` comment (see decision-form Step 4).
+- **defaults**: `[{text, test}]`, the choices you made without asking because a test proves them.
 - **Before/after is mandatory.** Backend-only → `beforeAfter` behavior table (request → status per role/territory; `hole` = the bug, `deny`/`allow` = correct). UI (`.vue/.css/.scss` changed) → real screenshots in `images` (the script refuses to render without them), or `mockupHtml` clearly labeled as a mockup when no live render is possible. Real PWA screenshots without a DB: see memory `feedback-always-worktree-always-artifact` (vite + Playwright with `/api/v1/` stubbed).
 - **verify** mirrors the acceptance criteria 1:1.
 - Everything else (ticket, branch, changed files, Create PR URL, the links — Linear, VS Code session (and the Artifact URL in the Linear comment) — `claude --resume`, git checkout line) is filled in by the script — don't write it.
@@ -64,7 +76,7 @@ Prints the page path and a ready Linear comment (summary + the 3 links + PR). Th
 
 ## Step 3 — Publish
 
-`Artifact` tool with the printed page path (`icon` on first publish only, one-sentence `description`). Re-render + republish the same path to update — same URL.
+`Artifact` tool with the printed page path (`icon` on first publish only, one-sentence `description`). With `decisions`, also pass `capabilities: {"comments": {}}` so "Send to Claude" works, and check that the session watches it with auto-replies armed. Re-render + republish the same path to update — same URL.
 
 ## Step 4 — Linear (ticket branches only)
 

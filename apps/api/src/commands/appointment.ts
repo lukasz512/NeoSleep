@@ -12,13 +12,15 @@ import {
   getTreatmentPlanById,
   getTenantDefaultTimezone,
   insertAuditLog,
-  insertNotification,
+  getIdentityIdForUser,
   APPOINTMENT_STATUSES,
   type Appointment,
   type AppointmentStatus,
   type AppointmentUpdate,
 } from "../db.js";
 import { ForbiddenError, NotFoundError, ValidationError } from "../errors.js";
+import { notify } from "../notifications/notify.js";
+import { timezoneForCountry } from "../utils/timezones.js";
 import { assertTerritoryAccessByTerritoryId } from "../middleware/requireScope.js";
 import { getAppointmentViewer, assertCanSeeAppointment, redactForViewer, type AppointmentViewer, type AppointmentView } from "../queries/appointment.js";
 
@@ -38,13 +40,6 @@ import { getAppointmentViewer, assertCanSeeAppointment, redactForViewer, type Ap
 export const DEFAULT_DURATION_MINUTES = 60;
 const MIN_DURATION_MINUTES = 5;
 const MAX_DURATION_MINUTES = 8 * 60;
-
-/** Clinic country → IANA zone. v1 has one zone per market; MX's other zones come with per-clinic settings. */
-const COUNTRY_TIMEZONES: Record<string, string> = {
-  PL: "Europe/Warsaw",
-  MX: "America/Mexico_City",
-  TH: "Asia/Bangkok",
-};
 
 function parseInstant(value: string, field: string): Date {
   const d = new Date(value);
@@ -67,7 +62,7 @@ function resolveEnd(start: Date, endAt: string | undefined, durationMinutes: num
 async function resolveTimezone(ctx: TenantContext, organizationId: string | null): Promise<string> {
   if (organizationId) {
     const org = await getOrganizationById(ctx.client, organizationId);
-    const zone = org?.country_code ? COUNTRY_TIMEZONES[org.country_code.toUpperCase()] : undefined;
+    const zone = timezoneForCountry(org?.country_code);
     if (zone) return zone;
   }
   return getTenantDefaultTimezone(ctx.client);
@@ -80,19 +75,14 @@ function canCloseAppointments(viewer: AppointmentViewer): boolean {
 async function notifyDoctor(ctx: TenantContext, appointment: Appointment, type: "appointment_booked" | "appointment_rescheduled" | "appointment_cancelled"): Promise<void> {
   const practitioner = await getPractitionerById(ctx.client, appointment.practitioner_id);
   if (!practitioner) return;
-  const titles = {
-    appointment_booked: "New appointment booked",
-    appointment_rescheduled: "Appointment rescheduled",
-    appointment_cancelled: "Appointment cancelled",
-  } as const;
-  await insertNotification(ctx.client, {
-    identity_id: practitioner.identity_id,
+  // Copy, channels and link come from the event catalog (ADR-027); the doctor
+  // is not told about a change they made themselves.
+  await notify(ctx.client, {
     type,
-    title: titles[type],
-    entity_type: "Appointment",
-    entity_id: appointment.id,
-    action_url: "/appointments",
-    metadata: { start_at: appointment.start_at, timezone: appointment.timezone, patient_id: appointment.patient_id },
+    recipients: [practitioner.identity_id],
+    entityId: appointment.id,
+    meta: { start_at: appointment.start_at, timezone: appointment.timezone, patient_id: appointment.patient_id },
+    actorIdentityId: await getIdentityIdForUser(ctx.client, ctx.user.id),
   });
 }
 
