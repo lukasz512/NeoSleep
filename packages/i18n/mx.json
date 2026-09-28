@@ -1126,6 +1126,8 @@
   "app.clinical.bundleQr": "QR para el paciente",
   "app.clinical.qrStatus.creating": "Creando enlace…",
   "app.clinical.qrStatus.waiting": "{done} de {total} · vence en {time}",
+  "app.clinical.qrStatus.waitingCount": "{done} de {total} · ",
+  "app.clinical.qrStatus.waitingExpires": "vence en {time}",
   "app.clinical.qrStatus.done": "Todo recibido",
   "app.clinical.qrStatus.retry": "Reintentar",
   "app.clinical.qrStatus.newQr": "Nuevo QR",
