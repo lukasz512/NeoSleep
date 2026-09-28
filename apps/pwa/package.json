@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@neo/api-client": "workspace:*",
+    "@neo/prefs": "workspace:*",
     "@neo/stores": "workspace:*",
     "@neo/ui": "workspace:*",
     "@neo/vuetify": "workspace:*",

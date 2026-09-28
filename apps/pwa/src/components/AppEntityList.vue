@@ -267,6 +267,9 @@
         <VDataTableServer
           v-show="!mobile"
           v-model:options="tableOptions"
+          :page="tableOptions.page"
+          :items-per-page="tableOptions.itemsPerPage"
+          :sort-by="tableOptions.sortBy"
           :headers="tableHeaders"
           :items="items"
           :items-length="total"

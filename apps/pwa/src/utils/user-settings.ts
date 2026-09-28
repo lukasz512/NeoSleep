@@ -1,18 +1,14 @@
 /**
- * Unified app settings (per user / instance) in localStorage.
- * Single key (`app-settings`) so we can later sync to backend.
+ * Device-wide app settings in localStorage (`app-settings`): the last language used on this
+ * device (so the login screen speaks it) and the sidebar state. Anything that belongs to a
+ * person — list filters, table sort, their language — lives in @neo/prefs, keyed by
+ * tenant + user (CORE-45).
  */
 
 import { useLocalStorage } from "@vueuse/core";
 import { APP_STORAGE_KEYS } from "../constants";
 
-export interface HcpFilters {
-  specialty?: string;
-  institution?: string;
-  region?: string;
-}
-
-/** Per-view filter state: key -> value. Single select: string. Multi-select: string[]. Persisted per viewId in localStorage. */
+/** Per-view filter state: key -> value. Single select: string. Multi-select: string[]. */
 export type ViewFilters = Record<string, string | string[]>;
 
 export interface AppSettings {
@@ -20,7 +16,10 @@ export interface AppSettings {
   // own localStorage key, not here. Do not re-add it here.
   locale?: "en" | "pl" | "mx";
   sidebarCollapsed?: boolean;
-  /** Keyed by view id (e.g. 'leads', 'hcp'). Each value is a record of filter key -> value. */
+}
+
+/** Before CORE-45 every account on a device shared these; migrated per user by utils/prefsSession.ts. */
+interface LegacySettings extends AppSettings {
   filters?: Record<string, ViewFilters>;
 }
 
@@ -31,10 +30,9 @@ export interface AppSettings {
 // silently pin every first-time visitor to "en" regardless of their browser locale.
 const DEFAULTS: AppSettings = {
   sidebarCollapsed: false,
-  filters: {},
 };
 
-const _store = useLocalStorage<AppSettings>(APP_STORAGE_KEYS.settings, { ...DEFAULTS }, {
+const _store = useLocalStorage<LegacySettings>(APP_STORAGE_KEYS.settings, { ...DEFAULTS }, {
   mergeDefaults: true,
   // Reading settings (getUserSettings) must not have the side effect of
   // writing defaults to storage — only setUserSettings should ever persist.
@@ -45,25 +43,21 @@ const _store = useLocalStorage<AppSettings>(APP_STORAGE_KEYS.settings, { ...DEFA
  * Returns current app settings. Uses defaults when storage is empty.
  */
 export function getUserSettings(): AppSettings {
-  return { ..._store.value };
+  const { filters: _legacy, ...settings } = _store.value;
+  return settings;
 }
 
 /**
- * Updates app settings (shallow merge at top level; filters[viewId] is merged).
- * Persists to localStorage automatically via useLocalStorage.
+ * Updates app settings (shallow merge). Persists to localStorage automatically via useLocalStorage.
  */
 export function setUserSettings(partial: Partial<AppSettings>): void {
-  const current = _store.value;
-  const next: AppSettings = { ...current, ...partial };
-  if (partial.filters !== undefined) {
-    next.filters = { ...current.filters };
-    for (const viewId of Object.keys(partial.filters)) {
-      const currentView = current.filters?.[viewId] as ViewFilters | undefined;
-      const partialView = partial.filters[viewId] as ViewFilters | undefined;
-      if (partialView && typeof partialView === "object") {
-        next.filters![viewId] = { ...currentView, ...partialView };
-      }
-    }
-  }
-  _store.value = next;
+  _store.value = { ..._store.value, ...partial };
+}
+
+/** Removes and returns the pre-CORE-45 shared filters, if any are still stored. */
+export function takeLegacyFilters(): Record<string, ViewFilters> | undefined {
+  const { filters, ...rest } = _store.value;
+  if (filters === undefined) return undefined;
+  _store.value = rest;
+  return filters && typeof filters === "object" ? filters : undefined;
 }
