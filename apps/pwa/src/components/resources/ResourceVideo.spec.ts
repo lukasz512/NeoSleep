@@ -92,6 +92,15 @@ describe("ResourceVideoTile", () => {
     expect(none.find(".video-card__duration").exists()).toBe(false);
   });
 
+  it("lies flat as a list row when asked (desktop/tablet list view)", () => {
+    const card = mountTile();
+    expect(card.classes()).not.toContain("video-card--row");
+    const row = mount(ResourceVideoTile, { props: { video: video(), layout: "row" }, global: { plugins: plugins() } });
+    mountedWrappers.push(row);
+    expect(row.classes()).toContain("video-card--row");
+    expect(row.find(".video-card__thumb").exists()).toBe(true);
+  });
+
   it("opens on click and on Enter", async () => {
     const w = mountTile();
     await w.trigger("click");

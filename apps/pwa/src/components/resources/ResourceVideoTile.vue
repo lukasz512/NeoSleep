@@ -1,7 +1,7 @@
 <template>
   <div
     class="video-card"
-    :class="{ 'video-card--pressing': pressing }"
+    :class="{ 'video-card--pressing': pressing, 'video-card--row': layout === 'row' }"
     role="button"
     tabindex="0"
     :aria-label="t('user.resources.video.play', { title: video.title })"
@@ -25,13 +25,15 @@
       <span v-if="video.durationSec" class="video-card__duration">{{ formatDuration(video.durationSec) }}</span>
       <span class="video-card__drop" aria-hidden="true"><AppIcon name="play" /></span>
     </div>
-    <span class="video-card__title">{{ video.title }}</span>
-    <span class="video-card__meta">
-      <span class="video-card__author">{{ video.description }}</span>
-      <span class="video-card__langs">
-        <span v-for="lang in video.languages" :key="lang.code" class="video-card__lang" :title="languageName(lang.code, locale)">
-          <PartnerLanguageFlag :code="lang.code" />
-          {{ lang.code.toUpperCase() }}
+    <span class="video-card__body">
+      <span class="video-card__title">{{ video.title }}</span>
+      <span class="video-card__meta">
+        <span class="video-card__author">{{ video.description }}</span>
+        <span class="video-card__langs">
+          <span v-for="lang in video.languages" :key="lang.code" class="video-card__lang" :title="languageName(lang.code, locale)">
+            <PartnerLanguageFlag :code="lang.code" />
+            {{ lang.code.toUpperCase() }}
+          </span>
         </span>
       </span>
     </span>
@@ -52,9 +54,10 @@ import type { PartnerResourceItem } from "../../composables/usePartnerResources"
  * like the rest of the app, not like a streaming site — no lift, no shadow,
  * a quiet tint on hover. The play button drops in like water (grows,
  * overshoots, settles) and a press swells the frame under the finger, the same
- * "drop" the phone avatar and page transitions use.
+ * "drop" the phone avatar and page transitions use. `layout="row"` lays the
+ * same card flat for the Resources list view (desktop/tablet toggle, NEO-151).
  */
-const props = defineProps<{ video: PartnerResourceItem }>();
+const props = withDefaults(defineProps<{ video: PartnerResourceItem; layout?: "card" | "row" }>(), { layout: "card" });
 const emit = defineEmits<{ open: [] }>();
 const { t, locale } = useI18n();
 
@@ -212,6 +215,12 @@ function open(): void {
   }
 }
 
+.video-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
 .video-card__title {
   font-size: 0.875rem;
   font-weight: 600;
@@ -247,6 +256,41 @@ function open(): void {
   align-items: center;
   gap: 4px;
   font-weight: 600;
+}
+
+/* Row: the list view — frame on the left, text beside it, like the app's other lists. */
+.video-card--row {
+  position: relative;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+  padding: 10px;
+  margin: 0 -10px;
+  border-radius: 12px;
+}
+.video-card--row::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  height: 1px;
+  background: rgba(var(--v-theme-on-surface), 0.08);
+}
+.video-card--row:hover::after {
+  opacity: 0;
+}
+.video-card--row .video-card__thumb {
+  flex: none;
+  width: 144px;
+}
+.video-card--row .video-card__body {
+  flex: 1;
+  gap: 4px;
+}
+.video-card--row .video-card__title {
+  min-height: 0;
+  font-size: 0.9375rem;
 }
 
 @media (prefers-reduced-motion: reduce) {

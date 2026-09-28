@@ -121,8 +121,14 @@
                     {{ t(`user.resources.topic.${group.topic}`) }}
                     <span class="view-resources__topic-count">{{ group.videos.length }}</span>
                   </h2>
-                  <div class="view-resources__video-grid">
-                    <ResourceVideoTile v-for="video in group.videos" :key="video.id" :video="video" @open="openVideo = video" />
+                  <div class="view-resources__video-grid" :class="{ 'view-resources__video-grid--list': layout === 'list' }">
+                    <ResourceVideoTile
+                      v-for="video in group.videos"
+                      :key="video.id"
+                      :video="video"
+                      :layout="layout === 'list' ? 'row' : 'card'"
+                      @open="openVideo = video"
+                    />
                   </div>
                 </section>
               </div>
@@ -131,6 +137,24 @@
         </Transition>
       </div>
       <ResourceVideoSheet :video="openVideo" @close="openVideo = null" />
+      <!-- Cards | list (NEO-151): desktop and tablet only, in the page header next to the title. -->
+      <Teleport v-if="wide && tab === 'videos' && videos.length" :to="pageHeader.to" defer :disabled="pageHeader.disabled.value">
+        <div class="view-resources__layout-toggle" role="group" :aria-label="t('user.resources.layout.label')">
+          <button
+            v-for="option in LAYOUTS"
+            :key="option.value"
+            type="button"
+            class="view-resources__layout-option"
+            :aria-pressed="savedLayout === option.value"
+            :title="t(option.label)"
+            :aria-label="t(option.label)"
+            :data-testid="`resources-layout-${option.value}`"
+            @click="setLayout(option.value)"
+          >
+            <AppIcon :name="option.icon" />
+          </button>
+        </div>
+      </Teleport>
     </template>
   </div>
 </template>
@@ -145,7 +169,10 @@ import AppEmptyState from "../components/AppEmptyState.vue";
 import ResourceVideoTile from "../components/resources/ResourceVideoTile.vue";
 import ResourceVideoSheet from "../components/resources/ResourceVideoSheet.vue";
 import { usePartnerResources, type PartnerResourceFileType, type PartnerResourceItem } from "../composables/usePartnerResources";
-import { usePageHeaderRow } from "../composables/usePageHeader";
+import { usePageHeaderRow, usePageHeaderTeleport } from "../composables/usePageHeader";
+import { useMediaQuery } from "@vueuse/core";
+import { getUserSettings, setUserSettings } from "../utils/user-settings";
+import { MOBILE_BREAKPOINT } from "../constants";
 import { useAuthStore } from "../stores/auth";
 import { SUPPORT_EMAIL } from "../constants";
 
@@ -171,6 +198,24 @@ const topicGroups = computed(() =>
     videos: videos.value.filter((v) => ((TOPIC_ORDER as readonly string[]).includes(v.topic ?? "") ? v.topic : "other") === topic),
   })).filter((g): g is { topic: Topic; videos: PartnerResourceItem[] } => g.videos.length > 0)
 );
+
+/**
+ * Cards or list (Łukasz, NEO-151): cards by default, the choice remembered on
+ * this device (app settings). Phones always get cards — no toggle there.
+ */
+type ResourcesLayout = "cards" | "list";
+const LAYOUTS: { value: ResourcesLayout; icon: AppIconName; label: string }[] = [
+  { value: "cards", icon: "view-grid", label: "user.resources.layout.cards" },
+  { value: "list", icon: "view-list", label: "user.resources.layout.list" },
+];
+const pageHeader = usePageHeaderTeleport();
+const wide = useMediaQuery(`(min-width: ${MOBILE_BREAKPOINT}px)`);
+const savedLayout = ref<ResourcesLayout>(getUserSettings().resourcesLayout ?? "cards");
+const layout = computed<ResourcesLayout>(() => (wide.value ? savedLayout.value : "cards"));
+function setLayout(value: ResourcesLayout): void {
+  savedLayout.value = value;
+  setUserSettings({ resourcesLayout: value });
+}
 
 /** The video playing in the cinema sheet — one at a time, so only one download runs. */
 const openVideo = ref<PartnerResourceItem | null>(null);
@@ -463,6 +508,45 @@ const incidentMailtoHref = computed(() => {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 20px 16px;
   }
+}
+
+.view-resources__video-grid--list {
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 0 !important;
+}
+
+/* Cards | list toggle: a quiet segmented pair, like the theme row in the account menu. */
+.view-resources__layout-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(var(--v-theme-on-surface), 0.06);
+}
+.view-resources__layout-option {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 30px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+.view-resources__layout-option .app-icon {
+  width: 18px;
+  height: 18px;
+}
+.view-resources__layout-option[aria-pressed="true"] {
+  background: rgb(var(--v-theme-surface));
+  color: rgb(var(--v-theme-primary));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+.view-resources__layout-option:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 1px;
 }
 
 /* Skeleton in the shape of the cards: frame, two title lines. */

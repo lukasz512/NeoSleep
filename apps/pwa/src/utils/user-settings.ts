@@ -22,6 +22,8 @@ export interface AppSettings {
   sidebarCollapsed?: boolean;
   /** Keyed by view id (e.g. 'leads', 'hcp'). Each value is a record of filter key -> value. */
   filters?: Record<string, ViewFilters>;
+  /** Resources videos as small cards or a list (NEO-151) — desktop/tablet only, remembered per device. */
+  resourcesLayout?: "cards" | "list";
 }
 
 // No default for `locale` here: this module's useLocalStorage() singleton persists
