@@ -591,7 +591,7 @@ const arrivedKeys = reactive(new Set<string>());
 let knownEntryIds: Set<string> | null = null;
 function flashArrived(key: string) {
   arrivedKeys.add(key);
-  setTimeout(() => arrivedKeys.delete(key), 2400);
+  setTimeout(() => arrivedKeys.delete(key), 3200); // = the CSS glow's length
 }
 watch(checklist, (value) => {
   if (!value) return;
@@ -907,22 +907,51 @@ watch(() => props.focusItem, (key) => highlightItem(key));
 .studies__item--focus {
   box-shadow: 0 0 0 3px rgba(var(--v-theme-primary), 0.45);
 }
-/* NEO-173: something just arrived in this row — a soft tint that fades out. */
-.studies__item--arrived .studies__item-content {
-  animation: studies-arrived 2.4s ease-out;
+/*
+ * NEO-173: something just arrived in this row — the whole tile (rail
+ * included) lights up green with a halo, holds, then fades out. The tint is
+ * an overlay so it covers the rail's own background too.
+ */
+.studies__item--arrived {
+  position: relative;
+  border-color: rgb(var(--v-theme-success));
+  animation: studies-arrived-halo 3.2s ease-out;
 }
-@keyframes studies-arrived {
-  from {
-    background: rgba(var(--v-theme-primary), 0.14);
+.studies__item--arrived::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: rgb(var(--v-theme-success));
+  animation: studies-arrived-tint 3.2s ease-out forwards;
+}
+@keyframes studies-arrived-halo {
+  0%,
+  45% {
+    box-shadow: 0 0 0 2px rgba(var(--v-theme-success), 0.55), 0 0 18px 2px rgba(var(--v-theme-success), 0.45);
   }
-  to {
-    background: transparent;
+  100% {
+    box-shadow: 0 0 0 0 rgba(var(--v-theme-success), 0), 0 0 0 0 rgba(var(--v-theme-success), 0);
+  }
+}
+@keyframes studies-arrived-tint {
+  0%,
+  45% {
+    opacity: 0.16;
+  }
+  100% {
+    opacity: 0;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .studies__item--arrived .studies__item-content {
+  .studies__item--arrived {
     animation: none;
-    box-shadow: inset 0 0 0 2px rgba(var(--v-theme-primary), 0.35);
+    box-shadow: 0 0 0 2px rgba(var(--v-theme-success), 0.55);
+  }
+  .studies__item--arrived::after {
+    animation: none;
+    opacity: 0.12;
   }
 }
 /* NEO-173: "Nuevo" — added by someone else, not yet opened by me. */
