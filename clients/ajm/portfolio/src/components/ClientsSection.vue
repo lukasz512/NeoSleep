@@ -6,13 +6,16 @@
     <p v-reveal class="eyebrow">{{ t("clients.eyebrow") }}</p>
     <ul class="clients__list">
       <li v-for="(c, i) in CLIENTS" :key="c.name" v-reveal="{ delay: i * 90 }" class="client">
-        <span class="client__num" aria-hidden="true">{{ String(i + 1).padStart(2, "0") }}</span>
-        <span
-          class="client__logo"
-          role="img"
-          :aria-label="c.name"
-          :style="{ '--logo': `url(${mediaUrl(c.logo)})`, '--h': c.height }"
-        />
+        <!-- each logo leads back to its case higher up the page -->
+        <a class="client__link" :href="`#${c.anchor}`" :aria-label="t('clients.goTo', { name: c.name })">
+          <span class="client__num" aria-hidden="true">{{ String(i + 1).padStart(2, "0") }}</span>
+          <span
+            class="client__logo"
+            aria-hidden="true"
+            :style="{ '--logo': `url(${mediaUrl(c.logo)})`, '--h': c.height }"
+          />
+          <span class="client__see" aria-hidden="true">{{ t("clients.see") }} ↑</span>
+        </a>
       </li>
     </ul>
   </section>
@@ -42,12 +45,35 @@ const { t } = useI18n();
 }
 .client {
   position: relative;
+  border-bottom: 1px solid var(--ajm-line);
+  transition: opacity 0.4s ease;
+}
+.client__link {
   display: grid;
   place-items: center;
   min-height: clamp(140px, 16vw, 220px);
   padding: 24px;
-  border-bottom: 1px solid var(--ajm-line);
-  transition: opacity 0.4s ease;
+  color: inherit;
+  text-decoration: none;
+}
+.client__see {
+  position: absolute;
+  right: 16px;
+  bottom: 14px;
+  font: 500 11px var(--ajm-font);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ajm-muted);
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity 0.4s ease,
+    transform 0.4s var(--ajm-ease);
+}
+.client__link:hover .client__see,
+.client__link:focus-visible .client__see {
+  opacity: 1;
+  transform: none;
 }
 .client:nth-child(odd) {
   border-right: 1px solid var(--ajm-line);

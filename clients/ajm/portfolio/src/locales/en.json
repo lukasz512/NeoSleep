@@ -19,7 +19,11 @@
     "kicker": "Corporate Events · Experiences"
   },
   "media": {
-    "play": "Play video"
+    "play": "Play video",
+    "enlarge": "View photo larger",
+    "prev": "Previous photo",
+    "next": "Next photo",
+    "close": "Close"
   },
   "hero": {
     "line1": "We create experiences",
@@ -140,7 +144,8 @@
         "body": "Lounges, activations and brand spaces: the relationship goes on, event after event."
       }
     },
-    "photoAltMore": "Lounge at a Privalia event"
+    "photoAltMore": "Lounge at a Privalia event",
+    "photoAlt2020": "eFashion Day Live 2020: the broadcast set"
   },
   "mendel": {
     "number": "Case 04",
@@ -186,7 +191,9 @@
     ]
   },
   "clients": {
-    "eyebrow": "Selected clients"
+    "eyebrow": "Selected clients",
+    "see": "See the project",
+    "goTo": "See the {name} project"
   },
   "about": {
     "eyebrow": "About AJ Management",
@@ -196,12 +203,12 @@
     "body2": "Our network of producers, venues, technical partners and specialist suppliers lets us build the right team for every project, with one central point of coordination.",
     "cities": [
       {
-        "city": "Mexico City",
-        "role": "Production & Operations"
-      },
-      {
         "city": "Madrid",
         "role": "Europe & Partnerships"
+      },
+      {
+        "city": "Mexico City",
+        "role": "Production & Operations"
       },
       {
         "city": "International",

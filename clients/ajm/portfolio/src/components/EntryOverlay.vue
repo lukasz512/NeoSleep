@@ -133,7 +133,7 @@ onBeforeUnmount(() => timers.forEach((t) => window.clearTimeout(t)));
   text-transform: uppercase;
   background: none;
   border: 0;
-  color: rgba(244, 241, 234, 0.45);
+  color: var(--ajm-muted);
   cursor: pointer;
   padding: 8px;
   z-index: 2;
@@ -149,7 +149,7 @@ onBeforeUnmount(() => timers.forEach((t) => window.clearTimeout(t)));
 
 /* ---- fade ---- */
 .entry--fade {
-  background: var(--ajm-stage);
+  background: var(--ajm-paper);
 }
 .entry--fade.is-open {
   opacity: 0;
@@ -164,7 +164,7 @@ onBeforeUnmount(() => timers.forEach((t) => window.clearTimeout(t)));
   left: 0;
   right: 0;
   height: 50.5%;
-  background: var(--ajm-stage);
+  background: var(--ajm-paper);
   transition: transform 1s cubic-bezier(0.83, 0, 0.17, 1);
 }
 .shutter--top {
@@ -179,7 +179,7 @@ onBeforeUnmount(() => timers.forEach((t) => window.clearTimeout(t)));
   left: 0;
   right: 0;
   height: 1px;
-  background: rgba(244, 241, 234, 0.5);
+  background: color-mix(in srgb, var(--ajm-ink) 40%, transparent);
   opacity: 0;
   transition: opacity 0.2s ease;
 }
@@ -194,7 +194,7 @@ onBeforeUnmount(() => timers.forEach((t) => window.clearTimeout(t)));
   display: grid;
   justify-items: center;
   gap: 18px;
-  color: var(--ajm-on-stage);
+  color: var(--ajm-ink);
   transition: opacity 0.35s ease, transform 1s cubic-bezier(0.83, 0, 0.17, 1);
 }
 .stage__mask {
@@ -213,7 +213,7 @@ onBeforeUnmount(() => timers.forEach((t) => window.clearTimeout(t)));
 .stage__line {
   width: min(56vw, 440px);
   height: 1px;
-  background: rgba(244, 241, 234, 0.7);
+  background: color-mix(in srgb, var(--ajm-ink) 70%, transparent);
   transform: scaleX(0);
   transition: transform 0.7s var(--ajm-ease);
 }
@@ -222,7 +222,7 @@ onBeforeUnmount(() => timers.forEach((t) => window.clearTimeout(t)));
   font: 500 11px var(--ajm-font);
   letter-spacing: 0.32em;
   text-transform: uppercase;
-  color: rgba(244, 241, 234, 0.55);
+  color: var(--ajm-muted);
   opacity: 0;
   transform: translateY(-6px);
   transition: opacity 0.6s ease 0.8s, transform 0.8s var(--ajm-ease) 0.8s, letter-spacing 1.4s var(--ajm-ease) 0.6s;

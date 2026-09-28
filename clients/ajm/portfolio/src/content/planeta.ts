@@ -29,6 +29,9 @@ export const PLANETA_EVENTS: PlanetaEvent[] = [
   { id: "vesubio", title: "Pizzería Vesubio", photos: ["planeta24", "planeta25"] },
 ];
 
+/** Shown on the page: events with at least 2 photos ("Algún día, hoy" has one so far). */
+export const PLANETA_VISIBLE = PLANETA_EVENTS.filter((e) => e.photos.length >= 2);
+
 export const LARGE_PHOTOS = new Set([
   "planeta13",
   "planeta14",

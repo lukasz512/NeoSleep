@@ -28,7 +28,8 @@ mask_from_light_bg() {
 
 cp "$SRC/universal.svg" "$OUT/universal.svg"   # vector, dark shapes only, no background
 cp "$SRC/privalia.png" "$OUT/privalia.png"     # already transparent
-mask_from_light_bg "$SRC/mendel.jpg" "$OUT/mendel.png"
+# Mendel: no auto-trim, it cut the dot of the symbol
+mask_from_light_bg "$SRC/mendel.jpg" "$OUT/mendel.png" "pad=iw+8:ih+8:4:4:white"
 # the Planeta webp carries broken EXIF and cropdetect cuts into the wordmark: crop by hand
 mask_from_light_bg "$SRC/planeta.webp" "$OUT/planeta.png" "crop=500:100:62:110"
 ls -la "$OUT"

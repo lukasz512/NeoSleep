@@ -221,6 +221,26 @@ Not yet: Privalia timeline, Mendel reel, Capacidades, Cómo trabajamos, Clientes
 - Deploy: `.github/workflows/deploy-ajm-portfolio.yml`, run manually or on prod pushes under `clients/ajm/`. `.htaccess` handles the client-side routes and forces HTTPS.
 - **Later (Łukasz)**: an Apple Wallet business card carrying a QR code that opens the page with the QR entry animation (`?src=qr`). This needs its own ticket, plus a pass-signing certificate from an Apple Developer account.
 
+## Round 5: Łukasz's review of the preview (2026-09-28)
+
+- The accent word is **pen-written** (Pinyon Script) and writes itself left to right as the heading rises (scroll-linked). The Bodoni italic stays only for figures.
+- The marker is **hand-drawn** again: a brush-edged SVG mask with a sand fill and no gradient. It is drawn by scroll right after the pen word. This replaces the band/hairline (M1).
+- Qué hacemos: the words light up only once the list is on screen (80 % → 40 % of the viewport).
+- Universal: the rooms follow scroll, and the video stays inside the matching room's third of the loop.
+- Capacidades stills now match their modules:
+  - audience for corporate
+  - stage interview for executive
+  - courtyard seating plan for logistics
+  - the Bordes palace room for venues
+- **Every event shows ≥ 2 photos** (test). Hidden until more photos arrive: Hugo Boss × Privalia, the neon-lounge event, and "Algún día, hoy". The 2020 chapter gets two clean studio frames.
+- Photos open in a full-screen viewer with a caption (Planeta and Privalia).
+- Privalia years are shown whole; they were cut by their window and the column width.
+- Mendel: the figures sit on one line and the labels fit on one line. The logo is no longer cropped.
+- The process pin length follows the real track width, which removes the empty screen at the end.
+- The client logos link to their cases. Cities read Madrid · CDMX · Internacional.
+- The entry follows the theme: paper on light, charcoal on dark.
+- Proposals in the Artifact, awaiting a choice: 3 pen fonts, 2 Planeta gallery layouts (no horizontal scroll), 3 objects for the gap before Clientes.
+
 ## Next (remaining)
 
 Scaffold `clients/ajm/portfolio` (Vite + Vue + TS, GSAP/Lenis, own ES/EN locales, lint rule blocking `@neo/*`), then build the vertical slice: entry (QR + link) → hero montage → Qué hacemos → Universal walk-through, in ES + EN, weak-network rules on.

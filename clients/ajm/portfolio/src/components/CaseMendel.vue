@@ -138,6 +138,7 @@ function counted(value: number): number {
   bottom: clamp(24px, 4vw, 56px);
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-end;
   gap: 16px clamp(32px, 6vw, 96px);
   margin: 0;
   padding: 0;
@@ -167,7 +168,7 @@ function counted(value: number): number {
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: rgba(244, 241, 234, 0.85);
-  max-width: 200px;
+  white-space: nowrap;
 }
 
 .reel__after {

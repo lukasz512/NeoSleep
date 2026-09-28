@@ -96,6 +96,12 @@ still "$EFD19" 28 1280 "$OUT/privalia/y2019-poster" "$EFD19_CROP"
 loop "$MAKING"  40.55 3.2 "$FILL_W" 720 29 "$OUT/privalia/y2020-720.mp4"
 loop "$MAKING"  40.55 3.2 "$FILL_W" 360 31 "$OUT/privalia/y2020-360.mp4"
 still "$MAKING" 41 1280 "$OUT/privalia/y2020-poster"
+# every event shows at least 2 photos (Łukasz, 2026-09-28): 2020 has no photos, so two clean
+# frames of the studio — the wide LED stage and the neon-ring interview
+still "$MAKING" 63.6 1280 "$OUT/privalia/y2020a-1280"
+still "$MAKING" 63.6 640  "$OUT/privalia/y2020a-640"
+still "$MAKING" 87.3 1280 "$OUT/privalia/y2020b-1280"
+still "$MAKING" 87.3 640  "$OUT/privalia/y2020b-640"
 find "$SRC/privalia" -type f -iname 'privalia*.jpg' | while read -r f; do
   base="$(basename "$f")"
   photo "$f" "$OUT/privalia/${base%.*}"
@@ -134,12 +140,16 @@ still "$MAKING" 63.6 1280 "$OUT/contact/stage-poster"
 still "$MAKING" 63.6 640 "$OUT/contact/stage-poster-640"
 
 # ---- Capacidades: one detail still per module (behind the big numbers) -------------------
-still "$MENDEL" 46  960 "$OUT/capabilities/c1" "$MENDEL_CROP"
-still "$MENDEL" 36  960 "$OUT/capabilities/c2" "$MENDEL_CROP"
+# Each still says what its module is (Łukasz, 2026-09-28: the first cut didn't):
+# 01 corporate events → a full conference audience · 02 executive → the stage interview
+# 03 teams → the long dinner tables · 04 production → the sound desk
+# 05 logistics → the courtyard seating plan from above · 06 venues → the Bordes palace room
+still "$EFD19" 147  960 "$OUT/capabilities/c1" "$EFD19_CROP"
+still "$MAKING" 86.2 960 "$OUT/capabilities/c2"
 still "$EFD19" 103  960 "$OUT/capabilities/c3" "$EFD19_CROP"
 still "$MAKING"  41 960 "$OUT/capabilities/c4"
-still "$MAKING"  17 960 "$OUT/capabilities/c5"
-still "$EFD19"  28  960 "$OUT/capabilities/c6" "$EFD19_CROP"
+still "$SRC/privalia/privalia01.jpg" "" 960 "$OUT/capabilities/c5"
+still "$SRC/planeta/planeta12.JPG" "" 960 "$OUT/capabilities/c6"
 
 # ---- Clientes: one-colour logo masks ------------------------------------------------------
 AJM_MATERIALS="$SRC" bash "$(dirname "$0")/encode-logos.sh" > /dev/null

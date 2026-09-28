@@ -11,7 +11,7 @@
       <p class="case__tags">{{ t("universal.tags") }}</p>
     </header>
 
-    <div class="walk">
+    <div ref="walk" class="walk">
       <div class="walk__frame">
         <LoopVideo
           ref="loop"
@@ -42,6 +42,7 @@ import { useI18n } from "vue-i18n";
 import LoopVideo from "./LoopVideo.vue";
 import { loopUrl, picture } from "../lib/media";
 import { useInView } from "../lib/useInView";
+import { span01, useScrollProgress } from "../lib/motion";
 
 defineProps<{ lite: boolean }>();
 const { t, tm, rt } = useI18n();
@@ -51,24 +52,36 @@ const seen = useInView(root, "-10%");
 // vue-i18n types message arrays loosely; each entry is a compiled message resolved by rt().
 const rooms = computed(() => (tm("universal.rooms") as unknown[]).map((r) => rt(r as Parameters<typeof rt>[0])));
 
-// The 18 s loop walks lounge → collection → meeting room; split it into equal thirds.
-const loop = ref<InstanceType<typeof LoopVideo> | null>(null);
-const currentTime = ref(0);
-const roomIndex = computed(() => Math.min(rooms.value.length - 1, Math.floor(currentTime.value / 6)));
+// Scroll picks the room (Łukasz, 2026-09-28): as the walk-through rises up the screen the list
+// steps lounge → collection → meeting room, and the video stays inside that room's third of the
+// 18 s loop (0–6 s, 6–12 s, 12–18 s), so picture and name always match. Lite: static list.
+const walk = ref<HTMLElement | null>(null);
+const entering = useScrollProgress(walk, "enter");
+const roomIndex = computed(() =>
+  Math.min(rooms.value.length - 1, Math.floor(span01(entering.value, 0.3, 0.95) * rooms.value.length)),
+);
+const SEGMENT = 6;
 
-function onTime(e: Event) {
-  currentTime.value = (e.target as HTMLVideoElement).currentTime;
+const loop = ref<InstanceType<typeof LoopVideo> | null>(null);
+function keepInRoom(e: Event) {
+  const v = e.target as HTMLVideoElement;
+  const start = roomIndex.value * SEGMENT;
+  if (v.currentTime < start || v.currentTime >= start + SEGMENT) v.currentTime = start;
 }
+watch(roomIndex, (i) => {
+  const v = loop.value?.video;
+  if (v && v.readyState > 0) v.currentTime = i * SEGMENT;
+});
 let bound: HTMLVideoElement | null = null;
 watch(
   () => loop.value?.video ?? null,
   (v) => {
-    bound?.removeEventListener("timeupdate", onTime);
+    bound?.removeEventListener("timeupdate", keepInRoom);
     bound = v;
-    bound?.addEventListener("timeupdate", onTime);
+    bound?.addEventListener("timeupdate", keepInRoom);
   },
 );
-onBeforeUnmount(() => bound?.removeEventListener("timeupdate", onTime));
+onBeforeUnmount(() => bound?.removeEventListener("timeupdate", keepInRoom));
 </script>
 
 <style scoped>

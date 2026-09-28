@@ -47,22 +47,28 @@
             />
           </div>
 
-          <div v-if="ch.photos" class="mosaic" :class="{ 'mosaic--single': ch.photos.length === 1 }">
-            <picture
+          <div v-if="ch.photos" class="mosaic" :class="{ 'mosaic--single': ch.photos.length === 1, 'mosaic--pair': ch.photos.length === 2 }">
+            <button
               v-for="(p, j) in ch.photos"
               :key="p.id"
               v-reveal="{ variant: 'scale', delay: (j % 3) * 90 }"
               v-parallax="j % 2 ? 0.06 : -0.04"
+              type="button"
               class="mosaic__item"
               :class="`mosaic__item--${j}`"
+              :aria-label="t('media.enlarge')"
+              @click="openPhoto(ch.id, j)"
             >
-              <source :srcset="picture(photoSrc(p)).avif" type="image/avif" />
-              <img :src="picture(photoSrc(p)).jpg" :alt="t(ch.id === 'more' ? 'privalia.photoAltMore' : 'privalia.photoAlt')" loading="lazy" decoding="async" />
-            </picture>
+              <picture>
+                <source :srcset="picture(photoSrc(p)).avif" type="image/avif" />
+                <img :src="picture(photoSrc(p)).jpg" :alt="altFor(ch.id)" loading="lazy" decoding="async" />
+              </picture>
+            </button>
           </div>
         </section>
       </div>
     </div>
+    <PhotoLightbox v-model:index="viewing" :photos="lightboxPhotos" :labels="lbLabels" />
   </article>
 </template>
 
@@ -71,7 +77,8 @@ import AccentText from "./AccentText.vue";
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import LoopVideo from "./LoopVideo.vue";
-import { PRIVALIA_CHAPTERS } from "../content/cases";
+import PhotoLightbox, { type LightboxPhoto } from "./PhotoLightbox.vue";
+import { PRIVALIA_VISIBLE } from "../content/cases";
 import { loopUrl, picture } from "../lib/media";
 import { useInView } from "../lib/useInView";
 import { vParallax, vReveal } from "../lib/motion";
@@ -81,7 +88,7 @@ const { t } = useI18n();
 const root = ref<HTMLElement | null>(null);
 const seen = useInView(root, "-10%");
 
-const chapters = PRIVALIA_CHAPTERS;
+const chapters = PRIVALIA_VISIBLE;
 const active = ref(0);
 const mark = computed(() => t(`privalia.chapters.${chapters[active.value]?.id ?? "y2019"}.mark`).split(""));
 const chapterEls = ref<(HTMLElement | null)[]>([]);
@@ -89,6 +96,27 @@ const chapterEls = ref<(HTMLElement | null)[]>([]);
 function photoSrc(p: { id: string; large: boolean }): string {
   return `privalia/${p.id}-${p.large ? 1280 : 640}`;
 }
+function altFor(id: string): string {
+  if (id === "more") return t("privalia.photoAltMore");
+  if (id === "y2020") return t("privalia.photoAlt2020");
+  return t("privalia.photoAlt");
+}
+
+// Photos open full screen with the chapter's name and year as the description.
+const viewing = ref<number | null>(null);
+const viewingChapter = ref<string>(chapters[0]?.id ?? "y2019");
+function openPhoto(id: string, j: number) {
+  viewingChapter.value = id;
+  viewing.value = j;
+}
+const lightboxPhotos = computed<LightboxPhoto[]>(() => {
+  const ch = chapters.find((c) => c.id === viewingChapter.value);
+  if (!ch?.photos) return [];
+  const title = t(`privalia.chapters.${ch.id}.name`);
+  const caption = [t(`privalia.chapters.${ch.id}.mark`), t("privalia.client")].join(" · ");
+  return ch.photos.map((p) => ({ src: picture(photoSrc(p)), title, caption }));
+});
+const lbLabels = computed(() => ({ prev: t("media.prev"), next: t("media.next"), close: t("media.close") }));
 
 // The chapter crossing the middle band of the screen drives the year.
 let io: IntersectionObserver | null = null;
@@ -149,15 +177,20 @@ onBeforeUnmount(() => io?.disconnect());
 }
 .tl__year {
   display: flex;
-  font: italic 400 clamp(68px, 12vw, 190px) / 1 var(--ajm-display);
+  /* sized to fit its column: at 12vw "2020" was wider than the rail and got cut */
+  font: italic 400 clamp(60px, 9vw, 150px) / 1 var(--ajm-display);
   letter-spacing: -0.05em;
   font-variant-numeric: tabular-nums;
 }
+/* each digit rolls inside its own window; the window is wider and taller than the digit so the
+   italic's overhang and the ball terminals are never cut (Łukasz: show them whole) */
 .tl__slot {
   position: relative;
   display: inline-block;
   overflow: hidden;
-  height: 1em;
+  height: 1.12em;
+  padding: 0.04em 0.16em 0 0.02em;
+  margin-right: -0.16em;
   min-width: 0.3em;
 }
 .tl__ch {
@@ -239,13 +272,26 @@ onBeforeUnmount(() => io?.disconnect());
   margin-top: clamp(16px, 2vw, 28px);
 }
 .mosaic__item {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
   overflow: hidden;
+  cursor: zoom-in;
   transform: translate3d(0, var(--py, 0), 0);
+}
+.mosaic__item picture {
+  display: block;
+  height: 100%;
 }
 .mosaic__item img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: transform 0.8s var(--ajm-ease);
+}
+.mosaic__item:hover img {
+  transform: scale(1.04);
 }
 .mosaic__item--0 {
   grid-column: 1 / 5;
@@ -263,6 +309,13 @@ onBeforeUnmount(() => io?.disconnect());
 }
 .mosaic__item--3 {
   grid-column: 3 / 5;
+  aspect-ratio: 3 / 2;
+}
+/* two photos: side by side, same size */
+.mosaic--pair .mosaic__item--0,
+.mosaic--pair .mosaic__item--1 {
+  grid-column: span 3;
+  grid-row: auto;
   aspect-ratio: 3 / 2;
 }
 /* a chapter with one photo shows it as a portrait, not cropped to the lead's landscape */

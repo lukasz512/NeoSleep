@@ -19,6 +19,7 @@
   --ajm-ease: cubic-bezier(0.7, 0, 0.2, 1);
   --ajm-font: "Montserrat Variable", "Montserrat", "Helvetica Neue", Arial, system-ui, sans-serif;
   --ajm-display: "Bodoni Moda", Didot, "Bodoni 72", Georgia, serif;
+  --ajm-script: "Pinyon Script", "Snell Roundhand", cursive;
   color-scheme: light;
 }
 :root[data-theme="dark"] {
@@ -57,16 +58,28 @@
     border-color 0.6s ease !important;
 }
 
-/* One Bodoni italic word per headline (T1 = A) and Bodoni italic figures (from C). */
-.acc,
+/* Figures (300, 360°, years) in Bodoni italic. */
 .fig {
   font-family: var(--ajm-display);
   font-style: italic;
   font-weight: 400;
   letter-spacing: -0.01em;
 }
-/* The partner's key phrase: a precise, square-edged sand band under the lower third of the
-   letters, drawn left to right once the heading is in view (no brush, no skew). */
+/* The one accent word per headline, written as if by pen (Łukasz, 2026-09-28: "like a pen").
+   AccentText sets --write from scroll, so the word writes itself left to right as the heading
+   comes up the screen. The clip reaches past the box so swashes aren't cut. */
+.acc {
+  font-family: var(--ajm-script);
+  font-weight: 400;
+  font-style: normal;
+  font-size: 1.32em;
+  line-height: 0.7;
+  letter-spacing: 0;
+  padding: 0 0.06em;
+  clip-path: inset(-0.6em calc((1 - var(--write, 1)) * 100%) -0.5em -0.3em);
+}
+/* The partner's key phrase: a hand-drawn sand stroke under the words (brush edges from an SVG
+   mask, no gradient). AccentText sets --draw from scroll, after the pen word is written. */
 .mk {
   position: relative;
   z-index: 0;
@@ -76,28 +89,19 @@
   content: "";
   position: absolute;
   z-index: -1;
-  left: -0.04em;
-  right: -0.04em;
-  bottom: 0.1em;
-  height: 0.28em;
+  left: -0.08em;
+  right: -0.1em;
+  bottom: 0.04em;
+  height: 0.42em;
   background: var(--ajm-sand);
-  opacity: 0.6;
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform 1s var(--ajm-ease) 0.55s;
+  opacity: 0.75;
+  -webkit-mask: var(--ajm-brush) 0 0 / 100% 100% no-repeat;
+  mask: var(--ajm-brush) 0 0 / 100% 100% no-repeat;
+  transform: rotate(-1deg);
+  clip-path: inset(0 calc((1 - var(--draw, 1)) * 100%) 0 0);
 }
-/* M1 (2026-09-28): on charcoal the band reads soft, so the dark theme draws a crisp 2 px
-   hairline under the phrase instead. */
-:root[data-theme="dark"] .mk::before {
-  /* just under the baseline: lower would fall outside the headline's mask-line clip */
-  bottom: 0.05em;
-  height: 2px;
-  opacity: 1;
-}
-.is-in .mk::before,
-.rv-in .mk::before,
-.lite .mk::before {
-  transform: scaleX(1);
+:root {
+  --ajm-brush: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 24' preserveAspectRatio='none'%3E%3Cpath d='M3 13C18 7 44 6 70 6.5c30 .6 58-1.4 88-.9 16 .3 30 1.6 38 3.4 2 .5 2 5.6.4 6.3-12 3.4-40 3.6-66 4.2-34 .8-62 2.4-94 2.6C12 22 4 20.5 2.6 18.4 1.6 16.9 1.8 14 3 13Z'/%3E%3C/svg%3E");
 }
 
 *,

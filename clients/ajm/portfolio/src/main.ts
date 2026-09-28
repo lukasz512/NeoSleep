@@ -8,6 +8,7 @@ import { applyTheme, initialTheme, readStoredTheme } from "./lib/theme";
 // Bodoni Moda italic for the one accent word per headline and for figures.
 import "@fontsource-variable/montserrat/wght.css";
 import "@fontsource/bodoni-moda/latin-400-italic.css";
+import "@fontsource/pinyon-script/latin-400.css";
 import "./style.css";
 
 const { locale, redirectTo } = resolveLocale(

@@ -7,7 +7,7 @@
     ref="root"
     class="process"
     :class="{ 'process--pinned': pinned }"
-    :style="pinned ? { height: `${steps.length * 55 + 100}vh` } : undefined"
+    :style="pinned ? { height: `calc(100svh + ${Math.round(overflow * 1.25)}px)` } : undefined"
   >
     <div class="process__sticky">
       <header class="process__head">
@@ -144,7 +144,7 @@ const current = computed(() =>
   display: flex;
   gap: clamp(40px, 6vw, 96px);
   width: max-content;
-  padding-right: 20vw;
+  padding-right: 8vw;
   will-change: transform;
 }
 .track__line {

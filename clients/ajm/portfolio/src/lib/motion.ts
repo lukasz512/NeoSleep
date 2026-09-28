@@ -120,6 +120,23 @@ export function progressThrough(top: number, height: number, viewport: number): 
   return Math.min(1, Math.max(0, -top / travel));
 }
 
+const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
+
+/**
+ * Pen timing for a headline, from its "enter" progress (0 = top at the viewport bottom,
+ * 1 = at the top): the accent word writes itself while the heading rises from 85 % to 50 % of
+ * the screen, then the marker stroke is drawn from 55 % to 30 %. Always complete by the time the
+ * heading sits in the upper third, so nobody reads a half-written word.
+ */
+export function penTiming(enter: number): { write: number; draw: number } {
+  return { write: clamp01((enter - 0.15) / 0.35), draw: clamp01((enter - 0.45) / 0.25) };
+}
+
+/** Where a value sits between `from` and `to`, clamped to 0…1. */
+export function span01(value: number, from: number, to: number): number {
+  return clamp01((value - from) / (to - from));
+}
+
 /** 0 → 1 while the element enters: 0 when its top is at the viewport bottom, 1 when it reaches the top. */
 export function progressEntering(top: number, viewport: number): number {
   return Math.min(1, Math.max(0, 1 - top / viewport));

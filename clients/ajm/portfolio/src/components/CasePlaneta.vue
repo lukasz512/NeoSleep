@@ -36,35 +36,57 @@
             <span class="book__count">{{ t("planeta.photoCount", { n: ev.photos.length }) }}</span>
           </p>
           <div class="book__grid">
-            <picture v-for="(p, j) in ev.photos" :key="p" :class="{ big: j === 0 && LARGE_PHOTOS.has(p) }">
-              <source :srcset="picture(photoBase(p, j === 0)).avif" type="image/avif" />
-              <img
-                :src="picture(photoBase(p, j === 0)).jpg"
-                :alt="t('planeta.photoAlt', { event: ev.title })"
-                loading="lazy"
-                decoding="async"
-              />
-            </picture>
+            <button
+              v-for="(p, j) in ev.photos"
+              :key="p"
+              type="button"
+              class="book__photo"
+              :class="{ big: j === 0 && LARGE_PHOTOS.has(p) }"
+              :aria-label="t('media.enlarge')"
+              @click="viewing = j"
+            >
+              <picture>
+                <source :srcset="picture(photoBase(p, j === 0)).avif" type="image/avif" />
+                <img
+                  :src="picture(photoBase(p, j === 0)).jpg"
+                  :alt="t('planeta.photoAlt', { event: ev.title })"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </picture>
+            </button>
           </div>
         </div>
       </div>
     </div>
+    <PhotoLightbox v-model:index="viewing" :photos="lightboxPhotos" :labels="lbLabels" />
   </article>
 </template>
 
 <script setup lang="ts">
 import AccentText from "./AccentText.vue";
-import { ref } from "vue";
+import PhotoLightbox, { type LightboxPhoto } from "./PhotoLightbox.vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { LARGE_PHOTOS, PLANETA_EVENTS, photoBase } from "../content/planeta";
+import { LARGE_PHOTOS, PLANETA_VISIBLE, photoBase } from "../content/planeta";
 import { picture } from "../lib/media";
 import { useInView } from "../lib/useInView";
 
 const { t } = useI18n();
 const root = ref<HTMLElement | null>(null);
 const seen = useInView(root, "-10%");
-const events = PLANETA_EVENTS;
+const events = PLANETA_VISIBLE;
 const openIndex = ref(0);
+
+// The open event's photos, largest file available, with a one-line description.
+const viewing = ref<number | null>(null);
+const lightboxPhotos = computed<LightboxPhoto[]>(() => {
+  const ev = events[openIndex.value];
+  if (!ev) return [];
+  const caption = [t(`planeta.events.${ev.id}`), ev.year, t("planeta.client"), t("planeta.city")].filter(Boolean).join(" · ");
+  return ev.photos.map((p) => ({ src: picture(photoBase(p, true)), title: ev.title, caption }));
+});
+const lbLabels = computed(() => ({ prev: t("media.prev"), next: t("media.next"), close: t("media.close") }));
 </script>
 
 <style scoped>
@@ -179,15 +201,31 @@ const openIndex = ref(0);
   grid-auto-rows: 180px;
   gap: 6px;
 }
-.book__grid picture.big {
+.book__photo {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  overflow: hidden;
+  border-radius: 2px;
+  cursor: zoom-in;
+}
+.book__photo.big {
   grid-column: span 2;
   grid-row: span 2;
+}
+.book__photo picture {
+  display: block;
+  height: 100%;
 }
 .book__grid img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 2px;
+  transition: transform 0.8s var(--ajm-ease);
+}
+.book__photo:hover img {
+  transform: scale(1.04);
 }
 @media (max-width: 600px) {
   .book__pages {

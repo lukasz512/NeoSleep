@@ -453,6 +453,9 @@ importers:
       '@fontsource/bodoni-moda':
         specifier: ^5.3.0
         version: 5.3.0
+      '@fontsource/pinyon-script':
+        specifier: ^5.3.0
+        version: 5.3.0
       vue:
         specifier: 'catalog:'
         version: 3.5.43(typescript@5.9.3)
@@ -1354,6 +1357,9 @@ packages:
 
   '@fontsource/bodoni-moda@5.3.0':
     resolution: {integrity: sha512-Wt2XBCHivYxkTP3ydq/Ax+7VshwsOh/6ayA5om2t+yClCkGwLPj2Mi6OnyMANjyLcqDUWs4rlOHnc8SBLf6/pA==}
+
+  '@fontsource/pinyon-script@5.3.0':
+    resolution: {integrity: sha512-ilhy4l5apzyDkfuKb7PZBUT5Sf6nfxucdXT5TQ0wQDyWtDPlouLy1lQq3lMEPk1lPsHHVrd11EkPnEG8FqDgUA==}
 
   '@googlemaps/markerclusterer@2.6.2':
     resolution: {integrity: sha512-U6uVhq8iWhiIckA89sgRu8OK35mjd6/3CuoZKWakKEf0QmRRWpatlsPb3kqXkoWSmbcZkopRiI4dnW6DQSd7bQ==}
@@ -6152,6 +6158,8 @@ snapshots:
   '@fontsource-variable/montserrat@5.3.0': {}
 
   '@fontsource/bodoni-moda@5.3.0': {}
+
+  '@fontsource/pinyon-script@5.3.0': {}
 
   '@googlemaps/markerclusterer@2.6.2':
     dependencies:

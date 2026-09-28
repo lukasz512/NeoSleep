@@ -11,10 +11,10 @@
  * Universal: the file AJM sent is the Universal Pictures mark (case: Universal Products & Experiences).
  */
 export const CLIENTS = [
-  { name: "Universal Products & Experiences", logo: "logos/universal.svg", height: 1.9 },
-  { name: "Grupo Planeta", logo: "logos/planeta.png", height: 1.1 },
-  { name: "Privalia", logo: "logos/privalia.png", height: 1.2 },
-  { name: "Mendel", logo: "logos/mendel.png", height: 1 },
+  { name: "Universal Products & Experiences", logo: "logos/universal.svg", height: 1.9, anchor: "universal" },
+  { name: "Grupo Planeta", logo: "logos/planeta.png", height: 1.1, anchor: "planeta" },
+  { name: "Privalia", logo: "logos/privalia.png", height: 1.2, anchor: "privalia" },
+  { name: "Mendel", logo: "logos/mendel.png", height: 1, anchor: "mendel" },
 ] as const;
 
 export interface PrivaliaChapter {
@@ -40,11 +40,27 @@ export const PRIVALIA_CHAPTERS: PrivaliaChapter[] = [
       { id: "privalia03", large: true },
     ],
   },
-  { id: "y2020", loop: "privalia/y2020", poster: "privalia/y2020-poster" },
+  {
+    id: "y2020",
+    loop: "privalia/y2020",
+    poster: "privalia/y2020-poster",
+    photos: [
+      { id: "y2020a", large: true },
+      { id: "y2020b", large: true },
+    ],
+  },
+  // Hugo Boss × Privalia live shopping: no photos yet.
   { id: "live" },
-  // E1 (2026-09-28): the neon lounge is another Privalia event (name and year to come)
+  // E1 (2026-09-28): the neon lounge is another Privalia event (name and year to come); one photo.
   { id: "more", photos: [{ id: "privalia06", large: true }] },
 ];
+
+/**
+ * Łukasz, 2026-09-28: "every event shows at least 2 photos". Anything with fewer stays in the
+ * data (ready for when AJM sends more) but is not shown.
+ */
+export const MIN_PHOTOS = 2;
+export const PRIVALIA_VISIBLE = PRIVALIA_CHAPTERS.filter((c) => (c.photos?.length ?? 0) >= MIN_PHOTOS);
 
 /** Mendel figures from the proposal: "300 Invitados · Producción & Coordinación 360° · Equipo de Producción Dedicado". */
 export const MENDEL_STATS = [

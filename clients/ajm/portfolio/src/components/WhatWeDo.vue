@@ -9,7 +9,7 @@
       <p>{{ t("what.body1") }}</p>
       <p>{{ t("what.body2") }}</p>
     </div>
-    <ul class="what__words">
+    <ul ref="list" class="what__words">
       <li v-for="(word, i) in words" :key="word" :class="{ lit: i < litCount }">{{ word }}</li>
     </ul>
   </section>
@@ -17,9 +17,10 @@
 
 <script setup lang="ts">
 import AccentText from "./AccentText.vue";
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useInView } from "../lib/useInView";
+import { span01, useScrollProgress } from "../lib/motion";
 
 const props = defineProps<{ lite: boolean }>();
 const { t, tm, rt } = useI18n();
@@ -29,23 +30,13 @@ const seen = useInView(root, "-15%");
 // vue-i18n types message arrays loosely; each entry is a compiled message resolved by rt().
 const words = computed(() => (tm("what.words") as unknown[]).map((w) => rt(w as Parameters<typeof rt>[0])));
 
-// Words light up with scroll progress through the section; lite mode shows them all at once.
-const progress = ref(0);
-const litCount = computed(() => (props.lite ? words.value.length : Math.ceil(progress.value * words.value.length)));
-
-function onScroll() {
-  const el = root.value;
-  if (!el) return;
-  const rect = el.getBoundingClientRect();
-  const span = rect.height + window.innerHeight * 0.3;
-  progress.value = Math.min(1, Math.max(0, (window.innerHeight * 0.85 - rect.top) / span));
-}
-onMounted(() => {
-  if (props.lite) return;
-  onScroll();
-  window.addEventListener("scroll", onScroll, { passive: true });
-});
-onBeforeUnmount(() => window.removeEventListener("scroll", onScroll));
+// Words light up only once the list itself is on screen: the first when it passes 80 % of the
+// viewport, the last when it reaches 40 %, so every word is seen lighting up (lite: all lit).
+const list = ref<HTMLElement | null>(null);
+const entering = useScrollProgress(list, "enter");
+const litCount = computed(() =>
+  props.lite ? words.value.length : Math.floor(span01(entering.value, 0.2, 0.6) * words.value.length + 0.001),
+);
 </script>
 
 <style scoped>
