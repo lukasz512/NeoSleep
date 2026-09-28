@@ -1,33 +1,30 @@
 /**
  * Placement for the account menu (NEO-154, reworked NEO-161 "Kropla"). The
- * avatar is a nail: the card's header avatar sits exactly on the app bar
- * avatar, and the card springs out of that point. On the phone the avatar
- * moves like a drop of water (NEO-159): it swells under the finger, dips,
- * swells to 120% and settles at 110%.
+ * card opens next to the app bar avatar; the avatar itself grows and flies
+ * into the card's top-right corner, where it sits with the same inset as the
+ * card's content (so the header reads as one designed block, not a button
+ * pinned onto a card).
  *
  * The motion itself is plain CSS in AppAccountMenu.vue (transform + opacity,
  * the same glass material and spring as the phone's bottom menu); this file
  * only measures once, before the card opens, and never per frame.
  */
 
-/** Desktop: the header avatar is this much bigger than the app bar one (40 / 32). */
-export const AVATAR_GROWTH = 40 / 32;
-/** Phone: the open avatar rests at 110% of the app bar one. */
-export const PHONE_AVATAR_GROWTH = 1.1;
-/** Phone: how far the app bar avatar swells under the finger. */
+/** The avatar in the app bar (AppLayout). */
+export const BAR_AVATAR_SIZE = 32;
+/** The avatar in the menu's header: bigger, in the card's top-right corner. */
+export const MENU_AVATAR_SIZE = 56;
+/** Inset of the header avatar from the card's top and end edge — the card's own content padding. */
+export const MENU_AVATAR_INSET = 16;
+/** Phone: how far the app bar avatar swells under the finger (AppAccountMenu CSS). */
 export const PHONE_PRESS_SCALE = 1.12;
-/** Phone: the peak of the drop before it settles at PHONE_AVATAR_GROWTH. */
-export const PHONE_AVATAR_PEAK = 1.2;
+/** The closed card's scale (AppAccountMenu CSS, `.account-menu__card`). */
+export const CARD_CLOSED_SCALE = 0.94;
 
-/** How much bigger the menu's avatar is than the app bar's. */
-export function avatarGrowth(phone: boolean): number {
-  return phone ? PHONE_AVATAR_GROWTH : AVATAR_GROWTH;
-}
-
-/** Gap between the card edge and the header avatar (top and end). */
-const AVATAR_INSET = 4;
-/** Phone: the card floats this far from the screen's sides (as the bottom pill). */
+/** Phone: the card floats this far from the screen's sides and top (as the bottom pill). */
 const PHONE_SIDE = 8;
+/** Desktop: the card reaches this far past the bar avatar's end and top edge. */
+const DESKTOP_OVERHANG = 12;
 /** How long the CSS close transition runs (AppAccountMenu.vue, --menu-dur-out). */
 export const CLOSE_DURATION = 180;
 
@@ -50,28 +47,38 @@ export interface CardPlacement {
 }
 
 /**
- * Positions the fixed card so its header avatar's centre sits exactly on the
- * trigger avatar's centre, and points the card's transform-origin at that
- * centre, so the CSS scale grows the card out of the avatar.
+ * Positions the fixed card by the app bar avatar and sets where the header
+ * avatar flies from: `--account-menu-fly` is the transform that puts the
+ * header avatar exactly over the bar avatar (at its size) while the card is
+ * closed. The card scales around the header avatar's centre, so that point
+ * stays put and the flight is a plain translate + scale.
  */
 export function placeCard({ triggerAvatar, card, phone }: CardPlacement): void {
   const a = triggerAvatar.getBoundingClientRect();
   const viewport = document.documentElement.clientWidth;
-  const half = (a.height * avatarGrowth(phone)) / 2;
-  const cx = a.left + a.width / 2;
-  const cy = a.top + a.height / 2;
-  const top = cy - half - AVATAR_INSET;
-  const avatarEnd = viewport - (cx + half);
+  let top: number;
+  let right: number;
   if (phone) {
-    Object.assign(card.style, { top: `${top}px`, left: `${PHONE_SIDE}px`, right: `${PHONE_SIDE}px` });
-    card.style.setProperty("--account-menu-avatar-top", `${AVATAR_INSET}px`);
-    card.style.setProperty("--account-menu-avatar-end", `${Math.max(0, avatarEnd - PHONE_SIDE)}px`);
+    top = PHONE_SIDE;
+    right = PHONE_SIDE;
+    Object.assign(card.style, { top: `${top}px`, left: `${PHONE_SIDE}px`, right: `${right}px` });
   } else {
-    Object.assign(card.style, { top: `${top}px`, right: `${avatarEnd - AVATAR_INSET}px`, left: "" });
-    card.style.setProperty("--account-menu-avatar-top", `${AVATAR_INSET}px`);
-    card.style.setProperty("--account-menu-avatar-end", `${AVATAR_INSET}px`);
+    top = Math.max(PHONE_SIDE, a.top - DESKTOP_OVERHANG);
+    right = Math.max(PHONE_SIDE, viewport - a.right - DESKTOP_OVERHANG);
+    Object.assign(card.style, { top: `${top}px`, right: `${right}px`, left: "" });
   }
-  // offsetWidth, not getBoundingClientRect: the closed card is scaled down.
-  const left = phone ? PHONE_SIDE : viewport - (avatarEnd - AVATAR_INSET) - card.offsetWidth;
-  card.style.setProperty("--account-menu-origin", `${cx - left}px ${cy - top}px`);
+  card.style.setProperty("--account-menu-avatar-top", `${MENU_AVATAR_INSET}px`);
+  card.style.setProperty("--account-menu-avatar-end", `${MENU_AVATAR_INSET}px`);
+
+  // Where the header avatar's centre lands (screen), and where the bar avatar's is.
+  const half = MENU_AVATAR_SIZE / 2;
+  const ox = viewport - right - MENU_AVATAR_INSET - half;
+  const oy = top + MENU_AVATAR_INSET + half;
+  const bx = a.left + a.width / 2;
+  const by = a.top + a.height / 2;
+  // The closed card is scaled around (ox, oy), which scales the flight too.
+  const s = CARD_CLOSED_SCALE;
+  const k = a.width / MENU_AVATAR_SIZE / s;
+  card.style.setProperty("--account-menu-origin", `calc(100% - ${MENU_AVATAR_INSET + half}px) ${MENU_AVATAR_INSET + half}px`);
+  card.style.setProperty("--account-menu-fly", `translate(${(bx - ox) / s}px, ${(by - oy) / s}px) scale(${k})`);
 }

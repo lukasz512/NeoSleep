@@ -311,9 +311,9 @@ onBeforeUnmount(() => {
   transition-duration: 240ms;
 }
 
-/* The glass card. Closed it is shrunk into the avatar (transform-origin is
-   the avatar's centre, set by placeCard) and transparent; open it springs
-   out. Transform + opacity only — the blur sits on the card, never animated. */
+/* The glass card. Closed it is slightly shrunk around the header avatar's
+   corner and transparent; open it springs out while the avatar flies in.
+   Transform + opacity only — the blur sits on the card, never animated. */
 .account-menu__card {
   position: fixed;
   z-index: calc(var(--account-menu-z) + 1);
@@ -328,8 +328,9 @@ onBeforeUnmount(() => {
   box-shadow:
     inset 0 1px 0 var(--glass-edge, transparent),
     var(--glass-shadow, 0 18px 48px rgb(0 0 0 / 0.2));
-  transform-origin: var(--account-menu-origin, calc(100% - 24px) 24px);
-  transform: scale(0.3);
+  /* the header avatar's centre: that point stays put while the card grows */
+  transform-origin: var(--account-menu-origin, calc(100% - 44px) 44px);
+  transform: scale(0.94);
   opacity: 0;
   will-change: transform, opacity;
   transition:
@@ -371,54 +372,22 @@ onBeforeUnmount(() => {
   opacity: 0.25;
 }
 
-/* Desktop: the header avatar is the bar's avatar grown (32 → 40). */
+/* The avatar flies from the app bar into the card's top-right corner and
+   grows there (useAccountMenuMotion.placeCard sets --account-menu-fly: the
+   transform that lays it over the bar avatar). A phone press (NEO-159)
+   starts the flight from the swollen size. Transform only. */
 .account-menu__card :deep([data-motion="avatar"]) {
-  transform: scale(0.8);
+  transform: var(--account-menu-fly, scale(0.6)) scale(var(--_press, 1));
   transition: transform var(--_dur-out) var(--_ease-out);
+}
+
+.account-menu--from-press .account-menu__card :deep([data-motion="avatar"]) {
+  --_press: 1.12;
 }
 
 .account-menu--open .account-menu__card :deep([data-motion="avatar"]) {
   transform: none;
-  transition: transform var(--_dur-in) var(--_spring);
-}
-
-/* Phone (NEO-159): the avatar moves like a drop of water — from the bar size
-   (or the swollen press) it dips, swells to 120% and settles at 110%. Scales
-   are relative to the resting 110%. */
-.account-menu--phone .account-menu__card :deep([data-motion="avatar"]) {
-  --drop-from: 0.909;
-  transform: scale(var(--drop-from));
-}
-
-.account-menu--phone.account-menu--from-press .account-menu__card :deep([data-motion="avatar"]) {
-  --drop-from: 1.018;
-}
-
-.account-menu--phone.account-menu--open .account-menu__card :deep([data-motion="avatar"]) {
-  transform: none;
-  animation: account-menu-drop 720ms both;
-}
-
-@keyframes account-menu-drop {
-  0% {
-    transform: scale(var(--drop-from));
-    animation-timing-function: cubic-bezier(0.37, 0, 0.23, 1);
-  }
-  26% {
-    transform: scale(0.864, 0.818);
-    animation-timing-function: cubic-bezier(0.37, 0, 0.23, 1);
-  }
-  58% {
-    transform: scale(1.069, 1.091);
-    animation-timing-function: cubic-bezier(0.37, 0, 0.23, 1);
-  }
-  82% {
-    transform: scale(0.973, 0.977);
-    animation-timing-function: cubic-bezier(0.37, 0, 0.23, 1);
-  }
-  100% {
-    transform: none;
-  }
+  transition: transform 520ms var(--_spring);
 }
 
 .account-menu__card :deep(:is([data-motion="name"], [data-motion="role"], [data-motion="extra"], [data-motion="row"])) {

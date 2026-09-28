@@ -40,39 +40,42 @@ const sheet = (w: VueWrapper) => w.find(".mobile-nav-panel__sheet");
 const scrimVisible = (w: VueWrapper) => w.find(".mobile-nav-panel__scrim").classes().includes("mobile-nav-panel__scrim--visible");
 
 // NEO-161 "Kropla": one floating glass box. Collapsed only its bottom row (the
-// pill) shows; "More" grows the same box upwards over the other modules, and
-// the row itself never changes.
+// pill) shows; "More" grows the same box upwards and the pill's buttons become
+// the first four modules of the grid. The toggle never leaves its slot.
 describe("MobileNavPanel", () => {
-  it("collapsed: the row holds the first primaryCount items plus More; the rest wait hidden in the same box", async () => {
+  const gridLabels = (w: VueWrapper) => w.findAll(".mobile-nav-panel__grid .mobile-nav-panel__cell").map((c) => c.text());
+  const hidden = (w: VueWrapper) => w.findAll(".mobile-nav-panel__grid .mobile-nav-panel__cell").map((c) => c.attributes("inert") !== undefined);
+
+  it("collapsed: the pill shows the first primaryCount modules plus More; the rest wait hidden in the same box", async () => {
     const { wrapper } = await mountPanel();
-    expect(wrapper.findAll(".mobile-nav-panel__items .mobile-nav-panel__cell")).toHaveLength(5);
-    expect(wrapper.findAll(".mobile-nav-panel__grid .mobile-nav-panel__cell")).toHaveLength(3);
+    // every module lives in the grid, in order — the first four are the pill's buttons
+    expect(gridLabels(wrapper)).toEqual(ITEMS.map((i) => i.label));
+    expect(wrapper.findAll(".mobile-nav-panel__cell--primary")).toHaveLength(4);
+    expect(hidden(wrapper)).toEqual([false, false, false, false, true, true, true]);
+    // the row itself only holds the toggle
+    expect(wrapper.findAll(".mobile-nav-panel__items .mobile-nav-panel__cell")).toHaveLength(1);
     expect(toggle(wrapper).text()).toContain("More");
     expect(toggle(wrapper).attributes("aria-expanded")).toBe("false");
     expect(toggle(wrapper).attributes("aria-controls")).toBe(sheet(wrapper).attributes("id"));
     // one box: the grid lives inside the nav, above the row, over one glass surface
     expect(wrapper.find(".mobile-nav-panel .mobile-nav-panel__sheet").exists()).toBe(true);
     expect(wrapper.findAll(".mobile-nav-panel__glass")).toHaveLength(1);
-    expect(sheet(wrapper).attributes("inert")).toBeDefined();
     expect(scrimVisible(wrapper)).toBe(false);
   });
 
-  it("More grows the box and shows the scrim; the same button in the same slot turns into Close", async () => {
+  it("More grows the box: the pill's buttons are grid positions 1–4, the toggle stays in its slot as Close", async () => {
     const { wrapper } = await mountPanel();
-    const barCells = () => wrapper.findAll(".mobile-nav-panel__items .mobile-nav-panel__cell").map((c) => c.text());
-    const before = barCells();
+    const toggleCell = () => wrapper.find(".mobile-nav-panel__items .mobile-nav-panel__cell--toggle");
+    expect(toggleCell().find(".mobile-nav-panel__toggle").exists()).toBe(true);
     await toggle(wrapper).trigger("click");
     await flushPromises();
     expect(isExpanded(wrapper)).toBe(true);
-    expect(sheet(wrapper).attributes("inert")).toBeUndefined();
+    expect(hidden(wrapper).every((h) => !h)).toBe(true);
+    expect(gridLabels(wrapper).slice(0, 4)).toEqual(["dashboard", "leads", "hcp", "hco"]);
     expect(scrimVisible(wrapper)).toBe(true);
+    expect(toggleCell().find(".mobile-nav-panel__toggle").exists()).toBe(true);
     expect(toggle(wrapper).text()).toContain("Close");
     expect(toggle(wrapper).attributes("aria-expanded")).toBe("true");
-    // The pill does not re-flow: same cells, the toggle still last.
-    const after = barCells();
-    expect(after).toHaveLength(before.length);
-    expect(after.slice(0, 4)).toEqual(before.slice(0, 4));
-    expect(after[4]).toContain("Close");
   });
 
   it("animates with CSS only — no script-driven animations", () => {

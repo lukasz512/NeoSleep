@@ -24,15 +24,26 @@
     <div class="mobile-nav-panel__shadow mobile-nav-panel__shadow--box" aria-hidden="true" />
     <div class="mobile-nav-panel__glass" aria-hidden="true" />
 
+    <!-- The grid holds every module in order: the first `primaryCount` are
+         the pill's own buttons. Collapsed they are moved down into the pill
+         (a transform computed from the grid geometry); "More" lets them rise
+         into positions 1–4, top left, with the rest following. -->
     <div
       v-if="hasOverflow"
       :id="sheetId"
       class="mobile-nav-panel__sheet"
-      :inert="expanded ? undefined : true"
+      :style="{ '--_rows': gridRows }"
     >
       <div class="mobile-nav-panel__handle" aria-hidden="true" />
       <div class="mobile-nav-panel__grid">
-        <div v-for="item in overflowItems" :key="item.path" class="mobile-nav-panel__cell">
+        <div
+          v-for="(item, index) in items"
+          :key="item.path"
+          class="mobile-nav-panel__cell"
+          :class="index < primaryCount ? 'mobile-nav-panel__cell--primary' : 'mobile-nav-panel__cell--overflow'"
+          :style="index < primaryCount ? { '--_i': index } : undefined"
+          :inert="index >= primaryCount && !expanded ? true : undefined"
+        >
           <MobileBottomNavItem :to="item.path" :label="item.label" :show-label="showLabels" @click="onItemClick">
             <slot name="icon" :item="item" />
           </MobileBottomNavItem>
@@ -41,14 +52,17 @@
     </div>
 
     <div class="mobile-nav-panel__items">
-      <div v-for="item in primaryItems" :key="item.path" class="mobile-nav-panel__cell">
-        <MobileBottomNavItem :to="item.path" :label="item.label" :show-label="showLabels" @click="onItemClick">
-          <slot name="icon" :item="item" />
-        </MobileBottomNavItem>
-      </div>
-      <!-- "More" and "Close" are the same button in the same slot: only its
-           icon (dots ⇄ X) and label change. -->
-      <div v-if="hasOverflow" class="mobile-nav-panel__cell">
+      <!-- Without overflow the pill is a plain row of its buttons. -->
+      <template v-if="!hasOverflow">
+        <div v-for="item in primaryItems" :key="item.path" class="mobile-nav-panel__cell">
+          <MobileBottomNavItem :to="item.path" :label="item.label" :show-label="showLabels" @click="onItemClick">
+            <slot name="icon" :item="item" />
+          </MobileBottomNavItem>
+        </div>
+      </template>
+      <!-- "More" and "Close" are the same button in the same slot (the
+           pill's last one): only its icon (dots ⇄ X) and label change. -->
+      <div v-else class="mobile-nav-panel__cell mobile-nav-panel__cell--toggle">
         <MobileBottomNavItem
           :label="expanded ? closeLabel : moreLabel"
           :show-label="showLabels"
@@ -128,6 +142,8 @@ const drag = ref(0);
 const hasOverflow = computed(() => props.items.length > props.primaryCount);
 const primaryItems = computed(() => props.items.slice(0, props.primaryCount));
 const overflowItems = computed(() => props.items.slice(props.primaryCount));
+/** Rows of the 4-column module grid — data, not a measurement: it sets how far the pill's buttons travel. */
+const gridRows = computed(() => Math.ceil(props.items.length / 4));
 
 /** "More" reads as the active tab while the rep is inside one of its modules. */
 const overflowActive = computed(() =>
@@ -245,6 +261,15 @@ defineExpose({ expanded, setExpanded });
   --_dur-out: var(--menu-dur-out, 180ms);
   --_spring: var(--menu-spring, cubic-bezier(0.34, 1.3, 0.64, 1));
   --_ease-out: var(--menu-ease-out, cubic-bezier(0.22, 1, 0.36, 1));
+  /* Fixed geometry: the pill's buttons move between the row and the grid by
+     these numbers alone (100cqw = the box's width). */
+  --_pad-row: 6px;
+  --_pad-grid: 8px;
+  --_gap: 4px;
+  --_cell-h: 68px;
+  --_sheet-pad-top: 6px;
+  --_slot: calc((100cqw - 2 * var(--_pad-row)) / 5);
+  --_col: calc((100cqw - 2 * var(--_pad-grid) - 3 * var(--_gap)) / 4);
 }
 
 /* The box: floats --_float above the bottom edge (and the home indicator),
@@ -261,6 +286,7 @@ defineExpose({ expanded, setExpanded });
   margin-inline: auto;
   display: flex;
   flex-direction: column;
+  container-type: inline-size;
   /* The collapsed grid area must not swallow taps meant for the page. */
   pointer-events: none;
   transition: transform var(--_dur-out) var(--_ease-out);
@@ -329,14 +355,16 @@ defineExpose({ expanded, setExpanded });
   transition-duration: 240ms;
 }
 
-/* The row: always the bottom of the box, never moves. */
+/* The row: always the bottom of the box, never moves. With overflow it only
+   holds the toggle, in the pill's last slot; the pill's other buttons are
+   grid cells moved down into their slots (see --primary below). */
 .mobile-nav-panel__items {
   flex: none;
   height: var(--_height);
-  padding-inline: 6px;
+  padding-inline: var(--_pad-row);
   display: flex;
   align-items: stretch;
-  justify-content: space-between;
+  justify-content: flex-end;
   min-width: 0;
   pointer-events: auto;
 }
@@ -347,16 +375,97 @@ defineExpose({ expanded, setExpanded });
   display: flex;
 }
 
+.mobile-nav-panel__cell--toggle {
+  flex: 0 0 var(--_slot);
+}
+
 .mobile-nav-panel__cell :deep(.mobile-bottom-nav-item) {
   flex: 1 1 auto;
   max-width: none;
   min-width: 0;
+  /* the whole slot is for the label: "Dashboard" fits a phone pill slot */
+  padding-inline: 2px;
 }
 
-/* The grid above the row, inside the same box. Collapsed it is hidden and
-   out of the tab order (inert); open it settles in a beat after the glass. */
+/* The grid above the row, inside the same box. Every size here is fixed, so
+   CSS alone knows where each cell is: the pill's buttons travel between the
+   bottom row and grid positions 1–4 without anything being measured. */
 .mobile-nav-panel__sheet {
-  padding: 6px 8px 0;
+  padding: var(--_sheet-pad-top) var(--_pad-grid) 0;
+}
+
+.mobile-nav-panel__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: var(--_cell-h);
+  gap: var(--_gap);
+  padding-bottom: 4px;
+  border-bottom: 1px solid transparent;
+  transition: border-color var(--_dur-out) linear;
+}
+
+.mobile-nav-panel--expanded .mobile-nav-panel__grid {
+  border-bottom-color: color-mix(in srgb, var(--mobile-bottom-nav-item-color, #666) 16%, transparent);
+}
+
+.mobile-nav-panel__grid .mobile-nav-panel__cell {
+  pointer-events: none;
+}
+
+.mobile-nav-panel__grid .mobile-nav-panel__cell :deep(.mobile-bottom-nav-item) {
+  border-radius: 16px;
+  pointer-events: auto;
+}
+
+/* Long names ("Presentations") wrap to a second line instead of being cut. */
+.mobile-nav-panel__grid .mobile-nav-panel__cell :deep(.mobile-bottom-nav-item__label) {
+  max-width: 100%;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  text-align: center;
+  line-height: 1.2;
+}
+
+/* The pill's own buttons. Collapsed: moved from grid position i (row 0,
+   column i) to pill slot i. Open: they rise into the grid, top left first.
+     x in the grid  = pad-grid + i·(cell + gap) + cell/2
+     x in the pill  = pad-row + (i + ½)·slot
+     y difference   = sheet height + pill/2 − (sheet top + cell/2)
+   Only transform moves; the tap target is kept to the slot width while
+   collapsed so neighbours don't overlap. */
+.mobile-nav-panel__cell--primary {
+  transform: translate(
+    calc(var(--_pad-row) + (var(--_i) + 0.5) * var(--_slot) - var(--_pad-grid) - var(--_i) * (var(--_col) + var(--_gap)) - var(--_col) / 2),
+    calc(var(--_rows) * (var(--_cell-h) + var(--_gap)) - var(--_gap) + 5px + var(--_height) / 2 - var(--_cell-h) / 2)
+  );
+  transition: transform var(--_dur-out) var(--_ease-out);
+}
+
+.mobile-nav-panel__cell--primary :deep(.mobile-bottom-nav-item) {
+  max-width: var(--_slot);
+  margin-inline: auto;
+}
+
+.mobile-nav-panel--expanded .mobile-nav-panel__cell--primary {
+  transform: none;
+  transition: transform var(--_dur-in) var(--_spring) calc(var(--_i) * 25ms);
+}
+
+.mobile-nav-panel--expanded .mobile-nav-panel__cell--primary :deep(.mobile-bottom-nav-item) {
+  max-width: none;
+}
+
+.mobile-nav-panel--dragging .mobile-nav-panel__cell--primary {
+  transition: none;
+}
+
+/* The rest of the modules: hidden (and inert) while collapsed, they settle
+   in a beat after the glass. */
+.mobile-nav-panel__cell--overflow {
   opacity: 0;
   transform: translateY(10px);
   visibility: hidden;
@@ -366,36 +475,14 @@ defineExpose({ expanded, setExpanded });
     visibility 0s linear var(--_dur-out);
 }
 
-.mobile-nav-panel--expanded .mobile-nav-panel__sheet {
+.mobile-nav-panel--expanded .mobile-nav-panel__cell--overflow {
   opacity: 1;
   transform: none;
   visibility: visible;
-  pointer-events: auto;
   transition:
-    opacity 200ms linear 90ms,
-    transform 280ms var(--_ease-out) 90ms,
+    opacity 200ms linear 110ms,
+    transform 280ms var(--_ease-out) 110ms,
     visibility 0s;
-}
-
-.mobile-nav-panel__grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 4px;
-  padding-bottom: 4px;
-  border-bottom: 1px solid color-mix(in srgb, var(--mobile-bottom-nav-item-color, #666) 16%, transparent);
-}
-
-.mobile-nav-panel__grid .mobile-nav-panel__cell {
-  min-height: 68px;
-}
-
-.mobile-nav-panel__grid .mobile-nav-panel__cell :deep(.mobile-bottom-nav-item) {
-  border-radius: 16px;
-}
-
-.mobile-nav-panel__grid .mobile-nav-panel__cell :deep(.mobile-bottom-nav-item__label) {
-  text-align: center;
-  line-height: 1.2;
 }
 
 /* Visible affordance for the drag-down gesture. */
@@ -405,6 +492,11 @@ defineExpose({ expanded, setExpanded });
   margin: 2px auto 6px;
   border-radius: 2px;
   background: var(--mobile-bottom-nav-item-color, #666);
+  opacity: 0;
+  transition: opacity var(--_dur-out) linear;
+}
+
+.mobile-nav-panel--expanded .mobile-nav-panel__handle {
   opacity: 0.35;
 }
 
@@ -493,8 +585,8 @@ defineExpose({ expanded, setExpanded });
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mobile-nav-panel__sheet,
-  .mobile-nav-panel--expanded .mobile-nav-panel__sheet {
+  .mobile-nav-panel__cell--overflow,
+  .mobile-nav-panel--expanded .mobile-nav-panel__cell--overflow {
     transform: none;
   }
 
@@ -502,8 +594,11 @@ defineExpose({ expanded, setExpanded });
   .mobile-nav-panel__glass,
   .mobile-nav-panel--expanded .mobile-nav-panel__glass,
   .mobile-nav-panel__shadow,
-  .mobile-nav-panel__sheet,
-  .mobile-nav-panel--expanded .mobile-nav-panel__sheet,
+  .mobile-nav-panel__cell--primary,
+  .mobile-nav-panel--expanded .mobile-nav-panel__cell--primary,
+  .mobile-nav-panel__cell--overflow,
+  .mobile-nav-panel--expanded .mobile-nav-panel__cell--overflow,
+  .mobile-nav-panel__handle,
   .mobile-nav-panel__dots,
   .mobile-nav-panel__close,
   .mobile-nav-panel__scrim {
