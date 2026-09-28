@@ -105,6 +105,27 @@ describe("ItemDetailLayout — record header", () => {
     expect(claim()).toBe(true);
   });
 
+  it("NEO-152 while loading: the identity line and the actions keep their place as skeletons", () => {
+    const { wrapper } = mountLayout({ hasContent: false, loading: true, recordTitle: "" });
+    expect(wrapper.find("[data-testid=record-details-skeleton]").exists()).toBe(true);
+    const actions = wrapper.find("[data-testid=record-actions-skeleton]");
+    expect(actions.findAll(".view-item__action-skeleton")).toHaveLength(3);
+    const users = mountLayout({ hasContent: false, loading: true, recordTitle: "", actionSkeletons: 4 }).wrapper;
+    expect(users.findAll(".view-item__action-skeleton")).toHaveLength(4);
+  });
+
+  it("NEO-152 a record without an identity line or actions (lead, document) reserves no space for them", () => {
+    const { wrapper } = mountLayout({ hasContent: false, loading: true, recordTitle: "", detailsSkeleton: false, actionSkeletons: 0 });
+    expect(wrapper.find("[data-testid=record-details-skeleton]").exists()).toBe(false);
+    expect(wrapper.find("[data-testid=record-actions-skeleton]").exists()).toBe(false);
+  });
+
+  it("NEO-152 loaded: the real actions replace the skeletons", () => {
+    const { wrapper } = mountLayout({});
+    expect(wrapper.find("[data-testid=record-actions-skeleton]").exists()).toBe(false);
+    expect(wrapper.find("[data-testid=record-details-skeleton]").exists()).toBe(false);
+  });
+
   it("while loading: a record page shows the skeleton body, not a spinner, and only after 200 ms (NEO-118)", async () => {
     vi.useFakeTimers();
     try {
@@ -179,5 +200,50 @@ describe("ItemDetailLayout — header from the list row while loading", () => {
 
   it("lists without an identity (e.g. territories) give no preview", () => {
     expect(recordPreviewFromItem("territories", { id: "1", name: "Norte" })).toBeNull();
+  });
+});
+
+describe("ItemDetailLayout — #aside side panel (NEO-153)", () => {
+  const realMatchMedia = window.matchMedia;
+  afterEach(() => {
+    window.matchMedia = realMatchMedia;
+  });
+  /** Stub for useMediaQuery: every query matches iff the viewport is at least `width`. */
+  function viewport(width: number) {
+    window.matchMedia = ((query: string) => {
+      const min = /min-width:\s*(\d+)px/.exec(query);
+      return {
+        matches: min ? width >= Number(min[1]) : false,
+        media: query,
+        onchange: null,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+        addListener: () => undefined,
+        removeListener: () => undefined,
+        dispatchEvent: () => false,
+      } as MediaQueryList;
+    }) as typeof window.matchMedia;
+  }
+  const slots = { sections: () => h("p", { class: "tabs" }, "tabs"), aside: () => h("p", { class: "panel" }, "panel") };
+
+  it("mounts the panel from 1280px — a large landscape tablet included", () => {
+    viewport(1280);
+    const { wrapper } = mountLayout({}, slots);
+    expect(wrapper.find(".view-item__aside .panel").exists()).toBe(true);
+    expect(wrapper.find(".view-item__card--with-aside").exists()).toBe(true);
+  });
+
+  it("does not mount the panel below 1280px (tablet, phone)", () => {
+    viewport(1180);
+    const { wrapper } = mountLayout({}, slots);
+    expect(wrapper.find(".panel").exists()).toBe(false);
+    expect(wrapper.find(".view-item__card--with-aside").exists()).toBe(false);
+    expect(wrapper.find(".tabs").exists()).toBe(true);
+  });
+
+  it("without an #aside slot the layout stays single-column at any width", () => {
+    viewport(1600);
+    const { wrapper } = mountLayout({}, { sections: slots.sections });
+    expect(wrapper.find(".view-item__aside").exists()).toBe(false);
   });
 });

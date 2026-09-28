@@ -71,10 +71,13 @@
         <span class="patient-questionnaire__secure" data-testid="secure-chip">
           <AppIcon name="lock" class="patient-questionnaire__secure-icon" />{{ t("app.questionnaire.secureLink") }}
         </span>
-        <div v-if="totalSteps > 1" class="patient-questionnaire__progress">
-          <span>{{ t("app.questionnaire.step", { n: stepNumber, total: totalSteps }) }} · {{ stepTitle(step) }}</span>
-          <VProgressLinear :model-value="(stepNumber - 1) / totalSteps * 100" color="primary" height="6" rounded :aria-label="t('app.questionnaire.step', { n: stepNumber, total: totalSteps })" />
-        </div>
+        <AppSegmentProgress
+          v-if="totalSteps > 1"
+          class="patient-questionnaire__progress"
+          :segments="stepSegments"
+          :label="t('app.questionnaire.step', { n: stepNumber, total: totalSteps })"
+          :meta="stepTitle(step)"
+        />
         <p v-if="stepNumber === 1" class="patient-questionnaire__intro">
           {{ totalSteps > 1
             ? t("app.questionnaire.intro.bundle", { clinic: clinicName, n: totalSteps })
@@ -85,13 +88,14 @@
         <form v-if="step.type === 'consent'" novalidate @submit.prevent="submitConsent">
           <h2 v-if="totalSteps > 1" class="patient-questionnaire__step-title">{{ stepTitle(step) }}</h2>
           <template v-if="step.consent_html">
-            <!-- One document on the link: read → sign → done, as three segments. -->
-            <ol v-if="totalSteps === 1" class="patient-questionnaire__phases" :aria-label="stepTitle(step)">
-              <li v-for="(phaseKey, index) in CONSENT_PHASES" :key="phaseKey" :class="{ 'patient-questionnaire__phase--on': index < consentPhase }" class="patient-questionnaire__phase">
-                <span class="patient-questionnaire__phase-bar" />
-                <span class="patient-questionnaire__phase-label">{{ index + 1 }} {{ t(`app.questionnaire.consentStep.phase.${phaseKey}`) }}</span>
-              </li>
-            </ol>
+            <!-- One document on the link: read → sign → done on the app's one segmented bar (NEO-127). -->
+            <AppSegmentProgress
+              v-if="totalSteps === 1"
+              class="patient-questionnaire__progress"
+              :segments="consentSegments"
+              :label="t(`app.questionnaire.consentStep.phase.${CONSENT_PHASES[consentPhase - 1]}`)"
+              :meta="`${consentPhase} / ${CONSENT_PHASES.length}`"
+            />
             <p v-if="!docRead" class="patient-questionnaire__prompt">{{ t("app.questionnaire.consentStep.read") }}</p>
 
             <button
@@ -247,6 +251,7 @@ import { AuthCard } from "@ui";
 import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppLoadingState from "../components/AppLoadingState.vue";
+import AppSegmentProgress, { type SegmentState } from "../components/AppSegmentProgress.vue";
 import ConsentSignatureField from "../components/questionnaire/ConsentSignatureField.vue";
 import ConsentDocumentReader from "../components/questionnaire/ConsentDocumentReader.vue";
 import PatientTopBar from "../components/questionnaire/PatientTopBar.vue";
@@ -348,6 +353,9 @@ const steps = computed(() => questionnaire.value?.steps ?? []);
 const totalSteps = computed(() => steps.value.length);
 const step = computed(() => steps.value.find((s) => !s.done && !skipped.value.has(s.key)) ?? null);
 const stepNumber = computed(() => (step.value ? steps.value.indexOf(step.value) + 1 : totalSteps.value));
+const stepSegments = computed<SegmentState[]>(() =>
+  steps.value.map((s) => (s.done ? "done" : s === step.value ? "current" : "todo")),
+);
 const stepKey = computed(() => (phase.value === "steps" ? `step-${step.value?.key ?? "none"}` : phase.value));
 
 const questions = computed(() => (step.value?.type === "stop_bang" ? STOP_QUESTIONS : MEDICAL_HISTORY_QUESTIONS));
@@ -359,6 +367,9 @@ const canSend = computed(() => allAnswered.value && consent.value);
 const canSign = computed(() => signed.value && accepted.value);
 /** 1 = reading, 2 = signing, 3 = done. */
 const consentPhase = computed(() => (phase.value === "submitted" ? 3 : docRead.value ? 2 : 1));
+const consentSegments = computed<SegmentState[]>(() =>
+  CONSENT_PHASES.map((_, index) => (index + 1 < consentPhase.value ? "done" : index + 1 === consentPhase.value ? "current" : "todo")),
+);
 /** Every step of the link is a document to sign — the thank-you screen then talks about signing. */
 const consentOnly = computed(() => steps.value.length > 0 && steps.value.every((s) => s.type === "consent"));
 const signerName = computed(() => questionnaire.value?.patient_name || questionnaire.value?.patient_first_name || "");
@@ -619,54 +630,6 @@ async function submitQuestionnaire() {
   height: 14px;
 }
 
-/* Read → Sign → Done: three segments filling in as the patient moves on. */
-.patient-questionnaire__phases {
-  list-style: none;
-  display: flex;
-  gap: 8px;
-  margin: 4px 0 16px;
-  padding: 0;
-}
-
-.patient-questionnaire__phase {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.patient-questionnaire__phase-bar {
-  position: relative;
-  height: 4px;
-  border-radius: 4px;
-  overflow: hidden;
-  background: rgba(var(--v-theme-on-surface), 0.1);
-}
-
-.patient-questionnaire__phase-bar::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: rgb(var(--v-theme-primary));
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform 500ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.patient-questionnaire__phase--on .patient-questionnaire__phase-bar::after {
-  transform: scaleX(1);
-}
-
-.patient-questionnaire__phase-label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-}
-
-.patient-questionnaire__phase--on .patient-questionnaire__phase-label {
-  color: rgb(var(--v-theme-on-surface));
-}
-
 /* The document itself: a card with a sheet-of-paper icon — tap to open the reader. */
 .patient-questionnaire__doc {
   display: flex;
@@ -845,13 +808,8 @@ async function submitQuestionnaire() {
 }
 
 .patient-questionnaire__progress {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
   margin-bottom: 16px;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: rgba(var(--v-theme-on-surface), 0.72);
+  font-size: 0.875rem;
 }
 
 .patient-questionnaire__intro {
@@ -997,7 +955,6 @@ async function submitQuestionnaire() {
 /* The "done" moment: the disc settles, the circle and the tick draw themselves, then the text and the next steps rise in.
    Only transform/opacity/stroke move — nothing that changes the card's size. */
 @media (prefers-reduced-motion: reduce) {
-  .patient-questionnaire__phase-bar::after,
   .patient-questionnaire__doc {
     transition: none;
   }

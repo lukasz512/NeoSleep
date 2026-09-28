@@ -6,13 +6,12 @@
   <div
     :key="locale"
     class="user-menu"
-    :class="{ 'user-menu--sheet': sheet }"
     :aria-label="t('user.user.menu')"
   >
-    <!-- NEO-122: text left, avatar right — the avatar sits exactly where the
-         app bar's avatar button was, so the menu reads as that button opened
-         up (data-motion marks what useAccountMenuMotion moves). -->
-    <div class="user-menu__identity" data-motion="header">
+    <!-- NEO-154: text left, avatar right — the avatar is the app bar's avatar,
+         pinned in place and grown, so the menu reads as that button opened up
+         (data-motion marks what useAccountMenuMotion moves). -->
+    <div class="user-menu__identity">
       <div class="user-menu__who">
         <span class="user-menu__name" data-motion="name">{{ name }}</span>
         <span v-if="email && email !== name" class="user-menu__email" data-motion="extra">{{ email }}</span>
@@ -21,7 +20,7 @@
           <span v-if="region" class="user-menu__region" data-motion="extra">{{ region }}</span>
         </span>
       </div>
-      <VAvatar size="40" color="primary" rounded="lg" class="user-menu__avatar" data-motion="avatar">
+      <VAvatar :size="avatarSize" color="primary" class="user-menu__avatar" data-motion="avatar">
         <span class="text-body-medium font-weight-bold">{{ initials }}</span>
       </VAvatar>
     </div>
@@ -137,8 +136,6 @@ import AppFlag from "../../components/AppFlag.vue";
 import { useInstallPrompt } from "../../composables/useInstallPrompt";
 
 withDefaults(defineProps<{
-  /** Phone: full-width bottom sheet instead of the desktop drop-down card. */
-  sheet?: boolean;
   name: string;
   email?: string;
   roleLabel: string;
@@ -153,9 +150,11 @@ withDefaults(defineProps<{
   version: string;
   /** "DEV" / "LOCAL" on non-prod builds, null on prod. */
   channel: string | null;
+  /** Header avatar size in px — 110% of the app bar avatar on phones (NEO-154). */
+  avatarSize?: number;
   /** Password / log out / install app — false for someone without an account (the patient on a QR link, NEO-126). */
   accountActions?: boolean;
-}>(), { email: undefined, region: undefined, accountActions: true });
+}>(), { email: undefined, region: undefined, avatarSize: 40, accountActions: true });
 
 const emit = defineEmits<{
   "set-theme": [preference: ThemePreference];
@@ -185,31 +184,23 @@ function onLocaleChange(value: string) {
 </script>
 
 <style scoped>
+/* The surrounding card (AppAccountMenu) paints the surface, border and corners. */
 .user-menu {
-  width: 340px;
-  max-width: 100%;
   display: flex;
   flex-direction: column;
-  background: rgb(var(--v-theme-surface));
-  border: 1px solid var(--pwa-border, rgba(var(--v-border-color), var(--v-border-opacity)));
-  border-radius: var(--pwa-radius);
-  overflow: hidden;
 }
 
-.user-menu--sheet {
-  width: 100%;
-  border: 0;
-  border-radius: 16px 16px 0 0;
-  /* Keep the version line above the home indicator. */
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-
-/* Tight top/right padding so the avatar lands on the app bar button's avatar. */
+/* The avatar lands on the app bar's avatar: useAccountMenuMotion's placeCard
+   sets how far it sits from the card's top and end edge. */
 .user-menu__identity {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
-  padding: 10px 10px 12px 16px;
+  padding: var(--account-menu-avatar-top, 3px) var(--account-menu-avatar-end, 3px) 14px 16px;
+}
+
+.user-menu__avatar {
+  flex-shrink: 0;
 }
 
 .user-menu__who {
@@ -217,6 +208,7 @@ function onLocaleChange(value: string) {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  padding-top: 6px;
   line-height: 1.3;
 }
 
@@ -308,11 +300,6 @@ function onLocaleChange(value: string) {
   background: rgb(var(--v-theme-surface));
   color: rgb(var(--v-theme-primary));
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.14);
-}
-
-/* The chosen flag gets a primary ring — a flag can't change colour to show it. */
-.user-menu__choice--on :deep(.app-flag) {
-  box-shadow: 0 0 0 2px rgb(var(--v-theme-primary));
 }
 
 .user-menu__choice-icon {

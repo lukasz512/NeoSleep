@@ -121,12 +121,12 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-async function mountPanel(): Promise<VueWrapper> {
+async function mountPanel(extraProps: Record<string, unknown> = {}): Promise<VueWrapper> {
   setActivePinia(createPinia());
   useAuthStore().user = { id: "u-1", email: "doc@clinic.test", name: "Dra. Test", role: "doctor" } as ReturnType<typeof useAuthStore>["user"];
   const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
   const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
-  const wrapper = mount(PatientStudiesPanel, { props: { patientId: "patient-1" }, attachTo: document.body, global: { plugins: [i18n, vuetify] } });
+  const wrapper = mount(PatientStudiesPanel, { props: { patientId: "patient-1", ...extraProps }, attachTo: document.body, global: { plugins: [i18n, vuetify] } });
   mounted.push(wrapper);
   await flushPromises();
   return wrapper;
@@ -270,6 +270,17 @@ describe("PatientStudiesPanel — the Estudios checklist", () => {
     expect(status.text()).toContain("Waiting for the patient");
     expect(status.text()).toMatch(/0 of 2 · expires in (23:59:5\d|24:00:00)/);
     expect(wrapper.find(".studies__pending").exists()).toBe(false);
+  });
+
+  it("the side panel's QR request (qrRequestNonce) opens the everything-QR here, once per bump (NEO-153)", async () => {
+    const wrapper = await mountPanel({ qrRequestNonce: 1 });
+    const creates = () => apiFetch.mock.calls.filter(([path, i]) => String(path).endsWith("/questionnaire-requests") && (i as RequestInit)?.method === "POST");
+    await vi.waitFor(() => expect(document.body.querySelector(".qr-dialog__code")).not.toBeNull());
+    expect(creates()).toHaveLength(1);
+    expect(JSON.parse((creates()[0]![1] as RequestInit).body as string)).toEqual({});
+    await wrapper.setProps({ qrRequestNonce: 1 });
+    await flushPromises();
+    expect(creates()).toHaveLength(1);
   });
 
   it("tapping the button while the link is live opens its details, and only 'Show QR again' there issues a new link", async () => {

@@ -68,17 +68,12 @@
     />
     <template v-else-if="checklist">
       <header class="studies__header">
-        <div class="studies__progress">
-          <span class="studies__progress-text">{{ t("app.clinical.progress", checklist.summary) }}</span>
-          <VProgressLinear
-            :model-value="(checklist.summary.done / Math.max(checklist.summary.total, 1)) * 100"
-            color="success"
-            bg-color="surface-variant"
-            height="6"
-            rounded
-            :aria-label="t('app.clinical.progress', checklist.summary)"
-          />
-        </div>
+        <AppSegmentProgress
+          class="studies__progress"
+          :segments="checklistSegments(checklist.items)"
+          :label="t('app.clinical.progress', checklist.summary)"
+          :meta="waitingCount ? t('app.clinical.progressWaiting', { n: waitingCount }) : undefined"
+        />
         <div class="studies__header-actions">
           <!-- The QR button is also the link's status (NEO-93) — no separate "waiting" banner. -->
           <QrStatusButton
@@ -291,6 +286,7 @@ import StudyUploadDialog from "../questionnaire/StudyUploadDialog.vue";
 import ChecklistStatusIcon from "../questionnaire/ChecklistStatusIcon.vue";
 import ChecklistResult from "../questionnaire/ChecklistResult.vue";
 import AppListItemMenu from "../AppListItemMenu.vue";
+import AppSegmentProgress from "../AppSegmentProgress.vue";
 import { apiFetch, extractErrorMessage } from "../../composables/useApi";
 import { fieldErrorsFromResponse } from "../../composables/useFormErrors";
 import type { SubmitDone } from "../../composables/useEntitySubmit";
@@ -302,6 +298,7 @@ import {
   type ChecklistItem,
   type ChecklistRecord,
   type ChecklistGroup,
+  checklistSegments,
 } from "../../composables/usePatientChecklist";
 import { sleepStudyFormFields } from "../../config/forms/sleepStudyForm";
 import {
@@ -328,6 +325,8 @@ const props = defineProps<{
   /** From the patient record — STOP-Bang works A (age) and G (sex) out from them. */
   dateOfBirth?: string | null;
   gender?: string | null;
+  /** NEO-153: bumped by the side panel's "QR for the patient" button — opens the everything-QR here, where its status and polling live. */
+  qrRequestNonce?: number;
 }>();
 
 const { t, locale } = useI18n();
@@ -337,6 +336,7 @@ const isAdmin = computed(() => authStore.user?.role === "admin");
 
 const checklistApi = usePatientChecklist(() => props.patientId);
 const checklist = computed(() => checklistApi.checklist.value);
+const waitingCount = computed(() => checklist.value?.items.filter((i) => i.status === "pending_patient").length ?? 0);
 const items = computed(() => checklist.value?.items ?? []);
 
 const GROUP_ORDER: ChecklistGroup[] = ["consent", "patient", "doctor", "results"];
@@ -634,6 +634,13 @@ async function openQr(items?: string[]) {
   Object.assign(qrDialog, { open: true, title, url: created.url, requestId: created.id });
 }
 const sendEverything = () => openQr();
+watch(
+  () => props.qrRequestNonce,
+  (nonce, previous) => {
+    if (nonce && nonce !== previous) void openQr();
+  },
+  { immediate: true },
+);
 
 /** "Send by email": the same link as the bundle QR, emailed to the patient (all open questionnaires). */
 const emailing = ref(false);
@@ -761,15 +768,14 @@ watch(() => props.focusItem, (key) => highlightItem(key));
   justify-content: space-between;
   gap: 12px 24px;
 }
+/* NEO-127: full width on phone (the header wraps, the bar gets its own line); capped beside the buttons on wider screens. */
 .studies__progress {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex: 1 1 220px;
-  max-width: 360px;
+  flex: 1 1 260px;
 }
-.studies__progress-text {
-  font-weight: 600;
+@media (min-width: 600px) {
+  .studies__progress {
+    max-width: 360px;
+  }
 }
 .studies__header-actions {
   display: flex;

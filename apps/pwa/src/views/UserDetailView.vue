@@ -25,6 +25,7 @@
       :back-route="{ name: 'users' }"
       :back-label="t('user.users.detail.back')"
       :record-title="user?.name ?? ''"
+      :action-skeletons="4"
       :not-found-label="t('user.users.detail.notFound')"
       @retry="loadUser"
     >

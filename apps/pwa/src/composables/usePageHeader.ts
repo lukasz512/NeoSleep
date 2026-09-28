@@ -50,25 +50,35 @@ export function useRecordHeaderClaim(): Ref<boolean> {
  * NEO-113: what a view's teleported toolbar needs to know about the header row
  * it sits in, on phones — the title element (to tell whether the module name
  * is being cut, see AppEntityList's fold into "⋯"), and a flag the toolbar
- * raises while its search takes the whole row, so AppLayout hides the title.
+ * raises while its search takes the whole row, so AppLayout fades the title.
+ *
+ * NEO-152: `subtitle` is the quiet line under a list's title on desktop
+ * ("128 records"). null = this view has none (no line at all); "" = a list
+ * that is still loading (the line keeps its height with a placeholder, so
+ * nothing below it moves when the count arrives).
  */
 export interface PageHeaderRow {
   title: Ref<HTMLElement | null>;
   searchTakesRow: Ref<boolean>;
+  subtitle: Ref<string | null>;
 }
 
 const PAGE_HEADER_ROW: InjectionKey<PageHeaderRow> = Symbol("pageHeaderRow");
 
-/** AppLayout: the header row's title element and search-open flag. */
+function inertRow(): PageHeaderRow {
+  return { title: ref(null), searchTakesRow: ref(false), subtitle: ref(null) };
+}
+
+/** AppLayout: the header row's title element, search-open flag and subtitle. */
 export function providePageHeaderRow(): PageHeaderRow {
-  const row: PageHeaderRow = { title: ref(null), searchTakesRow: ref(false) };
+  const row = inertRow();
   provide(PAGE_HEADER_ROW, row);
   return row;
 }
 
 /** A view's toolbar in the header row. Inert refs outside AppLayout (tests). */
 export function usePageHeaderRow(): PageHeaderRow {
-  return inject(PAGE_HEADER_ROW, { title: ref(null), searchTakesRow: ref(false) });
+  return inject(PAGE_HEADER_ROW, inertRow, true);
 }
 
 /** Props for a <Teleport> into the page header; disabled outside AppLayout (tests). */

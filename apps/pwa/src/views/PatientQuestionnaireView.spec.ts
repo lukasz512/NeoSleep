@@ -262,7 +262,7 @@ describe("PatientQuestionnaireView (public QR self-fill)", () => {
     );
     const wrapper = await mountView();
     // One document: read → sign → done as three segments, no "Step 1 of 1".
-    expect(wrapper.findAll(".patient-questionnaire__phase")).toHaveLength(3);
+    expect(wrapper.findAll("[data-testid='app-segment-progress-segment']")).toHaveLength(3);
     expect(wrapper.text()).not.toContain("Step 1 of 1");
 
     await readDocument(wrapper);

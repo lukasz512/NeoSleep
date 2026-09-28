@@ -12,14 +12,21 @@
           'app-entity-list__toolbar--hidden': mobile && toolbarHiddenByScroll && pageHeader.disabled.value,
           'app-entity-list__toolbar--in-header': !pageHeader.disabled.value,
           'app-entity-list__toolbar--mobile': mobile,
-          'app-entity-list__toolbar--search-open': mobile && searchFocused,
-          'app-entity-list__toolbar--has-query': mobile && !!searchQuery.trim(),
+          'app-entity-list__toolbar--compact-search': compactSearch,
+          'app-entity-list__toolbar--search-open': compactSearch && !overlayMode && searchFocused,
+          'app-entity-list__toolbar--has-query': compactSearch && !overlayMode && !!searchQuery.trim(),
+          'app-entity-list__toolbar--overlay-open': overlayOpen,
           'app-entity-list__toolbar--folded': toolsFolded,
         },
       ]"
       data-testid="entity-list-toolbar"
     >
       <div class="app-entity-list__search-group">
+        <!-- NEO-152: holds the search's place in the row. When the icon-only
+             search opens in the page header, the field lifts out over the
+             whole row (position: absolute, clip-path growing from this icon)
+             while this slot keeps its 48 px, so nothing beside it moves. -->
+        <div ref="searchSlotRef" class="app-entity-list__search-slot">
         <VTextField
           ref="searchFieldRef"
           v-model="searchQuery"
@@ -65,6 +72,7 @@
             </div>
           </template>
         </VTextField>
+        </div>
         <div class="app-entity-list__tool app-entity-list__tool--foldable" data-testid="entity-list-filter">
           <AppFilterBar
             ref="filterBarRef"
@@ -200,8 +208,11 @@
       />
     </div>
 
-    <!-- First load: quiet skeleton rows in the same card shape the data will
-         take, so the list fills in instead of a spinner swapping for a table. -->
+    <!-- First load: quiet skeleton rows in the same shape the data will take,
+         so the list fills in instead of a spinner swapping for a table.
+         NEO-152, desktop: it carries the table's header row (its rule, same
+         40 px) and the same 52 px rows at the same bleed, so the green rule
+         stays exactly where it is when the real rows arrive. -->
     <div
       v-else-if="isInitialLoading"
       key="skeleton"
@@ -210,6 +221,7 @@
       aria-live="polite"
       :aria-label="t('layout.loader.label')"
     >
+      <div v-if="!mobile" class="app-entity-list__skeleton-head" data-testid="entity-list-skeleton-head" aria-hidden="true" />
       <div v-for="n in SKELETON_ROWS" :key="n" class="app-entity-list__skeleton-row" :style="{ '--row-i': n - 1 }">
         <span class="app-entity-list__skeleton-avatar" />
         <span class="app-entity-list__skeleton-lines">
@@ -222,10 +234,17 @@
     <div
       v-else
       key="list"
+      ref="tableWrapRef"
       :class="[
         'app-entity-list__table-wrap',
-        { 'app-entity-list__table-wrap--flat': mobile, 'app-entity-list__table-wrap--busy': isRefreshing },
+        {
+          'app-entity-list__table-wrap--flat': mobile,
+          'app-entity-list__table-wrap--fit': !mobile,
+          'app-entity-list__table-wrap--busy': isRefreshing,
+          'app-entity-list__table-wrap--from-skeleton': skeletonWasShown,
+        },
       ]"
+      :style="mobile ? undefined : { '--entity-list-top': `${tableTop}px` }"
     >
       <!-- No rows at all → only the message, never an empty table body.
            Stays up while a follow-up search is still loading, so typing into
@@ -253,6 +272,7 @@
           :items-length="total"
           :item-value="itemValue"
           class="app-entity-list__table"
+          fixed-header
           hover
           :row-props="tableRowProps"
           @update:options="onOptionsUpdate"
@@ -266,7 +286,14 @@
             </div>
           </template>
         </VDataTableServer>
-        <div v-show="mobile" ref="feedScrollRef" class="app-entity-list__feed-scroll" @scroll="onFeedScroll">
+        <div
+          v-show="mobile"
+          ref="feedScrollRef"
+          class="app-entity-list__feed-scroll"
+          @scroll="onFeedScroll"
+          @pointerdown.capture="onFeedPointerDown"
+          @click.capture="onFeedClickCapture"
+        >
           <TransitionGroup name="list-stagger" tag="div" class="app-entity-list__feed">
             <VCard
               v-for="(item, index) in mobileItems"
@@ -335,10 +362,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, useSlots, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, useSlots, watch } from "vue";
 import { useDisplay } from "vuetify";
 import { useI18n } from "vue-i18n";
-import { useIntersectionObserver } from "@vueuse/core";
+import { useElementBounding, useIntersectionObserver, useWindowScroll } from "@vueuse/core";
 import AppButton from "./AppButton.vue";
 import AppEmptyState from "./AppEmptyState.vue";
 import AppErrorState from "./AppErrorState.vue";
@@ -349,6 +376,8 @@ import { useEntityList } from "../composables/useEntityList";
 import type { FilterDefinition } from "../composables/useFilters";
 import { usePageHeaderTeleport, usePageHeaderRow } from "../composables/usePageHeader";
 import { useHeaderToolsFold } from "../composables/useHeaderToolsFold";
+import { useCompactSearch } from "../composables/useCompactSearch";
+import { listCountKey, type ListCountNoun } from "../utils/listCountLabel";
 import { AppInlineAlert } from "@ui";
 
 export interface AppEntityListHeader {
@@ -368,6 +397,8 @@ export interface AppEntityListI18n {
   noResultsForCriteriaSubtitle: string;
   tableNoResults: string;
   errorLoad: string;
+  /** What the count under the title names ("8 patients"); without it, "8 records" (NEO-152). */
+  countNoun?: ListCountNoun;
 }
 
 const props = withDefaults(
@@ -406,7 +437,7 @@ const props = withDefaults(
 
 defineEmits<{ add: [] }>();
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const { mobile } = useDisplay();
 const pageHeader = usePageHeaderTeleport();
 const slots = useSlots();
@@ -472,7 +503,7 @@ function onFeedScroll(e: Event) {
   lastScrollTop = scrollTop;
 }
 
-const searchFieldRef = ref<{ focus: () => void } | null>(null);
+const searchFieldRef = ref<{ focus: () => void; $el?: unknown } | null>(null);
 /* Phone toolbar (NEO-85): three icons at rest; focusing search grows it over
    the whole row while filter/add step aside, and blurring brings them back
    (a non-empty query then stays on the left as a quiet pill). */
@@ -483,20 +514,145 @@ const searchFocused = ref(false);
    otherwise Filter / + / clear-all fold into "⋯" whenever the title would be
    cut (useHeaderToolsFold). */
 const headerRow = usePageHeaderRow();
-const inPhoneHeader = computed(() => mobile.value && !pageHeader.disabled.value);
-const searchTakesRow = computed(() => inPhoneHeader.value && (searchFocused.value || !!searchQuery.value.trim()));
-watch(searchTakesRow, (v) => (headerRow.searchTakesRow.value = v), { immediate: true });
-onBeforeUnmount(() => (headerRow.searchTakesRow.value = false));
+const inHeader = computed(() => !pageHeader.disabled.value);
+const inPhoneHeader = computed(() => mobile.value && inHeader.value);
 const toolbarRef = ref<HTMLElement | null>(null);
 const moreAnchorRef = ref<HTMLElement | null>(null);
 const filterBarRef = ref<{ open: () => void } | null>(null);
+const searchSlotRef = ref<HTMLElement | null>(null);
+
+/* NEO-152, desktop: the search field yields to the list's title (and its
+   subtitle) — once less than 400 px is left for it, it becomes its icon,
+   like on phones (useCompactSearch). */
+const { compact: desktopCompact } = useCompactSearch(
+  headerRow.title,
+  toolbarRef,
+  () => searchSlotRef.value,
+  computed(() => !mobile.value && inHeader.value),
+);
+const compactSearch = computed(() => mobile.value || desktopCompact.value);
+
+/* NEO-152 "opens in place": an icon-only search in the page header opens as
+   an overlay over the whole row — its clip grows from the icon's circle —
+   while the title and the other tools only fade. Nothing in the row changes
+   size, so there is no layout work per frame and no jump (the old version
+   grew the field's flex-basis and took the title out of the layout). */
+const overlayMode = computed(() => compactSearch.value && inHeader.value);
+const searchWanted = computed(() => searchFocused.value || !!searchQuery.value.trim());
+const overlayOpen = ref(false);
+const OVERLAY_EASE = "cubic-bezier(0.2, 0, 0, 1)";
+
+function prefersReducedMotion(): boolean {
+  return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+/** Plays the overlay's clip from the icon's circle to the full row (or back). */
+function playOverlay(direction: "open" | "close"): Promise<void> {
+  const field = searchFieldRef.value?.$el;
+  const slot = searchSlotRef.value;
+  const row = toolbarRef.value?.closest<HTMLElement>(".layout-page-header");
+  if (!(field instanceof HTMLElement) || !slot || !row || typeof field.animate !== "function" || prefersReducedMotion()) {
+    return Promise.resolve();
+  }
+  const r = row.getBoundingClientRect();
+  const s = slot.getBoundingClientRect();
+  const icon = `inset(0px ${Math.max(0, r.right - s.right)}px 0px ${Math.max(0, s.left - r.left)}px round 24px)`;
+  const full = "inset(0px 0px 0px 0px round 24px)";
+  const frames = direction === "open" ? [{ clipPath: icon }, { clipPath: full }] : [{ clipPath: full }, { clipPath: icon }];
+  const animation = field.animate(frames, { duration: direction === "open" ? 320 : 240, easing: OVERLAY_EASE });
+  return animation.finished.then(() => undefined, () => undefined);
+}
+
+watch(
+  [searchWanted, overlayMode],
+  async ([wanted, mode]) => {
+    if (!mode) {
+      overlayOpen.value = false;
+      return;
+    }
+    if (wanted && !overlayOpen.value) {
+      overlayOpen.value = true;
+      await nextTick();
+      await playOverlay("open");
+    } else if (!wanted && overlayOpen.value) {
+      await playOverlay("close");
+      if (!searchWanted.value) overlayOpen.value = false;
+    }
+  },
+);
+
+/* NEO-113/152: while the overlay is open AppLayout fades the title (its space
+   stays, so the row keeps its size). Off-header phone lists keep the old
+   in-row growth. */
+const searchTakesRow = computed(() => (overlayMode.value ? overlayOpen.value : false));
+watch(searchTakesRow, (v) => (headerRow.searchTakesRow.value = v), { immediate: true });
+onBeforeUnmount(() => (headerRow.searchTakesRow.value = false));
 const { folded: headerFolded } = useHeaderToolsFold(headerRow.title, toolbarRef, inPhoneHeader, searchTakesRow);
 const toolsFolded = computed(() => inPhoneHeader.value && headerFolded.value);
+
+/* NEO-152: the record count under the list's title (desktop; AppLayout
+   leaves it out on phones). "" while the first page loads keeps the line's
+   height, so the title doesn't move when the number arrives. */
+let ownSubtitle: string | null = null;
+watch(
+  [inHeader, total, hasCompletedInitialLoad, locale, hasActiveFiltersOrSearch, () => props.i18n.countNoun],
+  () => {
+    if (!inHeader.value) return;
+    // "8 patients" — or "3 patients · filtered" while a search or filter
+    // narrows the list, so the number is never read as the whole list.
+    const count = t(listCountKey(total.value, String(locale.value), props.i18n.countNoun), { count: total.value });
+    ownSubtitle = hasCompletedInitialLoad.value
+      ? hasActiveFiltersOrSearch.value ? `${count} · ${t("app.list.filtered")}` : count
+      : "";
+    headerRow.subtitle.value = ownSubtitle;
+  },
+  { immediate: true },
+);
+onBeforeUnmount(() => {
+  // The next list may already have written its own line — only clear ours.
+  if (inHeader.value && headerRow.subtitle.value === ownSubtitle) headerRow.subtitle.value = null;
+});
+
+/* NEO-160, phone feed: while the search is focused (keyboard up), the first
+   tap anywhere in the feed only leaves the search — keyboard closes, the list
+   stays — and the next tap opens the card. The state is read on pointerdown,
+   because by the time `click` fires the browser may already have moved focus
+   off the input. Captured on the feed, so a card's own handlers (open, "⋯"
+   menu) never see the dismissing tap. */
+let tapDismissesSearch = false;
+
+function onFeedPointerDown() {
+  tapDismissesSearch = mobile.value && searchFocused.value;
+}
+
+function onFeedClickCapture(e: MouseEvent) {
+  if (!tapDismissesSearch) return;
+  tapDismissesSearch = false;
+  e.preventDefault();
+  e.stopPropagation();
+  blurSearch();
+}
+
+function blurSearch() {
+  const el = searchFieldRef.value?.$el;
+  const input = el instanceof HTMLElement ? el.querySelector("input") : null;
+  input?.blur();
+}
 
 function onSearchClearClick() {
   onSearchClear();
   searchFieldRef.value?.focus();
 }
+
+/* NEO-130, desktop: the table never grows past the bottom of the screen — its
+   rows scroll inside, under the sticky column headers, with the pagination
+   footer always in view. CSS caps it at 100dvh minus this: the wrap's
+   distance from the top of the page (not of the viewport, so scrolling the
+   page doesn't change it). */
+const tableWrapRef = ref<HTMLElement | null>(null);
+const { top: tableWrapViewportTop } = useElementBounding(tableWrapRef);
+const { y: windowScrollY } = useWindowScroll();
+const tableTop = computed(() => Math.max(0, Math.round(tableWrapViewportTop.value + windowScrollY.value)));
 
 const itemValue = "id";
 /* Only the very first load for this view (nothing fetched yet) shows the
@@ -507,11 +663,15 @@ const itemValue = "id";
    skeleton mid-keystroke, which flashed away the very input being typed
    into. */
 const isInitialLoading = computed(() => loading.value && !hasCompletedInitialLoad.value);
+/* NEO-152: rows that replace the skeleton fill in where they stand — the list
+   itself doesn't fade or rise in after it (that nudge moved the header rule). */
+const skeletonWasShown = ref(false);
+watch(isInitialLoading, (v) => { if (v) skeletonWasShown.value = true; }, { immediate: true });
 /* Any reload after the first one (search, filter, page, sort): the current
    rows stay in place and dim until the new ones land, instead of the table
    being torn down. */
 const isRefreshing = computed(() => loading.value && hasCompletedInitialLoad.value);
-const SKELETON_ROWS = 6;
+const SKELETON_ROWS = 10;
 
 /* Row index as a CSS variable drives the staggered row entrance
    (AppEntityList.css, app-entity-list-row-in); capped so a long page doesn't

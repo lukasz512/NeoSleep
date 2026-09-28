@@ -3,18 +3,25 @@
     <div class="form-spine__identity">
       <div class="form-spine__who">
         <AppAvatar
-          :name="name || null"
+          v-if="name"
+          :name="name"
           :first-name="firstName || null"
           :last-name="lastName || null"
           :entity-type="entityType"
           :size="48"
         />
+        <span v-else class="form-spine__avatar-skeleton" aria-hidden="true" />
         <p
           class="form-spine__name"
           :class="{ 'form-spine__name--pending': !name }"
           data-testid="form-spine-name"
         >
-          {{ name || namePending }}
+          <template v-if="name">{{ name }}</template>
+          <template v-else>
+            <span class="d-sr-only">{{ namePending }}</span>
+            <span class="form-spine__bar form-spine__bar--name" aria-hidden="true" />
+            <span class="form-spine__bar form-spine__bar--surname" aria-hidden="true" />
+          </template>
         </p>
       </div>
       <!-- NEO-118 ficha: one labelled fact per line, so nothing wraps into
@@ -23,6 +30,7 @@
         <div v-for="f in facts" :key="f.key" class="form-spine__fact" :data-fact="f.key">
           <dt>{{ f.label }}</dt>
           <dd>
+            <span v-if="!f.value" class="form-spine__bar form-spine__bar--fact" aria-hidden="true" />
             {{ f.value }}
             <VTooltip v-if="f.more?.length" location="bottom">
               <template #activator="{ props: tooltipProps }">
@@ -65,7 +73,9 @@
  * The spine of the "Carpeta" form folder (NEO-92): the record's identity
  * (avatar and name, then a ficha of labelled facts and the status) above an index of
  * the form's sections. The name fills in live as the user types, so creating
- * and editing a record read as the same view. The index follows the sheet's
+ * and editing a record read as the same view: until then the avatar, name and
+ * empty facts are still skeleton bars in the shape of a saved record
+ * (NEO-128), each replaced by its value the moment it is typed. The index follows the sheet's
  * scroll (FormRenderer passes `active`) and marks sections with unsaved
  * changes. Phones get FormSectionChips instead.
  */
@@ -84,7 +94,7 @@ defineProps<{
   name: string;
   firstName?: string;
   lastName?: string;
-  /** Shown in place of the name until one is typed (create mode). */
+  /** Screen-reader text for the name skeleton until one is typed (create mode). */
   namePending: string;
   /** Labelled facts under the name (sex, age, born — or specialty, clinic, ...). */
   facts: IdentityFact[];
@@ -175,9 +185,47 @@ const emit = defineEmits<{ select: [id: string] }>();
   color: rgb(var(--v-theme-on-surface));
 }
 
+/* Create mode (NEO-128): the same grey as the loading skeleton, but still —
+   no breathing — so "empty, waiting for you" never reads as "loading". */
 .form-spine__name--pending {
-  font-weight: 500;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-spine__bar {
+  display: block;
+  height: 12px;
+  border-radius: 6px;
+  background: rgba(var(--v-theme-on-surface), 0.07);
+}
+
+.form-spine__bar--name {
+  width: 70%;
+}
+
+.form-spine__bar--surname {
+  width: 42%;
+  height: 8px;
+  border-radius: 4px;
+}
+
+.form-spine__bar--fact {
+  display: inline-block;
+  width: 64px;
+  height: 8px;
+  border-radius: 4px;
+  vertical-align: middle;
+}
+
+/* AppAvatar's circle (NEO-155), filled with the skeleton grey. */
+.form-spine__avatar-skeleton {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(var(--v-theme-on-surface), 0.07);
 }
 
 .form-spine__index {
