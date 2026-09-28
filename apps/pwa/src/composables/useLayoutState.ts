@@ -45,7 +45,10 @@ export function useLayoutState() {
     setUserSettings({ sidebarCollapsed: sidebarCollapsed.value });
   }
 
-  const isMobile = ref(false);
+  // Read synchronously on setup: starting at false and flipping after the
+  // debounced resize check made phones render the desktop account chip
+  // (avatar + name) for a moment, so the app bar jumped on every launch.
+  const isMobile = ref(typeof window !== "undefined" && window.innerWidth < MOBILE_BREAKPOINT);
   const mobileDrawerOpen = ref(false);
 
   const updateMobile = useDebounceFn(() => {

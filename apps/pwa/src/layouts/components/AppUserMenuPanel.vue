@@ -20,7 +20,7 @@
           <span v-if="region" class="user-menu__region" data-motion="extra">{{ region }}</span>
         </span>
       </div>
-      <VAvatar size="40" color="primary" class="user-menu__avatar" data-motion="avatar">
+      <VAvatar :size="avatarSize" color="primary" class="user-menu__avatar" data-motion="avatar">
         <span class="text-body-medium font-weight-bold">{{ initials }}</span>
       </VAvatar>
     </div>
@@ -132,7 +132,7 @@ import AppIcon, { type AppIconName } from "../../components/AppIcon.vue";
 import AppFlag from "../../components/AppFlag.vue";
 import { useInstallPrompt } from "../../composables/useInstallPrompt";
 
-defineProps<{
+withDefaults(defineProps<{
   name: string;
   email?: string;
   roleLabel: string;
@@ -147,7 +147,9 @@ defineProps<{
   version: string;
   /** "DEV" / "LOCAL" on non-prod builds, null on prod. */
   channel: string | null;
-}>();
+  /** Header avatar size in px — 110% of the app bar avatar on phones (NEO-154). */
+  avatarSize?: number;
+}>(), { email: undefined, region: undefined, avatarSize: 40 });
 
 const emit = defineEmits<{
   "set-theme": [preference: ThemePreference];
