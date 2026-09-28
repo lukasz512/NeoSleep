@@ -785,6 +785,8 @@
   "user.leads.detail.notes": "Notes",
   "user.leads.detail.edit": "Edit",
   "user.leads.detail.notFound": "Lead not found",
+  "user.leads.detail.tabs.details": "Details",
+  "user.leads.detail.tabs.notes": "Notes",
   "user.leads.actions.delete": "Delete lead",
   "user.leads.actions.deleteConfirmText": "Delete this lead? This can't be undone from the app.",
   "user.leads.actions.deleteSuccess": "Lead deleted",
