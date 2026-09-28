@@ -243,6 +243,9 @@ importers:
       '@neo/api-client':
         specifier: workspace:*
         version: link:../api/client
+      '@neo/prefs':
+        specifier: workspace:*
+        version: link:../../packages/prefs
       '@neo/stores':
         specifier: workspace:*
         version: link:../../packages/stores
