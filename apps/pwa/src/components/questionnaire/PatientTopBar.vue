@@ -24,7 +24,7 @@
           :aria-expanded="open"
           data-testid="patient-bar-avatar"
         >
-          <VAvatar size="40" color="primary" rounded="lg" data-motion="trigger-avatar">
+          <VAvatar size="40" color="primary" class="patient-bar__avatar" data-motion="trigger-avatar">
             <span class="text-body-medium font-weight-bold">{{ initial }}</span>
           </VAvatar>
           <!-- The link was verified by the server: this page really is for this patient. -->
@@ -208,6 +208,11 @@ function openInfo(kind: "security" | "help") {
   cursor: pointer;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
   animation: patient-bar-in 450ms cubic-bezier(0.22, 1, 0.36, 1) 80ms both;
+}
+
+/* Square with soft corners — the app's identity avatar shape (NEO-57), not the round account button. */
+.patient-bar__avatar {
+  border-radius: 12px;
 }
 
 .patient-bar__avatar-btn:focus-visible {
