@@ -1,80 +1,96 @@
-# CORE-47 — AJM Corporate Events Portfolio (ES/EN)
+# CORE-47 — AJM Corporate Events Landing (ES/EN)
 
-> Client: **AJ Management (AJM)**, Alfred Jan, international events producer, Madrid.
+> Client: **AJ Management (AJM)**. Founder & Director: Alfred Jan Díaz. Offices in Mexico City and Madrid, plus international work.
 > Tracked in Linear **CORE-47** until an AJM team exists; the ticket then moves to AJM.
-> Status: **planning** — questions round 1 open, remaining client materials pending.
+> Status: **planning**. Decisions round 1 is open and the photos and videos are still to come.
 
 ## The ask
 
-A portfolio-style landing, not a full website, that AJM sends to leads as a presentation for
-**corporate events** prospects. Spanish and English. It must feel like a production, not a brochure:
-flow, animations, transitions and page (re)load are part of the pitch.
+A selective, editorial **credentials landing** about AJM's corporate events, production and operations only. AJM sends it to leads. Within a few seconds a visitor should understand:
+- what AJM does
+- the level of projects it can run
+- which brands it has worked with
+- who personally leads each project
+
+It comes in Spanish and English. In its feel it is closer to an international production company's credentials deck than to an agency website.
 
 ## Sources
 
 | Source | State |
 |---|---|
-| Current site https://alfredjan.com/portfolio/ | Reviewed 2026-09-28 (9 sections, ~50 photos inlined as base64 in one 4.8 MB HTML page, videos behind "Watch" links) |
-| `AJ_Management_Propuesta_Landing_Eventos_Corporativos_ES.docx` | **Not read yet**: macOS blocks Claude from `~/Downloads`. Needs to be moved into the repo or `~/Documents` |
-| Client note | "De aquí se queda universal, e fashion day, glamour": keep **Universal Studios pop-up**, **eFashion Day**, **Glamour Beauty Week** |
-| Raw videos/photos | Coming from the client |
+| Client proposal "Eventos Corporativos & Experiencias — Propuesta de contenido y diseño para Landing Page" (ES) | **Received 2026-09-28 (pasted in chat). This is the source of truth for structure and copy.** |
+| Current site https://alfredjan.com/portfolio/ | Reviewed. Serves as reference for facts and older projects |
+| Client note on the current site: "se queda universal, e fashion day, glamour" | Folded in: Universal is case 01, and eFashion Day and Glamour Beauty Week become chapters of the **Privalia** timeline (case 03). Both were Privalia events |
+| Photos / videos | Coming from Łukasz (see "Materials") |
 
-## What stays: the three cases
+## Visual direction (from the proposal)
 
-| # | Case | Story in one line | Key numbers |
+- Modern, premium and minimal: **warm white + charcoal**, large-format type, lots of white space, full-screen event photography.
+- **Subtle motion.** No gradients, no icon clutter, no endless service lists, no generic testimonials, stars or unsupported superlatives.
+- Photography leads, copy is short. The overall impression should be *selective, international, operationally solid, personally led*.
+
+## Narrative (9 sections)
+
+| # | Section | Content (proposal) | Motion proposal |
 |---|---|---|---|
-| 1 | Universal Studios: Pop-Up Experience, CDMX (2025) | Commissioned directly by the LA HQ, a two-week immersive retail pop-up running alongside 2 other projects | 2 weeks · 3 simultaneous projects · LA HQ direct |
-| 2 | eFashion Day: E-commerce & Fashion Congress, Privalia MX (2019–2021) | A congress conceived, produced and directed by AJM, which moved from stage to hybrid streaming | 3 editions · 500 in person / 1,200+ online · PayPal, Banorte |
-| 3 | Glamour Beauty Week × Privalia × Nuxe | An editorial beauty breakfast and masterclass for influencers and press | Condé Nast standard · Glamour, Privalia, Nuxe, Murad |
+| 01 | Hero | "Creamos experiencias que conectan a las personas." Eventos Corporativos · Experiencias · Producción. CTA "Conoce nuestro trabajo ↓" | Full-screen muted video loop (or 3–5 photos crossfading). The headline rises line by line through a text mask. On first load a thin line draws across and opens into the image. |
+| 02 | Qué hacemos | "Grandes ideas. Ejecución impecable." + 6 words: Estrategia / Planeación / Producción / Logística / Experiencias / Ejecución | Typographic only. The 6 words light up one by one as you scroll, charcoal on warm white. |
+| 03 | Capacidades | 6 numbered modules on a dark background. "Un solo partner. De la planeación a la ejecución." | Big numbers 01–06. On hover or focus a small detail photo slides in behind the number: lighting, backstage, stage and so on. |
+| 04 | Proyectos | 4 editorial cases: Universal · Grupo Planeta · Privalia · Mendel | Each case opens with its lead image revealed by a wipe (clip-path), then 3–6 images in an editorial grid with slight parallax. |
+| 04.3 | Privalia | "Una colaboración construida a través del tiempo." | A **scroll-driven timeline**: eFashion Day 2019–21 → Vogue Shopping Week 2022–24 → Glamour Beauty Week → today. Years tick past like an odometer. |
+| 05 | Cómo trabajamos | 6 stages Brief → Cierre. "Un solo punto de contacto." | A **pinned horizontal scroll**: a single line runs through the 6 stages and fills in as you go. |
+| 06 | Clientes | 4 logos only, monochrome, large | Logos fade in with a small stagger. No logo wall. |
+| 07 | Sobre AJM | "Experiencia local. Perspectiva internacional." CDMX / Madrid / Internacional | 3 cities as large type. A thin line connects them. |
+| 08 | Alfred Jan Díaz | Quote + bio, portrait at ~40%, LinkedIn | The portrait reveals from bottom to top, and the quote sets in as a pull-quote. |
+| 09 | Contacto | "¿Tienes un evento en mente?" CTA "Hablemos de tu proyecto →" | Full-bleed event photo and one oversized CTA. Email · WhatsApp · LinkedIn · Instagram. |
 
-Dropped from this landing: Minions × Vogue Brazil, Hugo Boss × Privalia live shopping, Vogue Shopping Week, the Indian wedding, "More work". Open question: does the proposal doc add new corporate cases?
+**Page (re)load:** the intro (line draw → image) plays only on the first visit in a session. A reload restores your section with no intro, so it never feels slow twice.
 
-## Concept: "Every case is a production" (proposal, pending D5)
+## Materials
 
-The page is one continuous production with a film-set grammar: slate → chapters → credits.
+**Where to put them:** a folder outside the repo and outside `~/Downloads` (macOS blocks Claude there), e.g. `~/Documents/Private/AJM-materials/`, with one subfolder per section: `hero/ universal/ planeta/ privalia/ mendel/ alfred/ logos/ extra/`.
 
-- **Entry / refresh = "Take N".** The page loads black and a clapper slate reads `AJM · CORPORATE · TAKE 07`, then it snaps open onto a full-bleed muted showreel. Each reload increments the take and picks a different hero clip, so refreshing feels intentional. A reload restores the chapter you were on.
-- **Hero.** "Alfred Jan" in huge type works as a mask: the video plays *through* the letters, and on scroll the letters grow until the video fills the screen.
-- **Chapter cuts.** Between cases there is a hard cut to black, a running timecode and a chapter slate (`01 / 03`), like an edit bay.
-- **Case 1, Universal: "Doors open".** Scroll opens two panels like pop-up shop doors. Photos sit in 3D depth and you "walk in" (perspective parallax). The stats print as a ticket stub.
-- **Case 2, eFashion Day: "On air".** A broadcast UI with a REC dot, timecode and lower-thirds for the stats. The switch from 2019 (stage) to 2020–21 (streaming) is a channel-change glitch. The event video plays inside a stage-screen frame.
-- **Case 3, Glamour: "Table set".** An editorial magazine spread with a serif masthead in AJM's own type (no imitation of the Glamour logo). Scroll turns the page. Photos reveal through soft floral-shaped masks, and the table setting assembles top-down as you scroll.
-- **Credits roll.** The Condé Nast titles, brands and partners roll like end credits.
-- **Close.** "Ready to produce something memorable": email, WhatsApp, calendar link, and an optional PDF one-pager.
-- **Phone (pending D3).** Leads open the link from WhatsApp, so on a phone the same content becomes a **stories format** (tap-through, progress bars, one chapter per story) instead of a long scroll.
+**Video is welcome, however heavy.** Send the original files: 4K, ProRes and large MP4s are all fine. The originals are never committed to git and never served as they are. The build transcodes each one to web versions:
+- hero loop: 8–15 s, 1080p, H.264 + WebM, roughly 3–6 MB, muted, with a poster frame
+- case videos: adaptive streaming (HLS) from a video CDN (Cloudflare Stream / Bunny), loaded only when the section is near
 
-## Link name options (pending D1, needs the AJM domain)
+Photos should also be originals (JPG/HEIC/RAW exports at full resolution). The build produces AVIF/WebP in several sizes.
 
-- `alfredjan.com/corporate` (recommended: short and readable aloud)
-- `alfredjan.com/portfolio/corporate` (keeps the current path family)
-- `corporate.alfredjan.com` (own subdomain, easiest to host separately)
-- `alfredjan.com/es/corporate` + `/en/corporate` (language in the path)
-- Per-lead variant on top of any of these: `…/corporate?for=banorte`, which greets the lead by company name
+Checklist (from the proposal): hero 1 video or 3–5 photos · Universal 5–10 · Grupo Planeta 5–10 from the 2–3 strongest projects (Gandhi, Reforma 87, Museo Tamayo) · Privalia 4–8 across different years · Mendel 5–10 · 1 vertical portrait of Alfred · logos for AJM, Universal P&E, Grupo Planeta, Privalia and Mendel (vector or transparent PNG) · optional backstage/detail shots.
+
+## Link name options (pending D1)
+
+- `…/corporativo` · `…/corporate`, i.e. one short word per language
+- `…/es/eventos-corporativos` · `…/en/corporate-events`, SEO-friendly but long
+- `corporate.<domain>`, a subdomain that is easy to host separately
+- Per-lead add-on: `…?for=mendel` → "Preparado para Mendel"
+
+The domain is still open: alfredjan.com or a dedicated AJ Management domain.
 
 ## Architecture (pending D2)
 
-- A new static app, isolated from every other client: **no** `@neo/*` UI/brand/stores, no API, no DB in v1.
-- Shares only the toolchain with the monorepo: the pnpm catalog versions (Vue 3.5, Vite, TS strict, Vitest, ESLint).
-- Motion: GSAP + ScrollTrigger (scroll choreography) and Lenis (smooth scroll), loaded from npm, bundled.
-- Copy in the app's own `locales/es.json` + `en.json`, **not** `packages/i18n`, because that package is the NeoSleep/neoCRM product copy.
-- Media: videos on a streaming CDN (adaptive HLS plus poster frames) rather than in the bundle. The current site's 4.8 MB single HTML is the anti-pattern to avoid.
-- Hosting: static (Cloudflare Pages or similar), with its own deploy workflow, separate from the GoDaddy FTP pipeline.
+- A new static site, isolated from every other client: **no** `@neo/*` UI, brand or stores, and no API or DB in v1.
+- Shares only the toolchain: pnpm catalog versions (Vue 3.5, Vite, TS strict, Vitest, ESLint).
+- Motion: GSAP + ScrollTrigger and Lenis, bundled from npm, with every effect behind `prefers-reduced-motion`.
+- Copy in the app's own `locales/es.json` + `en.json`. Spanish is the source, since the client wrote ES.
+- Media pipeline: originals → build-time image variants plus a video CDN. Nothing heavy goes into the bundle or the repo.
+- Hosting: static (Cloudflare Pages or similar) with its own deploy workflow.
 
 ## Decided without asking (each proven by a test)
 
 - `prefers-reduced-motion` → no scroll choreography, crossfades only.
-- `/es` and `/en` routes, with the first visit redirected by browser language and a manual toggle kept.
-- A reload restores the current chapter (sessionStorage) and increments the take number.
+- `/es` and `/en`, with the first visit redirected by browser language and a toggle kept.
+- The intro plays once per session, and a reload restores the section.
 - Every video has a poster, loads lazily, and never autoplays with sound.
-- Mobile Lighthouse performance ≥ 85 on the built page (CI budget).
-- ES/EN key parity is enforced by a test.
+- Mobile Lighthouse performance ≥ 85, with an image/video weight budget in CI.
+- ES/EN key parity.
+- No gradients, stars or testimonial blocks: a lint/visual rule mirrors the proposal's "evitar" list.
 
 ## Round 1 questions (in the Artifact)
 
-D1 link/domain · D2 where the code lives · D3 phone experience · D4 lead tracking · D5 creative concept.
+D1 link/domain · D2 where the code lives · D3 phone experience · D4 lead tracking · D5 motion intensity (the proposal asks for *subtle*, while the first brief asked for *striking*).
 
 ## Next
 
-1. Łukasz answers round 1 and moves the proposal `.docx` somewhere Claude can read.
-2. The client sends raw videos/photos (ideally the originals, not the website JPEGs).
-3. Scaffold the app, then build chapter 1 end-to-end as a vertical slice for AJM's feedback before chapters 2–3.
+1. Łukasz answers round 1 and drops the materials into the folder.
+2. Scaffold, then build the vertical slice (Hero + Qué hacemos + case 01 Universal) in ES and EN, then show it to AJM before the remaining sections.
