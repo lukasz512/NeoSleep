@@ -12,6 +12,8 @@ import { fileURLToPath } from "url";
 import en from "@i18n/en.json";
 import AppEntityList from "./AppEntityList.vue";
 import { clearListSnapshots } from "../composables/useEntityList";
+import { defineComponent, h, ref } from "vue";
+import { PAGE_HEADER_ACTIONS_ID, providePageHeader, providePageHeaderRow, type PageHeaderRow } from "../composables/usePageHeader";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -108,6 +110,80 @@ function vi_stubFetch(impl: () => Promise<Response>) {
 }
 
 describe("AppEntityList", () => {
+  // NEO-152: the skeleton has the table's header row (its green rule) so the
+  // rule stays exactly where it is when the rows arrive, and the list that
+  // replaces it doesn't fade or rise in.
+  describe("skeleton → rows in place (NEO-152)", () => {
+    it("desktop skeleton carries the header row; the phone one doesn't", async () => {
+      const desktop = await mountEntityList({ fetchImpl: () => new Promise<Response>(() => {}) });
+      expect(desktop.find(".app-entity-list__skeleton").exists()).toBe(true);
+      expect(desktop.find("[data-testid='entity-list-skeleton-head']").exists()).toBe(true);
+      for (const w of mountedWrappers.splice(0)) w.unmount();
+      const phone = await mountEntityList({ fetchImpl: () => new Promise<Response>(() => {}), width: 390 });
+      expect(phone.find(".app-entity-list__skeleton--mobile").exists()).toBe(true);
+      expect(phone.find("[data-testid='entity-list-skeleton-head']").exists()).toBe(false);
+    });
+
+    it("the list that replaces the skeleton is marked to swap in place", async () => {
+      const wrapper = await mountEntityList({ items: [{ id: "1", name: "Ana" }] });
+      expect(wrapper.find(".app-entity-list__table-wrap").classes()).toContain("app-entity-list__table-wrap--from-skeleton");
+    });
+
+    it("the search field sits in its own slot, so an icon search can lift out without moving its neighbours", async () => {
+      const wrapper = await mountEntityList({ width: 390 });
+      const slot = wrapper.find(".app-entity-list__search-slot");
+      expect(slot.exists()).toBe(true);
+      expect(slot.find(".app-entity-list__search").exists()).toBe(true);
+      expect(wrapper.find("[data-testid='entity-list-toolbar']").classes()).toContain("app-entity-list__toolbar--compact-search");
+    });
+
+    it("in the page header the count names what it counts, and says when a search narrows it", async () => {
+      setActivePinia(createPinia());
+      Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1440 });
+      const router = createTestRouter();
+      await router.push("/");
+      await router.isReady();
+      const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
+      const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
+      vi_stubFetch(() => Promise.resolve(fakeListResponse([{ id: "1", name: "Ana" }, { id: "2", name: "Bo" }])));
+      const slot = document.createElement("div");
+      slot.id = PAGE_HEADER_ACTIONS_ID;
+      document.body.appendChild(slot);
+      let row!: PageHeaderRow;
+      const Shell = defineComponent({
+        setup() {
+          providePageHeader(ref(true));
+          row = providePageHeaderRow();
+          return () =>
+            h(AppEntityList, {
+              viewId: "leads",
+              apiEndpoint: "/api/v1/leads",
+              headers: [{ title: "Name", key: "name" }],
+              filterDefinitions: [],
+              i18n: { ...I18N, countNoun: "leads" },
+              cacheable: false,
+            });
+        },
+      });
+      const wrapper = mount(Shell, { attachTo: document.body.appendChild(document.createElement("div")), global: { plugins: [i18n, vuetify, router] } });
+      mountedWrappers.push(wrapper);
+      await flushPromises();
+      expect(row.subtitle.value).toBe("2 leads");
+      // The toolbar is teleported into the page header's slot.
+      const input = slot.querySelector<HTMLInputElement>(".app-entity-list__search input")!;
+      input.value = "an";
+      input.dispatchEvent(new Event("input"));
+      await new Promise((r) => setTimeout(r, 400));
+      await flushPromises();
+      expect(row.subtitle.value).toBe("2 leads · filtered");
+    });
+
+    it("a wide desktop keeps the full search field", async () => {
+      const wrapper = await mountEntityList({ width: 1440 });
+      expect(wrapper.find("[data-testid='entity-list-toolbar']").classes()).not.toContain("app-entity-list__toolbar--compact-search");
+    });
+  });
+
   // NEO-97: coming back to a list (e.g. Back from a record) shows its last
   // page at once and refreshes quietly — no skeleton, so the page transition
   // can fly the record's avatar + name straight back into its row.
@@ -300,6 +376,31 @@ describe("AppEntityList", () => {
       expect(down.defaultPrevented).toBe(true);
     });
 
+    // NEO-160: with the keyboard up, the first tap on the feed only leaves the
+    // search; the next tap is an ordinary tap that opens the card.
+    it("first tap on a card while the search is focused only blurs the search; the next tap goes through", async () => {
+      await mountEntityList({ width: 375 });
+      const card = document.querySelector(".app-entity-list__card") as HTMLElement;
+      const tap = () => {
+        // jsdom has no PointerEvent constructor; the listener only needs the type.
+        card.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+        const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+        card.dispatchEvent(click);
+        return click;
+      };
+      input().focus();
+      input().dispatchEvent(new FocusEvent("focus"));
+      await flushPromises();
+      expect(document.activeElement).toBe(input());
+
+      expect(tap().defaultPrevented).toBe(true);
+      await flushPromises();
+      expect(document.activeElement).not.toBe(input());
+      expect(toolbar().classList.contains("app-entity-list__toolbar--search-open")).toBe(false);
+
+      expect(tap().defaultPrevented).toBe(false);
+    });
+
     it("desktop never gets the phone classes", async () => {
       await mountEntityList({ width: 1440 });
       expect(toolbar().classList.contains("app-entity-list__toolbar--mobile")).toBe(false);
@@ -334,6 +435,23 @@ describe("AppEntityList", () => {
       path.resolve(__dirname, "../assets/transitions.css"),
       "utf-8",
     );
+
+    // NEO-160: the toolbar clips (overflow: hidden, for the scroll collapse), so
+    // it needs room for the focused search's 3 px halo — padding, offset by an
+    // equal negative margin so the row doesn't move.
+    it("toolbar leaves room for the focus halo without moving the row", () => {
+      expect(css).toMatch(/\.app-entity-list__toolbar\s*{[^}]*--app-entity-list-halo-room:\s*4px/);
+      expect(css).toMatch(/\.app-entity-list__toolbar\s*{[^}]*padding:\s*var\(--app-entity-list-halo-room\)/);
+      expect(css).toMatch(/\.app-entity-list__toolbar\s*{[^}]*margin:\s*calc\(-1 \* var\(--app-entity-list-halo-room\)\)/);
+    });
+
+    // NEO-160: outside the page header (a record's tab) the open search grows
+    // in the row, so its 48 px slot has to grow too.
+    it("the search slot grows while the search is open or holds a query", () => {
+      expect(css).toMatch(
+        /\.app-entity-list__toolbar--search-open \.app-entity-list__search-slot,\s*\.app-entity-list__toolbar--has-query \.app-entity-list__search-slot\s*{\s*flex:\s*1 1 0%;/,
+      );
+    });
 
     it("add button has no border and uses the primary color", () => {
       expect(css).toMatch(/\.app-entity-list__add--no-border\s*{[^}]*border:\s*none/);

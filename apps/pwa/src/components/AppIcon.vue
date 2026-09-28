@@ -365,7 +365,9 @@ const ICONS = {
   },
   "filter": {
     strokeWidth: 2,
-    paths: `<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />`,
+    // NEO-152: drawn 16 units wide (x 4–20), the same optical size as "search"
+    // and "plus" — the old 20-unit funnel read a size larger in the toolbar.
+    paths: `<polygon points="20 5 4 5 10.5 12.4 10.5 18.2 13.5 19.7 13.5 12.4 20 5" />`,
   },
   "video-camera": {
     strokeWidth: 2,
@@ -381,8 +383,8 @@ const ICONS = {
   },
   "search": {
     strokeWidth: 2,
-    paths: `<circle cx="11" cy="11" r="8" pathLength="1" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" pathLength="1" />`,
+    paths: `<circle cx="11" cy="11" r="7" pathLength="1" />
+            <line x1="20" y1="20" x2="15.95" y2="15.95" pathLength="1" />`,
   },
   "menu": {
     strokeWidth: 2,

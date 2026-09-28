@@ -28,7 +28,7 @@ function mountMenu(mobile = false) {
               ]),
             default: () =>
               h("div", { class: "panel" }, [
-                h("div", { "data-motion": "header" }, [
+                h("div", {}, [
                   h("span", { "data-motion": "name" }, "Ana López"),
                   h("span", { "data-motion": "avatar" }, "AL"),
                 ]),
@@ -89,11 +89,77 @@ describe("AppAccountMenu — NEO-122 avatar button turns into the menu", () => {
     expect(open.value).toBe(false);
   });
 
-  it("on phones renders the bottom sheet above the bottom nav bar", async () => {
+  // NEO-154: phone and desktop open the same card; the phone one sits above the bottom nav.
+  it("on phones opens the same card as on desktop, above the bottom nav bar", async () => {
     const { wrapper } = mountMenu(true);
     await wrapper.get('[data-testid="trigger"]').trigger("click");
     await flushPromises();
-    expect(dialog()?.classList.contains("account-menu__sheet")).toBe(true);
-    expect(document.querySelector(".account-menu--sheet")).not.toBeNull();
+    expect(dialog()?.classList.contains("account-menu__card")).toBe(true);
+    expect(document.querySelector(".account-menu--phone")).not.toBeNull();
+    expect(document.querySelector(".account-menu__sheet")).toBeNull();
+  });
+
+  it("on phones shows a swipe handle at the bottom of the card; desktop has none", async () => {
+    const phone = mountMenu(true);
+    await phone.wrapper.get('[data-testid="trigger"]').trigger("click");
+    await flushPromises();
+    expect(document.querySelector('[data-testid="account-menu-handle"]')).not.toBeNull();
+    phone.wrapper.unmount();
+    document.body.innerHTML = "";
+
+    const desktop = mountMenu(false);
+    await desktop.wrapper.get('[data-testid="trigger"]').trigger("click");
+    await flushPromises();
+    expect(dialog()).not.toBeNull();
+    expect(document.querySelector('[data-testid="account-menu-handle"]')).toBeNull();
+  });
+
+  describe("swipe up to close (phone)", () => {
+    function pointer(target: EventTarget, type: string, clientY: number, timeStamp = 0) {
+      const e = new MouseEvent(type, { clientY, clientX: 100, button: 0, bubbles: true });
+      Object.defineProperty(e, "pointerId", { value: 1 });
+      Object.defineProperty(e, "timeStamp", { value: timeStamp });
+      target.dispatchEvent(e);
+    }
+
+    async function openPhone() {
+      const menu = mountMenu(true);
+      await menu.wrapper.get('[data-testid="trigger"]').trigger("click");
+      await flushPromises();
+      return menu;
+    }
+
+    it("closes when the card is dragged up far enough", async () => {
+      const { open } = await openPhone();
+      pointer(dialog()!, "pointerdown", 300, 0);
+      pointer(window, "pointermove", 260, 200);
+      pointer(window, "pointermove", 200, 400);
+      pointer(window, "pointerup", 200, 400);
+      await flushPromises();
+      expect(open.value).toBe(false);
+    });
+
+    it("springs back and stays open after a short, slow drag", async () => {
+      const { open } = await openPhone();
+      pointer(dialog()!, "pointerdown", 300, 0);
+      pointer(window, "pointermove", 280, 300);
+      expect(dialog()!.style.transform).toBe("translateY(-20px)");
+      pointer(window, "pointerup", 280, 600);
+      await flushPromises();
+      expect(open.value).toBe(true);
+      expect(dialog()!.style.transform).toBe("");
+    });
+
+    it("a drag doesn't press the button it started on", async () => {
+      await openPhone();
+      const inside = document.querySelector<HTMLElement>('[data-testid="inside"]')!;
+      let clicked = false;
+      inside.addEventListener("click", () => (clicked = true));
+      pointer(inside, "pointerdown", 300, 0);
+      pointer(window, "pointermove", 280, 300);
+      pointer(window, "pointerup", 280, 600);
+      inside.click();
+      expect(clicked).toBe(false);
+    });
   });
 });

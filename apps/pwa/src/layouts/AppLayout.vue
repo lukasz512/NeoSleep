@@ -73,14 +73,13 @@
       </template>
 
       <!-- Account: top right on both breakpoints (NEO-55), avatar + name/role
-           on desktop, avatar only on mobile. The menu drops below it on
-           desktop and rises as a bottom sheet on phones (NEO-102), within
-           thumb reach. -->
+           on desktop, avatar only on mobile. The menu opens as a card around
+           that avatar on both (NEO-154 replaced the phone bottom sheet). -->
       <template #app-bar-actions>
         <div ref="barActions" class="layout-bar-actions">
-          <!-- NEO-122: the avatar button turns into the menu (desktop: the card
-               blooms out of the avatar; phone: a sheet rises and the avatar flies
-               into it) — see AppAccountMenu + useAccountMenuMotion. -->
+          <!-- NEO-122 / NEO-154: the avatar button turns into the menu — the
+               avatar stays put and grows, the card pours out of it (same on
+               desktop and phone); see AppAccountMenu + useAccountMenuMotion. -->
           <AppAccountMenu v-model:open="menuOpen" :mobile="isMobile" :label="t('user.user.menu')">
           <template #trigger="{ open: accountMenuOpen }">
             <AppButton
@@ -104,11 +103,11 @@
           </template>
 
           <AppUserMenuPanel
-            :sheet="isMobile"
             :name="user.displayName"
             :email="user.email"
             :role-label="user.role"
             :initials="user.initials"
+            :avatar-size="isMobile ? AVATAR_SIZE * PHONE_AVATAR_GROWTH : AVATAR_SIZE * AVATAR_GROWTH"
             :region="user.region"
             :theme-preference="themePreference"
             :locale="(locale as string)"
@@ -147,12 +146,10 @@
              teleports its own controls into (usePageHeader.ts). v-show, not
              v-if: the teleport target must never be removed from under a
              view that is still teleporting into it. -->
-        <!-- NEO-56: hidden on desktop while a detail view shows its record
-             header, whose "MODULE ›" eyebrow above the record's name replaces
-             this row. NEO-108: phones always show it — it is the card's first
-             line ("← Pacientes" / module icon + title), the eyebrow is hidden
-             there. -->
-        <!-- NEO-113: a view's open phone search takes the whole row, title included. -->
+        <!-- NEO-56: hidden while a detail view shows its record header, whose
+             "MODULE ›" eyebrow above the record's name replaces this row —
+             on phones too since NEO-152 (NEO-108 had kept "← Module" there). -->
+        <!-- NEO-113/152: a view's open icon search covers the whole row; the title fades under it. -->
         <div
           v-show="pageHeaderVisible"
           class="layout-page-header"
@@ -171,22 +168,34 @@
           >
             <AppIcon name="arrow-left" class="layout-back-icon" />
           </AppButton>
-          <Transition name="title-fade" mode="out-in">
-            <div :key="moduleTitle" class="layout-appbar__title-group layout-page-header__title">
-              <AppIcon
-                v-if="moduleIcon && !parentRoute"
-                :ref="(el) => (headerTitleGlyph.el.value = el)"
-                :name="moduleIcon"
-                class="layout-appbar__icon"
-                :style="{ marginInlineStart: `${-headerTitleGlyph.inset.value}px` }"
-              />
+          <!-- NEO-152: no title animation of its own — the title changes with
+               the page (the sheet's view transition carries it). Desktop
+               lists add a quiet count line 4 px under the title, like the
+               identity line under a record's name; phones leave it out. -->
+          <div class="layout-appbar__title-group layout-page-header__title">
+            <AppIcon
+              v-if="moduleIcon && !parentRoute"
+              :ref="(el) => (headerTitleGlyph.el.value = el)"
+              :name="moduleIcon"
+              class="layout-appbar__icon"
+              :style="{ marginInlineStart: `${-headerTitleGlyph.inset.value}px` }"
+            />
+            <div class="layout-page-header__titles">
               <span
                 :ref="setHeaderTitleEl"
                 class="layout-appbar__title"
                 :title="moduleTitle"
               >{{ moduleTitle }}</span>
+              <span
+                v-if="!isMobile && !parentRoute && pageHeaderRow.subtitle.value !== null"
+                class="layout-page-header__subtitle"
+                data-testid="page-header-subtitle"
+              >
+                <span v-if="pageHeaderRow.subtitle.value">{{ pageHeaderRow.subtitle.value }}</span>
+                <span v-else class="layout-page-header__subtitle-skeleton" aria-hidden="true" />
+              </span>
             </div>
-          </Transition>
+          </div>
           <div :id="PAGE_HEADER_ACTIONS_ID" class="layout-page-header__actions" />
         </div>
 
@@ -236,6 +245,7 @@ import {
 import { useGlyphInset } from "../composables/useGlyphInset";
 import { useBarLogoFit } from "../composables/useBarLogoFit";
 import { useThemeColorMeta } from "../composables/useThemeColorMeta";
+import { AVATAR_GROWTH, PHONE_AVATAR_GROWTH } from "../composables/useAccountMenuMotion";
 import { useI18n } from "vue-i18n";
 import { AppShell, useAppVersionParts, CHANGE_PASSWORD_FROM_MENU } from "@ui";
 import { useLayoutState } from "../composables/useLayoutState";
@@ -315,8 +325,10 @@ function setHeaderTitleEl(el: Element | ComponentPublicInstance | null) {
   pageHeaderRow.title.value = el instanceof HTMLElement ? el : null;
 }
 const recordHeaderClaim = provideRecordHeaderClaim();
-// Desktop: hidden while a record header replaces it; phones: always the card's first line.
-const pageHeaderVisible = computed(() => isMobile.value || !recordHeaderClaim.value);
+// Hidden while a record header replaces it — NEO-152: on phones too, whose
+// record header is now the desktop one, its "MODULE ›" link above the name
+// being the way back (no separate "← Module" row).
+const pageHeaderVisible = computed(() => !recordHeaderClaim.value);
 
 // NEO-108: logo sizes. The folded O is exactly the avatar's size, so both
 // corners of the phone bar match.
@@ -470,35 +482,31 @@ const moduleIcon = computed(() => {
   min-width: 0;
 }
 
-/* title-fade (packages/brand/transitions.css) slides the whole group left as
-   one block. Here the icon and title split apart in opposite directions on
-   the way out, and converge from opposite sides on the way in, instead. */
-.layout-appbar__title-group.title-fade-enter-from,
-.layout-appbar__title-group.title-fade-leave-to {
-  transform: none;
+/* NEO-152: the title over its count line, 4 px apart — the same rhythm as a
+   record's name over its identity line (ItemDetailLayout). */
+.layout-page-header__titles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1, 4px);
+  min-width: 0;
 }
-
-.layout-appbar__title-group.title-fade-enter-active .layout-appbar__icon,
-.layout-appbar__title-group.title-fade-leave-active .layout-appbar__icon,
-.layout-appbar__title-group.title-fade-enter-active .layout-appbar__title,
-.layout-appbar__title-group.title-fade-leave-active .layout-appbar__title {
-  transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+.layout-page-header__subtitle {
+  display: flex;
+  align-items: center;
+  height: 18px;
+  font-size: 0.8125rem;
+  line-height: 18px;
+  white-space: nowrap;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-variant-numeric: tabular-nums;
 }
-
-.layout-appbar__title-group.title-fade-leave-to .layout-appbar__icon {
-  transform: translateX(-8px);
-}
-
-.layout-appbar__title-group.title-fade-leave-to .layout-appbar__title {
-  transform: translateX(8px);
-}
-
-.layout-appbar__title-group.title-fade-enter-from .layout-appbar__icon {
-  transform: translateX(8px);
-}
-
-.layout-appbar__title-group.title-fade-enter-from .layout-appbar__title {
-  transform: translateX(-8px);
+/* While the list's first page loads: a placeholder of the same height. */
+.layout-page-header__subtitle-skeleton {
+  display: block;
+  width: 88px;
+  height: 10px;
+  border-radius: 5px;
+  background: rgba(var(--v-theme-on-surface), 0.07);
 }
 
 .layout-appbar__icon {
@@ -544,10 +552,13 @@ const moduleIcon = computed(() => {
   }
 }
 
+/* NEO-152: a list's name is the page's heading — 28 px bold on desktop
+   (phones: 24 px, below), clearly above the 14 px table text. */
 .layout-appbar__title {
-  font-size: 20px;
-  font-weight: 600;
-  line-height: var(--appbar-row, 28px);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 32px;
 }
 
 /* Only the collapse chevron lives here now (the account moved to the app
@@ -624,6 +635,9 @@ const moduleIcon = computed(() => {
    selector so it outranks `.layout-main__inner > *` below (which makes every
    other child a growing column). */
 .layout-main__inner > .layout-page-header {
+  /* NEO-152: the containing block of a list's open icon search, which
+     covers this whole row (AppEntityList's overlay). */
+  position: relative;
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -713,12 +727,17 @@ const moduleIcon = computed(() => {
   flex: 0 0 auto;
 }
 /* Open search (or a kept query) takes the whole row, title included. */
+/* NEO-152: an open icon search covers the row; the title and the back button
+   only fade under it — they keep their space, so nothing in the row moves
+   (NEO-113 had taken them out of the layout, which made the row jump). */
+.layout-page-header__title,
+.layout-page-header__back {
+  transition: opacity 150ms ease;
+}
 .layout-page-header--search .layout-page-header__title,
 .layout-page-header--search .layout-page-header__back {
-  display: none;
-}
-.layout-root:not(.layout-root--desktop) .layout-page-header--search .layout-page-header__actions {
-  flex: 1 1 auto;
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* Pulled back by the icon's inset in the 56px button plus the arrow glyph's

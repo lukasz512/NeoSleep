@@ -6,7 +6,8 @@
  * global stylesheet, because hit areas, wrapping and "nothing jumps" are
  * layout facts only a real browser engine computes.
  *
- * `?state=record` (default) · `loading` · `long` (very long name) · `notfound`.
+ * `?state=record` (default) · `loading` · `long` (very long name) · `notfound` ·
+ * `scroll` (a record with a tall body, for the NEO-158 phone sticky bar).
  */
 import { createApp, defineComponent, h } from "vue";
 import { createPinia } from "pinia";
@@ -18,6 +19,7 @@ import "../../src/assets/app-responsive.scss";
 import ItemDetailLayout from "../../src/components/ItemDetailLayout.vue";
 import AppButton from "../../src/components/AppButton.vue";
 import AppIcon from "../../src/components/AppIcon.vue";
+import { entityActionBtnClass, entityActionIcon, type EntityActionKey } from "../../src/config/entityActions";
 
 const state = new URLSearchParams(location.search).get("state") ?? "record";
 vuetify.theme.change(lightTheme);
@@ -35,9 +37,23 @@ const name = state === "long"
   ? "María de los Ángeles Fernández-Villaseñor Gutiérrez de la Concepción y Santa Cruz"
   : "Jan Kowalski";
 
+// Tones as the real views give them (config/entityActions.ts) — the sticky
+// bar reads them to keep delete out of the main slot.
+const ACTIONS: [EntityActionKey, string][] = [["scheduleVisit", "Plan visit"], ["edit", "Edit"], ["delete", "Delete"]];
 const actions = () =>
-  (["calendar", "pencil", "trash"] as const).map((icon) =>
-    h(AppButton, { icon: true, variant: "flat", size: "large", "aria-label": icon, class: "harness-action" }, () => h(AppIcon, { name: icon })),
+  ACTIONS.map(([key, label]) =>
+    h(
+      AppButton,
+      {
+        icon: true,
+        variant: "flat",
+        size: "large",
+        "aria-label": label,
+        class: ["harness-action", entityActionBtnClass(key)],
+        onClick: () => document.body.setAttribute("data-clicked", label),
+      },
+      () => h(AppIcon, { name: entityActionIcon(key) }),
+    ),
   );
 
 const Harness = defineComponent({
@@ -56,7 +72,10 @@ const Harness = defineComponent({
           },
           {
             "header-actions": actions,
-            sections: () => h("p", "Details"),
+            // The identity line every person record has (NEO-57), e.g. "M · 46 y".
+            "record-details": () => h("span", "M · 46 y"),
+            sections: () =>
+              state === "scroll" ? h("div", { style: "height: 2000px" }, "Details") : h("p", "Details"),
           },
         ),
       ]);

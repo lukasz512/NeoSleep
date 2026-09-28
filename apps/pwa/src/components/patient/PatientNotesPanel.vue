@@ -1,19 +1,12 @@
 <template>
   <div class="patient-notes-panel">
-    <div class="patient-notes-panel__compose">
-      <VTextarea
-        v-model="draft"
-        :label="t('app.notes.placeholder')"
-        variant="outlined"
-        density="comfortable"
-        rows="2"
-        auto-grow
-        hide-details
-      />
-      <AppButton color="primary" class="patient-notes-panel__submit" :loading="addLoading" :disabled="!draft.trim()" @click="onAdd">
-        {{ t("app.notes.add") }}
-      </AppButton>
-    </div>
+    <NoteComposer
+      v-model="draft"
+      class="patient-notes-panel__compose"
+      :placeholder="t('app.notes.placeholder')"
+      :loading="addLoading"
+      @submit="onAdd"
+    />
 
     <AppLoadingState v-if="loading && !loaded" />
     <AppErrorState
@@ -24,7 +17,9 @@
       :loading="loading"
       @refresh="loadNotes"
     />
-    <AppEmptyState v-else-if="notes.length === 0" :title="t('app.notes.empty')" />
+    <!-- NEO-153: a quiet one-liner, not the full-page empty state — the compose
+         box right above it is the call to action. -->
+    <p v-else-if="notes.length === 0" class="patient-notes-panel__empty">{{ t("app.notes.empty") }}</p>
     <ul v-else class="patient-notes-panel__list">
       <li v-for="note in notes" :key="note.id" class="patient-notes-panel__item">
         <div class="patient-notes-panel__item-header">
@@ -70,7 +65,7 @@ import AppConfirmDialog from "../AppConfirmDialog.vue";
 import AppIcon from "../AppIcon.vue";
 import AppLoadingState from "../AppLoadingState.vue";
 import AppErrorState from "../AppErrorState.vue";
-import AppEmptyState from "../AppEmptyState.vue";
+import NoteComposer from "../NoteComposer.vue";
 import { useAuthStore } from "../../stores/auth";
 import { useAsyncAction } from "../../composables/useAsyncAction";
 import { useNotes, type NoteItem } from "../../composables/useNotes";
@@ -130,14 +125,13 @@ watch(
 
 <style scoped>
 .patient-notes-panel__compose {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-bottom: 28px;
+  margin-bottom: var(--space-6, 24px);
 }
 
-.patient-notes-panel__submit {
-  align-self: flex-end;
+.patient-notes-panel__empty {
+  margin: 0;
+  font-size: 0.875rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
 .patient-notes-panel__list {

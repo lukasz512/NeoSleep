@@ -49,6 +49,12 @@ $pwa-fib-t-xl: 233ms;
 $pwa-fib-t-2xl: 377ms;
 $pwa-fib-t-3xl: 987ms;
 
+/* Name-seeded avatar palette (NEO-155): AppAvatar picks one of these hues
+   by a hash of the person's name (utils/avatarHue.ts — keep
+   AVATAR_HUE_COUNT equal to this list's length). Same saturation/lightness
+   per theme, so every tint has the same initials contrast. */
+$pwa-avatar-hues: 4, 28, 48, 95, 150, 190, 222, 262, 300, 335;
+
 :root {
   --pwa-fib-xs: #{$pwa-fib-xs};
   --pwa-fib-sm: #{$pwa-fib-sm};
@@ -130,6 +136,13 @@ $pwa-fib-t-3xl: 987ms;
   --pwa-identity-org-soft: rgba(160, 120, 40, 0.1);
   --pwa-identity-person: #56625f;
   --pwa-identity-person-soft: rgba(40, 60, 58, 0.07);
+  /* Lead: dashed ring around the avatar (NEO-155) — not a patient yet. */
+  --pwa-identity-lead: #7a4fc4;
+  @each $hue in $pwa-avatar-hues {
+    $i: index($pwa-avatar-hues, $hue) - 1;
+    --pwa-avatar-#{$i}-bg: hsl(#{$hue} 62% 91%);
+    --pwa-avatar-#{$i}-fg: hsl(#{$hue} 55% 32%);
+  }
   /* Toasts (AppNotifications.vue, NEO-76 "record context"): white card, the
      entity icon on a neutral grey tile, status only on the small badge and
      the action button. Semantic colors, deliberately not the brand teal. */
@@ -184,6 +197,12 @@ $pwa-fib-t-3xl: 987ms;
   --pwa-identity-org-soft: rgba(201, 168, 106, 0.14);
   --pwa-identity-person: #a3b1ae;
   --pwa-identity-person-soft: rgba(160, 175, 172, 0.12);
+  --pwa-identity-lead: #b69cf2;
+  @each $hue in $pwa-avatar-hues {
+    $i: index($pwa-avatar-hues, $hue) - 1;
+    --pwa-avatar-#{$i}-bg: hsl(#{$hue} 38% 24%);
+    --pwa-avatar-#{$i}-fg: hsl(#{$hue} 75% 76%);
+  }
   --pwa-toast-bg: #1e1e1e;
   --pwa-toast-border: #333333;
   --pwa-toast-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);

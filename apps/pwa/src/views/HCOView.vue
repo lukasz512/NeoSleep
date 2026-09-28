@@ -194,6 +194,7 @@ const hcoI18n = computed(() => ({
   add: "user.hco.add",
   emptyTitle: "user.hco.emptyTitle",
   emptySubtitle: "user.hco.emptySubtitle",
+  countNoun: "clinics" as const,
   noResultsForCriteria: "user.hco.noResultsForCriteria",
   noResultsForCriteriaSubtitle: "user.hco.noResultsForCriteriaSubtitle",
   tableNoResults: "user.hco.table.noResults",

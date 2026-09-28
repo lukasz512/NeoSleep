@@ -85,14 +85,50 @@ describe("AppAvatar (doctor badge, NEO-57)", () => {
   });
 });
 
-describe("AppAvatar (identity tint, NEO-57)", () => {
-  it("tints each identity type with its own tone class", () => {
-    expect(mountAvatar({ entityType: "patient", name: "Mateusz Dotestowania" }).classes()).toContain("app-avatar--patient");
-    expect(mountAvatar({ entityType: "hcp", name: "Jan Kowalski" }).classes()).toContain("app-avatar--doctor");
-    expect(mountAvatar({ entityType: "hco" }).classes()).toContain("app-avatar--org");
-    expect(mountAvatar({ entityType: "user", name: "Anna Nowak" }).classes()).toContain("app-avatar--person");
-    expect(mountAvatar({ entityType: "lead", name: "Anna Nowak" }).classes()).toContain("app-avatar--person");
+describe("AppAvatar (name-seeded color, NEO-155)", () => {
+  const hueOf = (w: VueWrapper) => w.classes().find((c) => c.startsWith("app-avatar--hue-"));
+
+  it("gives people a hue from their name — the same name, the same hue, whatever the type", () => {
+    const patient = hueOf(mountAvatar({ entityType: "patient", name: "Anna Nowak" }));
+    expect(patient).toMatch(/^app-avatar--hue-\d$/);
+    expect(hueOf(mountAvatar({ entityType: "user", name: "Anna Nowak" }))).toBe(patient);
   });
+
+  it("varies across a list of different people", () => {
+    const names = ["Adam Nowak", "María López", "Anna Kowalska", "Jan Wiśniewski", "Carlos Ruiz", "Ewa Zielińska"];
+    expect(new Set(names.map((name) => hueOf(mountAvatar({ entityType: "patient", name })))).size).toBeGreaterThan(3);
+  });
+
+  it("keeps the type tint for places", () => {
+    const org = mountAvatar({ entityType: "hco" });
+    expect(org.classes()).toContain("app-avatar--org");
+    expect(hueOf(org)).toBeUndefined();
+  });
+});
+
+describe("AppAvatar (lead ring + order ring, NEO-155)", () => {
+  it("marks a lead with the dashed ring, nobody else", () => {
+    expect(mountAvatar({ entityType: "lead", name: "Carlos Ruiz" }).classes()).toContain("app-avatar--lead");
+    expect(mountAvatar({ entityType: "user", name: "Carlos Ruiz" }).classes()).not.toContain("app-avatar--lead");
+  });
+
+  it("draws the order ring only for a patient with a live order", () => {
+    const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
+    const ring = (entityType: AppAvatarEntityType, orderStatus: string | null) => {
+      const w = mount(AppAvatar, { props: { entityType, name: "Adam Nowak", orderStatus }, global: { plugins: [vuetify] } });
+      mountedWrappers.push(w);
+      return w;
+    };
+    const shipped = ring("patient", "shipped");
+    expect(shipped.find("[data-testid=app-avatar-order-ring]").exists()).toBe(true);
+    expect(shipped.attributes("style")).toContain("--app-avatar-order-progress: 0.8");
+    expect(ring("patient", null).find("[data-testid=app-avatar-order-ring]").exists()).toBe(false);
+    expect(ring("patient", "cancelled").find("[data-testid=app-avatar-order-ring]").exists()).toBe(false);
+    expect(ring("user", "shipped").find("[data-testid=app-avatar-order-ring]").exists()).toBe(false);
+  });
+});
+
+describe("AppAvatar (photo)", () => {
 
   it("keeps initials for people and drops the tint behind a real photo", () => {
     expect(mountAvatar({ entityType: "patient", name: "Mateusz Dotestowania" }).find(".app-avatar__initials").text()).toBe("MD");

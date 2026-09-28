@@ -10,9 +10,9 @@ const OPTIONS = [
   { value: "history", label: "Historia endo" },
 ];
 
-function mountTabs(props: { fit?: boolean; modelValue?: string } = {}) {
+function mountTabs(props: { fit?: boolean; underline?: boolean; modelValue?: string } = {}) {
   return mount(AppSegmentedTabs, {
-    props: { modelValue: props.modelValue ?? "details", options: OPTIONS, fit: props.fit },
+    props: { modelValue: props.modelValue ?? "details", options: OPTIONS, fit: props.fit, underline: props.underline },
     global: { plugins: [createVuetify({ components: vuetifyComponents })] },
   });
 }
@@ -34,6 +34,20 @@ describe("AppSegmentedTabs", () => {
     for (const tab of wrapper.findAll(".app-segmented-tabs__tab")) {
       expect(tab.classes()).not.toContain("flex-grow-1");
     }
+  });
+
+  // NEO-153: detail views use a flat row with a sliding underline, not the glass pill.
+  it("underline: flat row with a bar thumb instead of the glass pill", () => {
+    const wrapper = mountTabs({ fit: true, underline: true });
+    expect(wrapper.classes()).toContain("app-segmented-tabs--underline");
+    expect(wrapper.classes()).not.toContain("rounded-pill");
+    expect(wrapper.find(".app-segmented-tabs__thumb").classes()).not.toContain("rounded-pill");
+  });
+
+  it("pill stays the default look", () => {
+    const wrapper = mountTabs();
+    expect(wrapper.classes()).toContain("rounded-pill");
+    expect(wrapper.classes()).not.toContain("app-segmented-tabs--underline");
   });
 
   it("marks the active tab and emits the clicked one", async () => {

@@ -145,7 +145,7 @@
             <PatientNotesPanel entity-type="patient" :entity-id="patient.id" />
           </template>
           <template #studies>
-            <PatientStudiesPanel :patient-id="patient.id" :focus-item="studyItem" :date-of-birth="patient.date_of_birth" :gender="patient.gender" />
+            <PatientStudiesPanel :patient-id="patient.id" :focus-item="studyItem" :date-of-birth="patient.date_of_birth" :gender="patient.gender" :qr-request-nonce="qrRequestNonce" />
           </template>
           <template #orthoapnea>
             <PatientOrthoApneaPanel :patient-id="patient.id" />
@@ -157,6 +157,17 @@
             <EntityHistoryPanel :endpoint="`/api/v1/patient/${patient.id}/history`" />
           </template>
         </DetailViewTabs>
+      </template>
+      <template v-if="patient" #aside>
+        <PatientAsidePanel
+          :patient="patient"
+          :can-see-studies="canSeeStudies"
+          :active-tab="activeTab"
+          @open-notes="activeTab = 'notes'"
+          @open-study="openStudy"
+          @open-tab="(tab: string) => (activeTab = tab)"
+          @qr="onAsideQr"
+        />
       </template>
     </ItemDetailLayout>
 
@@ -196,6 +207,7 @@ import { useIdentity } from "../composables/useIdentity";
 import AppAvatar from "../components/AppAvatar.vue";
 import IdentityDetails from "../components/IdentityDetails.vue";
 import PatientNotesPanel from "../components/patient/PatientNotesPanel.vue";
+import PatientAsidePanel from "../components/patient/PatientAsidePanel.vue";
 import PatientStudiesPanel from "../components/patient/PatientStudiesPanel.vue";
 import PatientStudiesSummary from "../components/patient/PatientStudiesSummary.vue";
 import PatientOrthoApneaPanel from "../components/patient/PatientOrthoApneaPanel.vue";
@@ -237,6 +249,8 @@ interface PatientDetail {
   ahi_baseline?: number | null;
   cpap_device?: string | null;
   medical_record?: string | null;
+  /** ICD-10 JSONB — nothing writes it yet; the side panel shows it when present (NEO-153). */
+  diagnosis_code?: Record<string, unknown> | null;
 }
 
 const { t } = useI18n();
@@ -299,6 +313,14 @@ function openStudy(itemKey: string) {
   studyItem.value = itemKey;
   if (activeTab.value === "studies") syncQuery();
   else activeTab.value = "studies";
+}
+
+/** Side panel "QR for the patient" (NEO-153): the Estudios tab owns the QR flow (status button, polling), so open it there. */
+const qrRequestNonce = ref(0);
+function onAsideQr() {
+  studyItem.value = null;
+  activeTab.value = "studies";
+  qrRequestNonce.value += 1;
 }
 
 function onEdit() {
