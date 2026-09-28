@@ -150,3 +150,20 @@ signed PDF is left behind.
   named in the aviso de privacidad); (2) a written confidentiality obligation for every manager
   account; (3) the patient consent / aviso text naming this recipient. The technical side
   (role-limited, territory-checked, read-audited) is done.
+
+## Addendum — live refresh and "Nuevo" (NEO-173, 2026-09-28)
+
+- **Live refresh.** The open Estudios tab (and the Details tab's studies card) checks
+  `GET /patient/:id/checklist/version`: every 15 s while a QR link is live (at most 15 min per
+  link, same per-IP rate-limit reason as the QR polling), every 60 s otherwise, only while the page
+  is visible, and once on coming back to it. The version is a hash of the checklist; the full,
+  read-audited checklist is loaded only when it moved, so polling never writes a health-data read row.
+  Rows with a new entry get a short highlight. The open QR dialog keeps its own faster check (NEO-117).
+- **"Nuevo" is per user.** An entry is new for me when someone else added it (the patient via QR, or
+  another staff member: `recorded_by` / `collected_by` / `uploaded_by`, and the create audit row for
+  sleep studies) on or after 2026-09-28, and I haven't opened it. Opening it (view, file, sleep study)
+  calls `POST /patient/:id/checklist/entries/:entryId/opened`, which writes an audit_log `read` row
+  (`entity_type = 'ChecklistEntry'`). That row is both the access trail and the "seen" state, so no
+  new table. Clinical roles only (the checklist's own guard).
+- **Deferred.** Notifying staff when a patient submits is in FEATURE_BACKLOG.md ("Patient QR submission →
+  staff notification") and builds on NEO-134.

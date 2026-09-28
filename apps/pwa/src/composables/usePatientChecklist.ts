@@ -46,6 +46,8 @@ export interface ChecklistHistoryEntry {
   created_at: string;
   source: "staff" | "patient";
   by: string | null;
+  /** NEO-173: someone else added it and I haven't opened it yet — the row's "Nuevo" chip. */
+  is_new?: boolean;
   record?: ChecklistRecord;
   file_attachment_id?: string | null;
   title?: string | null;
@@ -103,6 +105,13 @@ export interface PatientChecklist {
   /** The newest link when it ran out unused — the QR button's "link expired" state (NEO-93). */
   expired_request: PendingRequest | null;
   summary: { done: number; total: number };
+  /** Fingerprint of the content (NEO-173) — compared with /checklist/version to know when to reload. */
+  version: string;
+}
+
+/** Every entry of the checklist — item histories plus files not attached to an item. */
+export function checklistEntries(checklist: PatientChecklist): ChecklistHistoryEntry[] {
+  return [...checklist.items.flatMap((item) => item.history), ...checklist.other_uploads];
 }
 
 /** NEO-127: checklist items → AppSegmentProgress segments, in checklist order. */
@@ -155,6 +164,39 @@ export function usePatientChecklist(patientId: () => string) {
       loadError.value = true;
     } finally {
       loading.value = false;
+    }
+  }
+
+  /**
+   * Background check for the open tab (NEO-173): asks for the fingerprint
+   * only — no health data, so no audit row every poll — and reloads the
+   * checklist when it moved. Silent: no spinner, and a failed check (offline,
+   * blip) keeps what's on screen and waits for the next one.
+   */
+  async function refreshIfChanged(): Promise<void> {
+    if (loading.value) return;
+    const shown = checklist.value?.version;
+    try {
+      const res = await apiFetch(`/api/v1/patient/${patientId()}/checklist/version`, { handleErrors: false });
+      if (!res.ok) return;
+      const { version } = (await res.json()) as { version: string };
+      if (version === shown) return;
+      const full = await apiFetch(`/api/v1/patient/${patientId()}/checklist`, { handleErrors: false });
+      if (full.ok) checklist.value = (await full.json()) as PatientChecklist;
+    } catch {
+      // benign: offline / network blip — the next check retries, what's on screen stays
+    }
+  }
+
+  /** I opened this result (NEO-173): audited server-side, and its "Nuevo" goes away for me. */
+  async function markOpened(entry: ChecklistHistoryEntry): Promise<void> {
+    if (!entry.is_new) return;
+    entry.is_new = false; // at once — the open itself must not wait on this
+    try {
+      const res = await apiFetch(`/api/v1/patient/${patientId()}/checklist/entries/${entry.id}/opened`, { method: "POST", handleErrors: false });
+      if (!res.ok) await reportFailedResponse(res, { where: "usePatientChecklist.markOpened" });
+    } catch (err) {
+      reportCaught(err, { where: "usePatientChecklist.markOpened", level: "warn" });
     }
   }
 
@@ -283,5 +325,5 @@ export function usePatientChecklist(patientId: () => string) {
     await send(`/studies/uploads/${attachmentId}`, { method: "DELETE" }, { icon: "file", errorKey: "app.clinical.upload.deleteError", successKey: "app.clinical.upload.deleted", retryable: true });
   }
 
-  return { checklist, loading, loadError, loadFailure, load, recordQuestionnaire, completeBang, print, openFile, createRequest, requestStatus, sendByEmail, cancelRequest, upload, deleteUpload };
+  return { checklist, loading, loadError, loadFailure, load, refreshIfChanged, markOpened, recordQuestionnaire, completeBang, print, openFile, createRequest, requestStatus, sendByEmail, cancelRequest, upload, deleteUpload };
 }

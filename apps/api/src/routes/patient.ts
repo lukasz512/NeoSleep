@@ -10,8 +10,8 @@ import { GetPatientListQuery, GetPatientByIdQuery } from "../queries/patient.js"
 import { GetHistoryForPatientQuery } from "../queries/auditLog.js";
 import { GetPatientDocumentsQuery, GetPatientDocumentDownloadUrlQuery } from "../queries/entityDocuments.js";
 import { RecordClinicalQuestionnaireCommand, CompleteStopBangCommand } from "../commands/clinicalRecords.js";
-import { PrintChecklistItemCommand, UploadPatientStudyCommand, DeletePatientStudyUploadCommand } from "../commands/patientChecklist.js";
-import { GetPatientChecklistQuery } from "../queries/patientChecklist.js";
+import { PrintChecklistItemCommand, UploadPatientStudyCommand, DeletePatientStudyUploadCommand, OpenChecklistEntryCommand } from "../commands/patientChecklist.js";
+import { GetPatientChecklistQuery, annotateNewEntries, checklistVersion } from "../queries/patientChecklist.js";
 import multer from "multer";
 import { isClinicalRecordKind, type ClinicalRecordKind } from "../commands/clinicalRecordFields.js";
 import { ListClinicalRecordsQuery } from "../queries/clinicalRecords.js";
@@ -257,9 +257,43 @@ patientRouter.get(
       const ctx = await buildContext(req, client, slug);
       const result = await GetPatientChecklistQuery(ctx, id);
       await AuditHealthDataReadCommand(ctx, { entity_type: "Patient", entity_id: id, patient_id: id, view: "checklist" });
-      return result;
+      // version before annotating — it must not depend on who is looking (NEO-173).
+      const version = checklistVersion(result);
+      return { ...(await annotateNewEntries(client, result, ctx.user.id)), version };
     });
     res.json(checklist);
+  })
+);
+
+// NEO-173: the open Estudios tab polls this and reloads the checklist only
+// when it changed — a fingerprint, no health data, so no read audit row.
+patientRouter.get(
+  "/patient/:id/checklist/version",
+  requireStudyRole,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = uuidParam(req, "id");
+    const slug = tenantSlugFromHost(req.hostname);
+    const version = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return checklistVersion(await GetPatientChecklistQuery(ctx, id));
+    });
+    res.json({ version });
+  })
+);
+
+// NEO-173: the user opened one result — audited, and clears its "Nuevo" for them.
+patientRouter.post(
+  "/patient/:id/checklist/entries/:entryId/opened",
+  requireStudyRole,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = uuidParam(req, "id");
+    const entryId = uuidParam(req, "entryId");
+    const slug = tenantSlugFromHost(req.hostname);
+    await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      await OpenChecklistEntryCommand(ctx, id, entryId);
+    });
+    res.status(204).end();
   })
 );
 
