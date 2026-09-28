@@ -16,7 +16,16 @@ Status: decided 2026-09-28 (decision form `neo-163-linking-r1`); work split into
 | C1 | CORE/NEO split | Now, and migrate open platform tickets | NEO-171 |
 | C2 | Accounts | Separate: Łukasz as a person, Claude/worker as app users | NEO-171 |
 
-New client (same form): **AJ Management**, Linear key **AJM**, a neoCRM client. Open, blocking NEO-171: does neoCRM work live in CORE or in its own team, and does AJM share this repo?
+New client (same form): **AJ Management**, Linear key **AJM**, a neoCRM client.
+Answered 2026-09-28: neoCRM is the platform, so its work lives in **CORE**; AJM is a client team. AJM, like 4Seasons, lives in **this repo**. Client teams hold only client-specific work (config, content, requests).
+
+### Creating the teams (manual, Łukasz)
+
+1. Linear → Settings → Teams → **Create team**. Name `CORE`, identifier `CORE`, "copy settings from" NeoSleep so statuses (Needs Review, Ready for Worker, Blocked) and labels match.
+2. Repeat for `AJ Management` / `AJM`, and 4Seasons with its key.
+3. In each new team's settings, turn on **Triage** (NEO-168).
+4. Move open platform tickets: open the ticket → ⋯ → Move to team → CORE. The old NEO-n link keeps working.
+5. Tell Claude the 4Seasons key; hooks and checks then accept `NEO|CORE|AJM|<key>-n`.
 
 Change Index cost (found while shipping this ticket): NEO-170.
 
