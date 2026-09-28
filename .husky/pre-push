@@ -27,7 +27,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     range="$remote_sha..$local_sha"
   fi
   ALL_CHANGED="$ALL_CHANGED
-$(git diff --name-only "$range" -- apps packages 2>/dev/null || true)"
+$(git diff --name-only "$range" -- apps packages clients 2>/dev/null || true)"
 done
 
 AFFECTED_DIRS="$(printf '%s\n' "$ALL_CHANGED" | "$REPO_ROOT/infrastructure/scripts/affected-workspaces.sh")"

@@ -1,0 +1,30 @@
+{
+  "name": "@ajm/portfolio",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "build:preview": "VITE_PATH_ROUTING=off VITE_MEDIA_BASE=media vite build --base ./ --outDir dist-preview",
+    "preview": "vite preview",
+    "lint": "eslint .",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "media": "bash scripts/encode-media.sh"
+  },
+  "dependencies": {
+    "vue": "catalog:",
+    "vue-i18n": "catalog:"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "catalog:",
+    "@vue/test-utils": "catalog:",
+    "eslint": "catalog:",
+    "eslint-plugin-vue": "catalog:",
+    "jsdom": "^25.0.1",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:",
+    "vue-tsc": "^3.0.0"
+  }
+}

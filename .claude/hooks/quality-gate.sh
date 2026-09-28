@@ -47,8 +47,8 @@ if [ -f "$OVERRIDE_FILE" ]; then
   fi
 fi
 
-CHANGED="$(git status --porcelain -- apps packages docs 2>/dev/null | awk '{ $1=""; print substr($0,2) }')"
-SRC_CHANGED="$(printf '%s\n' "$CHANGED" | grep -E '^(apps|packages)/[^/]+/src/' || true)"
+CHANGED="$(git status --porcelain -- apps packages clients docs 2>/dev/null | awk '{ $1=""; print substr($0,2) }')"
+SRC_CHANGED="$(printf '%s\n' "$CHANGED" | grep -E '^((apps|packages)/[^/]+|clients/[^/]+/[^/]+)/src/' || true)"
 
 # --- Branch-level view ------------------------------------------------------------------
 # 2026-09-24: "every change ships with an Artifact, always" (Łukasz). The checks below this

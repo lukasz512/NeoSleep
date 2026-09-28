@@ -1,0 +1,5 @@
+dist
+node_modules
+# Encoded media is generated from the originals and uploaded to R2, never committed.
+public/media
+dist-preview

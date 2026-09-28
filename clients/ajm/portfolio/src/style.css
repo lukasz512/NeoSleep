@@ -1,0 +1,95 @@
+/* AJM visual rules (client proposal): warm white + charcoal, large type, lots of space,
+   photography leads, subtle motion, no gradients. */
+:root {
+  --ajm-paper: #f4f1ea;
+  --ajm-ink: #1d1c1a;
+  --ajm-muted: #7c776d;
+  --ajm-line: #d9d4c8;
+  --ajm-ink-soft: #2a2825;
+  --ajm-gutter: clamp(16px, 5vw, 72px);
+  --ajm-ease: cubic-bezier(0.7, 0, 0.2, 1);
+  --ajm-font: "Helvetica Neue", "Inter", Arial, system-ui, sans-serif;
+  --ajm-serif: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  color-scheme: light;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--ajm-paper);
+  color: var(--ajm-ink);
+  font: 400 17px/1.55 var(--ajm-font);
+  -webkit-font-smoothing: antialiased;
+}
+
+img,
+video {
+  display: block;
+  max-width: 100%;
+}
+
+a {
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
+.eyebrow {
+  font: 500 12px/1.2 var(--ajm-font);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ajm-muted);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Text mask rise: every line sits in an overflow-hidden span and slides up once visible. */
+.mask-line {
+  display: block;
+  overflow: hidden;
+  /* room for descenders (g, p, y) inside the mask */
+  padding-bottom: 0.12em;
+  margin-bottom: -0.12em;
+}
+.mask-line > span {
+  display: block;
+  transform: translateY(105%);
+  transition: transform 0.9s var(--ajm-ease);
+}
+.is-in .mask-line > span {
+  transform: none;
+}
+.is-in .mask-line:nth-child(2) > span {
+  transition-delay: 0.08s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+  .mask-line > span {
+    transform: none;
+  }
+}

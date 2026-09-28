@@ -1,0 +1,80 @@
+{
+  "meta": {
+    "title": "AJ Management — Eventos corporativos & experiencias",
+    "description": "Planeamos, producimos y operamos eventos corporativos diseñados alrededor de las personas, las marcas y los objetivos de negocio."
+  },
+  "nav": {
+    "projects": "Proyectos",
+    "capabilities": "Capacidades",
+    "contact": "Contacto",
+    "language": "English",
+    "languageAria": "Ver esta página en inglés"
+  },
+  "entry": {
+    "skip": "Saltar"
+  },
+  "media": {
+    "play": "Reproducir video"
+  },
+  "hero": {
+    "line1": "Creamos experiencias",
+    "line2": "que conectan a las personas.",
+    "kicker": "Eventos Corporativos · Experiencias · Producción",
+    "body": "Desde el concepto hasta la ejecución, planeamos, producimos y operamos eventos corporativos diseñados alrededor de las personas, las marcas y los objetivos de negocio.",
+    "places": "Ciudad de México · Madrid · Internacional",
+    "cta": "Conoce nuestro trabajo"
+  },
+  "what": {
+    "title1": "Grandes ideas.",
+    "title2": "Ejecución impecable.",
+    "body1": "AJ Management es una agencia independiente especializada en la planeación, producción, coordinación y ejecución de eventos y experiencias corporativas.",
+    "body2": "Trabajamos como una extensión del equipo de nuestros clientes, gestionando cada etapa del proceso: desde la idea inicial y la selección del espacio hasta la producción, los proveedores, la logística y la operación en sitio.",
+    "words": ["Estrategia", "Planeación", "Producción", "Logística", "Experiencias", "Ejecución"]
+  },
+  "projects": {
+    "eyebrow": "Proyectos seleccionados",
+    "lead": "Cada proyecto es diferente. Nuestro enfoque se mantiene: entender el objetivo, construir el equipo adecuado y ejecutar cada detalle."
+  },
+  "universal": {
+    "number": "Caso 01",
+    "client": "Universal Products & Experiences",
+    "title": "Dando vida a marcas globales.",
+    "tags": "Producción · Experiencias · Contenido",
+    "body": "AJ Management colabora en proyectos que transforman propiedades de entretenimiento reconocidas globalmente en experiencias y producciones relevantes para el mercado local.",
+    "rooms": ["Lounge", "Colección", "Sala de reuniones"],
+    "videoLabel": "Recorrido por el pop-up de Universal, Ciudad de México"
+  },
+  "planeta": {
+    "number": "Caso 02",
+    "client": "Grupo Planeta",
+    "title": "Creamos experiencias alrededor de las historias.",
+    "tags": "Eventos Corporativos · Lanzamientos · Producción · Experiencia de Invitados",
+    "body": "AJ Management trabaja junto a Grupo Planeta desarrollando y produciendo eventos que conectan autores, medios, aliados y audiencias a través de experiencias cuidadosamente diseñadas.",
+    "city": "Ciudad de México",
+    "dragHint": "Desliza para ver cada lanzamiento",
+    "photoCount": "{n} fotos",
+    "photoAlt": "{event}: montaje del evento",
+    "events": {
+      "bordes": "Lanzamiento de colección",
+      "novedades2025": "Presentación de novedades",
+      "novedades2024": "Presentación de novedades",
+      "cronicas": "Lanzamiento de libro",
+      "algundia": "Lanzamiento de libro",
+      "duelo": "Lanzamiento de libros"
+    }
+  },
+  "contact": {
+    "title": "¿Tienes un evento en mente?",
+    "body": "Ya sea una reunión corporativa, una experiencia ejecutiva, una convención o un evento de gran formato, nos encantará conocer tu proyecto.",
+    "cta": "Hablemos de tu proyecto",
+    "whatsappMessage": "Hola Alfred, vi el portafolio de AJ Management y me gustaría platicar sobre un evento.",
+    "email": "Email",
+    "whatsapp": "WhatsApp",
+    "instagram": "Instagram",
+    "places": "Ciudad de México · Madrid"
+  },
+  "footer": {
+    "privacy": "Esta página no usa cookies. Solo contamos visitas de forma anónima y agregada; no identificamos a nadie.",
+    "rights": "© {year} AJ Management"
+  }
+}

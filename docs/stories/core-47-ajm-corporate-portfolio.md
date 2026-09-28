@@ -118,7 +118,7 @@ Consequences:
 | Mendel | 1 edited video, 100 s, 1080p, lower-thirds burned in | **Highlight reel**: full-bleed muted reel, unmute, stat overlays on beats, a frame strip to jump |
 | Hero | nothing dedicated | A 10–12 s montage cut from the videos above |
 
-Findings: `planeta/planeta4.jpg` is eFashion Day 2019, not Planeta, so it moves to Privalia. The Mendel and eFashion videos have letterbox bars baked in, which get cropped at encode. Logo: `Dokumenty/AJ Management/logo/logo-white.svg`, one version, recoloured to charcoal/white from the same file.
+Findings: the Mendel and eFashion videos have letterbox bars baked in, which get cropped at encode. (An earlier note claiming `planeta4.jpg` was from eFashion Day was wrong. The encoded files confirm Łukasz's photo→event list.) Logo: `Dokumenty/AJ Management/logo/logo-white.svg`, one version, recoloured to charcoal/white from the same file.
 
 ## Weak-connection delivery (measured)
 
@@ -144,12 +144,40 @@ Alfred's portrait · permission to show the brands and footage publicly (Univers
 | R5 | Video hosting | **yes**: self-encoded HLS + loops on Cloudflare R2 |
 
 Consequences:
-- **Tracking = cookieless aggregate only** (visits, time, which case is viewed). R1 and R4 remove per-lead identification, so D4's "per-lead in neoCRM" and R2's "per-lead after Accept" have nothing to act on. There is **no neoCRM API endpoint** and no `@neo/*` touchpoint at all. *Awaiting Łukasz's confirmation of this reading (asked in the thread), because D4 said the opposite.*
+- **Tracking = cookieless aggregate only** (visits, time, which case is viewed). R1 and R4 remove per-lead identification, so D4's "per-lead in neoCRM" and R2's "per-lead after Accept" have nothing to act on. There is **no neoCRM API endpoint** and no `@neo/*` touchpoint at all. **Confirmed (C1, 2026-09-28): more, i.e. aggregate + a small footer privacy notice, no banner.**
 - **Consent:** with nothing per-lead and no cookies, a blocking banner is not legally required. The plan is a short privacy notice in the footer (ES/EN). If Łukasz still wants a banner for looks or trust, it is cheap to add.
 - **QR entry (R3):** the QR grid is cut from **one** hero photo (each square shows its slice), then the squares fly apart into the full photo. It is skipped for a simple fade when `prefers-reduced-motion`, Save-Data, `navigator.deviceMemory < 4`, `hardwareConcurrency < 4` or a slow connection is detected.
 - **Hosting:** Cloudflare R2 bucket + CDN for loops, HLS and images. The originals never leave Łukasz's Mac and git.
 
-## Next
+## Planeta events → photos (Łukasz, 2026-09-28)
+
+Colección Bordes 2024: 11, 4, 2, 12 · Novedades 2025: 5, 10 · Novedades 2024: 13, 14, 15, 1, 3, 8, 9 · Crónicas de la capital: 00, 7 · Algún día, hoy 2019: 22 · Duelo de historias: 20, 21, 18, 17. The source of truth is `clients/ajm/portfolio/src/content/planeta.ts`.
+
+## Scope change (Łukasz, 2026-09-28)
+
+- **No Alfred section for now**: projects only.
+- Contact: aj@alfredjan.com · WhatsApp 55 1745 8958 (+52) · Instagram @alfredjan.
+
+## Slice 1: built (2026-09-28)
+
+`clients/ajm/portfolio` (Vite + Vue + TS, `@ajm/portfolio`):
+- entry: QR mosaic from one photo, link line/AJ, fade on lite
+- hero (12 s montage loop)
+- Qué hacemos (words light up on scroll)
+- Universal walk-through (vertical loop + rooms in step)
+- Planeta bookshelf (6 events, real photos)
+- contact (WhatsApp prefilled, email, Instagram)
+- footer privacy notice
+- ES/EN via `/corporativo` · `/corporate`, or `?lang=` in static previews
+
+Supporting pieces:
+- Media pipeline: `scripts/encode-media.sh` (ffmpeg + sips).
+- Repo wiring: `clients/*/*` added to the pnpm workspace, ESLint blocks neoCRM imports, pre-commit/pre-push/quality-gate/affected-workspaces include clients, and CI runs `@ajm/portfolio` tests.
+- Preview: `pnpm --filter @ajm/portfolio build:preview` builds a static copy with relative paths, published as a private Artifact.
+
+Not yet: Privalia timeline, Mendel reel, Capacidades, Cómo trabajamos, Clientes, Sobre, phone stories mode (D3), aggregate analytics, R2 upload + deploy to alfredjan.com.
+
+## Next (remaining)
 
 Scaffold `clients/ajm/portfolio` (Vite + Vue + TS, GSAP/Lenis, own ES/EN locales, lint rule blocking `@neo/*`), then build the vertical slice: entry (QR + link) → hero montage → Qué hacemos → Universal walk-through, in ES + EN, weak-network rules on.
 
