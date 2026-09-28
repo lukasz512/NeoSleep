@@ -482,3 +482,37 @@ describe("patient date_of_birth (POST / PATCH / GET /api/v1/patient)", () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe("Estudios live refresh + Nuevo (NEO-173)", () => {
+  it("version is a fingerprint without a read audit row; opened is audited and clears is_new; reps get 403", async () => {
+    const { auth, patientId } = await authAndPatient("doctor");
+    const other = await authAndPatient("manager");
+    const exam = await request(app).post(`/api/v1/patient/${patientId}/clinical-records/oral_exam`).set("Authorization", other.auth).send({ has_bruxism: true });
+
+    const v1 = await request(app).get(`/api/v1/patient/${patientId}/checklist/version`).set("Authorization", auth);
+    const v2 = await request(app).get(`/api/v1/patient/${patientId}/checklist/version`).set("Authorization", auth);
+    expect(v1.status).toBe(200);
+    expect(v2.body.version).toBe(v1.body.version);
+    const full = await request(app).get(`/api/v1/patient/${patientId}/checklist`).set("Authorization", auth);
+    expect(full.body.version).toBe(v1.body.version); // the client compares against what it last loaded
+
+    const latestExam = async () =>
+      (await request(app).get(`/api/v1/patient/${patientId}/checklist`).set("Authorization", auth)).body.items
+        .find((i: { key: string }) => i.key === "oralExam").history[0];
+    expect((await latestExam()).is_new).toBe(true);
+    const opened = await request(app).post(`/api/v1/patient/${patientId}/checklist/entries/${exam.body.id}/opened`).set("Authorization", auth);
+    expect(opened.status).toBe(204);
+    expect((await latestExam()).is_new).toBe(false);
+
+    const reads = await withTenant(TENANT_SLUG, (client) =>
+      client.query<{ entity_type: string }>(`SELECT entity_type FROM audit_log WHERE action = 'read' AND metadata->>'patient_id' = $1 ORDER BY created_at`, [patientId]),
+    );
+    // Three checklist loads + one opened result — the two version polls left nothing.
+    expect(reads.rows.map((r) => r.entity_type)).toEqual(["Patient", "Patient", "ChecklistEntry", "Patient"]);
+
+    const rep = await authAndPatient("rep");
+    const repVersion = await request(app).get(`/api/v1/patient/${patientId}/checklist/version`).set("Authorization", rep.auth);
+    const repOpened = await request(app).post(`/api/v1/patient/${patientId}/checklist/entries/${exam.body.id}/opened`).set("Authorization", rep.auth);
+    expect([repVersion.status, repOpened.status]).toEqual([403, 403]);
+  });
+});

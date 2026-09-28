@@ -59,7 +59,7 @@ When it applies: use `WebSearch`/`WebFetch` to find 2-3 concrete, sourced data p
 
 ## Step 4 — Open Questions
 
-List anything that must be answered before `/product` or `/arch` can proceed. Do not finalize the story with an assumption where a question would take 30 seconds to ask.
+List only what must be answered before `/product` or `/arch` can proceed **and that no test could settle** (TDD first, CORE-44): product, business, legal and priority calls. Behavior, edge cases, validation and defaults are decided here as testable acceptance criteria ("Decided by default — test proves it"), not asked. Max 5 per round. They reach Łukasz as 3-button decisions (`/decision-form`: yes · no · expanded variant with a specialist's recommendation), never as a chat list.
 
 ---
 

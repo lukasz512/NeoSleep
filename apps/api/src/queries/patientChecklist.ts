@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { PoolClient } from "pg";
 import type { TenantContext } from "../context/TenantContext.js";
 import { DOCUMENT_MANIFEST } from "@neo/documents";
@@ -58,6 +59,12 @@ export interface ChecklistHistoryEntry {
   created_at: Date;
   source: "staff" | "patient";
   by: string | null;
+  /** users.id of the staff member who added it (null: the patient, or unknown) — decides "Nuevo" (NEO-173). */
+  created_by: string | null;
+  /** When it was entered, where created_at is a clinical date instead (a sleep study's study_date). */
+  added_at?: Date;
+  /** NEO-173: added by someone else since NEW_MARKER_SINCE and not yet opened by the viewing user — set by annotateNewEntries(). */
+  is_new?: boolean;
   /** Clinical form record (for view / PDF), when type = "record". */
   record?: (MedicalHistoryRecord | OralExamRecord | StopBangRecord) & { kind: ClinicalRecordKind };
   /** Stored file (signed consent PDF, uploaded study) — downloadable via the patient documents endpoint. */
@@ -118,6 +125,7 @@ function uploadEntry(file: FileAttachment): ChecklistHistoryEntry {
     created_at: file.created_at,
     source: "staff",
     by: typeof meta.uploaded_by_name === "string" ? meta.uploaded_by_name : null,
+    created_by: file.uploaded_by,
     file_attachment_id: file.id,
     title: typeof meta.title === "string" ? meta.title : null,
     notes: typeof meta.notes === "string" ? meta.notes : null,
@@ -147,6 +155,7 @@ export async function GetPatientChecklistQuery(ctx: TenantContext, patientId: st
 
   const config = await withPlatform((client) => listPatientChecklistConfig(client));
   const src = await loadSources(ctx.client, patientId);
+  const sleepStudyCreators = await getCreatorsFromAudit(ctx.client, "SleepStudy", src.sleepStudies.map((s) => s.id));
 
   const uploads = src.files.filter((f) => f.metadata?.document_type === "study_upload");
   const uploadsFor = (key: string) => uploads.filter((f) => f.metadata?.checklist_item === key).map(uploadEntry);
@@ -161,6 +170,7 @@ export async function GetPatientChecklistQuery(ctx: TenantContext, patientId: st
       created_at: r.created_at,
       source: "source" in r ? r.source : "staff",
       by: r.recorded_by_name,
+      created_by: r.recorded_by,
       record: { ...r, kind },
     }));
   };
@@ -188,6 +198,7 @@ export async function GetPatientChecklistQuery(ctx: TenantContext, patientId: st
               created_at: consent.granted_at,
               source: consent.collected_by ? ("staff" as const) : ("patient" as const),
               by: null,
+              created_by: consent.collected_by,
               file_attachment_id: file?.id ?? null,
               filename: file?.filename ?? null,
             };
@@ -231,6 +242,8 @@ export async function GetPatientChecklistQuery(ctx: TenantContext, patientId: st
       created_at: new Date(s.study_date ?? s.created_at),
       source: "staff" as const,
       by: null,
+      created_by: sleepStudyCreators.get(s.id) ?? null,
+      added_at: new Date(s.created_at),
       sleep_study: {
         id: s.id,
         status: s.status,
@@ -276,4 +289,67 @@ export async function GetPatientChecklistQuery(ctx: TenantContext, patientId: st
     expired_request: src.expired,
     summary: { done: items.filter((i) => i.status === "done").length, total: items.length },
   };
+}
+
+// ---------------------------------------------------------------------------
+// NEO-173 — "Nuevo" marker + change detection for the open Estudios tab
+// ---------------------------------------------------------------------------
+
+/**
+ * Results entered before this never count as new — without it every result
+ * already in the system would light up for every user on rollout day.
+ */
+export const NEW_MARKER_SINCE = new Date("2026-09-28T00:00:00Z");
+
+/** audit_log entity_type of the "this user opened this Estudios result" read row. */
+export const CHECKLIST_ENTRY_AUDIT_TYPE = "ChecklistEntry";
+
+/** sleep_study has no created_by column — its create command's audit row says who added it. */
+async function getCreatorsFromAudit(client: PoolClient, entityType: string, ids: string[]): Promise<Map<string, string>> {
+  if (!ids.length) return new Map();
+  const r = await client.query<{ entity_id: string; user_id: string }>(
+    `SELECT DISTINCT ON (entity_id) entity_id, user_id FROM audit_log
+      WHERE entity_type = $1 AND action = 'create' AND entity_id = ANY($2::text[]) AND user_id IS NOT NULL
+      ORDER BY entity_id, created_at`,
+    [entityType, ids]
+  );
+  return new Map(r.rows.map((row) => [row.entity_id, row.user_id]));
+}
+
+export function allChecklistEntries(checklist: PatientChecklist): ChecklistHistoryEntry[] {
+  return [...checklist.items.flatMap((item) => item.history), ...checklist.other_uploads];
+}
+
+/**
+ * Per viewing user: an entry is new when someone else added it (the patient
+ * via QR, or another staff member) after NEW_MARKER_SINCE, and this user has
+ * not opened it yet — no audit_log read row of theirs for it (written by
+ * OpenChecklistEntryCommand). Sets is_new on every entry.
+ */
+export async function annotateNewEntries(client: PoolClient, checklist: PatientChecklist, userId: string): Promise<PatientChecklist> {
+  const entries = allChecklistEntries(checklist);
+  const candidates = entries.filter((e) => e.created_by !== userId && (e.added_at ?? e.created_at) >= NEW_MARKER_SINCE);
+  const opened = new Set<string>();
+  if (candidates.length) {
+    const r = await client.query<{ entity_id: string }>(
+      `SELECT DISTINCT entity_id FROM audit_log
+        WHERE entity_type = $1 AND action = 'read' AND user_id = $2 AND entity_id = ANY($3::text[])`,
+      [CHECKLIST_ENTRY_AUDIT_TYPE, userId, candidates.map((e) => e.id)]
+    );
+    for (const row of r.rows) opened.add(row.entity_id);
+  }
+  const fresh = new Set(candidates.filter((e) => !opened.has(e.id)).map((e) => e.id));
+  for (const entry of entries) entry.is_new = fresh.has(entry.id);
+  return checklist;
+}
+
+/**
+ * A fingerprint of everything the Estudios tab shows (NEO-173). The open tab
+ * polls it and reloads the full checklist — an audited health-data read —
+ * only when it changed; the fingerprint itself carries no health data.
+ * Taken before annotateNewEntries, so one user opening a result does not
+ * change it for everyone else.
+ */
+export function checklistVersion(checklist: PatientChecklist): string {
+  return createHash("sha256").update(JSON.stringify(checklist)).digest("hex").slice(0, 32);
 }

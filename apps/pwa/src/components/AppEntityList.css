@@ -605,14 +605,14 @@
    padding to the card's edges; the outer cells pad by the same inset (above),
    so the content and the footer still sit on the page title's line. */
 .app-entity-list__table-wrap:not(.app-entity-list__table-wrap--flat),
-.app-entity-list__skeleton:not(.app-entity-list__skeleton--mobile) {
+.app-entity-list__skeleton {
   margin-inline: calc(-1 * var(--layout-card-inset, 16px));
 }
 
-/* NEO-121 — minimal footer on the 4 px grid: "10" (plain, as theme.scss
-   styles it), "1–10 de 47" and two hairline arrows, one 48 px row, 8 px
-   below the last row. The rows-per-page words stay only as the select's
-   aria-label (Vuetify sets it). */
+/* NEO-121 — minimal footer on the 4 px grid: "Rows: 10" (the value plain,
+   as theme.scss styles it), "1–10 de 47" and two arrows, one 48 px row, 8 px
+   below the last row. NEO-176: the short "Rows:" label is back — a bare "10"
+   read as an unexplained number. */
 .app-entity-list__table-wrap :deep(.v-data-table-footer) {
   min-height: 48px;
   margin-top: var(--space-2, 8px);
@@ -622,7 +622,8 @@
   font-variant-numeric: tabular-nums;
 }
 .app-entity-list__table-wrap :deep(.v-data-table-footer__items-per-page > span) {
-  display: none;
+  padding-inline-end: 0;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 .app-entity-list__table-wrap :deep(.v-data-table-footer__info) {
   padding: 0 var(--space-6, 24px);
@@ -647,12 +648,20 @@
 .app-entity-list__table-wrap :deep(.v-pagination) {
   margin: 0;
 }
+/* NEO-176 — the arrows were teal at Vuetify's plain-variant opacity (0.62,
+   0.26 disabled): too faint, and enabled vs disabled looked alike. Now full
+   text color when clickable, clearly grey when not; opacity stays at 1 so
+   the color alone carries the state. */
 .app-entity-list__table-wrap :deep(.v-pagination .v-btn) {
   width: 40px;
   height: 40px;
-  color: var(--pwa-primary);
+  color: var(--pwa-text);
+  opacity: 1;
 }
-/* Hairline chevrons (1.25 px stroke) in place of the MDI glyphs. */
+.app-entity-list__table-wrap :deep(.v-pagination .v-btn--disabled) {
+  color: rgba(var(--v-theme-on-surface), var(--v-disabled-opacity));
+}
+/* Thin chevrons (1.75 px stroke) in place of the MDI glyphs. */
 .app-entity-list__table-wrap :deep(.v-pagination__prev .v-icon),
 .app-entity-list__table-wrap :deep(.v-pagination__next .v-icon) {
   width: 20px;
@@ -666,10 +675,10 @@
   content: none;
 }
 .app-entity-list__table-wrap :deep(.v-pagination__prev .v-icon) {
-  --footer-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M14.5 6.5L9 12l5.5 5.5' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --footer-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M14.5 6.5L9 12l5.5 5.5' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 .app-entity-list__table-wrap :deep(.v-pagination__next .v-icon) {
-  --footer-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9.5 6.5L15 12l-5.5 5.5' fill='none' stroke='black' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --footer-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9.5 6.5L15 12l-5.5 5.5' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 /* The last arrow's box ends on the rows' right content line (cell padding). */
 .app-entity-list__table-wrap :deep(.v-data-table-footer__pagination) {
@@ -786,9 +795,10 @@
   animation-delay: calc(var(--row-i, 0) * 90ms);
 }
 
+/* Edge to edge like the feed rows it stands in for; the placeholder avatar
+   starts on the same content line as the real one. */
 .app-entity-list__skeleton--mobile .app-entity-list__skeleton-row {
   height: 72px;
-  padding: 0 16px;
 }
 
 .app-entity-list__skeleton-avatar {
@@ -913,11 +923,17 @@
   min-width: 560px;
 }
 
+/* Rows span the sheet edge to edge, like the desktop table's (NEO-152): the
+   scroller itself runs out through the sheet's whole padding. The bleed has
+   to sit here, not on the feed inside it — overflow-y: auto clips
+   overflow-x too, so a feed wider than its scroller lost its bleed and the
+   rows stopped on the content line. */
 .app-entity-list__feed-scroll {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  margin-inline: calc(-1 * var(--layout-card-inset, 16px));
 }
 
 .app-entity-list__feed {
@@ -925,9 +941,6 @@
   padding: 0;
   border: none;
   position: relative;
-  /* NEO-115: rows run out to the sheet's 16 px edge; their own 12 px inset
-     (below) brings avatars back onto the page's content line. */
-  margin-inline: calc(-1 * var(--layout-row-inset, 0px));
 }
 
 /* Card shape/rhythm follows the Fibonacci scale (--pwa-fib-*, theme.scss)
@@ -943,6 +956,9 @@
   box-shadow: inset 0 -1px 0 var(--pwa-rule);
   overflow: hidden;
   transition: opacity 0.2s ease, background-color 0.2s ease;
+  /* NEO-115: the row's content starts the sheet padding in; the avatar's own
+     12 px inset (below) brings it onto the page's content line (16 + 12). */
+  padding-inline: calc(var(--layout-card-inset, 16px) - var(--layout-row-inset, 12px));
 }
 
 .app-entity-list__card--disabled {
@@ -1032,7 +1048,7 @@
 }
 
 .app-entity-list__feed-empty {
-  margin: 0;
+  margin: 0 var(--layout-card-inset, 16px);
 }
 
 .app-entity-list__load-more {

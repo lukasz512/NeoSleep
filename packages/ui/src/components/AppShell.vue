@@ -67,8 +67,8 @@
     <slot />
   </VMain>
 
-  <!-- NEO-55: the bottom bar expands in place into a grid of every module
-       ("More" → close chevron) — see MobileNavPanel for the transition. -->
+  <!-- NEO-161: a floating glass pill; "More" opens the other modules in a
+       second capsule above it (the same button becomes "Close"). -->
   <MobileNavPanel
     v-if="mobile && showBottomNav"
     :items="navItems"
@@ -346,9 +346,13 @@ onMounted(() => {
 
 /* The bottom nav (MobileNavPanel) is position: fixed, not a Vuetify layout item, so VMain
    never learns to reserve space for it — without this, scrollable content
-   (e.g. entity list feeds) renders its last rows underneath the nav bar. */
+   (e.g. entity list feeds) would end underneath the floating pill. Content
+   still scrolls *under* the glass; this only lets the last row scroll clear
+   of it (pill height + the gap above and below it). */
 .app-shell__main--bottom-nav-space {
-  padding-bottom: calc(var(--mobile-bottom-nav-height, 64px) + env(safe-area-inset-bottom));
+  padding-bottom: calc(
+    var(--mobile-bottom-nav-height, 64px) + 2 * var(--mobile-bottom-nav-float, 10px) + env(safe-area-inset-bottom)
+  );
 }
 
 

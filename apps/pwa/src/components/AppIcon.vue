@@ -515,6 +515,35 @@ const ICONS = {
             <line x1="2" y1="12" x2="22" y2="12" />
             <path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z" />`,
   },
+  // ── Patient signing page (NEO-126) ───────────────────────────────────────
+  "lock": {
+    strokeWidth: 2,
+    paths: `<rect x="4" y="10" width="16" height="11" rx="2" />
+            <path d="M8 10V7a4 4 0 0 1 8 0v3" />`,
+  },
+  "shield-check": {
+    strokeWidth: 1.8,
+    paths: `<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" />
+            <path d="M8.5 12l2.5 2.5 4.5-5" />`,
+  },
+  "help-circle": {
+    strokeWidth: 1.8,
+    paths: `<circle cx="12" cy="12" r="9" />
+            <path d="M9.5 9a2.5 2.5 0 1 1 4 2c-1 .7-1.5 1.2-1.5 2.5" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />`,
+  },
+  "download": {
+    strokeWidth: 2,
+    paths: `<path d="M12 4v11" />
+            <path d="M7 10l5 5 5-5" />
+            <path d="M5 20h14" />`,
+  },
+  "external-link": {
+    strokeWidth: 2,
+    paths: `<path d="M14 4h6v6" />
+            <path d="M20 4l-9 9" />
+            <path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5" />`,
+  },
   "id-card": {
     strokeWidth: 2,
     paths: `<rect x="2" y="5" width="20" height="14" rx="2" />

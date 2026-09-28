@@ -1,4 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
 import { createRouter, createMemoryHistory } from "vue-router";
 import MobileNavPanel from "./MobileNavPanel.vue";
@@ -34,30 +36,52 @@ async function mountPanel(path = "/dashboard") {
 
 const toggle = (w: VueWrapper) => w.find(".mobile-nav-panel__toggle");
 const isExpanded = (w: VueWrapper) => w.find(".mobile-nav-panel").classes().includes("mobile-nav-panel--expanded");
+const sheet = (w: VueWrapper) => w.find(".mobile-nav-panel__sheet");
+const scrimVisible = (w: VueWrapper) => w.find(".mobile-nav-panel__scrim").classes().includes("mobile-nav-panel__scrim--visible");
 
-// NEO-55: the bottom bar expands in place into a grid of every module.
+// NEO-161 "Kropla": one floating glass box. Collapsed only its bottom row (the
+// pill) shows; "More" grows the same box upwards and the pill's buttons become
+// the first four modules of the grid. The toggle never leaves its slot.
 describe("MobileNavPanel", () => {
-  it("collapsed: every item is rendered once, those past primaryCount marked overflow, plus a More toggle", async () => {
+  const gridLabels = (w: VueWrapper) => w.findAll(".mobile-nav-panel__grid .mobile-nav-panel__cell").map((c) => c.text());
+  const hidden = (w: VueWrapper) => w.findAll(".mobile-nav-panel__grid .mobile-nav-panel__cell").map((c) => c.attributes("inert") !== undefined);
+
+  it("collapsed: the pill shows the first primaryCount modules plus More; the rest wait hidden in the same box", async () => {
     const { wrapper } = await mountPanel();
-    const cells = wrapper.findAll(".mobile-nav-panel__cell");
-    expect(cells).toHaveLength(ITEMS.length + 1);
-    expect(wrapper.findAll(".mobile-nav-panel__cell--overflow")).toHaveLength(3);
+    // every module lives in the grid, in order — the first four are the pill's buttons
+    expect(gridLabels(wrapper)).toEqual(ITEMS.map((i) => i.label));
+    expect(wrapper.findAll(".mobile-nav-panel__cell--primary")).toHaveLength(4);
+    expect(hidden(wrapper)).toEqual([false, false, false, false, true, true, true]);
+    // the row itself only holds the toggle
+    expect(wrapper.findAll(".mobile-nav-panel__items .mobile-nav-panel__cell")).toHaveLength(1);
     expect(toggle(wrapper).text()).toContain("More");
     expect(toggle(wrapper).attributes("aria-expanded")).toBe("false");
-    expect(wrapper.find(".mobile-nav-panel__scrim").exists()).toBe(false);
+    expect(toggle(wrapper).attributes("aria-controls")).toBe(sheet(wrapper).attributes("id"));
+    // one box: the grid lives inside the nav, above the row, over one glass surface
+    expect(wrapper.find(".mobile-nav-panel .mobile-nav-panel__sheet").exists()).toBe(true);
+    expect(wrapper.findAll(".mobile-nav-panel__glass")).toHaveLength(1);
+    expect(scrimVisible(wrapper)).toBe(false);
   });
 
-  it("More expands the same cells into the grid, shows the scrim, and turns into Close", async () => {
+  it("More grows the box: the pill's buttons are grid positions 1–4, the toggle stays in its slot as Close", async () => {
     const { wrapper } = await mountPanel();
+    const toggleCell = () => wrapper.find(".mobile-nav-panel__items .mobile-nav-panel__cell--toggle");
+    expect(toggleCell().find(".mobile-nav-panel__toggle").exists()).toBe(true);
     await toggle(wrapper).trigger("click");
     await flushPromises();
     expect(isExpanded(wrapper)).toBe(true);
-    expect(wrapper.find(".mobile-nav-panel__scrim").exists()).toBe(true);
-    expect(wrapper.find(".mobile-nav-panel__handle").exists()).toBe(true);
+    expect(hidden(wrapper).every((h) => !h)).toBe(true);
+    expect(gridLabels(wrapper).slice(0, 4)).toEqual(["dashboard", "leads", "hcp", "hco"]);
+    expect(scrimVisible(wrapper)).toBe(true);
+    expect(toggleCell().find(".mobile-nav-panel__toggle").exists()).toBe(true);
     expect(toggle(wrapper).text()).toContain("Close");
     expect(toggle(wrapper).attributes("aria-expanded")).toBe("true");
-    // No separate list: still exactly one cell per item + the toggle.
-    expect(wrapper.findAll(".mobile-nav-panel__cell")).toHaveLength(ITEMS.length + 1);
+  });
+
+  it("animates with CSS only — no script-driven animations", () => {
+    const source = readFileSync(path.resolve(__dirname, "MobileNavPanel.vue"), "utf-8");
+    expect(source).not.toMatch(/\.animate\(/);
+    expect(source).not.toContain("getBoundingClientRect");
   });
 
   it("closes from the Close toggle, the scrim, Escape, and any navigation", async () => {
@@ -92,7 +116,8 @@ describe("MobileNavPanel", () => {
   // jsdom has no PointerEvent constructor; a MouseEvent of the same type
   // carries clientY and reaches the same listeners.
   async function drag(w: VueWrapper, fromY: number, toY: number) {
-    w.find(".mobile-nav-panel").element.dispatchEvent(new MouseEvent("pointerdown", { clientY: fromY, bubbles: true }));
+    const target = isExpanded(w) ? ".mobile-nav-panel__sheet" : ".mobile-nav-panel__items";
+    w.find(target).element.dispatchEvent(new MouseEvent("pointerdown", { clientY: fromY, bubbles: true }));
     for (let y = fromY; fromY < toY ? y <= toY : y >= toY; y += fromY < toY ? 10 : -10) {
       window.dispatchEvent(new MouseEvent("pointermove", { clientY: y }));
     }
@@ -101,7 +126,7 @@ describe("MobileNavPanel", () => {
     await flushPromises();
   }
 
-  it("pulling the collapsed bar up opens the grid; a short pull does not", async () => {
+  it("pulling the collapsed pill up opens the box; a short pull does not", async () => {
     const { wrapper } = await mountPanel();
     await drag(wrapper, 800, 790);
     expect(isExpanded(wrapper)).toBe(false);
@@ -109,7 +134,7 @@ describe("MobileNavPanel", () => {
     expect(isExpanded(wrapper)).toBe(true);
   });
 
-  it("dragging the open grid down closes it; a short drag springs back open", async () => {
+  it("dragging the open box down closes it; a short drag springs back open", async () => {
     const { wrapper } = await mountPanel();
     await toggle(wrapper).trigger("click");
     await flushPromises();

@@ -110,3 +110,15 @@ and staff. Resend acts as a GDPR data processor for that data in transit —
 requires accepting Resend's DPA (available in their dashboard/Trust Center)
 before sending real personal data through it. No special-category (Art. 9) data
 is included in any of the three email types this ADR covers.
+
+## Update 2026-09-28 (NEO-162): sender is `notifications@`, patient emails lead with the clinic
+
+Resend's dashboard flagged `noreply@` as "Needs attention": a one-way address
+lowers inbox trust. The sending address is now
+`notifications@mail.neosleepcare.com` (still no mailbox behind it — Reply-To
+carries replies to a real inbox). Patient-facing emails that belong to a
+clinic show it first in the display name — `"<clinic> | NeoSleep"` — because
+patients recognise their clinic, not the platform; Reply-To stays the clinic's
+email (the data controller). Other emails keep `"NeoSleep"`. Render's
+`RESEND_FROM_EMAIL` (`sync: false`) must be changed by hand in its dashboard;
+Cloud Run reads it from `infrastructure/cloud-run/<env>.env.yaml`.

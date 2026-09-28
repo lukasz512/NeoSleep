@@ -1,8 +1,7 @@
 import { getPartnerLinksNeedingStatusSync, insertAuditLog, getActiveTenantSlugs, withTenant } from "../db.js";
 import { getTreatmentPlanById } from "../db/treatmentPlan.js";
-import { getPatientById } from "../db/patient.js";
 import { getPractitionerById } from "../db/practitioner.js";
-import { insertNotification } from "../db/notification.js";
+import { notify } from "../notifications/notify.js";
 import { fetchOrthoApneaTreatmentStatus, ORTHOAPNEA_TERMINAL_STATUSES } from "../services/partners/orthoapnea.js";
 
 /**
@@ -14,12 +13,10 @@ import { fetchOrthoApneaTreatmentStatus, ORTHOAPNEA_TERMINAL_STATUSES } from "..
  * and audit_log.user_id is nullable precisely for system-initiated writes
  * like this one.
  *
- * Scope deliberately stops at insertNotification(): it writes the in-app
- * inbox row for both the dentist and the patient. Wiring that row up to
- * actual delivery (email/push dispatch, a general notification "hub") is
- * explicitly out of scope here — separate follow-up work, per product
- * decision — this command's job is just to produce a correct notification
- * row and audit trail, not to build the dispatcher.
+ * Notifies the dentist through notify() (ADR-027): the event catalog decides
+ * copy and channels, and the delivery worker (NEO-136) sends the push. The
+ * patient is not notified here: patients have no in-app inbox, and patient
+ * messages go by email only, with consent (NEO-146/147).
  *
  * TRANSACTION SHAPE (see ADR-017): this used to run its entire loop —
  * including N sequential OrthoApnea HTTP round-trips — inside ONE withTenant()
@@ -69,24 +66,18 @@ export async function SyncOrthoApneaTreatmentStatusesCommand(
       if (!plan) return; // treatment_plan was deleted locally since the link was created — nothing to notify about
 
       const recipientIdentityIds: string[] = [];
-      const patient = await getPatientById(client, plan.patient_id);
-      if (patient) recipientIdentityIds.push(patient.identity_id);
       if (plan.dentist_id) {
         const dentist = await getPractitionerById(client, plan.dentist_id);
         if (dentist) recipientIdentityIds.push(dentist.identity_id);
       }
 
-      for (const identityId of recipientIdentityIds) {
-        await insertNotification(client, {
-          identity_id: identityId,
-          type: "partner_order_status_changed",
-          title: "OrthoApnea order status updated",
-          body: null,
-          entity_type: "TreatmentPlan",
-          entity_id: plan.id,
-          metadata: { partner: PARTNER_NAME, externalStatus: result.externalStatus },
-        });
-      }
+      await notify(client, {
+        type: "partner_order_status_changed",
+        recipients: recipientIdentityIds,
+        entityId: plan.id,
+        link: { patientId: plan.patient_id },
+        meta: { partner: PARTNER_NAME, externalStatus: result.externalStatus },
+      });
 
       await insertAuditLog(client, {
         action: "status_change",
