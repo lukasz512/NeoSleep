@@ -15,7 +15,7 @@ export interface PlanetaEvent {
 
 export const PLANETA_EVENTS: PlanetaEvent[] = [
   { id: "bordes", title: "Colección Bordes", year: 2024, photos: ["planeta11", "planeta4", "planeta2", "planeta12"] },
-  { id: "novedades2025", title: "Novedades Grupo Planeta", year: 2025, photos: ["planeta5", "planeta10"] },
+  { id: "novedades2025", title: "Novedades Grupo Planeta", year: 2025, photos: ["planeta5", "planeta10", "planeta23"] },
   {
     id: "novedades2024",
     title: "Novedades Grupo Planeta",

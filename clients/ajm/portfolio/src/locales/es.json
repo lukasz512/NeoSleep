@@ -4,14 +4,17 @@
     "description": "Planeamos, producimos y operamos eventos corporativos diseñados alrededor de las personas, las marcas y los objetivos de negocio."
   },
   "nav": {
+    "aria": "Secciones",
     "projects": "Proyectos",
     "capabilities": "Capacidades",
+    "about": "Nosotros",
     "contact": "Contacto",
     "language": "English",
     "languageAria": "Ver esta página en inglés"
   },
   "entry": {
-    "skip": "Saltar"
+    "skip": "Saltar",
+    "kicker": "Eventos Corporativos · Experiencias"
   },
   "media": {
     "play": "Reproducir video"
@@ -30,6 +33,19 @@
     "body1": "AJ Management es una agencia independiente especializada en la planeación, producción, coordinación y ejecución de eventos y experiencias corporativas.",
     "body2": "Trabajamos como una extensión del equipo de nuestros clientes, gestionando cada etapa del proceso: desde la idea inicial y la selección del espacio hasta la producción, los proveedores, la logística y la operación en sitio.",
     "words": ["Estrategia", "Planeación", "Producción", "Logística", "Experiencias", "Ejecución"]
+  },
+  "capabilities": {
+    "eyebrow": "Capacidades",
+    "title1": "Un solo partner.",
+    "title2": "De la planeación a la ejecución.",
+    "items": [
+      { "title": "Eventos Corporativos", "body": "Convenciones, reuniones de empresa, presentaciones y encuentros corporativos." },
+      { "title": "Experiencias Ejecutivas", "body": "Kick-offs, reuniones de liderazgo, foros y eventos ejecutivos." },
+      { "title": "Experiencias para Equipos", "body": "Eventos de integración, celebraciones, programas de reconocimiento y experiencias para colaboradores." },
+      { "title": "Producción de Eventos", "body": "Desarrollo creativo, producción audiovisual, escenarios, iluminación, mobiliario y coordinación técnica." },
+      { "title": "Logística & Operación", "body": "Gestión de invitados, transportación, cronogramas, acreditaciones, proveedores y coordinación en sitio." },
+      { "title": "Venues & Proveedores", "body": "Búsqueda de espacios, negociación, catering, entretenimiento y gestión de proveedores especializados." }
+    ]
   },
   "projects": {
     "eyebrow": "Proyectos seleccionados",
@@ -63,6 +79,71 @@
       "duelo": "Lanzamiento de libros"
     }
   },
+  "privalia": {
+    "number": "Caso 03",
+    "client": "Privalia",
+    "title": "Una colaboración construida a través del tiempo.",
+    "tags": "Eventos Corporativos · Experiencias · Producción",
+    "body": "Una relación de largo plazo construida a través de la consistencia en la ejecución, la confianza operativa y el entendimiento de las necesidades cambiantes del cliente.",
+    "photoAlt": "eFashion Day 2019: montaje y asistentes",
+    "chapters": {
+      "y2019": {
+        "mark": "2019",
+        "name": "eFashion Day",
+        "body": "Conferencias, networking y una comida para cientos de invitados en un patio convertido en escenario. Del montaje a la última mesa, en un solo día."
+      },
+      "y2020": {
+        "mark": "2020",
+        "name": "eFashion Day Live",
+        "body": "Cuando no era posible reunir a nadie, el evento se volvió transmisión en vivo: un set propio, speakers en remoto y producción técnica completa."
+      },
+      "live": {
+        "mark": "Live",
+        "name": "Hugo Boss × Privalia",
+        "body": "Producción de live shopping para Hugo Boss en Privalia México, con cobertura de GQ México & Latinoamérica."
+      }
+    }
+  },
+  "mendel": {
+    "number": "Caso 04",
+    "client": "Mendel",
+    "title": "Experiencias corporativas diseñadas alrededor de las personas.",
+    "tags": "Evento Corporativo · Producción · Logística",
+    "body": "Desde la planeación y coordinación de proveedores hasta la producción y operación en sitio, AJ Management desarrolló una experiencia corporativa pensada para reunir a la comunidad de Mendel.",
+    "videoLabel": "Evento de Mendel en Ciudad de México",
+    "stats": {
+      "guests": "Invitados",
+      "coordination": "Producción & Coordinación",
+      "team": "Equipo de Producción Dedicado"
+    }
+  },
+  "process": {
+    "eyebrow": "Cómo trabajamos",
+    "title": "Un solo punto de contacto durante todo el proceso.",
+    "steps": [
+      { "name": "Brief", "body": "Entendemos objetivos, audiencia, tiempos y presupuesto." },
+      { "name": "Concepto", "body": "Diseñamos la experiencia y definimos venue y enfoque de producción." },
+      { "name": "Planeación", "body": "Coordinamos proveedores, logística, cronogramas y producción técnica." },
+      { "name": "Producción", "body": "Montaje, coordinación y control de calidad." },
+      { "name": "Showtime", "body": "Operación en sitio y experiencia de invitados." },
+      { "name": "Cierre", "body": "Desmontaje, cierre operativo, reporte y seguimiento posterior." }
+    ]
+  },
+  "clients": {
+    "eyebrow": "Clientes seleccionados"
+  },
+  "about": {
+    "eyebrow": "Sobre AJ Management",
+    "title1": "Experiencia local.",
+    "title2": "Perspectiva internacional.",
+    "body1": "Fundada en México, AJ Management crea y produce eventos y experiencias para empresas y marcas en distintos mercados.",
+    "body2": "Nuestra red de productores, venues, aliados técnicos y proveedores especializados nos permite construir el equipo adecuado para cada proyecto, manteniendo un único punto central de coordinación.",
+    "cities": [
+      { "city": "Ciudad de México", "role": "Producción & Operación" },
+      { "city": "Madrid", "role": "Europa & Partnerships" },
+      { "city": "Internacional", "role": "Proyectos & Experiencias" }
+    ]
+  },
   "contact": {
     "title": "¿Tienes un evento en mente?",
     "body": "Ya sea una reunión corporativa, una experiencia ejecutiva, una convención o un evento de gran formato, nos encantará conocer tu proyecto.",
@@ -70,7 +151,10 @@
     "whatsappMessage": "Hola Alfred, vi el portafolio de AJ Management y me gustaría platicar sobre un evento.",
     "email": "Email",
     "whatsapp": "WhatsApp",
+    "linkedin": "LinkedIn",
     "instagram": "Instagram",
+    "stageLabel": "Escenario de eFashion Day Live 2020",
+    "person": "Alfred Jan Díaz · Founder & Director",
     "places": "Ciudad de México · Madrid"
   },
   "footer": {

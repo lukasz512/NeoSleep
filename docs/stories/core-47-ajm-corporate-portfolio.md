@@ -177,6 +177,31 @@ Supporting pieces:
 
 Not yet: Privalia timeline, Mendel reel, Capacidades, Cómo trabajamos, Clientes, Sobre, phone stories mode (D3), aggregate analytics, R2 upload + deploy to alfredjan.com.
 
+## Slice 2: every section, clean footage, entry on every load (2026-09-28)
+
+Łukasz's round (2026-09-28): the hero showed titles and logos; the entry must play on every load
+("spectacular and minimal"); LinkedIn + icons in contact; fill all copy; better motion; the
+"¿Tienes un evento en mente?" block must show the best stage, "like a Mindvalley event".
+
+- **Footage rule: no burned-in text, titles or logos.** Every loop window was re-cut after 1–4 fps contact
+  sheets of the originals: hero = eFashion 2019 audience → making-of hands/crew → dinner hall →
+  Mendel guests → wardrobe detail; Mendel reel 34–36.8 s + 46.5–48.8 s; making-of skips the glitch
+  transition at 40.0 s. Stills from letterboxed sources are cropped like the loops.
+- **Entry on every load** (reverses "once per session"): charcoal stage → hairline → AJ mark rises
+  through a mask → the line splits into a shutter onto the hero, which settles from a zoom. QR arrival
+  keeps the mosaic; lite keeps the fade. Every load starts at the top.
+- **New sections** with the proposal's copy (ES + EN): Capacidades (dark, 6 numbers, still wipes in for
+  the active row), Privalia timeline (odometer year: 2019 eFashion Day → 2020 eFashion Day Live →
+  Hugo Boss × Privalia live shopping, the last from alfredjan.com), Mendel reel (inset → full bleed,
+  300 / 360° count up), Cómo trabajamos (pinned horizontal scroll, line fills), Clientes (4 names in
+  type until logo files arrive), Sobre (3 cities on one drawn line), Contacto (eFashion Day Live 2020
+  studio stage loop, 4 channels with icons incl. LinkedIn).
+- **Motion layer** `src/lib/motion.ts` (v-reveal up/wipe/scale/line, v-parallax, scroll progress), all
+  off in lite mode. No animation library.
+- Photos: 5 eFashion Day 2019 photos (3 at 4032 px from the WhatsApp originals), Novedades 2025 third
+  angle (planeta23). Duplicates of existing Planeta photos skipped. Neon lounge placed in eFashion 2019
+  (same batch/venue, **to confirm**); Pizzería Vesubio photos parked in `AJM-materials/pending/`.
+
 ## Next (remaining)
 
 Scaffold `clients/ajm/portfolio` (Vite + Vue + TS, GSAP/Lenis, own ES/EN locales, lint rule blocking `@neo/*`), then build the vertical slice: entry (QR + link) → hero montage → Qué hacemos → Universal walk-through, in ES + EN, weak-network rules on.

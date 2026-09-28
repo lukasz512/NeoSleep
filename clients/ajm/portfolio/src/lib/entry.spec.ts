@@ -1,20 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { pickEntry } from "./entry";
+import { ENTRY_TIMING_MS, pickEntry } from "./entry";
 import { isLiteMode } from "./capability";
 
-describe("entry › picks entry by source and skips on reload", () => {
+describe("entry › picks entry by source, on every load", () => {
   it("QR arrival plays the QR entry", () => {
-    expect(pickEntry({ search: "?src=qr", lite: false, playedThisSession: false })).toBe("qr");
+    expect(pickEntry({ search: "?src=qr", lite: false })).toBe("qr");
   });
   it("any other link plays the link entry", () => {
-    expect(pickEntry({ search: "", lite: false, playedThisSession: false })).toBe("link");
-    expect(pickEntry({ search: "?utm_source=whatsapp", lite: false, playedThisSession: false })).toBe("link");
+    expect(pickEntry({ search: "", lite: false })).toBe("link");
+    expect(pickEntry({ search: "?utm_source=whatsapp", lite: false })).toBe("link");
   });
   it("weak device or connection gets a plain fade, even from QR", () => {
-    expect(pickEntry({ search: "?src=qr", lite: true, playedThisSession: false })).toBe("fade");
+    expect(pickEntry({ search: "?src=qr", lite: true })).toBe("fade");
   });
-  it("a reload in the same session skips the entry", () => {
-    expect(pickEntry({ search: "?src=qr", lite: false, playedThisSession: true })).toBe("none");
+  it("the page starts revealing before the overlay leaves, and no entry runs past 2.5 s", () => {
+    for (const { open, done } of Object.values(ENTRY_TIMING_MS)) {
+      expect(open).toBeLessThan(done);
+      expect(done).toBeLessThanOrEqual(2500);
+    }
   });
 });
 

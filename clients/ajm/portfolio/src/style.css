@@ -82,6 +82,56 @@ a {
   transition-delay: 0.08s;
 }
 
+/* v-reveal (lib/motion.ts): hidden until the element enters the viewport, then .rv-in */
+.rv {
+  transition:
+    opacity 0.9s ease var(--rv-delay, 0s),
+    transform 1.1s var(--ajm-ease) var(--rv-delay, 0s),
+    clip-path 1.2s var(--ajm-ease) var(--rv-delay, 0s);
+}
+.rv[data-rv="up"] {
+  opacity: 0;
+  transform: translate3d(0, 32px, 0);
+}
+.rv[data-rv="fade"] {
+  opacity: 0;
+}
+.rv[data-rv="wipe"] {
+  clip-path: inset(100% 0 0 0);
+}
+.rv[data-rv="line"] {
+  transform: scaleX(0);
+  transform-origin: left;
+  transition-duration: 1.4s;
+}
+/* scale: the frame fades in while the image inside settles, so the frame itself stays free to drift */
+.rv[data-rv="scale"] {
+  opacity: 0;
+}
+.rv[data-rv="scale"] img {
+  transform: scale(1.12);
+  transition: transform 1.6s var(--ajm-ease) var(--rv-delay, 0s);
+}
+.rv.rv-in {
+  opacity: 1;
+  transform: none;
+  clip-path: inset(0 0 0 0);
+}
+.rv.rv-in[data-rv="scale"] img {
+  transform: none;
+}
+.rv.rv-in[data-parallax] {
+  transform: translate3d(0, var(--py, 0), 0);
+}
+.lite .rv {
+  opacity: 1;
+  transform: none;
+  clip-path: none;
+}
+.lite .rv[data-rv="scale"] img {
+  transform: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

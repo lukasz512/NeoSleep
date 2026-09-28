@@ -4,6 +4,7 @@ export const CONTACT = {
   whatsapp: "525517458958",
   whatsappDisplay: "+52 55 1745 8958",
   instagram: "alfredjan",
+  linkedin: "https://www.linkedin.com/in/alfredjan/",
 } as const;
 
 export function whatsappLink(message: string): string {

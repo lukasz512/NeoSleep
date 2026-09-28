@@ -1,11 +1,14 @@
-<!-- First impression, once per session (lib/entry.ts decides which):
-     qr   — squares fly in and form the QR the visitor scanned; its dark modules are slices of the
-            hero photo, then the light ones fill in too and the mosaic opens into the hero (~2 s)
-     link — a thin line draws, the AJ mark tightens in, the page opens along the line (~1.5 s)
-     fade — weak device/connection: a plain crossfade -->
+<!-- First impression, on every load (lib/entry.ts decides which):
+     link — charcoal stage: a hairline draws out from the centre, the AJ mark rises out of it
+            through a mask, then the line splits into a shutter that opens onto the hero, which
+            settles from a slight zoom behind it (~2.5 s)
+     qr   — squares fly in and form the QR the visitor scanned; its dark modules are slices of one
+            photo, then the light ones fill in too and the mosaic opens into the hero (~2.1 s)
+     fade — weak device/connection: a plain crossfade
+     `open` fires the moment the page behind starts showing, so the hero can move with the shutter. -->
 <template>
   <div
-    v-if="kind !== 'none' && !finished"
+    v-if="!finished"
     class="entry"
     :class="[`entry--${kind}`, `is-${phase}`]"
     aria-hidden="true"
@@ -29,10 +32,15 @@
     </template>
 
     <template v-else-if="kind === 'link'">
-      <div class="half half--top" />
-      <div class="half half--bottom" />
-      <div class="line" />
-      <div class="mark"><AjLogo :label="'AJ Management'" /></div>
+      <div class="shutter shutter--top"><div class="shutter__edge" /></div>
+      <div class="shutter shutter--bottom"><div class="shutter__edge" /></div>
+      <div class="stage">
+        <div class="stage__mask">
+          <div class="stage__mark"><AjLogo label="AJ Management" /></div>
+        </div>
+        <div class="stage__line" />
+        <p class="stage__kicker">{{ kicker }}</p>
+      </div>
     </template>
 
     <button type="button" class="entry__skip" @click.stop="finish">{{ skipLabel }}</button>
@@ -43,14 +51,15 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import AjLogo from "./AjLogo.vue";
 import { qrPattern } from "../lib/qr";
-import { ENTRY_DURATION_MS, type EntryKind } from "../lib/entry";
+import { ENTRY_TIMING_MS, type EntryKind } from "../lib/entry";
 
-const props = defineProps<{ kind: EntryKind; photo: string; skipLabel: string }>();
-const emit = defineEmits<{ done: [] }>();
+const props = defineProps<{ kind: EntryKind; photo: string; skipLabel: string; kicker: string }>();
+const emit = defineEmits<{ open: []; done: [] }>();
 
 const size = 21;
 const phase = ref<"start" | "form" | "fill" | "open">("start");
 const finished = ref(false);
+let opened = false;
 const timers: number[] = [];
 
 const cells = computed(() => {
@@ -74,8 +83,16 @@ const cells = computed(() => {
   return out;
 });
 
+function open() {
+  if (opened) return;
+  opened = true;
+  phase.value = "open";
+  emit("open");
+}
+
 function finish() {
   if (finished.value) return;
+  open();
   finished.value = true;
   timers.forEach((t) => window.clearTimeout(t));
   emit("done");
@@ -86,21 +103,12 @@ function at(ms: number, fn: () => void) {
 }
 
 onMounted(() => {
-  if (props.kind === "none") {
-    finish();
-    return;
-  }
+  const timing = ENTRY_TIMING_MS[props.kind];
   // double rAF so the "start" state paints before transitions begin
   requestAnimationFrame(() => requestAnimationFrame(() => (phase.value = "form")));
-  if (props.kind === "qr") {
-    at(950, () => (phase.value = "fill"));
-    at(1450, () => (phase.value = "open"));
-  } else if (props.kind === "link") {
-    at(800, () => (phase.value = "open"));
-  } else {
-    phase.value = "open";
-  }
-  at(ENTRY_DURATION_MS[props.kind], finish);
+  if (props.kind === "qr") at(950, () => (phase.value = "fill"));
+  at(timing.open, open);
+  at(timing.done, finish);
 });
 
 onBeforeUnmount(() => timers.forEach((t) => window.clearTimeout(t)));
@@ -114,25 +122,136 @@ onBeforeUnmount(() => timers.forEach((t) => window.clearTimeout(t)));
   display: grid;
   place-items: center;
   background: var(--ajm-paper);
-  transition: background-color 0.5s ease, opacity 0.5s ease;
+  transition: background-color 0.5s ease, opacity 0.45s ease;
 }
 .entry__skip {
   position: absolute;
   right: var(--ajm-gutter);
   bottom: calc(24px + env(safe-area-inset-bottom));
-  font: 500 12px var(--ajm-font);
-  letter-spacing: 0.14em;
+  font: 500 11px var(--ajm-font);
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   background: none;
   border: 0;
-  color: var(--ajm-muted);
+  color: rgba(244, 241, 234, 0.45);
   cursor: pointer;
   padding: 8px;
+  z-index: 2;
+  transition: opacity 0.3s ease;
+}
+.entry--qr .entry__skip,
+.entry--fade .entry__skip {
+  color: var(--ajm-muted);
+}
+.is-open .entry__skip {
+  opacity: 0;
 }
 
 /* ---- fade ---- */
+.entry--fade {
+  background: var(--ajm-ink);
+}
 .entry--fade.is-open {
   opacity: 0;
+}
+
+/* ---- link: charcoal stage → hairline → mark → shutter ---- */
+.entry--link {
+  background: transparent;
+}
+.shutter {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 50.5%;
+  background: var(--ajm-ink);
+  transition: transform 1s cubic-bezier(0.83, 0, 0.17, 1);
+}
+.shutter--top {
+  top: 0;
+}
+.shutter--bottom {
+  bottom: 0;
+}
+/* the hairline travels with each shutter edge, so the line itself is what opens */
+.shutter__edge {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgba(244, 241, 234, 0.5);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.shutter--top .shutter__edge {
+  bottom: 0;
+}
+.shutter--bottom .shutter__edge {
+  top: 0;
+}
+.stage {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  color: var(--ajm-paper);
+  transition: opacity 0.35s ease, transform 1s cubic-bezier(0.83, 0, 0.17, 1);
+}
+.stage__mask {
+  overflow: hidden;
+  padding: 0 4px;
+}
+.stage__mark {
+  height: clamp(44px, 9vw, 72px);
+  transform: translateY(110%);
+  transition: transform 0.9s var(--ajm-ease) 0.35s;
+}
+.stage__mark :deep(svg) {
+  height: 100%;
+  width: auto;
+}
+.stage__line {
+  width: min(56vw, 440px);
+  height: 1px;
+  background: rgba(244, 241, 234, 0.7);
+  transform: scaleX(0);
+  transition: transform 0.7s var(--ajm-ease);
+}
+.stage__kicker {
+  margin: 0;
+  font: 500 11px var(--ajm-font);
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: rgba(244, 241, 234, 0.55);
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity 0.6s ease 0.8s, transform 0.8s var(--ajm-ease) 0.8s, letter-spacing 1.4s var(--ajm-ease) 0.6s;
+}
+.is-form .stage__line {
+  transform: scaleX(1);
+}
+.is-form .stage__mark {
+  transform: none;
+}
+.is-form .stage__kicker {
+  opacity: 1;
+  transform: none;
+  letter-spacing: 0.22em;
+}
+/* open: the centre line becomes the shutter edges, the mark lifts away, the halves part */
+.is-open .stage {
+  opacity: 0;
+  transform: translateY(-3vh) scale(0.96);
+  transition-duration: 0.35s, 1s;
+}
+.is-open .shutter__edge {
+  opacity: 1;
+}
+.is-open .shutter--top {
+  transform: translateY(-101%);
+}
+.is-open .shutter--bottom {
+  transform: translateY(101%);
 }
 
 /* ---- qr ---- */
@@ -177,62 +296,5 @@ onBeforeUnmount(() => timers.forEach((t) => window.clearTimeout(t)));
   transition:
     transform 0.6s var(--ajm-ease),
     opacity 0.6s ease 0.1s;
-}
-
-/* ---- link ---- */
-.entry--link {
-  background: transparent;
-}
-.half {
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 50%;
-  background: var(--ajm-paper);
-  transition: transform 0.7s var(--ajm-ease);
-}
-.half--top {
-  top: 0;
-}
-.half--bottom {
-  bottom: 0;
-}
-.line {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: min(60vw, 520px);
-  height: 1px;
-  background: var(--ajm-ink);
-  transform: translateX(-50%) scaleX(0);
-  transition: transform 0.6s var(--ajm-ease), opacity 0.3s ease;
-}
-.mark {
-  position: absolute;
-  top: calc(50% - 64px);
-  left: 50%;
-  height: 48px;
-  color: var(--ajm-ink);
-  transform: translateX(-50%);
-  opacity: 0;
-  letter-spacing: 0.4em;
-  transition: opacity 0.5s ease 0.25s;
-}
-.is-form .line {
-  transform: translateX(-50%) scaleX(1);
-}
-.is-form .mark {
-  opacity: 1;
-}
-.is-open .half--top {
-  transform: translateY(-100%);
-}
-.is-open .half--bottom {
-  transform: translateY(100%);
-}
-.is-open .line,
-.is-open .mark {
-  opacity: 0;
-  transition-delay: 0s;
 }
 </style>
