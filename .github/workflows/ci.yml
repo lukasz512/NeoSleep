@@ -14,7 +14,17 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [dev, prod]
+    # Work branches too (NEO-182): the session waits for a green CI before it
+    # hands over the "Create PR" link, so CI has to run before a PR exists.
+    # Keep in sync with .claude/ci-autofix.json "ciBranchPatterns".
+    branches: [dev, prod, "worktree-*", "worker/*", "claude/*"]
+
+# Once the PR is opened, its pull_request run and a push run of the same commit
+# can overlap — the newer one cancels the older (cancelled runs are ignored by
+# infrastructure/scripts/ci-status.mjs).
+concurrency:
+  group: ci-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -111,6 +121,9 @@ jobs:
       # independent path from the function the parity check above validates.
       - name: Sync isolated test tenant schema
         run: pnpm --filter @neo/api sync-test-schema
+
+      - name: Test — infrastructure scripts (blocking)
+        run: node --test "infrastructure/scripts/*.test.mjs"
 
       - name: Test — api (blocking)
         run: pnpm --filter @neo/api test

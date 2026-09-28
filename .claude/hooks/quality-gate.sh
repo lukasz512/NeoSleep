@@ -128,6 +128,64 @@ branch_artifact_check() {
       || FAILS+=("${ticket} isn't in the artifact index yet: node .claude/skills/ship-artifact/build.mjs index, publish the page (url from its output), then build.mjs index --published <url> — ship-artifact Step 5.")
   fi
   dev_mergeable_check
+  ci_green_check "$marker"
+}
+
+# 2026-09-28 (Łukasz, NEO-182): a pushed branch isn't done until GitHub's CI is green on
+# its HEAD — NEO-132 went out with green local tests and red e2e on GitHub, and nobody
+# was told. Rules (attempt limit, allowed fix scope) live in .claude/ci-autofix.json and
+# are shared with the GitHub handoff and the nightly linear-worker; the verdict comes from
+# infrastructure/scripts/ci-status.mjs. Pending blocks (wait — the PR link is handed over
+# only once green); red blocks with the failing tests (fix + push, max maxFixAttempts);
+# red after the limit blocks until the escalation to Łukasz is recorded as
+# "ciEscalated": {"sha": "<HEAD>"} in the marker.
+ci_green_check() {
+  local marker="$1" head upstream_sha status state
+  git rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1 || return 0
+  head="$(git rev-parse HEAD 2>/dev/null)" || return 0
+  # Already merged: dev_deploy_check takes over.
+  git merge-base --is-ancestor "$head" origin/dev 2>/dev/null && return 0
+  upstream_sha="$(git rev-parse '@{upstream}' 2>/dev/null || true)"
+  if [ "$head" != "$upstream_sha" ]; then
+    WARNS+=("'${BRANCH}' has commits that aren't pushed — after pushing, wait for CI (the next turn end checks it).")
+    return 0
+  fi
+  local on_ci=0 pattern
+  # read, not a for-loop: the patterns contain '*' and must not glob against the tree.
+  while IFS= read -r pattern; do
+    # shellcheck disable=SC2254
+    [ -n "$pattern" ] && case "$BRANCH" in $pattern) on_ci=1 ;; esac
+  done < <(jq -r '.ciBranchPatterns[]' .claude/ci-autofix.json 2>/dev/null)
+  if ! command -v gh >/dev/null 2>&1 || ! status="$(node infrastructure/scripts/ci-status.mjs --branch "$BRANCH" --sha "$head" 2>/dev/null)"; then
+    WARNS+=("Couldn't read GitHub CI for '${BRANCH}' (gh missing or offline) — check CI is green before handing over the PR link.")
+    return 0
+  fi
+  state="$(printf '%s' "$status" | jq -r '.state')"
+  case "$state" in
+    success) return 0 ;;
+    none)
+      if [ "$on_ci" -eq 1 ]; then
+        FAILS+=("CI hasn't started for '${BRANCH}' @ ${head:0:7} yet (it runs on every push to this branch). Wait a minute, then check: node infrastructure/scripts/ci-status.mjs. Don't hand over the PR link before CI is green.")
+      else
+        WARNS+=("'${BRANCH}' doesn't match .claude/ci-autofix.json ciBranchPatterns, so CI only runs once a PR exists — check it then.")
+      fi ;;
+    pending)
+      FAILS+=("CI is running for '${BRANCH}' @ ${head:0:7}: $(printf '%s' "$status" | jq -r '.runUrl'). Wait for it (run in the background: gh run watch $(printf '%s' "$status" | jq -r '.runId') --exit-status) — the PR link goes to Łukasz only once CI is green (.claude/ci-autofix.json waitForGreenBeforePrLink).") ;;
+    failure)
+      local failures attempt max
+      failures="$(printf '%s' "$status" | jq -r '(if (.failures | length) > 0 then .failures else .failedSteps end) | .[:15] | map("    · " + .) | join("\n")')"
+      max="$(printf '%s' "$status" | jq -r '.maxFixAttempts')"
+      attempt="$(printf '%s' "$status" | jq -r '.failedRuns')"
+      if [ "$(printf '%s' "$status" | jq -r '.exhausted')" = "true" ]; then
+        jq -e --arg sha "$head" '.ciEscalated.sha == $sha' "$marker" >/dev/null 2>&1 \
+          || FAILS+=("CI is still red on '${BRANCH}' after ${max} fix attempts — stop fixing. Tell Łukasz which tests fail and why you're stuck (reply + ticket comment), then record \"ciEscalated\": {\"sha\": \"${head}\", \"at\": \"<ISO time>\"} in $marker. Failing:
+${failures}")
+      else
+        FAILS+=("CI failed on '${BRANCH}' @ ${head:0:7} ($(printf '%s' "$status" | jq -r '.runUrl')) — fix attempt ${attempt} of ${max}. Failing:
+${failures}
+Scope ($(jq -r '.allowedFixScope' .claude/ci-autofix.json)). Reproduce locally (gh run view $(printf '%s' "$status" | jq -r '.runId') --log-failed), fix, push, then wait for CI again.")
+      fi ;;
+  esac
 }
 
 # 2026-09-25 (Łukasz, NEO-57): a "Create PR" link is only useful if GitHub can actually

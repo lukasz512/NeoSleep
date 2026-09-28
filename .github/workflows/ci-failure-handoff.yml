@@ -1,0 +1,45 @@
+# NEO-182: when CI goes red on a work branch, tell whoever fixes it — a comment
+# on the open PR with the failing tests, and the branch's Linear ticket back to
+# "Ready for Worker" with the `ci-failed` label so the nightly linear-worker
+# fixes it on the same branch (at most .claude/ci-autofix.json's maxFixAttempts
+# times; after that the ticket goes to "Needs Review" for Łukasz).
+# The logic lives in infrastructure/scripts/ci-failure-handoff.mjs.
+name: CI failure handoff
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: write
+
+jobs:
+  handoff:
+    if: >-
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.head_branch != 'dev' &&
+      github.event.workflow_run.head_branch != 'prod'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # One handoff per branch at a time: the push run and the PR run of the same
+    # commit can both finish red within seconds of each other.
+    concurrency:
+      group: ci-handoff-${{ github.event.workflow_run.head_branch }}
+      cancel-in-progress: false
+    steps:
+      # workflow_run always checks out the default branch — the handoff script is
+      # the reviewed one on dev, never code from the (possibly broken) PR branch.
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+      - name: Hand the failure to the PR and the Linear ticket
+        run: node infrastructure/scripts/ci-failure-handoff.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}

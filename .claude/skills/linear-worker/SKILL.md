@@ -21,6 +21,7 @@ You process **exactly one** Linear ticket per run, unattended. Nobody is watchin
 - **Fields read**: title + description (the raw input to `/enrich-user-story`), plus any attached screenshots/mockups if the Linear MCP tools available in this session expose attachment content — this is **unverified as of the first run of this skill**; if attachments can't be read, proceed on title + description alone and note in your Linear comment that attachments were not readable, rather than blocking on it.
 - **Claim step**: the moment you select a ticket, move it to `Worker: In Progress` before doing anything else. This exists so a second run (or a retry) can never double-process the same ticket, and so Łukasz sees "being worked on" state if he checks mid-run.
 - **Terminal states**: `Needs Review` (success) or `Blocked` (any stop condition below). Always leave a comment explaining what happened — a bare status change is not enough.
+- **Label `ci-failed`** (NEO-182): set by `.github/workflows/ci-failure-handoff.yml` when GitHub CI went red on the ticket's branch. Such a ticket is processed in **CI-fix mode** (below), not the normal procedure, and goes first in the queue — it's already-built work one fix away from review.
 - **Optional label `worker:backend-approved`**: a per-ticket, human-reviewed exception to the compliance-sensitive scope check for new backend code on `identities`/`patient`/`practitioner` only — see Step 4. Requires an accompanying scoping comment to mean anything; never applies to migrations/`auth.ts`/`consent`/`audit_log`.
 
 ---
@@ -31,7 +32,22 @@ You process **exactly one** Linear ticket per run, unattended. Nobody is watchin
 Read the repo root `CLAUDE.md` in full.
 
 ### 2. Select
-Query Linear for tickets in `Ready for Worker`. If `$ARGUMENTS` names a specific ticket ID, use that one instead of auto-selecting (manual/dry-run mode). If none are found and no argument was given, end cleanly — no branch, no push, no comment needed.
+Query Linear for tickets in `Ready for Worker`. If `$ARGUMENTS` names a specific ticket ID, use that one instead of auto-selecting (manual/dry-run mode). If none are found and no argument was given, end cleanly — no branch, no push, no comment needed. A ticket carrying the `ci-failed` label goes before the FIFO queue (oldest such first) and runs in **CI-fix mode** below instead of Steps 3–9.
+
+### CI-fix mode — ticket labelled `ci-failed` (NEO-182)
+
+Łukasz, 2026-09-28: a red CI is fixed by the same rules everywhere — this worker, an interactive session (quality-gate.sh) and the GitHub handoff all read **`.claude/ci-autofix.json`** (attempt limit, allowed fix scope, labels, states). Read it first; never restate its numbers from memory. This mode is the one sanctioned exception to Step 8's "no retry" — it fixes an already-reviewed-shape change, bounded by `maxFixAttempts`.
+
+1. Step 2.5 pre-flight still applies (push access). Claim the ticket (`Worker: In Progress`).
+2. Find the branch: the ticket's latest comment starting with `<!-- ci-autofix -->` names it (`CI failed on \`<branch>\``). `git fetch origin <branch>` and check it out — the existing branch, never a new one.
+3. `node infrastructure/scripts/ci-status.mjs --branch <branch> --sha $(git rev-parse HEAD)`:
+   - `success` or `pending` → someone already fixed it or CI is re-running: remove the label, move to `Needs Review`, comment one line, end.
+   - `exhausted: true` → don't touch the code: remove the label, move to `linear.exhaustedState`, comment that the limit is used up and what still fails, end.
+   - `failure` → go on.
+4. Reproduce each failing test locally (`gh run view <runId> --log-failed` for the full error; Vitest file or Playwright spec — harness specs run with `pnpm --filter @neo/pwa exec playwright test -c playwright.harness.config.ts <spec>`). Fix strictly within `allowedFixScope`. If the right fix is outside it (a behaviour decision, a failing test unrelated to this branch), don't fix — go to 7 with that explanation.
+5. Run Step 7's self-checks that apply to the touched files, commit (co-author trailer), `git push origin <branch>` — allowed even when a PR is open (`workerMayPushToOpenPr`). Never force-push, never open a PR.
+6. Wait for CI on the new HEAD (`gh run watch <id> --exit-status`, up to 30 min). Green → remove the label, comment on the ticket and the PR ("CI green after fix: <what was wrong>"), move to `Needs Review`. Red again → comment what you changed and end: the GitHub handoff has already re-queued it (or escalated it once the limit is reached).
+7. Could not fix within scope → comment the diagnosis on the ticket and the PR, remove the label, move to `Needs Review`, end.
 
 ### 2.5. Environment Pre-flight — before claiming, before any per-ticket work
 
@@ -257,6 +273,7 @@ This is the same marker schema `quality-gate.sh` enforces for interactive sessio
   `https://github.com/lukasz512/NeoSleep/compare/dev...worker/<...>?quick_pull=1&title=<url-encoded-title>&body=<url-encoded-body>`
   `title` is the ticket title (or a short summary); `body` is a short one/two-line summary of the change, plus — only when screenshots were produced — two markdown image lines pointing at the `raw.githubusercontent.com` URLs for `before.png`/`after.png` on the pushed branch, so they render inline the moment the PR form opens. Both `title` and `body` must be percent-encoded (spaces, `%0A` for newlines, and markdown's `! [ ] ( )` all need encoding). This still only pre-fills GitHub's own "new PR" form — Łukasz clicks "Create" himself, same as always; it does not open a pull request on your behalf.
 - **If Step 6.5's double-implementation pass ran**, include both attempts' one-paragraph summaries and the stated rationale for the winner in this same completion comment.
+- **Wait for CI before handing over** (NEO-182, `.claude/ci-autofix.json` `waitForGreenBeforePrLink`): the push starts CI on `worker/*`. Wait for it (`gh run watch <id> --exit-status`, up to 30 min). Green → go on. Red → fix it here once in CI-fix mode steps 4–6 (it counts toward `maxFixAttempts`), and if it's still red, leave the rest to the GitHub handoff: say so in the completion comment instead of presenting the PR link as ready.
 - Move the ticket to `Needs Review`.
 
 ---
@@ -276,6 +293,7 @@ This is the same marker schema `quality-gate.sh` enforces for interactive sessio
 | Ticket needs compliance-sensitive changes | Defer to a human session — do not implement, see Step 4 |
 | Ticket implementation isn't an obvious single path | `/arch assess [feature]`, see Step 5's ambiguity check and [_contracts/arch→linear-worker.md](../_contracts/arch→linear-worker.md) |
 | Self-check fails (including Step 7.5's backward consistency check) | `Blocked` + comment, see Step 8 — never a fix attempt within this run |
+| GitHub CI red on a ticket branch (`ci-failed` label) | CI-fix mode, bounded by `.claude/ci-autofix.json` — the only sanctioned fix loop |
 | `quality-gate.sh`'s hardcoded `127.0.0.1:5432` check being stale for normal local dev (no docker-compose exists in this repo; local dev uses remote Supabase) | Known pre-existing issue, out of scope for this skill — flag to `/devops` separately if it becomes a real blocker for human sessions too |
 | Scheduling / enabling / disabling the nightly cron | The `RemoteTrigger` routine configuration, not this skill — this skill only defines *what* a single run does |
 | Step 2.5 pre-flight fails (DB or git push, including a 403 GitHub App access gap) | Environment-wide problem, not this ticket's — comment (pointing at https://github.com/apps/claude/installations/select_target for a push failure) + leave in `Ready for Worker` per Step 2.5, needs a human to fix the environment before any ticket can proceed |
