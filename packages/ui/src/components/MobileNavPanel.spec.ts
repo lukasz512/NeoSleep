@@ -39,29 +39,31 @@ const isExpanded = (w: VueWrapper) => w.find(".mobile-nav-panel").classes().incl
 const sheet = (w: VueWrapper) => w.find(".mobile-nav-panel__sheet");
 const scrimVisible = (w: VueWrapper) => w.find(".mobile-nav-panel__scrim").classes().includes("mobile-nav-panel__scrim--visible");
 
-// NEO-161 "Kropla": a floating glass pill; "More" opens the other modules in a
-// second capsule above it, and the pill itself never changes.
+// NEO-161 "Kropla": one floating glass box. Collapsed only its bottom row (the
+// pill) shows; "More" grows the same box upwards over the other modules, and
+// the row itself never changes.
 describe("MobileNavPanel", () => {
-  it("collapsed: the pill holds the first primaryCount items plus More; the rest wait in the closed capsule", async () => {
+  it("collapsed: the row holds the first primaryCount items plus More; the rest wait hidden in the same box", async () => {
     const { wrapper } = await mountPanel();
-    expect(wrapper.findAll(".mobile-nav-panel .mobile-nav-panel__cell")).toHaveLength(5);
+    expect(wrapper.findAll(".mobile-nav-panel__items .mobile-nav-panel__cell")).toHaveLength(5);
     expect(wrapper.findAll(".mobile-nav-panel__grid .mobile-nav-panel__cell")).toHaveLength(3);
     expect(toggle(wrapper).text()).toContain("More");
     expect(toggle(wrapper).attributes("aria-expanded")).toBe("false");
     expect(toggle(wrapper).attributes("aria-controls")).toBe(sheet(wrapper).attributes("id"));
-    expect(sheet(wrapper).classes()).not.toContain("mobile-nav-panel__sheet--open");
+    // one box: the grid lives inside the nav, above the row, over one glass surface
+    expect(wrapper.find(".mobile-nav-panel .mobile-nav-panel__sheet").exists()).toBe(true);
+    expect(wrapper.findAll(".mobile-nav-panel__glass")).toHaveLength(1);
     expect(sheet(wrapper).attributes("inert")).toBeDefined();
     expect(scrimVisible(wrapper)).toBe(false);
   });
 
-  it("More opens the capsule and shows the scrim; the same button in the same slot turns into Close", async () => {
+  it("More grows the box and shows the scrim; the same button in the same slot turns into Close", async () => {
     const { wrapper } = await mountPanel();
-    const barCells = () => wrapper.findAll(".mobile-nav-panel .mobile-nav-panel__cell").map((c) => c.text());
+    const barCells = () => wrapper.findAll(".mobile-nav-panel__items .mobile-nav-panel__cell").map((c) => c.text());
     const before = barCells();
     await toggle(wrapper).trigger("click");
     await flushPromises();
     expect(isExpanded(wrapper)).toBe(true);
-    expect(sheet(wrapper).classes()).toContain("mobile-nav-panel__sheet--open");
     expect(sheet(wrapper).attributes("inert")).toBeUndefined();
     expect(scrimVisible(wrapper)).toBe(true);
     expect(toggle(wrapper).text()).toContain("Close");
@@ -111,7 +113,7 @@ describe("MobileNavPanel", () => {
   // jsdom has no PointerEvent constructor; a MouseEvent of the same type
   // carries clientY and reaches the same listeners.
   async function drag(w: VueWrapper, fromY: number, toY: number) {
-    const target = isExpanded(w) ? ".mobile-nav-panel__sheet" : ".mobile-nav-panel";
+    const target = isExpanded(w) ? ".mobile-nav-panel__sheet" : ".mobile-nav-panel__items";
     w.find(target).element.dispatchEvent(new MouseEvent("pointerdown", { clientY: fromY, bubbles: true }));
     for (let y = fromY; fromY < toY ? y <= toY : y >= toY; y += fromY < toY ? 10 : -10) {
       window.dispatchEvent(new MouseEvent("pointermove", { clientY: y }));
@@ -121,7 +123,7 @@ describe("MobileNavPanel", () => {
     await flushPromises();
   }
 
-  it("pulling the collapsed pill up opens the capsule; a short pull does not", async () => {
+  it("pulling the collapsed pill up opens the box; a short pull does not", async () => {
     const { wrapper } = await mountPanel();
     await drag(wrapper, 800, 790);
     expect(isExpanded(wrapper)).toBe(false);
@@ -129,7 +131,7 @@ describe("MobileNavPanel", () => {
     expect(isExpanded(wrapper)).toBe(true);
   });
 
-  it("dragging the open capsule down closes it; a short drag springs back open", async () => {
+  it("dragging the open box down closes it; a short drag springs back open", async () => {
     const { wrapper } = await mountPanel();
     await toggle(wrapper).trigger("click");
     await flushPromises();
