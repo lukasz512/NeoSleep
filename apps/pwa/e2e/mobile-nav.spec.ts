@@ -92,7 +92,19 @@ test("the account avatar grows into the card's top-right corner, inset like the 
   await open(page);
   await page.locator(".harness-avatar-btn").click();
   await expect(page.getByRole("dialog", { name: "User menu" })).toBeVisible();
-  await page.waitForTimeout(800);
+  // Wait for the grow motion to land: the avatar's box holds still across
+  // frames (a fixed 800ms delay raced it on WebKit CI).
+  await expect
+    .poll(() =>
+      page.evaluate(async () => {
+        const el = document.querySelector('.account-menu__card [data-motion="avatar"]');
+        const read = () => JSON.stringify(el?.getBoundingClientRect());
+        const before = read();
+        await new Promise((r) => setTimeout(r, 100));
+        return !!el && before === read();
+      }),
+    )
+    .toBe(true);
   const card = await box(page, ".account-menu__card");
   const avatar = await box(page, '.account-menu__card [data-motion="avatar"]');
   expect(Math.abs(avatar.width - 56)).toBeLessThan(1);
