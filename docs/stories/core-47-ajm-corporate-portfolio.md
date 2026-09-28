@@ -133,9 +133,25 @@ Findings: `planeta/planeta4.jpg` is eFashion Day 2019, not Planeta, so it moves 
 
 Alfred's portrait · permission to show the brands and footage publicly (Universal is often under NDA) · client logos (or names in type) · contact details (email, WhatsApp, LinkedIn, Instagram) · access to alfredjan.com DNS/hosting · one line of facts per case · approval of the EN copy.
 
-## Round 2 questions (in the Artifact)
+## Decisions — round 2 (Łukasz, 2026-09-28, as clicked)
 
-R1 per-lead identifier · R2 consent model · R3 QR entry animation · R4 where lead QR codes/links are generated · R5 video hosting.
+| # | Question | Answer |
+|---|---|---|
+| R1 | Per-lead identifier | **no**: no per-lead code, aggregate only |
+| R2 | Consent model | **more**: cookieless totals always, per-lead only after Accept |
+| R3 | QR entry animation | **more**: QR squares become a photo mosaic. Note: *check the device, and skip it when the device is weak; in fact it could be a single photo* |
+| R4 | Where lead QR/links are made | **no**: manually, from a list Łukasz keeps |
+| R5 | Video hosting | **yes**: self-encoded HLS + loops on Cloudflare R2 |
+
+Consequences:
+- **Tracking = cookieless aggregate only** (visits, time, which case is viewed). R1 and R4 remove per-lead identification, so D4's "per-lead in neoCRM" and R2's "per-lead after Accept" have nothing to act on. There is **no neoCRM API endpoint** and no `@neo/*` touchpoint at all. *Awaiting Łukasz's confirmation of this reading (asked in the thread), because D4 said the opposite.*
+- **Consent:** with nothing per-lead and no cookies, a blocking banner is not legally required. The plan is a short privacy notice in the footer (ES/EN). If Łukasz still wants a banner for looks or trust, it is cheap to add.
+- **QR entry (R3):** the QR grid is cut from **one** hero photo (each square shows its slice), then the squares fly apart into the full photo. It is skipped for a simple fade when `prefers-reduced-motion`, Save-Data, `navigator.deviceMemory < 4`, `hardwareConcurrency < 4` or a slow connection is detected.
+- **Hosting:** Cloudflare R2 bucket + CDN for loops, HLS and images. The originals never leave Łukasz's Mac and git.
+
+## Next
+
+Scaffold `clients/ajm/portfolio` (Vite + Vue + TS, GSAP/Lenis, own ES/EN locales, lint rule blocking `@neo/*`), then build the vertical slice: entry (QR + link) → hero montage → Qué hacemos → Universal walk-through, in ES + EN, weak-network rules on.
 
 ## Next
 
