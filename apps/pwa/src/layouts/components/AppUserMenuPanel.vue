@@ -81,8 +81,11 @@
 
     <!-- NEO-87 (variant E): always reachable while the app isn't added yet,
          so "Later" on the card is never a dead end. Opens the same card. -->
+    <!-- Extra rows under the settings — the patient page's links (NEO-126). -->
+    <slot name="links" />
+
     <button
-      v-if="installMethod"
+      v-if="accountActions && installMethod"
       type="button"
       class="user-menu__row"
       data-motion="row"
@@ -93,7 +96,7 @@
       {{ t(`layout.install.title.${device.form}`) }}
     </button>
 
-    <div class="user-menu__actions" :class="{ 'user-menu__actions--single': !canChangePassword }" data-motion="row">
+    <div v-if="accountActions" class="user-menu__actions" :class="{ 'user-menu__actions--single': !canChangePassword }" data-motion="row">
       <button
         v-if="canChangePassword"
         type="button"
@@ -150,7 +153,9 @@ withDefaults(defineProps<{
   channel: string | null;
   /** Header avatar size in px — the app bar avatar grown into the card corner (NEO-161). */
   avatarSize?: number;
-}>(), { email: undefined, region: undefined, avatarSize: 56 });
+  /** Password / log out / install app — false for someone without an account (the patient on a QR link, NEO-126). */
+  accountActions?: boolean;
+}>(), { email: undefined, region: undefined, avatarSize: 56, accountActions: true });
 
 const emit = defineEmits<{
   "set-theme": [preference: ThemePreference];
@@ -302,7 +307,9 @@ function onLocaleChange(value: string) {
   height: 22px;
 }
 
-.user-menu__row {
+/* Rows passed in through the #links slot get the same look (:slotted — they belong to the parent's scope). */
+.user-menu__row,
+:slotted(.user-menu__row) {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -318,13 +325,33 @@ function onLocaleChange(value: string) {
   cursor: pointer;
 }
 
-.user-menu__row:hover {
+.user-menu__row:hover,
+:slotted(.user-menu__row:hover) {
   background: rgba(var(--v-theme-on-surface), 0.04);
 }
 
-.user-menu__row:focus-visible {
+.user-menu__row:focus-visible,
+:slotted(.user-menu__row:focus-visible) {
   outline: 2px solid rgb(var(--v-theme-primary));
   outline-offset: -2px;
+}
+
+:slotted(.user-menu__row) {
+  width: 100%;
+  text-decoration: none;
+}
+
+:slotted(.user-menu__row-icon) {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+:slotted(.user-menu__row-note) {
+  margin-inline-start: auto;
+  font-size: 0.75rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
 /* The two account actions: same shape, size and icon style — log out differs

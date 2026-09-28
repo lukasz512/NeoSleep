@@ -20,3 +20,22 @@ export async function assertEmailNotTaken(
   );
   if (conflict.rows[0]) throw new EmailInUseError(email);
 }
+
+/**
+ * NEO-126: is this patient's email also on another identity (a family's shared
+ * inbox, a doctor, a user)? Every patient row carries email_shared = true (it
+ * means "may share"), so the flag alone can't tell — this looks for an actual
+ * second holder. The signed-copy email is only offered to an address that is
+ * the patient's alone: health data sent to a relative is a reportable breach.
+ */
+export async function isPatientEmailHeldByAnother(client: PoolClient, patientId: string, email: string): Promise<boolean> {
+  const { rows } = await client.query<{ shared: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1 FROM identities other
+       WHERE lower(other.email) = lower($2)
+         AND other.id != (SELECT identity_id FROM patient WHERE id = $1)
+     ) AS shared`,
+    [patientId, email]
+  );
+  return rows[0]?.shared ?? true;
+}

@@ -9,9 +9,12 @@ import { createRouter, createMemoryHistory } from "vue-router";
 import en from "@i18n/en.json";
 
 const apiFetch = vi.fn();
+// The top bar loads the tenant's branding (public /config/app) on its own —
+// answered here so the per-test mocks stay the questionnaire's calls only.
 vi.mock("../composables/useApi", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  apiFetch: (...args: unknown[]) => apiFetch(...args),
+  apiFetch: (...args: unknown[]) =>
+    args[0] === "/api/v1/config/app" ? Promise.resolve({ ok: false, status: 404, json: async () => ({}) }) : apiFetch(...args),
 }));
 
 import PatientQuestionnaireView from "./PatientQuestionnaireView.vue";
@@ -76,6 +79,17 @@ async function mountView(): Promise<VueWrapper> {
   mounted.push(wrapper);
   await flushPromises();
   return wrapper;
+}
+
+/** Opens the consent document card and reads it to the end (jsdom: the text always fits, so it's read at once). */
+async function readDocument(wrapper: VueWrapper) {
+  await wrapper.find("[data-testid='consent-document-card']").trigger("click");
+  await flushPromises();
+  await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+  const next = document.body.querySelector<HTMLButtonElement>("[data-testid='consent-reader-continue']")!;
+  expect(next.disabled).toBe(false);
+  next.click();
+  await flushPromises();
 }
 
 const buttonWithText = (wrapper: VueWrapper, text: string) => wrapper.findAll("button").filter((b) => b.text() === text);
@@ -178,23 +192,40 @@ describe("PatientQuestionnaireView (public QR self-fill)", () => {
 
   it("a bundle link walks the patient through each step — sign the consent, then the questionnaires — saving each on its own", async () => {
     apiFetch.mockResolvedValueOnce(
-      jsonResponse(true, 200, lookup([step("informedConsent", "consent", { consent_html: "<p>I consent to the treatment.</p>" }), step("stopBang", "stop_bang")])),
+      jsonResponse(
+        true,
+        200,
+        lookup([step("informedConsent", "consent", { consent_html: "<p>I consent to the treatment.</p>" }), step("stopBang", "stop_bang")], { signer_name: "Ana P." }),
+      ),
     );
     const wrapper = await mountView();
     expect(wrapper.text()).toContain("Step 1 of 2");
-    expect(wrapper.text()).toContain("I consent to the treatment.");
+    expect(wrapper.find("[data-testid='secure-chip']").text()).toBe("Secure link · just for you");
+    // The document is a card; signing only appears once it has been read.
+    expect(wrapper.find(".signature-pad-stub").exists()).toBe(false);
+    await readDocument(wrapper);
+    expect(document.body.textContent).toContain("I consent to the treatment.");
+    expect(wrapper.find(".signature-pad-stub").exists()).toBe(true);
+    expect(wrapper.find("[data-testid='consent-signer']").text()).toContain("You are signing as Ana P.");
+    expect(wrapper.find("[data-testid='consent-signer']").text()).toContain("Not you? Don't sign");
+    // No address on file → no "email me a copy".
+    expect(wrapper.find("[data-testid='consent-send-copy']").exists()).toBe(false);
 
     // No signature yet → nothing is sent.
     await wrapper.find("form").trigger("submit");
     expect(alerts(wrapper)).toEqual(["Sign in the box to continue."]);
+    // Signed, but "I have read and accept" not ticked → still nothing.
+    signed = true;
+    await wrapper.find("form").trigger("submit");
+    expect(alerts(wrapper)).toEqual(["Tick the box above to confirm you have read the document."]);
     expect(apiFetch).toHaveBeenCalledTimes(1);
 
-    signed = true;
+    await wrapper.find("[data-testid='consent-accept'] input").setValue(true);
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 201, { step: "informedConsent", completed: false }));
     await wrapper.find("form").trigger("submit");
     await flushPromises();
     const consentBody = JSON.parse((apiFetch.mock.calls[1]![1] as RequestInit).body as string);
-    expect(consentBody).toMatchObject({ token: TOKEN, step: "informedConsent", signatureDataUrl: SIGNATURE });
+    expect(consentBody).toMatchObject({ token: TOKEN, step: "informedConsent", signatureDataUrl: SIGNATURE, readToEnd: true });
 
     expect(wrapper.text()).toContain("Step 2 of 2");
     expect(wrapper.text()).toContain("Do you snore loudly?");
@@ -226,6 +257,52 @@ describe("PatientQuestionnaireView (public QR self-fill)", () => {
     await flushPromises();
     expect(wrapper.text()).toContain("Do you snore loudly?");
     expect(apiFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("a consent-only link ends on 'Document signed' with a receipt and the signed PDF to download", async () => {
+    apiFetch.mockResolvedValueOnce(
+      jsonResponse(true, 200, lookup([step("informedConsent", "consent", { consent_html: "<p>I consent.</p>" })], { signer_name: "Ana P.", clinic_name: "Clínica Sonrisa", copy_email: "a***@example.mx" })),
+    );
+    const wrapper = await mountView();
+    // One document: read → sign → done as three segments, no "Step 1 of 1".
+    expect(wrapper.findAll("[data-testid='app-segment-progress-segment']")).toHaveLength(3);
+    expect(wrapper.text()).not.toContain("Step 1 of 1");
+
+    await readDocument(wrapper);
+    signed = true;
+    await wrapper.find("[data-testid='consent-accept'] input").setValue(true);
+    // The copy by email is the patient's own choice — offered, never pre-ticked.
+    const copyBox = wrapper.find("[data-testid='consent-send-copy'] input");
+    expect((copyBox.element as HTMLInputElement).checked).toBe(false);
+    expect(wrapper.find("[data-testid='consent-send-copy']").text()).toContain("a***@example.mx");
+    await copyBox.setValue(true);
+    expect(buttonWithText(wrapper, "Sign the document")).toHaveLength(1);
+    apiFetch.mockResolvedValueOnce(
+      jsonResponse(true, 201, {
+        step: "informedConsent",
+        completed: true,
+        signed_copy: { filename: "informedConsent-2026-09-27.pdf", signed_at: "2026-09-27T12:32:00.000Z", pdf_base64: btoa("%PDF-1.7") },
+        copy_emailed: true,
+      }),
+    );
+    await wrapper.find("form").trigger("submit");
+    await flushPromises();
+    expect(JSON.parse((apiFetch.mock.calls[1]![1] as RequestInit).body as string).sendCopy).toBe(true);
+    expect(wrapper.text()).toContain("A copy is on its way to a***@example.mx.");
+
+    expect(wrapper.text()).toContain("Document signed");
+    expect(wrapper.text()).toContain("Clínica Sonrisa already has your signed document");
+    const receipt = wrapper.find("[data-testid='signed-receipt']");
+    expect(receipt.text()).toContain("Clínica Sonrisa");
+
+    const createObjectURL = vi.fn(() => "blob:copy");
+    URL.createObjectURL = createObjectURL as unknown as typeof URL.createObjectURL;
+    URL.revokeObjectURL = vi.fn();
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    await receipt.find("button").trigger("click");
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(click).toHaveBeenCalledTimes(1);
+    click.mockRestore();
   });
 
   it("a link whose steps are all done already shows the thank-you screen", async () => {
