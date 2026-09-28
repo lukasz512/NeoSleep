@@ -504,6 +504,10 @@ defineEmits<{
    on the toolbar row (sticky, negative top); transparent, over the toolbar's
    background and under its buttons. The avatar and the name travel there by
    scroll-driven keyframes — the numbers come from useRecordHeaderCollapse. */
+.view-item--collapsing {
+  /* NEO-183: room for a short record to scroll its header into the toolbar. */
+  padding-bottom: var(--rh-room, 0px);
+}
 .view-item--collapsing .view-item__record-header {
   position: sticky;
   top: calc(var(--v-layout-top, 56px) + 48px - var(--rh-R, 0px));

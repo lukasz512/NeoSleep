@@ -124,14 +124,21 @@ for (const width of [320, 375, 390, 430]) {
   });
 }
 
-test("a short record stays open (nothing to dock into)", async ({ page }) => {
-  await open(page, 390, "record");
-  await page.evaluate(() => window.scrollTo(0, 40));
-  await page.evaluate(() => window.dispatchEvent(new Event("scrollend")));
-  await page.waitForTimeout(700);
-  const avatar = await box(page, ".view-item__record-header > :first-child");
-  expect(avatar.width).toBeGreaterThan(36);
-});
+for (const width of [320, 390]) {
+  test(`${width}px: a record shorter than the screen still docks (NEO-183)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/e2e/harness/breadcrumbs.html?state=record");
+    await expect(page.locator("h1")).toBeVisible();
+    const end = await docked(page);
+    // The view reserves the missing room, so the page reaches the docked state.
+    expect(await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight)).toBeGreaterThanOrEqual(end - 1);
+    await scrollTo(page, end);
+    const avatar = await box(page, ".view-item__record-header > :first-child");
+    expect(avatar.width).toBeLessThan(28);
+    await scrollTo(page, 0);
+    expect((await box(page, ".view-item__record-header > :first-child")).width).toBeGreaterThan(36);
+  });
+}
 
 test("desktop: no toolbar, the header keeps its own actions", async ({ page }) => {
   await open(page, 1280);

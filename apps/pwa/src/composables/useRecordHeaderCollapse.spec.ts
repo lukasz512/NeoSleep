@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { collapseProgress, collapseVars, settleTarget, DOCK, type CollapseGeometry } from "./useRecordHeaderCollapse";
+import { collapseProgress, collapseVars, dockRoom, settleTarget, DOCK, type CollapseGeometry } from "./useRecordHeaderCollapse";
 
 // NEO-181: the numbers behind the scroll-driven collapse of the phone header.
 
@@ -76,5 +76,21 @@ describe("settleTarget", () => {
 
   it("returns to open when the page is too short to dock", () => {
     expect(settleTarget(90, 20, 100, 95)).toBe(20);
+  });
+});
+
+describe("dockRoom (NEO-183)", () => {
+  // A 664 px phone screen, the view starting 84 px down with 24 px of layout below it.
+  const view = (height: number) => ({ top: 84, height, below: 24 });
+
+  it("makes the page long enough to scroll the header into the toolbar", () => {
+    // Page must reach 664 + 42 + 60 = 766 px; the view ends at 84 + 300 + 24 = 408.
+    expect(dockRoom(42, 60, view(300), 664)).toBe(358);
+    expect(dockRoom(42, 60, view(657.5), 664)).toBe(1);
+  });
+
+  it("adds nothing to a record long enough to dock", () => {
+    expect(dockRoom(42, 60, view(658), 664)).toBe(0);
+    expect(dockRoom(42, 60, view(2000), 664)).toBe(0);
   });
 });
