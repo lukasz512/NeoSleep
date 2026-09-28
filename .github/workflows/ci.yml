@@ -181,3 +181,20 @@ jobs:
             if (Buffer.from(pdf.subarray(0, 5)).toString("latin1") !== "%PDF-") throw new Error("not a PDF");
             console.log("PDF OK", pdf.length, "bytes");
             process.exit(0);'
+
+  # Claude Code tooling (hooks, ship-artifact, worktree cleanup) has its own self-tests.
+  # They need only git, jq, bash and Node, no install and no database (CORE-23).
+  tooling:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+      - name: Tooling self-tests
+        run: |
+          git config --global user.name ci && git config --global user.email ci@example.com
+          node --test .claude/skills/ship-artifact/ticket.test.mjs
+          bash .claude/hooks/pre-tool-linear-ticket-format.test.sh
+          bash infrastructure/scripts/worktree-clean.test.sh

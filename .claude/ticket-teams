@@ -1,0 +1,7 @@
+# Linear team keys a ticket ID may start with (CORE-23, 2026-09-28).
+# One key per line. Branches, markers and PR titles are matched against
+# <KEY>-<n>, case-insensitive. Add a client team here when it gets its own
+# Linear team (e.g. AJM, 4Seasons) — hooks, ship-artifact and worktree-clean
+# all read this file.
+NEO
+CORE

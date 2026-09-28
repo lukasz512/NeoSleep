@@ -19,6 +19,10 @@ Status: decided 2026-09-28 (decision form `neo-163-linking-r1`); work split into
 New client (same form): **AJ Management**, Linear key **AJM**, a neoCRM client.
 Answered 2026-09-28: neoCRM is the platform, so its work lives in **CORE**; AJM is a client team. AJM, like 4Seasons, lives in **this repo**. Client teams hold only client-specific work (config, content, requests).
 
+### Split done (2026-09-28, CORE-23)
+
+Łukasz created **NeoCRM CORE** (key CORE); AJM and 4Seasons teams wait until they have work. Rule: CORE = anything every tenant gets; NEO = NeoSleep-only. Moved to CORE: every not-yet-started platform ticket (notifications engine, calendar, delivery tooling, dependency upgrades, backups, RBAC, generic PWA). Left in NEO: NeoSleep-specific work (OrthoApnea, Estudios, patient documents), raw ideas awaiting CORE-21, and every ticket already started or in review, so open branches and PRs keep their IDs. Old `NEO-<n>` links redirect. Hooks, ship-artifact and worktree-clean read allowed keys from `.claude/ticket-teams`; tooling self-tests now run in CI (`pnpm tooling:test`).
+
 ### Creating the teams (manual, Łukasz)
 
 1. Linear → Settings → Teams → **Create team**. Name `CORE`, identifier `CORE`, "copy settings from" NeoSleep so statuses (Needs Review, Ready for Worker, Blocked) and labels match.
