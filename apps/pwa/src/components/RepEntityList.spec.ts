@@ -445,6 +445,14 @@ describe("AppEntityList", () => {
       expect(css).toMatch(/\.app-entity-list__toolbar\s*{[^}]*margin:\s*calc\(-1 \* var\(--app-entity-list-halo-room\)\)/);
     });
 
+    // NEO-160: outside the page header (a record's tab) the open search grows
+    // in the row, so its 48 px slot has to grow too.
+    it("the search slot grows while the search is open or holds a query", () => {
+      expect(css).toMatch(
+        /\.app-entity-list__toolbar--search-open \.app-entity-list__search-slot,\s*\.app-entity-list__toolbar--has-query \.app-entity-list__search-slot\s*{\s*flex:\s*1 1 0%;/,
+      );
+    });
+
     it("add button has no border and uses the primary color", () => {
       expect(css).toMatch(/\.app-entity-list__add--no-border\s*{[^}]*border:\s*none/);
       expect(css).toMatch(/\.app-entity-list__add\s*{[^}]*--v-theme-primary/);

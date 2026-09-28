@@ -332,6 +332,13 @@
   height: 48px;
   align-items: center;
 }
+/* NEO-160: a list outside the page header (e.g. a record's "Doctors" tab)
+   has no overlay — the field grows in the row instead, so its slot has to
+   grow with it. Pinned at 48 px, the focused search stayed a circle. */
+.app-entity-list__toolbar--search-open .app-entity-list__search-slot,
+.app-entity-list__toolbar--has-query .app-entity-list__search-slot {
+  flex: 1 1 0%;
+}
 .app-entity-list__toolbar--compact-search .app-entity-list__search {
   flex: 1 1 auto;
   min-width: 0;
