@@ -23,8 +23,8 @@ export interface EmailRecipient {
 /** The rep/admin a personal-outreach email is "from" — the display name always reads
  * "NeoSleep" (consistent brand sender across lead-offer, partner-invite, and thank-you
  * emails), but Reply-To is still set to the rep's own address, so a doctor hitting "reply"
- * lands in the rep's real inbox (e.g. alfred.jan@neosleepcare.com on Microsoft 365), not a
- * noreply@ black hole. This needs no new mailbox to be provisioned per rep — it reuses
+ * lands in the rep's real inbox (e.g. alfred.jan@neosleepcare.com on Microsoft 365), not the
+ * unmonitored sending address. This needs no new mailbox to be provisioned per rep — it reuses
  * whatever real address the rep already logs in with. */
 export interface EmailSender {
   name: string;
@@ -49,10 +49,24 @@ interface SendEmailArgs {
   subject: string;
   html: string;
   attachments: EmailAttachment[];
-  /** Set so replies land in a real inbox (the rep's) instead of the noreply@ sending address. */
+  /** Set so replies land in a real inbox (the rep's) instead of the unmonitored sending address. */
   replyTo?: string;
   /** Fixed extra recipient(s), e.g. an internal compliance inbox — see PARTNER_DOCS_CC_EMAIL. */
   cc?: string | string[];
+  /** Display name in From; defaults to "NeoSleep". Patient emails use "<clinic> | NeoSleep" (NEO-162). */
+  fromName?: string;
+}
+
+/** RFC 5322 display name: CR/LF and angle brackets stripped (header injection), always quoted so commas/dots in a clinic name are safe. */
+function formatFrom(name: string, email: string): string {
+  const clean = name.replace(/[\r\n<>]/g, " ").replace(/\s+/g, " ").trim() || "NeoSleep";
+  return `"${clean.replace(/["\\]/g, "\\$&")}" <${email}>`;
+}
+
+/** "Clínica Dental Sonrisa | NeoSleep" — patients know their clinic, not the platform, so the clinic leads (NEO-162). */
+export function clinicFromName(clinicName: string | null | undefined): string {
+  const name = clinicName?.trim();
+  return name ? `${name} | NeoSleep` : "NeoSleep";
 }
 
 /**
@@ -72,7 +86,7 @@ async function sendEmail(logLabel: string, args: SendEmailArgs): Promise<string 
 
   try {
     const { data, error } = await resend.emails.send({
-      from: `NeoSleep <${RESEND_FROM_EMAIL}>`,
+      from: formatFrom(args.fromName ?? "NeoSleep", RESEND_FROM_EMAIL),
       to: args.to,
       subject: args.subject,
       html: args.html,
@@ -201,6 +215,7 @@ export async function sendQuestionnaireLinkEmail(
     html,
     attachments: getEmailAttachments(socials),
     ...(clinic.email ? { replyTo: clinic.email } : {}),
+    fromName: clinicFromName(clinic.name),
   });
   return id !== null;
 }

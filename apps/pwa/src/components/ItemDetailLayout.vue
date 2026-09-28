@@ -1,5 +1,5 @@
 <template>
-  <div class="view-item">
+  <div ref="viewEl" class="view-item" :class="{ 'view-item--toolbar': phoneToolbar, 'view-item--collapsing': collapsing }">
     <!-- NEO-56 record header (Salesforce Lightning / Veeva pattern): a tile
          with the entity's icon, the parent list as a small eyebrow link above
          the record's name, actions on the right. On desktop it replaces
@@ -7,18 +7,13 @@
          phones that row stays as the card's first line (NEO-108), so the
          eyebrow is hidden there. NEO-158: the name stays on one line — it
          shrinks to fit, and only a very long one ends in "…" (useFitTitle). -->
-    <!-- NEO-158, phones: once this header scrolls away, a slim bar with the
-         name and the actions pins under the app bar. -->
-    <RecordStickyBar
-      v-if="showStickyBar"
-      :title="recordTitle ?? ''"
-      :header="recordHeaderEl"
-      :actions="headerActionsEl"
-    >
-      <template v-if="$slots['record-tile']" #avatar>
-        <slot name="record-tile" />
-      </template>
-    </RecordStickyBar>
+    <!-- NEO-181, phones: the record's toolbar (‹ back, main action, ⋯) pins
+         under the app bar from the start; as the page scrolls, the header
+         below collapses into it (useRecordHeaderCollapse). -->
+    <template v-if="phoneToolbar">
+      <span ref="collapseSentinel" class="view-item__collapse-sentinel" aria-hidden="true" />
+      <RecordToolbar :back="parentCrumb" :actions="headerActionsEl" :skeletons="hasContent ? 0 : actionSkeletons" />
+    </template>
     <header v-if="showRecordHeader" ref="recordHeaderEl" class="view-item__record-header">
       <!-- A record with an identity (NEO-57) swaps the module tile for its
            avatar via #record-tile; the module icon is the fallback. -->
@@ -143,7 +138,8 @@ import { recordPreviewFor } from "../composables/useRecordPreview";
 import AppLoadingState from "./AppLoadingState.vue";
 import AppRecordSkeleton from "./AppRecordSkeleton.vue";
 import AppBreadcrumbs from "./AppBreadcrumbs.vue";
-import RecordStickyBar from "./RecordStickyBar.vue";
+import RecordToolbar from "./RecordToolbar.vue";
+import { useRecordHeaderCollapse } from "../composables/useRecordHeaderCollapse";
 import { IdentityDetailsWrapScope } from "./identityDetailsWrap";
 import { useFitTitle } from "../composables/useFitTitle";
 import type { BreadcrumbItem } from "./AppBreadcrumbs.types";
@@ -249,7 +245,12 @@ const headerActionsEl = ref<HTMLElement | null>(null);
 useFitTitle(recordTitleEl, computed(() => props.recordTitle ?? preview.value?.title));
 
 const isPhone = useMediaQuery("(max-width: 767.98px)");
-const showStickyBar = computed(() => isPhone.value && showRecordHeader.value && props.hasContent);
+const phoneToolbar = computed(() => isPhone.value && showRecordHeader.value);
+// The header collapses only once the record is there (not over a skeleton).
+const collapsing = computed(() => phoneToolbar.value && props.hasContent);
+const viewEl = ref<HTMLElement | null>(null);
+const collapseSentinel = ref<HTMLElement | null>(null);
+useRecordHeaderCollapse({ root: viewEl, sentinel: collapseSentinel, header: recordHeaderEl, title: recordTitleEl, enabled: collapsing });
 
 const recordHeaderClaim = useRecordHeaderClaim();
 watchEffect(() => {
@@ -475,6 +476,86 @@ defineEmits<{
   }
 }
 
+/* NEO-181, phones: the toolbar above the header has the way back (‹ MODULE)
+   and the actions, so the header drops its eyebrow link and its icon row.
+   The row stays in the DOM, out of sight: the toolbar mirrors those buttons
+   and clicks them (hidden elements still run their handlers). */
+.view-item__collapse-sentinel {
+  display: block;
+  height: 0;
+}
+.view-item--toolbar .view-item__record-header .view-item__eyebrow {
+  display: none;
+}
+.view-item--toolbar .view-item__record-header > .view-item__header-actions {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+}
+.view-item--toolbar .view-item__record-header {
+  flex-wrap: nowrap;
+  padding-top: var(--space-2, 8px);
+}
+
+/* The collapse: the header scrolls up natively and pins with its last 48 px
+   on the toolbar row (sticky, negative top); transparent, over the toolbar's
+   background and under its buttons. The avatar and the name travel there by
+   scroll-driven keyframes — the numbers come from useRecordHeaderCollapse. */
+.view-item--collapsing .view-item__record-header {
+  position: sticky;
+  top: calc(var(--v-layout-top, 56px) + 48px - var(--rh-R, 0px));
+  z-index: 5;
+  pointer-events: none;
+}
+.view-item--collapsing .view-item__record-header > :deep(:first-child),
+.view-item--collapsing .view-item__record-title {
+  transform-origin: 0 0;
+  will-change: transform;
+}
+@keyframes view-item-dock-avatar {
+  to {
+    transform: translate(var(--rh-av-dx, 0px), var(--rh-av-dy, 0px)) scale(var(--rh-av-s, 1));
+  }
+}
+@keyframes view-item-dock-title {
+  from {
+    max-width: var(--rh-nm-w0, 100%);
+  }
+  to {
+    transform: translate(var(--rh-nm-dx, 0px), var(--rh-nm-dy, 0px)) scale(var(--rh-nm-s, 1));
+    max-width: var(--rh-nm-w1, 100%);
+  }
+}
+@keyframes view-item-dock-fade {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+@supports (animation-timeline: scroll()) {
+  /* Linear on purpose: each pixel of scroll moves everything by one step,
+     so the motion stays glued to the finger in both directions. */
+  .view-item--collapsing .view-item__record-header > :deep(:first-child) {
+    animation: view-item-dock-avatar linear both;
+    animation-timeline: scroll(root block);
+    animation-range: var(--rh-start, 0px) calc(var(--rh-start, 0px) + var(--rh-R, 1px));
+  }
+  .view-item--collapsing .view-item__record-title {
+    animation: view-item-dock-title linear both;
+    animation-timeline: scroll(root block);
+    animation-range: var(--rh-start, 0px) calc(var(--rh-start, 0px) + var(--rh-R, 1px));
+  }
+  .view-item--collapsing .view-item__record-details,
+  .view-item--collapsing .view-item__record-title-row > :deep(:not(h1)) {
+    animation: view-item-dock-fade linear both;
+    animation-timeline: scroll(root block);
+    animation-range: var(--rh-start, 0px) calc(var(--rh-start, 0px) + var(--rh-fade, 24px));
+  }
+}
+
 /* Not a visual card on purpose — no surface, no border, no inset padding: the
    entity content sits directly on the page background (same color as the rest
    of the view), aligned with the header row above it — i.e. on the same page
@@ -684,7 +765,7 @@ defineEmits<{
    fade in instead of popping in. */
 .view-item__record-details,
 .view-item__record-header > .view-item__header-actions,
-.view-item > :not(.view-item__record-header, .view-item__header-row, .record-bar-home) {
+.view-item > :not(.view-item__record-header, .view-item__header-row, .view-item__collapse-sentinel, .record-toolbar, .record-toolbar-bg) {
   animation: view-item-fade-in 220ms cubic-bezier(0, 0, 0.2, 1) both;
 }
 @keyframes view-item-fade-in {
@@ -695,7 +776,7 @@ defineEmits<{
 @media (prefers-reduced-motion: reduce) {
   .view-item__record-details,
   .view-item__record-header > .view-item__header-actions,
-  .view-item > :not(.view-item__record-header, .view-item__header-row, .record-bar-home) {
+  .view-item > :not(.view-item__record-header, .view-item__header-row, .view-item__collapse-sentinel, .record-toolbar, .record-toolbar-bg) {
     animation: none;
   }
 }
