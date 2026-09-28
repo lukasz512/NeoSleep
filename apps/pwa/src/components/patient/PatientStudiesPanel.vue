@@ -122,13 +122,16 @@
             :key="item.key"
             :ref="(el) => setRowRef(item.key, el)"
             class="studies__item"
-            :class="[`studies__item--${item.status}`, { 'studies__item--focus': focusedKey === item.key }]"
+            :class="[`studies__item--${item.status}`, { 'studies__item--focus': focusedKey === item.key, 'studies__item--arrived': arrivedKeys.has(item.key) }]"
           >
             <span class="studies__rail"><ChecklistStatusIcon :status="item.status" /></span>
             <div class="studies__item-content">
               <div class="studies__item-main" :class="{ 'studies__item-main--result': resultEntry(item) }">
                 <div class="studies__item-text">
-                  <span class="studies__item-title">{{ itemTitle(item) }}</span>
+                  <span class="studies__item-title">
+                    {{ itemTitle(item) }}
+                    <span v-if="hasNew(item)" class="studies__new" data-testid="studies-new">{{ t("app.clinical.new") }}</span>
+                  </span>
                   <span class="studies__item-status">{{ statusLine(item) }}</span>
                   <!-- STOP-Bang is half the patient's, half the specialist's: show each half's own state. -->
                   <span v-if="item.actions.form === 'stop_bang' && item.status !== 'missing'" class="studies__split" :aria-label="t('app.clinical.split.aria')">
@@ -215,6 +218,7 @@
                       <button type="button" class="studies__history-entry" @click="openEntry(item, entry)">
                         <span class="studies__history-date">{{ formatDate(entry.created_at) }}</span>
                         <span>{{ entryLine(entry) }}</span>
+                        <span v-if="entry.is_new" class="studies__new">{{ t("app.clinical.new") }}</span>
                       </button>
                       <AppButton
                         v-if="isAdmin && entry.type === 'upload' && !entry.sleep_study_id"
@@ -248,17 +252,25 @@
       <section v-if="checklist.other_uploads.length" class="studies__group" aria-labelledby="studies-group-other">
         <h3 id="studies-group-other" class="studies__group-title">{{ t("app.clinical.group.other") }}</h3>
         <ul class="studies__list">
-          <li v-for="upload in checklist.other_uploads" :key="upload.id" class="studies__item studies__item--done">
+          <li
+            v-for="upload in checklist.other_uploads"
+            :key="upload.id"
+            class="studies__item studies__item--done"
+            :class="{ 'studies__item--arrived': arrivedKeys.has(upload.id) }"
+          >
             <span class="studies__rail"><ChecklistStatusIcon status="done" /></span>
             <div class="studies__item-content">
               <div class="studies__item-main studies__item-main--result">
                 <div class="studies__item-text">
-                  <span class="studies__item-title">{{ upload.title }}</span>
+                  <span class="studies__item-title">
+                    {{ upload.title }}
+                    <span v-if="upload.is_new" class="studies__new">{{ t("app.clinical.new") }}</span>
+                  </span>
                   <span class="studies__item-status">{{ t("app.clinical.status.doneOn", { date: formatDate(upload.created_at) }) }}<template v-if="upload.by"> · {{ t("app.clinical.recordedBy", { name: upload.by }) }}</template></span>
                 </div>
                 <div class="studies__item-actions">
                   <AppListItemMenu :aria-label="t('app.clinical.action.more', { item: upload.title ?? upload.filename ?? '' })">
-                    <VListItem :title="t('app.clinical.action.open')" @click="checklistApi.openFile(upload.id)">
+                    <VListItem :title="t('app.clinical.action.open')" @click="openOtherUpload(upload)">
                       <template #prepend><AppIcon name="file" /></template>
                     </VListItem>
                     <VListItem v-if="isAdmin" :title="t('app.common.remove')" @click="checklistApi.deleteUpload(upload.id)">
@@ -267,7 +279,7 @@
                   </AppListItemMenu>
                 </div>
               </div>
-              <ChecklistResult class="studies__result" :entry="upload" @open-file="checklistApi.openFile(upload.id)" />
+              <ChecklistResult class="studies__result" :entry="upload" @open-file="openOtherUpload(upload)" />
             </div>
           </li>
         </ul>
@@ -305,7 +317,9 @@ import {
   type ChecklistRecord,
   type ChecklistGroup,
   checklistSegments,
+  checklistEntries,
 } from "../../composables/usePatientChecklist";
+import { useVisiblePolling } from "../../composables/useVisiblePolling";
 import { sleepStudyFormFields } from "../../config/forms/sleepStudyForm";
 import {
   MEDICAL_HISTORY_QUESTIONS,
@@ -482,6 +496,7 @@ function openCompleteBang(item: ChecklistItem) {
 }
 
 async function openEntry(item: ChecklistItem, entry: ChecklistHistoryEntry) {
+  void checklistApi.markOpened(entry);
   if (entry.record) {
     Object.assign(questionnaireDialog, { open: true, kind: entry.record.kind, mode: "view", record: entry.record });
   } else if (entry.sleep_study) {
@@ -553,31 +568,53 @@ watch(qrPatientStarted, (started) => {
   if (started) qrDialog.open = false;
 });
 
-// Refresh while a link is live, so the QR status button moves on its own
-// (the open QR dialog has its own faster check, below). 15 s, and only for 15 min per link: the
-// doctor's device and a patient's phone usually share the clinic Wi-Fi's one
-// public IP — and so the API's per-IP rate limit; fast polling left open
-// could starve the patient's submit.
-const POLL_MS = 15_000;
-const POLL_MAX_MS = 15 * 60_000;
-let pollTimer: ReturnType<typeof setInterval> | null = null;
-function stopPolling() {
-  if (pollTimer) clearInterval(pollTimer);
-  pollTimer = null;
-}
+// The open tab keeps itself current (NEO-173): every 15 s while a link is
+// live, so the QR status button and the patient's answers move on their own,
+// every 60 s otherwise (another doctor's upload, a result entered elsewhere).
+// Only while the page is visible, plus once on coming back to it. Each check
+// asks for the checklist's fingerprint and reloads only when it moved. The
+// 15 s mode stops 15 min into a link: the doctor's device and a patient's
+// phone usually share the clinic Wi-Fi's one public IP — and so the API's
+// per-IP rate limit. The open QR dialog has its own faster check, below.
+const POLL_LINK_MS = 15_000;
+const POLL_LINK_MAX_MS = 15 * 60_000;
+const POLL_IDLE_MS = 60_000;
+const linkLiveSince = ref<number | null>(null);
 watch(
   () => checklist.value?.pending_requests[0]?.id ?? null,
-  (liveId) => {
-    stopPolling();
-    if (!liveId) return;
-    const startedAt = Date.now();
-    pollTimer = setInterval(() => {
-      if (Date.now() - startedAt > POLL_MAX_MS) return stopPolling();
-      void checklistApi.load();
-    }, POLL_MS);
-  }
+  (liveId, previous) => {
+    if (liveId !== previous) linkLiveSince.value = liveId ? Date.now() : null;
+  },
 );
-onBeforeUnmount(stopPolling);
+useVisiblePolling(
+  () => (linkLiveSince.value !== null && Date.now() - linkLiveSince.value < POLL_LINK_MAX_MS ? POLL_LINK_MS : POLL_IDLE_MS),
+  checklistApi.refreshIfChanged,
+);
+
+// What just arrived gets a short highlight (NEO-173) — a row with an entry
+// that wasn't there on the previous load. Not on the first load.
+const arrivedKeys = reactive(new Set<string>());
+let knownEntryIds: Set<string> | null = null;
+function flashArrived(key: string) {
+  arrivedKeys.add(key);
+  setTimeout(() => arrivedKeys.delete(key), 2400);
+}
+watch(checklist, (value) => {
+  if (!value) return;
+  const known = knownEntryIds;
+  knownEntryIds = new Set(checklistEntries(value).map((entry) => entry.id));
+  if (!known) return;
+  for (const item of value.items) if (item.history.some((entry) => !known.has(entry.id))) flashArrived(item.key);
+  for (const upload of value.other_uploads) if (!known.has(upload.id)) flashArrived(upload.id);
+});
+watch(() => props.patientId, () => (knownEntryIds = null));
+
+const hasNew = (item: ChecklistItem) => item.history.some((entry) => entry.is_new);
+
+function openOtherUpload(upload: ChecklistHistoryEntry) {
+  void checklistApi.markOpened(upload);
+  void checklistApi.openFile(upload.id);
+}
 
 // Fast check while the QR is on screen (NEO-117): wait 5 s — the patient
 // first has to point the camera and open the link — then ask every 2 s
@@ -907,6 +944,38 @@ watch(() => props.focusItem, (key) => highlightItem(key));
 }
 .studies__item--focus {
   box-shadow: 0 0 0 3px rgba(var(--v-theme-primary), 0.45);
+}
+/* NEO-173: something just arrived in this row — a soft tint that fades out. */
+.studies__item--arrived .studies__item-content {
+  animation: studies-arrived 2.4s ease-out;
+}
+@keyframes studies-arrived {
+  from {
+    background: rgba(var(--v-theme-primary), 0.14);
+  }
+  to {
+    background: transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .studies__item--arrived .studies__item-content {
+    animation: none;
+    box-shadow: inset 0 0 0 2px rgba(var(--v-theme-primary), 0.35);
+  }
+}
+/* NEO-173: "Nuevo" — added by someone else, not yet opened by me. */
+.studies__new {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  vertical-align: 1px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: rgb(var(--v-theme-primary));
+  background: rgba(var(--v-theme-primary), 0.12);
 }
 .studies__item-content {
   min-width: 0;

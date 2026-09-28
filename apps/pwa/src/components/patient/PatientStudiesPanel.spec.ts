@@ -95,7 +95,10 @@ beforeEach(() => {
     summary: { done: 1, total: 6 },
   };
   apiFetch.mockImplementation(async (path: string, init?: RequestInit) => {
-    if (path.endsWith("/checklist")) return jsonResponse(true, 200, structuredClone(checklistBody));
+    // The content itself is the fingerprint here — any change to checklistBody moves it (NEO-173).
+    if (path.endsWith("/checklist")) return jsonResponse(true, 200, { ...structuredClone(checklistBody), version: JSON.stringify(checklistBody) });
+    if (path.endsWith("/checklist/version")) return jsonResponse(true, 200, { version: JSON.stringify(checklistBody) });
+    if (path.endsWith("/opened") && init?.method === "POST") return jsonResponse(true, 204, null);
     if (path.endsWith("/print")) return jsonResponse(true, 200, null, "application/pdf");
     if (path.endsWith("/questionnaire-requests") && init?.method === "POST") {
       if (failCreate) return jsonResponse(false, 500, { error: "boom" });
@@ -455,5 +458,49 @@ describe("PatientStudiesPanel — the Estudios checklist", () => {
     await flushPromises();
     expect(document.body.textContent).toContain("Add study");
     expect((document.body.querySelector("#study-upload-title") as HTMLInputElement).value).toBe("Polysomnography");
+  });
+
+  it("with no link live it checks the fingerprint every 60 s and reloads only when it moved; the new row is highlighted (NEO-173)", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const wrapper = await mountPanel();
+      const calls = (suffix: string) => apiFetch.mock.calls.filter(([path]) => String(path).endsWith(suffix)).length;
+      expect(calls("/checklist")).toBe(1);
+
+      await vi.advanceTimersByTimeAsync(60_000);
+      await flushPromises();
+      expect([calls("/checklist/version"), calls("/checklist")]).toEqual([1, 1]); // nothing changed → no reload
+
+      const items = checklistBody.items as ReturnType<typeof item>[];
+      items[3] = item("oralExam", "doctor", "done", {
+        actions: actions({ fill: "questionnaire", form: "oral_exam" }),
+        history: [{ id: "oe-1", type: "record", created_at: "2026-09-28T10:00:00Z", source: "staff", by: "Dr. Other", is_new: true, record: { kind: "oral_exam", id: "oe-1", created_at: "2026-09-28T10:00:00Z", recorded_by_name: "Dr. Other", has_bruxism: true } }],
+      });
+      await vi.advanceTimersByTimeAsync(60_000);
+      await flushPromises();
+      expect([calls("/checklist/version"), calls("/checklist")]).toEqual([2, 2]);
+      expect(rows(wrapper)[3]!.classes()).toContain("studies__item--arrived");
+      expect(rows(wrapper)[3]!.find("[data-testid='studies-new']").text()).toBe("New");
+      expect(rows(wrapper)[1]!.classes()).not.toContain("studies__item--arrived");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("'New' goes away once I open that result, and the open is reported (NEO-173)", async () => {
+    const history = (checklistBody.items as ReturnType<typeof item>[])[1]!.history as Record<string, unknown>[];
+    history[0]!.is_new = true;
+    const wrapper = await mountPanel();
+    const row = rows(wrapper)[1]!;
+    expect(row.find("[data-testid='studies-new']").exists()).toBe(true);
+
+    await row.find('[aria-label="More actions for Medical history"]').trigger("click");
+    await flushPromises();
+    const view = [...document.body.querySelectorAll(".v-list-item")].find((el) => el.textContent?.includes("View")) as HTMLElement;
+    view.click();
+    await flushPromises();
+
+    expect(row.find("[data-testid='studies-new']").exists()).toBe(false);
+    expect(apiFetch).toHaveBeenCalledWith("/api/v1/patient/patient-1/checklist/entries/mh-1/opened", expect.objectContaining({ method: "POST" }));
   });
 });

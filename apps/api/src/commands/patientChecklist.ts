@@ -2,7 +2,14 @@ import type { TenantContext } from "../context/TenantContext.js";
 import { insertAuditLog, insertFileAttachment, getFileAttachmentById, deleteFileAttachment } from "../db.js";
 import type { MedicalHistoryRecord, OralExamRecord, StopBangRecord } from "../db/clinicalRecords.js";
 import { getPatientPdfContext, formatBirthDate, patientDocumentFooter } from "../db/patientPdfContext.js";
-import { GetPatientChecklistQuery, POLYSOMNOGRAPHY_KEY, type ChecklistItem } from "../queries/patientChecklist.js";
+import {
+  GetPatientChecklistQuery,
+  POLYSOMNOGRAPHY_KEY,
+  CHECKLIST_ENTRY_AUDIT_TYPE,
+  allChecklistEntries,
+  type ChecklistItem,
+} from "../queries/patientChecklist.js";
+import { AuditHealthDataReadCommand } from "./healthDataReadAudit.js";
 import { GetCurrentDocumentContentQuery } from "../queries/documentContent.js";
 import { renderDocumentHtml, renderDocumentFooterHtml, getDocumentRefCode, documentT, DOCUMENT_MANIFEST } from "@neo/documents";
 import { renderHtmlToPdf, type ChoiceField } from "../services/documentRenderer.js";
@@ -262,4 +269,21 @@ export async function DeletePatientStudyUploadCommand(ctx: TenantContext, patien
     entity_before: { patient_id: patientId, document_type: "study_upload", title: file.metadata?.title ?? null },
     request_id: ctx.requestId,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Opened a result (NEO-173)
+// ---------------------------------------------------------------------------
+
+/**
+ * The user opened one Estudios result (view, file, sleep study). Leaves the
+ * audit_log `read` row for that exact entry — the access trail, and what
+ * clears its "Nuevo" marker for this user (annotateNewEntries). The entry
+ * must belong to this patient, so the endpoint can't be used to plant rows.
+ */
+export async function OpenChecklistEntryCommand(ctx: TenantContext, patientId: string, entryId: string): Promise<void> {
+  const checklist = await GetPatientChecklistQuery(ctx, patientId);
+  const entry = allChecklistEntries(checklist).find((e) => e.id === entryId);
+  if (!entry) throw new NotFoundError("ChecklistEntry", entryId);
+  await AuditHealthDataReadCommand(ctx, { entity_type: CHECKLIST_ENTRY_AUDIT_TYPE, entity_id: entryId, patient_id: patientId, view: `checklist_entry:${entry.type}` });
 }

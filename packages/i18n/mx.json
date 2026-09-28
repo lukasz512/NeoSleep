@@ -1038,6 +1038,7 @@
   "app.clinical.risk.intermediate": "Riesgo intermedio",
   "app.clinical.risk.high": "Riesgo alto",
   "app.clinical.awaitingBang": "Falta B-A-N-G",
+  "app.clinical.new": "Nuevo",
   "app.clinical.completeBang": "Completar B-A-N-G",
   "app.clinical.section.stop": "S-T-O-P — responde el paciente",
   "app.clinical.section.bang": "B-A-N-G — lo evalúa el médico",
