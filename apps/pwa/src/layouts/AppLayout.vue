@@ -107,6 +107,7 @@
             :email="user.email"
             :role-label="user.role"
             :initials="user.initials"
+            :avatar-size="isMobile ? AVATAR_SIZE * PHONE_AVATAR_GROWTH : AVATAR_SIZE * AVATAR_GROWTH"
             :region="user.region"
             :theme-preference="themePreference"
             :locale="(locale as string)"
@@ -244,6 +245,7 @@ import {
 import { useGlyphInset } from "../composables/useGlyphInset";
 import { useBarLogoFit } from "../composables/useBarLogoFit";
 import { useThemeColorMeta } from "../composables/useThemeColorMeta";
+import { AVATAR_GROWTH, PHONE_AVATAR_GROWTH } from "../composables/useAccountMenuMotion";
 import { useI18n } from "vue-i18n";
 import { AppShell, useAppVersionParts, CHANGE_PASSWORD_FROM_MENU } from "@ui";
 import { useLayoutState } from "../composables/useLayoutState";

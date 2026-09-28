@@ -12,6 +12,10 @@ import { test, expect, type Page } from "@playwright/test";
  * - the account card's avatar lands on the app bar avatar
  */
 
+// The first visit compiles the whole shell + account menu on the dev server
+// (~40 s cold), longer than Playwright's default 30 s per test.
+test.describe.configure({ timeout: 90_000 });
+
 async function open(page: Page, query = "") {
   await page.setViewportSize({ width: 390, height: 780 });
   await page.goto(`/e2e/harness/mobile-nav.html${query}`);

@@ -21,6 +21,7 @@ import { AppShell } from "@neo/ui";
 import AppIcon, { type AppIconName } from "../../src/components/AppIcon.vue";
 import AppAccountMenu from "../../src/layouts/components/AppAccountMenu.vue";
 import AppUserMenuPanel from "../../src/layouts/components/AppUserMenuPanel.vue";
+import { PHONE_AVATAR_GROWTH } from "../../src/composables/useAccountMenuMotion";
 
 const params = new URLSearchParams(location.search);
 const theme = params.get("theme") === "dark" ? darkTheme : lightTheme;
@@ -112,6 +113,7 @@ const Harness = defineComponent({
                       canChangePassword: true,
                       version: "Version 2.14.0 (build 412)",
                       channel: "DEV",
+                      avatarSize: 32 * PHONE_AVATAR_GROWTH,
                     }),
                 },
               ),
