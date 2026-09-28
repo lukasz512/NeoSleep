@@ -20,6 +20,7 @@
     <CasePrivalia :lite="lite" />
     <CaseMendel :lite="lite" />
     <ProcessSection :lite="lite" />
+    <ScrollMonogram />
     <ClientsSection />
     <AboutSection />
     <ContactSection :lite="lite" />
@@ -44,6 +45,7 @@ import CasePrivalia from "./components/CasePrivalia.vue";
 import CaseMendel from "./components/CaseMendel.vue";
 import ProcessSection from "./components/ProcessSection.vue";
 import ClientsSection from "./components/ClientsSection.vue";
+import ScrollMonogram from "./components/ScrollMonogram.vue";
 import AboutSection from "./components/AboutSection.vue";
 import ContactSection from "./components/ContactSection.vue";
 import { pickEntry, type EntryKind } from "./lib/entry";

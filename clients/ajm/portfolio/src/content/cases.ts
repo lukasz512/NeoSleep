@@ -18,7 +18,7 @@ export const CLIENTS = [
 ] as const;
 
 export interface PrivaliaChapter {
-  id: "y2019" | "y2020" | "live" | "more";
+  id: "y2019" | "y2020" | "live";
   /** silent loop base under media/, or none when the chapter is type only */
   loop?: string;
   poster?: string;
@@ -31,13 +31,16 @@ export const PRIVALIA_CHAPTERS: PrivaliaChapter[] = [
     id: "y2019",
     loop: "privalia/y2019",
     poster: "privalia/y2019-poster",
+    // Łukasz's "neon1–8" set (2026-09-28) groups the neon lounge (privalia06) with these, so it is
+    // eFashion Day 2019 too; the other files in that set are copies of photos already here.
     photos: [
       { id: "privalia04", large: true },
-      { id: "privalia01", large: true },
+      { id: "privalia06", large: true },
       { id: "privalia02", large: true },
       { id: "privalia22", large: true },
       { id: "privalia05", large: true },
       { id: "privalia03", large: true },
+      { id: "privalia01", large: true },
     ],
   },
   {
@@ -51,8 +54,6 @@ export const PRIVALIA_CHAPTERS: PrivaliaChapter[] = [
   },
   // Hugo Boss × Privalia live shopping: no photos yet.
   { id: "live" },
-  // E1 (2026-09-28): the neon lounge is another Privalia event (name and year to come); one photo.
-  { id: "more", photos: [{ id: "privalia06", large: true }] },
 ];
 
 /**

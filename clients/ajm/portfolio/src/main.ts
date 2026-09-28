@@ -5,10 +5,10 @@ import { PATH_ROUTING, resolveLocale } from "./lib/locale";
 import { isLiteMode, readDeviceSignals } from "./lib/capability";
 import { applyTheme, initialTheme, readStoredTheme } from "./lib/theme";
 // Self-hosted fonts (no request to Google, weak-network friendly): Montserrat for everything,
-// Bodoni Moda italic for the one accent word per headline and for figures.
+// Italianno for the pen-written accent word (F1 = F3, 2026-09-28), Bodoni Moda italic for figures.
 import "@fontsource-variable/montserrat/wght.css";
 import "@fontsource/bodoni-moda/latin-400-italic.css";
-import "@fontsource/pinyon-script/latin-400.css";
+import "@fontsource/italianno/latin-400.css";
 import "./style.css";
 
 const { locale, redirectTo } = resolveLocale(

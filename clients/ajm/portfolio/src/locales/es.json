@@ -102,7 +102,6 @@
     "tags": "Eventos Corporativos · Lanzamientos · Producción · Experiencia de Invitados",
     "body": "AJ Management trabaja junto a Grupo Planeta desarrollando y produciendo eventos que conectan autores, medios, aliados y audiencias a través de experiencias cuidadosamente diseñadas.",
     "city": "Ciudad de México",
-    "dragHint": "Desliza para ver cada lanzamiento",
     "photoCount": "{n} fotos",
     "photoAlt": "{event}: montaje del evento",
     "events": {
@@ -137,14 +136,8 @@
         "mark": "Live",
         "name": "Hugo Boss × Privalia",
         "body": "Producción de live shopping para Hugo Boss en Privalia México, con cobertura de GQ México & Latinoamérica."
-      },
-      "more": {
-        "mark": "Más",
-        "name": "Más para Privalia",
-        "body": "Lounges, activaciones y espacios para marcas: la relación sigue, evento tras evento."
       }
     },
-    "photoAltMore": "Lounge de un evento de Privalia",
     "photoAlt2020": "eFashion Day Live 2020: el set de transmisión"
   },
   "mendel": {

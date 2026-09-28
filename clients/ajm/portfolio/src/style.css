@@ -19,7 +19,7 @@
   --ajm-ease: cubic-bezier(0.7, 0, 0.2, 1);
   --ajm-font: "Montserrat Variable", "Montserrat", "Helvetica Neue", Arial, system-ui, sans-serif;
   --ajm-display: "Bodoni Moda", Didot, "Bodoni 72", Georgia, serif;
-  --ajm-script: "Pinyon Script", "Snell Roundhand", cursive;
+  --ajm-script: "Italianno", "Snell Roundhand", cursive;
   color-scheme: light;
 }
 :root[data-theme="dark"] {
@@ -65,14 +65,14 @@
   font-weight: 400;
   letter-spacing: -0.01em;
 }
-/* The one accent word per headline, written as if by pen (Łukasz, 2026-09-28: "like a pen").
+/* The one accent word per headline, written as if by pen (Łukasz, 2026-09-28: "like a pen"; Italianno, F1).
    AccentText sets --write from scroll, so the word writes itself left to right as the heading
    comes up the screen. The clip reaches past the box so swashes aren't cut. */
 .acc {
   font-family: var(--ajm-script);
   font-weight: 400;
   font-style: normal;
-  font-size: 1.32em;
+  font-size: 1.55em;
   line-height: 0.7;
   letter-spacing: 0;
   padding: 0 0.06em;

@@ -97,7 +97,6 @@ function photoSrc(p: { id: string; large: boolean }): string {
   return `privalia/${p.id}-${p.large ? 1280 : 640}`;
 }
 function altFor(id: string): string {
-  if (id === "more") return t("privalia.photoAltMore");
   if (id === "y2020") return t("privalia.photoAlt2020");
   return t("privalia.photoAlt");
 }
@@ -317,6 +316,11 @@ onBeforeUnmount(() => io?.disconnect());
   grid-column: span 3;
   grid-row: auto;
   aspect-ratio: 3 / 2;
+}
+/* the seventh photo closes the spread as a wide band (the courtyard seen from above) */
+.mosaic__item--6 {
+  grid-column: 1 / 7;
+  aspect-ratio: 21 / 9;
 }
 /* a chapter with one photo shows it as a portrait, not cropped to the lead's landscape */
 .mosaic--single .mosaic__item--0 {

@@ -1,5 +1,8 @@
-<!-- Case 02 · Grupo Planeta: the only photo-led case. A bookshelf of event "spines";
-     opening one shows its photos. Only originals ≥1600 px are shown large (content/planeta.ts). -->
+<!-- Case 02 · Grupo Planeta, "index + stage" (G3 = G-B, 2026-09-28): the launches are a list on the
+     left; the active one fills a large stage on the right with its photos. Desktop: hover/focus/click
+     picks a launch, and the launch crossing the middle of the screen becomes active while scrolling.
+     Phones: the stage sits above the list and follows scroll the same way. Photos open full screen.
+     Only originals ≥1600 px are used large (content/planeta.ts). -->
 <template>
   <article id="planeta" ref="root" class="case" :class="{ 'is-in': seen }">
     <header class="case__head">
@@ -11,51 +14,68 @@
       <p class="case__body">{{ t("planeta.body") }}</p>
     </header>
 
-    <p class="shelf__hint eyebrow">{{ t("planeta.dragHint") }} →</p>
-    <div class="shelf" role="list">
-      <div
-        v-for="(ev, i) in events"
-        :key="ev.id"
-        class="book"
-        :class="{ open: i === openIndex }"
-        role="listitem"
-      >
-        <button
-          type="button"
-          class="book__spine"
-          :aria-expanded="i === openIndex"
-          :aria-controls="`book-${ev.id}`"
-          @click="openIndex = i"
+    <div class="ix">
+      <ol class="ix__list">
+        <li
+          v-for="(ev, i) in events"
+          :key="ev.id"
+          :ref="(el) => (rows[i] = el as HTMLElement | null)"
+          v-reveal="{ delay: i * 60 }"
+          :data-index="i"
         >
-          <span class="book__year">{{ ev.year ?? "" }}</span>
-          <span class="book__title">{{ ev.title }}</span>
-        </button>
-        <div :id="`book-${ev.id}`" class="book__pages" :hidden="i !== openIndex">
-          <p class="book__meta">
-            <strong>{{ ev.title }}</strong> · {{ t(`planeta.events.${ev.id}`) }}<template v-if="ev.year"> · {{ ev.year }}</template>
-            <span class="book__count">{{ t("planeta.photoCount", { n: ev.photos.length }) }}</span>
-          </p>
-          <div class="book__grid">
-            <button
-              v-for="(p, j) in ev.photos"
-              :key="p"
-              type="button"
-              class="book__photo"
-              :class="{ big: j === 0 && LARGE_PHOTOS.has(p) }"
-              :aria-label="t('media.enlarge')"
-              @click="viewing = j"
-            >
-              <picture>
-                <source :srcset="picture(photoBase(p, j === 0)).avif" type="image/avif" />
-                <img
-                  :src="picture(photoBase(p, j === 0)).jpg"
-                  :alt="t('planeta.photoAlt', { event: ev.title })"
-                  loading="lazy"
-                  decoding="async"
-                />
-              </picture>
-            </button>
-          </div>
+          <button
+            type="button"
+            class="ix__item"
+            :class="{ on: i === active }"
+            :aria-pressed="i === active"
+            @mouseenter="active = i"
+            @focus="active = i"
+            @click="active = i"
+          >
+            <span class="ix__year">{{ ev.year ?? "—" }}</span>
+            <span class="ix__title">{{ ev.title }}</span>
+            <span class="ix__kind">{{ t(`planeta.events.${ev.id}`) }}</span>
+          </button>
+        </li>
+      </ol>
+
+      <div class="ix__stage">
+        <TransitionGroup name="st" tag="div" class="ix__frame">
+          <button
+            v-for="(p, j) in current.photos.slice(0, 1)"
+            :key="`${current.id}-${p}`"
+            type="button"
+            class="ix__lead"
+            :aria-label="t('media.enlarge')"
+            @click="viewing = j"
+          >
+            <picture>
+              <source :srcset="picture(photoBase(p, true)).avif" type="image/avif" />
+              <img :src="picture(photoBase(p, true)).jpg" :alt="t('planeta.photoAlt', { event: current.title })" decoding="async" />
+            </picture>
+          </button>
+        </TransitionGroup>
+        <div class="ix__meta">
+          <span class="ix__metaTitle">{{ current.title }}</span>
+          <span class="ix__metaLine">
+            {{ t(`planeta.events.${current.id}`) }}<template v-if="current.year"> · {{ current.year }}</template>
+            · {{ t("planeta.photoCount", { n: current.photos.length }) }}
+          </span>
+        </div>
+        <div class="ix__thumbs">
+          <button
+            v-for="(p, j) in current.photos"
+            :key="`${current.id}-t-${p}`"
+            type="button"
+            class="ix__thumb"
+            :aria-label="t('media.enlarge')"
+            @click="viewing = j"
+          >
+            <picture>
+              <source :srcset="picture(photoBase(p, false)).avif" type="image/avif" />
+              <img :src="picture(photoBase(p, false)).jpg" alt="" loading="lazy" decoding="async" />
+            </picture>
+          </button>
         </div>
       </div>
     </div>
@@ -66,23 +86,39 @@
 <script setup lang="ts">
 import AccentText from "./AccentText.vue";
 import PhotoLightbox, { type LightboxPhoto } from "./PhotoLightbox.vue";
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { LARGE_PHOTOS, PLANETA_VISIBLE, photoBase } from "../content/planeta";
+import { PLANETA_VISIBLE, photoBase, type PlanetaEvent } from "../content/planeta";
 import { picture } from "../lib/media";
 import { useInView } from "../lib/useInView";
+import { vReveal } from "../lib/motion";
 
 const { t } = useI18n();
 const root = ref<HTMLElement | null>(null);
 const seen = useInView(root, "-10%");
 const events = PLANETA_VISIBLE;
-const openIndex = ref(0);
+const active = ref(0);
+const current = computed<PlanetaEvent>(() => events[active.value] ?? events[0]!);
+const rows = ref<(HTMLElement | null)[]>([]);
 
-// The open event's photos, largest file available, with a one-line description.
+// The launch crossing the middle band of the screen becomes active while scrolling.
+let io: IntersectionObserver | null = null;
+onMounted(() => {
+  if (typeof IntersectionObserver === "undefined") return;
+  io = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) if (e.isIntersecting) active.value = Number((e.target as HTMLElement).dataset.index);
+    },
+    { rootMargin: "-48% 0px -48% 0px" },
+  );
+  rows.value.forEach((r) => r && io?.observe(r));
+});
+onBeforeUnmount(() => io?.disconnect());
+
+// The active launch's photos, largest file available, with a one-line description.
 const viewing = ref<number | null>(null);
 const lightboxPhotos = computed<LightboxPhoto[]>(() => {
-  const ev = events[openIndex.value];
-  if (!ev) return [];
+  const ev = current.value;
   const caption = [t(`planeta.events.${ev.id}`), ev.year, t("planeta.client"), t("planeta.city")].filter(Boolean).join(" · ");
   return ev.photos.map((p) => ({ src: picture(photoBase(p, true)), title: ev.title, caption }));
 });
@@ -115,125 +151,165 @@ const lbLabels = computed(() => ({ prev: t("media.prev"), next: t("media.next"),
   font-size: clamp(17px, 1.5vw, 21px);
   color: var(--ajm-ink-soft);
 }
-.shelf__hint {
-  margin: 0 0 14px;
+
+.ix {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: clamp(24px, 5vw, 72px);
+  align-items: start;
 }
-.shelf {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  padding-bottom: 12px;
-  margin: 0 calc(-1 * var(--ajm-gutter));
-  padding-inline: var(--ajm-gutter);
-  scrollbar-width: thin;
+.ix__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--ajm-line);
 }
-.book {
-  display: flex;
-  flex: 0 0 auto;
-  scroll-snap-align: start;
-  min-height: min(72svh, 620px);
-}
-.book__spine {
-  width: 76px;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  align-items: center;
-  gap: 18px;
-  padding: 18px 0;
-  border: 1px solid var(--ajm-line);
-  background: var(--ajm-paper);
-  color: var(--ajm-ink);
+.ix__item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 2px 14px;
+  align-items: baseline;
+  padding: clamp(14px, 1.8vw, 22px) 0;
+  border: 0;
+  border-bottom: 1px solid var(--ajm-line);
+  background: none;
+  color: inherit;
+  text-align: left;
   cursor: pointer;
-  transition: background-color 0.4s ease, color 0.4s ease;
+  font: inherit;
 }
-.book__spine:hover,
-.book.open .book__spine {
-  background: var(--ajm-ink);
-  color: var(--ajm-paper);
+.ix__year {
+  grid-row: span 2;
+  font: italic 400 20px var(--ajm-display);
+  color: var(--ajm-muted);
 }
-.book__year {
-  font: 500 11px var(--ajm-font);
-  letter-spacing: 0.12em;
+.ix__title {
+  font: 500 clamp(20px, 2.2vw, 30px) / 1.15 var(--ajm-font);
+  letter-spacing: -0.01em;
+  color: var(--ajm-faint);
+  transition:
+    color 0.4s ease,
+    transform 0.5s var(--ajm-ease);
 }
-.book__title {
-  writing-mode: vertical-rl;
-  transform: rotate(180deg);
-  font: 500 18px var(--ajm-serif);
-  letter-spacing: 0.02em;
-  white-space: nowrap;
+.ix__kind {
+  font-size: 13px;
+  color: var(--ajm-muted);
 }
-.book__pages {
-  width: min(78vw, 980px);
-  padding: 0 0 0 16px;
-  animation: pages 0.7s var(--ajm-ease);
+.ix__item.on .ix__title,
+.ix__item:hover .ix__title {
+  color: var(--ajm-ink);
 }
-.book__pages[hidden] {
-  display: none;
+.ix__item.on .ix__title {
+  transform: translateX(8px);
 }
-@keyframes pages {
-  from {
-    clip-path: inset(0 100% 0 0);
-  }
-  to {
-    clip-path: inset(0 0 0 0);
-  }
+.ix__item:focus-visible {
+  outline: 2px solid var(--ajm-ink);
+  outline-offset: 2px;
 }
-.book__meta {
+
+.ix__stage {
+  position: sticky;
+  top: 12vh;
+  display: grid;
+  gap: 12px;
+}
+.ix__frame {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: var(--ajm-line);
+}
+.ix__lead {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+}
+.ix__lead picture,
+.ix__lead img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* the new launch wipes in over the old one */
+.st-enter-active {
+  transition: clip-path 0.9s var(--ajm-ease);
+  z-index: 1;
+}
+.st-enter-active img {
+  transition: transform 1.3s var(--ajm-ease);
+}
+.st-enter-from {
+  clip-path: inset(0 0 0 100%);
+}
+.st-enter-from img {
+  transform: scale(1.08);
+}
+.st-leave-active {
+  transition: opacity 0.9s ease;
+}
+.st-leave-to {
+  opacity: 0.999;
+}
+.ix__meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 10px;
+  gap: 4px 12px;
   align-items: baseline;
-  margin: 0 0 12px;
-  font-size: 14px;
-  color: var(--ajm-ink-soft);
 }
-.book__count {
-  margin-left: auto;
+.ix__metaTitle {
+  font: 500 16px var(--ajm-font);
+}
+.ix__metaLine {
+  font-size: 13px;
   color: var(--ajm-muted);
-  font-size: 12px;
-  letter-spacing: 0.08em;
 }
-.book__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  grid-auto-rows: 180px;
+.ix__thumbs {
+  display: flex;
   gap: 6px;
+  flex-wrap: wrap;
 }
-.book__photo {
-  display: block;
+.ix__thumb {
+  width: 72px;
+  height: 52px;
   padding: 0;
   border: 0;
   background: none;
   overflow: hidden;
-  border-radius: 2px;
   cursor: zoom-in;
+  opacity: 0.7;
+  transition: opacity 0.3s ease;
 }
-.book__photo.big {
-  grid-column: span 2;
-  grid-row: span 2;
+.ix__thumb:hover,
+.ix__thumb:focus-visible {
+  opacity: 1;
 }
-.book__photo picture {
-  display: block;
-  height: 100%;
-}
-.book__grid img {
+.ix__thumb img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 0.8s var(--ajm-ease);
 }
-.book__photo:hover img {
-  transform: scale(1.04);
-}
-@media (max-width: 600px) {
-  .book__pages {
-    width: 82vw;
+
+@media (max-width: 860px) {
+  .ix {
+    grid-template-columns: 1fr;
   }
-  .book__grid {
-    grid-template-columns: repeat(2, 1fr);
-    grid-auto-rows: 120px;
+  .ix__stage {
+    grid-row: 1;
+    top: 60px;
+    z-index: 2;
+    background: var(--ajm-paper);
+    padding-bottom: 8px;
+  }
+  .ix__frame {
+    aspect-ratio: 16 / 10;
+  }
+  .ix__thumbs {
+    display: none;
   }
 }
 </style>
