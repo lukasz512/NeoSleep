@@ -867,7 +867,7 @@ watch(() => props.focusItem, (key) => highlightItem(key));
     white-space: nowrap;
   }
 }
-/* Phone (NEO-93): one row — the QR status takes the width next to the email icon. */
+/* Phone (NEO-93, NEO-180): one row — the QR status takes the width left by the email and "add study" icons. */
 @media (max-width: 600px) {
   .studies__header-actions {
     width: 100%;
@@ -880,17 +880,6 @@ watch(() => props.focusItem, (key) => highlightItem(key));
   /* Nothing left for the patient → no QR button: what's left moves to the end of the row. */
   .studies__header-actions:not(:has(.studies__qr)) {
     justify-content: flex-end;
-  }
-  /* NEO-127: "add study" sits on the counter's line, top right; the bar stays full width under it. */
-  .studies__compact-btn.studies__add {
-    position: absolute;
-    top: -6px;
-    right: 0;
-    width: 36px;
-    height: 36px !important;
-  }
-  .studies__progress :deep(.app-segment-progress__label) {
-    padding-right: 48px;
   }
 }
 
