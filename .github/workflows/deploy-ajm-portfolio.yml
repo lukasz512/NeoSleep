@@ -1,0 +1,63 @@
+# Deploy the AJ Management portfolio (clients/ajm/portfolio) to GoDaddy FTP
+# → corporativo.alfredjan.com (H1, 2026-09-28).
+#
+# Runs by hand (Actions → "Deploy AJM Portfolio" → Run workflow) or when a change under
+# clients/ajm/ reaches prod. It never runs for NeoSleep-only changes.
+#
+# Secrets (repository settings → Secrets and variables → Actions):
+#   AJM_FTP_SERVER, AJM_FTP_USERNAME, AJM_FTP_PASSWORD — the FTP account of the GoDaddy hosting
+#     that serves alfredjan.com. If it is the same account as neosleepcare.com, leave them unset
+#     and the NeoSleep FTP_* secrets are used.
+#   AJM_FTP_DIR — FTP path of the subdomain's folder, e.g. /public_html/corporativo (not a URL).
+#
+# Media: the encoded loops/photos (scripts/encode-media.sh) are not in git. The job uploads
+# whatever is in clients/ajm/portfolio/public/media; until they're in the repo (decision G1)
+# upload that folder once by hand to <AJM_FTP_DIR>/media.
+
+name: Deploy AJM Portfolio
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [prod]
+    paths: ["clients/ajm/**"]
+
+concurrency:
+  group: deploy-ajm-portfolio
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --filter @ajm/portfolio...
+
+      - name: Test
+        run: pnpm --filter @ajm/portfolio test
+
+      - name: Build
+        run: pnpm --filter @ajm/portfolio build
+
+      - name: Deploy to corporativo.alfredjan.com
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.AJM_FTP_SERVER || secrets.FTP_SERVER }}
+          username: ${{ secrets.AJM_FTP_USERNAME || secrets.FTP_USERNAME }}
+          password: ${{ secrets.AJM_FTP_PASSWORD || secrets.FTP_PASSWORD }}
+          protocol: ftp
+          local-dir: ./clients/ajm/portfolio/dist/
+          server-dir: ${{ secrets.AJM_FTP_DIR }}/
+          dangerous-clean-slate: false

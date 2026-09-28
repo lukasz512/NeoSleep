@@ -4,8 +4,18 @@
  * Everything a visitor reads lives in locales/*.json.
  */
 
-/** Section 06: only four names, in type (no logo files yet), in the proposal's order. */
-export const CLIENT_NAMES = ["Universal Products & Experiences", "Grupo Planeta", "Privalia", "Mendel"] as const;
+/**
+ * Section 06: four logos only, in the proposal's order. Files come from AJM (2026-09-28) and are
+ * turned into one-colour masks by scripts/encode-logos.sh. `height` evens out the optical size
+ * (a wide wordmark needs less height than one with a symbol). The name is the accessible label.
+ * Universal: the file AJM sent is the Universal Pictures mark (case: Universal Products & Experiences).
+ */
+export const CLIENTS = [
+  { name: "Universal Products & Experiences", logo: "logos/universal.svg", height: 1.9 },
+  { name: "Grupo Planeta", logo: "logos/planeta.png", height: 1.1 },
+  { name: "Privalia", logo: "logos/privalia.png", height: 1.2 },
+  { name: "Mendel", logo: "logos/mendel.png", height: 1 },
+] as const;
 
 export interface PrivaliaChapter {
   id: "y2019" | "y2020" | "live";

@@ -141,4 +141,7 @@ still "$MAKING"  41 960 "$OUT/capabilities/c4"
 still "$MAKING"  17 960 "$OUT/capabilities/c5"
 still "$EFD19"  28  960 "$OUT/capabilities/c6" "$EFD19_CROP"
 
+# ---- Clientes: one-colour logo masks ------------------------------------------------------
+AJM_MATERIALS="$SRC" bash "$(dirname "$0")/encode-logos.sh" > /dev/null
+
 du -sh "$OUT"/*
