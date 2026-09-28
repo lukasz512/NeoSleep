@@ -8,7 +8,7 @@
     <header class="case__head">
       <p class="eyebrow">{{ t("planeta.number") }} · {{ t("planeta.client") }}</p>
       <h3 class="case__title">
-        <span class="mask-line"><span><AccentText :text="t('planeta.title')" /></span></span>
+        <span class="mask-line"><span><AccentText :text="t('planeta.title')" :stroke="1" /></span></span>
       </h3>
       <p class="case__tags">{{ t("planeta.tags") }} · {{ t("planeta.city") }}</p>
       <p class="case__body">{{ t("planeta.body") }}</p>

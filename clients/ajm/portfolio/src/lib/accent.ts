@@ -50,6 +50,19 @@ export function groupAccent(source: string): Group[] {
   return groups;
 }
 
+/** Number of marker strokes in style.css (.mk--0 … .mk--3). */
+export const MARKER_VARIANTS = 4;
+
+/**
+ * Which hand-drawn stroke a phrase gets: fixed per text (same stroke on every visit and in both
+ * themes), but different between neighbouring headlines so no two look stamped (round 7).
+ */
+export function markerVariant(source: string): number {
+  let h = 7;
+  for (const ch of plainAccent(source)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return h % MARKER_VARIANTS;
+}
+
 /** The plain sentence, for document titles, aria labels and anywhere markup can't go. */
 export function plainAccent(source: string): string {
   return source.replace(/[[\]~]/g, "");

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { groupAccent, parseAccent, plainAccent } from "./accent";
+import { MARKER_VARIANTS, groupAccent, markerVariant, parseAccent, plainAccent } from "./accent";
 import es from "../locales/es.json";
 import en from "../locales/en.json";
 
@@ -25,6 +25,12 @@ describe("accent › headline markup", () => {
     const g = groupAccent("Dando vida a ~marcas [globales.]~");
     expect(g.map((x) => x.mk)).toEqual([false, true]);
     expect(g[1]?.parts.map((p) => p.text)).toEqual(["marcas ", "globales."]);
+  });
+  it("a phrase always gets the same marker stroke, within the styled range", () => {
+    const v = markerVariant("Dando vida a ~marcas [globales.]~");
+    expect(v).toBe(markerVariant("Dando vida a ~marcas [globales.]~"));
+    expect(v).toBeGreaterThanOrEqual(0);
+    expect(v).toBeLessThan(MARKER_VARIANTS);
   });
   it("plainAccent strips the markup", () => {
     expect(plainAccent("construida ~a través del [tiempo.]~")).toBe("construida a través del tiempo.");

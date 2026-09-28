@@ -6,7 +6,7 @@
     <header class="case__head">
       <p class="eyebrow">{{ t("universal.number") }} · {{ t("universal.client") }}</p>
       <h3 class="case__title">
-        <span class="mask-line"><span><AccentText :text="t('universal.title')" /></span></span>
+        <span class="mask-line"><span><AccentText :text="t('universal.title')" :stroke="0" /></span></span>
       </h3>
       <p class="case__tags">{{ t("universal.tags") }}</p>
     </header>

@@ -6,7 +6,7 @@
     <header class="case__head">
       <p class="eyebrow">{{ t("mendel.number") }} · {{ t("mendel.client") }}</p>
       <h3 class="case__title">
-        <span class="mask-line"><span><AccentText :text="t('mendel.title')" /></span></span>
+        <span class="mask-line"><span><AccentText :text="t('mendel.title')" :stroke="3" /></span></span>
       </h3>
       <p class="case__tags">{{ t("mendel.tags") }}</p>
     </header>

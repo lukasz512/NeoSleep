@@ -7,7 +7,7 @@
     <header class="case__head">
       <p class="eyebrow">{{ t("privalia.number") }} · {{ t("privalia.client") }}</p>
       <h3 class="case__title">
-        <span class="mask-line"><span><AccentText :text="t('privalia.title')" /></span></span>
+        <span class="mask-line"><span><AccentText :text="t('privalia.title')" :stroke="2" /></span></span>
       </h3>
       <p class="case__tags">{{ t("privalia.tags") }}</p>
       <p v-reveal class="case__body">{{ t("privalia.body") }}</p>

@@ -122,14 +122,27 @@ export function progressThrough(top: number, height: number, viewport: number): 
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 
+/** Pen timing for a headline, from the ms elapsed since it came into view (see PEN_MS). */
+export function penTiming(elapsedMs: number): { write: number; draw: number } {
+  const w = clamp01((elapsedMs - PEN_MS.delay) / PEN_MS.write);
+  const drawFrom = PEN_MS.delay + PEN_MS.write + PEN_MS.gap;
+  const d = clamp01((elapsedMs - drawFrom) / PEN_MS.draw);
+  return { write: easeInOut(w), draw: easeOut(d) };
+}
+
 /**
- * Pen timing for a headline, from its "enter" progress (0 = top at the viewport bottom,
- * 1 = at the top): the accent word writes itself while the heading rises from 85 % to 50 % of
- * the screen, then the marker stroke is drawn from 55 % to 30 %. Always complete by the time the
- * heading sits in the upper third, so nobody reads a half-written word.
+ * Round 7 (Łukasz): time, not scroll. Once the heading has risen into view the pen writes the
+ * script word, and only then is the marker drawn: always one after the other, and always finished,
+ * so a word is never left half written when scrolling stops. `delay` lets the line reveal land first.
  */
-export function penTiming(enter: number): { write: number; draw: number } {
-  return { write: clamp01((enter - 0.15) / 0.35), draw: clamp01((enter - 0.45) / 0.25) };
+export const PEN_MS = { delay: 550, write: 1100, gap: 120, draw: 650 } as const;
+export const PEN_TOTAL_MS = PEN_MS.delay + PEN_MS.write + PEN_MS.gap + PEN_MS.draw;
+
+function easeInOut(t: number): number {
+  return t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+}
+function easeOut(t: number): number {
+  return 1 - (1 - t) ** 3;
 }
 
 /** Where a value sits between `from` and `to`, clamped to 0…1. */

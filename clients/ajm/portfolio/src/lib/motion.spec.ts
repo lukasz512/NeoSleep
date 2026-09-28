@@ -1,17 +1,29 @@
 import { describe, expect, it } from "vitest";
-import { parseReveal, penTiming, progressEntering, progressThrough, span01 } from "./motion";
+import { PEN_MS, PEN_TOTAL_MS, parseReveal, penTiming, progressEntering, progressThrough, span01 } from "./motion";
 
 describe("motion › pen timing", () => {
-  it("nothing is written while the heading is still low on the screen", () => {
-    expect(penTiming(0.1)).toEqual({ write: 0, draw: 0 });
+  it("nothing is written until the line has landed", () => {
+    expect(penTiming(0)).toEqual({ write: 0, draw: 0 });
+    expect(penTiming(PEN_MS.delay)).toEqual({ write: 0, draw: 0 });
   });
-  it("the word is written before the marker starts", () => {
-    const mid = penTiming(0.45);
-    expect(mid.write).toBeGreaterThan(0.8);
-    expect(mid.draw).toBe(0);
+  it("the marker never starts before the word is fully written (one after the other)", () => {
+    for (let ms = 0; ms <= PEN_TOTAL_MS; ms += 10) {
+      const t = penTiming(ms);
+      if (t.draw > 0) expect(t.write).toBe(1);
+    }
   });
-  it("both are complete once the heading is in the upper third", () => {
-    expect(penTiming(0.75)).toEqual({ write: 1, draw: 1 });
+  it("the word writes continuously forward", () => {
+    let last = 0;
+    for (let ms = 0; ms <= PEN_TOTAL_MS; ms += 10) {
+      const { write } = penTiming(ms);
+      expect(write).toBeGreaterThanOrEqual(last);
+      last = write;
+    }
+  });
+  it("both are complete within 2.5 s and stay complete", () => {
+    expect(PEN_TOTAL_MS).toBeLessThanOrEqual(2500);
+    expect(penTiming(PEN_TOTAL_MS)).toEqual({ write: 1, draw: 1 });
+    expect(penTiming(60_000)).toEqual({ write: 1, draw: 1 });
   });
   it("span01 maps and clamps", () => {
     expect(span01(5, 0, 10)).toBe(0.5);
