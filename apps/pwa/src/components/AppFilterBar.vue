@@ -197,8 +197,9 @@ function removeChip(def: FilterDefinition, value: string) {
 }
 
 .app-filter-bar__icon {
-  width: 24px;
-  height: 24px;
+  /* NEO-152: same 22 px as the list toolbar's other glyphs. */
+  width: 22px;
+  height: 22px;
   display: block;
   color: inherit;
 }

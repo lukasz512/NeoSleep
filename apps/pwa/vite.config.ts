@@ -34,9 +34,10 @@ interface NeoPwaOptions {
 function neoPwaPlugin(opts: NeoPwaOptions): ReturnType<typeof VitePWA> {
   const config: Partial<VitePWAOptions> = {
     registerType: "autoUpdate",
-    // Deferred, so the service-worker registration script in <head> never
-    // blocks the HTML parser (and with it the boot splash's first paint).
-    injectRegister: "script-defer",
+    // Registered from the app itself (src/boot/serviceWorkerUpdate.ts, NEO-125),
+    // which also reloads into a new deploy; the injected registerSW.js only
+    // registered and left people on the cached previous version.
+    injectRegister: false,
     // Real files in public/, generated from the brand icon by
     // scripts/generate-pwa-icons.mjs (NEO-87). Before they existed every icon
     // URL fell through to the SPA's index.html, so Chrome never offered
@@ -60,6 +61,11 @@ function neoPwaPlugin(opts: NeoPwaOptions): ReturnType<typeof VitePWA> {
       ],
     },
     workbox: {
+      // autoUpdate does not set these by itself (NEO-125): without them a new
+      // deploy's worker sits in "waiting" until every tab and the installed
+      // app are fully closed — on a phone, practically never.
+      skipWaiting: true,
+      clientsClaim: true,
       globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
       runtimeCaching: [
         { urlPattern: /^https?:\/\/.*\/api\//, handler: "NetworkOnly" },

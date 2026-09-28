@@ -1,0 +1,248 @@
+<title>{{TITLE}}</title>
+<base target="_blank">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#f6f8f8; --surface:#ffffff; --ink:#15201f; --muted:#5a6968; --line:#d9e2e1;
+  --accent:#0f6f6a; --accent-soft:#e2f1ef; --warn:#8a5a00; --warn-soft:#fff3d6; --ok:#1d7a3e; --ok-soft:#e5f4ea; --deny:#b3261e;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace; --sans:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  color-scheme:dark; --bg:#0f1515; --surface:#172020; --ink:#e3ecea; --muted:#94a5a3; --line:#2a3736;
+  --accent:#5cc2b9; --accent-soft:#18302e; --warn:#f0c46a; --warn-soft:#3a2e12; --ok:#7fd49a; --ok-soft:#173222; --deny:#f2968d;
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark; --bg:#0f1515; --surface:#172020; --ink:#e3ecea; --muted:#94a5a3; --line:#2a3736;
+  --accent:#5cc2b9; --accent-soft:#18302e; --warn:#f0c46a; --warn-soft:#3a2e12; --ok:#7fd49a; --ok-soft:#173222; --deny:#f2968d;
+}
+body{background:var(--bg);color:var(--ink);font:15px/1.55 var(--sans);padding-inline:16px;padding-block:24px 0}
+main{max-width:760px;margin:0 auto;display:grid;gap:28px;padding-bottom:120px}
+h1{font-size:26px;line-height:1.25;margin:0;text-wrap:balance;font-weight:600}
+h2{font-size:13px;margin:0;font:500 12px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+p{margin:0}
+.eyebrow{font:500 12px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.summary{font-size:16px}
+.context{margin:0;padding-left:18px;display:grid;gap:4px;color:var(--muted);font-size:14px}
+.links{display:flex;flex-wrap:wrap;gap:8px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);text-decoration:none;font:500 14px var(--sans);cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn:focus-visible,.opt input:focus-visible+span,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.section{display:grid;gap:14px}
+.q{display:grid;gap:10px;padding:16px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.q[data-answered="true"]{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.qhead{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:baseline}
+.qid{font:500 12px var(--mono);color:var(--accent);background:var(--accent-soft);padding:1px 7px;border-radius:6px}
+.qtext{font-weight:500;text-wrap:pretty}
+.qctx{font-size:13.5px;color:var(--muted);grid-column:2}
+.opts{display:grid;gap:6px}
+.opt{display:block;cursor:pointer}
+.opt input{position:absolute;opacity:0;pointer-events:none}
+.opt>span{display:grid;grid-template-columns:18px 1fr;gap:10px;align-items:start;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.opt>span::before{content:"";width:14px;height:14px;margin-top:4px;border:1.5px solid var(--muted);border-radius:50%;box-sizing:border-box}
+.opt input[type=checkbox]+span::before{border-radius:3px}
+.opt input:checked+span{border-color:var(--accent);background:var(--accent-soft)}
+.opt input:checked+span::before{border-color:var(--accent);background:var(--accent);box-shadow:inset 0 0 0 2.5px var(--accent-soft)}
+.olabel{font-weight:500}
+.odetail{display:block;font-size:13.5px;color:var(--muted)}
+.rec{display:inline-block;margin-left:6px;padding:0 7px;border-radius:99px;font:500 11px var(--mono);background:var(--ok-soft);color:var(--ok);vertical-align:1px}
+.qnote{font-size:13px;color:var(--muted)}
+.qnote summary{cursor:pointer;width:max-content}
+textarea{width:100%;box-sizing:border-box;min-height:70px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:14px/1.5 var(--sans);resize:vertical}
+.final textarea{min-height:130px;background:var(--surface)}
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px))}
+.bar-in{max-width:760px;margin:0 auto;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.progress{font:500 13px var(--mono);color:var(--muted);font-variant-numeric:tabular-nums;margin-right:auto}
+.status{flex-basis:100%;font-size:13.5px}
+.status.ok{color:var(--ok)} .status.err{color:var(--deny)}
+@media (prefers-reduced-motion:no-preference){.opt>span{transition:background .12s,border-color .12s}}
+</style>
+<main>
+  <header style="display:grid;gap:12px">
+    <div class="eyebrow" id="eyebrow"></div>
+    <h1 id="title"></h1>
+    <p class="summary" id="summary"></p>
+    <ul class="context" id="context"></ul>
+    <div class="links" id="links"></div>
+  </header>
+  <form id="form" novalidate></form>
+</main>
+<div class="bar">
+  <div class="bar-in">
+    <span class="progress" id="progress"></span>
+    <button type="button" class="btn" id="copy"></button>
+    <button type="button" class="btn primary" id="send"></button>
+    <p class="status" id="status" hidden></p>
+  </div>
+</div>
+<script type="application/json" id="form-data">{{DATA}}</script>
+<script>
+(() => {
+  const D = JSON.parse(document.getElementById("form-data").textContent);
+  const UI = Object.assign({
+    send: "Send to Claude", copy: "Copy answers", notesTitle: "Notes", notesPlaceholder: "Anything else Claude should know…",
+    questionNote: "Add a comment", other: "Other (describe in comment)", recommended: "recommended",
+    answered: "answered", sending: "Sending…", sent: "Sent. Claude continues in the VS Code thread and replies in the comments.",
+    copied: "Copied. Paste into the Claude chat.", copyFailed: "Copy was refused. Select the text below and copy it by hand.",
+    noClaude: "Sending to Claude is not available here. Use Copy answers and paste into the chat.",
+    consent: "Allow comments from this page, then press Send again.", failed: "Could not send",
+  }, D.ui || {});
+  const KEY = "decision-form:" + D.id;
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, attrs = {}, ...kids) => {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k === "text") n.textContent = v; else if (v !== false && v != null) n.setAttribute(k, v === true ? "" : v);
+    }
+    kids.flat().forEach((c) => c && n.append(c));
+    return n;
+  };
+
+  let state = { answers: {}, notes: {}, final: "" };
+  try { state = Object.assign(state, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch {}
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} };
+
+  $("eyebrow").textContent = [D.ticket, D.kind].filter(Boolean).join(" · ");
+  $("title").textContent = D.title;
+  $("summary").textContent = D.summary || "";
+  (D.context || []).forEach((c) => $("context").append(el("li", { text: c })));
+  (D.links || []).forEach((l) => $("links").append(el("a", { class: "btn", href: l.url, text: l.label })));
+  $("send").textContent = UI.send; $("copy").textContent = UI.copy;
+
+  const questions = [];
+  const form = $("form");
+  form.style.cssText = "display:grid;gap:28px";
+  for (const s of D.sections) {
+    const sec = el("section", { class: "section" }, el("h2", { text: s.title }));
+    for (const q of s.questions) {
+      questions.push(q);
+      const type = q.multi ? "checkbox" : "radio";
+      const opts = [...q.options];
+      if (q.allowOther !== false) opts.push({ id: "other", label: UI.other });
+      const box = el("div", { class: "q", id: "q-" + q.id },
+        el("div", { class: "qhead" },
+          el("span", { class: "qid", text: q.id }),
+          el("span", { class: "qtext", text: q.text }),
+          q.context ? el("span", { class: "qctx", text: q.context }) : null),
+        el("div", { class: "opts", role: q.multi ? "group" : "radiogroup", "aria-label": q.text },
+          opts.map((o) => {
+            const input = el("input", { type, name: "a-" + q.id, value: o.id, id: `a-${q.id}-${o.id}` });
+            const picked = [].concat(state.answers[q.id] || []);
+            input.checked = picked.includes(o.id);
+            input.addEventListener("change", () => {
+              const all = [...form.querySelectorAll(`input[name="a-${q.id}"]:checked`)].map((i) => i.value);
+              state.answers[q.id] = q.multi ? all : all[0];
+              if (!all.length) delete state.answers[q.id];
+              save(); refresh();
+            });
+            return el("label", { class: "opt", for: input.id }, input,
+              el("span", {}, el("span", {},
+                el("span", { class: "olabel", text: o.label }),
+                o.recommended ? el("span", { class: "rec", text: UI.recommended }) : null,
+                o.detail ? el("span", { class: "odetail", text: o.detail }) : null)));
+          })));
+      const ta = el("textarea", { id: "n-" + q.id, "aria-label": UI.questionNote + " " + q.id, maxlength: "600" });
+      ta.value = state.notes[q.id] || "";
+      ta.addEventListener("input", () => { state.notes[q.id] = ta.value; save(); });
+      const det = el("details", { class: "qnote" }, el("summary", { text: UI.questionNote }), ta);
+      if (ta.value) det.open = true;
+      box.append(det);
+      sec.append(box);
+    }
+    form.append(sec);
+  }
+  const fin = el("textarea", { id: "final-notes", placeholder: UI.notesPlaceholder, maxlength: "2000" });
+  fin.value = state.final || "";
+  fin.addEventListener("input", () => { state.final = fin.value; save(); });
+  form.append(el("section", { class: "section final" }, el("h2", { text: UI.notesTitle }), fin));
+  form.addEventListener("submit", (e) => e.preventDefault());
+
+  function refresh() {
+    let n = 0;
+    for (const q of questions) {
+      const a = state.answers[q.id];
+      const ok = Array.isArray(a) ? a.length > 0 : !!a;
+      if (ok) n++;
+      $("q-" + q.id).dataset.answered = ok;
+    }
+    $("progress").textContent = `${n}/${questions.length} ${UI.answered}`;
+  }
+  refresh();
+
+  // Plain-text answer sheet. Option ids + short labels keep it under the 4 KiB comment limit.
+  function sheet() {
+    const lines = [`[decision-form] ${D.id}${D.ticket ? " (" + D.ticket + ")" : ""}: ${D.title}`];
+    const skipped = [];
+    for (const q of questions) {
+      const picked = [].concat(state.answers[q.id] || []);
+      const note = (state.notes[q.id] || "").trim().replace(/\s+/g, " ");
+      if (!picked.length && !note) { skipped.push(q.id); continue; }
+      const labels = picked.map((id) => {
+        const o = q.options.find((x) => x.id === id);
+        return o ? `${id}) ${o.short || o.label}` : `${id})`;
+      });
+      lines.push(`${q.id} ${q.short || q.text.slice(0, 50)} → ${labels.join(" + ") || "—"}${note ? " | " + note : ""}`);
+    }
+    if (skipped.length) lines.push(`Skipped: ${skipped.join(", ")}`);
+    if (state.final.trim()) lines.push("", "Notes:", state.final.trim());
+    return lines.join("\n");
+  }
+  const bytes = (s) => new TextEncoder().encode(s).length;
+  function chunks(text, max = 3800) {
+    const out = []; let cur = "";
+    for (const line of text.split("\n")) {
+      const next = cur ? cur + "\n" + line : line;
+      if (bytes(next) > max && cur) { out.push(cur); cur = line; } else cur = next;
+    }
+    if (cur) out.push(cur);
+    return out;
+  }
+  function status(msg, kind) { const s = $("status"); s.hidden = false; s.textContent = msg; s.className = "status " + (kind || ""); }
+
+  $("copy").addEventListener("click", async () => {
+    const text = sheet();
+    try { await navigator.clipboard.writeText(text); status(UI.copied, "ok"); }
+    catch {
+      status(UI.copyFailed, "err");
+      let pre = $("fallback");
+      if (!pre) { pre = el("textarea", { id: "fallback", readonly: true }); $("status").after(pre); }
+      pre.value = text; pre.select();
+    }
+  });
+
+  let comments = null;
+  (async () => {
+    comments = await window.claude?.use?.("comments");
+    if (!comments) { $("send").disabled = true; $("send").title = UI.noClaude; return; }
+    try { if ((await comments.canSendToClaude()) !== "available") { $("send").title = UI.noClaude; } } catch {}
+  })();
+
+  $("send").addEventListener("click", async () => {
+    if (!comments) { status(UI.noClaude, "err"); return; }
+    const btn = $("send");
+    try {
+      if ((await comments.canSendToClaude()) !== "available") { status(UI.noClaude, "err"); return; }
+    } catch { status(UI.noClaude, "err"); return; }
+    btn.disabled = true; btn.textContent = UI.sending;
+    try {
+      const parts = chunks(sheet());
+      const anchor = await comments.anchorFor($("title"));
+      let threadId = null;
+      // Long sheets: earlier parts land as plain comments in one thread, the last part sends the thread to Claude.
+      for (let i = 0; i < parts.length - 1; i++) {
+        if (!threadId) threadId = (await comments.create({ anchor, text: parts[i] })).threadId;
+        else await comments.reply(threadId, parts[i]);
+      }
+      const last = parts[parts.length - 1];
+      await comments.sendToClaude(threadId ? { threadId, text: last } : { anchor, text: last });
+      status(UI.sent, "ok");
+      btn.textContent = UI.send;
+    } catch (e) {
+      const code = e && e.code;
+      status(code === "consent_required" ? UI.consent : `${UI.failed} (${code || "error"}). ${UI.noClaude}`, "err");
+      btn.textContent = UI.send;
+    } finally { btn.disabled = false; }
+  });
+})();
+</script>

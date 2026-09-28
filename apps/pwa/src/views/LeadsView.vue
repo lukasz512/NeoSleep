@@ -315,6 +315,7 @@ const leadsI18n = computed(() => ({
   add: "user.leads.add",
   emptyTitle: "user.leads.emptyTitle",
   emptySubtitle: "user.leads.emptySubtitle",
+  countNoun: "leads" as const,
   noResultsForCriteria: "user.leads.noResultsForCriteria",
   noResultsForCriteriaSubtitle: "user.leads.noResultsForCriteriaSubtitle",
   tableNoResults: "user.leads.table.noResults",

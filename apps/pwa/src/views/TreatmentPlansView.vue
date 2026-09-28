@@ -168,6 +168,7 @@ const listI18n = computed(() => ({
   add: "app.treatmentPlans.title",
   emptyTitle: "app.treatmentPlans.emptyTitle",
   emptySubtitle: "app.treatmentPlans.emptySubtitle",
+  countNoun: "devices" as const,
   noResultsForCriteria: "app.patients.noResultsForCriteria",
   noResultsForCriteriaSubtitle: "app.patients.noResultsForCriteriaSubtitle",
   tableNoResults: "app.treatmentPlans.table.noResults",

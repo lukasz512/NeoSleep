@@ -1,12 +1,16 @@
 <template>
   <div
     ref="rootEl"
-    class="app-segmented-tabs position-relative d-flex pa-2 pa-sm-1 rounded-pill"
-    :class="{ 'app-segmented-tabs--compact': compact, 'app-segmented-tabs--fit': fit }"
+    class="app-segmented-tabs position-relative d-flex"
+    :class="[
+      underline ? 'app-segmented-tabs--underline' : 'pa-2 pa-sm-1 rounded-pill',
+      { 'app-segmented-tabs--compact': compact, 'app-segmented-tabs--fit': fit },
+    ]"
     role="tablist"
   >
     <div
-      class="app-segmented-tabs__thumb position-absolute rounded-pill bg-primary"
+      class="app-segmented-tabs__thumb position-absolute bg-primary"
+      :class="underline ? 'rounded' : 'rounded-pill'"
       :style="thumbStyle"
       aria-hidden="true"
     />
@@ -61,6 +65,8 @@ const props = defineProps<{
   compact?: boolean;
   /** Tabs take their label's width instead of equal columns; the bar is only as wide as its tabs. */
   fit?: boolean;
+  /** NEO-153: flat row over a hairline with a sliding underline instead of the glass pill — detail views on desktop, where the tabs head a content column. */
+  underline?: boolean;
 }>();
 
 defineEmits<{
@@ -100,7 +106,7 @@ onMounted(() => {
 });
 onBeforeUnmount(() => resizeObserver?.disconnect());
 watch(
-  () => [props.modelValue, props.options, props.fit, props.compact],
+  () => [props.modelValue, props.options, props.fit, props.compact, props.underline],
   () => void nextTick(measure),
   { deep: true },
 );
@@ -148,8 +154,8 @@ watch(
   left: var(--seg-pad);
   box-shadow: 0 2px 8px rgba(var(--v-theme-primary), 0.35);
   transition:
-    transform 420ms var(--pwa-ease-spring, cubic-bezier(0.34, 1.2, 0.64, 1)),
-    width 420ms var(--pwa-ease-spring, cubic-bezier(0.34, 1.2, 0.64, 1));
+    transform 300ms var(--pwa-ease-spring, cubic-bezier(0.34, 1.2, 0.64, 1)),
+    width 300ms var(--pwa-ease-spring, cubic-bezier(0.34, 1.2, 0.64, 1));
   will-change: transform;
   pointer-events: none;
 }
@@ -190,6 +196,40 @@ watch(
 .app-segmented-tabs--fit .app-segmented-tabs__tab {
   flex: 0 0 auto;
   min-width: 88px;
+}
+
+/* NEO-153 underline: no glass container, a hairline under the row and a 2px
+   bar as the thumb. Declared after the pill + fit rules so it wins over both;
+   --seg-pad 0 because there is no container padding to inset from. */
+.app-segmented-tabs--underline {
+  --seg-pad: 0px;
+  background: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+.app-segmented-tabs--underline.app-segmented-tabs--fit {
+  width: 100%;
+}
+.app-segmented-tabs--underline .app-segmented-tabs__thumb {
+  top: auto;
+  bottom: -1px;
+  height: 2px;
+  box-shadow: none;
+}
+.app-segmented-tabs--underline .app-segmented-tabs__tab {
+  min-height: 44px;
+  border-radius: var(--pwa-radius, 8px) var(--pwa-radius, 8px) 0 0;
+}
+.app-segmented-tabs--underline .app-segmented-tabs__tab--active {
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-segmented-tabs__thumb {
+    transition: none;
+  }
 }
 
 .app-segmented-tabs__tab :deep(.v-btn__content) {

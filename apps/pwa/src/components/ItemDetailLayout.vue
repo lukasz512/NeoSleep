@@ -5,8 +5,21 @@
          the record's name, actions on the right. On desktop it replaces
          AppLayout's "← <Module>" page-header row (claimRecordHeader); on
          phones that row stays as the card's first line (NEO-108), so the
-         eyebrow is hidden there. The name is never truncated — it is the record's identity. -->
-    <header v-if="showRecordHeader" class="view-item__record-header">
+         eyebrow is hidden there. NEO-158: the name stays on one line — it
+         shrinks to fit, and only a very long one ends in "…" (useFitTitle). -->
+    <!-- NEO-158, phones: once this header scrolls away, a slim bar with the
+         name and the actions pins under the app bar. -->
+    <RecordStickyBar
+      v-if="showStickyBar"
+      :title="recordTitle ?? ''"
+      :header="recordHeaderEl"
+      :actions="headerActionsEl"
+    >
+      <template v-if="$slots['record-tile']" #avatar>
+        <slot name="record-tile" />
+      </template>
+    </RecordStickyBar>
+    <header v-if="showRecordHeader" ref="recordHeaderEl" class="view-item__record-header">
       <!-- A record with an identity (NEO-57) swaps the module tile for its
            avatar via #record-tile; the module icon is the fallback. -->
       <slot v-if="hasContent && $slots['record-tile']" name="record-tile" />
@@ -19,18 +32,26 @@
       <div class="view-item__record-text">
         <AppBreadcrumbs v-if="parentCrumb" class="view-item__eyebrow" :items="[parentCrumb]" />
         <div class="view-item__record-title-row">
-          <h1 v-if="hasContent" class="view-item__record-title">{{ recordTitle }}</h1>
-          <h1 v-else-if="preview" class="view-item__record-title">{{ preview.title }}</h1>
+          <h1 v-if="hasContent" ref="recordTitleEl" class="view-item__record-title">{{ recordTitle }}</h1>
+          <h1 v-else-if="preview" ref="recordTitleEl" class="view-item__record-title">{{ preview.title }}</h1>
           <span v-else class="view-item__record-title-skeleton" aria-hidden="true" />
           <slot v-if="hasContent" name="title-extra" />
         </div>
         <!-- NEO-57's quiet identity line under the name ("F · 47 y", "Dentist · Clinic"). -->
         <div v-if="hasContent && $slots['record-details']" class="view-item__record-details">
-          <slot name="record-details" />
+          <IdentityDetailsWrapScope><slot name="record-details" /></IdentityDetailsWrapScope>
+        </div>
+        <!-- NEO-152: while loading, the identity line and the actions keep
+             their place as skeletons, so the header doesn't grow when they arrive. -->
+        <div v-else-if="!hasContent && detailsSkeleton" class="view-item__record-details view-item__record-details--skeleton" aria-hidden="true">
+          <span class="view-item__skeleton-bar" data-testid="record-details-skeleton" />
         </div>
       </div>
-      <div v-if="hasContent && $slots['header-actions']" class="view-item__header-actions">
+      <div v-if="hasContent && $slots['header-actions']" ref="headerActionsEl" class="view-item__header-actions">
         <slot name="header-actions" />
+      </div>
+      <div v-else-if="!hasContent && actionSkeletons > 0" class="view-item__header-actions view-item__header-actions--skeleton" aria-hidden="true" data-testid="record-actions-skeleton">
+        <span v-for="n in actionSkeletons" :key="n" class="view-item__action-skeleton" />
       </div>
     </header>
     <!-- NEO-55 row for views without a record header (and for not-found /
@@ -53,16 +74,24 @@
       </Teleport>
     </div>
     <slot v-if="hasContent && $slots.body" name="body" />
-    <div v-else-if="hasContent" class="view-item__card">
-      <slot v-if="!showRecordHeader" name="title">
-        <h1 v-if="title" class="view-item__title">{{ title }}</h1>
-      </slot>
-      <div v-if="$slots.sections" class="view-item__sections">
-        <slot name="sections" />
+    <div v-else-if="hasContent" class="view-item__card" :class="{ 'view-item__card--with-aside': showAside }">
+      <div class="view-item__main">
+        <slot v-if="!showRecordHeader" name="title">
+          <h1 v-if="title" class="view-item__title">{{ title }}</h1>
+        </slot>
+        <div v-if="$slots.sections" class="view-item__sections">
+          <slot name="sections" />
+        </div>
+        <div v-if="$slots.actions" class="view-item__actions">
+          <slot name="actions" />
+        </div>
       </div>
-      <div v-if="$slots.actions" class="view-item__actions">
-        <slot name="actions" />
-      </div>
+      <!-- NEO-153: optional side panel next to the tabs, from 1280px; below
+           that it is not mounted at all (so it fetches nothing there) and its
+           content stays reachable through the tabs. -->
+      <aside v-if="showAside" class="view-item__aside">
+        <slot name="aside" />
+      </aside>
     </div>
     <div v-else-if="!loading && loadError" class="view-item__state-wrap">
       <AppStateView :title="loadErrorTitle" :subtitle="loadErrorSubtitle">
@@ -102,7 +131,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, watchEffect } from "vue";
+import { computed, onBeforeUnmount, ref, useSlots, watchEffect } from "vue";
+import { useMediaQuery } from "@vueuse/core";
 import { useI18n } from "vue-i18n";
 import { useRoute, type RouteLocationRaw } from "vue-router";
 import { AppStateView, useErrorText } from "@ui";
@@ -113,6 +143,9 @@ import { recordPreviewFor } from "../composables/useRecordPreview";
 import AppLoadingState from "./AppLoadingState.vue";
 import AppRecordSkeleton from "./AppRecordSkeleton.vue";
 import AppBreadcrumbs from "./AppBreadcrumbs.vue";
+import RecordStickyBar from "./RecordStickyBar.vue";
+import { IdentityDetailsWrapScope } from "./identityDetailsWrap";
+import { useFitTitle } from "../composables/useFitTitle";
 import type { BreadcrumbItem } from "./AppBreadcrumbs.types";
 import type { AppIconName } from "./AppIcon.vue";
 import { navTitleKey, navIconName } from "../router/routes";
@@ -161,7 +194,11 @@ const props = withDefaults(defineProps<{
   recordTitle?: string;
   /** Tile icon override — e.g. the org-type icon for an HCO (NEO-18). Defaults to the module icon. */
   recordIcon?: AppIconName;
-}>(), { title: "", loadError: false, loadErrorCause: undefined, recordTitle: undefined, recordIcon: undefined });
+  /** How many header actions the loaded record shows — the loading header keeps that many placeholders (NEO-152). 0 = none. */
+  actionSkeletons?: number;
+  /** Whether the loaded record has an identity line (#record-details) — the loading header keeps its place (NEO-152). */
+  detailsSkeleton?: boolean;
+}>(), { title: "", loadError: false, loadErrorCause: undefined, recordTitle: undefined, recordIcon: undefined, actionSkeletons: 3, detailsSkeleton: true });
 
 const describeError = useErrorText();
 const loadErrorText = computed(() => (props.loadErrorCause == null ? null : describeError(props.loadErrorCause)));
@@ -198,6 +235,22 @@ const showRecordHeader = computed(
 
 // While the record header is shown it replaces AppLayout's desktop
 // "← <Module>" page-header row (NEO-55) — the eyebrow link is the way back.
+/** NEO-153: the #aside panel needs room for the 720px column plus itself, so
+ *  it follows the breakpoint only — a large landscape tablet gets it too. */
+const slots = useSlots();
+const isWide = useMediaQuery("(min-width: 1280px)");
+const showAside = computed(() => !!slots.aside && isWide.value);
+
+// NEO-158: the name on one line, the identity line under it wrapping between
+// its parts ("Pulmonologist ·" / "Klinika Testowa") rather than mid-name.
+const recordHeaderEl = ref<HTMLElement | null>(null);
+const recordTitleEl = ref<HTMLElement | null>(null);
+const headerActionsEl = ref<HTMLElement | null>(null);
+useFitTitle(recordTitleEl, computed(() => props.recordTitle ?? preview.value?.title));
+
+const isPhone = useMediaQuery("(max-width: 767.98px)");
+const showStickyBar = computed(() => isPhone.value && showRecordHeader.value && props.hasContent);
+
 const recordHeaderClaim = useRecordHeaderClaim();
 watchEffect(() => {
   recordHeaderClaim.value = showRecordHeader.value;
@@ -231,6 +284,46 @@ defineEmits<{
 .view-item__header-actions {
   flex-shrink: 0;
   margin-left: auto;
+}
+
+/* NEO-152: the record's actions read like the list toolbar above it — the
+   same 56 px buttons 8 px apart with 22 px glyphs, the last one on the same
+   right edge. */
+.view-item__record-header > .view-item__header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  /* Centred on the name, not on the whole text block: the eyebrow (16 px)
+     + 4 px gap + half the 32 px name row = 36 px, minus half a 56 px button. */
+  align-self: flex-start;
+  margin-top: 8px;
+}
+.view-item__action-skeleton {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.view-item__action-skeleton::before {
+  content: "";
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: rgba(var(--v-theme-on-surface), 0.08);
+}
+.view-item__record-details--skeleton {
+  display: flex;
+  align-items: center;
+  height: 1.3125rem;
+}
+.view-item__skeleton-bar {
+  display: block;
+  width: 160px;
+  max-width: 60%;
+  height: 0.75rem;
+  border-radius: 6px;
+  background: rgba(var(--v-theme-on-surface), 0.08);
 }
 
 /* NEO-56 record header. */
@@ -271,22 +364,33 @@ defineEmits<{
 .view-item__record-title-row {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: var(--space-2, 8px) var(--space-3, 12px);
   min-height: 2rem;
+  min-width: 0;
+}
+/* A badge next to the name ("Invited") keeps its size; the name gives way. */
+.view-item__record-title-row > :not(.view-item__record-title) {
+  flex-shrink: 0;
 }
 
+/* NEO-158: one line, always. useFitTitle shrinks a long name to fit (down to
+   18 px); only past that does it end in "…". */
 .view-item__record-title {
+  flex: 0 1 auto;
+  min-width: 0;
   margin: 0;
   font-size: 1.5rem;
   line-height: 1.2;
   font-weight: 600;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
 }
 
 .view-item__record-details {
   font-size: 0.875rem;
+  min-width: 0;
 }
 
 .view-item__record-title-skeleton {
@@ -298,7 +402,9 @@ defineEmits<{
   background: rgba(var(--v-theme-on-surface), 0.08);
 }
 @media (prefers-reduced-motion: no-preference) {
-  .view-item__record-title-skeleton {
+  .view-item__record-title-skeleton,
+  .view-item__skeleton-bar,
+  .view-item__action-skeleton::before {
     animation: view-item-pulse 1.4s ease-in-out infinite;
   }
   @keyframes view-item-pulse {
@@ -306,35 +412,44 @@ defineEmits<{
   }
 }
 
-/* Phone (Salesforce Mobile pattern): tile + actions on the first row, the
-   name on its own full-width row below — three 56px actions next to the name
-   would otherwise wrap even a short name onto two lines. */
+/* Phone (NEO-152): the same header as on desktop — tile, then the "MODULE ›"
+   link over the name over the identity line — so a record looks the same
+   everywhere and the avatar lands in the same place when it flies in from
+   the list. The link is the way back (AppLayout drops its "← Module" row on
+   phones too). Only the actions move: three 56 px buttons beside the name
+   would squeeze it, so they wrap onto their own row under the header. */
 @media (max-width: 767.98px) {
+  /* NEO-158: sized from 0, not from its one-line name — otherwise a long name
+     makes the text block wrap under the avatar instead of shrinking beside it. */
+  .view-item__record-header > .view-item__record-text {
+    flex-basis: 0;
+  }
   .view-item__record-header {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    grid-template-rows: minmax(56px, auto) auto auto;
-    grid-template-areas:
-      "tile . actions"
-      "title title title"
-      "details details details";
-    align-items: center;
+    flex-wrap: wrap;
     column-gap: var(--space-3, 12px);
-    /* NEO-115 (4 px grid): tile → name 12, name → meta 4, meta → tabs 16. */
-    row-gap: 0;
+    row-gap: var(--space-3, 12px);
     min-height: 0;
     margin-bottom: var(--space-4, 16px);
   }
-  .view-item__record-header .view-item__record-title-row { margin-top: var(--space-3, 12px); }
-  .view-item__record-header .view-item__record-details { margin-top: var(--space-1, 4px); }
-  .view-item__record-header .view-item__tile,
-  .view-item__record-header > .app-avatar { grid-area: tile; }
-  .view-item__record-header .view-item__record-text { display: contents; }
-  /* AppLayout's page-header row already shows "← <Module>" above it on phones (NEO-108). */
-  .view-item__record-header .view-item__eyebrow { display: none; }
-  .view-item__record-header .view-item__record-title-row { grid-area: title; }
-  .view-item__record-header .view-item__record-details { grid-area: details; }
-  .view-item__record-header .view-item__header-actions { grid-area: actions; }
+  /* 48 px buttons on their own row, on the right like the phone list's
+     toolbar: the last button ends on the card's content edge. */
+  .view-item__record-header > .view-item__header-actions {
+    order: 3;
+    flex: 1 0 100%;
+    justify-content: flex-end;
+    align-self: auto;
+    margin: 0;
+  }
+  .view-item__header-actions :deep(.v-btn--icon.v-btn--size-large),
+  .view-item__action-skeleton {
+    width: 48px;
+    height: 48px;
+  }
+  /* A 44 px tall touch target around the small link, without growing the line. */
+  .view-item__record-header .view-item__eyebrow {
+    padding-block: 12px;
+    margin-block: -12px;
+  }
   .view-item__tile {
     width: 40px;
     height: 40px;
@@ -370,6 +485,28 @@ defineEmits<{
   border: none;
 }
 
+.view-item__main {
+  min-width: 0;
+}
+
+/* NEO-153: 720px content column (DetailViewTabs caps itself there) + a 320px
+   side panel that stays in view while the column scrolls. */
+.view-item__card--with-aside {
+  display: grid;
+  grid-template-columns: minmax(0, 720px) 320px;
+  gap: var(--space-8, 32px);
+  align-items: start;
+}
+
+.view-item__aside {
+  position: sticky;
+  top: var(--space-4, 16px);
+  /* A tall panel scrolls inside itself instead of hanging below the fold. */
+  max-height: calc(100dvh - var(--space-8, 32px));
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
 .view-item__title {
   margin: 0 0 var(--space-6, 24px) 0;
   font-size: 1.5rem;
@@ -390,9 +527,21 @@ defineEmits<{
 /* Slot content (sections) uses these classes; :deep so they apply. */
 .view-item__card :deep(.view-item__row) {
   display: grid;
-  grid-template-columns: 140px 1fr;
+  /* minmax(0, …): a long unbreakable value (an e-mail) must wrap, never widen
+     the page — on a phone that zooms the whole screen out (NEO-158). */
+  grid-template-columns: 140px minmax(0, 1fr);
   gap: 12px;
   align-items: baseline;
+}
+/* NEO-158: on the smallest phones (SE, 320–360 px) a 140 px label column
+   leaves the value ~100 px — a clinic name took six lines. The label goes
+   above its value instead. */
+@media (max-width: 374.98px) {
+  .view-item__card :deep(.view-item__row) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+    margin-bottom: var(--space-2, 8px);
+  }
 }
 
 .view-item__card :deep(.view-item__label) {
@@ -418,6 +567,8 @@ defineEmits<{
 
 .view-item__card :deep(.view-item__value) {
   margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: 0.9375rem;
   color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
 }
@@ -491,8 +642,8 @@ defineEmits<{
 }
 
 .view-item__header-actions :deep(.view-item__action-icon) {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   display: block;
   color: inherit !important;
   stroke: currentColor !important;
@@ -533,7 +684,7 @@ defineEmits<{
    fade in instead of popping in. */
 .view-item__record-details,
 .view-item__record-header > .view-item__header-actions,
-.view-item > :not(.view-item__record-header, .view-item__header-row) {
+.view-item > :not(.view-item__record-header, .view-item__header-row, .record-bar-home) {
   animation: view-item-fade-in 220ms cubic-bezier(0, 0, 0.2, 1) both;
 }
 @keyframes view-item-fade-in {
@@ -544,7 +695,7 @@ defineEmits<{
 @media (prefers-reduced-motion: reduce) {
   .view-item__record-details,
   .view-item__record-header > .view-item__header-actions,
-  .view-item > :not(.view-item__record-header, .view-item__header-row) {
+  .view-item > :not(.view-item__record-header, .view-item__header-row, .record-bar-home) {
     animation: none;
   }
 }

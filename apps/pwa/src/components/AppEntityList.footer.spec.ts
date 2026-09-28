@@ -6,12 +6,20 @@ import path from "node:path";
 describe("AppEntityList table footer (NEO-121)", () => {
   const css = readFileSync(path.resolve(__dirname, "AppEntityList.css"), "utf-8");
 
-  it("runs the table 16 px into the sheet padding so cell content sits on the page title's line", () => {
-    expect(css).toMatch(/\.app-entity-list__table-wrap:not\(\.app-entity-list__table-wrap--flat\)\s*\{\s*margin-inline: -16px;/);
+  // NEO-152: out to the card's edges (the whole sheet padding), the skeleton too.
+  it("runs the table (and its skeleton) through the sheet padding to the card's edges", () => {
+    expect(css).toMatch(
+      /\.app-entity-list__table-wrap:not\(\.app-entity-list__table-wrap--flat\),\s*\.app-entity-list__skeleton:not\(\.app-entity-list__skeleton--mobile\)\s*\{\s*margin-inline: calc\(-1 \* var\(--layout-card-inset, 16px\)\);/,
+    );
+  });
+
+  it("pads the outer cells by the card inset so content stays on the page title's line", () => {
+    expect(css).toMatch(/> tr > :first-child\) \{\s*padding-inline-start: var\(--layout-card-inset, 16px\);/);
+    expect(css).toMatch(/> tr > :last-child\) \{\s*padding-inline-end: var\(--layout-card-inset, 16px\);/);
   });
 
   it("is one 48 px row, 8 px below the rows, 14 px text", () => {
-    expect(css).toMatch(/:deep\(\.v-data-table-footer\) \{\s*min-height: 48px;\s*margin-top: var\(--space-2, 8px\);\s*padding: 0 16px;/);
+    expect(css).toMatch(/:deep\(\.v-data-table-footer\) \{\s*min-height: 48px;\s*margin-top: var\(--space-2, 8px\);\s*padding: 0 var\(--layout-card-inset, 16px\);/);
     expect(css).toMatch(/font-size: 0\.875rem;\s*font-variant-numeric: tabular-nums;/);
   });
 

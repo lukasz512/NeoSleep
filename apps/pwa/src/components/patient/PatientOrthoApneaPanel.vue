@@ -129,6 +129,7 @@ import EntityLink from "../EntityLink.vue";
 import { useIdentity } from "../../composables/useIdentity";
 import { hcpDetailLink } from "../../utils/entityLinks";
 import { apiFetch } from "../../composables/useApi";
+import { isDraftTreatmentPlan, treatmentPlanStatusColor, treatmentPlanStatusLabel } from "../../utils/treatmentPlanStatus";
 import { useNotifications } from "../../composables/useNotifications";
 import { useAuthStore } from "../../stores/auth";
 import OrthoApneaOrderWizard, { type OrthoApneaDraftPlan } from "./OrthoApneaOrderWizard.vue";
@@ -159,7 +160,7 @@ interface TreatmentPlanItem {
  * persistDraft() for how it gets there, and onConfirm() for how the
  * `orthoapneaDraft` marker gets cleared once a real order goes out. */
 function isDraft(plan: TreatmentPlanItem): boolean {
-  return !!plan.metadata?.orthoapneaDraft;
+  return isDraftTreatmentPlan(plan);
 }
 
 const { t } = useI18n();
@@ -266,19 +267,11 @@ async function loadPlans() {
 }
 
 function statusColor(status: string): string {
-  switch (status) {
-    case "completed": return "success";
-    case "in_progress":
-    case "patient_notified": return "info";
-    case "cancelled": return "default";
-    case "on_hold": return "warning";
-    default: return "warning";
-  }
+  return treatmentPlanStatusColor(status);
 }
 
 function statusLabel(status: string): string {
-  const key = `app.treatmentPlans.status.${status.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase())}`;
-  return t(key);
+  return treatmentPlanStatusLabel(t, status);
 }
 
 /** Only drafts are clickable — resumes the wizard where it was left off. A

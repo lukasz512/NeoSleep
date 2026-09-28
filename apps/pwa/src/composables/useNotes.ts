@@ -1,5 +1,5 @@
 import { reportCaught, reportFailedResponse } from "@api";
-import { ref } from "vue";
+import { getCurrentScope, onScopeDispose, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { apiFetch } from "./useApi";
 import { useNotifications } from "./useNotifications";
@@ -12,6 +12,17 @@ export interface NoteItem {
   author_name: string | null;
   body: string;
   created_at: string;
+}
+
+/** Fired on window after a note is added or deleted, so every other useNotes
+ *  instance showing the same record reloads (NEO-153: the desktop side panel
+ *  and the Notes tab are mounted side by side). */
+const NOTES_CHANGED_EVENT = "notes-changed";
+
+interface NotesChangedDetail {
+  entityType: string;
+  entityId: string;
+  source: symbol;
 }
 
 /**
@@ -29,6 +40,19 @@ export function useNotes(entityType: string, entityId: () => string | undefined)
   const loadError = ref(false);
   /** The error behind loadError (NEO-81) — lets the error state say offline vs. server problem. */
   const loadFailure = ref<unknown>(null);
+
+  const instance = Symbol("useNotes");
+  function announceChange(id: string): void {
+    const detail: NotesChangedDetail = { entityType, entityId: id, source: instance };
+    window.dispatchEvent(new CustomEvent<NotesChangedDetail>(NOTES_CHANGED_EVENT, { detail }));
+  }
+  function onNotesChanged(event: Event): void {
+    const { detail } = event as CustomEvent<NotesChangedDetail>;
+    if (detail.source === instance || detail.entityType !== entityType || detail.entityId !== entityId()) return;
+    void loadNotes();
+  }
+  window.addEventListener(NOTES_CHANGED_EVENT, onNotesChanged);
+  if (getCurrentScope()) onScopeDispose(() => window.removeEventListener(NOTES_CHANGED_EVENT, onNotesChanged));
 
   async function loadNotes(): Promise<void> {
     const id = entityId();
@@ -71,6 +95,7 @@ export function useNotes(entityType: string, entityId: () => string | undefined)
       });
       if (res.ok) {
         notifications.show(t("app.notes.addSuccess"), "success", undefined, { icon: "pencil" });
+        announceChange(id);
         await loadNotes();
         return true;
       }
@@ -83,10 +108,12 @@ export function useNotes(entityType: string, entityId: () => string | undefined)
   }
 
   async function deleteNote(noteId: string): Promise<boolean> {
+    const id = entityId();
     try {
       const res = await apiFetch(`/api/v1/note/${noteId}`, { method: "DELETE", handleErrors: false });
       if (res.ok) {
         notes.value = notes.value.filter((n) => n.id !== noteId);
+        if (id) announceChange(id);
         notifications.show(t("app.notes.deleteSuccess"), "success", undefined, { icon: "pencil" });
         return true;
       }
