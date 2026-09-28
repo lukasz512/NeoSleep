@@ -96,14 +96,20 @@
             variant="tonal"
             :loading="emailing"
             :aria-label="t('app.clinical.email.send')"
+            :title="t('app.clinical.email.send')"
             @click="sendByEmail"
           >
-            <template #prepend><AppIcon name="mail" /></template>
-            <span class="studies__btn-label">{{ t("app.clinical.email.send") }}</span>
+            <AppIcon name="mail" />
           </AppButton>
-          <AppButton class="studies__compact-btn studies__add" color="success" variant="tonal" :aria-label="t('app.clinical.addStudy')" @click="openUpload(null)">
-            <template #prepend><AppIcon name="plus" class="studies__add-icon" /></template>
-            <span class="studies__btn-label">{{ t("app.clinical.addStudy") }}</span>
+          <AppButton
+            class="studies__compact-btn studies__add"
+            color="success"
+            variant="tonal"
+            :aria-label="t('app.clinical.addStudy')"
+            :title="t('app.clinical.addStudy')"
+            @click="openUpload(null)"
+          >
+            <AppIcon name="plus" class="studies__add-icon" />
           </AppButton>
         </div>
       </header>
@@ -769,11 +775,11 @@ watch(() => props.focusItem, (key) => highlightItem(key));
   justify-content: space-between;
   gap: 12px 24px;
 }
-/* NEO-127: full width on phone (the header wraps, the bar gets its own line); capped beside the buttons on wider screens. */
+/* NEO-127: full width on phone (the header wraps, the bar gets its own line); capped beside the buttons on desktop. */
 .studies__progress {
   flex: 1 1 260px;
 }
-@media (min-width: 600px) {
+@media (min-width: 1025px) {
   .studies__progress {
     max-width: 360px;
   }
@@ -784,33 +790,25 @@ watch(() => props.focusItem, (key) => highlightItem(key));
   align-items: center;
   gap: 8px;
 }
-/* Every header button is one height — the QR status button sets the same token. */
+/* NEO-127: email and "add study" are square icon buttons everywhere (the
+   aria-label and hover title keep the name); the QR status matches the corners. */
 .studies__compact-btn {
-  height: var(--pwa-btn-min-height, 40px) !important;
+  flex: none;
+  width: var(--pwa-btn-min-height, 44px);
+  height: var(--pwa-btn-min-height, 44px) !important;
+  min-width: 0 !important;
+  padding-inline: 0 !important;
+  border-radius: var(--pwa-radius) !important;
+}
+.studies__header .studies__qr {
+  border-radius: var(--pwa-radius);
 }
 .studies__add-icon {
   stroke-width: 2.6;
 }
-/* Phone and tablet: email and "add study" shrink to 44px round icon buttons
-   (their aria-label keeps the name) instead of wrapping to a new line. */
-@media (max-width: 1279px) {
-  .studies__compact-btn {
-    flex: none;
-    width: var(--pwa-btn-min-height, 44px);
-    min-width: 0 !important;
-    padding-inline: 0 !important;
-  }
-  .studies__compact-btn .studies__btn-label {
-    display: none;
-  }
-  .studies__compact-btn :deep(.v-btn__prepend) {
-    margin: 0;
-  }
-}
-/* Tablet (NEO-127): bar, QR status and the icon buttons on one line; on a
-   narrow tablet the QR label is cut with "…" rather than wrapping. Desktop
-   (≥1280px) keeps the labelled buttons. */
-@media (min-width: 601px) and (max-width: 1279px) {
+/* Tablet and desktop: bar, QR status and the icon buttons on one line; on a
+   narrow tablet the QR label is cut with "…" rather than wrapping. */
+@media (min-width: 601px) {
   .studies__header {
     flex-wrap: nowrap;
   }
