@@ -241,6 +241,12 @@ Not yet: Privalia timeline, Mendel reel, Capacidades, Cómo trabajamos, Clientes
 - The entry follows the theme: paper on light, charcoal on dark.
 - Proposals in the Artifact, awaiting a choice: 3 pen fonts, 2 Planeta gallery layouts (no horizontal scroll), 3 objects for the gap before Clientes.
 
+## Round 6 (2026-09-28)
+
+- Decisions: F1 = Italianno as the pen font; G3 = Planeta as an index with a sticky stage (the event in the middle of the screen drives the stage; the phone shows the stage above the list); O1 = the AJ monogram drawn by scroll before Clientes; E3 = Łukasz is getting the missing photos.
+- Photo audit: the renamed neon1-8 set is the eFashion Day 2019 set, so the neon lounge joined 2019 and the separate Privalia chapter was dropped. platena1-6 are re-exports of existing Planeta photos, which confirms Vesubio is Planeta.
+- Still hidden (fewer than 2 photos): Hugo Boss × Privalia and «Algún día, hoy».
+
 ## Next (remaining)
 
 Scaffold `clients/ajm/portfolio` (Vite + Vue + TS, GSAP/Lenis, own ES/EN locales, lint rule blocking `@neo/*`), then build the vertical slice: entry (QR + link) → hero montage → Qué hacemos → Universal walk-through, in ES + EN, weak-network rules on.
