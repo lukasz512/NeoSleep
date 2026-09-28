@@ -51,11 +51,17 @@ describe("leadFormFields", () => {
     expect(typeof countryCode.default).toBe("function");
   });
 
-  it("exposes only Identity + institution + licence number + diagnosis + hidden status/region/country_code/type — nothing else", () => {
+  it("exposes only Identity + institution + licence number + diagnosis + type + channel + hidden status/region/country_code — nothing else", () => {
     expect(leadFormFields.map((f) => f.key)).toEqual([
       "salutation", "first_name", "last_name", "email", "phone",
-      "institution", "pwz", "cedula", "diagnosis", "type", "status", "region", "country_code",
+      "institution", "pwz", "cedula", "diagnosis", "type", "source", "status", "region", "country_code",
     ]);
+  });
+
+  it("requires the channel, one option per known lead source (NEO-155)", () => {
+    const source = leadFormFields.find((f) => f.key === "source")!;
+    expect(source.required).toBe(true);
+    expect(Array.isArray(source.options) && source.options.map((o) => o.value)).toEqual(["website", "social", "whatsapp", "phone", "referral", "event"]);
   });
 
   it("licence number fields show only for doctor leads in the matching country (NEO-51)", () => {

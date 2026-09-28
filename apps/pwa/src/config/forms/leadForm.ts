@@ -4,6 +4,7 @@ import { identityFields } from "./identityFields";
 import { licenseNumberFields } from "./licenseNumberFields";
 import { inSection } from "./sections";
 import { i18n } from "../../plugins/i18n";
+import { LEAD_SOURCES } from "../../utils/leadSource";
 
 /**
  * Lead entity config for the generic FormRenderer. A Lead is deliberately
@@ -79,6 +80,17 @@ export const leadFormFields: FormFieldDef[] = [
     // defaulting to 'other', which silently hid both those actions on every
     // newly created lead until a rep manually switched the dropdown.
     default: "doctor",
+    cols: 12,
+  },
+  // NEO-155: every lead names the channel it came in through — its icon is
+  // the badge on the lead's avatar. Values = LEAD_SOURCES (utils/leadSource.ts).
+  {
+    key: "source",
+    section: "status",
+    type: "select",
+    labelKey: "user.leads.form.source",
+    options: LEAD_SOURCES.map((value) => ({ title: `user.leads.source.${value}`, value })),
+    required: true,
     cols: 12,
   },
   {

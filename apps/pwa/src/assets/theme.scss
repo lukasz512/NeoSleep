@@ -4,6 +4,9 @@
  * Can be overridden from admin later.
  * Design tokens: foundation/docs/DESIGN_AND_UI.md.
  */
+@use "sass:list";
+@use "sass:map";
+@use "sass:math";
 @use "./scss/brand-colors" as brand;
 
 $pwa-breakpoint-mobile: 768px;
@@ -49,11 +52,37 @@ $pwa-fib-t-xl: 233ms;
 $pwa-fib-t-2xl: 377ms;
 $pwa-fib-t-3xl: 987ms;
 
-/* Name-seeded avatar palette (NEO-155): AppAvatar picks one of these hues
-   by a hash of the person's name (utils/avatarHue.ts — keep
-   AVATAR_HUE_COUNT equal to this list's length). Same saturation/lightness
-   per theme, so every tint has the same initials contrast. */
-$pwa-avatar-hues: 4, 28, 48, 95, 150, 190, 222, 262, 300, 335;
+/* Avatar color families, "quiet + accent" (NEO-155, Łukasz's pick
+   2026-09-28): everything lives in the desk's greys and only patients carry
+   the brand teal, so the eye lands on the person under care. Each family is
+   a list of (hue, saturation) tints; AppAvatar picks one by a hash of the
+   name (org: by organization type) — utils/avatarHue.ts, keep
+   AVATAR_FAMILY_SIZES equal to these list lengths. Lightness is shared per
+   family and theme, so every tint has the same initials contrast. Leads use
+   only the fg (outline, no fill). */
+$pwa-avatar-families: (
+  patient: ((172, 55), (178, 50), (166, 45), (184, 45)),
+  doctor: ((205, 14), (215, 12), (195, 12)),
+  org: ((35, 16), (28, 14), (42, 14), (20, 12), (48, 12)),
+  lead: ((172, 45), (178, 40)),
+  person: ((150, 5), (200, 5), (30, 5)),
+);
+/* (background lightness, initials lightness) per family. */
+$pwa-avatar-light: (patient: (90, 30), doctor: (92, 26), org: (91, 30), lead: (96, 32), person: (93, 34));
+$pwa-avatar-dark: (patient: (24, 72), doctor: (23, 78), org: (22, 76), lead: (16, 74), person: (22, 74));
+
+@mixin pwa-avatar-tokens($lightness) {
+  @each $family, $tints in $pwa-avatar-families {
+    $l: map.get($lightness, $family);
+    @for $i from 1 through list.length($tints) {
+      $tint: list.nth($tints, $i);
+      $h: list.nth($tint, 1);
+      $s: list.nth($tint, 2);
+      --pwa-avatar-#{$family}-#{$i - 1}-bg: hsl(#{$h} #{$s}% #{list.nth($l, 1)}%);
+      --pwa-avatar-#{$family}-#{$i - 1}-fg: hsl(#{$h} #{math.min($s + 15, 90)}% #{list.nth($l, 2)}%);
+    }
+  }
+}
 
 :root {
   --pwa-fib-xs: #{$pwa-fib-xs};
@@ -136,13 +165,11 @@ $pwa-avatar-hues: 4, 28, 48, 95, 150, 190, 222, 262, 300, 335;
   --pwa-identity-org-soft: rgba(160, 120, 40, 0.1);
   --pwa-identity-person: #56625f;
   --pwa-identity-person-soft: rgba(40, 60, 58, 0.07);
-  /* Lead: dashed ring around the avatar (NEO-155) — not a patient yet. */
-  --pwa-identity-lead: #7a4fc4;
-  @each $hue in $pwa-avatar-hues {
-    $i: index($pwa-avatar-hues, $hue) - 1;
-    --pwa-avatar-#{$i}-bg: hsl(#{$hue} 62% 91%);
-    --pwa-avatar-#{$i}-fg: hsl(#{$hue} 55% 32%);
-  }
+  /* Lead: dashed teal outline, no fill (NEO-155) — almost there, not in yet. */
+  --pwa-identity-lead: hsl(172 55% 38%);
+  /* Doctor specialty badge: the doctor family's own graphite, a step darker. */
+  --pwa-avatar-doctor-badge: hsl(210 20% 40%);
+  @include pwa-avatar-tokens($pwa-avatar-light);
   /* Toasts (AppNotifications.vue, NEO-76 "record context"): white card, the
      entity icon on a neutral grey tile, status only on the small badge and
      the action button. Semantic colors, deliberately not the brand teal. */
@@ -197,12 +224,9 @@ $pwa-avatar-hues: 4, 28, 48, 95, 150, 190, 222, 262, 300, 335;
   --pwa-identity-org-soft: rgba(201, 168, 106, 0.14);
   --pwa-identity-person: #a3b1ae;
   --pwa-identity-person-soft: rgba(160, 175, 172, 0.12);
-  --pwa-identity-lead: #b69cf2;
-  @each $hue in $pwa-avatar-hues {
-    $i: index($pwa-avatar-hues, $hue) - 1;
-    --pwa-avatar-#{$i}-bg: hsl(#{$hue} 38% 24%);
-    --pwa-avatar-#{$i}-fg: hsl(#{$hue} 75% 76%);
-  }
+  --pwa-identity-lead: hsl(172 55% 62%);
+  --pwa-avatar-doctor-badge: hsl(210 22% 66%);
+  @include pwa-avatar-tokens($pwa-avatar-dark);
   --pwa-toast-bg: #1e1e1e;
   --pwa-toast-border: #333333;
   --pwa-toast-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
