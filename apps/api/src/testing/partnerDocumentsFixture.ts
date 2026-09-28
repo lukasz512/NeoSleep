@@ -1,6 +1,5 @@
 import type { PoolClient } from "pg";
-import { withPlatform } from "../db/tenant.js";
-import { getCurrentDocumentContentVersion, insertDocumentContentVersion } from "../db/documentContent.js";
+import { ensureDocumentContent } from "./documentContentFixture.js";
 import { setApprovedPartnerVersion, setPartnerSignatory } from "../db/partnerSignatories.js";
 
 /**
@@ -23,19 +22,10 @@ const LOCALES = ["pl", "mx"] as const;
 export async function ensurePartnerDocumentsReady(client: PoolClient, approverUserId: string): Promise<void> {
   for (const locale of LOCALES) {
     for (const templateKey of TEMPLATES) {
-      const version = await withPlatform(async (platform) => {
-        const current = await getCurrentDocumentContentVersion(platform, templateKey, locale);
-        if (current) return current;
-        return insertDocumentContentVersion(platform, {
-          templateKey,
-          locale,
-          contentHtml: `<p>QA fixture ${templateKey} ${locale}</p>`,
-          createdByUserId: approverUserId,
-          createdByName: "QA fixture",
-          createdByEmail: "qa-fixture@neosleepcare.com",
-          createdByTenantSlug: "test",
-          changeNote: "partnerDocumentsFixture",
-        });
+      const version = await ensureDocumentContent(templateKey, locale, {
+        contentHtml: `<p>QA fixture ${templateKey} ${locale}</p>`,
+        changeNote: "partnerDocumentsFixture",
+        createdByUserId: approverUserId,
       });
       if (templateKey !== "partnerPrivacyNotice") {
         await setApprovedPartnerVersion(client, templateKey, locale, version.id);

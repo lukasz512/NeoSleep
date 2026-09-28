@@ -1,8 +1,7 @@
 import { describe, it, expect, vi, beforeAll } from "vitest";
 import bcrypt from "bcrypt";
 import { withTenant, insertStaffUser, insertPatient, insertPractitioner, insertSleepStudy, getGlobalTerritoryId } from "../db.js";
-import { withPlatform } from "../db/tenant.js";
-import { insertDocumentContentVersion } from "../db/documentContent.js";
+import { ensureDocumentContent } from "../testing/documentContentFixture.js";
 import type { TenantContext } from "../context/TenantContext.js";
 import { ValidationError } from "../errors.js";
 import { RecordClinicalQuestionnaireCommand } from "./clinicalRecords.js";
@@ -55,20 +54,10 @@ async function buildContext(client: Client): Promise<TenantContext> {
 const newPatient = (client: Client) => insertPatient(client, { first_name: "Ana", last_name: `Checklist-${uniqueSuffix()}` });
 const isPdf = (bytes: Uint8Array) => Buffer.from(bytes.subarray(0, 5)).toString("latin1") === "%PDF-";
 
+// Real template keys in the shared platform schema — reuse the current text, seed only on an empty DB (NEO-184).
 beforeAll(async () => {
   for (const templateKey of ["historiaEndo", "informedConsent"]) {
-    await withPlatform((client) =>
-      insertDocumentContentVersion(client, {
-        templateKey,
-        locale: "mx",
-        contentHtml: "<p>QA consent body.</p>",
-        createdByUserId: "00000000-0000-0000-0000-000000000000",
-        createdByName: "QA",
-        createdByEmail: "qa@neosleepcare.com",
-        createdByTenantSlug: TENANT_SLUG,
-        changeNote: "seeded by commands/patientChecklist.spec.ts",
-      })
-    );
+    await ensureDocumentContent(templateKey, "mx", { contentHtml: "<p>QA consent body.</p>", changeNote: "seeded by commands/patientChecklist.spec.ts" });
   }
 }, 15000);
 
