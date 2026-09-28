@@ -27,7 +27,8 @@ describe("AppEntityList styles (NEO-152)", () => {
   it("in the page header search, filter and + never wrap; the field fills the free room", () => {
     expect(css).toMatch(/\.app-entity-list__toolbar--in-header \{[^}]*flex-wrap: nowrap;/);
     expect(css).toMatch(/\.app-entity-list__toolbar--in-header \.app-entity-list__search-group \{\s*flex-wrap: nowrap;\s*flex: 1 1 auto;\s*justify-content: flex-end;/);
-    expect(css).toMatch(/\.app-entity-list__toolbar--in-header:not\(\.app-entity-list__toolbar--mobile\) \{\s*margin-left: var\(--space-4, 16px\);/);
+    // 16 px to the title, minus the toolbar's halo padding (NEO-160).
+    expect(css).toMatch(/\.app-entity-list__toolbar--in-header:not\(\.app-entity-list__toolbar--mobile\) \{\s*margin-left: calc\(var\(--space-4, 16px\) - var\(--app-entity-list-halo-room\)\);/);
   });
 
   it("toolbar glyphs are all 22 px, and the funnel is drawn as wide as the magnifier", () => {

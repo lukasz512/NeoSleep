@@ -286,7 +286,14 @@
             </div>
           </template>
         </VDataTableServer>
-        <div v-show="mobile" ref="feedScrollRef" class="app-entity-list__feed-scroll" @scroll="onFeedScroll">
+        <div
+          v-show="mobile"
+          ref="feedScrollRef"
+          class="app-entity-list__feed-scroll"
+          @scroll="onFeedScroll"
+          @pointerdown.capture="onFeedPointerDown"
+          @click.capture="onFeedClickCapture"
+        >
           <TransitionGroup name="list-stagger" tag="div" class="app-entity-list__feed">
             <VCard
               v-for="(item, index) in mobileItems"
@@ -605,6 +612,32 @@ onBeforeUnmount(() => {
   // The next list may already have written its own line — only clear ours.
   if (inHeader.value && headerRow.subtitle.value === ownSubtitle) headerRow.subtitle.value = null;
 });
+
+/* NEO-160, phone feed: while the search is focused (keyboard up), the first
+   tap anywhere in the feed only leaves the search — keyboard closes, the list
+   stays — and the next tap opens the card. The state is read on pointerdown,
+   because by the time `click` fires the browser may already have moved focus
+   off the input. Captured on the feed, so a card's own handlers (open, "⋯"
+   menu) never see the dismissing tap. */
+let tapDismissesSearch = false;
+
+function onFeedPointerDown() {
+  tapDismissesSearch = mobile.value && searchFocused.value;
+}
+
+function onFeedClickCapture(e: MouseEvent) {
+  if (!tapDismissesSearch) return;
+  tapDismissesSearch = false;
+  e.preventDefault();
+  e.stopPropagation();
+  blurSearch();
+}
+
+function blurSearch() {
+  const el = searchFieldRef.value?.$el;
+  const input = el instanceof HTMLElement ? el.querySelector("input") : null;
+  input?.blur();
+}
 
 function onSearchClearClick() {
   onSearchClear();

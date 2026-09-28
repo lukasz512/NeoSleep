@@ -7,6 +7,12 @@
 }
 
 .app-entity-list__toolbar {
+  /* NEO-160: room for the focused search's 3 px halo (--pwa-focus-halo).
+     The overflow:hidden below (needed for the scroll collapse) used to cut
+     it off at the field's top and bottom edge, leaving only the rounded
+     ends lit. Padding gives it room; the equal negative margin keeps the
+     toolbar's footprint exactly where it was. */
+  --app-entity-list-halo-room: 4px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -14,7 +20,9 @@
      spaced row instead of the group's own icons sitting tighter together
      than the add button sits from the group. */
   gap: var(--pwa-fib-sm, 8px);
-  margin-bottom: 16px;
+  padding: var(--app-entity-list-halo-room);
+  margin: calc(-1 * var(--app-entity-list-halo-room));
+  margin-bottom: calc(16px - var(--app-entity-list-halo-room));
   flex-shrink: 0;
   /* Collapses away on mobile while scrolling the feed down (see
      --hidden below) — max-height needs a real "from" value (not the
@@ -31,14 +39,14 @@
   flex: 1 1 auto;
   min-width: 0;
   justify-content: flex-end;
-  margin-bottom: 0;
+  margin-bottom: calc(-1 * var(--app-entity-list-halo-room));
   /* NEO-152: search, filter and + always share one line — the field shrinks,
      and under 400 px it becomes its icon (useCompactSearch); nothing wraps. */
   flex-wrap: nowrap;
 }
 /* Desktop: at least 16 px between the title and the field. */
 .app-entity-list__toolbar--in-header:not(.app-entity-list__toolbar--mobile) {
-  margin-left: var(--space-4, 16px);
+  margin-left: calc(var(--space-4, 16px) - var(--app-entity-list-halo-room));
 }
 /* The field adapts to the room beside the title: the cluster takes the free
    space (still right-aligned) and the field grows up to its 610 px basis. */
@@ -51,7 +59,8 @@
 .app-entity-list__toolbar--hidden {
   max-height: 0;
   opacity: 0;
-  margin-bottom: 0;
+  padding-block: 0;
+  margin-block: 0;
   pointer-events: none;
 }
 

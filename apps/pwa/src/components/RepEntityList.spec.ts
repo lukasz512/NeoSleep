@@ -376,6 +376,31 @@ describe("AppEntityList", () => {
       expect(down.defaultPrevented).toBe(true);
     });
 
+    // NEO-160: with the keyboard up, the first tap on the feed only leaves the
+    // search; the next tap is an ordinary tap that opens the card.
+    it("first tap on a card while the search is focused only blurs the search; the next tap goes through", async () => {
+      await mountEntityList({ width: 375 });
+      const card = document.querySelector(".app-entity-list__card") as HTMLElement;
+      const tap = () => {
+        // jsdom has no PointerEvent constructor; the listener only needs the type.
+        card.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+        const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+        card.dispatchEvent(click);
+        return click;
+      };
+      input().focus();
+      input().dispatchEvent(new FocusEvent("focus"));
+      await flushPromises();
+      expect(document.activeElement).toBe(input());
+
+      expect(tap().defaultPrevented).toBe(true);
+      await flushPromises();
+      expect(document.activeElement).not.toBe(input());
+      expect(toolbar().classList.contains("app-entity-list__toolbar--search-open")).toBe(false);
+
+      expect(tap().defaultPrevented).toBe(false);
+    });
+
     it("desktop never gets the phone classes", async () => {
       await mountEntityList({ width: 1440 });
       expect(toolbar().classList.contains("app-entity-list__toolbar--mobile")).toBe(false);
@@ -410,6 +435,15 @@ describe("AppEntityList", () => {
       path.resolve(__dirname, "../assets/transitions.css"),
       "utf-8",
     );
+
+    // NEO-160: the toolbar clips (overflow: hidden, for the scroll collapse), so
+    // it needs room for the focused search's 3 px halo — padding, offset by an
+    // equal negative margin so the row doesn't move.
+    it("toolbar leaves room for the focus halo without moving the row", () => {
+      expect(css).toMatch(/\.app-entity-list__toolbar\s*{[^}]*--app-entity-list-halo-room:\s*4px/);
+      expect(css).toMatch(/\.app-entity-list__toolbar\s*{[^}]*padding:\s*var\(--app-entity-list-halo-room\)/);
+      expect(css).toMatch(/\.app-entity-list__toolbar\s*{[^}]*margin:\s*calc\(-1 \* var\(--app-entity-list-halo-room\)\)/);
+    });
 
     it("add button has no border and uses the primary color", () => {
       expect(css).toMatch(/\.app-entity-list__add--no-border\s*{[^}]*border:\s*none/);
