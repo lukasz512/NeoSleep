@@ -7,7 +7,7 @@
  * layout facts only a real browser engine computes.
  *
  * `?state=record` (default) · `loading` · `long` (very long name) · `notfound` ·
- * `scroll` (a record with a tall body, for the NEO-158 phone sticky bar).
+ * `scroll` (a record with a tall body, for the NEO-181 phone toolbar and collapse).
  */
 import { createApp, defineComponent, h } from "vue";
 import { createPinia } from "pinia";
@@ -59,7 +59,8 @@ const actions = () =>
 const Harness = defineComponent({
   setup() {
     return () =>
-      h("div", { style: "padding: 24px; max-width: 100%; box-sizing: border-box" }, [
+      // Like the app on a phone: a 56 px app bar above (Vuetify's --v-layout-top), then the sheet's own padding.
+      h("div", { style: "padding: 84px 24px 24px; max-width: 100%; box-sizing: border-box; --v-layout-top: 56px" }, [
         h(
           ItemDetailLayout,
           {

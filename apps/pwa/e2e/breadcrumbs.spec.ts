@@ -110,21 +110,22 @@ test.describe("desktop (1280px) — eyebrow", () => {
   });
 });
 
-test.describe("phone (390px) — NEO-152", () => {
-  test("the eyebrow is the way back, as on desktop", async ({ page }) => {
+test.describe("phone (390px) — NEO-181", () => {
+  test("the way back is the toolbar's ‹ MODULE link (the eyebrow gives way to it)", async ({ page }) => {
     await open(page, "record", 390);
-    await expect(eyebrow(page)).toBeVisible();
-    await expect(eyebrow(page)).toHaveAttribute("href", "/patients");
+    await expect(page.getByTestId("record-toolbar-back")).toBeVisible();
+    await expect(page.getByTestId("record-toolbar-back")).toHaveAttribute("href", "/patients");
+    await expect(eyebrow(page)).toBeHidden();
   });
 
-  test("the actions sit on their own row, the last one on the header's right edge", async ({ page }) => {
+  test("the actions live in the toolbar above the name, the last one on the right edge", async ({ page }) => {
     await open(page, "record", 390);
-    const head = (await header(page).boundingBox())!;
     const title = (await page.locator("h1").boundingBox())!;
-    const actions = await page.locator(".harness-action").all();
-    const last = (await actions.at(-1)!.boundingBox())!;
-    expect(last.y).toBeGreaterThan(title.y + title.height - 1);
-    expect(Math.abs(last.x + last.width - (head.x + head.width))).toBeLessThanOrEqual(1);
+    const more = (await page.getByTestId("record-toolbar-more").boundingBox())!;
+    const head = (await header(page).boundingBox())!;
+    expect(more.y + more.height).toBeLessThanOrEqual(title.y + 1);
+    // The glyph ends near the content edge (the 44 px button pads 11 px around a 22 px icon).
+    expect(Math.abs(more.x + more.width - 11 - (head.x + head.width))).toBeLessThanOrEqual(12);
   });
 });
 
