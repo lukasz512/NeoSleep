@@ -965,6 +965,16 @@ body {
   z-index: 10001 !important;
 }
 
+/* AppDateField's phone calendar/time sheet (NEO-132) opens from inside those
+   dialogs — same stack problem as the menus below, so it sat behind the form. */
+.app-date-field-sheet {
+  z-index: 10002 !important;
+}
+/* Vuetify focuses the sheet's content wrapper on open; no ring for a sheet nobody tabbed to. */
+.app-date-field-sheet > .v-overlay__content:focus-visible {
+  outline: none;
+}
+
 /*
  * Same root cause, different symptom: a VSelect/VAutocomplete/VCombobox menu
  * opened *inside* one of the forced-z-index dialogs above computes its own

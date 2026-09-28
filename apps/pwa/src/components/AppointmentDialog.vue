@@ -70,30 +70,31 @@
             </template>
           </VAutocomplete>
 
-          <div class="pwa-form-row mb-3">
-            <VTextField
-              :ref="(el) => setFieldEl('start', el)"
-              v-model="startWall"
-              :error-messages="serverError('start')"
-              :label="t('user.appointments.form.fieldStart')"
-              type="datetime-local"
-              variant="outlined"
-              density="comfortable"
-              class="pwa-form-row-item"
-              :rules="[required]"
-              data-testid="appointment-start"
-            />
-            <VSelect
-              :ref="(el) => setFieldEl('duration', el)"
-              v-model="duration"
-              :error-messages="serverError('duration')"
-              :label="t('user.appointments.form.fieldDuration')"
-              :items="durationItems"
-              variant="outlined"
-              density="comfortable"
-              class="pwa-form-row-item"
-            />
-          </div>
+          <!-- Date | Time side by side (NEO-132, T2); taken slots of this doctor are struck through. -->
+          <AppDateField
+            :ref="(el) => setFieldEl('start', el)"
+            v-model="startWall"
+            mode="datetime"
+            :error-messages="serverError('start')"
+            :label="t('user.appointments.form.fieldDate')"
+            :min="isEdit ? undefined : 'today'"
+            quick-picks="future"
+            :busy="takenSlots"
+            :busy-duration="duration"
+            class="mb-3"
+            :rules="[required]"
+            test-id="appointment-start"
+          />
+          <VSelect
+            :ref="(el) => setFieldEl('duration', el)"
+            v-model="duration"
+            :error-messages="serverError('duration')"
+            :label="t('user.appointments.form.fieldDuration')"
+            :items="durationItems"
+            variant="outlined"
+            density="comfortable"
+            class="mb-3"
+          />
 
           <VTextarea
             v-if="!isFieldForce"
@@ -134,12 +135,14 @@ import {
   type Appointment,
   type AppointmentWriteResult,
 } from "../composables/useAppointments";
-import { deviceTimeZone, toZonedInputValue, zonedInputToIso, timeZoneLabel } from "../utils/appointmentTime";
+import { deviceTimeZone, toZonedInputValue, zonedInputToIso, timeZoneLabel, takenIntervalsOnDay } from "../utils/appointmentTime";
+import { addDaysIso } from "../utils/dateField";
 import { intlLocale } from "@i18n/language-options";
 import AppButton from "./AppButton.vue";
 import AppAvatar from "./AppAvatar.vue";
 import AppIcon from "./AppIcon.vue";
 import AppFormDialog from "./AppFormDialog.vue";
+import AppDateField from "./AppDateField.vue";
 import { AppInlineAlert, FormErrorSummary } from "@ui";
 
 interface NamedRef {
@@ -313,6 +316,34 @@ watch(
     if (!isEdit.value && !fixedPatient.value) void loadOptions("/api/v1/patient?limit=-1", patientOptions, loadingPatients);
     if (!isEdit.value && !fixedPractitioner.value && !isDoctor.value) {
       void loadOptions("/api/v1/practitioner?limit=-1", practitionerOptions, loadingPractitioners);
+    }
+  },
+  { immediate: true },
+);
+
+/**
+ * The chosen doctor's bookings that day, so the time list shows what's taken
+ * before Save instead of a 409 after it. A doctor booking for themself needs
+ * no filter — the API already scopes their list to their own visits.
+ */
+const takenSlots = ref<{ start: string; end: string }[]>([]);
+const bookingDay = computed(() => (startWall.value ? startWall.value.slice(0, 10) : ""));
+watch(
+  [() => props.modelValue, bookingDay, practitionerId, zone],
+  async ([open, day, doctorId]) => {
+    takenSlots.value = [];
+    if (!open || !day || (!doctorId && !isDoctor.value)) return;
+    const from = zonedInputToIso(`${day}T00:00`, zone.value);
+    const to = zonedInputToIso(`${addDaysIso(day, 1)}T00:00`, zone.value);
+    const query = new URLSearchParams({ start: from, end: to });
+    if (doctorId && !isDoctor.value) query.set("practitioner_id", doctorId);
+    try {
+      const res = await apiFetch(`/api/v1/appointments?${query.toString()}`, { handleErrors: false });
+      if (!res.ok || bookingDay.value !== day) return;
+      const items = ((await res.json()) as { items?: Appointment[] }).items ?? [];
+      takenSlots.value = takenIntervalsOnDay(items, day, zone.value, props.appointment?.id);
+    } catch (err) {
+      reportCaught(err, { where: "AppointmentDialog.takenSlots" });
     }
   },
   { immediate: true },

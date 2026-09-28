@@ -213,6 +213,7 @@ import AppConfirmDialog from "./AppConfirmDialog.vue";
 import PhoneField from "./PhoneField.vue";
 import EmailField from "./EmailField.vue";
 import ChoiceChipsField from "./ChoiceChipsField.vue";
+import AppDateField from "./AppDateField.vue";
 import { useNotifications } from "../composables/useNotifications";
 import type { SubmitDone } from "../composables/useEntitySubmit";
 import { useFormErrors, focusFormField, type FieldErrors } from "../composables/useFormErrors";
@@ -571,6 +572,7 @@ function componentFor(type: FormFieldType) {
     case "email": return EmailField;
     case "boolean": return VSwitch;
     case "choice": return ChoiceChipsField;
+    case "date": return AppDateField;
     default: return VTextField;
   }
 }
@@ -643,7 +645,24 @@ function fieldAttrs(f: FormFieldDef): Record<string, unknown> {
     case "chips":
       return { ...common, items: [], multiple: true, chips: true, closableChips: true };
     case "date":
-      return { ...common, type: "date" };
+      // AppDateField (NEO-132): typed DD/MM/YYYY + calendar card, never the native picker.
+      return {
+        modelValue: common.modelValue,
+        "onUpdate:modelValue": common["onUpdate:modelValue"],
+        label: common.label,
+        rules: common.rules,
+        hint: common.hint,
+        persistentHint: common.persistentHint,
+        errorMessages: common.errorMessages,
+        disabled: common.disabled,
+        color: common.color,
+        variant: common.variant,
+        density: common.density,
+        min: f.date?.min,
+        max: f.date?.max,
+        openAt: f.date?.openAt,
+        quickPicks: f.date?.quickPicks,
+      };
     case "boolean":
       // Its own prop set, not spread from `common` — outlined-field props
       // (variant/rules/placeholder) don't apply to a switch.

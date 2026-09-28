@@ -172,6 +172,7 @@ export const patientFormFields: FormFieldDef[] = [
     default: null,
     required: true,
     rules: [dateOfBirthInRange],
+    date: { min: "1900-01-01", max: "today", openAt: "year" },
     cols: 6,
   },
   {
