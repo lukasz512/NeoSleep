@@ -1,10 +1,11 @@
 /**
- * Shared filter state per view: load from localStorage (per rep), persist on change, clear, active count.
+ * Shared filter state per view, remembered per user on this device (CORE-45, @neo/prefs).
  * Use with AppFilterBar for consistent filter UI. Filter definitions are the single source of truth for keys and defaults.
  */
 
-import { ref, computed, watch } from "vue";
-import { getUserSettings, setUserSettings, type ViewFilters } from "../utils/user-settings";
+import { computed } from "vue";
+import { usePersistedState } from "@prefs";
+import type { ViewFilters } from "../utils/user-settings";
 
 /** Single filter definition: key, label i18n key, type, optional options for select, default value. */
 export interface FilterDefinition {
@@ -18,53 +19,53 @@ export interface FilterDefinition {
   multiple?: boolean;
 }
 
-/**
- * Returns reactive filter state for a view, persisted in localStorage under rep settings (filters[viewId]).
- * - filterState: reactive record key -> value; mutate to change, or replace on clear.
- * - activeFilterCount: number of filters with non-empty value.
- * - hasActiveFilters: true when activeFilterCount > 0.
- * - clearFilters(): sets all keys to their default (or '').
- * State is saved automatically when filterState changes.
- */
-function toArray(v: string | string[] | undefined): string[] {
+function toArray(v: unknown): string[] {
   if (v === undefined || v === null) return [];
-  return Array.isArray(v) ? v.filter((s) => String(s).trim() !== "") : String(v).trim() ? [String(v).trim()] : [];
+  return Array.isArray(v) ? v.filter((s) => String(s).trim() !== "").map(String) : String(v).trim() ? [String(v).trim()] : [];
 }
 
+const isMulti = (d: FilterDefinition) => d.type === "select" && d.multiple !== false;
+
+/**
+ * Returns reactive filter state for a view, saved for the signed-in user on this device.
+ * - filterState: reactive record key -> value; mutate to change, or replace on clear.
+ * - activeFilterCount / hasActiveFilters: for the filter button's badge.
+ * - clearFilters(): sets all keys to their default (or '').
+ * A saved value that is no longer one of a filter's options (e.g. a deleted territory) is dropped
+ * on load, so the list never comes up empty for a reason the user can't see. Options that
+ * aren't known yet (empty list) are left alone.
+ */
 export function useFilters(viewId: string, definitions: FilterDefinition[]) {
   const defaults: ViewFilters = {};
-  for (const d of definitions) {
-    const multi = d.type === "select" && (d.multiple !== false);
-    defaults[d.key] = multi ? [] : (d.default ?? "");
-  }
-  const saved = getUserSettings().filters?.[viewId];
-  const initial: ViewFilters = { ...defaults };
-  if (saved && typeof saved === "object") {
-    for (const d of definitions) {
-      if (d.key in saved) {
-        const multi = d.type === "select" && (d.multiple !== false);
-        const raw = saved[d.key];
-        if (multi) {
-          initial[d.key] = toArray(raw);
-        } else if (typeof raw === "string") {
-          initial[d.key] = raw;
-        }
-      }
-    }
-  }
+  for (const d of definitions) defaults[d.key] = isMulti(d) ? [] : (d.default ?? "");
 
-  const filterState = ref<ViewFilters>(initial);
+  const filterState = usePersistedState<ViewFilters>(`view:${viewId}:filters`, defaults, {
+    // Before multi-select, values were single strings.
+    normalize: (raw) => {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
+      const out: Record<string, unknown> = { ...raw };
+      for (const d of definitions) if (isMulti(d) && d.key in out) out[d.key] = toArray(out[d.key]);
+      return out;
+    },
+    validate: (state) => {
+      const out: ViewFilters = { ...state };
+      for (const d of definitions) {
+        const known = new Set((d.options ?? []).map((o) => o.value));
+        if (!known.size) continue;
+        const v = out[d.key];
+        if (Array.isArray(v)) out[d.key] = v.filter((s) => known.has(s));
+        else if (v && !known.has(v)) out[d.key] = d.default ?? "";
+      }
+      return out;
+    },
+  });
 
   const activeFilterCount = computed(() => {
     let n = 0;
     for (const d of definitions) {
       const v = filterState.value[d.key];
-      const multi = d.type === "select" && (d.multiple !== false);
-      if (multi) {
-        n += toArray(v).length;
-      } else if (typeof v === "string" && v.trim() !== "") {
-        n++;
-      }
+      if (isMulti(d)) n += toArray(v).length;
+      else if (typeof v === "string" && v.trim() !== "") n++;
     }
     return n;
   });
@@ -72,21 +73,8 @@ export function useFilters(viewId: string, definitions: FilterDefinition[]) {
   const hasActiveFilters = computed(() => activeFilterCount.value > 0);
 
   function clearFilters() {
-    const next: ViewFilters = {};
-    for (const d of definitions) {
-      const multi = d.type === "select" && (d.multiple !== false);
-      next[d.key] = multi ? [] : (d.default ?? "");
-    }
-    filterState.value = next;
+    filterState.value = { ...defaults, ...Object.fromEntries(definitions.filter(isMulti).map((d) => [d.key, []])) };
   }
-
-  watch(
-    filterState,
-    () => {
-      setUserSettings({ filters: { [viewId]: { ...filterState.value } } });
-    },
-    { deep: true }
-  );
 
   return {
     filterState,

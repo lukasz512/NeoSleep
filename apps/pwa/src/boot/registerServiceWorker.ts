@@ -11,10 +11,9 @@ import { browserDeps, createNeedReloadHandler } from "./serviceWorkerUpdate";
  */
 export function installServiceWorkerUpdates(router: Pick<Router, "afterEach" | "resolve">): void {
   if (!("serviceWorker" in navigator)) return;
-  const bootAt = performance.timeOrigin || Date.now();
   registerSW({
     immediate: true,
-    onNeedReload: createNeedReloadHandler(router, browserDeps(bootAt)),
+    onNeedReload: createNeedReloadHandler(router, browserDeps()),
     onRegisteredSW: (_url, registration) => {
       if (!registration) return;
       document.addEventListener("visibilitychange", () => {

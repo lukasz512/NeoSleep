@@ -1,27 +1,26 @@
 import { describe, it, expect, vi } from "vitest";
 import type { NavigationHookAfter, RouteLocationNormalized, Router } from "vue-router";
 import {
-  BOOT_WINDOW_MS,
   RELOAD_GUARD_MS,
+  browserDeps,
   createNeedReloadHandler,
   decideUpdateAction,
   type ServiceWorkerUpdateDeps,
 } from "./serviceWorkerUpdate";
 
 describe("decideUpdateAction (NEO-125)", () => {
-  it("reloads straight away when the new version takes over right after the page opened", () => {
-    expect(decideUpdateAction(2_000, null, 1_000_000)).toBe("reload-now");
-    expect(decideUpdateAction(BOOT_WINDOW_MS, null, 1_000_000)).toBe("reload-now");
+  it("reloads straight away on an untouched page, however long the new version took to download", () => {
+    expect(decideUpdateAction(false, null, 1_000_000)).toBe("reload-now");
   });
 
-  it("never reloads a page someone has been using — waits for their next navigation", () => {
-    expect(decideUpdateAction(BOOT_WINDOW_MS + 1, null, 1_000_000)).toBe("reload-on-next-navigation");
+  it("never reloads a page someone has touched — waits for their next navigation", () => {
+    expect(decideUpdateAction(true, null, 1_000_000)).toBe("reload-on-next-navigation");
   });
 
   it("does not loop: a reload moments ago means do nothing", () => {
     const now = 1_000_000;
-    expect(decideUpdateAction(1_000, now - 5_000, now)).toBe("none");
-    expect(decideUpdateAction(1_000, now - RELOAD_GUARD_MS - 1, now)).toBe("reload-now");
+    expect(decideUpdateAction(false, now - 5_000, now)).toBe("none");
+    expect(decideUpdateAction(false, now - RELOAD_GUARD_MS - 1, now)).toBe("reload-now");
   });
 });
 
@@ -45,7 +44,7 @@ function deps(overrides: Partial<ServiceWorkerUpdateDeps> = {}): ServiceWorkerUp
   let guard: number | null = null;
   return {
     now: () => 100_000,
-    bootAt: 100_000 - 3_000,
+    hasInteracted: () => false,
     readGuard: () => guard,
     writeGuard: (at) => (guard = at),
     reload: vi.fn(),
@@ -55,7 +54,7 @@ function deps(overrides: Partial<ServiceWorkerUpdateDeps> = {}): ServiceWorkerUp
 }
 
 describe("createNeedReloadHandler (NEO-125)", () => {
-  it("reloads right after boot and marks the guard", () => {
+  it("reloads an untouched page and marks the guard", () => {
     const d = deps();
     const { router } = fakeRouter();
     createNeedReloadHandler(router, d)();
@@ -63,8 +62,8 @@ describe("createNeedReloadHandler (NEO-125)", () => {
     expect(d.readGuard()).toBe(100_000);
   });
 
-  it("later: no reload now, a full load of the next route instead (with the router base)", () => {
-    const d = deps({ bootAt: 100_000 - BOOT_WINDOW_MS - 5_000 });
+  it("touched page: no reload now, a full load of the next route instead (with the router base)", () => {
+    const d = deps({ hasInteracted: () => true });
     const { router, navigate } = fakeRouter();
     createNeedReloadHandler(router, d)();
     expect(d.reload).not.toHaveBeenCalled();
@@ -80,5 +79,19 @@ describe("createNeedReloadHandler (NEO-125)", () => {
     createNeedReloadHandler(router, d);
     navigate("/a", "/b");
     expect(d.loadUrl).not.toHaveBeenCalled();
+  });
+});
+
+describe("browserDeps (NEO-125)", () => {
+  it("a tap or a key press marks the page as in use; scrolling does not", () => {
+    const d = browserDeps();
+    expect(d.hasInteracted()).toBe(false);
+    window.dispatchEvent(new Event("scroll"));
+    expect(d.hasInteracted()).toBe(false);
+    window.dispatchEvent(new Event("pointerdown"));
+    expect(d.hasInteracted()).toBe(true);
+    const d2 = browserDeps();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "a" }));
+    expect(d2.hasInteracted()).toBe(true);
   });
 });

@@ -10,7 +10,7 @@ argument-hint: "[content.json path]"
 
 Łukasz's standing rule (2026-09-25): after every session the Artifact is **the** deliverable — on the Linear ticket and in the chat. He needs nothing else. This skill makes it the same shape every time, so he learns where to look. Rules behind it: CLAUDE.md "Standing decisions"; `.claude/hooks/quality-gate.sh` enforces the marker.
 
-**Before anything: a ticket (NEO, CORE or AJM) and a branch named after it (NEO-84).** No ticket → create one (`## Problem` / `## Change` / `## Done when`, ≤1500 chars — the PreToolUse hook rejects anything else) and rename the branch. `render` refuses a branch without `<neo|core|ajm>-<n>`.
+**Before anything: a Linear ticket and a branch named after it (NEO-84).** No ticket → create one in CORE (platform), NEO (NeoSleep-only) or AJM (`## Problem` / `## Change` / `## Done when`, ≤1500 chars — the PreToolUse hook rejects anything else) and rename the branch. `render` refuses a branch without `<key>-<n>` (keys in `.claude/ticket-teams`).
 
 **TDD is the first rule of every Artifact (Łukasz, 2026-09-28, CORE-44).** The acceptance criteria become failing tests before the code, `verify` mirrors them, and `testCoverageMap` points at them. Anything a test settles is **not** a question for Łukasz: decide it, prove it with the test, and list it in `defaults`.
 

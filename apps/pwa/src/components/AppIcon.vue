@@ -368,6 +368,19 @@ const ICONS = {
             <line x1="10" y1="18" x2="20" y2="18" />`,
   },
   // ── Generic UI icons ──────────────────────────────────────────────────────
+  "view-grid": {
+    strokeWidth: 2,
+    paths: `<rect x="4" y="4" width="7" height="7" rx="1.5" />
+            <rect x="13" y="4" width="7" height="7" rx="1.5" />
+            <rect x="4" y="13" width="7" height="7" rx="1.5" />
+            <rect x="13" y="13" width="7" height="7" rx="1.5" />`,
+  },
+  "view-list": {
+    strokeWidth: 2,
+    paths: `<rect x="3.5" y="5" width="5" height="4" rx="1" />
+            <rect x="3.5" y="15" width="5" height="4" rx="1" />
+            <path d="M11.5 6.5h9M11.5 16.5h9" />`,
+  },
   "play": {
     strokeWidth: 2,
     paths: `<path d="M7 4.5v15l12.5-7.5z" fill="currentColor" />`,

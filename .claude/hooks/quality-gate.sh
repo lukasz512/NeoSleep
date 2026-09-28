@@ -34,6 +34,9 @@ set -uo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
 cd "$REPO_ROOT" || exit 0
+# ticket_of <branch> → NEO-n / CORE-n / … (team keys in .claude/ticket-teams, CORE-23)
+# shellcheck source=lib/ticket.sh
+source "$REPO_ROOT/.claude/hooks/lib/ticket.sh"
 
 # --- Manual human-only override -------------------------------------------------------
 # Claude cannot create or edit this file (it must ask the user to run this outside the
@@ -79,11 +82,11 @@ WARNS=()
 branch_artifact_check() {
   [ -z "$BRANCH_CHANGED" ] && return 0
   local ticket marker visual
-  ticket="$(printf '%s' "$BRANCH" | grep -oiE '(neo|core|ajm)-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]' || true)"
+  ticket="$(ticket_of "$BRANCH" || true)"
   # 2026-09-26 (Łukasz, NEO-84): every change has a NEO ticket — trivial ones too. The
   # ticket ID in the branch name is what links branch, PR, Artifact and ticket.
   if [ -z "$ticket" ]; then
-    FAILS+=("Branch '${BRANCH}' has changes but no NEO ticket in its name. Every change needs a ticket (NEO-84): create one in Linear (template: ## Problem / ## Change / ## Done when, short and only about this change), then move the work to a branch named after it (EnterWorktree name '<neo-n>-<slug>', or git branch -m worktree-neo-<n>-<slug>).")
+    FAILS+=("Branch '${BRANCH}' has changes but no ticket ID (<key>-<n>, keys in .claude/ticket-teams) in its name. Every change needs a ticket (NEO-84): create one in Linear (template: ## Problem / ## Change / ## Done when, short and only about this change), then move the work to a branch named after it (EnterWorktree name '<key>-<n>-<slug>', e.g. core-23-team-split, or git branch -m worktree-<key>-<n>-<slug>).")
     return 0
   fi
   if [ -f ".claude/local/artifacts/${ticket}.json" ]; then
@@ -128,6 +131,64 @@ branch_artifact_check() {
       || FAILS+=("${ticket} isn't in the artifact index yet: node .claude/skills/ship-artifact/build.mjs index, publish the page (url from its output), then build.mjs index --published <url> — ship-artifact Step 5.")
   fi
   dev_mergeable_check
+  ci_green_check "$marker"
+}
+
+# 2026-09-28 (Łukasz, NEO-182): a pushed branch isn't done until GitHub's CI is green on
+# its HEAD — NEO-132 went out with green local tests and red e2e on GitHub, and nobody
+# was told. Rules (attempt limit, allowed fix scope) live in .claude/ci-autofix.json and
+# are shared with the GitHub handoff and the nightly linear-worker; the verdict comes from
+# infrastructure/scripts/ci-status.mjs. Pending blocks (wait — the PR link is handed over
+# only once green); red blocks with the failing tests (fix + push, max maxFixAttempts);
+# red after the limit blocks until the escalation to Łukasz is recorded as
+# "ciEscalated": {"sha": "<HEAD>"} in the marker.
+ci_green_check() {
+  local marker="$1" head upstream_sha status state
+  git rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1 || return 0
+  head="$(git rev-parse HEAD 2>/dev/null)" || return 0
+  # Already merged: dev_deploy_check takes over.
+  git merge-base --is-ancestor "$head" origin/dev 2>/dev/null && return 0
+  upstream_sha="$(git rev-parse '@{upstream}' 2>/dev/null || true)"
+  if [ "$head" != "$upstream_sha" ]; then
+    WARNS+=("'${BRANCH}' has commits that aren't pushed — after pushing, wait for CI (the next turn end checks it).")
+    return 0
+  fi
+  local on_ci=0 pattern
+  # read, not a for-loop: the patterns contain '*' and must not glob against the tree.
+  while IFS= read -r pattern; do
+    # shellcheck disable=SC2254
+    [ -n "$pattern" ] && case "$BRANCH" in $pattern) on_ci=1 ;; esac
+  done < <(jq -r '.ciBranchPatterns[]' .claude/ci-autofix.json 2>/dev/null)
+  if ! command -v gh >/dev/null 2>&1 || ! status="$(node infrastructure/scripts/ci-status.mjs --branch "$BRANCH" --sha "$head" 2>/dev/null)"; then
+    WARNS+=("Couldn't read GitHub CI for '${BRANCH}' (gh missing or offline) — check CI is green before handing over the PR link.")
+    return 0
+  fi
+  state="$(printf '%s' "$status" | jq -r '.state')"
+  case "$state" in
+    success) return 0 ;;
+    none)
+      if [ "$on_ci" -eq 1 ]; then
+        FAILS+=("CI hasn't started for '${BRANCH}' @ ${head:0:7} yet (it runs on every push to this branch). Wait a minute, then check: node infrastructure/scripts/ci-status.mjs. Don't hand over the PR link before CI is green.")
+      else
+        WARNS+=("'${BRANCH}' doesn't match .claude/ci-autofix.json ciBranchPatterns, so CI only runs once a PR exists — check it then.")
+      fi ;;
+    pending)
+      FAILS+=("CI is running for '${BRANCH}' @ ${head:0:7}: $(printf '%s' "$status" | jq -r '.runUrl'). Wait for it (run in the background: gh run watch $(printf '%s' "$status" | jq -r '.runId') --exit-status) — the PR link goes to Łukasz only once CI is green (.claude/ci-autofix.json waitForGreenBeforePrLink).") ;;
+    failure)
+      local failures attempt max
+      failures="$(printf '%s' "$status" | jq -r '(if (.failures | length) > 0 then .failures else .failedSteps end) | .[:15] | map("    · " + .) | join("\n")')"
+      max="$(printf '%s' "$status" | jq -r '.maxFixAttempts')"
+      attempt="$(printf '%s' "$status" | jq -r '.failedRuns')"
+      if [ "$(printf '%s' "$status" | jq -r '.exhausted')" = "true" ]; then
+        jq -e --arg sha "$head" '.ciEscalated.sha == $sha' "$marker" >/dev/null 2>&1 \
+          || FAILS+=("CI is still red on '${BRANCH}' after ${max} fix attempts — stop fixing. Tell Łukasz which tests fail and why you're stuck (reply + ticket comment), then record \"ciEscalated\": {\"sha\": \"${head}\", \"at\": \"<ISO time>\"} in $marker. Failing:
+${failures}")
+      else
+        FAILS+=("CI failed on '${BRANCH}' @ ${head:0:7} ($(printf '%s' "$status" | jq -r '.runUrl')) — fix attempt ${attempt} of ${max}. Failing:
+${failures}
+Scope ($(jq -r '.allowedFixScope' .claude/ci-autofix.json)). Reproduce locally (gh run view $(printf '%s' "$status" | jq -r '.runId') --log-failed), fix, push, then wait for CI again.")
+      fi ;;
+  esac
 }
 
 # 2026-09-25 (Łukasz, NEO-57): a "Create PR" link is only useful if GitHub can actually

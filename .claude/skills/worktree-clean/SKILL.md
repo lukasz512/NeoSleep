@@ -18,7 +18,7 @@ Removes worktrees and branches that are really finished — nothing else. Rules 
 pnpm -s worktree:clean --json
 ```
 
-This fetches `origin --prune` first. Each entry has `kind` (`worktree` | `local-only` | `remote-only`), `branch`, `path`, `ticket` (`NEO-<n>` or null), `remoteExists`, `status` (`CANDIDATE` | `KEEP`), `reason`, `dirtyFiles`.
+This fetches `origin --prune` first. Each entry has `kind` (`worktree` | `local-only` | `remote-only`), `branch`, `path`, `ticket` (`NEO-<n>`, `CORE-<n>`, … or null; keys in `.claude/ticket-teams`), `remoteExists`, `status` (`CANDIDATE` | `KEEP`), `reason`, `dirtyFiles`.
 
 Only `CANDIDATE` entries go further. Never try to "rescue" a `KEEP` entry (no stashing, no committing, no `--force`) — dirty or unmerged work is Łukasz's to decide on.
 

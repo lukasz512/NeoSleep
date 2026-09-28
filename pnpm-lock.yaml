@@ -243,6 +243,9 @@ importers:
       '@neo/api-client':
         specifier: workspace:*
         version: link:../api/client
+      '@neo/prefs':
+        specifier: workspace:*
+        version: link:../../packages/prefs
       '@neo/stores':
         specifier: workspace:*
         version: link:../../packages/stores
@@ -471,6 +474,25 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
+
+  packages/prefs:
+    dependencies:
+      vue:
+        specifier: 'catalog:'
+        version: 3.5.43(typescript@5.9.3)
+    devDependencies:
+      '@vitejs/plugin-vue':
+        specifier: 'catalog:'
+        version: 6.0.9(vite@8.3.1(@types/node@22.20.4)(esbuild@0.28.2)(sass@1.105.0)(terser@5.51.2)(tsx@4.23.15))(vue@3.5.43(typescript@5.9.3))
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vite:
+        specifier: 'catalog:'
+        version: 8.3.1(@types/node@22.20.4)(esbuild@0.28.2)(sass@1.105.0)(terser@5.51.2)(tsx@4.23.15)
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.2(@types/node@22.20.4)(jsdom@25.0.1)(vite@8.3.1(@types/node@22.20.4)(esbuild@0.28.2)(sass@1.105.0)(terser@5.51.2)(tsx@4.23.15))
 
   packages/stores:
     dependencies:

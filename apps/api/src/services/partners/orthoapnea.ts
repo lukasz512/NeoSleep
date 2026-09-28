@@ -485,10 +485,68 @@ async function fetchRawResources(): Promise<RawOrthoApneaResource[]> {
   }
 }
 
+/**
+ * Where a video sits in a dentist's work with a patient (NEO-151, Łukasz picked
+ * "topics by stage" over subject topics). OrthoApnea sends no topics, so like
+ * RESOURCE_CATEGORY_BY_ID this is our own table, keyed by resource id; a video
+ * added later lands in "other" until someone places it. The frontend labels
+ * the keys (user.resources.topic.*) and shows them in this order.
+ */
+export const VIDEO_TOPICS = ["detect", "diagnose", "records", "order", "followup", "other"] as const;
+export type VideoTopic = (typeof VIDEO_TOPICS)[number];
+const VIDEO_TOPIC_BY_ID: Record<number, VideoTopic> = {
+  26: "detect", // Introducción a la Medicina Dental del Sueño
+  27: "detect", // Cómo detectar pacientes con AOS en la clínica dental
+  28: "detect", // Prevalencia, diagnóstico y tratamiento en la AOS
+  32: "diagnose", // Diagnóstico y pruebas del sueño
+  31: "diagnose", // WatchPAT: diagnóstico domiciliario
+  47: "records", // Galga de George (ES; its EN/DE twins are merged into it)
+  48: "records",
+  49: "records",
+  59: "records", // Registros con galga y cera de mordida
+  50: "records", // Impresiones digitales
+  51: "records", // Impresiones tradicionales
+  55: "order", // OrthoApnea NOA and how to request it in Apneadock
+  30: "order", // Apneadock: plataforma de gestión de tratamientos
+  52: "followup", // Colocación OrthoApnea NOA
+  29: "followup", // Tratamiento con DAM: de los registros al seguimiento
+};
+
+/**
+ * One video recorded once per language arrives as separate resources (the
+ * George Gauge clip: 47 ES, 48 EN, 49 DE). Łukasz, NEO-151: show it once with
+ * all its flags. The first id is the entry's stable id; its default file and
+ * title follow the app locale's fallback chain, like every other resource.
+ */
+const LANGUAGE_TWINS: string[][] = [["47", "48", "49"]];
+
+export function mergeLanguageTwins(items: PartnerResourceItem[], locale: string): PartnerResourceItem[] {
+  const chain = (LOCALE_FALLBACK[locale] ?? LOCALE_FALLBACK.en).map((s) => s.toLowerCase());
+  const dropped = new Set<string>();
+  const merged = new Map<string, PartnerResourceItem>();
+  for (const group of LANGUAGE_TWINS) {
+    const members = group
+      .map((id) => items.find((i) => i.id === id))
+      .filter((i): i is PartnerResourceItem => Boolean(i));
+    if (members.length < 2) continue;
+    const rank = (m: PartnerResourceItem) =>
+      Math.min(99, ...m.languages.map((l) => chain.indexOf(l.code)).filter((n) => n >= 0));
+    const best = [...members].sort((a, b) => rank(a) - rank(b))[0]!;
+    merged.set(members[0]!.id, {
+      ...best,
+      id: members[0]!.id,
+      languages: members.flatMap((m) => m.languages),
+      weight: Math.min(...members.map((m) => m.weight)),
+    });
+    for (const m of members.slice(1)) dropped.add(m.id);
+  }
+  return items.filter((i) => !dropped.has(i.id)).map((i) => merged.get(i.id) ?? i);
+}
+
 export async function fetchResources(locale: string): Promise<PartnerResourceItem[]> {
   const rows = await fetchRawResources();
 
-  return rows
+  const items = rows
     .filter((row) => !row.deleted)
     .map((row): PartnerResourceItem => {
       const labels = RESOURCE_CATEGORY_BY_ID[row.id];
@@ -505,10 +563,12 @@ export async function fetchResources(locale: string): Promise<PartnerResourceIte
         category: labels?.category ?? UNKNOWN_CATEGORY,
         subcategory: labels?.subcategory ?? null,
         weight: row.weight,
+        ...(row.type === VIDEO_TYPE ? { topic: VIDEO_TOPIC_BY_ID[row.id] ?? "other" } : {}),
       };
     })
     .filter((item) => item.title) // no usable title in any language — not worth showing
     .sort((a, b) => a.weight - b.weight);
+  return mergeLanguageTwins(items, locale);
 }
 
 /** Resource id -> the video media path that actually worked, so repeat requests for the same video don't pay the two-path probe again. */

@@ -1,5 +1,8 @@
 import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
+import { Readable } from "node:stream";
 import ffmpegStatic from "ffmpeg-static";
 import { resolveVideoSource, type VideoSource } from "./orthoapnea.js";
 import { uploadPartnerDocument, downloadPartnerDocument } from "../partnerDocuments.js";
@@ -24,10 +27,18 @@ export interface Poster {
   durationSec: number | null;
 }
 
+export interface FfmpegResult {
+  code: number | null;
+  /** Set when the process was killed (e.g. SIGSEGV, or SIGKILL from the timeout) — logged, since code alone is null then. */
+  signal?: NodeJS.Signals | null;
+  stdout: Buffer;
+  stderr: string;
+}
+
 export interface PosterDeps {
   ffmpegPath: string | null;
   resolveSource: (resourceId: string, locale: string) => Promise<VideoSource>;
-  runFfmpeg: (args: string[]) => Promise<{ code: number | null; stdout: Buffer; stderr: string }>;
+  runFfmpeg: (args: string[]) => Promise<FfmpegResult>;
   storageGet: (path: string) => Promise<Uint8Array | null>;
   storagePut: (path: string, bytes: Uint8Array, contentType: string) => Promise<void>;
 }
@@ -39,7 +50,7 @@ const POSTER_WIDTH = 640;
 
 function defaultRunFfmpeg(path: string) {
   return (args: string[]) =>
-    new Promise<{ code: number | null; stdout: Buffer; stderr: string }>((resolve, reject) => {
+    new Promise<FfmpegResult>((resolve, reject) => {
       const child = spawn(path, args, { stdio: ["ignore", "pipe", "pipe"] });
       const out: Buffer[] = [];
       let err = "";
@@ -50,9 +61,9 @@ function defaultRunFfmpeg(path: string) {
         clearTimeout(timer);
         reject(e);
       });
-      child.on("close", (code) => {
+      child.on("close", (code, signal) => {
         clearTimeout(timer);
-        resolve({ code, stdout: Buffer.concat(out), stderr: err });
+        resolve({ code, signal, stdout: Buffer.concat(out), stderr: err });
       });
     });
 }
@@ -94,34 +105,85 @@ function storagePath(resourceId: string, version: string, ext: "jpg" | "json"): 
   return `${STORAGE_PREFIX}/${resourceId}/${hash}.${ext}`;
 }
 
-function headerArgs(source: VideoSource): string[] {
-  const lines = Object.entries(source.headers).map(([k, v]) => `${k}: ${v}\r\n`).join("");
-  return lines ? ["-headers", lines] : [];
+/**
+ * ffmpeg reads the video through a throwaway HTTP proxy on 127.0.0.1, never
+ * apneadock.es directly. The ffmpeg-static Linux build is fully static, and a
+ * static glibc binary crashes (SIGSEGV) on its first DNS lookup — every poster
+ * on Cloud Run died that way (NEO-151, dev, 2026-09-28), while macOS builds
+ * worked. A numeric loopback URL needs no DNS and no TLS in ffmpeg; Node does
+ * both, and the session header never leaves apps/api either way. The random
+ * path keeps other local processes from using the open port meanwhile.
+ */
+async function withLoopbackUrl<T>(source: VideoSource, fn: (url: string) => Promise<T>): Promise<T> {
+  const secret = randomBytes(12).toString("hex");
+  const server = createServer((req, res) => {
+    if (req.url !== `/${secret}.mp4` || (req.method !== "GET" && req.method !== "HEAD")) {
+      res.writeHead(404).end();
+      return;
+    }
+    const headers: Record<string, string> = { ...source.headers };
+    if (typeof req.headers.range === "string") headers.Range = req.headers.range;
+    const upstream = new AbortController();
+    res.on("close", () => upstream.abort());
+    fetch(source.url, { method: req.method, headers, signal: upstream.signal })
+      .then((up) => {
+        const pass: Record<string, string> = {};
+        for (const name of ["content-type", "content-length", "content-range", "accept-ranges"]) {
+          const value = up.headers.get(name);
+          if (value) pass[name] = value;
+        }
+        res.writeHead(up.status, pass);
+        if (!up.body || req.method === "HEAD") {
+          res.end();
+          return;
+        }
+        Readable.fromWeb(up.body as import("node:stream/web").ReadableStream<Uint8Array>)
+          .on("error", () => res.destroy())
+          .pipe(res);
+      })
+      .catch(() => {
+        // benign: ffmpeg closed the connection (seek) or the partner dropped it — ffmpeg reports the failure itself.
+        if (!res.headersSent) res.writeHead(502);
+        res.end();
+      });
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => resolve());
+  });
+  try {
+    const { port } = server.address() as AddressInfo;
+    return await fn(`http://127.0.0.1:${port}/${secret}.mp4`);
+  } finally {
+    server.closeAllConnections();
+    server.close();
+  }
 }
 
-async function generate(source: VideoSource): Promise<Poster> {
-  // Pass 1: the input banner carries the duration (ffmpeg exits non-zero: no output given).
-  const probe = await deps.runFfmpeg(["-hide_banner", ...headerArgs(source), "-i", source.url]);
-  const durationSec = parseDurationSec(probe.stderr);
+function generate(source: VideoSource): Promise<Poster> {
+  return withLoopbackUrl(source, async (url) => {
+    // Pass 1: the input banner carries the duration (ffmpeg exits non-zero: no output given).
+    const probe = await deps.runFfmpeg(["-hide_banner", "-i", url]);
+    const durationSec = parseDurationSec(probe.stderr);
 
-  // Pass 2: seek (input-side, so only the needed bytes are fetched) and encode one frame.
-  const grab = await deps.runFfmpeg([
-    "-hide_banner",
-    "-loglevel", "error",
-    "-ss", frameTimestampSec(durationSec).toFixed(1),
-    ...headerArgs(source),
-    "-i", source.url,
-    "-frames:v", "1",
-    "-vf", `scale=${POSTER_WIDTH}:-2`,
-    "-q:v", "5",
-    "-f", "image2",
-    "-c:v", "mjpeg",
-    "pipe:1",
-  ]);
-  if (grab.code !== 0 || grab.stdout.length === 0) {
-    throw new Error(`ffmpeg frame grab failed (code ${grab.code}): ${grab.stderr.slice(-300)}`);
-  }
-  return { jpeg: new Uint8Array(grab.stdout), durationSec };
+    // Pass 2: seek (input-side, so only the needed bytes are fetched) and encode one frame.
+    const grab = await deps.runFfmpeg([
+      "-hide_banner",
+      "-loglevel", "error",
+      "-ss", frameTimestampSec(durationSec).toFixed(1),
+      "-i", url,
+      "-frames:v", "1",
+      "-vf", `scale=${POSTER_WIDTH}:-2`,
+      "-q:v", "5",
+      "-f", "image2",
+      "-c:v", "mjpeg",
+      "pipe:1",
+    ]);
+    if (grab.code !== 0 || grab.stdout.length === 0) {
+      throw new Error(`ffmpeg frame grab failed (code ${grab.code}, signal ${grab.signal ?? "none"}): ${grab.stderr.slice(-300)}`);
+    }
+    return { jpeg: new Uint8Array(grab.stdout), durationSec };
+  });
 }
 
 const memory = new Map<string, Poster>();

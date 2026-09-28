@@ -15,9 +15,11 @@ import { onBeforeUnmount, watch, type Ref } from "vue";
  *   measures the header and writes the numbers the keyframes need as CSS
  *   variables on the view; where scroll-driven animations aren't supported,
  *   it applies the same frames itself on scroll.
- * - Let go halfway and it settles: fully open, or fully docked when the page
- *   is long enough to dock at all (a short record simply stays open, as iOS
- *   large titles do).
+ * - Let go halfway and it settles: fully open or fully docked.
+ * - NEO-183: most records are shorter than a phone screen, so the page could
+ *   not scroll far enough to dock (often not at all). The view reserves just
+ *   the missing scroll room at its bottom (--rh-room), so every record can
+ *   collapse; a record long enough already gets none.
  */
 
 /** Where things land in the 48 px toolbar row, from the content's left edge. */
@@ -98,6 +100,54 @@ export function collapseProgress(scrollY: number, start: number, height: number)
   return Math.min(1, Math.max(0, (scrollY - start) / height));
 }
 
+/**
+ * Bottom room the view must add so the page can scroll to the docked state.
+ * Worked out from the view itself (its top in the page, its height without
+ * the room, and what the layout puts below it) rather than from the page's
+ * scroll height: a layout with a min-height fills a short page, so page
+ * height doesn't grow with the view until the view outgrows that filler.
+ */
+export function dockRoom(
+  start: number,
+  height: number,
+  view: { top: number; height: number; below: number },
+  viewport: number,
+): number {
+  if (height <= 0) return 0;
+  return Math.max(0, Math.ceil(viewport + start + height - view.top - view.height - view.below));
+}
+
+/**
+ * Top of `el` in the page, from offsetTop — which ignores transforms, so a
+ * page still sliding in (AppShell's entrance) doesn't skew the measurement.
+ */
+function pageTop(el: HTMLElement): number {
+  let top = 0;
+  for (let node: HTMLElement | null = el; node; node = node.offsetParent as HTMLElement | null) top += node.offsetTop;
+  return top;
+}
+
+/** In-flow space the layout keeps below `el`: ancestors' bottom padding, borders, margins and later siblings. */
+function spaceBelow(el: HTMLElement): number {
+  let sum = 0;
+  let node: HTMLElement | null = el;
+  while (node && node !== document.body) {
+    const cs = getComputedStyle(node);
+    sum += parseFloat(cs.marginBottom) || 0;
+    for (let sib = node.nextElementSibling; sib; sib = sib.nextElementSibling) {
+      const pos = getComputedStyle(sib).position;
+      if (pos !== "absolute" && pos !== "fixed" && sib instanceof HTMLElement) sum += sib.offsetHeight;
+    }
+    const parent: HTMLElement | null = node.parentElement;
+    if (parent) {
+      const ps = getComputedStyle(parent);
+      sum += (parseFloat(ps.paddingBottom) || 0) + (parseFloat(ps.borderBottomWidth) || 0);
+    }
+    node = parent;
+  }
+  return sum;
+}
+
 /** Where to settle after the finger lifts, or null to stay. */
 export function settleTarget(scrollY: number, start: number, height: number, maxScroll: number): number | null {
   const p = collapseProgress(scrollY, start, height);
@@ -163,7 +213,7 @@ export function useRecordHeaderCollapse(opts: {
   function clear() {
     const root = opts.root.value;
     if (!root) return;
-    for (const name of ["--rh-start", "--rh-R", "--rh-av-dx", "--rh-av-dy", "--rh-av-s", "--rh-nm-dx", "--rh-nm-dy", "--rh-nm-s", "--rh-nm-w0", "--rh-nm-w1", "--rh-fade", "--rh-label"]) {
+    for (const name of ["--rh-start", "--rh-room", "--rh-R", "--rh-av-dx", "--rh-av-dy", "--rh-av-s", "--rh-nm-dx", "--rh-nm-dy", "--rh-nm-s", "--rh-nm-w0", "--rh-nm-w1", "--rh-fade", "--rh-label"]) {
       root.style.removeProperty(name);
     }
   }
@@ -173,9 +223,17 @@ export function useRecordHeaderCollapse(opts: {
     const sentinel = opts.sentinel.value;
     const g = geometry();
     if (!opts.enabled.value || !root || !sentinel || !g) return clear();
-    start = Math.max(0, sentinel.getBoundingClientRect().top + window.scrollY - layoutTop());
+    start = Math.max(0, pageTop(sentinel) - layoutTop());
     height = g.height;
     root.style.setProperty("--rh-start", px(start));
+    // Measured without the room already reserved, so re-measuring is stable.
+    const reserved = parseFloat(root.style.getPropertyValue("--rh-room")) || 0;
+    const view = {
+      top: pageTop(root),
+      height: root.offsetHeight - reserved,
+      below: spaceBelow(root),
+    };
+    root.style.setProperty("--rh-room", px(dockRoom(start, height, view, window.innerHeight)));
     for (const [name, value] of Object.entries(collapseVars(g))) root.style.setProperty(name, value);
     if (!supportsTimeline) applyFallback();
   }

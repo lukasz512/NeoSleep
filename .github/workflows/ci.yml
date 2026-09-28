@@ -14,7 +14,17 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [dev, prod]
+    # Work branches too (NEO-182): the session waits for a green CI before it
+    # hands over the "Create PR" link, so CI has to run before a PR exists.
+    # Keep in sync with .claude/ci-autofix.json "ciBranchPatterns".
+    branches: [dev, prod, "worktree-*", "worker/*", "claude/*"]
+
+# Once the PR is opened, its pull_request run and a push run of the same commit
+# can overlap — the newer one cancels the older (cancelled runs are ignored by
+# infrastructure/scripts/ci-status.mjs).
+concurrency:
+  group: ci-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -112,6 +122,9 @@ jobs:
       - name: Sync isolated test tenant schema
         run: pnpm --filter @neo/api sync-test-schema
 
+      - name: Test — infrastructure scripts (blocking)
+        run: node --test "infrastructure/scripts/*.test.mjs"
+
       - name: Test — api (blocking)
         run: pnpm --filter @neo/api test
 
@@ -181,3 +194,20 @@ jobs:
             if (Buffer.from(pdf.subarray(0, 5)).toString("latin1") !== "%PDF-") throw new Error("not a PDF");
             console.log("PDF OK", pdf.length, "bytes");
             process.exit(0);'
+
+  # Claude Code tooling (hooks, ship-artifact, worktree cleanup) has its own self-tests.
+  # They need only git, jq, bash and Node, no install and no database (CORE-23).
+  tooling:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+      - name: Tooling self-tests
+        run: |
+          git config --global user.name ci && git config --global user.email ci@example.com
+          node --test .claude/skills/ship-artifact/ticket.test.mjs
+          bash .claude/hooks/pre-tool-linear-ticket-format.test.sh
+          bash infrastructure/scripts/worktree-clean.test.sh

@@ -88,9 +88,9 @@ is_protected() {
   return 1
 }
 
-ticket_of() {
-  printf '%s' "$1" | grep -oiE 'neo-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]'
-}
+# ticket_of <branch> → NEO-163 / CORE-23 / … (team keys in .claude/ticket-teams, CORE-23).
+# shellcheck source=../../.claude/hooks/lib/ticket.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/.claude/hooks/lib/ticket.sh"
 
 # Why a ref is not safe to drop, or empty if it is. Safe = merged into BASE with own
 # commits, either by ancestry or with every own commit already on BASE as an identical

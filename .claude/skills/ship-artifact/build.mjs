@@ -24,6 +24,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { dirname, join, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { ticketFromBranch, ticketTeams } from "./ticket.mjs";
 import { validateQuestions, widget } from "../decision-form/decisions.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -37,7 +38,7 @@ const git = (...args) => {
 
 const ROOT = git("rev-parse", "--show-toplevel") || process.cwd();
 const BRANCH = git("rev-parse", "--abbrev-ref", "HEAD");
-const TICKET_FROM_BRANCH = (BRANCH.match(/\b((?:neo|core|ajm)-\d+)\b/i)?.[1] ?? "").toUpperCase() || null;
+const TICKET_FROM_BRANCH = ticketFromBranch(BRANCH);
 const MARKER_DIR = join(ROOT, ".claude/local/artifacts");
 const DRAFT = join(MARKER_DIR, ".draft.json");
 // The index is shared by every worktree, so it lives in the main checkout's .claude/local.
@@ -181,7 +182,7 @@ function render(contentPath) {
     if (!c[key] || (Array.isArray(c[key]) && !c[key].length)) throw new Error(`content.${key} is required`);
   }
   if (!ticket) {
-    throw new Error("every change needs a ticket (NEO-84): create it in Linear first (NEO/CORE/AJM) and work on a branch named after it (worktree-<team>-<n>-<slug>)");
+    throw new Error(`every change needs a Linear ticket (NEO-84): create it in Linear first and work on a branch named after it (worktree-<key>-<n>-<slug>, key one of ${ticketTeams().join("/")})`);
   }
   if (!SESSION_ID) throw new Error("CLAUDE_CODE_SESSION_ID is not set — run this from the Claude Code session that made the change (needed for the VS Code link)");
   checkLimits(c);
