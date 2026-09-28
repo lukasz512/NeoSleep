@@ -1213,6 +1213,8 @@
   "app.clinical.bundleQr": "QR for the patient",
   "app.clinical.qrStatus.creating": "Creating link…",
   "app.clinical.qrStatus.waiting": "{done} of {total} · expires in {time}",
+  "app.clinical.qrStatus.waitingCount": "{done} of {total} · ",
+  "app.clinical.qrStatus.waitingExpires": "expires in {time}",
   "app.clinical.qrStatus.done": "All received",
   "app.clinical.qrStatus.retry": "Retry",
   "app.clinical.qrStatus.newQr": "New QR",
