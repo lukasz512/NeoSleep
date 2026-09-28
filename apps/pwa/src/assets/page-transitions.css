@@ -156,3 +156,38 @@ html[data-page-transition="module"]::view-transition-new(pwa-page) {
     animation: pwa-page-fade-in 160ms linear both;
   }
 }
+
+/* ── chrome stays on top (NEO-161) ─────────────────────────────────
+   The page sheet has its own view-transition-name, so during a page change
+   it is drawn in the ::view-transition overlay — above the whole document,
+   z-index 9998 of the bottom nav included. That is why the card used to
+   slide over the menu. The app bar and the bottom pill get their own names
+   too, and their groups are stacked above the page and never animate: they
+   stay exactly where they are while the page changes underneath. */
+.app-shell__bar {
+  view-transition-name: pwa-top-bar;
+}
+.app-shell__bottom-nav {
+  view-transition-name: pwa-bottom-nav;
+}
+/* Listed with the html[data-page-transition] prefix too, so the reduce-motion
+   crossfade above (which targets every snapshot) never fades them. */
+::view-transition-group(pwa-top-bar),
+::view-transition-group(pwa-bottom-nav),
+html[data-page-transition]::view-transition-group(pwa-top-bar),
+html[data-page-transition]::view-transition-group(pwa-bottom-nav) {
+  z-index: 10;
+  animation: none;
+}
+::view-transition-old(pwa-top-bar),
+::view-transition-old(pwa-bottom-nav),
+html[data-page-transition]::view-transition-old(pwa-top-bar),
+html[data-page-transition]::view-transition-old(pwa-bottom-nav) {
+  display: none;
+}
+::view-transition-new(pwa-top-bar),
+::view-transition-new(pwa-bottom-nav),
+html[data-page-transition]::view-transition-new(pwa-top-bar),
+html[data-page-transition]::view-transition-new(pwa-bottom-nav) {
+  animation: none;
+}

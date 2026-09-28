@@ -1,44 +1,64 @@
 <template>
-  <Transition name="mobile-nav-panel-scrim">
-    <div v-if="expanded" class="mobile-nav-panel__scrim" aria-hidden="true" @click="setExpanded(false)" />
-  </Transition>
+  <div
+    class="mobile-nav-panel__scrim"
+    :class="{ 'mobile-nav-panel__scrim--visible': expanded }"
+    aria-hidden="true"
+    @click="setExpanded(false)"
+  />
 
-  <nav
-    ref="panelEl"
-    v-bind="$attrs"
-    class="mobile-nav-panel"
-    :class="{ 'mobile-nav-panel--expanded': expanded, 'mobile-nav-panel--dragging': dragOffset !== 0 }"
-    :style="dragOffset !== 0 ? { transform: `translateY(${dragOffset}px)` } : undefined"
-    :aria-label="ariaLabel"
-    @pointerdown="onPointerDown"
+  <!-- The module grid: a second glass capsule floating above the bar. It is
+       always in the DOM so opening and closing are plain CSS transitions. -->
+  <div
+    v-if="hasOverflow"
+    :id="sheetId"
+    class="mobile-nav-panel__sheet"
+    :class="{ 'mobile-nav-panel__sheet--open': expanded, 'mobile-nav-panel__sheet--dragging': sheetDrag !== 0 }"
+    :style="sheetDrag !== 0 ? { transform: `translateY(${sheetDrag}px)` } : undefined"
+    :inert="expanded ? undefined : true"
+    @pointerdown="onSheetPointerDown"
     @dragstart.prevent
   >
-    <div v-if="expanded" class="mobile-nav-panel__handle" aria-hidden="true" />
-    <div class="mobile-nav-panel__items">
-      <div
-        v-for="(item, index) in items"
-        :key="item.path"
-        :ref="(el) => setCellEl(item.path, el)"
-        class="mobile-nav-panel__cell"
-        :class="{ 'mobile-nav-panel__cell--overflow': index >= primaryCount }"
-      >
+    <div class="mobile-nav-panel__handle" aria-hidden="true" />
+    <div class="mobile-nav-panel__grid">
+      <div v-for="item in overflowItems" :key="item.path" class="mobile-nav-panel__cell">
         <MobileBottomNavItem :to="item.path" :label="item.label" :show-label="showLabels" @click="onItemClick">
           <slot name="icon" :item="item" />
         </MobileBottomNavItem>
       </div>
-      <div v-if="hasOverflow" :ref="(el) => setCellEl(TOGGLE_KEY, el)" class="mobile-nav-panel__cell">
+    </div>
+  </div>
+
+  <nav
+    v-bind="$attrs"
+    class="mobile-nav-panel"
+    :class="{ 'mobile-nav-panel--expanded': expanded, 'mobile-nav-panel--dragging': barLift !== 0 }"
+    :style="barLift !== 0 ? { transform: `translateY(${barLift}px)` } : undefined"
+    :aria-label="ariaLabel"
+    @pointerdown="onBarPointerDown"
+    @dragstart.prevent
+  >
+    <div class="mobile-nav-panel__items">
+      <div v-for="item in primaryItems" :key="item.path" class="mobile-nav-panel__cell">
+        <MobileBottomNavItem :to="item.path" :label="item.label" :show-label="showLabels" @click="onItemClick">
+          <slot name="icon" :item="item" />
+        </MobileBottomNavItem>
+      </div>
+      <!-- "More" and "Close" are the same button in the same slot: only its
+           icon (dots ⇄ X) and label change. -->
+      <div v-if="hasOverflow" class="mobile-nav-panel__cell">
         <MobileBottomNavItem
           :label="expanded ? closeLabel : moreLabel"
           :show-label="showLabels"
           :active="!expanded && overflowActive"
           :expanded="expanded"
+          :aria-controls="sheetId"
           class="mobile-nav-panel__toggle"
           @click="onToggleClick"
         >
           <span class="mobile-nav-panel__toggle-icon" aria-hidden="true">
             <span class="mobile-nav-panel__dots"><span /><span /><span /></span>
-            <svg class="mobile-nav-panel__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M6 9l6 6 6-6" />
+            <svg class="mobile-nav-panel__close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M6 6l12 12M18 6L6 18" />
             </svg>
           </span>
         </MobileBottomNavItem>
@@ -48,7 +68,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onUnmounted, ref, watch, type ComponentPublicInstance } from "vue";
+import { computed, onUnmounted, ref, useId, watch } from "vue";
 import { useRoute } from "vue-router";
 import MobileBottomNavItem from "./MobileBottomNavItem.vue";
 
@@ -59,21 +79,19 @@ export interface MobileNavPanelItem {
 }
 
 /**
- * Mobile bottom navigation that expands in place into a grid of every
- * module (NEO-55). Collapsed it is the familiar bottom bar: the first
- * `primaryCount` items plus a "More" toggle. Expanded, the *same* cells
- * re-flow into a 4-column grid, so each item visibly travels from its bar
- * slot to its grid slot (FLIP, via the Web Animations API), the overflow
- * items fade in behind them, and "More" — which lands in the grid's last
- * cell, next to where it was — turns into a close chevron.
+ * Mobile bottom navigation, NEO-161 "Kropla": a floating liquid-glass pill
+ * with the first `primaryCount` items plus a "More" toggle. "More" opens the
+ * remaining modules in a second glass capsule above the pill; the pill itself
+ * never re-flows, so "Close" is exactly where "More" was.
  *
- * Opens on: "More", or pulling the bar up. Closes on: the chevron, a tap on
- * the scrim, a drag down, Escape, and any navigation. Honors
- * prefers-reduced-motion (state changes, no movement).
+ * All motion is CSS (transform + opacity on classes this component toggles):
+ * no layout is measured or animated from script, so it stays smooth on slow
+ * phones. Opens on: "More", or pulling the pill up. Closes on: the same
+ * button, a tap on the scrim, a drag down on the capsule, Escape, and any
+ * navigation. Honors prefers-reduced-motion (state changes, no movement).
  */
-// Two roots (scrim + panel): parent class/style (e.g. AppShell's entrance
-// animation) belongs on the panel itself, which stays position: fixed — a
-// transformed wrapper would re-anchor it.
+// Several roots (scrim + sheet + bar): parent class/style (e.g. AppShell's
+// entrance animation) belongs on the bar itself.
 defineOptions({ inheritAttrs: false });
 
 const props = withDefaults(
@@ -88,126 +106,41 @@ const props = withDefaults(
   { primaryCount: 4, showLabels: false, ariaLabel: "Navigation", moreLabel: "More", closeLabel: "Close" },
 );
 
-const TOGGLE_KEY = "__toggle__";
-const DURATION = 360;
-const EASING = "cubic-bezier(0.2, 0, 0, 1)";
-/** How far a drag must travel down before release closes the panel. */
-const DRAG_CLOSE_THRESHOLD = 72;
-/** How far the collapsed bar must be pulled up before release opens it. */
+/** How far a drag must travel down before release closes the capsule. */
+const DRAG_CLOSE_THRESHOLD = 64;
+/** How far the pill must be pulled up before release opens the capsule. */
 const DRAG_OPEN_THRESHOLD = 32;
-/** The collapsed bar follows an upward pull at this fraction, capped — a hint, not a real move. */
+/** The pill follows an upward pull at this fraction, capped — a hint, not a real move. */
 const DRAG_OPEN_RESISTANCE = 0.35;
-const DRAG_OPEN_MAX_LIFT = 20;
+const DRAG_OPEN_MAX_LIFT = 16;
 
 const route = useRoute();
-const panelEl = ref<HTMLElement | null>(null);
+const sheetId = `mobile-nav-sheet-${useId()}`;
 const expanded = ref(false);
-const dragOffset = ref(0);
-const cellEls = new Map<string, HTMLElement>();
+/** Live drag offsets (px); 0 = not dragging, the CSS state rules. */
+const sheetDrag = ref(0);
+const barLift = ref(0);
 
 const hasOverflow = computed(() => props.items.length > props.primaryCount);
+const primaryItems = computed(() => props.items.slice(0, props.primaryCount));
+const overflowItems = computed(() => props.items.slice(props.primaryCount));
 
 /** "More" reads as the active tab while the rep is inside one of its modules. */
 const overflowActive = computed(() =>
-  props.items
-    .slice(props.primaryCount)
-    .some((item) => route.path === item.path || route.path.startsWith(`${item.path}/`)),
+  overflowItems.value.some((item) => route.path === item.path || route.path.startsWith(`${item.path}/`)),
 );
 
-function setCellEl(key: string, el: Element | ComponentPublicInstance | null) {
-  if (el instanceof HTMLElement) cellEls.set(key, el);
-  else cellEls.delete(key);
-}
-
-function isRendered(el: HTMLElement): boolean {
-  return el.getClientRects().length > 0;
-}
-
-function prefersReducedMotion(): boolean {
-  return typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-}
-
-let transitioning = false;
-
-async function setExpanded(next: boolean) {
-  if (next === expanded.value || transitioning) return;
-  const panel = panelEl.value;
-  if (!panel || prefersReducedMotion() || typeof panel.animate !== "function") {
-    expanded.value = next;
-    dragOffset.value = 0;
-    return;
-  }
-  transitioning = true;
-  try {
-    // Collapsing: the overflow items have no slot in the bar, so they fade
-    // out first instead of vanishing when the layout snaps back.
-    if (!next) {
-      const leaving = [...cellEls.entries()]
-        .filter(([key, el]) => key !== TOGGLE_KEY && el.classList.contains("mobile-nav-panel__cell--overflow"))
-        .map(([, el]) =>
-          el.animate([{ opacity: 1 }, { opacity: 0, transform: "translateY(8px)" }], {
-            duration: 120,
-            easing: "ease-in",
-            fill: "forwards",
-          }),
-        );
-      // benign: a cancelled animation rejects `finished` — it is still finished for our purposes.
-      await Promise.all(leaving.map((a) => a.finished.catch(() => undefined)));
-      leaving.forEach((a) => a.cancel());
-    }
-
-    // FLIP — First: where everything is now (a drag offset included, so a
-    // drag-to-close continues from where the finger let go).
-    const first = new Map<string, DOMRect>();
-    cellEls.forEach((el, key) => {
-      if (isRendered(el)) first.set(key, el.getBoundingClientRect());
-    });
-    const panelFirst = panel.getBoundingClientRect();
-
-    // Last: switch layout.
-    expanded.value = next;
-    dragOffset.value = 0;
-    await nextTick();
-    const panelLast = panel.getBoundingClientRect();
-
-    // Invert + Play. The panel is pinned to the bottom, so animating its
-    // height grows/shrinks it upward — the bar "rises" into the sheet.
-    panel.animate(
-      [
-        { height: `${panelFirst.height}px`, transform: `translateY(${panelFirst.bottom - panelLast.bottom}px)` },
-        { height: `${panelLast.height}px`, transform: "none" },
-      ],
-      { duration: DURATION, easing: EASING },
-    );
-
-    let appearIndex = 0;
-    cellEls.forEach((el, key) => {
-      if (!isRendered(el)) return;
-      const last = el.getBoundingClientRect();
-      const from = first.get(key);
-      if (from) {
-        el.animate(
-          [{ transform: `translate(${from.left - last.left}px, ${from.top - last.top}px)` }, { transform: "none" }],
-          { duration: DURATION, easing: EASING },
-        );
-      } else {
-        el.animate(
-          [
-            { opacity: 0, transform: "translateY(12px) scale(0.96)" },
-            { opacity: 1, transform: "none" },
-          ],
-          { duration: 260, delay: 120 + appearIndex++ * 40, easing: EASING, fill: "backwards" },
-        );
-      }
-    });
-  } finally {
-    transitioning = false;
-  }
+function setExpanded(next: boolean) {
+  expanded.value = next && hasOverflow.value;
+  // Clearing the inline offset hands the element back to its CSS transition,
+  // which continues from where the finger let go.
+  sheetDrag.value = 0;
+  barLift.value = 0;
 }
 
 function onToggleClick(event: MouseEvent) {
   if (consumeSuppressedClick(event)) return;
-  void setExpanded(!expanded.value);
+  setExpanded(!expanded.value);
 }
 
 function onItemClick(event: MouseEvent) {
@@ -215,26 +148,27 @@ function onItemClick(event: MouseEvent) {
   consumeSuppressedClick(event);
 }
 
-// Any navigation (a grid item, the back arrow, a bar tab) collapses the panel.
+// Any navigation (a grid item, the back arrow, a bar tab) closes the capsule.
 watch(
   () => route.fullPath,
-  () => void setExpanded(false),
+  () => setExpanded(false),
 );
 
 // ── Escape ─────────────────────────────────────────────────────────────
 function onKeydown(event: KeyboardEvent) {
-  if (event.key === "Escape") void setExpanded(false);
+  if (event.key === "Escape") setExpanded(false);
 }
 watch(expanded, (isOpen) => {
   if (isOpen) window.addEventListener("keydown", onKeydown);
   else window.removeEventListener("keydown", onKeydown);
 });
 
-// ── Drag: pull the bar up to open, drag the grid down to close ────────────
+// ── Drag: pull the pill up to open, drag the capsule down to close ─────────
 let dragStartY = 0;
 let dragging = false;
 /** Raw finger travel (px, negative = up), independent of the resisted visual offset. */
 let dragDelta = 0;
+let dragTarget: "bar" | "sheet" = "bar";
 let suppressNextClick = false;
 
 function consumeSuppressedClick(event: MouseEvent): boolean {
@@ -244,8 +178,8 @@ function consumeSuppressedClick(event: MouseEvent): boolean {
   return true;
 }
 
-function onPointerDown(event: PointerEvent) {
-  if (transitioning || (!expanded.value && !hasOverflow.value)) return;
+function startDrag(target: "bar" | "sheet", event: PointerEvent) {
+  dragTarget = target;
   dragStartY = event.clientY;
   dragging = false;
   dragDelta = 0;
@@ -254,16 +188,24 @@ function onPointerDown(event: PointerEvent) {
   window.addEventListener("pointercancel", onPointerUp);
 }
 
+function onBarPointerDown(event: PointerEvent) {
+  if (!expanded.value && hasOverflow.value) startDrag("bar", event);
+}
+
+function onSheetPointerDown(event: PointerEvent) {
+  if (expanded.value) startDrag("sheet", event);
+}
+
 function onPointerMove(event: PointerEvent) {
   dragDelta = event.clientY - dragStartY;
-  if (expanded.value) {
-    // Grid: follows the finger down 1:1.
+  if (dragTarget === "sheet") {
+    // Capsule: follows the finger down 1:1.
     if (!dragging && dragDelta > 8) dragging = true;
-    if (dragging) dragOffset.value = Math.max(0, dragDelta);
+    if (dragging) sheetDrag.value = Math.max(0, dragDelta);
   } else {
-    // Bar: lifts a little under an upward pull, so the gesture visibly "takes".
+    // Pill: lifts a little under an upward pull, so the gesture visibly "takes".
     if (!dragging && dragDelta < -8) dragging = true;
-    if (dragging) dragOffset.value = Math.max(-DRAG_OPEN_MAX_LIFT, Math.min(0, dragDelta * DRAG_OPEN_RESISTANCE));
+    if (dragging) barLift.value = Math.max(-DRAG_OPEN_MAX_LIFT, Math.min(0, dragDelta * DRAG_OPEN_RESISTANCE));
   }
 }
 
@@ -280,21 +222,8 @@ function onPointerUp() {
   suppressNextClick = true;
   // The click (if any) fires right after pointerup; drop the guard after it.
   window.setTimeout(() => (suppressNextClick = false), 0);
-  // Both continue from where the finger let go: setExpanded measures the
-  // FLIP "first" positions with the drag offset still applied.
-  if (expanded.value && dragDelta > DRAG_CLOSE_THRESHOLD) {
-    void setExpanded(false);
-  } else if (!expanded.value && dragDelta < -DRAG_OPEN_THRESHOLD) {
-    void setExpanded(true);
-  } else {
-    const panel = panelEl.value;
-    const from = dragOffset.value;
-    dragOffset.value = 0;
-    panel?.animate?.([{ transform: `translateY(${from}px)` }, { transform: "none" }], {
-      duration: 200,
-      easing: EASING,
-    });
-  }
+  if (dragTarget === "sheet") setExpanded(dragDelta <= DRAG_CLOSE_THRESHOLD);
+  else setExpanded(dragDelta < -DRAG_OPEN_THRESHOLD);
 }
 
 onUnmounted(() => {
@@ -306,27 +235,48 @@ defineExpose({ expanded, setExpanded });
 </script>
 
 <style scoped>
-/* Collapsed: identical to MobileBottomNavBar (same tokens, same metrics). */
+/* Material + motion tokens. The app (apps/pwa theme.scss) sets them per
+   theme; these fallbacks keep the component usable on its own. */
+.mobile-nav-panel,
+.mobile-nav-panel__sheet,
+.mobile-nav-panel__scrim {
+  --_float: var(--mobile-bottom-nav-float, 10px);
+  --_height: var(--mobile-bottom-nav-height, 64px);
+  --_glass: var(--glass-surface, rgb(255 255 255 / 0.74));
+  --_glass-solid: var(--glass-solid, #fff);
+  --_glass-blur: var(--glass-blur, blur(18px) saturate(170%));
+  --_glass-edge: var(--glass-edge, rgb(255 255 255 / 0.7));
+  --_glass-shadow: var(--glass-shadow, 0 12px 32px -10px rgb(0 0 0 / 0.28));
+  --_dur-in: var(--menu-dur-in, 420ms);
+  --_dur-out: var(--menu-dur-out, 180ms);
+  --_spring: var(--menu-spring, cubic-bezier(0.34, 1.3, 0.64, 1));
+  --_ease-out: var(--menu-ease-out, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+/* The pill: floats --_float above the bottom edge (and the home indicator),
+   a phone-sized cluster in the middle on tablets. */
 .mobile-nav-panel {
   position: fixed;
-  bottom: 0;
   left: 0;
   right: 0;
+  bottom: calc(var(--_float) + env(safe-area-inset-bottom));
   z-index: 9998;
+  width: calc(100% - 2 * var(--_float));
+  max-width: 480px;
+  height: var(--_height);
+  margin-inline: auto;
+  padding-inline: 6px;
   display: flex;
-  flex-direction: column;
-  height: calc(var(--mobile-bottom-nav-height, 64px) + env(safe-area-inset-bottom));
-  /* Same side edge as the page content above it (NEO-61). */
-  padding-inline: var(--page-gutter, 20px);
-  padding-bottom: env(safe-area-inset-bottom);
-  background: var(--mobile-bottom-nav-bg, #fff);
-  border-top: 1px solid var(--mobile-bottom-nav-border, rgba(0, 0, 0, 0.12));
-  border-top-left-radius: var(--mobile-bottom-nav-radius, 0);
-  border-top-right-radius: var(--mobile-bottom-nav-radius, 0);
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
-  /* Vertical drags are ours (pull up to open, drag down to close) — the bar
-     never scrolls, so the browser must not claim them as a pan. Taps are
-     unaffected. */
+  border-radius: calc(var(--_height) / 2);
+  background: var(--_glass);
+  -webkit-backdrop-filter: var(--_glass-blur);
+  backdrop-filter: var(--_glass-blur);
+  box-shadow:
+    inset 0 1px 0 var(--_glass-edge),
+    var(--_glass-shadow);
+  transition: transform var(--_dur-out) var(--_ease-out);
+  /* Vertical drags are ours (pull up to open) — the pill never scrolls, so
+     the browser must not claim them as a pan. Taps are unaffected. */
   touch-action: none;
 }
 
@@ -334,19 +284,13 @@ defineExpose({ expanded, setExpanded });
   flex: 1 1 auto;
   display: flex;
   align-items: stretch;
-  justify-content: center;
-  gap: var(--space-2, 8px);
-  /* Tablet width (NEO-61): the items — and the expanded module grid — stay a
-     phone-sized cluster in the middle instead of spreading across the whole
-     bar. 5 cells × 89px + 4 gaps. */
-  width: 100%;
-  max-width: 480px;
-  margin-inline: auto;
+  justify-content: space-between;
+  min-width: 0;
 }
 
 .mobile-nav-panel__cell {
-  flex: 0 1 89px;
-  min-width: 55px;
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
 }
 
@@ -356,68 +300,112 @@ defineExpose({ expanded, setExpanded });
   min-width: 0;
 }
 
-.mobile-nav-panel__cell--overflow {
-  display: none;
+/* The module capsule: same material and width as the pill, just above it.
+   Closed it is shrunk into the "More" button's corner and transparent;
+   open it springs out of that corner. Transform + opacity only. */
+.mobile-nav-panel__sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--_height) + 2 * var(--_float) + env(safe-area-inset-bottom));
+  z-index: 9998;
+  width: calc(100% - 2 * var(--_float));
+  max-width: 480px;
+  margin-inline: auto;
+  padding: 6px 8px 10px;
+  border-radius: 28px;
+  background: var(--_glass);
+  -webkit-backdrop-filter: var(--_glass-blur);
+  backdrop-filter: var(--_glass-blur);
+  box-shadow:
+    inset 0 1px 0 var(--_glass-edge),
+    var(--_glass-shadow);
+  transform-origin: calc(100% - 36px) calc(100% + var(--_float) + var(--_height) / 2);
+  transform: translateY(12px) scale(0.4, 0.3);
+  opacity: 0;
+  visibility: hidden;
+  touch-action: none;
+  contain: layout paint;
+  will-change: transform, opacity;
+  transition:
+    transform var(--_dur-out) var(--_ease-out),
+    opacity var(--_dur-out) linear,
+    visibility 0s linear var(--_dur-out);
 }
 
-/* Expanded: the same cells as a 4-column grid, the panel sized by content. */
-.mobile-nav-panel--expanded {
-  height: auto;
-  padding-top: var(--space-2, 8px);
-  padding-bottom: calc(var(--space-4, 16px) + env(safe-area-inset-bottom));
-  border-top-left-radius: 20px;
-  border-top-right-radius: 20px;
-  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.16);
+.mobile-nav-panel__sheet--open {
+  transform: none;
+  opacity: 1;
+  visibility: visible;
+  transition:
+    transform var(--_dur-in) var(--_spring),
+    opacity 120ms linear,
+    visibility 0s;
 }
 
-.mobile-nav-panel--expanded .mobile-nav-panel__items {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-2, 8px);
-}
-
-.mobile-nav-panel--expanded .mobile-nav-panel__cell,
-.mobile-nav-panel--expanded .mobile-nav-panel__cell--overflow {
-  display: flex;
-  min-height: 72px;
-}
-
-.mobile-nav-panel--expanded .mobile-nav-panel__cell :deep(.mobile-bottom-nav-item__label) {
-  text-align: center;
-  line-height: 1.2;
-}
-
+.mobile-nav-panel__sheet--dragging,
 .mobile-nav-panel--dragging {
   transition: none;
+}
+
+/* The items settle a beat after the capsule. */
+.mobile-nav-panel__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 100ms linear,
+    transform 100ms linear;
+}
+
+.mobile-nav-panel__sheet--open .mobile-nav-panel__grid {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 200ms linear 90ms,
+    transform 260ms var(--_ease-out) 90ms;
+}
+
+.mobile-nav-panel__grid .mobile-nav-panel__cell {
+  min-height: 68px;
+}
+
+.mobile-nav-panel__grid .mobile-nav-panel__cell :deep(.mobile-bottom-nav-item) {
+  border-radius: 16px;
+}
+
+.mobile-nav-panel__grid .mobile-nav-panel__cell :deep(.mobile-bottom-nav-item__label) {
+  text-align: center;
+  line-height: 1.2;
 }
 
 /* Visible affordance for the drag-down gesture. */
 .mobile-nav-panel__handle {
   width: 36px;
   height: 4px;
-  margin: 0 auto 8px;
+  margin: 2px auto 6px;
   border-radius: 2px;
-  background: currentColor;
-  color: var(--mobile-bottom-nav-item-color, #666);
+  background: var(--mobile-bottom-nav-item-color, #666);
   opacity: 0.35;
-  flex: none;
 }
 
-/* "More" dots ⇄ close chevron, crossfading in place. */
+/* "More" dots ⇄ Close X, in place. */
 .mobile-nav-panel__toggle-icon {
   position: relative;
   display: inline-grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
 }
 
 .mobile-nav-panel__dots,
-.mobile-nav-panel__chevron {
+.mobile-nav-panel__close {
   grid-area: 1 / 1;
   transition:
-    opacity 200ms ease,
-    transform 360ms cubic-bezier(0.2, 0, 0, 1);
+    opacity var(--_dur-out) linear,
+    transform var(--_dur-out) var(--_ease-out);
 }
 
 .mobile-nav-panel__dots {
@@ -433,46 +421,77 @@ defineExpose({ expanded, setExpanded });
   }
 }
 
-.mobile-nav-panel__chevron {
-  width: 22px;
-  height: 22px;
+.mobile-nav-panel__close {
+  width: 20px;
+  height: 20px;
   opacity: 0;
-  transform: rotate(-180deg);
+  transform: rotate(-90deg) scale(0.5);
+}
+
+.mobile-nav-panel--expanded .mobile-nav-panel__toggle {
+  color: var(--mobile-bottom-nav-item-active-color, #1976d2);
 }
 
 .mobile-nav-panel--expanded .mobile-nav-panel__dots {
   opacity: 0;
-  transform: rotate(90deg) scale(0.6);
+  transform: rotate(90deg) scale(0.5);
 }
 
-.mobile-nav-panel--expanded .mobile-nav-panel__chevron {
+.mobile-nav-panel--expanded .mobile-nav-panel__close {
   opacity: 1;
   transform: none;
 }
 
+/* A plain dim, no blur: cheap to fade on any phone. */
 .mobile-nav-panel__scrim {
   position: fixed;
   inset: 0;
   z-index: 9997;
-  background: rgba(0, 0, 0, 0.32);
-}
-
-.mobile-nav-panel-scrim-enter-active,
-.mobile-nav-panel-scrim-leave-active {
-  transition: opacity 280ms ease;
-}
-
-.mobile-nav-panel-scrim-enter-from,
-.mobile-nav-panel-scrim-leave-to {
+  background: var(--mobile-nav-scrim, rgb(0 0 0 / 0.28));
   opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--_dur-out) linear;
+}
+
+.mobile-nav-panel__scrim--visible {
+  opacity: 1;
+  pointer-events: auto;
+  transition-duration: 240ms;
+}
+
+/* No glass where the browser can't blur, or the user asked for less
+   transparency: the same shapes in a solid surface. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .mobile-nav-panel,
+  .mobile-nav-panel__sheet {
+    background: var(--_glass-solid);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .mobile-nav-panel,
+  .mobile-nav-panel__sheet {
+    background: var(--_glass-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .mobile-nav-panel__sheet,
+  .mobile-nav-panel__sheet--open {
+    transform: none;
+  }
+
+  .mobile-nav-panel__sheet,
+  .mobile-nav-panel__sheet--open,
+  .mobile-nav-panel__grid,
+  .mobile-nav-panel__sheet--open .mobile-nav-panel__grid,
   .mobile-nav-panel__dots,
-  .mobile-nav-panel__chevron,
-  .mobile-nav-panel-scrim-enter-active,
-  .mobile-nav-panel-scrim-leave-active {
-    transition: none;
+  .mobile-nav-panel__close,
+  .mobile-nav-panel__scrim {
+    transition-duration: 0s;
+    transition-delay: 0s;
   }
 }
 </style>

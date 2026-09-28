@@ -10,7 +10,7 @@
   >
     <!-- NEO-154: text left, avatar right — the avatar is the app bar's avatar,
          pinned in place and grown, so the menu reads as that button opened up
-         (data-motion marks what useAccountMenuMotion moves). -->
+         (data-motion marks what AppAccountMenu's CSS motion moves). -->
     <div class="user-menu__identity">
       <div class="user-menu__who">
         <span class="user-menu__name" data-motion="name">{{ name }}</span>

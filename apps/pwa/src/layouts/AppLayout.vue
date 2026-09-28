@@ -77,9 +77,9 @@
            that avatar on both (NEO-154 replaced the phone bottom sheet). -->
       <template #app-bar-actions>
         <div ref="barActions" class="layout-bar-actions">
-          <!-- NEO-122 / NEO-154: the avatar button turns into the menu — the
-               avatar stays put and grows, the card pours out of it (same on
-               desktop and phone); see AppAccountMenu + useAccountMenuMotion. -->
+          <!-- NEO-122 / NEO-154 / NEO-161: the avatar button turns into the
+               menu — the avatar stays put and grows, the glass card springs
+               out of it (same on desktop and phone); see AppAccountMenu. -->
           <AppAccountMenu v-model:open="menuOpen" :mobile="isMobile" :label="t('user.user.menu')">
           <template #trigger="{ open: accountMenuOpen }">
             <AppButton
@@ -796,7 +796,8 @@ const moduleIcon = computed(() => {
 .layout-root:not(.layout-root--desktop) .layout-main__inner {
   margin-inline: var(--layout-sheet-margin);
   min-height: calc(
-    100dvh - var(--v-layout-top, 56px) - var(--mobile-bottom-nav-height, 56px) - env(safe-area-inset-bottom)
+    100dvh - var(--v-layout-top, 56px) - var(--mobile-bottom-nav-height, 56px) - 2 * var(--mobile-bottom-nav-float, 10px)
+      - env(safe-area-inset-bottom)
       - var(--layout-sheet-foot)
   );
 }

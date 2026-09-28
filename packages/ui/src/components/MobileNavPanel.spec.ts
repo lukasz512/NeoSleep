@@ -1,4 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
 import { createRouter, createMemoryHistory } from "vue-router";
 import MobileNavPanel from "./MobileNavPanel.vue";
@@ -34,30 +36,47 @@ async function mountPanel(path = "/dashboard") {
 
 const toggle = (w: VueWrapper) => w.find(".mobile-nav-panel__toggle");
 const isExpanded = (w: VueWrapper) => w.find(".mobile-nav-panel").classes().includes("mobile-nav-panel--expanded");
+const sheet = (w: VueWrapper) => w.find(".mobile-nav-panel__sheet");
+const scrimVisible = (w: VueWrapper) => w.find(".mobile-nav-panel__scrim").classes().includes("mobile-nav-panel__scrim--visible");
 
-// NEO-55: the bottom bar expands in place into a grid of every module.
+// NEO-161 "Kropla": a floating glass pill; "More" opens the other modules in a
+// second capsule above it, and the pill itself never changes.
 describe("MobileNavPanel", () => {
-  it("collapsed: every item is rendered once, those past primaryCount marked overflow, plus a More toggle", async () => {
+  it("collapsed: the pill holds the first primaryCount items plus More; the rest wait in the closed capsule", async () => {
     const { wrapper } = await mountPanel();
-    const cells = wrapper.findAll(".mobile-nav-panel__cell");
-    expect(cells).toHaveLength(ITEMS.length + 1);
-    expect(wrapper.findAll(".mobile-nav-panel__cell--overflow")).toHaveLength(3);
+    expect(wrapper.findAll(".mobile-nav-panel .mobile-nav-panel__cell")).toHaveLength(5);
+    expect(wrapper.findAll(".mobile-nav-panel__grid .mobile-nav-panel__cell")).toHaveLength(3);
     expect(toggle(wrapper).text()).toContain("More");
     expect(toggle(wrapper).attributes("aria-expanded")).toBe("false");
-    expect(wrapper.find(".mobile-nav-panel__scrim").exists()).toBe(false);
+    expect(toggle(wrapper).attributes("aria-controls")).toBe(sheet(wrapper).attributes("id"));
+    expect(sheet(wrapper).classes()).not.toContain("mobile-nav-panel__sheet--open");
+    expect(sheet(wrapper).attributes("inert")).toBeDefined();
+    expect(scrimVisible(wrapper)).toBe(false);
   });
 
-  it("More expands the same cells into the grid, shows the scrim, and turns into Close", async () => {
+  it("More opens the capsule and shows the scrim; the same button in the same slot turns into Close", async () => {
     const { wrapper } = await mountPanel();
+    const barCells = () => wrapper.findAll(".mobile-nav-panel .mobile-nav-panel__cell").map((c) => c.text());
+    const before = barCells();
     await toggle(wrapper).trigger("click");
     await flushPromises();
     expect(isExpanded(wrapper)).toBe(true);
-    expect(wrapper.find(".mobile-nav-panel__scrim").exists()).toBe(true);
-    expect(wrapper.find(".mobile-nav-panel__handle").exists()).toBe(true);
+    expect(sheet(wrapper).classes()).toContain("mobile-nav-panel__sheet--open");
+    expect(sheet(wrapper).attributes("inert")).toBeUndefined();
+    expect(scrimVisible(wrapper)).toBe(true);
     expect(toggle(wrapper).text()).toContain("Close");
     expect(toggle(wrapper).attributes("aria-expanded")).toBe("true");
-    // No separate list: still exactly one cell per item + the toggle.
-    expect(wrapper.findAll(".mobile-nav-panel__cell")).toHaveLength(ITEMS.length + 1);
+    // The pill does not re-flow: same cells, the toggle still last.
+    const after = barCells();
+    expect(after).toHaveLength(before.length);
+    expect(after.slice(0, 4)).toEqual(before.slice(0, 4));
+    expect(after[4]).toContain("Close");
+  });
+
+  it("animates with CSS only — no script-driven animations", () => {
+    const source = readFileSync(path.resolve(__dirname, "MobileNavPanel.vue"), "utf-8");
+    expect(source).not.toMatch(/\.animate\(/);
+    expect(source).not.toContain("getBoundingClientRect");
   });
 
   it("closes from the Close toggle, the scrim, Escape, and any navigation", async () => {
@@ -92,7 +111,8 @@ describe("MobileNavPanel", () => {
   // jsdom has no PointerEvent constructor; a MouseEvent of the same type
   // carries clientY and reaches the same listeners.
   async function drag(w: VueWrapper, fromY: number, toY: number) {
-    w.find(".mobile-nav-panel").element.dispatchEvent(new MouseEvent("pointerdown", { clientY: fromY, bubbles: true }));
+    const target = isExpanded(w) ? ".mobile-nav-panel__sheet" : ".mobile-nav-panel";
+    w.find(target).element.dispatchEvent(new MouseEvent("pointerdown", { clientY: fromY, bubbles: true }));
     for (let y = fromY; fromY < toY ? y <= toY : y >= toY; y += fromY < toY ? 10 : -10) {
       window.dispatchEvent(new MouseEvent("pointermove", { clientY: y }));
     }
@@ -101,7 +121,7 @@ describe("MobileNavPanel", () => {
     await flushPromises();
   }
 
-  it("pulling the collapsed bar up opens the grid; a short pull does not", async () => {
+  it("pulling the collapsed pill up opens the capsule; a short pull does not", async () => {
     const { wrapper } = await mountPanel();
     await drag(wrapper, 800, 790);
     expect(isExpanded(wrapper)).toBe(false);
@@ -109,7 +129,7 @@ describe("MobileNavPanel", () => {
     expect(isExpanded(wrapper)).toBe(true);
   });
 
-  it("dragging the open grid down closes it; a short drag springs back open", async () => {
+  it("dragging the open capsule down closes it; a short drag springs back open", async () => {
     const { wrapper } = await mountPanel();
     await toggle(wrapper).trigger("click");
     await flushPromises();

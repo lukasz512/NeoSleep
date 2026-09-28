@@ -1,9 +1,11 @@
 import { describe, it, expect, afterEach } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { defineComponent, h, ref } from "vue";
 import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
 import AppAccountMenu from "./AppAccountMenu.vue";
 
-// jsdom has no Element.animate, so the motion takes its instant path — these
+// jsdom has no layout (and no Element.animate), so the CSS motion is skipped — these
 // tests cover behaviour (open, close, focus, accessibility), not the animation.
 
 const mounted: VueWrapper[] = [];
@@ -97,5 +99,20 @@ describe("AppAccountMenu — NEO-122 avatar button turns into the menu", () => {
     expect(dialog()?.classList.contains("account-menu__card")).toBe(true);
     expect(document.querySelector(".account-menu--phone")).not.toBeNull();
     expect(document.querySelector(".account-menu__sheet")).toBeNull();
+  });
+
+  // NEO-161: the motion is CSS on a class — no script animation, no SVG filter.
+  it("opens by adding a class the CSS transitions on, with no script-driven animation", async () => {
+    const { wrapper } = mountMenu(true);
+    await wrapper.get('[data-testid="trigger"]').trigger("click");
+    await flushPromises();
+    expect(document.querySelector(".account-menu--open")).not.toBeNull();
+    const dir = path.resolve(__dirname);
+    const component = readFileSync(path.join(dir, "AppAccountMenu.vue"), "utf-8");
+    const motion = readFileSync(path.resolve(dir, "../../composables/useAccountMenuMotion.ts"), "utf-8");
+    for (const source of [component, motion]) {
+      expect(source).not.toMatch(/\.animate\(/);
+      expect(source).not.toContain("feGaussianBlur");
+    }
   });
 });

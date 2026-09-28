@@ -182,7 +182,7 @@ function onTouchEnd(id: number, e: TouchEvent) {
 /* Phone: sit above the bottom nav bar instead of covering it. */
 .notif-hub--mobile {
   right: 50%;
-  bottom: calc(var(--mobile-bottom-nav-height, 56px) + 12px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(var(--mobile-bottom-nav-height, 56px) + 2 * var(--mobile-bottom-nav-float, 10px) + 12px + env(safe-area-inset-bottom, 0px));
   transform: translateX(50%);
 }
 

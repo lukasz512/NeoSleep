@@ -1,219 +1,62 @@
 /**
- * Motion for the account menu, NEO-154 variant A "Kropla" (Łukasz picked it
- * from the live prototype, 2026-09-27). The avatar is a nail: it never moves,
- * it only grows from the app bar size to the menu size around its own centre,
- * while the card surface pours out of it like water (a blob behind a gooey
- * threshold filter), overshoots a little and settles. The name and role blur
- * out of the button and sharpen in the card header. Desktop and phone share
- * all of it; on the phone the card spans the screen from the top edge.
- *
- * Everything here is Web Animations API on plain elements, so the component
- * decides *when* and this file only decides *how*. With prefers-reduced-motion
- * (or no WAAPI, e.g. jsdom) every function resolves immediately and the menu
- * simply appears/disappears.
+ * Placement for the account menu (NEO-154, reworked NEO-161 "Kropla"). The
+ * avatar is a nail: the card's header avatar sits exactly on the app bar
+ * avatar, and the card springs out of that point. The motion itself is plain
+ * CSS in AppAccountMenu.vue (transform + opacity, the same glass material and
+ * spring as the phone's bottom menu); this file only measures once, before
+ * the card opens, and never per frame.
  */
 
-/** Material 3 "emphasized decelerate" — fast start, very soft landing. */
-const EMPHASIZED = "cubic-bezier(0.05, 0.7, 0.1, 1)";
-/** Material 3 "emphasized accelerate" — for exits. */
-const ACCELERATE = "cubic-bezier(0.3, 0, 0.8, 0.15)";
-const STANDARD = "cubic-bezier(0.2, 0, 0, 1)";
-/** Page dim behind the card (phone dims more: the card covers most of the screen). */
-export const DESKTOP_DIM_OPACITY = 0.06;
-export const PHONE_DIM_OPACITY = 0.38;
 /** The header avatar is this much bigger than the app bar one (40 / 32). */
 export const AVATAR_GROWTH = 40 / 32;
-/** Desktop: gap between the card edge and the header avatar (top and end). */
+/** Gap between the card edge and the header avatar (top and end). */
 const AVATAR_INSET = 4;
-/** Desktop card border width — the header padding sits inside it. */
-const CARD_BORDER = 1;
+/** Phone: the card floats this far from the screen's sides (as the bottom pill). */
+const PHONE_SIDE = 8;
+/** How long the CSS close transition runs (AppAccountMenu.vue, --menu-dur-out). */
+export const CLOSE_DURATION = 180;
 
+/**
+ * Whether CSS transitions will actually run: a real browser (jsdom has no
+ * layout and no Element.animate) without prefers-reduced-motion.
+ */
 export function motionAllowed(): boolean {
   if (typeof window === "undefined" || typeof Element.prototype.animate !== "function") return false;
   return !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 }
 
-/**
- * A damped spring sampled into a CSS `linear()` easing (zeta < 1 overshoots),
- * or `fallback` where the browser has no `linear()`.
- */
-export function springEasing(zeta: number, fallback: string): string {
-  if (typeof CSS === "undefined" || !CSS.supports?.("transition-timing-function", "linear(0, 1)")) return fallback;
-  const w = 6.9 / zeta; // settles to 0.1% by t = 1
-  const wd = w * Math.sqrt(1 - zeta * zeta);
-  const points: number[] = [];
-  for (let i = 0; i <= 60; i++) {
-    const t = i / 60;
-    const x = 1 - Math.exp(-zeta * w * t) * (Math.cos(wd * t) + ((zeta * w) / wd) * Math.sin(wd * t));
-    points.push(i === 60 ? 1 : Math.round(x * 10000) / 10000);
-  }
-  return `linear(${points.join(", ")})`;
-}
-
-/** Resolves when the animation ends, whether it finished or was cancelled. */
-function ended(a: Animation): Promise<unknown> {
-  // benign: finished rejects with AbortError on cancel() (a new open/close took over)
-  return a.finished.catch(() => undefined);
-}
-const settled = (list: Animation[]) => Promise.all(list.map(ended));
-
-export interface CardParts {
-  /** The avatar inside the trigger button — the nail everything turns around. */
+export interface CardPlacement {
+  /** The avatar inside the trigger button. */
   triggerAvatar: Element;
-  /** Name / role text inside the trigger button (desktop shows them, phone doesn't). */
-  triggerName: Element | null;
-  triggerRole: Element | null;
-  /** Fixed-position card that wraps the menu panel and paints its surface. */
+  /** Fixed-position card that wraps the menu panel. */
   card: HTMLElement;
-  shadow: HTMLElement;
-  dim: HTMLElement;
-  /** Fixed layer behind the card, filtered so its shapes merge like liquid. */
-  liquid: HTMLElement;
-  /** The card surface while it pours out of the avatar. */
-  blob: HTMLElement;
-  /** A drop that trails from the avatar into the blob, so the two stay joined. */
-  drop: HTMLElement;
-  avatar: Element;
-  name: Element | null;
-  role: Element | null;
-  /** Header bits with no counterpart in the button (email, region chip). */
-  extras: Element[];
-  /** Everything under the header, animated one after another. */
-  rows: Element[];
-  /** Phone: full-width card from the top edge; desktop: 340px card. */
+  /** Phone: the card spans the screen (minus PHONE_SIDE); desktop: 340px card. */
   phone: boolean;
 }
 
 /**
  * Positions the fixed card so its header avatar's centre sits exactly on the
- * trigger avatar's centre, and sizes the shadow to it. Desktop: the avatar
- * keeps a fixed inset from the card's top and end edge, so the card follows
- * the avatar. Phone: the card is pinned to the top edge and the header padding
- * (--account-menu-avatar-top / -end) follows the avatar instead.
+ * trigger avatar's centre, and points the card's transform-origin at that
+ * centre, so the CSS scale grows the card out of the avatar.
  */
-export function placeCard(parts: Pick<CardParts, "triggerAvatar" | "card" | "shadow" | "phone">): void {
-  const { triggerAvatar, card, shadow, phone } = parts;
+export function placeCard({ triggerAvatar, card, phone }: CardPlacement): void {
   const a = triggerAvatar.getBoundingClientRect();
+  const viewport = document.documentElement.clientWidth;
   const half = (a.height * AVATAR_GROWTH) / 2;
-  const top = a.top + a.height / 2 - half;
-  const end = document.documentElement.clientWidth - (a.left + a.width / 2 + half);
-  if (phone) {
-    Object.assign(card.style, { top: "0px", left: "0px", right: "0px" });
-    card.style.setProperty("--account-menu-avatar-top", `${Math.max(0, top)}px`);
-    card.style.setProperty("--account-menu-avatar-end", `${Math.max(0, end)}px`);
-  } else {
-    Object.assign(card.style, { top: `${top - AVATAR_INSET}px`, right: `${end - AVATAR_INSET}px`, left: "" });
-    card.style.setProperty("--account-menu-avatar-top", `${AVATAR_INSET - CARD_BORDER}px`);
-    card.style.setProperty("--account-menu-avatar-end", `${AVATAR_INSET - CARD_BORDER}px`);
-  }
-  const c = card.getBoundingClientRect();
-  Object.assign(shadow.style, { top: `${c.top}px`, left: `${c.left}px`, width: `${c.width}px`, height: `${c.height}px` });
-}
-
-type Box = { left: number; top: number; width: number; height: number };
-const px = (b: Box, radius: number | string): Keyframe => ({
-  left: `${b.left}px`, top: `${b.top}px`, width: `${b.width}px`, height: `${b.height}px`,
-  borderRadius: typeof radius === "number" ? `${radius}px` : radius,
-});
-
-/** The shapes the liquid passes through: the avatar dot, a stretched drop, the card. */
-function liquidShapes(parts: CardParts) {
-  const a = parts.triggerAvatar.getBoundingClientRect();
-  const c = parts.card.getBoundingClientRect();
   const cx = a.left + a.width / 2;
   const cy = a.top + a.height / 2;
-  const r = a.width / 2;
-  // the card's own corners (all round on desktop, bottom only on the phone)
-  const radius = getComputedStyle(parts.card).borderRadius || "24px";
-  return {
-    dot: { left: cx - r, top: cy - r, width: 2 * r, height: 2 * r },
-    // height leads, width follows: the surface runs down before it spreads
-    stretched: { left: c.left + c.width * 0.5, top: c.top, width: c.width * 0.5, height: c.height * 0.72 },
-    card: { left: c.left, top: c.top, width: c.width, height: c.height },
-    // where the trailing drop sinks into the surface
-    sink: { left: c.left + c.width * 0.55, top: c.top + c.height * 0.4, width: 8, height: 8 },
-    lift: { left: cx - r - 6, top: cy - r - 6, width: 2 * r + 12, height: 2 * r + 12 },
-    r,
-    radius,
-  };
-}
-
-const FLUID = springEasing(0.74, EMPHASIZED);
-const POP = springEasing(0.62, EMPHASIZED);
-
-/** Desktop and phone open, ~0.62 s. `reveal` runs once the card has settled. */
-export async function openCard(parts: CardParts, reveal: () => void): Promise<void> {
-  const { card, shadow, dim, liquid, blob, drop, avatar, name, role, extras, rows, triggerName, triggerRole } = parts;
-  const dimTo = String(parts.phone ? PHONE_DIM_OPACITY : DESKTOP_DIM_OPACITY);
-  if (!motionAllowed()) {
-    reveal();
-    dim.style.opacity = dimTo;
-    shadow.style.opacity = "1";
-    return;
+  const top = cy - half - AVATAR_INSET;
+  const avatarEnd = viewport - (cx + half);
+  if (phone) {
+    Object.assign(card.style, { top: `${top}px`, left: `${PHONE_SIDE}px`, right: `${PHONE_SIDE}px` });
+    card.style.setProperty("--account-menu-avatar-top", `${AVATAR_INSET}px`);
+    card.style.setProperty("--account-menu-avatar-end", `${Math.max(0, avatarEnd - PHONE_SIDE)}px`);
+  } else {
+    Object.assign(card.style, { top: `${top}px`, right: `${avatarEnd - AVATAR_INSET}px`, left: "" });
+    card.style.setProperty("--account-menu-avatar-top", `${AVATAR_INSET}px`);
+    card.style.setProperty("--account-menu-avatar-end", `${AVATAR_INSET}px`);
   }
-  const s = liquidShapes(parts);
-  card.classList.add("account-menu__card--fluid");
-  liquid.style.visibility = "visible";
-  const anims: Animation[] = [
-    // 1. the surface pours out of the avatar, runs down, spreads and settles
-    blob.animate([px(s.dot, s.r), { ...px(s.stretched, 30), offset: 0.38 }, px(s.card, s.radius)], { duration: 620, easing: FLUID, fill: "both" }),
-    drop.animate([px(s.lift, s.r + 6), px(s.sink, 4)], { duration: 460, easing: EMPHASIZED, fill: "both" }),
-    // 2. the nail: the avatar only grows, around its own centre
-    avatar.animate([{ transform: `scale(${1 / AVATAR_GROWTH})` }, { transform: "none" }], { duration: 520, easing: POP }),
-    // 3. the header text sharpens in, the rows follow one by one
-    ...[name, role, ...extras].filter((el): el is Element => el !== null).map((el, i) =>
-      el.animate([{ opacity: 0, filter: "blur(5px)" }, { opacity: 1, filter: "blur(0)" }], { duration: 300, delay: 150 + i * 40, easing: EMPHASIZED, fill: "backwards" })),
-    ...rows.map((el, i) =>
-      el.animate(
-        [{ opacity: 0, transform: "translateY(10px)", filter: "blur(3px)" }, { opacity: 1, transform: "none", filter: "blur(0)" }],
-        { duration: 320, delay: 190 + i * 45, easing: EMPHASIZED, fill: "backwards" })),
-    ...[triggerName, triggerRole].filter((el): el is Element => el !== null).map((el) =>
-      el.animate([{ opacity: 1, filter: "blur(0)" }, { opacity: 0, filter: "blur(5px)" }], { duration: 200, easing: STANDARD, fill: "forwards" })),
-    dim.animate([{ opacity: 0 }, { opacity: dimTo }], { duration: 300, easing: STANDARD, fill: "forwards" }),
-    // 4. the card lifts off once it has landed
-    shadow.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, delay: 420, easing: STANDARD, fill: "forwards" }),
-  ];
-  await settled(anims);
-  reveal();
-  card.classList.remove("account-menu__card--fluid");
-  liquid.style.visibility = "";
-  shadow.style.opacity = "1";
-  dim.style.opacity = dimTo;
-  anims.forEach((a) => a.cancel());
-}
-
-/**
- * Close, ~0.4 s: the content fades, then the surface drains back into the
- * avatar and the avatar shrinks to the bar size. `reveal` shows the button
- * again (its name blurs back in) as the liquid starts to drain.
- */
-export async function closeCard(parts: CardParts, reveal: () => void): Promise<void> {
-  const { card, shadow, dim, liquid, blob, drop, avatar, name, role, extras, rows, triggerName, triggerRole } = parts;
-  if (!motionAllowed()) {
-    reveal();
-    return;
-  }
-  const dimFrom = String(parts.phone ? PHONE_DIM_OPACITY : DESKTOP_DIM_OPACITY);
-  const fade: Animation[] = [
-    ...rows.map((el) => el.animate([{ opacity: 1 }, { opacity: 0, transform: "translateY(-4px)" }], { duration: 110, easing: ACCELERATE, fill: "forwards" })),
-    ...[name, role, ...extras].filter((el): el is Element => el !== null).map((el) =>
-      el.animate([{ opacity: 1 }, { opacity: 0, filter: "blur(4px)" }], { duration: 140, fill: "forwards" })),
-    shadow.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 120, fill: "forwards" }),
-  ];
-  await settled(fade);
-  const s = liquidShapes(parts);
-  card.classList.add("account-menu__card--fluid");
-  liquid.style.visibility = "visible";
-  reveal();
-  const drain: Animation[] = [
-    blob.animate([px(s.card, s.radius), { ...px(s.stretched, 30), offset: 0.55 }, px(s.dot, s.r)], { duration: 300, easing: ACCELERATE, fill: "forwards" }),
-    drop.animate([px(s.sink, 4), px(s.lift, s.r + 6)], { duration: 300, easing: STANDARD, fill: "forwards" }),
-    avatar.animate([{ transform: "none" }, { transform: `scale(${1 / AVATAR_GROWTH})` }], { duration: 280, easing: STANDARD, fill: "forwards" }),
-    dim.animate([{ opacity: dimFrom }, { opacity: 0 }], { duration: 260, easing: STANDARD, fill: "forwards" }),
-    ...[triggerName, triggerRole].filter((el): el is Element => el !== null).map((el) =>
-      el.animate([{ opacity: 0, filter: "blur(5px)" }, { opacity: 1, filter: "blur(0)" }], { duration: 220, delay: 160, easing: EMPHASIZED, fill: "both" })),
-  ];
-  await settled(drain);
-  // The overlay unmounts next, so only the button's own text needs its styles back.
-  for (const a of drain.slice(4)) a.cancel();
+  // offsetWidth, not getBoundingClientRect: the closed card is scaled down.
+  const left = phone ? PHONE_SIDE : viewport - (avatarEnd - AVATAR_INSET) - card.offsetWidth;
+  card.style.setProperty("--account-menu-origin", `${cx - left}px ${cy - top}px`);
 }
