@@ -515,7 +515,7 @@ const filterBarRef = ref<{ open: () => void } | null>(null);
 const searchSlotRef = ref<HTMLElement | null>(null);
 
 /* NEO-152, desktop: the search field yields to the list's title (and its
-   subtitle) — once less than 200 px is left for it, it becomes its icon,
+   subtitle) — once less than 400 px is left for it, it becomes its icon,
    like on phones (useCompactSearch). */
 const { compact: desktopCompact } = useCompactSearch(
   headerRow.title,

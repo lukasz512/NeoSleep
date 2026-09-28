@@ -32,6 +32,20 @@
   min-width: 0;
   justify-content: flex-end;
   margin-bottom: 0;
+  /* NEO-152: search, filter and + always share one line — the field shrinks,
+     and under 400 px it becomes its icon (useCompactSearch); nothing wraps. */
+  flex-wrap: nowrap;
+}
+/* Desktop: at least 16 px between the title and the field. */
+.app-entity-list__toolbar--in-header:not(.app-entity-list__toolbar--mobile) {
+  margin-left: var(--space-4, 16px);
+}
+/* The field adapts to the room beside the title: the cluster takes the free
+   space (still right-aligned) and the field grows up to its 610 px basis. */
+.app-entity-list__toolbar--in-header .app-entity-list__search-group {
+  flex-wrap: nowrap;
+  flex: 1 1 auto;
+  justify-content: flex-end;
 }
 
 .app-entity-list__toolbar--hidden {
