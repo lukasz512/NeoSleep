@@ -80,15 +80,35 @@ The domain is still open: alfredjan.com or a dedicated AJ Management domain.
 
 - `prefers-reduced-motion` → no scroll choreography, crossfades only.
 - `/es` and `/en`, with the first visit redirected by browser language and a toggle kept.
-- The intro plays once per session, and a reload restores the section.
+- The entry plays on a new session (QR variant when `?src=qr`), and a reload skips it and restores the section.
+- Nothing is logged per lead before consent, and "reject" leaves the page fully working.
 - Every video has a poster, loads lazily, and never autoplays with sound.
 - Mobile Lighthouse performance ≥ 85, with an image/video weight budget in CI.
 - ES/EN key parity.
 - No gradients, stars or testimonial blocks: a lint/visual rule mirrors the proposal's "evitar" list.
 
-## Round 1 questions (in the Artifact)
+## Decisions — round 1 (Łukasz, 2026-09-28, as clicked)
 
-D1 link/domain · D2 where the code lives · D3 phone experience · D4 lead tracking · D5 motion intensity (the proposal asks for *subtle*, while the first brief asked for *striking*).
+| # | Question | Answer |
+|---|---|---|
+| D1 | Link / domain | **yes**: `alfredjan.com/corporativo` (ES) + `/corporate` (EN) |
+| D2 | Where the code lives | **more**: a new top-level `clients/ajm/` folder in this repo with its own deploy. A lint rule blocks `@neo/*` imports |
+| D3 | Phone experience | **more**: stories mode on phones. Note: *many visits will come from phones via a QR code. A QR arrival should get an entry animation built around the QR, so it is visible. A plain link gets no QR, just a ~1.5 s catchy entry animation. Cookie consent is required.* |
+| D4 | Lead tracking | **more**: per-lead opens logged in neoCRM |
+| D5 | Motion intensity | **more**: a quiet base plus one signature move per section |
+
+Consequences:
+- **Two entry animations** (replaces the "intro once per session" default):
+  - `?src=qr` (every QR code carries it) → a QR-themed entry of about 2 s
+  - any other link → an entry of about 1.5 s with no QR
+  - either way, a reload within the session skips the entry and restores the section
+- **Phone = stories**: one section per story with progress bars; tap or swipe advances. Desktop keeps the editorial scroll.
+- **Per-lead logging (D4)** needs (a) a per-lead identifier in the URL/QR, (b) a neoCRM API endpoint that records opens, and (c) consent first. This touches `apps/api` (neoCRM is the platform), while the site itself still imports nothing from `@neo/*`.
+- **Contradiction to settle (round 2):** D1 chose the plain link without the per-lead `?for=` variant, but D4 needs to know *which* lead opened it. See R1.
+
+## Round 2 questions (in the Artifact)
+
+R1 per-lead identifier · R2 consent model · R3 QR entry animation · R4 where lead QR codes/links are generated.
 
 ## Next
 
