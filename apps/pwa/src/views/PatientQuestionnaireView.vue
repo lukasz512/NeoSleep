@@ -43,6 +43,12 @@
         </p>
         <!-- One receipt per document signed on this visit, with its PDF copy (handed back once by the server, NEO-126). -->
         <div v-for="copy in signedCopies" :key="copy.filename" class="patient-questionnaire__receipt" data-testid="signed-receipt">
+          <p v-if="copy.copyRequested" class="patient-questionnaire__copy-note" :class="{ 'patient-questionnaire__copy-note--failed': !copy.copyEmailed }">
+            <AppIcon :name="copy.copyEmailed ? 'mail' : 'alert-circle'" class="patient-questionnaire__copy-note-icon" />
+            {{ copy.copyEmailed
+              ? t("app.questionnaire.thanks.copyEmailed", { email: copy.copyEmail })
+              : t("app.questionnaire.thanks.copyNotEmailed") }}
+          </p>
           <dl class="patient-questionnaire__receipt-rows">
             <div><dt>{{ t("app.questionnaire.thanks.receipt.document") }}</dt><dd>{{ copy.title }}</dd></div>
             <div><dt>{{ t("app.questionnaire.thanks.receipt.signedAt") }}</dt><dd>{{ formatStamp(copy.signedAt) }}</dd></div>
@@ -126,9 +132,20 @@
                 <p class="patient-questionnaire__signer" data-testid="consent-signer">
                   <strong>{{ t("app.questionnaire.consentStep.signer", { name: signerName, date: formatStamp(signingAt) }) }}</strong>
                   <span>{{ t("app.questionnaire.consentStep.signerNote") }}</span>
+                  <span class="patient-questionnaire__not-you">{{ t("app.questionnaire.consentStep.notYou") }}</span>
                 </p>
                 <VCheckbox v-model="accepted" hide-details class="patient-questionnaire__consent" data-testid="consent-accept">
                   <template #label>{{ t("app.questionnaire.consentStep.accept") }}</template>
+                </VCheckbox>
+                <!-- The patient's own request for a copy (legal, 2026-09-28): unticked by default, offered only for an address that is theirs alone. -->
+                <VCheckbox
+                  v-if="questionnaire.copy_email"
+                  v-model="sendCopy"
+                  hide-details
+                  class="patient-questionnaire__consent patient-questionnaire__send-copy"
+                  data-testid="consent-send-copy"
+                >
+                  <template #label>{{ t("app.questionnaire.consentStep.sendCopy", { email: questionnaire.copy_email }) }}</template>
                 </VCheckbox>
               </div>
             </Transition>
@@ -168,7 +185,7 @@
               :title="stepTitle(step)"
               :subtitle="`${clinicName} · ${t('app.questionnaire.consentStep.readingTime', { min: readingMinutes })}`"
               :html="step.consent_html"
-              :patient-name="questionnaire.patient_name"
+              :patient-name="questionnaire.signer_name"
               @read="onDocumentRead"
             />
           </template>
@@ -287,8 +304,10 @@ interface PublicStep {
 }
 interface PublicQuestionnaire {
   patient_first_name: string;
-  /** Full name — only while a consent is still to be signed. */
-  patient_name?: string | null;
+  /** "First L." for the signature line — only while a consent is still to be signed. */
+  signer_name?: string | null;
+  /** Masked address the signed copy may be emailed to — null when there's none or it's shared. */
+  copy_email?: string | null;
   clinic_name: string | null;
   clinic_email: string | null;
   clinic_phone?: string | null;
@@ -301,11 +320,16 @@ interface SignedCopy {
   filename: string;
   signedAt: string;
   pdfBase64: string;
+  /** The patient ticked "email me a copy" for this document. */
+  copyRequested: boolean;
+  copyEmailed: boolean;
+  copyEmail: string | null;
 }
 interface StepResult {
   step: string;
   completed: boolean;
   signed_copy?: { filename: string; signed_at: string; pdf_base64: string };
+  copy_emailed?: boolean;
 }
 
 const CONSENT_PHASES = ["read", "sign", "done"] as const;
@@ -340,6 +364,8 @@ const readerOpen = ref(false);
 const docRead = ref(false);
 /** "I have read the document and accept its content." */
 const accepted = ref(false);
+/** "Email me a copy at j***@…" — the patient's own request, sent with the signature. */
+const sendCopy = ref(false);
 /** When the signing area appeared — the date shown next to "signing as". */
 const signingAt = ref(new Date());
 /** Documents signed on this visit, with their PDF copies (kept in memory only). */
@@ -372,7 +398,7 @@ const consentSegments = computed<SegmentState[]>(() =>
 );
 /** Every step of the link is a document to sign — the thank-you screen then talks about signing. */
 const consentOnly = computed(() => steps.value.length > 0 && steps.value.every((s) => s.type === "consent"));
-const signerName = computed(() => questionnaire.value?.patient_name || questionnaire.value?.patient_first_name || "");
+const signerName = computed(() => questionnaire.value?.signer_name || questionnaire.value?.patient_first_name || "");
 const readingMinutes = computed(() => {
   const words = (step.value?.consent_html ?? "").replace(/<[^>]+>/g, " ").split(/\s+/).filter(Boolean).length;
   return Math.max(1, Math.ceil(words / WORDS_PER_MINUTE));
@@ -429,6 +455,7 @@ function resetStepState() {
   readerOpen.value = false;
   docRead.value = false;
   accepted.value = false;
+  sendCopy.value = false;
   showMissing.value = false;
   submitError.value = false;
   restoreDraft();
@@ -521,6 +548,7 @@ function skip() {
 }
 
 async function send(body: Record<string, unknown>) {
+  const copyRequested = body.sendCopy === true;
   submitting.value = true;
   submitError.value = false;
   try {
@@ -546,6 +574,9 @@ async function send(body: Record<string, unknown>) {
           filename: result.signed_copy.filename,
           signedAt: result.signed_copy.signed_at,
           pdfBase64: result.signed_copy.pdf_base64,
+          copyRequested,
+          copyEmailed: result.copy_emailed === true,
+          copyEmail: questionnaire.value?.copy_email ?? null,
         },
       ];
     }
@@ -577,7 +608,7 @@ async function submitConsent() {
     return;
   }
   if (!step.value) return;
-  await send({ step: step.value.key, signatureDataUrl: signature, readToEnd: docRead.value });
+  await send({ step: step.value.key, signatureDataUrl: signature, readToEnd: docRead.value, sendCopy: sendCopy.value && !!questionnaire.value?.copy_email });
 }
 
 async function submitQuestionnaire() {
@@ -752,6 +783,34 @@ async function submitQuestionnaire() {
 
 .patient-questionnaire__signer span {
   color: rgba(var(--v-theme-on-surface), 0.72);
+}
+
+.patient-questionnaire__not-you {
+  margin-top: 4px;
+  font-weight: 600;
+}
+
+.patient-questionnaire__send-copy {
+  margin-top: 0;
+}
+
+.patient-questionnaire__copy-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 0.875rem;
+  color: rgb(var(--v-theme-success));
+}
+
+.patient-questionnaire__copy-note--failed {
+  color: rgb(var(--v-theme-warning));
+}
+
+.patient-questionnaire__copy-note-icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
 }
 
 .patient-questionnaire__cta {

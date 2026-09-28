@@ -195,7 +195,7 @@ describe("PatientQuestionnaireView (public QR self-fill)", () => {
       jsonResponse(
         true,
         200,
-        lookup([step("informedConsent", "consent", { consent_html: "<p>I consent to the treatment.</p>" }), step("stopBang", "stop_bang")], { patient_name: "Ana Pérez" }),
+        lookup([step("informedConsent", "consent", { consent_html: "<p>I consent to the treatment.</p>" }), step("stopBang", "stop_bang")], { signer_name: "Ana P." }),
       ),
     );
     const wrapper = await mountView();
@@ -206,7 +206,10 @@ describe("PatientQuestionnaireView (public QR self-fill)", () => {
     await readDocument(wrapper);
     expect(document.body.textContent).toContain("I consent to the treatment.");
     expect(wrapper.find(".signature-pad-stub").exists()).toBe(true);
-    expect(wrapper.find("[data-testid='consent-signer']").text()).toContain("You are signing as Ana Pérez");
+    expect(wrapper.find("[data-testid='consent-signer']").text()).toContain("You are signing as Ana P.");
+    expect(wrapper.find("[data-testid='consent-signer']").text()).toContain("Not you? Don't sign");
+    // No address on file → no "email me a copy".
+    expect(wrapper.find("[data-testid='consent-send-copy']").exists()).toBe(false);
 
     // No signature yet → nothing is sent.
     await wrapper.find("form").trigger("submit");
@@ -258,7 +261,7 @@ describe("PatientQuestionnaireView (public QR self-fill)", () => {
 
   it("a consent-only link ends on 'Document signed' with a receipt and the signed PDF to download", async () => {
     apiFetch.mockResolvedValueOnce(
-      jsonResponse(true, 200, lookup([step("informedConsent", "consent", { consent_html: "<p>I consent.</p>" })], { patient_name: "Ana Pérez", clinic_name: "Clínica Sonrisa" })),
+      jsonResponse(true, 200, lookup([step("informedConsent", "consent", { consent_html: "<p>I consent.</p>" })], { signer_name: "Ana P.", clinic_name: "Clínica Sonrisa", copy_email: "a***@example.mx" })),
     );
     const wrapper = await mountView();
     // One document: read → sign → done as three segments, no "Step 1 of 1".
@@ -268,16 +271,24 @@ describe("PatientQuestionnaireView (public QR self-fill)", () => {
     await readDocument(wrapper);
     signed = true;
     await wrapper.find("[data-testid='consent-accept'] input").setValue(true);
+    // The copy by email is the patient's own choice — offered, never pre-ticked.
+    const copyBox = wrapper.find("[data-testid='consent-send-copy'] input");
+    expect((copyBox.element as HTMLInputElement).checked).toBe(false);
+    expect(wrapper.find("[data-testid='consent-send-copy']").text()).toContain("a***@example.mx");
+    await copyBox.setValue(true);
     expect(buttonWithText(wrapper, "Sign the document")).toHaveLength(1);
     apiFetch.mockResolvedValueOnce(
       jsonResponse(true, 201, {
         step: "informedConsent",
         completed: true,
         signed_copy: { filename: "informedConsent-2026-09-27.pdf", signed_at: "2026-09-27T12:32:00.000Z", pdf_base64: btoa("%PDF-1.7") },
+        copy_emailed: true,
       }),
     );
     await wrapper.find("form").trigger("submit");
     await flushPromises();
+    expect(JSON.parse((apiFetch.mock.calls[1]![1] as RequestInit).body as string).sendCopy).toBe(true);
+    expect(wrapper.text()).toContain("A copy is on its way to a***@example.mx.");
 
     expect(wrapper.text()).toContain("Document signed");
     expect(wrapper.text()).toContain("Clínica Sonrisa already has your signed document");

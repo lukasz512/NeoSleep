@@ -27,6 +27,12 @@ const { uploadMock, deleteMock } = vi.hoisted(() => ({
   uploadMock: vi.fn(async (path: string) => ({ path, bucket: "partner-documents" })),
   deleteMock: vi.fn(async (_path: string) => undefined),
 }));
+// The mail provider (Resend) is the other external boundary: the signed-copy email is observed, never sent.
+const { copyEmailMock } = vi.hoisted(() => ({ copyEmailMock: vi.fn(async (..._args: unknown[]) => true) }));
+vi.mock("../mailer.js", async (importActual) => ({
+  ...(await importActual<typeof import("../mailer.js")>()),
+  sendPatientSignedCopyEmail: copyEmailMock,
+}));
 vi.mock("../services/partnerDocuments.js", async (importActual) => ({
   ...(await importActual<typeof import("../services/partnerDocuments.js")>()),
   uploadPartnerDocument: uploadMock,
@@ -100,8 +106,10 @@ describe("patient QR link — one link for everything the patient has to do", ()
 
       const view = await GetPublicQuestionnaireQuery(client, tokenOf(url), "mx");
       expect(view.patient_first_name).toBe("Lucía");
-      // A consent is still to be signed: the full name shows next to the pad (NEO-126).
-      expect(view.patient_name).toContain("Secreto");
+      // A consent is still to be signed: "First L." next to the pad, never the surname (NEO-126, legal 2026-09-28).
+      expect(view.signer_name).toBe("Lucía S.");
+      expect(JSON.stringify(view)).not.toContain("Secreto");
+      expect(view.copy_email).toBeNull(); // no email on file
       expect(view.steps.map((s) => [s.key, s.type, s.done])).toEqual([
         ["informedConsent", "consent", false],
         ["medicalHistory", "medical_history", false],
@@ -206,6 +214,40 @@ describe("patient QR link — one link for everything the patient has to do", ()
     });
   }, 30000);
 
+  it("the signed copy is emailed only when asked for and only to an address that is the patient's alone", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const own = `qa-copy-${uniqueSuffix()}@example.test`;
+      const patient = await insertPatient(client, { first_name: "Ana", last_name: `Copy-${uniqueSuffix()}`, email: own });
+      const { url } = await CreateQuestionnaireRequestCommand(ctx, patient.id, { items: ["informedConsent"] }, ORIGIN);
+
+      const view = await GetPublicQuestionnaireQuery(client, tokenOf(url));
+      expect(view.copy_email).toBe(`q***@example.test`); // masked, never the full address
+
+      copyEmailMock.mockClear();
+      const result = await SubmitPublicQuestionnaireCommand(inTx(client), tokenOf(url), { step: "informedConsent", signatureDataUrl: SIGNATURE, sendCopy: true }, META);
+      expect(result.copy_emailed).toBe(true);
+      expect(copyEmailMock).toHaveBeenCalledTimes(1);
+      const [to, , , document] = copyEmailMock.mock.calls[0] as unknown as [string, unknown, unknown, { filename: string; content: Buffer }];
+      expect(to).toBe(own);
+      expect(document.content.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+      const { rows } = await client.query(
+        `SELECT entity_after FROM audit_log WHERE action = 'notify' AND entity_after->>'patient_id' = $1`,
+        [patient.id]
+      );
+      expect(rows[0].entity_after).toMatchObject({ channel: "email", sent_to: "q***@example.test" });
+
+      // A family inbox: the same address on a second patient → no copy offered, none sent even if asked.
+      const sibling = await insertPatient(client, { first_name: "Eva", last_name: `Copy-${uniqueSuffix()}`, email: own });
+      const second = await CreateQuestionnaireRequestCommand(ctx, sibling.id, { items: ["informedConsent"] }, ORIGIN);
+      expect((await GetPublicQuestionnaireQuery(client, tokenOf(second.url))).copy_email).toBeNull();
+      copyEmailMock.mockClear();
+      const shared = await SubmitPublicQuestionnaireCommand(inTx(client), tokenOf(second.url), { step: "informedConsent", signatureDataUrl: SIGNATURE, sendCopy: true }, META);
+      expect(shared.copy_emailed).toBeUndefined();
+      expect(copyEmailMock).not.toHaveBeenCalled();
+    });
+  }, 60000);
+
   it("only patient-completable items can be put on a link; issuing a new link retires overlapping ones; cancel/expiry kill it", async () => {
     await withTenant(TENANT_SLUG, async (client) => {
       const ctx = await buildContext(client);
@@ -216,7 +258,8 @@ describe("patient QR link — one link for everything the patient has to do", ()
       const first = await CreateQuestionnaireRequestCommand(ctx, patient.id, { items: ["medicalHistory"] }, ORIGIN);
       // No consent on the link: the page gets the first name only, never the full name (NEO-126).
       const questionnaireOnly = await GetPublicQuestionnaireQuery(client, tokenOf(first.url));
-      expect(questionnaireOnly.patient_name).toBeNull();
+      expect(questionnaireOnly.signer_name).toBeNull();
+      expect(questionnaireOnly.copy_email).toBeNull();
       expect(JSON.stringify(questionnaireOnly)).not.toContain("Links-");
       const bundle = await CreateQuestionnaireRequestCommand(ctx, patient.id, {}, ORIGIN);
       await expect(GetPublicQuestionnaireQuery(client, tokenOf(first.url))).rejects.toThrow(QuestionnaireLinkInvalidError);

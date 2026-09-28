@@ -28,7 +28,8 @@ import { uploadPartnerDocument, deletePartnerDocument } from "../services/partne
 import { hashToken } from "../utils/hashToken.js";
 import { generateToken } from "../utils/generateToken.js";
 import { AppError, NotFoundError, ValidationError } from "../errors.js";
-import { sendQuestionnaireLinkEmail } from "../mailer.js";
+import { sendQuestionnaireLinkEmail, sendPatientSignedCopyEmail } from "../mailer.js";
+import { isPatientEmailHeldByAnother } from "../db/identityEmail.js";
 import { PRIVACY_NOTICE_URL } from "../env.js";
 import { validateMedicalHistory, validateStop } from "./clinicalRecordFields.js";
 
@@ -273,11 +274,19 @@ export interface PublicStep {
 export interface PublicQuestionnaire {
   patient_first_name: string;
   /**
-   * Full name, shown next to the signature pad ("You are signing as …", NEO-126).
-   * Only while the link still holds a consent to sign — a questionnaire-only
-   * link keeps showing the first name alone.
+   * "Child K." — first name + last-name initial, next to the signature pad
+   * ("You are signing as …", NEO-126). Only while a consent is still to be
+   * signed. Never the full name (legal, 2026-09-28): whoever holds the link
+   * would learn that this named person is a patient here; the full name is
+   * in the signed PDF only.
    */
-  patient_name: string | null;
+  signer_name: string | null;
+  /**
+   * Masked address ("j***@gmail.com") the patient may ask the signed copy to
+   * be emailed to — only while a consent is open, and only when the address
+   * is the patient's alone (not on another identity, e.g. a family inbox).
+   */
+  copy_email: string | null;
   clinic_name: string | null;
   /** Where the patient exercises data rights — the clinic, as controller. */
   clinic_email: string | null;
@@ -325,10 +334,24 @@ async function consentText(templateKey: string, locale: string): Promise<{ html:
   }
 }
 
+/** "Child Kowalski" → "Child K." — who is signing, without the surname. */
+function signerDisplayName(firstName: string, lastName: string): string {
+  const initial = lastName.trim().charAt(0).toUpperCase();
+  return initial ? `${firstName.trim()} ${initial}.` : firstName.trim();
+}
+
+/** The patient's own address for the signed copy, or null (none on file, or shared with another identity). */
+async function signedCopyAddress(client: PoolClient, patientId: string, email: string | null): Promise<string | null> {
+  const address = email?.trim();
+  if (!address) return null;
+  return (await isPatientEmailHeldByAnother(client, patientId, address)) ? null : address;
+}
+
 /**
  * What the page may show: first name and clinic — the link could be scanned
- * by someone other than the patient. The full name is added only while a
- * consent is still to be signed (the signer must see whose name they sign in).
+ * by someone other than the patient. While a consent is still to be signed it
+ * also gets "First L." for the signature line and the masked address the
+ * signed copy can be emailed to (NEO-126).
  */
 export async function GetPublicQuestionnaireQuery(client: PoolClient, token: string, locale?: unknown): Promise<PublicQuestionnaire> {
   if (!validTokenShape(token)) throw new QuestionnaireLinkInvalidError();
@@ -355,9 +378,11 @@ export async function GetPublicQuestionnaireQuery(client: PoolClient, token: str
   }
 
   const consentOpen = steps.some((s) => s.type === "consent" && !s.done);
+  const copyAddress = consentOpen ? await signedCopyAddress(client, request.patient_id, context.patient_email) : null;
   return {
     patient_first_name: context.patient_first_name,
-    patient_name: consentOpen ? context.patient_name : null,
+    signer_name: consentOpen ? signerDisplayName(context.patient_first_name, context.patient_last_name) : null,
+    copy_email: copyAddress ? maskEmail(copyAddress) : null,
     clinic_name: context.organization_name,
     clinic_email: context.organization_email,
     clinic_phone: context.organization_phone,
@@ -398,6 +423,8 @@ export interface PublicStepResult {
    * so no second endpoint has to accept the (soon dead) token again.
    */
   signed_copy?: { filename: string; signed_at: string; pdf_base64: string };
+  /** The patient ticked "email me a copy" and it was handed to the mail provider. */
+  copy_emailed?: boolean;
 }
 
 async function lockOpenStep(client: PoolClient, token: string, step: string): Promise<QuestionnaireRequest> {
@@ -480,6 +507,8 @@ export async function SubmitPublicQuestionnaireCommand(
   // The page unlocks "sign" only after the document was scrolled to its end;
   // recorded as evidence of an informed consent, never trusted for anything else.
   const readToEnd = body.readToEnd === true;
+  // "Email me a copy" — ticked by the patient before signing (their own Art. 15 request), in the same tap.
+  const sendCopy = body.sendCopy === true;
 
   // (1) lock + validate + prepare
   const prepared = await run(async (client) => {
@@ -487,7 +516,8 @@ export async function SubmitPublicQuestionnaireCommand(
     const context = await getPatientPdfContext(client, request.patient_id, request.created_by); // no linked doctor → the doctor who sent the link
     if (!context) throw new QuestionnaireLinkInvalidError();
     const version = await GetCurrentDocumentContentQuery(step, locale); // NotFound until an admin authors it
-    return { patientId: request.patient_id, context, version };
+    const copyAddress = sendCopy ? await signedCopyAddress(client, request.patient_id, context.patient_email) : null;
+    return { patientId: request.patient_id, requestId: request.id, context, version, copyAddress };
   });
 
   // (2) render with the signature + upload, no DB connection held
@@ -514,8 +544,9 @@ export async function SubmitPublicQuestionnaireCommand(
   );
 
   // (3) re-lock, record, mark the step — or undo the upload
+  let result: PublicStepResult;
   try {
-    return await run(async (client) => {
+    result = await run(async (client) => {
       const request = await lockOpenStep(client, token, step);
       const attachment = await insertFileAttachment(client, {
         entity_type: "patient",
@@ -584,5 +615,62 @@ export async function SubmitPublicQuestionnaireCommand(
       console.error(`[questionnaireRequest] could not delete orphaned signed consent ${uploaded.path}:`, cleanupErr)
     );
     throw err;
+  }
+
+  // (4) the copy the patient asked for — after the commit, so a mail failure never undoes a signature.
+  if (sendCopy && prepared.copyAddress) {
+    result.copy_emailed = await emailSignedCopy(run, prepared, { filename, pdfBytes, signedAt, locale }, meta);
+  }
+  return result;
+}
+
+/**
+ * Emails the signed PDF to the patient who asked for it. A neutral subject
+ * and one sentence, the PDF attached — no treatment or diagnosis in the text
+ * (legal, 2026-09-28). The audit row records the masked recipient; failures
+ * are logged and reported to the page as "not sent", never thrown.
+ */
+async function emailSignedCopy(
+  run: PublicRunner,
+  prepared: { patientId: string; requestId: string; context: NonNullable<Awaited<ReturnType<typeof getPatientPdfContext>>>; copyAddress: string | null },
+  doc: { filename: string; pdfBytes: Uint8Array; signedAt: Date; locale: string },
+  meta: PublicSubmissionMeta
+): Promise<boolean> {
+  const address = prepared.copyAddress;
+  if (!address) return false;
+  const { context } = prepared;
+  try {
+    const sent = await sendPatientSignedCopyEmail(
+      address,
+      {
+        title: context.patient_salutation,
+        firstName: context.patient_first_name,
+        lastName: context.patient_last_name,
+        language: patientEmailLocale(context.patient_language, context.patient_region),
+        region: context.patient_region,
+      },
+      { name: context.organization_name, email: context.organization_email },
+      { filename: doc.filename, content: Buffer.from(doc.pdfBytes) },
+      formatFormDate(doc.signedAt, doc.locale)
+    );
+    if (!sent) return false;
+    await run((client) =>
+      insertAuditLog(client, {
+        user_id: null,
+        action: "notify",
+        entity_type: "QuestionnaireRequest",
+        entity_id: prepared.requestId,
+        entity_after: { patient_id: prepared.patientId, channel: "email", sent_to: maskEmail(address), document: doc.filename },
+        legal_basis: "consent",
+        user_ip: meta.ip,
+        user_agent: meta.userAgent,
+        request_id: meta.requestId,
+        metadata: { actor: "patient", purpose: "signed_copy" },
+      })
+    );
+    return true;
+  } catch (err) {
+    console.error("[questionnaireRequest] signed copy email failed:", err);
+    return false;
   }
 }
