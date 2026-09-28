@@ -1,3 +1,4 @@
+import { get as httpGet } from "node:http";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   __setPosterDepsForTests,
@@ -69,14 +70,53 @@ describe("getPoster", () => {
     expect(deps.storagePut).toHaveBeenCalledWith(expect.stringMatching(/^resource-posters\/orthoapnea\/26\/[0-9a-f]{16}\.jpg$/), expect.any(Uint8Array), "image/jpeg");
   });
 
-  it("seeks before -i so ffmpeg only fetches the bytes around the frame", async () => {
+  it("seeks before -i, and reads a numeric loopback URL — never the partner host (static ffmpeg crashes on DNS)", async () => {
     const deps = fakeDeps();
     __setPosterDepsForTests(deps);
     await getPoster("26", "mx");
 
     const grabArgs = vi.mocked(deps.runFfmpeg).mock.calls[1]![0];
     expect(grabArgs.indexOf("-ss")).toBeLessThan(grabArgs.indexOf("-i"));
-    expect(grabArgs[grabArgs.indexOf("-headers") + 1]).toBe("Authorization: Bearer x\r\n");
+    expect(grabArgs[grabArgs.indexOf("-i") + 1]).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/[0-9a-f]{24}\.mp4$/);
+    expect(grabArgs).not.toContain("-headers");
+    expect(grabArgs.join(" ")).not.toContain("apneadock");
+  });
+
+  it("the loopback proxy forwards Range + the session header upstream and passes 206 back", async () => {
+    const upstream = vi.fn(async () =>
+      new Response(new Uint8Array([1, 2, 3, 4]), { status: 206, headers: { "content-range": "bytes 0-3/600", "content-type": "video/mp4" } })
+    );
+    vi.stubGlobal("fetch", upstream);
+    const seen: { status?: number; range?: string; body?: number } = {};
+    const deps = fakeDeps({
+      runFfmpeg: vi.fn(async (args: string[]) => {
+        const url = args[args.indexOf("-i") + 1]!;
+        await new Promise<void>((resolve) =>
+          httpGet(url, { headers: { Range: "bytes=0-3" } }, (res) => {
+            seen.status = res.statusCode;
+            seen.range = res.headers["content-range"];
+            const chunks: Buffer[] = [];
+            res.on("data", (c: Buffer) => chunks.push(c));
+            res.on("end", () => {
+              seen.body = Buffer.concat(chunks).length;
+              resolve();
+            });
+          })
+        );
+        return args.includes("pipe:1")
+          ? { code: 0, stdout: Buffer.from([0xff]), stderr: "" }
+          : { code: 1, stdout: Buffer.alloc(0), stderr: "Duration: 00:10:00.00" };
+      }),
+    });
+    __setPosterDepsForTests(deps);
+
+    await getPoster("26", "mx");
+    expect(seen).toEqual({ status: 206, range: "bytes 0-3/600", body: 4 });
+    expect(upstream).toHaveBeenCalledWith(
+      SOURCE.url,
+      expect.objectContaining({ headers: { Authorization: "Bearer x", Range: "bytes=0-3" } })
+    );
+    vi.unstubAllGlobals();
   });
 
   it("uses a stored poster without running ffmpeg", async () => {

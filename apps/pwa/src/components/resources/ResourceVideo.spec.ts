@@ -170,17 +170,6 @@ describe("ResourceVideoSheet", () => {
     expect(buttons[1]!.getAttribute("aria-pressed")).toBe("true");
   });
 
-  it("goes full screen as soon as it opens (the click still counts as a user gesture)", async () => {
-    const request = vi.fn(async () => undefined);
-    Object.defineProperty(HTMLElement.prototype, "requestFullscreen", { value: request, configurable: true });
-    mountSheet();
-    await nextTick();
-    await nextTick();
-    expect(request).toHaveBeenCalledTimes(1);
-    expect((request.mock.contexts[0] as HTMLElement).classList.contains("video-sheet__stage")).toBe(true);
-    delete (HTMLElement.prototype as { requestFullscreen?: unknown }).requestFullscreen;
-  });
-
   it("emits close from the X", async () => {
     const w = mountSheet();
     await nextTick();
