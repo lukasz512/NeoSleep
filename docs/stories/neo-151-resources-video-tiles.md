@@ -25,3 +25,10 @@
 ## Compliance
 - Posters are derived frames of partner marketing/education content. No patient data is involved.
 - They are stored in the existing private bucket under `resource-posters/orthoapnea/` and served only with a signed-in user's media token.
+
+## Round 2 (Łukasz, 2026-09-28, decision form in the NEO-151 artifact)
+- The player never goes full screen by itself. It opens with the app's dialog motion (a spring from the tile, a sheet on phones).
+- D1 → **B, small cards**: 4/3/2 per row, the frame on top, the title under it in normal ink. No lift or shadow, a quiet tint on hover, the play button drops in like water, and a press swells.
+- D2 → **topics by stage of work with a patient**: detect → diagnose → records & impressions → order the device → fit & follow up (+ other). The table lives in the API (`VIDEO_TOPIC_BY_ID`).
+- D3 → **merged**: the George Gauge clip (47 ES / 48 EN / 49 DE) is one entry with 3 flags and opens in the app's language.
+- Posters on Linux: ffmpeg reads through a 127.0.0.1 proxy (the static binary crashes on DNS).

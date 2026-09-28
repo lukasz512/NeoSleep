@@ -33,4 +33,6 @@ export interface PartnerResourceItem {
   posterUrl?: string | null;
   /** Videos only: whole seconds, null until the poster has been made once. */
   durationSec?: number | null;
+  /** Videos only (NEO-151): stage of the dentist's work with a patient — see VIDEO_TOPICS in partners/orthoapnea.ts. */
+  topic?: string;
 }

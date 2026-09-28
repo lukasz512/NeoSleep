@@ -17,10 +17,17 @@
       </div>
 
       <div class="view-resources__window">
-        <div v-if="loading && tab === 'videos'" aria-hidden="true">
-          <div class="view-resources__video-grid">
-            <div v-for="n in 6" :key="n" class="view-resources__video-skeleton" />
-          </div>
+        <div v-if="loading && tab === 'videos'" class="view-resources__topics" aria-hidden="true">
+          <section v-for="g in 2" :key="g" class="view-resources__topic">
+            <div class="view-resources__skeleton-line view-resources__skeleton-line--heading" />
+            <div class="view-resources__video-grid">
+              <div v-for="n in 4" :key="n" class="view-resources__video-skeleton">
+                <div class="view-resources__skeleton-thumb" />
+                <div class="view-resources__skeleton-line" />
+                <div class="view-resources__skeleton-line view-resources__skeleton-line--short" />
+              </div>
+            </div>
+          </section>
         </div>
 
         <div v-else-if="loading" class="view-resources__grid" aria-hidden="true">
@@ -107,14 +114,17 @@
               <!-- "Webinars" appears once per page (NEO-151): under the title on desktop
                    (page-header subtitle), and here only on phones, where the header has no subtitle line. -->
               <p class="view-resources__phone-subtitle">{{ videosSubtitle }}</p>
-              <div class="view-resources__video-grid">
-                <ResourceVideoTile
-                  v-for="(video, i) in videos"
-                  :key="video.id"
-                  :video="video"
-                  :index="i"
-                  @open="openVideo = video"
-                />
+              <!-- Topics = stages of the dentist's work with a patient (NEO-151), in that order. -->
+              <div class="view-resources__topics">
+                <section v-for="group in topicGroups" :key="group.topic" class="view-resources__topic">
+                  <h2 class="view-resources__topic-title">
+                    {{ t(`user.resources.topic.${group.topic}`) }}
+                    <span class="view-resources__topic-count">{{ group.videos.length }}</span>
+                  </h2>
+                  <div class="view-resources__video-grid">
+                    <ResourceVideoTile v-for="video in group.videos" :key="video.id" :video="video" @open="openVideo = video" />
+                  </div>
+                </section>
               </div>
             </template>
           </div>
@@ -151,6 +161,16 @@ const tab = ref<"documents" | "videos">("videos");
 const tabOptions = computed(() => [{ value: "videos", label: t("user.resources.tabs.videos") }]);
 
 watch(locale, (l) => load(l), { immediate: true });
+
+/** Stage order comes from the API (VIDEO_TOPICS); a video without a known stage goes last, under "other". */
+const TOPIC_ORDER = ["detect", "diagnose", "records", "order", "followup", "other"] as const;
+type Topic = (typeof TOPIC_ORDER)[number];
+const topicGroups = computed(() =>
+  TOPIC_ORDER.map((topic) => ({
+    topic,
+    videos: videos.value.filter((v) => ((TOPIC_ORDER as readonly string[]).includes(v.topic ?? "") ? v.topic : "other") === topic),
+  })).filter((g): g is { topic: Topic; videos: PartnerResourceItem[] } => g.videos.length > 0)
+);
 
 /** The video playing in the cinema sheet — one at a time, so only one download runs. */
 const openVideo = ref<PartnerResourceItem | null>(null);
@@ -404,28 +424,55 @@ const incidentMailtoHref = computed(() => {
   }
 }
 
-/* 3 per row on desktop, 2 on tablet, 1 on phone (NEO-151) — Vuetify's md/sm breakpoints. */
-.view-resources__video-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
+/* Small cards (NEO-151, variant B): 4 per row on desktop, 3 on tablet, 2 on phone.
+   Container query, not viewport — the content column's width depends on the side menu. */
+.view-resources__topics {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
   padding-bottom: 16px;
 }
-@media (min-width: 600px) {
-  .view-resources__video-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+.view-resources__topic-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.3;
 }
-@media (min-width: 960px) {
+.view-resources__topic-count {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-variant-numeric: tabular-nums;
+}
+.view-resources__video-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 12px;
+}
+@container (min-width: 560px) {
   .view-resources__video-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 20px;
+  }
+}
+@container (min-width: 860px) {
+  .view-resources__video-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 20px 16px;
   }
 }
 
+/* Skeleton in the shape of the cards: frame, two title lines. */
 .view-resources__video-skeleton {
-  aspect-ratio: 4 / 3;
-  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.view-resources__skeleton-thumb,
+.view-resources__skeleton-line {
   background: linear-gradient(
     100deg,
     rgb(var(--v-theme-surface-container-high)) 30%,
@@ -434,6 +481,23 @@ const incidentMailtoHref = computed(() => {
   );
   background-size: 220% 100%;
   animation: view-resources-shimmer 1.4s linear infinite;
+}
+.view-resources__skeleton-thumb {
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+}
+.view-resources__skeleton-line {
+  height: 10px;
+  width: 90%;
+  border-radius: 5px;
+}
+.view-resources__skeleton-line--short {
+  width: 55%;
+}
+.view-resources__skeleton-line--heading {
+  width: 140px;
+  height: 14px;
+  margin-bottom: 14px;
 }
 @keyframes view-resources-shimmer {
   from {
@@ -444,7 +508,8 @@ const incidentMailtoHref = computed(() => {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .view-resources__video-skeleton {
+  .view-resources__skeleton-thumb,
+  .view-resources__skeleton-line {
     animation: none;
   }
 }
