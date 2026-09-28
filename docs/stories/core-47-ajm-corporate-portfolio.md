@@ -106,9 +106,36 @@ Consequences:
 - **Per-lead logging (D4)** needs (a) a per-lead identifier in the URL/QR, (b) a neoCRM API endpoint that records opens, and (c) consent first. This touches `apps/api` (neoCRM is the platform), while the site itself still imports nothing from `@neo/*`.
 - **Contradiction to settle (round 2):** D1 chose the plain link without the per-lead `?for=` variant, but D4 needs to know *which* lead opened it. See R1.
 
+## Materials review (2026-09-28) and one treatment per case
+
+Łukasz: *"no more photos: work with what we have; where there's only video, focus on video. Each case slightly different."*
+
+| Case | What exists | Treatment |
+|---|---|---|
+| Universal P&E | 1 vertical iPhone video, 69 s, 1080×1920, a walk-through of the pop-up with no people | **Walk-through**: the video in a tall portrait frame, advanced by scroll on desktop, with room names rolling in beside it; full-screen story on phones |
+| Grupo Planeta | ~18 photos: 4 sharp 4032 px, ~10 small 1280 px (WhatsApp-compressed), 1 collage | **Bookshelf**: a horizontal drag gallery of event "spines" (Crónicas, México Bizarro, Bordes, gala) that open into photos; small photos only shown small |
+| Privalia | 4 videos: eFashion Day 2019 recap (4 min, 720p), 2020 streaming (4 min), making-of 2020 (1:42), brand film (1:00); 1 photo | **Timeline with video chapters**: 6–8 s silent loops per year and "Watch" for the full film in a lightbox |
+| Mendel | 1 edited video, 100 s, 1080p, lower-thirds burned in | **Highlight reel**: full-bleed muted reel, unmute, stat overlays on beats, a frame strip to jump |
+| Hero | nothing dedicated | A 10–12 s montage cut from the videos above |
+
+Findings: `planeta/planeta4.jpg` is eFashion Day 2019, not Planeta, so it moves to Privalia. The Mendel and eFashion videos have letterbox bars baked in, which get cropped at encode. Logo: `Dokumenty/AJ Management/logo/logo-white.svg`, one version, recoloured to charcoal/white from the same file.
+
+## Weak-connection delivery (measured)
+
+- Silent 8 s loop from the Mendel footage: **0.9 MB at 720p, 0.26 MB at 360p** (H.264, CRF 28–30, faststart, no audio).
+- Full films: an HLS ladder at 360/540/720/1080p.
+- Posters and photos: AVIF + WebP in 3 widths, with a ~1 KB blurred placeholder inline.
+- Nothing video loads before its section is near. With Save-Data, 2G/3G or a slow first byte, loops are replaced by posters with a play button.
+- Budget: first screen ≤ 300 KB.
+- ffmpeg is installed on Łukasz's Mac (Homebrew) for the encode pipeline.
+
+## Still needed from AJM
+
+Alfred's portrait · permission to show the brands and footage publicly (Universal is often under NDA) · client logos (or names in type) · contact details (email, WhatsApp, LinkedIn, Instagram) · access to alfredjan.com DNS/hosting · one line of facts per case · approval of the EN copy.
+
 ## Round 2 questions (in the Artifact)
 
-R1 per-lead identifier · R2 consent model · R3 QR entry animation · R4 where lead QR codes/links are generated.
+R1 per-lead identifier · R2 consent model · R3 QR entry animation · R4 where lead QR codes/links are generated · R5 video hosting.
 
 ## Next
 
