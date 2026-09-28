@@ -135,6 +135,7 @@ import AppSegmentProgress from "../AppSegmentProgress.vue";
 import NoteComposer from "../NoteComposer.vue";
 import ChecklistStatusIcon from "../questionnaire/ChecklistStatusIcon.vue";
 import { checklistSegments, usePatientChecklist } from "../../composables/usePatientChecklist";
+import { useVisiblePolling } from "../../composables/useVisiblePolling";
 import { checklistItemTitle } from "../../config/questionnaires";
 import { apiFetch } from "../../composables/useApi";
 import { formatDiagnosis } from "../../utils/diagnosis";
@@ -215,6 +216,8 @@ async function loadOrthoApnea(): Promise<void> {
 function loadStudies(): void {
   if (props.canSeeStudies) void checklistApi.load();
 }
+// The side panel is on every tab, so it keeps its studies card current too (NEO-173) — 60 s fingerprint check.
+useVisiblePolling(() => (props.canSeeStudies ? 60_000 : null), checklistApi.refreshIfChanged);
 
 const draft = ref("");
 const { loading: addLoading, run: onAdd } = useAsyncAction(async () => {

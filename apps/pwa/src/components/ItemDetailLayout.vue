@@ -1,12 +1,20 @@
 <template>
-  <div class="view-item">
+  <div ref="viewEl" class="view-item" :class="{ 'view-item--toolbar': phoneToolbar, 'view-item--collapsing': collapsing }">
     <!-- NEO-56 record header (Salesforce Lightning / Veeva pattern): a tile
          with the entity's icon, the parent list as a small eyebrow link above
          the record's name, actions on the right. On desktop it replaces
          AppLayout's "← <Module>" page-header row (claimRecordHeader); on
          phones that row stays as the card's first line (NEO-108), so the
-         eyebrow is hidden there. The name is never truncated — it is the record's identity. -->
-    <header v-if="showRecordHeader" class="view-item__record-header">
+         eyebrow is hidden there. NEO-158: the name stays on one line — it
+         shrinks to fit, and only a very long one ends in "…" (useFitTitle). -->
+    <!-- NEO-181, phones: the record's toolbar (‹ back, main action, ⋯) pins
+         under the app bar from the start; as the page scrolls, the header
+         below collapses into it (useRecordHeaderCollapse). -->
+    <template v-if="phoneToolbar">
+      <span ref="collapseSentinel" class="view-item__collapse-sentinel" aria-hidden="true" />
+      <RecordToolbar :back="parentCrumb" :actions="headerActionsEl" :skeletons="hasContent ? 0 : actionSkeletons" />
+    </template>
+    <header v-if="showRecordHeader" ref="recordHeaderEl" class="view-item__record-header">
       <!-- A record with an identity (NEO-57) swaps the module tile for its
            avatar via #record-tile; the module icon is the fallback. -->
       <slot v-if="hasContent && $slots['record-tile']" name="record-tile" />
@@ -19,14 +27,14 @@
       <div class="view-item__record-text">
         <AppBreadcrumbs v-if="parentCrumb" class="view-item__eyebrow" :items="[parentCrumb]" />
         <div class="view-item__record-title-row">
-          <h1 v-if="hasContent" class="view-item__record-title">{{ recordTitle }}</h1>
-          <h1 v-else-if="preview" class="view-item__record-title">{{ preview.title }}</h1>
+          <h1 v-if="hasContent" ref="recordTitleEl" class="view-item__record-title">{{ recordTitle }}</h1>
+          <h1 v-else-if="preview" ref="recordTitleEl" class="view-item__record-title">{{ preview.title }}</h1>
           <span v-else class="view-item__record-title-skeleton" aria-hidden="true" />
           <slot v-if="hasContent" name="title-extra" />
         </div>
         <!-- NEO-57's quiet identity line under the name ("F · 47 y", "Dentist · Clinic"). -->
         <div v-if="hasContent && $slots['record-details']" class="view-item__record-details">
-          <slot name="record-details" />
+          <IdentityDetailsWrapScope><slot name="record-details" /></IdentityDetailsWrapScope>
         </div>
         <!-- NEO-152: while loading, the identity line and the actions keep
              their place as skeletons, so the header doesn't grow when they arrive. -->
@@ -34,7 +42,7 @@
           <span class="view-item__skeleton-bar" data-testid="record-details-skeleton" />
         </div>
       </div>
-      <div v-if="hasContent && $slots['header-actions']" class="view-item__header-actions">
+      <div v-if="hasContent && $slots['header-actions']" ref="headerActionsEl" class="view-item__header-actions">
         <slot name="header-actions" />
       </div>
       <div v-else-if="!hasContent && actionSkeletons > 0" class="view-item__header-actions view-item__header-actions--skeleton" aria-hidden="true" data-testid="record-actions-skeleton">
@@ -118,7 +126,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, useSlots, watchEffect } from "vue";
+import { computed, onBeforeUnmount, ref, useSlots, watchEffect } from "vue";
 import { useMediaQuery } from "@vueuse/core";
 import { useI18n } from "vue-i18n";
 import { useRoute, type RouteLocationRaw } from "vue-router";
@@ -130,6 +138,10 @@ import { recordPreviewFor } from "../composables/useRecordPreview";
 import AppLoadingState from "./AppLoadingState.vue";
 import AppRecordSkeleton from "./AppRecordSkeleton.vue";
 import AppBreadcrumbs from "./AppBreadcrumbs.vue";
+import RecordToolbar from "./RecordToolbar.vue";
+import { useRecordHeaderCollapse } from "../composables/useRecordHeaderCollapse";
+import { IdentityDetailsWrapScope } from "./identityDetailsWrap";
+import { useFitTitle } from "../composables/useFitTitle";
 import type { BreadcrumbItem } from "./AppBreadcrumbs.types";
 import type { AppIconName } from "./AppIcon.vue";
 import { navTitleKey, navIconName } from "../router/routes";
@@ -224,6 +236,21 @@ const showRecordHeader = computed(
 const slots = useSlots();
 const isWide = useMediaQuery("(min-width: 1280px)");
 const showAside = computed(() => !!slots.aside && isWide.value);
+
+// NEO-158: the name on one line, the identity line under it wrapping between
+// its parts ("Pulmonologist ·" / "Klinika Testowa") rather than mid-name.
+const recordHeaderEl = ref<HTMLElement | null>(null);
+const recordTitleEl = ref<HTMLElement | null>(null);
+const headerActionsEl = ref<HTMLElement | null>(null);
+useFitTitle(recordTitleEl, computed(() => props.recordTitle ?? preview.value?.title));
+
+const isPhone = useMediaQuery("(max-width: 767.98px)");
+const phoneToolbar = computed(() => isPhone.value && showRecordHeader.value);
+// The header collapses only once the record is there (not over a skeleton).
+const collapsing = computed(() => phoneToolbar.value && props.hasContent);
+const viewEl = ref<HTMLElement | null>(null);
+const collapseSentinel = ref<HTMLElement | null>(null);
+useRecordHeaderCollapse({ root: viewEl, sentinel: collapseSentinel, header: recordHeaderEl, title: recordTitleEl, enabled: collapsing });
 
 const recordHeaderClaim = useRecordHeaderClaim();
 watchEffect(() => {
@@ -338,22 +365,33 @@ defineEmits<{
 .view-item__record-title-row {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: var(--space-2, 8px) var(--space-3, 12px);
   min-height: 2rem;
+  min-width: 0;
+}
+/* A badge next to the name ("Invited") keeps its size; the name gives way. */
+.view-item__record-title-row > :not(.view-item__record-title) {
+  flex-shrink: 0;
 }
 
+/* NEO-158: one line, always. useFitTitle shrinks a long name to fit (down to
+   18 px); only past that does it end in "…". */
 .view-item__record-title {
+  flex: 0 1 auto;
+  min-width: 0;
   margin: 0;
   font-size: 1.5rem;
   line-height: 1.2;
   font-weight: 600;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
 }
 
 .view-item__record-details {
   font-size: 0.875rem;
+  min-width: 0;
 }
 
 .view-item__record-title-skeleton {
@@ -382,6 +420,11 @@ defineEmits<{
    phones too). Only the actions move: three 56 px buttons beside the name
    would squeeze it, so they wrap onto their own row under the header. */
 @media (max-width: 767.98px) {
+  /* NEO-158: sized from 0, not from its one-line name — otherwise a long name
+     makes the text block wrap under the avatar instead of shrinking beside it. */
+  .view-item__record-header > .view-item__record-text {
+    flex-basis: 0;
+  }
   .view-item__record-header {
     flex-wrap: wrap;
     column-gap: var(--space-3, 12px);
@@ -430,6 +473,86 @@ defineEmits<{
   .view-item__record-header .view-item__record-title-row {
     min-height: 32px;
     align-items: center;
+  }
+}
+
+/* NEO-181, phones: the toolbar above the header has the way back (‹ MODULE)
+   and the actions, so the header drops its eyebrow link and its icon row.
+   The row stays in the DOM, out of sight: the toolbar mirrors those buttons
+   and clicks them (hidden elements still run their handlers). */
+.view-item__collapse-sentinel {
+  display: block;
+  height: 0;
+}
+.view-item--toolbar .view-item__record-header .view-item__eyebrow {
+  display: none;
+}
+.view-item--toolbar .view-item__record-header > .view-item__header-actions {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+}
+.view-item--toolbar .view-item__record-header {
+  flex-wrap: nowrap;
+  padding-top: var(--space-2, 8px);
+}
+
+/* The collapse: the header scrolls up natively and pins with its last 48 px
+   on the toolbar row (sticky, negative top); transparent, over the toolbar's
+   background and under its buttons. The avatar and the name travel there by
+   scroll-driven keyframes — the numbers come from useRecordHeaderCollapse. */
+.view-item--collapsing .view-item__record-header {
+  position: sticky;
+  top: calc(var(--v-layout-top, 56px) + 48px - var(--rh-R, 0px));
+  z-index: 5;
+  pointer-events: none;
+}
+.view-item--collapsing .view-item__record-header > :deep(:first-child),
+.view-item--collapsing .view-item__record-title {
+  transform-origin: 0 0;
+  will-change: transform;
+}
+@keyframes view-item-dock-avatar {
+  to {
+    transform: translate(var(--rh-av-dx, 0px), var(--rh-av-dy, 0px)) scale(var(--rh-av-s, 1));
+  }
+}
+@keyframes view-item-dock-title {
+  from {
+    max-width: var(--rh-nm-w0, 100%);
+  }
+  to {
+    transform: translate(var(--rh-nm-dx, 0px), var(--rh-nm-dy, 0px)) scale(var(--rh-nm-s, 1));
+    max-width: var(--rh-nm-w1, 100%);
+  }
+}
+@keyframes view-item-dock-fade {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+@supports (animation-timeline: scroll()) {
+  /* Linear on purpose: each pixel of scroll moves everything by one step,
+     so the motion stays glued to the finger in both directions. */
+  .view-item--collapsing .view-item__record-header > :deep(:first-child) {
+    animation: view-item-dock-avatar linear both;
+    animation-timeline: scroll(root block);
+    animation-range: var(--rh-start, 0px) calc(var(--rh-start, 0px) + var(--rh-R, 1px));
+  }
+  .view-item--collapsing .view-item__record-title {
+    animation: view-item-dock-title linear both;
+    animation-timeline: scroll(root block);
+    animation-range: var(--rh-start, 0px) calc(var(--rh-start, 0px) + var(--rh-R, 1px));
+  }
+  .view-item--collapsing .view-item__record-details,
+  .view-item--collapsing .view-item__record-title-row > :deep(:not(h1)) {
+    animation: view-item-dock-fade linear both;
+    animation-timeline: scroll(root block);
+    animation-range: var(--rh-start, 0px) calc(var(--rh-start, 0px) + var(--rh-fade, 24px));
   }
 }
 
@@ -485,9 +608,21 @@ defineEmits<{
 /* Slot content (sections) uses these classes; :deep so they apply. */
 .view-item__card :deep(.view-item__row) {
   display: grid;
-  grid-template-columns: 140px 1fr;
+  /* minmax(0, …): a long unbreakable value (an e-mail) must wrap, never widen
+     the page — on a phone that zooms the whole screen out (NEO-158). */
+  grid-template-columns: 140px minmax(0, 1fr);
   gap: 12px;
   align-items: baseline;
+}
+/* NEO-158: on the smallest phones (SE, 320–360 px) a 140 px label column
+   leaves the value ~100 px — a clinic name took six lines. The label goes
+   above its value instead. */
+@media (max-width: 374.98px) {
+  .view-item__card :deep(.view-item__row) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+    margin-bottom: var(--space-2, 8px);
+  }
 }
 
 .view-item__card :deep(.view-item__label) {
@@ -513,6 +648,8 @@ defineEmits<{
 
 .view-item__card :deep(.view-item__value) {
   margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: 0.9375rem;
   color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
 }
@@ -628,7 +765,7 @@ defineEmits<{
    fade in instead of popping in. */
 .view-item__record-details,
 .view-item__record-header > .view-item__header-actions,
-.view-item > :not(.view-item__record-header, .view-item__header-row) {
+.view-item > :not(.view-item__record-header, .view-item__header-row, .view-item__collapse-sentinel, .record-toolbar, .record-toolbar-bg) {
   animation: view-item-fade-in 220ms cubic-bezier(0, 0, 0.2, 1) both;
 }
 @keyframes view-item-fade-in {
@@ -639,7 +776,7 @@ defineEmits<{
 @media (prefers-reduced-motion: reduce) {
   .view-item__record-details,
   .view-item__record-header > .view-item__header-actions,
-  .view-item > :not(.view-item__record-header, .view-item__header-row) {
+  .view-item > :not(.view-item__record-header, .view-item__header-row, .view-item__collapse-sentinel, .record-toolbar, .record-toolbar-bg) {
     animation: none;
   }
 }

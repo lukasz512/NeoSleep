@@ -28,6 +28,10 @@ export interface PartnerResourceItem {
   category: string;
   subcategory: string | null;
   weight: number;
+  /** Videos only (NEO-151): a JPEG frame made by the API; null when that host can't make posters. */
+  posterUrl?: string | null;
+  /** Videos only: whole seconds, null until the API has probed the file once. */
+  durationSec?: number | null;
 }
 
 export interface PartnerResourceSubgroup {
@@ -104,6 +108,7 @@ async function load(locale: string): Promise<void> {
     items.value = data.resources.map((r) => ({
       ...r,
       mediaUrl: playableMediaUrl(r.mediaUrl, data.mediaToken),
+      posterUrl: r.posterUrl ? playableMediaUrl(r.posterUrl, data.mediaToken) : null,
       languages: r.languages.map((l) => ({ ...l, mediaUrl: playableMediaUrl(l.mediaUrl, data.mediaToken) })),
     }));
     loadedForLocale.value = locale;

@@ -18,7 +18,12 @@
         <Transition name="qr-status-roll" mode="out-in">
           <span :key="title" class="qr-status__title" :class="{ 'qr-status__title--action': isAction }">{{ title }}</span>
         </Transition>
-        <span v-if="subtitle" class="qr-status__subtitle">{{ subtitle }}</span>
+        <!-- Split so a phone can drop the count and keep the clock (NEO-180). -->
+        <span v-if="state === 'waiting'" class="qr-status__subtitle"
+          ><span class="qr-status__count">{{ t("app.clinical.qrStatus.waitingCount", { done, total }) }}</span
+          >{{ t("app.clinical.qrStatus.waitingExpires", { time: countdown }) }}</span
+        >
+        <span v-else-if="subtitle" class="qr-status__subtitle">{{ subtitle }}</span>
       </span>
       <AppIcon v-if="live" name="chevron-down" class="qr-status__chevron" :class="{ 'qr-status__chevron--open': menuOpen }" />
     </button>
@@ -471,6 +476,10 @@ onBeforeUnmount(() => {
     padding: 0 12px 0 14px;
   }
   .qr-status--waiting .qr-status__icon {
+    display: none;
+  }
+  /* NEO-180: the count is already in the bar above; the countdown must stay whole. */
+  .qr-status__count {
     display: none;
   }
 }

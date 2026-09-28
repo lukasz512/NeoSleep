@@ -461,12 +461,14 @@ describe("SyncOrthoApneaTreatmentStatusesCommand", () => {
     const patientNotifications = await withTenant(TENANT_SLUG, (client) =>
       getNotificationsPaginated(client, patient.identity_id, "all", 1, 10)
     );
-    expect(patientNotifications.rows.some((n) => n.type === "partner_order_status_changed")).toBe(true);
+    // Patients have no in-app inbox; they are told by email, with consent (NEO-146/147) — not here.
+    expect(patientNotifications.rows.some((n) => n.type === "partner_order_status_changed")).toBe(false);
 
     const dentistNotifications = await withTenant(TENANT_SLUG, (client) =>
       getNotificationsPaginated(client, dentist.identity_id, "all", 1, 10)
     );
-    expect(dentistNotifications.rows.some((n) => n.type === "partner_order_status_changed")).toBe(true);
+    const dentistRow = dentistNotifications.rows.find((n) => n.type === "partner_order_status_changed");
+    expect(dentistRow?.action_url).toBe(`/patients/${plan.patient_id}`);
 
     const auditEntries = await withTenant(TENANT_SLUG, (client) => getAuditLogForEntities(client, ["PartnerOrder"], [plan.id]));
     expect(auditEntries.some((e) => e.action === "status_change")).toBe(true);

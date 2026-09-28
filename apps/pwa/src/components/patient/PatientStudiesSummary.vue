@@ -30,6 +30,7 @@ import { useI18n } from "vue-i18n";
 import AppSegmentProgress from "../AppSegmentProgress.vue";
 import ChecklistStatusIcon from "../questionnaire/ChecklistStatusIcon.vue";
 import { checklistSegments, usePatientChecklist, type ChecklistItem } from "../../composables/usePatientChecklist";
+import { useVisiblePolling } from "../../composables/useVisiblePolling";
 import { checklistItemTitle } from "../../config/questionnaires";
 
 /**
@@ -50,6 +51,8 @@ function itemTitle(item: ChecklistItem): string {
 }
 
 onMounted(checklistApi.load);
+// Stays current while the Details tab is open (NEO-173) — fingerprint check every 60 s, reload only on change.
+useVisiblePolling(() => 60_000, checklistApi.refreshIfChanged);
 </script>
 
 <style scoped>

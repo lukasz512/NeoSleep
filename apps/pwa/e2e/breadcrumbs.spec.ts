@@ -11,8 +11,9 @@ import { test, expect, type Page } from "@playwright/test";
  *   link still has a 44px-tall hit area
  * - phone (NEO-152): the same header as desktop — the "MODULE ›" eyebrow is
  *   the way back (no "← <Module>" row); the actions get their own row, on the right
- * - a very long name wraps (never truncated — it's the record's identity)
- *   without pushing the actions off-screen or scrolling the page sideways
+ * - a very long name stays on one line (NEO-158: shrinks to fit down to
+ *   18 px, then "…", full name kept as its text and tooltip) without pushing
+ *   the actions off-screen or scrolling the page sideways
  * - the loading placeholder keeps the header's height (nothing jumps)
  */
 
@@ -38,11 +39,22 @@ for (const [device, width] of [["desktop", 1280], ["phone", 390]] as const) {
       expect(await noSideScroll(page)).toBe(true);
     });
 
-    test("a very long name wraps in full; actions stay on screen", async ({ page }) => {
+    test("a very long name stays on one line (shrinks to 18 px, then …); actions stay on screen", async ({ page }) => {
       await open(page, "long", width);
       const h1 = page.locator("h1");
+      // The full name is still the h1's text (screen readers) and its tooltip.
       await expect(h1).toContainText("y Santa Cruz");
-      expect(await h1.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+      const box = await h1.evaluate((el) => ({
+        height: el.getBoundingClientRect().height,
+        lineHeight: parseFloat(getComputedStyle(el).lineHeight),
+        fontSize: parseFloat(getComputedStyle(el).fontSize),
+        title: el.getAttribute("title"),
+        cut: el.scrollWidth > el.clientWidth,
+      }));
+      expect(box.height).toBeLessThanOrEqual(box.lineHeight + 1);
+      expect(box.fontSize).toBeGreaterThanOrEqual(18);
+      // Only a name that is actually cut with "…" needs its tooltip.
+      if (box.cut) expect(box.title).toContain("y Santa Cruz");
       for (const action of await page.locator(".harness-action").all()) {
         const b = (await action.boundingBox())!;
         expect(b.x + b.width).toBeLessThanOrEqual(width);
@@ -98,21 +110,22 @@ test.describe("desktop (1280px) — eyebrow", () => {
   });
 });
 
-test.describe("phone (390px) — NEO-152", () => {
-  test("the eyebrow is the way back, as on desktop", async ({ page }) => {
+test.describe("phone (390px) — NEO-181", () => {
+  test("the way back is the toolbar's ‹ MODULE link (the eyebrow gives way to it)", async ({ page }) => {
     await open(page, "record", 390);
-    await expect(eyebrow(page)).toBeVisible();
-    await expect(eyebrow(page)).toHaveAttribute("href", "/patients");
+    await expect(page.getByTestId("record-toolbar-back")).toBeVisible();
+    await expect(page.getByTestId("record-toolbar-back")).toHaveAttribute("href", "/patients");
+    await expect(eyebrow(page)).toBeHidden();
   });
 
-  test("the actions sit on their own row, the last one on the header's right edge", async ({ page }) => {
+  test("the actions live in the toolbar above the name, the last one on the right edge", async ({ page }) => {
     await open(page, "record", 390);
-    const head = (await header(page).boundingBox())!;
     const title = (await page.locator("h1").boundingBox())!;
-    const actions = await page.locator(".harness-action").all();
-    const last = (await actions.at(-1)!.boundingBox())!;
-    expect(last.y).toBeGreaterThan(title.y + title.height - 1);
-    expect(Math.abs(last.x + last.width - (head.x + head.width))).toBeLessThanOrEqual(1);
+    const more = (await page.getByTestId("record-toolbar-more").boundingBox())!;
+    const head = (await header(page).boundingBox())!;
+    expect(more.y + more.height).toBeLessThanOrEqual(title.y + 1);
+    // The glyph ends near the content edge (the 44 px button pads 11 px around a 22 px icon).
+    expect(Math.abs(more.x + more.width - 11 - (head.x + head.width))).toBeLessThanOrEqual(12);
   });
 });
 

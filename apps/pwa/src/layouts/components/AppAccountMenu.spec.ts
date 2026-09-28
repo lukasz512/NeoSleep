@@ -1,9 +1,11 @@
 import { describe, it, expect, afterEach } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { defineComponent, h, ref } from "vue";
 import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
 import AppAccountMenu from "./AppAccountMenu.vue";
 
-// jsdom has no Element.animate, so the motion takes its instant path — these
+// jsdom has no layout (and no Element.animate), so the CSS motion is skipped — these
 // tests cover behaviour (open, close, focus, accessibility), not the animation.
 
 const mounted: VueWrapper[] = [];
@@ -97,5 +99,84 @@ describe("AppAccountMenu — NEO-122 avatar button turns into the menu", () => {
     expect(dialog()?.classList.contains("account-menu__card")).toBe(true);
     expect(document.querySelector(".account-menu--phone")).not.toBeNull();
     expect(document.querySelector(".account-menu__sheet")).toBeNull();
+  });
+
+  it("on phones shows a swipe handle at the bottom of the card; desktop has none", async () => {
+    const phone = mountMenu(true);
+    await phone.wrapper.get('[data-testid="trigger"]').trigger("click");
+    await flushPromises();
+    expect(document.querySelector('[data-testid="account-menu-handle"]')).not.toBeNull();
+    phone.wrapper.unmount();
+    document.body.innerHTML = "";
+
+    const desktop = mountMenu(false);
+    await desktop.wrapper.get('[data-testid="trigger"]').trigger("click");
+    await flushPromises();
+    expect(dialog()).not.toBeNull();
+    expect(document.querySelector('[data-testid="account-menu-handle"]')).toBeNull();
+  });
+
+  describe("swipe up to close (phone)", () => {
+    function pointer(target: EventTarget, type: string, clientY: number, timeStamp = 0) {
+      const e = new MouseEvent(type, { clientY, clientX: 100, button: 0, bubbles: true });
+      Object.defineProperty(e, "pointerId", { value: 1 });
+      Object.defineProperty(e, "timeStamp", { value: timeStamp });
+      target.dispatchEvent(e);
+    }
+
+    async function openPhone() {
+      const menu = mountMenu(true);
+      await menu.wrapper.get('[data-testid="trigger"]').trigger("click");
+      await flushPromises();
+      return menu;
+    }
+
+    it("closes when the card is dragged up far enough", async () => {
+      const { open } = await openPhone();
+      pointer(dialog()!, "pointerdown", 300, 0);
+      pointer(window, "pointermove", 260, 200);
+      pointer(window, "pointermove", 200, 400);
+      pointer(window, "pointerup", 200, 400);
+      await flushPromises();
+      expect(open.value).toBe(false);
+    });
+
+    it("springs back and stays open after a short, slow drag", async () => {
+      const { open } = await openPhone();
+      pointer(dialog()!, "pointerdown", 300, 0);
+      pointer(window, "pointermove", 280, 300);
+      expect(dialog()!.style.transform).toBe("translateY(-20px)");
+      pointer(window, "pointerup", 280, 600);
+      await flushPromises();
+      expect(open.value).toBe(true);
+      expect(dialog()!.style.transform).toBe("");
+    });
+
+    it("a drag doesn't press the button it started on", async () => {
+      await openPhone();
+      const inside = document.querySelector<HTMLElement>('[data-testid="inside"]')!;
+      let clicked = false;
+      inside.addEventListener("click", () => (clicked = true));
+      pointer(inside, "pointerdown", 300, 0);
+      pointer(window, "pointermove", 280, 300);
+      pointer(window, "pointerup", 280, 600);
+      inside.click();
+      expect(clicked).toBe(false);
+    });
+  });
+
+  // NEO-161: the motion is CSS on a class — no script animation, no SVG filter.
+  it("opens by adding a class the CSS transitions on, with no script-driven animation", async () => {
+    const { wrapper } = mountMenu(true);
+    await wrapper.get('[data-testid="trigger"]').trigger("click");
+    await flushPromises();
+    expect(document.querySelector(".account-menu--open")).not.toBeNull();
+    const dir = path.resolve(__dirname);
+    const component = readFileSync(path.join(dir, "AppAccountMenu.vue"), "utf-8");
+    const motion = readFileSync(path.resolve(dir, "../../composables/useAccountMenuMotion.ts"), "utf-8");
+    for (const source of [component, motion]) {
+      expect(source).not.toMatch(/\.animate\(/);
+      expect(source).not.toContain("feGaussianBlur");
+    }
   });
 });
