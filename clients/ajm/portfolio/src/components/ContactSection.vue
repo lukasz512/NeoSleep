@@ -17,7 +17,7 @@
     <div class="contact__copy">
       <p v-reveal class="eyebrow contact__person">{{ t("contact.person") }}</p>
       <h2 class="contact__title">
-        <span class="mask-line"><span>{{ t("contact.title") }}</span></span>
+        <span class="mask-line"><span><AccentText :text="t('contact.title')" /></span></span>
       </h2>
       <p v-reveal="{ delay: 120 }" class="contact__body">{{ t("contact.body") }}</p>
       <a
@@ -44,6 +44,7 @@
 </template>
 
 <script setup lang="ts">
+import AccentText from "./AccentText.vue";
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import LoopVideo from "./LoopVideo.vue";
@@ -88,9 +89,9 @@ const channels = computed(() => [
   min-height: 110svh;
   display: grid;
   align-items: center;
-  color: var(--ajm-paper);
+  color: var(--ajm-on-stage);
   overflow: hidden;
-  background: var(--ajm-ink);
+  background: var(--ajm-stage);
 }
 .contact__bg {
   position: absolute;

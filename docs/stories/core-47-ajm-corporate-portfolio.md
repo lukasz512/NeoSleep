@@ -202,6 +202,14 @@ Not yet: Privalia timeline, Mendel reel, Capacidades, Cómo trabajamos, Clientes
   angle (planeta23). Duplicates of existing Planeta photos skipped. Neon lounge placed in eFashion 2019
   (same batch/venue, **to confirm**); Pizzería Vesubio photos parked in `AJM-materials/pending/`.
 
+## Round 3: typography, marker, theme (Łukasz + Alfred, 2026-09-28)
+
+- **T1 = A**: Montserrat everywhere, plus one Bodoni Moda italic word per headline. Figures (300, 360°, years) are set in Bodoni italic, taken from C. Both fonts are self-hosted (@fontsource), so there are no Google requests.
+- **T2**: a single sand colour, used **once per partner** on its key phrase: "marcas globales", "las historias", "a través del tiempo", "las personas". The marker is precise: a square-edged band under the lower third of the letters, drawn left to right. There is no brush and no skew. The copy carries the markup (`[word]` = italic, `~phrase~` = marker), and a test enforces one marker per case and at most one italic word per string.
+- **Theme switch** (a must): light/dark. The new theme opens as a circle from the switch (View Transitions). Browsers without View Transitions, and lite mode, get a colour crossfade. The first visit follows the device. The choice is remembered on this device (localStorage). Footage sections stay dark in both themes (stage tokens).
+- **P1**: the neon lounge and Pizzería Vesubio photos are "different events"; both stay off the page until named.
+- **H1**: the site goes live on the subdomain `corporativo.alfredjan.com`. This needs one CNAME record at deploy time.
+
 ## Next (remaining)
 
 Scaffold `clients/ajm/portfolio` (Vite + Vue + TS, GSAP/Lenis, own ES/EN locales, lint rule blocking `@neo/*`), then build the vertical slice: entry (QR + link) → hero montage → Qué hacemos → Universal walk-through, in ES + EN, weak-network rules on.

@@ -7,7 +7,7 @@
       <p class="eyebrow caps__eyebrow">{{ t("capabilities.eyebrow") }}</p>
       <h2 class="caps__title">
         <span class="mask-line"><span>{{ t("capabilities.title1") }}</span></span>
-        <span class="mask-line"><span>{{ t("capabilities.title2") }}</span></span>
+        <span class="mask-line"><span><AccentText :text="t('capabilities.title2')" /></span></span>
       </h2>
     </header>
 
@@ -45,6 +45,7 @@
 </template>
 
 <script setup lang="ts">
+import AccentText from "./AccentText.vue";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { picture } from "../lib/media";
@@ -90,8 +91,8 @@ watch(active, (v) => {
 
 <style scoped>
 .caps {
-  background: var(--ajm-ink);
-  color: var(--ajm-paper);
+  background: var(--ajm-caps);
+  color: var(--ajm-on-stage);
   padding: clamp(96px, 14vw, 180px) var(--ajm-gutter);
 }
 .caps__head {
@@ -133,7 +134,7 @@ watch(active, (v) => {
   opacity: 0.35;
 }
 .cap:focus-visible {
-  box-shadow: inset 2px 0 0 var(--ajm-paper);
+  box-shadow: inset 2px 0 0 var(--ajm-on-stage);
 }
 .cap__num {
   font: 400 clamp(40px, 6vw, 92px) / 0.9 var(--ajm-font);
@@ -143,8 +144,8 @@ watch(active, (v) => {
   transition: color 0.45s ease, -webkit-text-stroke-color 0.45s ease;
 }
 .cap.on .cap__num {
-  color: var(--ajm-paper);
-  -webkit-text-stroke-color: var(--ajm-paper);
+  color: var(--ajm-on-stage);
+  -webkit-text-stroke-color: var(--ajm-on-stage);
 }
 .cap__text {
   display: grid;
@@ -200,7 +201,7 @@ watch(active, (v) => {
   bottom: 14px;
   font: 500 11px var(--ajm-font);
   letter-spacing: 0.16em;
-  color: var(--ajm-paper);
+  color: var(--ajm-on-stage);
   mix-blend-mode: difference;
 }
 @media (max-width: 860px) {

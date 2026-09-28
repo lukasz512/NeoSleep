@@ -7,6 +7,7 @@
       <a href="#nosotros">{{ t("nav.about") }}</a>
       <a href="#contacto">{{ t("nav.contact") }}</a>
       <a class="head__lang" :href="otherPath" :aria-label="t('nav.languageAria')" :hreflang="otherLocale">{{ t("nav.language") }}</a>
+      <ThemeSwitch :lite="lite" />
     </nav>
   </header>
 </template>
@@ -15,9 +16,10 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import AjLogo from "./AjLogo.vue";
+import ThemeSwitch from "./ThemeSwitch.vue";
 import { PATH_ROUTING, switchLocalePath, type Locale } from "../lib/locale";
 
-const props = defineProps<{ locale: Locale }>();
+const props = defineProps<{ locale: Locale; lite: boolean }>();
 const { t } = useI18n();
 
 const otherLocale = computed<Locale>(() => (props.locale === "es" ? "en" : "es"));
@@ -52,7 +54,7 @@ onBeforeUnmount(() => window.removeEventListener("scroll", onScroll));
   justify-content: space-between;
   gap: 16px;
   padding: calc(14px + env(safe-area-inset-top)) var(--ajm-gutter) 14px;
-  color: var(--ajm-paper);
+  color: var(--ajm-on-stage);
   transition: background-color 0.4s ease, color 0.4s ease, transform 0.5s var(--ajm-ease);
 }
 .head--hidden {
@@ -69,6 +71,7 @@ onBeforeUnmount(() => window.removeEventListener("scroll", onScroll));
 }
 .head__nav {
   display: flex;
+  align-items: center;
   gap: clamp(14px, 3vw, 32px);
   font: 500 12px var(--ajm-font);
   letter-spacing: 0.14em;

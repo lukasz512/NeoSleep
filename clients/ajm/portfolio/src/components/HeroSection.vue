@@ -18,7 +18,7 @@
       <p class="eyebrow hero__kicker hero__step" style="--i: 0">{{ t("hero.kicker") }}</p>
       <h1 class="hero__title">
         <span class="mask-line"><span>{{ t("hero.line1") }}</span></span>
-        <span class="mask-line"><span>{{ t("hero.line2") }}</span></span>
+        <span class="mask-line"><span><AccentText :text="t('hero.line2')" /></span></span>
       </h1>
       <p class="hero__body hero__step" style="--i: 3">{{ t("hero.body") }}</p>
       <p class="hero__places hero__step" style="--i: 4">{{ t("hero.places") }}</p>
@@ -31,6 +31,7 @@
 </template>
 
 <script setup lang="ts">
+import AccentText from "./AccentText.vue";
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import LoopVideo from "./LoopVideo.vue";
@@ -59,9 +60,9 @@ onBeforeUnmount(() => window.removeEventListener("scroll", onScroll));
   min-height: 100svh;
   display: grid;
   align-items: end;
-  color: var(--ajm-paper);
+  color: var(--ajm-on-stage);
   overflow: hidden;
-  background: var(--ajm-ink);
+  background: var(--ajm-stage);
 }
 .hero__drift {
   position: absolute;
@@ -167,7 +168,7 @@ onBeforeUnmount(() => window.removeEventListener("scroll", onScroll));
 .hero__scroll i {
   position: absolute;
   inset: 0;
-  background: var(--ajm-paper);
+  background: var(--ajm-on-stage);
   animation: run 2.2s var(--ajm-ease) infinite;
 }
 @keyframes run {

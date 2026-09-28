@@ -7,7 +7,7 @@
     <header class="case__head">
       <p class="eyebrow">{{ t("privalia.number") }} · {{ t("privalia.client") }}</p>
       <h3 class="case__title">
-        <span class="mask-line"><span>{{ t("privalia.title") }}</span></span>
+        <span class="mask-line"><span><AccentText :text="t('privalia.title')" /></span></span>
       </h3>
       <p class="case__tags">{{ t("privalia.tags") }}</p>
       <p v-reveal class="case__body">{{ t("privalia.body") }}</p>
@@ -67,6 +67,7 @@
 </template>
 
 <script setup lang="ts">
+import AccentText from "./AccentText.vue";
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import LoopVideo from "./LoopVideo.vue";
@@ -148,7 +149,7 @@ onBeforeUnmount(() => io?.disconnect());
 }
 .tl__year {
   display: flex;
-  font: 500 clamp(64px, 11vw, 176px) / 1 var(--ajm-font);
+  font: italic 400 clamp(68px, 12vw, 190px) / 1 var(--ajm-display);
   letter-spacing: -0.05em;
   font-variant-numeric: tabular-nums;
 }
@@ -265,18 +266,14 @@ onBeforeUnmount(() => io?.disconnect());
   aspect-ratio: 3 / 2;
 }
 .mosaic__item--4 {
-  grid-column: 1 / 3;
-  aspect-ratio: 3 / 4;
-  margin-top: clamp(16px, 3vw, 48px);
-}
-.mosaic__item--5 {
-  grid-column: 3 / 7;
+  grid-column: 1 / 4;
   aspect-ratio: 4 / 3;
   margin-top: clamp(16px, 3vw, 48px);
 }
-.mosaic__item--6 {
-  grid-column: 1 / 7;
-  aspect-ratio: 21 / 9;
+.mosaic__item--5 {
+  grid-column: 4 / 7;
+  aspect-ratio: 4 / 3;
+  margin-top: clamp(16px, 3vw, 48px);
 }
 
 @media (max-width: 860px) {

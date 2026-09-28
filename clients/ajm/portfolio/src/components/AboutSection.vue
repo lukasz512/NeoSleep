@@ -5,7 +5,7 @@
     <p class="eyebrow">{{ t("about.eyebrow") }}</p>
     <h2 class="about__title">
       <span class="mask-line"><span>{{ t("about.title1") }}</span></span>
-      <span class="mask-line"><span>{{ t("about.title2") }}</span></span>
+      <span class="mask-line"><span><AccentText :text="t('about.title2')" /></span></span>
     </h2>
     <div class="about__text">
       <p v-reveal>{{ t("about.body1") }}</p>
@@ -24,6 +24,7 @@
 </template>
 
 <script setup lang="ts">
+import AccentText from "./AccentText.vue";
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useInView } from "../lib/useInView";

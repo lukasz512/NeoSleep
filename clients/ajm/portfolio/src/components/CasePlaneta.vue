@@ -5,7 +5,7 @@
     <header class="case__head">
       <p class="eyebrow">{{ t("planeta.number") }} · {{ t("planeta.client") }}</p>
       <h3 class="case__title">
-        <span class="mask-line"><span>{{ t("planeta.title") }}</span></span>
+        <span class="mask-line"><span><AccentText :text="t('planeta.title')" /></span></span>
       </h3>
       <p class="case__tags">{{ t("planeta.tags") }} · {{ t("planeta.city") }}</p>
       <p class="case__body">{{ t("planeta.body") }}</p>
@@ -53,6 +53,7 @@
 </template>
 
 <script setup lang="ts">
+import AccentText from "./AccentText.vue";
 import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { LARGE_PHOTOS, PLANETA_EVENTS, photoBase } from "../content/planeta";

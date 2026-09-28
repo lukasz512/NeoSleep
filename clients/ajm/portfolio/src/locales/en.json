@@ -10,7 +10,9 @@
     "about": "About",
     "contact": "Contact",
     "language": "Español",
-    "languageAria": "View this page in Spanish"
+    "languageAria": "View this page in Spanish",
+    "themeToDark": "Switch to dark mode",
+    "themeToLight": "Switch to light mode"
   },
   "entry": {
     "skip": "Skip",
@@ -21,7 +23,7 @@
   },
   "hero": {
     "line1": "We create experiences",
-    "line2": "that bring people together.",
+    "line2": "that bring [people] together.",
     "kicker": "Corporate Events · Experiences · Production",
     "body": "From concept to execution, we plan, produce and run corporate events designed around people, brands and business goals.",
     "places": "Mexico City · Madrid · International",
@@ -29,22 +31,47 @@
   },
   "what": {
     "title1": "Big ideas.",
-    "title2": "Flawless execution.",
+    "title2": "[Flawless] execution.",
     "body1": "AJ Management is an independent agency specialised in planning, producing, coordinating and delivering corporate events and experiences.",
     "body2": "We work as an extension of our clients' teams, handling every stage: from the first idea and venue selection to production, suppliers, logistics and on-site operations.",
-    "words": ["Strategy", "Planning", "Production", "Logistics", "Experiences", "Execution"]
+    "words": [
+      "Strategy",
+      "Planning",
+      "Production",
+      "Logistics",
+      "Experiences",
+      "Execution"
+    ]
   },
   "capabilities": {
     "eyebrow": "Capabilities",
     "title1": "One partner.",
-    "title2": "From planning to execution.",
+    "title2": "From planning to [execution].",
     "items": [
-      { "title": "Corporate Events", "body": "Conventions, company meetings, presentations and corporate gatherings." },
-      { "title": "Executive Experiences", "body": "Kick-offs, leadership meetings, forums and executive events." },
-      { "title": "Team Experiences", "body": "Team-building events, celebrations, recognition programmes and employee experiences." },
-      { "title": "Event Production", "body": "Creative development, audiovisual production, staging, lighting, furniture and technical coordination." },
-      { "title": "Logistics & Operations", "body": "Guest management, transport, run-of-show, accreditation, suppliers and on-site coordination." },
-      { "title": "Venues & Suppliers", "body": "Venue sourcing, negotiation, catering, entertainment and specialist supplier management." }
+      {
+        "title": "Corporate Events",
+        "body": "Conventions, company meetings, presentations and corporate gatherings."
+      },
+      {
+        "title": "Executive Experiences",
+        "body": "Kick-offs, leadership meetings, forums and executive events."
+      },
+      {
+        "title": "Team Experiences",
+        "body": "Team-building events, celebrations, recognition programmes and employee experiences."
+      },
+      {
+        "title": "Event Production",
+        "body": "Creative development, audiovisual production, staging, lighting, furniture and technical coordination."
+      },
+      {
+        "title": "Logistics & Operations",
+        "body": "Guest management, transport, run-of-show, accreditation, suppliers and on-site coordination."
+      },
+      {
+        "title": "Venues & Suppliers",
+        "body": "Venue sourcing, negotiation, catering, entertainment and specialist supplier management."
+      }
     ]
   },
   "projects": {
@@ -54,16 +81,20 @@
   "universal": {
     "number": "Case 01",
     "client": "Universal Products & Experiences",
-    "title": "Bringing global brands to life.",
+    "title": "Bringing ~[global] brands~ to life.",
     "tags": "Production · Experiences · Content",
     "body": "AJ Management works on projects that turn globally recognised entertainment properties into experiences and productions that matter to the local market.",
-    "rooms": ["Lounge", "Collection", "Meeting room"],
+    "rooms": [
+      "Lounge",
+      "Collection",
+      "Meeting room"
+    ],
     "videoLabel": "Walk-through of the Universal pop-up, Mexico City"
   },
   "planeta": {
     "number": "Case 02",
     "client": "Grupo Planeta",
-    "title": "We build experiences around stories.",
+    "title": "We build experiences around ~[stories.]~",
     "tags": "Corporate Events · Launches · Production · Guest Experience",
     "body": "AJ Management works with Grupo Planeta to develop and produce events that connect authors, media, partners and audiences through carefully designed experiences.",
     "city": "Mexico City",
@@ -82,7 +113,7 @@
   "privalia": {
     "number": "Case 03",
     "client": "Privalia",
-    "title": "A partnership built over time.",
+    "title": "A partnership ~built over [time.]~",
     "tags": "Corporate Events · Experiences · Production",
     "body": "A long-term relationship built on consistent execution, operational trust and an understanding of the client's changing needs.",
     "photoAlt": "eFashion Day 2019: set-up and guests",
@@ -107,7 +138,7 @@
   "mendel": {
     "number": "Case 04",
     "client": "Mendel",
-    "title": "Corporate experiences designed around people.",
+    "title": "Corporate experiences designed around ~[people.]~",
     "tags": "Corporate Event · Production · Logistics",
     "body": "From planning and supplier coordination to production and on-site operations, AJ Management built a corporate experience designed to bring the Mendel community together.",
     "videoLabel": "Mendel event in Mexico City",
@@ -119,14 +150,32 @@
   },
   "process": {
     "eyebrow": "How we work",
-    "title": "One point of contact from start to finish.",
+    "title": "One point of [contact] from start to finish.",
     "steps": [
-      { "name": "Brief", "body": "We understand goals, audience, timing and budget." },
-      { "name": "Concept", "body": "We design the experience and define the venue and production approach." },
-      { "name": "Planning", "body": "We coordinate suppliers, logistics, timelines and technical production." },
-      { "name": "Production", "body": "Build, coordination and quality control." },
-      { "name": "Showtime", "body": "On-site operations and guest experience." },
-      { "name": "Wrap-up", "body": "Load-out, operational close, report and follow-up." }
+      {
+        "name": "Brief",
+        "body": "We understand goals, audience, timing and budget."
+      },
+      {
+        "name": "Concept",
+        "body": "We design the experience and define the venue and production approach."
+      },
+      {
+        "name": "Planning",
+        "body": "We coordinate suppliers, logistics, timelines and technical production."
+      },
+      {
+        "name": "Production",
+        "body": "Build, coordination and quality control."
+      },
+      {
+        "name": "Showtime",
+        "body": "On-site operations and guest experience."
+      },
+      {
+        "name": "Wrap-up",
+        "body": "Load-out, operational close, report and follow-up."
+      }
     ]
   },
   "clients": {
@@ -135,17 +184,26 @@
   "about": {
     "eyebrow": "About AJ Management",
     "title1": "Local expertise.",
-    "title2": "International perspective.",
+    "title2": "International [perspective].",
     "body1": "Founded in Mexico, AJ Management creates and produces events and experiences for companies and brands across markets.",
     "body2": "Our network of producers, venues, technical partners and specialist suppliers lets us build the right team for every project, with one central point of coordination.",
     "cities": [
-      { "city": "Mexico City", "role": "Production & Operations" },
-      { "city": "Madrid", "role": "Europe & Partnerships" },
-      { "city": "International", "role": "Projects & Experiences" }
+      {
+        "city": "Mexico City",
+        "role": "Production & Operations"
+      },
+      {
+        "city": "Madrid",
+        "role": "Europe & Partnerships"
+      },
+      {
+        "city": "International",
+        "role": "Projects & Experiences"
+      }
     ]
   },
   "contact": {
-    "title": "Have an event in mind?",
+    "title": "Have an [event] in mind?",
     "body": "Whether it's a corporate meeting, an executive experience, a convention or a large-scale event, we'd love to hear about your project.",
     "cta": "Let's talk about your project",
     "whatsappMessage": "Hi Alfred, I saw the AJ Management portfolio and would like to talk about an event.",

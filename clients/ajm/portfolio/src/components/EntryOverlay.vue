@@ -149,7 +149,7 @@ onBeforeUnmount(() => timers.forEach((t) => window.clearTimeout(t)));
 
 /* ---- fade ---- */
 .entry--fade {
-  background: var(--ajm-ink);
+  background: var(--ajm-stage);
 }
 .entry--fade.is-open {
   opacity: 0;
@@ -164,7 +164,7 @@ onBeforeUnmount(() => timers.forEach((t) => window.clearTimeout(t)));
   left: 0;
   right: 0;
   height: 50.5%;
-  background: var(--ajm-ink);
+  background: var(--ajm-stage);
   transition: transform 1s cubic-bezier(0.83, 0, 0.17, 1);
 }
 .shutter--top {
@@ -194,7 +194,7 @@ onBeforeUnmount(() => timers.forEach((t) => window.clearTimeout(t)));
   display: grid;
   justify-items: center;
   gap: 18px;
-  color: var(--ajm-paper);
+  color: var(--ajm-on-stage);
   transition: opacity 0.35s ease, transform 1s cubic-bezier(0.83, 0, 0.17, 1);
 }
 .stage__mask {

@@ -3,7 +3,7 @@
   <section ref="root" class="what" :class="{ 'is-in': seen }">
     <h2 class="what__title">
       <span class="mask-line"><span>{{ t("what.title1") }}</span></span>
-      <span class="mask-line"><span>{{ t("what.title2") }}</span></span>
+      <span class="mask-line"><span><AccentText :text="t('what.title2')" /></span></span>
     </h2>
     <div class="what__text">
       <p>{{ t("what.body1") }}</p>
@@ -16,6 +16,7 @@
 </template>
 
 <script setup lang="ts">
+import AccentText from "./AccentText.vue";
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useInView } from "../lib/useInView";
@@ -83,12 +84,12 @@ onBeforeUnmount(() => window.removeEventListener("scroll", onScroll));
   letter-spacing: -0.01em;
 }
 .what__words li {
-  color: #cfc9bd;
+  color: var(--ajm-faint);
   transition: color 0.5s ease;
 }
 .what__words li:not(:last-child)::after {
   content: " / ";
-  color: #cfc9bd;
+  color: var(--ajm-faint);
   white-space: pre;
 }
 .what__words li.lit {

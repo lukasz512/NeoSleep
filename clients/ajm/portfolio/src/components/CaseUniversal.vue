@@ -6,7 +6,7 @@
     <header class="case__head">
       <p class="eyebrow">{{ t("universal.number") }} · {{ t("universal.client") }}</p>
       <h3 class="case__title">
-        <span class="mask-line"><span>{{ t("universal.title") }}</span></span>
+        <span class="mask-line"><span><AccentText :text="t('universal.title')" /></span></span>
       </h3>
       <p class="case__tags">{{ t("universal.tags") }}</p>
     </header>
@@ -36,6 +36,7 @@
 </template>
 
 <script setup lang="ts">
+import AccentText from "./AccentText.vue";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import LoopVideo from "./LoopVideo.vue";
@@ -129,7 +130,7 @@ onBeforeUnmount(() => bound?.removeEventListener("timeupdate", onTime));
   letter-spacing: -0.015em;
 }
 .walk__rooms li {
-  color: #cfc9bd;
+  color: var(--ajm-faint);
   transition: color 0.5s ease;
 }
 .walk__rooms li.on {

@@ -21,13 +21,12 @@ export const PRIVALIA_CHAPTERS: PrivaliaChapter[] = [
     id: "y2019",
     loop: "privalia/y2019",
     poster: "privalia/y2019-poster",
-    // privalia06 (neon lounge) came in the same batch and venue; its event is still to be confirmed
+    // privalia06 (neon lounge) is left out: a different event, still to be named (P1, 2026-09-28)
     photos: [
       { id: "privalia04", large: true },
       { id: "privalia01", large: true },
       { id: "privalia02", large: true },
       { id: "privalia22", large: true },
-      { id: "privalia06", large: true },
       { id: "privalia05", large: true },
       { id: "privalia03", large: true },
     ],

@@ -61,7 +61,7 @@ defineExpose({ video });
 .loop {
   position: relative;
   overflow: hidden;
-  background: var(--ajm-ink);
+  background: var(--ajm-stage);
 }
 .loop__poster img,
 .loop__video {
@@ -87,7 +87,7 @@ defineExpose({ video });
   border-radius: 50%;
   border: 1px solid rgba(244, 241, 234, 0.7);
   background: rgba(29, 28, 26, 0.45);
-  color: var(--ajm-paper);
+  color: var(--ajm-on-stage);
   display: grid;
   place-items: center;
   cursor: pointer;

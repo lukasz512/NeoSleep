@@ -12,7 +12,7 @@
     <div class="process__sticky">
       <header class="process__head">
         <p class="eyebrow">{{ t("process.eyebrow") }}</p>
-        <h2 v-reveal class="process__title">{{ t("process.title") }}</h2>
+        <h2 v-reveal class="process__title"><AccentText :text="t('process.title')" /></h2>
       </header>
 
       <div ref="viewport" class="process__viewport">
@@ -37,6 +37,7 @@
 </template>
 
 <script setup lang="ts">
+import AccentText from "./AccentText.vue";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useScrollProgress, vReveal } from "../lib/motion";
@@ -208,7 +209,7 @@ const current = computed(() =>
   transition: color 0.5s ease;
 }
 .process--pinned .step:not(.on) .step__name {
-  color: #c9c3b6;
+  color: var(--ajm-faint);
 }
 .step__body {
   max-width: 340px;

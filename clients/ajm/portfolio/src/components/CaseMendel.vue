@@ -6,7 +6,7 @@
     <header class="case__head">
       <p class="eyebrow">{{ t("mendel.number") }} · {{ t("mendel.client") }}</p>
       <h3 class="case__title">
-        <span class="mask-line"><span>{{ t("mendel.title") }}</span></span>
+        <span class="mask-line"><span><AccentText :text="t('mendel.title')" /></span></span>
       </h3>
       <p class="case__tags">{{ t("mendel.tags") }}</p>
     </header>
@@ -42,6 +42,7 @@
 </template>
 
 <script setup lang="ts">
+import AccentText from "./AccentText.vue";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import LoopVideo from "./LoopVideo.vue";
@@ -113,7 +114,7 @@ function counted(value: number): number {
   height: min(88svh, 62vw);
   min-height: 420px;
   overflow: hidden;
-  color: var(--ajm-paper);
+  color: var(--ajm-on-stage);
   /* inset frame → full bleed */
   clip-path: inset(0 calc((1 - var(--open, 1)) * 12vw) round calc((1 - var(--open, 1)) * 6px));
 }
@@ -157,7 +158,7 @@ function counted(value: number): number {
   transform: none;
 }
 .stat__value {
-  font: 500 clamp(56px, 8vw, 128px) / 0.9 var(--ajm-font);
+  font: italic 400 clamp(60px, 8.6vw, 136px) / 0.9 var(--ajm-display);
   letter-spacing: -0.04em;
   font-variant-numeric: tabular-nums;
 }

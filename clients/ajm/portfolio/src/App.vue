@@ -6,7 +6,7 @@
     :kicker="t('entry.kicker')"
     @open="heroReady = true"
   />
-  <SiteHeader :locale="locale" />
+  <SiteHeader :locale="locale" :lite="lite" />
   <main>
     <HeroSection :lite="lite" :ready="heroReady" />
     <WhatWeDo :lite="lite" />
