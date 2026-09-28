@@ -1,19 +1,20 @@
 #!/usr/bin/env node
-// decision-form — renders a questions JSON into a form Artifact. Łukasz ticks
-// options, adds notes, presses "Send to Claude"; the page posts the answer sheet
-// as an artifact comment via comments.sendToClaude, which wakes the watching
-// Claude Code session (NEO-88).
+// decision-form — renders a questions JSON into a form Artifact. Every question is
+// three buttons (yes · no · expanded variant with a specialist's recommendation,
+// CORE-44); "Send to Claude" posts the answer sheet as an artifact comment via
+// comments.sendToClaude, which wakes the watching Claude Code session (NEO-88).
 //
 //   node .claude/skills/decision-form/build.mjs <questions.json>
 //     → validates, writes .claude/local/forms/<id>.html, prints the path
 //
-// No dependencies beyond Node. English only (CLAUDE.md) — Polish copy lives in the
-// questions JSON (its `ui` block overrides the English chrome).
+// The widget itself lives in decisions.mjs (shared with ship-artifact); tests in
+// decisions.test.mjs. English only (CLAUDE.md) — Polish copy lives in the JSON `ui`.
 
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
+import { validateQuestions, widget } from "./decisions.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = (() => {
@@ -32,47 +33,47 @@ if (!src) {
 const data = JSON.parse(readFileSync(resolve(src), "utf-8"));
 
 const errors = [];
-const need = (cond, msg) => cond || errors.push(msg);
-need(/^[a-z0-9-]{3,60}$/.test(data.id ?? ""), "id: kebab-case, 3-60 chars (also the localStorage key)");
-need(typeof data.title === "string" && data.title.length <= 60, "title: required, ≤ 60 chars");
-need(!data.summary || data.summary.length <= 320, "summary: ≤ 320 chars");
-need(Array.isArray(data.sections) && data.sections.length > 0, "sections: at least one");
-const ids = new Set();
-for (const s of data.sections ?? []) {
-  need(typeof s.title === "string", "section.title required");
-  for (const q of s.questions ?? []) {
-    need(/^[A-Za-z0-9.-]{1,8}$/.test(q.id ?? ""), `question id "${q.id}": 1-8 chars, letters/digits`);
-    need(!ids.has(q.id), `duplicate question id ${q.id}`);
-    ids.add(q.id);
-    need(typeof q.text === "string" && q.text.length <= 240, `${q.id}: text required, ≤ 240 chars`);
-    need(!q.short || q.short.length <= 50, `${q.id}: short ≤ 50 chars (goes into the answer sheet)`);
-    need(Array.isArray(q.options) && q.options.length >= 2 && q.options.length <= 6, `${q.id}: 2-6 options`);
-    const oids = new Set();
-    for (const o of q.options ?? []) {
-      need(/^[a-z]$/.test(o.id ?? ""), `${q.id}: option ids are single letters a-z`);
-      need(!oids.has(o.id), `${q.id}: duplicate option ${o.id}`);
-      oids.add(o.id);
-      need(typeof o.label === "string" && o.label.length <= 90, `${q.id}/${o.id}: label required, ≤ 90 chars`);
-      need(!o.detail || o.detail.length <= 220, `${q.id}/${o.id}: detail ≤ 220 chars`);
-    }
-    need((q.options ?? []).filter((o) => o.recommended).length <= 1 || q.multi, `${q.id}: at most one recommended option`);
-  }
+if (!/^[a-z0-9-]{3,60}$/.test(data.id ?? "")) errors.push("id: kebab-case, 3-60 chars (also the localStorage key)");
+if (typeof data.title !== "string" || data.title.length > 60) errors.push("title: required, ≤ 60 chars");
+if (data.summary && data.summary.length > 320) errors.push("summary: ≤ 320 chars");
+if (data.sections) errors.push("sections: gone (CORE-44) — use a flat `questions` array, max 5");
+if (!Array.isArray(data.questions) || !data.questions.length) errors.push("questions: at least one");
+errors.push(...validateQuestions(data.questions ?? []));
+for (const d of data.defaults ?? []) {
+  if (!d.text || !d.test) errors.push(`defaults: each item needs text + test (the test that proves it): ${JSON.stringify(d).slice(0, 60)}`);
 }
 if (errors.length) {
   console.error("questions JSON rejected:\n- " + errors.join("\n- "));
   process.exit(1);
 }
 
-// Safe inside <script type="application/json">: nothing can close the tag.
-const json = JSON.stringify(data).replace(/</g, "\\u003c");
-const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
-const html = readFileSync(join(HERE, "template.html"), "utf-8")
-  .replace("{{TITLE}}", esc(data.title))
-  .replace("{{DATA}}", () => json);
+const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+const w = widget(data);
+const defaults = data.defaults?.length
+  ? `<div class="defaults"><h2>${esc(data.ui?.defaultsTitle ?? "Decided without asking — the test proves it")}</h2><ul>${data.defaults
+      .map((d) => `<li>${esc(d.text)} <code>${esc(d.test)}</code></li>`)
+      .join("")}</ul></div>`
+  : "";
+const slots = {
+  TITLE: esc(data.title),
+  EYEBROW: esc([data.ticket, data.kind].filter(Boolean).join(" · ")),
+  SUMMARY: esc(data.summary ?? ""),
+  CONTEXT: data.context?.length ? `<ul class="context">${data.context.map((c) => `<li>${esc(c)}</li>`).join("")}</ul>` : "",
+  DEFAULTS: defaults,
+  LINKS: (data.links ?? []).map((l) => `<a class="btn" href="${esc(l.url)}">${esc(l.label)}</a>`).join(""),
+  WIDGET_CSS: w.css,
+  WIDGET_HTML: w.html,
+  WIDGET_SCRIPT: w.script,
+};
+// split/join, not String.replace: replacement text may contain "$&"-style sequences.
+const html = Object.entries(slots).reduce(
+  (page, [key, value]) => page.split(`{{${key}}}`).join(value),
+  readFileSync(join(HERE, "template.html"), "utf-8")
+);
 
 const outDir = join(ROOT, ".claude/local/forms");
 mkdirSync(outDir, { recursive: true });
 const out = join(outDir, `${data.id}.html`);
 writeFileSync(out, html);
 console.log(out);
-console.log(`${ids.size} questions. Publish with capabilities {"comments": {}}.`);
+console.log(`${data.questions.length} questions. Publish with capabilities {"comments": {}}.`);
