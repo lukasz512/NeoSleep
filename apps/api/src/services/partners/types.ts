@@ -29,4 +29,8 @@ export interface PartnerResourceItem {
   category: string;
   subcategory: string | null;
   weight: number;
+  /** Videos only (NEO-151): proxy URL of a JPEG frame, or null when this host can't make posters. */
+  posterUrl?: string | null;
+  /** Videos only: whole seconds, null until the poster has been made once. */
+  durationSec?: number | null;
 }
