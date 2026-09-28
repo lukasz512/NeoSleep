@@ -17,6 +17,17 @@ check() {  # check <description> <command...>
 status_of() { jq -r --arg b "$1" '.[] | select(.branch == $b) | .status' "$SANDBOX/report.json"; }
 is_status() { [ "$(status_of "$1")" = "$2" ]; }
 
+echo "ticket IDs from branch names (CORE-23, keys in .claude/ticket-teams)"
+# shellcheck source=../../.claude/hooks/lib/ticket.sh
+source "$(dirname "$SCRIPT")/../../.claude/hooks/lib/ticket.sh"
+check "NEO branch"                                    test "$(ticket_of worktree-neo-163-linking)" = "NEO-163"
+check "CORE branch"                                   test "$(ticket_of worktree-core-23-team-split)" = "CORE-23"
+check "worker branch, upper case"                     test "$(ticket_of worker/CORE-7-prefs)" = "CORE-7"
+check "branch without a ticket"                       test -z "$(ticket_of claude/laughing-fermat-w6onh8)"
+check "AJM branch"                                    test "$(ticket_of worktree-ajm-4-intake)" = "AJM-4"
+check "unknown team key is ignored"                   test -z "$(ticket_of worktree-fs-4-x)"
+check "look-alike word is not a ticket"               test -z "$(ticket_of feature/hardcore-5)"
+
 export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.com GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.com
 
 cd "$SANDBOX"

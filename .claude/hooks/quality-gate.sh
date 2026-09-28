@@ -34,6 +34,9 @@ set -uo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
 cd "$REPO_ROOT" || exit 0
+# ticket_of <branch> → NEO-n / CORE-n / … (team keys in .claude/ticket-teams, CORE-23)
+# shellcheck source=lib/ticket.sh
+source "$REPO_ROOT/.claude/hooks/lib/ticket.sh"
 
 # --- Manual human-only override -------------------------------------------------------
 # Claude cannot create or edit this file (it must ask the user to run this outside the
@@ -79,11 +82,11 @@ WARNS=()
 branch_artifact_check() {
   [ -z "$BRANCH_CHANGED" ] && return 0
   local ticket marker visual
-  ticket="$(printf '%s' "$BRANCH" | grep -oiE '(neo|core|ajm)-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]' || true)"
+  ticket="$(ticket_of "$BRANCH" || true)"
   # 2026-09-26 (Łukasz, NEO-84): every change has a NEO ticket — trivial ones too. The
   # ticket ID in the branch name is what links branch, PR, Artifact and ticket.
   if [ -z "$ticket" ]; then
-    FAILS+=("Branch '${BRANCH}' has changes but no NEO ticket in its name. Every change needs a ticket (NEO-84): create one in Linear (template: ## Problem / ## Change / ## Done when, short and only about this change), then move the work to a branch named after it (EnterWorktree name '<neo-n>-<slug>', or git branch -m worktree-neo-<n>-<slug>).")
+    FAILS+=("Branch '${BRANCH}' has changes but no ticket ID (<key>-<n>, keys in .claude/ticket-teams) in its name. Every change needs a ticket (NEO-84): create one in Linear (template: ## Problem / ## Change / ## Done when, short and only about this change), then move the work to a branch named after it (EnterWorktree name '<key>-<n>-<slug>', e.g. core-23-team-split, or git branch -m worktree-<key>-<n>-<slug>).")
     return 0
   fi
   if [ -f ".claude/local/artifacts/${ticket}.json" ]; then
