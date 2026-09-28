@@ -11,6 +11,8 @@ import { lightTheme, darkTheme } from "../plugins/vuetify";
 import { useAuthStore } from "../stores/auth";
 import { useConfigStore } from "../stores/config";
 import { loadLocale } from "../plugins/i18n";
+import { getPrefsIdentity } from "@prefs";
+import { saveUserLocale } from "../utils/prefsSession";
 
 export function useLayoutState() {
   const router = useRouter();
@@ -84,6 +86,9 @@ export function useLayoutState() {
     await loadLocale(lang);
     locale.value = lang;
     setUserSettings({ locale: lang });
+    // Language is per person (CORE-45): it follows this user on this device after sign-in.
+    const id = getPrefsIdentity();
+    if (id) saveUserLocale(id, lang);
     await nextTick();
     localeTransitioning.value = false;
   }

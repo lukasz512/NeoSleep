@@ -15,6 +15,7 @@ import "@brand/transitions.css";
 import "./assets/transitions.css";
 import { configureErrorReporting, installGlobalErrorHandlers } from "@api";
 import { setupOfflineCacheSession } from "./composables/useOfflineCacheSession";
+import { setupPrefsSession } from "./composables/usePrefsSession";
 import { apiFetch } from "./composables/useApi";
 import { authTokenStorage } from "./stores/auth";
 import { useNotifications } from "./composables/useNotifications";
@@ -81,6 +82,7 @@ useMotionPreferenceStore().startListening();
 
 installGlobalErrorHandlers(app);
 setupOfflineCacheSession();
+setupPrefsSession();
 
 app.provide("neo:apiFetch", apiFetch);
 app.provide("neo:authTokenStorage", authTokenStorage);

@@ -11,6 +11,7 @@
       "@api":       ["../../apps/api/client/src/index.ts"],
       "@ui":        ["../../packages/ui/src/index.ts"],
       "@stores":    ["../../packages/stores/src/index.ts"],
+      "@prefs":     ["../../packages/prefs/src/index.ts"],
       "@vuetify":   ["../../packages/vuetify/src/index.ts"],
       "@documents-browser": ["../../packages/documents/src/browser/index.ts"],
       "vue":        ["node_modules/vue/dist/vue.d.ts"]
@@ -22,6 +23,7 @@
     "../../packages/brand",
     "../../packages/vuetify/src",
     "../../packages/stores/src",
+    "../../packages/prefs/src",
     "../../packages/documents/src/browser",
     "../../apps/api/client/src"
   ]

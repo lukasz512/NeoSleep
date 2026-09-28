@@ -5,6 +5,7 @@ import { useDebounceFn } from "@vueuse/core";
 import { apiErrorFromResponse, isOfflineError, readJson, reportCaught } from "@api";
 import { apiFetch } from "./useApi";
 import { useFilters, type FilterDefinition } from "./useFilters";
+import { useListTableState } from "./useListTableState";
 import { CACHEABLE_ENTITIES, type CacheableEntity } from "../utils/offlineCache";
 import { useEntityCacheStore } from "../stores/entityCache";
 import { useAuthStore } from "../stores/auth";
@@ -67,11 +68,9 @@ export function useEntityList(opts: EntityListOptions) {
     opts.filterDefinitions,
   );
 
-  const tableOptions = ref({
-    page: 1,
-    itemsPerPage: 10,
-    sortBy: [{ key: "created_at", order: "desc" as const }],
-  });
+  // Sort + rows per page are remembered per user on this device (CORE-45); the search box
+  // text is deliberately not (a patient's name must not stay on a shared tablet).
+  const tableOptions = useListTableState(opts.viewId);
   /**
    * Starts true, not false: onMounted below fires loadData() immediately,
    * but that first render still paints once before it does. Starting
