@@ -107,7 +107,8 @@
       "novedades2024": "New releases showcase",
       "cronicas": "Book launch",
       "algundia": "Book launch",
-      "duelo": "Book launch"
+      "duelo": "Book launch",
+      "vesubio": "Book launch"
     }
   },
   "privalia": {
@@ -132,8 +133,14 @@
         "mark": "Live",
         "name": "Hugo Boss × Privalia",
         "body": "Live shopping production for Hugo Boss on Privalia Mexico, covered by GQ Mexico & Latin America."
+      },
+      "more": {
+        "mark": "More",
+        "name": "More for Privalia",
+        "body": "Lounges, activations and brand spaces: the relationship goes on, event after event."
       }
-    }
+    },
+    "photoAltMore": "Lounge at a Privalia event"
   },
   "mendel": {
     "number": "Case 04",

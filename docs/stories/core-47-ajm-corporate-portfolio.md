@@ -210,6 +210,17 @@ Not yet: Privalia timeline, Mendel reel, Capacidades, Cómo trabajamos, Clientes
 - **P1**: the neon lounge and Pizzería Vesubio photos are "different events"; both stay off the page until named.
 - **H1**: the site goes live on the subdomain `corporativo.alfredjan.com`. This needs one CNAME record at deploy time.
 
+## Round 4 (2026-09-28)
+
+- The client logos are live as one-colour masks that follow the theme. The browser tab shows an AJ monogram favicon, and there is an apple-touch-icon.
+- **M1**: the marker is a band in the light theme and a 2 px hairline in the dark theme.
+- **E1**: the neon lounge is another Privalia event, shown as a "Más / More" chapter. Its name and year are still to come.
+- **E2**: Pizzería Vesubio is a Grupo Planeta book launch, shown as a new spine. Title and year are still to come.
+- **G1**: the encoded web media (~17 MB) is committed.
+- **G2**: alfredjan.com is on the same GoDaddy account as neosleepcare.com, so the NeoSleep `FTP_*` secrets are reused. Only `AJM_FTP_DIR` is needed.
+- Deploy: `.github/workflows/deploy-ajm-portfolio.yml`, run manually or on prod pushes under `clients/ajm/`. `.htaccess` handles the client-side routes and forces HTTPS.
+- **Later (Łukasz)**: an Apple Wallet business card carrying a QR code that opens the page with the QR entry animation (`?src=qr`). This needs its own ticket, plus a pass-signing certificate from an Apple Developer account.
+
 ## Next (remaining)
 
 Scaffold `clients/ajm/portfolio` (Vite + Vue + TS, GSAP/Lenis, own ES/EN locales, lint rule blocking `@neo/*`), then build the vertical slice: entry (QR + link) → hero montage → Qué hacemos → Universal walk-through, in ES + EN, weak-network rules on.

@@ -5,14 +5,12 @@
 # clients/ajm/ reaches prod. It never runs for NeoSleep-only changes.
 #
 # Secrets (repository settings → Secrets and variables → Actions):
-#   AJM_FTP_SERVER, AJM_FTP_USERNAME, AJM_FTP_PASSWORD — the FTP account of the GoDaddy hosting
-#     that serves alfredjan.com. If it is the same account as neosleepcare.com, leave them unset
-#     and the NeoSleep FTP_* secrets are used.
 #   AJM_FTP_DIR — FTP path of the subdomain's folder, e.g. /public_html/corporativo (not a URL).
+#   The FTP account is the same GoDaddy account as neosleepcare.com (G2, 2026-09-28), so the
+#   NeoSleep FTP_* secrets are reused; AJM_FTP_SERVER/USERNAME/PASSWORD override them if ever set.
 #
-# Media: the encoded loops/photos (scripts/encode-media.sh) are not in git. The job uploads
-# whatever is in clients/ajm/portfolio/public/media; until they're in the repo (decision G1)
-# upload that folder once by hand to <AJM_FTP_DIR>/media.
+# Media: the encoded loops/photos live in clients/ajm/portfolio/public/media in git (G1) and
+# ship with the build; re-encode them with `pnpm --filter @ajm/portfolio media`.
 
 name: Deploy AJM Portfolio
 

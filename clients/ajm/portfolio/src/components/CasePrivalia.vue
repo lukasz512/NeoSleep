@@ -47,7 +47,7 @@
             />
           </div>
 
-          <div v-if="ch.photos" class="mosaic">
+          <div v-if="ch.photos" class="mosaic" :class="{ 'mosaic--single': ch.photos.length === 1 }">
             <picture
               v-for="(p, j) in ch.photos"
               :key="p.id"
@@ -57,7 +57,7 @@
               :class="`mosaic__item--${j}`"
             >
               <source :srcset="picture(photoSrc(p)).avif" type="image/avif" />
-              <img :src="picture(photoSrc(p)).jpg" :alt="t('privalia.photoAlt')" loading="lazy" decoding="async" />
+              <img :src="picture(photoSrc(p)).jpg" :alt="t(ch.id === 'more' ? 'privalia.photoAltMore' : 'privalia.photoAlt')" loading="lazy" decoding="async" />
             </picture>
           </div>
         </section>
@@ -264,6 +264,11 @@ onBeforeUnmount(() => io?.disconnect());
 .mosaic__item--3 {
   grid-column: 3 / 5;
   aspect-ratio: 3 / 2;
+}
+/* a chapter with one photo shows it as a portrait, not cropped to the lead's landscape */
+.mosaic--single .mosaic__item--0 {
+  grid-column: 1 / 4;
+  aspect-ratio: 3 / 4;
 }
 .mosaic__item--4 {
   grid-column: 1 / 4;

@@ -25,6 +25,8 @@ export const PLANETA_EVENTS: PlanetaEvent[] = [
   { id: "cronicas", title: "Crónicas de la capital", photos: ["planeta00", "planeta7"] },
   { id: "algundia", title: "Algún día, hoy", year: 2019, photos: ["planeta22"] },
   { id: "duelo", title: "Duelo de historias", photos: ["planeta20", "planeta21", "planeta18", "planeta17"] },
+  // E2 (2026-09-28): a Grupo Planeta book launch held at Pizzería Vesubio; title and year to come.
+  { id: "vesubio", title: "Pizzería Vesubio", photos: ["planeta24", "planeta25"] },
 ];
 
 export const LARGE_PHOTOS = new Set([

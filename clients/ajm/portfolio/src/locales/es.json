@@ -107,7 +107,8 @@
       "novedades2024": "Presentación de novedades",
       "cronicas": "Lanzamiento de libro",
       "algundia": "Lanzamiento de libro",
-      "duelo": "Lanzamiento de libros"
+      "duelo": "Lanzamiento de libros",
+      "vesubio": "Lanzamiento de libro"
     }
   },
   "privalia": {
@@ -132,8 +133,14 @@
         "mark": "Live",
         "name": "Hugo Boss × Privalia",
         "body": "Producción de live shopping para Hugo Boss en Privalia México, con cobertura de GQ México & Latinoamérica."
+      },
+      "more": {
+        "mark": "Más",
+        "name": "Más para Privalia",
+        "body": "Lounges, activaciones y espacios para marcas: la relación sigue, evento tras evento."
       }
-    }
+    },
+    "photoAltMore": "Lounge de un evento de Privalia"
   },
   "mendel": {
     "number": "Caso 04",

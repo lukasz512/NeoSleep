@@ -18,7 +18,7 @@ export const CLIENTS = [
 ] as const;
 
 export interface PrivaliaChapter {
-  id: "y2019" | "y2020" | "live";
+  id: "y2019" | "y2020" | "live" | "more";
   /** silent loop base under media/, or none when the chapter is type only */
   loop?: string;
   poster?: string;
@@ -31,7 +31,6 @@ export const PRIVALIA_CHAPTERS: PrivaliaChapter[] = [
     id: "y2019",
     loop: "privalia/y2019",
     poster: "privalia/y2019-poster",
-    // privalia06 (neon lounge) is left out: a different event, still to be named (P1, 2026-09-28)
     photos: [
       { id: "privalia04", large: true },
       { id: "privalia01", large: true },
@@ -43,6 +42,8 @@ export const PRIVALIA_CHAPTERS: PrivaliaChapter[] = [
   },
   { id: "y2020", loop: "privalia/y2020", poster: "privalia/y2020-poster" },
   { id: "live" },
+  // E1 (2026-09-28): the neon lounge is another Privalia event (name and year to come)
+  { id: "more", photos: [{ id: "privalia06", large: true }] },
 ];
 
 /** Mendel figures from the proposal: "300 Invitados · Producción & Coordinación 360° · Equipo de Producción Dedicado". */
