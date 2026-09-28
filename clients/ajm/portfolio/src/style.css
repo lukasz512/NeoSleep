@@ -81,7 +81,7 @@
   line-height: 0.55;
   letter-spacing: 0;
   padding: 0 0.06em;
-  margin: 0 -0.1em 0 -0.22em;
+  margin: 0 -0.1em 0 -0.1em;
   transform: skewX(-12deg);
   transform-origin: 0 100%;
   /* the pen moves left to right; at rest the clip sits well outside the glyphs, so Italianno's

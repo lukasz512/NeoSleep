@@ -94,7 +94,7 @@ onBeforeUnmount(() => bound?.removeEventListener("timeupdate", keepInRoom));
   margin-bottom: clamp(32px, 5vw, 64px);
 }
 .case__title {
-  margin: 12px 0;
+  margin: 12px 0 0.5em;
   font: 500 clamp(32px, 5vw, 72px) / 1 var(--ajm-font);
   letter-spacing: -0.02em;
 }
