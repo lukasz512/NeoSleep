@@ -1,6 +1,24 @@
 # NEO-163 — Claude · Linear · GitHub: link contract, no orphans, leaner tickets
 
-Status: proposal, waiting for Łukasz's decisions (decision form linked from the Artifact).
+Status: decided 2026-09-28 (decision form `neo-163-linking-r1`); work split into NEO-164…171 (project P-NEO-5).
+
+## Decisions (Łukasz, 2026-09-28)
+
+| # | Question | Answer | Ticket |
+|---|---|---|---|
+| A1 | Claude link | VS Code link + Artifact with `claude --resume <id>` | NEO-164, NEO-165 |
+| A2 | GitHub check | Blocks merge (required), Renovate exempt | NEO-164 |
+| A3 | Linear API key for hooks | Yes, local only (`.claude/local/`) | NEO-166 |
+| A4 | Orphan sweep | Label `orphan` + one Linear view, no messages | NEO-169 |
+| B1 | Required fields | All 6: Type, Area, Market, Priority, Estimate, Project | NEO-167 |
+| B2 | Raw ideas | Triage; Claude formats in English, original as first comment | NEO-168 |
+| B3 | Artifact language | English everywhere; chat stays Polish | — |
+| C1 | CORE/NEO split | Now, and migrate open platform tickets | NEO-171 |
+| C2 | Accounts | Separate: Łukasz as a person, Claude/worker as app users | NEO-171 |
+
+New client (same form): **AJ Management**, Linear key **AJM**, a neoCRM client. Open, blocking NEO-171: does neoCRM work live in CORE or in its own team, and does AJM share this repo?
+
+Change Index cost (found while shipping this ticket): NEO-170.
 
 ## Why
 
