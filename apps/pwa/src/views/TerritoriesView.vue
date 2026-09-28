@@ -4,6 +4,7 @@
       view-id="territories"
       api-endpoint="/api/v1/territory"
       :headers="tableHeaders"
+      :filter-definitions="[]"
       :i18n="territoriesI18n"
       :show-add-button="true"
       @add="onAdd"
