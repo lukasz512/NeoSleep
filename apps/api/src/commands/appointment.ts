@@ -12,13 +12,14 @@ import {
   getTreatmentPlanById,
   getTenantDefaultTimezone,
   insertAuditLog,
-  insertNotification,
+  getIdentityIdForUser,
   APPOINTMENT_STATUSES,
   type Appointment,
   type AppointmentStatus,
   type AppointmentUpdate,
 } from "../db.js";
 import { ForbiddenError, NotFoundError, ValidationError } from "../errors.js";
+import { notify } from "../notifications/notify.js";
 import { assertTerritoryAccessByTerritoryId } from "../middleware/requireScope.js";
 import { getAppointmentViewer, assertCanSeeAppointment, redactForViewer, type AppointmentViewer, type AppointmentView } from "../queries/appointment.js";
 
@@ -80,19 +81,14 @@ function canCloseAppointments(viewer: AppointmentViewer): boolean {
 async function notifyDoctor(ctx: TenantContext, appointment: Appointment, type: "appointment_booked" | "appointment_rescheduled" | "appointment_cancelled"): Promise<void> {
   const practitioner = await getPractitionerById(ctx.client, appointment.practitioner_id);
   if (!practitioner) return;
-  const titles = {
-    appointment_booked: "New appointment booked",
-    appointment_rescheduled: "Appointment rescheduled",
-    appointment_cancelled: "Appointment cancelled",
-  } as const;
-  await insertNotification(ctx.client, {
-    identity_id: practitioner.identity_id,
+  // Copy, channels and link come from the event catalog (ADR-027); the doctor
+  // is not told about a change they made themselves.
+  await notify(ctx.client, {
     type,
-    title: titles[type],
-    entity_type: "Appointment",
-    entity_id: appointment.id,
-    action_url: "/appointments",
-    metadata: { start_at: appointment.start_at, timezone: appointment.timezone, patient_id: appointment.patient_id },
+    recipients: [practitioner.identity_id],
+    entityId: appointment.id,
+    meta: { start_at: appointment.start_at, timezone: appointment.timezone, patient_id: appointment.patient_id },
+    actorIdentityId: await getIdentityIdForUser(ctx.client, ctx.user.id),
   });
 }
 
