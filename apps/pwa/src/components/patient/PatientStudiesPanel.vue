@@ -96,14 +96,20 @@
             variant="tonal"
             :loading="emailing"
             :aria-label="t('app.clinical.email.send')"
+            :title="t('app.clinical.email.send')"
             @click="sendByEmail"
           >
-            <template #prepend><AppIcon name="mail" /></template>
-            <span class="studies__btn-label">{{ t("app.clinical.email.send") }}</span>
+            <AppIcon name="mail" />
           </AppButton>
-          <AppButton class="studies__compact-btn" color="success" variant="tonal" :aria-label="t('app.clinical.addStudy')" @click="openUpload(null)">
-            <template #prepend><AppIcon name="plus" class="studies__add-icon" /></template>
-            <span class="studies__btn-label">{{ t("app.clinical.addStudy") }}</span>
+          <AppButton
+            class="studies__compact-btn studies__add"
+            color="success"
+            variant="tonal"
+            :aria-label="t('app.clinical.addStudy')"
+            :title="t('app.clinical.addStudy')"
+            @click="openUpload(null)"
+          >
+            <AppIcon name="plus" class="studies__add-icon" />
           </AppButton>
         </div>
       </header>
@@ -762,17 +768,18 @@ watch(() => props.focusItem, (key) => highlightItem(key));
 }
 
 .studies__header {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px 24px;
 }
-/* NEO-127: full width on phone (the header wraps, the bar gets its own line); capped beside the buttons on wider screens. */
+/* NEO-127: full width on phone (the header wraps, the bar gets its own line); capped beside the buttons on desktop. */
 .studies__progress {
   flex: 1 1 260px;
 }
-@media (min-width: 600px) {
+@media (min-width: 1025px) {
   .studies__progress {
     max-width: 360px;
   }
@@ -783,15 +790,47 @@ watch(() => props.focusItem, (key) => highlightItem(key));
   align-items: center;
   gap: 8px;
 }
-/* Every header button is one height — the QR status button sets the same token. */
+/* NEO-127: email and "add study" are square icon buttons everywhere (the
+   aria-label and hover title keep the name); the QR status matches the corners. */
 .studies__compact-btn {
-  height: var(--pwa-btn-min-height, 40px) !important;
+  flex: none;
+  width: var(--pwa-btn-min-height, 44px);
+  height: var(--pwa-btn-min-height, 44px) !important;
+  min-width: 0 !important;
+  padding-inline: 0 !important;
+  border-radius: var(--pwa-radius) !important;
+}
+.studies__header .studies__qr {
+  border-radius: var(--pwa-radius);
 }
 .studies__add-icon {
   stroke-width: 2.6;
 }
-/* Phone (NEO-93): one row — the QR status takes the width, email and "add
-   study" shrink to 44px round icon buttons (their aria-label keeps the name). */
+/* Tablet and desktop: bar, QR status and the icon buttons on one line; on a
+   narrow tablet the QR label is cut with "…" rather than wrapping. */
+@media (min-width: 601px) {
+  .studies__header {
+    flex-wrap: nowrap;
+  }
+  .studies__progress {
+    min-width: 160px;
+  }
+  .studies__header-actions {
+    flex: 0 1 auto;
+    flex-wrap: nowrap;
+    min-width: 0;
+  }
+  .studies__qr {
+    min-width: 0;
+  }
+  .studies__qr :deep(.qr-status__title) {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+/* Phone (NEO-93): one row — the QR status takes the width next to the email icon. */
 @media (max-width: 600px) {
   .studies__header-actions {
     width: 100%;
@@ -801,21 +840,20 @@ watch(() => props.focusItem, (key) => highlightItem(key));
     flex: 1 1 auto;
     min-width: 0;
   }
-  .studies__compact-btn {
-    flex: none;
-    width: var(--pwa-btn-min-height, 44px);
-    min-width: 0 !important;
-    padding-inline: 0 !important;
-  }
-  .studies__compact-btn .studies__btn-label {
-    display: none;
-  }
-  .studies__compact-btn :deep(.v-btn__prepend) {
-    margin: 0;
-  }
-  /* Nothing left for the patient → no QR button: "add study" moves to the end of the row. */
+  /* Nothing left for the patient → no QR button: what's left moves to the end of the row. */
   .studies__header-actions:not(:has(.studies__qr)) {
     justify-content: flex-end;
+  }
+  /* NEO-127: "add study" sits on the counter's line, top right; the bar stays full width under it. */
+  .studies__compact-btn.studies__add {
+    position: absolute;
+    top: -6px;
+    right: 0;
+    width: 36px;
+    height: 36px !important;
+  }
+  .studies__progress :deep(.app-segment-progress__label) {
+    padding-right: 48px;
   }
 }
 
