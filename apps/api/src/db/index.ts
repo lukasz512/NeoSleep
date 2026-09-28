@@ -17,6 +17,7 @@ export * from "./lookup.js";
 export * from "./tenant.js";
 export * from "./i18n.js";
 export * from "./notification.js";
+export * from "./notificationPreference.js";
 export * from "./invite.js";
 export * from "./partnerSignatories.js";
 export * from "./consent.js";
