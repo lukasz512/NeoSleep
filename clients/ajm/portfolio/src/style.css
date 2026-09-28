@@ -86,6 +86,14 @@
   transform-origin: left;
   transition: transform 1s var(--ajm-ease) 0.55s;
 }
+/* M1 (2026-09-28): on charcoal the band reads soft, so the dark theme draws a crisp 2 px
+   hairline under the phrase instead. */
+:root[data-theme="dark"] .mk::before {
+  /* just under the baseline: lower would fall outside the headline's mask-line clip */
+  bottom: 0.05em;
+  height: 2px;
+  opacity: 1;
+}
 .is-in .mk::before,
 .rv-in .mk::before,
 .lite .mk::before {

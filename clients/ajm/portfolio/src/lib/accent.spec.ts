@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseAccent, plainAccent } from "./accent";
+import { groupAccent, parseAccent, plainAccent } from "./accent";
 import es from "../locales/es.json";
 import en from "../locales/en.json";
 
@@ -20,6 +20,11 @@ describe("accent › headline markup", () => {
       { text: "a través del ", acc: false, mk: true },
       { text: "tiempo.", acc: true, mk: true },
     ]);
+  });
+  it("a marked phrase is one group, so it draws one continuous marker", () => {
+    const g = groupAccent("Dando vida a ~marcas [globales.]~");
+    expect(g.map((x) => x.mk)).toEqual([false, true]);
+    expect(g[1]?.parts.map((p) => p.text)).toEqual(["marcas ", "globales."]);
   });
   it("plainAccent strips the markup", () => {
     expect(plainAccent("construida ~a través del [tiempo.]~")).toBe("construida a través del tiempo.");

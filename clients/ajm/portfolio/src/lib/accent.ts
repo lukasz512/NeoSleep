@@ -34,6 +34,22 @@ export function parseAccent(source: string): Segment[] {
   return out;
 }
 
+export interface Group {
+  mk: boolean;
+  parts: Segment[];
+}
+
+/** Consecutive segments that share the marker, so a marked phrase renders as one span. */
+export function groupAccent(source: string): Group[] {
+  const groups: Group[] = [];
+  for (const s of parseAccent(source)) {
+    const last = groups[groups.length - 1];
+    if (last && last.mk === s.mk) last.parts.push(s);
+    else groups.push({ mk: s.mk, parts: [s] });
+  }
+  return groups;
+}
+
 /** The plain sentence, for document titles, aria labels and anywhere markup can't go. */
 export function plainAccent(source: string): string {
   return source.replace(/[[\]~]/g, "");
