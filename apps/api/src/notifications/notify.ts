@@ -14,8 +14,8 @@ import {
   GROUPED_BODY_KEY,
   type NotificationType,
   type NotificationLinkParams,
-  type NotificationChannel,
 } from "./catalog.js";
+import { resolveChannels, loadRecipientPreferences, getTenantNotificationDefaults } from "./preferences.js";
 
 /**
  * notify() — the one entry point for producing a notification (NEO-134, ADR-027 §2).
@@ -26,11 +26,10 @@ import {
  *     bumped (group_count + 1) instead of adding a second row;
  *   - otherwise a new inbox row is written with the catalog's category,
  *     priority, link and PHI-free copy in the recipient's language;
- *   - one notification_delivery row per catalog channel: in_app delivered at
- *     once, the rest pending for the delivery worker (NEO-136).
- *
- * Preferences and quiet hours (NEO-135) plug in at resolveChannels(); until
- * then every recipient gets the catalog's channels.
+ *   - one notification_delivery row per channel the recipient gets
+ *     (preferences.ts: user → tenant default → catalog, locked categories,
+ *     quiet hours → not_before): in_app delivered at once, the rest pending
+ *     for the delivery worker (CORE-3).
  *
  * `meta` is stored on the row for the app's own use (ids, times). It is never
  * rendered into push/email copy — copy comes only from the catalog's i18n keys.
@@ -55,10 +54,6 @@ export interface NotifyResult {
   notifications: Notification[];
 }
 
-function resolveChannels(channels: readonly NotificationChannel[]): NotificationChannel[] {
-  return Array.from(new Set<NotificationChannel>(["in_app", ...channels]));
-}
-
 function renderCopy(type: NotificationType, language: string | null, groupCount: number): { title: string; body: string } {
   const keys = copyKeys(type);
   return {
@@ -70,7 +65,7 @@ function renderCopy(type: NotificationType, language: string | null, groupCount:
 export async function notify(client: PoolClient, input: NotifyInput): Promise<NotifyResult> {
   const def = getEventDefinition(input.type);
   const recipients = Array.from(new Set(input.recipients)).filter((id) => id && id !== input.actorIdentityId);
-  const channels = resolveChannels(def.channels);
+  const tenantDefaults = recipients.length > 0 ? await getTenantNotificationDefaults(client) : {};
   const actionUrl = def.link(input.link ?? {});
   const metadata = input.meta ?? null;
   const notifications: Notification[] = [];
@@ -99,8 +94,9 @@ export async function notify(client: PoolClient, input: NotifyInput): Promise<No
       });
     }
 
-    for (const channel of channels) {
-      await insertNotificationDelivery(client, row.id, channel);
+    const channels = resolveChannels(def, await loadRecipientPreferences(client, identityId), tenantDefaults);
+    for (const { channel, notBefore } of channels) {
+      await insertNotificationDelivery(client, row.id, channel, notBefore);
     }
     notifications.push(row);
   }

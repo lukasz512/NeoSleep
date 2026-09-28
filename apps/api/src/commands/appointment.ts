@@ -20,6 +20,7 @@ import {
 } from "../db.js";
 import { ForbiddenError, NotFoundError, ValidationError } from "../errors.js";
 import { notify } from "../notifications/notify.js";
+import { timezoneForCountry } from "../utils/timezones.js";
 import { assertTerritoryAccessByTerritoryId } from "../middleware/requireScope.js";
 import { getAppointmentViewer, assertCanSeeAppointment, redactForViewer, type AppointmentViewer, type AppointmentView } from "../queries/appointment.js";
 
@@ -39,13 +40,6 @@ import { getAppointmentViewer, assertCanSeeAppointment, redactForViewer, type Ap
 export const DEFAULT_DURATION_MINUTES = 60;
 const MIN_DURATION_MINUTES = 5;
 const MAX_DURATION_MINUTES = 8 * 60;
-
-/** Clinic country → IANA zone. v1 has one zone per market; MX's other zones come with per-clinic settings. */
-const COUNTRY_TIMEZONES: Record<string, string> = {
-  PL: "Europe/Warsaw",
-  MX: "America/Mexico_City",
-  TH: "Asia/Bangkok",
-};
 
 function parseInstant(value: string, field: string): Date {
   const d = new Date(value);
@@ -68,7 +62,7 @@ function resolveEnd(start: Date, endAt: string | undefined, durationMinutes: num
 async function resolveTimezone(ctx: TenantContext, organizationId: string | null): Promise<string> {
   if (organizationId) {
     const org = await getOrganizationById(ctx.client, organizationId);
-    const zone = org?.country_code ? COUNTRY_TIMEZONES[org.country_code.toUpperCase()] : undefined;
+    const zone = timezoneForCountry(org?.country_code);
     if (zone) return zone;
   }
   return getTenantDefaultTimezone(ctx.client);
