@@ -97,7 +97,7 @@ const current = computed(() =>
 <style scoped>
 .process {
   position: relative;
-  padding: clamp(96px, 12vw, 160px) var(--ajm-gutter);
+  padding: clamp(96px, 12vw, 160px) var(--ajm-gutter) clamp(16px, 2vw, 32px);
   border-top: 1px solid var(--ajm-line);
 }
 .process--pinned {

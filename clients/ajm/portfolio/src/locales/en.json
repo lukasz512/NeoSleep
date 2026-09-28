@@ -27,15 +27,15 @@
   },
   "hero": {
     "line1": "We create experiences",
-    "line2": "that bring [people] together",
+    "line2": "that bring [people] ~together~",
     "kicker": "Corporate Events · Experiences · Production",
     "body": "From concept to execution, we plan, produce and run corporate events designed around people, brands and business goals.",
     "places": "Mexico City · Madrid · International",
     "cta": "See our work"
   },
   "what": {
-    "title1": "Big ideas",
-    "title2": "[Flawless] execution",
+    "title1": "Big [ideas]",
+    "title2": "~Flawless~ execution",
     "body1": "AJ Management is an independent agency specialised in planning, producing, coordinating and delivering corporate events and experiences.",
     "body2": "We work as an extension of our clients' teams, handling every stage: from the first idea and venue selection to production, suppliers, logistics and on-site operations.",
     "words": [
@@ -49,7 +49,7 @@
   },
   "capabilities": {
     "eyebrow": "Capabilities",
-    "title1": "One partner",
+    "title1": "~One~ partner",
     "title2": "From planning to [execution]",
     "items": [
       {

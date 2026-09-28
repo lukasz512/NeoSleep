@@ -82,7 +82,8 @@
   letter-spacing: 0;
   padding: 0 0.06em;
   margin: 0 -0.1em 0 -0.1em;
-  transform: skewX(-12deg);
+  /* slanted, and set on a slight upward angle like a hand-written note (round 8) */
+  transform: rotate(-4deg) skewX(-12deg);
   transform-origin: 0 100%;
   /* the pen moves left to right; at rest the clip sits well outside the glyphs, so Italianno's
      tall loops and end swashes are never cut (round 7: "always fully visible") */
@@ -291,4 +292,17 @@ html.gliding main {
 }
 html.lite main {
   transition: none;
+}
+/* the flight's motion blur: a viewport-sized layer under the header, strength set per frame */
+.glide-blur {
+  position: fixed;
+  inset: 0;
+  z-index: 15; /* under the fixed header (20), which stays sharp */
+  pointer-events: none;
+  backdrop-filter: blur(var(--glide-blur, 0px));
+  -webkit-backdrop-filter: blur(var(--glide-blur, 0px));
+  visibility: hidden;
+}
+html.gliding .glide-blur {
+  visibility: visible;
 }

@@ -2,7 +2,7 @@
 <template>
   <section ref="root" class="what" :class="{ 'is-in': seen }">
     <h2 class="what__title">
-      <span class="mask-line"><span>{{ t("what.title1") }}</span></span>
+      <span class="mask-line"><span><AccentText :text="t('what.title1')" /></span></span>
       <span class="mask-line"><span><AccentText :text="t('what.title2')" /></span></span>
     </h2>
     <div class="what__text">
@@ -51,6 +51,8 @@ const litCount = computed(() =>
   margin: 0;
   font: 500 clamp(40px, 7vw, 112px) / 0.98 var(--ajm-font);
   letter-spacing: -0.025em;
+  /* tight letters, but the words keep air between them (round 8) */
+  word-spacing: 0.12em;
 }
 .what__text {
   grid-column: 6 / -1;

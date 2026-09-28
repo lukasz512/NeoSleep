@@ -45,10 +45,14 @@ describe("accent › house rules in the copy", () => {
   it.each([
     ["es", es],
     ["en", en],
-  ])("%s: exactly one marker per partner, and only in case titles", (_l, loc) => {
+  ])("%s: one marker per partner, one in the hero, one on Flawless, one on One partner (round 8), nowhere else", (_l, loc) => {
     for (const c of cases) expect((loc[c].title.match(/~[^~]+~/g) ?? []).length).toBe(1);
+    expect((loc.hero.line2.match(/~[^~]+~/g) ?? []).length).toBe(1);
+    expect((loc.what.title2.match(/~[^~]+~/g) ?? []).length).toBe(1);
+    expect(loc.what.title1).toMatch(/\[[^\]]+\]/); // the pen writes "ideas"
     const markers = all(loc).join(" ").match(/~[^~]+~/g) ?? [];
-    expect(markers.length).toBe(cases.length);
+    expect((loc.capabilities.title1.match(/~[^~]+~/g) ?? []).length).toBe(1);
+    expect(markers.length).toBe(cases.length + 3);
   });
   it.each([
     ["es", es],

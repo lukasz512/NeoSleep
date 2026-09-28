@@ -32,8 +32,8 @@ const { t } = useI18n();
 
 <style scoped>
 .clients {
-  padding: clamp(96px, 12vw, 160px) var(--ajm-gutter);
-  border-top: 1px solid var(--ajm-line);
+  /* sits right under the AJ monogram: no rule above, little space (round 8) */
+  padding: clamp(16px, 2vw, 32px) var(--ajm-gutter) clamp(96px, 12vw, 160px);
 }
 .clients__list {
   list-style: none;

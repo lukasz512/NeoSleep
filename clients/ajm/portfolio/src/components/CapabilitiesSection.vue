@@ -6,7 +6,7 @@
     <header class="caps__head">
       <p class="eyebrow caps__eyebrow">{{ t("capabilities.eyebrow") }}</p>
       <h2 class="caps__title">
-        <span class="mask-line"><span>{{ t("capabilities.title1") }}</span></span>
+        <span class="mask-line"><span><AccentText :text="t('capabilities.title1')" /></span></span>
         <span class="mask-line"><span><AccentText :text="t('capabilities.title2')" /></span></span>
       </h2>
     </header>

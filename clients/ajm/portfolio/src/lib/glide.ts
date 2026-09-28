@@ -1,25 +1,28 @@
 /**
- * In-page links (menu, client logos, hero CTA) glide instead of jumping (Łukasz, 2026-09-29:
- * "lift the page and drop it"). The curve lifts slightly back, travels, and settles a hair past
- * the target before landing; the page itself rises a touch while it is carried (html.gliding in
- * style.css). Lite mode and reduced motion jump straight there.
+ * In-page links (menu, client logos, hero CTA) fly instead of jumping. Round 8 (Łukasz, 2026-09-29):
+ * the page leaves slowly, then flies with a motion blur you can see, and lands softly on the
+ * target. The blur is a viewport-sized backdrop (cheap: it never paints the whole page) whose
+ * strength follows the speed. Lite mode and reduced motion jump straight there.
  */
 
-const LIFT = 0.8; // how far the curve pulls back / settles past (≈2.5 % of the jump)
-
-/** easeInOutBack with a small overshoot constant: 0 → 1 with a lift at the start and a settle at the end. */
+/** 0 → 1: a slow take-off (time is stretched at the start), a fast middle, a soft landing. */
 export function glideCurve(t: number): number {
   if (t <= 0) return 0;
   if (t >= 1) return 1;
-  const c = LIFT * 1.525;
-  return t < 0.5
-    ? ((2 * t) ** 2 * ((c + 1) * 2 * t - c)) / 2
-    : ((2 * t - 2) ** 2 * ((c + 1) * (t * 2 - 2) + c) + 2) / 2;
+  const s = t ** 1.25;
+  return s < 0.5 ? 16 * s ** 5 : 1 - (-2 * s + 2) ** 5 / 2;
 }
 
-/** ms for a jump of `distance` px: 0.9 s for a short hop, up to 1.8 s across the page. */
+/** ms for a jump of `distance` px: 1.1 s for a short hop, up to 2 s across the page. */
 export function glideDuration(distance: number): number {
-  return Math.round(Math.min(1800, Math.max(900, 700 + Math.abs(distance) * 0.18)));
+  return Math.round(Math.min(2000, Math.max(1100, 900 + Math.abs(distance) * 0.12)));
+}
+
+/** Blur in px for a scroll speed in px/ms: none while slow, up to 10 px in full flight. */
+export function glideBlur(speed: number): number {
+  const v = Math.abs(speed);
+  if (v <= 1) return 0;
+  return Math.min(10, Math.round((v - 1) * 0.5 * 10) / 10);
 }
 
 /** Room left above a target for the fixed header. */
@@ -33,6 +36,7 @@ export function glideTo(target: HTMLElement, instant: boolean): void {
   const root = document.documentElement;
   const done = () => {
     root.classList.remove("gliding");
+    root.style.removeProperty("--glide-blur");
     if (!target.hasAttribute("tabindex")) target.setAttribute("tabindex", "-1");
     target.focus({ preventScroll: true });
   };
@@ -45,18 +49,29 @@ export function glideTo(target: HTMLElement, instant: boolean): void {
   const duration = glideDuration(to - from);
   const start = performance.now();
   root.classList.add("gliding");
+  let lastY = from;
+  let lastT = start;
   const step = (now: number) => {
     if (run !== active) return; // a newer click took over
     const t = Math.min(1, (now - start) / duration);
-    window.scrollTo(0, from + (to - from) * glideCurve(t));
+    const y = from + (to - from) * glideCurve(t);
+    window.scrollTo(0, y);
+    const speed = (y - lastY) / Math.max(1, now - lastT);
+    root.style.setProperty("--glide-blur", `${t < 1 ? glideBlur(speed) : 0}px`);
+    lastY = y;
+    lastT = now;
     if (t < 1) requestAnimationFrame(step);
     else done();
   };
   requestAnimationFrame(step);
 }
 
-/** One listener for every `href="#…"` link on the page. */
+/** One listener for every `href="#…"` link on the page, plus the blur layer the flight uses. */
 export function installGlide(): void {
+  const veil = document.createElement("div");
+  veil.className = "glide-blur";
+  veil.setAttribute("aria-hidden", "true");
+  document.body.appendChild(veil);
   document.addEventListener("click", (e) => {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     const link = (e.target as Element | null)?.closest?.('a[href^="#"]');
