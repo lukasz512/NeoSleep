@@ -356,7 +356,8 @@ describe("AppLayout", () => {
       expect(layout).toMatch(/\.layout-page-header__title \.layout-appbar__title \{\s*font-size: 24px;\s*font-weight: 700;/);
       expect(layout).toMatch(/\.layout-page-header--child \.layout-appbar__title \{\s*font-size: 14px;/);
       const list = readFileSync(path.resolve(__dirname, "../components/AppEntityList.css"), "utf-8");
-      expect(list).toContain("margin-inline: calc(-1 * var(--layout-row-inset, 0px));");
+      // Rows bleed to the sheet's edges (e2e/entity-list-width.spec.ts checks the boxes).
+      expect(list).toContain("padding-inline: calc(var(--layout-card-inset, 16px) - var(--layout-row-inset, 12px));");
       expect(list).toContain("margin-left: var(--layout-row-inset, 12px);");
     });
 

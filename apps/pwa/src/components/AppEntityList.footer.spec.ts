@@ -7,10 +7,15 @@ describe("AppEntityList table footer (NEO-121)", () => {
   const css = readFileSync(path.resolve(__dirname, "AppEntityList.css"), "utf-8");
 
   // NEO-152: out to the card's edges (the whole sheet padding), the skeleton too.
-  it("runs the table (and its skeleton) through the sheet padding to the card's edges", () => {
+  it("runs the table (and its skeleton, phone too) through the sheet padding to the card's edges", () => {
     expect(css).toMatch(
-      /\.app-entity-list__table-wrap:not\(\.app-entity-list__table-wrap--flat\),\s*\.app-entity-list__skeleton:not\(\.app-entity-list__skeleton--mobile\)\s*\{\s*margin-inline: calc\(-1 \* var\(--layout-card-inset, 16px\)\);/,
+      /\.app-entity-list__table-wrap:not\(\.app-entity-list__table-wrap--flat\),\s*\.app-entity-list__skeleton\s*\{\s*margin-inline: calc\(-1 \* var\(--layout-card-inset, 16px\)\);/,
     );
+  });
+
+  it("runs the phone feed's scroller (not the feed inside it) to the card's edges", () => {
+    expect(css).toMatch(/\.app-entity-list__feed-scroll \{[^}]*margin-inline: calc\(-1 \* var\(--layout-card-inset, 16px\)\);/);
+    expect(css).not.toMatch(/\.app-entity-list__feed \{[^}]*margin-inline/);
   });
 
   it("pads the outer cells by the card inset so content stays on the page title's line", () => {
