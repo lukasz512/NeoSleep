@@ -72,7 +72,7 @@
 | r1 E3 | Push permission | Contextual, after a meaningful action; never on load |
 | r1 E4 | Retention | Read 90 days, unread 180 days, delivery log 1 year |
 | r2 R6 | Patient reminders | 24 h + 2 h before; the 2 h reminder only between 08:00 and 20:00 clinic time |
-| r2 R8 | Manager/admin events | Region forms, order problems, cancellations, lead unassigned over 24 h, **plus** digest (see open question 1) |
+| r2 R8 | Manager/admin events | Region forms, order problems, cancellations, lead unassigned over 24 h — **real time and in the digest** (confirmed 2026-09-28: "a manager should get a lot of information") |
 | r2 R9 | Rep events | Lead assigned, lead neglected, doctor activity in territory, planner reminder |
 | r1 F1 | Build order | **Engine first**, then channels and UI, events, patient, later |
 | r1 F2 | Scheduler | Google Cloud Scheduler → internal job endpoint every 5 min |
@@ -117,7 +117,7 @@ Overlap with the Calendar epic: NEO-141 covers the in-app part of NEO-28, and NE
 - [ ] All copy starts in `packages/i18n/en.json`, with pl/mx parity.
 
 ### Open Questions
-1. **R8 contradiction**: Łukasz ticked a–d **and** "digest only" for managers. Current reading: a–d in real time **and** in the digest. This must be confirmed before NEO-142 starts.
+1. ~~R8 contradiction~~ — resolved 2026-09-28: real time **and** digest.
 2. The WhatsApp/SMS provider (Twilio vs Meta + SMSAPI) is deferred to NEO-149. Cost per message and the DPA must be known before the go decision.
 3. /legal must review the per-channel consent wording in PL and MX (NEO-146) before it ships.
 4. Cloud Scheduler for **prod**: prod still runs on Render (NEO-45). The tick endpoint must work on both platforms, and the Scheduler targets whichever one serves prod at the time.
