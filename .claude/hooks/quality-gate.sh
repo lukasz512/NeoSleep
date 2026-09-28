@@ -79,7 +79,7 @@ WARNS=()
 branch_artifact_check() {
   [ -z "$BRANCH_CHANGED" ] && return 0
   local ticket marker visual
-  ticket="$(printf '%s' "$BRANCH" | grep -oiE 'neo-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]' || true)"
+  ticket="$(printf '%s' "$BRANCH" | grep -oiE '(neo|core|ajm)-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]' || true)"
   # 2026-09-26 (Łukasz, NEO-84): every change has a NEO ticket — trivial ones too. The
   # ticket ID in the branch name is what links branch, PR, Artifact and ticket.
   if [ -z "$ticket" ]; then

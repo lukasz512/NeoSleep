@@ -36,7 +36,7 @@ const git = (...args) => {
 
 const ROOT = git("rev-parse", "--show-toplevel") || process.cwd();
 const BRANCH = git("rev-parse", "--abbrev-ref", "HEAD");
-const TICKET_FROM_BRANCH = (BRANCH.match(/\b(neo-\d+)\b/i)?.[1] ?? "").toUpperCase() || null;
+const TICKET_FROM_BRANCH = (BRANCH.match(/\b((?:neo|core|ajm)-\d+)\b/i)?.[1] ?? "").toUpperCase() || null;
 const MARKER_DIR = join(ROOT, ".claude/local/artifacts");
 const DRAFT = join(MARKER_DIR, ".draft.json");
 // The index is shared by every worktree, so it lives in the main checkout's .claude/local.
