@@ -275,9 +275,9 @@ $pwa-avatar-hues: 4, 28, 48, 95, 150, 190, 222, 262, 300, 335;
  * follows the tenant palette and the dark theme.
  */
 :root {
-  --glass-surface: color-mix(in srgb, rgb(var(--v-theme-surface)) 74%, transparent);
+  --glass-surface: color-mix(in srgb, rgb(var(--v-theme-surface)) 82%, transparent);
   --glass-solid: rgb(var(--v-theme-surface));
-  --glass-blur: blur(18px) saturate(170%);
+  --glass-blur: blur(20px) saturate(170%);
   --glass-edge: rgb(255 255 255 / 0.7);
   --glass-shadow: 0 0 0 1px rgb(16 48 45 / 0.06), 0 12px 32px -10px rgb(16 48 45 / 0.3);
   --mobile-nav-scrim: rgb(8 20 19 / 0.28);
@@ -293,7 +293,7 @@ $pwa-avatar-hues: 4, 28, 48, 95, 150, 190, 222, 262, 300, 335;
   }
 }
 [data-theme="dark"] {
-  --glass-surface: color-mix(in srgb, rgb(var(--v-theme-surface)) 72%, transparent);
+  --glass-surface: color-mix(in srgb, rgb(var(--v-theme-surface)) 82%, transparent);
   --glass-edge: rgb(255 255 255 / 0.1);
   --glass-shadow: 0 0 0 1px rgb(255 255 255 / 0.06), 0 14px 36px -10px rgb(0 0 0 / 0.6);
   --mobile-nav-scrim: rgb(0 0 0 / 0.45);
