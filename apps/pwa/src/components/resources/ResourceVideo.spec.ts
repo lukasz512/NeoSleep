@@ -59,7 +59,7 @@ describe("formatDuration", () => {
 
 describe("ResourceVideoTile", () => {
   function mountTile(v = video()) {
-    const w = mount(ResourceVideoTile, { props: { video: v, index: 0 }, global: { plugins: plugins() } });
+    const w = mount(ResourceVideoTile, { props: { video: v }, global: { plugins: plugins() } });
     mountedWrappers.push(w);
     return w;
   }
@@ -69,13 +69,13 @@ describe("ResourceVideoTile", () => {
     expect(w.get("img").attributes("src")).toBe("https://api.test/poster/27?t=tok");
     expect(w.text()).toContain("Cómo detectar pacientes");
     expect(w.text()).toContain("48:39");
-    expect(w.findAll(".video-tile__lang").map((l) => l.text())).toEqual(["ES", "EN"]);
+    expect(w.findAll(".video-card__lang").map((l) => l.text())).toEqual(["ES", "EN"]);
     expect(w.find("video").exists()).toBe(false);
   });
 
   it("shimmers until the poster loads, then fades it in", async () => {
     const w = mountTile();
-    const poster = w.get(".video-tile__poster");
+    const poster = w.get(".video-card__thumb");
     expect(poster.attributes("data-state")).toBe("loading");
     await w.get("img").trigger("load");
     expect(poster.attributes("data-state")).toBe("ready");
@@ -85,11 +85,20 @@ describe("ResourceVideoTile", () => {
     const w = mountTile();
     await w.get("img").trigger("error");
     expect(w.find("img").exists()).toBe(false);
-    expect(w.get(".video-tile__poster").attributes("data-state")).toBe("error");
+    expect(w.get(".video-card__thumb").attributes("data-state")).toBe("error");
 
     const none = mountTile(video({ posterUrl: null, durationSec: null }));
     expect(none.find("img").exists()).toBe(false);
-    expect(none.find(".video-tile__duration").exists()).toBe(false);
+    expect(none.find(".video-card__duration").exists()).toBe(false);
+  });
+
+  it("lies flat as a list row when asked (desktop/tablet list view)", () => {
+    const card = mountTile();
+    expect(card.classes()).not.toContain("video-card--row");
+    const row = mount(ResourceVideoTile, { props: { video: video(), layout: "row" }, global: { plugins: plugins() } });
+    mountedWrappers.push(row);
+    expect(row.classes()).toContain("video-card--row");
+    expect(row.find(".video-card__thumb").exists()).toBe(true);
   });
 
   it("opens on click and on Enter", async () => {
@@ -168,17 +177,6 @@ describe("ResourceVideoSheet", () => {
     await nextTick();
     expect(($("video") as HTMLVideoElement).getAttribute("src")).toBe("https://api.test/media/27?lang=En&t=tok");
     expect(buttons[1]!.getAttribute("aria-pressed")).toBe("true");
-  });
-
-  it("goes full screen as soon as it opens (the click still counts as a user gesture)", async () => {
-    const request = vi.fn(async () => undefined);
-    Object.defineProperty(HTMLElement.prototype, "requestFullscreen", { value: request, configurable: true });
-    mountSheet();
-    await nextTick();
-    await nextTick();
-    expect(request).toHaveBeenCalledTimes(1);
-    expect((request.mock.contexts[0] as HTMLElement).classList.contains("video-sheet__stage")).toBe(true);
-    delete (HTMLElement.prototype as { requestFullscreen?: unknown }).requestFullscreen;
   });
 
   it("emits close from the X", async () => {

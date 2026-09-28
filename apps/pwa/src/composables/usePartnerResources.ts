@@ -32,6 +32,8 @@ export interface PartnerResourceItem {
   posterUrl?: string | null;
   /** Videos only: whole seconds, null until the API has probed the file once. */
   durationSec?: number | null;
+  /** Videos only (NEO-151): stage of the dentist's work — detect | diagnose | records | order | followup | other. */
+  topic?: string;
 }
 
 export interface PartnerResourceSubgroup {
