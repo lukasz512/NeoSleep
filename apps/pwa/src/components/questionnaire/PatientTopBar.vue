@@ -36,7 +36,6 @@
         :name="firstName"
         :role-label="t('app.questionnaire.menu.role', { clinic })"
         :initials="initial"
-        :avatar-size="40"
         :theme-preference="themeStore.preference"
         :locale="(locale as string)"
         :can-change-password="false"

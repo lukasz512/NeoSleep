@@ -8,9 +8,10 @@
     class="user-menu"
     :aria-label="t('user.user.menu')"
   >
-    <!-- NEO-154: text left, avatar right — the avatar is the app bar's avatar,
-         pinned in place and grown, so the menu reads as that button opened up
-         (data-motion marks what useAccountMenuMotion moves). -->
+    <!-- NEO-154 / NEO-161: text left, avatar right — the app bar's avatar
+         flies in and grows into the card's top-right corner, inset like the
+         rest of the card's content (data-motion marks what AppAccountMenu's
+         CSS motion moves). -->
     <div class="user-menu__identity">
       <div class="user-menu__who">
         <span class="user-menu__name" data-motion="name">{{ name }}</span>
@@ -150,11 +151,11 @@ withDefaults(defineProps<{
   version: string;
   /** "DEV" / "LOCAL" on non-prod builds, null on prod. */
   channel: string | null;
-  /** Header avatar size in px — 110% of the app bar avatar on phones (NEO-154). */
+  /** Header avatar size in px — the app bar avatar grown into the card corner (NEO-161). */
   avatarSize?: number;
   /** Password / log out / install app — false for someone without an account (the patient on a QR link, NEO-126). */
   accountActions?: boolean;
-}>(), { email: undefined, region: undefined, avatarSize: 40, accountActions: true });
+}>(), { email: undefined, region: undefined, avatarSize: 56, accountActions: true });
 
 const emit = defineEmits<{
   "set-theme": [preference: ThemePreference];
@@ -194,9 +195,9 @@ function onLocaleChange(value: string) {
    sets how far it sits from the card's top and end edge. */
 .user-menu__identity {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
-  padding: var(--account-menu-avatar-top, 3px) var(--account-menu-avatar-end, 3px) 14px 16px;
+  padding: var(--account-menu-avatar-top, 16px) var(--account-menu-avatar-end, 16px) 14px 16px;
 }
 
 .user-menu__avatar {
@@ -208,7 +209,6 @@ function onLocaleChange(value: string) {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  padding-top: 6px;
   line-height: 1.3;
 }
 

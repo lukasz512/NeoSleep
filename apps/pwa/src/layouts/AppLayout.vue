@@ -77,9 +77,9 @@
            that avatar on both (NEO-154 replaced the phone bottom sheet). -->
       <template #app-bar-actions>
         <div ref="barActions" class="layout-bar-actions">
-          <!-- NEO-122 / NEO-154: the avatar button turns into the menu — the
-               avatar stays put and grows, the card pours out of it (same on
-               desktop and phone); see AppAccountMenu + useAccountMenuMotion. -->
+          <!-- NEO-122 / NEO-154 / NEO-161: the avatar button turns into the
+               menu — the avatar stays put and grows, the glass card springs
+               out of it (same on desktop and phone); see AppAccountMenu. -->
           <AppAccountMenu v-model:open="menuOpen" :mobile="isMobile" :label="t('user.user.menu')">
           <template #trigger="{ open: accountMenuOpen }">
             <AppButton
@@ -107,7 +107,7 @@
             :email="user.email"
             :role-label="user.role"
             :initials="user.initials"
-            :avatar-size="isMobile ? AVATAR_SIZE * PHONE_AVATAR_GROWTH : AVATAR_SIZE * AVATAR_GROWTH"
+            :avatar-size="MENU_AVATAR_SIZE"
             :region="user.region"
             :theme-preference="themePreference"
             :locale="(locale as string)"
@@ -245,7 +245,7 @@ import {
 import { useGlyphInset } from "../composables/useGlyphInset";
 import { useBarLogoFit } from "../composables/useBarLogoFit";
 import { useThemeColorMeta } from "../composables/useThemeColorMeta";
-import { AVATAR_GROWTH, PHONE_AVATAR_GROWTH } from "../composables/useAccountMenuMotion";
+import { MENU_AVATAR_SIZE } from "../composables/useAccountMenuMotion";
 import { useI18n } from "vue-i18n";
 import { AppShell, useAppVersionParts, CHANGE_PASSWORD_FROM_MENU } from "@ui";
 import { useLayoutState } from "../composables/useLayoutState";
@@ -798,7 +798,8 @@ const moduleIcon = computed(() => {
 .layout-root:not(.layout-root--desktop) .layout-main__inner {
   margin-inline: var(--layout-sheet-margin);
   min-height: calc(
-    100dvh - var(--v-layout-top, 56px) - var(--mobile-bottom-nav-height, 56px) - env(safe-area-inset-bottom)
+    100dvh - var(--v-layout-top, 56px) - var(--mobile-bottom-nav-height, 56px) - 2 * var(--mobile-bottom-nav-float, 10px)
+      - env(safe-area-inset-bottom)
       - var(--layout-sheet-foot)
   );
 }
