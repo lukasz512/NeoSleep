@@ -18,9 +18,6 @@
 
       <div class="view-resources__window">
         <div v-if="loading && tab === 'videos'" aria-hidden="true">
-          <div class="view-resources__heading">
-            <VSkeletonLoader type="text" color="surface-container-high" width="140" />
-          </div>
           <div class="view-resources__video-grid">
             <div v-for="n in 6" :key="n" class="view-resources__video-skeleton" />
           </div>
@@ -107,11 +104,9 @@
               <AppEmptyState :title="t('user.resources.emptyVideos')" />
             </div>
             <template v-else>
-              <!-- One label only (NEO-151): the tab bar and the "Webinar" category heading said the same thing twice. -->
-              <h2 class="view-resources__heading">
-                {{ t("user.resources.tabs.videos") }}
-                <span class="view-resources__count">{{ videos.length }}</span>
-              </h2>
+              <!-- "Webinars" appears once per page (NEO-151): under the title on desktop
+                   (page-header subtitle), and here only on phones, where the header has no subtitle line. -->
+              <p class="view-resources__phone-subtitle">{{ videosSubtitle }}</p>
               <div class="view-resources__video-grid">
                 <ResourceVideoTile
                   v-for="(video, i) in videos"
@@ -131,7 +126,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted, onUnmounted } from "vue";
+import { ref, reactive, computed, watch, onMounted, onUnmounted, onBeforeUnmount } from "vue";
 import { useI18n } from "vue-i18n";
 import { AppSegmentedTabs } from "@ui";
 import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
@@ -140,6 +135,7 @@ import AppEmptyState from "../components/AppEmptyState.vue";
 import ResourceVideoTile from "../components/resources/ResourceVideoTile.vue";
 import ResourceVideoSheet from "../components/resources/ResourceVideoSheet.vue";
 import { usePartnerResources, type PartnerResourceFileType, type PartnerResourceItem } from "../composables/usePartnerResources";
+import { usePageHeaderRow } from "../composables/usePageHeader";
 import { useAuthStore } from "../stores/auth";
 import { SUPPORT_EMAIL } from "../constants";
 
@@ -158,6 +154,23 @@ watch(locale, (l) => load(l), { immediate: true });
 
 /** The video playing in the cinema sheet — one at a time, so only one download runs. */
 const openVideo = ref<PartnerResourceItem | null>(null);
+
+/** Page subtitle (NEO-151): "Webinars · 15" under the Resources title; "" keeps its placeholder while loading. */
+const videosSubtitle = computed(() => `${t("user.resources.tabs.videos")} · ${videos.value.length}`);
+const headerRow = usePageHeaderRow();
+let ownSubtitle: string | null = null;
+watch(
+  [videosSubtitle, loading, loadError],
+  () => {
+    ownSubtitle = loadError.value ? null : loading.value ? "" : videosSubtitle.value;
+    headerRow.subtitle.value = ownSubtitle;
+  },
+  { immediate: true }
+);
+onBeforeUnmount(() => {
+  // The next view may already have written its own line — only clear ours.
+  if (headerRow.subtitle.value === ownSubtitle) headerRow.subtitle.value = null;
+});
 
 const FILE_TYPE_ICONS: Record<PartnerResourceFileType, AppIconName> = {
   pdf: "file-pdf",
@@ -377,20 +390,18 @@ const incidentMailtoHref = computed(() => {
   background: rgba(var(--v-theme-primary), 0.18);
 }
 
-.view-resources__heading {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin: 4px 0 16px;
-  font-size: 20px;
-  font-weight: 700;
-  line-height: 1.2;
-}
-.view-resources__count {
-  font-size: 14px;
-  font-weight: 500;
-  color: rgba(var(--v-theme-on-surface), 0.6);
+/* Phones only: AppLayout shows the page subtitle on desktop (>= 768 px, MOBILE_BREAKPOINT). */
+.view-resources__phone-subtitle {
+  display: none;
+  margin: 0 0 12px;
+  font-size: 0.8125rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   font-variant-numeric: tabular-nums;
+}
+@media (max-width: 767.98px) {
+  .view-resources__phone-subtitle {
+    display: block;
+  }
 }
 
 /* 3 per row on desktop, 2 on tablet, 1 on phone (NEO-151) — Vuetify's md/sm breakpoints. */

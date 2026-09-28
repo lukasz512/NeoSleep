@@ -8,7 +8,7 @@
     @update:model-value="(open: boolean) => !open && emit('close')"
   >
     <div v-if="video" class="video-sheet" data-testid="resource-video-sheet">
-      <div class="video-sheet__stage" :data-state="state">
+      <div ref="stage" class="video-sheet__stage" :data-state="state">
         <img v-if="video.posterUrl" class="video-sheet__backdrop" :src="video.posterUrl" alt="" aria-hidden="true" />
         <video
           :key="src"
@@ -18,7 +18,6 @@
           :poster="video.posterUrl ?? undefined"
           controls
           autoplay
-          playsinline
           preload="auto"
           @loadstart="onStart"
           @canplay="onReady"
@@ -90,7 +89,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onBeforeUnmount } from "vue";
+import { ref, watch, nextTick, onBeforeUnmount } from "vue";
 import { useI18n } from "vue-i18n";
 import { useDisplay } from "vuetify";
 import { VBottomSheet } from "vuetify/components/VBottomSheet";
@@ -121,6 +120,35 @@ type State = "loading" | "buffering" | "playing" | "error";
 const state = ref<State>("loading");
 const src = ref("");
 const player = ref<HTMLVideoElement | null>(null);
+const stage = ref<HTMLElement | null>(null);
+
+/**
+ * Łukasz, NEO-151: a webinar plays full screen. Browsers only allow
+ * fullscreen right after a click (Chrome: ~5 s), and the first frame takes
+ * 10–20 s, so the stage goes full screen when the tile is clicked and the
+ * loading state shows there. iPhone has no element fullscreen: without
+ * `playsinline` its own player takes the whole screen once playback starts.
+ * A browser that refuses just keeps the sheet — nothing to handle.
+ */
+async function enterFullscreen(): Promise<void> {
+  await nextTick();
+  const el = stage.value as (HTMLElement & { webkitRequestFullscreen?: () => void }) | null;
+  if (!el || document.fullscreenElement) return;
+  try {
+    if (el.requestFullscreen) await el.requestFullscreen();
+    else el.webkitRequestFullscreen?.();
+  } catch {
+    // benign: not allowed here (no recent click, iframe without allowfullscreen) — the sheet is the fallback.
+  }
+}
+
+function exitFullscreen(): void {
+  if (!document.fullscreenElement) return;
+  document.exitFullscreen().catch(() => {
+    // benign: the user already left full screen (Esc) while the sheet was closing.
+  });
+}
+
 const elapsed = ref(0);
 const slow = ref(false);
 /** After this long the copy switches from "usually 10–20 s" to "still loading, it's slow". */
@@ -165,11 +193,16 @@ watch(
     stopTimer();
     state.value = "loading";
     src.value = video ? (video.languages.find((l) => l.mediaUrl === video.mediaUrl)?.mediaUrl ?? video.mediaUrl) : "";
+    if (video) void enterFullscreen();
+    else exitFullscreen();
   },
   { immediate: true }
 );
 
-onBeforeUnmount(stopTimer);
+onBeforeUnmount(() => {
+  stopTimer();
+  exitFullscreen();
+});
 </script>
 
 <style scoped>
@@ -191,6 +224,15 @@ onBeforeUnmount(stopTimer);
   aspect-ratio: 16 / 9;
   overflow: hidden;
   background: #000;
+}
+/* Full screen (NEO-151): the stage fills the display, the frame is letterboxed. */
+.video-sheet__stage:fullscreen {
+  aspect-ratio: auto;
+  width: 100vw;
+  height: 100vh;
+}
+.video-sheet__stage:fullscreen .video-sheet__video {
+  object-fit: contain;
 }
 .video-sheet__backdrop {
   position: absolute;
