@@ -54,6 +54,13 @@ describe("AppDateField — date (NEO-132)", () => {
     expect(lastEmit(w)).toBe("1990-10-10");
   });
 
+  it("a pasted ISO date (1979-03-15) is read as that date, not as digits in the locale's order", async () => {
+    const w = mountField({}, "en");
+    await typeAndLeave(w, dateInput(w), "1979-03-15");
+    expect((dateInput(w).element as HTMLInputElement).value).toBe("03/15/1979");
+    expect(lastEmit(w)).toBe("1979-03-15");
+  });
+
   it("31 February → says how many days the month has, and emits nothing", async () => {
     const w = mountField();
     await typeAndLeave(w, dateInput(w), "31022026");

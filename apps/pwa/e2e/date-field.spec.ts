@@ -19,11 +19,17 @@ async function open(page: Page, query: string, size: { width: number; height: nu
   await page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== "running"));
 }
 
-/** The element painted at the center of `testId` is inside it — i.e. nothing covers it. */
+/**
+ * The element painted at the center of the *on-screen part* of `testId` is
+ * inside it — i.e. nothing covers it. (A phone sheet can reach past the
+ * viewport edge; its full-rect center would then be off-screen.)
+ */
 async function paintsOnTop(page: Page, testId: string): Promise<boolean> {
   return page.getByTestId(testId).evaluate((el) => {
     const r = el.getBoundingClientRect();
-    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    const top = Math.max(r.top, 0);
+    const bottom = Math.min(r.bottom, window.innerHeight);
+    const hit = document.elementFromPoint(r.left + r.width / 2, (top + bottom) / 2);
     return !!hit && el.contains(hit);
   });
 }

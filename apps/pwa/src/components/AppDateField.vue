@@ -320,7 +320,10 @@ function enforceMask(field: typeof dateInput, text: string) {
 }
 
 function onDateInput(v: string | null) {
-  dateDigits.value = onlyDigits(v ?? "", DATE_DIGITS);
+  // A pasted ISO date ("1979-03-15", e.g. from another system) is read as a
+  // date, not as digits in the locale's order.
+  const iso = /^\s*(\d{4}-\d{2}-\d{2})\s*$/.exec(v ?? "")?.[1];
+  dateDigits.value = iso ? isoToDateDigits(iso, fmt.value) : onlyDigits(v ?? "", DATE_DIGITS);
   enforceMask(dateInput, dateText.value);
 }
 function onTimeInput(v: string | null) {
