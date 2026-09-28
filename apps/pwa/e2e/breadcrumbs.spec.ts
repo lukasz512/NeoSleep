@@ -11,8 +11,9 @@ import { test, expect, type Page } from "@playwright/test";
  *   link still has a 44px-tall hit area
  * - phone (NEO-152): the same header as desktop — the "MODULE ›" eyebrow is
  *   the way back (no "← <Module>" row); the actions get their own row, on the right
- * - a very long name wraps (never truncated — it's the record's identity)
- *   without pushing the actions off-screen or scrolling the page sideways
+ * - a very long name stays on one line (NEO-158: shrinks to fit down to
+ *   18 px, then "…", full name kept as its text and tooltip) without pushing
+ *   the actions off-screen or scrolling the page sideways
  * - the loading placeholder keeps the header's height (nothing jumps)
  */
 
@@ -38,11 +39,22 @@ for (const [device, width] of [["desktop", 1280], ["phone", 390]] as const) {
       expect(await noSideScroll(page)).toBe(true);
     });
 
-    test("a very long name wraps in full; actions stay on screen", async ({ page }) => {
+    test("a very long name stays on one line (shrinks to 18 px, then …); actions stay on screen", async ({ page }) => {
       await open(page, "long", width);
       const h1 = page.locator("h1");
+      // The full name is still the h1's text (screen readers) and its tooltip.
       await expect(h1).toContainText("y Santa Cruz");
-      expect(await h1.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+      const box = await h1.evaluate((el) => ({
+        height: el.getBoundingClientRect().height,
+        lineHeight: parseFloat(getComputedStyle(el).lineHeight),
+        fontSize: parseFloat(getComputedStyle(el).fontSize),
+        title: el.getAttribute("title"),
+        cut: el.scrollWidth > el.clientWidth,
+      }));
+      expect(box.height).toBeLessThanOrEqual(box.lineHeight + 1);
+      expect(box.fontSize).toBeGreaterThanOrEqual(18);
+      // Only a name that is actually cut with "…" needs its tooltip.
+      if (box.cut) expect(box.title).toContain("y Santa Cruz");
       for (const action of await page.locator(".harness-action").all()) {
         const b = (await action.boundingBox())!;
         expect(b.x + b.width).toBeLessThanOrEqual(width);
