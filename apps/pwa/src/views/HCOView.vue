@@ -39,6 +39,7 @@
         <EntityLink
           :to="null"
           entity-type="hco"
+          :org-type="(item as HCOListItem).type"
           :label="(item as HCOListItem).name"
           :details="orgDetails(item as HCOListItem).details"
           :avatar-size="32"

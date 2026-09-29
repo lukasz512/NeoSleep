@@ -85,8 +85,12 @@ const props = withDefaults(
     moreDetails?: string[];
     /** A doctor's (first) specialty code — the avatar badge shows its icon. */
     specialty?: string | null;
+    /** An organization's type — picks its avatar icon and tint (NEO-155). */
+    orgType?: string | null;
+    /** A lead's channel (lead.source) — the avatar badge shows its icon (NEO-155). */
+    leadSource?: string | null;
   }>(),
-  { entityType: undefined, firstName: null, lastName: null, avatarSize: 20, details: () => [], moreDetails: () => [], specialty: null },
+  { entityType: undefined, firstName: null, lastName: null, avatarSize: 20, details: () => [], moreDetails: () => [], specialty: null, orgType: null, leadSource: null },
 );
 
 const ROUTE_ENTITY_TYPES: Record<string, AppAvatarEntityType> = {
@@ -124,6 +128,8 @@ const avatarProps = computed(() => {
     entityType: entityType.value,
     size: props.avatarSize,
     specialty: props.specialty,
+    orgType: props.orgType,
+    leadSource: props.leadSource,
   };
 });
 </script>

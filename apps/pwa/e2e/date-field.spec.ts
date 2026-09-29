@@ -56,8 +56,9 @@ for (const [name, size] of [["laptop", LAPTOP], ["phone", PHONE]] as const) {
     await open(page, "dialog=folder&mode=create", size);
     await page.getByTestId("date-field-open-calendar").click();
     await expect(page.getByTestId("date-field-calendar")).toBeVisible();
-    await page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== "running"));
-    expect(await paintsOnTop(page, "date-field-calendar")).toBe(true);
+    // WebKit can report no running animation before the sheet has slid in,
+    // so poll: a sheet stuck behind the dialog still fails after the timeout.
+    await expect.poll(() => paintsOnTop(page, "date-field-calendar")).toBe(true);
   });
 
   test(`${name}: event start is Date | Time on one line, and the time list opens above the form`, async ({ page }) => {

@@ -219,89 +219,73 @@
         </VTooltip>
       </template>
 
-      <template v-if="lead" #body>
-        <div class="view-detail__body">
-          <!-- Data card -->
-          <div class="view-detail__card">
-            <dl class="view-detail__fields">
-              <div v-if="!isInactive(lead)" class="view-detail__row">
-                <dt class="view-detail__label">
-                  {{ t("user.leads.detail.email") }}
-                </dt>
-                <dd class="view-detail__value">
-                  <a
-                    v-if="lead.email"
-                    :href="`mailto:${lead.email}`"
-                    class="view-detail__link"
-                    >{{ lead.email }}</a
-                  >
-                  <span v-else class="view-detail__empty">—</span>
-                </dd>
-              </div>
-
-              <div v-if="!isInactive(lead)" class="view-detail__row">
-                <dt class="view-detail__label">
-                  {{ t("user.leads.detail.phone") }}
-                </dt>
-                <dd class="view-detail__value">
-                  <a
-                    v-if="lead.phone"
-                    :href="`tel:${lead.phone}`"
-                    class="view-detail__link"
-                    >{{ lead.phone }}</a
-                  >
-                  <span v-else class="view-detail__empty">—</span>
-                </dd>
-              </div>
-
-              <div class="view-detail__row">
-                <dt class="view-detail__label">
-                  {{ t("user.leads.detail.status") }}
-                </dt>
-                <dd class="view-detail__value">
-                  <span
-                    :class="[
-                      'pwa-lead-status-chip',
-                      `pwa-lead-status-chip--${leadStatusClass(lead.status)}`,
-                    ]"
-                  >
-                    {{ statusLabel(lead.status) }}
-                  </span>
-                </dd>
-              </div>
-
-              <div class="view-detail__row">
-                <dt class="view-detail__label">
-                  {{ t("user.leads.detail.region") }}
-                </dt>
-                <dd class="view-detail__value">{{ lead.region || "—" }}</dd>
-              </div>
-
-              <div class="view-detail__row">
-                <dt class="view-detail__label">
-                  {{ t("user.leads.detail.institution") }}
-                </dt>
-                <dd class="view-detail__value">
-                  <EntityLink
-                    :to="leadInstitution(lead) ? hcoListLink(leadInstitution(lead)) : null"
-                    :label="leadInstitution(lead)"
-                    entity-type="hco"
-                  />
-                </dd>
-              </div>
-
-              <div class="view-detail__row view-detail__row--notes">
-                <dt class="view-detail__label">
-                  {{ t("user.leads.detail.notes") }}
-                </dt>
-                <dd class="view-detail__value view-detail__value--notes">
-                  <span v-if="lead.notes">{{ lead.notes }}</span>
-                  <span v-else class="view-detail__empty">—</span>
-                </dd>
-              </div>
-            </dl>
-          </div>
-        </div>
+      <template v-if="lead" #record-tile>
+        <AppAvatar
+          :name="lead.name"
+          entity-type="lead"
+          :first-name="lead.first_name"
+          :last-name="lead.last_name"
+          :lead-source="lead.source"
+          :size="48"
+        />
+      </template>
+      <template v-if="lead" #record-details>
+        <IdentityDetails :details="leadIdentity(lead)" />
+      </template>
+      <template v-if="lead" #sections>
+        <!-- NEO-155: same record layout as patients/doctors (DetailViewTabs +
+             view-item rows), instead of the lead's own hand-rolled card. -->
+        <DetailViewTabs v-model="activeTab" :tabs="leadTabs">
+          <template #details>
+            <div v-if="!isInactive(lead)" class="view-item__row">
+              <dt class="view-item__label view-item__label--icon"><AppIcon name="mail" />{{ t("user.leads.detail.email") }}</dt>
+              <dd class="view-item__value">
+                <a v-if="lead.email" :href="`mailto:${lead.email}`" class="view-item__link">{{ lead.email }}</a>
+                <span v-else class="view-item__empty">—</span>
+              </dd>
+            </div>
+            <div v-if="!isInactive(lead)" class="view-item__row">
+              <dt class="view-item__label view-item__label--icon"><AppIcon name="phone" />{{ t("user.leads.detail.phone") }}</dt>
+              <dd class="view-item__value">
+                <a v-if="lead.phone" :href="`tel:${lead.phone}`" class="view-item__link">{{ lead.phone }}</a>
+                <span v-else class="view-item__empty">—</span>
+              </dd>
+            </div>
+            <div class="view-item__row">
+              <dt class="view-item__label">{{ t("user.leads.detail.status") }}</dt>
+              <dd class="view-item__value">
+                <span :class="['pwa-lead-status-chip', `pwa-lead-status-chip--${leadStatusClass(lead.status)}`]">
+                  {{ statusLabel(lead.status) }}
+                </span>
+              </dd>
+            </div>
+            <div class="view-item__row">
+              <dt class="view-item__label">{{ t("user.leads.form.source") }}</dt>
+              <dd class="view-item__value">{{ sourceLabel(lead.source) }}</dd>
+            </div>
+            <div class="view-item__row">
+              <dt class="view-item__label">{{ t("user.leads.detail.institution") }}</dt>
+              <dd class="view-item__value">
+                <EntityLink
+                  :to="leadInstitution(lead) ? hcoListLink(leadInstitution(lead)) : null"
+                  :label="leadInstitution(lead)"
+                  entity-type="hco"
+                />
+              </dd>
+            </div>
+            <div class="view-item__row">
+              <dt class="view-item__label">{{ t("user.leads.detail.region") }}</dt>
+              <dd class="view-item__value">{{ lead.region || "—" }}</dd>
+            </div>
+            <div v-if="lead.notes" class="view-item__row">
+              <dt class="view-item__label">{{ t("user.leads.detail.notes") }}</dt>
+              <dd class="view-item__value">{{ lead.notes }}</dd>
+            </div>
+          </template>
+          <template #notes>
+            <PatientNotesPanel entity-type="lead" :entity-id="lead.id" />
+          </template>
+        </DetailViewTabs>
       </template>
     </ItemDetailLayout>
 
@@ -361,6 +345,11 @@ import {
 } from "../utils/leadStatus";
 import { hcoListLink } from "../utils/entityLinks";
 import EntityLink from "../components/EntityLink.vue";
+import AppAvatar from "../components/AppAvatar.vue";
+import IdentityDetails from "../components/IdentityDetails.vue";
+import DetailViewTabs from "../components/DetailViewTabs.vue";
+import PatientNotesPanel from "../components/patient/PatientNotesPanel.vue";
+import { isLeadSource } from "../utils/leadSource";
 import { leadFormFields } from "../config/forms/leadForm";
 import { hcpFormFields, hcpFormDerive } from "../config/forms/hcpForm";
 import { partnerInviteFormFields } from "../config/forms/partnerInviteForm";
@@ -464,6 +453,25 @@ const backRoute = computed(() => ({ name: "leads" }));
 function statusLabel(status: string): string {
   const key = leadStatusI18nKey(status);
   return key ? t(key) : status || t("user.leads.filters.statusNew");
+}
+
+const leadTabs = [
+  { value: "details", labelKey: "user.leads.detail.tabs.details" },
+  { value: "notes", labelKey: "user.leads.detail.tabs.notes" },
+];
+const activeTab = ref(typeof route.query.tab === "string" ? route.query.tab : "details");
+
+function sourceLabel(source: string | null | undefined): string {
+  return isLeadSource(source) ? t(`user.leads.source.${source}`) : "—";
+}
+
+/** One quiet identity line under the name, like doctors/patients: clinic · channel. */
+function leadIdentity(l: Lead): string[] {
+  const details: string[] = [];
+  const institution = leadInstitution(l);
+  if (institution) details.push(institution);
+  if (isLeadSource(l.source)) details.push(t(`user.leads.source.${l.source}`));
+  return details;
 }
 
 function isInactive(lead: Lead): boolean {
@@ -732,69 +740,4 @@ watch(() => route.params.id, loadLead);
   margin: 0 0 12px;
 }
 
-/* Header name */
-
-
-.view-detail__body {
-  display: grid;
-  grid-template-columns: 1fr;
-  align-items: stretch;
-  gap: 16px;
-}
-
-/* Data block — flat like ItemDetailLayout's .view-item__card: page
-   background, no border, no inset padding. */
-.view-detail__card {
-  background: transparent;
-  border: none;
-}
-
-.view-detail__fields {
-  margin: 0;
-  display: grid;
-  gap: 14px;
-}
-
-.view-detail__row {
-  display: grid;
-  grid-template-columns: 140px 1fr;
-  gap: 12px;
-  align-items: baseline;
-}
-
-.view-detail__row--notes {
-  align-items: start;
-}
-
-.view-detail__label {
-  margin: 0;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-}
-
-.view-detail__value {
-  margin: 0;
-  font-size: 0.9375rem;
-  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
-}
-
-.view-detail__value--notes {
-  font-style: italic;
-  font-size: 0.875rem;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  line-height: 1.5;
-}
-
-.view-detail__link {
-  color: rgb(var(--v-theme-primary));
-  text-decoration: none;
-  &:hover {
-    text-decoration: underline;
-  }
-}
-
-.view-detail__empty {
-  color: rgba(var(--v-theme-on-surface), var(--v-disabled-opacity));
-}
 </style>

@@ -1,14 +1,16 @@
 /**
- * Identity tint family per entity type (theme.scss --pwa-identity-<tone>,
- * NEO-57): patient teal, doctor blue, organization amber, everyone else
- * (users, leads, events) neutral. Shared by AppAvatar, IdentityTags and
- * EntityLink so an avatar and its tags always agree.
+ * Identity color family per entity type (theme.scss $pwa-avatar-families,
+ * NEO-155 "quiet + accent"): patient = brand teal, doctor = cool graphite,
+ * organization = warm stone, lead = teal outline only, everyone else
+ * (users, events) = neutral desk grey. Shared by AppAvatar and anything that
+ * has to agree with an avatar's color.
  */
-export type IdentityTone = "patient" | "doctor" | "org" | "person";
+export type IdentityTone = "patient" | "doctor" | "org" | "lead" | "person";
 
 export function identityTone(entityType: string): IdentityTone {
   if (entityType === "patient") return "patient";
   if (entityType === "hcp") return "doctor";
   if (entityType === "hco") return "org";
+  if (entityType === "lead") return "lead";
   return "person";
 }
