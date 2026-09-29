@@ -51,6 +51,18 @@ export function isPatientCompletable(key: string, fillMode: ChecklistFillMode): 
 }
 
 export type ChecklistGroup = "consent" | "patient" | "doctor" | "results";
+/**
+ * Which patient tab an item lives in (NEO-193): "document" = Documentos (consent + the parts of the
+ * Historia Clínica — questionnaires, STOP-Bang, exploration), "study" = Estudios (lab/device results).
+ * Under NOM-004 both belong to the expediente clínico; the split is signed record vs. result, not legal vs. medical.
+ */
+export type ChecklistCategory = "document" | "study";
+export const CATEGORY_FOR_GROUP: Record<ChecklistGroup, ChecklistCategory> = {
+  consent: "document",
+  patient: "document",
+  doctor: "document",
+  results: "study",
+};
 export type ChecklistStatus = "missing" | "pending_patient" | "partial" | "done";
 
 export interface ChecklistHistoryEntry {
@@ -86,6 +98,7 @@ export interface ChecklistItem {
   label: string;
   fillMode: ChecklistFillMode;
   group: ChecklistGroup;
+  category: ChecklistCategory;
   status: ChecklistStatus;
   completed_at: Date | null;
   history: ChecklistHistoryEntry[];
@@ -222,6 +235,7 @@ export async function GetPatientChecklistQuery(ctx: TenantContext, patientId: st
         label: DOCUMENT_MANIFEST.find((m) => m.templateKey === key)?.label ?? key,
         fillMode,
         group: GROUP_FOR[fillMode],
+        category: CATEGORY_FOR_GROUP[GROUP_FOR[fillMode]],
         status,
         completed_at: status === "done" && latest ? latest.created_at : null,
         history,
@@ -269,6 +283,7 @@ export async function GetPatientChecklistQuery(ctx: TenantContext, patientId: st
     label: "Polysomnography",
     fillMode: "external",
     group: "results",
+    category: CATEGORY_FOR_GROUP.results,
     status: psgDone ? "done" : psgHistory.length ? "partial" : "missing",
     completed_at: psgDone?.created_at ?? null,
     history: psgHistory,

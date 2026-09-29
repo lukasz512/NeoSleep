@@ -24,6 +24,7 @@ function item(key: string, status: ChecklistItem["status"]): ChecklistItem {
     label: key,
     fillMode: "patient",
     group: "patient",
+    category: "document",
     status,
     completed_at: null,
     history: [],

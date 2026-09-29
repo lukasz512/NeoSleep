@@ -20,7 +20,7 @@ import PatientAsidePanel from "./PatientAsidePanel.vue";
 const ok = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as Response;
 const actions = (qr: boolean) => ({ qr, fill: null, form: null, print: true, upload: true });
 const item = (key: string, group: string, status: string, qr = true) => ({
-  key, templateKey: key, label: key, fillMode: group, group, status, completed_at: null, history: [], pending_request_id: null, actions: actions(qr),
+  key, templateKey: key, label: key, fillMode: group, group, category: group === "results" ? "study" : "document", status, completed_at: null, history: [], pending_request_id: null, actions: actions(qr),
 });
 
 let checklistItems: ReturnType<typeof item>[];
@@ -97,7 +97,7 @@ describe("PatientAsidePanel (NEO-153)", () => {
     const toSign = wrapper.find(".patient-aside__to-sign");
     expect(toSign.findAll("li")).toHaveLength(1);
     await toSign.find("button").trigger("click");
-    expect(wrapper.emitted("open-study")).toEqual([["informedConsent"]]);
+    expect(wrapper.emitted("open-study")).toEqual([["informedConsent", "document"]]);
 
     checklistItems = [item("informedConsent", "consent", "done")];
     expect((await mountPanel()).find(".patient-aside__to-sign").text()).toContain("Everything is signed");

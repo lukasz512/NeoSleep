@@ -50,7 +50,7 @@
       <h2 class="patient-aside__heading">{{ t("app.patients.detail.aside.toSign") }}</h2>
       <ul v-if="toSign.length" class="patient-aside__studies">
         <li v-for="item in toSign" :key="item.key">
-          <button type="button" class="patient-aside__study" @click="$emit('open-study', item.key)">
+          <button type="button" class="patient-aside__study" @click="$emit('open-study', item.key, item.category)">
             <ChecklistStatusIcon :status="item.status" />
             <span>{{ checklistItemTitle(t, item.key, item.label) }}</span>
           </button>
@@ -66,7 +66,7 @@
         <AppSegmentProgress :segments="checklistSegments(checklist.items)" :label="t('app.clinical.progress', checklist.summary)" />
         <ul class="patient-aside__studies">
           <li v-for="item in checklist.items" :key="item.key">
-            <button type="button" class="patient-aside__study" @click="$emit('open-study', item.key)">
+            <button type="button" class="patient-aside__study" @click="$emit('open-study', item.key, item.category)">
               <ChecklistStatusIcon :status="item.status" />
               <span>{{ checklistItemTitle(t, item.key, item.label) }}</span>
             </button>
@@ -134,7 +134,7 @@ import AppIcon from "../AppIcon.vue";
 import AppSegmentProgress from "../AppSegmentProgress.vue";
 import NoteComposer from "../NoteComposer.vue";
 import ChecklistStatusIcon from "../questionnaire/ChecklistStatusIcon.vue";
-import { checklistSegments, usePatientChecklist } from "../../composables/usePatientChecklist";
+import { checklistSegments, usePatientChecklist, type ChecklistCategory } from "../../composables/usePatientChecklist";
 import { useVisiblePolling } from "../../composables/useVisiblePolling";
 import { checklistItemTitle } from "../../config/questionnaires";
 import { apiFetch } from "../../composables/useApi";
@@ -164,7 +164,7 @@ const props = defineProps<{
 
 defineEmits<{
   "open-notes": [];
-  "open-study": [itemKey: string];
+  "open-study": [itemKey: string, category: ChecklistCategory];
   "open-tab": [tab: string];
   qr: [];
 }>();
