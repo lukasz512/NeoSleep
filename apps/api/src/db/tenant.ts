@@ -7,6 +7,46 @@ import { AppError, DatabaseError, ValidationError } from "../errors.js";
  * Slugs must be lowercase alphanumeric + underscores (e.g. "neosleep_pl").
  * This prevents search_path injection via a crafted Host header.
  */
+/**
+ * Is this a Postgres or connection failure? Only those become DatabaseError
+ * ("Database error: withTenant", 503). Anything else thrown inside a
+ * transaction — a rejected email, a bug in a command — keeps its own type,
+ * so it is neither shown nor logged as a broken database (NEO-202: 7 of 8
+ * "Database error: withTenant" toasts in two weeks weren't the database).
+ * pg errors carry a 5-character SQLSTATE `code`; socket errors an E… code.
+ */
+export function isPostgresError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const code = (err as { code?: unknown }).code;
+  if (typeof code === "string" && (/^[0-9A-Z]{5}$/.test(code) || /^E[A-Z]{3,}$/.test(code))) return true;
+  return isConnectionError(err);
+}
+
+/** The pool couldn't hand out a working connection (dropped, timed out, refused). */
+export function isConnectionError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  return /Connection terminated|timeout exceeded when trying to connect|connect ECONN|ECONNRESET|server closed the connection/i.test(err.message);
+}
+
+/**
+ * Takes a pool connection and opens the transaction, retrying once when the
+ * connection itself fails. Only this step is retried — never the caller's
+ * work, which may already have sent an email or written a file.
+ */
+async function connectAndBegin(): Promise<PoolClient> {
+  for (let attempt = 1; ; attempt++) {
+    let client: PoolClient | null = null;
+    try {
+      client = await getDb().connect();
+      await client.query("BEGIN");
+      return client;
+    } catch (err) {
+      client?.release(true);
+      if (attempt >= 2 || !isConnectionError(err)) throw new DatabaseError("connect", err);
+    }
+  }
+}
+
 function sanitizeSlug(slug: string): string {
   if (!/^[a-z0-9_][a-z0-9_]*$/.test(slug)) {
     throw new ValidationError(`Invalid tenant slug: "${slug}"`);
@@ -40,10 +80,9 @@ export async function withTenant<T>(
   fn: (client: PoolClient) => Promise<T>
 ): Promise<T> {
   const slug = sanitizeSlug(tenantSlug);
-  const client = await getDb().connect();
+  const client = await connectAndBegin();
 
   try {
-    await client.query("BEGIN");
     // SET LOCAL reverts when the transaction ends — no session-level contamination.
     // `extensions` (Supabase's convention for installed extensions — pgcrypto,
     // uuid-ossp, ltree) is appended last, after the tenant schema and public,
@@ -65,7 +104,7 @@ export async function withTenant<T>(
       rollbackFailed = true;
     }
     client.release(rollbackFailed);
-    if (err instanceof AppError) throw err;
+    if (err instanceof AppError || !isPostgresError(err)) throw err;
     throw new DatabaseError("withTenant", err);
   }
 }
@@ -86,9 +125,8 @@ export async function withTenant<T>(
  * documented there.
  */
 export async function withPlatform<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
-  const client = await getDb().connect();
+  const client = await connectAndBegin();
   try {
-    await client.query("BEGIN");
     const result = await fn(client);
     await client.query("COMMIT");
     client.release();
@@ -101,7 +139,7 @@ export async function withPlatform<T>(fn: (client: PoolClient) => Promise<T>): P
       rollbackFailed = true;
     }
     client.release(rollbackFailed);
-    if (err instanceof AppError) throw err;
+    if (err instanceof AppError || !isPostgresError(err)) throw err;
     throw new DatabaseError("withPlatform", err);
   }
 }

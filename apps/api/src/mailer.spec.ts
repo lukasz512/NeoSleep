@@ -131,6 +131,28 @@ describe("mailer — configured", () => {
     expect(call.html).not.toMatch(/\/q#|href="https?:\/\/[^"]*pwa/);
   });
 
+  it("a recipient Resend refuses becomes EMAIL_REJECTED (422), not a generic failure (NEO-202)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { sendQuestionnaireLinkEmail, EmailRejectedError } = await importMailer(true);
+    sendMock.mockResolvedValueOnce({ data: null, error: { name: "validation_error", message: "Invalid `to` field. Please use our testing email address instead of domains like `example.com`." } });
+
+    const err = await sendQuestionnaireLinkEmail("q@example.com", "https://x", RECIPIENT, { name: null, email: null }, 1).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(EmailRejectedError);
+    expect(err).toMatchObject({ code: "EMAIL_REJECTED", statusCode: 422 });
+  });
+
+  it("other Resend validation errors stay plain errors — the address isn't blamed for them", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { sendQuestionnaireLinkEmail, EmailRejectedError } = await importMailer(true);
+    sendMock.mockResolvedValueOnce({ data: null, error: { name: "validation_error", message: "Invalid `tags` value" } });
+
+    const err = await sendQuestionnaireLinkEmail("ok@neosleepcare.com", "https://x", RECIPIENT, { name: null, email: null }, 1).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    expect(err).not.toBeInstanceOf(EmailRejectedError);
+  });
+
   it("sendContactEmail sends to RESEND_NOTIFY_TO with the given subject and rows rendered in the HTML", async () => {
     const { sendContactEmail } = await importMailer(true);
 
@@ -176,13 +198,13 @@ describe("mailer — configured", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     sendMock.mockResolvedValue({
       data: null,
-      error: { name: "validation_error", message: "Invalid `to` field", statusCode: 422 },
+      error: { name: "rate_limit_exceeded", message: "Too many requests", statusCode: 429 },
     });
     const { sendPasswordResetEmail } = await importMailer(true);
 
     await expect(
       sendPasswordResetEmail("doctor@example.com", "https://pwa.neosleepcare.com/reset-password?token=abc", RECIPIENT)
-    ).rejects.toThrow(/Invalid `to` field/);
+    ).rejects.toThrow(/rate_limit_exceeded: Too many requests/);
 
     expect(errorSpy).toHaveBeenCalled();
     errorSpy.mockRestore();

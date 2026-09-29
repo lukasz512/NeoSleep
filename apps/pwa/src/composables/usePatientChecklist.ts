@@ -341,7 +341,10 @@ export function usePatientChecklist(patientId: () => string) {
     const body = { ...(options.items ? { items: options.items } : {}), ...(options.copyToMe ? { copy_to_me: true } : {}) };
     const res = await apiFetch(`/api/v1/patient/${patientId()}/questionnaire-requests/email`, { ...json(body), handleErrors: false });
     if (res.status === 422) {
-      notifications.show(t("app.clinical.email.noEmail"), "warning", undefined, { icon: "mail" });
+      // 422 is either "no email on the record" or "the mail server refused this address" (NEO-202).
+      const { code } = (await res.clone().json().catch(() => ({}))) as { code?: string };
+      const key = code === "EMAIL_REJECTED" ? "app.clinical.email.rejected" : "app.clinical.email.noEmail";
+      notifications.show(t(key), "warning", undefined, { icon: "mail" });
       return null;
     }
     if (!res.ok) {
