@@ -6,7 +6,11 @@ DirectoryIndex index.html
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
+  # alfredjan.com sits behind Cloudflare, which reaches this server over plain HTTP: redirect only when
+  # the visitor's own request was HTTP (X-Forwarded-Proto), or it loops (ERR_TOO_MANY_REDIRECTS, 2026-09-29)
   RewriteCond %{HTTPS} off
+  RewriteCond %{HTTP:X-Forwarded-Proto} !=https
+  RewriteCond %{HTTP:CF-Visitor} !https
   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
   RewriteCond %{REQUEST_FILENAME} -f [OR]
   RewriteCond %{REQUEST_FILENAME} -d
