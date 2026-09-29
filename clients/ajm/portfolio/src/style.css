@@ -93,6 +93,10 @@
    Four strokes (.mk--0…3), one per partner, so none looks stamped. Drawn by AccentText after the
    pen word is written (--draw). One sand colour; ink density comes from the mask's alpha. */
 .mk {
+  /* inline-block (round 8): the stroke is placed against the word's own box. As a plain inline the
+     box is the font's content area, which Safari and Chrome size differently once a line wraps, and
+     the stroke rode up over the word ("together", "execution", "people"). */
+  display: inline-block;
   position: relative;
   z-index: 0;
   white-space: nowrap;
@@ -137,7 +141,7 @@
   --mk-shape: var(--ajm-stroke-3);
   --mk-rot: -2.6deg;
   --mk-h: 0.5em;
-  --mk-b: 0;
+  --mk-b: 0em; /* with a unit: calc(0 - 0.16em) is invalid and the stroke jumped above the word */
   --mk-l: -0.18em;
   --mk-r: -0.12em;
 }

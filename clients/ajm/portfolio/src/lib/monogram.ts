@@ -1,13 +1,17 @@
 /**
- * The pinned AJ sketch (Łukasz, 2026-09-29): the page stops on the monogram for about two scroll
- * swipes, and that scroll draws it: construction lines → outline → pencil hatching → solid ink;
- * once it is inked the construction lines fade out, and only then does the page move on.
+ * The pinned AJ sketch (Łukasz, 2026-09-29): the page stops on the monogram and the scroll draws it:
+ * construction lines → outline → pencil hatching → solid ink; the construction lines then fade.
+ * The blueprint starts very large and closes in to its size while the outline is drawn, keeps
+ * shrinking gently, and ends in the lockup: the mark slides left and "Management" is written beside
+ * it. Only then does the page move on.
  */
 
 /** Extra scroll the page is held for, in screen heights. */
-export const MONO_PIN_SCREENS = 1.8;
+export const MONO_PIN_SCREENS = 2.4;
 
 const span = (p: number, a: number, b: number) => Math.min(1, Math.max(0, (p - a) / (b - a)));
+/** smootherstep: zero speed at both ends, so nothing starts or stops with a jolt */
+const smooth = (t: number) => t * t * t * (t * (t * 6 - 15) + 10);
 
 export interface MonoStages {
   guide: number;
@@ -15,22 +19,32 @@ export interface MonoStages {
   hatch: number;
   fill: number;
   guidesOut: number;
-  /** scale of the whole blueprint: very large at first, settling to 1 as the outline completes */
+  /** scale of the whole blueprint: very large at first, 1 when the outline is done, then smaller */
   zoom: number;
+  /** 0 → 1: the mark slides left to make room for the word */
+  shift: number;
+  /** 0 → 1: "Management" is revealed beside the mark */
+  word: number;
 }
 
-/** how large the blueprint starts (Łukasz, 2026-09-29: "first really big, then smaller as it draws") */
+/** how large the blueprint starts ("first really big, then smaller as it draws") */
 const ZOOM_FROM = 2.8;
+/** how small it ends, in the lockup ("it should shrink even more") */
+const ZOOM_TO = 0.5;
 
-/** Stage values (0…1) for the progress through the pinned stretch. */
+/** Stage values for the progress (0…1) through the pinned stretch. */
 export function monoStages(p: number): MonoStages {
   return {
-    guide: span(p, 0.02, 0.34),
-    draw: span(p, 0.3, 0.54),
-    hatch: span(p, 0.5, 0.66),
-    fill: span(p, 0.62, 0.78),
-    guidesOut: span(p, 0.8, 0.94),
-    // ease-out: it closes in quickly at first, then settles gently onto its size
-    zoom: 1 + (ZOOM_FROM - 1) * (1 - span(p, 0, 0.54)) ** 2,
+    guide: span(p, 0.02, 0.26),
+    draw: span(p, 0.22, 0.42),
+    hatch: span(p, 0.4, 0.52),
+    fill: span(p, 0.49, 0.6),
+    guidesOut: span(p, 0.6, 0.7),
+    zoom:
+      p < 0.42
+        ? 1 + (ZOOM_FROM - 1) * (1 - smooth(span(p, 0, 0.42)))
+        : 1 - (1 - ZOOM_TO) * smooth(span(p, 0.6, 0.95)),
+    shift: smooth(span(p, 0.7, 0.9)),
+    word: span(p, 0.8, 0.95),
   };
 }

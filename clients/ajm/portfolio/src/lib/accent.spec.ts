@@ -69,7 +69,8 @@ describe("accent › house rules in the copy", () => {
       expect(marked).not.toContain("[");
       // round 8 (Łukasz): the pen writes first ("Bringing", "partnership", "experiences") and the marker
       // closes the line ("global", "time", "people"); only Planeta keeps "~Creamos~ … [historias]"
-      if (c === "planeta") expect(title.indexOf("~")).toBeLessThan(title.indexOf("["));
+      // Planeta keeps the marker first; so does Universal in English ("Bringing ~global~ brands to [life]")
+      if (c === "planeta" || (c === "universal" && title.startsWith("Bringing"))) expect(title.indexOf("~")).toBeLessThan(title.indexOf("["));
       else expect(title.indexOf("[")).toBeLessThan(title.indexOf("~"));
     }
   });

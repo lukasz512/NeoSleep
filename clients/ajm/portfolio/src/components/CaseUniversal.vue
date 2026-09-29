@@ -58,7 +58,8 @@ const rooms = computed(() => (tm("universal.rooms") as unknown[]).map((r) => rt(
 const walk = ref<HTMLElement | null>(null);
 const entering = useScrollProgress(walk, "enter");
 const roomIndex = computed(() =>
-  Math.min(rooms.value.length - 1, Math.floor(span01(entering.value, 0.3, 0.95) * rooms.value.length)),
+  // round 8: the first room lights a little later, once the walk-through is well up the screen
+  Math.min(rooms.value.length - 1, Math.floor(span01(entering.value, 0.5, 1) * rooms.value.length)),
 );
 const SEGMENT = 6;
 
