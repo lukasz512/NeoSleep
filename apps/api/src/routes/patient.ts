@@ -24,6 +24,7 @@ import {
 } from "../commands/questionnaireRequest.js";
 import { AuditHealthDataReadCommand } from "../commands/healthDataReadAudit.js";
 import { resolveFrontendOrigin } from "../utils/frontendOrigin.js";
+import { GetPatientEmailSendsQuery } from "../queries/patientEmailSend.js";
 import { ValidationError } from "../errors.js";
 import { parsePaginationParams, toFilterArray, routeParam } from "./utils.js";
 
@@ -388,9 +389,9 @@ patientRouter.post(
     const origin = resolveFrontendOrigin(req);
     const result = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
-      return SendQuestionnaireEmailCommand(ctx, id, origin);
+      return SendQuestionnaireEmailCommand(ctx, id, origin, (req.body ?? {}) as { items?: unknown; copy_to_me?: unknown });
     });
-    res.status(201).json({ ...result.request, sent_to: result.sent_to });
+    res.status(201).json({ ...result.request, sent_to: result.sent_to, url: result.url });
   })
 );
 
@@ -407,6 +408,21 @@ patientRouter.get(
       return GetQuestionnaireRequestStatusQuery(ctx, id, requestId);
     });
     res.json(status);
+  })
+);
+
+/** Emails sent to this patient and what Resend reported about each (NEO-190). */
+patientRouter.get(
+  "/patient/:id/email-sends",
+  requireStudyRole,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = uuidParam(req, "id");
+    const slug = tenantSlugFromHost(req.hostname);
+    const sends = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return GetPatientEmailSendsQuery(ctx, id);
+    });
+    res.json(sends);
   })
 );
 

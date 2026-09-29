@@ -34,6 +34,18 @@
       :title="qrDialog.title"
       :url="qrDialog.url"
     />
+    <SendEmailDialog
+      v-model="emailDialog.open"
+      :items="emailableItems"
+      :open-keys="openEmailKeys"
+      :recipient="emailDialog.recipient"
+      :sends="emailDialog.sends"
+      :sending="emailing"
+      :last-url="emailDialog.lastUrl"
+      :item-title="itemTitle"
+      :format-date-time="formatDateTime"
+      @send="onEmailSend"
+    />
     <StudyUploadDialog
       v-model="uploadDialog.open"
       :items="items"
@@ -97,7 +109,7 @@
             :loading="emailing"
             :aria-label="t('app.clinical.email.send')"
             :title="t('app.clinical.email.send')"
-            @click="sendByEmail"
+            @click="openEmailDialog"
           >
             <AppIcon name="mail" />
           </AppButton>
@@ -307,6 +319,7 @@ import ClinicalQuestionnaireDialog from "../questionnaire/ClinicalQuestionnaireD
 import QuestionnaireQrDialog from "../questionnaire/QuestionnaireQrDialog.vue";
 import QrStatusButton from "../questionnaire/QrStatusButton.vue";
 import StudyUploadDialog from "../questionnaire/StudyUploadDialog.vue";
+import SendEmailDialog from "../questionnaire/SendEmailDialog.vue";
 import ChecklistStatusIcon from "../questionnaire/ChecklistStatusIcon.vue";
 import ChecklistResult from "../questionnaire/ChecklistResult.vue";
 import AppListItemMenu from "../AppListItemMenu.vue";
@@ -322,6 +335,7 @@ import {
   type ChecklistItem,
   type ChecklistRecord,
   type ChecklistGroup,
+  type EmailSend,
   checklistSegments,
   checklistEntries,
 } from "../../composables/usePatientChecklist";
@@ -686,12 +700,39 @@ watch(
   { immediate: true },
 );
 
-/** "Send by email": the same link as the bundle QR, emailed to the patient (all open questionnaires). */
+/**
+ * "Send by email" (NEO-192): a dialog where the doctor picks what the
+ * emailed link covers, sees the masked address and the send history with
+ * delivery status, and can copy the link right after sending.
+ */
 const emailing = ref(false);
-async function sendByEmail() {
+const emailDialog = reactive<{ open: boolean; recipient: string | null; sends: EmailSend[]; lastUrl: string | null }>({
+  open: false,
+  recipient: null,
+  sends: [],
+  lastUrl: null,
+});
+const emailableItems = computed(() => (checklist.value?.items ?? []).filter((item) => item.actions.qr));
+const openEmailKeys = computed(() =>
+  emailableItems.value.filter((item) => item.status === "missing" || item.status === "pending_patient").map((item) => item.key)
+);
+async function refreshEmailSends() {
+  const data = await checklistApi.loadEmailSends();
+  if (!data) return;
+  emailDialog.recipient = data.recipient;
+  emailDialog.sends = data.sends;
+}
+async function openEmailDialog() {
+  emailDialog.lastUrl = null;
+  emailDialog.open = true;
+  await refreshEmailSends();
+}
+async function onEmailSend({ items, copyToMe }: { items: string[]; copyToMe: boolean }) {
   emailing.value = true;
   try {
-    await checklistApi.sendByEmail();
+    const sent = await checklistApi.sendByEmail({ items, copyToMe });
+    if (sent) emailDialog.lastUrl = sent.url;
+    await refreshEmailSends();
   } finally {
     emailing.value = false;
   }

@@ -1,4 +1,4 @@
-import { Resend } from "resend";
+import { Resend, type WebhookEventPayload } from "resend";
 import {
   renderEmailLayout,
   escapeHtml,
@@ -8,7 +8,8 @@ import {
   emailT,
   type EmailAttachment,
 } from "@neo/email";
-import { RESEND_API_KEY, RESEND_FROM_EMAIL, RESEND_NOTIFY_TO, PARTNER_DOCS_CC_EMAIL } from "./env.js";
+import { maskEmail } from "./utils/maskEmail.js";
+import { RESEND_API_KEY, RESEND_FROM_EMAIL, RESEND_NOTIFY_TO, PARTNER_DOCS_CC_EMAIL, RESEND_WEBHOOK_SECRET } from "./env.js";
 
 /** Every personalized email needs at least these to build a proper "Hi {title} {name}," greeting,
  * and region to pick the right social links (see @neo/email's config/emailSocials.ts). */
@@ -55,7 +56,16 @@ interface SendEmailArgs {
   cc?: string | string[];
   /** Display name in From; defaults to "NeoSleep". Patient emails use "<clinic> | NeoSleep" (NEO-162). */
   fromName?: string;
+  /** Resend tags, echoed back in its webhooks — how routes/webhooks.ts finds the tenant and the send-log row (NEO-190). */
+  tags?: EmailTags;
 }
+
+/** Tags on patient emails: which tenant schema holds the send-log row, and what kind of email it was. */
+export interface EmailTags {
+  tenant: string;
+  kind: string;
+}
+
 
 /** RFC 5322 display name: CR/LF and angle brackets stripped (header injection), always quoted so commas/dots in a clinic name are safe. */
 function formatFrom(name: string, email: string): string {
@@ -93,11 +103,12 @@ async function sendEmail(logLabel: string, args: SendEmailArgs): Promise<string 
       attachments: args.attachments,
       ...(args.replyTo ? { replyTo: args.replyTo } : {}),
       ...(args.cc ? { cc: args.cc } : {}),
+      ...(args.tags ? { tags: [{ name: "tenant", value: args.tags.tenant }, { name: "kind", value: args.tags.kind }] } : {}),
     });
     if (error) {
       throw new Error(`${error.name}: ${error.message}`);
     }
-    console.log(`[mailer] Sent ${logLabel} to ${args.to}`);
+    console.log(`[mailer] Sent ${logLabel} to ${maskEmail(args.to)}${data?.id ? ` (${data.id})` : ""}`);
     return data?.id ?? null;
   } catch (err) {
     console.error(`[mailer] Failed to send ${logLabel}:`, err);
@@ -182,8 +193,10 @@ export async function sendQuestionnaireLinkEmail(
   link: string,
   recipient: EmailRecipient,
   clinic: { name: string | null; email: string | null },
-  count: number
-): Promise<boolean> {
+  count: number,
+  tags?: EmailTags,
+  validDays?: number
+): Promise<string | null> {
   const locale = recipient.language;
   const greetingName = formatGreetingName(recipient, to);
   const clinicName = clinic.name ?? emailT(locale, "email.questionnaireLink.yourClinic");
@@ -193,7 +206,7 @@ export async function sendQuestionnaireLinkEmail(
     <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.greeting", { name: greetingName }))}</p>
     <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, count === 1 ? "email.questionnaireLink.bodyOne" : "email.questionnaireLink.bodyMany", { clinic: clinicName, count: String(count) }))}</p>
     <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.questionnaireLink.howLong"))}</p>
-    <p style="margin:0 0 16px;font-size:13px;color:#7a827e;">${escapeHtml(emailT(locale, "email.questionnaireLink.expiry"))}</p>
+    <p style="margin:0 0 16px;font-size:13px;color:#7a827e;">${escapeHtml(validDays ? emailT(locale, "email.questionnaireLink.expiryDays", { days: String(validDays) }) : emailT(locale, "email.questionnaireLink.expiry"))}</p>
     <p style="margin:0;font-size:13px;color:#7a827e;">${escapeHtml(emailT(locale, "email.questionnaireLink.ignore"))}</p>`;
 
   const socials = getSocialsForRegion(recipient.region);
@@ -216,8 +229,9 @@ export async function sendQuestionnaireLinkEmail(
     attachments: getEmailAttachments(socials),
     ...(clinic.email ? { replyTo: clinic.email } : {}),
     fromName: clinicFromName(clinic.name),
+    ...(tags ? { tags } : {}),
   });
-  return id !== null;
+  return id;
 }
 
 export interface LeadOfferLinks {
@@ -395,8 +409,9 @@ export async function sendPatientSignedCopyEmail(
   recipient: EmailRecipient,
   clinic: { name: string | null; email: string | null },
   document: { filename: string; content: Buffer },
-  signedOn: string
-): Promise<boolean> {
+  signedOn: string,
+  tags?: EmailTags
+): Promise<string | null> {
   const locale = recipient.language;
   const greetingName = formatGreetingName(recipient, to);
   const clinicName = clinic.name ?? emailT(locale, "email.questionnaireLink.yourClinic");
@@ -424,8 +439,10 @@ export async function sendPatientSignedCopyEmail(
     html,
     attachments: [...getEmailAttachments(socials), { filename: document.filename, content: document.content }],
     ...(clinic.email ? { replyTo: clinic.email } : {}),
+    fromName: clinicFromName(clinic.name),
+    ...(tags ? { tags } : {}),
   });
-  return id !== null;
+  return id;
 }
 
 /** One signed document ready to attach — plain PDF bytes, not yet an EmailAttachment
@@ -481,5 +498,58 @@ export async function sendSignedDocumentsEmail(
     html,
     attachments: [...getEmailAttachments(socials), ...documents.map((d) => ({ filename: d.filename, content: d.content }))],
     ...(cc ? { cc } : {}),
+  });
+}
+
+export class ResendWebhookNotConfiguredError extends Error {}
+
+/**
+ * Checks a Resend webhook's signature (Svix / Standard Webhooks: svix-id,
+ * svix-timestamp, svix-signature over the raw body) and returns the parsed
+ * event. Throws on a bad or stale signature — the caller answers 400.
+ */
+export function verifyResendWebhook(
+  rawBody: string,
+  headers: { id: string; timestamp: string; signature: string },
+  secret: string | null = RESEND_WEBHOOK_SECRET ?? null
+): WebhookEventPayload {
+  if (!secret) throw new ResendWebhookNotConfiguredError("RESEND_WEBHOOK_SECRET is not set");
+  // verify() makes no API call, so any client works — even without RESEND_API_KEY.
+  const client = resend ?? new Resend("re_verify_only");
+  return client.webhooks.verify({ payload: rawBody, headers, webhookSecret: secret });
+}
+
+/**
+ * NEO-192 (D4): the doctor's own confirmation that an email went to a
+ * patient — short name, masked address, document count, time. It carries
+ * no link to the patient's documents, so the doctor's inbox never holds a
+ * way into the patient's forms.
+ */
+export async function sendEmailSentConfirmation(
+  to: string,
+  info: { patient: string; sentTo: string; count: number; clinic: string | null; language: string }
+): Promise<void> {
+  const locale = info.language;
+  const when = new Intl.DateTimeFormat(INTL_LOCALE[locale] ?? "en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date());
+  const bodyHtml = `
+    <h1 style="margin:0 0 16px;font-size:20px;font-weight:bold;color:#128F83;text-align:center;">${escapeHtml(emailT(locale, "email.sendConfirmation.title"))}</h1>
+    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.sendConfirmation.body", { patient: info.patient, email: info.sentTo, count: String(info.count), date: when }))}</p>
+    <p style="margin:0;font-size:13px;color:#7a827e;">${escapeHtml(emailT(locale, "email.sendConfirmation.noLink"))}</p>`;
+  const socials = getSocialsForRegion(null);
+  const html = renderEmailLayout({
+    preheader: emailT(locale, "email.sendConfirmation.title"),
+    bodyHtml,
+    footerTagline: emailT(locale, "email.footer.tagline"),
+    footerCities: emailT(locale, "email.footer.cities"),
+    footerCopyright: emailT(locale, "email.footer.copyright", { year: String(new Date().getFullYear()) }),
+    supportLeadIn: emailT(locale, "email.footer.support"),
+    socials,
+  });
+  await sendEmail("send confirmation email", {
+    to,
+    subject: emailT(locale, "email.sendConfirmation.subject", { patient: info.patient }),
+    html,
+    attachments: getEmailAttachments(socials),
+    fromName: clinicFromName(info.clinic),
   });
 }

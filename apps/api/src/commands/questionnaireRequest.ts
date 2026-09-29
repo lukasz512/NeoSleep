@@ -28,8 +28,10 @@ import { uploadPartnerDocument, deletePartnerDocument } from "../services/partne
 import { hashToken } from "../utils/hashToken.js";
 import { generateToken } from "../utils/generateToken.js";
 import { AppError, NotFoundError, ValidationError } from "../errors.js";
-import { sendQuestionnaireLinkEmail, sendPatientSignedCopyEmail } from "../mailer.js";
+import { sendQuestionnaireLinkEmail, sendPatientSignedCopyEmail, sendEmailSentConfirmation } from "../mailer.js";
 import { isPatientEmailHeldByAnother } from "../db/identityEmail.js";
+import { insertPatientEmailSend } from "../db/patientEmailSend.js";
+import { maskEmail } from "../utils/maskEmail.js";
 import { PRIVACY_NOTICE_URL } from "../env.js";
 import { validateMedicalHistory, validateStop } from "./clinicalRecordFields.js";
 
@@ -46,6 +48,8 @@ import { validateMedicalHistory, validateStop } from "./clinicalRecordFields.js"
  */
 
 export const QUESTIONNAIRE_LINK_TTL_MS = 24 * 60 * 60 * 1000;
+/** An emailed link lives longer: patients often read the email days later (NEO-162, D2). */
+export const QUESTIONNAIRE_EMAIL_LINK_TTL_DAYS = 7;
 /** Dead links are deleted this many days after they expire (purgeDeadQuestionnaireRequests). */
 export const QUESTIONNAIRE_LINK_RETENTION_DAYS = 30;
 
@@ -105,7 +109,8 @@ export async function CreateQuestionnaireRequestCommand(
   ctx: TenantContext,
   patientId: string,
   body: { items?: unknown; kind?: unknown },
-  frontendOrigin: string
+  frontendOrigin: string,
+  ttlMs: number = QUESTIONNAIRE_LINK_TTL_MS
 ): Promise<CreatedQuestionnaireRequest> {
   const checklist = await GetPatientChecklistQuery(ctx, patientId); // territory-checked
   const completable = checklist.items.filter((item) => item.actions.qr);
@@ -134,7 +139,7 @@ export async function CreateQuestionnaireRequestCommand(
     patient_id: patientId,
     items,
     token_hash: hashToken(token),
-    expires_at: new Date(Date.now() + QUESTIONNAIRE_LINK_TTL_MS),
+    expires_at: new Date(Date.now() + ttlMs),
     created_by: ctx.user.id,
   });
 
@@ -152,11 +157,7 @@ export async function CreateQuestionnaireRequestCommand(
   return { request, url: `${frontendOrigin}/q#${token}` };
 }
 
-/** "maria.lopez@example.mx" → "m***@example.mx" — enough for staff to recognise the address, nothing more in logs or toasts. */
-export function maskEmail(email: string): string {
-  const [local, domain] = email.split("@");
-  return domain ? `${local.slice(0, 1)}***@${domain}` : "***";
-}
+export { maskEmail };
 
 /** Email language from the patient's own settings: Polish, Mexican Spanish, else by region, else English. */
 function patientEmailLocale(language: string | null, region: string | null): string {
@@ -181,9 +182,17 @@ function patientEmailLocale(language: string | null, region: string | null): str
 export async function SendQuestionnaireEmailCommand(
   ctx: TenantContext,
   patientId: string,
-  frontendOrigin: string
-): Promise<{ request: CreatedQuestionnaireRequest["request"]; sent_to: string }> {
-  const created = await CreateQuestionnaireRequestCommand(ctx, patientId, {}, frontendOrigin); // territory-checked
+  frontendOrigin: string,
+  body: { items?: unknown; copy_to_me?: unknown } = {}
+): Promise<{ request: CreatedQuestionnaireRequest["request"]; sent_to: string; url: string }> {
+  // NEO-192: the doctor picks the items in the send dialog; none picked = everything still open.
+  const created = await CreateQuestionnaireRequestCommand(
+    ctx,
+    patientId,
+    Array.isArray(body.items) ? { items: body.items } : {},
+    frontendOrigin,
+    QUESTIONNAIRE_EMAIL_LINK_TTL_DAYS * 24 * 60 * 60 * 1000
+  ); // territory-checked
   const context = await getPatientPdfContext(ctx.client, patientId, ctx.user.id);
   if (!context) throw new NotFoundError("Patient", patientId);
   const email = context.patient_email?.trim();
@@ -200,11 +209,22 @@ export async function SendQuestionnaireEmailCommand(
       region: context.patient_region,
     },
     { name: context.organization_name, email: context.organization_email },
-    created.request.items.length
+    created.request.items.length,
+    { tenant: ctx.slug, kind: "questionnaire_link" },
+    QUESTIONNAIRE_EMAIL_LINK_TTL_DAYS
   );
   if (!sent) throw new QuestionnaireEmailUnavailableError();
 
   const sentTo = maskEmail(email);
+  // What Resend later reports about this email (delivered, bounced, spam) lands on this row — NEO-190.
+  await insertPatientEmailSend(ctx.client, {
+    patientId,
+    sentBy: ctx.user.id,
+    kind: "questionnaire_link",
+    questionnaireRequestId: created.request.id,
+    sentToMasked: sentTo,
+    providerMessageId: sent,
+  });
   await insertAuditLog(ctx.client, {
     user_id: ctx.user.id,
     action: "notify",
@@ -213,7 +233,24 @@ export async function SendQuestionnaireEmailCommand(
     entity_after: { patient_id: patientId, channel: "email", sent_to: sentTo, items: created.request.items.length },
     request_id: ctx.requestId,
   });
-  return { request: created.request, sent_to: sentTo };
+
+  // D4: the doctor's own confirmation — who, how many, when; never the patient's link.
+  if (body.copy_to_me === true && ctx.user.email) {
+    await sendEmailSentConfirmation(ctx.user.email, {
+      patient: shortPatientName(context.patient_first_name, context.patient_last_name),
+      sentTo,
+      count: created.request.items.length,
+      clinic: context.organization_name,
+      language: patientEmailLocale(context.patient_language, context.patient_region),
+    }).catch((err: unknown) => console.error("[questionnaireRequest] send confirmation email failed:", err));
+  }
+  return { request: created.request, sent_to: sentTo, url: created.url };
+}
+
+/** "Lucía C." — enough for the doctor to recognise the patient, no full name in an inbox. */
+function shortPatientName(first: string | null, last: string | null): string {
+  const initial = last?.trim().charAt(0);
+  return [first?.trim(), initial ? `${initial}.` : null].filter(Boolean).join(" ") || "—";
 }
 
 export async function CancelQuestionnaireRequestCommand(ctx: TenantContext, patientId: string, requestId: string): Promise<void> {
@@ -411,6 +448,8 @@ export interface PublicSubmissionMeta {
   ip: string | null;
   userAgent: string | null;
   requestId: string | null;
+  /** Tenant of the link — tags the signed-copy email so its delivery status finds its row (NEO-190). */
+  tenantSlug?: string;
 }
 
 export interface PublicStepResult {
@@ -651,11 +690,20 @@ async function emailSignedCopy(
       },
       { name: context.organization_name, email: context.organization_email },
       { filename: doc.filename, content: Buffer.from(doc.pdfBytes) },
-      formatFormDate(doc.signedAt, doc.locale)
+      formatFormDate(doc.signedAt, doc.locale),
+      meta.tenantSlug ? { tenant: meta.tenantSlug, kind: "signed_copy" } : undefined
     );
     if (!sent) return false;
-    await run((client) =>
-      insertAuditLog(client, {
+    await run(async (client) => {
+      await insertPatientEmailSend(client, {
+        patientId: prepared.patientId,
+        sentBy: null,
+        kind: "signed_copy",
+        questionnaireRequestId: prepared.requestId,
+        sentToMasked: maskEmail(address),
+        providerMessageId: sent,
+      });
+      await insertAuditLog(client, {
         user_id: null,
         action: "notify",
         entity_type: "QuestionnaireRequest",
@@ -666,8 +714,8 @@ async function emailSignedCopy(
         user_agent: meta.userAgent,
         request_id: meta.requestId,
         metadata: { actor: "patient", purpose: "signed_copy" },
-      })
-    );
+      });
+    });
     return true;
   } catch (err) {
     console.error("[questionnaireRequest] signed copy email failed:", err);
