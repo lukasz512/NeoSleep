@@ -21,9 +21,9 @@ export interface MonoStages {
   guidesOut: number;
   /** scale of the whole blueprint: very large at first, 1 when the outline is done, then smaller */
   zoom: number;
-  /** 0 → 1: the mark slides left to make room for the word */
+  /** 0 → 1: the mark moves to its place in the lockup */
   shift: number;
-  /** 0 → 1: "Management" is revealed beside the mark */
+  /** 0 → 1 (eased): the rest of the lockup, ALFRED · JAN · Management, is written out around the mark */
   word: number;
 }
 
@@ -45,6 +45,6 @@ export function monoStages(p: number): MonoStages {
         ? 1 + (ZOOM_FROM - 1) * (1 - smooth(span(p, 0, 0.42)))
         : 1 - (1 - ZOOM_TO) * smooth(span(p, 0.6, 0.95)),
     shift: smooth(span(p, 0.7, 0.9)),
-    word: span(p, 0.8, 0.95),
+    word: smooth(span(p, 0.76, 0.96)),
   };
 }
