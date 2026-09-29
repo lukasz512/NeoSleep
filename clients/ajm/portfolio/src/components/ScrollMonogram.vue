@@ -28,12 +28,10 @@
           <line x1="0" y1="0" x2="0" y2="7" class="mono__hatchline" />
         </pattern>
       </defs>
-      <!-- construction, as in a notebook page: a circle, its square and the diagonals -->
+      <!-- construction, as in a Leonardo notebook: the letters inscribed in a circle with its square,
+           and every line the letters are built on carried on past them (GUIDES below) -->
       <g class="mono__guides" filter="url(#ajm-pencil)">
-        <circle pathLength="1" cx="760" cy="363" r="176" />
-        <rect pathLength="1" x="584" y="187" width="352" height="352" />
-        <line pathLength="1" x1="584" y1="187" x2="936" y2="539" />
-        <line pathLength="1" x1="936" y1="187" x2="584" y2="539" />
+        <path v-for="(d, i) in GUIDES" :key="i" pathLength="1" :d="d" :style="{ '--i': i }" />
       </g>
       <g filter="url(#ajm-pencil)">
         <path class="mono__hatch" :d="A" :transform="TA" />
@@ -57,12 +55,50 @@ const J =
 const TA = "matrix(1.3333333,0,0,-1.3333333,803.61933,219.06013)";
 const TJ = "matrix(1.3333333,0,0,-1.3333333,894.54733,294.25667)";
 
+/**
+ * The sketch's construction, in the viewBox's units. Key points of the letters (from A/J above):
+ * A apex 774.6,219.1 · A foot 626,431.8 · A inner foot 652.2,431.8 / inner top 778.6,247.7 ·
+ * A stem x 782.3–803.6 · baseline y 431.8 · J top bar y 294.3 (x 823.8–894.5) · J bowl ≈ 838.6,440.
+ * The circle holds the letters (centre 760,363, r 200); its inscribed square is their bounding box.
+ */
+const C = { x: 760, y: 363, r: 200 };
+const SQ = C.r / Math.SQRT2;
+const line = (x1: number, y1: number, x2: number, y2: number) => `M ${x1} ${y1} L ${x2} ${y2}`;
+const circle = (cx: number, cy: number, r: number) =>
+  `M ${cx - r} ${cy} a ${r} ${r} 0 1 0 ${2 * r} 0 a ${r} ${r} 0 1 0 ${-2 * r} 0`;
+/** extend the segment p→q by `a` of its length before p and `b` after q */
+const ext = (px: number, py: number, qx: number, qy: number, a: number, b: number) =>
+  line(px - (qx - px) * a, py - (qy - py) * a, qx + (qx - px) * b, qy + (qy - py) * b);
+const GUIDES = [
+  circle(C.x, C.y, C.r),
+  `M ${C.x - SQ} ${C.y - SQ} h ${2 * SQ} v ${2 * SQ} h ${-2 * SQ} Z`,
+  line(C.x - SQ, C.y - SQ, C.x + SQ, C.y + SQ),
+  line(C.x + SQ, C.y - SQ, C.x - SQ, C.y + SQ),
+  line(C.x, C.y - C.r - 14, C.x, C.y + C.r + 14),
+  line(C.x - C.r - 14, C.y, C.x + C.r + 14, C.y),
+  // the A: both diagonals carried past the apex and the foot
+  ext(626, 431.8, 774.6, 219.1, 0.45, 0.38),
+  ext(652.2, 431.8, 778.6, 247.7, 0.5, 0.55),
+  // stems and bars as long pencil rules
+  line(803.6, 150, 803.6, 578),
+  line(782.3, 170, 782.3, 560),
+  line(894.5, 170, 894.5, 560),
+  line(548, 219.1, 972, 219.1),
+  line(560, 294.3, 960, 294.3),
+  line(548, 431.8, 972, 431.8),
+  // the J's bowl, compassed
+  circle(838.6, 440, 56),
+  circle(838.6, 440, 35),
+  // a compass arc from the A's foot through its apex
+  "M 626 172.2 A 259.6 259.6 0 0 1 885.6 431.8",
+];
+
 const root = ref<HTMLElement | null>(null);
 const lite = typeof document !== "undefined" && document.documentElement.classList.contains("lite");
 const entering = useScrollProgress(root, "enter");
 // scroll stages while the mark rises from the bottom of the screen to just above its middle
 const stage = (a: number, b: number) => computed(() => (lite ? "1" : span01(entering.value, a, b).toFixed(3)));
-const guide = stage(0.05, 0.35);
+const guide = stage(0.02, 0.45);
 const draw = stage(0.2, 0.5);
 const hatch = stage(0.45, 0.65);
 const fill = stage(0.62, 0.8);
@@ -106,7 +142,7 @@ onBeforeUnmount(() => {
   overflow: visible;
   transform: translate3d(var(--mx, 0), var(--my, 0), 0);
 }
-/* pencil construction lines, faint, drawn first */
+/* pencil construction lines, faint, drawn first and one after another */
 .mono__guides > * {
   fill: none;
   stroke: var(--ajm-muted);
@@ -114,7 +150,7 @@ onBeforeUnmount(() => {
   stroke-opacity: 0.45;
   vector-effect: non-scaling-stroke;
   stroke-dasharray: 1;
-  stroke-dashoffset: calc(1 - var(--guide, 1));
+  stroke-dashoffset: calc(1 - clamp(0, var(--guide, 1) * 2.2 - var(--i) * 0.07, 1));
 }
 /* the outline, in pencil, darkening to ink as it is coloured in */
 .mono__ink {
