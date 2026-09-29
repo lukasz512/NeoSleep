@@ -1096,7 +1096,7 @@
   "app.clinical.bang.unitKg": "kg",
   "app.clinical.bang.male": "Mężczyzna?",
   "app.clinical.bang.fromRecord": "Z karty pacjenta",
-  "app.clinical.bang.rangeBmi": "Sprawdź wzrost (100–230 cm) i wagę (25–350 kg).",
+  "app.clinical.bang.rangeBmi": "Sprawdź wzrost (100–230 cm) i wagę (25–350 kg) — razem muszą dać BMI 5–99,9.",
   "app.clinical.bang.bothNeeded": "Podaj wzrost i wagę, żeby obliczyć BMI.",
   "app.clinical.bang.rangeNeck": "Obwód szyi musi mieścić się między 20 a 70 cm.",
   "app.clinical.patientStamp": "Wypełnione przez pacjenta przez osobisty link · {date}",

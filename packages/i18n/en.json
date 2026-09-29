@@ -1177,7 +1177,7 @@
   "app.clinical.bang.unitKg": "kg",
   "app.clinical.bang.male": "Male?",
   "app.clinical.bang.fromRecord": "From the patient record",
-  "app.clinical.bang.rangeBmi": "Check height (100–230 cm) and weight (25–350 kg).",
+  "app.clinical.bang.rangeBmi": "Check height (100–230 cm) and weight (25–350 kg) — together they must give a BMI of 5–99.9.",
   "app.clinical.bang.bothNeeded": "Enter both height and weight to work out the BMI.",
   "app.clinical.bang.rangeNeck": "The neck must be between 20 and 70 cm.",
   "app.clinical.patientStamp": "Answered by the patient via their personal link · {date}",

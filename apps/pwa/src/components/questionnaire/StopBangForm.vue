@@ -104,7 +104,7 @@ import { intlLocale } from "@i18n/language-options";
 import AppIcon from "../AppIcon.vue";
 import StopBangScoreGauge from "./StopBangScoreGauge.vue";
 import YesNoToggle from "./YesNoToggle.vue";
-import { STOP_QUESTIONS, BANG_QUESTIONS, parseStopBangMeasure, type StopBangMeasureKey } from "../../config/questionnaires";
+import { STOP_QUESTIONS, BANG_QUESTIONS, parseStopBangMeasure, stopBangBmi, stopBangBmiInRange, type StopBangMeasureKey } from "../../config/questionnaires";
 import { STOP_BANG_ICONS, STOP_BANG_LETTERS } from "./stopBangIcons";
 import { ageFromDateOfBirth } from "../../utils/patientDemographics";
 import type { ChecklistRecord } from "../../composables/usePatientChecklist";
@@ -150,7 +150,13 @@ const bmi = computed(() => {
   if (readonly.value) return props.record?.bmi != null ? Number(props.record.bmi) : null;
   const { height, weight } = bmiInput.value;
   if (typeof height !== "number" || typeof weight !== "number") return null;
-  return Math.round((weight / (height / 100) ** 2) * 10) / 10;
+  const value = stopBangBmi(height, weight);
+  // An implausible BMI (e.g. 100 cm + 100 kg = 100) never decides B — the range message below asks to fix it.
+  return stopBangBmiInRange(value) ? value : null;
+});
+const bmiImplausible = computed(() => {
+  const { height, weight } = bmiInput.value;
+  return typeof height === "number" && typeof weight === "number" && !stopBangBmiInRange(stopBangBmi(height, weight));
 });
 const neck = computed(() => {
   const value = parseMeasure("neck_cm");
@@ -160,7 +166,7 @@ const measureError = computed(() => {
   const { height, weight } = bmiInput.value;
   return {
     bmi:
-      height === "invalid" || weight === "invalid"
+      height === "invalid" || weight === "invalid" || bmiImplausible.value
         ? t("app.clinical.bang.rangeBmi")
         : (height === null) !== (weight === null)
           ? t("app.clinical.bang.bothNeeded")

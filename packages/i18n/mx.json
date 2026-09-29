@@ -1096,7 +1096,7 @@
   "app.clinical.bang.unitKg": "kg",
   "app.clinical.bang.male": "¿Es hombre?",
   "app.clinical.bang.fromRecord": "De la ficha del paciente",
-  "app.clinical.bang.rangeBmi": "Revisa la talla (100–230 cm) y el peso (25–350 kg).",
+  "app.clinical.bang.rangeBmi": "Revisa la talla (100–230 cm) y el peso (25–350 kg): juntos deben dar un IMC de 5 a 99.9.",
   "app.clinical.bang.bothNeeded": "Escribe talla y peso para calcular el IMC.",
   "app.clinical.bang.rangeNeck": "El cuello debe estar entre 20 y 70 cm.",
   "app.clinical.patientStamp": "Respondido por el paciente vía enlace personal · {date}",

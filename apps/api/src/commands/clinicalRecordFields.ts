@@ -147,6 +147,7 @@ const MEASUREMENT_RANGES = {
   weight_kg: [25, 350],
   neck_cm: [20, 70],
 } as const;
+const BMI_RANGE = [5, 99.9] as const;
 
 function optionalMeasurement(input: Record<string, unknown>, key: keyof typeof MEASUREMENT_RANGES): number | null {
   const value = input[key];
@@ -176,6 +177,10 @@ export function validateBangWithMeasurements(
   if ((height === null) !== (weight === null)) throw new ValidationError("height_cm and weight_kg must be given together");
   const neck = optionalMeasurement(input, "neck_cm");
   const bmi = height !== null && weight !== null ? Math.round((weight / (height / 100) ** 2) * 10) / 10 : null;
+  // Each value can be in range while the pair is not (100 cm + 100 kg = BMI 100): migration 034's bmi NUMERIC(3,1) CHECK is 5-99.9.
+  if (bmi !== null && (bmi < BMI_RANGE[0] || bmi > BMI_RANGE[1])) {
+    throw new ValidationError(`height_cm and weight_kg must give a BMI between ${BMI_RANGE[0]} and ${BMI_RANGE[1]}`);
+  }
 
   const derived: Record<string, unknown> = { ...input };
   if (bmi !== null) derived.bmi_over_35 = bmi > 35;
