@@ -2,6 +2,7 @@ packages:
   - "apps/*"
   - "apps/api/client"
   - "packages/*"
+  - "clients/*/*"
 
 # Shared versions across workspaces — one update bumps the version everywhere.
 catalog:

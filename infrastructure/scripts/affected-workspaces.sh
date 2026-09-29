@@ -10,4 +10,4 @@ set -euo pipefail
 # changed" case) — under pipefail that would kill this whole script, so its
 # failure is swallowed here; sort still runs (on empty input) and this
 # script itself always exits 0.
-sed -E 's#^(apps/[^/]+|packages/[^/]+)/.*#\1#' | { grep -E '^(apps|packages)/' || true; } | sort -u
+sed -E 's#^(apps/[^/]+|packages/[^/]+|clients/[^/]+/[^/]+)/.*#\1#' | { grep -E '^(apps|packages|clients)/' || true; } | sort -u

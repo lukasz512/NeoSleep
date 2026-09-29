@@ -1,0 +1,50 @@
+/**
+ * Grupo Planeta events and their photos, as listed by Łukasz on 2026-09-28.
+ * Event names are proper nouns (book titles) and stay in Spanish in both locales;
+ * the descriptive copy lives in locales/*.json under planeta.events.<id>.
+ *
+ * `large` marks photos whose original is ≥1600 px (encode-media.sh made a 1280 px variant);
+ * only those may be shown full-bleed. The rest are WhatsApp-sized and shown small.
+ */
+export interface PlanetaEvent {
+  id: string;
+  title: string;
+  year?: number;
+  photos: string[];
+}
+
+export const PLANETA_EVENTS: PlanetaEvent[] = [
+  { id: "bordes", title: "Colección Bordes", year: 2024, photos: ["planeta11", "planeta4", "planeta2", "planeta12"] },
+  { id: "novedades2025", title: "Novedades Grupo Planeta", year: 2025, photos: ["planeta5", "planeta10", "planeta23"] },
+  {
+    id: "novedades2024",
+    title: "Novedades Grupo Planeta",
+    year: 2024,
+    photos: ["planeta15", "planeta13", "planeta14", "planeta1", "planeta3", "planeta8", "planeta9"],
+  },
+  // round 8 (Łukasz, 2026-09-29): undated launches are 2023
+  { id: "cronicas", title: "Crónicas de la capital", year: 2023, photos: ["planeta00", "planeta7"] },
+  { id: "algundia", title: "Algún día, hoy", year: 2019, photos: ["planeta22"] },
+  { id: "duelo", title: "Duelo de historias", year: 2023, photos: ["planeta20", "planeta21", "planeta18", "planeta17"] },
+  // E2 (2026-09-28): a Grupo Planeta book launch held at Pizzería Vesubio; title to come; 2023 (round 8).
+  { id: "vesubio", title: "Pizzería Vesubio", year: 2023, photos: ["planeta24", "planeta25"] },
+];
+
+/** Shown on the page: events with at least 2 photos ("Algún día, hoy" has one so far). */
+export const PLANETA_VISIBLE = PLANETA_EVENTS.filter((e) => e.photos.length >= 2);
+
+export const LARGE_PHOTOS = new Set([
+  "planeta13",
+  "planeta14",
+  "planeta15",
+  "planeta17",
+  "planeta18",
+  "planeta20",
+  "planeta21",
+  "planeta22",
+]);
+
+/** Best source width for a photo: 1280 only when the original can carry it. */
+export function photoBase(id: string, wantLarge: boolean): string {
+  return `planeta/${id}-${wantLarge && LARGE_PHOTOS.has(id) ? 1280 : 640}`;
+}

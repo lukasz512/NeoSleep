@@ -79,5 +79,22 @@ export default [
       "neo/no-silent-catch": "error",
     },
   },
+  {
+    // CORE-47 (D2): client sites under clients/<key>/* stay separate from neoCRM —
+    // no shared UI, brand, copy, stores or API client. They share only the toolchain.
+    files: ["clients/**/*.{ts,vue}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            { group: ["@neo/*", "@ui", "@ui/*", "@brand", "@brand/*", "@i18n", "@i18n/*", "@stores", "@stores/*", "@api", "@vuetify"], message: "Client sites must not import neoCRM code (CORE-47 D2)." },
+            { group: ["**/apps/**", "**/packages/**"], message: "Client sites must not reach into neoCRM apps/packages (CORE-47 D2)." },
+          ],
+        },
+      ],
+      "vue/multi-word-component-names": "off",
+    },
+  },
   eslintConfigPrettier,
 ];

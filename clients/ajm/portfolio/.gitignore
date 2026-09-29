@@ -1,0 +1,7 @@
+dist
+node_modules
+dist-preview
+# public/media (encoded web media, ~17 MB) IS committed (G1, 2026-09-28) so the GoDaddy deploy
+# is self-contained. The originals stay out of git, in ~/Documents/Private/AJM-materials.
+dist-godaddy
+ajm-corporativo.zip

@@ -1,0 +1,332 @@
+/* AJM visual rules (client proposal): warm white + charcoal, large type, lots of space,
+   photography leads, subtle motion, no gradients.
+   Two kinds of colour tokens:
+   - page tokens (paper, ink, muted, line, ink-soft, faint) swap with the light/dark theme;
+   - stage tokens (stage, on-stage) stay dark/light in both themes, for text over footage. */
+:root {
+  --ajm-paper: #f4f1ea;
+  --ajm-ink: #1d1c1a;
+  --ajm-muted: #7c776d;
+  --ajm-line: #d9d4c8;
+  --ajm-ink-soft: #2a2825;
+  --ajm-faint: #cfc9bd;
+  --ajm-caps: #1d1c1a;
+  --ajm-stage: #1d1c1a;
+  --ajm-on-stage: #f4f1ea;
+  /* the one accent: sand, used once per partner on its key phrase (T2, 2026-09-28) */
+  --ajm-sand: #d4ad84;
+  /* the lockup's light grey ("Management" in logo alfred fondo blanco.ai) */
+  --ajm-lockup-grey: #a4a4a4;
+  --ajm-gutter: clamp(16px, 5vw, 72px);
+  --ajm-ease: cubic-bezier(0.7, 0, 0.2, 1);
+  --ajm-font: "Montserrat Variable", "Montserrat", "Helvetica Neue", Arial, system-ui, sans-serif;
+  --ajm-display: "Bodoni Moda", Didot, "Bodoni 72", Georgia, serif;
+  --ajm-script: "Mrs Saint Delafield", "Snell Roundhand", cursive;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --ajm-paper: #141311;
+  --ajm-ink: #efe9de;
+  --ajm-muted: #9a938a;
+  --ajm-line: #2f2c28;
+  --ajm-ink-soft: #d6cfc3;
+  --ajm-faint: #4a4640;
+  --ajm-caps: #0b0a09;
+  --ajm-sand: #b8905f;
+  --ajm-lockup-grey: #8a8580;
+  color-scheme: dark;
+}
+
+/* Theme change (lib/theme.ts): the new theme opens as a circle from the switch, over the old one.
+   Browsers without view transitions get a short crossfade of the page colours instead. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-new(root) {
+  clip-path: circle(0 at var(--ajm-tx, 100%) var(--ajm-ty, 0));
+  animation: ajm-reveal 1.1s cubic-bezier(0.76, 0, 0.24, 1) forwards;
+}
+@keyframes ajm-reveal {
+  to {
+    clip-path: circle(var(--ajm-tr, 150vmax) at var(--ajm-tx, 100%) var(--ajm-ty, 0));
+  }
+}
+.theme-fade,
+.theme-fade * {
+  transition:
+    background-color 0.6s ease,
+    color 0.6s ease,
+    border-color 0.6s ease !important;
+}
+
+/* Figures (300, 360°, years) in Bodoni italic. */
+.fig {
+  font-family: var(--ajm-display);
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+/* The one accent word per headline, written as if by pen (Łukasz, 2026-09-28: "like a pen").
+   Round 8: a finer copperplate hand (Mrs Saint Delafield) in its own natural slant, no extra skew.
+   AccentText sets --write from scroll, so the word writes itself left to right as the heading
+   comes up the screen. The clip reaches past the box so swashes aren't cut. */
+.acc {
+  font-family: var(--ajm-script);
+  font-weight: 400;
+  font-style: normal;
+  /* bigger than the face and allowed to run into the letters either side (negative margins, drawn
+     above them), like a signature across a printed line */
+  display: inline-block;
+  position: relative;
+  z-index: 1;
+  font-size: 1.95em;
+  line-height: 0.55;
+  letter-spacing: 0;
+  padding: 0 0.06em;
+  margin: 0 0.02em 0 -0.1em;
+  /* sits a touch lower on the line, so it scales with the heading more naturally (round 8) */
+  top: 0.05em;
+  /* the pen moves left to right; at rest the clip sits well outside the glyphs, so the script's
+     tall loops and end swashes are never cut (round 7: "always fully visible") */
+  clip-path: inset(-1.2em calc((1 - var(--write, 1)) * (100% + 0.6em) - 0.6em) -1.2em -0.6em);
+}
+/* The partner's key phrase: one pass of a chisel-tip marker, laid at a slant under the words.
+   Four strokes (.mk--0…3), one per partner, so none looks stamped. Drawn by AccentText after the
+   pen word is written (--draw). One sand colour; ink density comes from the mask's alpha. */
+.mk {
+  /* inline-block (round 8): the stroke is placed against the word's own box. As a plain inline the
+     box is the font's content area, which Safari and Chrome size differently once a line wraps, and
+     the stroke rode up over the word ("together", "execution", "people"). */
+  display: inline-block;
+  position: relative;
+  z-index: 0;
+  white-space: nowrap;
+  --mk-shape: var(--ajm-stroke-0);
+  --mk-rot: -2deg;
+  --mk-h: 0.46em;
+  --mk-b: 0.02em;
+  --mk-l: -0.14em;
+  --mk-r: -0.2em;
+}
+.mk::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: var(--mk-l);
+  right: var(--mk-r);
+  /* round 8: a little lower, under the letters rather than through them */
+  bottom: calc(var(--mk-b) - 0.16em);
+  height: var(--mk-h);
+  background: var(--ajm-sand);
+  -webkit-mask: var(--mk-shape) 0 0 / 100% 100% no-repeat;
+  mask: var(--mk-shape) 0 0 / 100% 100% no-repeat;
+  transform: rotate(var(--mk-rot));
+  transform-origin: 0 50%;
+  clip-path: inset(-20% calc((1 - var(--draw, 1)) * 100%) -20% 0);
+}
+.mk--1 {
+  --mk-shape: var(--ajm-stroke-1);
+  --mk-rot: -3.2deg;
+  --mk-h: 0.4em;
+  --mk-b: 0.08em;
+  --mk-r: -0.3em;
+}
+.mk--2 {
+  --mk-shape: var(--ajm-stroke-2);
+  --mk-rot: -1.1deg;
+  --mk-h: 0.54em;
+  --mk-b: -0.03em;
+  --mk-l: -0.1em;
+}
+.mk--3 {
+  --mk-shape: var(--ajm-stroke-3);
+  --mk-rot: -2.6deg;
+  --mk-h: 0.5em;
+  --mk-b: 0em; /* with a unit: calc(0 - 0.16em) is invalid and the stroke jumped above the word */
+  --mk-l: -0.18em;
+  --mk-r: -0.12em;
+}
+:root {
+  --ajm-stroke-0: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 24' preserveAspectRatio='none'%3E%3Cpath d='M3 21 L12 5 C50 4.2 100 3.4 150 3 C170 2.8 186 2.6 197 2.4 L189 18.2 C150 18.6 100 19.4 55 20.2 C35 20.6 18 20.9 3 21Z' fill-opacity='.82'/%3E%3Cpath d='M3 21 L12 5 L19 4.9 L10 20.9Z'/%3E%3Cpath d='M197 2.4 L189 18.2 L184 18.3 L191.5 2.5Z'/%3E%3Cpath d='M14 9 C70 8 130 7 190 6' fill='none' stroke='black' stroke-opacity='.35' stroke-width='.8'/%3E%3Cpath d='M9 16 C80 15.5 140 14 186 13.6' fill='none' stroke='black' stroke-opacity='.35' stroke-width='.8'/%3E%3C/svg%3E");
+  --ajm-stroke-1: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 24' preserveAspectRatio='none'%3E%3Cpath d='M2 22 L10 6.5 C60 5 110 4.6 160 3.8 C176 3.4 188 2.4 198 1 L193 12 C180 14 165 15.2 150 15.8 C100 17.4 55 19.4 2 22Z' fill-opacity='.82'/%3E%3Cpath d='M2 22 L10 6.5 L17 6.3 L9 21.7Z'/%3E%3Cpath d='M12 11 C80 9.6 140 8.4 192 5.2' fill='none' stroke='black' stroke-opacity='.35' stroke-width='.8'/%3E%3Cpath d='M8 17.5 C60 16.6 120 15 170 13.4' fill='none' stroke='black' stroke-opacity='.35' stroke-width='.8'/%3E%3C/svg%3E");
+  --ajm-stroke-2: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 24' preserveAspectRatio='none'%3E%3Cpath d='M4 23 L11 3 C45 4.5 80 2 120 3.2 C150 4 175 2.2 196 2.8 L191 20.5 C160 19.2 130 21.4 95 20.6 C60 19.8 30 22 4 23Z' fill-opacity='.82'/%3E%3Cpath d='M4 23 L11 3 L18 3.2 L11 22.8Z'/%3E%3Cpath d='M196 2.8 L191 20.5 L185 20.4 L190 2.9Z'/%3E%3Cpath d='M13 8 C60 9 120 7.6 192 7.2' fill='none' stroke='black' stroke-opacity='.35' stroke-width='.8'/%3E%3Cpath d='M9 13 C70 13.6 130 12.4 190 12.2' fill='none' stroke='black' stroke-opacity='.35' stroke-width='.8'/%3E%3Cpath d='M7 19 C60 18.6 120 18.4 188 17.2' fill='none' stroke='black' stroke-opacity='.35' stroke-width='.8'/%3E%3C/svg%3E");
+  --ajm-stroke-3: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 24' preserveAspectRatio='none'%3E%3Cpath d='M3 18 L10 4.5 C60 3.8 120 3.2 196 2.6 L190 15 C130 15.6 70 16.4 3 18Z' fill-opacity='.82'/%3E%3Cpath d='M40 22.5 L45 11 C90 10.4 140 9.8 194 9.2 L189 20 C140 20.6 90 21.4 40 22.5Z'/%3E%3Cpath d='M3 18 L10 4.5 L16 4.5 L9 18Z'/%3E%3Cpath d='M12 9 C80 8.2 140 7.4 192 6.8' fill='none' stroke='black' stroke-opacity='.35' stroke-width='.8'/%3E%3C/svg%3E");
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+/* nothing may scroll the page sideways on a phone (round 8): swashes, markers and parallax photos
+   overhang their boxes on purpose. clip (not hidden) keeps position: sticky working. */
+html,
+body {
+  overflow-x: clip;
+}
+
+body {
+  margin: 0;
+  background: var(--ajm-paper);
+  color: var(--ajm-ink);
+  font: 400 17px/1.55 var(--ajm-font);
+  -webkit-font-smoothing: antialiased;
+}
+
+img,
+video {
+  display: block;
+  max-width: 100%;
+}
+
+a {
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
+.eyebrow {
+  font: 500 12px/1.2 var(--ajm-font);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ajm-muted);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Text mask rise: every line sits in an overflow-hidden span and slides up once visible. */
+.mask-line {
+  display: block;
+  overflow: hidden;
+  /* room inside the mask for descenders and for the script word's tall loops and swashes, which
+     reach far above, below and past the line (round 7: they were being cut) */
+  /* round 8: the finer script's descenders (p, f, g) reach a full line below the baseline */
+  padding: 1.2em 0.5em 1.1em;
+  margin: -1.2em -0.5em -1.1em;
+}
+/* The masks overhang their lines (negative margins) and must not change the line spacing. In normal
+   flow the bottom margin of one line and the top margin of the next collapse into one, which pushed
+   the lines apart once the overhang grew (round 8: "why is the first line so high?"). As flex items
+   they don't collapse, so each heading keeps its own line height plus a small, even gap. */
+:where(h1, h2, h3, h4):has(> .mask-line) {
+  display: flex;
+  flex-direction: column;
+  row-gap: 0.08em;
+}
+.mask-line > span {
+  display: block;
+  /* fully below the (padded) mask, not peeking into its bottom padding */
+  transform: translateY(calc(100% + 2em));
+  transition: transform 0.9s var(--ajm-ease);
+}
+.is-in .mask-line > span {
+  transform: none;
+}
+.is-in .mask-line:nth-child(2) > span {
+  transition-delay: 0.08s;
+}
+
+/* v-reveal (lib/motion.ts): hidden until the element enters the viewport, then .rv-in */
+.rv {
+  transition:
+    opacity 0.9s ease var(--rv-delay, 0s),
+    transform 1.1s var(--ajm-ease) var(--rv-delay, 0s),
+    clip-path 1.2s var(--ajm-ease) var(--rv-delay, 0s);
+}
+.rv[data-rv="up"] {
+  opacity: 0;
+  transform: translate3d(0, 32px, 0);
+}
+.rv[data-rv="fade"] {
+  opacity: 0;
+}
+.rv[data-rv="wipe"] {
+  clip-path: inset(100% 0 0 0);
+}
+.rv[data-rv="line"] {
+  transform: scaleX(0);
+  transform-origin: left;
+  transition-duration: 1.4s;
+}
+/* scale: the frame fades in while the image inside settles, so the frame itself stays free to drift */
+.rv[data-rv="scale"] {
+  opacity: 0;
+}
+.rv[data-rv="scale"] img {
+  transform: scale(1.12);
+  transition: transform 1.6s var(--ajm-ease) var(--rv-delay, 0s);
+}
+.rv.rv-in {
+  opacity: 1;
+  transform: none;
+  clip-path: inset(0 0 0 0);
+}
+.rv.rv-in[data-rv="scale"] img {
+  transform: none;
+}
+.rv.rv-in[data-parallax] {
+  transform: translate3d(0, var(--py, 0), 0);
+}
+.lite .rv {
+  opacity: 1;
+  transform: none;
+  clip-path: none;
+}
+.lite .rv[data-rv="scale"] img {
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+  .mask-line > span {
+    transform: none;
+  }
+}
+
+/* Glide (lib/glide.ts): while an in-page link carries the reader, the page is lifted a touch and
+   set down again on arrival: "pick it up and drop it" (Łukasz, 2026-09-29). Only <main> moves,
+   so the fixed header and overlays stay put. */
+main {
+  transition: transform 0.55s var(--ajm-ease);
+}
+/* translate only: a scale on a page this tall would shift far sections by ~100 px on landing */
+html.gliding main {
+  transform: translateY(-10px);
+}
+html.lite main {
+  transition: none;
+}
+/* the flight's motion blur: a viewport-sized layer under the header, strength set per frame */
+.glide-blur {
+  position: fixed;
+  inset: 0;
+  z-index: 15; /* under the fixed header (20), which stays sharp */
+  pointer-events: none;
+  backdrop-filter: blur(var(--glide-blur, 0px));
+  -webkit-backdrop-filter: blur(var(--glide-blur, 0px));
+  visibility: hidden;
+}
+html.gliding .glide-blur {
+  visibility: visible;
+}
