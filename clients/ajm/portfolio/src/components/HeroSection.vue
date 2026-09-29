@@ -15,6 +15,7 @@
     </div>
     <div class="hero__scrim" />
     <div class="hero__copy" :style="{ '--lift': lift }">
+      <p v-if="greeting" class="hero__hello"><AccentText :text="`[${greeting}]`" /></p>
       <p class="eyebrow hero__kicker hero__step" style="--i: 0">{{ t("hero.kicker") }}</p>
       <h1 class="hero__title">
         <span class="mask-line"><span>{{ t("hero.line1") }}</span></span>
@@ -38,7 +39,7 @@ import LoopVideo from "./LoopVideo.vue";
 import { loopUrl, picture } from "../lib/media";
 import { vParallax } from "../lib/motion";
 
-const props = defineProps<{ lite: boolean; ready: boolean }>();
+const props = defineProps<{ lite: boolean; ready: boolean; greeting?: string }>();
 const { t } = useI18n();
 
 // 0 → 1 over the first viewport of scrolling; the copy fades and lifts with it.
@@ -108,6 +109,11 @@ onBeforeUnmount(() => window.removeEventListener("scroll", onScroll));
 .hero__kicker {
   color: rgba(244, 241, 234, 0.8);
   margin: 0 0 18px;
+}
+/* CORE-59: the prospect's greeting, in the pen's hand, above the kicker */
+.hero__hello {
+  margin: 0 0 clamp(8px, 2vh, 20px);
+  font: 400 clamp(20px, 2.4vw, 34px) / 1 var(--ajm-font);
 }
 .hero__title {
   margin: 0 0 24px;

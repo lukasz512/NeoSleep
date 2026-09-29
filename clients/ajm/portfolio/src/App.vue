@@ -3,11 +3,12 @@
     :kind="entry"
     :skip-label="t('entry.skip')"
     :kicker="t('entry.kicker')"
+    :greeting="prospect ? t('prospect.hello', { name: prospect.name }) : ''"
     @open="heroReady = true"
   />
   <SiteHeader :locale="locale" :lite="lite" />
   <main>
-    <HeroSection :lite="lite" :ready="heroReady" />
+    <HeroSection :lite="lite" :ready="heroReady" :greeting="prospect ? t('prospect.hello', { name: prospect.name }) : ''" />
     <WhatWeDo :lite="lite" />
     <CapabilitiesSection />
     <section id="proyectos" class="projects">
@@ -20,7 +21,7 @@
     <CaseMendel :lite="lite" />
     <MoreWork />
     <ProcessSection :lite="lite" />
-    <ScrollMonogram />
+    <ScrollMonogram :prospect="prospect" />
     <ClientsSection />
     <AboutSection />
     <ContactSection :lite="lite" />
@@ -50,6 +51,7 @@ import ScrollMonogram from "./components/ScrollMonogram.vue";
 import AboutSection from "./components/AboutSection.vue";
 import ContactSection from "./components/ContactSection.vue";
 import { pickEntry, type EntryKind } from "./lib/entry";
+import { prospectFrom } from "./lib/prospect";
 import { vReveal } from "./lib/motion";
 import type { Locale } from "./lib/locale";
 
@@ -65,6 +67,8 @@ window.scrollTo(0, 0);
 
 const entry: EntryKind = pickEntry({ search: window.location.search, lite: props.lite });
 const heroReady = ref(false);
+// CORE-59: ?para=<name> greets the prospect (entry, hero) and ends the AJ sketch as "AJ × their logo"
+const prospect = prospectFrom(window.location.search);
 </script>
 
 <style scoped>

@@ -61,6 +61,18 @@
       </g>
       </g>
     </svg>
+      <!-- CORE-59: the prospect joins the lockup, "× <their logo>" (or their name when we have no logo) -->
+      <div v-if="prospect" class="mono__with">
+        <span class="mono__x" aria-hidden="true">×</span>
+        <span
+          v-if="prospect.logo"
+          class="mono__brand"
+          role="img"
+          :aria-label="prospect.name"
+          :style="{ '--logo': `url(${mediaUrl(prospect.logo)})`, '--h': prospect.height ?? 1 }"
+        />
+        <span v-else class="mono__brand-name">{{ prospect.name }}</span>
+      </div>
     </div>
   </div>
 </template>
@@ -70,6 +82,10 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { useScrollProgress } from "../lib/motion";
 import { magnetPull } from "../lib/magnet";
 import { MONO_PIN_SCREENS, monoStages } from "../lib/monogram";
+import { mediaUrl } from "../lib/media";
+import type { Prospect } from "../lib/prospect";
+
+defineProps<{ prospect?: Prospect | null }>();
 
 // The two strokes of the AJ monogram, exactly as in AjLogo.vue (client file logo-white.svg).
 const A = "m 0,0 v -159.584 h -15.978 v 138.067 h -2.774 l -94.825,-138.067 h -19.608 L -21.746,0 Z";
@@ -208,10 +224,39 @@ onBeforeUnmount(() => {
   height: calc(100svh * (1 + var(--pin)));
 }
 .mono__stage {
+  position: relative;
   display: grid;
   place-items: center;
   height: 100svh;
   overflow: clip;
+}
+/* CORE-59: "× logo" settles in under the lockup as its words finish */
+.mono__with {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + var(--size) * 0.3);
+  display: flex;
+  align-items: center;
+  gap: clamp(12px, 2vw, 22px);
+  color: var(--ajm-ink);
+  opacity: clamp(0, (var(--word, 1) - 0.55) / 0.45, 1);
+  transform: translate(-50%, calc((1 - clamp(0, (var(--word, 1) - 0.55) / 0.45, 1)) * 14px));
+}
+.mono__x {
+  font: 300 clamp(18px, 2vw, 28px) / 1 var(--ajm-font);
+  color: var(--ajm-lockup-grey);
+}
+.mono__brand {
+  display: block;
+  width: clamp(120px, 16vw, 220px);
+  height: calc(var(--h, 1) * clamp(24px, 2.8vw, 40px));
+  background: currentColor;
+  -webkit-mask: var(--logo) center / contain no-repeat;
+  mask: var(--logo) center / contain no-repeat;
+}
+.mono__brand-name {
+  font: 500 clamp(18px, 2.2vw, 30px) / 1 var(--ajm-font);
+  letter-spacing: 0.02em;
 }
 .mono--pinned .mono__stage {
   position: sticky;

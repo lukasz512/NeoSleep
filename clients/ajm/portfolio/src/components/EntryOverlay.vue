@@ -27,6 +27,7 @@
       <div class="shutter shutter--top"><div class="shutter__edge" /></div>
       <div class="shutter shutter--bottom"><div class="shutter__edge" /></div>
       <div class="stage">
+        <p v-if="greeting" class="stage__hello">{{ greeting }}</p>
         <div class="stage__mask">
           <div class="stage__mark"><AjLogo label="AJ Management" /></div>
         </div>
@@ -45,7 +46,7 @@ import AjLogo from "./AjLogo.vue";
 import { qrPattern } from "../lib/qr";
 import { ENTRY_TIMING_MS, QR_PRELUDE_MS, type EntryKind } from "../lib/entry";
 
-const props = defineProps<{ kind: EntryKind; skipLabel: string; kicker: string }>();
+const props = defineProps<{ kind: EntryKind; skipLabel: string; kicker: string; greeting?: string }>();
 const emit = defineEmits<{ open: []; done: [] }>();
 
 const size = 21;
@@ -198,6 +199,18 @@ onBeforeUnmount(() => timers.forEach((t) => window.clearTimeout(t)));
   gap: 18px;
   color: var(--ajm-ink);
   transition: opacity 0.35s ease, transform 1s cubic-bezier(0.83, 0, 0.17, 1);
+}
+/* CORE-59: "Hola Mendel", written left to right by the pen before the mark rises */
+.stage__hello {
+  margin: 0 0 4px;
+  font: 400 clamp(40px, 7vw, 72px) / 1 var(--ajm-script);
+  color: var(--ajm-ink);
+  padding: 0.25em 0.3em 0.35em;
+  clip-path: inset(-0.4em 100% -0.6em -0.4em);
+  transition: clip-path 1.1s cubic-bezier(0.45, 0, 0.2, 1) 0.05s;
+}
+.is-form .stage__hello {
+  clip-path: inset(-0.4em -0.4em -0.6em -0.4em);
 }
 .stage__mask {
   overflow: hidden;

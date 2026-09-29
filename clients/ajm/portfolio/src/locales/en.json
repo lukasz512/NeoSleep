@@ -18,6 +18,10 @@
     "skip": "Skip",
     "kicker": "Corporate Events · Experiences"
   },
+  "prospect": {
+    "hello": "Hello {name}",
+    "with": "for {name}"
+  },
   "media": {
     "play": "Play video",
     "enlarge": "View photo larger",
