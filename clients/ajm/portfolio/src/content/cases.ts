@@ -56,7 +56,7 @@ export const PRIVALIA_CHAPTERS: PrivaliaChapter[] = [
   },
   // Privalia Beauty Week × Glamour at Brick Hotel CDMX: stills from the Glamour reels, cropped below
   // the magazine wordmark (encode-extra.sh). Vertical 1080 px sources, so 640 px only. Year from the
-  // files' creation date (2024); to confirm with AJM.
+  // 2023 (Y1, Łukasz 2026-09-29).
   {
     id: "beauty",
     portrait: true,

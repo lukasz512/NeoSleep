@@ -1,6 +1,6 @@
 <!-- Section 09. Closes on the strongest stage AJM has on film (eFashion Day Live 2020 studio):
      the loop plays full-bleed and slowly pushes in as the section scrolls up, the question rises
-     through a mask, one oversized CTA, then the four channels with icons. -->
+     through a mask, one oversized CTA, then the channels with icons (email, WhatsApp México, phone España, LinkedIn, Instagram). -->
 <template>
   <section id="contacto" ref="root" class="contact" :class="{ 'is-in': seen }">
     <div class="contact__bg" :style="{ '--push': push }">
@@ -49,7 +49,7 @@ import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import LoopVideo from "./LoopVideo.vue";
 import SocialIcon from "./SocialIcon.vue";
-import { CONTACT, whatsappLink } from "../content/contact";
+import { CONTACT, telLink, whatsappLink } from "../content/contact";
 import { loopUrl, picture } from "../lib/media";
 import { useInView } from "../lib/useInView";
 import { useScrollProgress, vReveal } from "../lib/motion";
@@ -72,6 +72,7 @@ const channels = computed(() => [
     href: whatsappLink(t("contact.whatsappMessage")),
     external: true,
   },
+  { icon: "phone" as const, label: t("contact.phoneEs"), value: CONTACT.phoneEsDisplay, href: telLink(CONTACT.phoneEs), external: false },
   { icon: "linkedin" as const, label: t("contact.linkedin"), value: "Alfred Jan Díaz", href: CONTACT.linkedin, external: true },
   {
     icon: "instagram" as const,

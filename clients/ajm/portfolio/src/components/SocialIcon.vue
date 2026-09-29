@@ -18,6 +18,10 @@
         fill="currentColor"
       />
     </template>
+    <template v-else-if="name === 'phone'">
+      <rect x="6.5" y="2.8" width="11" height="18.4" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.5" />
+      <path d="M10.5 18h3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+    </template>
     <template v-else-if="name === 'linkedin'">
       <rect x="3" y="3" width="18" height="18" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.5" />
       <path d="M7.5 10.5v6M7.5 7.6v.1M11 16.5v-6M11 13c0-1.6 1-2.6 2.4-2.6s2.1 1 2.1 2.6v3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
@@ -31,7 +35,7 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{ name: "email" | "whatsapp" | "linkedin" | "instagram" }>();
+defineProps<{ name: "email" | "whatsapp" | "phone" | "linkedin" | "instagram" }>();
 </script>
 
 <style scoped>
