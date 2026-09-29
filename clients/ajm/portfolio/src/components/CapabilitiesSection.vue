@@ -1,6 +1,7 @@
-<!-- Section 03 · Capacidades, on charcoal. Six big numbered rows; the active one (hover/focus on desktop,
-     the row crossing the middle of the screen on phones) lights up and a production still wipes in
-     beside it, while the others dim. Stills are text-free frames from AJM's own footage. -->
+<!-- Section 03 · Capacidades, on charcoal. Six big numbered rows that open one at a time like an
+     accordion as they cross the middle of the screen (round 8: every visitor sees all six while
+     scrolling; hover/focus still opens a row directly). The open row lights up, shows its text, and a
+     production still wipes in beside it. Stills are text-free frames from AJM's own footage. -->
 <template>
   <section id="capacidades" ref="root" class="caps" :class="{ 'is-in': seen }">
     <header class="caps__head">
@@ -12,7 +13,7 @@
     </header>
 
     <div class="caps__body">
-      <ol class="caps__list" :class="{ 'has-active': active !== null }" @mouseleave="active = null">
+      <ol class="caps__list" :class="{ 'has-active': active !== null }">
         <li
           v-for="(item, i) in items"
           :key="item.title"
@@ -36,7 +37,7 @@
       <div class="caps__stage" aria-hidden="true">
         <picture v-for="(_, i) in items" :key="i" class="caps__still" :class="{ on: shown === i }">
           <source :srcset="picture(`capabilities/c${i + 1}`).avif" type="image/avif" />
-          <img :src="picture(`capabilities/c${i + 1}`).jpg" alt="" loading="lazy" decoding="async" />
+          <img :src="picture(`capabilities/c${i + 1}`).jpg" alt="" decoding="async" />
         </picture>
         <span class="caps__counter">{{ String(shown + 1).padStart(2, "0") }} / 06</span>
       </div>
@@ -68,10 +69,10 @@ const lastActive = ref(0);
 const shown = computed(() => active.value ?? lastActive.value);
 const rows = ref<(HTMLElement | null)[]>([]);
 
-// Phones have no hover: the row crossing the middle band of the screen becomes active.
+// On every device the row crossing the middle band of the screen opens, so scrolling walks through all six.
 let io: IntersectionObserver | null = null;
 onMounted(() => {
-  if (typeof IntersectionObserver === "undefined" || !window.matchMedia?.("(hover: none)").matches) return;
+  if (typeof IntersectionObserver === "undefined") return;
   io = new IntersectionObserver(
     (entries) => {
       for (const e of entries) {
@@ -124,6 +125,9 @@ watch(active, (v) => {
   grid-template-columns: clamp(72px, 10vw, 150px) 1fr;
   gap: 16px;
   align-items: baseline;
+  /* tall enough that each row holds the middle of the screen for a moment while scrolling */
+  min-height: clamp(120px, 22vh, 220px);
+  align-content: start;
   padding: clamp(18px, 2.4vw, 30px) 0;
   border-bottom: 1px solid rgba(244, 241, 234, 0.16);
   cursor: default;
@@ -136,16 +140,16 @@ watch(active, (v) => {
 .cap:focus-visible {
   box-shadow: inset 2px 0 0 var(--ajm-on-stage);
 }
+/* plain, light numerals (round 8: the outlined ones showed the font's inner contours) */
 .cap__num {
-  font: 400 clamp(40px, 6vw, 92px) / 0.9 var(--ajm-font);
-  letter-spacing: -0.04em;
-  color: transparent;
-  -webkit-text-stroke: 1px rgba(244, 241, 234, 0.55);
-  transition: color 0.45s ease, -webkit-text-stroke-color 0.45s ease;
+  font: 200 clamp(40px, 6vw, 92px) / 0.9 var(--ajm-font);
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  color: rgba(244, 241, 234, 0.4);
+  transition: color 0.45s ease;
 }
 .cap.on .cap__num {
   color: var(--ajm-on-stage);
-  -webkit-text-stroke-color: var(--ajm-on-stage);
 }
 .cap__text {
   display: grid;
@@ -163,6 +167,21 @@ watch(active, (v) => {
   max-width: 520px;
   font-size: 16px;
   color: rgba(244, 241, 234, 0.66);
+  /* accordion: only the open row shows its text */
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition:
+    max-height 0.6s var(--ajm-ease),
+    opacity 0.5s ease,
+    transform 0.6s var(--ajm-ease);
+}
+.cap.on .cap__desc,
+.caps__list:not(.has-active) .cap__desc {
+  max-height: 10em;
+  opacity: 1;
+  transform: none;
 }
 .caps__stage {
   position: sticky;

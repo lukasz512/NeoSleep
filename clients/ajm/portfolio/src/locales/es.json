@@ -35,7 +35,7 @@
   },
   "what": {
     "title1": "Grandes [ideas]",
-    "title2": "Ejecución ~impecable~",
+    "title2": "~Ejecución~ impecable",
     "body1": "AJ Management es una agencia independiente especializada en la planeación, producción, coordinación y ejecución de eventos y experiencias corporativas.",
     "body2": "Trabajamos como una extensión del equipo de nuestros clientes, gestionando cada etapa del proceso: desde la idea inicial y la selección del espacio hasta la producción, los proveedores, la logística y la operación en sitio.",
     "words": [
@@ -49,8 +49,8 @@
   },
   "capabilities": {
     "eyebrow": "Capacidades",
-    "title1": "Un ~solo~ partner",
-    "title2": "De la planeación a la [ejecución]",
+    "title1": "Un [solo] partner",
+    "title2": "De la planeación a la ~ejecución~",
     "items": [
       {
         "title": "Eventos Corporativos",
@@ -85,7 +85,7 @@
   "universal": {
     "number": "Caso 01",
     "client": "Universal Products & Experiences",
-    "title": "~Dando vida~ a marcas [globales]",
+    "title": "[Dando vida] a marcas ~globales~",
     "tags": "Producción · Experiencias · Contenido",
     "body": "AJ Management colabora en proyectos que transforman propiedades de entretenimiento reconocidas globalmente en experiencias y producciones relevantes para el mercado local.",
     "rooms": [
@@ -117,7 +117,7 @@
   "privalia": {
     "number": "Caso 03",
     "client": "Privalia",
-    "title": "Una colaboración ~construida~ a través del [tiempo]",
+    "title": "Una [colaboración] construida a través del ~tiempo~",
     "tags": "Eventos Corporativos · Experiencias · Producción",
     "body": "Una relación de largo plazo construida a través de la consistencia en la ejecución, la confianza operativa y el entendimiento de las necesidades cambiantes del cliente.",
     "photoAlt": "eFashion Day 2019: montaje y asistentes",
@@ -149,7 +149,7 @@
   "mendel": {
     "number": "Caso 04",
     "client": "Mendel",
-    "title": "Experiencias corporativas ~diseñadas~ alrededor de las [personas]",
+    "title": "[Experiencias] corporativas diseñadas alrededor de las ~personas~",
     "tags": "Evento Corporativo · Producción · Logística",
     "body": "Desde la planeación y coordinación de proveedores hasta la producción y operación en sitio, AJ Management desarrolló una experiencia corporativa pensada para reunir a la comunidad de Mendel.",
     "videoLabel": "Evento de Mendel en Ciudad de México",
@@ -176,7 +176,7 @@
   },
   "process": {
     "eyebrow": "Cómo trabajamos",
-    "title": "Un solo punto de [contacto] durante todo el proceso",
+    "title": "Un solo ~punto~ de contacto de [principio] a fin",
     "steps": [
       {
         "name": "Brief",

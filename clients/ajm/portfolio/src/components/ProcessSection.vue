@@ -7,9 +7,11 @@
     ref="root"
     class="process"
     :class="{ 'process--pinned': pinned }"
-    :style="pinned ? { height: `calc(100svh + ${Math.round(overflow * 1.25)}px)` } : undefined"
+    :style="
+      pinned ? { height: `calc(100svh + ${Math.round(overflow * 1.25)}px)`, marginBottom: `${-emptyBelow}px` } : undefined
+    "
   >
-    <div class="process__sticky">
+    <div ref="sticky" class="process__sticky">
       <header class="process__head">
         <p class="eyebrow">{{ t("process.eyebrow") }}</p>
         <h2 v-reveal class="process__title"><AccentText :text="t('process.title')" /></h2>
@@ -53,6 +55,7 @@ const steps = computed(() =>
 const root = ref<HTMLElement | null>(null);
 const viewport = ref<HTMLElement | null>(null);
 const track = ref<HTMLElement | null>(null);
+const sticky = ref<HTMLElement | null>(null);
 
 // Pin only where there is room and motion is welcome.
 const wide = ref(false);
@@ -68,6 +71,7 @@ onMounted(() => {
     ro = new ResizeObserver(measure);
     if (track.value) ro.observe(track.value);
     if (viewport.value) ro.observe(viewport.value);
+    if (sticky.value) ro.observe(sticky.value);
   }
 });
 let ro: ResizeObserver | null = null;
@@ -79,10 +83,19 @@ const pinned = computed(() => wide.value && !props.lite);
 watch(pinned, () => nextTick(measure));
 
 const overflow = ref(0);
+// The pinned stage is a full screen with the content centred, so the empty band under the steps
+// would show as a gap once the pin releases (round 8: "this space has to go"). The section pulls
+// what follows up by that band, leaving 24 px.
+const emptyBelow = ref(0);
 // a function declaration, so onMounted above can use it before this line runs
 function measure() {
   if (!track.value || !viewport.value) return;
   overflow.value = Math.max(0, track.value.scrollWidth - viewport.value.clientWidth);
+  if (sticky.value) {
+    const box = sticky.value.getBoundingClientRect();
+    const contentBottom = track.value.getBoundingClientRect().bottom - box.top;
+    emptyBelow.value = Math.max(0, Math.round(box.height - contentBottom - 24));
+  }
 }
 
 const progress = useScrollProgress(root);

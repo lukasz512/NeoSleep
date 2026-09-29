@@ -114,6 +114,10 @@ onBeforeUnmount(() => window.removeEventListener("scroll", onScroll));
   font: 500 clamp(36px, 6.2vw, 92px) / 1.02 var(--ajm-font);
   letter-spacing: -0.02em;
 }
+/* the pen word's low swash ran into the "r" of "bring": give it a little more room on the left */
+.hero__title :deep(.acc) {
+  margin-left: 0.06em;
+}
 .hero__title .mask-line > span {
   transition-duration: 1.1s;
   transition-delay: 0.15s;

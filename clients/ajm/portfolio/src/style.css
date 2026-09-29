@@ -81,9 +81,11 @@
   line-height: 0.55;
   letter-spacing: 0;
   padding: 0 0.06em;
-  margin: 0 -0.1em 0 -0.1em;
+  margin: 0 0.02em 0 -0.1em;
   /* slanted, and set on a slight upward angle like a hand-written note (round 8) */
   transform: rotate(-4deg) skewX(-12deg);
+  /* sits a touch lower on the line, so it scales with the heading more naturally (round 8) */
+  top: 0.05em;
   transform-origin: 0 100%;
   /* the pen moves left to right; at rest the clip sits well outside the glyphs, so Italianno's
      tall loops and end swashes are never cut (round 7: "always fully visible") */

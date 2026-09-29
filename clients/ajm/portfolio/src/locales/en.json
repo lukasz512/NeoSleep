@@ -35,7 +35,7 @@
   },
   "what": {
     "title1": "Big [ideas]",
-    "title2": "~Flawless~ execution",
+    "title2": "Flawless ~execution~",
     "body1": "AJ Management is an independent agency specialised in planning, producing, coordinating and delivering corporate events and experiences.",
     "body2": "We work as an extension of our clients' teams, handling every stage: from the first idea and venue selection to production, suppliers, logistics and on-site operations.",
     "words": [
@@ -49,8 +49,8 @@
   },
   "capabilities": {
     "eyebrow": "Capabilities",
-    "title1": "~One~ partner",
-    "title2": "From planning to [execution]",
+    "title1": "[One] partner",
+    "title2": "From planning to ~execution~",
     "items": [
       {
         "title": "Corporate Events",
@@ -85,7 +85,7 @@
   "universal": {
     "number": "Case 01",
     "client": "Universal Products & Experiences",
-    "title": "~Bringing~ [global] brands to life",
+    "title": "[Bringing] ~global~ brands to life",
     "tags": "Production · Experiences · Content",
     "body": "AJ Management works on projects that turn globally recognised entertainment properties into experiences and productions that matter to the local market.",
     "rooms": [
@@ -117,7 +117,7 @@
   "privalia": {
     "number": "Case 03",
     "client": "Privalia",
-    "title": "A partnership ~built~ over [time]",
+    "title": "A [partnership] built over ~time~",
     "tags": "Corporate Events · Experiences · Production",
     "body": "A long-term relationship built on consistent execution, operational trust and an understanding of the client's changing needs.",
     "photoAlt": "eFashion Day 2019: set-up and guests",
@@ -149,7 +149,7 @@
   "mendel": {
     "number": "Case 04",
     "client": "Mendel",
-    "title": "Corporate experiences ~designed~ around [people]",
+    "title": "Corporate [experiences] designed around ~people~",
     "tags": "Corporate Event · Production · Logistics",
     "body": "From planning and supplier coordination to production and on-site operations, AJ Management built a corporate experience designed to bring the Mendel community together.",
     "videoLabel": "Mendel event in Mexico City",
@@ -176,7 +176,7 @@
   },
   "process": {
     "eyebrow": "How we work",
-    "title": "One point of [contact] from start to finish",
+    "title": "One ~point~ of contact from [start] to finish",
     "steps": [
       {
         "name": "Brief",

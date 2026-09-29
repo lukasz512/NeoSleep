@@ -45,25 +45,29 @@ describe("accent › house rules in the copy", () => {
   it.each([
     ["es", es],
     ["en", en],
-  ])("%s: one marker per partner, one in the hero, one on Flawless, one on One partner (round 8), nowhere else", (_l, loc) => {
+  ])("%s: one marker per partner, one in the hero, one on each execution, one on point (round 8), nowhere else", (_l, loc) => {
     for (const c of cases) expect((loc[c].title.match(/~[^~]+~/g) ?? []).length).toBe(1);
     expect((loc.hero.line2.match(/~[^~]+~/g) ?? []).length).toBe(1);
-    expect((loc.what.title2.match(/~[^~]+~/g) ?? []).length).toBe(1);
+    expect(loc.what.title2).toMatch(/~(execution|Ejecución)~/); // execution is marked, not Flawless
     expect(loc.what.title1).toMatch(/\[[^\]]+\]/); // the pen writes "ideas"
     const markers = all(loc).join(" ").match(/~[^~]+~/g) ?? [];
-    expect((loc.capabilities.title1.match(/~[^~]+~/g) ?? []).length).toBe(1);
-    expect(markers.length).toBe(cases.length + 3);
+    expect((loc.capabilities.title2.match(/~[^~]+~/g) ?? []).length).toBe(1); // execution is marked
+    expect(loc.capabilities.title1).toMatch(/\[[^\]]+\]/); // the pen writes "One"
+    expect((loc.process.title.match(/~[^~]+~/g) ?? []).length).toBe(1); // "point" is marked
+    expect(markers.length).toBe(cases.length + 4);
   });
   it.each([
     ["es", es],
     ["en", en],
-  ])("%s: the marker sits on the verb, apart from the pen word (M2: two beats per title)", (_l, loc) => {
+  ])("%s: pen word and marker are two different beats in every case title", (_l, loc) => {
     for (const c of cases) {
       const title: string = loc[c].title;
       const marked = title.match(/~([^~]+)~/)?.[1] ?? "";
       expect(marked).not.toContain("[");
-      // the marker comes first in the line, the pen word closes it
-      expect(title.indexOf("~")).toBeLessThan(title.indexOf("["));
+      // round 8 (Łukasz): the pen writes first ("Bringing", "partnership", "experiences") and the marker
+      // closes the line ("global", "time", "people"); only Planeta keeps "~Creamos~ … [historias]"
+      if (c === "planeta") expect(title.indexOf("~")).toBeLessThan(title.indexOf("["));
+      else expect(title.indexOf("[")).toBeLessThan(title.indexOf("~"));
     }
   });
   it.each([

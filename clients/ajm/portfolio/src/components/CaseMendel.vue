@@ -92,7 +92,7 @@ function counted(value: number): number {
   margin: 0 var(--ajm-gutter) clamp(32px, 5vw, 56px);
 }
 .case__title {
-  margin: 12px 0 0.5em;
+  margin: 0.35em 0 0.5em;
   font: 500 clamp(32px, 5vw, 72px) / 1 var(--ajm-font);
   letter-spacing: -0.02em;
 }

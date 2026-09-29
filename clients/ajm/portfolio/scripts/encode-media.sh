@@ -144,7 +144,8 @@ still "$MAKING" 63.6 640 "$OUT/contact/stage-poster-640"
 # 01 corporate events → a full conference audience · 02 executive → the stage interview
 # 03 teams → the long dinner tables · 04 production → the sound desk
 # 05 logistics → the courtyard seating plan from above · 06 venues → the Bordes palace room
-still "$EFD19" 147  960 "$OUT/capabilities/c1" "$EFD19_CROP"
+# Corporate Events: the eFashion 2019 courtyard full of guests, cropped below the event logo (round 8)
+still "$SRC/privalia/privalia03.jpg" "" 960 "$OUT/capabilities/c1" "crop=iw*0.72:ih*0.7:iw*0.28:ih*0.3"
 still "$MAKING" 86.2 960 "$OUT/capabilities/c2"
 still "$EFD19" 103  960 "$OUT/capabilities/c3" "$EFD19_CROP"
 still "$MAKING"  41 960 "$OUT/capabilities/c4"

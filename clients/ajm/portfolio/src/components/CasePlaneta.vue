@@ -113,7 +113,7 @@ const lbLabels = computed(() => ({ prev: t("media.prev"), next: t("media.next"),
   margin-bottom: clamp(32px, 5vw, 64px);
 }
 .case__title {
-  margin: 12px 0 0.5em;
+  margin: 0.35em 0 0.5em;
   font: 500 clamp(32px, 5vw, 72px) / 1 var(--ajm-font);
   letter-spacing: -0.02em;
 }
