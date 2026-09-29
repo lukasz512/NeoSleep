@@ -220,6 +220,15 @@ a {
   padding: 1.2em 0.5em 1.1em;
   margin: -1.2em -0.5em -1.1em;
 }
+/* The masks overhang their lines (negative margins) and must not change the line spacing. In normal
+   flow the bottom margin of one line and the top margin of the next collapse into one, which pushed
+   the lines apart once the overhang grew (round 8: "why is the first line so high?"). As flex items
+   they don't collapse, so each heading keeps its own line height plus a small, even gap. */
+:where(h1, h2, h3, h4):has(> .mask-line) {
+  display: flex;
+  flex-direction: column;
+  row-gap: 0.08em;
+}
 .mask-line > span {
   display: block;
   /* fully below the (padded) mask, not peeking into its bottom padding */
