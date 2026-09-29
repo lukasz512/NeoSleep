@@ -211,8 +211,8 @@
   },
   "about": {
     "eyebrow": "About AJ Management",
-    "title1": "Local expertise",
-    "title2": "International [perspective]",
+    "title1": "Local [expertise]",
+    "title2": "~International~ perspective",
     "body1": "Founded in Mexico, AJ Management creates and produces events and experiences for companies and brands across markets.",
     "body2": "Our network of producers, venues, technical partners and specialist suppliers lets us build the right team for every project, with one central point of coordination.",
     "cities": [
@@ -231,7 +231,7 @@
     ]
   },
   "contact": {
-    "title": "Have an [event] in mind?",
+    "title": "[Have] an ~event~ in mind?",
     "body": "Whether it's a corporate meeting, an executive experience, a convention or a large-scale event, we'd love to hear about your project.",
     "cta": "Let's talk about your project",
     "whatsappMessage": "Hi Alfred, I saw the AJ Management portfolio and would like to talk about an event.",

@@ -4,7 +4,7 @@
   <section id="nosotros" ref="root" class="about" :class="{ 'is-in': seen }">
     <p class="eyebrow">{{ t("about.eyebrow") }}</p>
     <h2 class="about__title">
-      <span class="mask-line"><span>{{ t("about.title1") }}</span></span>
+      <span class="mask-line"><span><AccentText :text="t('about.title1')" /></span></span>
       <span class="mask-line"><span><AccentText :text="t('about.title2')" /></span></span>
     </h2>
     <div class="about__text">

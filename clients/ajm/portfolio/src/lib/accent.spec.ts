@@ -45,7 +45,7 @@ describe("accent › house rules in the copy", () => {
   it.each([
     ["es", es],
     ["en", en],
-  ])("%s: one marker per partner, one in the hero, one on each execution, one on point (round 8), nowhere else", (_l, loc) => {
+  ])("%s: one marker per partner, one in the hero, one each on execution, point, internacional, evento (round 8), nowhere else", (_l, loc) => {
     for (const c of cases) expect((loc[c].title.match(/~[^~]+~/g) ?? []).length).toBe(1);
     expect((loc.hero.line2.match(/~[^~]+~/g) ?? []).length).toBe(1);
     expect(loc.what.title2).toMatch(/~(execution|Ejecución)~/); // execution is marked, not Flawless
@@ -54,7 +54,10 @@ describe("accent › house rules in the copy", () => {
     expect((loc.capabilities.title2.match(/~[^~]+~/g) ?? []).length).toBe(1); // execution is marked
     expect(loc.capabilities.title1).toMatch(/\[[^\]]+\]/); // the pen writes "One"
     expect((loc.process.title.match(/~[^~]+~/g) ?? []).length).toBe(1); // "point" is marked
-    expect(markers.length).toBe(cases.length + 4);
+    expect((loc.about.title2.match(/~[^~]+~/g) ?? []).length).toBe(1); // internacional is marked
+    expect(loc.about.title1).toMatch(/\[[^\]]+\]/); // the pen writes "Experiencia"
+    expect((loc.contact.title.match(/~[^~]+~/g) ?? []).length).toBe(1); // evento is marked
+    expect(markers.length).toBe(cases.length + 6);
   });
   it.each([
     ["es", es],

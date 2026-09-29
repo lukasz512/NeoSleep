@@ -354,7 +354,8 @@ onBeforeUnmount(() => io?.disconnect());
     grid-template-columns: 1fr;
   }
   .tl__rail {
-    top: 56px;
+    top: var(--head-offset, 56px);
+    transition: top 0.5s var(--ajm-ease);
     z-index: 2;
     background: var(--ajm-paper);
     padding: 8px 0;

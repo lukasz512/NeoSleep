@@ -230,7 +230,8 @@ watch(active, (v) => {
   .caps__stage {
     grid-row: 1;
     position: sticky;
-    top: 64px;
+    top: var(--head-offset, 64px);
+    transition: top 0.5s var(--ajm-ease);
     z-index: 1;
     aspect-ratio: 16 / 9;
   }

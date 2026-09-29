@@ -15,7 +15,12 @@ export interface MonoStages {
   hatch: number;
   fill: number;
   guidesOut: number;
+  /** scale of the whole blueprint: very large at first, settling to 1 as the outline completes */
+  zoom: number;
 }
+
+/** how large the blueprint starts (Łukasz, 2026-09-29: "first really big, then smaller as it draws") */
+const ZOOM_FROM = 2.8;
 
 /** Stage values (0…1) for the progress through the pinned stretch. */
 export function monoStages(p: number): MonoStages {
@@ -25,5 +30,7 @@ export function monoStages(p: number): MonoStages {
     hatch: span(p, 0.5, 0.66),
     fill: span(p, 0.62, 0.78),
     guidesOut: span(p, 0.8, 0.94),
+    // ease-out: it closes in quickly at first, then settles gently onto its size
+    zoom: 1 + (ZOOM_FROM - 1) * (1 - span(p, 0, 0.54)) ** 2,
   };
 }

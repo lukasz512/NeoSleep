@@ -85,7 +85,7 @@
   "universal": {
     "number": "Caso 01",
     "client": "Universal Products & Experiences",
-    "title": "[Dando vida] a marcas ~globales~",
+    "title": "Dando [vida] a marcas ~globales~",
     "tags": "Producción · Experiencias · Contenido",
     "body": "AJ Management colabora en proyectos que transforman propiedades de entretenimiento reconocidas globalmente en experiencias y producciones relevantes para el mercado local.",
     "rooms": [
@@ -211,8 +211,8 @@
   },
   "about": {
     "eyebrow": "Sobre AJ Management",
-    "title1": "Experiencia local",
-    "title2": "Perspectiva [internacional]",
+    "title1": "[Experiencia] local",
+    "title2": "Perspectiva ~internacional~",
     "body1": "Fundada en México, AJ Management crea y produce eventos y experiencias para empresas y marcas en distintos mercados.",
     "body2": "Nuestra red de productores, venues, aliados técnicos y proveedores especializados nos permite construir el equipo adecuado para cada proyecto, manteniendo un único punto central de coordinación.",
     "cities": [
@@ -231,7 +231,7 @@
     ]
   },
   "contact": {
-    "title": "¿Tienes un [evento] en mente?",
+    "title": "¿[Tienes] un ~evento~ en mente?",
     "body": "Ya sea una reunión corporativa, una experiencia ejecutiva, una convención o un evento de gran formato, nos encantará conocer tu proyecto.",
     "cta": "Hablemos de tu proyecto",
     "whatsappMessage": "Hola Alfred, vi el portafolio de AJ Management y me gustaría platicar sobre un evento.",

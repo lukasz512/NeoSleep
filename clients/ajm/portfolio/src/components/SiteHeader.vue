@@ -1,5 +1,5 @@
 <template>
-  <header class="head" :class="{ 'head--solid': solid, 'head--hidden': hidden }">
+  <header ref="bar" class="head" :class="{ 'head--solid': solid, 'head--hidden': hidden }">
     <a class="head__logo" href="#top"><AjLogo label="AJ Management" /></a>
     <nav class="head__nav" :aria-label="t('nav.aria')">
       <a href="#proyectos">{{ t("nav.projects") }}</a>
@@ -13,7 +13,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import AjLogo from "./AjLogo.vue";
 import ThemeSwitch from "./ThemeSwitch.vue";
@@ -37,11 +37,29 @@ function onScroll() {
   hidden.value = y > window.innerHeight && y > lastY;
   lastY = y;
 }
+// Sticky parts on phones (Privalia's year, the Capabilities still) sit right under the bar: they read
+// --head-offset, the bar's height while it shows and 0 while it is slid away (round 8: otherwise
+// the page scrolled through the gap above them).
+const bar = ref<HTMLElement | null>(null);
+let ro: ResizeObserver | null = null;
+function publishOffset() {
+  const h = hidden.value ? 0 : Math.round(bar.value?.getBoundingClientRect().height ?? 0);
+  document.documentElement.style.setProperty("--head-offset", `${h}px`);
+}
+watch(hidden, publishOffset);
 onMounted(() => {
   onScroll();
   window.addEventListener("scroll", onScroll, { passive: true });
+  publishOffset();
+  if (typeof ResizeObserver !== "undefined" && bar.value) {
+    ro = new ResizeObserver(publishOffset);
+    ro.observe(bar.value);
+  }
 });
-onBeforeUnmount(() => window.removeEventListener("scroll", onScroll));
+onBeforeUnmount(() => {
+  window.removeEventListener("scroll", onScroll);
+  ro?.disconnect();
+});
 </script>
 
 <style scoped>

@@ -1,7 +1,8 @@
 <!-- The pause between "Cómo trabajamos" and the clients (O1 = O-A, 2026-09-28): the AJ monogram
      from the client's logo, drawn like a Leonardo sketch (round 8, Łukasz 2026-09-29). The page stops
      on it for about two scroll swipes (lib/monogram.ts) and that scroll draws it: construction lines,
-     outline, pencil hatching, solid black; then the construction lines fade and the page moves on. The grain comes from a light
+     outline, pencil hatching, solid black; then the construction lines fade and the page moves on.
+     The blueprint starts very large and closes in to its size while the outline is drawn. The grain comes from a light
      turbulence filter, so the lines look drawn, not ruled. On a mouse the mark is pulled toward the
      pointer like a magnet (lib/magnet.ts). Decorative only (aria-hidden). Lite: finished and still. -->
 <template>
@@ -13,6 +14,7 @@
     :style="{
       '--pin': MONO_PIN_SCREENS,
       '--guides-out': st.guidesOut,
+      '--zoom': st.zoom.toFixed(3),
       '--guide': guide,
       '--draw': draw,
       '--hatch': hatch,
@@ -148,6 +150,7 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   height: 100svh;
+  overflow: clip;
 }
 .mono--pinned .mono__stage {
   position: sticky;
@@ -157,7 +160,9 @@ onBeforeUnmount(() => {
   width: var(--size);
   aspect-ratio: 1;
   overflow: visible;
-  transform: translate3d(var(--mx, 0), var(--my, 0), 0);
+  /* round 8: the blueprint starts very large and settles to its size as it is drawn */
+  transform: translate3d(var(--mx, 0), var(--my, 0), 0) scale(var(--zoom, 1));
+  will-change: transform;
 }
 /* pencil construction lines, faint, drawn first and one after another */
 .mono__guides {

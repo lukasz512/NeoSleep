@@ -22,11 +22,12 @@ export const PLANETA_EVENTS: PlanetaEvent[] = [
     year: 2024,
     photos: ["planeta15", "planeta13", "planeta14", "planeta1", "planeta3", "planeta8", "planeta9"],
   },
-  { id: "cronicas", title: "Crónicas de la capital", photos: ["planeta00", "planeta7"] },
+  // round 8 (Łukasz, 2026-09-29): undated launches are 2023
+  { id: "cronicas", title: "Crónicas de la capital", year: 2023, photos: ["planeta00", "planeta7"] },
   { id: "algundia", title: "Algún día, hoy", year: 2019, photos: ["planeta22"] },
-  { id: "duelo", title: "Duelo de historias", photos: ["planeta20", "planeta21", "planeta18", "planeta17"] },
-  // E2 (2026-09-28): a Grupo Planeta book launch held at Pizzería Vesubio; title and year to come.
-  { id: "vesubio", title: "Pizzería Vesubio", photos: ["planeta24", "planeta25"] },
+  { id: "duelo", title: "Duelo de historias", year: 2023, photos: ["planeta20", "planeta21", "planeta18", "planeta17"] },
+  // E2 (2026-09-28): a Grupo Planeta book launch held at Pizzería Vesubio; title to come; 2023 (round 8).
+  { id: "vesubio", title: "Pizzería Vesubio", year: 2023, photos: ["planeta24", "planeta25"] },
 ];
 
 /** Shown on the page: events with at least 2 photos ("Algún día, hoy" has one so far). */
