@@ -15,6 +15,7 @@ import { lookupRouter } from "./routes/lookup.js";
 import { websiteContactRouter } from "./routes/website-contact.js";
 import { bookingRouter } from "./routes/booking.js";
 import { publicRouter } from "./routes/public.js";
+import { webhooksRouter } from "./routes/webhooks.js";
 import { patientRouter } from "./routes/patient.js";
 import { pushRouter } from "./routes/push.js";
 import { usersRouter } from "./routes/users.js";
@@ -129,6 +130,8 @@ app.use(
 app.use("/api/v1/public/questionnaire/submit", express.json({ limit: "600kb" }));
 // The early "opened" ping sends its token as text/plain (no CORS preflight, NEO-123).
 app.use("/api/v1/public/questionnaire/opened", express.text({ type: "text/plain", limit: "1kb" }));
+// Resend signs the exact bytes it sends — keep the raw body for that one path (NEO-190).
+app.use("/api/v1/webhooks/resend", express.raw({ type: "*/*", limit: "256kb" }));
 app.use(express.json({ limit: "50kb" }));
 // Express 5 (body-parser 2) leaves req.body undefined when nothing was parsed — a
 // GET, a bodiless POST/DELETE, or a non-JSON content type. Express 4 always set {}.
@@ -166,6 +169,7 @@ app.use("/api/v1", lookupRouter);
 app.use("/api/v1", websiteContactRouter);
 app.use("/api/v1", bookingRouter);
 app.use("/api/v1", publicRouter);
+app.use("/api/v1", webhooksRouter);
 app.use("/api/v1", patientRouter);
 app.use("/api/v1", pushRouter);
 app.use("/api/v1", usersRouter);

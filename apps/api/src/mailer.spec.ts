@@ -104,6 +104,20 @@ describe("mailer — configured", () => {
     expect(sendMock.mock.calls[1]![0].from).toBe('"NeoSleep" <notifications@mail.neosleepcare.com>');
   });
 
+  it("tags patient emails for the delivery webhook, returns Resend's id and logs only a masked address (NEO-190)", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const { sendQuestionnaireLinkEmail } = await importMailer(true);
+
+    const id = await sendQuestionnaireLinkEmail("lucia@example.mx", "https://x", RECIPIENT, { name: null, email: null }, 1, { tenant: "neosleep", kind: "questionnaire_link" });
+
+    expect(id).toBe("test-email-id");
+    expect(sendMock.mock.calls[0]![0].tags).toEqual([{ name: "tenant", value: "neosleep" }, { name: "kind", value: "questionnaire_link" }]);
+    const logged = logSpy.mock.calls.map((c) => String(c[0])).join("\n");
+    expect(logged).toContain("l***@example.mx");
+    expect(logged).not.toContain("lucia@example.mx");
+    logSpy.mockRestore();
+  });
+
   it("sendContactEmail sends to RESEND_NOTIFY_TO with the given subject and rows rendered in the HTML", async () => {
     const { sendContactEmail } = await importMailer(true);
 

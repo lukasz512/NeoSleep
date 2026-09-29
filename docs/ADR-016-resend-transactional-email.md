@@ -122,3 +122,13 @@ patients recognise their clinic, not the platform; Reply-To stays the clinic's
 email (the data controller). Other emails keep `"NeoSleep"`. Render's
 `RESEND_FROM_EMAIL` (`sync: false`) must be changed by hand in its dashboard;
 Cloud Run reads it from `infrastructure/cloud-run/<env>.env.yaml`.
+
+## Update 2026-09-29 (NEO-190): delivery status via webhook
+
+"Sent" only ever meant Resend *accepted* the email. Patient emails are now
+tagged (`tenant`, `kind`) and logged in the tenant's `patient_email_send`
+with Resend's message id. `POST /api/v1/webhooks/resend` verifies the
+Standard Webhooks signature (`RESEND_WEBHOOK_SECRET`, via the Resend SDK's
+`webhooks.verify`, raw body) and moves the row's status forward (never
+back): delivered, delayed, bounced, failed, suppressed, complained. Opens
+and clicks are not tracked. The mailer log masks the recipient address.

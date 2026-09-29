@@ -16,7 +16,7 @@ import {
  * only the Resend boundary (mailer.ts) is mocked, same pattern as
  * commands/users.spec.ts.
  */
-const { sendMock } = vi.hoisted(() => ({ sendMock: vi.fn(async (..._args: unknown[]) => true) }));
+const { sendMock } = vi.hoisted(() => ({ sendMock: vi.fn(async (..._args: unknown[]): Promise<string | null> => "re_test_message") }));
 vi.mock("../mailer.js", async (importActual) => ({
   ...(await importActual<typeof import("../mailer.js")>()),
   sendQuestionnaireLinkEmail: sendMock,
@@ -40,7 +40,7 @@ async function buildContext(client: Client): Promise<TenantContext> {
 
 beforeEach(() => {
   sendMock.mockReset();
-  sendMock.mockResolvedValue(true);
+  sendMock.mockResolvedValue(`re_${uniqueSuffix()}`);
 });
 
 describe("SendQuestionnaireEmailCommand", () => {
@@ -56,7 +56,8 @@ describe("SendQuestionnaireEmailCommand", () => {
       expect(request.items).toEqual(["informedConsent", "medicalHistory", "stopBang"]);
 
       expect(sendMock).toHaveBeenCalledTimes(1);
-      const [to, link, recipient, , count] = sendMock.mock.calls[0]!;
+      const [to, link, recipient, , count, tags] = sendMock.mock.calls[0]!;
+      expect(tags).toEqual({ tenant: TENANT_SLUG, kind: "questionnaire_link" });
       expect(to).toBe(email);
       expect(link).toMatch(new RegExp(`^${ORIGIN}/q#[A-Za-z0-9_-]{43}$`));
       expect(recipient).toMatchObject({ firstName: "Lucía", language: "mx" });
@@ -68,6 +69,14 @@ describe("SendQuestionnaireEmailCommand", () => {
       const notify = audit.find((row) => row.action === "notify");
       expect(notify?.entity_after).toMatchObject({ channel: "email", sent_to: "l***@example.mx", items: 3 });
       expect(JSON.stringify(notify?.entity_after)).not.toContain(email);
+
+      // NEO-190: the send is logged with Resend's id, so its delivery status can follow.
+      const messageId = await sendMock.mock.results[0]!.value;
+      const { rows } = await client.query(
+        "SELECT kind, sent_to_masked, status, questionnaire_request_id, sent_by FROM patient_email_send WHERE provider_message_id = $1",
+        [messageId]
+      );
+      expect(rows).toEqual([{ kind: "questionnaire_link", sent_to_masked: "l***@example.mx", status: "sent", questionnaire_request_id: request.id, sent_by: ctx.user.id }]);
     });
   });
 
@@ -81,7 +90,7 @@ describe("SendQuestionnaireEmailCommand", () => {
   });
 
   it("reports a failure instead of 'sent' when email isn't available", async () => {
-    sendMock.mockResolvedValue(false);
+    sendMock.mockResolvedValue(null);
     await withTenant(TENANT_SLUG, async (client) => {
       const ctx = await buildContext(client);
       const patient = await insertPatient(client, { first_name: "Ana", last_name: `Correo-${uniqueSuffix()}`, email: `ana.${uniqueSuffix()}@example.mx` });

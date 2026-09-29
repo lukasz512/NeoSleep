@@ -30,6 +30,7 @@ import { generateToken } from "../utils/generateToken.js";
 import { AppError, NotFoundError, ValidationError } from "../errors.js";
 import { sendQuestionnaireLinkEmail, sendPatientSignedCopyEmail } from "../mailer.js";
 import { isPatientEmailHeldByAnother } from "../db/identityEmail.js";
+import { insertPatientEmailSend } from "../db/patientEmailSend.js";
 import { PRIVACY_NOTICE_URL } from "../env.js";
 import { validateMedicalHistory, validateStop } from "./clinicalRecordFields.js";
 
@@ -200,11 +201,21 @@ export async function SendQuestionnaireEmailCommand(
       region: context.patient_region,
     },
     { name: context.organization_name, email: context.organization_email },
-    created.request.items.length
+    created.request.items.length,
+    { tenant: ctx.slug, kind: "questionnaire_link" }
   );
   if (!sent) throw new QuestionnaireEmailUnavailableError();
 
   const sentTo = maskEmail(email);
+  // What Resend later reports about this email (delivered, bounced, spam) lands on this row — NEO-190.
+  await insertPatientEmailSend(ctx.client, {
+    patientId,
+    sentBy: ctx.user.id,
+    kind: "questionnaire_link",
+    questionnaireRequestId: created.request.id,
+    sentToMasked: sentTo,
+    providerMessageId: sent,
+  });
   await insertAuditLog(ctx.client, {
     user_id: ctx.user.id,
     action: "notify",
@@ -411,6 +422,8 @@ export interface PublicSubmissionMeta {
   ip: string | null;
   userAgent: string | null;
   requestId: string | null;
+  /** Tenant of the link — tags the signed-copy email so its delivery status finds its row (NEO-190). */
+  tenantSlug?: string;
 }
 
 export interface PublicStepResult {
@@ -651,11 +664,20 @@ async function emailSignedCopy(
       },
       { name: context.organization_name, email: context.organization_email },
       { filename: doc.filename, content: Buffer.from(doc.pdfBytes) },
-      formatFormDate(doc.signedAt, doc.locale)
+      formatFormDate(doc.signedAt, doc.locale),
+      meta.tenantSlug ? { tenant: meta.tenantSlug, kind: "signed_copy" } : undefined
     );
     if (!sent) return false;
-    await run((client) =>
-      insertAuditLog(client, {
+    await run(async (client) => {
+      await insertPatientEmailSend(client, {
+        patientId: prepared.patientId,
+        sentBy: null,
+        kind: "signed_copy",
+        questionnaireRequestId: prepared.requestId,
+        sentToMasked: maskEmail(address),
+        providerMessageId: sent,
+      });
+      await insertAuditLog(client, {
         user_id: null,
         action: "notify",
         entity_type: "QuestionnaireRequest",
@@ -666,8 +688,8 @@ async function emailSignedCopy(
         user_agent: meta.userAgent,
         request_id: meta.requestId,
         metadata: { actor: "patient", purpose: "signed_copy" },
-      })
-    );
+      });
+    });
     return true;
   } catch (err) {
     console.error("[questionnaireRequest] signed copy email failed:", err);

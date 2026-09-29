@@ -120,6 +120,7 @@ publicRouter.post(
       {
         ip: req.ip ?? null,
         userAgent: req.get("user-agent")?.slice(0, 512) ?? null,
+        tenantSlug: slug,
         requestId: requestId && UUID_RE.test(requestId) ? requestId : null,
       }
     );

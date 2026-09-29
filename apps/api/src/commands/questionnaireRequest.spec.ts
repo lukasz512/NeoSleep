@@ -28,7 +28,7 @@ const { uploadMock, deleteMock } = vi.hoisted(() => ({
   deleteMock: vi.fn(async (_path: string) => undefined),
 }));
 // The mail provider (Resend) is the other external boundary: the signed-copy email is observed, never sent.
-const { copyEmailMock } = vi.hoisted(() => ({ copyEmailMock: vi.fn(async (..._args: unknown[]) => true) }));
+const { copyEmailMock } = vi.hoisted(() => ({ copyEmailMock: vi.fn(async (..._args: unknown[]): Promise<string | null> => `re_copy_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`) }));
 vi.mock("../mailer.js", async (importActual) => ({
   ...(await importActual<typeof import("../mailer.js")>()),
   sendPatientSignedCopyEmail: copyEmailMock,
@@ -236,6 +236,9 @@ describe("patient QR link — one link for everything the patient has to do", ()
         [patient.id]
       );
       expect(rows[0].entity_after).toMatchObject({ channel: "email", sent_to: "q***@example.test" });
+      // NEO-190: logged for its delivery status, without a sender (the patient asked for it).
+      const sends = await client.query("SELECT kind, sent_by, sent_to_masked FROM patient_email_send WHERE patient_id = $1", [patient.id]);
+      expect(sends.rows).toEqual([{ kind: "signed_copy", sent_by: null, sent_to_masked: "q***@example.test" }]);
 
       // A family inbox: the same address on a second patient → no copy offered, none sent even if asked.
       const sibling = await insertPatient(client, { first_name: "Eva", last_name: `Copy-${uniqueSuffix()}`, email: own });
