@@ -159,6 +159,8 @@ authRouter.post(
           refresh_token: refreshToken,
           user: {
             id: staff.id,
+            // CORE-45: the PWA keys per-user device settings (filters, offline cache) by tenant + user.
+            tenant: slug,
             email: staff.email,
             name: staff.name ?? undefined,
             role: staff.role,
@@ -191,6 +193,7 @@ authRouter.get(
     res.json({
       user: {
         id: user.sub,
+        tenant: tenantSlugFromHost(req.hostname),
         email: user.email,
         name: user.name,
         picture: user.picture,
@@ -642,6 +645,7 @@ authRouter.post("/auth/google/exchange", asyncHandler(async (req: Request, res: 
         refresh_token: refreshToken,
         user: {
           id: user.id,
+          tenant: slug,
           email: user.email,
           name: user.name ?? undefined,
           role: user.role,

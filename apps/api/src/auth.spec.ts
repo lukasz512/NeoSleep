@@ -108,6 +108,8 @@ describe("Auth routes", () => {
         .send({ email, password: TEST_PASSWORD });
       expect(res.status).toBe(200);
       expect(res.body.user).toMatchObject({ email, hasPassword: true });
+      // CORE-45: the PWA keys per-user device settings (filters, offline cache) by tenant + user.
+      expect(res.body.user.tenant).toBe(TENANT_SLUG);
       expect(typeof res.body.token).toBe("string");
       expect(res.body.token.split(".")).toHaveLength(3);
       // Opaque, not a JWT (ADR-020) — nothing to decode, just a random value.
@@ -407,6 +409,20 @@ describe("Auth routes", () => {
         .set("X-Forwarded-For", freshIp())
         .send({ token: "not-a-real-token", new_password: "irrelevant-but-long-enough" });
       expect(res.status).toBe(400);
+    });
+  });
+
+  describe("GET /api/v1/auth/session", () => {
+    it("returns the tenant with the user, so the PWA can scope per-user device settings (CORE-45)", async () => {
+      const login = await request(app)
+        .post("/api/v1/auth/login")
+        .set("X-Forwarded-For", freshIp())
+        .send({ email, password: TEST_PASSWORD });
+      const res = await request(app)
+        .get("/api/v1/auth/session")
+        .set("Authorization", `Bearer ${login.body.token}`);
+      expect(res.status).toBe(200);
+      expect(res.body.user).toMatchObject({ email, tenant: TENANT_SLUG });
     });
   });
 });
