@@ -33,7 +33,7 @@ const isMulti = (d: FilterDefinition) => d.type === "select" && d.multiple !== f
  * - clearFilters(): sets all keys to their default (or '').
  * A saved value that is no longer one of a filter's options (e.g. a deleted territory) is dropped
  * on load, so the list never comes up empty for a reason the user can't see. Options that
- * aren't known yet (empty list) are left alone.
+ * aren't known yet (empty list, or only "All" while lookups load) are left alone.
  */
 export function useFilters(viewId: string, definitions: FilterDefinition[]) {
   const defaults: ViewFilters = {};
@@ -50,7 +50,9 @@ export function useFilters(viewId: string, definitions: FilterDefinition[]) {
     validate: (state) => {
       const out: ViewFilters = { ...state };
       for (const d of definitions) {
-        const known = new Set((d.options ?? []).map((o) => o.value));
+        // "All" (value "") is always there; lookup-driven options (specialty, region…) arrive
+        // later from the API, so with nothing but "All" the real options aren't known yet.
+        const known = new Set((d.options ?? []).map((o) => o.value).filter((v) => v !== ""));
         if (!known.size) continue;
         const v = out[d.key];
         if (Array.isArray(v)) out[d.key] = v.filter((s) => known.has(s));
