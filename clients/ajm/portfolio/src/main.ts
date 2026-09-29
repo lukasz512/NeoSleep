@@ -5,10 +5,11 @@ import { DEFAULT_LOCALE, PATH_ROUTING, resolveLocale } from "./lib/locale";
 import { isLiteMode, readDeviceSignals } from "./lib/capability";
 import { applyTheme, initialTheme, readStoredTheme } from "./lib/theme";
 // Self-hosted fonts (no request to Google, weak-network friendly): Montserrat for everything,
-// Italianno for the pen-written accent word (F1 = F3, 2026-09-28), Bodoni Moda italic for figures.
+// Mrs Saint Delafield for the pen-written accent word (round 8: thinner, "Italy / Paris / Russia";
+// was Italianno), Bodoni Moda italic for figures.
 import "@fontsource-variable/montserrat/wght.css";
 import "@fontsource/bodoni-moda/latin-400-italic.css";
-import "@fontsource/italianno/latin-400.css";
+import "@fontsource/mrs-saint-delafield/latin-400.css";
 import "./style.css";
 import { installGlide } from "./lib/glide";
 

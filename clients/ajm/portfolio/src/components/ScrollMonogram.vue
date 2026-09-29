@@ -1,15 +1,18 @@
 <!-- The pause between "Cómo trabajamos" and the clients (O1 = O-A, 2026-09-28): the AJ monogram
-     from the client's logo, drawn like a Leonardo sketch as it rises up the screen (round 8,
-     Łukasz 2026-09-29): pencil construction lines (circle, square, diagonals) first, then the outline,
-     then pencil hatching, and finally it is coloured in solid black. The grain comes from a light
+     from the client's logo, drawn like a Leonardo sketch (round 8, Łukasz 2026-09-29). The page stops
+     on it for about two scroll swipes (lib/monogram.ts) and that scroll draws it: construction lines,
+     outline, pencil hatching, solid black; then the construction lines fade and the page moves on. The grain comes from a light
      turbulence filter, so the lines look drawn, not ruled. On a mouse the mark is pulled toward the
      pointer like a magnet (lib/magnet.ts). Decorative only (aria-hidden). Lite: finished and still. -->
 <template>
   <div
     ref="root"
     class="mono"
+    :class="{ 'mono--pinned': !lite }"
     aria-hidden="true"
     :style="{
+      '--pin': MONO_PIN_SCREENS,
+      '--guides-out': st.guidesOut,
       '--guide': guide,
       '--draw': draw,
       '--hatch': hatch,
@@ -18,6 +21,7 @@
       '--my': `${pull.y}px`,
     }"
   >
+    <div class="mono__stage">
     <svg class="mono__mark" viewBox="560 163 400 400">
       <defs>
         <filter id="ajm-pencil" x="-5%" y="-5%" width="110%" height="110%">
@@ -40,13 +44,15 @@
         <path class="mono__ink" pathLength="1" :d="J" :transform="TJ" />
       </g>
     </svg>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
-import { span01, useScrollProgress } from "../lib/motion";
+import { useScrollProgress } from "../lib/motion";
 import { magnetPull } from "../lib/magnet";
+import { MONO_PIN_SCREENS, monoStages } from "../lib/monogram";
 
 // The two strokes of the AJ monogram, exactly as in AjLogo.vue (client file logo-white.svg).
 const A = "m 0,0 v -159.584 h -15.978 v 138.067 h -2.774 l -94.825,-138.067 h -19.608 L -21.746,0 Z";
@@ -95,13 +101,13 @@ const GUIDES = [
 
 const root = ref<HTMLElement | null>(null);
 const lite = typeof document !== "undefined" && document.documentElement.classList.contains("lite");
-const entering = useScrollProgress(root, "enter");
-// scroll stages while the mark rises from the bottom of the screen to just above its middle
-const stage = (a: number, b: number) => computed(() => (lite ? "1" : span01(entering.value, a, b).toFixed(3)));
-const guide = stage(0.02, 0.45);
-const draw = stage(0.2, 0.5);
-const hatch = stage(0.45, 0.65);
-const fill = stage(0.62, 0.8);
+const through = useScrollProgress(root);
+// lite: the finished mark, still; otherwise every stage follows the scroll through the pinned stretch
+const st = computed(() => monoStages(lite ? 1 : through.value));
+const guide = computed(() => st.value.guide.toFixed(3));
+const draw = computed(() => st.value.draw.toFixed(3));
+const hatch = computed(() => st.value.hatch.toFixed(3));
+const fill = computed(() => st.value.fill.toFixed(3));
 
 // Magnet: ease toward the pull for the current pointer position, back to rest when it leaves.
 const pull = reactive({ x: 0, y: 0 });
@@ -130,11 +136,22 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+/* the stage is a full screen held while the sketch draws; the mark and its construction fill
+   most of it, with air above and below */
 .mono {
-  --size: clamp(140px, 20vw, 240px);
+  --size: min(58svh, 78vw);
+}
+.mono--pinned {
+  height: calc(100svh * (1 + var(--pin)));
+}
+.mono__stage {
   display: grid;
   place-items: center;
-  padding: clamp(8px, 2vh, 24px) 0 0;
+  height: 100svh;
+}
+.mono--pinned .mono__stage {
+  position: sticky;
+  top: 0;
 }
 .mono__mark {
   width: var(--size);
@@ -143,12 +160,14 @@ onBeforeUnmount(() => {
   transform: translate3d(var(--mx, 0), var(--my, 0), 0);
 }
 /* pencil construction lines, faint, drawn first and one after another */
+.mono__guides {
+  opacity: calc(1 - var(--guides-out, 0));
+}
 .mono__guides > * {
   fill: none;
   stroke: var(--ajm-muted);
-  stroke-width: 0.8;
+  stroke-width: 0.6; /* viewBox units: no non-scaling-stroke, which breaks pathLength dashes in Chrome */
   stroke-opacity: 0.45;
-  vector-effect: non-scaling-stroke;
   stroke-dasharray: 1;
   stroke-dashoffset: calc(1 - clamp(0, var(--guide, 1) * 2.2 - var(--i) * 0.07, 1));
 }
@@ -157,9 +176,8 @@ onBeforeUnmount(() => {
   fill: var(--ajm-ink);
   fill-opacity: var(--fill, 1);
   stroke: var(--ajm-ink);
-  stroke-width: 1.2;
+  stroke-width: 0.9;
   stroke-linejoin: round;
-  vector-effect: non-scaling-stroke;
   stroke-dasharray: 1;
   stroke-dashoffset: calc(1 - var(--draw, 1));
 }

@@ -19,7 +19,7 @@ describe("magnet › the AJ is drawn toward the pointer (round 8)", () => {
     expect(mid).toBeGreaterThan(edge);
     for (const d of [10, 100, 200, 300, 500]) expect(magnetPull(d, 0).x).toBeLessThan(d);
   });
-  it("is capped at 60 px", () => {
-    for (const d of [100, 200, 300, 400]) expect(Math.hypot(...Object.values(magnetPull(d, d)))).toBeLessThanOrEqual(60);
+  it("is capped at 22 px (round 8: a gentle pull, not a grab)", () => {
+    for (const d of [100, 200, 300, 400]) expect(Math.hypot(...Object.values(magnetPull(d, d)))).toBeLessThanOrEqual(22);
   });
 });

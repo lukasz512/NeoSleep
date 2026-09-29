@@ -15,7 +15,7 @@
   "dependencies": {
     "@fontsource-variable/montserrat": "^5.3.0",
     "@fontsource/bodoni-moda": "^5.3.0",
-    "@fontsource/italianno": "^5.3.0",
+    "@fontsource/mrs-saint-delafield": "^5.3.0",
     "vue": "catalog:",
     "vue-i18n": "catalog:"
   },

@@ -19,7 +19,7 @@
   --ajm-ease: cubic-bezier(0.7, 0, 0.2, 1);
   --ajm-font: "Montserrat Variable", "Montserrat", "Helvetica Neue", Arial, system-ui, sans-serif;
   --ajm-display: "Bodoni Moda", Didot, "Bodoni 72", Georgia, serif;
-  --ajm-script: "Italianno", "Snell Roundhand", cursive;
+  --ajm-script: "Mrs Saint Delafield", "Snell Roundhand", cursive;
   color-scheme: light;
 }
 :root[data-theme="dark"] {
@@ -65,15 +65,16 @@
   font-weight: 400;
   letter-spacing: -0.01em;
 }
-/* The one accent word per headline, written as if by pen (Łukasz, 2026-09-28: "like a pen"; Italianno, F1).
+/* The one accent word per headline, written as if by pen (Łukasz, 2026-09-28: "like a pen").
+   Round 8: a finer copperplate hand (Mrs Saint Delafield) in its own natural slant, no extra skew.
    AccentText sets --write from scroll, so the word writes itself left to right as the heading
    comes up the screen. The clip reaches past the box so swashes aren't cut. */
 .acc {
   font-family: var(--ajm-script);
   font-weight: 400;
   font-style: normal;
-  /* round 7b: bigger and more slanted than the face itself, and allowed to run into the letters
-     either side (negative margins, drawn above them), like a signature across a printed line */
+  /* bigger than the face and allowed to run into the letters either side (negative margins, drawn
+     above them), like a signature across a printed line */
   display: inline-block;
   position: relative;
   z-index: 1;
@@ -82,12 +83,9 @@
   letter-spacing: 0;
   padding: 0 0.06em;
   margin: 0 0.02em 0 -0.1em;
-  /* slanted, and set on a slight upward angle like a hand-written note (round 8) */
-  transform: rotate(-4deg) skewX(-12deg);
   /* sits a touch lower on the line, so it scales with the heading more naturally (round 8) */
   top: 0.05em;
-  transform-origin: 0 100%;
-  /* the pen moves left to right; at rest the clip sits well outside the glyphs, so Italianno's
+  /* the pen moves left to right; at rest the clip sits well outside the glyphs, so the script's
      tall loops and end swashes are never cut (round 7: "always fully visible") */
   clip-path: inset(-0.9em calc((1 - var(--write, 1)) * (100% + 0.6em) - 0.6em) -0.7em -0.6em);
 }
@@ -111,7 +109,8 @@
   z-index: -1;
   left: var(--mk-l);
   right: var(--mk-r);
-  bottom: var(--mk-b);
+  /* round 8: a little lower, under the letters rather than through them */
+  bottom: calc(var(--mk-b) - 0.16em);
   height: var(--mk-h);
   background: var(--ajm-sand);
   -webkit-mask: var(--mk-shape) 0 0 / 100% 100% no-repeat;
@@ -157,6 +156,12 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+}
+/* nothing may scroll the page sideways on a phone (round 8): swashes, markers and parallax photos
+   overhang their boxes on purpose. clip (not hidden) keeps position: sticky working. */
+html,
+body {
+  overflow-x: clip;
 }
 
 body {
