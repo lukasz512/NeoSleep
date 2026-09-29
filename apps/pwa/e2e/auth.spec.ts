@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+// CORE-58: flaky on CI WebKit; hunted 20× with no retries by .github/workflows/e2e-flake-hunt.yml.
 
 /**
  * ADR-020 cross-browser auth coverage. See playwright.config.ts's doc comment

@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+// CORE-58: flaky on CI WebKit; hunted 20× with no retries by .github/workflows/e2e-flake-hunt.yml.
 
 /**
  * NEO-132 AppDateField in a real browser: the typed mask (no 5th year digit)

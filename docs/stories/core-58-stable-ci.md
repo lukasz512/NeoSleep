@@ -1,6 +1,11 @@
 # CORE-58 — Stable CI
 
-Status: plan, waiting for Łukasz's decisions (Artifact linked from CORE-58).
+Status: in progress. Decisions (Łukasz, 2026-09-28):
+
+- D1: keep e2e on the Vite dev server (no production-build switch). auth bfcache gets its own fix.
+- D2: honour "reduce motion" globally **and** add a switch in the account menu (separate ticket).
+- D3: PWA/web unit tests, `tooling` and `api-image` become required only after one week with zero flake-hunt failures.
+- D4: keep 1 retry; a nightly job opens a CORE ticket for any test that passed only on retry.
 
 ## Evidence (last 100 CI runs, 2026-09-28)
 

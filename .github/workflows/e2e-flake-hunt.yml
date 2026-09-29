@@ -1,0 +1,123 @@
+# e2e flake hunt (CORE-58). Runs Playwright specs many times with no retries, on all
+# three engines, so a flaky test fails here before it reaches dev.
+#
+# - Push to a work branch that touches apps/pwa/e2e/ or the Playwright config: the spec
+#   files changed vs dev, 20× each (whole suite 3× when only config changed).
+# - Nightly on dev: the whole e2e suite, 5× each.
+# - Manual (Actions → e2e flake hunt → Run workflow): any spec list and repeat count.
+#
+# A flaky test only shows up under CI load (Linux WebKit is the slow one); a fast laptop
+# passes 140/140. That's why this runs here and not only locally.
+
+name: e2e flake hunt
+
+on:
+  # push, not pull_request: branches are pushed well before Łukasz opens the PR.
+  push:
+    branches-ignore: [dev, prod]
+    paths:
+      - "apps/pwa/e2e/**"
+      - "apps/pwa/playwright.config.ts"
+      - ".github/workflows/e2e-flake-hunt.yml"
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      specs:
+        description: "Spec files, space separated (empty = whole suite)"
+        required: false
+        default: ""
+      repeat:
+        description: "Repeats per test"
+        required: false
+        default: "20"
+
+concurrency:
+  group: e2e-flake-hunt-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hunt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      DEFAULT_TENANT_SLUG: neosleep
+      SESSION_SECRET: ci-test-session-secret-not-for-production-use
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @neo/email build
+      - run: pnpm --filter @neo/documents build
+      - run: pnpm --filter @neo/api migrate
+      - run: pnpm --filter @neo/api sync-test-schema
+
+      - name: Pick specs and repeat count
+        id: pick
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_SPECS: ${{ github.event.inputs.specs }}
+          INPUT_REPEAT: ${{ github.event.inputs.repeat }}
+        run: |
+          case "$EVENT" in
+            push)
+              base="$(git merge-base origin/dev HEAD)"
+              specs="$(git diff --name-only "$base" HEAD -- 'apps/pwa/e2e/*.spec.ts' | sed 's#^apps/pwa/##' | tr '\n' ' ')"
+              # Config or workflow changed without a spec change: hunt the whole suite once over.
+              repeat=20
+              [ -z "$specs" ] && repeat=3 ;;
+            workflow_dispatch) specs="$INPUT_SPECS"; repeat="${INPUT_REPEAT:-20}" ;;
+            *) specs=""; repeat=5 ;;
+          esac
+          echo "specs=$specs" >> "$GITHUB_OUTPUT"
+          echo "repeat=$repeat" >> "$GITHUB_OUTPUT"
+          echo "Hunting: ${specs:-whole suite} × $repeat" >> "$GITHUB_STEP_SUMMARY"
+
+      - run: pnpm --filter @neo/pwa exec playwright install --with-deps chromium firefox webkit
+
+      - name: Write .env for the e2e dev servers
+        run: |
+          cat > .env <<EOF
+          DATABASE_URL=${DATABASE_URL}
+          DEFAULT_TENANT_SLUG=${DEFAULT_TENANT_SLUG}
+          SESSION_SECRET=${SESSION_SECRET}
+          EOF
+
+      - name: Run ${{ steps.pick.outputs.repeat }}× with no retries
+        working-directory: apps/pwa
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: flake-hunt.json
+        run: pnpm exec playwright test ${{ steps.pick.outputs.specs }} --repeat-each=${{ steps.pick.outputs.repeat }} --retries=0 --reporter=github,json
+
+      - name: Failure rate per test
+        if: always()
+        working-directory: apps/pwa
+        run: node ../../infrastructure/scripts/flake-report.mjs flake-hunt.json >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: flake-hunt-results
+          path: apps/pwa/test-results/
+          retention-days: 7
