@@ -460,14 +460,14 @@ describe("PatientStudiesPanel — the Estudios checklist", () => {
     expect((document.body.querySelector("#study-upload-title") as HTMLInputElement).value).toBe("Polysomnography");
   });
 
-  it("with no link live it checks the fingerprint every 60 s and reloads only when it moved; the new row is highlighted (NEO-173)", async () => {
+  it("the open tab checks the fingerprint every 15 s, link or not, and reloads only when it moved; the new row is highlighted (NEO-173)", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
       const wrapper = await mountPanel();
       const calls = (suffix: string) => apiFetch.mock.calls.filter(([path]) => String(path).endsWith(suffix)).length;
       expect(calls("/checklist")).toBe(1);
 
-      await vi.advanceTimersByTimeAsync(60_000);
+      await vi.advanceTimersByTimeAsync(15_000);
       await flushPromises();
       expect([calls("/checklist/version"), calls("/checklist")]).toEqual([1, 1]); // nothing changed → no reload
 
@@ -476,7 +476,7 @@ describe("PatientStudiesPanel — the Estudios checklist", () => {
         actions: actions({ fill: "questionnaire", form: "oral_exam" }),
         history: [{ id: "oe-1", type: "record", created_at: "2026-09-28T10:00:00Z", source: "staff", by: "Dr. Other", is_new: true, record: { kind: "oral_exam", id: "oe-1", created_at: "2026-09-28T10:00:00Z", recorded_by_name: "Dr. Other", has_bruxism: true } }],
       });
-      await vi.advanceTimersByTimeAsync(60_000);
+      await vi.advanceTimersByTimeAsync(15_000);
       await flushPromises();
       expect([calls("/checklist/version"), calls("/checklist")]).toEqual([2, 2]);
       expect(rows(wrapper)[3]!.classes()).toContain("studies__item--arrived");
@@ -485,6 +485,14 @@ describe("PatientStudiesPanel — the Estudios checklist", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("shows which colleagues already opened the result (NEO-173 B2)", async () => {
+    const history = (checklistBody.items as ReturnType<typeof item>[])[1]!.history as Record<string, unknown>[];
+    history[0]!.opened_by = [{ name: "Dra. Ana Ruiz", at: "2026-09-29T10:00:00Z" }, { name: "Dr. Luis Pérez", at: "2026-09-29T11:00:00Z" }];
+    const wrapper = await mountPanel();
+    expect(rows(wrapper)[1]!.find("[data-testid='studies-seen-by']").text()).toBe("Seen by Dra. Ana Ruiz, Dr. Luis Pérez");
+    expect(rows(wrapper)[2]!.find("[data-testid='studies-seen-by']").exists()).toBe(false);
   });
 
   it("'New' goes away once I open that result, and the open is reported (NEO-173)", async () => {

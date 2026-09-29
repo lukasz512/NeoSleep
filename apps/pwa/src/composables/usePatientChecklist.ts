@@ -48,6 +48,8 @@ export interface ChecklistHistoryEntry {
   by: string | null;
   /** NEO-173: someone else added it and I haven't opened it yet — the row's "Nuevo" chip. */
   is_new?: boolean;
+  /** Colleagues (not me) who already opened it, first open each — "Visto por …" (NEO-173 B2). */
+  opened_by?: { name: string; at: string }[];
   record?: ChecklistRecord;
   file_attachment_id?: string | null;
   title?: string | null;

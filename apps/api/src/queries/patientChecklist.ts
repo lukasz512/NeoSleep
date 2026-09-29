@@ -65,6 +65,8 @@ export interface ChecklistHistoryEntry {
   added_at?: Date;
   /** NEO-173: added by someone else since NEW_MARKER_SINCE and not yet opened by the viewing user — set by annotateNewEntries(). */
   is_new?: boolean;
+  /** NEO-173 B2: colleagues (not the viewer) who already opened it, first open each — from the audit trail. */
+  opened_by?: { name: string; at: Date }[];
   /** Clinical form record (for view / PDF), when type = "record". */
   record?: (MedicalHistoryRecord | OralExamRecord | StopBangRecord) & { kind: ClinicalRecordKind };
   /** Stored file (signed consent PDF, uploaded study) — downloadable via the patient documents endpoint. */
@@ -324,22 +326,33 @@ export function allChecklistEntries(checklist: PatientChecklist): ChecklistHisto
  * Per viewing user: an entry is new when someone else added it (the patient
  * via QR, or another staff member) after NEW_MARKER_SINCE, and this user has
  * not opened it yet — no audit_log read row of theirs for it (written by
- * OpenChecklistEntryCommand). Sets is_new on every entry.
+ * OpenChecklistEntryCommand). Sets is_new on every entry, and opened_by:
+ * the colleagues (not the viewer) who already opened it, first open each —
+ * Łukasz's B2 answer, "per user + show who already opened it" (2026-09-29).
  */
 export async function annotateNewEntries(client: PoolClient, checklist: PatientChecklist, userId: string): Promise<PatientChecklist> {
   const entries = allChecklistEntries(checklist);
-  const candidates = entries.filter((e) => e.created_by !== userId && (e.added_at ?? e.created_at) >= NEW_MARKER_SINCE);
-  const opened = new Set<string>();
-  if (candidates.length) {
-    const r = await client.query<{ entity_id: string }>(
-      `SELECT DISTINCT entity_id FROM audit_log
-        WHERE entity_type = $1 AND action = 'read' AND user_id = $2 AND entity_id = ANY($3::text[])`,
-      [CHECKLIST_ENTRY_AUDIT_TYPE, userId, candidates.map((e) => e.id)]
+  const openedByMe = new Set<string>();
+  const openedByOthers = new Map<string, { name: string; at: Date }[]>();
+  if (entries.length) {
+    const r = await client.query<{ entity_id: string; user_id: string; name: string | null; at: Date }>(
+      `SELECT a.entity_id, a.user_id, MIN(a.created_at) AS at,
+              (SELECT NULLIF(concat_ws(' ', i.first_name, i.last_name), '') FROM users u JOIN identities i ON i.id = u.identity_id WHERE u.id = a.user_id) AS name
+         FROM audit_log a
+        WHERE a.entity_type = $1 AND a.action = 'read' AND a.user_id IS NOT NULL AND a.entity_id = ANY($2::text[])
+        GROUP BY a.entity_id, a.user_id
+        ORDER BY at`,
+      [CHECKLIST_ENTRY_AUDIT_TYPE, entries.map((e) => e.id)]
     );
-    for (const row of r.rows) opened.add(row.entity_id);
+    for (const row of r.rows) {
+      if (row.user_id === userId) openedByMe.add(row.entity_id);
+      else if (row.name) openedByOthers.set(row.entity_id, [...(openedByOthers.get(row.entity_id) ?? []), { name: row.name, at: row.at }]);
+    }
   }
-  const fresh = new Set(candidates.filter((e) => !opened.has(e.id)).map((e) => e.id));
-  for (const entry of entries) entry.is_new = fresh.has(entry.id);
+  for (const entry of entries) {
+    entry.is_new = entry.created_by !== userId && (entry.added_at ?? entry.created_at) >= NEW_MARKER_SINCE && !openedByMe.has(entry.id);
+    entry.opened_by = openedByOthers.get(entry.id) ?? [];
+  }
   return checklist;
 }
 

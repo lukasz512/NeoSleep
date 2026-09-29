@@ -133,6 +133,9 @@
                     <span v-if="hasNew(item)" class="studies__new" data-testid="studies-new">{{ t("app.clinical.new") }}</span>
                   </span>
                   <span class="studies__item-status">{{ statusLine(item) }}</span>
+                  <span v-if="seenBy(resultEntry(item) ?? item.history[0])" class="studies__seen-by" data-testid="studies-seen-by">
+                    <AppIcon name="eye" class="studies__seen-icon" />{{ seenBy(resultEntry(item) ?? item.history[0]) }}
+                  </span>
                   <!-- STOP-Bang is half the patient's, half the specialist's: show each half's own state. -->
                   <span v-if="item.actions.form === 'stop_bang' && item.status !== 'missing'" class="studies__split" :aria-label="t('app.clinical.split.aria')">
                     <span v-for="half in stopBangHalves(item)" :key="half.key" class="studies__split-half" :class="`studies__split-half--${half.state}`">
@@ -267,6 +270,9 @@
                     <span v-if="upload.is_new" class="studies__new">{{ t("app.clinical.new") }}</span>
                   </span>
                   <span class="studies__item-status">{{ t("app.clinical.status.doneOn", { date: formatDate(upload.created_at) }) }}<template v-if="upload.by"> · {{ t("app.clinical.recordedBy", { name: upload.by }) }}</template></span>
+                  <span v-if="seenBy(upload)" class="studies__seen-by">
+                    <AppIcon name="eye" class="studies__seen-icon" />{{ seenBy(upload) }}
+                  </span>
                 </div>
                 <div class="studies__item-actions">
                   <AppListItemMenu :aria-label="t('app.clinical.action.more', { item: upload.title ?? upload.filename ?? '' })">
@@ -568,28 +574,17 @@ watch(qrPatientStarted, (started) => {
   if (started) qrDialog.open = false;
 });
 
-// The open tab keeps itself current (NEO-173): every 15 s while a link is
-// live, so the QR status button and the patient's answers move on their own,
-// every 60 s otherwise (another doctor's upload, a result entered elsewhere).
-// Only while the page is visible, plus once on coming back to it. Each check
-// asks for the checklist's fingerprint and reloads only when it moved. The
-// 15 s mode stops 15 min into a link: the doctor's device and a patient's
-// phone usually share the clinic Wi-Fi's one public IP — and so the API's
-// per-IP rate limit. The open QR dialog has its own faster check, below.
-const POLL_LINK_MS = 15_000;
-const POLL_LINK_MAX_MS = 15 * 60_000;
-const POLL_IDLE_MS = 60_000;
-const linkLiveSince = ref<number | null>(null);
-watch(
-  () => checklist.value?.pending_requests[0]?.id ?? null,
-  (liveId, previous) => {
-    if (liveId !== previous) linkLiveSince.value = liveId ? Date.now() : null;
-  },
-);
-useVisiblePolling(
-  () => (linkLiveSince.value !== null && Date.now() - linkLiveSince.value < POLL_LINK_MAX_MS ? POLL_LINK_MS : POLL_IDLE_MS),
-  checklistApi.refreshIfChanged,
-);
+// The open tab keeps itself current (NEO-173): every 15 s while it is open —
+// whether the patient uses a QR shown here, an emailed link or one made on
+// another device, and for another doctor's upload too (Łukasz: "open studies
+// page → every 15 s"; the side panel and Details card check every 60 s). Only
+// while the page is visible, plus once on coming back to it. Each check asks
+// for the checklist's fingerprint (tiny, not audited) and reloads only when
+// it moved — 60 requests / 15 min per open tab, far under the API's per-IP
+// limit even on a clinic Wi-Fi shared with the patient's phone. The open QR
+// dialog has its own faster check, below.
+const POLL_TAB_MS = 15_000;
+useVisiblePolling(() => POLL_TAB_MS, checklistApi.refreshIfChanged);
 
 // What just arrived gets a short highlight (NEO-173) — a row with an entry
 // that wasn't there on the previous load. Not on the first load.
@@ -610,6 +605,12 @@ watch(checklist, (value) => {
 watch(() => props.patientId, () => (knownEntryIds = null));
 
 const hasNew = (item: ChecklistItem) => item.history.some((entry) => entry.is_new);
+
+/** "Seen by Dr. A, Dr. B" — colleagues who already opened this result (NEO-173 B2; from the audit trail). */
+function seenBy(entry: ChecklistHistoryEntry | null | undefined): string | null {
+  const names = entry?.opened_by?.map((o) => o.name) ?? [];
+  return names.length ? t("app.clinical.seenBy", { names: names.join(", ") }) : null;
+}
 
 function openOtherUpload(upload: ChecklistHistoryEntry) {
   void checklistApi.markOpened(upload);
@@ -980,6 +981,18 @@ watch(() => props.focusItem, (key) => highlightItem(key));
     animation: none;
     opacity: 0.12;
   }
+}
+/* NEO-173 B2: who of my colleagues already opened it. */
+.studies__seen-by {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+.studies__seen-icon {
+  width: 14px;
+  height: 14px;
 }
 /* NEO-173: "Nuevo" — added by someone else, not yet opened by me. */
 .studies__new {

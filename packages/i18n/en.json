@@ -1153,6 +1153,7 @@
   "app.clinical.risk.high": "High risk",
   "app.clinical.awaitingBang": "B-A-N-G missing",
   "app.clinical.new": "New",
+  "app.clinical.seenBy": "Seen by {names}",
   "app.clinical.completeBang": "Complete B-A-N-G",
   "app.clinical.section.stop": "S-T-O-P — answered by the patient",
   "app.clinical.section.bang": "B-A-N-G — measured by the clinician",
