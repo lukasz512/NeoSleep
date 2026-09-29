@@ -153,10 +153,11 @@ signed PDF is left behind.
 
 ## Addendum — live refresh and "Nuevo" (NEO-173, 2026-09-28)
 
-- **Live refresh.** The open Estudios tab (and the Details tab's studies card) checks
-  `GET /patient/:id/checklist/version`: every 15 s while a QR link is live (at most 15 min per
-  link, same per-IP rate-limit reason as the QR polling), every 60 s otherwise, only while the page
-  is visible, and once on coming back to it. The version is a hash of the checklist; the full,
+- **Live refresh.** The open Estudios tab checks `GET /patient/:id/checklist/version` every
+  15 s, link or not; the Details card and the side panel every 60 s. Only while the page is visible,
+  and once on coming back to it. (The first cut polled the tab at 60 s unless a link made in that
+  tab was live, so an emailed link or one from another device took up to a minute; fixed
+  2026-09-29.) 60 fingerprint requests / 15 min per open tab is far under the per-IP limit. The version is a hash of the checklist; the full,
   read-audited checklist is loaded only when it moved, so polling never writes a health-data read row.
   Rows with a new entry get a short highlight. The open QR dialog keeps its own faster check (NEO-117).
 - **"Nuevo" is per user.** An entry is new for me when someone else added it (the patient via QR, or

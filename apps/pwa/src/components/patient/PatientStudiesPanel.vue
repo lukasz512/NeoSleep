@@ -568,28 +568,17 @@ watch(qrPatientStarted, (started) => {
   if (started) qrDialog.open = false;
 });
 
-// The open tab keeps itself current (NEO-173): every 15 s while a link is
-// live, so the QR status button and the patient's answers move on their own,
-// every 60 s otherwise (another doctor's upload, a result entered elsewhere).
-// Only while the page is visible, plus once on coming back to it. Each check
-// asks for the checklist's fingerprint and reloads only when it moved. The
-// 15 s mode stops 15 min into a link: the doctor's device and a patient's
-// phone usually share the clinic Wi-Fi's one public IP — and so the API's
-// per-IP rate limit. The open QR dialog has its own faster check, below.
-const POLL_LINK_MS = 15_000;
-const POLL_LINK_MAX_MS = 15 * 60_000;
-const POLL_IDLE_MS = 60_000;
-const linkLiveSince = ref<number | null>(null);
-watch(
-  () => checklist.value?.pending_requests[0]?.id ?? null,
-  (liveId, previous) => {
-    if (liveId !== previous) linkLiveSince.value = liveId ? Date.now() : null;
-  },
-);
-useVisiblePolling(
-  () => (linkLiveSince.value !== null && Date.now() - linkLiveSince.value < POLL_LINK_MAX_MS ? POLL_LINK_MS : POLL_IDLE_MS),
-  checklistApi.refreshIfChanged,
-);
+// The open tab keeps itself current (NEO-173): every 15 s while it is open —
+// whether the patient uses a QR shown here, an emailed link or one made on
+// another device, and for another doctor's upload too (Łukasz: "open studies
+// page → every 15 s"; the side panel and Details card check every 60 s). Only
+// while the page is visible, plus once on coming back to it. Each check asks
+// for the checklist's fingerprint (tiny, not audited) and reloads only when
+// it moved — 60 requests / 15 min per open tab, far under the API's per-IP
+// limit even on a clinic Wi-Fi shared with the patient's phone. The open QR
+// dialog has its own faster check, below.
+const POLL_TAB_MS = 15_000;
+useVisiblePolling(() => POLL_TAB_MS, checklistApi.refreshIfChanged);
 
 // What just arrived gets a short highlight (NEO-173) — a row with an entry
 // that wasn't there on the previous load. Not on the first load.
