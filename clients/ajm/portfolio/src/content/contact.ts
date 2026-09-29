@@ -20,3 +20,7 @@ export function whatsappLink(message: string): string {
 export function telLink(digits: string): string {
   return `tel:+${digits}`;
 }
+
+/** Order of the contact rows (two columns): email, Instagram · phone Spain, phone Mexico · LinkedIn. */
+export const CHANNEL_ORDER = ["email", "instagram", "phoneEs", "whatsapp", "linkedin"] as const;
+export type Channel = (typeof CHANNEL_ORDER)[number];

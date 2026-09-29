@@ -1,6 +1,6 @@
 <!-- Section 09. Closes on the strongest stage AJM has on film (eFashion Day Live 2020 studio):
      the loop plays full-bleed and slowly pushes in as the section scrolls up, the question rises
-     through a mask, one oversized CTA, then the channels with icons (email, WhatsApp México, phone España, LinkedIn, Instagram). -->
+     through a mask, one oversized CTA, then the channels with icons in CHANNEL_ORDER (email, Instagram · Spain, Mexico · LinkedIn). -->
 <template>
   <section id="contacto" ref="root" class="contact" :class="{ 'is-in': seen }">
     <div class="contact__bg" :style="{ '--push': push }">
@@ -49,7 +49,7 @@ import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import LoopVideo from "./LoopVideo.vue";
 import SocialIcon from "./SocialIcon.vue";
-import { CONTACT, telLink, whatsappLink } from "../content/contact";
+import { CHANNEL_ORDER, CONTACT, telLink, whatsappLink, type Channel } from "../content/contact";
 import { loopUrl, picture } from "../lib/media";
 import { useInView } from "../lib/useInView";
 import { useScrollProgress, vReveal } from "../lib/motion";
@@ -63,25 +63,28 @@ const seen = useInView(root, "-10%");
 const progress = useScrollProgress(root, "enter");
 const push = computed(() => (props.lite ? "1" : (1.12 - progress.value * 0.12).toFixed(4)));
 
-const channels = computed(() => [
-  { icon: "email" as const, label: t("contact.email"), value: CONTACT.email, href: `mailto:${CONTACT.email}`, external: false },
-  {
-    icon: "whatsapp" as const,
-    label: t("contact.whatsapp"),
-    value: CONTACT.whatsappDisplay,
-    href: whatsappLink(t("contact.whatsappMessage")),
-    external: true,
-  },
-  { icon: "phone" as const, label: t("contact.phoneEs"), value: CONTACT.phoneEsDisplay, href: telLink(CONTACT.phoneEs), external: false },
-  { icon: "linkedin" as const, label: t("contact.linkedin"), value: "Alfred Jan Díaz", href: CONTACT.linkedin, external: true },
-  {
-    icon: "instagram" as const,
-    label: t("contact.instagram"),
-    value: `@${CONTACT.instagram}`,
-    href: `https://instagram.com/${CONTACT.instagram}`,
-    external: true,
-  },
-]);
+const channels = computed(() => {
+  const all: Record<Channel, { icon: "email" | "whatsapp" | "phone" | "linkedin" | "instagram"; label: string; value: string; href: string; external: boolean }> = {
+    email: { icon: "email", label: t("contact.email"), value: CONTACT.email, href: `mailto:${CONTACT.email}`, external: false },
+    instagram: {
+      icon: "instagram",
+      label: t("contact.instagram"),
+      value: `@${CONTACT.instagram}`,
+      href: `https://instagram.com/${CONTACT.instagram}`,
+      external: true,
+    },
+    phoneEs: { icon: "phone", label: t("contact.phoneEs"), value: CONTACT.phoneEsDisplay, href: telLink(CONTACT.phoneEs), external: false },
+    whatsapp: {
+      icon: "whatsapp",
+      label: t("contact.whatsapp"),
+      value: CONTACT.whatsappDisplay,
+      href: whatsappLink(t("contact.whatsappMessage")),
+      external: true,
+    },
+    linkedin: { icon: "linkedin", label: t("contact.linkedin"), value: "Alfred Jan Díaz", href: CONTACT.linkedin, external: true },
+  };
+  return CHANNEL_ORDER.map((c) => all[c]);
+});
 </script>
 
 <style scoped>

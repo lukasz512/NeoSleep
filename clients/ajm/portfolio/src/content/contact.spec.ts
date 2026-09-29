@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CONTACT, telLink } from "./contact";
+import { CHANNEL_ORDER, CONTACT, telLink } from "./contact";
 import { MORE_PROJECTS } from "./more";
 import es from "../locales/es.json";
 import en from "../locales/en.json";
@@ -23,5 +23,15 @@ describe("content › years of the extra projects (Y1: all 2023)", () => {
   it("Beauty Week × Glamour is marked 2023 in both languages", () => {
     expect(es.privalia.chapters.beauty.mark).toBe("2023");
     expect(en.privalia.chapters.beauty.mark).toBe("2023");
+  });
+});
+
+describe("contact › order of the channels (Łukasz 2026-09-29)", () => {
+  it("email, Instagram · phone Spain, phone Mexico · LinkedIn (two columns)", () => {
+    expect(CHANNEL_ORDER).toEqual(["email", "instagram", "phoneEs", "whatsapp", "linkedin"]);
+  });
+  it("the Mexican number says so", () => {
+    expect(es.contact.whatsapp).toContain("México");
+    expect(en.contact.whatsapp).toContain("Mexico");
   });
 });
