@@ -75,7 +75,7 @@
       :is="isPhone ? VBottomSheet : VMenu"
       v-if="mode !== 'time'"
       v-model="dateOpen"
-      v-bind="isPhone ? { class: 'app-date-field-sheet' } : { target: dateTarget, location: 'bottom start', offset: 4, closeOnContentClick: false }"
+      v-bind="isPhone ? { class: 'app-date-field-sheet' } : { target: dateTarget, location: 'bottom end', offset: 4, width: dateMenuWidth, closeOnContentClick: false }"
     >
       <div class="app-date-field__panel" data-testid="date-field-calendar">
         <div v-if="quickPicks.length" class="app-date-field__chips">
@@ -361,23 +361,54 @@ const timeRules = computed(() => [
   ...(props.mode === "time" ? callerRules.value : []),
 ]);
 
+/**
+ * Leaving the field for its own calendar/time list isn't "done with the field",
+ * so our half-typed check waits until the card closes. (The card's position no
+ * longer depends on messages at all — see fieldBox below.)
+ */
 function onDateFocus(focused: boolean) {
   dateFocused.value = focused;
-  if (!focused) void nextTick(() => dateInput.value?.validate());
+  if (!focused && !dateOpen.value) void nextTick(() => dateInput.value?.validate());
 }
 function onTimeFocus(focused: boolean) {
   timeFocused.value = focused;
-  if (!focused) void nextTick(() => timeInput.value?.validate());
+  if (!focused && !timeOpen.value) void nextTick(() => timeInput.value?.validate());
 }
 
 // ── Calendar ──────────────────────────────────────────────────────────────
 
 const dateOpen = ref(false);
 const viewMode = ref<"month" | "months" | "year">("month");
-const dateTarget = computed(() => dateInput.value?.$el ?? undefined);
+/**
+ * The card hangs from the field's box (.v-field), not the whole v-input: the
+ * v-input also holds the message line, which appears when the field is
+ * validated on blur — mid-click on the card — and shifted the card 22 px down
+ * under the pointer, so Firefox/Safari dropped the click (NEO-188: "the year
+ * doesn't open in the event form"). The box never moves.
+ */
+function fieldBox(el: HTMLElement | undefined): HTMLElement | undefined {
+  return el?.querySelector<HTMLElement>(".v-field") ?? el;
+}
+const dateTarget = computed(() => fieldBox(dateInput.value?.$el));
+
+/**
+ * The card hangs from the field's right edge ("bottom end") and is at least
+ * as wide as the field, never under DATE_MENU_MIN_WIDTH — NEO-188: pinned to
+ * the left edge at a fixed 320 px, a half-width field near the dialog's right
+ * side pushed it past the dialog, and the month grid squeezed to 2 columns.
+ * Growing leftwards keeps it over the form. Measured on open, so a resized
+ * window or a narrower column is picked up.
+ */
+const DATE_MENU_MIN_WIDTH = 360;
+const dateMenuWidth = ref(DATE_MENU_MIN_WIDTH);
 
 watch(dateOpen, (open) => {
-  if (open) viewMode.value = props.openAt === "year" && !dateIso.value ? "year" : "month";
+  if (!open) {
+    if (!dateFocused.value) void nextTick(() => dateInput.value?.validate());
+    return;
+  }
+  viewMode.value = props.openAt === "year" && !dateIso.value ? "year" : "month";
+  dateMenuWidth.value = Math.max(dateTarget.value?.offsetWidth ?? 0, DATE_MENU_MIN_WIDTH);
 });
 
 const pickerDate = computed(() => (dateIso.value ? new Date(`${dateIso.value}T00:00:00`) : null));
@@ -422,7 +453,7 @@ const quickPicks = computed(() => {
 // ── Times ─────────────────────────────────────────────────────────────────
 
 const timeOpen = ref(false);
-const timeTarget = computed(() => timeInput.value?.$el ?? undefined);
+const timeTarget = computed(() => fieldBox(timeInput.value?.$el));
 const slotList = ref<HTMLElement | null>(null);
 
 const slots = computed(() => {
@@ -436,7 +467,10 @@ const slots = computed(() => {
 });
 
 watch(timeOpen, async (open) => {
-  if (!open) return;
+  if (!open) {
+    if (!timeFocused.value) void nextTick(() => timeInput.value?.validate());
+    return;
+  }
   await nextTick();
   // Start the list at the chosen time (or the first free slot) instead of 07:00.
   const target = time.value ?? slots.value.find((s) => !s.disabled)?.time;
@@ -494,7 +528,8 @@ const datePlaceholder = computed(() =>
   background: rgb(var(--v-theme-surface));
   border-radius: 16px;
   padding: 12px;
-  width: 320px;
+  /* The menu sets the width (dateMenuWidth); the panel fills it. */
+  width: 100%;
   max-width: 100vw;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.24);
 }
@@ -525,6 +560,10 @@ const datePlaceholder = computed(() =>
 .app-date-field__picker {
   background: transparent;
   box-shadow: none;
+}
+/* Months as a 3 × 4 grid (Vuetify's default is 2 × 6): shorter card, same as the year grid's 3 columns. */
+.app-date-field__picker :deep(.v-date-picker-months__content) {
+  grid-template-columns: repeat(3, 1fr);
 }
 .app-date-field__footer {
   display: flex;
