@@ -1,7 +1,6 @@
 <template>
   <EntryOverlay
     :kind="entry"
-    :photo="entryPhoto"
     :skip-label="t('entry.skip')"
     :kicker="t('entry.kicker')"
     @open="heroReady = true"
@@ -51,7 +50,6 @@ import ScrollMonogram from "./components/ScrollMonogram.vue";
 import AboutSection from "./components/AboutSection.vue";
 import ContactSection from "./components/ContactSection.vue";
 import { pickEntry, type EntryKind } from "./lib/entry";
-import { mediaUrl } from "./lib/media";
 import { vReveal } from "./lib/motion";
 import type { Locale } from "./lib/locale";
 
@@ -67,8 +65,6 @@ window.scrollTo(0, 0);
 
 const entry: EntryKind = pickEntry({ search: window.location.search, lite: props.lite });
 const heroReady = ref(false);
-// A neutral, text-free frame (Universal lounge) so the QR mosaic reads as a photo, not a logo.
-const entryPhoto = mediaUrl("universal/lounge.jpg");
 </script>
 
 <style scoped>

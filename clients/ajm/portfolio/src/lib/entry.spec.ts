@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ENTRY_TIMING_MS, pickEntry } from "./entry";
+import { ENTRY_TIMING_MS, QR_PRELUDE_MS, pickEntry } from "./entry";
 import { isLiteMode } from "./capability";
 
 describe("entry › picks entry by source, on every load", () => {
@@ -13,11 +13,15 @@ describe("entry › picks entry by source, on every load", () => {
   it("weak device or connection gets a plain fade, even from QR", () => {
     expect(pickEntry({ search: "?src=qr", lite: true })).toBe("fade");
   });
-  it("the page starts revealing before the overlay leaves, and no entry runs past 2.5 s", () => {
-    for (const { open, done } of Object.values(ENTRY_TIMING_MS)) {
-      expect(open).toBeLessThan(done);
-      expect(done).toBeLessThanOrEqual(2500);
-    }
+  it("the page starts revealing before the overlay leaves; the link entry and the fade stay within 2.5 s", () => {
+    for (const { open, done } of Object.values(ENTRY_TIMING_MS)) expect(open).toBeLessThan(done);
+    expect(ENTRY_TIMING_MS.link.done).toBeLessThanOrEqual(2500);
+    expect(ENTRY_TIMING_MS.fade.done).toBeLessThanOrEqual(2500);
+  });
+  it("QR arrival: a longer black-QR prelude first, then the whole regular entry (round 8)", () => {
+    expect(QR_PRELUDE_MS).toBeGreaterThanOrEqual(2500);
+    expect(ENTRY_TIMING_MS.qr.open).toBe(QR_PRELUDE_MS + ENTRY_TIMING_MS.link.open);
+    expect(ENTRY_TIMING_MS.qr.done).toBe(QR_PRELUDE_MS + ENTRY_TIMING_MS.link.done);
   });
 });
 

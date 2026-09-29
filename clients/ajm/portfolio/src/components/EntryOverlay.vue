@@ -2,36 +2,28 @@
      link — charcoal stage: a hairline draws out from the centre, the AJ mark rises out of it
             through a mask, then the line splits into a shutter that opens onto the hero, which
             settles from a slight zoom behind it (~2.5 s)
-     qr   — squares fly in and form the QR the visitor scanned; its dark modules are slices of one
-            photo, then the light ones fill in too and the mosaic opens into the hero (~2.1 s)
+     qr   — round 8: a black QR (the shape the visitor just scanned) assembles from flying modules,
+            holds, and dissolves; then the link entry above plays in full (QR_PRELUDE_MS + 2.5 s)
      fade — weak device/connection: a plain crossfade
      `open` fires the moment the page behind starts showing, so the hero can move with the shutter. -->
 <template>
   <div
     v-if="!finished"
     class="entry"
-    :class="[`entry--${kind}`, `is-${phase}`]"
+    :class="[`entry--${kind === 'qr' ? 'link' : kind}`, `is-${phase}`, kind === 'qr' ? `qr-${qrPhase}` : '']"
     aria-hidden="true"
     @click="finish"
   >
-    <template v-if="kind === 'qr'">
-      <div class="qr" :style="{ '--n': size }">
-        <i
-          v-for="cell in cells"
-          :key="cell.key"
-          :class="{ dark: cell.dark }"
-          :style="{
-            '--dx': `${cell.dx}px`,
-            '--dy': `${cell.dy}px`,
-            '--d': `${cell.delay}ms`,
-            '--img': `url(${photo})`,
-            backgroundPosition: `${cell.px}% ${cell.py}%`,
-          }"
-        />
-      </div>
-    </template>
+    <div v-if="kind === 'qr' && qrPhase !== 'gone'" class="qr" :style="{ '--n': size }">
+      <i
+        v-for="cell in cells"
+        :key="cell.key"
+        :class="{ dark: cell.dark }"
+        :style="{ '--dx': `${cell.dx}px`, '--dy': `${cell.dy}px`, '--d': `${cell.delay}ms` }"
+      />
+    </div>
 
-    <template v-else-if="kind === 'link'">
+    <template v-if="kind === 'link' || kind === 'qr'">
       <div class="shutter shutter--top"><div class="shutter__edge" /></div>
       <div class="shutter shutter--bottom"><div class="shutter__edge" /></div>
       <div class="stage">
@@ -51,20 +43,22 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import AjLogo from "./AjLogo.vue";
 import { qrPattern } from "../lib/qr";
-import { ENTRY_TIMING_MS, type EntryKind } from "../lib/entry";
+import { ENTRY_TIMING_MS, QR_PRELUDE_MS, type EntryKind } from "../lib/entry";
 
-const props = defineProps<{ kind: EntryKind; photo: string; skipLabel: string; kicker: string }>();
+const props = defineProps<{ kind: EntryKind; skipLabel: string; kicker: string }>();
 const emit = defineEmits<{ open: []; done: [] }>();
 
 const size = 21;
-const phase = ref<"start" | "form" | "fill" | "open">("start");
+const phase = ref<"start" | "form" | "open">("start");
+/** the QR prelude, before the link entry: modules fly in → the code holds → it dissolves → gone */
+const qrPhase = ref<"start" | "form" | "out" | "gone">("start");
 const finished = ref(false);
 let opened = false;
 const timers: number[] = [];
 
 const cells = computed(() => {
   const grid = qrPattern(size);
-  const out: { key: string; dark: boolean; dx: number; dy: number; delay: number; px: number; py: number }[] = [];
+  const out: { key: string; dark: boolean; dx: number; dy: number; delay: number }[] = [];
   grid.forEach((row, r) =>
     row.forEach((dark, c) => {
       const angle = ((r * 31 + c * 17) % 360) * (Math.PI / 180);
@@ -74,9 +68,8 @@ const cells = computed(() => {
         dark,
         dx: Math.round(Math.cos(angle) * dist),
         dy: Math.round(Math.sin(angle) * dist),
-        delay: (r + c) * 12,
-        px: (c / (size - 1)) * 100,
-        py: (r / (size - 1)) * 100,
+        // a slow diagonal sweep: about 0.9 s from the first module to the last
+        delay: (r + c) * 22,
       });
     }),
   );
@@ -105,8 +98,17 @@ function at(ms: number, fn: () => void) {
 onMounted(() => {
   const timing = ENTRY_TIMING_MS[props.kind];
   // double rAF so the "start" state paints before transitions begin
-  requestAnimationFrame(() => requestAnimationFrame(() => (phase.value = "form")));
-  if (props.kind === "qr") at(950, () => (phase.value = "fill"));
+  const nextPaint = (fn: () => void) => requestAnimationFrame(() => requestAnimationFrame(fn));
+  if (props.kind === "qr") {
+    nextPaint(() => (qrPhase.value = "form"));
+    at(QR_PRELUDE_MS - 650, () => (qrPhase.value = "out"));
+    at(QR_PRELUDE_MS, () => {
+      qrPhase.value = "gone";
+      nextPaint(() => (phase.value = "form"));
+    });
+  } else {
+    nextPaint(() => (phase.value = "form"));
+  }
   at(timing.open, open);
   at(timing.done, finish);
 });
@@ -254,47 +256,36 @@ onBeforeUnmount(() => timers.forEach((t) => window.clearTimeout(t)));
   transform: translateY(101%);
 }
 
-/* ---- qr ---- */
+/* ---- qr prelude: a black QR on paper, above the (still closed) link entry ---- */
 .qr {
-  --cell: calc(min(64vmin, 420px) / var(--n));
+  --cell: calc(min(60vmin, 400px) / var(--n));
+  position: absolute;
+  z-index: 1;
   display: grid;
   grid-template-columns: repeat(var(--n), var(--cell));
-  gap: 1px;
-  transition: transform 0.55s var(--ajm-ease), gap 0.4s ease;
+  transition:
+    transform 0.65s var(--ajm-ease),
+    opacity 0.55s ease;
 }
 .qr i {
   width: var(--cell);
   height: var(--cell);
-  background-size: calc(var(--n) * 100%) calc(var(--n) * 100%);
-  background-color: var(--ajm-paper);
-  background-image: var(--img);
   opacity: 0;
-  transform: translate(var(--dx), var(--dy)) scale(0.4);
+  transform: translate(var(--dx), var(--dy)) scale(0.3) rotate(25deg);
   transition:
-    transform 0.7s var(--ajm-ease) var(--d),
-    opacity 0.4s ease var(--d);
+    transform 0.9s var(--ajm-ease) var(--d),
+    opacity 0.5s ease var(--d);
 }
-/* only the dark modules show during "form" (a QR on paper); the light ones join on "fill" */
-.is-form .qr i.dark,
-.is-fill .qr i,
-.is-open .qr i {
+.qr i.dark {
+  background: var(--ajm-ink);
+}
+.qr-form .qr i.dark {
   opacity: 1;
   transform: none;
 }
-.is-fill .qr,
-.is-open .qr {
-  gap: 0;
-}
-.entry--qr.is-open {
-  background-color: transparent;
-}
-.entry--qr.is-open .qr {
-  transform: scale(4);
-}
-.entry--qr.is-open .qr i {
+/* dissolve: the code breathes out a little and fades, making room for the line and the mark */
+.qr-out .qr {
   opacity: 0;
-  transition:
-    transform 0.6s var(--ajm-ease),
-    opacity 0.6s ease 0.1s;
+  transform: scale(1.08);
 }
 </style>
