@@ -1,7 +1,7 @@
 import { createApp } from "vue";
 import App from "./App.vue";
 import { makeI18n } from "./i18n";
-import { PATH_ROUTING, resolveLocale } from "./lib/locale";
+import { DEFAULT_LOCALE, PATH_ROUTING, resolveLocale } from "./lib/locale";
 import { isLiteMode, readDeviceSignals } from "./lib/capability";
 import { applyTheme, initialTheme, readStoredTheme } from "./lib/theme";
 // Self-hosted fonts (no request to Google, weak-network friendly): Montserrat for everything,
@@ -17,6 +17,7 @@ const { locale, redirectTo } = resolveLocale(
   navigator.languages ?? [],
   window.location.search,
   PATH_ROUTING,
+  DEFAULT_LOCALE,
 );
 if (redirectTo) {
   window.history.replaceState(null, "", redirectTo);

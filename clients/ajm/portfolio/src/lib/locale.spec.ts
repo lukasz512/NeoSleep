@@ -22,6 +22,10 @@ describe("i18n › static preview (no path routing)", () => {
     expect(resolveLocale("/artifact/abc", ["es-MX"], "?lang=en", false)).toEqual({ locale: "en" });
     expect(resolveLocale("/artifact/abc", ["es-MX"], "", false)).toEqual({ locale: "es" });
   });
+  it("single-URL site (alfredjan.com/corporativo, round 8): Spanish unless ?lang=en, whatever the browser", () => {
+    expect(resolveLocale("/corporativo/", ["en-US"], "", false, "es")).toEqual({ locale: "es" });
+    expect(resolveLocale("/corporativo/", ["es-MX"], "?lang=en", false, "es")).toEqual({ locale: "en" });
+  });
   it("the language switch sets ?lang= and keeps ?src=qr", () => {
     expect(switchLocalePath("en", "?src=qr", false)).toBe("?src=qr&lang=en");
   });
