@@ -16,10 +16,14 @@ import {
  * only the Resend boundary (mailer.ts) is mocked, same pattern as
  * commands/users.spec.ts.
  */
-const { sendMock } = vi.hoisted(() => ({ sendMock: vi.fn(async (..._args: unknown[]): Promise<string | null> => "re_test_message") }));
+const { sendMock, confirmMock } = vi.hoisted(() => ({
+  sendMock: vi.fn(async (..._args: unknown[]): Promise<string | null> => "re_test_message"),
+  confirmMock: vi.fn(async (..._args: unknown[]): Promise<void> => undefined),
+}));
 vi.mock("../mailer.js", async (importActual) => ({
   ...(await importActual<typeof import("../mailer.js")>()),
   sendQuestionnaireLinkEmail: sendMock,
+  sendEmailSentConfirmation: confirmMock,
 }));
 
 const TENANT_SLUG = process.env.DEFAULT_TENANT_SLUG ?? "test";
@@ -39,6 +43,7 @@ async function buildContext(client: Client): Promise<TenantContext> {
 }
 
 beforeEach(() => {
+  confirmMock.mockReset();
   sendMock.mockReset();
   sendMock.mockResolvedValue(`re_${uniqueSuffix()}`);
 });
@@ -86,6 +91,50 @@ describe("SendQuestionnaireEmailCommand", () => {
       const patient = await insertPatient(client, { first_name: "Sin", last_name: `Correo-${uniqueSuffix()}` });
       await expect(SendQuestionnaireEmailCommand(ctx, patient.id, ORIGIN)).rejects.toThrow(PatientHasNoEmailError);
       expect(sendMock).not.toHaveBeenCalled();
+    });
+  });
+
+  it("emails only the documents the doctor picked, with a link valid for 7 days (NEO-192)", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const patient = await insertPatient(client, { first_name: "Rosa", last_name: `Elige-${uniqueSuffix()}`, email: `rosa.${uniqueSuffix()}@example.mx`, region: "MX" });
+
+      const before = Date.now();
+      const { request, url } = await SendQuestionnaireEmailCommand(ctx, patient.id, ORIGIN, { items: ["stopBang"] });
+
+      expect(request.items).toEqual(["stopBang"]);
+      expect(url).toMatch(new RegExp(`^${ORIGIN}/q#[A-Za-z0-9_-]{43}$`));
+      const days = (new Date(request.expires_at).getTime() - before) / 86_400_000;
+      expect(days).toBeGreaterThan(6.99);
+      expect(days).toBeLessThan(7.01);
+      const [, , , , count, , validDays] = sendMock.mock.calls[0]!;
+      expect(count).toBe(1);
+      expect(validDays).toBe(7);
+      expect(confirmMock).not.toHaveBeenCalled();
+    });
+  });
+
+  it("refuses a document the patient can't do online", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const patient = await insertPatient(client, { first_name: "Rosa", last_name: `NoOnline-${uniqueSuffix()}`, email: `rosa.${uniqueSuffix()}@example.mx` });
+      await expect(SendQuestionnaireEmailCommand(ctx, patient.id, ORIGIN, { items: ["historiaEndo"] })).rejects.toThrow(/can't be completed by the patient/);
+      expect(sendMock).not.toHaveBeenCalled();
+    });
+  });
+
+  it("sends the doctor a confirmation without any link when asked (D4)", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const patient = await insertPatient(client, { first_name: "Lucía", last_name: `Copia-${uniqueSuffix()}`, email: `lucia.${uniqueSuffix()}@example.mx`, region: "MX" });
+
+      await SendQuestionnaireEmailCommand(ctx, patient.id, ORIGIN, { copy_to_me: true });
+
+      expect(confirmMock).toHaveBeenCalledTimes(1);
+      const [to, info] = confirmMock.mock.calls[0] as [string, Record<string, unknown>];
+      expect(to).toBe(ctx.user.email);
+      expect(info).toMatchObject({ patient: "Lucía C.", sentTo: "l***@example.mx", count: 3, language: "mx" });
+      expect(JSON.stringify(info)).not.toContain("/q#");
     });
   });
 

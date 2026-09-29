@@ -57,6 +57,11 @@ export async function insertPatientEmailSend(
   return rows[0]!;
 }
 
+export async function patientEmailSendExists(client: PoolClient, providerMessageId: string): Promise<boolean> {
+  const { rowCount } = await client.query("SELECT 1 FROM patient_email_send WHERE provider_message_id = $1", [providerMessageId]);
+  return (rowCount ?? 0) > 0;
+}
+
 /** Applies a delivery event; returns false when no row has this message id or the status would move back. */
 export async function applyPatientEmailStatus(
   client: PoolClient,

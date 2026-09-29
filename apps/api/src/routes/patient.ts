@@ -389,9 +389,9 @@ patientRouter.post(
     const origin = resolveFrontendOrigin(req);
     const result = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
-      return SendQuestionnaireEmailCommand(ctx, id, origin);
+      return SendQuestionnaireEmailCommand(ctx, id, origin, (req.body ?? {}) as { items?: unknown; copy_to_me?: unknown });
     });
-    res.status(201).json({ ...result.request, sent_to: result.sent_to });
+    res.status(201).json({ ...result.request, sent_to: result.sent_to, url: result.url });
   })
 );
 
@@ -422,7 +422,7 @@ patientRouter.get(
       const ctx = await buildContext(req, client, slug);
       return GetPatientEmailSendsQuery(ctx, id);
     });
-    res.json({ sends });
+    res.json(sends);
   })
 );
 

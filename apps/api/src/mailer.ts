@@ -8,6 +8,7 @@ import {
   emailT,
   type EmailAttachment,
 } from "@neo/email";
+import { maskEmail } from "./utils/maskEmail.js";
 import { RESEND_API_KEY, RESEND_FROM_EMAIL, RESEND_NOTIFY_TO, PARTNER_DOCS_CC_EMAIL, RESEND_WEBHOOK_SECRET } from "./env.js";
 
 /** Every personalized email needs at least these to build a proper "Hi {title} {name}," greeting,
@@ -65,11 +66,6 @@ export interface EmailTags {
   kind: string;
 }
 
-/** "l***@example.mx" — logs never carry a patient's full address. */
-function maskAddress(email: string): string {
-  const [local = "", domain = ""] = email.split("@");
-  return domain ? `${local.slice(0, 1)}***@${domain}` : "***";
-}
 
 /** RFC 5322 display name: CR/LF and angle brackets stripped (header injection), always quoted so commas/dots in a clinic name are safe. */
 function formatFrom(name: string, email: string): string {
@@ -112,7 +108,7 @@ async function sendEmail(logLabel: string, args: SendEmailArgs): Promise<string 
     if (error) {
       throw new Error(`${error.name}: ${error.message}`);
     }
-    console.log(`[mailer] Sent ${logLabel} to ${maskAddress(args.to)}${data?.id ? ` (${data.id})` : ""}`);
+    console.log(`[mailer] Sent ${logLabel} to ${maskEmail(args.to)}${data?.id ? ` (${data.id})` : ""}`);
     return data?.id ?? null;
   } catch (err) {
     console.error(`[mailer] Failed to send ${logLabel}:`, err);
@@ -198,7 +194,8 @@ export async function sendQuestionnaireLinkEmail(
   recipient: EmailRecipient,
   clinic: { name: string | null; email: string | null },
   count: number,
-  tags?: EmailTags
+  tags?: EmailTags,
+  validDays?: number
 ): Promise<string | null> {
   const locale = recipient.language;
   const greetingName = formatGreetingName(recipient, to);
@@ -209,7 +206,7 @@ export async function sendQuestionnaireLinkEmail(
     <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.greeting", { name: greetingName }))}</p>
     <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, count === 1 ? "email.questionnaireLink.bodyOne" : "email.questionnaireLink.bodyMany", { clinic: clinicName, count: String(count) }))}</p>
     <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.questionnaireLink.howLong"))}</p>
-    <p style="margin:0 0 16px;font-size:13px;color:#7a827e;">${escapeHtml(emailT(locale, "email.questionnaireLink.expiry"))}</p>
+    <p style="margin:0 0 16px;font-size:13px;color:#7a827e;">${escapeHtml(validDays ? emailT(locale, "email.questionnaireLink.expiryDays", { days: String(validDays) }) : emailT(locale, "email.questionnaireLink.expiry"))}</p>
     <p style="margin:0;font-size:13px;color:#7a827e;">${escapeHtml(emailT(locale, "email.questionnaireLink.ignore"))}</p>`;
 
   const socials = getSocialsForRegion(recipient.region);
@@ -520,4 +517,39 @@ export function verifyResendWebhook(
   // verify() makes no API call, so any client works — even without RESEND_API_KEY.
   const client = resend ?? new Resend("re_verify_only");
   return client.webhooks.verify({ payload: rawBody, headers, webhookSecret: secret });
+}
+
+/**
+ * NEO-192 (D4): the doctor's own confirmation that an email went to a
+ * patient — short name, masked address, document count, time. It carries
+ * no link to the patient's documents, so the doctor's inbox never holds a
+ * way into the patient's forms.
+ */
+export async function sendEmailSentConfirmation(
+  to: string,
+  info: { patient: string; sentTo: string; count: number; clinic: string | null; language: string }
+): Promise<void> {
+  const locale = info.language;
+  const when = new Intl.DateTimeFormat(INTL_LOCALE[locale] ?? "en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date());
+  const bodyHtml = `
+    <h1 style="margin:0 0 16px;font-size:20px;font-weight:bold;color:#128F83;text-align:center;">${escapeHtml(emailT(locale, "email.sendConfirmation.title"))}</h1>
+    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.sendConfirmation.body", { patient: info.patient, email: info.sentTo, count: String(info.count), date: when }))}</p>
+    <p style="margin:0;font-size:13px;color:#7a827e;">${escapeHtml(emailT(locale, "email.sendConfirmation.noLink"))}</p>`;
+  const socials = getSocialsForRegion(null);
+  const html = renderEmailLayout({
+    preheader: emailT(locale, "email.sendConfirmation.title"),
+    bodyHtml,
+    footerTagline: emailT(locale, "email.footer.tagline"),
+    footerCities: emailT(locale, "email.footer.cities"),
+    footerCopyright: emailT(locale, "email.footer.copyright", { year: String(new Date().getFullYear()) }),
+    supportLeadIn: emailT(locale, "email.footer.support"),
+    socials,
+  });
+  await sendEmail("send confirmation email", {
+    to,
+    subject: emailT(locale, "email.sendConfirmation.subject", { patient: info.patient }),
+    html,
+    attachments: getEmailAttachments(socials),
+    fromName: clinicFromName(info.clinic),
+  });
 }

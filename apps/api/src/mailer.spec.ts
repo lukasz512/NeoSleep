@@ -118,6 +118,19 @@ describe("mailer — configured", () => {
     logSpy.mockRestore();
   });
 
+  it("sendEmailSentConfirmation tells the doctor who/what/when in their language, with no patient link (NEO-192)", async () => {
+    const { sendEmailSentConfirmation } = await importMailer(true);
+
+    await sendEmailSentConfirmation("doctor@neosleepcare.com", { patient: "Lucía C.", sentTo: "l***@example.mx", count: 2, clinic: "Clínica Sonrisa", language: "pl" });
+
+    const call = sendMock.mock.calls[0]![0];
+    expect(call.to).toBe("doctor@neosleepcare.com");
+    expect(call.from).toBe('"Clínica Sonrisa | NeoSleep" <notifications@mail.neosleepcare.com>');
+    expect(call.subject).toContain("Lucía C.");
+    expect(call.html).toContain("l***@example.mx");
+    expect(call.html).not.toMatch(/\/q#|href="https?:\/\/[^"]*pwa/);
+  });
+
   it("sendContactEmail sends to RESEND_NOTIFY_TO with the given subject and rows rendered in the HTML", async () => {
     const { sendContactEmail } = await importMailer(true);
 

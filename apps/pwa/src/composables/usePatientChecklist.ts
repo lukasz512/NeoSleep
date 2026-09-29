@@ -78,6 +78,20 @@ export interface ChecklistItem {
   actions: { qr: boolean; fill: "questionnaire" | "sleep_study" | null; form: ClinicalRecordKind | null; print: boolean; upload: boolean };
 }
 
+export type EmailSendStatus = "sent" | "delayed" | "delivered" | "bounced" | "failed" | "suppressed" | "complained";
+
+/** One email the app sent this patient and what Resend reported about it (NEO-190). */
+export interface EmailSend {
+  id: string;
+  kind: "questionnaire_link" | "signed_copy";
+  sent_to_masked: string;
+  status: EmailSendStatus;
+  status_detail: string | null;
+  status_at: string | null;
+  created_at: string;
+  questionnaire_request_id: string | null;
+}
+
 export interface PendingRequest {
   id: string;
   items: string[];
@@ -308,25 +322,34 @@ export function usePatientChecklist(patientId: () => string) {
     return res ? ((await res.json()) as PendingRequest) : null;
   }
 
+  /** Where the next email would go (masked) and what was sent before (NEO-192). */
+  async function loadEmailSends(): Promise<{ recipient: string | null; sends: EmailSend[] } | null> {
+    const res = await apiFetch(`/api/v1/patient/${patientId()}/email-sends`, { handleErrors: false });
+    if (!res.ok) return null;
+    return (await res.json()) as { recipient: string | null; sends: EmailSend[] };
+  }
+
   /**
-   * Emails the patient one personal link to everything they can still fill.
-   * A patient without an email gets a clear "add one to the record" message,
-   * not a generic failure. Returns the masked address it went to, or null.
+   * Emails the patient one personal link to the picked items (all open ones
+   * when none are given). A patient without an email gets a clear "add one
+   * to the record" message, not a generic failure. Returns the masked
+   * address and the link (for "Copy link"), or null.
    */
-  async function sendByEmail(): Promise<string | null> {
-    const res = await apiFetch(`/api/v1/patient/${patientId()}/questionnaire-requests/email`, { ...json({}), handleErrors: false });
+  async function sendByEmail(options: { items?: string[]; copyToMe?: boolean } = {}): Promise<{ sent_to: string; url: string } | null> {
+    const body = { ...(options.items ? { items: options.items } : {}), ...(options.copyToMe ? { copy_to_me: true } : {}) };
+    const res = await apiFetch(`/api/v1/patient/${patientId()}/questionnaire-requests/email`, { ...json(body), handleErrors: false });
     if (res.status === 422) {
       notifications.show(t("app.clinical.email.noEmail"), "warning", undefined, { icon: "mail" });
       return null;
     }
     if (!res.ok) {
-      await failWith(res, "app.clinical.email.failed", "mail", () => sendByEmail());
+      await failWith(res, "app.clinical.email.failed", "mail", () => sendByEmail(options));
       return null;
     }
-    const { sent_to } = (await res.json()) as { sent_to: string };
+    const { sent_to, url } = (await res.json()) as { sent_to: string; url: string };
     notifications.show(t("app.clinical.email.sent", { email: sent_to }), "success", undefined, { icon: "mail" });
     await load();
-    return sent_to;
+    return { sent_to, url };
   }
 
   async function cancelRequest(requestId: string): Promise<void> {
@@ -355,5 +378,5 @@ export function usePatientChecklist(patientId: () => string) {
     await send(`/studies/uploads/${attachmentId}`, { method: "DELETE" }, { icon: "file", errorKey: "app.clinical.upload.deleteError", successKey: "app.clinical.upload.deleted", retryable: true });
   }
 
-  return { checklist, loading, loadError, loadFailure, load, refreshIfChanged, markOpened, recordQuestionnaire, completeBang, print, openFile, createRequest, requestStatus, sendByEmail, cancelRequest, upload, deleteUpload };
+  return { checklist, loading, loadError, loadFailure, load, refreshIfChanged, markOpened, recordQuestionnaire, completeBang, print, openFile, createRequest, requestStatus, sendByEmail, loadEmailSends, cancelRequest, upload, deleteUpload };
 }

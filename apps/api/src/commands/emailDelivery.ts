@@ -1,6 +1,6 @@
 import type { WebhookEventPayload } from "resend";
 import { withTenant, getActiveTenantSlugs, tenantSlugFromHost } from "../db/tenant.js";
-import { applyPatientEmailStatus, type PatientEmailStatus } from "../db/patientEmailSend.js";
+import { applyPatientEmailStatus, patientEmailSendExists, type PatientEmailStatus } from "../db/patientEmailSend.js";
 
 /**
  * NEO-190: turns a verified Resend webhook event into a delivery status on
@@ -8,8 +8,8 @@ import { applyPatientEmailStatus, type PatientEmailStatus } from "../db/patientE
  * every tenant, so the tenant comes from the "tenant" tag the email was sent
  * with (mailer.ts EmailTags) and must be an active tenant (or the default one
  * this API serves) — a tag can't point the update at an arbitrary schema.
- * Emails without that tag (password reset,
- * partner invites …) have no row and are ignored.
+ * Emails without that tag (password reset, partner invites …) have no row
+ * and are ignored.
  *
  * Opens and clicks are ignored on purpose: patient emails carry no tracking.
  */
@@ -48,8 +48,7 @@ export async function ApplyResendEventCommand(event: WebhookEventPayload): Promi
 
   const at = new Date(event.created_at);
   const applied = await withTenant(tenant, async (client) => {
-    const row = await client.query("SELECT 1 FROM patient_email_send WHERE provider_message_id = $1", [data.email_id]);
-    if (!row.rowCount) return "unknown_email" as const;
+    if (!(await patientEmailSendExists(client, data.email_id))) return "unknown_email" as const;
     const moved = await applyPatientEmailStatus(client, data.email_id, status, statusDetail(event), Number.isNaN(at.getTime()) ? new Date() : at);
     return moved ? ("applied" as const) : ("stale" as const);
   });
