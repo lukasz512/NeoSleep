@@ -133,6 +133,9 @@
                     <span v-if="hasNew(item)" class="studies__new" data-testid="studies-new">{{ t("app.clinical.new") }}</span>
                   </span>
                   <span class="studies__item-status">{{ statusLine(item) }}</span>
+                  <span v-if="seenBy(resultEntry(item) ?? item.history[0])" class="studies__seen-by" data-testid="studies-seen-by">
+                    <AppIcon name="eye" class="studies__seen-icon" />{{ seenBy(resultEntry(item) ?? item.history[0]) }}
+                  </span>
                   <!-- STOP-Bang is half the patient's, half the specialist's: show each half's own state. -->
                   <span v-if="item.actions.form === 'stop_bang' && item.status !== 'missing'" class="studies__split" :aria-label="t('app.clinical.split.aria')">
                     <span v-for="half in stopBangHalves(item)" :key="half.key" class="studies__split-half" :class="`studies__split-half--${half.state}`">
@@ -267,6 +270,9 @@
                     <span v-if="upload.is_new" class="studies__new">{{ t("app.clinical.new") }}</span>
                   </span>
                   <span class="studies__item-status">{{ t("app.clinical.status.doneOn", { date: formatDate(upload.created_at) }) }}<template v-if="upload.by"> · {{ t("app.clinical.recordedBy", { name: upload.by }) }}</template></span>
+                  <span v-if="seenBy(upload)" class="studies__seen-by">
+                    <AppIcon name="eye" class="studies__seen-icon" />{{ seenBy(upload) }}
+                  </span>
                 </div>
                 <div class="studies__item-actions">
                   <AppListItemMenu :aria-label="t('app.clinical.action.more', { item: upload.title ?? upload.filename ?? '' })">
@@ -599,6 +605,12 @@ watch(checklist, (value) => {
 watch(() => props.patientId, () => (knownEntryIds = null));
 
 const hasNew = (item: ChecklistItem) => item.history.some((entry) => entry.is_new);
+
+/** "Seen by Dr. A, Dr. B" — colleagues who already opened this result (NEO-173 B2; from the audit trail). */
+function seenBy(entry: ChecklistHistoryEntry | null | undefined): string | null {
+  const names = entry?.opened_by?.map((o) => o.name) ?? [];
+  return names.length ? t("app.clinical.seenBy", { names: names.join(", ") }) : null;
+}
 
 function openOtherUpload(upload: ChecklistHistoryEntry) {
   void checklistApi.markOpened(upload);
@@ -969,6 +981,18 @@ watch(() => props.focusItem, (key) => highlightItem(key));
     animation: none;
     opacity: 0.12;
   }
+}
+/* NEO-173 B2: who of my colleagues already opened it. */
+.studies__seen-by {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+.studies__seen-icon {
+  width: 14px;
+  height: 14px;
 }
 /* NEO-173: "Nuevo" — added by someone else, not yet opened by me. */
 .studies__new {

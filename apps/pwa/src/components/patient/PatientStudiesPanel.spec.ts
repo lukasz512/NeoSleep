@@ -487,6 +487,14 @@ describe("PatientStudiesPanel — the Estudios checklist", () => {
     }
   });
 
+  it("shows which colleagues already opened the result (NEO-173 B2)", async () => {
+    const history = (checklistBody.items as ReturnType<typeof item>[])[1]!.history as Record<string, unknown>[];
+    history[0]!.opened_by = [{ name: "Dra. Ana Ruiz", at: "2026-09-29T10:00:00Z" }, { name: "Dr. Luis Pérez", at: "2026-09-29T11:00:00Z" }];
+    const wrapper = await mountPanel();
+    expect(rows(wrapper)[1]!.find("[data-testid='studies-seen-by']").text()).toBe("Seen by Dra. Ana Ruiz, Dr. Luis Pérez");
+    expect(rows(wrapper)[2]!.find("[data-testid='studies-seen-by']").exists()).toBe(false);
+  });
+
   it("'New' goes away once I open that result, and the open is reported (NEO-173)", async () => {
     const history = (checklistBody.items as ReturnType<typeof item>[])[1]!.history as Record<string, unknown>[];
     history[0]!.is_new = true;

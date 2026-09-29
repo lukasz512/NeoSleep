@@ -74,6 +74,23 @@ describe("annotateNewEntries (NEO-173)", () => {
     });
   }, 20000);
 
+  it("shows me which colleagues already opened a result (B2), never myself", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const me = await staff(client);
+      const colleague = await staff(client, "manager");
+      const patient = await newPatient(client);
+      const record = await insertMedicalHistory(client, { patient_id: patient.id, recorded_by: null, source: "patient", request_id: null, consent: null }, NO_ANSWERS);
+      await OpenChecklistEntryCommand(colleague, patient.id, record.id);
+      await OpenChecklistEntryCommand(me, patient.id, record.id);
+
+      const openedBy = async (ctx: TenantContext) =>
+        allChecklistEntries(await annotateNewEntries(ctx.client, await GetPatientChecklistQuery(ctx, patient.id), ctx.user.id))
+          .find((e) => e.id === record.id)!.opened_by!.map((o) => o.name);
+      expect(await openedBy(me)).toEqual(["QA Staff"]);
+      expect(await openedBy(colleague)).toEqual(["QA Staff"]); // me, from the colleague's side — never themselves
+    });
+  }, 20000);
+
   it("what the patient filled via QR is new for every staff member", async () => {
     await withTenant(TENANT_SLUG, async (client) => {
       const me = await staff(client);
