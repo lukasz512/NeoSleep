@@ -34,6 +34,17 @@ async function settle(page: Page, dialog: string, width: number) {
   await expect(page.locator(".v-dialog .v-card").first()).toBeVisible();
   // The dialog opens with a scale/fade transition — measure once it settles.
   await page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== "running"));
+  // WebKit can report no running animation before the enter transition has
+  // started (CI saw the headline measured 35px above the card), so also wait
+  // until the card and its title hold still for a few frames.
+  await page.waitForFunction(() => {
+    const w = window as Window & { __dialogRects?: string[] };
+    const card = document.querySelector(".v-dialog .v-card")?.getBoundingClientRect();
+    const title = document.querySelector("[data-testid=app-dialog-header-title]")?.getBoundingClientRect();
+    const key = [card?.x, card?.y, card?.width, title?.x, title?.y].join(",");
+    const seen = (w.__dialogRects = [...(w.__dialogRects ?? []), key].slice(-5));
+    return seen.length === 5 && seen.every((k) => k === key);
+  }, undefined, { polling: "raf" });
 }
 
 async function box(page: Page, selector: string): Promise<Box> {

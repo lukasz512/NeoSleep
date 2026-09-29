@@ -73,13 +73,14 @@
         :label="getLeadFromItem(item).name"
         :first-name="getLeadFromItem(item).first_name"
         :last-name="getLeadFromItem(item).last_name"
+        :lead-source="getLeadFromItem(item).source"
         :avatar-size="32"
       >
         <GenderIcon :gender="getGenderFromName(getLeadFromItem(item).name)" />
       </EntityLink>
     </template>
     <template #feed-card-avatar="{ item }">
-      <AppAvatar v-bind="personAvatarProps(getLeadFromItem(item))" entity-type="lead" :size="55" />
+      <AppAvatar v-bind="personAvatarProps(getLeadFromItem(item))" entity-type="lead" :lead-source="getLeadFromItem(item).source" :size="55" />
     </template>
     <template #feed-card-title="{ item }">
       <span class="leads-name-cell">
@@ -205,6 +206,8 @@ export interface Lead {
   status: string;
   type?: string;
   region: string;
+  /** Channel the lead came in through (utils/leadSource.ts) — its avatar badge. */
+  source?: string | null;
   metadata?: Record<string, unknown> | null;
   specialty?: string;
   notes?: string;

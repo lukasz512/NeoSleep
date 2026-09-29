@@ -126,11 +126,47 @@ const ICONS = {
             <rect x="14" y="14" width="7" height="7" />
             <rect x="3" y="14" width="7" height="7" />`,
   },
+  // Sprout (NEO-155): a lead is someone not grown into a patient/partner yet.
   "nav-leads": {
     strokeWidth: 2,
-    paths: `<path d="M7 20v-8a5 5 0 0 1 10 0v8" />
-            <line x1="5" y1="20" x2="9" y2="20" />
-            <line x1="15" y1="20" x2="19" y2="20" />`,
+    paths: `<path d="M12 21v-9" />
+            <path d="M12 12c0-4-3-6-7-6 0 4 3 6 7 6z" />
+            <path d="M12 14c0-3.5 2.5-5.5 7-5.5 0 3.5-2.5 5.5-7 5.5z" />
+            <line x1="8" y1="21" x2="16" y2="21" />`,
+  },
+  // ── Lead channel badges (NEO-155), one per lead.source value ───────────────
+  "lead-source-website": {
+    strokeWidth: 2,
+    paths: `<circle cx="12" cy="12" r="9" />
+            <path d="M3 12h18" />
+            <path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18z" />`,
+  },
+  "lead-source-social": {
+    strokeWidth: 2,
+    paths: `<rect x="3.5" y="3.5" width="17" height="17" rx="5" />
+            <circle cx="12" cy="12" r="4" />`,
+  },
+  "lead-source-whatsapp": {
+    strokeWidth: 2,
+    paths: `<path d="M4 20l1.3-3.8A8 8 0 1 1 8 19z" />`,
+  },
+  "lead-source-phone": {
+    strokeWidth: 2,
+    paths: `<path d="M5 4h3.5l1.5 4-2 1.5a11 11 0 0 0 6.5 6.5L16 14l4 1.5V19a1 1 0 0 1-1 1A16 16 0 0 1 4 5a1 1 0 0 1 1-1z" />`,
+  },
+  "lead-source-referral": {
+    strokeWidth: 2,
+    paths: `<circle cx="9" cy="8" r="3.5" />
+            <path d="M2.5 20v-1a5.5 5.5 0 0 1 11 0v1" />
+            <line x1="18" y1="8" x2="18" y2="14" />
+            <line x1="15" y1="11" x2="21" y2="11" />`,
+  },
+  "lead-source-event": {
+    strokeWidth: 2,
+    paths: `<rect x="3.5" y="5" width="17" height="15" rx="2" />
+            <line x1="3.5" y1="10" x2="20.5" y2="10" />
+            <line x1="8" y1="3" x2="8" y2="7" />
+            <line x1="16" y1="3" x2="16" y2="7" />`,
   },
   "nav-hcp": {
     strokeWidth: 2,
@@ -151,13 +187,10 @@ const ICONS = {
   // "clinic" keeps the "nav-hco" icon above (unchanged, matches the ticket).
   "hco-hospital": {
     strokeWidth: 2,
-    // Building outline + a single centered cross — dropped the two window
-    // divider lines from the original design (Łukasz's pick from 3
-    // minimalist candidates, 2026-09-21): four internal lines plus the cross
-    // read as busy at 40px avatar scale.
-    paths: `<rect x="3" y="4" width="18" height="17" />
-            <line x1="12" y1="7" x2="12" y2="17" />
-            <line x1="7" y1="12" x2="17" y2="12" />`,
+    // NEO-155: the "H" road sign — the most widely recognised hospital mark
+    // (Łukasz's pick, 2026-09-28), replacing the building + cross.
+    paths: `<rect x="3.5" y="3.5" width="17" height="17" rx="3" />
+            <path d="M9 8v8M15 8v8M9 12h6" />`,
   },
   "hco-pharmacy": {
     strokeWidth: 2,
@@ -168,10 +201,10 @@ const ICONS = {
   },
   "hco-practice": {
     strokeWidth: 2,
-    paths: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-            <circle cx="12" cy="7" r="4" />
-            <line x1="12" y1="16.5" x2="12" y2="19.5" stroke-width="1.4" />
-            <line x1="10.5" y1="18" x2="13.5" y2="18" stroke-width="1.4" />`,
+    // NEO-155: doctor's bag — a one-person practice (JDG), not a building.
+    paths: `<rect x="3" y="8" width="18" height="12" rx="2" />
+            <path d="M9 8V6a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+            <path d="M12 11v6M9 14h6" />`,
   },
   "hco-other": {
     strokeWidth: 2,
