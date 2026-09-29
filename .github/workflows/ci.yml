@@ -131,8 +131,8 @@ jobs:
       - name: Test — ui package (blocking)
         run: pnpm --filter @neo/ui test
 
-      - name: Test — AJM portfolio client site (blocking)
-        run: pnpm --filter @ajm/portfolio test
+      - name: Test — AJM corporativo client site (blocking)
+        run: pnpm --filter @ajm/corporativo test
 
       - name: Test — pwa (informational — pre-existing failures being triaged, not yet a merge gate)
         run: pnpm --filter @neo/pwa test

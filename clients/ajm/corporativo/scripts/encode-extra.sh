@@ -3,7 +3,7 @@
 #   Privalia Beauty Week × Glamour (three vertical reels) · Minions × Vogue Brasil BTS · Indian Wedding CDMX
 #
 #   AJM_EXTRA="~/Documents/Dokumenty/AJ Management/aj rozne/alfredjan_site 5/alfred5" \
-#     bash clients/ajm/portfolio/scripts/encode-extra.sh
+#     bash clients/ajm/corporativo/scripts/encode-extra.sh
 #
 # Frames were picked from contact sheets: no titles, no logos, no credits. The Glamour reels carry a
 # GLAMOUR wordmark in the top corner on every frame, so they are cropped to 4:5 below it.

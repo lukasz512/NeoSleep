@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Encodes AJM's original footage and photos into web-weight assets.
 #
-#   AJM_MATERIALS=~/Documents/Private/AJM-materials pnpm --filter @ajm/portfolio media
+#   AJM_MATERIALS=~/Documents/Private/AJM-materials pnpm --filter @ajm/corporativo media
 #
 # Originals never enter git. Output goes to public/media (gitignored) for local dev;
 # in production the same tree is uploaded to the Cloudflare R2 bucket (decision R5).
