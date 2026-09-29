@@ -231,7 +231,7 @@
     ]
   },
   "contact": {
-    "title": "¿[Tienes] un ~evento~ en mente?",
+    "title": "¿Tienes un [evento] en ~mente~?",
     "body": "Ya sea una reunión corporativa, una experiencia ejecutiva, una convención o un evento de gran formato, nos encantará conocer tu proyecto.",
     "cta": "Hablemos de tu proyecto",
     "whatsappMessage": "Hola Alfred, vi el portafolio de AJ Management y me gustaría platicar sobre un evento.",

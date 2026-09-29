@@ -56,7 +56,7 @@ describe("accent › house rules in the copy", () => {
     expect((loc.process.title.match(/~[^~]+~/g) ?? []).length).toBe(1); // "point" is marked
     expect((loc.about.title2.match(/~[^~]+~/g) ?? []).length).toBe(1); // internacional is marked
     expect(loc.about.title1).toMatch(/\[[^\]]+\]/); // the pen writes "Experiencia"
-    expect((loc.contact.title.match(/~[^~]+~/g) ?? []).length).toBe(1); // evento is marked
+    expect(loc.contact.title).toMatch(/\[(event|evento)\].*~(mind|mente)~/); // pen on event, marker on mind
     expect(markers.length).toBe(cases.length + 6);
   });
   it.each([

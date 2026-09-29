@@ -90,7 +90,7 @@
   top: 0.05em;
   /* the pen moves left to right; at rest the clip sits well outside the glyphs, so the script's
      tall loops and end swashes are never cut (round 7: "always fully visible") */
-  clip-path: inset(-0.9em calc((1 - var(--write, 1)) * (100% + 0.6em) - 0.6em) -0.7em -0.6em);
+  clip-path: inset(-1.2em calc((1 - var(--write, 1)) * (100% + 0.6em) - 0.6em) -1.2em -0.6em);
 }
 /* The partner's key phrase: one pass of a chisel-tip marker, laid at a slant under the words.
    Four strokes (.mk--0…3), one per partner, so none looks stamped. Drawn by AccentText after the
@@ -216,13 +216,14 @@ a {
   overflow: hidden;
   /* room inside the mask for descenders and for the script word's tall loops and swashes, which
      reach far above, below and past the line (round 7: they were being cut) */
-  padding: 0.8em 0.5em 0.45em;
-  margin: -0.8em -0.5em -0.45em;
+  /* round 8: the finer script's descenders (p, f, g) reach a full line below the baseline */
+  padding: 1.2em 0.5em 1.1em;
+  margin: -1.2em -0.5em -1.1em;
 }
 .mask-line > span {
   display: block;
   /* fully below the (padded) mask, not peeking into its bottom padding */
-  transform: translateY(calc(100% + 1.3em));
+  transform: translateY(calc(100% + 2em));
   transition: transform 0.9s var(--ajm-ease);
 }
 .is-in .mask-line > span {
