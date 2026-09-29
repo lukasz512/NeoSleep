@@ -36,6 +36,22 @@ const VALID_LEAD_STATUSES = [
 /** Matches lead_type_check (009_partner_invite_and_documents.sql). Drives the doctor-only "Invite to collaborate" action. */
 const VALID_LEAD_TYPES = ["doctor", "hospital", "pharmacy", "patient", "other"];
 
+/**
+ * Channel a lead came in through (NEO-155) — drives the channel badge on the
+ * lead avatar. "website" is what the public demo form already writes, so it
+ * stays the key for the web channel. The PWA form requires one; the API keeps
+ * it optional (older leads have none) but rejects anything off this list.
+ */
+const VALID_LEAD_SOURCES = ["website", "social", "whatsapp", "phone", "referral", "event"];
+
+function normalizeLeadSource(input: string | null | undefined): string | null | undefined {
+  if (input === undefined || input === null) return input;
+  const value = input.trim().toLowerCase();
+  if (!value) return null;
+  if (!VALID_LEAD_SOURCES.includes(value)) throw new ValidationError(`Invalid lead source: "${input}"`);
+  return value;
+}
+
 function normalizeLeadStatus(input: string | undefined): string | undefined {
   if (input === undefined) return undefined;
   const value = input.trim().toLowerCase();
@@ -115,7 +131,7 @@ export async function CreateLeadCommand(
     region:      input.region?.trim() ?? "",
     country_code: input.country_code?.trim() || null,
     territory_id: input.territory_id ?? null,
-    source:      input.source?.trim() ?? null,
+    source:      normalizeLeadSource(input.source) ?? null,
     institution: input.institution?.trim() || null,
     assigned_to: input.assigned_to?.trim() ?? null,
     metadata:    { ...input.metadata, institution },
@@ -184,7 +200,7 @@ export async function UpdateLeadCommand(
     region:      input.region,
     country_code: input.country_code,
     territory_id: input.territory_id,
-    source:      input.source,
+    source:      normalizeLeadSource(input.source),
     institution: input.institution,
     assigned_to: input.assigned_to,
     metadata:    input.metadata,

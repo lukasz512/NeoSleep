@@ -1,11 +1,17 @@
 <template>
   <div class="layout-public" :style="gradientAccentStyle">
-    <!-- Fades in as a single unit on mount (see bgVisible/playEnter below) and
-         fades out again via the injected playExit — the two layers inside
-         keep their own tuned opacities (see .layout-public__bg-image/
+    <!-- Spreads out from under the orbs as a single unit on mount (see bgVisible below) and
+         dissolves again as part of the backdrop's playExit — the two layers
+         inside keep their own tuned opacities (see .layout-public__bg-image/
          -gradient) untouched; this wrapper's opacity just multiplies on top,
          so entrance/exit never has to duplicate those per-theme values. -->
-    <div class="layout-public__bg" :class="{ 'layout-public__bg--visible': bgVisible }">
+    <div
+      class="layout-public__bg"
+      :class="{
+        'layout-public__bg--visible': bgVisible,
+        'layout-public__bg--dissolving': bgDissolving,
+      }"
+    >
       <div
         class="layout-public__bg-image"
         aria-hidden="true"
@@ -13,8 +19,13 @@
       />
       <div class="layout-public__bg-gradient" aria-hidden="true" />
     </div>
+    <!-- Above the background, below the routed view (.layout-public__main,
+         z-index 1). Owned here rather than by AuthView so the orbs are on
+         screen from the first paint, together with the background — also
+         while the router is still resolving the session (see backdropBusy). -->
+    <AuthOrbs ref="orbsRef" :busy="backdropBusy" :anchor="orbsAnchor" :instant="orbsInstant" />
     <main id="main-content" class="layout-public__main" role="main">
-      <RouterView v-slot="{ Component }">
+      <RouterView v-slot="{ Component, route: viewRoute }">
         <!-- No :key="route.path" here (unlike AppLayout): /login,
              /forgot-password and /reset-password intentionally share one
              component instance (see routes.ts) so its card/chrome never
@@ -22,8 +33,11 @@
              every one of those navigations and defeat that. Vue already
              remounts on its own when the component itself actually changes
              (e.g. → ChangePasswordView), so no key is needed either way. -->
+        <!-- An app route never renders here: while App.vue holds this layout
+             for the exit (see exitToApp), the app view must not show through
+             the dissolving backdrop — AppLayout renders it once the swap happens. -->
         <Transition name="view-fade-lift" mode="out-in">
-          <component :is="Component" />
+          <component :is="Component" v-if="viewRoute.meta.layout !== 'app'" />
         </Transition>
       </RouterView>
     </main>
@@ -31,23 +45,34 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onBeforeUnmount, nextTick, provide } from "vue";
+import { ref, reactive, computed, watch, onMounted, nextTick, provide } from "vue";
+import { useRouter } from "vue-router";
 import { useThemeStore } from "@stores";
 import { brandColors } from "@brand/colors";
 import { BRAND_AUTH_BACKGROUND_URL } from "@brand/logos";
-import { AUTH_BACKGROUND_EXIT_KEY } from "@ui";
+import { AuthOrbs, AUTH_BACKDROP_KEY, type AuthBackdrop } from "@ui";
+import { useAuthStore } from "../stores/auth";
+import { useThemeColorMeta } from "../composables/useThemeColorMeta";
+import { bootedWithSplash, whenSplashLifts, whenSplashGone } from "../boot/bootSplash";
 
 const authBackgroundUrl = BRAND_AUTH_BACKGROUND_URL;
 
 // Fades the background (photo + gradient, see .layout-public__bg) in on
-// mount and exposes playExit so AuthView can fade it back out as part of its
-// own post-login exit sequence, before router.push actually swaps this whole
-// layout for AppLayout (see App.vue) — that swap has no transition of its
-// own, so without this the background would just vanish instantly under the
-// fading card/logo/orbs instead of fading with them.
-const BG_EXIT_DURATION = 600;
+// mount. On exit it dissolves (fade + slight swell + blur) in the same beat as
+// the orbs growing toward the viewer and melting (AuthOrbs' playExit), so the orbs
+// read as pulling the whole canvas away with them — all before router.push
+// swaps this layout for AppLayout (see App.vue), which has no transition of
+// its own.
+const BG_DISSOLVE_DURATION = 1400;
 
-const bgVisible = ref(false);
+// The static HTML boot splash (src/boot/splash.ts) already painted this exact
+// backdrop before any JS ran. Taking over from it, the background starts fully
+// visible and the orbs start at rest — no second fade/pop-in — and the splash
+// crossfades away on top once this layout has rendered underneath it.
+const takingOverFromSplash = bootedWithSplash();
+const bgVisible = ref(takingOverFromSplash);
+const bgDissolving = ref(false);
+const orbsInstant = ref(takingOverFromSplash);
 const prefersReducedMotion =
   typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -55,22 +80,112 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Intro (mirrors the exit): plain ground, the orbs pop in (AuthOrbs), then the
+// background spreads out from underneath them — see .layout-public__bg. The
+// boot splash plays the identical intro in pure CSS before JS runs; taking over
+// from it, all of this has already happened.
+const BG_REVEAL_DELAY = 250;
+const BG_REVEAL_DURATION = 1100;
+
+let resolveBgRevealed: () => void = () => {};
+const bgRevealed = new Promise<void>((resolve) => {
+  resolveBgRevealed = resolve;
+});
+
 onMounted(async () => {
-  if (prefersReducedMotion) {
+  if (takingOverFromSplash || prefersReducedMotion) {
     bgVisible.value = true;
+    resolveBgRevealed();
     return;
   }
   await nextTick();
+  await wait(BG_REVEAL_DELAY);
   bgVisible.value = true;
+  await wait(BG_REVEAL_DURATION);
+  resolveBgRevealed();
 });
 
-async function playBackgroundExit(): Promise<void> {
+async function dissolveBackground(): Promise<void> {
+  bgDissolving.value = true;
   if (prefersReducedMotion) return;
-  bgVisible.value = false;
-  await wait(BG_EXIT_DURATION);
+  await wait(BG_DISSOLVE_DURATION);
 }
 
-provide(AUTH_BACKGROUND_EXIT_KEY, playBackgroundExit);
+// ── Shared auth backdrop (see AuthBackdrop in packages/ui) ──────────────────
+const orbsRef = ref<InstanceType<typeof AuthOrbs> | null>(null);
+const orbsAnchor = ref<HTMLElement | null>(null);
+
+// The initial navigation (session check in the router guard + the lazy view
+// chunk) is already in flight when this layout mounts — App.vue renders it
+// for the router's start location — so the orbs breathe "busy" until it
+// settles, then views report their own loading via setBusy.
+const router = useRouter();
+const routerReady = ref(false);
+void router.isReady().then(() => {
+  routerReady.value = true;
+});
+
+// Also busy while the session check keeps running in the background after the
+// router stopped waiting for it (SESSION_CHECK_BUDGET_MS in router/index.ts).
+const auth = useAuthStore();
+const busySources = reactive(new Set<string>());
+const backdropBusy = computed(
+  () => !routerReady.value || auth.sessionChecking || busySources.size > 0,
+);
+
+let backdropExited = false;
+
+const backdrop: AuthBackdrop = {
+  setBusy(source, busy) {
+    if (busy) busySources.add(source);
+    else busySources.delete(source);
+  },
+  registerAnchor(el) {
+    orbsAnchor.value = el;
+  },
+  // The card zooms out of the orbs only once the whole intro has played —
+  // orbs in, background revealed, boot splash (if any) lifting off.
+  whenEntered: () =>
+    Promise.all([orbsRef.value?.whenEntered(), bgRevealed, whenSplashLifts()]).then(() => undefined),
+  async playExit() {
+    backdropExited = true;
+    await Promise.all([orbsRef.value?.playExit(), dissolveBackground()]);
+  },
+};
+
+provide(AUTH_BACKDROP_KEY, backdrop);
+
+/**
+ * Called by App.vue right before it swaps this layout for AppLayout. After a
+ * sign-in the exit has already played (AuthView runs playExitSequence before
+ * router.push); on a page refresh with a live session it hasn't — the session
+ * check just resolves and the app route arrives. Play the same exit here then,
+ * once the boot splash is fully gone, so a refresh ends exactly like a login
+ * instead of the backdrop cutting straight to a bare page.
+ */
+async function exitToApp(): Promise<void> {
+  if (backdropExited) return;
+  await whenSplashGone();
+  if (backdropExited) return;
+  await backdrop.playExit();
+}
+
+defineExpose({ exitToApp });
+
+// A post-login exit normally ends with App.vue swapping this layout out for
+// AppLayout. When the next route is public too (forced password change), this
+// layout stays mounted — bring the background and orbs back instead of
+// leaving the next view on a bare page.
+watch(
+  () => router.currentRoute.value.path,
+  () => {
+    if (!backdropExited || router.currentRoute.value.meta.layout !== "public") return;
+    backdropExited = false;
+    bgDissolving.value = false;
+    orbsInstant.value = false;
+    void orbsRef.value?.replay();
+  },
+);
 
 // Feeds brand teal into the animated gradient below (see .layout-public in
 // <style>) so it tracks packages/brand/colors.ts instead of hardcoded hex
@@ -85,30 +200,12 @@ const gradientAccentStyle = {
 // Tints the iOS Safari toolbar (and, if the app is added to the home screen,
 // the surrounding status-bar area) to match this layout's own background —
 // see .layout-public below, same two hex values. Scoped to this layout via
-// mount/unmount so app-layout routes aren't affected by a leftover tag.
+// mount/unmount (useThemeColorMeta) so app-layout routes aren't affected by a
+// leftover tag.
 const THEME_COLOR = { light: "#e8f5f4", dark: "#111111" } as const;
 
 const themeStore = useThemeStore();
-let metaEl: HTMLMetaElement | null = null;
-
-watch(
-  () => themeStore.mode,
-  (mode) => {
-    if (typeof document === "undefined") return;
-    if (!metaEl) {
-      metaEl = document.createElement("meta");
-      metaEl.setAttribute("name", "theme-color");
-      document.head.appendChild(metaEl);
-    }
-    metaEl.setAttribute("content", THEME_COLOR[mode]);
-  },
-  { immediate: true, flush: "sync" },
-);
-
-onBeforeUnmount(() => {
-  metaEl?.remove();
-  metaEl = null;
-});
+useThemeColorMeta(() => THEME_COLOR[themeStore.mode]);
 </script>
 
 <style scoped>
@@ -117,11 +214,12 @@ onBeforeUnmount(() => {
   height: 100dvh;
   overflow: hidden;
   box-sizing: border-box;
-  /* Revealed as .layout-public__bg fades its own opacity out on exit (see
-     playBackgroundExit) — the background doesn't just go transparent onto
+  /* Revealed as .layout-public__bg dissolves on exit (see
+     dissolveBackground) — the background doesn't just go transparent onto
      whatever happens to sit behind this layout, it deliberately washes to
-     white before the app underneath takes over. */
-  background: #fff;
+     the app's own page color (white / near-black per theme) before the app
+     underneath takes over. */
+  background: rgb(var(--v-theme-background, 255, 255, 255));
   /* env(safe-area-inset-*) needs viewport-fit=cover on the <meta viewport>
      tag (see index.html) to be non-zero at all — without it iOS Safari never
      lets the page extend under the notch/home-indicator in the first place,
@@ -129,27 +227,60 @@ onBeforeUnmount(() => {
      it, .layout-public__bg (a sibling, absolutely positioned, ignoring this
      padding) still bleeds all the way to the true screen edges — only the
      card/logo content below gets pushed clear of the hardware cutouts. */
-  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
-    max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  /* Exposed as variables so a view that scrolls itself (PartnerRegistrationView)
+     can extend its scroller under this frame — otherwise a wheel/swipe that
+     starts in the 16px band around the card scrolls nothing. */
+  --layout-public-inset-top: max(16px, env(safe-area-inset-top));
+  --layout-public-inset-right: max(16px, env(safe-area-inset-right));
+  --layout-public-inset-bottom: max(16px, env(safe-area-inset-bottom));
+  --layout-public-inset-left: max(16px, env(safe-area-inset-left));
+  padding: var(--layout-public-inset-top) var(--layout-public-inset-right) var(--layout-public-inset-bottom)
+    var(--layout-public-inset-left);
 }
 
-/* Wraps both layers below — fades in on mount and out via playBackgroundExit
-   (see script), so entrance/exit is one opacity transition here rather than
-   duplicated across the image and gradient's own already-tuned opacities. */
+/* Wraps both layers below — fades in on mount and dissolves via
+   dissolveBackground (see script), so entrance/exit is one transition here
+   rather than duplicated across the image and gradient's own already-tuned
+   opacities. */
+/* Entrance: spreads out from underneath the orbs — a circle growing from the
+   orb cluster's center (--layout-public-orbs-y, same geometry as AuthOrbs'
+   default frame and the boot splash) — instead of a flat fade-in. */
 .layout-public__bg {
+  --layout-public-orbs-y: calc(max(16px, env(safe-area-inset-top)) + clamp(24px, 10vh, 96px) + 115px + 220px);
   position: absolute;
   inset: 0;
   z-index: 0;
   opacity: 0;
-  transition: opacity 0.6s ease-out;
+  clip-path: circle(0px at 50% var(--layout-public-orbs-y));
+  transition:
+    clip-path 1.1s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.4s ease-out;
 }
 
 .layout-public__bg--visible {
   opacity: 1;
+  clip-path: circle(150vmax at 50% var(--layout-public-orbs-y));
+}
+
+/* "Rozpływa się" — melts rather than cuts: fades while swelling slightly and
+   going soft-focus, over the same 1.4s the orbs take to grow past the
+   screen edges (AuthOrbs), so the two read as one motion. */
+.layout-public__bg--dissolving {
+  opacity: 0;
+  transform: scale(1.06);
+  filter: blur(14px);
+  transition:
+    opacity 1.4s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 1.4s cubic-bezier(0.4, 0, 0.2, 1),
+    filter 1.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .layout-public__bg {
+  .layout-public__bg,
+  .layout-public__bg--dissolving {
+    transform: none;
+    filter: none;
+    clip-path: none;
     transition: none;
   }
 }

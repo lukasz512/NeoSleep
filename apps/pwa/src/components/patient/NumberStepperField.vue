@@ -20,6 +20,7 @@
       density="comfortable"
       hide-details
       :disabled="disabled"
+      :error="error"
       class="number-stepper-field__input"
       @update:model-value="onInput"
     />
@@ -55,8 +56,10 @@ const props = withDefaults(
     modelValue: number | null;
     step?: number;
     disabled?: boolean;
+    /** Red outline only — the message itself sits under the field group (e.g. the wizard's MR/MP alert, NEO-109). */
+    error?: boolean;
   }>(),
-  { step: 1, disabled: false }
+  { step: 1, disabled: false, error: false }
 );
 
 const emit = defineEmits<{ "update:modelValue": [value: number | null] }>();

@@ -11,6 +11,7 @@ import {
   getCountryTerritoryId,
   createInviteToken,
   invalidateUnusedInviteTokensForUser,
+  updateUser,
   type InsertPractitionerInput,
   type UpdatePractitionerInput,
   type Practitioner,
@@ -20,8 +21,10 @@ import { ValidationError, ConflictError } from "../errors.js";
 import { ConvertLeadCommand } from "./lead.js";
 import { inferLanguage } from "./invitePractitioner.js";
 import { sendPartnerInviteEmail } from "../mailer.js";
-import { FRONTEND_URL } from "../env.js";
+import { DEFAULT_FRONTEND_ORIGIN } from "../utils/frontendOrigin.js";
 import { hashToken } from "../utils/hashToken.js";
+import { normalizeNationalIds } from "../utils/nationalIds.js";
+import { resolvePractitionerJurisdiction, resolvePartnerDocumentSet } from "./partnerDocuments.js";
 
 /**
  * COMMANDS — Practitioner domain.
@@ -92,7 +95,7 @@ export async function CreatePractitionerCommand(
     country_code:     input.country_code ?? null,
     influence_tier:   input.influence_tier,
     language:         input.language ?? null,
-    national_ids:     input.national_ids ?? null,
+    national_ids:     normalizeNationalIds(input.national_ids) ?? null,
     social_links:     input.social_links ?? null,
   };
 
@@ -197,7 +200,7 @@ export async function UpdatePractitionerCommand(
     territory_id:     input.territory_id,
     influence_tier:   input.influence_tier,
     language:         input.language,
-    national_ids:     input.national_ids,
+    national_ids:     normalizeNationalIds(input.national_ids),
     social_links:     input.social_links,
     status:           input.status,
   };
@@ -253,7 +256,14 @@ export async function DeletePractitionerCommand(ctx: TenantContext, id: string):
 
 const INVITE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days — see invitePractitioner.ts's own constant/comment for why this is minted here, not at invite time.
 
-export async function ActivatePractitionerCommand(ctx: TenantContext, id: string): Promise<Practitioner | null> {
+export async function ActivatePractitionerCommand(
+  ctx: TenantContext,
+  id: string,
+  /** Resolved by the route from the request (utils/frontendOrigin.ts) — never the raw,
+   * possibly comma-separated FRONTEND_URL, which produced links like
+   * "https://pwa…,https://pwa-dev…/partner-register" that Gmail flags as invalid. */
+  frontendOrigin: string = DEFAULT_FRONTEND_ORIGIN
+): Promise<Practitioner | null> {
   if (!id?.trim()) throw new ValidationError("practitioner id is required");
 
   const practitioner = await getPractitionerById(ctx.client, id);
@@ -261,7 +271,18 @@ export async function ActivatePractitionerCommand(ctx: TenantContext, id: string
   if (practitioner.status === "active" || practitioner.status === "inactive") {
     throw new ConflictError(`Practitioner is already ${practitioner.status}`);
   }
-  if (!practitioner.email) throw new ValidationError("Practitioner must have an email address before activation");
+  if (!practitioner.email) throw new ValidationError("Practitioner must have an email address before activation", "email");
+
+  // NEO-51: never send an invite the doctor can't complete — their country's
+  // partner documents must exist, have a NeoSleep signatory, and be approved
+  // by that signatory. Throws PartnerDocumentsNotReadyError (409) otherwise.
+  const jurisdiction = await resolvePractitionerJurisdiction(ctx.client, practitioner);
+  if (!jurisdiction) {
+    throw new ValidationError(
+      "Partner onboarding is only available for practitioners in Poland (PL) or Mexico (MX) — set the doctor's or their clinic's country first"
+    );
+  }
+  await resolvePartnerDocumentSet(ctx.client, jurisdiction);
 
   // Only provision a login when this identity has no users account yet —
   // a resend (status already "invited") reuses the account created on the
@@ -293,6 +314,10 @@ export async function ActivatePractitionerCommand(ctx: TenantContext, id: string
       practitioner.country_code
     );
     userId = user?.id ?? null;
+    // Same as InvitePractitionerCommand's lead path: the login stays
+    // 'inactive' until the doctor accepts the invite (AcceptPractitionerInviteCommand
+    // sets 'active'), so it can't be used before the documents are signed.
+    if (userId) await updateUser(ctx.client, userId, { status: "inactive" });
   }
 
   if (userId) {
@@ -302,9 +327,15 @@ export async function ActivatePractitionerCommand(ctx: TenantContext, id: string
 
     const token = crypto.randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + INVITE_EXPIRY_MS);
-    await createInviteToken(ctx.client, userId, null, hashToken(token), expiresAt, ctx.user.id);
+    // Activation is NeoSleep's countersignature moment: this date is printed
+    // next to the signatory's signature on the partner agreement. A resend
+    // mints a new token, so it also gets a new date.
+    await createInviteToken(ctx.client, userId, null, hashToken(token), expiresAt, ctx.user.id, {
+      counterparty_signed_at: new Date().toISOString(),
+      jurisdiction,
+    });
 
-    const registerLink = `${FRONTEND_URL}/partner-register?token=${encodeURIComponent(token)}`;
+    const registerLink = `${frontendOrigin}/partner-register?token=${encodeURIComponent(token)}`;
     await sendPartnerInviteEmail(
       practitioner.email,
       registerLink,
@@ -312,8 +343,8 @@ export async function ActivatePractitionerCommand(ctx: TenantContext, id: string
         title: practitioner.salutation,
         firstName: practitioner.first_name,
         lastName: practitioner.last_name,
-        language: inferLanguage(practitioner.region),
-        region: practitioner.region,
+        language: inferLanguage(jurisdiction),
+        region: jurisdiction,
       },
       { name: ctx.user.name ?? "NeoSleep", email: ctx.user.email }
     );

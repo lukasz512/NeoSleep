@@ -25,6 +25,8 @@ export interface EntityActionDef {
 
 export const ENTITY_ACTIONS = {
   scheduleVisit:    { icon: "calendar",     tone: "success" },
+  /** Patient↔doctor appointment (NEO-34) — not the rep's encounter above. */
+  bookAppointment:  { icon: "nav-appointments", tone: "success" },
   moveToDoctors:    { icon: "user-arrow",   tone: "primary" },
   inviteToPartner:  { icon: "mail",         tone: "primary" },
   sendOffer:        { icon: "mail",         tone: "primary" },

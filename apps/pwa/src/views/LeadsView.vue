@@ -42,6 +42,7 @@
     <FormRenderer
       v-model="showConvertToPatientModal"
       :fields="patientFormFields"
+      :derive="patientFormDerive"
       :initial-data="convertToPatientInitialData"
       title-key="app.patients.form.title"
       submit-label-key="app.patients.form.submit"
@@ -66,19 +67,25 @@
       @add="onAddLead"
     >
     <template #item.name="{ item }">
-      <span class="leads-name-cell">
-        <AppAvatar :name="getLeadFromItem(item).name" :first-name="getLeadFromItem(item).first_name" :last-name="getLeadFromItem(item).last_name" entity-type="lead" :size="32" />
+      <EntityLink
+        :to="null"
+        entity-type="lead"
+        :label="getLeadFromItem(item).name"
+        :first-name="getLeadFromItem(item).first_name"
+        :last-name="getLeadFromItem(item).last_name"
+        :lead-source="getLeadFromItem(item).source"
+        :avatar-size="32"
+      >
         <GenderIcon :gender="getGenderFromName(getLeadFromItem(item).name)" />
-        {{ getLeadFromItem(item).name }}
-      </span>
+      </EntityLink>
     </template>
     <template #feed-card-avatar="{ item }">
-      <AppAvatar :name="getLeadFromItem(item).name" :first-name="getLeadFromItem(item).first_name" :last-name="getLeadFromItem(item).last_name" entity-type="lead" :size="55" />
+      <AppAvatar v-bind="personAvatarProps(getLeadFromItem(item))" entity-type="lead" :lead-source="getLeadFromItem(item).source" :size="55" />
     </template>
     <template #feed-card-title="{ item }">
       <span class="leads-name-cell">
         <GenderIcon :gender="getGenderFromName(getLeadFromItem(item).name)" />
-        {{ getLeadFromItem(item).name }}
+        {{ shortPersonName(getLeadFromItem(item).name, getLeadFromItem(item).first_name, getLeadFromItem(item).last_name) }}
       </span>
     </template>
     <template #item.email="{ item }">
@@ -97,10 +104,17 @@
     <template #item.type="{ item }">
       {{ typeLabel(getLeadFromItem(item).type) }}
     </template>
+    <!-- Second tile line: specialty when known, else the clinic the lead came in through. -->
     <template #feed-card-meta="{ item }">
-      <span v-if="leadSecondaryLine(getLeadFromItem(item))">
-        {{ leadSecondaryLine(getLeadFromItem(item)) }}
+      <span v-if="getLeadFromItem(item).specialty" class="leads-feed-meta">
+        {{ getLeadFromItem(item).specialty }}
       </span>
+      <EntityLink
+        v-else-if="leadInstitution(getLeadFromItem(item))"
+        :to="hcoListLink(leadInstitution(getLeadFromItem(item)))"
+        :label="leadInstitution(getLeadFromItem(item))"
+        entity-type="hco"
+      />
     </template>
     <template #feed-card-status="{ item }">
       <span
@@ -110,16 +124,11 @@
       </span>
     </template>
     <template #item.institution="{ item }">
-      <RouterLink
-        v-if="leadInstitution(getLeadFromItem(item))"
-        :to="hcoListLink(leadInstitution(getLeadFromItem(item)))"
-        class="app-entity-list__institution-link"
-        @click.stop
-      >
-        <AppIcon name="nav-hco" class="app-entity-list__institution-icon" />
-        {{ leadInstitution(getLeadFromItem(item)) }}
-      </RouterLink>
-      <span v-else class="app-entity-list__cell-empty">—</span>
+      <EntityLink
+        :to="leadInstitution(getLeadFromItem(item)) ? hcoListLink(leadInstitution(getLeadFromItem(item))) : null"
+        :label="leadInstitution(getLeadFromItem(item))"
+        entity-type="hco"
+      />
     </template>
     <template #feed-card-actions="{ item }">
       <AppListItemMenu :aria-label="t('app.common.moreActions')">
@@ -157,10 +166,14 @@
 </template>
 
 <script setup lang="ts">
+import { toEncounterBody } from "../utils/encounterMapping";
 import { ref, computed, defineAsyncComponent } from "vue";
 import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
 import AppAvatar from "../components/AppAvatar.vue";
+import EntityLink from "../components/EntityLink.vue";
+import { shortPersonName } from "../utils/shortPersonName";
+import { personAvatarProps } from "../utils/personAvatarProps";
 import GenderIcon from "../components/GenderIcon.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppListItemMenu from "../components/AppListItemMenu.vue";
@@ -170,7 +183,7 @@ const FormRenderer = defineAsyncComponent(() => import("../components/FormRender
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
 import { leadFormFields } from "../config/forms/leadForm";
 import { hcpFormFields, hcpFormDerive } from "../config/forms/hcpForm";
-import { patientFormFields } from "../config/forms/patientForm";
+import { patientFormFields, patientFormDerive } from "../config/forms/patientForm";
 import { partnerInviteFormFields } from "../config/forms/partnerInviteForm";
 import { createPractitionerFromLead } from "../utils/leadConversion";
 import { apiFetch } from "../composables/useApi";
@@ -179,7 +192,7 @@ import { type FilterDefinition } from "../composables/useFilters";
 import { useAuthStore } from "../stores/auth";
 import { useConfigStore } from "../stores/config";
 import { getGenderFromName } from "../utils/genderFromName";
-import { leadStatusClass, leadStatusI18nKey, leadInstitution } from "../utils/leadStatus";
+import { leadStatusClass, leadStatusI18nKey, leadInstitution, leadNationalIds } from "../utils/leadStatus";
 import { hcoListLink } from "../utils/entityLinks";
 
 export interface Lead {
@@ -193,6 +206,8 @@ export interface Lead {
   status: string;
   type?: string;
   region: string;
+  /** Channel the lead came in through (utils/leadSource.ts) — its avatar badge. */
+  source?: string | null;
   metadata?: Record<string, unknown> | null;
   specialty?: string;
   notes?: string;
@@ -228,6 +243,7 @@ const moveToDoctorsInitialData = computed(() => (selectedLead.value ? {
   // isCreatingNewOrganization() resolves it against the loaded clinic list
   // once options finish loading (see hcpForm.ts).
   organization_id: leadInstitution(selectedLead.value),
+  national_ids: leadNationalIds(selectedLead.value),
 } : undefined));
 
 /** Same stable-reference reasoning as moveToDoctorsInitialData above. */
@@ -235,6 +251,8 @@ const inviteInitialData = computed(() => (selectedLead.value ? {
   first_name: selectedLead.value.first_name,
   last_name: selectedLead.value.last_name,
   email: selectedLead.value.email ?? "",
+  region: selectedLead.value.region,
+  national_ids: leadNationalIds(selectedLead.value),
 } : undefined));
 
 /** Same stable-reference reasoning as moveToDoctorsInitialData above. */
@@ -300,6 +318,7 @@ const leadsI18n = computed(() => ({
   add: "user.leads.add",
   emptyTitle: "user.leads.emptyTitle",
   emptySubtitle: "user.leads.emptySubtitle",
+  countNoun: "leads" as const,
   noResultsForCriteria: "user.leads.noResultsForCriteria",
   noResultsForCriteriaSubtitle: "user.leads.noResultsForCriteriaSubtitle",
   tableNoResults: "user.leads.table.noResults",
@@ -332,11 +351,6 @@ function isConverted(lead: Lead): boolean {
   return (lead.status || "").toLowerCase() === "converted";
 }
 
-/** Second tile line — specialty when known, else the clinic the lead came in through. */
-function leadSecondaryLine(lead: Lead): string {
-  return lead.specialty || leadInstitution(lead) || "";
-}
-
 function onScheduleVisit() {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -358,9 +372,10 @@ async function onEventFormSubmit(
         apiFetch("/api/v1/encounter", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: payload.title, start_at: payload.start_at, end_at: payload.end_at, type: payload.type, status: payload.status, location: payload.location, video_link: payload.video_link, notes: payload.notes, region: payload.region, attendees: payload.attendees }),
+          body: JSON.stringify(toEncounterBody(payload)),
         }),
       successMessage: t("user.planner.form.success"),
+      icon: "nav-planner",
       errorMessage: t("user.planner.form.errorSave"),
       refresh: false,
     },
@@ -390,6 +405,7 @@ async function onConvertToPatientSubmit(data: Record<string, unknown>, done: (ok
           body: JSON.stringify({ ...data, lead_id: leadId }),
         }),
       successMessage: t("app.patients.form.success"),
+      icon: "nav-patients",
       errorMessage: t("app.patients.form.errorSave"),
     },
     done,
@@ -413,6 +429,7 @@ async function onInviteSubmit(data: Record<string, unknown>, done: (ok: boolean)
           body: JSON.stringify(data),
         }),
       successMessage: t("user.leads.form.inviteSuccess"),
+      icon: "mail",
       errorMessage: t("user.leads.form.inviteError"),
     },
     done,
@@ -426,6 +443,7 @@ async function onContactSubmit(data: Record<string, unknown>, done: (ok: boolean
     {
       request: async () => ({ ok: await createPractitionerFromLead(data, leadId) }),
       successMessage: t("user.hcp.form.contactCreated"),
+      icon: "nav-hcp",
       errorMessage: t("user.hcp.form.contactError"),
     },
     done,
@@ -449,6 +467,7 @@ async function onLeadEditSubmit(data: Record<string, unknown>, done: (ok: boolea
           body: JSON.stringify(data),
         }),
       successMessage: t("user.leads.form.editSuccess"),
+      icon: "nav-leads",
       errorMessage: t("user.leads.form.errorSave"),
     },
     done,
@@ -476,6 +495,8 @@ async function onLeadSubmit(data: Record<string, unknown>, done: (ok: boolean) =
           body: JSON.stringify(data),
         }),
       successMessage: t("user.leads.form.success"),
+      openCreated: "lead-detail",
+      icon: "nav-leads",
       errorMessage: t("user.leads.form.errorSave"),
     },
     done,

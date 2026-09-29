@@ -1,7 +1,9 @@
+import { reportCaught } from "@api";
 import { reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { apiFetch } from "./useApi";
-import { useNotifications } from "./useNotifications";
+import { fieldErrorsFromResponse, type FieldErrors } from "./useFormErrors";
+import { retryAction, useNotifications, type ShowOptions } from "./useNotifications";
 
 /**
  * Extracted from OrthoApneaOrderWizard.vue: everything that does an apiFetch
@@ -12,7 +14,7 @@ import { useNotifications } from "./useNotifications";
  * owns it would just mean passing form/sequence as parameters everywhere.
  *
  * Left in the component (see its own header comment): step navigation
- * (step/maxReachedStep/goNext/goToStep), canAdvance/step1Valid validation,
+ * (step/maxReachedStep/goNext/goToStep), per-step validation + NEO-109 error display,
  * the morningAligner <-> products sync watchers, and all template/UI-only
  * computed values (sortedProductOptions, selectedProductIds, mandibularRange,
  * productChipColor/productSortRank) — none of those call the API or build a
@@ -86,9 +88,85 @@ export type OrthoApneaWizardForm = ReturnType<typeof defaultForm>;
 
 const DEFAULT_SEQUENCE: OrthoApneaWizardSequence = { seq1: 60, seq2: 70, seq3: 80 };
 
+/** A treatment_plan saved locally whose OrthoApnea order still has to be sent. */
+interface UnsentOrder {
+  planId: string;
+  body: string;
+}
+
+const ORDER_TOAST: ShowOptions = { icon: "nav-treatment-plans" };
+
+/**
+ * API field key → the wizard's own form key, for a 400 that names a field
+ * (NEO-109). treatment_plan speaks snake_case (dentist_id), the OrthoApnea
+ * order payload speaks OA's own names, with the alternative address nested
+ * under deliveryAddress.* — every one of them maps back to the field the rep
+ * actually edits. A key not listed here isn't on the wizard, so it can't be
+ * marked and the caller falls back to its toast.
+ */
+export const WIZARD_FIELD_FOR_API_FIELD: Readonly<Record<string, keyof OrthoApneaWizardForm>> = {
+  dentist_id: "doctorId",
+  product: "products",
+  retrusionMax: "retrusionMax",
+  protrusionMax: "protrusionMax",
+  "deliveryAddress.country": "altCountryId",
+  "deliveryAddress.postalCode": "altPostalCode",
+  "deliveryAddress.city": "altCity",
+  "deliveryAddress.address": "altAddress",
+  "deliveryAddress.name": "altName",
+  "deliveryAddress.email": "altEmail",
+  "deliveryAddress.phone": "altPhone",
+};
+
+/** The API's field errors re-keyed to the wizard's form keys; null when none of them is a wizard field. */
+export function toWizardFieldErrors(errors: FieldErrors | null): FieldErrors | null {
+  if (!errors) return null;
+  const mapped: FieldErrors = {};
+  for (const [apiKey, reason] of Object.entries(errors)) {
+    const key = WIZARD_FIELD_FOR_API_FIELD[apiKey];
+    if (key) mapped[key] = reason;
+  }
+  return Object.keys(mapped).length > 0 ? mapped : null;
+}
+
 export function useOrthoApneaOrderWizard() {
   const { t } = useI18n();
   const notifications = useNotifications();
+
+  async function sendOrder(order: UnsentOrder): Promise<boolean> {
+    try {
+      const res = await apiFetch("/api/v1/partners/orthoapnea/treatments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: order.body,
+        handleErrors: false,
+      });
+      return res.ok;
+    } catch (err) {
+      reportCaught(err, { where: "useOrthoApneaOrderWizard.sendOrder" });
+      return false;
+    }
+  }
+
+  /** Error toast; with anything left unsent it carries Retry, which re-sends just those. */
+  function showOrderFailure(key: string, unsent: UnsentOrder[]): void {
+    notifications.show(t(key), "error", undefined, {
+      ...ORDER_TOAST,
+      action: unsent.length > 0 ? retryAction(() => resendOrders(unsent)) : undefined,
+    });
+  }
+
+  async function resendOrders(orders: UnsentOrder[]): Promise<void> {
+    const stillUnsent: UnsentOrder[] = [];
+    for (const order of orders) {
+      if (!(await sendOrder(order))) stillUnsent.push(order);
+    }
+    if (stillUnsent.length === 0) {
+      notifications.show(t("app.orthoApneaOrder.success"), "success", undefined, ORDER_TOAST);
+    } else {
+      showOrderFailure(stillUnsent.length < orders.length ? "app.orthoApneaOrder.partialFailure" : "app.orthoApneaOrder.error", stillUnsent);
+    }
+  }
 
   const form = reactive(defaultForm());
   const sequence = reactive<OrthoApneaWizardSequence>({ ...DEFAULT_SEQUENCE });
@@ -108,6 +186,17 @@ export function useOrthoApneaOrderWizard() {
   /** The treatment_plan id this session is drafting into — see persistDraft()/confirmOrder(). */
   const currentDraftPlanId = ref<string | null>(null);
   const submitLoading = ref(false);
+  /**
+   * The fields the API rejected on the last confirmOrder()/persistDraft()
+   * (wizard form keys), or null. Set only when the save failed on them and
+   * nothing was created yet — the component then jumps to their step and
+   * marks them instead of toasting (NEO-109).
+   */
+  const rejectedFields = ref<FieldErrors | null>(null);
+
+  async function rejectedFieldsOf(res: Response): Promise<FieldErrors | null> {
+    return toWizardFieldErrors(await fieldErrorsFromResponse(res));
+  }
 
   /** "¿Cuándo desea el producto?" — hidden per product decision (not shown
    * anywhere in the wizard UI), but still computed and sent as `desiredDate`:
@@ -167,7 +256,8 @@ export function useOrthoApneaOrderWizard() {
         const data = (await res.json()) as { items: { id: number; name: string }[] };
         internalClinicId.value = data.items[0]?.id ?? null;
       }
-    } catch {
+    } catch (err) {
+      reportCaught(err, { where: "useOrthoApneaOrderWizard.loadClinic", level: "warn" });
       // leave internalClinicId null — createOrthoApneaTreatment on the backend will surface the real error
     }
   }
@@ -288,6 +378,7 @@ export function useOrthoApneaOrderWizard() {
    * effects here, those stay in the component (see saveDraftAndClose).
    */
   async function persistDraft(patientId: string, sleepStudyId: string): Promise<boolean> {
+    rejectedFields.value = null;
     const snapshot = { ...JSON.parse(JSON.stringify(form)), sequence: { ...sequence } };
     const metadata = { orthoapneaDraft: snapshot };
 
@@ -298,6 +389,7 @@ export function useOrthoApneaOrderWizard() {
         body: JSON.stringify({ metadata, dentist_id: form.doctorId ?? undefined }),
         handleErrors: false,
       });
+      if (!res.ok) rejectedFields.value = await rejectedFieldsOf(res);
       return res.ok;
     }
 
@@ -316,6 +408,8 @@ export function useOrthoApneaOrderWizard() {
     if (res.ok) {
       const plan = (await res.json()) as { id: string };
       currentDraftPlanId.value = plan.id;
+    } else {
+      rejectedFields.value = await rejectedFieldsOf(res);
     }
     return res.ok;
   }
@@ -330,18 +424,26 @@ export function useOrthoApneaOrderWizard() {
    * caller should close the dialog and emit "submitted": true on any
    * completed attempt (even partial failure — some orders may have gone
    * through), false only when the flow never really started (no products
-   * selected, or the initial "ensure patient" call itself threw).
+   * selected, the initial "ensure patient" call itself threw, or the first
+   * plan was rejected on a wizard field — then `rejectedFields` names it and
+   * no toast is shown: every product carries the same fields, so nothing was
+   * created and the rep fixes the field in the form, NEO-109).
    */
   async function confirmOrder(patientId: string, sleepStudyId: string): Promise<boolean> {
     if (submitLoading.value) return false;
     if (form.products.length === 0) return false;
 
+    rejectedFields.value = null;
     submitLoading.value = true;
     try {
       await apiFetch(`/api/v1/partners/orthoapnea/patients/${patientId}/ensure`, { method: "POST" });
 
       let succeeded = 0;
       let failed = 0;
+      // Plans that exist locally but whose OrthoApnea mirror failed — the only
+      // part Retry can redo (the API refuses a plan already submitted, so a
+      // retry can never order the same device twice).
+      const unsent: UnsentOrder[] = [];
 
       for (let i = 0; i < form.products.length; i++) {
         const product = form.products[i]!;
@@ -359,6 +461,12 @@ export function useOrthoApneaOrderWizard() {
             handleErrors: false,
           });
           if (!patchRes.ok) {
+            // A rejected field is the same on every product's plan — nothing
+            // was created yet, so the form marks it instead of a toast.
+            if (i === 0) {
+              rejectedFields.value = await rejectedFieldsOf(patchRes);
+              if (rejectedFields.value) return false;
+            }
             failed += 1;
             continue;
           }
@@ -376,34 +484,37 @@ export function useOrthoApneaOrderWizard() {
             handleErrors: false,
           });
           if (!planRes.ok) {
+            // A rejected field is the same on every product's plan — nothing
+            // was created yet, so the form marks it instead of a toast.
+            if (i === 0) {
+              rejectedFields.value = await rejectedFieldsOf(planRes);
+              if (rejectedFields.value) return false;
+            }
             failed += 1;
             continue;
           }
           planId = ((await planRes.json()) as { id: string }).id;
         }
 
-        const orderRes = await apiFetch("/api/v1/partners/orthoapnea/treatments", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ treatment_plan_id: planId, ...buildWizardPayload(product) }),
-          handleErrors: false,
-        });
+        const order: UnsentOrder = { planId, body: JSON.stringify({ treatment_plan_id: planId, ...buildWizardPayload(product) }) };
         // treatment_plan already exists locally either way (source of truth preserved) —
         // a failure here only means the OrthoApnea mirror for THIS product failed.
-        if (orderRes.ok) succeeded += 1;
-        else failed += 1;
+        if (await sendOrder(order)) succeeded += 1;
+        else {
+          failed += 1;
+          unsent.push(order);
+        }
       }
 
       if (failed === 0) {
-        notifications.show(t("app.orthoApneaOrder.success"), "success");
-      } else if (succeeded > 0) {
-        notifications.show(t("app.orthoApneaOrder.partialFailure"), "error");
+        notifications.show(t("app.orthoApneaOrder.success"), "success", undefined, ORDER_TOAST);
       } else {
-        notifications.show(t("app.orthoApneaOrder.error"), "error");
+        showOrderFailure(succeeded > 0 ? "app.orthoApneaOrder.partialFailure" : "app.orthoApneaOrder.error", unsent);
       }
       return true;
-    } catch {
-      notifications.show(t("app.orthoApneaOrder.error"), "error");
+    } catch (err) {
+      reportCaught(err, { where: "useOrthoApneaOrderWizard.confirmOrder" });
+      notifications.show(t("app.orthoApneaOrder.error"), "error", undefined, ORDER_TOAST);
       return false;
     } finally {
       submitLoading.value = false;
@@ -423,6 +534,7 @@ export function useOrthoApneaOrderWizard() {
     internalClinicId,
     currentDraftPlanId,
     submitLoading,
+    rejectedFields,
     resetForOpen,
     loadProducts,
     loadClinic,

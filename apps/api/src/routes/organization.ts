@@ -8,8 +8,9 @@ import { CreateOrganizationCommand, UpdateOrganizationCommand, DeleteOrganizatio
 import { GetOrganizationListQuery, GetOrganizationByIdQuery } from "../queries/organization.js";
 import { GetHistoryForOrganizationQuery } from "../queries/auditLog.js";
 import { GetOrganizationDocumentsQuery, GetOrganizationDocumentDownloadUrlQuery } from "../queries/entityDocuments.js";
+import { GetOrganizationPractitionersQuery } from "../queries/practitioner.js";
 import { ValidationError } from "../errors.js";
-import { parsePaginationParams } from "./utils.js";
+import { parsePaginationParams, toFilterArray, routeParam } from "./utils.js";
 
 /**
  * Organization routes — thin waiters.
@@ -59,7 +60,7 @@ organizationRouter.get(
   "/organization/:id",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing organization id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -74,13 +75,43 @@ organizationRouter.get(
 );
 
 // ---------------------------------------------------------------------------
+// GET /api/v1/organization/:id/practitioners — clinic's doctors + stats (NEO-14)
+// ---------------------------------------------------------------------------
+organizationRouter.get(
+  "/organization/:id/practitioners",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = routeParam(req, "id")?.trim();
+    if (!id) throw new ValidationError("Missing organization id");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    const { page, limit, sortBy, sortOrder } = parsePaginationParams(req);
+    const search = typeof req.query.search === "string" ? req.query.search.trim() : undefined;
+
+    const result = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return GetOrganizationPractitionersQuery(ctx, {
+        organizationId: id,
+        search:    search || undefined,
+        specialty: toFilterArray(req.query.specialty),
+        page,
+        limit,
+        sortBy,
+        sortOrder,
+      });
+    });
+    res.json(result);
+  })
+);
+
+// ---------------------------------------------------------------------------
 // GET /api/v1/organization/:id/history — audit trail (History tab)
 // ---------------------------------------------------------------------------
 organizationRouter.get(
   "/organization/:id/history",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing organization id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -100,7 +131,7 @@ organizationRouter.get(
   "/organization/:id/documents",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing organization id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -119,8 +150,8 @@ organizationRouter.get(
   "/organization/:id/documents/:documentId/download",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
-    const documentId = req.params.documentId?.trim();
+    const id = routeParam(req, "id")?.trim();
+    const documentId = routeParam(req, "documentId")?.trim();
     if (!id || !documentId) throw new ValidationError("Missing organization id or document id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -144,7 +175,7 @@ organizationRouter.post(
       name?: string; type?: string; status?: string;
       address_line1?: string; city?: string; state?: string; postal_code?: string;
       country_code?: string; region?: string; territory_id?: string | null; phone?: string; email?: string; website?: string;
-      google_link?: string; specialties?: string[];
+      google_link?: string; specialties?: string[]; show_on_public_map?: boolean;
       metadata?: Record<string, unknown>;
     };
 
@@ -166,6 +197,7 @@ organizationRouter.post(
         website:       typeof body.website       === "string" ? body.website       : null,
         google_link:   typeof body.google_link   === "string" ? body.google_link   : null,
         specialties:   Array.isArray(body.specialties) ? body.specialties : undefined,
+        show_on_public_map: typeof body.show_on_public_map === "boolean" ? body.show_on_public_map : undefined,
         metadata:      body.metadata ?? null,
       });
     });
@@ -181,7 +213,7 @@ organizationRouter.patch(
   "/organization/:id",
   requireRole("admin", "manager", "kam", "msl", "rep"),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing organization id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -189,7 +221,7 @@ organizationRouter.patch(
       name?: string; type?: string; status?: string;
       address_line1?: string; city?: string; state?: string; postal_code?: string;
       country_code?: string; region?: string; territory_id?: string | null; phone?: string; email?: string; website?: string;
-      google_link?: string; specialties?: string[];
+      google_link?: string; specialties?: string[]; show_on_public_map?: boolean;
       metadata?: Record<string, unknown>;
     };
 
@@ -211,6 +243,7 @@ organizationRouter.patch(
         website:       body.website              !== undefined ? body.website      : undefined,
         google_link:   body.google_link          !== undefined ? body.google_link  : undefined,
         specialties:   Array.isArray(body.specialties) ? body.specialties : undefined,
+        show_on_public_map: typeof body.show_on_public_map === "boolean" ? body.show_on_public_map : undefined,
         metadata:      body.metadata             !== undefined ? body.metadata     : undefined,
       });
     });
@@ -227,7 +260,7 @@ organizationRouter.delete(
   "/organization/:id",
   requireRole("admin"),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing organization id");
 
     const slug = tenantSlugFromHost(req.hostname);

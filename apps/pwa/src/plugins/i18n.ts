@@ -27,7 +27,7 @@ function resolveInitialLocale(): "en" | "pl" | "mx" {
       }
     }
   } catch {
-    // ignore
+    // benign: storage unavailable (private mode / blocked) — fall back to the browser locale below.
   }
   return detectBrowserLocale();
 }

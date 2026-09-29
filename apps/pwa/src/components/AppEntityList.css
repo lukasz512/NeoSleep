@@ -7,6 +7,12 @@
 }
 
 .app-entity-list__toolbar {
+  /* NEO-160: room for the focused search's 3 px halo (--pwa-focus-halo).
+     The overflow:hidden below (needed for the scroll collapse) used to cut
+     it off at the field's top and bottom edge, leaving only the rounded
+     ends lit. Padding gives it room; the equal negative margin keeps the
+     toolbar's footprint exactly where it was. */
+  --app-entity-list-halo-room: 4px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -14,7 +20,9 @@
      spaced row instead of the group's own icons sitting tighter together
      than the add button sits from the group. */
   gap: var(--pwa-fib-sm, 8px);
-  margin-bottom: 16px;
+  padding: var(--app-entity-list-halo-room);
+  margin: calc(-1 * var(--app-entity-list-halo-room));
+  margin-bottom: calc(16px - var(--app-entity-list-halo-room));
   flex-shrink: 0;
   /* Collapses away on mobile while scrolling the feed down (see
      --hidden below) — max-height needs a real "from" value (not the
@@ -25,41 +33,51 @@
     margin-bottom var(--pwa-fib-t-xl, 233ms) ease;
 }
 
+/* Teleported into AppLayout's desktop page header (NEO-55): that row owns
+   the spacing below it, and the toolbar fills the space right of the title. */
+.app-entity-list__toolbar--in-header {
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: flex-end;
+  margin-bottom: calc(-1 * var(--app-entity-list-halo-room));
+  /* NEO-152: search, filter and + always share one line — the field shrinks,
+     and under 400 px it becomes its icon (useCompactSearch); nothing wraps. */
+  flex-wrap: nowrap;
+}
+/* Desktop: at least 16 px between the title and the field. */
+.app-entity-list__toolbar--in-header:not(.app-entity-list__toolbar--mobile) {
+  margin-left: calc(var(--space-4, 16px) - var(--app-entity-list-halo-room));
+}
+/* The field adapts to the room beside the title: the cluster takes the free
+   space (still right-aligned) and the field grows up to its 610 px basis. */
+.app-entity-list__toolbar--in-header .app-entity-list__search-group {
+  flex-wrap: nowrap;
+  flex: 1 1 auto;
+  justify-content: flex-end;
+}
+
 .app-entity-list__toolbar--hidden {
   max-height: 0;
   opacity: 0;
-  margin-bottom: 0;
+  padding-block: 0;
+  margin-block: 0;
   pointer-events: none;
 }
 
 /* Search + filter + clear-all read as one cluster, pinned to the right edge
    of the toolbar, flush against the add button. Content-hugging (not
-   flex:1) so the --active tonal background below hugs just the visible
-   controls instead of stretching across unused toolbar width.
+   flex:1) so nothing stretches across unused toolbar width.
    margin-left:auto here is the *only* auto margin in this row — the add
    button (further down) deliberately has none. Two competing auto margins
    split the leftover space between them instead of both collapsing to
    zero-gap, which is exactly what left this group sitting in the middle of
-   the toolbar with add pushed off to the far right past a gap. */
-/* Active search/filters: tonal M3 pill behind the whole group (field +
-   filter + clear-all) so the three read as one connected control instead of
-   three separate icons that happen to be near each other. Same
-   surface-container-low tone already used for the table header and mobile
-   feed cards elsewhere in this file.
-   This used to be a separate ::after pseudo-element, absolutely positioned
-   with a negative inset to bleed outward without occupying real layout
-   space. That kept breaking: border-radius on a manually-inset box is only
-   ever as good as the browser correctly clamping *that* box's own corner
-   radius to *its own* dimensions, and something about the extra layer kept
-   reading as flattened/uneven rather than a clean stadium.
-   box-shadow's spread avoids the whole problem: a solid (non-blurred)
-   shadow with 0 blur and a spread radius traces the element's *own*
-   border-radius outward by exactly that spread amount — the browser
-   guarantees the offset curve is parallel to the original, so the "bleed"
-   is mathematically tied to this element's real shape instead of being a
-   second box that has to be kept in sync with it by hand. No extra
-   pseudo-element, no z-index/stacking to manage, no separate inset to keep
-   matched to the icon row's own gap. */
+   the toolbar with add pushed off to the far right past a gap.
+   No real padding here on purpose — the icon row's own spacing must equal
+   the toolbar's gap to the add button (that's the "equal spacing" this
+   component is supposed to have). Real padding on this box would inflate
+   it beyond that shared gap: the group's own padding-right + the
+   toolbar's gap would double up, so filter→+ reads wider than
+   search→filter. */
 .app-entity-list__search-group {
   display: flex;
   align-items: center;
@@ -67,39 +85,14 @@
   flex: 0 1 auto;
   margin-left: auto;
   min-width: 0;
-  border-radius: var(--pwa-radius-pill, 9999px);
-  /* No real padding here on purpose — the icon row's own spacing must equal
-     the toolbar's gap to the add button (that's the "equal spacing" this
-     component is supposed to have). Real padding on this box would inflate
-     it beyond that shared gap: the group's own padding-right + the
-     toolbar's gap would double up, so filter→+ reads wider than
-     search→filter. The --active pill's breathing room comes from the
-     box-shadow spread below instead, which doesn't occupy real layout
-     space — same visual buffer, but it can't disturb the icon spacing or
-     the group's own size (no jump between active/inactive either, since
-     nothing here resizes).
-     No flex-grow here, even while typing — flex-grow saturates at "fill all
-     remaining space" and can never overshoot past that regardless of the
-     eased value transiently exceeding 1, which is why the group used to
-     grow via flex-grow:1 and the field never visibly bounced: there was no
-     slack for a spring curve to overshoot *into*. The field's own
-     flex-basis (below) is a real, generous-but-bounded px value instead —
-     content-hugging auto-sizing here naturally grows the group to match it
-     (a definite child basis participates in the parent's own preferred-size
-     computation even when the parent itself isn't flex-growing), and a
-     definite basis *can* genuinely overshoot past its target before
-     settling, which is what the bounce actually needs. */
-  box-shadow: 0 0 0 0 transparent;
-  transition: box-shadow var(--pwa-fib-t-md, 89ms) ease;
 }
 
-.app-entity-list__search-group--active {
-  box-shadow: 0 0 0 var(--pwa-fib-sm, 8px) rgb(var(--v-theme-surface-container-low));
-}
-
+/* NEO-152: every toolbar glyph (search, filter, +, clear, ⋯) is 22 px, and
+   each is drawn 14–16 units wide in AppIcon, so none reads bigger than its
+   neighbours. */
 .app-entity-list__search-icon {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   display: block;
   color: var(--pwa-text, currentColor);
 }
@@ -222,35 +215,22 @@
    clipped to nothing by the button's overflow, which is why these icons
    were invisible despite correct color. */
 .app-entity-list__icon {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   display: block;
   color: inherit;
 }
 
-/* Width is a deterministic flex-basis per state, not flex-grow competing for
-   "leftover space" inside a content-hugging parent. .app-entity-list__search-group
-   only grows (flex-grow:1) in the --typing state — at rest it hugs its own
-   content, meaning a field relying on flex-grow to reach its size has
-   nothing to grow *into* and collapses to its own minimum content width
-   instead (this is what truncated the placeholder to "Searc"). A fixed
-   basis sizes it correctly regardless of what the parent is doing.
-   One transition on the base rule covers every state (collapsed, medium,
-   desktop, typing) — a single continuous spring motion instead of the
-   previous per-state transitions with their own extra staggered delays,
-   which read as several small disjointed motions rather than one fluid one. */
+/* A static, bounded width (610 — a term of the same Fibonacci sequence used
+   throughout this file) rather than flex-grow:1 filling the whole row, which
+   read as too wide (swallowing the entire toolbar, no breathing room before
+   filter/add). Always the same size at rest and while typing — no animated
+   state change here, so the field never visibly shifts the filter/clear-all/
+   add controls sitting next to it. flex-shrink:1 lets it yield gracefully on
+   phones where 610px doesn't fit next to filter+add. */
 .app-entity-list__search {
-  /* One open width, used from the moment it opens — no separate smaller
-     "just focused" stage that then grows again once typing starts. It's a
-     real, bounded px value (610 — a term of the same Fibonacci sequence
-     used throughout this file) rather than flex-grow:1 filling literally
-     100% of the row, which read as *too* wide (swallowing the whole
-     toolbar, no breathing room before filter/add) when this was still a
-     separate --typing-only state. flex-shrink:1 lets it yield gracefully
-     on phones where 610px genuinely doesn't fit next to filter+add. */
   flex: 0 1 610px;
   min-width: 0;
-  transition: flex-basis var(--pwa-fib-t-xl, 233ms) var(--pwa-ease-spring, cubic-bezier(0.34, 1.2, 0.64, 1));
 }
 
 /* Belt-and-suspenders floor under the flex-basis above: even if this outer
@@ -259,11 +239,8 @@
    typed text stays legible instead of getting clipped mid-word. Can make
    the field visually overflow its own (shrunk) outer box on very narrow
    viewports rather than silently truncating — an intentional trade-off,
-   legible-but-slightly-overflowing beats illegible-but-contained.
-   :not(--collapsed) matters here: this must NOT apply to the bare 44px
-   mobile icon (no text to protect there, and forcing 300px onto a
-   supposedly-collapsed control just re-expands it right back open). */
-.app-entity-list__search:not(.app-entity-list__search--collapsed) :deep(.v-input__control) {
+   legible-but-slightly-overflowing beats illegible-but-contained. */
+.app-entity-list__search :deep(.v-input__control) {
   min-width: 300px;
 }
 
@@ -293,42 +270,219 @@
 }
 
 /* Vuetify thickens the outline to 2px on focus/error by default — keep it at
-   the same thin 1px while the mobile search expands, so the box only grows
-   in width, not stroke weight. */
+   the same thin 1px as the resting state, for visual consistency. */
 .app-entity-list__search :deep(.v-field--focused .v-field__outline) {
   --v-field-border-width: 1px;
 }
 
-/* Mobile: search collapses to just the prepend icon at rest (border faded
-   out, same transition as the width change so both move together);
-   focusing grows it straight to the open width (610px, see the base rule
-   above, shared with desktop and with typing — no separate stage). */
-@media (max-width: 767px) {
-  /* 20px (desktop, inside a full-width field) reads noticeably thinner than
-     the 24px filter/add icons once it's a bare icon sitting next to them at
-     rest — bump to 24px here so the stroke weight matches. */
-  .app-entity-list__search-icon {
-    width: 24px;
-    height: 24px;
-  }
+/* At rest, this field's own outlined-variant border (theme.scss's global
+   `.v-field--variant-outlined .v-field__outline` rule, `--v-theme-outline`)
+   read as a different gray from the table border right below it
+   (`--pwa-table-border`, used by .app-entity-list__table-wrap and every
+   other table/list border in the app) — search and table visually
+   disagreed despite sitting in the same toolbar. Pin this field's resting
+   border to the same token. `:not(.v-field--focused)` keeps the focused
+   state on the global rule's own `--v-theme-primary` color untouched (the
+   ticket only asked about the *inactive* border) — without it, this
+   selector and the global focused-state rule tie on specificity and the
+   winner would depend on source order alone. */
+.app-entity-list__search :deep(.v-field:not(.v-field--focused) .v-field__outline) {
+  color: var(--pwa-table-border);
+}
 
-  .app-entity-list__search :deep(.v-field__outline) {
-    opacity: 1;
-    transition: opacity var(--pwa-fib-t-xl, 233ms) var(--pwa-ease-spring, cubic-bezier(0.34, 1.2, 0.64, 1));
-  }
+/* ── Phone toolbar (NEO-85) ──────────────────────────────────────────────
+   One row, never wrapping: [search] [filter] [add], right-aligned.
+   - at rest the search is just its icon (a 48px circle, like its neighbours);
+   - focused, it grows over the whole row and the other tools step aside
+     (fade + shrink, their width collapsing so the field can slide into it);
+   - blurred with a query, it stays open on the left as a quiet tinted pill
+     showing the query (with its own clear button), tools back on the right.
+   The field is always the real input, so a tap anywhere on it focuses it. */
+/* (The clear-all wrap is a tool too, but keeps its own width rules above.) */
+.app-entity-list__tool:not(.app-entity-list__clear-filters-wrap) {
+  display: flex;
+  flex: 0 0 auto;
+  max-width: 64px;
+  transition:
+    max-width var(--pwa-fib-t-2xl, 377ms) var(--pwa-ease-emphasized-decel, cubic-bezier(0.05, 0.7, 0.1, 1)),
+    margin-left var(--pwa-fib-t-2xl, 377ms) var(--pwa-ease-emphasized-decel, cubic-bezier(0.05, 0.7, 0.1, 1)),
+    opacity var(--pwa-fib-t-lg, 144ms) ease,
+    transform var(--pwa-fib-t-xl, 233ms) var(--pwa-ease-emphasized-decel, cubic-bezier(0.05, 0.7, 0.1, 1));
+}
 
-  .app-entity-list__search--collapsed {
-    flex-basis: 44px;
-  }
+.app-entity-list__toolbar--mobile {
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+}
+.app-entity-list__toolbar--mobile .app-entity-list__search-group {
+  flex: 1 1 auto;
+  justify-content: flex-end;
+  margin-left: 0;
+}
+/* The search's slot is layout-neutral while the field is a full field; once
+   the search is icon-only (phones, or a narrow desktop — NEO-152) it holds a
+   48 px place of its own. */
+.app-entity-list__search-slot {
+  display: contents;
+}
+.app-entity-list__toolbar--compact-search .app-entity-list__search-slot {
+  display: flex;
+  flex: 0 0 48px;
+  min-width: 48px;
+  height: 48px;
+  align-items: center;
+}
+/* NEO-160: a list outside the page header (e.g. a record's "Doctors" tab)
+   has no overlay — the field grows in the row instead, so its slot has to
+   grow with it. Pinned at 48 px, the focused search stayed a circle. */
+.app-entity-list__toolbar--search-open .app-entity-list__search-slot,
+.app-entity-list__toolbar--has-query .app-entity-list__search-slot {
+  flex: 1 1 0%;
+}
+.app-entity-list__toolbar--compact-search .app-entity-list__search {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.app-entity-list__toolbar--mobile .app-entity-list__search {
+  flex: 0 0 48px;
+  transition:
+    flex-basis var(--pwa-fib-t-2xl, 377ms) var(--pwa-ease-emphasized-decel, cubic-bezier(0.05, 0.7, 0.1, 1)),
+    flex-grow var(--pwa-fib-t-2xl, 377ms) var(--pwa-ease-emphasized-decel, cubic-bezier(0.05, 0.7, 0.1, 1));
+}
+.app-entity-list__toolbar--compact-search .app-entity-list__search :deep(.v-input__control) {
+  min-width: 0;
+}
+.app-entity-list__toolbar--compact-search .app-entity-list__search :deep(.v-field) {
+  transition: background-color var(--pwa-fib-t-xl, 233ms) ease;
+}
+.app-entity-list__toolbar--compact-search .app-entity-list__search :deep(.v-field__outline) {
+  transition: opacity var(--pwa-fib-t-xl, 233ms) ease;
+}
 
-  .app-entity-list__search--collapsed :deep(.v-field__outline) {
+/* At rest, empty: only the icon, no outline, nothing to read. */
+.app-entity-list__toolbar--compact-search:not(.app-entity-list__toolbar--search-open):not(.app-entity-list__toolbar--has-query):not(.app-entity-list__toolbar--overlay-open)
+  .app-entity-list__search
+  :deep(.v-field) {
+  cursor: pointer;
+  padding-inline-start: 13px;
+}
+.app-entity-list__toolbar--compact-search:not(.app-entity-list__toolbar--search-open):not(.app-entity-list__toolbar--overlay-open)
+  .app-entity-list__search
+  :deep(.v-field__outline) {
+  opacity: 0;
+}
+.app-entity-list__toolbar--compact-search:not(.app-entity-list__toolbar--search-open):not(.app-entity-list__toolbar--has-query):not(.app-entity-list__toolbar--overlay-open)
+  .app-entity-list__search
+  :deep(input) {
+  opacity: 0;
+}
+
+/* NEO-152 — open in place: the field lifts out of its slot over the whole
+   page-header row (.layout-page-header is its containing block) and
+   playOverlay()'s clip-path (AppEntityList.vue) grows it from the icon's
+   circle. The slot keeps
+   its 48 px and the tools only fade, so no box in the row changes size. */
+.app-entity-list__toolbar--overlay-open .app-entity-list__search {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  background: var(--pwa-sheet);
+  border-radius: var(--pwa-radius-pill, 9999px);
+}
+.app-entity-list__toolbar--overlay-open .app-entity-list__search :deep(.v-input__control) {
+  min-width: 0;
+  width: 100%;
+}
+.app-entity-list__toolbar--overlay-open .app-entity-list__search :deep(input) {
+  animation: app-entity-list-search-text-in 160ms ease 120ms both;
+}
+@keyframes app-entity-list-search-text-in {
+  from {
     opacity: 0;
+  }
+}
+.app-entity-list__toolbar--overlay-open .app-entity-list__tool {
+  opacity: 0;
+  transform: scale(0.8);
+  pointer-events: none;
+}
+/* Kept query, field blurred: the same overlay as a quiet tinted pill. */
+.app-entity-list__toolbar--overlay-open .app-entity-list__search :deep(.v-field:not(.v-field--focused)) {
+  background: color-mix(in srgb, var(--pwa-primary) 8%, var(--pwa-sheet));
+}
+
+/* Open, or holding a query: the field takes the row. */
+.app-entity-list__toolbar--search-open .app-entity-list__search,
+.app-entity-list__toolbar--has-query .app-entity-list__search {
+  flex: 1 1 0%;
+}
+/* Blurred with a query: a soft brand-tinted pill with the query text. */
+.app-entity-list__toolbar--has-query:not(.app-entity-list__toolbar--search-open) .app-entity-list__search :deep(.v-field) {
+  background: color-mix(in srgb, var(--pwa-primary) 8%, transparent);
+}
+
+/* Open: the other tools step aside, and the row gap before each goes with it
+   (a 0-wide flex item still keeps its gap). */
+.app-entity-list__toolbar--search-open .app-entity-list__tool {
+  max-width: 0;
+  margin-left: calc(-1 * var(--pwa-fib-sm, 8px));
+  opacity: 0;
+  transform: scale(0.6);
+  pointer-events: none;
+}
+
+/* NEO-113 — phone toolbar in the header row, next to the module title:
+   content-sized, so the title gets the rest of the row; an open search (or a
+   kept query) takes the whole row (AppLayout hides the title then). */
+.app-entity-list__toolbar--mobile.app-entity-list__toolbar--in-header {
+  flex: 0 0 auto;
+}
+.app-entity-list__toolbar--mobile.app-entity-list__toolbar--in-header.app-entity-list__toolbar--search-open,
+.app-entity-list__toolbar--mobile.app-entity-list__toolbar--in-header.app-entity-list__toolbar--has-query {
+  flex: 1 1 auto;
+}
+/* NEO-115: 48 px touch buttons in the phone header row (4 px grid). */
+.app-entity-list__toolbar--mobile.app-entity-list__toolbar--in-header :deep(.v-btn--icon.v-btn--size-large) {
+  width: 48px;
+  height: 48px;
+}
+.app-entity-list__toolbar--mobile.app-entity-list__toolbar--in-header .app-entity-list__search {
+  flex-basis: 48px;
+}
+/* The overlay needs the in-header toolbar to stay content-sized. */
+.app-entity-list__toolbar--mobile.app-entity-list__toolbar--in-header.app-entity-list__toolbar--overlay-open {
+  flex: 0 0 auto;
+}
+/* Folded: Filter / + / clear-all live in the "⋯" menu instead. */
+.app-entity-list__toolbar--folded .app-entity-list__tool--foldable {
+  display: none;
+}
+.app-entity-list__more-anchor {
+  display: inline-flex;
+}
+.app-entity-list__more-menu .app-entity-list__icon {
+  margin-inline-end: 12px;
+}
+.app-entity-list__more-count {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: rgb(var(--v-theme-primary));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-entity-list__tool,
+  .app-entity-list__toolbar--mobile .app-entity-list__search {
+    transition: none;
+  }
+  .app-entity-list__toolbar--overlay-open .app-entity-list__search :deep(input) {
+    animation: none;
   }
 }
 
 .app-entity-list__empty-wrap,
-.app-entity-list__error-wrap,
-.app-entity-list__loading-wrap {
+.app-entity-list__error-wrap {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
@@ -341,54 +495,358 @@
   margin: 0 0 12px;
 }
 
+/* Height follows the rows: a short list ends right after its last row with
+   the pagination footer directly underneath, a long one grows until the
+   page runs out and then scrolls inside (.v-table__wrapper below) while the
+   footer stays visible. The old flex:1 + 70vh floor stretched a 2-row list
+   over the whole page with the footer stranded at the bottom. */
 .app-entity-list__table-wrap {
-  flex: 1 1 0;
-  min-height: 70vh;
+  flex: 0 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-radius: var(--pwa-radius);
-  /* M3 outline-variant instead of Vuetify's generic --v-border-color — same
-     static gray already used for the mobile feed cards' border (see
-     .app-entity-list__card below), so desktop and mobile share one tone. */
-  border: 1px solid rgb(var(--v-theme-outline-variant));
+  /* NEO-85 "record stack": the list is written on the content sheet itself —
+     no box or background of its own; rows are ruled lines on that paper. */
+  background: transparent;
 }
 
-/* M3: header row reads as a distinct tonal layer (surface-container-low)
-   above the body's plain surface, instead of Vuetify's own header
-   background — depth via tone, not a rule/shadow under the header. */
-.app-entity-list__table-wrap :deep(.v-data-table__th) {
-  background: rgb(var(--v-theme-surface-container-low));
+.app-entity-list__table-wrap :deep(.v-table) {
+  background: transparent;
+  --v-table-header-height: 40px;
+  /* NEO-130: two-line rows (name over its quiet details line), as tight as
+     those two lines allow, so a page of 10 plus headers and the pagination
+     footer fits a 13" MacBook browser window (~1265×843) without scrolling. */
+  --v-table-row-height: 52px;
 }
 
-/* Mobile feed items carry their own border + elevation (below) — the
-   outer wrap border would otherwise double up as a card-around-cards box. */
+/* NEO-130, desktop: capped at the bottom of the screen (minus the sheet's own
+   inset and foot, AppLayout.vue); past that the rows scroll inside under the
+   sticky headers. The 240px floor keeps a few rows usable on a very short
+   window instead of collapsing the table to its header. */
+.app-entity-list__table-wrap--fit {
+  max-height: max(
+    240px,
+    calc(100dvh - var(--entity-list-top, 0px) - var(--layout-card-inset, 16px) - var(--layout-sheet-foot, 12px))
+  );
+}
+
+.app-entity-list__table-wrap :deep(.v-table > .v-table__wrapper > table) {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+/* Header: small uppercase labels in the brand colour on a stronger rule, like
+   the printed header row of a record form. */
+.app-entity-list__table-wrap :deep(.v-table > .v-table__wrapper > table > thead > tr > th) {
+  /* Opaque sheet colour: the header row is sticky (fixed-header, NEO-130),
+     so rows scroll underneath it and must not show through. */
+  background: var(--pwa-sheet);
+  border-bottom: 0;
+  box-shadow: inset 0 -1.5px 0 var(--pwa-rule-strong);
+  font-size: 0.65625rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pwa-primary);
+  vertical-align: bottom;
+  padding-bottom: 10px;
+}
+
+/* Rows: one ruled hairline under each, in a tint of the brand colour. */
+.app-entity-list__table-wrap :deep(.v-table > .v-table__wrapper > table > tbody > tr > td) {
+  background: transparent;
+  border-bottom: 0;
+  box-shadow: inset 0 -1px 0 var(--pwa-rule);
+}
+
+/* NEO-152: the table spans the whole card, edge to edge (see the bleed
+   below); the outer cells pad by the card inset so text still starts on the
+   page title's line. */
+.app-entity-list__table-wrap:not(.app-entity-list__table-wrap--flat) :deep(.v-table > .v-table__wrapper > table > * > tr > :first-child) {
+  padding-inline-start: var(--layout-card-inset, 16px);
+}
+.app-entity-list__table-wrap:not(.app-entity-list__table-wrap--flat) :deep(.v-table > .v-table__wrapper > table > * > tr > :last-child) {
+  padding-inline-end: var(--layout-card-inset, 16px);
+}
+
+/* Vuetify's hover layer is a ::after on each cell: a faint brand tint on
+   hover, a stronger one while pressed (touch feedback on tablets). */
+.app-entity-list__table-wrap :deep(.v-table.v-table--hover > .v-table__wrapper > table > tbody > tr:hover > td::after) {
+  background: var(--pwa-row-hover);
+}
+.app-entity-list__table-wrap :deep(.v-table.v-table--hover > .v-table__wrapper > table > tbody > tr:active > td::after) {
+  background: color-mix(in srgb, var(--pwa-primary) 10%, transparent);
+  opacity: 1;
+}
+
+/* With floating rows there is nothing for a rows→footer divider to separate;
+   the global theme.scss divider rule still applies to every other table. */
+.app-entity-list__table-wrap :deep(.v-data-table > .v-divider) {
+  display: none;
+}
+
+/* VDataTableServer's default pagination footer (rows-per-page, page count,
+   prev/next) rendered with full-emphasis body text on the row count/page
+   controls. The separator above it is Vuetify's own <VDivider>, recolored
+   globally in theme.scss — no border-top here, or the two stack into a
+   double line. De-emphasizing the text
+   (medium-emphasis on-surface, same tone used for the row-count/meta text
+   elsewhere in this file) reads as a quieter, data-dense footer rather than
+   another row of primary content — closer to the clinical-record tables
+   this is meant to match than Vuetify's generic default. */
+.app-entity-list__table-wrap :deep(.v-data-table-footer) {
+  padding: 8px 16px;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 0.8125rem;
+}
+
+/* NEO-121, widened in NEO-152 — the table runs out through the sheet's whole
+   padding to the card's edges; the outer cells pad by the same inset (above),
+   so the content and the footer still sit on the page title's line. */
+.app-entity-list__table-wrap:not(.app-entity-list__table-wrap--flat),
+.app-entity-list__skeleton {
+  margin-inline: calc(-1 * var(--layout-card-inset, 16px));
+}
+
+/* NEO-121 — minimal footer on the 4 px grid: "Rows: 10" (the value plain,
+   as theme.scss styles it), "1–10 de 47" and two arrows, one 48 px row, 8 px
+   below the last row. NEO-176: the short "Rows:" label is back — a bare "10"
+   read as an unexplained number. */
+.app-entity-list__table-wrap :deep(.v-data-table-footer) {
+  min-height: 48px;
+  margin-top: var(--space-2, 8px);
+  padding: 0 var(--layout-card-inset, 16px);
+  gap: 0;
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+.app-entity-list__table-wrap :deep(.v-data-table-footer__items-per-page > span) {
+  padding-inline-end: 0;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+.app-entity-list__table-wrap :deep(.v-data-table-footer__info) {
+  padding: 0 var(--space-6, 24px);
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+}
+.app-entity-list__table-wrap :deep(.v-pagination__first),
+.app-entity-list__table-wrap :deep(.v-pagination__last) {
+  display: none;
+}
+.app-entity-list__table-wrap :deep(.v-pagination__list) {
+  gap: var(--space-2, 8px);
+}
+.app-entity-list__table-wrap :deep(.v-pagination__list) {
+  margin: 0;
+  padding: 0;
+}
+.app-entity-list__table-wrap :deep(.v-pagination__item),
+.app-entity-list__table-wrap :deep(.v-pagination__prev),
+.app-entity-list__table-wrap :deep(.v-pagination__next) {
+  margin: 0;
+}
+.app-entity-list__table-wrap :deep(.v-pagination) {
+  margin: 0;
+}
+/* NEO-176 — the arrows were teal at Vuetify's plain-variant opacity (0.62,
+   0.26 disabled): too faint, and enabled vs disabled looked alike. Now full
+   text color when clickable, clearly grey when not; opacity stays at 1 so
+   the color alone carries the state. */
+.app-entity-list__table-wrap :deep(.v-pagination .v-btn) {
+  width: 40px;
+  height: 40px;
+  color: var(--pwa-text);
+  opacity: 1;
+}
+.app-entity-list__table-wrap :deep(.v-pagination .v-btn--disabled) {
+  color: rgba(var(--v-theme-on-surface), var(--v-disabled-opacity));
+}
+/* Thin chevrons (1.75 px stroke) in place of the MDI glyphs. */
+.app-entity-list__table-wrap :deep(.v-pagination__prev .v-icon),
+.app-entity-list__table-wrap :deep(.v-pagination__next .v-icon) {
+  width: 20px;
+  height: 20px;
+  background: currentColor;
+  mask: var(--footer-chevron) center / 20px 20px no-repeat;
+  -webkit-mask: var(--footer-chevron) center / 20px 20px no-repeat;
+}
+.app-entity-list__table-wrap :deep(.v-pagination__prev .v-icon::before),
+.app-entity-list__table-wrap :deep(.v-pagination__next .v-icon::before) {
+  content: none;
+}
+.app-entity-list__table-wrap :deep(.v-pagination__prev .v-icon) {
+  --footer-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M14.5 6.5L9 12l5.5 5.5' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.app-entity-list__table-wrap :deep(.v-pagination__next .v-icon) {
+  --footer-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9.5 6.5L15 12l-5.5 5.5' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+/* The last arrow's box ends on the rows' right content line (cell padding). */
+.app-entity-list__table-wrap :deep(.v-data-table-footer__pagination) {
+  margin-inline-end: 0;
+}
+@media (hover: none) and (pointer: coarse) {
+  .app-entity-list__table-wrap :deep(.v-pagination .v-btn) {
+    width: 48px;
+    height: 48px;
+  }
+}
+
+/* Mobile: the feed cards (below) are the surfaces, on the same paper
+   ground as the desktop table — a flat wrap so the cards run the full
+   content width instead of sitting in a padded box-around-cards. */
 .app-entity-list__table-wrap--flat {
   overflow: visible;
-  border: none;
   border-radius: 0;
+  padding: 0;
+  background: transparent;
 }
 
 .app-entity-list__table-wrap :deep(.v-data-table) {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  flex: 1;
+  flex: 0 1 auto;
   min-height: 0;
-}
-
-.app-entity-list__table-wrap :deep(.v-data-table__td) {
-  transition: opacity 0.5s ease;
-}
-
-.app-entity-list__table-wrap :deep(.v-data-table tbody tr) {
-  transition: opacity 0.45s ease, background-color 0.25s ease;
 }
 
 .app-entity-list__table-wrap :deep(.v-table__wrapper) {
-  flex: 1;
+  flex: 0 1 auto;
   min-height: 0;
   overflow: auto;
+}
+
+/* ── Motion (NEO-57, NEO-152) ────────────────────────────────────────────
+   Minimal on purpose: rows fade in where they stand, one after another 22ms
+   apart (index from tableRowProps, capped at 10), only when a row is new to
+   the DOM — a re-fetch returning the same patients doesn't replay it. They
+   no longer rise: after the skeleton they take its exact place (NEO-152).
+   A reload in flight (search/filter/page/sort) dims the current rows
+   instead of blanking the table; states (list → empty, error) cross-fade via
+   <Transition name="app-entity-list-swap">, skeleton → list swaps in place. */
+@keyframes app-entity-list-row-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.app-entity-list__table-wrap :deep(.v-data-table tbody tr) {
+  animation: app-entity-list-row-in 200ms cubic-bezier(0, 0, 0.2, 1) both;
+  animation-delay: calc(var(--row-i, 0) * 22ms);
+}
+
+.app-entity-list__table-wrap :deep(.v-data-table tbody) {
+  transition: opacity var(--pwa-fib-t-xl, 233ms) ease;
+}
+
+.app-entity-list__table-wrap--busy :deep(.v-data-table tbody) {
+  opacity: 0.45;
+}
+
+.app-entity-list-swap-enter-active,
+.app-entity-list-swap-leave-active {
+  transition: opacity var(--pwa-fib-t-xl, 233ms) ease, transform var(--pwa-fib-t-xl, 233ms) var(--pwa-ease-out-smooth, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.app-entity-list-swap-enter-from {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+.app-entity-list-swap-leave-to {
+  opacity: 0;
+}
+
+/* NEO-152: skeleton → list is a swap in place — no fade out and back in, no
+   4 px rise — so the header rule and the row lines never move or blink. */
+.app-entity-list__skeleton.app-entity-list-swap-leave-active,
+.app-entity-list__table-wrap--from-skeleton.app-entity-list-swap-enter-active {
+  transition: none;
+}
+.app-entity-list__table-wrap--from-skeleton.app-entity-list-swap-enter-from {
+  opacity: 1;
+  transform: none;
+}
+
+/* First-load skeleton: the same shape as the real rows, breathing softly
+   (opacity only, no shimmer sweep) so it reads as "loading" without
+   drawing the eye. */
+.app-entity-list__skeleton {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The table's header row without its labels: same 40 px, same rule. */
+.app-entity-list__skeleton-head {
+  flex: none;
+  height: 40px;
+  box-shadow: inset 0 -1.5px 0 var(--pwa-rule-strong);
+}
+
+.app-entity-list__skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 52px;
+  padding: 0 var(--layout-card-inset, 16px);
+  box-shadow: inset 0 -1px 0 var(--pwa-rule);
+  animation: app-entity-list-skeleton-breathe 1.6s ease-in-out infinite;
+  animation-delay: calc(var(--row-i, 0) * 90ms);
+}
+
+/* Edge to edge like the feed rows it stands in for; the placeholder avatar
+   starts on the same content line as the real one. */
+.app-entity-list__skeleton--mobile .app-entity-list__skeleton-row {
+  height: 72px;
+}
+
+.app-entity-list__skeleton-avatar {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(var(--v-theme-on-surface), 0.07);
+}
+
+.app-entity-list__skeleton-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.app-entity-list__skeleton-line {
+  height: 10px;
+  width: min(220px, 60%);
+  border-radius: 5px;
+  background: rgba(var(--v-theme-on-surface), 0.07);
+}
+
+.app-entity-list__skeleton-line--short {
+  width: min(120px, 35%);
+}
+
+@keyframes app-entity-list-skeleton-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-entity-list__table-wrap :deep(.v-data-table tbody tr),
+  .app-entity-list__skeleton-row {
+    animation: none;
+  }
+
+  .app-entity-list-swap-enter-active,
+  .app-entity-list-swap-leave-active {
+    transition: opacity 1ms;
+  }
 }
 
 .app-entity-list__table-wrap :deep(.v-data-table__tr--clickable) {
@@ -408,27 +866,27 @@
   content: "";
   position: absolute;
   inset: 0;
-  background-color: rgb(var(--v-theme-on-surface));
+  background-color: var(--pwa-primary);
   opacity: 0;
   transition: opacity 0.2s ease;
   pointer-events: none;
 }
 .app-entity-list__card--clickable:hover::after {
-  opacity: 0.04;
+  opacity: 0.05;
 }
 .app-entity-list__card--clickable:active::after {
-  opacity: 0.08;
+  opacity: 0.1;
+  transition-duration: 0.08s;
 }
 
 .app-entity-list__no-results-placeholder {
-  flex: 1;
-  min-height: 40vh;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 12px;
-  padding: 24px;
+  padding: 48px 24px;
   text-align: center;
 }
 
@@ -465,16 +923,22 @@
   min-width: 560px;
 }
 
+/* Rows span the sheet edge to edge, like the desktop table's (NEO-152): the
+   scroller itself runs out through the sheet's whole padding. The bleed has
+   to sit here, not on the feed inside it — overflow-y: auto clips
+   overflow-x too, so a feed wider than its scroller lost its bleed and the
+   rows stopped on the content line. */
 .app-entity-list__feed-scroll {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  margin-inline: calc(-1 * var(--layout-card-inset, 16px));
 }
 
 .app-entity-list__feed {
   display: block;
-  padding: var(--pwa-fib-md, 13px) 0;
+  padding: 0;
   border: none;
   position: relative;
 }
@@ -484,20 +948,17 @@
    rounder shape for the feed's list-item cards specifically. */
 .app-entity-list__card {
   position: relative;
-  margin-bottom: var(--pwa-fib-md, 13px);
-  border-radius: var(--pwa-fib-lg, 21px);
-  /* M3 outline-variant + surface-container-low (packages/vuetify theme
-     colors) instead of Vuetify's generic --v-border-color/surface — a
-     low-emphasis divider around a faintly tonal card, the M3 "filled card"
-     look, rather than a plain outline on the page background. */
-  border: 1px solid rgb(var(--v-theme-outline-variant));
-  background: rgb(var(--v-theme-surface-container-low));
+  /* NEO-85: the same ruled line as a desktop table row, so a patient looks
+     like the same entry on phone and desktop. */
+  border-radius: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: inset 0 -1px 0 var(--pwa-rule);
   overflow: hidden;
   transition: opacity 0.2s ease, background-color 0.2s ease;
-}
-
-.app-entity-list__card:last-of-type {
-  margin-bottom: 0;
+  /* NEO-115: the row's content starts the sheet padding in; the avatar's own
+     12 px inset (below) brings it onto the page's content line (16 + 12). */
+  padding-inline: calc(var(--layout-card-inset, 16px) - var(--layout-row-inset, 12px));
 }
 
 .app-entity-list__card--disabled {
@@ -515,7 +976,7 @@
   display: flex;
   align-items: stretch;
   gap: 0;
-  min-height: var(--pwa-fib-3xl, 89px);
+  min-height: 72px;
 }
 
 /* Circular avatar (Material 3's default leading-image shape for a list
@@ -526,9 +987,9 @@
 .app-entity-list__card-avatar {
   flex-shrink: 0;
   align-self: center;
-  width: var(--pwa-fib-xxl, 55px);
-  height: var(--pwa-fib-xxl, 55px);
-  margin-left: var(--pwa-fib-md, 13px);
+  width: 48px;
+  height: 48px;
+  margin-left: var(--layout-row-inset, 12px);
 }
 
 .app-entity-list__card-avatar :deep(.v-avatar) {
@@ -546,7 +1007,7 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: var(--pwa-fib-md, 13px) var(--pwa-fib-sm, 8px) var(--pwa-fib-md, 13px) var(--pwa-fib-md, 13px);
+  padding: var(--space-3, 12px) var(--space-2, 8px) var(--space-3, 12px) var(--space-3, 12px);
 }
 
 .app-entity-list__card-title {
@@ -556,6 +1017,9 @@
 
 .app-entity-list__card-meta {
   margin-top: 2px;
+  /* Room for the doctor badge, which overhangs its avatar's bottom-right
+     corner by 3px — without it this overflow:hidden clips the disc. */
+  padding-bottom: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -564,8 +1028,8 @@
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: var(--pwa-fib-xs, 5px);
-  padding: var(--pwa-fib-sm, 8px) var(--pwa-fib-sm, 8px) var(--pwa-fib-sm, 8px) 0;
+  gap: var(--space-1, 4px);
+  padding: var(--space-2, 8px) var(--space-1, 4px) var(--space-2, 8px) 0;
 }
 
 .app-entity-list__card-status {
@@ -584,32 +1048,17 @@
 }
 
 .app-entity-list__feed-empty {
-  margin: 0;
+  margin: 0 var(--layout-card-inset, 16px);
 }
 
 .app-entity-list__load-more {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: var(--pwa-fib-xl, 34px);
-  padding: 1rem 0;
-}
-
-.app-entity-list__institution-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: rgb(var(--v-theme-primary));
-  text-decoration: none;
-}
-.app-entity-list__institution-link:hover {
-  text-decoration: underline;
-}
-
-.app-entity-list__institution-icon {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
+  /* NEO-121: 48 px end-of-list loader, 16 px clear of the bottom bar. */
+  min-height: 48px;
+  padding: 0;
+  margin-bottom: var(--space-4, 16px);
 }
 
 .app-entity-list__cell-empty {

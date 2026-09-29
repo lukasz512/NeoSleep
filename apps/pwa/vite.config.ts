@@ -1,3 +1,5 @@
+import fs from "fs";
+import { createRequire } from "module";
 import path from "path";
 import { fileURLToPath } from "url";
 import { defineConfig, mergeConfig } from "vite";
@@ -6,7 +8,16 @@ import vuetify from "vite-plugin-vuetify";
 import { VitePWA } from "vite-plugin-pwa";
 import type { VitePWAOptions } from "vite-plugin-pwa";
 import basicSsl from "@vitejs/plugin-basic-ssl";
+import type { Plugin } from "vite";
 import { sharedViteConfig } from "../../vite.shared.ts";
+import { injectBootSplash } from "./src/boot/splash.ts";
+
+/** Paints the auth backdrop from static HTML before any JS runs — see src/boot/splash.ts. */
+function bootSplashPlugin(): Plugin {
+  // "post": after Vite has injected the built CSS/JS links, which the splash
+  // transform rewrites to be non-render-blocking.
+  return { name: "neo-boot-splash", transformIndexHtml: { order: "post", handler: (html) => injectBootSplash(html) } };
+}
 
 interface NeoPwaOptions {
   name: string;
@@ -17,13 +28,23 @@ interface NeoPwaOptions {
   backgroundColor?: string;
   icon192?: string;
   icon512?: string;
+  iconMaskable512?: string;
 }
 
 function neoPwaPlugin(opts: NeoPwaOptions): ReturnType<typeof VitePWA> {
   const config: Partial<VitePWAOptions> = {
     registerType: "autoUpdate",
+    // Registered from the app itself (src/boot/serviceWorkerUpdate.ts, NEO-125),
+    // which also reloads into a new deploy; the injected registerSW.js only
+    // registered and left people on the cached previous version.
+    injectRegister: false,
+    // Real files in public/, generated from the brand icon by
+    // scripts/generate-pwa-icons.mjs (NEO-87). Before they existed every icon
+    // URL fell through to the SPA's index.html, so Chrome never offered
+    // "Install app" and iOS used a screenshot as the home-screen icon.
     includeAssets: ["favicon.ico", "apple-touch-icon.png"],
     manifest: {
+      id:               opts.startUrl ?? "/",
       name:             opts.name,
       short_name:       opts.shortName,
       description:      opts.description ?? opts.name,
@@ -36,10 +57,15 @@ function neoPwaPlugin(opts: NeoPwaOptions): ReturnType<typeof VitePWA> {
       icons: [
         { src: opts.icon192 ?? "/icon-192.png", sizes: "192x192", type: "image/png" },
         { src: opts.icon512 ?? "/icon-512.png", sizes: "512x512", type: "image/png" },
-        { src: opts.icon512 ?? "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+        { src: opts.iconMaskable512 ?? "/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
       ],
     },
     workbox: {
+      // autoUpdate does not set these by itself (NEO-125): without them a new
+      // deploy's worker sits in "waiting" until every tab and the installed
+      // app are fully closed — on a phone, practically never.
+      skipWaiting: true,
+      clientsClaim: true,
       globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
       runtimeCaching: [
         { urlPattern: /^https?:\/\/.*\/api\//, handler: "NetworkOnly" },
@@ -65,6 +91,22 @@ function neoPwaPlugin(opts: NeoPwaOptions): ReturnType<typeof VitePWA> {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// App version (shown under the login badge, sent with diagnostics) comes from
+// this app's package.json — the single place it's bumped. Set on process.env
+// before Vite loads env, so it wins over any VITE_APP_VERSION in .env files.
+// Build number + channel are set by CI (see deploy-pwa.yml).
+const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "package.json"), "utf8")) as { version: string };
+process.env.VITE_APP_VERSION = pkg.version;
+// Every public Vuetify component entry (vuetify/components/VBtn, …), read
+// from the package's own components/index.js re-export list rather than a
+// glob — the lib/components folder also ships unfinished internals (e.g.
+// VOverflowBtn, commented out of that index) that fail to pre-bundle.
+function vuetifyComponentEntries(): string[] {
+  const vuetifyRoot = path.dirname(createRequire(import.meta.url).resolve("vuetify/package.json"));
+  const index = fs.readFileSync(path.join(vuetifyRoot, "lib/components/index.js"), "utf8");
+  return [...index.matchAll(/^export \* from "\.\/(\w+)\/index\.js";/gm)].map((m) => `vuetify/components/${m[1]}`);
+}
+
 // Dev-server proxy target for /api, /auth, /health — never used in production
 // builds (those get VITE_API_URL baked in at build time by CI, see deploy-pwa.yml).
 // Defaults to the local API server; set VITE_DEV_API_TARGET to a remote HTTPS URL
@@ -79,8 +121,9 @@ export default defineConfig(mergeConfig(sharedViteConfig(__dirname), {
     // if the dev server itself isn't served over HTTPS.
     ...(devApiIsHttps ? [basicSsl()] : []),
     vue(),
+    bootSplashPlugin(),
     neoPwaPlugin({
-      name:        "NeoSleep Rep",
+      name:        "NeoSleep",
       shortName:   "NeoSleep",
       description: "Sales rep CRM for NeoSleep — manage HCPs, leads, and post-call forms.",
       startUrl:    "/",
@@ -90,6 +133,14 @@ export default defineConfig(mergeConfig(sharedViteConfig(__dirname), {
       styles: { configFile: "src/styles/vuetify-settings.scss" },
     }),
   ],
+  // One copy of each, always (NEO-80). pnpm can resolve the same version twice
+  // with different peer sets (vue-router@5 for apps/pwa vs packages/ui did),
+  // and a production build then bundles both: packages/ui's useRoute() looks
+  // up the other copy's injection key, gets undefined, and the login page
+  // never renders. Dev mode prebundles a single copy, so only prod breaks.
+  resolve: {
+    dedupe: ["vue", "vue-router", "pinia", "vue-i18n"],
+  },
   css: {
     preprocessorOptions: {
       sass: { api: "modern-compiler" },
@@ -97,18 +148,44 @@ export default defineConfig(mergeConfig(sharedViteConfig(__dirname), {
     },
   },
   build: {
-    rollupOptions: {
+    // Vite 8 bundles with Rolldown: the Rollup `manualChunks` object form is
+    // gone, so the same two long-lived vendor chunks are declared as
+    // codeSplitting groups. Each group also captures its matched modules'
+    // dependencies (Rolldown default), mirroring what manualChunks did.
+    rolldownOptions: {
       output: {
-        manualChunks: {
-          vuetify: ["vuetify"],
-          vue: ["vue", "vue-router", "pinia", "vue-i18n"],
+        codeSplitting: {
+          groups: [
+            // Higher priority first, so vue itself lands here and not in the
+            // vuetify chunk (vuetify's framework entry imports vue).
+            { name: "vue", priority: 2, test: /[\\/]node_modules[\\/](?:vue|vue-router|pinia|vue-i18n)[\\/]/ },
+            // Only vuetify's package entry (createVuetify + its composables),
+            // exactly what `manualChunks: { vuetify: ["vuetify"] }` resolved to —
+            // auto-imported components (vuetify/components/*) stay with the
+            // views that use them.
+            { name: "vuetify", priority: 1, test: /[\\/]node_modules[\\/]vuetify[\\/]lib[\\/]framework\.js$/ },
+          ],
         },
       },
     },
   },
+  // vite-plugin-vuetify's autoImport injects per-component imports
+  // (vuetify/components/VBtn, …) during transform, which Vite's startup
+  // dependency scanner never sees. On a cold cache (every CI run) Vite then
+  // discovers them on the first page load and force-reloads the page
+  // ("optimized dependencies changed. reloading") — mid-test for Playwright,
+  // wiping a half-filled login form or bouncing an authenticated /login to
+  // /patients. Pre-bundling them up front removes that late reload.
+  optimizeDeps: {
+    include: vuetifyComponentEntries(),
+  },
   appType: "spa",
   server: {
     host: true,
+    // Pre-transform the entry's import graph as soon as the dev server starts,
+    // instead of on the first page load — a cold first load was ~22s of
+    // on-demand transforms (600+ module requests) otherwise.
+    warmup: { clientFiles: ["./src/main.ts", "./src/App.vue", "./src/layouts/*.vue"] },
     proxy: {
       "/api":    { target: devApiTarget, changeOrigin: true, secure: devApiIsHttps },
       "/auth":   { target: devApiTarget, changeOrigin: true, secure: devApiIsHttps },

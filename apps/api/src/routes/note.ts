@@ -6,6 +6,7 @@ import { buildContext } from "../context/TenantContext.js";
 import { CreateNoteCommand, DeleteNoteCommand } from "../commands/note.js";
 import { GetNotesForEntityQuery } from "../queries/note.js";
 import { ValidationError } from "../errors.js";
+import { routeParam } from "./utils.js";
 
 /**
  * Note routes — thin waiters. Generic across patient/practitioner/organization/lead
@@ -69,7 +70,7 @@ noteRouter.delete(
   "/note/:id",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing note id");
 
     const slug = tenantSlugFromHost(req.hostname);

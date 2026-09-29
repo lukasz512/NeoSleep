@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { APP_STORAGE_KEYS } from "../constants";
-import type { getUserSettings as GetUserSettings, setUserSettings as SetUserSettings } from "./user-settings";
+import type { getUserSettings as GetUserSettings, setUserSettings as SetUserSettings, takeLegacyFilters as TakeLegacyFilters } from "./user-settings";
 
 const storage: Record<string, string> = {};
 const mockLocalStorage = {
@@ -15,6 +15,7 @@ const mockLocalStorage = {
 
 let getUserSettings: typeof GetUserSettings;
 let setUserSettings: typeof SetUserSettings;
+let takeLegacyFilters: typeof TakeLegacyFilters;
 
 describe("user-settings", () => {
   // user-settings.ts holds its state in a module-level useLocalStorage()
@@ -30,7 +31,7 @@ describe("user-settings", () => {
     // environments without one) — clear it too, or state leaks between tests.
     globalThis.localStorage?.clear();
     vi.resetModules();
-    ({ getUserSettings, setUserSettings } = await import("./user-settings"));
+    ({ getUserSettings, setUserSettings, takeLegacyFilters } = await import("./user-settings"));
   });
 
   it("getUserSettings returns defaults when storage is empty", () => {
@@ -39,7 +40,6 @@ describe("user-settings", () => {
     // detection from the browser language; a default here would race and override it.
     expect(s.locale).toBeUndefined();
     expect(s.sidebarCollapsed).toBe(false);
-    expect(s.filters).toEqual({});
   });
 
   it("setUserSettings persists and getUserSettings returns saved values", () => {
@@ -49,20 +49,14 @@ describe("user-settings", () => {
     expect(s.sidebarCollapsed).toBe(true);
   });
 
-  it("setUserSettings merges filters per viewId (hcp, leads, etc.)", () => {
-    setUserSettings({ filters: { hcp: { specialty: "Sleep medicine" } } });
-    let s = getUserSettings();
-    expect(s.filters?.hcp?.specialty).toBe("Sleep medicine");
-
-    setUserSettings({ filters: { hcp: { region: "Mazovia" } } });
-    s = getUserSettings();
-    expect(s.filters?.hcp?.specialty).toBe("Sleep medicine");
-    expect(s.filters?.hcp?.region).toBe("Mazovia");
-
-    setUserSettings({ filters: { leads: { status: "qualified", region: "North" } } });
-    s = getUserSettings();
-    expect(s.filters?.leads?.status).toBe("qualified");
-    expect(s.filters?.leads?.region).toBe("North");
+  it("no longer holds list filters: they are per user in @neo/prefs (CORE-45)", async () => {
+    globalThis.localStorage.setItem(APP_STORAGE_KEYS.settings, JSON.stringify({ locale: "pl", filters: { hcp: { region: "Mazovia" } } }));
+    vi.resetModules();
+    ({ getUserSettings, setUserSettings, takeLegacyFilters } = await import("./user-settings"));
+    expect(getUserSettings()).not.toHaveProperty("filters");
+    expect(takeLegacyFilters()).toEqual({ hcp: { region: "Mazovia" } });
+    expect(takeLegacyFilters()).toBeUndefined();
+    expect(getUserSettings().locale).toBe("pl");
   });
 
   it("getUserSettings with empty storage returns defaults without persisting", () => {

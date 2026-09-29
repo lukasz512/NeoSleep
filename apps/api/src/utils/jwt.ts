@@ -32,6 +32,8 @@ export interface AuthTokenPayload {
   region?: string;
   language?: string;
   forcePasswordChange?: boolean;
+  /** Absent on tokens issued before NEO-102 — read as false until the next refresh. */
+  hasPassword?: boolean;
   /** Compared against users.token_version in TenantContext.buildContext() — bumping the DB
    *  column (incrementUserTokenVersion) invalidates every outstanding token for that user,
    *  e.g. on password change. Not checked here or in requireAuth — see buildContext's doc
@@ -52,6 +54,7 @@ export interface SignableUser {
   region?: string | null;
   language?: string | null;
   forcePasswordChange?: boolean;
+  has_password?: boolean;
   token_version: number;
 }
 
@@ -68,6 +71,7 @@ export function signAuthToken(user: SignableUser): string {
     region: user.region ?? undefined,
     language: user.language ?? undefined,
     forcePasswordChange: user.forcePasswordChange ?? false,
+    hasPassword: user.has_password ?? false,
     tokenVersion: user.token_version,
   };
   return jwt.sign(payload, JWT_SECRET, {
@@ -78,7 +82,35 @@ export function signAuthToken(user: SignableUser): string {
 
 /** Throws (jsonwebtoken's TokenExpiredError/JsonWebTokenError) on missing/invalid/expired/tampered tokens. */
 export function verifyAuthToken(token: string): AuthTokenPayload {
-  return jwt.verify(token, JWT_SECRET, { algorithms: [ALGORITHM] }) as AuthTokenPayload;
+  const payload = jwt.verify(token, JWT_SECRET, { algorithms: [ALGORITHM] }) as AuthTokenPayload & { purpose?: string };
+  // A media token (below) is signed with the same secret but must never work as a login.
+  if (payload.purpose) throw new jwt.JsonWebTokenError("not an access token");
+  return payload;
+}
+
+/**
+ * Partner media (OrthoApnea webinars/documents) is played by a plain
+ * `<video src>` / `<a href>`, which can't send an Authorization header, so
+ * the resources list hands out this token for the URL's `?t=` instead. It
+ * only opens the partner media route (requirePartnerMediaAuth), never a
+ * login, and outlives the 15-min access token so a 1-hour webinar can keep
+ * streaming range requests to the end.
+ */
+const MEDIA_TOKEN_PURPOSE = "partner-media";
+const MEDIA_TOKEN_EXPIRY = "4h";
+
+export function signMediaToken(userId: string): string {
+  return jwt.sign({ sub: userId, purpose: MEDIA_TOKEN_PURPOSE }, JWT_SECRET, {
+    algorithm: ALGORITHM,
+    expiresIn: MEDIA_TOKEN_EXPIRY,
+  });
+}
+
+/** Throws on an invalid/expired token or any token that isn't a media token. */
+export function verifyMediaToken(token: string): { sub: string } {
+  const payload = jwt.verify(token, JWT_SECRET, { algorithms: [ALGORITHM] }) as { sub: string; purpose?: string };
+  if (payload.purpose !== MEDIA_TOKEN_PURPOSE) throw new jwt.JsonWebTokenError("not a media token");
+  return { sub: payload.sub };
 }
 
 /** Parses `Authorization: Bearer <token>` — case-insensitive scheme, single space. */

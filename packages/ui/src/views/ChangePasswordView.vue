@@ -1,25 +1,16 @@
 <template>
-  <div class="change-password-view">
-    <VCard class="change-password-view__card" elevation="4" rounded="lg">
+  <div ref="formEl" class="change-password-view">
+    <VCard class="change-password-view__card" elevation="2" rounded="lg">
       <VCardText class="change-password-view__body">
         <h1 class="change-password-view__title">{{ t('user.changePassword.title') }}</h1>
         <p class="change-password-view__subtitle">{{ t('user.changePassword.subtitle') }}</p>
 
-        <VAlert
-          v-if="errorKey"
-          type="error"
-          variant="tonal"
-          density="compact"
-          class="change-password-view__alert"
-          closable
-          @click:close="errorKey = null"
-        >
-          {{ t(errorKey) }}
-        </VAlert>
-
         <VForm ref="form" class="change-password-view__form" @submit.prevent="handleSubmit">
+          <FormErrorSummary :errors="summary.lines.value" :title="summary.title.value" @select="focusField" />
+
           <VTextField
             v-model="currentPassword"
+            data-field="current_password"
             :type="showCurrentPassword ? 'text' : 'password'"
             :label="t('user.changePassword.currentPassword')"
             variant="outlined"
@@ -27,14 +18,17 @@
             autocomplete="current-password"
             prepend-inner-icon="mdi-lock-outline"
             :rules="[rulePasswordRequired]"
+            :error-messages="summary.serverError('current_password')"
             class="change-password-view__field"
             :disabled="loading"
             :append-inner-icon="showCurrentPassword ? 'mdi-eye-off' : 'mdi-eye'"
             @click:append-inner="showCurrentPassword = !showCurrentPassword"
+            @update:model-value="summary.clearServerError('current_password')"
           />
 
           <VTextField
             v-model="newPassword"
+            data-field="new_password"
             :type="showNewPassword ? 'text' : 'password'"
             :label="t('user.changePassword.newPassword')"
             variant="outlined"
@@ -42,10 +36,12 @@
             autocomplete="new-password"
             prepend-inner-icon="mdi-lock-outline"
             :rules="[rulePasswordRequired, ruleNewPasswordLength]"
+            :error-messages="summary.serverError('new_password')"
             class="change-password-view__field"
             :disabled="loading"
             :append-inner-icon="showNewPassword ? 'mdi-eye-off' : 'mdi-eye'"
             @click:append-inner="showNewPassword = !showNewPassword"
+            @update:model-value="summary.clearServerError('new_password')"
           />
 
           <VBtn
@@ -58,6 +54,20 @@
           >
             {{ t('user.changePassword.submit') }}
           </VBtn>
+          <!-- Opened from the account menu (NEO-102) the change is optional, so
+               it can be abandoned; after a forced change on login it can't. -->
+          <VBtn
+            v-if="voluntary"
+            variant="text"
+            size="large"
+            block
+            :disabled="loading"
+            class="change-password-view__cancel"
+            data-testid="change-password-cancel"
+            @click="cancel"
+          >
+            {{ t('user.changePassword.cancel') }}
+          </VBtn>
         </VForm>
       </VCardText>
     </VCard>
@@ -65,32 +75,92 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, watch, inject } from "vue";
 import { useI18n } from "vue-i18n";
-import { inject } from "vue";
-import { createUseChangePasswordFlow } from "../composables/useChangePasswordFlow";
+import { useRoute, useRouter } from "vue-router";
+import { createUseChangePasswordFlow, CHANGE_PASSWORD_FROM_MENU } from "../composables/useChangePasswordFlow";
+import { focusFormField, useFormErrorSummary } from "../composables/useFormErrorSummary";
 import type { ApiFetchOptions } from "@api";
+import type { AuthTokenStorage } from "@stores";
+import FormErrorSummary from "../components/FormErrorSummary.vue";
 
 type ApiFetchFn = (path: string, options?: ApiFetchOptions) => Promise<Response>;
+type NotifyFn = (message: string, type: "success" | "info" | "warning" | "error", key?: string) => void;
 
 const { t } = useI18n();
+const route = useRoute();
+const router = useRouter();
 
 const apiFetch = inject<ApiFetchFn>("neo:apiFetch")!;
+const notify = inject<NotifyFn | null>("neo:notify", null);
 
-const useChangePasswordFlow = createUseChangePasswordFlow(apiFetch);
-const { currentPassword, newPassword, loading, errorKey, submit } = useChangePasswordFlow();
+const authTokenStorage = inject<AuthTokenStorage>("neo:authTokenStorage")!;
+
+/** Reached from the account menu rather than forced on login. */
+const voluntary = route.query.from === CHANGE_PASSWORD_FROM_MENU;
+
+/** Back to wherever the menu was opened; the app's start page if the URL was opened directly. */
+function cancel() {
+  if (typeof window.history.state?.back === "string") router.back();
+  else void router.push("/");
+}
+
+const useChangePasswordFlow = createUseChangePasswordFlow(apiFetch, authTokenStorage);
+const { currentPassword, newPassword, loading, errorKey, toastKey, fieldErrors, submit } = useChangePasswordFlow();
+
+const INCORRECT_CURRENT_KEY = "user.changePassword.error.incorrectCurrent";
+
+// Errors live in the form (NEO-109): under the field and in the summary box on
+// top. Only what no field can fix (no connection, server error) is a toast.
+const summary = useFormErrorSummary({
+  fields: () => [
+    {
+      key: "current_password",
+      label: t("user.changePassword.currentPassword"),
+      value: currentPassword.value,
+      rules: [rulePasswordRequired],
+    },
+    {
+      key: "new_password",
+      label: t("user.changePassword.newPassword"),
+      value: newPassword.value,
+      rules: [rulePasswordRequired, ruleNewPasswordLength],
+    },
+  ],
+  // A wrong current password is marked on that field instead (see the watch below).
+  formErrorKeys: () => [errorKey.value === INCORRECT_CURRENT_KEY ? null : errorKey.value],
+  formTitleKey: "user.changePassword.errorSummary.title",
+});
+
+watch(errorKey, (key) => {
+  if (key === INCORRECT_CURRENT_KEY) summary.setServerMessage("current_password", t(key));
+});
+watch(fieldErrors, (errors) => {
+  if (errors && !summary.setServerErrors(errors)) errorKey.value = "user.changePassword.error.network";
+});
+watch(toastKey, (key) => {
+  if (key) notify?.(t(key), "error", key);
+});
+
+const formEl = ref<HTMLElement | null>(null);
+function focusField(key: string) {
+  focusFormField(formEl.value?.querySelector(`[data-field="${key}"]`));
+}
 
 const showCurrentPassword = ref(false);
 const showNewPassword = ref(false);
 const form = ref<{ validate: () => Promise<{ valid: boolean }> } | null>(null);
 
-const rulePasswordRequired = (v: string) =>
-  !!v || t("user.changePassword.validation.passwordRequired");
-const ruleNewPasswordLength = (v: string) =>
-  v.length >= 8 || t("user.changePassword.validation.passwordTooShort");
+function rulePasswordRequired(v: string): true | string {
+  return !!v || t("user.changePassword.validation.passwordRequired");
+}
+function ruleNewPasswordLength(v: string): true | string {
+  return v.length >= 8 || t("user.changePassword.validation.passwordTooShort");
+}
 
 async function handleSubmit() {
   if (!form.value) return;
+  summary.attempted.value = true;
   const { valid } = await form.value.validate();
   if (valid) await submit();
 }
@@ -130,10 +200,6 @@ async function handleSubmit() {
   margin: 0 0 24px;
 }
 
-.change-password-view__alert {
-  margin-bottom: 20px;
-}
-
 .change-password-view__form {
   display: flex;
   flex-direction: column;
@@ -149,5 +215,10 @@ async function handleSubmit() {
   letter-spacing: normal;
   font-weight: 600;
   margin-top: 12px;
+}
+
+.change-password-view__cancel {
+  text-transform: none;
+  letter-spacing: normal;
 }
 </style>

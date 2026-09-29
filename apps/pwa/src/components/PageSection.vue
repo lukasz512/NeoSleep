@@ -1,10 +1,10 @@
 <template>
   <VCard variant="outlined" class="page-section">
-    <VCardTitle class="text-h6">{{ title }}</VCardTitle>
+    <VCardTitle class="text-title-large">{{ title }}</VCardTitle>
     <VCardText v-if="$slots.default">
       <slot />
     </VCardText>
-    <VCardText v-else-if="subtitle" class="text-body-2 text-medium-emphasis">
+    <VCardText v-else-if="subtitle" class="text-body-medium text-medium-emphasis">
       {{ subtitle }}
     </VCardText>
   </VCard>

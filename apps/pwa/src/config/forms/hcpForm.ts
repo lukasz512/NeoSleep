@@ -4,6 +4,8 @@ import { useConfigStore } from "../../stores/config";
 import { useAuthStore } from "../../stores/auth";
 import { identityFields } from "./identityFields";
 import { loadTerritoryOptions } from "./territoryOptions";
+import { licenseNumberFields } from "./licenseNumberFields";
+import { inSection } from "./sections";
 
 /**
  * Practitioner (HCP) entity config for the generic FormRenderer. Reuses the
@@ -219,6 +221,7 @@ export const hcpFormFields: FormFieldDef[] = [
   ...identity,
   {
     key: "organization_id",
+    section: "organization",
     type: "combobox",
     labelKey: (form) => (isCreatingNewOrganization(form) ? "user.hcp.form.clinicNew" : "user.hcp.form.clinic"),
     color: (form) => (isCreatingNewOrganization(form) ? "success" : undefined),
@@ -233,6 +236,7 @@ export const hcpFormFields: FormFieldDef[] = [
     // here would silently collide with the practitioner's own hidden
     // `region` field and identityFields()' `phone` field below.
     key: "org_type",
+    section: "organization",
     type: "select",
     labelKey: "user.hco.form.type",
     options: loadNewOrgTypeOptions,
@@ -242,6 +246,7 @@ export const hcpFormFields: FormFieldDef[] = [
   },
   {
     key: "org_region",
+    section: "organization",
     type: "autocomplete",
     labelKey: "user.hco.form.region",
     options: loadNewOrgRegionOptions,
@@ -251,6 +256,7 @@ export const hcpFormFields: FormFieldDef[] = [
   },
   {
     key: "org_address_line1",
+    section: "organization",
     type: "text",
     labelKey: "user.hco.form.addressLine1",
     hidden: (form) => !isCreatingNewOrganization(form),
@@ -259,6 +265,7 @@ export const hcpFormFields: FormFieldDef[] = [
   },
   {
     key: "org_city",
+    section: "organization",
     type: "text",
     labelKey: "user.hco.form.city",
     hidden: (form) => !isCreatingNewOrganization(form),
@@ -267,6 +274,7 @@ export const hcpFormFields: FormFieldDef[] = [
   },
   {
     key: "org_postal_code",
+    section: "organization",
     type: "text",
     labelKey: "user.hco.form.postalCode",
     hidden: (form) => !isCreatingNewOrganization(form),
@@ -275,6 +283,7 @@ export const hcpFormFields: FormFieldDef[] = [
   },
   {
     key: "org_phone",
+    section: "organization",
     type: "phone",
     labelKey: "user.hco.form.phone",
     icon: "phone",
@@ -284,6 +293,7 @@ export const hcpFormFields: FormFieldDef[] = [
   },
   {
     key: "primary_specialty",
+    section: "profile",
     type: "autocomplete",
     labelKey: "user.hcp.form.specialty",
     options: loadSpecialtyOptionsInheritedFirst,
@@ -293,6 +303,7 @@ export const hcpFormFields: FormFieldDef[] = [
   },
   {
     key: "influence_tier",
+    section: "profile",
     type: "select",
     labelKey: "user.hcp.form.influenceTier",
     options: INFLUENCE_TIER_OPTIONS,
@@ -301,12 +312,14 @@ export const hcpFormFields: FormFieldDef[] = [
   },
   {
     key: "region",
+    section: "territory",
     type: "text",
     labelKey: "user.hcp.form.region",
     hidden: true,
   },
   {
     key: "territory_id",
+    section: "territory",
     type: "autocomplete",
     labelKey: "user.hcp.form.territory",
     hint: "app.patients.form.territoryHint",
@@ -317,21 +330,18 @@ export const hcpFormFields: FormFieldDef[] = [
   },
   {
     key: "language",
+    section: "profile",
     type: "text",
     labelKey: "user.hcp.form.language",
     hidden: true,
     default: () => useAuthStore().user?.language ?? "en",
   },
-  {
-    key: "primary",
-    type: "text",
-    labelKey: "user.hcp.form.nationalId",
-    icon: "id-card",
-    nestUnder: "national_ids",
-    cols: 12,
-  },
+  // PL PWZ / MX cédula — replaces the old generic "National ID" field
+  // (national_ids.primary), migrated by apps/api/migrations/028 (NEO-51).
+  ...inSection("profile", ...licenseNumberFields({ nestUnder: "national_ids" })),
   {
     key: "linkedin",
+    section: "links",
     type: "text",
     labelKey: "user.hcp.form.linkedin",
     icon: "linkedin",
@@ -340,6 +350,7 @@ export const hcpFormFields: FormFieldDef[] = [
   },
   {
     key: "instagram",
+    section: "links",
     type: "text",
     labelKey: "user.hcp.form.instagram",
     icon: "instagram",
@@ -348,6 +359,7 @@ export const hcpFormFields: FormFieldDef[] = [
   },
   {
     key: "facebook",
+    section: "links",
     type: "text",
     labelKey: "user.hcp.form.facebook",
     icon: "facebook",
@@ -356,6 +368,7 @@ export const hcpFormFields: FormFieldDef[] = [
   },
   {
     key: "google",
+    section: "links",
     type: "text",
     labelKey: "user.hcp.form.googleLink",
     icon: "map-pin",
@@ -364,6 +377,7 @@ export const hcpFormFields: FormFieldDef[] = [
   },
   {
     key: "status",
+    section: "profile",
     type: "select",
     labelKey: "user.hcp.form.status",
     options: STATUS_OPTIONS,

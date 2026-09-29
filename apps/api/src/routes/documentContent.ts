@@ -3,15 +3,18 @@ import { asyncHandler } from "../middleware/errorHandler.js";
 import { requireRole } from "../middleware/requireRole.js";
 import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
-import { SaveDocumentContentVersionCommand, SetDocumentTemplateEntityTypesCommand } from "../commands/documentContent.js";
+import { SaveDocumentContentVersionCommand, SetDocumentTemplateEntityTypesCommand, SetPatientChecklistConfigCommand } from "../commands/documentContent.js";
 import {
   GetDocumentContentIndexQuery,
   GetCurrentDocumentContentQuery,
   ListDocumentContentVersionsQuery,
   GetDocumentContentVersionByIdQuery,
   GetDocumentTemplateEntityTypesQuery,
+  GetPatientChecklistConfigQuery,
 } from "../queries/documentContent.js";
+import { ApprovePartnerDocumentVersionCommand, GetPartnerApprovalStatusQuery } from "../commands/partnerDocuments.js";
 import { ValidationError } from "../errors.js";
+import { routeParam } from "./utils.js";
 
 /**
  * Document-content routes — thin waiters, same shape as routes/users.ts.
@@ -51,7 +54,7 @@ documentContentRouter.get(
   "/document-content/:templateKey/entity-types",
   requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
-    const { templateKey } = req.params;
+    const templateKey = routeParam(req, "templateKey") ?? "";
     const slug = tenantSlugFromHost(req.hostname);
     const result = await withTenant(slug, async (client) => {
       await buildContext(req, client, slug);
@@ -65,7 +68,7 @@ documentContentRouter.put(
   "/document-content/:templateKey/entity-types",
   requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
-    const { templateKey } = req.params;
+    const templateKey = routeParam(req, "templateKey") ?? "";
     const entityTypes = Array.isArray(req.body?.entityTypes)
       ? req.body.entityTypes.filter((v: unknown): v is string => typeof v === "string")
       : undefined;
@@ -80,11 +83,42 @@ documentContentRouter.put(
   })
 );
 
+// Patient Estudios checklist config (who fills it, position) — also before
+// the ":locale" wildcard below, same reason as entity-types above.
+documentContentRouter.get(
+  "/document-content/:templateKey/patient-checklist",
+  requireRole("admin", "manager"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const templateKey = routeParam(req, "templateKey") ?? "";
+    const slug = tenantSlugFromHost(req.hostname);
+    const result = await withTenant(slug, async (client) => {
+      await buildContext(req, client, slug);
+      return GetPatientChecklistConfigQuery(templateKey);
+    });
+    res.json(result);
+  })
+);
+
+documentContentRouter.put(
+  "/document-content/:templateKey/patient-checklist",
+  requireRole("admin", "manager"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const templateKey = routeParam(req, "templateKey") ?? "";
+    const slug = tenantSlugFromHost(req.hostname);
+    const result = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return SetPatientChecklistConfigCommand(ctx, templateKey, (req.body ?? {}) as { fillMode?: unknown; sortOrder?: unknown });
+    });
+    res.json(result);
+  })
+);
+
 documentContentRouter.get(
   "/document-content/:templateKey/:locale",
   requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
-    const { templateKey, locale } = req.params;
+    const templateKey = routeParam(req, "templateKey") ?? "";
+    const locale = routeParam(req, "locale") ?? "";
     const slug = tenantSlugFromHost(req.hostname);
     const result = await withTenant(slug, async (client) => {
       await buildContext(req, client, slug);
@@ -98,7 +132,8 @@ documentContentRouter.get(
   "/document-content/:templateKey/:locale/versions",
   requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
-    const { templateKey, locale } = req.params;
+    const templateKey = routeParam(req, "templateKey") ?? "";
+    const locale = routeParam(req, "locale") ?? "";
     const cursor = typeof req.query.cursor === "string" ? Number.parseInt(req.query.cursor, 10) : undefined;
     const limit = typeof req.query.limit === "string" ? Number.parseInt(req.query.limit, 10) : undefined;
     const slug = tenantSlugFromHost(req.hostname);
@@ -114,7 +149,7 @@ documentContentRouter.get(
   "/document-content/:templateKey/:locale/versions/:versionId",
   requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
-    const { versionId } = req.params;
+    const versionId = routeParam(req, "versionId") ?? "";
     const slug = tenantSlugFromHost(req.hostname);
     const result = await withTenant(slug, async (client) => {
       await buildContext(req, client, slug);
@@ -124,11 +159,48 @@ documentContentRouter.get(
   })
 );
 
+// ---------------------------------------------------------------------------
+// Partner documents (NEO-51) — the jurisdiction's NeoSleep signatory approves
+// a version, which is what lets their signature appear on that exact text.
+// Non-countersigned templates answer { countersigned: false }.
+// ---------------------------------------------------------------------------
+documentContentRouter.get(
+  "/document-content/:templateKey/:locale/approval",
+  requireRole("admin", "manager"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const templateKey = routeParam(req, "templateKey") ?? "";
+    const locale = routeParam(req, "locale") ?? "";
+    const slug = tenantSlugFromHost(req.hostname);
+    const result = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return GetPartnerApprovalStatusQuery(ctx, templateKey, locale);
+    });
+    res.json(result ? { countersigned: true, ...result } : { countersigned: false });
+  })
+);
+
+documentContentRouter.post(
+  "/document-content/:templateKey/:locale/versions/:versionId/approve",
+  requireRole("admin", "manager"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const templateKey = routeParam(req, "templateKey") ?? "";
+    const locale = routeParam(req, "locale") ?? "";
+    const versionId = routeParam(req, "versionId") ?? "";
+    const slug = tenantSlugFromHost(req.hostname);
+    const result = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return ApprovePartnerDocumentVersionCommand(ctx, templateKey, locale, versionId);
+    });
+    res.json(result);
+  })
+);
+
 documentContentRouter.post(
   "/document-content/:templateKey/:locale",
   requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
-    const { templateKey, locale } = req.params;
+    const templateKey = routeParam(req, "templateKey") ?? "";
+    const locale = routeParam(req, "locale") ?? "";
     const contentHtml = typeof req.body?.contentHtml === "string" ? req.body.contentHtml : undefined;
     if (!contentHtml) throw new ValidationError("contentHtml is required");
     const changeNote = typeof req.body?.changeNote === "string" ? req.body.changeNote : null;

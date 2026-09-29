@@ -11,11 +11,9 @@
       avatar-entity-type="user"
       @submit="onSubmit"
     />
-    <VAlert
+    <AppInlineAlert
       v-if="isOffline"
       type="warning"
-      variant="tonal"
-      density="compact"
       class="view-detail__offline-banner"
       :text="t('app.common.offlineShowingCached')"
     />
@@ -23,16 +21,19 @@
       :has-content="!!user"
       :loading="loading"
       :load-error="loadFailed"
+      :load-error-cause="loadFailure"
       :back-route="{ name: 'users' }"
       :back-label="t('user.users.detail.back')"
+      :record-title="user?.name ?? ''"
+      :action-skeletons="4"
       :not-found-label="t('user.users.detail.notFound')"
       @retry="loadUser"
     >
-      <template v-if="user" #title>
-        <span class="view-item__title-wrap">
-          <AppAvatar :name="user.name" :first-name="user.first_name" :last-name="user.last_name" entity-type="user" :size="40" />
-          <h1 class="view-item__title">{{ user.name }}</h1>
-        </span>
+      <template v-if="user" #record-tile>
+        <AppAvatar :name="user.name" entity-type="user" :first-name="user.first_name" :last-name="user.last_name" :size="48" />
+      </template>
+      <template v-if="user" #record-details>
+        <IdentityDetails :details="[t(`user.users.role.${roleKey}`)]" />
       </template>
       <template v-if="user" #header-actions>
         <VTooltip location="bottom">
@@ -225,48 +226,39 @@
       </template>
     </ItemDetailLayout>
 
-    <VDialog
+    <AppConfirmDialog
       v-model="showDeleteConfirm"
+      :text="t('user.users.actions.deleteConfirmText')"
+      :secondary-label="t('app.common.cancel')"
+      :secondary-color="null"
+      :primary-label="t('user.users.actions.delete')"
+      primary-color="error"
+      primary-variant="text"
+      :loading="deleteLoading"
       max-width="360"
-      :transition="originDialogTransition"
-      persistent
-    >
-      <VCard>
-        <VCardText>{{ t("user.users.actions.deleteConfirmText") }}</VCardText>
-        <VCardActions>
-          <VSpacer />
-          <AppButton variant="text" @click="showDeleteConfirm = false">
-            {{ t("app.common.cancel") }}
-          </AppButton>
-          <AppButton
-            color="error"
-            variant="text"
-            :loading="deleteLoading"
-            @click="onDelete"
-          >
-            {{ t("user.users.actions.delete") }}
-          </AppButton>
-        </VCardActions>
-      </VCard>
-    </VDialog>
+      @secondary="showDeleteConfirm = false"
+      @primary="onDelete"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
+import { isOfflineError, reportCaught, reportFailedResponse } from "@api";
 import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
-import { originDialogTransition } from "@ui";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { apiFetch } from "../composables/useApi";
 import { useEntityCacheStore } from "../stores/entityCache";
-import { useNotifications } from "../composables/useNotifications";
+import { retryAction, useNotifications } from "../composables/useNotifications";
 import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import DetailViewTabs from "../components/DetailViewTabs.vue";
 import AppButton from "../components/AppButton.vue";
+import AppConfirmDialog from "../components/AppConfirmDialog.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppAvatar from "../components/AppAvatar.vue";
+import IdentityDetails from "../components/IdentityDetails.vue";
 import AppLoadingState from "../components/AppLoadingState.vue";
 import { userFormFields } from "../config/forms/userForm";
 import {
@@ -274,6 +266,7 @@ import {
   entityActionBtnClass,
 } from "../config/entityActions";
 import { useAuthStore } from "../stores/auth";
+import { AppInlineAlert } from "@ui";
 
 const FormRenderer = defineAsyncComponent(
   () => import("../components/FormRenderer.vue"),
@@ -316,6 +309,8 @@ const loading = ref(true);
 const isOffline = ref(false);
 /** True when loadUser() failed for a reason other than a genuine 404 (network/server) — see loadUser(). */
 const loadFailed = ref(false);
+/** The error behind loadFailed (NEO-81) — lets the error state say offline vs. server problem. */
+const loadFailure = ref<unknown>(null);
 const showEditModal = ref(false);
 const showDeleteConfirm = ref(false);
 const userTabs = [
@@ -355,6 +350,8 @@ async function onSubmit(
           body: JSON.stringify(payload),
         }),
       successMessage: t("user.users.form.editSuccess"),
+      icon: "nav-users",
+      context: user.value?.name,
       errorMessage: t("user.users.form.errorSave"),
       onSuccess: () => loadUser(),
     },
@@ -373,6 +370,8 @@ const { loading: resetPasswordLoading, run: onResetPassword } = useAsyncAction(
       notifications.show(
         t("user.users.actions.resetPasswordSuccess"),
         "success",
+        undefined,
+        { icon: "key", context: user.value?.name },
       );
     }
   },
@@ -396,6 +395,8 @@ const { loading: toggleStatusLoading, run: onToggleStatus } = useAsyncAction(
             : "user.users.actions.disableSuccess",
         ),
         "success",
+        undefined,
+        { icon: "nav-users", context: user.value?.name },
       );
       await loadUser();
     }
@@ -410,7 +411,7 @@ const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
   });
   if (res.ok) {
     showDeleteConfirm.value = false;
-    notifications.show(t("user.users.actions.deleteSuccess"), "success");
+    notifications.show(t("user.users.actions.deleteSuccess"), "success", undefined, { icon: "nav-users", context: user.value?.name });
     window.dispatchEvent(new Event("entity-list-refresh"));
     router.push({ name: "users" });
   }
@@ -438,11 +439,15 @@ async function loadUser() {
         user.value as unknown as Record<string, unknown>,
       );
     } else if (res.status !== 404) {
+      loadFailure.value = await reportFailedResponse(res, { where: "UserDetailView.load", path: "/api/v1/users/:id" });
       loadFailed.value = true;
     }
-  } catch {
-    // Network failure, not a server error — fall back to the cached record if we have one.
-    const cached = await usersCache.readOne(id);
+  } catch (err) {
+    reportCaught(err, { where: "UserDetailView.load" });
+    loadFailure.value = err;
+    // Only a request that never reached the server may fall back to the cached record (ADR-013) —
+    // a bad response or a bug shows the real error instead of stale data.
+    const cached = isOfflineError(err) ? await usersCache.readOne(id) : null;
     if (cached) {
       user.value = cached as unknown as UserDetail;
       isOffline.value = true;
@@ -466,10 +471,11 @@ async function loadDocuments() {
     if (res.ok) {
       documents.value = (await res.json()) as UserDocument[];
     } else {
-      notifications.show(t("user.users.documents.errorLoad"), "error");
+      notifications.show(t("user.users.documents.errorLoad"), "error", undefined, { icon: "file", context: user.value?.name, action: retryAction(loadDocuments) });
     }
-  } catch {
-    notifications.show(t("user.users.documents.errorLoad"), "error");
+  } catch (err) {
+    reportCaught(err, { where: "UserDetailView.loadDocuments" });
+    notifications.show(t("user.users.documents.errorLoad"), "error", undefined, { icon: "file", context: user.value?.name, action: retryAction(loadDocuments) });
   } finally {
     documentsLoading.value = false;
   }
@@ -486,7 +492,11 @@ async function onDownloadDocument(documentId: string) {
     const { url } = (await res.json()) as { url: string };
     window.open(url, "_blank", "noopener");
   } else {
-    notifications.show(t("user.users.documents.errorLoad"), "error");
+    notifications.show(t("user.users.documents.errorLoad"), "error", undefined, {
+      icon: "file",
+      context: user.value?.name,
+      action: retryAction(() => onDownloadDocument(documentId)),
+    });
   }
 }
 

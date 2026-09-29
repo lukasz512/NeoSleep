@@ -61,4 +61,15 @@ describe("hcoFormFields", () => {
     expect(territory.cols).toBe(6);
     expect(territory.hint).toBeUndefined();
   });
+
+  it("show_on_public_map is an admin-gated switch, on by default, with a hint (NEO-79)", () => {
+    const field = hcoFormFields.find((f) => f.key === "show_on_public_map")!;
+    expect(field.type).toBe("boolean");
+    expect(field.default).toBe(true);
+    expect(field.labelKey).toBe("user.hco.form.showOnPublicMap");
+    expect(field.hint).toBe("user.hco.form.showOnPublicMapHint");
+    // Same gate as status — a function reading the current user's role.
+    expect(typeof field.hidden).toBe("function");
+    expect(field.cols).toBe(12);
+  });
 });

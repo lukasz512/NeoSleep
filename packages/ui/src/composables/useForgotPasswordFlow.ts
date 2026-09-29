@@ -1,6 +1,7 @@
 import { ref } from "vue";
 import { useRoute } from "vue-router";
-import type { ApiFetchOptions } from "@api";
+import { reportCaught, reportFailedResponse, type ApiFetchOptions } from "@api";
+import { applyCaughtError, applyFailedResponse, clearFlowErrors, createFlowErrors } from "./flowErrors";
 
 type ApiFetchFn = (path: string, options?: ApiFetchOptions) => Promise<Response>;
 
@@ -13,11 +14,13 @@ export function createUseForgotPasswordFlow(apiFetch: ApiFetchFn) {
     const prefillEmail = typeof route.query.email === "string" ? route.query.email : "";
     const email = ref(prefillEmail);
     const loading = ref(false);
-    const errorKey = ref<string | null>(null);
+    // NEO-109: errorKey = a line in the form's summary box, toastKey = a toast
+    // (connection / server only), fieldErrors = fields the API rejected.
+    const errors = createFlowErrors();
     const submitted = ref(false);
 
     async function submit(): Promise<void> {
-      errorKey.value = null;
+      clearFlowErrors(errors);
       loading.value = true;
       try {
         const res = await apiFetch("/api/v1/auth/forgot-password", {
@@ -28,7 +31,8 @@ export function createUseForgotPasswordFlow(apiFetch: ApiFetchFn) {
         });
 
         if (!res.ok) {
-          errorKey.value = "user.forgotPassword.error.network";
+          const failure = await reportFailedResponse(res, { where: "useForgotPasswordFlow.submit" });
+          await applyFailedResponse(errors, res, failure, "user.forgotPassword.error.network");
           return;
         }
 
@@ -36,13 +40,22 @@ export function createUseForgotPasswordFlow(apiFetch: ApiFetchFn) {
         // whether the account exists, so the UI can't distinguish either —
         // that's intentional, it prevents email enumeration.
         submitted.value = true;
-      } catch {
-        errorKey.value = "user.forgotPassword.error.network";
+      } catch (err) {
+        reportCaught(err, { where: "useForgotPasswordFlow.submit" });
+        applyCaughtError(errors, err, "user.forgotPassword.error.network");
       } finally {
         loading.value = false;
       }
     }
 
-    return { email, loading, errorKey, submitted, submit };
+    return {
+      email,
+      loading,
+      errorKey: errors.errorKey,
+      toastKey: errors.toastKey,
+      fieldErrors: errors.fieldErrors,
+      submitted,
+      submit,
+    };
   };
 }

@@ -1,6 +1,8 @@
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, nextTick, type ComponentPublicInstance } from "vue";
 import { useI18n } from "vue-i18n";
 import { apiFetch } from "./useApi";
+import { useNotifications } from "./useNotifications";
+import { useFormErrors, focusFormField, type FieldErrors, type FormErrorField } from "./useFormErrors";
 import { scrollToFormTop } from "../utils/scrollToFormTop";
 import type { EventFormData, EventFormInitialData, EventSubmitPayload } from "../components/EventForm.types";
 
@@ -10,6 +12,19 @@ export const UI_TO_API_STATUS: Record<string, "scheduled" | "completed" | "cance
   done: "completed",
   rejected: "cancelled",
   no_show: "no_show",
+};
+
+/** API payload key → the form field that edits it, so a 400 naming the key marks that field (NEO-109). */
+export const EVENT_API_TO_FORM_KEY: Record<string, keyof EventFormData> = {
+  title: "title",
+  start_at: "start",
+  end_at: "end",
+  type: "type",
+  status: "status",
+  location: "location",
+  video_link: "videoLink",
+  notes: "notes",
+  region: "region",
 };
 
 /** Map API status → UI status. */
@@ -25,6 +40,7 @@ export function useEventForm(
   emit: (event: "update:modelValue" | "submit", ...args: unknown[]) => void,
 ) {
   const { t } = useI18n();
+  const notifications = useNotifications();
 
   const formRef = ref<{ validate: () => Promise<{ valid: boolean }>; $el?: Element } | null>(null);
   const submitting = ref(false);
@@ -58,18 +74,78 @@ export function useEventForm(
   const formTitle   = computed(() => isEditMode.value ? t("user.planner.form.editTitle") : t("user.planner.form.title"));
   const formSubmitLabel = computed(() => isEditMode.value ? t("user.planner.form.editSubmit") : t("user.planner.form.submit"));
 
+  const text = (v: unknown) => (typeof v === "string" ? v.trim() : "");
   const startRules = computed(() => [
-    (v: string) => !!v?.trim() || t("user.planner.form.validation.startRequired"),
+    (v: unknown) => !!text(v) || t("user.planner.form.validation.startRequired"),
   ]);
   const endRules = computed(() => [
-    (v: string) => !!v?.trim() || t("user.planner.form.validation.endRequired"),
-    (v: string) => {
+    (v: unknown) => !!text(v) || t("user.planner.form.validation.endRequired"),
+    (v: unknown) => {
       const start = form.value.start?.trim();
-      const end = v?.trim();
+      const end = text(v);
       if (!start || !end) return true;
       return new Date(end) > new Date(start) || t("user.planner.form.validation.endAfterStart");
     },
   ]);
+
+  /**
+   * Errors show in the form, never as a toast (NEO-109) — same pattern as
+   * FormRenderer: under the field, in the summary box on top, only after the
+   * first Save; a field the API rejected clears as soon as it's edited.
+   */
+  const { attempted, serverError, clearServerError, setServerErrors, reset: resetErrors, errorListFor } = useFormErrors();
+
+  const errorFields = computed<FormErrorField[]>(() => {
+    const f = form.value;
+    const fields: FormErrorField[] = [
+      { key: "title", label: t("user.planner.form.fieldTitle"), value: f.title },
+      { key: "start", label: t("user.planner.form.fieldStart"), value: f.start, rules: startRules.value },
+      { key: "end", label: t("user.planner.form.fieldEnd"), value: f.end, rules: endRules.value },
+      { key: "type", label: t("user.planner.form.fieldType"), value: f.type },
+      { key: "status", label: t("user.planner.form.fieldStatus"), value: f.status },
+    ];
+    if (f.type === "f2f") fields.push({ key: "location", label: t("user.planner.form.fieldLocation"), value: f.location });
+    if (f.type === "video") fields.push({ key: "videoLink", label: t("user.planner.form.fieldVideoLink"), value: f.videoLink });
+    fields.push(
+      { key: "notes", label: t("user.planner.form.fieldNotes"), value: f.notes },
+      { key: "region", label: t("user.planner.form.fieldRegion"), value: f.region },
+    );
+    return fields;
+  });
+  const errorList = errorListFor(() => errorFields.value);
+
+  // Editing a field the API rejected clears its error right away.
+  for (const key of Object.values(EVENT_API_TO_FORM_KEY)) {
+    watch(() => form.value[key], () => clearServerError(key));
+  }
+
+  const fieldEls: Record<string, Element> = {};
+  function setFieldEl(key: string, el: Element | ComponentPublicInstance | null) {
+    if (!el) delete fieldEls[key];
+    else fieldEls[key] = el instanceof Element ? el : el.$el;
+  }
+  /** The summary's links jump to their field. */
+  function focusField(key: string) {
+    focusFormField(fieldEls[key]);
+  }
+
+  /**
+   * Marks the fields the API rejected (its payload keys mapped to this form's
+   * keys) and scrolls up to the summary. A field this form doesn't show can't
+   * be marked, so that one still gets a toast.
+   */
+  function showServerErrors(fieldErrors: FieldErrors) {
+    const mapped: FieldErrors = {};
+    for (const [apiKey, reason] of Object.entries(fieldErrors)) {
+      const key = EVENT_API_TO_FORM_KEY[apiKey];
+      if (key) mapped[key] = reason;
+    }
+    if (setServerErrors(mapped, errorFields.value.map((f) => f.key))) {
+      nextTick(() => scrollToFormTop(formRef.value?.$el));
+    } else {
+      notifications.show(t("app.formRenderer.validation.saveRejected"), "error", undefined, { icon: "sad-cloud" });
+    }
+  }
 
   function toDatetimeLocal(iso: string): string {
     if (!iso) return "";
@@ -174,8 +250,9 @@ export function useEventForm(
   }
 
   async function onSubmit() {
+    attempted.value = true;
     const valid = await formRef.value?.validate();
-    if (!valid?.valid) {
+    if (!valid?.valid || errorList.value.length) {
       scrollToFormTop(formRef.value?.$el);
       return;
     }
@@ -201,8 +278,11 @@ export function useEventForm(
         region: form.value.region.trim(),
         attendees,
       };
-      const ok = await new Promise<boolean>((resolve) => emit("submit", payload, resolve));
-      if (ok) emit("update:modelValue", false);
+      const result = await new Promise<{ ok: boolean; fieldErrors?: FieldErrors }>((resolve) =>
+        emit("submit", payload, (ok: boolean, fieldErrors?: FieldErrors) => resolve({ ok, fieldErrors })),
+      );
+      if (result.ok) emit("update:modelValue", false);
+      else if (result.fieldErrors) showServerErrors(result.fieldErrors);
     } finally {
       submitting.value = false;
     }
@@ -242,6 +322,7 @@ export function useEventForm(
           };
         }
         initialFormSnapshot.value = { ...form.value };
+        resetErrors();
       } else {
         initialFormSnapshot.value = null;
       }
@@ -254,6 +335,7 @@ export function useEventForm(
     typeItems, statusItems,
     isEditMode, formTitle, formSubmitLabel,
     startRules, endRules,
+    errorList, serverError, setFieldEl, focusField,
     onDialogUpdate, confirmDiscard, onCancelClick, onSubmit,
   };
 }

@@ -3,6 +3,7 @@ import { getFileAttachmentsForEntity, getFileAttachmentById, getLinkedUserIdForP
 import { NotFoundError } from "../errors.js";
 import { getPartnerDocumentSignedUrl } from "../services/partnerDocuments.js";
 import { toDto, type DocumentDto } from "./documents.js";
+import { requirePatientInScope, requirePractitionerInScope, requireOrganizationInScope } from "./entityAccess.js";
 
 /**
  * QUERIES — "Documents" sub-tab on HCP/HCO/Patient detail views (Slice 1 of
@@ -25,6 +26,7 @@ import { toDto, type DocumentDto } from "./documents.js";
  * written against their users row, not their practitioner row.
  */
 export async function GetPractitionerDocumentsQuery(ctx: TenantContext, practitionerId: string): Promise<DocumentDto[]> {
+  await requirePractitionerInScope(ctx, practitionerId);
   const ownRows = await getFileAttachmentsForEntity(ctx.client, "practitioner", practitionerId);
 
   const linkedUserId = await getLinkedUserIdForPractitioner(ctx.client, practitionerId);
@@ -36,11 +38,13 @@ export async function GetPractitionerDocumentsQuery(ctx: TenantContext, practiti
 }
 
 export async function GetOrganizationDocumentsQuery(ctx: TenantContext, organizationId: string): Promise<DocumentDto[]> {
+  await requireOrganizationInScope(ctx, organizationId);
   const rows = await getFileAttachmentsForEntity(ctx.client, "organization", organizationId);
   return rows.map(toDto);
 }
 
 export async function GetPatientDocumentsQuery(ctx: TenantContext, patientId: string): Promise<DocumentDto[]> {
+  await requirePatientInScope(ctx, patientId);
   const rows = await getFileAttachmentsForEntity(ctx.client, "patient", patientId);
   return rows.map(toDto);
 }
@@ -56,6 +60,7 @@ export async function GetPractitionerDocumentDownloadUrlQuery(
   practitionerId: string,
   documentId: string
 ): Promise<string> {
+  await requirePractitionerInScope(ctx, practitionerId);
   const attachment = await getFileAttachmentById(ctx.client, documentId);
   if (!attachment || !attachment.path) throw new NotFoundError("Document", documentId);
 
@@ -72,6 +77,7 @@ export async function GetOrganizationDocumentDownloadUrlQuery(
   organizationId: string,
   documentId: string
 ): Promise<string> {
+  await requireOrganizationInScope(ctx, organizationId);
   const attachment = await getFileAttachmentById(ctx.client, documentId);
   if (!attachment || attachment.entity_type !== "organization" || attachment.entity_id !== organizationId || !attachment.path) {
     throw new NotFoundError("Document", documentId);
@@ -84,6 +90,7 @@ export async function GetPatientDocumentDownloadUrlQuery(
   patientId: string,
   documentId: string
 ): Promise<string> {
+  await requirePatientInScope(ctx, patientId);
   const attachment = await getFileAttachmentById(ctx.client, documentId);
   if (!attachment || attachment.entity_type !== "patient" || attachment.entity_id !== patientId || !attachment.path) {
     throw new NotFoundError("Document", documentId);

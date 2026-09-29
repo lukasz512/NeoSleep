@@ -82,9 +82,35 @@ const RECONNECT_COOLDOWN_MS = 15_000;
 /** After this many consecutive failed logins, checkConnection() reports `attemptsExhausted` so the frontend can switch from "retrying" to "this looks like a real outage" messaging. Still keeps retrying on the same cooldown — a doctor's reload can't fix a server-side outage, but OrthoApnea coming back on its own shouldn't require one either. */
 const MAX_CONSECUTIVE_FAILURES = 3;
 
+/** Same budget as FETCH_TIMEOUT_MS below. Without it a hung login never settles, loginInFlight is never cleared, and every later caller awaits the same dead promise — "disconnected" until the process restarts. */
+const LOGIN_TIMEOUT_MS = 20_000;
+
+/**
+ * Why the last login failed — reported by checkConnection() so "OrthoApnea
+ * is down" and "this server has the wrong password" stop looking identical
+ * from the PWA; they need completely different fixes.
+ */
+export type ConnectionFailureReason =
+  | "not_configured"
+  | "credentials_rejected"
+  | "unreachable"
+  | "timeout"
+  | "unexpected_response";
+
+class OrthoApneaLoginError extends PartnerServiceError {
+  constructor(
+    readonly reason: ConnectionFailureReason,
+    message: string,
+    cause?: unknown
+  ) {
+    super("orthoapnea", message, cause);
+  }
+}
+
 let session: OrthoApneaSession | null = null;
 let loginInFlight: Promise<OrthoApneaSession> | null = null;
 let lastLoginFailureAt: number | null = null;
+let lastFailureReason: ConnectionFailureReason | null = null;
 let consecutiveFailures = 0;
 
 function isSessionValid(s: OrthoApneaSession): boolean {
@@ -93,31 +119,50 @@ function isSessionValid(s: OrthoApneaSession): boolean {
 
 async function login(): Promise<OrthoApneaSession> {
   if (!ORTHOAPNEA_EMAIL || !ORTHOAPNEA_PASSWORD) {
-    throw new PartnerServiceError("orthoapnea", "ORTHOAPNEA_EMAIL / ORTHOAPNEA_PASSWORD not configured");
+    throw new OrthoApneaLoginError("not_configured", "ORTHOAPNEA_EMAIL / ORTHOAPNEA_PASSWORD not configured");
   }
 
   // Confirmed from a captured request: POST with no body, credentials via
   // HTTP Basic auth (not a JSON body) — matches apneadock.es's Angular client.
   const basicAuth = Buffer.from(`${ORTHOAPNEA_EMAIL}:${ORTHOAPNEA_PASSWORD}`).toString("base64");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), LOGIN_TIMEOUT_MS);
   let res: Response;
   try {
     res = await fetch(`${ORTHOAPNEA_BASE_URL}${LOGIN_PATH}`, {
       method: "POST",
       headers: { Authorization: `Basic ${basicAuth}` },
+      signal: controller.signal,
     });
   } catch (cause) {
+    if (controller.signal.aborted) {
+      console.error(`[orthoapnea] login timed out after ${LOGIN_TIMEOUT_MS}ms`);
+      throw new OrthoApneaLoginError("timeout", `login timed out after ${LOGIN_TIMEOUT_MS}ms`, cause);
+    }
     console.error("[orthoapnea] login request failed (network error):", cause);
-    throw new PartnerServiceError("orthoapnea", "login request failed (network error)", cause);
+    throw new OrthoApneaLoginError("unreachable", "login request failed (network error)", cause);
+  } finally {
+    clearTimeout(timeout);
   }
   if (!res.ok) {
-    console.error(`[orthoapnea] login failed with status ${res.status}`);
-    throw new PartnerServiceError("orthoapnea", `login failed with status ${res.status}`);
+    // 401/403 from /api/login = OrthoApnea rejected ORTHOAPNEA_EMAIL/PASSWORD
+    // as configured on this server (e.g. the password was changed on
+    // apneadock.es but not in the Render environment).
+    const reason = res.status === 401 || res.status === 403 ? "credentials_rejected" : "unexpected_response";
+    console.error(`[orthoapnea] login failed with status ${res.status} (${reason})`);
+    throw new OrthoApneaLoginError(reason, `login failed with status ${res.status}`);
   }
 
-  const data = (await res.json()) as { token?: string };
+  let data: { token?: string };
+  try {
+    data = (await res.json()) as { token?: string };
+  } catch (cause) {
+    console.error("[orthoapnea] login response was not JSON");
+    throw new OrthoApneaLoginError("unexpected_response", "login response was not JSON", cause);
+  }
   if (!data.token) {
-    console.error("[orthoapnea] login response did not contain a token field:", data);
-    throw new PartnerServiceError("orthoapnea", "login response did not contain a token field");
+    console.error("[orthoapnea] login response did not contain a token field");
+    throw new OrthoApneaLoginError("unexpected_response", "login response did not contain a token field");
   }
   const expiresAt = decodeJwtExpiry(data.token) ?? Date.now() + FALLBACK_SESSION_TTL_MS;
   console.log(`[orthoapnea] login succeeded, session valid until ${new Date(expiresAt).toISOString()}`);
@@ -142,11 +187,13 @@ async function ensureSession(): Promise<OrthoApneaSession> {
       .then((s) => {
         session = s;
         lastLoginFailureAt = null;
+        lastFailureReason = null;
         consecutiveFailures = 0;
         return s;
       })
       .catch((err: unknown) => {
         lastLoginFailureAt = Date.now();
+        lastFailureReason = err instanceof OrthoApneaLoginError ? err.reason : "unexpected_response";
         consecutiveFailures += 1;
         throw err;
       })
@@ -174,6 +221,7 @@ export function __resetOrthoApneaStateForTests(): void {
   session = null;
   loginInFlight = null;
   lastLoginFailureAt = null;
+  lastFailureReason = null;
   consecutiveFailures = 0;
 }
 
@@ -181,6 +229,8 @@ export interface ConnectionStatus {
   connected: boolean;
   /** True once MAX_CONSECUTIVE_FAILURES has been hit without a successful login in between — signals "this isn't a blip" rather than "still trying". */
   attemptsExhausted: boolean;
+  /** Why the last login failed; only set when not connected. Names which side to fix, never contains a credential. */
+  reason?: ConnectionFailureReason;
 }
 
 /**
@@ -196,7 +246,11 @@ export async function checkConnection(): Promise<ConnectionStatus> {
     await ensureSession();
     return { connected: true, attemptsExhausted: false };
   } catch {
-    return { connected: false, attemptsExhausted: consecutiveFailures >= MAX_CONSECUTIVE_FAILURES };
+    return {
+      connected: false,
+      attemptsExhausted: consecutiveFailures >= MAX_CONSECUTIVE_FAILURES,
+      reason: lastFailureReason ?? "unexpected_response",
+    };
   }
 }
 
@@ -231,8 +285,11 @@ async function authedFetch(path: string, init: RequestInit = {}, isRetry = false
   } finally {
     clearTimeout(timeout);
   }
-  if (res.status === 401 && !isRetry) {
-    console.warn(`[orthoapnea] 401 on ${path} — session likely expired, re-logging in and retrying once`);
+  // apneadock.es answers an invalid/expired/revoked JWT with 403, not 401
+  // (verified 2026-09-25 against production). Retrying on 401 only left a
+  // stale cached token failing every call until its `exp` (~12h later).
+  if ((res.status === 401 || res.status === 403) && !isRetry) {
+    console.warn(`[orthoapnea] ${res.status} on ${path} — session likely stale, re-logging in and retrying once`);
     session = null; // force a fresh login and retry exactly once
     return authedFetch(path, init, true);
   }
@@ -428,10 +485,68 @@ async function fetchRawResources(): Promise<RawOrthoApneaResource[]> {
   }
 }
 
+/**
+ * Where a video sits in a dentist's work with a patient (NEO-151, Łukasz picked
+ * "topics by stage" over subject topics). OrthoApnea sends no topics, so like
+ * RESOURCE_CATEGORY_BY_ID this is our own table, keyed by resource id; a video
+ * added later lands in "other" until someone places it. The frontend labels
+ * the keys (user.resources.topic.*) and shows them in this order.
+ */
+export const VIDEO_TOPICS = ["detect", "diagnose", "records", "order", "followup", "other"] as const;
+export type VideoTopic = (typeof VIDEO_TOPICS)[number];
+const VIDEO_TOPIC_BY_ID: Record<number, VideoTopic> = {
+  26: "detect", // Introducción a la Medicina Dental del Sueño
+  27: "detect", // Cómo detectar pacientes con AOS en la clínica dental
+  28: "detect", // Prevalencia, diagnóstico y tratamiento en la AOS
+  32: "diagnose", // Diagnóstico y pruebas del sueño
+  31: "diagnose", // WatchPAT: diagnóstico domiciliario
+  47: "records", // Galga de George (ES; its EN/DE twins are merged into it)
+  48: "records",
+  49: "records",
+  59: "records", // Registros con galga y cera de mordida
+  50: "records", // Impresiones digitales
+  51: "records", // Impresiones tradicionales
+  55: "order", // OrthoApnea NOA and how to request it in Apneadock
+  30: "order", // Apneadock: plataforma de gestión de tratamientos
+  52: "followup", // Colocación OrthoApnea NOA
+  29: "followup", // Tratamiento con DAM: de los registros al seguimiento
+};
+
+/**
+ * One video recorded once per language arrives as separate resources (the
+ * George Gauge clip: 47 ES, 48 EN, 49 DE). Łukasz, NEO-151: show it once with
+ * all its flags. The first id is the entry's stable id; its default file and
+ * title follow the app locale's fallback chain, like every other resource.
+ */
+const LANGUAGE_TWINS: string[][] = [["47", "48", "49"]];
+
+export function mergeLanguageTwins(items: PartnerResourceItem[], locale: string): PartnerResourceItem[] {
+  const chain = (LOCALE_FALLBACK[locale] ?? LOCALE_FALLBACK.en).map((s) => s.toLowerCase());
+  const dropped = new Set<string>();
+  const merged = new Map<string, PartnerResourceItem>();
+  for (const group of LANGUAGE_TWINS) {
+    const members = group
+      .map((id) => items.find((i) => i.id === id))
+      .filter((i): i is PartnerResourceItem => Boolean(i));
+    if (members.length < 2) continue;
+    const rank = (m: PartnerResourceItem) =>
+      Math.min(99, ...m.languages.map((l) => chain.indexOf(l.code)).filter((n) => n >= 0));
+    const best = [...members].sort((a, b) => rank(a) - rank(b))[0]!;
+    merged.set(members[0]!.id, {
+      ...best,
+      id: members[0]!.id,
+      languages: members.flatMap((m) => m.languages),
+      weight: Math.min(...members.map((m) => m.weight)),
+    });
+    for (const m of members.slice(1)) dropped.add(m.id);
+  }
+  return items.filter((i) => !dropped.has(i.id)).map((i) => merged.get(i.id) ?? i);
+}
+
 export async function fetchResources(locale: string): Promise<PartnerResourceItem[]> {
   const rows = await fetchRawResources();
 
-  return rows
+  const items = rows
     .filter((row) => !row.deleted)
     .map((row): PartnerResourceItem => {
       const labels = RESOURCE_CATEGORY_BY_ID[row.id];
@@ -448,16 +563,18 @@ export async function fetchResources(locale: string): Promise<PartnerResourceIte
         category: labels?.category ?? UNKNOWN_CATEGORY,
         subcategory: labels?.subcategory ?? null,
         weight: row.weight,
+        ...(row.type === VIDEO_TYPE ? { topic: VIDEO_TOPIC_BY_ID[row.id] ?? "other" } : {}),
       };
     })
     .filter((item) => item.title) // no usable title in any language — not worth showing
     .sort((a, b) => a.weight - b.weight);
+  return mergeLanguageTwins(items, locale);
 }
 
 /** Resource id -> the video media path that actually worked, so repeat requests for the same video don't pay the two-path probe again. */
 const resolvedVideoPathCache = new Map<string, string>();
 
-async function tryVideoPaths(resourceId: string, filename: string): Promise<Response> {
+async function tryVideoPaths(resourceId: string, filename: string, init: RequestInit): Promise<Response> {
   const encoded = encodeURIComponent(filename);
   const cached = resolvedVideoPathCache.get(resourceId);
   const candidates = cached
@@ -466,7 +583,7 @@ async function tryVideoPaths(resourceId: string, filename: string): Promise<Resp
 
   let lastRes: Response | null = null;
   for (const path of candidates) {
-    const res = await authedFetch(path);
+    const res = await authedFetch(path, init);
     if (res.ok && res.body) {
       resolvedVideoPathCache.set(resourceId, path);
       return res;
@@ -488,11 +605,64 @@ async function tryVideoPaths(resourceId: string, filename: string): Promise<Resp
  * path confirmed (DOCUMENT_MEDIA_PATH); video path resolved via
  * tryVideoPaths (see its comment).
  */
+export interface ResourceMedia {
+  body: ReadableStream<Uint8Array>;
+  /** 200, or 206 when a `range` was asked for and honoured. */
+  status: number;
+  /** Only the headers a browser needs to play/seek — passed through as-is. */
+  headers: Record<"content-type" | "content-length" | "content-range" | "accept-ranges", string | null>;
+}
+
+function mediaFrom(res: Response): ResourceMedia {
+  const h = (name: keyof ResourceMedia["headers"]) => res.headers.get(name);
+  return {
+    body: res.body as ReadableStream<Uint8Array>,
+    status: res.status,
+    headers: {
+      "content-type": h("content-type"),
+      "content-length": h("content-length"),
+      "content-range": h("content-range"),
+      "accept-ranges": h("accept-ranges"),
+    },
+  };
+}
+
+/**
+ * Upper bound for one media response. Cloud Run rejects a non-streamed
+ * response over 32 MiB ("Response size was too large" → 500), and Chrome
+ * opens a `<video>` with `Range: bytes=0-` — i.e. "the whole 580 MB". A 206
+ * for a shorter slice is valid HTTP; the player just asks for the next one,
+ * and apneadock.es never streams more than a slice nobody may watch.
+ */
+export const MAX_MEDIA_SLICE_BYTES = 8 * 1024 * 1024;
+
+/** Caps a single `bytes=` range to MAX_MEDIA_SLICE_BYTES; anything else (no range, multi-range) passes through. */
+export function boundedRange(range: string | undefined): string | undefined {
+  if (!range) return range;
+  const open = /^bytes=(\d+)-(\d*)$/.exec(range.trim());
+  if (open) {
+    const start = Number(open[1]);
+    const lastAllowed = start + MAX_MEDIA_SLICE_BYTES - 1;
+    const end = open[2] === "" ? lastAllowed : Math.min(Number(open[2]), lastAllowed);
+    return `bytes=${start}-${end}`;
+  }
+  const suffix = /^bytes=-(\d+)$/.exec(range.trim());
+  if (suffix) return `bytes=-${Math.min(Number(suffix[1]), MAX_MEDIA_SLICE_BYTES)}`;
+  return range;
+}
+
+/**
+ * `range` is the browser's own Range header, capped by boundedRange(): webinars
+ * are hundreds of MB (id 26 is ~580 MB), Safari/iPadOS refuses to play
+ * `<video>` without 206 responses, and seeking must not re-download from
+ * byte 0. apneadock.es answers Range with 206 (verified 2026-09-25).
+ */
 export async function fetchResourceMedia(
   resourceId: string,
   locale: string,
-  lang?: string
-): Promise<{ body: ReadableStream<Uint8Array>; contentType: string | null }> {
+  lang?: string,
+  range?: string
+): Promise<ResourceMedia> {
   const rows = await fetchRawResources();
   const raw = rows.find((r) => String(r.id) === resourceId && !r.deleted);
   if (!raw) {
@@ -510,18 +680,55 @@ export async function fetchResourceMedia(
     );
   }
 
+  const upstreamRange = boundedRange(range);
+  const init: RequestInit = upstreamRange ? { headers: { Range: upstreamRange } } : {};
+
   if (raw.type === VIDEO_TYPE) {
-    const mediaRes = await tryVideoPaths(resourceId, filename);
-    return { body: mediaRes.body as ReadableStream<Uint8Array>, contentType: mediaRes.headers.get("content-type") };
+    return mediaFrom(await tryVideoPaths(resourceId, filename, init));
   }
 
   const mediaPath = `${DOCUMENT_MEDIA_PATH}/${encodeURIComponent(filename)}`;
-  const mediaRes = await authedFetch(mediaPath);
+  const mediaRes = await authedFetch(mediaPath, init);
   if (!mediaRes.ok || !mediaRes.body) {
     console.error(`[orthoapnea] document fetch failed with status ${mediaRes.status} for '${mediaPath}'`);
     throw new PartnerServiceError("orthoapnea", `media fetch failed with status ${mediaRes.status} for '${mediaPath}'`);
   }
-  return { body: mediaRes.body, contentType: mediaRes.headers.get("content-type") };
+  return mediaFrom(mediaRes);
+}
+
+/**
+ * Where a video really lives upstream, for server-side tools that need to
+ * seek in it themselves (the poster grabber, NEO-151). ffmpeg does its own
+ * Range requests, so it gets apneadock.es's URL plus the session header —
+ * both stay inside apps/api. `version` changes whenever OrthoApnea swaps the
+ * file (different name or size), so a cached poster is never stale.
+ */
+export interface VideoSource {
+  url: string;
+  headers: Record<string, string>;
+  version: string;
+}
+
+export async function resolveVideoSource(resourceId: string, locale: string): Promise<VideoSource> {
+  const rows = await fetchRawResources();
+  const raw = rows.find((r) => String(r.id) === resourceId && !r.deleted && r.type === VIDEO_TYPE);
+  if (!raw) throw new PartnerServiceError("orthoapnea", `video '${resourceId}' not found`);
+  const filename = pickLocalized(raw, "url", locale);
+  if (!filename) throw new PartnerServiceError("orthoapnea", `video '${resourceId}' has no file for locale '${locale}'`);
+
+  // One byte is enough to learn which folder serves it and the file's total size.
+  const probe = await tryVideoPaths(resourceId, filename, { headers: { Range: "bytes=0-0" } });
+  await probe.body?.cancel();
+  const total = /\/(\d+)$/.exec(probe.headers.get("content-range") ?? "")?.[1] ?? probe.headers.get("content-length") ?? "?";
+  const path = resolvedVideoPathCache.get(resourceId);
+  if (!path) throw new PartnerServiceError("orthoapnea", `video '${resourceId}' path not resolved`);
+
+  const { token } = await ensureSession();
+  return {
+    url: `${ORTHOAPNEA_BASE_URL}${path}`,
+    headers: { Authorization: `Bearer ${token}` },
+    version: `${filename}:${total}`,
+  };
 }
 
 // =============================================================================

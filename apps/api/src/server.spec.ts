@@ -6,8 +6,20 @@ describe("API server", () => {
   it("GET /health returns ok", async () => {
     const res = await request(app).get("/health");
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ ok: true });
+    expect(res.body).toEqual({ ok: true, commit: process.env.GIT_COMMIT || process.env.RENDER_GIT_COMMIT || null });
   });
+
+  it("GET /health/pdf renders a real PDF, then rate-limits after 3 calls a minute", async () => {
+    const first = await request(app).get("/health/pdf");
+    expect(first.status).toBe(200);
+    expect(first.body.ok).toBe(true);
+    expect(first.body.bytes).toBeGreaterThan(500);
+
+    await request(app).get("/health/pdf");
+    await request(app).get("/health/pdf");
+    const fourth = await request(app).get("/health/pdf");
+    expect(fourth.status).toBe(429);
+  }, 60_000);
 
   // Auth guard — unauthenticated requests should return 401
   // NOTE: routes live under /api/v1 (see server.ts) using singular resource
@@ -165,11 +177,67 @@ describe("API server", () => {
     expect(res.body).toHaveProperty("error");
   });
 
+  // Express 5 (body-parser 2) leaves req.body undefined when nothing was parsed;
+  // server.ts restores the Express 4 `{}` default. Without it, every handler that
+  // destructures `req.body as {...}` would 500 on a bodiless or non-JSON request.
+  describe("request body default (Express 5 migration)", () => {
+    it("POST /api/v1/auth/login with no body returns 400, not 500", async () => {
+      const res = await request(app).post("/api/v1/auth/login");
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ error: "Email and password are required.", code: "VALIDATION_ERROR", field: "email", reason: "required" });
+    });
+
+    it("POST /api/v1/auth/login with a non-JSON content type returns 400, not 500", async () => {
+      const res = await request(app).post("/api/v1/auth/login").set("Content-Type", "text/plain").send("hello");
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ error: "Email and password are required.", code: "VALIDATION_ERROR", field: "email", reason: "required" });
+    });
+
+    it("POST /api/v1/auth/forgot-password with no body returns 400, not 500", async () => {
+      const res = await request(app).post("/api/v1/auth/forgot-password");
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ error: "Email is required.", code: "VALIDATION_ERROR", field: "email", reason: "required" });
+    });
+  });
+
+  it("unknown route returns 404 without leaking internals", async () => {
+    const res = await request(app).get("/api/v1/does-not-exist");
+    expect(res.status).toBe(404);
+    expect(res.text).not.toMatch(/at .*\.js:\d+/);
+  });
+
+  it("rejected async handler reaches the JSON error middleware", async () => {
+    // An unusable questionnaire token makes the async handler throw an AppError
+    // (410 LINK_INVALID) after an await — it must come back as the JSON error shape.
+    const res = await request(app).post("/api/v1/public/questionnaire/lookup").send({ token: "not-a-real-token" });
+    expect(res.status).toBe(410);
+    expect(res.headers["content-type"]).toMatch(/application\/json/);
+    expect(res.body).toEqual({ error: "This link is no longer valid", code: "LINK_INVALID" });
+  });
+
+  it("global rate limiter sends standard RateLimit headers with the configured limit", async () => {
+    const res = await request(app).get("/api/v1/lead");
+    expect(res.headers["ratelimit-limit"]).toBe("1000");
+    expect(res.headers["x-ratelimit-limit"]).toBeUndefined();
+  });
+
   it("GET /api/v1/public/specialists is public", async () => {
     const res = await request(app).get("/api/v1/public/specialists");
     expect(res.status).not.toBe(401);
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty("specialists");
     expect(Array.isArray(res.body.specialists)).toBe(true);
+  });
+
+  it("GET /api/v1/public/specialists is briefly cacheable public data, still rate-limited (NEO-79)", async () => {
+    const res = await request(app).get("/api/v1/public/specialists");
+    expect(res.status).toBe(200);
+    expect(res.headers["cache-control"]).toBe("public, max-age=300, stale-while-revalidate=600");
+    expect(res.headers["ratelimit-limit"]).toBe("60");
+  });
+
+  it("other /api/v1 responses keep the no-store default (the public cache header is scoped to the specialists route)", async () => {
+    const res = await request(app).get("/api/v1/lead");
+    expect(res.headers["cache-control"]).toBe("no-store, private");
   });
 });

@@ -111,9 +111,79 @@ Track for certifications relevant to medical SaaS and pharma sales. Updated as r
 
 ---
 
+## 4. MDR — EU Medical Device Regulation 2017/745 (Manufacturer path — TRIGGERED)
+
+**Decision (2026-09-20):** NeoSleep will design and sell its own branded sleep/mandibular devices, not only resell third-party CE-marked devices.
+
+**What this changes:** Two separate MDR triggers exist and must be tracked separately —
+
+| Trigger | Status | Note |
+|---|---|---|
+| Own-brand physical device manufacturing | ✅ Triggered — 2026-09-20 decision | Makes NeoSleep the "manufacturer" under MDR Art. 2(30), independent of any software feature |
+| Software as a Medical Device (SaMD) — e.g. AI diagnosis/symptom scoring | ⬜ Not triggered | Revisit before building any clinical decision-support feature (see skill for trigger conditions) |
+
+Building the own-brand device is now a roadmap item, not a "watch and see" risk.
+
+### Companion standards required (manufacturer path)
+
+- [ ] **ISO 13485** — Quality Management System for medical device manufacturers. Near-mandatory prerequisite for MDR CE marking; get this gap-analyzed alongside ISO 27001 to share audit/documentation overhead.
+- [ ] **IEC 62304** — software lifecycle requirements, required if the device ships with embedded or companion software (firmware, companion app, Bluetooth pairing, etc.)
+- [ ] **ISO 14971** — risk management process for medical devices (hazard analysis, risk control, post-market surveillance)
+- [ ] Technical documentation file (MDR Annex II/III), UDI (Unique Device Identification) registration
+- [ ] Notified Body involvement — required for Class IIa and above; self-certification may be possible only for Class I
+
+### Action required
+
+- [ ] Classify the device (Class I / IIa / IIb) with an MDR regulatory consultant — this determines self-certification vs. Notified Body audit
+- [ ] Legal/regulatory scoping session before finalizing device specs or committing to a launch date
+- [ ] Do not use diagnostic/treatment language in marketing or product copy until device classification + CE marking is obtained
+- [ ] Budget and timeline for this track are materially larger than the software-only (SaMD) path — get consultant estimates before roadmap commitments
+
+---
+
+## 5. SOC 2 Type II (US market gate)
+
+**What it is:** Audit opinion (Type II = controls tested over an observation period, not a point-in-time snapshot) covering the AICPA Trust Service Criteria. US enterprises generally prefer this over ISO 27001.
+**When needed:** First US pharma client in scope, or first US-based device distribution partner.
+**Cost:** 30,000–80,000 USD; 6–12 month observation period + audit.
+**Status:** Not started.
+
+Prep now, cheaply:
+- [ ] All production access logged
+- [ ] All admin actions go through `audit_log`
+- [ ] Documented change management (PR → review → deploy)
+- [ ] Uptime monitoring + SLA tracking
+
+---
+
+## 6. HIPAA (US market gate)
+
+**Status:** Not applicable today — no US patients or providers in scope.
+**When needed:** First US pharma customer, or first US patient/device-user data enters the system.
+**Cost:** 50,000–150,000 USD.
+**Note:** Roughly 60% of controls overlap with ISO 27001; roughly 40% of the technical safeguards are satisfied as a side effect of FHIR Phase 2/3 (FHIR AuditEvent + SMART on FHIR) — see [docs/fhir-compliance.md](./fhir-compliance.md).
+
+---
+
+## 7. Additional standards to track
+
+Lower priority than the sections above — surface these when the relevant market/decision materializes, don't gap-analyze all at once.
+
+| Standard | What it covers | Why relevant to NeoSleep | Trigger |
+|---|---|---|---|
+| **ISO 27701 (PIMS)** | Privacy Information Management, extends ISO 27001 | Direct evidence of GDPR + LFPDPPP compliance in one certification; small marginal cost on top of the ISO 27001 program already planned | Bundle with ISO 27001 gap analysis (Q3 2026) |
+| **ISO 27018** | Protection of PII in public cloud | DB is hosted on Supabase (shared cloud infra) — pharma security questionnaires ask about this regardless of ISO 27001 status | Bundle with ISO 27001/27701 |
+| **HITRUST CSF** | US healthcare-specific security framework | Some large US healthcare orgs/payers require HITRUST instead of, or in addition to, SOC 2/HIPAA self-attestation | Evaluate at first US enterprise prospect — don't start speculatively |
+| **NOM-024-SSA3** | Mexican health information interoperability standard | MX is an **active** market (not just planned) — needs a legal check on whether this is mandatory for systems handling HCP/patient data in Mexico | Legal review — should happen soon, MX is live |
+| **PCI DSS** | Payment card data security | `purchase_order` handles patient payments via Stripe (`stripe_payment_intent_id`) — if card data never touches our backend (Stripe Checkout/Elements), scope is the lightweight SAQ-A; verify this assumption in the payment integration | Verify current Stripe integration flow now — cheap to confirm, expensive to discover wrong |
+
+---
+
 ## References
 
 - WCAG 2.1 Quick Reference: https://www.w3.org/WAI/WCAG21/quickref/
 - HONcode application: https://www.hon.ch/HONcode/Conduct.html
 - ISO 27001:2022 overview: https://www.iso.org/isoiec-27001-information-security.html
 - EU EAA (European Accessibility Act): https://ec.europa.eu/social/main.jsp?catId=1202
+- EU MDR 2017/745 overview: https://health.ec.europa.eu/medical-devices-sector_en
+- ISO 13485:2016 overview: https://www.iso.org/standard/59752.html

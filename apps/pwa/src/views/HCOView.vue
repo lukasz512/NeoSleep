@@ -36,13 +36,14 @@
       @add="onAddAccount"
     >
       <template #item.name="{ item }">
-        <span class="hco-name-cell">
-          <AppAvatar entity-type="hco" :org-type="(item as HCOListItem).type" :size="32" />
-          {{ (item as HCOListItem).name }}
-        </span>
-      </template>
-      <template #item.type="{ item }">
-        {{ hcoTypeLabel((item as HCOListItem).type) }}
+        <EntityLink
+          :to="null"
+          entity-type="hco"
+          :org-type="(item as HCOListItem).type"
+          :label="(item as HCOListItem).name"
+          :details="orgDetails(item as HCOListItem).details"
+          :avatar-size="32"
+        />
       </template>
       <template #item.region="{ item }">
         {{ (item as HCOListItem).territory_name || (item as HCOListItem).region || "—" }}
@@ -76,30 +77,31 @@
       </template>
     </AppEntityList>
 
-    <VDialog v-model="showDeleteConfirm" max-width="360" :transition="originDialogTransition" persistent>
-      <VCard>
-        <VCardText>{{ t("user.hco.detail.deleteConfirmText") }}</VCardText>
-        <VCardActions>
-          <VSpacer />
-          <AppButton variant="text" @click="showDeleteConfirm = false">
-            {{ t("app.common.cancel") }}
-          </AppButton>
-          <AppButton color="error" variant="text" :loading="deleteLoading" @click="onDelete">
-            {{ t("user.hco.detail.delete") }}
-          </AppButton>
-        </VCardActions>
-      </VCard>
-    </VDialog>
+    <AppConfirmDialog
+      v-model="showDeleteConfirm"
+      :text="t('user.hco.detail.deleteConfirmText')"
+      :secondary-label="t('app.common.cancel')"
+      :secondary-color="null"
+      :primary-label="t('user.hco.detail.delete')"
+      primary-color="error"
+      primary-variant="text"
+      :loading="deleteLoading"
+      max-width="360"
+      @secondary="showDeleteConfirm = false"
+      @primary="onDelete"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
+import { toEncounterBody } from "../utils/encounterMapping";
 import { computed, ref, defineAsyncComponent } from "vue";
-import { originDialogTransition } from "@ui";
 import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
 import AppAvatar from "../components/AppAvatar.vue";
-import AppButton from "../components/AppButton.vue";
+import EntityLink from "../components/EntityLink.vue";
+import { useIdentity } from "../composables/useIdentity";
+import AppConfirmDialog from "../components/AppConfirmDialog.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppListItemMenu from "../components/AppListItemMenu.vue";
 import { entityActionIcon, entityActionMenuIconClass } from "../config/entityActions";
@@ -135,6 +137,7 @@ interface HCOListItem {
 }
 
 const { t } = useI18n();
+const { orgDetails } = useIdentity();
 const configStore = useConfigStore();
 const notifications = useNotifications();
 const { submit } = useEntitySubmit();
@@ -182,7 +185,6 @@ const hcoFilterDefinitions = computed<FilterDefinition[]>(() => [
 
 const tableHeaders = computed(() => [
   { title: t("user.hco.table.name"), key: "name", sortable: true },
-  { title: t("user.hco.table.type"), key: "type", sortable: true },
   { title: t("user.hco.table.region"), key: "region", sortable: true },
 ]);
 
@@ -193,6 +195,7 @@ const hcoI18n = computed(() => ({
   add: "user.hco.add",
   emptyTitle: "user.hco.emptyTitle",
   emptySubtitle: "user.hco.emptySubtitle",
+  countNoun: "clinics" as const,
   noResultsForCriteria: "user.hco.noResultsForCriteria",
   noResultsForCriteriaSubtitle: "user.hco.noResultsForCriteriaSubtitle",
   tableNoResults: "user.hco.table.noResults",
@@ -221,6 +224,8 @@ async function onAccountSubmit(data: Record<string, unknown>, done: (ok: boolean
           body: JSON.stringify(data),
         }),
       successMessage: t("user.hco.form.success"),
+      openCreated: "hco-detail",
+      icon: "nav-hco",
       errorMessage: t("user.hco.form.errorSave"),
     },
     done,
@@ -246,7 +251,7 @@ const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
   if (res.ok) {
     showDeleteConfirm.value = false;
     deletingHcoId.value = null;
-    notifications.show(t("user.hco.detail.deleteSuccess"), "success");
+    notifications.show(t("user.hco.detail.deleteSuccess"), "success", undefined, { icon: "nav-hco" });
     window.dispatchEvent(new Event("entity-list-refresh"));
   }
 });
@@ -263,6 +268,7 @@ async function onEditSubmit(data: Record<string, unknown>, done: (ok: boolean) =
           body: JSON.stringify(data),
         }),
       successMessage: t("user.hco.form.editSuccess"),
+      icon: "nav-hco",
       errorMessage: t("user.hco.form.errorSave"),
     },
     done,
@@ -291,9 +297,10 @@ async function onEventFormSubmit(
         apiFetch("/api/v1/encounter", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: payload.title, start_at: payload.start_at, end_at: payload.end_at, type: payload.type, status: payload.status, location: payload.location, video_link: payload.video_link, notes: payload.notes, region: payload.region, attendees: payload.attendees }),
+          body: JSON.stringify(toEncounterBody(payload)),
         }),
       successMessage: t("user.planner.form.success"),
+      icon: "nav-planner",
       errorMessage: t("user.planner.form.errorSave"),
       refresh: false,
     },
@@ -303,10 +310,5 @@ async function onEventFormSubmit(
 </script>
 
 <style scoped>
-.hco-name-cell {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
 </style>
 

@@ -40,18 +40,42 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # API_URL_PROD / API_URL_DEV point at the Cloud Run services (NEO-45). Until
+      # they are set, the old RENDER_API_URL_* secrets are used, so switching the
+      # frontend over (or rolling back to Render) is just changing a secret and
+      # re-running this workflow. See docs/RUNBOOK_API_CLOUD_RUN.md.
       - name: Set API URL for build
         run: |
           if [ "${{ github.ref }}" = "refs/heads/prod" ]; then
-            echo "VITE_API_URL=${{ secrets.RENDER_API_URL_PROD }}" >> $GITHUB_ENV
+            echo "VITE_API_URL=${{ secrets.API_URL_PROD || secrets.RENDER_API_URL_PROD }}" >> $GITHUB_ENV
             echo "VITE_GA_ID=${{ secrets.VITE_GA_ID_PROD }}" >> $GITHUB_ENV
           else
-            echo "VITE_API_URL=${{ secrets.RENDER_API_URL_DEV }}" >> $GITHUB_ENV
+            echo "VITE_API_URL=${{ secrets.API_URL_DEV || secrets.RENDER_API_URL_DEV }}" >> $GITHUB_ENV
             echo "VITE_GA_ID=${{ secrets.VITE_GA_ID_DEV }}" >> $GITHUB_ENV
           fi
 
+      # Shown under the login badge as "Version <package.json version> (build N)".
+      # N = this workflow's run number minus BUILD_BASE, so numbering started at 1
+      # with NEO-12 (run 114 was the last deploy before it). Never lower
+      # BUILD_BASE — build numbers must only ever go up.
+      - name: Set app build number and channel
+        env:
+          BUILD_BASE: 114
+        run: |
+          echo "VITE_APP_BUILD=$(( ${{ github.run_number }} - BUILD_BASE ))" >> $GITHUB_ENV
+          if [ "${{ github.ref }}" = "refs/heads/prod" ]; then
+            echo "VITE_APP_CHANNEL=prod" >> $GITHUB_ENV
+          else
+            echo "VITE_APP_CHANNEL=dev" >> $GITHUB_ENV
+          fi
+
+      # VITE_GOOGLE_MAPS_BROWSER_API_KEY powers the HCO location map
+      # (components/HCOLocationMap.vue). HTTP-referrer-restricted to the PWA/website
+      # domains, so it is safe in the bundle. Without it the map never loads.
       - name: Build rep-app
         run: pnpm run build:pwa
+        env:
+          VITE_GOOGLE_MAPS_BROWSER_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_BROWSER_API_KEY }}
 
       - name: Deploy to PROD (pwa.neosleepcare.com)
         if: github.ref == 'refs/heads/prod'

@@ -13,7 +13,9 @@ export function useWebsiteLocale() {
   i18n.locale.value = locale;
     try {
       localStorage.setItem(STORAGE_KEY, locale);
-    } catch (_) {}
+    } catch {
+      // benign: storage unavailable (privacy mode) — the choice just won't persist.
+    }
   }
 
   return {

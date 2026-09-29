@@ -3,9 +3,12 @@ import {
   getPractitionerPaginated,
   getPractitionerById,
   getTerritoryPath,
+  getOrganizationAffiliations,
+  getUserPrimaryOrganizationId,
   type GetPractitionerFilters,
   type Practitioner,
   type TerritoryPathNode,
+  type OrganizationAffiliation,
 } from "../db.js";
 import { formatDisplayName } from "../utils/personName.js";
 import { getAllowedScopePaths, assertTerritoryAccessByTerritoryId } from "../middleware/requireScope.js";
@@ -31,6 +34,9 @@ export interface PractitionerDto {
   // primary_specialty is the canonical field; specialty is the legacy alias
   primary_specialty: string;
   specialty: string;
+  /** Every specialty the practitioner has (lookup keys); the PWA shows the
+   *  primary one and lists the rest in a "+N" tooltip (NEO-57). */
+  specialties: string[];
   organization_id: string | null;
   institution: string;
   region: string;
@@ -47,9 +53,21 @@ export interface PractitionerDto {
   social_links: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
+  /** Only populated on the single-record GetPractitionerByIdQuery (same
+   *  no-N+1-on-the-list-query reasoning as territory_path above). */
+  organizations: OrganizationAffiliation[] | null;
+  /** The CALLING rep's own primary clinic for this practitioner
+   *  (practitioner_assignment.primary_org_id) — null for admin/manager, who
+   *  have no personal assignment row by design. See docs/stories/pwa-medico-view.md. */
+  my_primary_organization_id: string | null;
 }
 
-function toDto(p: Practitioner, territoryPath: TerritoryPathNode[] | null = null): PractitionerDto {
+function toDto(
+  p: Practitioner,
+  territoryPath: TerritoryPathNode[] | null = null,
+  organizations: OrganizationAffiliation[] | null = null,
+  myPrimaryOrganizationId: string | null = null
+): PractitionerDto {
   const name = formatDisplayName(p);
   return {
     id:                p.id,
@@ -61,6 +79,7 @@ function toDto(p: Practitioner, territoryPath: TerritoryPathNode[] | null = null
     phone:             p.phone ?? "",
     primary_specialty: p.primary_specialty ?? "",
     specialty:         p.primary_specialty ?? "",  // legacy alias
+    specialties:       p.specialties ?? [],
     organization_id:   p.organization_id ?? null,
     institution:       p.institution ?? "",
     region:            p.region,
@@ -74,6 +93,8 @@ function toDto(p: Practitioner, territoryPath: TerritoryPathNode[] | null = null
     social_links:      p.social_links ?? null,
     created_at:        p.created_at instanceof Date ? p.created_at.toISOString() : String(p.created_at),
     updated_at:        p.updated_at instanceof Date ? p.updated_at.toISOString() : String(p.updated_at),
+    organizations:     organizations,
+    my_primary_organization_id: myPrimaryOrganizationId,
   };
 }
 
@@ -121,6 +142,63 @@ export async function GetPractitionerListQuery(
 }
 
 // ---------------------------------------------------------------------------
+// QUERY: ORGANIZATION'S PRACTITIONERS WITH STATS (HCO "Médicos" tab, NEO-14)
+// ---------------------------------------------------------------------------
+
+export interface PractitionerWithStatsDto extends PractitionerDto {
+  patient_count: number;
+  device_count: number;
+  /** device_count / patient_count as a rounded %, null when the doctor has no patients. */
+  efficiency_pct: number | null;
+}
+
+export interface GetOrganizationPractitionersInput {
+  organizationId: string;
+  search?: string;
+  specialty?: string | string[];
+  page?: number;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: "asc" | "desc";
+}
+
+/**
+ * Doctors of one clinic (primary organization_id OR a practitioner_organization
+ * affiliation), each with patient/device counts. What each count includes:
+ * docs/stories/hco-medicos-table.md.
+ */
+export async function GetOrganizationPractitionersQuery(
+  ctx: TenantContext,
+  input: GetOrganizationPractitionersInput
+): Promise<{ items: PractitionerWithStatsDto[]; total: number }> {
+  const filters: GetPractitionerFilters = {
+    search:          input.search,
+    specialty:       input.specialty,
+    organization_id: input.organizationId,
+    scopePaths:      await getAllowedScopePaths(ctx.client, ctx.user.roles),
+    includeStats:    true,
+  };
+
+  const { rows, total } = await getPractitionerPaginated(
+    ctx.client,
+    filters,
+    input.page ?? 1,
+    input.limit ?? 50,
+    input.sortBy ?? "name",
+    input.sortOrder ?? "asc"
+  );
+  return {
+    items: rows.map((row) => ({
+      ...toDto(row),
+      patient_count:  row.patient_count ?? 0,
+      device_count:   row.device_count ?? 0,
+      efficiency_pct: row.efficiency_pct ?? null,
+    })),
+    total,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // QUERY: GET BY ID
 // ---------------------------------------------------------------------------
 
@@ -132,5 +210,11 @@ export async function GetPractitionerByIdQuery(
   if (!practitioner) return null;
   await assertTerritoryAccessByTerritoryId(ctx, practitioner.territory_id);
   const territoryPath = practitioner.territory_id ? await getTerritoryPath(ctx.client, practitioner.territory_id) : null;
-  return toDto(practitioner, territoryPath);
+  const organizations = await getOrganizationAffiliations(ctx.client, id);
+  // Only a rep has a personal practitioner_assignment row by design — see
+  // PractitionerDto.my_primary_organization_id's own doc comment.
+  const myPrimaryOrganizationId = ctx.user.role === "rep"
+    ? await getUserPrimaryOrganizationId(ctx.client, id, ctx.user.id)
+    : null;
+  return toDto(practitioner, territoryPath, organizations, myPrimaryOrganizationId);
 }

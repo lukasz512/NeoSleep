@@ -16,7 +16,7 @@ async function login(page: Page): Promise<void> {
   await page.getByLabel("Email", { exact: true }).fill(EMAIL);
   await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await page.waitForURL("**/dashboard");
+  await page.waitForURL("**/leads");
 }
 
 // Pure app logic (form validation, error display) — not browser-engine-dependent,
@@ -24,9 +24,9 @@ async function login(page: Page): Promise<void> {
 test.describe("login form", () => {
   test.skip(({ browserName }) => browserName !== "chromium", "app logic only, not browser-engine-dependent");
 
-  test("happy path reaches the dashboard", async ({ page }) => {
+  test("happy path reaches the rep home (leads)", async ({ page }) => {
     await login(page);
-    await expect(page).toHaveURL(/\/dashboard/);
+    await expect(page).toHaveURL(/\/leads/);
   });
 
   test("wrong password shows an error and stays on /login", async ({ page }) => {
@@ -48,9 +48,9 @@ test.describe("session persistence across a real reload", () => {
     await login(page);
     await page.reload();
     // A broken silent-refresh would bounce back to /login instead — the URL
-    // check alone is the real assertion; nothing on /dashboard renders a
+    // check alone is the real assertion; nothing on /leads renders a
     // role="alert" at all, so there's no login-error element to check here.
-    await expect(page).toHaveURL(/\/dashboard/);
+    await expect(page).toHaveURL(/\/leads/);
   });
 });
 
@@ -59,17 +59,23 @@ test.describe("back/forward navigation (bfcache)", () => {
     await login(page);
     await page.goto("/login"); // any other in-app navigation would do
     await page.goBack();
-    await expect(page).toHaveURL(/\/dashboard/);
+    await expect(page).toHaveURL(/\/leads/);
     // A page restored from bfcache with a dead in-memory token reference would
     // still show the URL as authenticated but fail the next real API call —
     // force one via a reload-independent action: a fresh navigation attempt.
-    await page.goto("/dashboard");
-    await expect(page).toHaveURL(/\/dashboard/);
+    await page.goto("/leads");
+    await expect(page).toHaveURL(/\/leads/);
   });
 });
 
 test.describe("logout is per-device", () => {
   test("logging out in one browser context does not affect a second concurrent session", async ({ browser }) => {
+    // Two full logins + a logout + a reload against the unbundled Vite dev
+    // server: on CI's Linux WebKit, under the parallel load of the rest of the
+    // suite, that sometimes doesn't fit in the default 30 s (flaky on dev too,
+    // e.g. run 36126093961; failed outright on NEO-56's larger suite, always
+    // in the final reload's "load" wait). test.slow() triples the budget.
+    test.slow();
     const contextA = await browser.newContext();
     const contextB = await browser.newContext();
     const pageA = await contextA.newPage();
@@ -79,14 +85,19 @@ test.describe("logout is per-device", () => {
     await login(pageB);
 
     // Logout in A: open the user menu (AppLayout.vue's .layout-user-btn), then
-    // click "Log out" (AppUserMenuPanel.vue, i18n key user.settings.logOut).
+    // click the logout icon button (AppUserMenuPanel.vue, i18n key
+    // user.settings.logOut). NEO-9 made this an icon-only VBtn wrapped in a
+    // VTooltip — the tooltip's own overlay also contains the text "Log out"
+    // but stays hidden until hovered, so getByText matched that instead of
+    // the button and failed with "element is not visible". The button's
+    // accessible name (its aria-label) is the only reliable way to target it.
     await pageA.locator(".layout-user-btn").click();
-    await pageA.getByText("Log out").click();
+    await pageA.getByRole("button", { name: "Log out" }).click();
     await pageA.waitForURL("**/login");
 
     // B must still be able to reload and stay authenticated.
     await pageB.reload();
-    await expect(pageB).toHaveURL(/\/dashboard/);
+    await expect(pageB).toHaveURL(/\/leads/);
 
     await contextA.close();
     await contextB.close();

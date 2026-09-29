@@ -1,5 +1,6 @@
 import type { FormFieldDef } from "../../types/formField";
 import { emailField } from "./identityFields";
+import { licenseNumberFields } from "./licenseNumberFields";
 
 /**
  * "Invite to collaborate" confirmation form — shown before sending a doctor-
@@ -27,4 +28,14 @@ export const partnerInviteFormFields: FormFieldDef[] = [
     cols: 6,
   },
   emailField(),
+  // Optional here — prefilled from the lead when known; the doctor confirms or
+  // enters it on the registration page, where it's required (NEO-51).
+  ...licenseNumberFields({ nestUnder: "national_ids" }),
+  {
+    // Drives which licence field is shown; set from the lead by the host view.
+    key: "region",
+    type: "text",
+    labelKey: "user.leads.form.region",
+    hidden: true,
+  },
 ];

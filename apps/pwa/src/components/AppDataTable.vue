@@ -11,9 +11,9 @@
       >
         <template #bottom></template>
       </VDataTable>
-      <VAlert v-if="items.length === 0 && noResultsText" type="info" variant="tonal" density="comfortable" class="app-data-table__empty">
+      <AppInlineAlert v-if="items.length === 0 && noResultsText" type="info" class="app-data-table__empty">
         {{ noResultsText }}
-      </VAlert>
+      </AppInlineAlert>
     </div>
 
     <!-- Mobile: feed of cards -->
@@ -24,16 +24,16 @@
         variant="outlined"
         class="app-data-table__card"
       >
-        <VCardTitle class="text-body-1 font-weight-medium">
+        <VCardTitle class="text-body-large font-weight-medium">
           {{ getItemCell(item, titleKey) }}
         </VCardTitle>
-        <VCardSubtitle v-if="metaKeys.length" class="text-caption text-medium-emphasis">
+        <VCardSubtitle v-if="metaKeys.length" class="text-body-small text-medium-emphasis">
           {{ formatMeta(item) }}
         </VCardSubtitle>
       </VCard>
-      <VAlert v-if="items.length === 0 && noResultsText" type="info" variant="tonal" density="comfortable" class="app-data-table__empty">
+      <AppInlineAlert v-if="items.length === 0 && noResultsText" type="info" class="app-data-table__empty">
         {{ noResultsText }}
-      </VAlert>
+      </AppInlineAlert>
     </div>
   </div>
 </template>
@@ -41,6 +41,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useDisplay } from "vuetify";
+import { AppInlineAlert } from "@ui";
 
 const { mobile } = useDisplay();
 
@@ -86,7 +87,11 @@ function formatMeta(item: object): string {
 .app-data-table__table-wrap {
   overflow-x: auto;
   border-radius: var(--pwa-radius);
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  /* --pwa-table-border (theme.scss): shared with AppEntityList's table-wrap
+     and RelatedEntityPanel's item dividers, was Vuetify's generic
+     --v-border-color here — a different gray from the rest of the app's
+     tables. */
+  border: 1px solid var(--pwa-table-border);
 }
 
 .app-data-table__table {

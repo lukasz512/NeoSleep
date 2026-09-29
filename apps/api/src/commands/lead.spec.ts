@@ -69,4 +69,19 @@ describe("CreateLeadCommand", () => {
       }
     });
   });
+
+  it("stores a known channel as source and rejects anything else (NEO-155)", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+
+      const lead = await CreateLeadCommand(ctx, {
+        first_name: "Ana", last_name: "Channel", type: "patient", source: " WhatsApp ", metadata: {},
+      });
+      expect(lead.source).toBe("whatsapp");
+
+      await expect(
+        CreateLeadCommand(ctx, { first_name: "Ana", last_name: "Channel", type: "patient", source: "fax", metadata: {} }),
+      ).rejects.toThrow(ValidationError);
+    });
+  });
 });

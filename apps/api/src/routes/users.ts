@@ -7,7 +7,7 @@ import { CreateUserCommand, UpdateUserCommand, DeleteUserCommand, ResetUserPassw
 import { GetUserListQuery, GetUserByIdQuery } from "../queries/users.js";
 import { GetUserDocumentsQuery, GetUserDocumentDownloadUrlQuery } from "../queries/documents.js";
 import { ValidationError } from "../errors.js";
-import { parsePaginationParams, toFilterArray } from "./utils.js";
+import { parsePaginationParams, toFilterArray, routeParam } from "./utils.js";
 import type { StaffRole } from "../db.js";
 import { resolveFrontendOrigin } from "../utils/frontendOrigin.js";
 
@@ -52,7 +52,7 @@ usersRouter.get(
   "/users/:id",
   requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing user id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -106,7 +106,7 @@ usersRouter.patch(
   "/users/:id",
   requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing user id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -141,7 +141,7 @@ usersRouter.post(
   "/users/:id/reset-password",
   requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing user id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -161,7 +161,7 @@ usersRouter.get(
   "/users/:id/documents",
   requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing user id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -180,8 +180,8 @@ usersRouter.get(
   "/users/:id/documents/:documentId/download",
   requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
-    const documentId = req.params.documentId?.trim();
+    const id = routeParam(req, "id")?.trim();
+    const documentId = routeParam(req, "documentId")?.trim();
     if (!id || !documentId) throw new ValidationError("Missing user id or document id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -201,7 +201,7 @@ usersRouter.delete(
   "/users/:id",
   requireRole("admin"),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing user id");
 
     const slug = tenantSlugFromHost(req.hostname);

@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "grammy": "^1.46.0",
-    "openai": "^4.104.0"
+    "openai": "^7.23.0"
   },
   "devDependencies": {
     "@types/node": "catalog:",

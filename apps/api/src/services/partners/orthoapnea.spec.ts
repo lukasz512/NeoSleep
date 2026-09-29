@@ -44,7 +44,7 @@ describe("checkConnection", () => {
   it("reports not connected, without calling fetch, when credentials aren't configured", async () => {
     const { checkConnection } = await importService(false);
     const status = await checkConnection();
-    expect(status).toEqual({ connected: false, attemptsExhausted: false });
+    expect(status).toEqual({ connected: false, attemptsExhausted: false, reason: "not_configured" });
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -74,7 +74,7 @@ describe("checkConnection", () => {
         vi.advanceTimersByTime(16_000);
         status = await checkConnection();
       }
-      expect(status).toEqual({ connected: false, attemptsExhausted: true });
+      expect(status).toEqual({ connected: false, attemptsExhausted: true, reason: "credentials_rejected" });
     } finally {
       vi.useRealTimers();
     }

@@ -16,11 +16,9 @@
       avatar-entity-type="hco"
       @submit="onAccountSubmit"
     />
-    <VAlert
+    <AppInlineAlert
       v-if="isOffline"
       type="warning"
-      variant="tonal"
-      density="compact"
       class="view-detail__offline-banner"
       :text="t('app.common.offlineShowingCached')"
     />
@@ -28,28 +26,26 @@
     :has-content="!!hco"
     :loading="loading"
     :load-error="loadFailed"
+    :load-error-cause="loadFailure"
     :back-route="{ name: 'hco' }"
     :back-label="t('user.hco.detail.back')"
+    :record-title="hco?.name ?? ''"
     :not-found-label="t('user.hco.detail.notFound')"
     @retry="loadHCO"
   >
-    <template #title v-if="hco">
-      <span class="view-item__title-wrap hco-title-row">
-        <span class="view-item__title-wrap">
-          <AppAvatar entity-type="hco" :org-type="hco.type" :size="40" />
-          <h1 class="view-item__title">{{ hco.name }}</h1>
-        </span>
-        <span class="hco-title-row__badges">
-          <VChip :color="hcoTypeColor(hco.type)" size="large" variant="tonal">
-            {{ hcoTypeLabel(hco.type) }}
-          </VChip>
-          <VChip :color="hcoStatusColor(hco.status)" size="large" variant="tonal">
-            {{ hcoStatusLabel(hco.status) }}
-          </VChip>
-        </span>
-      </span>
+    <template v-if="hco" #record-tile>
+      <AppAvatar :name="hco.name" entity-type="hco" :org-type="hco.type" :size="48" />
     </template>
-    <template #header-actions v-if="hco">
+    <template v-if="hco" #title-extra>
+      <!-- Type now lives in the identity line; status stays a badge next to the name. -->
+      <VChip :color="hcoStatusColor(hco.status)" size="small" variant="tonal">
+        {{ hcoStatusLabel(hco.status) }}
+      </VChip>
+    </template>
+    <template v-if="hco" #record-details>
+      <IdentityDetails :details="orgDetails(hco, { withCity: true }).details" />
+    </template>
+    <template v-if="hco" #header-actions>
       <VTooltip location="bottom">
         <template #activator="{ props: tooltipProps }">
           <AppButton
@@ -99,7 +95,7 @@
         <span>{{ t('user.hco.detail.delete') }}</span>
       </VTooltip>
     </template>
-    <template #sections v-if="hco">
+    <template v-if="hco" #sections>
       <DetailViewTabs v-model="activeTab" :tabs="hcoTabs">
         <template #details>
           <div class="hco-details-layout">
@@ -182,11 +178,7 @@
           <PatientNotesPanel entity-type="organization" :entity-id="hco.id" />
         </template>
         <template #relatedDoctors>
-          <RelatedEntityPanel
-            :endpoint="`/api/v1/practitioner?organization_id=${hco.id}&limit=-1`"
-            detail-route-name="hcp-detail"
-            :empty-label="t('user.hco.detail.relatedDoctorsEmpty')"
-          />
+          <OrganizationPractitionersPanel :organization-id="hco.id" />
         </template>
         <template #documents>
           <EntityDocumentsPanel :endpoint="`/api/v1/organization/${hco.id}/documents`" />
@@ -198,26 +190,26 @@
     </template>
   </ItemDetailLayout>
 
-  <VDialog v-model="showDeleteConfirm" max-width="360" :transition="originDialogTransition" persistent>
-    <VCard>
-      <VCardText>{{ t("user.hco.detail.deleteConfirmText") }}</VCardText>
-      <VCardActions>
-        <VSpacer />
-        <AppButton variant="text" @click="showDeleteConfirm = false">
-          {{ t("app.common.cancel") }}
-        </AppButton>
-        <AppButton color="error" variant="text" :loading="deleteLoading" @click="onDelete">
-          {{ t("user.hco.detail.delete") }}
-        </AppButton>
-      </VCardActions>
-    </VCard>
-  </VDialog>
+  <AppConfirmDialog
+    v-model="showDeleteConfirm"
+    :text="t('user.hco.detail.deleteConfirmText')"
+    :secondary-label="t('app.common.cancel')"
+    :secondary-color="null"
+    :primary-label="t('user.hco.detail.delete')"
+    primary-color="error"
+    primary-variant="text"
+    :loading="deleteLoading"
+    max-width="360"
+    @secondary="showDeleteConfirm = false"
+    @primary="onDelete"
+  />
   </div>
 </template>
 
 <script setup lang="ts">
+import { toEncounterBody } from "../utils/encounterMapping";
+import { isOfflineError, reportCaught, reportFailedResponse } from "@api";
 import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
-import { originDialogTransition } from "@ui";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { usePermissions } from "../composables/usePermissions";
@@ -229,22 +221,24 @@ import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import AppButton from "../components/AppButton.vue";
+import AppConfirmDialog from "../components/AppConfirmDialog.vue";
 import AppAvatar from "../components/AppAvatar.vue";
+import IdentityDetails from "../components/IdentityDetails.vue";
+import { useIdentity } from "../composables/useIdentity";
 import AppIcon from "../components/AppIcon.vue";
 import DetailViewTabs from "../components/DetailViewTabs.vue";
 import EntityHistoryPanel from "../components/EntityHistoryPanel.vue";
-import RelatedEntityPanel from "../components/RelatedEntityPanel.vue";
+import OrganizationPractitionersPanel from "../components/practitioner/OrganizationPractitionersPanel.vue";
 import EntityDocumentsPanel from "../components/EntityDocumentsPanel.vue";
 import HCOLocationMap from "../components/HCOLocationMap.vue";
 import PatientNotesPanel from "../components/patient/PatientNotesPanel.vue";
 import { hcoFormFields } from "../config/forms/hcoForm";
 import { entityActionIcon, entityActionBtnClass } from "../config/entityActions";
 import {
-  hcoTypeLabel as hcoTypeLabelFor,
   hcoStatusLabel as hcoStatusLabelFor,
-  hcoTypeColor,
   hcoStatusColor,
 } from "../utils/hcoLabels";
+import { AppInlineAlert } from "@ui";
 
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
@@ -275,6 +269,7 @@ interface HCO {
 }
 
 const { t } = useI18n();
+const { orgDetails } = useIdentity();
 const route = useRoute();
 const router = useRouter();
 const notifications = useNotifications();
@@ -293,9 +288,6 @@ watch(activeTab, (tab) => {
   router.replace({ query: { ...route.query, tab } });
 });
 
-function hcoTypeLabel(type?: string): string {
-  return hcoTypeLabelFor(t, type);
-}
 function hcoStatusLabel(status?: string): string {
   return hcoStatusLabelFor(t, status);
 }
@@ -319,6 +311,8 @@ const loading = ref(true);
 const isOffline = ref(false);
 /** True when loadHCO() failed for a reason other than a genuine 404 (network/server) — see loadHCO(). */
 const loadFailed = ref(false);
+/** The error behind loadFailed (NEO-81) — lets the error state say offline vs. server problem. */
+const loadFailure = ref<unknown>(null);
 const showEditModal = ref(false);
 const showDeleteConfirm = ref(false);
 const showEventForm = ref(false);
@@ -348,20 +342,11 @@ async function onEventFormSubmit(
         apiFetch("/api/v1/encounter", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: payload.title,
-            start_at: payload.start_at,
-            end_at: payload.end_at,
-            type: payload.type,
-            status: payload.status,
-            location: payload.location,
-            video_link: payload.video_link,
-            notes: payload.notes,
-            region: payload.region,
-            attendees: payload.attendees,
-          }),
+          body: JSON.stringify(toEncounterBody(payload)),
         }),
       successMessage: t("user.planner.form.success"),
+      icon: "nav-planner",
+      context: hco.value?.name,
       errorMessage: t("user.planner.form.errorSave"),
       refresh: false,
     },
@@ -381,7 +366,7 @@ const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
   });
   if (res.ok) {
     showDeleteConfirm.value = false;
-    notifications.show(t("user.hco.detail.deleteSuccess"), "success");
+    notifications.show(t("user.hco.detail.deleteSuccess"), "success", undefined, { icon: "nav-hco", context: hco.value?.name });
     window.dispatchEvent(new Event("entity-list-refresh"));
     router.push({ name: "hco" });
   }
@@ -399,6 +384,8 @@ async function onAccountSubmit(data: Record<string, unknown>, done: (ok: boolean
           body: JSON.stringify(data),
         }),
       successMessage: t("user.hco.form.editSuccess"),
+      icon: "nav-hco",
+      context: hco.value?.name,
       errorMessage: t("user.hco.form.errorSave"),
       onSuccess: () => loadHCO(),
     },
@@ -425,11 +412,15 @@ async function loadHCO() {
       // Not a genuine 404 — ItemDetailLayout renders its own "connection
       // problem" + retry state for this (see :load-error), so no separate
       // toast on top of it.
+      loadFailure.value = await reportFailedResponse(res, { where: "HCODetailView.load", path: "/api/v1/organization/:id" });
       loadFailed.value = true;
     }
-  } catch {
-    // Network failure, not a server error — fall back to the cached record if we have one.
-    const cached = await hcoCache.readOne(id);
+  } catch (err) {
+    reportCaught(err, { where: "HCODetailView.load" });
+    loadFailure.value = err;
+    // Only a request that never reached the server may fall back to the cached record (ADR-013) —
+    // a bad response or a bug shows the real error instead of stale data.
+    const cached = isOfflineError(err) ? await hcoCache.readOne(id) : null;
     if (cached) {
       hco.value = cached as unknown as HCO;
       isOffline.value = true;
@@ -457,18 +448,7 @@ watch(() => route.params.id, loadHCO);
   gap: 8px;
 }
 
-.hco-title-row {
-  width: 100%;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
-}
 
-.hco-title-row__badges {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
 
 .hco-specialties {
   display: flex;

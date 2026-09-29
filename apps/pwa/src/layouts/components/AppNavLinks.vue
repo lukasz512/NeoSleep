@@ -69,18 +69,20 @@ const { unreadCount } = useNotificationCenter();
    default spacing — this extra breathing room only applies when the sidebar
    is fully expanded. */
 .layout-app__nav--expanded {
-  padding: 12px 8px 0;
+  padding: 12px var(--layout-nav-inset, 8px) 0;
 }
 
+/* Both insets are AppLayout's shell edge tokens — the logo in the app bar
+   is aligned to the icon edge they produce. */
 .layout-app__nav-list :deep(.v-list-item) {
   min-height: unset;
-  padding: 8px 10px;
+  padding: 8px var(--layout-nav-item-inset, 10px);
 }
 
 .layout-app__nav-list :deep(.v-list-item__prepend) {
-  margin-inline-end: 10px;
+  margin-inline-end: var(--layout-nav-icon-gap, 10px);
   opacity: 1;
-  min-width: 20px;
+  min-width: var(--layout-nav-icon-size, 20px);
   flex-shrink: 0;
 }
 

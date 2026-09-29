@@ -21,10 +21,9 @@
       avatar-entity-type="hcp"
       @submit="onEditSubmit"
     />
-    <EventForm
-      v-model="showEventForm"
-      :initial-data="eventFormInitial"
-      @submit="onEventFormSubmit"
+    <AppointmentDialog
+      v-model="showAppointmentDialog"
+      :practitioner="appointmentPractitioner"
     />
     <!-- Reps still add HCPs only through the lead -> invite-to-partner / move-to-doctors pipeline (see LeadDetailView.vue) -->
     <AppEntityList
@@ -39,38 +38,49 @@
       @add="onAddContact"
     >
     <template #item.name="{ item }">
-      <span class="hcp-name-cell">
-        <AppAvatar :name="(item as HCPListItem).name" :first-name="(item as HCPListItem).first_name" :last-name="(item as HCPListItem).last_name" entity-type="hcp" :size="32" />
-        {{ (item as { name?: string }).name }}
-      </span>
-    </template>
-    <template #item.specialty="{ item }">
-      {{ specialtyLabel((item as HCPListItem).specialty) }}
+      <EntityLink
+        :to="null"
+        entity-type="hcp"
+        :specialty="(item as HCPListItem).specialty"
+        :label="(item as HCPListItem).name"
+        :first-name="(item as HCPListItem).first_name"
+        :last-name="(item as HCPListItem).last_name"
+        :details="doctorDetails(item as HCPListItem).details"
+        :more-details="doctorDetails(item as HCPListItem).more"
+        :avatar-size="32"
+      />
     </template>
     <template #item.institution="{ item }">
-      <EntityLink
-        :to="(item as HCPListItem).organization_id ? { name: 'hco-detail', params: { id: (item as HCPListItem).organization_id } } : null"
-        :label="(item as HCPListItem).institution"
-      />
+      <EntityLink :to="hcoDetailLink((item as HCPListItem).organization_id)" :label="(item as HCPListItem).institution" />
     </template>
     <template #item.region="{ item }">
       {{ (item as HCPListItem).territory_name || (item as HCPListItem).region || "—" }}
     </template>
     <template #feed-card-avatar="{ item }">
-      <AppAvatar :name="(item as HCPListItem).name" :first-name="(item as HCPListItem).first_name" :last-name="(item as HCPListItem).last_name" entity-type="hcp" :size="55" />
+      <AppAvatar v-bind="personAvatarProps(item as HCPListItem)" entity-type="hcp" :specialty="(item as HCPListItem).specialty" :size="55" />
     </template>
     <template #feed-card-title="{ item }">
-      <span class="hcp-name-cell">
-        {{ (item as { name?: string }).name }}
-      </span>
+      {{ shortPersonName((item as HCPListItem).name, (item as HCPListItem).first_name, (item as HCPListItem).last_name) }}
     </template>
     <template #feed-card-meta="{ item }">
-      {{ specialtyLabel((item as HCPListItem).specialty) }}
+      <EntityMetaLine
+        :text="hcpCardMeta(item as HCPListItem)"
+        :to="hcoDetailLink((item as HCPListItem).organization_id)"
+        :label="(item as HCPListItem).institution"
+      />
+    </template>
+    <template #feed-card-status="{ item }">
+      <VChip size="x-small" variant="tonal" color="primary" class="hcp-specialty-chip">
+        <template #prepend>
+          <AppIcon :name="practitionerSpecialtyIcon((item as HCPListItem).specialty)" class="hcp-specialty-chip__icon" />
+        </template>
+        {{ specialtyLabel((item as HCPListItem).specialty) }}
+      </VChip>
     </template>
     <template #feed-card-actions="{ item }">
       <AppListItemMenu :aria-label="t('app.common.moreActions')">
-        <VListItem :title="t('user.detail.scheduleVisit')" @click="onScheduleVisit(item as HCPListItem)">
-          <template #prepend><AppIcon :name="entityActionIcon('scheduleVisit')" :class="entityActionMenuIconClass('scheduleVisit')" /></template>
+        <VListItem :title="t('user.detail.bookPatient')" @click="onBookPatient(item as HCPListItem)">
+          <template #prepend><AppIcon :name="entityActionIcon('bookAppointment')" :class="entityActionMenuIconClass('bookAppointment')" /></template>
         </VListItem>
         <VListItem v-if="canEditPractitioners" :title="t('user.hcp.detail.edit')" @click="onEditContact(item as HCPListItem)">
           <template #prepend><AppIcon :name="entityActionIcon('edit')" :class="entityActionMenuIconClass('edit')" /></template>
@@ -88,6 +98,9 @@ import AppEntityList from "../components/AppEntityList.vue";
 import AppAvatar from "../components/AppAvatar.vue";
 import AppIcon from "../components/AppIcon.vue";
 import EntityLink from "../components/EntityLink.vue";
+import { useIdentity } from "../composables/useIdentity";
+import { shortPersonName } from "../utils/shortPersonName";
+import { personAvatarProps } from "../utils/personAvatarProps";
 import AppListItemMenu from "../components/AppListItemMenu.vue";
 import { entityActionIcon, entityActionMenuIconClass } from "../config/entityActions";
 import { apiFetch } from "../composables/useApi";
@@ -97,9 +110,13 @@ import { useAuthStore } from "../stores/auth";
 import { usePermissions } from "../composables/usePermissions";
 import { useConfigStore } from "../stores/config";
 import { hcpFormFields, hcpFormDerive, resolveOrganizationIdForSubmit } from "../config/forms/hcpForm";
+import { practitionerSpecialtyIcon } from "../utils/hcpLabels";
+import { hcpCardMeta } from "../utils/mobileCardMeta";
+import { hcoDetailLink } from "../utils/entityLinks";
+import EntityMetaLine from "../components/EntityMetaLine.vue";
 
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
-const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
+const AppointmentDialog = defineAsyncComponent(() => import("../components/AppointmentDialog.vue"));
 
 interface HCPListItem {
   id: string;
@@ -111,6 +128,7 @@ interface HCPListItem {
   phone?: string;
   primary_specialty?: string;
   specialty?: string;
+  specialties?: string[];
   organization_id?: string | null;
   institution?: string;
   region?: string;
@@ -122,6 +140,7 @@ interface HCPListItem {
 }
 
 const { t } = useI18n();
+const { doctorDetails } = useIdentity();
 const configStore = useConfigStore();
 const authStore = useAuthStore();
 // Direct add is its own, narrower admin/manager-only path — reps/kam/msl still
@@ -130,9 +149,10 @@ const canAdd = computed(() => authStore.user?.role === "admin" || authStore.user
 const { canEditPractitioners } = usePermissions();
 const showAddModal = ref(false);
 const showEditModal = ref(false);
-const showEventForm = ref(false);
+const showAppointmentDialog = ref(false);
+/** Row menu "Umów pacjenta" (NEO-34): a patient↔doctor appointment with this doctor. */
+const appointmentPractitioner = ref<{ id: string; name: string } | null>(null);
 const selectedHcp = ref<HCPListItem | null>(null);
-const eventFormInitial = ref<{ start_at: string; end_at: string; hcpIds?: string[] } | undefined>(undefined);
 const { submit } = useEntitySubmit();
 
 /** Stable reference — see HCPDetailView.vue's identical computed for why an
@@ -180,7 +200,6 @@ const hcpFilterDefinitions = computed<FilterDefinition[]>(() => [
 
 const tableHeaders = computed(() => [
   { title: t("user.hcp.table.name"), key: "name", sortable: true },
-  { title: t("user.hcp.table.specialty"), key: "specialty", sortable: true },
   { title: t("user.hcp.table.institution"), key: "institution", sortable: true },
   { title: t("user.hcp.table.region"), key: "region", sortable: true },
 ]);
@@ -201,6 +220,7 @@ const hcpI18n = computed(() => ({
   add: "user.hcp.add",
   emptyTitle: "user.hcp.emptyTitle",
   emptySubtitle: "user.hcp.emptySubtitle",
+  countNoun: "doctors" as const,
   noResultsForCriteria: "user.hcp.noResultsForCriteria",
   noResultsForCriteriaSubtitle: "user.hcp.noResultsForCriteriaSubtitle",
   tableNoResults: "user.hcp.table.noResults",
@@ -224,6 +244,8 @@ async function onContactSubmit(data: Record<string, unknown>, done: (ok: boolean
         });
       },
       successMessage: t("user.hcp.form.success"),
+      openCreated: "hcp-detail",
+      icon: "nav-hcp",
       errorMessage: t("user.hcp.form.errorSave"),
     },
     done,
@@ -250,50 +272,22 @@ async function onEditSubmit(data: Record<string, unknown>, done: (ok: boolean) =
         });
       },
       successMessage: t("user.hcp.form.editSuccess"),
+      icon: "nav-hcp",
       errorMessage: t("user.hcp.form.errorSave"),
     },
     done,
   );
 }
 
-function onScheduleVisit(hcp: HCPListItem) {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  eventFormInitial.value = {
-    start_at: new Date(`${date} 09:00`).toISOString(),
-    end_at: new Date(`${date} 10:00`).toISOString(),
-    hcpIds: hcp.id ? [hcp.id] : [],
-  };
-  showEventForm.value = true;
-}
-
-async function onEventFormSubmit(
-  payload: import("../components/EventForm.vue").EventSubmitPayload,
-  done: (ok: boolean) => void,
-) {
-  await submit(
-    {
-      request: () =>
-        apiFetch("/api/v1/encounter", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: payload.title, start_at: payload.start_at, end_at: payload.end_at, type: payload.type, status: payload.status, location: payload.location, video_link: payload.video_link, notes: payload.notes, region: payload.region, attendees: payload.attendees }),
-        }),
-      successMessage: t("user.planner.form.success"),
-      errorMessage: t("user.planner.form.errorSave"),
-      refresh: false,
-    },
-    done,
-  );
+function onBookPatient(hcp: HCPListItem) {
+  appointmentPractitioner.value = { id: hcp.id, name: hcp.name ?? "" };
+  showAppointmentDialog.value = true;
 }
 </script>
 
 <style scoped>
-.hcp-name-cell {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+.hcp-specialty-chip__icon {
+  width: 14px;
+  height: 14px;
 }
-
 </style>

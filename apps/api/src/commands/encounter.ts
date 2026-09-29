@@ -71,7 +71,7 @@ export async function CreateEncounterCommand(
     start_at:          input.start_at.trim(),
     end_at:            input.end_at ?? null,
     type:              input.type,
-    status:            isEncounterStatus(input.status ?? "") ? (input.status as EncounterStatus) : "planned",
+    status:            isEncounterStatus(input.status ?? "") ? (input.status as EncounterStatus) : "scheduled",
     notes:             input.notes ?? null,
     practitioner_id:   input.practitioner_id ?? null,
     organization_id:   input.organization_id ?? null,

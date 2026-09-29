@@ -1,5 +1,5 @@
 <template>
-  <AnimatedCard ref="animatedCardRef" class="auth-card" :loading="loading" :auto-play="autoPlay">
+  <AnimatedCard ref="animatedCardRef" class="auth-card" :loading="loading" :auto-play="autoPlay" :motion="motion">
     <div v-if="backTo || title" class="auth-card__back-row">
       <VBtn
         v-if="backTo"
@@ -36,7 +36,7 @@ import { ref, onBeforeUnmount } from "vue";
 import { useI18n } from "vue-i18n";
 import AnimatedCard from "./AnimatedCard.vue";
 
-const { backTo = null, title = null, loading = false, stepKey, autoPlay = true } = defineProps<{
+const { backTo = null, title = null, loading = false, stepKey, autoPlay = true, motion = "lift" } = defineProps<{
   /** Route path for the back arrow, rendered inside the card's top-left corner. Omit to hide it. */
   backTo?: string | null;
   /** Step title, rendered in the same row as the back arrow (not inside the slot) so the two are
@@ -48,6 +48,8 @@ const { backTo = null, title = null, loading = false, stepKey, autoPlay = true }
   stepKey: string | number;
   /** False lets a parent stage this card's entrance explicitly via playEnter() instead of it firing on mount — see AuthView. */
   autoPlay?: boolean;
+  /** Entrance style, passed through to AnimatedCard — AuthView uses "zoom" (card grows out of the orbs). */
+  motion?: "lift" | "zoom";
 }>();
 
 const { t } = useI18n();
@@ -82,6 +84,13 @@ defineExpose({
 <style scoped>
 .auth-card {
   position: relative;
+  /* Every page hosting this card (login, partner registration, patient
+     questionnaire) lays it out in a fixed-height, scrolling flex column. A
+     flex item shrinks to fit by default, and the card clips its overflow —
+     so on a phone a tall step (the partner registration form, the patient
+     questionnaire) was cut off with its submit button out of reach. The
+     card keeps its content height; the page column scrolls. */
+  flex-shrink: 0;
 }
 
 /* Flex row, full card width, in normal flow above the step content — not

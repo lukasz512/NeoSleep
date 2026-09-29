@@ -21,10 +21,20 @@ export const APP_STORAGE_KEYS = {
    *  force a re-login. The short-lived access token itself is memory-only and re-derived
    *  from this on demand via POST /auth/refresh (see composables/useApi.ts). */
   refreshToken: "app-refresh-token",
+  /** "Add to device" card: how often the user said "Later" (NEO-87) — per device on purpose. */
+  installCard: "app-install-card",
+  /** Prefix of a patient's unsent questionnaire answers on their own device (composables/useQuestionnaireDraft.ts) —
+   *  followed by a hash of the link token, never the token itself; cleared on submit, on an expired link and after 24h. */
+  questionnaireDraftPrefix: "app-q-draft:",
 } as const;
 
 /** Default sidebar state: expanded (false = not collapsed) */
 export const SIDEBAR_DEFAULT_COLLAPSED = false;
+
+/** Desktop side-menu collapse toggle. Hidden for now (Łukasz, 2026-09-25): the
+ *  menu always renders expanded and a previously saved collapsed state is
+ *  ignored, so nobody is stuck in a rail with no way back out. */
+export const SIDEBAR_COLLAPSE_ENABLED = false;
 
 /** Viewport width (px): below this = mobile (hamburger + bottom drawer) */
 export const MOBILE_BREAKPOINT = 768;

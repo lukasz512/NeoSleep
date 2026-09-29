@@ -218,3 +218,45 @@ describe("GET/PUT /api/v1/document-content/:templateKey/entity-types (admin+mana
     expect((get.body as string[]).sort()).toEqual(["organization", "practitioner"]);
   });
 });
+
+describe("GET/PUT /api/v1/document-content/:templateKey/patient-checklist (admin+manager only)", () => {
+  it("403s a rep", async () => {
+    const res = await request(app)
+      .put("/api/v1/document-content/__test/patient-checklist")
+      .set("Authorization", `Bearer ${tokenForNonexistentUser("rep")}`)
+      .send({ fillMode: "patient", sortOrder: 10 });
+    expect(res.status).toBe(403);
+  });
+
+  it("round trip, and re-saving the entity types keeps the checklist config (delete-then-insert must not drop it)", async () => {
+    const manager = await withTenant(TENANT_SLUG, (client) => insertTestUser(client, "manager"));
+    const auth = `Bearer ${tokenFor(manager, "manager")}`;
+
+    await request(app).put("/api/v1/document-content/__test/entity-types").set("Authorization", auth).send({ entityTypes: ["organization"] });
+    const notAssigned = await request(app)
+      .put("/api/v1/document-content/__test/patient-checklist")
+      .set("Authorization", auth)
+      .send({ fillMode: "patient", sortOrder: 25 });
+    expect(notAssigned.status).toBe(400);
+
+    await request(app).put("/api/v1/document-content/__test/entity-types").set("Authorization", auth).send({ entityTypes: ["patient"] });
+    const bad = await request(app)
+      .put("/api/v1/document-content/__test/patient-checklist")
+      .set("Authorization", auth)
+      .send({ fillMode: "whoever", sortOrder: 25 });
+    expect(bad.status).toBe(400);
+
+    const put = await request(app)
+      .put("/api/v1/document-content/__test/patient-checklist")
+      .set("Authorization", auth)
+      .send({ fillMode: "patient", sortOrder: 25 });
+    expect(put.status).toBe(200);
+
+    await request(app).put("/api/v1/document-content/__test/entity-types").set("Authorization", auth).send({ entityTypes: ["patient", "lead"] });
+    const get = await request(app).get("/api/v1/document-content/__test/patient-checklist").set("Authorization", auth);
+    expect(get.body).toEqual({ fillMode: "patient", sortOrder: 25 });
+
+    // Leave the shared platform fixture unassigned for other specs.
+    await request(app).put("/api/v1/document-content/__test/entity-types").set("Authorization", auth).send({ entityTypes: [] });
+  });
+});

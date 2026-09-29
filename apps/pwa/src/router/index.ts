@@ -1,9 +1,10 @@
 import { createRouter, createWebHistory } from "vue-router";
-import { routes, isRoleAllowed, appHomePath } from "./routes";
+import { routes, isRoleAllowed, homePathForRole } from "./routes";
 import { useAuthStore } from "../stores/auth";
 import { useRolePreviewStore } from "../stores/rolePreview";
 import type { UserRole } from "../stores/auth";
 import { ensurePartnerConnection } from "../composables/usePartnerConnection";
+import { installPageTransitions } from "./pageTransitions";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -12,35 +13,52 @@ const router = createRouter({
 
 const isDev = import.meta.env.DEV;
 
+/** How long /login and /forgot-password wait for the session check before showing the form anyway. */
+export const SESSION_CHECK_BUDGET_MS = 2500;
+
 /**
  * Auth guard: app starts at login; protected routes require valid session (API).
  * - Root "/" redirects to /login (route config); authenticated users are redirected from /login to /patients.
  * - requiresAuth: ensure session is checked (fetchSession), then allow or redirect to /login?redirect=.
  */
-router.beforeEach(async (to, _from, next) => {
+router.beforeEach(async (to) => {
   const auth = useAuthStore();
   const rolePreview = useRolePreviewStore();
 
   if (to.meta.devOnly) {
     if (isDev) {
-      next();
-      return;
+      return true;
     }
-    next({ path: "/login" });
-    return;
+    return { path: "/login" };
   }
 
   if (to.meta.public) {
     if (to.path === "/login" || to.path === "/forgot-password") {
-      if (!auth.sessionChecked) await auth.fetchSession();
+      const redirect = typeof to.query.redirect === "string" && to.query.redirect ? to.query.redirect : "/patients";
+      if (!auth.sessionChecked) {
+        // Never hold the login form hostage to a slow API (Render cold start,
+        // bad mobile network — up to apiFetch's 20s timeout). Past the budget,
+        // show the form now and let the check finish in the background; if it
+        // does find a valid session, move on to the app from there.
+        const check = auth.fetchSession();
+        const settledInTime = await Promise.race([
+          check.then(() => true),
+          new Promise<false>((resolve) => setTimeout(() => resolve(false), SESSION_CHECK_BUDGET_MS)),
+        ]);
+        if (!settledInTime) {
+          void check.then((authenticated) => {
+            if (authenticated && router.currentRoute.value.meta.public) {
+              void router.replace({ path: redirect, query: {} });
+            }
+          });
+          return true;
+        }
+      }
       if (auth.isAuthenticated) {
-        const redirect = typeof to.query.redirect === "string" && to.query.redirect ? to.query.redirect : "/patients";
-        next({ path: redirect, query: {} });
-        return;
+        return { path: redirect, query: {} };
       }
     }
-    next();
-    return;
+    return true;
   }
 
   if (to.meta.requiresAuth) {
@@ -48,8 +66,7 @@ router.beforeEach(async (to, _from, next) => {
       await auth.fetchSession();
     }
     if (!auth.isAuthenticated) {
-      next({ path: "/login", query: { redirect: to.fullPath } });
-      return;
+      return { path: "/login", query: { redirect: to.fullPath } };
     }
     // Admin's "view as" preview (rolePreview.ts) is respected here too — only for
     // navigation, so testing as another role actually redirects like the real
@@ -58,8 +75,7 @@ router.beforeEach(async (to, _from, next) => {
     const roles = to.meta.roles as UserRole[] | undefined;
     const effectiveRole = rolePreview.previewRole ?? auth.user?.role;
     if (!isRoleAllowed(roles, effectiveRole)) {
-      next({ path: appHomePath });
-      return;
+      return { path: homePathForRole(effectiveRole) };
     }
 
     // Fire-and-forget: retries the partner connection if it's down and
@@ -68,12 +84,14 @@ router.beforeEach(async (to, _from, next) => {
     const partner = to.meta.partner as string | undefined;
     if (partner) void ensurePartnerConnection(partner);
 
-    next();
-    return;
+    return true;
   }
 
-  next();
+  return true;
 });
+
+// NEO-85: list → record → back slides, module switches fade through.
+installPageTransitions(router);
 
 /** Trace view navigation in dev (from → to, route name). */
 if (isDev) {
@@ -85,5 +103,5 @@ if (isDev) {
 }
 
 export default router;
-export { routes, appNavRoutes, appHomePath } from "./routes";
+export { routes, appNavRoutes, appHomePath, homePathForRole } from "./routes";
 export { PublicLayout, AppLayout } from "./routes";

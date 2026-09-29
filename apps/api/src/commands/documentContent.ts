@@ -5,7 +5,10 @@ import { withPlatform } from "../db/tenant.js";
 import { insertDocumentContentVersion, type DocumentContentVersionRow } from "../db/documentContent.js";
 import {
   setEntityTypesForTemplate,
+  setPatientChecklistConfig,
+  CHECKLIST_FILL_MODES,
   DOCUMENT_TEMPLATE_ENTITY_TYPES,
+  type ChecklistFillMode,
   type DocumentTemplateEntityType,
 } from "../db/documentTemplateEntityType.js";
 import { isKnownDocument, DOCUMENT_MANIFEST, SUPPORTED_LOCALES } from "@neo/documents";
@@ -151,4 +154,43 @@ export async function SetDocumentTemplateEntityTypesCommand(
   });
 
   return unique;
+}
+
+/**
+ * Patient Estudios checklist config (migration 031, ADR-024): who fills a
+ * patient document (consent / patient / doctor / external) and its
+ * position in the checklist. Only for templates already assigned to the
+ * patient entity type — assign first on the same Permissions tab.
+ */
+export async function SetPatientChecklistConfigCommand(
+  ctx: TenantContext,
+  templateKey: string,
+  input: { fillMode?: unknown; sortOrder?: unknown }
+): Promise<{ fillMode: ChecklistFillMode; sortOrder: number }> {
+  const key = templateKey?.trim();
+  if (!key || !DOCUMENT_MANIFEST.some((entry) => entry.templateKey === key)) {
+    throw new ValidationError(`Unknown document template: "${key}"`);
+  }
+  const { fillMode, sortOrder } = input;
+  if (typeof fillMode !== "string" || !CHECKLIST_FILL_MODES.includes(fillMode as ChecklistFillMode)) {
+    throw new ValidationError(`fillMode must be one of ${CHECKLIST_FILL_MODES.join(", ")}`);
+  }
+  if (typeof sortOrder !== "number" || !Number.isInteger(sortOrder) || sortOrder < 0 || sortOrder > 999) {
+    throw new ValidationError("sortOrder must be an integer between 0 and 999");
+  }
+
+  const updated = await withPlatform((platformClient) =>
+    setPatientChecklistConfig(platformClient, key, fillMode as ChecklistFillMode, sortOrder)
+  );
+  if (!updated) throw new ValidationError(`"${key}" isn't assigned to patients — assign it first`);
+
+  await insertAuditLog(ctx.client, {
+    user_id: ctx.user.id,
+    action: "update",
+    entity_type: "PatientChecklistConfig",
+    entity_after: { template_key: key, fill_mode: fillMode, sort_order: sortOrder },
+    request_id: ctx.requestId,
+  });
+
+  return { fillMode: fillMode as ChecklistFillMode, sortOrder };
 }

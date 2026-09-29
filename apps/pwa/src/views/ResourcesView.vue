@@ -2,7 +2,7 @@
   <div class="view-resources d-flex flex-column">
     <div v-if="loadError" class="view-resources__state">
       <AppErrorState
-        :title="t('app.errorState.title')"
+        :error="loadFailure"
         :refresh-label="t('app.errorState.refresh')"
         :loading="loading"
         :secondary-label="t('user.resources.reportIncident')"
@@ -12,12 +12,25 @@
     </div>
 
     <template v-else>
-      <div class="view-resources__tabs-bar">
+      <div v-if="tabOptions.length > 1" class="view-resources__tabs-bar">
         <AppSegmentedTabs v-model="tab" :options="tabOptions" :compact="scrolled" class="view-resources__tabs" />
       </div>
 
       <div class="view-resources__window">
-        <div v-if="loading" class="view-resources__grid" aria-hidden="true">
+        <div v-if="loading && tab === 'videos'" class="view-resources__topics" aria-hidden="true">
+          <section v-for="g in 2" :key="g" class="view-resources__topic">
+            <div class="view-resources__skeleton-line view-resources__skeleton-line--heading" />
+            <div class="view-resources__video-grid">
+              <div v-for="n in 4" :key="n" class="view-resources__video-skeleton">
+                <div class="view-resources__skeleton-thumb" />
+                <div class="view-resources__skeleton-line" />
+                <div class="view-resources__skeleton-line view-resources__skeleton-line--short" />
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div v-else-if="loading" class="view-resources__grid" aria-hidden="true">
           <VCard
             v-for="n in 8"
             :key="n"
@@ -44,9 +57,9 @@
             </div>
             <template v-else>
               <section v-for="group in documentGroups" :key="group.category" class="view-resources__group">
-                <h2 class="text-body-1 font-weight-bold mb-3">{{ group.category }}</h2>
+                <h2 class="text-body-large font-weight-bold mb-3">{{ group.category }}</h2>
                 <div v-for="subgroup in group.subgroups" :key="subgroup.subcategory ?? ''" class="view-resources__subgroup">
-                  <h3 v-if="subgroup.subcategory" class="text-caption font-weight-bold text-medium-emphasis mb-2">
+                  <h3 v-if="subgroup.subcategory" class="text-body-small font-weight-bold text-medium-emphasis mb-2">
                     {{ subgroup.subcategory }}
                   </h3>
                   <div class="view-resources__grid">
@@ -67,7 +80,7 @@
                             rel="noopener"
                           >
                             <AppIcon :name="fileTypeIcon(doc.fileType)" class="view-resources__card-icon mb-2" />
-                            <span :ref="(el) => registerTitleEl(doc.id, el as Element | null)" class="view-resources__card-title text-body-2 font-weight-bold">
+                            <span :ref="(el) => registerTitleEl(doc.id, el as Element | null)" class="view-resources__card-title text-body-medium font-weight-bold">
                               {{ doc.title }}
                             </span>
                           </a>
@@ -77,7 +90,7 @@
                         <a
                           v-for="lang in doc.languages"
                           :key="lang.code"
-                          class="view-resources__lang-chip text-caption font-weight-bold rounded-pill px-2 py-1"
+                          class="view-resources__lang-chip text-body-small font-weight-bold rounded-pill px-2 py-1"
                           :href="lang.mediaUrl"
                           target="_blank"
                           rel="noopener"
@@ -98,58 +111,73 @@
               <AppEmptyState :title="t('user.resources.emptyVideos')" />
             </div>
             <template v-else>
-              <section v-for="group in videoGroups" :key="group.category" class="view-resources__group">
-                <h2 class="text-body-1 font-weight-bold mb-3">{{ group.category }}</h2>
-                <div v-for="subgroup in group.subgroups" :key="subgroup.subcategory ?? ''" class="view-resources__grid view-resources__grid--videos">
-                  <VCard v-for="video in subgroup.items" :key="video.id" variant="flat" rounded="lg" class="bg-surface-container-low pa-3">
-                    <video controls preload="none" class="view-resources__video rounded-lg" :src="video.mediaUrl" />
-                    <VTooltip location="bottom" :text="video.title" open-delay="400" :disabled="!truncatedTitles[video.id]">
-                      <template #activator="{ props: tooltipProps }">
-                        <div v-bind="tooltipProps" class="d-flex flex-column w-100 mt-2">
-                          <span :ref="(el) => registerTitleEl(video.id, el as Element | null)" class="view-resources__card-title text-body-2 font-weight-bold">
-                            {{ video.title }}
-                          </span>
-                          <span v-if="video.description" class="text-caption text-medium-emphasis">{{ video.description }}</span>
-                        </div>
-                      </template>
-                    </VTooltip>
-                    <div class="view-resources__lang-row d-flex flex-wrap justify-end ga-2 mt-2">
-                      <a
-                        v-for="lang in video.languages"
-                        :key="lang.code"
-                        class="view-resources__lang-chip text-caption font-weight-bold rounded-pill px-2 py-1"
-                        :href="lang.mediaUrl"
-                        target="_blank"
-                        rel="noopener"
-                        :aria-label="lang.code.toUpperCase()"
-                      >
-                        {{ lang.code.toUpperCase() }}
-                      </a>
-                    </div>
-                  </VCard>
-                </div>
-              </section>
+              <!-- "Webinars" appears once per page (NEO-151): under the title on desktop
+                   (page-header subtitle), and here only on phones, where the header has no subtitle line. -->
+              <p class="view-resources__phone-subtitle">{{ videosSubtitle }}</p>
+              <!-- Topics = stages of the dentist's work with a patient (NEO-151), in that order. -->
+              <div class="view-resources__topics">
+                <section v-for="group in topicGroups" :key="group.topic" class="view-resources__topic">
+                  <h2 class="view-resources__topic-title">
+                    {{ t(`user.resources.topic.${group.topic}`) }}
+                    <span class="view-resources__topic-count">{{ group.videos.length }}</span>
+                  </h2>
+                  <div class="view-resources__video-grid" :class="{ 'view-resources__video-grid--list': layout === 'list' }">
+                    <ResourceVideoTile
+                      v-for="video in group.videos"
+                      :key="video.id"
+                      :video="video"
+                      :layout="layout === 'list' ? 'row' : 'card'"
+                      @open="openVideo = video"
+                    />
+                  </div>
+                </section>
+              </div>
             </template>
           </div>
         </Transition>
       </div>
+      <ResourceVideoSheet :video="openVideo" @close="openVideo = null" />
+      <!-- Cards | list (NEO-151): desktop and tablet only, in the page header next to the title. -->
+      <Teleport v-if="wide && tab === 'videos' && videos.length" :to="pageHeader.to" defer :disabled="pageHeader.disabled.value">
+        <div class="view-resources__layout-toggle" role="group" :aria-label="t('user.resources.layout.label')">
+          <button
+            v-for="option in LAYOUTS"
+            :key="option.value"
+            type="button"
+            class="view-resources__layout-option"
+            :aria-pressed="savedLayout === option.value"
+            :title="t(option.label)"
+            :aria-label="t(option.label)"
+            :data-testid="`resources-layout-${option.value}`"
+            @click="setLayout(option.value)"
+          >
+            <AppIcon :name="option.icon" />
+          </button>
+        </div>
+      </Teleport>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted, onUnmounted } from "vue";
+import { ref, reactive, computed, watch, onMounted, onUnmounted, onBeforeUnmount } from "vue";
 import { useI18n } from "vue-i18n";
 import { AppSegmentedTabs } from "@ui";
 import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
 import AppErrorState from "../components/AppErrorState.vue";
 import AppEmptyState from "../components/AppEmptyState.vue";
-import { usePartnerResources, type PartnerResourceFileType } from "../composables/usePartnerResources";
+import ResourceVideoTile from "../components/resources/ResourceVideoTile.vue";
+import ResourceVideoSheet from "../components/resources/ResourceVideoSheet.vue";
+import { usePartnerResources, type PartnerResourceFileType, type PartnerResourceItem } from "../composables/usePartnerResources";
+import { usePageHeaderRow, usePageHeaderTeleport } from "../composables/usePageHeader";
+import { useMediaQuery } from "@vueuse/core";
+import { getUserSettings, setUserSettings } from "../utils/user-settings";
+import { MOBILE_BREAKPOINT } from "../constants";
 import { useAuthStore } from "../stores/auth";
 import { SUPPORT_EMAIL } from "../constants";
 
 const { t, locale } = useI18n();
-const { items, documents, videos, documentGroups, videoGroups, loading, loadError, load } = usePartnerResources();
+const { documents, videos, documentGroups, loading, loadError, loadFailure, load } = usePartnerResources();
 const authStore = useAuthStore();
 
 // Documents tab hidden per product decision — only Webinars (the renamed
@@ -160,6 +188,54 @@ const tab = ref<"documents" | "videos">("videos");
 const tabOptions = computed(() => [{ value: "videos", label: t("user.resources.tabs.videos") }]);
 
 watch(locale, (l) => load(l), { immediate: true });
+
+/** Stage order comes from the API (VIDEO_TOPICS); a video without a known stage goes last, under "other". */
+const TOPIC_ORDER = ["detect", "diagnose", "records", "order", "followup", "other"] as const;
+type Topic = (typeof TOPIC_ORDER)[number];
+const topicGroups = computed(() =>
+  TOPIC_ORDER.map((topic) => ({
+    topic,
+    videos: videos.value.filter((v) => ((TOPIC_ORDER as readonly string[]).includes(v.topic ?? "") ? v.topic : "other") === topic),
+  })).filter((g): g is { topic: Topic; videos: PartnerResourceItem[] } => g.videos.length > 0)
+);
+
+/**
+ * Cards or list (Łukasz, NEO-151): cards by default, the choice remembered on
+ * this device (app settings). Phones always get cards — no toggle there.
+ */
+type ResourcesLayout = "cards" | "list";
+const LAYOUTS: { value: ResourcesLayout; icon: AppIconName; label: string }[] = [
+  { value: "cards", icon: "view-grid", label: "user.resources.layout.cards" },
+  { value: "list", icon: "view-list", label: "user.resources.layout.list" },
+];
+const pageHeader = usePageHeaderTeleport();
+const wide = useMediaQuery(`(min-width: ${MOBILE_BREAKPOINT}px)`);
+const savedLayout = ref<ResourcesLayout>(getUserSettings().resourcesLayout ?? "cards");
+const layout = computed<ResourcesLayout>(() => (wide.value ? savedLayout.value : "cards"));
+function setLayout(value: ResourcesLayout): void {
+  savedLayout.value = value;
+  setUserSettings({ resourcesLayout: value });
+}
+
+/** The video playing in the cinema sheet — one at a time, so only one download runs. */
+const openVideo = ref<PartnerResourceItem | null>(null);
+
+/** Page subtitle (NEO-151): "Webinars · 15" under the Resources title; "" keeps its placeholder while loading. */
+const videosSubtitle = computed(() => `${t("user.resources.tabs.videos")} · ${videos.value.length}`);
+const headerRow = usePageHeaderRow();
+let ownSubtitle: string | null = null;
+watch(
+  [videosSubtitle, loading, loadError],
+  () => {
+    ownSubtitle = loadError.value ? null : loading.value ? "" : videosSubtitle.value;
+    headerRow.subtitle.value = ownSubtitle;
+  },
+  { immediate: true }
+);
+onBeforeUnmount(() => {
+  // The next view may already have written its own line — only clear ours.
+  if (headerRow.subtitle.value === ownSubtitle) headerRow.subtitle.value = null;
+});
 
 const FILE_TYPE_ICONS: Record<PartnerResourceFileType, AppIconName> = {
   pdf: "file-pdf",
@@ -379,10 +455,146 @@ const incidentMailtoHref = computed(() => {
   background: rgba(var(--v-theme-primary), 0.18);
 }
 
-.view-resources__video {
-  width: 100%;
+/* Phones only: AppLayout shows the page subtitle on desktop (>= 768 px, MOBILE_BREAKPOINT). */
+.view-resources__phone-subtitle {
+  display: none;
+  margin: 0 0 12px;
+  font-size: 0.8125rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 767.98px) {
+  .view-resources__phone-subtitle {
+    display: block;
+  }
+}
+
+/* Small cards (NEO-151, variant B): 4 per row on desktop, 3 on tablet, 2 on phone.
+   Container query, not viewport — the content column's width depends on the side menu. */
+.view-resources__topics {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding-bottom: 16px;
+}
+.view-resources__topic-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.3;
+}
+.view-resources__topic-count {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-variant-numeric: tabular-nums;
+}
+.view-resources__video-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 12px;
+}
+@container (min-width: 560px) {
+  .view-resources__video-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@container (min-width: 860px) {
+  .view-resources__video-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 20px 16px;
+  }
+}
+
+.view-resources__video-grid--list {
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 0 !important;
+}
+
+/* Cards | list toggle: a quiet segmented pair, like the theme row in the account menu. */
+.view-resources__layout-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(var(--v-theme-on-surface), 0.06);
+}
+.view-resources__layout-option {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 30px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+.view-resources__layout-option .app-icon {
+  width: 18px;
+  height: 18px;
+}
+.view-resources__layout-option[aria-pressed="true"] {
+  background: rgb(var(--v-theme-surface));
+  color: rgb(var(--v-theme-primary));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+.view-resources__layout-option:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 1px;
+}
+
+/* Skeleton in the shape of the cards: frame, two title lines. */
+.view-resources__video-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.view-resources__skeleton-thumb,
+.view-resources__skeleton-line {
+  background: linear-gradient(
+    100deg,
+    rgb(var(--v-theme-surface-container-high)) 30%,
+    rgba(var(--v-theme-on-surface), 0.08) 50%,
+    rgb(var(--v-theme-surface-container-high)) 70%
+  );
+  background-size: 220% 100%;
+  animation: view-resources-shimmer 1.4s linear infinite;
+}
+.view-resources__skeleton-thumb {
   aspect-ratio: 16 / 9;
-  background: #000;
-  display: block;
+  border-radius: 10px;
+}
+.view-resources__skeleton-line {
+  height: 10px;
+  width: 90%;
+  border-radius: 5px;
+}
+.view-resources__skeleton-line--short {
+  width: 55%;
+}
+.view-resources__skeleton-line--heading {
+  width: 140px;
+  height: 14px;
+  margin-bottom: 14px;
+}
+@keyframes view-resources-shimmer {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -120% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .view-resources__skeleton-thumb,
+  .view-resources__skeleton-line {
+    animation: none;
+  }
 }
 </style>

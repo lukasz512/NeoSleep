@@ -3,6 +3,7 @@ import type { Request } from "express";
 import { tenantSlugFromHost } from "../db.js";
 import { getUserRoleScopes, getUserTokenVersion, type StaffRole, type UserRoleScope } from "../db/users.js";
 import { AuthError } from "../errors.js";
+import type { RequestWithId } from "../middleware/requestId.js";
 
 /**
  * TenantContext — the object passed to every Command and Query.
@@ -84,6 +85,8 @@ export async function buildContext(req: Request, client: PoolClient, slug?: stri
       role:  req.user.role,
       roles,
     },
-    requestId: (req.headers["x-request-id"] as string | undefined) ?? crypto.randomUUID(),
+    // Same id the requestId middleware returned as X-Request-ID (NEO-81), so audit rows,
+    // server logs and browser diagnostics reports all share one correlation id.
+    requestId: (req as Partial<RequestWithId>).requestId ?? crypto.randomUUID(),
   };
 }

@@ -11,10 +11,12 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@googlemaps/markerclusterer": "2.6.2",
     "@neo/api-client": "workspace:*",
     "@neo/stores": "workspace:*",
     "@neo/ui": "workspace:*",
     "@unhead/vue": "catalog:",
+    "@vue/devtools-api": "catalog:",
     "@vueuse/core": "catalog:",
     "flag-icons": "^7.5.0",
     "pinia": "catalog:",
@@ -25,7 +27,7 @@
     "vuetify": "catalog:"
   },
   "devDependencies": {
-    "@types/google.maps": "^3.66.2",
+    "@types/google.maps": "^3.66.4",
     "@vitejs/plugin-vue": "catalog:",
     "@vue/test-utils": "catalog:",
     "eslint": "catalog:",

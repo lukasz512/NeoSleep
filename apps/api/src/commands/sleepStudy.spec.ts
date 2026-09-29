@@ -29,7 +29,7 @@ async function buildTestContext(client: Parameters<typeof CreatePatientCommand>[
 }
 
 async function createTestPatient(ctx: TenantContext) {
-  return CreatePatientCommand(ctx, { first_name: "Test", last_name: `Patient-${uniqueSuffix()}`, email: `qa-patient-${uniqueSuffix()}@example.com`, phone: "600100200" });
+  return CreatePatientCommand(ctx, { gender: "female", date_of_birth: "1980-01-01", first_name: "Test", last_name: `Patient-${uniqueSuffix()}`, email: `qa-patient-${uniqueSuffix()}@example.com`, phone: "600100200" });
 }
 
 describe("CreateSleepStudyCommand", () => {
@@ -48,6 +48,27 @@ describe("CreateSleepStudyCommand", () => {
       await expect(
         CreateSleepStudyCommand(ctx, { patient_id: patient.id, status: "not-a-real-status" })
       ).rejects.toThrow(ValidationError);
+    });
+  });
+
+  it("rejects a study dated in the future (NEO-132) and marks the study_date field", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const patient = await createTestPatient(ctx);
+      const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const err = await CreateSleepStudyCommand(ctx, { patient_id: patient.id, study_date: nextWeek }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ValidationError);
+      expect((err as ValidationError).field).toBe("study_date");
+    });
+  });
+
+  it("accepts a study dated today", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const patient = await createTestPatient(ctx);
+      const today = new Date().toISOString().slice(0, 10);
+      const study = await CreateSleepStudyCommand(ctx, { patient_id: patient.id, study_date: today });
+      expect(study.id).toBeTruthy();
     });
   });
 

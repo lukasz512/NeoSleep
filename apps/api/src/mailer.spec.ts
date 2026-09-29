@@ -34,8 +34,9 @@ beforeEach(() => {
 async function importMailer(configured: boolean, overrides: Record<string, string | undefined> = {}) {
   vi.doMock("./env.js", () => ({
     RESEND_API_KEY: configured ? "re_test_key" : undefined,
-    RESEND_FROM_EMAIL: configured ? "noreply@mail.neosleepcare.com" : undefined,
+    RESEND_FROM_EMAIL: configured ? "notifications@mail.neosleepcare.com" : undefined,
     RESEND_NOTIFY_TO: configured ? "admin@neosleepcare.com" : undefined,
+    PARTNER_DOCS_CC_EMAIL: undefined,
     ...overrides,
   }));
   vi.resetModules();
@@ -77,10 +78,57 @@ describe("mailer — configured", () => {
     expect(sendMock).toHaveBeenCalledTimes(1);
     const call = sendMock.mock.calls[0]![0];
     expect(call.to).toBe("doctor@example.com");
-    expect(call.from).toContain("noreply@mail.neosleepcare.com");
+    expect(call.from).toContain("notifications@mail.neosleepcare.com");
     expect(call.subject).toBeTruthy();
     expect(call.html).toContain(resetLink);
     expect(call.attachments.length).toBeGreaterThan(0);
+  });
+
+  it("sendQuestionnaireLinkEmail is from '<clinic> | NeoSleep' with Reply-To the clinic (NEO-162)", async () => {
+    const { sendQuestionnaireLinkEmail } = await importMailer(true);
+
+    await sendQuestionnaireLinkEmail("patient@example.com", "https://pwa.neosleepcare.com/q/abc", RECIPIENT, { name: "Clínica Sonrisa, S.C.", email: "hola@sonrisa.mx" }, 2);
+
+    const call = sendMock.mock.calls[0]![0];
+    expect(call.from).toBe('"Clínica Sonrisa, S.C. | NeoSleep" <notifications@mail.neosleepcare.com>');
+    expect(call.replyTo).toBe("hola@sonrisa.mx");
+  });
+
+  it("sendQuestionnaireLinkEmail strips header-breaking characters from the clinic name and falls back to NeoSleep", async () => {
+    const { sendQuestionnaireLinkEmail } = await importMailer(true);
+
+    await sendQuestionnaireLinkEmail("patient@example.com", "https://x", RECIPIENT, { name: 'Evil\r\nBcc: a@b.c <"x">', email: null }, 1);
+    await sendQuestionnaireLinkEmail("patient@example.com", "https://x", RECIPIENT, { name: null, email: null }, 1);
+
+    expect(sendMock.mock.calls[0]![0].from).toBe('"Evil Bcc: a@b.c \\"x\\" | NeoSleep" <notifications@mail.neosleepcare.com>');
+    expect(sendMock.mock.calls[1]![0].from).toBe('"NeoSleep" <notifications@mail.neosleepcare.com>');
+  });
+
+  it("tags patient emails for the delivery webhook, returns Resend's id and logs only a masked address (NEO-190)", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const { sendQuestionnaireLinkEmail } = await importMailer(true);
+
+    const id = await sendQuestionnaireLinkEmail("lucia@example.mx", "https://x", RECIPIENT, { name: null, email: null }, 1, { tenant: "neosleep", kind: "questionnaire_link" });
+
+    expect(id).toBe("test-email-id");
+    expect(sendMock.mock.calls[0]![0].tags).toEqual([{ name: "tenant", value: "neosleep" }, { name: "kind", value: "questionnaire_link" }]);
+    const logged = logSpy.mock.calls.map((c) => String(c[0])).join("\n");
+    expect(logged).toContain("l***@example.mx");
+    expect(logged).not.toContain("lucia@example.mx");
+    logSpy.mockRestore();
+  });
+
+  it("sendEmailSentConfirmation tells the doctor who/what/when in their language, with no patient link (NEO-192)", async () => {
+    const { sendEmailSentConfirmation } = await importMailer(true);
+
+    await sendEmailSentConfirmation("doctor@neosleepcare.com", { patient: "Lucía C.", sentTo: "l***@example.mx", count: 2, clinic: "Clínica Sonrisa", language: "pl" });
+
+    const call = sendMock.mock.calls[0]![0];
+    expect(call.to).toBe("doctor@neosleepcare.com");
+    expect(call.from).toBe('"Clínica Sonrisa | NeoSleep" <notifications@mail.neosleepcare.com>');
+    expect(call.subject).toContain("Lucía C.");
+    expect(call.html).toContain("l***@example.mx");
+    expect(call.html).not.toMatch(/\/q#|href="https?:\/\/[^"]*pwa/);
   });
 
   it("sendContactEmail sends to RESEND_NOTIFY_TO with the given subject and rows rendered in the HTML", async () => {
@@ -106,6 +154,22 @@ describe("mailer — configured", () => {
     const call = sendMock.mock.calls[0]![0];
     expect(call.to).toBe("hcp@example.com");
     expect(call.html).toContain(registerLink);
+  });
+
+  it("sendSignedDocumentsEmail addresses the doctor formally by title + name and links to login", async () => {
+    const { sendSignedDocumentsEmail } = await importMailer(true);
+    const loginLink = "https://pwa.neosleepcare.com/login";
+    const doc = { filename: "agreement.pdf", content: Buffer.from("%PDF") };
+
+    await sendSignedDocumentsEmail("jan@example.com", { ...RECIPIENT, language: "pl", title: null, firstName: "Jan", lastName: "Kowalski" }, [doc], loginLink);
+
+    const call = sendMock.mock.calls[0]![0];
+    expect(call.html).toContain("Dr Jan Kowalski,");
+    expect(call.html).not.toContain("Cześć");
+    expect(call.html).not.toContain("jan@example.com,");
+    expect(call.html).toContain(loginLink);
+    expect(call.html).toContain("Zaloguj się do NeoSleep");
+    expect(call.attachments).toEqual(expect.arrayContaining([expect.objectContaining({ filename: "agreement.pdf" })]));
   });
 
   it("logs and rethrows when Resend returns an API error", async () => {

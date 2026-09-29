@@ -1,4 +1,4 @@
-import { Resend } from "resend";
+import { Resend, type WebhookEventPayload } from "resend";
 import {
   renderEmailLayout,
   escapeHtml,
@@ -8,7 +8,8 @@ import {
   emailT,
   type EmailAttachment,
 } from "@neo/email";
-import { RESEND_API_KEY, RESEND_FROM_EMAIL, RESEND_NOTIFY_TO, PARTNER_DOCS_CC_EMAIL } from "./env.js";
+import { maskEmail } from "./utils/maskEmail.js";
+import { RESEND_API_KEY, RESEND_FROM_EMAIL, RESEND_NOTIFY_TO, PARTNER_DOCS_CC_EMAIL, RESEND_WEBHOOK_SECRET } from "./env.js";
 
 /** Every personalized email needs at least these to build a proper "Hi {title} {name}," greeting,
  * and region to pick the right social links (see @neo/email's config/emailSocials.ts). */
@@ -20,14 +21,12 @@ export interface EmailRecipient {
   region?: string | null;
 }
 
-/** The rep/admin a personal-outreach email is "from" — e.g. a lead-offer or partner-invite
- * email should look like it came from the rep who actually triggered it, not a faceless
- * "NeoSleep" system sender. Resend's verified sending address stays the same either way (it
- * has to, for SPF/DKIM/DMARC alignment — see ADR-016 on why that's a dedicated subdomain, not
- * a per-person mailbox); what changes is the display name and the Reply-To header, so a doctor
- * hitting "reply" lands in the rep's own real inbox (e.g. alfred.jan@neosleepcare.com on
- * Microsoft 365), not a noreply@ black hole. This needs no new mailbox to be provisioned per
- * rep — it reuses whatever real address the rep already logs in with. */
+/** The rep/admin a personal-outreach email is "from" — the display name always reads
+ * "NeoSleep" (consistent brand sender across lead-offer, partner-invite, and thank-you
+ * emails), but Reply-To is still set to the rep's own address, so a doctor hitting "reply"
+ * lands in the rep's real inbox (e.g. alfred.jan@neosleepcare.com on Microsoft 365), not the
+ * unmonitored sending address. This needs no new mailbox to be provisioned per rep — it reuses
+ * whatever real address the rep already logs in with. */
 export interface EmailSender {
   name: string;
   email: string;
@@ -51,12 +50,33 @@ interface SendEmailArgs {
   subject: string;
   html: string;
   attachments: EmailAttachment[];
-  /** Overrides the "NeoSleep" display name — e.g. the rep's own name for personal outreach. */
-  fromName?: string;
-  /** Set so replies land in a real inbox (the rep's) instead of the noreply@ sending address. */
+  /** Set so replies land in a real inbox (the rep's) instead of the unmonitored sending address. */
   replyTo?: string;
   /** Fixed extra recipient(s), e.g. an internal compliance inbox — see PARTNER_DOCS_CC_EMAIL. */
   cc?: string | string[];
+  /** Display name in From; defaults to "NeoSleep". Patient emails use "<clinic> | NeoSleep" (NEO-162). */
+  fromName?: string;
+  /** Resend tags, echoed back in its webhooks — how routes/webhooks.ts finds the tenant and the send-log row (NEO-190). */
+  tags?: EmailTags;
+}
+
+/** Tags on patient emails: which tenant schema holds the send-log row, and what kind of email it was. */
+export interface EmailTags {
+  tenant: string;
+  kind: string;
+}
+
+
+/** RFC 5322 display name: CR/LF and angle brackets stripped (header injection), always quoted so commas/dots in a clinic name are safe. */
+function formatFrom(name: string, email: string): string {
+  const clean = name.replace(/[\r\n<>]/g, " ").replace(/\s+/g, " ").trim() || "NeoSleep";
+  return `"${clean.replace(/["\\]/g, "\\$&")}" <${email}>`;
+}
+
+/** "Clínica Dental Sonrisa | NeoSleep" — patients know their clinic, not the platform, so the clinic leads (NEO-162). */
+export function clinicFromName(clinicName: string | null | undefined): string {
+  const name = clinicName?.trim();
+  return name ? `${name} | NeoSleep` : "NeoSleep";
 }
 
 /**
@@ -68,26 +88,28 @@ interface SendEmailArgs {
  * (e.g. auth.ts's fire-and-forget forgot-password handler) already expect a
  * rejected promise on failure.
  */
-async function sendEmail(logLabel: string, args: SendEmailArgs): Promise<void> {
+async function sendEmail(logLabel: string, args: SendEmailArgs): Promise<string | null> {
   if (!resend || !RESEND_FROM_EMAIL) {
     console.warn(`[mailer] Resend not configured – set RESEND_API_KEY, RESEND_FROM_EMAIL in .env`);
-    return;
+    return null;
   }
 
   try {
-    const { error } = await resend.emails.send({
-      from: `${args.fromName ?? "NeoSleep"} <${RESEND_FROM_EMAIL}>`,
+    const { data, error } = await resend.emails.send({
+      from: formatFrom(args.fromName ?? "NeoSleep", RESEND_FROM_EMAIL),
       to: args.to,
       subject: args.subject,
       html: args.html,
       attachments: args.attachments,
       ...(args.replyTo ? { replyTo: args.replyTo } : {}),
       ...(args.cc ? { cc: args.cc } : {}),
+      ...(args.tags ? { tags: [{ name: "tenant", value: args.tags.tenant }, { name: "kind", value: args.tags.kind }] } : {}),
     });
     if (error) {
       throw new Error(`${error.name}: ${error.message}`);
     }
-    console.log(`[mailer] Sent ${logLabel} to ${args.to}`);
+    console.log(`[mailer] Sent ${logLabel} to ${maskEmail(args.to)}${data?.id ? ` (${data.id})` : ""}`);
+    return data?.id ?? null;
   } catch (err) {
     console.error(`[mailer] Failed to send ${logLabel}:`, err);
     throw err;
@@ -160,6 +182,58 @@ export async function sendPasswordResetEmail(to: string, resetLink: string, reci
   });
 }
 
+/**
+ * The patient's personal link to their open questionnaires — returns whether it was actually handed to Resend (docs/stories/
+ * clinical-questionnaire-capture-redesign.md). Deliberately says nothing
+ * clinical — no questionnaire names, no answers: an inbox is not a place
+ * for health data. Replies go to the clinic, which is the data controller.
+ */
+export async function sendQuestionnaireLinkEmail(
+  to: string,
+  link: string,
+  recipient: EmailRecipient,
+  clinic: { name: string | null; email: string | null },
+  count: number,
+  tags?: EmailTags,
+  validDays?: number
+): Promise<string | null> {
+  const locale = recipient.language;
+  const greetingName = formatGreetingName(recipient, to);
+  const clinicName = clinic.name ?? emailT(locale, "email.questionnaireLink.yourClinic");
+
+  const bodyHtml = `
+    <h1 style="margin:0 0 16px;font-size:20px;font-weight:bold;color:#128F83;text-align:center;">${escapeHtml(emailT(locale, "email.questionnaireLink.title"))}</h1>
+    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.greeting", { name: greetingName }))}</p>
+    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, count === 1 ? "email.questionnaireLink.bodyOne" : "email.questionnaireLink.bodyMany", { clinic: clinicName, count: String(count) }))}</p>
+    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.questionnaireLink.howLong"))}</p>
+    <p style="margin:0 0 16px;font-size:13px;color:#7a827e;">${escapeHtml(validDays ? emailT(locale, "email.questionnaireLink.expiryDays", { days: String(validDays) }) : emailT(locale, "email.questionnaireLink.expiry"))}</p>
+    <p style="margin:0;font-size:13px;color:#7a827e;">${escapeHtml(emailT(locale, "email.questionnaireLink.ignore"))}</p>`;
+
+  const socials = getSocialsForRegion(recipient.region);
+  const html = renderEmailLayout({
+    preheader: emailT(locale, "email.questionnaireLink.title"),
+    bodyHtml,
+    cta: { text: emailT(locale, "email.questionnaireLink.cta"), href: link },
+    footerTagline: emailT(locale, "email.footer.tagline"),
+    footerCities: emailT(locale, "email.footer.cities"),
+    footerCopyright: emailT(locale, "email.footer.copyright", { year: String(new Date().getFullYear()) }),
+    supportLeadIn: emailT(locale, "email.footer.support"),
+    socials,
+  });
+
+  // false when email isn't configured (sendEmail logs and skips) — the caller must tell the user, not claim it was sent.
+  const id = await sendEmail("questionnaire link email", {
+    to,
+    subject: emailT(locale, "email.questionnaireLink.subject", { clinic: clinicName }),
+    html,
+    attachments: getEmailAttachments(socials),
+    ...(clinic.email ? { replyTo: clinic.email } : {}),
+    fromName: clinicFromName(clinic.name),
+    ...(tags ? { tags } : {}),
+  });
+  return id;
+}
+
 export interface LeadOfferLinks {
   /** Plain link to the marketing page — no prefill, just "learn more". */
   offerLink: string;
@@ -200,7 +274,6 @@ export async function sendLeadOfferEmail(
     subject: emailT(locale, "email.leadOffer.subject"),
     html,
     attachments: getEmailAttachments(socials),
-    fromName: sender.name,
     replyTo: sender.email,
   });
 }
@@ -285,7 +358,6 @@ export async function sendPartnerInviteEmail(
     subject: emailT(locale, "email.partnerInvite.subject"),
     html,
     attachments: getEmailAttachments(socials),
-    fromName: sender.name,
     replyTo: sender.email,
   });
 }
@@ -321,9 +393,56 @@ export async function sendPartnerJoinThankYouEmail(to: string, recipient: EmailR
     subject: emailT(locale, "email.partnerJoinThankYou.subject"),
     html,
     attachments: getEmailAttachments(socials),
-    fromName: sender.name,
     replyTo: sender.email,
   });
+}
+
+/**
+ * NEO-126: the signed consent, emailed to the patient because they ticked
+ * "send me a copy" before signing. Neutral on purpose (legal, 2026-09-28):
+ * the subject and text name only the clinic and the date — no treatment, no
+ * diagnosis; the document itself is the attachment. Replies go to the clinic,
+ * the data controller. Returns whether it was handed to Resend.
+ */
+export async function sendPatientSignedCopyEmail(
+  to: string,
+  recipient: EmailRecipient,
+  clinic: { name: string | null; email: string | null },
+  document: { filename: string; content: Buffer },
+  signedOn: string,
+  tags?: EmailTags
+): Promise<string | null> {
+  const locale = recipient.language;
+  const greetingName = formatGreetingName(recipient, to);
+  const clinicName = clinic.name ?? emailT(locale, "email.questionnaireLink.yourClinic");
+
+  const bodyHtml = `
+    <h1 style="margin:0 0 16px;font-size:20px;font-weight:bold;color:#128F83;text-align:center;">${escapeHtml(emailT(locale, "email.signedCopy.title"))}</h1>
+    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.greeting", { name: greetingName }))}</p>
+    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.signedCopy.body", { clinic: clinicName, date: signedOn }))}</p>
+    <p style="margin:0;font-size:13px;color:#7a827e;">${escapeHtml(emailT(locale, "email.signedCopy.ignore"))}</p>`;
+
+  const socials = getSocialsForRegion(recipient.region);
+  const html = renderEmailLayout({
+    preheader: emailT(locale, "email.signedCopy.title"),
+    bodyHtml,
+    footerTagline: emailT(locale, "email.footer.tagline"),
+    footerCities: emailT(locale, "email.footer.cities"),
+    footerCopyright: emailT(locale, "email.footer.copyright", { year: String(new Date().getFullYear()) }),
+    supportLeadIn: emailT(locale, "email.footer.support"),
+    socials,
+  });
+
+  const id = await sendEmail("signed copy email", {
+    to,
+    subject: emailT(locale, "email.signedCopy.subject", { clinic: clinicName }),
+    html,
+    attachments: [...getEmailAttachments(socials), { filename: document.filename, content: document.content }],
+    ...(clinic.email ? { replyTo: clinic.email } : {}),
+    fromName: clinicFromName(clinic.name),
+    ...(tags ? { tags } : {}),
+  });
+  return id;
 }
 
 /** One signed document ready to attach — plain PDF bytes, not yet an EmailAttachment
@@ -335,28 +454,36 @@ export interface SignedDocumentAttachment {
 
 /**
  * Sent right after AcceptPractitionerInviteCommand's transaction commits (never from inside
- * it — a failure here must not roll back a signature that already succeeded). Ccs a fixed
- * internal compliance inbox when PARTNER_DOCS_CC_EMAIL is set (interim single-tenant-MVP env
- * var — see docs/stories/partner-registration-legal-documents.md, 2026-09-16 addendum, on why
- * this isn't per-tenant config yet).
+ * it — a failure here must not roll back a signature that already succeeded). NeoSleep's copy
+ * goes to `ccEmail` — the jurisdiction's signatory config (NEO-51: PL → lukasz.ostrowski@,
+ * MX → alfred.jan@) — falling back to the older single PARTNER_DOCS_CC_EMAIL env var.
+ * Returns Resend's message id (null when email isn't configured) for the evidence trail.
  */
 export async function sendSignedDocumentsEmail(
   to: string,
   recipient: EmailRecipient,
-  documents: SignedDocumentAttachment[]
-): Promise<void> {
+  documents: SignedDocumentAttachment[],
+  loginLink: string,
+  ccEmail?: string | null
+): Promise<string | null> {
   const locale = recipient.language;
-  const greetingName = formatGreetingName(recipient, to);
+  // These are the signed legal documents, so the address line is formal ("Dr First Last,"), never
+  // the casual "Hi …," greeting and never the bare email address. Every partner is a doctor, so a
+  // missing salutation on the record falls back to the locale's "Dr" rather than dropping the title.
+  const hasName = !!(recipient.firstName?.trim() || recipient.lastName?.trim());
+  const title = recipient.title?.trim() || (hasName ? emailT(locale, "email.signedDocuments.defaultTitle") : null);
+  const addressName = formatGreetingName({ ...recipient, title }, to);
 
   const bodyHtml = `
     <h1 style="margin:0 0 16px;font-size:20px;font-weight:bold;color:#128F83;text-align:center;">${escapeHtml(emailT(locale, "email.signedDocuments.title"))}</h1>
-    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.greeting", { name: greetingName }))}</p>
+    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.signedDocuments.address", { name: addressName }))}</p>
     <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.signedDocuments.body"))}</p>`;
 
   const socials = getSocialsForRegion(recipient.region);
   const html = renderEmailLayout({
     preheader: emailT(locale, "email.signedDocuments.title"),
     bodyHtml,
+    cta: { text: emailT(locale, "email.signedDocuments.cta"), href: loginLink },
     footerTagline: emailT(locale, "email.footer.tagline"),
     footerCities: emailT(locale, "email.footer.cities"),
     footerCopyright: emailT(locale, "email.footer.copyright", { year: String(new Date().getFullYear()) }),
@@ -364,11 +491,65 @@ export async function sendSignedDocumentsEmail(
     socials,
   });
 
-  await sendEmail("signed documents email", {
+  const cc = ccEmail || PARTNER_DOCS_CC_EMAIL;
+  return sendEmail("signed documents email", {
     to,
     subject: emailT(locale, "email.signedDocuments.subject"),
     html,
     attachments: [...getEmailAttachments(socials), ...documents.map((d) => ({ filename: d.filename, content: d.content }))],
-    ...(PARTNER_DOCS_CC_EMAIL ? { cc: PARTNER_DOCS_CC_EMAIL } : {}),
+    ...(cc ? { cc } : {}),
+  });
+}
+
+export class ResendWebhookNotConfiguredError extends Error {}
+
+/**
+ * Checks a Resend webhook's signature (Svix / Standard Webhooks: svix-id,
+ * svix-timestamp, svix-signature over the raw body) and returns the parsed
+ * event. Throws on a bad or stale signature — the caller answers 400.
+ */
+export function verifyResendWebhook(
+  rawBody: string,
+  headers: { id: string; timestamp: string; signature: string },
+  secret: string | null = RESEND_WEBHOOK_SECRET ?? null
+): WebhookEventPayload {
+  if (!secret) throw new ResendWebhookNotConfiguredError("RESEND_WEBHOOK_SECRET is not set");
+  // verify() makes no API call, so any client works — even without RESEND_API_KEY.
+  const client = resend ?? new Resend("re_verify_only");
+  return client.webhooks.verify({ payload: rawBody, headers, webhookSecret: secret });
+}
+
+/**
+ * NEO-192 (D4): the doctor's own confirmation that an email went to a
+ * patient — short name, masked address, document count, time. It carries
+ * no link to the patient's documents, so the doctor's inbox never holds a
+ * way into the patient's forms.
+ */
+export async function sendEmailSentConfirmation(
+  to: string,
+  info: { patient: string; sentTo: string; count: number; clinic: string | null; language: string }
+): Promise<void> {
+  const locale = info.language;
+  const when = new Intl.DateTimeFormat(INTL_LOCALE[locale] ?? "en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date());
+  const bodyHtml = `
+    <h1 style="margin:0 0 16px;font-size:20px;font-weight:bold;color:#128F83;text-align:center;">${escapeHtml(emailT(locale, "email.sendConfirmation.title"))}</h1>
+    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.sendConfirmation.body", { patient: info.patient, email: info.sentTo, count: String(info.count), date: when }))}</p>
+    <p style="margin:0;font-size:13px;color:#7a827e;">${escapeHtml(emailT(locale, "email.sendConfirmation.noLink"))}</p>`;
+  const socials = getSocialsForRegion(null);
+  const html = renderEmailLayout({
+    preheader: emailT(locale, "email.sendConfirmation.title"),
+    bodyHtml,
+    footerTagline: emailT(locale, "email.footer.tagline"),
+    footerCities: emailT(locale, "email.footer.cities"),
+    footerCopyright: emailT(locale, "email.footer.copyright", { year: String(new Date().getFullYear()) }),
+    supportLeadIn: emailT(locale, "email.footer.support"),
+    socials,
+  });
+  await sendEmail("send confirmation email", {
+    to,
+    subject: emailT(locale, "email.sendConfirmation.subject", { patient: info.patient }),
+    html,
+    attachments: getEmailAttachments(socials),
+    fromName: clinicFromName(info.clinic),
   });
 }

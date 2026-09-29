@@ -85,7 +85,7 @@
 
     <div v-if="loadError" class="app-entity-list__error-wrap">
       <AppErrorState
-        :title="t('app.errorState.title')"
+        :error="loadFailure"
         :subtitle="loadError"
         :refresh-label="t('app.errorState.refresh')"
         :loading="loading"
@@ -260,6 +260,8 @@
 </template>
 
 <script setup lang="ts">
+import { reportCaught } from "@api";
+import { showErrorToast } from "../composables/useErrorToast";
 import { ref, computed, defineAsyncComponent } from "vue";
 import { useI18n } from "vue-i18n";
 import AppButton from "../components/AppButton.vue";
@@ -270,6 +272,8 @@ import AppIcon from "../components/AppIcon.vue";
 import AppFilterBar from "../components/AppFilterBar.vue";
 import { useAuthStore } from "../stores/auth";
 import { apiFetch } from "../composables/useApi";
+import { fieldErrorsFromResponse } from "../composables/useFormErrors";
+import type { SubmitDone } from "../composables/useEntitySubmit";
 import { useNotifications } from "../composables/useNotifications";
 import { useEntityList } from "../composables/useEntityList";
 import type { FilterDefinition } from "../composables/useFilters";
@@ -320,7 +324,7 @@ const presentationFilterDefinitions = computed<FilterDefinition[]>(() => [
 
 const {
   searchQuery, filterState, activeFilterCount, tableOptions,
-  loading, clearingSearch, clearingFilters, loadError, items, total,
+  loading, clearingSearch, clearingFilters, loadError, loadFailure, items, total,
   hasActiveFiltersOrSearch, isTrulyEmpty,
   onFilterStateUpdate, onFiltersClear, onSearchClear,
   onOptionsUpdate, loadData,
@@ -385,7 +389,7 @@ function onEdit(p: Record<string, unknown>) {
   showForm.value = true;
 }
 
-async function onSubmit(payload: Record<string, unknown>, done: (ok: boolean) => void) {
+async function onSubmit(payload: Record<string, unknown>, done: SubmitDone) {
   const isEdit = typeof payload.id === "string" && payload.id;
   const url = isEdit ? `/api/v1/presentation/${payload.id}` : "/api/v1/presentation";
   const method = isEdit ? "PATCH" : "POST";
@@ -401,14 +405,20 @@ async function onSubmit(payload: Record<string, unknown>, done: (ok: boolean) =>
       notifications.show(
         t(isEdit ? "user.presentations.form.editSuccess" : "user.presentations.form.success"),
         "success",
+        undefined,
+        { icon: "nav-presentations" },
       );
       editingItem.value = null;
       window.dispatchEvent(new Event("entity-list-refresh"));
       done(true);
     } else {
-      done(false);
+      // A 400 naming a field is marked in the form (NEO-109); anything else was already toasted by apiFetch.
+      done(false, (await fieldErrorsFromResponse(res)) ?? undefined);
     }
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "PresentationsView.onSubmit" });
+    // A non-2xx already toasts via apiFetch; a thrown error (offline, bad response) had no feedback at all.
+    showErrorToast(err, { icon: "nav-presentations" });
     done(false);
   }
 }

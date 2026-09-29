@@ -7,6 +7,7 @@
     <AppLoadingState v-if="loading" />
     <AppErrorState
       v-else-if="loadError"
+      :error="loadFailure"
       :title="t('user.document-content.errorLoad')"
       :refresh-label="t('app.errorState.refresh')"
       @refresh="load"
@@ -53,6 +54,7 @@
 </template>
 
 <script setup lang="ts">
+import { reportCaught, reportFailedResponse } from "@api";
 import { ref, onMounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
@@ -78,18 +80,24 @@ const router = useRouter();
 const documents = ref<DocumentContentIndexEntry[]>([]);
 const loading = ref(true);
 const loadError = ref(false);
+/** The error behind loadError (NEO-81) — lets the error state say offline vs. server problem. */
+const loadFailure = ref<unknown>(null);
 
 async function load(): Promise<void> {
   loading.value = true;
   loadError.value = false;
+  loadFailure.value = null;
   try {
     const res = await apiFetch("/api/v1/document-content", { handleErrors: false });
     if (res.ok) {
       documents.value = (await res.json()) as DocumentContentIndexEntry[];
     } else {
+      loadFailure.value = await reportFailedResponse(res, { where: "DocumentsView.load" });
       loadError.value = true;
     }
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "DocumentsView.load" });
+    loadFailure.value = err;
     loadError.value = true;
   } finally {
     loading.value = false;

@@ -1,5 +1,5 @@
 <template>
-  <AuthDotGridBackground :dark="theme === 'dark'" />
+  <AuthDotGridBackground :dark="theme === 'dark'" :busy="dotsBusy" :anchor="dotsAnchor" />
 
   <div class="auth-chrome__topbar">
     <VMenu
@@ -40,10 +40,17 @@
          would fight the rAF loop. Two different strengths (see script) so
          halo/logo visibly separate in depth instead of moving as one block.
          The PWA badge lives in AuthView now, below the card, not here. -->
-    <div ref="haloMagnetEl" class="auth-chrome__halo" />
+    <!-- Inverted on purpose (NEO-53): the login page sits on a teal photo, not
+         a plain surface, so light mode shows the WHITE wordmark (BrandLogo's
+         "dark" asset) and dark mode the dark-ink one — same scheme as the PWA
+         badge under the card (NEO-12). The halo stays a dark shadow in both
+         themes and crossfades slowly between the two on toggle. -->
+    <div ref="haloMagnetEl" class="auth-chrome__halo">
+      <AuthHalo :dark="theme === 'dark'" />
+    </div>
     <div ref="logoMagnetEl" class="auth-chrome__logo-magnet">
       <BrandLogo
-        :dark="theme === 'dark'"
+        :dark="theme !== 'dark'"
         :light-src="configStore.config.logo_url"
         :dark-src="configStore.config.logo_dark_url"
         :alt="t('user.login.logoAlt')"
@@ -64,6 +71,7 @@ import type { ApiFetchOptions } from "@api";
 import { useMagneticPointer } from "../composables/useMagneticPointer";
 import ThemeLocaleSwitcher from "./ThemeLocaleSwitcher.vue";
 import BrandLogo from "./BrandLogo.vue";
+import AuthHalo from "./AuthHalo.vue";
 import AuthDotGridBackground from "./AuthDotGridBackground.vue";
 
 // Card no longer moves at all (see AuthView) — only the logo does, which
@@ -112,7 +120,17 @@ const configStore = useConfigStore();
 
 // autoPlay=false lets a parent (see AuthView) stage this logo's entrance
 // alongside other elements instead of it firing the moment this mounts.
-const { autoPlay = true } = defineProps<{ autoPlay?: boolean }>();
+const {
+  autoPlay = true,
+  dotsBusy = false,
+  dotsAnchor = null,
+} = defineProps<{
+  autoPlay?: boolean;
+  /** A sign-in is in flight — the dot field is inhaled into the card (see AuthDotGridBackground). */
+  dotsBusy?: boolean;
+  /** The card the dots are inhaled into. */
+  dotsAnchor?: HTMLElement | null;
+}>();
 
 // Entrance/exit choreography for the logo, mirroring AnimatedCard's
 // pattern: emerges from below on mount; playExit() (called by the auth view
@@ -206,24 +224,16 @@ defineExpose({ playEnter, playExit });
   }
 }
 
-/* Soft blurred halo behind the logo — the dot field is busy enough that it
-   needs a bit of contrast lift to stay legible. White in light mode (light
-   bg, so a bright halo separates it), dark in dark mode. First in the DOM
-   (see template) so it paints behind its sibling without needing an explicit
-   z-index; absolutely positioned so it takes no space in the flex layout.
-   Own (very light) magnetic transform — "leciutko" — so it isn't a dead,
-   static backdrop either. */
+/* Positions the halo (see AuthHalo) behind the logo and bleeds it past the
+   wordmark's edges. First in the DOM (see template) so it paints behind its
+   sibling without needing an explicit z-index; absolutely positioned so it
+   takes no space in the flex layout. Own (very light) magnetic transform —
+   "leciutko" — so it isn't a dead, static backdrop either. */
 .auth-chrome__halo {
   position: absolute;
   inset: -30px -70px;
-  background: radial-gradient(ellipse, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 72%);
-  filter: blur(26px);
   pointer-events: none;
   will-change: transform;
-}
-
-[data-theme="dark"] .auth-chrome__halo {
-  background: radial-gradient(ellipse, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0) 72%);
 }
 
 /* Magnetic transform target (see useMagneticPointer in <script>) — written to

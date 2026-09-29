@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<!--
+  Partner data processing agreement (Annex 1 of the partner agreement)
+  =====================================================================
+  NEO-51. This content is normally rendered INSIDE templates/partnerAgreement.html
+  (its named "annex" slot) — the doctor signs one PDF covering both. This
+  standalone template exists so the Documents tab can preview and version
+  the annex text on its own (platform.document_content_version rows keyed
+  "partnerDpa"). See partnerAgreement.html's header comment for the locale
+  (= jurisdiction) convention and the no-literal-token rule for comments.
+-->
+<html>
+<head>
+<meta charset="UTF-8" />
+<title>{{documents.partnerAgreement.annexTitle}}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: {{brand:primary}};
+    --secondary: {{brand:secondary}};
+    --text: #1a1a1a;
+    --font: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  @page { size: A4; margin: 18mm 14mm 18mm; }
+  body { font-family: var(--font); font-weight: 300; color: var(--text); font-size: 9.5pt; line-height: 1.45; max-width: 800px; margin: 0 auto; padding: 28px 24px 20px; background: #fff; }
+  p { margin: 0 0 8px; text-align: justify; }
+  ol, ul { margin: 0 0 8px; padding-left: 20px; }
+  li { margin-bottom: 4px; text-align: justify; }
+  /* "§ n." heading paragraphs read as the shared section heading — same rule as partnerAgreement.html. */
+  .doc-content p:has(> strong:only-child) { display: flex; align-items: center; gap: 10px; margin: 14px 0 4px; text-align: left; break-after: avoid; }
+  .doc-content p:has(> strong:only-child)::after { content: ""; flex: 1; border-top: 1px solid #dfe6e4; }
+  .doc-content p > strong:only-child { font-size: 7.5pt; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--primary); white-space: nowrap; }
+  .screen-only.contact-footer { font-size: 8pt; color: var(--secondary); border-top: 1px solid #ccc; padding-top: 8px; margin-top: 24px; }
+  .screen-only.contact-footer .doc-ref { text-align: right; margin-top: 2px; }
+  @media print { body { padding: 0; max-width: none; } .screen-only { display: none; } }
+  /* Same phone-width preview rule as partnerAgreement.html. */
+  @media screen and (max-width: 600px) {
+    body { padding: 20px 16px; }
+    p, li { text-align: left; }
+  }
+  {{style:docTheme}}
+</style>
+</head>
+<body>
+
+  <header class="doc-header">
+    <span class="logo">{{brand:logo}}</span>
+    <span class="doc-cat">{{documents.partnerAgreement.annexHeading}}</span>
+  </header>
+
+  <div class="doc-title">
+    <h1>{{documents.partnerAgreement.annexTitle}}</h1>
+  </div>
+
+  <div class="doc-content">{{content}}</div>
+
+  <div class="contact-footer screen-only">
+    <div>{{brand:contactLine}}</div>
+    <div class="doc-ref" data-field="doc_ref">{{doc:ref}}</div>
+  </div>
+
+</body>
+</html>

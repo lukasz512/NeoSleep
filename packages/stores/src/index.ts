@@ -11,3 +11,6 @@ export { useGlobalLoaderStore } from "./loader";
 
 export { useMotionPreferenceStore } from "./motionPreference";
 export type { MotionPreference } from "./motionPreference";
+
+export { APP_VERSION_KEY } from "./appVersion";
+export type { AppVersionInfo, AppReleaseChannel } from "./appVersion";

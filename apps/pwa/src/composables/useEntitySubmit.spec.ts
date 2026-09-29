@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
-import { useEntitySubmit } from "./useEntitySubmit";
+import { defineComponent, h } from "vue";
+import { mount } from "@vue/test-utils";
+import { createMemoryHistory, createRouter } from "vue-router";
+import { useEntitySubmit, type EntitySubmitResult } from "./useEntitySubmit";
 import { useNotifications } from "./useNotifications";
 
 function okResponse(): Response {
@@ -29,12 +32,14 @@ describe("useEntitySubmit", () => {
         },
         successMessage: "Saved",
         errorMessage: "Failed",
+        icon: "nav-patients",
         onSuccess,
       },
       done,
     );
 
     expect(current.value?.message).toBe("Saved");
+    expect(current.value?.icon).toBe("nav-patients");
     expect(current.value?.type).toBe("success");
     dismissCurrent();
 
@@ -50,7 +55,7 @@ describe("useEntitySubmit", () => {
     const dispatchSpy = vi.spyOn(window, "dispatchEvent");
 
     await submit(
-      { request: async () => okResponse(), successMessage: "Saved", errorMessage: "Failed", refresh: false },
+      { request: async () => okResponse(), successMessage: "Saved", errorMessage: "Failed", icon: "nav-patients", refresh: false },
       vi.fn(),
     );
 
@@ -66,7 +71,7 @@ describe("useEntitySubmit", () => {
     const dispatchSpy = vi.spyOn(window, "dispatchEvent");
 
     await submit(
-      { request: async () => failResponse(), successMessage: "Saved", errorMessage: "Could not save" },
+      { request: async () => failResponse(), successMessage: "Saved", errorMessage: "Could not save", icon: "nav-patients" },
       done,
     );
 
@@ -76,6 +81,51 @@ describe("useEntitySubmit", () => {
     expect(done).toHaveBeenCalledWith(false);
     expect(dispatchSpy).not.toHaveBeenCalled();
     dispatchSpy.mockRestore();
+  });
+
+  it("on a 400 naming a field: no toast, done(false) with that field's error (NEO-109)", async () => {
+    const { submit } = useEntitySubmit();
+    const { current } = useNotifications();
+    const done = vi.fn();
+    const res = new Response(JSON.stringify({ error: "date_of_birth is out of range", code: "VALIDATION_ERROR", field: "date_of_birth" }), { status: 400 });
+
+    await submit(
+      { request: async () => res, successMessage: "Saved", errorMessage: "Could not save", icon: "nav-patients" },
+      done,
+    );
+
+    expect(current.value).toBeNull();
+    expect(done).toHaveBeenCalledWith(false, { date_of_birth: "invalid" });
+  });
+
+  it("on a 409 EMAIL_IN_USE: no toast, the email field gets the taken-email message (NEO-111)", async () => {
+    const { submit } = useEntitySubmit();
+    const { current } = useNotifications();
+    const done = vi.fn();
+    const res = new Response(JSON.stringify({ error: "Email in use", code: "EMAIL_IN_USE", field: "email", reason: "taken" }), { status: 409 });
+
+    await submit(
+      { request: async () => res, successMessage: "Saved", errorMessage: "Could not save", icon: "nav-patients" },
+      done,
+    );
+
+    expect(current.value).toBeNull();
+    expect(done).toHaveBeenCalledWith(false, { email: "taken" });
+  });
+
+  it("on a 400 naming no field: falls back to the error toast", async () => {
+    const { submit } = useEntitySubmit();
+    const { current, dismissCurrent } = useNotifications();
+    const done = vi.fn();
+
+    await submit(
+      { request: async () => new Response(JSON.stringify({ error: "Bad" }), { status: 400 }), successMessage: "Saved", errorMessage: "Could not save", icon: "nav-patients" },
+      done,
+    );
+
+    expect(current.value?.message).toBe("Could not save");
+    dismissCurrent();
+    expect(done).toHaveBeenCalledWith(false);
   });
 
   it("on a thrown network error: shows an error notification and calls done(false)", async () => {
@@ -90,6 +140,7 @@ describe("useEntitySubmit", () => {
         },
         successMessage: "Saved",
         errorMessage: "Could not save",
+        icon: "nav-patients",
       },
       done,
     );
@@ -98,5 +149,62 @@ describe("useEntitySubmit", () => {
     expect(current.value?.type).toBe("error");
     dismissCurrent();
     expect(done).toHaveBeenCalledWith(false);
+  });
+});
+
+describe("useEntitySubmit — openCreated (NEO-119)", () => {
+  function createdResponse(body: unknown): EntitySubmitResult {
+    return { ok: true, status: 201, clone: () => ({ json: async () => body }) };
+  }
+
+  async function mountWithRouter() {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: "/patients", name: "patients", component: { render: () => h("div") } },
+        { path: "/patients/:id", name: "patient-detail", component: { render: () => h("div") } },
+      ],
+    });
+    await router.push("/patients");
+    let api!: ReturnType<typeof useEntitySubmit>;
+    mount(
+      defineComponent({
+        setup() {
+          api = useEntitySubmit();
+          return () => h("div");
+        },
+      }),
+      { global: { plugins: [router] } },
+    );
+    return { router, submit: api.submit };
+  }
+
+  const base = { successMessage: "Saved", errorMessage: "Failed", icon: "nav-patients" as const };
+
+  it("opens the new record's page after a successful create, after done(true)", async () => {
+    const { router, submit } = await mountWithRouter();
+    const seen: string[] = [];
+    await submit(
+      { ...base, openCreated: "patient-detail", request: async () => createdResponse({ id: "p-42", name: "María" }) },
+      (ok) => seen.push(`done:${ok}:${router.currentRoute.value.fullPath}`),
+    );
+    expect(seen).toEqual(["done:true:/patients"]);
+    expect(router.currentRoute.value.fullPath).toBe("/patients/p-42");
+    useNotifications().dismissCurrent();
+  });
+
+  it("stays put without openCreated (edits, creates from other flows)", async () => {
+    const { router, submit } = await mountWithRouter();
+    await submit({ ...base, request: async () => createdResponse({ id: "p-42" }) }, vi.fn());
+    expect(router.currentRoute.value.fullPath).toBe("/patients");
+    useNotifications().dismissCurrent();
+  });
+
+  it("stays put when the save fails or the response has no id", async () => {
+    const { router, submit } = await mountWithRouter();
+    await submit({ ...base, openCreated: "patient-detail", request: async () => ({ ok: false }) }, vi.fn());
+    await submit({ ...base, openCreated: "patient-detail", request: async () => createdResponse({ saved: true }) }, vi.fn());
+    expect(router.currentRoute.value.fullPath).toBe("/patients");
+    useNotifications().dismissCurrent();
   });
 });

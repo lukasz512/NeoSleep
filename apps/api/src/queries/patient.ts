@@ -7,6 +7,10 @@ import {
   type Patient,
   type TerritoryPathNode,
 } from "../db.js";
+import { withPlatform } from "../db/tenant.js";
+import { listPatientChecklistConfig, type ChecklistFillMode } from "../db/documentTemplateEntityType.js";
+import { getPatientFormCompletion, POLYSOMNOGRAPHY_FORM_KEY, type FormCompletionItem } from "../db/patientFormCompletion.js";
+import { DOCUMENT_MANIFEST } from "@neo/documents";
 import { getAllowedScopePaths, assertTerritoryAccessByTerritoryId } from "../middleware/requireScope.js";
 
 /**
@@ -27,8 +31,18 @@ export interface PatientDto {
   last_name: string;
   email: string | null;
   phone: string | null;
+  /** male | female | other | prefer_not_to_say | null — the list shows F/M + age (NEO-57) */
+  gender: string | null;
+  /** YYYY-MM-DD or null */
+  date_of_birth: string | null;
   practitioner_id: string | null;
   practitioner_name: string | null;
+  /** Name parts for the PWA's short list name (first given name + first surname). */
+  practitioner_first_name: string | null;
+  practitioner_last_name: string | null;
+  /** Doctor's specialty lookup key, labelled via lookups on the client */
+  practitioner_specialty: string | null;
+  practitioner_specialties: string[];
   diagnosis_code: Record<string, unknown> | null;
   ahi_baseline: number | null;
   cpap_device: string | null;
@@ -48,6 +62,14 @@ export interface PatientDto {
   updated_at: string;
 }
 
+/** One entry per document template assigned to patients, in DOCUMENT_MANIFEST order (NEO-54). */
+export interface PatientIntakeFormStatus {
+  key: string;
+  done: boolean;
+}
+
+export type PatientListItemDto = PatientDto & { intake_forms: PatientIntakeFormStatus[] };
+
 function toDto(p: Patient & { name: string }, territoryPath: TerritoryPathNode[] | null = null): PatientDto {
   return {
     id:              p.id,
@@ -57,8 +79,14 @@ function toDto(p: Patient & { name: string }, territoryPath: TerritoryPathNode[]
     last_name:       p.last_name,
     email:           p.email ?? null,
     phone:           p.phone ?? null,
+    gender:          p.gender ?? null,
+    date_of_birth:   p.date_of_birth ?? null,
     practitioner_id: p.practitioner_id ?? null,
     practitioner_name: p.practitioner_name ?? null,
+    practitioner_first_name: p.practitioner_first_name ?? null,
+    practitioner_last_name: p.practitioner_last_name ?? null,
+    practitioner_specialty: p.practitioner_specialty ?? null,
+    practitioner_specialties: p.practitioner_specialties ?? [],
     diagnosis_code:  p.diagnosis_code ?? null,
     ahi_baseline:    p.ahi_baseline ?? null,
     cpap_device:     p.cpap_device ?? null,
@@ -90,7 +118,7 @@ export interface GetPatientListInput {
 }
 
 export interface GetPatientListResult {
-  items: PatientDto[];
+  items: PatientListItemDto[];
   total: number;
 }
 
@@ -112,7 +140,36 @@ export async function GetPatientListQuery(
   const sortOrder = input.sortOrder ?? "desc";
 
   const { rows, total } = await getPatientsPaginated(ctx.client, filters, page, limit, sortBy, sortOrder);
-  return { items: rows.map((row) => toDto(row)), total };
+
+  const forms = await getPatientIntakeForms();
+  const completion = await getPatientFormCompletion(ctx.client, rows.map((row) => row.id), forms);
+  const items = rows.map((row) => {
+    const done = completion.get(row.id);
+    return {
+      ...toDto(row),
+      intake_forms: forms.map(({ key }) => ({ key, done: done?.has(key) ?? false })),
+    };
+  });
+  return { items, total };
+}
+
+/**
+ * The patient's Estudios items, in the same order the Estudios checklist
+ * shows them (ADR-024): the templates an admin assigned to "patient"
+ * (Documents → Permissions), grouped consent → patient → doctor → results by
+ * their fill mode and ordered by the admin's position within a group, then
+ * polysomnography, which every patient always has. Hidden (test-fixture) and
+ * unknown keys are dropped.
+ */
+const FILL_MODE_ORDER: ChecklistFillMode[] = ["consent", "patient", "doctor", "external"];
+async function getPatientIntakeForms(): Promise<FormCompletionItem[]> {
+  const config = await withPlatform((client) => listPatientChecklistConfig(client));
+  const known = new Set(DOCUMENT_MANIFEST.filter((entry) => !entry.hidden).map((entry) => entry.templateKey));
+  const templates = config
+    .filter((c) => known.has(c.template_key))
+    .map((c) => ({ key: c.template_key, fillMode: c.fill_mode ?? ("doctor" as const) }))
+    .sort((x, y) => FILL_MODE_ORDER.indexOf(x.fillMode) - FILL_MODE_ORDER.indexOf(y.fillMode));
+  return [...templates, { key: POLYSOMNOGRAPHY_FORM_KEY, fillMode: null }];
 }
 
 // ---------------------------------------------------------------------------

@@ -8,7 +8,7 @@ import { CreateLeadCommand, UpdateLeadCommand, ConvertLeadCommand, DeleteLeadCom
 import { InvitePractitionerCommand } from "../commands/invitePractitioner.js";
 import { GetLeadListQuery, GetLeadByIdQuery } from "../queries/lead.js";
 import { ValidationError } from "../errors.js";
-import { parsePaginationParams, toFilterArray } from "./utils.js";
+import { parsePaginationParams, toFilterArray, routeParam } from "./utils.js";
 import { resolveFrontendOrigin } from "../utils/frontendOrigin.js";
 
 /**
@@ -58,7 +58,7 @@ leadsRouter.get(
   "/lead/:id",
   requireRole("admin", "manager", "kam", "msl", "rep"),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing lead id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -117,7 +117,7 @@ leadsRouter.patch(
   "/lead/:id",
   requireRole("admin", "manager", "kam", "msl", "rep"),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing lead id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -177,10 +177,18 @@ leadsRouter.post(
   "/lead/:id/invite",
   requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing lead id");
 
-    const body = req.body as { first_name?: string; last_name?: string; email?: string };
+    const body = req.body as { first_name?: string; last_name?: string; email?: string; national_ids?: unknown };
+    const nationalIds =
+      body.national_ids && typeof body.national_ids === "object" && !Array.isArray(body.national_ids)
+        ? Object.fromEntries(
+            Object.entries(body.national_ids as Record<string, unknown>).filter(
+              (entry): entry is [string, string] => typeof entry[1] === "string",
+            ),
+          )
+        : undefined;
     const slug = tenantSlugFromHost(req.hostname);
     await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
@@ -188,6 +196,7 @@ leadsRouter.post(
         first_name: typeof body.first_name === "string" ? body.first_name : undefined,
         last_name:  typeof body.last_name  === "string" ? body.last_name  : undefined,
         email:      typeof body.email      === "string" ? body.email      : undefined,
+        national_ids: nationalIds,
       });
     });
 
@@ -202,7 +211,7 @@ leadsRouter.post(
   "/lead/:id/send-offer",
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing lead id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -223,7 +232,7 @@ leadsRouter.delete(
   "/lead/:id",
   requireRole("admin"),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing lead id");
 
     const slug = tenantSlugFromHost(req.hostname);

@@ -1,192 +1,224 @@
 <template>
-  <VDialog
+  <AppFormDialog
+    ref="dialogRef"
     :model-value="modelValue"
-    max-width="680"
-    content-class="pwa-form-dialog__content"
-    class="form-renderer-dialog"
-    :transition="originDialogTransition"
+    :title="formTitle"
+    :avatar-entity-type="avatarEntityType"
+    :avatar-name="avatarName"
+    :avatar-first-name="String(form.first_name ?? '')"
+    :avatar-last-name="String(form.last_name ?? '')"
+    :folder="isFolder"
+    :max-width="isFolder && mdAndUp ? 900 : undefined"
     @update:model-value="onDialogUpdate"
+    @close="onCancelClick"
+    @body-scroll="followScroll"
   >
-    <VCard class="pwa-form-dialog__card">
-      <VCardTitle class="mx-2 mt-2 text-h6 pwa-form-dialog__title-row">
-        <AppAvatar
-          v-if="avatarEntityType"
-          :name="avatarName"
-          :entity-type="avatarEntityType"
-          :size="40"
-        />
-        <span>{{ formTitle }}</span>
-        <VSpacer />
-        <AppButton
-          icon
-          variant="text"
-          :title="t('app.common.close')"
-          :aria-label="t('app.common.close')"
-          @click="onCancelClick"
-        >
-          <AppIcon name="close" class="pwa-form-dialog__close-icon" />
-        </AppButton>
-      </VCardTitle>
-      <VCardText>
-        <VAlert
-          v-if="verifyInfoKey"
-          type="info"
-          variant="tonal"
-          density="comfortable"
-          border="start"
-          color="primary"
-          border-color="primary"
-          rounded="lg"
-          class="mb-6"
-        >
-          {{ t(verifyInfoKey) }}
-        </VAlert>
-        <VForm ref="formRef" @submit.prevent="onSubmit">
-          <template v-for="(row, ri) in rows" :key="ri">
-            <div v-if="row.length > 1" class="pwa-form-row mb-3">
-              <div v-for="f in row" :key="f.key" class="pwa-form-row-item pwa-form-col" :style="rowItemStyle(f)">
-                <component
-                  :is="componentFor(f.type)"
-                  :ref="(el: unknown) => setFieldEl(f.key, el)"
-                  v-bind="fieldAttrs(f)"
-                >
-                  <template v-if="f.icon" #prepend-inner>
-                    <button
-                      v-if="f.icon === 'at'"
-                      type="button"
-                      class="pwa-email-at-btn"
-                      :aria-label="t('app.identity.form.emailInsertAt')"
-                      @mousedown.prevent="insertAtSign(f)"
-                    >
-                      <AppIcon name="at" class="pwa-form-field-icon" />
-                    </button>
-                    <AppIcon v-else :name="f.icon" class="pwa-form-field-icon" />
-                  </template>
-                  <template v-if="f.avatarEntityType" #item="{ item, props: itemProps }">
-                    <VListItem v-if="item.value" v-bind="itemProps" :title="item.title">
-                      <template #prepend>
-                        <AppAvatar :name="item.title" :entity-type="f.avatarEntityType" :size="28" />
-                      </template>
-                    </VListItem>
-                  </template>
-                  <template v-if="f.avatarEntityType" #chip="{ item, props: chipProps }">
-                    <VChip v-if="item.value" v-bind="chipProps" :text="resolvedChipTitle(f, item)" closable>
-                      <template #prepend>
-                        <AppSpinner v-if="chipIsLoading(f)" :size="14" :width="2" class="mr-1" />
-                        <AppAvatar v-else :name="resolvedChipTitle(f, item)" :entity-type="f.avatarEntityType" :size="18" class="mr-1" />
-                      </template>
-                    </VChip>
-                  </template>
-                  <template v-if="hasColorOptions(f)" #item="{ item, props: itemProps }">
-                    <VListItem v-bind="itemProps" :title="undefined">
-                      <VChip :color="chipColor(item.raw.color)" variant="tonal" size="small">{{ item.title }}</VChip>
-                    </VListItem>
-                  </template>
-                  <template v-if="hasColorOptions(f)" #chip="{ item, props: chipProps }">
-                    <VChip v-bind="chipProps" :color="chipColor(item.raw.color)" variant="tonal" size="small">
-                      {{ item.title }}
-                    </VChip>
-                  </template>
-                </component>
-              </div>
-            </div>
-            <div v-else class="mb-3">
-              <component
-                :is="componentFor(row[0].type)"
-                :ref="(el: unknown) => setFieldEl(row[0].key, el)"
-                v-bind="fieldAttrs(row[0])"
-              >
-                <template v-if="row[0].icon" #prepend-inner>
-                  <button
-                    v-if="row[0].icon === 'at'"
-                    type="button"
-                    class="pwa-email-at-btn"
-                    :aria-label="t('app.identity.form.emailInsertAt')"
-                    @mousedown.prevent="insertAtSign(row[0])"
-                  >
-                    <AppIcon name="at" class="pwa-form-field-icon" />
-                  </button>
-                  <AppIcon v-else :name="row[0].icon" class="pwa-form-field-icon" />
-                </template>
-                <template v-if="row[0].avatarEntityType" #item="{ item, props: itemProps }">
-                  <VListItem v-if="item.value" v-bind="itemProps" :title="item.title">
-                    <template #prepend>
-                      <AppAvatar :name="item.title" :entity-type="row[0].avatarEntityType" :size="28" />
-                    </template>
-                  </VListItem>
-                </template>
-                <template v-if="row[0].avatarEntityType" #chip="{ item, props: chipProps }">
-                  <VChip v-if="item.value" v-bind="chipProps" :text="resolvedChipTitle(row[0], item)" closable>
-                    <template #prepend>
-                      <AppSpinner v-if="chipIsLoading(row[0])" :size="14" :width="2" class="mr-1" />
-                      <AppAvatar v-else :name="resolvedChipTitle(row[0], item)" :entity-type="row[0].avatarEntityType" :size="18" class="mr-1" />
-                    </template>
-                  </VChip>
-                </template>
-                <template v-if="hasColorOptions(row[0])" #item="{ item, props: itemProps }">
-                  <VListItem v-bind="itemProps" :title="undefined">
-                    <VChip :color="chipColor(item.raw.color)" variant="tonal" size="small">{{ item.title }}</VChip>
-                  </VListItem>
-                </template>
-                <template v-if="hasColorOptions(row[0])" #chip="{ item, props: chipProps }">
-                  <VChip v-bind="chipProps" :color="chipColor(item.raw.color)" variant="tonal" size="small">
-                    {{ item.title }}
-                  </VChip>
-                </template>
-              </component>
-            </div>
-          </template>
-        </VForm>
-      </VCardText>
-      <VCardActions class="mx-2 mb-2">
-        <VSpacer />
-        <AppButton variant="text" @click="onCancelClick">
-          {{ t("app.common.cancel") }}
-        </AppButton>
-        <AppButton color="primary" :loading="submitting" @click="onSubmit">
-          {{ formSubmitLabel }}
-        </AppButton>
-      </VCardActions>
-    </VCard>
-
-    <VDialog
-      v-model="showDiscardConfirm"
-      max-width="360"
-      content-class="pwa-form-dialog__content"
-      class="pwa-discard-dialog"
-      :transition="originDialogTransition"
-      persistent
+    <AppInlineAlert
+      v-if="verifyInfoKey"
+      type="info"
+      class="mb-6"
     >
-      <VCard class="pwa-confirm-dialog__card">
-        <VCardText>{{ t("app.common.discardChanges") }}</VCardText>
-        <VCardActions>
-          <VSpacer />
-          <AppButton variant="text" @click="showDiscardConfirm = false">
-            {{ t("app.common.cancel") }}
-          </AppButton>
-          <AppButton color="error" variant="text" @click="confirmDiscard">
-            {{ t("app.common.discard") }}
-          </AppButton>
-        </VCardActions>
-      </VCard>
-    </VDialog>
-  </VDialog>
+      {{ t(verifyInfoKey) }}
+    </AppInlineAlert>
+    <VForm ref="formRef" @submit.prevent="onSubmit">
+      <FormErrorSummary :errors="errorList" :title="t('app.formRenderer.errorSummary.title', { n: errorList.length })" @select="focusField" />
+      <section
+        v-for="sec in sections"
+        :key="sec.id"
+        class="pwa-form-section"
+        :class="{ 'pwa-form-section--titled': isFolder }"
+        :data-section="sec.id"
+        :aria-labelledby="isFolder ? `${uid}-${sec.id}` : undefined"
+      >
+      <h3 v-if="isFolder" :id="`${uid}-${sec.id}`" class="pwa-form-section__title">
+        {{ sec.label }}
+        <span
+          v-if="errorCountBySection[sec.id]"
+          class="pwa-form-section__errors"
+          data-testid="section-error-count"
+          :aria-label="t('app.formRenderer.errorSummary.sectionCount', { n: errorCountBySection[sec.id] })"
+        >{{ errorCountBySection[sec.id] }}</span>
+      </h3>
+      <template v-for="(row, ri) in sec.rows" :key="ri">
+        <div v-if="row.length > 1" class="pwa-form-row mb-3">
+          <div v-for="f in row" :key="f.key" class="pwa-form-row-item pwa-form-col" :style="rowItemStyle(f)">
+            <component
+              :is="componentFor(f.type)"
+              :ref="(el: unknown) => setFieldEl(f.key, el)"
+              v-bind="fieldAttrs(f)"
+            >
+              <template v-if="f.icon" #prepend-inner>
+                <button
+                  v-if="f.icon === 'at'"
+                  type="button"
+                  class="pwa-email-at-btn"
+                  :aria-label="t('app.identity.form.emailInsertAt')"
+                  @mousedown.prevent="insertAtSign(f)"
+                >
+                  <AppIcon name="at" class="pwa-form-field-icon" />
+                </button>
+                <AppIcon v-else :name="f.icon" class="pwa-form-field-icon" />
+              </template>
+              <template v-if="f.avatarEntityType" #item="{ internalItem: item, props: itemProps }">
+                <VListItem v-if="item.value" v-bind="itemProps" :title="item.title" :subtitle="item.raw.subtitle">
+                  <template #prepend>
+                    <AppAvatar :name="item.title" :entity-type="f.avatarEntityType" :size="item.raw.subtitle ? 36 : 28" />
+                  </template>
+                </VListItem>
+              </template>
+              <template v-if="f.avatarEntityType" #chip="{ internalItem: item, props: chipProps }">
+                <VChip v-if="item.value" v-bind="chipProps" :text="resolvedChipTitle(f, item)" closable>
+                  <template #prepend>
+                    <AppSpinner v-if="chipIsLoading(f)" :size="14" :width="2" class="mr-1" />
+                    <AppAvatar v-else :name="resolvedChipTitle(f, item)" :entity-type="f.avatarEntityType" :size="18" class="mr-1" />
+                  </template>
+                </VChip>
+              </template>
+              <template v-if="hasColorOptions(f)" #item="{ internalItem: item, props: itemProps }">
+                <VListItem v-bind="itemProps" :title="undefined">
+                  <VChip :color="chipColor(item.raw.color)" variant="tonal" size="small">{{ item.title }}</VChip>
+                </VListItem>
+              </template>
+              <template v-if="hasColorOptions(f)" #chip="{ internalItem: item, props: chipProps }">
+                <VChip v-bind="chipProps" :color="chipColor(item.raw.color)" variant="tonal" size="small">
+                  {{ item.title }}
+                </VChip>
+              </template>
+            </component>
+          </div>
+        </div>
+        <div v-else class="mb-3">
+          <component
+            :is="componentFor(row[0].type)"
+            :ref="(el: unknown) => setFieldEl(row[0].key, el)"
+            v-bind="fieldAttrs(row[0])"
+          >
+            <template v-if="row[0].icon" #prepend-inner>
+              <button
+                v-if="row[0].icon === 'at'"
+                type="button"
+                class="pwa-email-at-btn"
+                :aria-label="t('app.identity.form.emailInsertAt')"
+                @mousedown.prevent="insertAtSign(row[0])"
+              >
+                <AppIcon name="at" class="pwa-form-field-icon" />
+              </button>
+              <AppIcon v-else :name="row[0].icon" class="pwa-form-field-icon" />
+            </template>
+            <template v-if="row[0].avatarEntityType" #item="{ internalItem: item, props: itemProps }">
+              <VListItem v-if="item.value" v-bind="itemProps" :title="item.title" :subtitle="item.raw.subtitle">
+                <template #prepend>
+                  <AppAvatar :name="item.title" :entity-type="row[0].avatarEntityType" :size="item.raw.subtitle ? 36 : 28" />
+                </template>
+              </VListItem>
+            </template>
+            <template v-if="row[0].avatarEntityType" #chip="{ internalItem: item, props: chipProps }">
+              <VChip v-if="item.value" v-bind="chipProps" :text="resolvedChipTitle(row[0], item)" closable>
+                <template #prepend>
+                  <AppSpinner v-if="chipIsLoading(row[0])" :size="14" :width="2" class="mr-1" />
+                  <AppAvatar v-else :name="resolvedChipTitle(row[0], item)" :entity-type="row[0].avatarEntityType" :size="18" class="mr-1" />
+                </template>
+              </VChip>
+            </template>
+            <template v-if="hasColorOptions(row[0])" #item="{ internalItem: item, props: itemProps }">
+              <VListItem v-bind="itemProps" :title="undefined">
+                <VChip :color="chipColor(item.raw.color)" variant="tonal" size="small">{{ item.title }}</VChip>
+              </VListItem>
+            </template>
+            <template v-if="hasColorOptions(row[0])" #chip="{ internalItem: item, props: chipProps }">
+              <VChip v-bind="chipProps" :color="chipColor(item.raw.color)" variant="tonal" size="small">
+                {{ item.title }}
+              </VChip>
+            </template>
+          </component>
+        </div>
+      </template>
+      </section>
+    </VForm>
+
+    <template v-if="isFolder" #spine>
+      <FormFolderSpine
+        :entity-type="avatarEntityType"
+        :name="avatarName"
+        :first-name="String(form.first_name ?? '')"
+        :last-name="String(form.last_name ?? '')"
+        :name-pending="t('app.formRenderer.namePending')"
+        :facts="spineFacts"
+        :status="statusChip"
+        :status-label="t('app.formRenderer.fact.status')"
+        :sections="indexSections"
+        :active="activeSection"
+        :index-label="t('app.formRenderer.sectionsLabel')"
+        :changed-label="t('app.formRenderer.sectionChanged')"
+        @select="goToSection"
+      />
+    </template>
+    <template v-if="isFolder && !mdAndUp" #header-extra>
+      <FormSectionChips
+        :sections="indexSections"
+        :active="activeSection"
+        :index-label="t('app.formRenderer.sectionsLabel')"
+        :changed-label="t('app.formRenderer.sectionChanged')"
+        @select="goToSection"
+      />
+    </template>
+
+    <template #actions>
+      <span v-if="changedCount" class="pwa-form-dialog__changes" data-testid="form-changes" aria-live="polite">
+        <span class="pwa-form-dialog__changes-dot" aria-hidden="true" />
+        {{ t("app.formRenderer.unsavedChanges", { n: changedCount }) }}
+      </span>
+      <VSpacer />
+      <AppButton variant="text" @click="onCancelClick">
+        {{ t("app.common.cancel") }}
+      </AppButton>
+      <AppButton color="primary" variant="flat" :loading="submitting" @click="onSubmit">
+        {{ formSubmitLabel }}
+      </AppButton>
+    </template>
+
+    <template #overlays>
+      <AppConfirmDialog
+        v-model="showDiscardConfirm"
+        :text="t('app.common.discardChanges')"
+        :secondary-label="t('app.common.cancel')"
+        :secondary-color="null"
+        :primary-label="t('app.common.discard')"
+        primary-color="error"
+        primary-variant="text"
+        max-width="360"
+        @secondary="showDiscardConfirm = false"
+        @primary="confirmDiscard"
+      />
+    </template>
+  </AppFormDialog>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { useDisplay } from "vuetify";
+import { useIdentity } from "../composables/useIdentity";
+import FormFolderSpine, { type FormSpineSection } from "./FormFolderSpine.vue";
+import FormSectionChips from "./FormSectionChips.vue";
 import { VTextField, VSelect, VAutocomplete, VCombobox, VTextarea, VSwitch } from "vuetify/components";
-import { originDialogTransition } from "@ui";
 import { useFormRenderer } from "../composables/useFormRenderer";
 import { scrollToFormTop } from "../utils/scrollToFormTop";
 import AppButton from "./AppButton.vue";
 import AppIcon from "./AppIcon.vue";
 import AppAvatar, { type AppAvatarEntityType } from "./AppAvatar.vue";
 import AppSpinner from "./AppSpinner.vue";
+import AppFormDialog from "./AppFormDialog.vue";
+import AppConfirmDialog from "./AppConfirmDialog.vue";
 import PhoneField from "./PhoneField.vue";
 import EmailField from "./EmailField.vue";
-import type { FormFieldDef, FormFieldType } from "../types/formField";
+import ChoiceChipsField from "./ChoiceChipsField.vue";
+import AppDateField from "./AppDateField.vue";
+import { useNotifications } from "../composables/useNotifications";
+import type { SubmitDone } from "../composables/useEntitySubmit";
+import { useFormErrors, focusFormField, type FieldErrors } from "../composables/useFormErrors";
+import type { FormDerive, FormFieldDef, FormFieldType } from "../types/formField";
+import { AppInlineAlert, FormErrorSummary } from "@ui";
 
 /**
  * componentFor() below resolves to these imported component OBJECTS, never
@@ -211,7 +243,7 @@ import type { FormFieldDef, FormFieldType } from "../types/formField";
 
 const props = withDefaults(
   defineProps<{
-    modelValue: boolean;
+    modelValue?: boolean;
     fields: FormFieldDef[];
     initialData?: Record<string, unknown>;
     titleKey: string;
@@ -219,10 +251,10 @@ const props = withDefaults(
     submitLabelKey?: string;
     editSubmitLabelKey?: string;
     /** Entity-specific derived-fields hook — see useFormRenderer.ts's 3rd param. */
-    derive?: (form: Record<string, unknown>) => Partial<Record<string, unknown>> | void;
+    derive?: FormDerive;
     /** i18n key for an info banner shown above the form (e.g. "verify this data"). */
     verifyInfoKey?: string;
-    /** Shows an AppAvatar next to the dialog title, live-previewing first/last name — opt-in, only for identity-based forms (hcp/lead/patient/user). */
+    /** Shows an AppAvatar in the dialog header, live-previewing first/last name — opt-in, only for identity-based forms (hcp/lead/patient/user). */
     avatarEntityType?: AppAvatarEntityType;
   }>(),
   { modelValue: false },
@@ -233,9 +265,10 @@ const emit = defineEmits<{
   /**
    * `done` must be called by the listener once its own async submit work
    * (the actual apiFetch call) settles — true closes the dialog, false
-   * keeps it open (e.g. after a failed request) so the user can retry.
+   * keeps it open (e.g. after a failed request) so the user can retry;
+   * `fieldErrors` (a 400 naming a field, NEO-109) are marked on those fields.
    */
-  submit: [payload: Record<string, unknown>, done: (ok: boolean) => void];
+  submit: [payload: Record<string, unknown>, done: SubmitDone];
 }>();
 
 const { t } = useI18n();
@@ -245,11 +278,34 @@ const {
   formRef, form, isEditMode,
   resolvedOptions, loadingOptions, loadAllAsyncOptions,
   rulesFor, validate, buildPayload,
-  resetForm, hasChanged,
+  resetForm, hasChanged, changedKeys,
 } = useFormRenderer(props.fields, initialDataRef, props.derive);
+const { factsFor } = useIdentity();
 
 const submitting = ref(false);
 const showDiscardConfirm = ref(false);
+
+/**
+ * Errors show in the form, never as a toast (NEO-109) — see useFormErrors:
+ * under each field, in the summary box on top and as a count on each section
+ * heading, only after the first Save. A field the API rejected clears as
+ * soon as it's edited (setField).
+ */
+const { attempted, serverError: serverErrorText, clearServerError, setServerErrors, reset: resetErrors, errorListFor } = useFormErrors();
+
+const errorList = errorListFor(() =>
+  sections.value.flatMap((sec) => sec.fields.map((f) => ({ key: f.key, label: labelFor(f), value: form.value[f.key], rules: rulesFor(f) }))),
+);
+
+const errorCountBySection = computed<Record<string, number>>(() => {
+  const keys = new Set(errorList.value.map((e) => e.key));
+  return Object.fromEntries(sections.value.map((sec) => [sec.id, sec.fields.filter((f) => keys.has(f.key)).length]));
+});
+
+/** The summary's links jump to their field. */
+function focusField(key: string) {
+  focusFormField((fieldEls[key] as { $el?: Element } | undefined)?.$el);
+}
 
 const formTitle = computed(() =>
   isEditMode.value && props.editTitleKey ? t(props.editTitleKey) : t(props.titleKey),
@@ -278,9 +334,8 @@ function colorFor(f: FormFieldDef): string | undefined {
   return typeof f.color === "function" ? f.color(form.value) : f.color;
 }
 
-const rows = computed(() => {
+function pairRows(fields: FormFieldDef[]): FormFieldDef[][] {
   const result: FormFieldDef[][] = [];
-  const fields = props.fields.filter((f) => !isFieldHidden(f));
   let i = 0;
   while (i < fields.length) {
     const f = fields[i];
@@ -296,7 +351,120 @@ const rows = computed(() => {
     }
   }
   return result;
+}
+
+/**
+ * Visible fields grouped by `section` (NEO-92), sections in the order of
+ * their first field, so a config keeps its natural field order; a field
+ * without one joins the first section. Pairing into rows happens per section.
+ */
+const sections = computed(() => {
+  const groups = new Map<string, FormFieldDef[]>();
+  const visible = props.fields.filter((f) => !isFieldHidden(f));
+  const fallback = visible.find((f) => f.section)?.section ?? "default";
+  for (const f of visible) {
+    const id = f.section ?? fallback;
+    groups.set(id, [...(groups.get(id) ?? []), f]);
+  }
+  return [...groups].map(([id, fields]) => ({
+    id,
+    label: t(`app.formRenderer.section.${id}`),
+    fields,
+    rows: pairRows(fields),
+  }));
 });
+
+/** Two or more sections make the "Carpeta" folder: spine + section headings. Shorter forms stay one plain sheet. */
+const isFolder = computed(() => sections.value.length >= 2);
+
+// Desktop (≥ 960px) gets the spine; tablets (a tile) and phones (a bottom
+// sheet) get the same index as a row of chips under the header.
+const { mdAndUp } = useDisplay();
+const uid = useId();
+
+/**
+ * Change markers (section dots + counter) are an edit-only feature (NEO-98):
+ * on create every typed field is "new", so marking them is just noise. The
+ * discard confirm on close still uses hasChanged() in both modes.
+ */
+const shownChangedKeys = computed(() => (isEditMode.value ? changedKeys.value : []));
+const changedSet = computed(() => new Set(shownChangedKeys.value));
+const changedCount = computed(() => shownChangedKeys.value.length);
+const indexSections = computed<FormSpineSection[]>(() =>
+  sections.value.map((s) => ({ id: s.id, label: s.label, changed: s.fields.some((f) => changedSet.value.has(f.key)) })),
+);
+
+/** The spine's ficha reads the live form over the record, so create and edit fill it the same way. */
+const spineFacts = computed(() =>
+  props.avatarEntityType
+    ? factsFor(props.avatarEntityType, { ...(props.initialData ?? {}), ...form.value }, { placeholders: !isEditMode.value })
+    : [],
+);
+
+/** A `status` select with coloured options shows as the same tonal pill on the spine as in lists. */
+const statusChip = computed(() => {
+  const f = props.fields.find((x) => x.key === "status" && x.type === "select");
+  if (!f) return null;
+  const option = resolvedOptions(f).find((o) => o.value === form.value.status);
+  return option?.color ? { label: option.title, color: chipColor(option.color) } : null;
+});
+
+// Scroll-spy: the active section is the last one whose top has passed the
+// top of the sheet (plus a little slack); at the very bottom, the last one.
+const dialogRef = ref<InstanceType<typeof AppFormDialog> | null>(null);
+const activeSection = ref("");
+const SPY_SLACK_PX = 48;
+
+function sectionEls(body: HTMLElement): HTMLElement[] {
+  return Array.from(body.querySelectorAll<HTMLElement>(".pwa-form-section[data-section]"));
+}
+
+let spyPausedUntil = 0;
+let spyResume: ReturnType<typeof setTimeout> | undefined;
+
+function followScroll(body: HTMLElement) {
+  if (!isFolder.value) return;
+  const wait = spyPausedUntil - performance.now();
+  if (wait > 0) {
+    // Catch up once the pause ends, in case the user scrolled meanwhile.
+    clearTimeout(spyResume);
+    spyResume = setTimeout(() => followScroll(body), wait + 20);
+    return;
+  }
+  const els = sectionEls(body);
+  if (!els.length) return;
+  const top = body.getBoundingClientRect().top;
+  const atBottom = body.scrollTop + body.clientHeight >= body.scrollHeight - 1 && body.scrollTop > 0;
+  let current = els[0];
+  for (const el of els) {
+    if (el.getBoundingClientRect().top - top <= SPY_SLACK_PX) current = el;
+  }
+  activeSection.value = (atBottom ? els[els.length - 1] : current).dataset.section ?? "";
+}
+
+function goToSection(id: string) {
+  const body = dialogRef.value?.bodyEl();
+  const el = body ? sectionEls(body).find((s) => s.dataset.section === id) : undefined;
+  if (!body || !el) return;
+  const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const offset = el.getBoundingClientRect().top - body.getBoundingClientRect().top;
+  // The first section scrolls back to the very top (its own padding included).
+  const target = el === sectionEls(body)[0] ? 0 : body.scrollTop + offset - 16;
+  // Hold the picked section while the smooth scroll passes the ones between.
+  spyPausedUntil = reduce ? 0 : performance.now() + 600;
+  body.scrollTo({ top: target, behavior: reduce ? "auto" : "smooth" });
+  activeSection.value = id;
+}
+
+onBeforeUnmount(() => clearTimeout(spyResume));
+
+watch(
+  sections,
+  (list) => {
+    if (!list.some((s) => s.id === activeSection.value)) activeSection.value = list[0]?.id ?? "";
+  },
+  { immediate: true },
+);
 
 /**
  * Sets --pwa-form-col rather than `flex` directly — theme.scss's
@@ -335,7 +503,7 @@ function insertAtSign(f: FormFieldDef) {
     try {
       inputEl?.setSelectionRange(start + 1, start + 1);
     } catch {
-      // no-op: unsupported input type, focus() above is enough
+      // benign: unsupported input type for setSelectionRange — focus() above is enough.
     }
   });
 }
@@ -403,14 +571,22 @@ function componentFor(type: FormFieldType) {
     case "phone": return PhoneField;
     case "email": return EmailField;
     case "boolean": return VSwitch;
+    case "choice": return ChoiceChipsField;
+    case "date": return AppDateField;
     default: return VTextField;
   }
+}
+
+/** Every field edit goes through here, so a rejected value's server error clears the moment it changes. */
+function setField(f: FormFieldDef, v: unknown) {
+  form.value[f.key] = v;
+  clearServerError(f.key);
 }
 
 function fieldAttrs(f: FormFieldDef): Record<string, unknown> {
   const common: Record<string, unknown> = {
     modelValue: form.value[f.key],
-    "onUpdate:modelValue": (v: unknown) => { form.value[f.key] = normalizeFieldValue(f, v); },
+    "onUpdate:modelValue": (v: unknown) => { setField(f, normalizeFieldValue(f, v)); },
     label: labelFor(f),
     variant: "outlined",
     density: "comfortable",
@@ -420,6 +596,7 @@ function fieldAttrs(f: FormFieldDef): Record<string, unknown> {
     placeholder: f.placeholder ? t(f.placeholder) : undefined,
     disabled: submitting.value || (!!f.immutableOnEdit && isEditMode.value),
     color: colorFor(f),
+    errorMessages: serverErrorText(f.key),
   };
 
   switch (f.type) {
@@ -468,7 +645,24 @@ function fieldAttrs(f: FormFieldDef): Record<string, unknown> {
     case "chips":
       return { ...common, items: [], multiple: true, chips: true, closableChips: true };
     case "date":
-      return { ...common, type: "date" };
+      // AppDateField (NEO-132): typed DD/MM/YYYY + calendar card, never the native picker.
+      return {
+        modelValue: common.modelValue,
+        "onUpdate:modelValue": common["onUpdate:modelValue"],
+        label: common.label,
+        rules: common.rules,
+        hint: common.hint,
+        persistentHint: common.persistentHint,
+        errorMessages: common.errorMessages,
+        disabled: common.disabled,
+        color: common.color,
+        variant: common.variant,
+        density: common.density,
+        min: f.date?.min,
+        max: f.date?.max,
+        openAt: f.date?.openAt,
+        quickPicks: f.date?.quickPicks,
+      };
     case "boolean":
       // Its own prop set, not spread from `common` — outlined-field props
       // (variant/rules/placeholder) don't apply to a switch.
@@ -480,8 +674,23 @@ function fieldAttrs(f: FormFieldDef): Record<string, unknown> {
         label: labelFor(f),
         color: "primary",
         density: "comfortable",
-        hideDetails: true,
+        // A switch has no validation message, so the details row is only
+        // worth its space when the field carries a helper text (hint).
+        hideDetails: !f.hint,
+        hint: f.hint ? t(f.hint) : undefined,
+        persistentHint: !!f.hint,
         disabled: submitting.value || (!!f.immutableOnEdit && isEditMode.value),
+      };
+    case "choice":
+      // Chips, not an outlined input — only the props ChoiceChipsField takes.
+      return {
+        modelValue: form.value[f.key],
+        "onUpdate:modelValue": (v: unknown) => { setField(f, v); },
+        label: labelFor(f),
+        items: resolvedOptions(f),
+        rules: rulesFor(f),
+        errorMessages: common.errorMessages,
+        disabled: common.disabled,
       };
     case "text":
     default:
@@ -510,19 +719,40 @@ function onCancelClick() {
   }
 }
 
+const notifications = useNotifications();
+
 async function onSubmit() {
+  attempted.value = true;
   const valid = await validate();
-  if (!valid) {
+  if (!valid || errorList.value.length) {
     scrollToFormTop(formRef.value?.$el);
     return;
   }
   submitting.value = true;
   try {
     const payload = buildPayload();
-    const ok = await new Promise<boolean>((resolve) => emit("submit", payload, resolve));
-    if (ok) emit("update:modelValue", false);
+    const result = await new Promise<{ ok: boolean; fieldErrors?: FieldErrors }>((resolve) =>
+      emit("submit", payload, (ok, fieldErrors) => resolve({ ok, fieldErrors })),
+    );
+    if (result.ok) {
+      emit("update:modelValue", false);
+    } else if (result.fieldErrors) {
+      showServerErrors(result.fieldErrors);
+    }
   } finally {
     submitting.value = false;
+  }
+}
+
+/**
+ * Marks the fields the API rejected and scrolls up to the summary. A field
+ * this form doesn't show can't be marked, so that one still gets a toast.
+ */
+function showServerErrors(fieldErrors: FieldErrors) {
+  if (setServerErrors(fieldErrors, sections.value.flatMap((sec) => sec.fields.map((f) => f.key)))) {
+    nextTick(() => scrollToFormTop(formRef.value?.$el));
+  } else {
+    notifications.show(t("app.formRenderer.validation.saveRejected"), "error", undefined, { icon: "sad-cloud" });
   }
 }
 
@@ -538,6 +768,8 @@ watch(
   (open, wasOpen) => {
     if (open && !wasOpen) {
       resetForm();
+      resetErrors();
+      activeSection.value = sections.value[0]?.id ?? "";
       loadAllAsyncOptions();
     }
   },

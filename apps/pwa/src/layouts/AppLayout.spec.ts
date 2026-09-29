@@ -8,7 +8,7 @@ import { navRoutesForRole } from "../router/routes";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const APP_MODULE_ROUTES = [
-  "dashboard", "leads", "planner", "hcp", "hco", "patients", "presentations", "users",
+  "dashboard", "leads", "planner", "hcp", "hco", "patients", "appointments", "presentations", "users",
   "sleep-studies", "treatment-plans", "resources", "territories",
 ] as const;
 
@@ -63,7 +63,7 @@ describe("AppLayout", () => {
   describe("shared AppShell (packages/ui) drives the responsive chrome", () => {
     it("AppLayout uses the shared AppShell component, not a hand-rolled drawer/appbar", () => {
       const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
-      expect(appLayoutSource).toContain('import { AppShell } from "@ui"');
+      expect(appLayoutSource).toMatch(/import \{[^}]*\bAppShell\b[^}]*\} from "@ui"/);
       expect(appLayoutSource).toContain("<AppShell");
     });
 
@@ -73,11 +73,26 @@ describe("AppLayout", () => {
       expect(appLayoutSource).toContain("useVisibleNavRoutes");
     });
 
-    it("mobile drawer close is wired: AppNavLinks emits navigate, AppLayout closes the drawer", () => {
-      const navLinksSource = readFileSync(path.resolve(__dirname, "components/AppNavLinks.vue"), "utf-8");
-      expect(navLinksSource).toContain("$emit('navigate')");
-      const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
-      expect(appLayoutSource).toContain('@navigate="mobileDrawerOpen = false"');
+    // body below it become visually indistinguishable.
+    it("app bar has an explicit surface color so it doesn't blend into the body background in dark mode", () => {
+      const appShellSource = readFileSync(
+        path.resolve(__dirname, "../../../../packages/ui/src/components/AppShell.vue"),
+        "utf-8",
+      );
+      // NEO-85: a CSS variable instead of a Vuetify `color` prop, so the app can
+      // tint it from the tenant's runtime primary (AppLayout sets it to the desk).
+      expect(appShellSource).toMatch(
+        /\.app-shell__bar,\s*\.app-shell__nav\s*{[^}]*background:\s*var\(--app-shell-chrome-fill\)/,
+      );
+      expect(appShellSource).toMatch(/--app-shell-chrome-fill:\s*var\(--app-shell-chrome, rgb\(var\(--v-theme-surface-container-low\)\)\)/);
+      const layoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
+      expect(layoutSource).toMatch(/--app-shell-chrome:\s*var\(--pwa-desk\)/);
+    });
+
+    it("routed content is a paper sheet on the desk (NEO-85 record stack)", () => {
+      const layoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
+      expect(layoutSource).toMatch(/<AppShell[\s\S]*?\bsheet\b[\s\S]*?>/);
+      expect(layoutSource).toMatch(/\.layout-main__inner\s*{[^}]*background:\s*var\(--pwa-sheet\)[^}]*box-shadow:\s*var\(--pwa-sheet-shadow\)/);
     });
   });
 
@@ -91,38 +106,37 @@ describe("AppLayout", () => {
     });
 
     // /presentations is meta.hidden (see routes.ts) — excluded from appNavRoutes entirely,
-    // superseded by /resources. /dashboard IS a real appNavRoutes entry (ALL_STAFF_ROLES,
-    // not filtered out) — every role sees it first, contrary to this describe block's
-    // original (stale) title claiming otherwise.
+    // superseded by /resources. /dashboard is admin-only (2026-09-26) — every other
+    // role's first entry (and home, see homePathForRole) is its first remaining module.
     it("rep sees every core module (leads, hcp, hco, patients, planner, resources) but not users, sleep-studies, treatment-plans, or territories", () => {
-      const expectedPaths = ["/dashboard", "/leads", "/hcp", "/hco", "/patients", "/planner", "/resources"];
+      const expectedPaths = ["/leads", "/hcp", "/hco", "/patients", "/appointments", "/planner", "/resources"];
       expect(navRoutesForRole("rep").map((r) => r.path)).toEqual(expectedPaths);
     });
 
-    it("manager sees users management, leads, the clinical aggregates (sleep-studies/treatment-plans), and documents — everything except territories", () => {
+    it("manager sees users management, leads, sleep studies (NEO-83), treatment plans and documents — not territories", () => {
       const expectedPaths = [
-        "/dashboard", "/leads", "/hcp", "/hco", "/patients",
-        "/sleep-studies", "/treatment-plans", "/planner", "/resources", "/users", "/documents",
+        "/leads", "/hcp", "/hco", "/patients", "/appointments", "/sleep-studies",
+        "/treatment-plans", "/planner", "/resources", "/users", "/documents",
       ];
       expect(navRoutesForRole("manager").map((r) => r.path)).toEqual(expectedPaths);
     });
 
     it("kam and msl see leads, hcp, hco, patients, planner, resources but not users (same field-force access as rep)", () => {
-      const expectedPaths = ["/dashboard", "/leads", "/hcp", "/hco", "/patients", "/planner", "/resources"];
+      const expectedPaths = ["/leads", "/hcp", "/hco", "/patients", "/appointments", "/planner", "/resources"];
       expect(navRoutesForRole("kam").map((r) => r.path)).toEqual(expectedPaths);
       expect(navRoutesForRole("msl").map((r) => r.path)).toEqual(expectedPaths);
     });
 
     it("admin always sees every nav item, including leads, documents, and territories (isRoleAllowed bypasses role restrictions for admin)", () => {
       const expectedPaths = [
-        "/dashboard", "/leads", "/hcp", "/hco", "/patients", "/sleep-studies",
+        "/dashboard", "/leads", "/hcp", "/hco", "/patients", "/appointments", "/sleep-studies",
         "/treatment-plans", "/planner", "/resources", "/users", "/documents", "/territories",
       ];
       expect(navRoutesForRole("admin").map((r) => r.path)).toEqual(expectedPaths);
     });
 
-    it("doctor sees dashboard, patients, the clinical aggregates, planner, and resources — never leads, hcp, hco, or users", () => {
-      const expectedPaths = ["/dashboard", "/patients", "/sleep-studies", "/treatment-plans", "/planner", "/resources"];
+    it("doctor sees patients, the clinical aggregates, planner, and resources — never leads, hcp, hco, or users", () => {
+      const expectedPaths = ["/patients", "/appointments", "/sleep-studies", "/treatment-plans", "/planner", "/resources"];
       expect(navRoutesForRole("doctor").map((r) => r.path)).toEqual(expectedPaths);
     });
   });
@@ -156,54 +170,226 @@ describe("AppLayout", () => {
     });
   });
 
-  describe("top bar: logo-only on the right, hamburger + title on the left", () => {
-    it("app bar's right side renders only the logo — no notification bell (that's DashboardView-only), no role-preview select, no user menu", () => {
-      const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
-      expect(appLayoutSource).not.toContain("app-bar-actions");
-      // Component usage/import, not the explanatory code comment that legitimately
-      // names AppNotificationCenter.vue (why polling moved out of it) — a bare
-      // substring check would false-positive on that comment.
-      expect(appLayoutSource).not.toMatch(/<AppNotificationCenter\b/);
-      expect(appLayoutSource).not.toMatch(/import\s+AppNotificationCenter\b/);
-      expect(appLayoutSource).not.toContain("rolePreview");
-      expect(appLayoutSource).not.toContain("VSelect");
+  // NEO-55: logo top-left of the full-width app bar (desktop only), account
+  // top-right (both breakpoints), module title in the content card's own
+  // header row on desktop, no hamburger/mobile drawer — bottom bar + "More".
+  describe("NEO-55 — app bar, page header and mobile navigation", () => {
+    const readLayout = () => readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
+    const readShell = () =>
+      readFileSync(path.resolve(__dirname, "../../../../packages/ui/src/components/AppShell.vue"), "utf-8");
+    const slotBlock = (source: string, slot: string) => {
+      const start = source.indexOf(`<template #${slot}`);
+      return source.slice(start, source.indexOf("\n      </template>", start));
+    };
+
+    // NEO-108: the logo is back on phones (smaller, folding into its O when
+    // the bar's icons need the room); the back arrow moved into the card.
+    it("app bar's leading slot renders the logo on both breakpoints, never a back arrow", () => {
+      const block = slotBlock(readLayout(), "app-bar-start");
+      expect(block).toMatch(/<div class="layout-appbar__brand">\s*<AppLogo\s+ref="barLogo"/);
+      expect(block).not.toContain('v-if="!isMobile"');
+      expect(block).toContain(':height="isMobile ? MOBILE_LOGO_HEIGHT : DESKTOP_LOGO_HEIGHT"');
+      expect(block).toContain(':folded="logoFolded"');
+      expect(block).not.toContain('name="arrow-left"');
+    });
+
+    it("the folded logo is the avatar's size, and folding is measured from the bar, not a breakpoint", () => {
+      const layout = readLayout();
+      expect(slotBlock(layout, "app-bar-start")).toContain(':mark-size="AVATAR_SIZE"');
+      expect(slotBlock(layout, "app-bar-actions")).toContain('<VAvatar :size="AVATAR_SIZE"');
+      // The DEV badge after the logo counts towards the room the logo needs.
+      expect(layout).toMatch(/useBarLogoFit\(barLogo, barActions, wordmarkWidth, isMobile, \{ el: envBadge, gap: BRAND_GAP \}\)/);
+      expect(slotBlock(layout, "app-bar-actions")).toContain('ref="barActions"');
+    });
+
+    it("the logo is no longer rendered inside the side menu or on the right of the app bar", () => {
+      const shell = readShell();
+      expect(shell).not.toContain('<slot name="logo"');
+      expect(shell).not.toContain("app-shell__bar-logo");
+      expect(shell).toContain('<slot name="app-bar-start"');
+    });
+
+    it("the account menu lives in the app bar's actions slot and grows out of the avatar button (NEO-102, NEO-122)", () => {
+      const layout = readLayout();
+      const block = slotBlock(layout, "app-bar-actions");
+      expect(block.match(/<AppUserMenuPanel\b/g)).toHaveLength(1);
+      expect(block).toMatch(/<AppAccountMenu v-model:open="menuOpen" :mobile="isMobile"/);
+      // the motion reads these marks on the button
+      expect(block).toContain('data-motion="trigger-avatar"');
+      expect(block).toContain('data-motion="trigger-name"');
+      expect(block).toContain(':aria-expanded="accountMenuOpen"');
+      expect(block).toContain("user.initials");
+      expect(block).toContain(':can-change-password="user.canChangePassword"');
+      expect(block).toContain(':version="appVersion.version"');
+      // Name + role next to the avatar on desktop only.
+      expect(block).toMatch(/v-if="!isMobile" class="layout-user-info"/);
+    });
+
+    it("the drawer footer holds only the collapse toggle — no version label (moved to the account menu, NEO-102), no account button", () => {
+      const block = slotBlock(readLayout(), "drawer-footer");
+      expect(block).toContain("toggleSidebar");
+      expect(block).not.toContain("appVersion");
+      expect(block).not.toContain("AppUserMenuPanel");
+      expect(block).not.toContain("VAvatar");
+    });
+
+    it("the collapse toggle is hidden behind SIDEBAR_COLLAPSE_ENABLED (off for now)", () => {
+      const block = slotBlock(readLayout(), "drawer-footer");
+      expect(block).toMatch(/v-if="SIDEBAR_COLLAPSE_ENABLED"\s+class="layout-nav-footer"/);
+    });
+
+    it("the account button never locks while a request is in flight (only view controls do)", () => {
+      const block = slotBlock(readLayout(), "app-bar-actions");
+      expect(block).toMatch(/class="layout-user-btn"[\s\S]*?ignore-global-loading/);
+    });
+
+    it("no notification bell, role-preview select, or theme panel sneaks into the app bar", () => {
+      const source = readLayout();
+      expect(source).not.toMatch(/<AppNotificationCenter\b/);
+      expect(source).not.toMatch(/import\s+AppNotificationCenter\b/);
+      expect(source).not.toContain("rolePreview");
+      expect(source).not.toContain("VSelect");
     });
 
     it("the unread-notification nav dot pulse animation respects prefers-reduced-motion", () => {
-      const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
-      expect(appLayoutSource).toContain("prefers-reduced-motion");
+      expect(readLayout()).toContain("prefers-reduced-motion");
     });
 
-    it("app bar logo slot renders only for the 'bar' location — the left drawer no longer shows a logo", () => {
-      const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
-      expect(appLayoutSource).toMatch(/v-if=["']location === ['"]bar['"]["']/);
-
-      const appLogoSource = readFileSync(path.resolve(__dirname, "components/AppLogo.vue"), "utf-8");
-      // The sidebar/drawer logo variant has been removed entirely, not just hidden.
-      expect(appLogoSource).not.toContain("variant");
-      expect(appLogoSource).not.toContain("layout-app__logo-icon");
-      expect(appLogoSource).toContain("layout-app__bar-logo-link");
-      const barLinkClassBody = appLogoSource.match(/\.layout-app__bar-logo-link\s*\{[\s\S]*?\n\}/)?.[0] ?? "";
-      expect(barLinkClassBody).not.toContain("::after");
-      expect(barLinkClassBody).not.toContain("border");
+    it("page header: back arrow on detail views, module title, and the teleport target for view controls", () => {
+      const source = readLayout();
+      const header = source.slice(source.indexOf('class="layout-page-header"') - 40, source.indexOf("<RouterView"));
+      // NEO-56: hidden while a detail view's record header replaces it —
+      // NEO-152: on phones too (no separate "← Module" row there any more).
+      expect(source).toMatch(/<div\s+v-show="pageHeaderVisible"\s+class="layout-page-header"/);
+      // NEO-113: views teleport into it on phones too, and an open icon search covers it.
+      expect(source).toContain("providePageHeader(computed(() => true))");
+      expect(source).toContain("'layout-page-header--search': pageHeaderRow.searchTakesRow.value");
+      expect(source).toContain("const pageHeaderVisible = computed(() => !recordHeaderClaim.value)");
+      expect(source).toContain("provideRecordHeaderClaim()");
+      expect(header).toMatch(/v-if="parentRoute"[\s\S]*?:to="parentRoute"/);
+      expect(header).toContain("{{ moduleTitle }}");
+      expect(header).toContain(':id="PAGE_HEADER_ACTIONS_ID"');
+      expect(source).toContain("providePageHeader(");
     });
 
-    it("the shared AppShell always shows the app-bar logo (not mobile-only)", () => {
-      const appShellSource = readFileSync(
-        path.resolve(__dirname, "../../../../packages/ui/src/components/AppShell.vue"),
-        "utf-8",
+    it("the app bar has no title on either breakpoint (NEO-108: it lives in the card)", () => {
+      expect(readLayout()).not.toContain("<template #app-bar-title");
+    });
+
+    it("detail views show the parent module's title, not the detail route's own", () => {
+      const source = readLayout();
+      expect(source).toContain("navParentName(name)");
+      expect(source).toMatch(/const name = parentName\.value \?\? route\.name/);
+    });
+
+    it("AppShell has no hamburger and renders the side menu on desktop only", () => {
+      const shell = readShell();
+      expect(shell).not.toContain("app-shell__hamburger");
+      expect(shell).not.toContain(":temporary");
+      expect(shell).toMatch(/<VNavigationDrawer\s+v-if="!mobile"/);
+    });
+
+    it("AppShell's bottom bar is the expanding MobileNavPanel: all nav items, first 4 in the bar, More/Close labels from i18n", () => {
+      const shell = readShell();
+      expect(shell).toMatch(/<MobileNavPanel[\s\S]*?:items="navItems"[\s\S]*?:primary-count="BOTTOM_NAV_ITEM_COUNT"/);
+      expect(shell).not.toContain("<VBottomSheet");
+      const layout = readLayout();
+      expect(layout).toContain(":more-label=\"t('layout.nav.more')\"");
+      expect(layout).toContain(":close-label=\"t('layout.nav.close')\"");
+    });
+
+    // Logo ↔ side-menu icons and avatar ↔ page-header icons must line up by
+    // construction: the bar's edge insets are computed from the same tokens
+    // that place the icons, never hand-tuned numbers of their own.
+    it("app bar edge insets are derived from the nav/card tokens the icons use", () => {
+      const layout = readLayout();
+      expect(layout).toMatch(
+        /--app-shell-bar-start-inset:\s*calc\(\s*var\(--layout-nav-inset\)\s*\+\s*var\(--layout-nav-item-inset\)\s*\+\s*var\(--layout-icon-ink-inset\)/,
       );
-      expect(appShellSource).not.toContain('v-if="mobile" class="app-shell__bar-logo"');
-      expect(appShellSource).toContain("app-shell__bar-logo");
-    });
-  });
+      expect(layout).toMatch(
+        /--app-shell-bar-end-inset:\s*calc\(\s*var\(--layout-card-inset\)\s*\+\s*var\(--layout-action-icon-inset\)/,
+      );
+      expect(layout).toMatch(/\.layout-main__inner\s*\{\s*padding:\s*var\(--layout-card-inset\)/);
 
-  describe("user menu and sidebar collapse toggle live in the desktop drawer footer", () => {
-    it("desktop drawer-footer renders both the user menu and the collapse toggle", () => {
-      const appLayoutSource = readFileSync(path.resolve(__dirname, "AppLayout.vue"), "utf-8");
-      expect(appLayoutSource).toContain("layout-nav-footer");
-      expect(appLayoutSource).toContain("AppUserMenuPanel");
-      expect(appLayoutSource).toContain("toggleSidebar");
+      const navLinks = readFileSync(path.resolve(__dirname, "components/AppNavLinks.vue"), "utf-8");
+      expect(navLinks).toContain("var(--layout-nav-inset");
+      expect(navLinks).toContain("var(--layout-nav-item-inset");
+
+      const shell = readShell();
+      expect(shell).toContain("padding-inline-start: var(--app-shell-bar-start-inset");
+      expect(shell).toContain("padding-inline-end: var(--app-shell-bar-end-inset");
+
+      // The logo link itself adds no inline offset on top of the shell inset.
+      const logo = readFileSync(path.resolve(__dirname, "components/AppLogo.vue"), "utf-8");
+      expect(logo).toMatch(/\.layout-app__bar-logo-link\s*\{[\s\S]*?padding:\s*8px 0;/);
+    });
+
+    // Page-header title icon and back arrow start on the content edge (card inset).
+    it("title icon and back arrow are placed from the card inset, the icon's glyph margin measured, not guessed", () => {
+      const layout = readLayout();
+      expect(layout).toMatch(
+        /\.layout-page-header__back\s*\{[\s\S]*?margin-inline-start:\s*calc\(-1 \* \(var\(--layout-action-icon-inset\) \+ var\(--layout-back-arrow-ink-inset\)\)\)/,
+      );
+      expect(layout).toContain("useGlyphInset(pageHeaderVisible)");
+      expect(layout.match(/marginInlineStart: `\$\{-\w+TitleGlyph\.inset\.value\}px`/g)).toHaveLength(1);
+    });
+
+    // NEO-108: on phones the logo and the avatar circle sit on the sheet's own
+    // outer edges — one token for the sheet margin and both bar insets.
+    it("phone bar edges are the content sheet's outer edges", () => {
+      const layout = readLayout();
+      expect(layout).toMatch(/--app-shell-bar-start-inset:\s*var\(--layout-sheet-margin\)/);
+      expect(layout).toMatch(
+        /--app-shell-bar-end-inset:\s*calc\(var\(--layout-sheet-margin\) - var\(--layout-user-btn-pad-end\)\)/,
+      );
+      expect(layout).toMatch(/\.layout-main__inner\s*\{\s*margin-inline:\s*var\(--layout-sheet-margin\)/);
+    });
+
+    // NEO-115: one content line on phones (sheet padding 16 + row inset 12),
+    // a 48 px header row and three title steps (page 24 bold, back link 14 grey).
+    it("phone content line, header height and title steps are on the 4 px grid", () => {
+      const layout = readLayout();
+      expect(layout).toMatch(/--layout-sheet-pad:\s*16px/);
+      expect(layout).toMatch(/--layout-row-inset:\s*12px/);
+      expect(layout).toMatch(/--layout-card-inset:\s*calc\(var\(--layout-sheet-pad\) \+ var\(--layout-row-inset\)\)/);
+      expect(layout).toContain("'layout-page-header--child': !!parentRoute");
+      expect(layout).toMatch(/\.layout-page-header__title \.layout-appbar__title \{\s*font-size: 24px;\s*font-weight: 700;/);
+      expect(layout).toMatch(/\.layout-page-header--child \.layout-appbar__title \{\s*font-size: 14px;/);
+      const list = readFileSync(path.resolve(__dirname, "../components/AppEntityList.css"), "utf-8");
+      // Rows bleed to the sheet's edges (e2e/entity-list-width.spec.ts checks the boxes).
+      expect(list).toContain("padding-inline: calc(var(--layout-card-inset, 16px) - var(--layout-row-inset, 12px));");
+      expect(list).toContain("margin-left: var(--layout-row-inset, 12px);");
+    });
+
+    // NEO-152: a list's name is the page heading (28 px bold), its record count
+    // sits 4 px under it on desktop only, and an open icon search covers the
+    // row while the title only fades (no layout jump).
+    it("NEO-152 list header: 28 px title, desktop-only count line 4 px under it, search fades the title", () => {
+      const layout = readLayout();
+      expect(layout).toMatch(/\.layout-appbar__title \{\s*font-size: 28px;\s*font-weight: 700;/);
+      expect(layout).toMatch(/\.layout-page-header__titles \{\s*display: flex;\s*flex-direction: column;\s*gap: var\(--space-1, 4px\);/);
+      expect(layout).toMatch(/v-if="!isMobile && !parentRoute && pageHeaderRow\.subtitle\.value !== null"/);
+      expect(layout).toMatch(/\.layout-page-header__subtitle \{[^}]*height: 18px;/);
+      expect(layout).toMatch(/\.layout-page-header--search \.layout-page-header__back \{\s*opacity: 0;\s*pointer-events: none;/);
+      expect(layout).not.toMatch(/\.layout-page-header--search[^{]*\{\s*display: none;/);
+      expect(layout).toMatch(/\.layout-main__inner > \.layout-page-header \{[^}]*position: relative;/);
+      // The title changes with the page (view transition), no animation of its own.
+      expect(layout).not.toContain('<Transition name="title-fade"');
+    });
+
+    it("collapse chevron button is 32px with right-edge margin", () => {
+      const rule = readLayout().match(/\.layout-collapse-btn\s*\{[\s\S]*?\}/)?.[0] ?? "";
+      expect(rule).toMatch(/width:\s*32px/);
+      expect(rule).toMatch(/height:\s*32px/);
+      expect(rule).toMatch(/margin-inline-end:\s*8px/);
+    });
+
+    it("account button has no custom hover/focus size animation (two prior attempts both looked broken live)", () => {
+      const source = readLayout();
+      const rule = source.match(/(?<!--compact )\.layout-user-btn\s*\{[\s\S]*?\}/)?.[0] ?? "";
+      expect(rule).not.toMatch(/transition/);
+      expect(source).not.toMatch(/\.layout-user-btn:hover/);
+      expect(source).not.toMatch(/\.layout-user-btn[\s\S]{0,400}transform:\s*scale/);
     });
   });
 

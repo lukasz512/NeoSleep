@@ -1,5 +1,6 @@
+import { reportCaught, reportFailedResponse } from "@api";
 import { apiFetch } from "./useApi";
-import { useNotifications } from "./useNotifications";
+import { retryAction, useNotifications } from "./useNotifications";
 import { i18n } from "../plugins/i18n";
 
 /**
@@ -27,7 +28,12 @@ function partnerDisplayName(partner: string): string {
 interface ConnectionStatus {
   connected: boolean;
   attemptsExhausted: boolean;
+  /** Set by the API when not connected (see ConnectionFailureReason in services/partners/orthoapnea.ts). */
+  reason?: string;
 }
+
+/** Failures only a server-side config change fixes — telling the rep to reload would be wrong. */
+const CONFIG_FAILURE_REASONS = new Set(["credentials_rejected", "not_configured"]);
 
 /** One toast per partner per cooldown window — repeatedly bouncing between two OrthoApnea-tagged routes while it's down shouldn't spam a notification on every navigation. */
 const NOTIFY_COOLDOWN_MS = 30_000;
@@ -36,9 +42,15 @@ const lastNotifiedAt = new Map<string, number>();
 async function checkPartnerConnection(partner: string): Promise<ConnectionStatus> {
   try {
     const res = await apiFetch(`/api/v1/partners/${partner}/status`, { handleErrors: false });
-    if (!res.ok) return { connected: false, attemptsExhausted: false };
+    if (!res.ok) {
+      // The status route itself never fails for a down partner (it answers 200 + connected:false),
+      // so a non-2xx here is our own API failing — report it, the toast below still warns the user.
+      await reportFailedResponse(res, { where: "usePartnerConnection.checkPartnerConnection" });
+      return { connected: false, attemptsExhausted: false };
+    }
     return (await res.json()) as ConnectionStatus;
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "usePartnerConnection.checkPartnerConnection" });
     return { connected: false, attemptsExhausted: false };
   }
 }
@@ -51,18 +63,39 @@ async function checkPartnerConnection(partner: string): Promise<ConnectionStatus
  * looks like a real outage — try reloading" since a doctor bouncing
  * between routes deserves to know the difference.
  */
-export async function ensurePartnerConnection(partner: string): Promise<void> {
+export async function ensurePartnerConnection(partner: string, { fromRetry = false } = {}): Promise<void> {
   const status = await checkPartnerConnection(partner);
-  if (status.connected) return;
+  const toast = { icon: "globe" as const, context: partnerDisplayName(partner) };
+  if (status.connected) {
+    // Only a Retry the user clicked gets a confirmation — a silent pass on
+    // every navigation would be noise.
+    if (fromRetry) {
+      useNotifications().show(
+        i18n.global.t("app.partners.connectionRestored", { partner: partnerDisplayName(partner) }),
+        "success",
+        undefined,
+        toast,
+      );
+    }
+    return;
+  }
 
   const now = Date.now();
   const last = lastNotifiedAt.get(partner) ?? 0;
-  if (now - last < NOTIFY_COOLDOWN_MS) return;
+  // The cooldown is for navigation-triggered checks; an explicit Retry always answers.
+  if (!fromRetry && now - last < NOTIFY_COOLDOWN_MS) return;
   lastNotifiedAt.set(partner, now);
 
-  const key = status.attemptsExhausted ? "app.partners.connectionErrorPersistent" : "app.partners.connectionError";
+  const key =
+    status.reason && CONFIG_FAILURE_REASONS.has(status.reason)
+      ? "app.partners.connectionErrorConfig"
+      : status.attemptsExhausted
+        ? "app.partners.connectionErrorPersistent"
+        : "app.partners.connectionError";
   useNotifications().show(
     i18n.global.t(key, { partner: partnerDisplayName(partner) }),
     "warning",
+    undefined,
+    { ...toast, action: retryAction(() => ensurePartnerConnection(partner, { fromRetry: true })) },
   );
 }

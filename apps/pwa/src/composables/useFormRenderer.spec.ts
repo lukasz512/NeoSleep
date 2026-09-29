@@ -130,6 +130,27 @@ describe("useFormRenderer", () => {
     expect(r.form.value.region).toBe("PL");
   });
 
+  it("derive gets the form as of its previous run, so it can tell which field was just edited", async () => {
+    const seen: [unknown, unknown][] = [];
+    const derive = (form: Record<string, unknown>, prev: Record<string, unknown>) => {
+      seen.push([prev.a, form.a]);
+      return form.a === "x" && prev.a !== "x" ? { b: "from-a" } : undefined;
+    };
+    const fields: FormFieldDef[] = [
+      { key: "a", type: "text", labelKey: "a" },
+      { key: "b", type: "text", labelKey: "b" },
+    ];
+    const r = useFormRenderer(fields, ref({ a: "start" }), derive);
+    r.form.value.a = "x";
+    await nextTick();
+    await nextTick();
+    expect(r.form.value.b).toBe("from-a");
+    // The very first run already sees the opened record as `prev`, not {}.
+    expect(seen[0]).toEqual(["start", "x"]);
+    // The patch's own re-run sees a unchanged — no ping-pong.
+    expect(seen.at(-1)).toEqual(["x", "x"]);
+  });
+
   it("hasChanged compares against the open-time snapshot, ignoring incidental whitespace", () => {
     const fields: FormFieldDef[] = [{ key: "name", type: "text", labelKey: "name" }];
     const r = useFormRenderer(fields, ref({ name: "Ada" }));

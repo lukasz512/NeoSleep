@@ -13,19 +13,21 @@
       @add="onAdd"
     >
       <template #item.name="{ item }">
-        <span class="users-name-cell">
-          <AppAvatar :name="(item as UserListItem).name" :first-name="(item as UserListItem).first_name" :last-name="(item as UserListItem).last_name" entity-type="user" :size="32" />
-          {{ (item as { name?: string }).name }}
-        </span>
+        <EntityLink
+          :to="null"
+          entity-type="user"
+          :label="(item as UserListItem).name"
+          :first-name="(item as UserListItem).first_name"
+          :last-name="(item as UserListItem).last_name"
+          :details="userDetails(roleKeyOf(item as Record<string, unknown>)).details"
+          :avatar-size="32"
+        />
       </template>
       <template #feed-card-avatar="{ item }">
-        <AppAvatar :name="(item as UserListItem).name" :first-name="(item as UserListItem).first_name" :last-name="(item as UserListItem).last_name" entity-type="user" :size="55" />
+        <AppAvatar v-bind="personAvatarProps(item as UserListItem)" entity-type="user" :size="55" />
       </template>
       <template #feed-card-title="{ item }">
-        {{ (item as { name?: string }).name }}
-      </template>
-      <template #item.role="{ item }">
-        {{ t(`user.users.role.${roleKeyOf(item as Record<string, unknown>)}`) }}
+        {{ shortPersonName((item as UserListItem).name, (item as UserListItem).first_name, (item as UserListItem).last_name) }}
       </template>
       <template #item.status="{ item }">
         <span :class="['users-view__status', `users-view__status--${(item as Record<string, unknown>).status}`]">
@@ -82,30 +84,32 @@
       @submit="onEditSubmit"
     />
 
-    <VDialog v-model="showDeleteConfirm" max-width="360" :transition="originDialogTransition" persistent>
-      <VCard>
-        <VCardText>{{ t("user.users.actions.deleteConfirmText") }}</VCardText>
-        <VCardActions>
-          <VSpacer />
-          <AppButton variant="text" @click="showDeleteConfirm = false">
-            {{ t("app.common.cancel") }}
-          </AppButton>
-          <AppButton color="error" variant="text" :loading="deleteLoading" @click="onDelete">
-            {{ t("user.users.actions.delete") }}
-          </AppButton>
-        </VCardActions>
-      </VCard>
-    </VDialog>
+    <AppConfirmDialog
+      v-model="showDeleteConfirm"
+      :text="t('user.users.actions.deleteConfirmText')"
+      :secondary-label="t('app.common.cancel')"
+      :secondary-color="null"
+      :primary-label="t('user.users.actions.delete')"
+      primary-color="error"
+      primary-variant="text"
+      :loading="deleteLoading"
+      max-width="360"
+      @secondary="showDeleteConfirm = false"
+      @primary="onDelete"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, defineAsyncComponent } from "vue";
-import { originDialogTransition } from "@ui";
 import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
 import AppAvatar from "../components/AppAvatar.vue";
-import AppButton from "../components/AppButton.vue";
+import EntityLink from "../components/EntityLink.vue";
+import { useIdentity } from "../composables/useIdentity";
+import { shortPersonName } from "../utils/shortPersonName";
+import { personAvatarProps } from "../utils/personAvatarProps";
+import AppConfirmDialog from "../components/AppConfirmDialog.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppListItemMenu from "../components/AppListItemMenu.vue";
 import { entityActionIcon, entityActionMenuIconClass } from "../config/entityActions";
@@ -129,6 +133,7 @@ interface UserListItem {
 }
 
 const { t } = useI18n();
+const { userDetails } = useIdentity();
 const notifications = useNotifications();
 const { submit } = useEntitySubmit();
 const authStore = useAuthStore();
@@ -168,7 +173,6 @@ const usersFilterDefinitions = computed<FilterDefinition[]>(() => [
 const tableHeaders = computed(() => [
   { title: t("user.users.table.name"), key: "name", sortable: true },
   { title: t("user.users.table.email"), key: "email", sortable: true },
-  { title: t("user.users.table.role"), key: "role", sortable: false },
   { title: t("user.users.table.status"), key: "status", sortable: true },
 ]);
 
@@ -179,6 +183,7 @@ const usersI18n = computed(() => ({
   add: "user.users.add",
   emptyTitle: "user.users.emptyTitle",
   emptySubtitle: "user.users.emptySubtitle",
+  countNoun: "users" as const,
   noResultsForCriteria: "user.users.noResultsForCriteria",
   noResultsForCriteriaSubtitle: "user.users.noResultsForCriteriaSubtitle",
   tableNoResults: "user.users.table.noResults",
@@ -210,6 +215,7 @@ async function onEditSubmit(payload: Record<string, unknown>, done: (ok: boolean
           body: JSON.stringify(payload),
         }),
       successMessage: t("user.users.form.editSuccess"),
+      icon: "nav-users",
       errorMessage: t("user.users.form.errorSave"),
     },
     done,
@@ -221,7 +227,7 @@ const { run: onResetPassword } = useAsyncAction(async (user: UserListItem) => {
     method: "POST",
   });
   if (res.ok) {
-    notifications.show(t("user.users.actions.resetPasswordSuccess"), "success");
+    notifications.show(t("user.users.actions.resetPasswordSuccess"), "success", undefined, { icon: "key", context: user.name });
   }
 });
 
@@ -236,6 +242,8 @@ const { run: onToggleStatus } = useAsyncAction(async (user: UserListItem) => {
     notifications.show(
       t(nextStatus === "active" ? "user.users.actions.enableSuccess" : "user.users.actions.disableSuccess"),
       "success",
+      undefined,
+      { icon: "nav-users", context: user.name },
     );
     window.dispatchEvent(new Event("entity-list-refresh"));
   }
@@ -278,7 +286,7 @@ const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
   if (res.ok) {
     showDeleteConfirm.value = false;
     deletingUserId.value = null;
-    notifications.show(t("user.users.actions.deleteSuccess"), "success");
+    notifications.show(t("user.users.actions.deleteSuccess"), "success", undefined, { icon: "nav-users" });
     window.dispatchEvent(new Event("entity-list-refresh"));
   }
 });
@@ -293,6 +301,7 @@ async function onSubmit(payload: Record<string, unknown>, done: (ok: boolean) =>
           body: JSON.stringify(payload),
         }),
       successMessage: t("user.users.form.success"),
+      icon: "nav-users",
       errorMessage: t("user.users.form.errorSave"),
     },
     done,
@@ -307,12 +316,6 @@ async function onSubmit(payload: Record<string, unknown>, done: (ok: boolean) =>
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
-}
-
-.users-name-cell {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
 }
 
 .users-view__status {

@@ -27,6 +27,19 @@ function assertValidType(studyType: string | undefined): void {
   }
 }
 
+/**
+ * A study can't be dated in the future (Łukasz, NEO-132). One day of slack
+ * over UTC's today covers clinics east of UTC, whose local "today" is already
+ * UTC's tomorrow for part of the day.
+ */
+function assertStudyDateNotFuture(studyDate: string | null | undefined): void {
+  if (!studyDate) return;
+  const v = studyDate.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) throw new ValidationError("study_date must be YYYY-MM-DD", "study_date");
+  const latest = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  if (v > latest) throw new ValidationError("study_date cannot be in the future", "study_date");
+}
+
 export interface CreateSleepStudyInput extends Omit<SleepStudyInsert, "patient_id"> {
   patient_id: string;
 }
@@ -38,6 +51,7 @@ export async function CreateSleepStudyCommand(
   if (!input.patient_id?.trim()) throw new ValidationError("patient_id is required");
   assertValidStatus(input.status);
   assertValidType(input.study_type);
+  assertStudyDateNotFuture(input.study_date);
 
   const study = await insertSleepStudy(ctx.client, input);
 
@@ -63,6 +77,7 @@ export async function UpdateSleepStudyCommand(
   if (!id?.trim()) throw new ValidationError("sleep study id is required");
   assertValidStatus(input.status);
   assertValidType(input.study_type);
+  assertStudyDateNotFuture(input.study_date);
 
   const before = await getSleepStudyById(ctx.client, id);
   if (!before) return null;

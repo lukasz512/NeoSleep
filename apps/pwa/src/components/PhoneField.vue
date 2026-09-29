@@ -18,7 +18,7 @@
       <template #prepend-inner>
         <FlagIcon v-if="currentFlagCountry" :country-code="currentFlagCountry" />
       </template>
-      <template #item="{ item, props: itemProps }">
+      <template #item="{ internalItem: item, props: itemProps }">
         <VListItem v-bind="itemProps" :title="undefined" class="pwa-phone-field__item">
           <template #prepend>
             <FlagIcon :country-code="item.raw.country" class="pwa-phone-field__item-flag" />
@@ -37,6 +37,7 @@
       :hint="hint"
       :persistent-hint="persistentHint"
       :rules="rules"
+      :error-messages="errorMessages"
       :variant="variant"
       :density="density"
       :disabled="disabled"
@@ -77,6 +78,8 @@ const props = withDefaults(
     hint?: string;
     persistentHint?: boolean;
     rules?: ((v: unknown) => true | string)[];
+    /** Set from outside the rules, e.g. a field the API rejected (NEO-109). */
+    errorMessages?: string | string[];
     variant?: string;
     density?: string;
     /** Overrides the logged-in rep's own country_code as the default area

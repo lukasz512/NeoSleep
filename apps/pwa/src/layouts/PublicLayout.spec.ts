@@ -36,7 +36,9 @@ describe("PublicLayout", () => {
       expect(source).toMatch(/\.layout-public\s*\{[\s\S]*?overflow:\s*hidden/);
       // Safe-area-aware (see index.html's viewport-fit=cover) but still
       // falls back to a plain 16px on devices/browsers without a notch/inset.
-      expect(source).toMatch(/\.layout-public\s*\{[\s\S]*?padding:\s*max\(16px, env\(safe-area-inset-top\)\)/);
+      // Exposed as --layout-public-inset-* so a self-scrolling view can extend under it.
+      expect(source).toMatch(/--layout-public-inset-top:\s*max\(16px, env\(safe-area-inset-top\)\)/);
+      expect(source).toMatch(/\.layout-public\s*\{[\s\S]*?padding:\s*var\(--layout-public-inset-top\)/);
     });
 
     it("styles are scoped", () => {

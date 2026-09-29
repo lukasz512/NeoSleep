@@ -1,5 +1,24 @@
 import { describe, it, expect } from "vitest";
-import { isRoleAllowed, navRoutesForRole } from "./routes";
+import { homePathForRole, isRoleAllowed, navRoutesForRole, navParentName, routes } from "./routes";
+
+// NEO-55: AppLayout's back arrow and "← <Module>" title come from this mapping.
+describe("navParentName", () => {
+  it("maps every detail route (`:id` or deeper) to an existing list route", () => {
+    const named = routes.filter((r): r is typeof r & { name: string } => typeof r.name === "string");
+    const detailNames = named.filter((r) => r.path.includes("/:") && r.meta?.layout === "app").map((r) => r.name);
+    expect(detailNames.length).toBeGreaterThan(0);
+    for (const name of detailNames) {
+      const parent = navParentName(name);
+      expect(parent, `no parent for ${name}`).toBeDefined();
+      expect(named.some((r) => r.name === parent)).toBe(true);
+    }
+  });
+
+  it("is undefined for top-level modules", () => {
+    expect(navParentName("patients")).toBeUndefined();
+    expect(navParentName("dashboard")).toBeUndefined();
+  });
+});
 
 describe("isRoleAllowed", () => {
   it("allows any role when a route has no roles restriction", () => {
@@ -49,5 +68,22 @@ describe("navRoutesForRole", () => {
   it("manager and admin see /documents", () => {
     expect(navRoutesForRole("manager").some((r) => r.path === "/documents")).toBe(true);
     expect(navRoutesForRole("admin").some((r) => r.path === "/documents")).toBe(true);
+  });
+});
+
+describe("homePathForRole", () => {
+  it("sends admin to the dashboard — the only role that can see it", () => {
+    expect(homePathForRole("admin")).toBe("/dashboard");
+    expect(navRoutesForRole("manager").some((r) => r.path === "/dashboard")).toBe(false);
+    expect(navRoutesForRole("doctor").some((r) => r.path === "/dashboard")).toBe(false);
+  });
+
+  it("lands doctor and manager on patients", () => {
+    expect(homePathForRole("doctor")).toBe("/patients");
+    expect(homePathForRole("manager")).toBe("/patients");
+  });
+
+  it("falls back to the first visible module for field-force roles", () => {
+    expect(homePathForRole("rep")).toBe("/leads");
   });
 });

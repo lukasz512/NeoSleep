@@ -1,9 +1,12 @@
 import { Readable } from "node:stream";
 import { Router, type Router as RouterType, type Request, type Response } from "express";
 import { asyncHandler } from "../../middleware/errorHandler.js";
-import { requireAuth } from "../../middleware/requireAuth.js";
+import { requireAuth, requirePartnerMediaAuth } from "../../middleware/requireAuth.js";
+import { signMediaToken } from "../../utils/jwt.js";
 import { fetchResources, fetchResourceMedia } from "../../services/partners/orthoapnea.js";
+import { getPoster, warmPosters, knownDurationSec, posterSupported } from "../../services/partners/resourcePosters.js";
 import { ValidationError } from "../../errors.js";
+import { routeParam } from "../utils.js";
 
 /**
  * OrthoApnea resources (documents/videos library) — read-only, no queueing
@@ -13,6 +16,9 @@ import { ValidationError } from "../../errors.js";
  */
 export const orthoapneaResourcesRouter: RouterType = Router();
 
+/** Cloud Run's cap on a response that declares its size (HTTP/1, non-streamed). */
+const CLOUD_RUN_MAX_BUFFERED_BYTES = 32 * 1024 * 1024;
+
 // ---------------------------------------------------------------------------
 // GET /api/v1/partners/orthoapnea/resources — list, locale-mapped
 // ---------------------------------------------------------------------------
@@ -21,8 +27,42 @@ orthoapneaResourcesRouter.get(
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
     const locale = (req.query.locale as string | undefined) ?? "en";
-    const resources = await fetchResources(locale);
-    res.json({ resources });
+    const withPosters = posterSupported();
+    const resources = (await fetchResources(locale)).map((r) =>
+      r.kind === "video"
+        ? {
+            ...r,
+            posterUrl: withPosters ? `/api/v1/partners/orthoapnea/resources/${r.id}/poster?locale=${locale}` : null,
+            durationSec: knownDurationSec(r.id),
+          }
+        : r
+    );
+    if (withPosters) warmPosters(resources.filter((r) => r.kind === "video").map((r) => r.id), locale);
+    // For the `?t=` on each mediaUrl — see signMediaToken for why.
+    res.json({ resources, mediaToken: signMediaToken(req.user!.sub) });
+  })
+);
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/partners/orthoapnea/resources/:id/poster — one JPEG frame (NEO-151)
+// ---------------------------------------------------------------------------
+orthoapneaResourcesRouter.get(
+  "/partners/orthoapnea/resources/:id/poster",
+  requirePartnerMediaAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = routeParam(req, "id")?.trim();
+    if (!id) throw new ValidationError("Missing resource id");
+    const locale = (req.query.locale as string | undefined) ?? "en";
+    const poster = await getPoster(id, locale);
+    // 404, not 5xx: a missing poster is expected (no ffmpeg on this host, odd file) and the tile has a fallback cover.
+    if (!poster) {
+      res.status(404).json({ error: "No poster for this video" });
+      return;
+    }
+    res.setHeader("Content-Type", "image/jpeg");
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    res.setHeader("Cache-Control", "private, max-age=86400");
+    res.end(Buffer.from(poster.jpeg));
   })
 );
 
@@ -31,15 +71,31 @@ orthoapneaResourcesRouter.get(
 // ---------------------------------------------------------------------------
 orthoapneaResourcesRouter.get(
   "/partners/orthoapnea/resources/:id/media",
-  requireAuth,
+  requirePartnerMediaAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing resource id");
     const locale = (req.query.locale as string | undefined) ?? "en";
     const lang = req.query.lang as string | undefined;
 
-    const { body, contentType } = await fetchResourceMedia(id, locale, lang);
-    if (contentType) res.setHeader("Content-Type", contentType);
-    Readable.fromWeb(body as import("node:stream/web").ReadableStream<Uint8Array>).pipe(res);
+    const media = await fetchResourceMedia(id, locale, lang, req.headers.range);
+    res.status(media.status);
+    // helmet's default CORP (same-origin) makes the browser refuse a
+    // `<video>`/`<a>` on the PWA's own origin loading this from the API's.
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    for (const [name, value] of Object.entries(media.headers)) {
+      if (value) res.setHeader(name, value);
+    }
+    // Always advertise ranges so players switch to 206 slices, and never
+    // declare a length Cloud Run would refuse (>32 MiB): without it, Node
+    // streams chunked, which Cloud Run allows (a request with no Range at all).
+    res.setHeader("Accept-Ranges", "bytes");
+    if (Number(media.headers["content-length"]) > CLOUD_RUN_MAX_BUFFERED_BYTES) res.removeHeader("Content-Length");
+    // Player seeks/pauses abort their request; destroying our stream cancels
+    // the upstream body too, so apneadock.es doesn't keep sending hundreds
+    // of MB nobody will read.
+    const stream = Readable.fromWeb(media.body as import("node:stream/web").ReadableStream<Uint8Array>);
+    res.on("close", () => stream.destroy());
+    stream.pipe(res);
   })
 );

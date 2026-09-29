@@ -1,6 +1,7 @@
 import type { PoolClient } from "pg";
 import { toArray } from "./helpers.js";
 import { AppError, DatabaseError } from "../errors.js";
+import { displayNameSql } from "../utils/personName.js";
 
 export type StaffRole = "admin" | "manager" | "kam" | "msl" | "rep" | "doctor";
 
@@ -13,7 +14,7 @@ export interface User {
   first_name: string | null;
   last_name: string | null;
   phone: string | null;
-  /** Computed: first_name + ' ' + last_name */
+  /** Computed display name — salutation (Dr./Dra./Prof. only) + first_name + last_name, see utils/personName.ts. */
   name: string | null;
   // From user_roles JOIN — matches the user_roles.role CHECK constraint.
   // "Primary" role/scope (earliest-granted user_roles row) — a user can hold
@@ -38,6 +39,9 @@ export interface User {
   territory_id: string | null;
   status: string;
   token_version: number;
+  /** Whether the account can sign in with a password (Google-only accounts can't),
+   *  so the app only offers "Change password" where it would work. */
+  has_password: boolean;
   created_at: Date;
   updated_at: Date;
 }
@@ -61,10 +65,11 @@ const USER_JOIN = `
 
 const USER_COLS = `
   u.id, u.identity_id, i.email, i.title AS salutation, i.first_name, i.last_name, i.phone,
-  TRIM(COALESCE(i.first_name, '') || ' ' || COALESCE(i.last_name, '')) AS name,
+  ${displayNameSql("i")} AS name,
   COALESCE(ur.role, 'rep') AS role,
   ur.territory_id AS scope_territory_id, st.name AS scope_territory_name, st.kind AS scope_territory_kind,
   u.google_sub, i.region, i.country_code, i.language, i.territory_id, u.status, u.token_version,
+  (u.password_hash IS NOT NULL) AS has_password,
   u.created_at, u.updated_at`.trim();
 
 const STAFF_AUTH_COLS = `${USER_COLS}, u.password_hash, u.force_password_change`;
@@ -75,52 +80,62 @@ const STAFF_AUTH_COLS = `${USER_COLS}, u.password_hash, u.force_password_change`
  * already in effect on that client. Never call these with a pool-level client.
  */
 
-export async function getOrCreateUserByProvider(
+/** Outcome of matching a Google identity to an existing staff account (NEO-78). */
+export type GoogleSignInResult =
+  | { kind: "ok"; user: User }
+  /** No usable account: unknown email, unverified Google email, or the matching
+   *  account is already linked to a different Google account. Never auto-created:
+   *  accounts are created only by an admin. */
+  | { kind: "no_account" }
+  /** An account exists but its status is not 'active' (inactive / suspended / pending invite). */
+  | { kind: "inactive" };
+
+/**
+ * Resolves the staff user a Google sign-in belongs to. Never creates an account:
+ * before NEO-78 this auto-provisioned a global-scope 'rep' for any Google email,
+ * which would have let anyone with a Google account into the CRM.
+ *
+ * 1. A user already linked to this Google `sub` wins (an email change on the
+ *    Google side doesn't lock them out).
+ * 2. Otherwise only a Google-verified email is matched against identities.email
+ *    (UNIQUE, and users.identity_id is UNIQUE, so at most one user), and that
+ *    user's google_sub is linked on first sign-in, unless it is already linked
+ *    to a different Google account.
+ */
+export async function resolveGoogleSignInUser(
   client: PoolClient,
-  _provider: string,
   googleSub: string,
   email: string,
-  name?: string | null
-): Promise<User | null> {
+  emailVerified: boolean
+): Promise<GoogleSignInResult> {
   try {
-    // Check by google_sub first
-    const existing = await client.query<User>(
+    const bySub = await client.query<User>(
       `SELECT ${USER_COLS} ${USER_JOIN} WHERE u.google_sub = $1 AND u.deleted_at IS NULL`,
       [googleSub]
     );
-    if (existing.rows[0]) return existing.rows[0];
+    const linked = bySub.rows[0];
+    if (linked) return linked.status === "active" ? { kind: "ok", user: linked } : { kind: "inactive" };
 
-    // Not found — create. The surrounding withTenant() transaction owns atomicity.
-    const firstName = name ? name.split(" ")[0] ?? null : null;
-    const lastName = name && name.includes(" ") ? name.split(" ").slice(1).join(" ") : null;
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!emailVerified || !normalizedEmail) return { kind: "no_account" };
 
-    const identityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (email, first_name, last_name) VALUES ($1, $2, $3) RETURNING id`,
-      [email.trim().toLowerCase(), firstName, lastName]
+    const byEmail = await client.query<User>(
+      `SELECT ${USER_COLS} ${USER_JOIN} WHERE lower(i.email) = $1 AND u.deleted_at IS NULL`,
+      [normalizedEmail]
     );
-    const identityId = identityResult.rows[0]!.id;
-
-    const userResult = await client.query<{ id: string }>(
-      `INSERT INTO users (identity_id, google_sub, status) VALUES ($1, $2, 'active') RETURNING id`,
-      [identityId, googleSub]
-    );
-    const userId = userResult.rows[0]!.id;
+    const candidate = byEmail.rows[0];
+    if (!candidate || byEmail.rows.length > 1) return { kind: "no_account" };
+    if (candidate.google_sub && candidate.google_sub !== googleSub) return { kind: "no_account" };
+    if (candidate.status !== "active") return { kind: "inactive" };
 
     await client.query(
-      `INSERT INTO user_roles (user_id, role, territory_id)
-       VALUES ($1, 'rep', (SELECT id FROM territory WHERE kind = 'global' LIMIT 1))
-       ON CONFLICT (user_id, role, territory_id) DO NOTHING`,
-      [userId]
+      `UPDATE users SET google_sub = $1, updated_at = now() WHERE id = $2 AND google_sub IS NULL`,
+      [googleSub, candidate.id]
     );
-
-    const inserted = await client.query<User>(
-      `SELECT ${USER_COLS} ${USER_JOIN} WHERE u.id = $1`,
-      [userId]
-    );
-    return inserted.rows[0] ?? null;
+    return { kind: "ok", user: { ...candidate, google_sub: googleSub } };
   } catch (err) {
     if (err instanceof AppError) throw err;
-    throw new DatabaseError("getOrCreateUserByProvider", err);
+    throw new DatabaseError("resolveGoogleSignInUser", err);
   }
 }
 
@@ -204,7 +219,7 @@ export async function insertStaffUser(
   try {
     const identityResult = await client.query<{ id: string }>(
       `INSERT INTO identities (email, title, first_name, last_name, phone, country_code) VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
+       ON CONFLICT (email) WHERE NOT email_shared DO UPDATE SET email = EXCLUDED.email
        RETURNING id`,
       [normalizedEmail, salutation?.trim() || null, firstName, lastName, phone ?? null, countryCode ?? null]
     );
@@ -279,12 +294,31 @@ export async function getUserRoleScopes(client: PoolClient, userId: string): Pro
   }
 }
 
-/** Seeded staff accounts with no password set yet (bootstrapped on startup — see auth.ts). */
+/**
+ * Seeded staff accounts with no password set yet (bootstrapped on startup — see auth.ts).
+ * Never an invited partner/doctor account: those set their own password when they accept
+ * the invite, and giving them the shared initial password would let anyone who knows their
+ * email log in before they've signed anything (found while verifying NEO-51). Invited
+ * accounts are excluded both by status (they stay 'inactive' until acceptance) and by
+ * having an invite token at all.
+ *
+ * Opt-in, not "everyone without a password": only rows a seed migration explicitly
+ * created with force_password_change = true (the column defaults to false). Accounts
+ * linked to Google sign-in (resolveGoogleSignInUser above) sign in through Google and
+ * must never get the shared password either, hence also google_sub IS NULL.
+ * Doctors never get it, however they were created (invite, lead conversion, or an
+ * admin adding a 'doctor' user without a password): they set their own password.
+ */
 export async function getUsersWithoutPassword(client: PoolClient): Promise<{ id: string; email: string }[]> {
   try {
     const r = await client.query<{ id: string; email: string }>(
       `SELECT u.id, i.email FROM users u JOIN identities i ON u.identity_id = i.id
-       WHERE u.password_hash IS NULL AND u.deleted_at IS NULL`
+       WHERE u.password_hash IS NULL AND u.deleted_at IS NULL
+         AND u.status = 'active'
+         AND u.force_password_change = true
+         AND u.google_sub IS NULL
+         AND NOT EXISTS (SELECT 1 FROM invite_tokens it WHERE it.user_id = u.id)
+         AND NOT EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.id AND ur.role = 'doctor')`
     );
     return r.rows;
   } catch (err) {

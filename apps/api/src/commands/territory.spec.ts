@@ -88,6 +88,8 @@ describe("UpdateTerritoryCommand", () => {
       const ctx = await buildTestContext(client);
       const territory = await CreateTerritoryCommand(ctx, { name: `Self-${uniqueSuffix()}`, country_code: "MX", kind: "region" });
       await expect(UpdateTerritoryCommand(ctx, territory.id, { parent_id: territory.id })).rejects.toThrow(ValidationError);
+      // NEO-109: names the parent field so the form marks it (the message doesn't lead with the key).
+      await expect(UpdateTerritoryCommand(ctx, territory.id, { parent_id: territory.id })).rejects.toMatchObject({ field: "parent_id" });
     });
   });
 
@@ -105,7 +107,7 @@ describe("UpdateTerritoryCommand", () => {
       const a = await CreateTerritoryCommand(ctx, { name: `CycleA-${uniqueSuffix()}`, country_code: "MX", kind: "region" });
       const b = await CreateTerritoryCommand(ctx, { name: `CycleB-${uniqueSuffix()}`, country_code: "MX", kind: "city", parent_id: a.id });
 
-      await expect(UpdateTerritoryCommand(ctx, a.id, { parent_id: b.id })).rejects.toThrow(ValidationError);
+      await expect(UpdateTerritoryCommand(ctx, a.id, { parent_id: b.id })).rejects.toMatchObject({ field: "parent_id" });
 
       // The rejected update must not have partially applied.
       const path = await getTerritoryPath(client, b.id);

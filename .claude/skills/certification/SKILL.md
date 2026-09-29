@@ -108,25 +108,34 @@ Full gap checklist in `docs/CERTIFICATIONS.md`. Key items to track:
 ---
 
 ### 5. MDR / SaMD — EU Medical Device Regulation (2017/745)
-**Status:** Needs legal assessment — may not apply, or may apply to future features
-**When needed:** Before adding any feature that could be classified as Software as a Medical Device
-**Risk level:** HIGH — if NeoSleep software is used to diagnose, monitor, or treat a medical condition, it may be a Class IIa medical device under EU MDR
+**Status:** Manufacturer path TRIGGERED (decision 2026-09-20: NeoSleep will build its own branded sleep/mandibular devices, not only resell third-party CE-marked devices). Full detail: [docs/CERTIFICATIONS.md](../../../docs/CERTIFICATIONS.md) §4.
+**Risk level:** HIGH — track two separate triggers independently, don't conflate them:
 
-**SaMD trigger conditions (any of these may classify NeoSleep as a medical device):**
+| Trigger | Status |
+|---|---|
+| Own-brand physical device manufacturing | ✅ Triggered 2026-09-20 — makes NeoSleep the "manufacturer" under MDR Art. 2(30), regardless of any software feature |
+| SaMD (software providing diagnosis/treatment decisions) | ⬜ Not triggered — see conditions below |
+
+**SaMD trigger conditions** (any of these would separately classify the *software* as a medical device, on top of the device-manufacturing trigger above):
 - The app provides diagnostic recommendations (e.g., "this patient likely has OSA")
 - The app drives treatment decisions (e.g., "recommend mandibular device based on symptom score")
 - Clinicians act on the software's output to make medical decisions
 
-**What NeoSleep currently does:** CRM for reps, referral platform — NOT providing clinical decisions. This is likely NOT a medical device today.
+**What NeoSleep currently does (software):** CRM for reps, referral platform — NOT providing clinical decisions. SaMD trigger not yet crossed.
 
-**What could trigger MDR in future:**
+**What could trigger the SaMD path in future (in addition to the device path already triggered):**
 - An AI/ML feature suggesting diagnoses to HCPs
 - A symptom checker that guides patients
 - A sleep scoring algorithm used by clinicians
 
-**Action required:**
+**Action required (device-manufacturing path, now active):**
+- [ ] Classify the device (Class I / IIa / IIb) with an MDR regulatory consultant
+- [ ] Companion standards: ISO 13485 (QMS), IEC 62304 (if companion software/firmware ships), ISO 14971 (risk management)
+- [ ] Legal/regulatory scoping session before finalizing device specs or a launch date
+- [ ] Keep marketing/product copy free of diagnostic/treatment claims until CE marking is obtained
+
+**Action required (SaMD path, still just a watch item):**
 - [ ] Legal opinion from MDR specialist before building any clinical decision support feature
-- [ ] Keep product description clear: "referral management tool" not "diagnostic software"
 - [ ] Document the intended purpose carefully — this is the key MDR classification factor
 
 ---

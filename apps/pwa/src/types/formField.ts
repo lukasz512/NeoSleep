@@ -21,7 +21,7 @@
 import type AppIcon from "../components/AppIcon.vue";
 import type AppAvatar from "../components/AppAvatar.vue";
 type AppIconName = InstanceType<typeof AppIcon>["$props"]["name"];
-type AppAvatarEntityType = NonNullable<InstanceType<typeof AppAvatar>["$props"]["entityType"]>;
+export type AppAvatarEntityType = NonNullable<InstanceType<typeof AppAvatar>["$props"]["entityType"]>;
 
 /** Supported input types the renderer knows how to draw. */
 export type FormFieldType =
@@ -36,7 +36,9 @@ export type FormFieldType =
   | "chips"
   | "combobox"
   | "date"
-  | "boolean";
+  | "boolean"
+  /** A few large tappable chips instead of a dropdown — see ChoiceChipsField.vue. */
+  | "choice";
 
 /**
  * One selectable option for 'select'/'autocomplete'/'combobox' fields.
@@ -61,7 +63,27 @@ export interface FormFieldOption {
    * pill instead of plain text — see FormRenderer's `hasColorOptions()`.
    */
   color?: string;
+  /**
+   * Secondary line under the title in the dropdown list (e.g. a doctor's
+   * specialty · clinic) — only drawn by the avatar item slot
+   * (FormFieldDef.avatarEntityType). Already-resolved text, not an i18n key.
+   */
+  subtitle?: string;
+  /** 'choice' fields: a short symbol drawn before the label (e.g. "♀"). Not copy — never translated. */
+  symbol?: string;
+  /** 'choice' fields: shown as a small link under the main chips instead of a chip of its own. */
+  secondary?: boolean;
 }
+
+/**
+ * Entity-specific derived-fields hook (FormRenderer's `derive` prop). Runs on
+ * every form change with the form as it was on the previous run, so a hook
+ * can tell which field the user just touched; returns the fields to patch.
+ */
+export type FormDerive = (
+  form: Record<string, unknown>,
+  prev: Record<string, unknown>,
+) => Partial<Record<string, unknown>> | void;
 
 /**
  * A field-level validation rule. Return `true` when valid, or an i18n KEY
@@ -69,6 +91,25 @@ export interface FormFieldOption {
  * `t()` at render time, so config files never need access to a translator.
  */
 export type FormFieldRule = (v: unknown) => true | string;
+
+/**
+ * The shared set of form sections (NEO-92). A form whose fields span two or
+ * more sections renders as the "Carpeta" folder: a spine with the record's
+ * identity and a section index, and one sheet with a heading per section.
+ * Labels: `app.formRenderer.section.<id>` in packages/i18n.
+ */
+export const FORM_SECTION_IDS = [
+  "identity",
+  "contact",
+  "organization",
+  "profile",
+  "clinical",
+  "status",
+  "access",
+  "territory",
+  "links",
+] as const;
+export type FormSectionId = (typeof FORM_SECTION_IDS)[number];
 
 export interface FormFieldDef {
   /** Payload field name — also the key form state is stored/read under. */
@@ -100,6 +141,12 @@ export interface FormFieldDef {
    * `dependsOn` change) and cached.
    */
   options?: FormFieldOption[] | ((form: Record<string, unknown>) => Promise<FormFieldOption[]>);
+  /**
+   * Narrows a STATIC `options` list against the live form (e.g. salutations
+   * offered per market, from the form's country) — keeps the list static, so
+   * titles stay i18n keys, instead of turning it into an async loader.
+   */
+  optionFilter?: (option: FormFieldOption, form: Record<string, unknown>) => boolean;
   /** Allow multiple selections — only meaningful for type 'autocomplete'. */
   multiple?: boolean;
   /**
@@ -187,4 +234,22 @@ export interface FormFieldDef {
    */
   trueValue?: unknown;
   falseValue?: unknown;
+  /**
+   * Which section this field belongs to (NEO-92). FormRenderer groups fields
+   * by section in order of each section's first field, so a config can keep
+   * its field order; fields without one join the first section. Use
+   * config/forms/sections.ts's `inSection()` to tag a run of fields.
+   */
+  section?: FormSectionId;
+  /**
+   * 'date' fields only (NEO-132, AppDateField): allowed range — "YYYY-MM-DD"
+   * or the live token "today" — which day the calendar opens on, and the
+   * shortcut chips above it ("past": Today/Yesterday/A week ago).
+   */
+  date?: {
+    min?: string;
+    max?: string;
+    openAt?: "day" | "year";
+    quickPicks?: "past" | "future" | "none";
+  };
 }

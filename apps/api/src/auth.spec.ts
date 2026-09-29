@@ -2,7 +2,8 @@ import { describe, it, expect, beforeAll } from "vitest";
 import request from "supertest";
 import bcrypt from "bcrypt";
 import { app } from "./server.js";
-import { withTenant, insertStaffUser } from "./db.js";
+import { withTenant, insertStaffUser, getStaffUserByEmail, getUserById } from "./db.js";
+import { signAuthToken } from "./utils/jwt.js";
 
 // Single-tenant stage — tenant isolation is intentionally out of scope here.
 // TODO(multi-tenant): once a second tenant schema is live, add a test proving
@@ -57,6 +58,8 @@ describe("Auth routes", () => {
         .send({ password: TEST_PASSWORD });
       expect(res.status).toBe(400);
       expect(res.body).toHaveProperty("error");
+      // NEO-109: names the field so the sign-in form can mark it.
+      expect(res.body).toMatchObject({ code: "VALIDATION_ERROR", field: "email", reason: "required" });
     });
 
     it("400s when password is missing", async () => {
@@ -66,6 +69,7 @@ describe("Auth routes", () => {
         .send({ email });
       expect(res.status).toBe(400);
       expect(res.body).toHaveProperty("error");
+      expect(res.body).toMatchObject({ code: "VALIDATION_ERROR", field: "password", reason: "required" });
     });
 
     it("400s when password is under 8 characters, with the same generic message used for invalid credentials", async () => {
@@ -75,6 +79,8 @@ describe("Auth routes", () => {
         .send({ email, password: "short" });
       expect(res.status).toBe(400);
       expect(res.body.error).toBe("Invalid email or password.");
+      // A credentials verdict, not a field one — never says which part was wrong.
+      expect(res.body).not.toHaveProperty("field");
     });
 
     it("401s for an unknown email with the generic message", async () => {
@@ -101,13 +107,32 @@ describe("Auth routes", () => {
         .set("X-Forwarded-For", freshIp())
         .send({ email, password: TEST_PASSWORD });
       expect(res.status).toBe(200);
-      expect(res.body.user).toMatchObject({ email });
+      expect(res.body.user).toMatchObject({ email, hasPassword: true });
+      // CORE-45: the PWA keys per-user device settings (filters, offline cache) by tenant + user.
+      expect(res.body.user.tenant).toBe(TENANT_SLUG);
       expect(typeof res.body.token).toBe("string");
       expect(res.body.token.split(".")).toHaveLength(3);
       // Opaque, not a JWT (ADR-020) — nothing to decode, just a random value.
       expect(typeof res.body.refresh_token).toBe("string");
       expect(res.body.refresh_token.length).toBeGreaterThanOrEqual(32);
       expect(res.body.refresh_token.split(".")).toHaveLength(1);
+    });
+
+    it("401s with the generic message for an inactive account even with the right password", async () => {
+      const inactiveEmail = testEmail("inactive");
+      await createLoginUser(inactiveEmail);
+      await withTenant(TENANT_SLUG, (client) =>
+        client.query(
+          `UPDATE users SET status = 'inactive' WHERE identity_id = (SELECT id FROM identities WHERE email = $1)`,
+          [inactiveEmail],
+        ),
+      );
+      const res = await request(app)
+        .post("/api/v1/auth/login")
+        .set("X-Forwarded-For", freshIp())
+        .send({ email: inactiveEmail, password: TEST_PASSWORD });
+      expect(res.status).toBe(401);
+      expect(res.body.error).toBe("Invalid email or password.");
     });
 
     it("eventually 429s after repeated attempts from the same client", async () => {
@@ -155,7 +180,26 @@ describe("Auth routes", () => {
         .set("X-Forwarded-For", ip)
         .set("Authorization", `Bearer ${loginRes.body.token}`);
       expect(res.status).toBe(200);
-      expect(res.body.user).toMatchObject({ email });
+      expect(res.body.user).toMatchObject({ email, hasPassword: true });
+    });
+
+    // NEO-102: the account menu only offers "Change password" when this is true,
+    // so a Google-only account (no password_hash) must read false.
+    it("reports hasPassword=false for an account without a password (Google-only)", async () => {
+      const googleEmail = testEmail("google-only");
+      const user = await withTenant(TENANT_SLUG, async (client) => {
+        await insertStaffUser(client, googleEmail, "QA", "Google", "rep", null, false);
+        const row = await getStaffUserByEmail(client, googleEmail);
+        return row ? await getUserById(client, row.id) : null;
+      });
+      expect(user?.has_password).toBe(false);
+      const token = signAuthToken(user!);
+      const res = await request(app)
+        .get("/api/v1/auth/session")
+        .set("X-Forwarded-For", freshIp())
+        .set("Authorization", `Bearer ${token}`);
+      expect(res.status).toBe(200);
+      expect(res.body.user).toMatchObject({ email: googleEmail, hasPassword: false });
     });
   });
 
@@ -208,6 +252,7 @@ describe("Auth routes", () => {
         .set("Authorization", `Bearer ${loginRes.body.token}`)
         .send({ current_password: TEST_PASSWORD, new_password: "short" });
       expect(res.status).toBe(400);
+      expect(res.body).toMatchObject({ code: "VALIDATION_ERROR", field: "new_password", reason: "invalid" });
     });
 
     it("401s when the current password is wrong", async () => {
@@ -266,6 +311,15 @@ describe("Auth routes", () => {
   });
 
   describe("POST /api/v1/auth/forgot-password", () => {
+    it("400s without an email, naming the field (NEO-109)", async () => {
+      const res = await request(app)
+        .post("/api/v1/auth/forgot-password")
+        .set("X-Forwarded-For", freshIp())
+        .send({});
+      expect(res.status).toBe(400);
+      expect(res.body).toMatchObject({ code: "VALIDATION_ERROR", field: "email", reason: "required" });
+    });
+
     it("always 200s with the same generic message, whether or not the email exists", async () => {
       const existingRes = await request(app)
         .post("/api/v1/auth/forgot-password")
@@ -322,6 +376,7 @@ describe("Auth routes", () => {
         .set("X-Forwarded-For", freshIp())
         .send({ token, new_password: "short" });
       expect(shortRes.status).toBe(400);
+      expect(shortRes.body).toMatchObject({ code: "VALIDATION_ERROR", field: "new_password", reason: "invalid" });
 
       const resetRes = await request(app)
         .post("/api/v1/auth/reset-password")
@@ -354,6 +409,20 @@ describe("Auth routes", () => {
         .set("X-Forwarded-For", freshIp())
         .send({ token: "not-a-real-token", new_password: "irrelevant-but-long-enough" });
       expect(res.status).toBe(400);
+    });
+  });
+
+  describe("GET /api/v1/auth/session", () => {
+    it("returns the tenant with the user, so the PWA can scope per-user device settings (CORE-45)", async () => {
+      const login = await request(app)
+        .post("/api/v1/auth/login")
+        .set("X-Forwarded-For", freshIp())
+        .send({ email, password: TEST_PASSWORD });
+      const res = await request(app)
+        .get("/api/v1/auth/session")
+        .set("Authorization", `Bearer ${login.body.token}`);
+      expect(res.status).toBe(200);
+      expect(res.body.user).toMatchObject({ email, tenant: TENANT_SLUG });
     });
   });
 });

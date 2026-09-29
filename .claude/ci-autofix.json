@@ -1,0 +1,16 @@
+{
+  "$comment": "NEO-182 — one rule set for every CI fix loop: the VS Code session (quality-gate.sh), the GitHub handoff (ci-failure-handoff.yml) and the nightly linear-worker. Decided by Łukasz 2026-09-28 (form ci-autofix-2026-09). Change rules here, not in the readers.",
+  "workflow": "CI",
+  "maxFixAttempts": 2,
+  "waitForGreenBeforePrLink": true,
+  "localE2eOnUiChange": true,
+  "workerMayPushToOpenPr": true,
+  "ciBranchPatterns": ["worktree-*", "worker/*", "claude/*"],
+  "allowedFixScope": "Only what makes the failing CI checks pass: fix the branch's own code that the failing tests exercise, or the test itself when it asserts something the change deliberately altered (say so in the comment). No new features, no refactors, no unrelated files. Never delete, skip (.skip/.only/test.fixme) or loosen a test just to turn CI green.",
+  "linear": {
+    "failedLabel": "ci-failed",
+    "workerState": "Ready for Worker",
+    "exhaustedState": "Needs Review"
+  },
+  "commentMarker": "<!-- ci-autofix -->"
+}

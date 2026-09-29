@@ -14,7 +14,17 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [dev, prod]
+    # Work branches too (NEO-182): the session waits for a green CI before it
+    # hands over the "Create PR" link, so CI has to run before a PR exists.
+    # Keep in sync with .claude/ci-autofix.json "ciBranchPatterns".
+    branches: [dev, prod, "worktree-*", "worker/*", "claude/*"]
+
+# Once the PR is opened, its pull_request run and a push run of the same commit
+# can overlap — the newer one cancels the older (cancelled runs are ignored by
+# infrastructure/scripts/ci-status.mjs).
+concurrency:
+  group: ci-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -86,24 +96,43 @@ jobs:
       - name: Lint (all workspaces)
         run: pnpm -r lint
 
+      - name: i18n key parity (en/pl/mx)
+        run: pnpm i18n:parity
+
       - name: Typecheck (all workspaces)
         run: pnpm -r typecheck
 
       - name: Run DB migrations
         run: pnpm --filter @neo/api migrate
 
+      # Regression guard for the exact drift 027_sync_create_tenant_schema.sql
+      # fixed: create_tenant_schema() had gone stale relative to later
+      # migrations for years (see that migration's header) — this fails fast
+      # if a future migration touches a tenant table without also updating
+      # the function, instead of drifting silently again.
+      - name: Check create_tenant_schema() parity
+        run: pnpm --filter @neo/api check-tenant-schema-parity
+
       # Integration tests must never write into "neosleep" (see
       # apps/api/vitest.config.ts) — they target an isolated "test" schema
-      # instead, cloned structurally from "neosleep" since create_tenant_schema()
-      # alone is stale relative to later migrations (see sync-test-schema.ts).
+      # instead. Still cloned via sync-test-schema.ts rather than calling
+      # create_tenant_schema('test') directly, even though that function is
+      # accurate again as of 027 — keeps the isolated test schema on its own
+      # independent path from the function the parity check above validates.
       - name: Sync isolated test tenant schema
         run: pnpm --filter @neo/api sync-test-schema
+
+      - name: Test — infrastructure scripts (blocking)
+        run: node --test "infrastructure/scripts/*.test.mjs"
 
       - name: Test — api (blocking)
         run: pnpm --filter @neo/api test
 
       - name: Test — ui package (blocking)
         run: pnpm --filter @neo/ui test
+
+      - name: Test — AJM portfolio client site (blocking)
+        run: pnpm --filter @ajm/portfolio test
 
       - name: Test — pwa (informational — pre-existing failures being triaged, not yet a merge gate)
         run: pnpm --filter @neo/pwa test
@@ -131,9 +160,57 @@ jobs:
           DATABASE_URL=${DATABASE_URL}
           DEFAULT_TENANT_SLUG=${DEFAULT_TENANT_SLUG}
           SESSION_SECRET=${SESSION_SECRET}
-          ORTHOAPNEA_EMAIL=${ORTHOAPNEA_EMAIL}
-          ORTHOAPNEA_PASSWORD=${ORTHOAPNEA_PASSWORD}
           EOF
 
       - name: Test — pwa e2e (blocking)
         run: pnpm --filter @neo/pwa test:e2e
+
+      # Page snapshot + trace of each failing e2e test — the log alone only
+      # says "element not found", not what the page showed instead.
+      - name: Upload e2e failure traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pwa-e2e-test-results
+          path: apps/pwa/test-results/
+          retention-days: 7
+
+  # The API ships as a Docker image to Cloud Run (NEO-45, deploy-api.yml). Build it on
+  # every PR/push so a broken Dockerfile fails here, not during a deploy. Build only,
+  # nothing is pushed.
+  api-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build API image
+        run: docker build --platform linux/amd64 -f apps/api/Dockerfile -t neo-api:ci .
+      # Render a real PDF inside the built image, with a Google Font like every document
+      # template: that HTTPS fetch loads Chromium's network stack (NSS + libsqlite3). A plain
+      # page renders even when those system libs are missing, so it must be this page.
+      - name: Render a PDF inside the image
+        run: |
+          docker run --rm -w /app/apps/api --entrypoint node neo-api:ci --input-type=module -e '
+            const r = await import("/app/apps/api/dist/services/documentRenderer.js");
+            const html = "<!doctype html><html><head><meta charset=UTF-8><link href=\"https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap\" rel=stylesheet><style>body{font-family:Poppins,sans-serif}</style></head><body><h1>CI smoke é ñ ł</h1></body></html>";
+            const pdf = await r.renderHtmlToPdf(html);
+            if (Buffer.from(pdf.subarray(0, 5)).toString("latin1") !== "%PDF-") throw new Error("not a PDF");
+            console.log("PDF OK", pdf.length, "bytes");
+            process.exit(0);'
+
+  # Claude Code tooling (hooks, ship-artifact, worktree cleanup) has its own self-tests.
+  # They need only git, jq, bash and Node, no install and no database (CORE-23).
+  tooling:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+      - name: Tooling self-tests
+        run: |
+          git config --global user.name ci && git config --global user.email ci@example.com
+          node --test .claude/skills/ship-artifact/ticket.test.mjs
+          bash .claude/hooks/pre-tool-linear-ticket-format.test.sh
+          bash infrastructure/scripts/worktree-clean.test.sh

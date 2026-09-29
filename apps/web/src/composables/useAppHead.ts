@@ -17,7 +17,7 @@ export function useAppHead() {
       { rel: "icon",             type: "image/svg+xml", href: "/brand/logos/icon/icon_dark.svg" },
       { rel: "apple-touch-icon",                        href: "/brand/logos/icon/icon_dark.svg" },
       { rel: "canonical",                               href: canonical },
-      ...HREFLANG_CODES.map((hreflang) => ({ rel: "alternate", hreflang, href: canonical })),
+      ...HREFLANG_CODES.map((hreflang) => ({ rel: "alternate" as const, hreflang, href: canonical })),
     ],
     meta: [
       { name: "theme-color",                          content: "#128F83" },

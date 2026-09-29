@@ -58,7 +58,9 @@
 
       <div class="notif-center__list">
         <p v-if="loading" class="notif-center__state">{{ t("layout.loader.label") }}</p>
-        <p v-else-if="loadError" class="notif-center__state">{{ t("notificationCenter.error.load") }}</p>
+        <p v-else-if="loadError" class="notif-center__state">
+          {{ t("notificationCenter.error.load") }} {{ loadFailureText?.body }} {{ loadFailureText?.reference }}
+        </p>
         <p v-else-if="items.length === 0" class="notif-center__state">
           {{ filter === "unread" ? t("notificationCenter.empty.unread") : t("notificationCenter.empty.all") }}
         </p>
@@ -91,6 +93,7 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { useErrorTextFor } from "@ui";
 import { VMenu } from "vuetify/components";
 import AppButton from "./AppButton.vue";
 import AppIcon from "./AppIcon.vue";
@@ -100,7 +103,8 @@ const { t, locale } = useI18n();
 // Polling lifecycle is owned by AppLayout.vue (always mounted for the whole
 // session) — this component only renders on DashboardView now, but the
 // unread count/dots must stay live everywhere else too.
-const { items, unreadCount, loading, loadError, fetchList, markRead, markAllRead } = useNotificationCenter();
+const { items, unreadCount, loading, loadError, loadFailure, fetchList, markRead, markAllRead } = useNotificationCenter();
+const loadFailureText = useErrorTextFor(loadFailure);
 
 const open = ref(false);
 const filter = ref<"all" | "unread">("all");
@@ -126,6 +130,7 @@ function formatTime(iso: string): string {
   try {
     return new Date(iso).toLocaleString(locale.value, { dateStyle: "medium", timeStyle: "short" });
   } catch {
+    // benign: an unparseable date or unsupported locale — show the raw ISO string instead.
     return iso;
   }
 }

@@ -1,12 +1,17 @@
 <template>
   <div
-    class="app-segmented-tabs position-relative d-flex pa-2 pa-sm-1 rounded-pill"
-    :class="{ 'app-segmented-tabs--compact': compact }"
+    ref="rootEl"
+    class="app-segmented-tabs position-relative d-flex"
+    :class="[
+      underline ? 'app-segmented-tabs--underline' : 'pa-2 pa-sm-1 rounded-pill',
+      { 'app-segmented-tabs--compact': compact, 'app-segmented-tabs--fit': fit },
+    ]"
     role="tablist"
   >
     <div
-      class="app-segmented-tabs__thumb position-absolute rounded-pill bg-primary"
-      :style="{ width: `calc((100% - var(--seg-pad) * 2) / ${options.length})`, transform: `translateX(${activeIndex * 100}%)` }"
+      class="app-segmented-tabs__thumb position-absolute bg-primary"
+      :class="underline ? 'rounded' : 'rounded-pill'"
+      :style="thumbStyle"
       aria-hidden="true"
     />
     <VBtn
@@ -15,8 +20,8 @@
       variant="text"
       size="small"
       role="tab"
-      class="app-segmented-tabs__tab position-relative flex-grow-1 text-body-2 font-weight-medium"
-      :class="{ 'app-segmented-tabs__tab--active': option.value === modelValue }"
+      class="app-segmented-tabs__tab position-relative text-body-medium font-weight-medium"
+      :class="{ 'app-segmented-tabs__tab--active': option.value === modelValue, 'flex-grow-1': !fit }"
       :aria-selected="option.value === modelValue"
       @click="$emit('update:modelValue', option.value)"
     >
@@ -26,7 +31,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { VBtn } from "vuetify/components";
 
 /**
@@ -36,6 +41,12 @@ import { VBtn } from "vuetify/components";
  * is meant to eventually replace there too). Native-iOS-inspired: this is
  * the shared building block for that everywhere a connected tab switcher is
  * needed, not a one-off per view.
+ *
+ * Two layouts: equal columns filling the row (default — e.g. ResourcesView's
+ * full-width switcher), or `fit`, where each tab takes its label's own width
+ * and the bar hugs its tabs (NEO-61 — detail views, where a label such as
+ * "Historia endo" must never be ellipsized). Either way the thumb is placed
+ * from the active tab's measured box, so it matches both layouts.
  *
  * Layout/spacing/typography use Vuetify utility classes per
  * docs/foundation/DESIGN_AND_UI.md's utility-first convention — only the
@@ -52,6 +63,10 @@ const props = defineProps<{
   options: AppSegmentedTabOption[];
   /** Shrinks to exactly the desktop-sized control (same padding + tab height, not an approximation) — e.g. while the caller's content scrolls, iOS-large-title-style. No-op on desktop, which already renders at that size. */
   compact?: boolean;
+  /** Tabs take their label's width instead of equal columns; the bar is only as wide as its tabs. */
+  fit?: boolean;
+  /** NEO-153: flat row over a hairline with a sliding underline instead of the glass pill — detail views on desktop, where the tabs head a content column. */
+  underline?: boolean;
 }>();
 
 defineEmits<{
@@ -59,6 +74,42 @@ defineEmits<{
 }>();
 
 const activeIndex = computed(() => Math.max(0, props.options.findIndex((o) => o.value === props.modelValue)));
+
+const rootEl = ref<HTMLElement | null>(null);
+/** Active tab's box inside the container (offsetLeft already includes --seg-pad); null until measured. */
+const activeBox = ref<{ left: number; width: number } | null>(null);
+
+function measure(): void {
+  const tab = rootEl.value?.querySelectorAll<HTMLElement>(".app-segmented-tabs__tab")[activeIndex.value];
+  if (!tab || tab.offsetWidth === 0) return;
+  activeBox.value = { left: tab.offsetLeft, width: tab.offsetWidth };
+}
+
+// Until the first measurement (and in jsdom, which has no layout) the
+// equal-column math is used — exact for the default layout.
+const thumbStyle = computed(() =>
+  activeBox.value
+    ? { left: "0", width: `${activeBox.value.width}px`, transform: `translateX(${activeBox.value.left}px)` }
+    : {
+        width: `calc((100% - var(--seg-pad) * 2) / ${props.options.length})`,
+        transform: `translateX(${activeIndex.value * 100}%)`,
+      },
+);
+
+let resizeObserver: ResizeObserver | undefined;
+onMounted(() => {
+  measure();
+  if (typeof ResizeObserver !== "undefined" && rootEl.value) {
+    resizeObserver = new ResizeObserver(measure);
+    resizeObserver.observe(rootEl.value);
+  }
+});
+onBeforeUnmount(() => resizeObserver?.disconnect());
+watch(
+  () => [props.modelValue, props.options, props.fit, props.compact, props.underline],
+  () => void nextTick(measure),
+  { deep: true },
+);
 </script>
 
 <style scoped>
@@ -102,7 +153,9 @@ const activeIndex = computed(() => Math.max(0, props.options.findIndex((o) => o.
   bottom: var(--seg-pad);
   left: var(--seg-pad);
   box-shadow: 0 2px 8px rgba(var(--v-theme-primary), 0.35);
-  transition: transform 420ms var(--pwa-ease-spring, cubic-bezier(0.34, 1.2, 0.64, 1));
+  transition:
+    transform 300ms var(--pwa-ease-spring, cubic-bezier(0.34, 1.2, 0.64, 1)),
+    width 300ms var(--pwa-ease-spring, cubic-bezier(0.34, 1.2, 0.64, 1));
   will-change: transform;
   pointer-events: none;
 }
@@ -111,7 +164,9 @@ const activeIndex = computed(() => Math.max(0, props.options.findIndex((o) => o.
   z-index: 1;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   text-transform: none;
-  letter-spacing: normal;
+  /* Tracking comes from the text-body-medium utility class. Vuetify 4 puts
+     utilities in a cascade layer, so any letter-spacing here would now
+     override it (it never did under Vuetify 3's !important utilities). */
   /* Vuetify's flex-grow-1 utility only sets flex-grow — flex-basis stays
      auto, so a long label (e.g. "Estudios de sueño") keeps its content
      width and steals space from neighbors instead of sharing the row
@@ -123,6 +178,58 @@ const activeIndex = computed(() => Math.max(0, props.options.findIndex((o) => o.
      be able to shrink a flex child below its content size at all. */
   flex-basis: 0;
   min-width: 0;
+}
+
+/* fit (NEO-61): each tab is its label's width and never ellipsized; the bar
+   hugs its tabs. min-width stops a short label ("Notes") reading as a sliver
+   next to a long one. Declared after the equal-column rule above so it wins. */
+.app-segmented-tabs--fit {
+  width: max-content;
+  max-width: 100%;
+  /* A narrow tablet can't always fit every label: scroll, never ellipsize. */
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.app-segmented-tabs--fit::-webkit-scrollbar {
+  display: none;
+}
+.app-segmented-tabs--fit .app-segmented-tabs__tab {
+  flex: 0 0 auto;
+  min-width: 88px;
+}
+
+/* NEO-153 underline: no glass container, a hairline under the row and a 2px
+   bar as the thumb. Declared after the pill + fit rules so it wins over both;
+   --seg-pad 0 because there is no container padding to inset from. */
+.app-segmented-tabs--underline {
+  --seg-pad: 0px;
+  background: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+.app-segmented-tabs--underline.app-segmented-tabs--fit {
+  width: 100%;
+}
+.app-segmented-tabs--underline .app-segmented-tabs__thumb {
+  top: auto;
+  bottom: -1px;
+  height: 2px;
+  box-shadow: none;
+}
+.app-segmented-tabs--underline .app-segmented-tabs__tab {
+  min-height: 44px;
+  border-radius: var(--pwa-radius, 8px) var(--pwa-radius, 8px) 0 0;
+}
+.app-segmented-tabs--underline .app-segmented-tabs__tab--active {
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-segmented-tabs__thumb {
+    transition: none;
+  }
 }
 
 .app-segmented-tabs__tab :deep(.v-btn__content) {

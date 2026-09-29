@@ -1,0 +1,62 @@
+# Deploy the AJ Management portfolio (clients/ajm/portfolio) to GoDaddy FTP
+# → alfredjan.com/corporativo (one address, language switch via ?lang=en; Łukasz 2026-09-29).
+# The same build by hand: bash clients/ajm/portfolio/scripts/package-godaddy.sh (zip for File Manager).
+#
+# Runs by hand (Actions → "Deploy AJM Portfolio" → Run workflow) or when a change under
+# clients/ajm/ reaches prod. It never runs for NeoSleep-only changes.
+#
+# Secrets (repository settings → Secrets and variables → Actions):
+#   AJM_FTP_DIR — FTP path of the site's folder, e.g. /public_html/corporativo (not a URL).
+#   The FTP account is the same GoDaddy account as neosleepcare.com (G2, 2026-09-28), so the
+#   NeoSleep FTP_* secrets are reused; AJM_FTP_SERVER/USERNAME/PASSWORD override them if ever set.
+#
+# Media: the encoded loops/photos live in clients/ajm/portfolio/public/media in git (G1) and
+# ship with the build; re-encode them with `pnpm --filter @ajm/portfolio media`.
+
+name: Deploy AJM Portfolio
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [prod]
+    paths: ["clients/ajm/**"]
+
+concurrency:
+  group: deploy-ajm-portfolio
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --filter @ajm/portfolio...
+
+      - name: Test
+        run: pnpm --filter @ajm/portfolio test
+
+      - name: Build
+        run: bash clients/ajm/portfolio/scripts/package-godaddy.sh
+
+      - name: Deploy to alfredjan.com/corporativo
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.AJM_FTP_SERVER || secrets.FTP_SERVER }}
+          username: ${{ secrets.AJM_FTP_USERNAME || secrets.FTP_USERNAME }}
+          password: ${{ secrets.AJM_FTP_PASSWORD || secrets.FTP_PASSWORD }}
+          protocol: ftp
+          local-dir: ./clients/ajm/portfolio/dist-godaddy/corporativo/
+          server-dir: ${{ secrets.AJM_FTP_DIR }}/
+          dangerous-clean-slate: false

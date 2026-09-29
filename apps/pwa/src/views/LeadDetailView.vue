@@ -34,6 +34,7 @@
     <FormRenderer
       v-model="showConvertToPatientModal"
       :fields="patientFormFields"
+      :derive="patientFormDerive"
       :initial-data="convertToPatientInitialData"
       title-key="app.patients.form.title"
       submit-label-key="app.patients.form.submit"
@@ -47,11 +48,9 @@
       @submit="onEventFormSubmit"
     />
 
-    <VAlert
+    <AppInlineAlert
       v-if="isOffline"
       type="warning"
-      variant="tonal"
-      density="compact"
       class="view-detail__offline-banner"
       :text="t('app.common.offlineShowingCached')"
     />
@@ -59,18 +58,14 @@
       :has-content="!!lead"
       :loading="loading"
       :load-error="loadFailed"
+      :load-error-cause="loadFailure"
       :back-route="backRoute"
       :back-label="t('user.leads.detail.back')"
+      :record-title="lead?.name ?? ''"
+      :details-skeleton="false"
       :not-found-label="t('user.leads.detail.notFound')"
       @retry="loadLead"
     >
-      <!-- Name inline with back arrow -->
-      <template v-if="lead" #header-title>
-        <span class="view-detail__header-name-wrap">
-          <AppAvatar :name="lead.name" :first-name="lead.first_name" :last-name="lead.last_name" entity-type="lead" :size="32" />
-          <h1 class="view-detail__header-name">{{ lead.name }}</h1>
-        </span>
-      </template>
 
       <!-- Actions on the right — for a doctor-type lead, Send Offer and Invite
            to Partner are the two-step conversion pipeline, so they lead. -->
@@ -224,157 +219,110 @@
         </VTooltip>
       </template>
 
-      <template v-if="lead" #body>
-        <div class="view-detail__body">
-          <!-- Data card -->
-          <div class="view-detail__card">
-            <dl class="view-detail__fields">
-              <div v-if="!isInactive(lead)" class="view-detail__row">
-                <dt class="view-detail__label">
-                  {{ t("user.leads.detail.email") }}
-                </dt>
-                <dd class="view-detail__value">
-                  <a
-                    v-if="lead.email"
-                    :href="`mailto:${lead.email}`"
-                    class="view-detail__link"
-                    >{{ lead.email }}</a
-                  >
-                  <span v-else class="view-detail__empty">—</span>
-                </dd>
-              </div>
-
-              <div v-if="!isInactive(lead)" class="view-detail__row">
-                <dt class="view-detail__label">
-                  {{ t("user.leads.detail.phone") }}
-                </dt>
-                <dd class="view-detail__value">
-                  <a
-                    v-if="lead.phone"
-                    :href="`tel:${lead.phone}`"
-                    class="view-detail__link"
-                    >{{ lead.phone }}</a
-                  >
-                  <span v-else class="view-detail__empty">—</span>
-                </dd>
-              </div>
-
-              <div class="view-detail__row">
-                <dt class="view-detail__label">
-                  {{ t("user.leads.detail.status") }}
-                </dt>
-                <dd class="view-detail__value">
-                  <span
-                    :class="[
-                      'pwa-lead-status-chip',
-                      `pwa-lead-status-chip--${leadStatusClass(lead.status)}`,
-                    ]"
-                  >
-                    {{ statusLabel(lead.status) }}
-                  </span>
-                </dd>
-              </div>
-
-              <div class="view-detail__row">
-                <dt class="view-detail__label">
-                  {{ t("user.leads.detail.region") }}
-                </dt>
-                <dd class="view-detail__value">{{ lead.region || "—" }}</dd>
-              </div>
-
-              <div class="view-detail__row">
-                <dt class="view-detail__label">
-                  {{ t("user.leads.detail.institution") }}
-                </dt>
-                <dd class="view-detail__value">
-                  <RouterLink
-                    v-if="leadInstitution(lead)"
-                    :to="hcoListLink(leadInstitution(lead))"
-                    class="view-detail__link view-detail__institution-link"
-                  >
-                    <AppIcon
-                      name="nav-hco"
-                      class="view-detail__institution-icon"
-                    />
-                    {{ leadInstitution(lead) }}
-                  </RouterLink>
-                  <span v-else class="view-detail__empty">—</span>
-                </dd>
-              </div>
-
-              <div class="view-detail__row view-detail__row--notes">
-                <dt class="view-detail__label">
-                  {{ t("user.leads.detail.notes") }}
-                </dt>
-                <dd class="view-detail__value view-detail__value--notes">
-                  <span v-if="lead.notes">{{ lead.notes }}</span>
-                  <span v-else class="view-detail__empty">—</span>
-                </dd>
-              </div>
-            </dl>
-          </div>
-        </div>
+      <template v-if="lead" #record-tile>
+        <AppAvatar
+          :name="lead.name"
+          entity-type="lead"
+          :first-name="lead.first_name"
+          :last-name="lead.last_name"
+          :lead-source="lead.source"
+          :size="48"
+        />
+      </template>
+      <template v-if="lead" #record-details>
+        <IdentityDetails :details="leadIdentity(lead)" />
+      </template>
+      <template v-if="lead" #sections>
+        <!-- NEO-155: same record layout as patients/doctors (DetailViewTabs +
+             view-item rows), instead of the lead's own hand-rolled card. -->
+        <DetailViewTabs v-model="activeTab" :tabs="leadTabs">
+          <template #details>
+            <div v-if="!isInactive(lead)" class="view-item__row">
+              <dt class="view-item__label view-item__label--icon"><AppIcon name="mail" />{{ t("user.leads.detail.email") }}</dt>
+              <dd class="view-item__value">
+                <a v-if="lead.email" :href="`mailto:${lead.email}`" class="view-item__link">{{ lead.email }}</a>
+                <span v-else class="view-item__empty">—</span>
+              </dd>
+            </div>
+            <div v-if="!isInactive(lead)" class="view-item__row">
+              <dt class="view-item__label view-item__label--icon"><AppIcon name="phone" />{{ t("user.leads.detail.phone") }}</dt>
+              <dd class="view-item__value">
+                <a v-if="lead.phone" :href="`tel:${lead.phone}`" class="view-item__link">{{ lead.phone }}</a>
+                <span v-else class="view-item__empty">—</span>
+              </dd>
+            </div>
+            <div class="view-item__row">
+              <dt class="view-item__label">{{ t("user.leads.detail.status") }}</dt>
+              <dd class="view-item__value">
+                <span :class="['pwa-lead-status-chip', `pwa-lead-status-chip--${leadStatusClass(lead.status)}`]">
+                  {{ statusLabel(lead.status) }}
+                </span>
+              </dd>
+            </div>
+            <div class="view-item__row">
+              <dt class="view-item__label">{{ t("user.leads.form.source") }}</dt>
+              <dd class="view-item__value">{{ sourceLabel(lead.source) }}</dd>
+            </div>
+            <div class="view-item__row">
+              <dt class="view-item__label">{{ t("user.leads.detail.institution") }}</dt>
+              <dd class="view-item__value">
+                <EntityLink
+                  :to="leadInstitution(lead) ? hcoListLink(leadInstitution(lead)) : null"
+                  :label="leadInstitution(lead)"
+                  entity-type="hco"
+                />
+              </dd>
+            </div>
+            <div class="view-item__row">
+              <dt class="view-item__label">{{ t("user.leads.detail.region") }}</dt>
+              <dd class="view-item__value">{{ lead.region || "—" }}</dd>
+            </div>
+            <div v-if="lead.notes" class="view-item__row">
+              <dt class="view-item__label">{{ t("user.leads.detail.notes") }}</dt>
+              <dd class="view-item__value">{{ lead.notes }}</dd>
+            </div>
+          </template>
+          <template #notes>
+            <PatientNotesPanel entity-type="lead" :entity-id="lead.id" />
+          </template>
+        </DetailViewTabs>
       </template>
     </ItemDetailLayout>
 
-    <VDialog
+    <AppConfirmDialog
       v-model="showDeleteConfirm"
+      :text="t('user.leads.actions.deleteConfirmText')"
+      :secondary-label="t('app.common.cancel')"
+      :secondary-color="null"
+      :primary-label="t('user.leads.actions.delete')"
+      primary-color="error"
+      primary-variant="text"
+      :loading="deleteLoading"
       max-width="360"
-      :transition="originDialogTransition"
-      persistent
-    >
-      <VCard>
-        <VCardText>{{ t("user.leads.actions.deleteConfirmText") }}</VCardText>
-        <VCardActions>
-          <VSpacer />
-          <AppButton variant="text" @click="showDeleteConfirm = false">
-            {{ t("app.common.cancel") }}
-          </AppButton>
-          <AppButton
-            color="error"
-            variant="text"
-            :loading="deleteLoading"
-            @click="onDelete"
-          >
-            {{ t("user.leads.actions.delete") }}
-          </AppButton>
-        </VCardActions>
-      </VCard>
-    </VDialog>
+      @secondary="showDeleteConfirm = false"
+      @primary="onDelete"
+    />
 
-    <VDialog
+    <AppConfirmDialog
       v-model="showResendOfferConfirm"
+      :text="t('user.leads.detail.sendOfferResendConfirmText', { date: offerSentAtLabel })"
+      :secondary-label="t('app.common.cancel')"
+      :secondary-color="null"
+      :primary-label="t('user.leads.detail.sendOffer')"
+      :primary-color="null"
+      primary-variant="text"
+      :loading="sendOfferLoading"
       max-width="360"
-      :transition="originDialogTransition"
-      persistent
-    >
-      <VCard>
-        <VCardText>{{
-          t("user.leads.detail.sendOfferResendConfirmText", {
-            date: offerSentAtLabel,
-          })
-        }}</VCardText>
-        <VCardActions>
-          <VSpacer />
-          <AppButton variant="text" @click="showResendOfferConfirm = false">
-            {{ t("app.common.cancel") }}
-          </AppButton>
-          <AppButton
-            variant="text"
-            :loading="sendOfferLoading"
-            @click="runSendOffer"
-          >
-            {{ t("user.leads.detail.sendOffer") }}
-          </AppButton>
-        </VCardActions>
-      </VCard>
-    </VDialog>
+      @secondary="showResendOfferConfirm = false"
+      @primary="runSendOffer"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
+import { toEncounterBody } from "../utils/encounterMapping";
+import { isOfflineError, reportCaught, reportFailedResponse } from "@api";
 import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
-import { originDialogTransition } from "@ui";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useAuthStore } from "../stores/auth";
@@ -385,26 +333,34 @@ import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import AppButton from "../components/AppButton.vue";
+import AppConfirmDialog from "../components/AppConfirmDialog.vue";
 import AppIcon from "../components/AppIcon.vue";
-import AppAvatar from "../components/AppAvatar.vue";
 import GenderIcon from "../components/GenderIcon.vue";
 import { getGenderFromName } from "../utils/genderFromName";
 import {
   leadStatusClass,
   leadStatusI18nKey,
   leadInstitution,
+  leadNationalIds,
 } from "../utils/leadStatus";
 import { hcoListLink } from "../utils/entityLinks";
+import EntityLink from "../components/EntityLink.vue";
+import AppAvatar from "../components/AppAvatar.vue";
+import IdentityDetails from "../components/IdentityDetails.vue";
+import DetailViewTabs from "../components/DetailViewTabs.vue";
+import PatientNotesPanel from "../components/patient/PatientNotesPanel.vue";
+import { isLeadSource } from "../utils/leadSource";
 import { leadFormFields } from "../config/forms/leadForm";
 import { hcpFormFields, hcpFormDerive } from "../config/forms/hcpForm";
 import { partnerInviteFormFields } from "../config/forms/partnerInviteForm";
-import { patientFormFields } from "../config/forms/patientForm";
+import { patientFormFields, patientFormDerive } from "../config/forms/patientForm";
 import { createPractitionerFromLead } from "../utils/leadConversion";
 import {
   entityActionIcon,
   entityActionBtnClass,
 } from "../config/entityActions";
 import type { Lead } from "./LeadsView.vue";
+import { AppInlineAlert } from "@ui";
 
 const FormRenderer = defineAsyncComponent(
   () => import("../components/FormRenderer.vue"),
@@ -429,6 +385,8 @@ const loading = ref(true);
 const isOffline = ref(false);
 /** True when loadLead() failed for a reason other than a genuine 404 (network/server) — see loadLead(). */
 const loadFailed = ref(false);
+/** The error behind loadFailed (NEO-81) — lets the error state say offline vs. server problem. */
+const loadFailure = ref<unknown>(null);
 const showEditModal = ref(false);
 const showMoveToDoctorsModal = ref(false);
 const showInviteModal = ref(false);
@@ -458,6 +416,7 @@ const moveToDoctorsInitialData = computed(() =>
         // isCreatingNewOrganization() resolves it against the loaded clinic list
         // once options finish loading (see hcpForm.ts).
         organization_id: leadInstitution(lead.value),
+        national_ids: leadNationalIds(lead.value),
       }
     : undefined,
 );
@@ -469,6 +428,8 @@ const inviteInitialData = computed(() =>
         first_name: lead.value.first_name,
         last_name: lead.value.last_name,
         email: lead.value.email ?? "",
+        region: lead.value.region,
+        national_ids: leadNationalIds(lead.value),
       }
     : undefined,
 );
@@ -492,6 +453,25 @@ const backRoute = computed(() => ({ name: "leads" }));
 function statusLabel(status: string): string {
   const key = leadStatusI18nKey(status);
   return key ? t(key) : status || t("user.leads.filters.statusNew");
+}
+
+const leadTabs = [
+  { value: "details", labelKey: "user.leads.detail.tabs.details" },
+  { value: "notes", labelKey: "user.leads.detail.tabs.notes" },
+];
+const activeTab = ref(typeof route.query.tab === "string" ? route.query.tab : "details");
+
+function sourceLabel(source: string | null | undefined): string {
+  return isLeadSource(source) ? t(`user.leads.source.${source}`) : "—";
+}
+
+/** One quiet identity line under the name, like doctors/patients: clinic · channel. */
+function leadIdentity(l: Lead): string[] {
+  const details: string[] = [];
+  const institution = leadInstitution(l);
+  if (institution) details.push(institution);
+  if (isLeadSource(l.source)) details.push(t(`user.leads.source.${l.source}`));
+  return details;
 }
 
 function isInactive(lead: Lead): boolean {
@@ -523,20 +503,11 @@ async function onEventFormSubmit(
         apiFetch("/api/v1/encounter", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: payload.title,
-            start_at: payload.start_at,
-            end_at: payload.end_at,
-            type: payload.type,
-            status: payload.status,
-            location: payload.location,
-            video_link: payload.video_link,
-            notes: payload.notes,
-            region: payload.region,
-            attendees: payload.attendees,
-          }),
+          body: JSON.stringify(toEncounterBody(payload)),
         }),
       successMessage: t("user.planner.form.success"),
+      icon: "nav-planner",
+      context: lead.value?.name,
       errorMessage: t("user.planner.form.errorSave"),
       refresh: false,
     },
@@ -570,6 +541,8 @@ async function onInviteSubmit(
           body: JSON.stringify(data),
         }),
       successMessage: t("user.leads.form.inviteSuccess"),
+      icon: "mail",
+      context: lead.value?.name,
       errorMessage: t("user.leads.form.inviteError"),
       onSuccess: () => loadLead(),
     },
@@ -595,6 +568,8 @@ async function onContactSubmit(
     {
       request: async () => ({ ok: await createPractitionerFromLead(data, leadId) }),
       successMessage: t("user.hcp.form.contactCreated"),
+      icon: "nav-hcp",
+      context: lead.value?.name,
       errorMessage: t("user.hcp.form.contactError"),
       onSuccess: () => loadLead(),
     },
@@ -627,6 +602,8 @@ async function onConvertToPatientSubmit(
           body: JSON.stringify({ ...data, lead_id: leadId }),
         }),
       successMessage: t("app.patients.form.success"),
+      icon: "nav-patients",
+      context: lead.value?.name,
       errorMessage: t("app.patients.form.errorSave"),
       onSuccess: () => loadLead(),
     },
@@ -657,6 +634,8 @@ async function onLeadSubmit(
           body: JSON.stringify(data),
         }),
       successMessage: t("user.leads.form.editSuccess"),
+      icon: "nav-leads",
+      context: lead.value?.name,
       errorMessage: t("user.leads.form.errorSave"),
       onSuccess: () => loadLead(),
     },
@@ -681,7 +660,7 @@ const { loading: sendOfferLoading, run: runSendOffer } = useAsyncAction(
     if (res.ok) {
       lead.value = (await res.json()) as Lead;
       showResendOfferConfirm.value = false;
-      notifications.show(t("user.leads.detail.sendOfferSuccess"), "success");
+      notifications.show(t("user.leads.detail.sendOfferSuccess"), "success", undefined, { icon: "mail", context: lead.value?.name });
     }
   },
 );
@@ -702,7 +681,7 @@ const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
   });
   if (res.ok) {
     showDeleteConfirm.value = false;
-    notifications.show(t("user.leads.actions.deleteSuccess"), "success");
+    notifications.show(t("user.leads.actions.deleteSuccess"), "success", undefined, { icon: "nav-leads", context: lead.value?.name });
     window.dispatchEvent(new Event("entity-list-refresh"));
     router.push({ name: "leads" });
   }
@@ -727,11 +706,15 @@ async function loadLead() {
       // Not a genuine 404 — ItemDetailLayout renders its own "connection
       // problem" + retry state for this (see :load-error), so no separate
       // toast on top of it.
+      loadFailure.value = await reportFailedResponse(res, { where: "LeadDetailView.load", path: "/api/v1/lead/:id" });
       loadFailed.value = true;
     }
-  } catch {
-    // Network failure, not a server error — fall back to the cached record if we have one.
-    const cached = await leadCache.readOne(id);
+  } catch (err) {
+    reportCaught(err, { where: "LeadDetailView.load" });
+    loadFailure.value = err;
+    // Only a request that never reached the server may fall back to the cached record (ADR-013) —
+    // a bad response or a bug shows the real error instead of stale data.
+    const cached = isOfflineError(err) ? await leadCache.readOne(id) : null;
     if (cached) {
       lead.value = cached as unknown as Lead;
       isOffline.value = true;
@@ -757,96 +740,4 @@ watch(() => route.params.id, loadLead);
   margin: 0 0 12px;
 }
 
-/* Header name */
-.view-detail__header-name-wrap {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.view-detail__header-name {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.view-detail__body {
-  display: grid;
-  grid-template-columns: 1fr;
-  align-items: stretch;
-  gap: 16px;
-}
-
-/* Data card */
-.view-detail__card {
-  padding: 24px;
-  border-radius: var(--pwa-radius);
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  background: rgba(var(--v-theme-surface), 1);
-}
-
-.view-detail__fields {
-  margin: 0;
-  display: grid;
-  gap: 14px;
-}
-
-.view-detail__row {
-  display: grid;
-  grid-template-columns: 140px 1fr;
-  gap: 12px;
-  align-items: baseline;
-}
-
-.view-detail__row--notes {
-  align-items: start;
-}
-
-.view-detail__label {
-  margin: 0;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-}
-
-.view-detail__value {
-  margin: 0;
-  font-size: 0.9375rem;
-  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
-}
-
-.view-detail__value--notes {
-  font-style: italic;
-  font-size: 0.875rem;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  line-height: 1.5;
-}
-
-.view-detail__link {
-  color: rgb(var(--v-theme-primary));
-  text-decoration: none;
-  &:hover {
-    text-decoration: underline;
-  }
-}
-
-.view-detail__institution-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.view-detail__institution-icon {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-}
-
-.view-detail__empty {
-  color: rgba(var(--v-theme-on-surface), var(--v-disabled-opacity));
-}
 </style>

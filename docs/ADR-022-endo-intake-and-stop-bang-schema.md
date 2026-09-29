@@ -1,7 +1,11 @@
 # ADR-022: Historia Endo intake + STOP-Bang screening schema
 
 ## Status
-Accepted
+Partially superseded by [ADR-023](ADR-023-clinical-questionnaires-and-patient-self-fill.md) (2026-09-24): the
+one-row-per-patient, upsert-in-place `endo_intake` model is replaced by two append-only tables
+(`medical_history_questionnaire`, `oral_exam`), and `stop_bang_screening`'s B-A-N-G columns / `score`
+became nullable for patient self-fill. `stop_bang_screening` as its own table and the
+`recorded_by → users(id)` decision still stand.
 
 ## Context
 

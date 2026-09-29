@@ -1,30 +1,25 @@
 <template>
   <div class="patient-notes-panel">
-    <div class="patient-notes-panel__compose">
-      <VTextarea
-        v-model="draft"
-        :label="t('app.notes.placeholder')"
-        variant="outlined"
-        density="comfortable"
-        rows="2"
-        auto-grow
-        hide-details
-      />
-      <AppButton color="primary" class="patient-notes-panel__submit" :loading="addLoading" :disabled="!draft.trim()" @click="onAdd">
-        {{ t("app.notes.add") }}
-      </AppButton>
-    </div>
+    <NoteComposer
+      v-model="draft"
+      class="patient-notes-panel__compose"
+      :placeholder="t('app.notes.placeholder')"
+      :loading="addLoading"
+      @submit="onAdd"
+    />
 
     <AppLoadingState v-if="loading && !loaded" />
     <AppErrorState
       v-else-if="loadError"
-      :title="t('app.errorState.title')"
+      :error="loadFailure"
       :subtitle="t('app.notes.errorLoad')"
       :refresh-label="t('app.errorState.refresh')"
       :loading="loading"
       @refresh="loadNotes"
     />
-    <AppEmptyState v-else-if="notes.length === 0" :title="t('app.notes.empty')" />
+    <!-- NEO-153: a quiet one-liner, not the full-page empty state — the compose
+         box right above it is the call to action. -->
+    <p v-else-if="notes.length === 0" class="patient-notes-panel__empty">{{ t("app.notes.empty") }}</p>
     <ul v-else class="patient-notes-panel__list">
       <li v-for="note in notes" :key="note.id" class="patient-notes-panel__item">
         <div class="patient-notes-panel__item-header">
@@ -45,30 +40,32 @@
       </li>
     </ul>
 
-    <VDialog v-model="showDeleteConfirm" max-width="360" :transition="originDialogTransition">
-      <VCard>
-        <VCardText>{{ t("app.notes.deleteConfirmText") }}</VCardText>
-        <VCardActions>
-          <VSpacer />
-          <AppButton variant="text" @click="showDeleteConfirm = false">{{ t("app.common.cancel") }}</AppButton>
-          <AppButton color="error" variant="text" :loading="deleteLoading" @click="onConfirmDelete">
-            {{ t("app.common.remove") }}
-          </AppButton>
-        </VCardActions>
-      </VCard>
-    </VDialog>
+    <AppConfirmDialog
+      v-model="showDeleteConfirm"
+      :text="t('app.notes.deleteConfirmText')"
+      :secondary-label="t('app.common.cancel')"
+      :secondary-color="null"
+      :primary-label="t('app.common.remove')"
+      primary-color="error"
+      primary-variant="text"
+      :loading="deleteLoading"
+      :persistent="false"
+      max-width="360"
+      @secondary="showDeleteConfirm = false"
+      @primary="onConfirmDelete"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { originDialogTransition } from "@ui";
 import AppButton from "../AppButton.vue";
+import AppConfirmDialog from "../AppConfirmDialog.vue";
 import AppIcon from "../AppIcon.vue";
 import AppLoadingState from "../AppLoadingState.vue";
 import AppErrorState from "../AppErrorState.vue";
-import AppEmptyState from "../AppEmptyState.vue";
+import NoteComposer from "../NoteComposer.vue";
 import { useAuthStore } from "../../stores/auth";
 import { useAsyncAction } from "../../composables/useAsyncAction";
 import { useNotes, type NoteItem } from "../../composables/useNotes";
@@ -87,7 +84,7 @@ const props = defineProps<{
 const { t } = useI18n();
 const authStore = useAuthStore();
 
-const { notes, loading, loaded, loadError, loadNotes, addNote, deleteNote } = useNotes(
+const { notes, loading, loaded, loadError, loadFailure, loadNotes, addNote, deleteNote } = useNotes(
   props.entityType,
   () => props.entityId
 );
@@ -128,14 +125,13 @@ watch(
 
 <style scoped>
 .patient-notes-panel__compose {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-bottom: 28px;
+  margin-bottom: var(--space-6, 24px);
 }
 
-.patient-notes-panel__submit {
-  align-self: flex-end;
+.patient-notes-panel__empty {
+  margin: 0;
+  font-size: 0.875rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
 .patient-notes-panel__list {

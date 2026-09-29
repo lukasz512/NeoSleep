@@ -96,6 +96,8 @@ async function setupPatient(overrides: Partial<Parameters<typeof CreatePatientCo
   return withTenant(TENANT_SLUG, async (client) => {
     const ctx = await buildTestContext(client);
     const patient = await CreatePatientCommand(ctx, {
+      gender: "female",
+      date_of_birth: "1980-01-01",
       first_name: "Test",
       last_name: `Patient-${uniqueSuffix()}`,
       email: `qa-patient-${uniqueSuffix()}@example.com`,
@@ -110,7 +112,7 @@ async function setupPatient(overrides: Partial<Parameters<typeof CreatePatientCo
 async function setupPatientAndPlan(planOverrides: Partial<Parameters<typeof CreateTreatmentPlanCommand>[1]> = {}) {
   return withTenant(TENANT_SLUG, async (client) => {
     const ctx = await buildTestContext(client);
-    const patient = await CreatePatientCommand(ctx, { first_name: "Test", last_name: `Patient-${uniqueSuffix()}`, email: `qa-patient-${uniqueSuffix()}@example.com`, phone: "600100200" });
+    const patient = await CreatePatientCommand(ctx, { gender: "female", date_of_birth: "1980-01-01", first_name: "Test", last_name: `Patient-${uniqueSuffix()}`, email: `qa-patient-${uniqueSuffix()}@example.com`, phone: "600100200" });
     const study = await CreateSleepStudyCommand(ctx, { patient_id: patient.id });
     const plan = await CreateTreatmentPlanCommand(ctx, {
       patient_id: patient.id,
@@ -389,8 +391,7 @@ describe("createOrthoApneaTreatment", () => {
       createOrthoApneaTreatment(TENANT_SLUG, planB.id, {}),
     ]);
 
-    expect(overlapDetected).toBe(false);
-
+    // Register both links for cleanup before asserting, so a failure can't leak them.
     const [linkA, linkB] = await withTenant(TENANT_SLUG, (client) =>
       Promise.all([
         getPartnerLink(client, "orthoapnea", "treatment_plan", planA.id),
@@ -398,6 +399,8 @@ describe("createOrthoApneaTreatment", () => {
       ])
     );
     createdPartnerLinkIds.push(linkA!.id, linkB!.id);
+
+    expect(overlapDetected).toBe(false);
   });
 });
 
@@ -408,7 +411,7 @@ describe("SyncOrthoApneaTreatmentStatusesCommand", () => {
   it("notifies the patient and dentist and writes an audit_log entry when the partner status changes", async () => {
     const { ctx, patient, plan, dentist } = await withTenant(TENANT_SLUG, async (client) => {
       const ctx = await buildTestContext(client);
-      const patient = await CreatePatientCommand(ctx, { first_name: "Test", last_name: `Patient-${uniqueSuffix()}`, email: `qa-patient-${uniqueSuffix()}@example.com`, phone: "600100200" });
+      const patient = await CreatePatientCommand(ctx, { gender: "female", date_of_birth: "1980-01-01", first_name: "Test", last_name: `Patient-${uniqueSuffix()}`, email: `qa-patient-${uniqueSuffix()}@example.com`, phone: "600100200" });
       const dentist = await CreatePractitionerCommand(ctx, {
         first_name: "Test",
         last_name: `Dentist-${uniqueSuffix()}`,
@@ -430,6 +433,12 @@ describe("SyncOrthoApneaTreatmentStatusesCommand", () => {
       "/api/treatments": () => ({ status: 200, body: treatmentDtoFixture }), // statusId 1
     });
     await createOrthoApneaTreatment(TENANT_SLUG, plan.id, {});
+    // Register for cleanup right away, not after the assertions below — a link
+    // leaked by a failing run stays in the sync worklist of every later run
+    // (SyncOrthoApneaTreatmentStatusesCommand polls ALL non-terminal links),
+    // which is exactly how this test used to snowball past its timeout.
+    const createdLink = await withTenant(TENANT_SLUG, (client) => getPartnerLink(client, "orthoapnea", "treatment_plan", plan.id));
+    createdPartnerLinkIds.push(createdLink!.id);
 
     stubFetchRoutes({
       [LOGIN_ROUTE[0]]: LOGIN_ROUTE[1],
@@ -448,17 +457,18 @@ describe("SyncOrthoApneaTreatmentStatusesCommand", () => {
 
     const link = await withTenant(TENANT_SLUG, (client) => getPartnerLink(client, "orthoapnea", "treatment_plan", plan.id));
     expect(link?.external_status).toBe("2");
-    createdPartnerLinkIds.push(link!.id);
 
     const patientNotifications = await withTenant(TENANT_SLUG, (client) =>
       getNotificationsPaginated(client, patient.identity_id, "all", 1, 10)
     );
-    expect(patientNotifications.rows.some((n) => n.type === "partner_order_status_changed")).toBe(true);
+    // Patients have no in-app inbox; they are told by email, with consent (NEO-146/147) — not here.
+    expect(patientNotifications.rows.some((n) => n.type === "partner_order_status_changed")).toBe(false);
 
     const dentistNotifications = await withTenant(TENANT_SLUG, (client) =>
       getNotificationsPaginated(client, dentist.identity_id, "all", 1, 10)
     );
-    expect(dentistNotifications.rows.some((n) => n.type === "partner_order_status_changed")).toBe(true);
+    const dentistRow = dentistNotifications.rows.find((n) => n.type === "partner_order_status_changed");
+    expect(dentistRow?.action_url).toBe(`/patients/${plan.patient_id}`);
 
     const auditEntries = await withTenant(TENANT_SLUG, (client) => getAuditLogForEntities(client, ["PartnerOrder"], [plan.id]));
     expect(auditEntries.some((e) => e.action === "status_change")).toBe(true);

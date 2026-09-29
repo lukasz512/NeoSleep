@@ -23,6 +23,12 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      # Makes @sparticuz/chromium unpack its bundled shared libs (libnspr4,
+      # libnss3, fonts) — Render's native runtime lacks them and PDF
+      # generation dies otherwise. services/documentRenderer.ts also sets
+      # this itself before importing the package; this is for visibility.
+      - key: AWS_LAMBDA_JS_RUNTIME
+        value: nodejs20.x
       - key: DATABASE_URL
         sync: false
       - key: FRONTEND_URL

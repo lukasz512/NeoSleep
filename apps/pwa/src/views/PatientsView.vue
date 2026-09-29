@@ -3,6 +3,7 @@
     <FormRenderer
       v-model="showAddModal"
       :fields="patientFormFields"
+      :derive="patientFormDerive"
       title-key="app.patients.form.title"
       submit-label-key="app.patients.form.submit"
       avatar-entity-type="patient"
@@ -11,6 +12,7 @@
     <FormRenderer
       v-model="showEditModal"
       :fields="patientFormFields"
+      :derive="patientFormDerive"
       :initial-data="selectedPatient ?? undefined"
       title-key="app.patients.form.title"
       edit-title-key="app.patients.form.editTitle"
@@ -19,10 +21,9 @@
       avatar-entity-type="patient"
       @submit="onEditSubmit"
     />
-    <EventForm
-      v-model="showEventForm"
-      :initial-data="eventFormInitial"
-      @submit="onEventFormSubmit"
+    <AppointmentDialog
+      v-model="showAppointmentDialog"
+      :patient="appointmentPatient"
     />
     <AppEntityList
       view-id="patients"
@@ -37,25 +38,45 @@
       @add="onAddPatient"
     >
       <template #item.name="{ item }">
-        <span class="patients-name-cell">
-          <AppAvatar :name="(item as PatientListItem).name" :first-name="(item as PatientListItem).first_name" :last-name="(item as PatientListItem).last_name" entity-type="patient" :size="32" />
-          {{ (item as { name?: string }).name }}
-        </span>
+        <EntityLink
+          :to="null"
+          entity-type="patient"
+          :label="(item as PatientListItem).name"
+          :first-name="(item as PatientListItem).first_name"
+          :last-name="(item as PatientListItem).last_name"
+          :details="patientDetails(item as PatientListItem).details"
+          :avatar-size="32"
+        />
       </template>
       <template #feed-card-avatar="{ item }">
-        <AppAvatar :name="(item as PatientListItem).name" :first-name="(item as PatientListItem).first_name" :last-name="(item as PatientListItem).last_name" entity-type="patient" :size="55" />
+        <AppAvatar v-bind="personAvatarProps(item as PatientListItem)" entity-type="patient" :size="55" />
       </template>
       <template #feed-card-title="{ item }">
-        {{ (item as { name?: string }).name }}
+        {{ shortPersonName((item as PatientListItem).name, (item as PatientListItem).first_name, (item as PatientListItem).last_name) }}
       </template>
       <template #item.practitioner_name="{ item }">
-        <span v-if="(item as { practitioner_name?: string }).practitioner_name">
-          {{ (item as { practitioner_name?: string }).practitioner_name }}
-        </span>
-        <span v-else class="app-entity-list__cell-empty">—</span>
+        <EntityLink
+          :to="hcpDetailLink((item as PatientListItem).practitioner_id)"
+          entity-type="hcp"
+          :specialty="(item as PatientListItem).practitioner_specialty"
+          :label="(item as PatientListItem).practitioner_name"
+          :first-name="(item as PatientListItem).practitioner_first_name"
+          :last-name="(item as PatientListItem).practitioner_last_name"
+          :details="doctorOf(item as PatientListItem).details"
+          :more-details="doctorOf(item as PatientListItem).more"
+          :avatar-size="32"
+        />
       </template>
-      <template #item.region="{ item }">
-        {{ (item as PatientListItem).territory_name || (item as PatientListItem).region || "—" }}
+      <!-- Doctor's own list: every patient is theirs, so the column that
+           would repeat their name shows when the record last changed. -->
+      <template #item.updated_at="{ item }">
+        <span class="patients-view__updated">
+          <span>{{ formatDateShort((item as PatientListItem).updated_at, dateLocale) }}</span>
+          <span class="patients-view__updated-ago">{{ formatRelativeToNow((item as PatientListItem).updated_at, dateLocale) }}</span>
+        </span>
+      </template>
+      <template #item.intake_forms="{ item }">
+        <PatientIntakeForms :forms="(item as PatientListItem).intake_forms ?? []" />
       </template>
       <template #item.status="{ item }">
         <VChip
@@ -67,8 +88,24 @@
         </VChip>
       </template>
       <template #feed-card-meta="{ item }">
-        <span v-if="(item as { practitioner_name?: string }).practitioner_name">
-          {{ (item as { practitioner_name?: string }).practitioner_name }}
+        <!-- Mobile card (NEO-57): the patient's quiet line incl. date of
+             birth, then the doctor as a small identity (name only) — or, in
+             the doctor's own list, when the record last changed. -->
+        <span class="patients-view__card-stack">
+          <IdentityDetails :details="patientDetails(item as PatientListItem, { withDob: true }).details" />
+          <span v-if="isDoctor" class="patients-view__card-meta">
+            {{ formatRelativeToNow((item as PatientListItem).updated_at, dateLocale) }}
+          </span>
+          <EntityLink
+            v-else-if="(item as PatientListItem).practitioner_name"
+            :to="hcpDetailLink((item as PatientListItem).practitioner_id)"
+            entity-type="hcp"
+            :specialty="(item as PatientListItem).practitioner_specialty"
+            :label="(item as PatientListItem).practitioner_name"
+            :first-name="(item as PatientListItem).practitioner_first_name"
+            :last-name="(item as PatientListItem).practitioner_last_name"
+            :avatar-size="24"
+          />
         </span>
       </template>
       <template #feed-card-status="{ item }">
@@ -82,8 +119,8 @@
       </template>
       <template #feed-card-actions="{ item }">
         <AppListItemMenu :aria-label="t('app.common.moreActions')">
-          <VListItem :title="t('user.detail.scheduleVisit')" @click="onScheduleVisit(item as PatientListItem)">
-            <template #prepend><AppIcon :name="entityActionIcon('scheduleVisit')" :class="entityActionMenuIconClass('scheduleVisit')" /></template>
+          <VListItem :title="t('user.detail.bookAppointment')" @click="onBookAppointment(item as PatientListItem)">
+            <template #prepend><AppIcon :name="entityActionIcon('bookAppointment')" :class="entityActionMenuIconClass('bookAppointment')" /></template>
           </VListItem>
           <VListItem v-if="canEditPatients" :title="t('app.patients.detail.edit')" @click="onEditPatient(item as PatientListItem)">
             <template #prepend><AppIcon :name="entityActionIcon('edit')" :class="entityActionMenuIconClass('edit')" /></template>
@@ -99,6 +136,16 @@ import { ref, computed, defineAsyncComponent } from "vue";
 import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
 import AppAvatar from "../components/AppAvatar.vue";
+import PatientIntakeForms from "../components/patient/PatientIntakeForms.vue";
+import type { PatientIntakeFormStatus } from "../types/patientIntakeForm";
+import EntityLink from "../components/EntityLink.vue";
+import { intlLocale } from "@i18n/language-options";
+import IdentityDetails from "../components/IdentityDetails.vue";
+import { shortPersonName } from "../utils/shortPersonName";
+import { useIdentity } from "../composables/useIdentity";
+import { formatDateShort, formatRelativeToNow } from "../utils/relativeDate";
+import { hcpDetailLink } from "../utils/entityLinks";
+import { personAvatarProps } from "../utils/personAvatarProps";
 import AppIcon from "../components/AppIcon.vue";
 import AppListItemMenu from "../components/AppListItemMenu.vue";
 import { entityActionIcon, entityActionMenuIconClass } from "../config/entityActions";
@@ -108,11 +155,11 @@ import { usePermissions } from "../composables/usePermissions";
 import { useConfigStore } from "../stores/config";
 import { apiFetch } from "../composables/useApi";
 import { useEntitySubmit } from "../composables/useEntitySubmit";
-import { patientFormFields } from "../config/forms/patientForm";
+import { patientFormFields, patientFormDerive } from "../config/forms/patientForm";
 import { patientStatusColor, patientStatusLabel } from "../utils/patientStatus";
 
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
-const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
+const AppointmentDialog = defineAsyncComponent(() => import("../components/AppointmentDialog.vue"));
 
 interface PatientListItem {
   id: string;
@@ -123,27 +170,42 @@ interface PatientListItem {
   phone?: string | null;
   practitioner_id?: string | null;
   practitioner_name?: string | null;
+  practitioner_first_name?: string | null;
+  practitioner_last_name?: string | null;
+  practitioner_specialty?: string | null;
+  practitioner_specialties?: string[] | null;
+  gender?: string | null;
+  date_of_birth?: string | null;
+  updated_at?: string;
   status?: string;
   region?: string;
   territory_name?: string | null;
+  intake_forms?: PatientIntakeFormStatus[];
   ahi_baseline?: number | null;
   cpap_device?: string | null;
   medical_record?: string | null;
 }
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const configStore = useConfigStore();
+const { patientDetails, specialtySet } = useIdentity();
+const dateLocale = computed(() => intlLocale(locale.value));
+function doctorOf(p: PatientListItem) {
+  return specialtySet(p.practitioner_specialty, p.practitioner_specialties);
+}
 const { submit } = useEntitySubmit();
 const authStore = useAuthStore();
 // Direct add is its own, narrower admin/manager-only shortcut — everyone
 // else still adds patients through the lead pipeline.
 const canAdd = computed(() => authStore.user?.role === "admin" || authStore.user?.role === "manager");
+const isDoctor = computed(() => authStore.user?.role === "doctor");
 const { canEditPatients } = usePermissions();
 const showAddModal = ref(false);
 const showEditModal = ref(false);
-const showEventForm = ref(false);
+const showAppointmentDialog = ref(false);
+/** Row menu "Umów wizytę" books a patient↔doctor appointment (NEO-34) for that patient. */
+const appointmentPatient = ref<{ id: string; name: string; practitioner_id: string | null } | null>(null);
 const selectedPatient = ref<PatientListItem | null>(null);
-const eventFormInitial = ref<{ start_at: string; end_at: string; patientIds?: string[] } | undefined>(undefined);
 
 const patientFilterDefs: FilterDefinition[] = [
   { key: "status", labelKey: "app.patients.filters.status", type: "select", default: "" },
@@ -169,8 +231,10 @@ const patientFilterDefinitions = computed<FilterDefinition[]>(() => [
 
 const tableHeaders = computed(() => [
   { title: t("app.patients.table.name"),             key: "name",              sortable: true },
-  { title: t("app.patients.table.practitioner"),     key: "practitioner_name", sortable: false },
-  { title: t("app.patients.table.region"),           key: "region",            sortable: true },
+  isDoctor.value
+    ? { title: t("app.patients.table.lastUpdated"),  key: "updated_at",        sortable: true }
+    : { title: t("app.patients.table.practitioner"), key: "practitioner_name", sortable: false },
+  { title: t("app.patients.table.forms"),            key: "intake_forms",      sortable: false },
   { title: t("app.patients.table.status"),           key: "status",            sortable: true },
 ]);
 
@@ -181,6 +245,7 @@ const patientsI18n = computed(() => ({
   add:                          "app.patients.add",
   emptyTitle:                   "app.patients.emptyTitle",
   emptySubtitle:                "app.patients.emptySubtitle",
+  countNoun: "patients" as const,
   noResultsForCriteria:         "app.patients.noResultsForCriteria",
   noResultsForCriteriaSubtitle: "app.patients.noResultsForCriteriaSubtitle",
   tableNoResults:               "app.patients.table.noResults",
@@ -206,6 +271,8 @@ async function onPatientSubmit(data: Record<string, unknown>, done: (ok: boolean
           body: JSON.stringify(data),
         }),
       successMessage: t("app.patients.form.success"),
+      openCreated: "patient-detail",
+      icon: "nav-patients",
       errorMessage: t("app.patients.form.errorSave"),
     },
     done,
@@ -229,50 +296,36 @@ async function onEditSubmit(data: Record<string, unknown>, done: (ok: boolean) =
           body: JSON.stringify(data),
         }),
       successMessage: t("app.patients.form.editSuccess"),
+      icon: "nav-patients",
       errorMessage: t("app.patients.form.errorSave"),
     },
     done,
   );
 }
 
-function onScheduleVisit(patient: PatientListItem) {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  eventFormInitial.value = {
-    start_at: new Date(`${date} 09:00`).toISOString(),
-    end_at: new Date(`${date} 10:00`).toISOString(),
-    patientIds: patient.id ? [patient.id] : [],
-  };
-  showEventForm.value = true;
-}
-
-async function onEventFormSubmit(
-  payload: import("../components/EventForm.vue").EventSubmitPayload,
-  done: (ok: boolean) => void,
-) {
-  await submit(
-    {
-      request: () =>
-        apiFetch("/api/v1/encounter", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: payload.title, start_at: payload.start_at, end_at: payload.end_at, type: payload.type, status: payload.status, location: payload.location, video_link: payload.video_link, notes: payload.notes, region: payload.region, attendees: payload.attendees }),
-        }),
-      successMessage: t("user.planner.form.success"),
-      errorMessage: t("user.planner.form.errorSave"),
-      refresh: false,
-    },
-    done,
-  );
+function onBookAppointment(patient: PatientListItem) {
+  appointmentPatient.value = { id: patient.id, name: patient.name ?? "", practitioner_id: patient.practitioner_id ?? null };
+  showAppointmentDialog.value = true;
 }
 </script>
 
 <style scoped>
-.patients-name-cell {
+.patients-view__updated {
   display: inline-flex;
-  align-items: center;
+  flex-direction: column;
+  line-height: 1.3;
+}
+
+.patients-view__card-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 6px;
 }
 
+.patients-view__updated-ago,
+.patients-view__card-meta {
+  font-size: 0.78125rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
 </style>

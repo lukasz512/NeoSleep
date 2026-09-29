@@ -1,0 +1,448 @@
+<template>
+  <!-- NEO-122 / NEO-154: the avatar button turns into the account menu. The
+       button itself comes from the #trigger slot (so AppLayout keeps its
+       styles); data-motion="trigger-avatar" inside it is where the card lands. -->
+  <span
+    ref="triggerWrap"
+    class="account-menu__trigger"
+    :class="{ 'account-menu__trigger--hidden': triggerHidden, 'account-menu__trigger--pressed': pressed }"
+    @click="toggle"
+    @pointerdown="onTriggerPress"
+  >
+    <slot name="trigger" :open="open" />
+  </span>
+
+  <Teleport to="body">
+    <!-- NEO-161 "Kropla": the same glass card on desktop and phone, springing
+         out of the avatar. The motion is CSS on --open (transform + opacity),
+         the same material and spring as the phone's bottom menu. -->
+    <div
+      v-if="rendered"
+      class="account-menu"
+      :class="{
+        'account-menu--phone': mobile,
+        'account-menu--open': shown,
+        'account-menu--dragging': dragging,
+        'account-menu--from-press': fromPress,
+      }"
+    >
+      <div ref="dim" class="account-menu__dim" data-testid="account-menu-dim" @click="close" />
+      <div
+        ref="panel"
+        class="account-menu__card"
+        role="dialog"
+        :aria-label="label"
+        tabindex="-1"
+        data-testid="account-menu"
+        :class="{ 'account-menu__card--swipe': swipeable }"
+        @pointerdown="onCardPointerDown"
+        @click.capture="onCardClickCapture"
+      >
+        <slot />
+        <!-- Phone: same grabber as the bottom nav's module capsule, so the
+             card reads as something that can be swiped away (upwards). -->
+        <div v-if="mobile" class="account-menu__handle" aria-hidden="true" data-motion="row" data-testid="account-menu-handle" />
+      </div>
+    </div>
+  </Teleport>
+</template>
+
+<script setup lang="ts">
+import { nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { CLOSE_DURATION, motionAllowed, placeCard } from "../../composables/useAccountMenuMotion";
+
+const props = defineProps<{
+  /** Phone: the card spans the screen width (same motion as desktop). */
+  mobile: boolean;
+  /** Accessible name of the dialog. */
+  label: string;
+}>();
+
+const open = defineModel<boolean>("open", { default: false });
+
+const triggerWrap = ref<HTMLElement | null>(null);
+const panel = ref<HTMLElement | null>(null);
+const dim = ref<HTMLElement | null>(null);
+/** The overlay is in the DOM (open, or still animating closed). */
+const rendered = ref(false);
+/** The open state the CSS transitions to (a frame after `rendered`). */
+const shown = ref(false);
+/** The button is hidden while the menu stands in its place. */
+const triggerHidden = ref(false);
+/** Phone: the app bar avatar is swollen under the finger (CSS does the swell). */
+const pressed = ref(false);
+/** Phone: this open started from a press, so the drop starts from the swollen size. */
+const fromPress = ref(false);
+/** Phone: the card fits without scrolling, so a vertical swipe can move it. */
+const swipeable = ref(false);
+/** The finger is moving the card right now (no transition while it does). */
+const dragging = ref(false);
+/** Bumped on every open/close so a superseded one doesn't finish the wrong one. */
+let run = 0;
+
+function toggle() {
+  open.value = !open.value;
+}
+
+function close() {
+  open.value = false;
+}
+
+function triggerButton(): HTMLElement | null {
+  return triggerWrap.value?.querySelector<HTMLElement>("button, [role='button']") ?? null;
+}
+
+// ── Phone: the avatar swells under the finger, like a drop about to fall ──
+function onTriggerPress(e: PointerEvent) {
+  if (!props.mobile || open.value || e.button !== 0) return;
+  pressed.value = true;
+  const done = () => {
+    window.removeEventListener("pointerup", done);
+    window.removeEventListener("pointercancel", done);
+    // a tap opens the menu (click comes right after pointerup); anything else lets go
+    setTimeout(() => {
+      if (!open.value) pressed.value = false;
+    }, 0);
+  };
+  window.addEventListener("pointerup", done);
+  window.addEventListener("pointercancel", done);
+}
+
+// ── Phone: swipe the card up to close it ─────────────────────────────────
+/** Past this many px upwards (or a quick flick) the card closes on release. */
+const SWIPE_CLOSE_DISTANCE = 64;
+const SWIPE_CLOSE_VELOCITY = 0.5; // px per ms
+/** A move shorter than this is still a tap. */
+const SWIPE_SLOP = 6;
+let swipe: { id: number; y0: number; x0: number; t0: number; dy: number; active: boolean } | null = null;
+/** Set after a real drag so the click that follows pointerup doesn't hit a button. */
+let swallowClick = false;
+
+function setDrag(dy: number) {
+  const card = panel.value;
+  if (!card || !dim.value) return;
+  // up follows the finger, down only gives a little (rubber band)
+  const y = dy < 0 ? dy : dy / 4;
+  card.style.transform = y ? `translateY(${y}px)` : "";
+  const h = card.offsetHeight || 1;
+  dim.value.style.opacity = dy < 0 ? String(Math.max(0, 1 + dy / h)) : "";
+}
+
+function onCardPointerDown(e: PointerEvent) {
+  if (!props.mobile || !swipeable.value || !open.value || e.button !== 0) return;
+  swipe = { id: e.pointerId, y0: e.clientY, x0: e.clientX, t0: e.timeStamp, dy: 0, active: false };
+  window.addEventListener("pointermove", onSwipeMove);
+  window.addEventListener("pointerup", onSwipeEnd);
+  window.addEventListener("pointercancel", onSwipeEnd);
+}
+
+function onSwipeMove(e: PointerEvent) {
+  if (!swipe || e.pointerId !== swipe.id) return;
+  const dy = e.clientY - swipe.y0;
+  if (!swipe.active) {
+    if (Math.abs(dy) < SWIPE_SLOP || Math.abs(dy) < Math.abs(e.clientX - swipe.x0)) return;
+    swipe.active = true;
+    dragging.value = true;
+  }
+  swipe.dy = dy;
+  setDrag(dy);
+}
+
+function endSwipeListeners() {
+  window.removeEventListener("pointermove", onSwipeMove);
+  window.removeEventListener("pointerup", onSwipeEnd);
+  window.removeEventListener("pointercancel", onSwipeEnd);
+}
+
+function onSwipeEnd(e: PointerEvent) {
+  if (!swipe || e.pointerId !== swipe.id) return;
+  const { active, dy, t0 } = swipe;
+  swipe = null;
+  endSwipeListeners();
+  if (!active) return;
+  swallowClick = true;
+  setTimeout(() => (swallowClick = false), 0);
+  dragging.value = false;
+  const velocity = -dy / Math.max(1, e.timeStamp - t0);
+  if (dy < 0 && (-dy > SWIPE_CLOSE_DISTANCE || velocity > SWIPE_CLOSE_VELOCITY)) {
+    close(); // the CSS close transition continues from where the card was let go
+    return;
+  }
+  // not far enough: spring back (the CSS transition on the card carries it)
+  setDrag(0);
+}
+
+function onCardClickCapture(e: MouseEvent) {
+  if (!swallowClick) return;
+  e.stopPropagation();
+  e.preventDefault();
+}
+
+function resetDrag() {
+  swipe = null;
+  dragging.value = false;
+  endSwipeListeners();
+  if (panel.value) panel.value.style.transform = "";
+  if (dim.value) dim.value.style.opacity = "";
+}
+
+/** Resolves on the next painted frame, so the closed state is drawn before --open. */
+const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+
+async function show() {
+  const id = ++run;
+  fromPress.value = pressed.value;
+  rendered.value = true;
+  await nextTick();
+  if (id !== run) return;
+  const card = panel.value;
+  const triggerAvatar = triggerWrap.value?.querySelector('[data-motion="trigger-avatar"]');
+  if (card && triggerAvatar) {
+    // measured once, while the button is still there, so the card lands on its avatar
+    placeCard({ triggerAvatar, card, phone: props.mobile });
+    card.querySelectorAll<HTMLElement>('[data-motion="row"]').forEach((row, i) => row.style.setProperty("--account-menu-i", String(i)));
+    swipeable.value = props.mobile && card.scrollHeight <= card.clientHeight;
+  }
+  // the menu's avatar takes over at once, so the pressed bar avatar can't peek out behind it
+  triggerHidden.value = true;
+  pressed.value = false;
+  if (motionAllowed()) await nextFrame();
+  if (id !== run) return;
+  shown.value = true;
+  panel.value?.focus({ preventScroll: true });
+}
+
+async function hide() {
+  const id = ++run;
+  if (!rendered.value) return;
+  shown.value = false;
+  // Dropping a swipe's inline offset in the same frame lets the close
+  // transition run from where the finger let go.
+  resetDrag();
+  // The button comes back at once; the card shrinks into it and fades.
+  triggerHidden.value = false;
+  if (motionAllowed()) await wait(CLOSE_DURATION);
+  if (id !== run) return;
+  rendered.value = false;
+  triggerButton()?.focus({ preventScroll: true });
+}
+
+watch(open, (value) => (value ? show() : hide()));
+
+// The layout can switch between desktop and phone while the menu is open.
+watch(() => props.mobile, () => {
+  if (!open.value) return;
+  run++;
+  triggerHidden.value = false;
+  shown.value = false;
+  rendered.value = false;
+  open.value = false;
+});
+
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === "Escape" && open.value) {
+    e.stopPropagation();
+    close();
+  }
+}
+watch(rendered, (value) => {
+  if (value) document.addEventListener("keydown", onKeydown);
+  else document.removeEventListener("keydown", onKeydown);
+});
+onBeforeUnmount(() => {
+  document.removeEventListener("keydown", onKeydown);
+  endSwipeListeners();
+});
+</script>
+
+<style scoped>
+.account-menu {
+  --account-menu-z: 2400;
+  --account-menu-radius: 28px;
+  --_dur-in: var(--menu-dur-in, 420ms);
+  --_dur-out: var(--menu-dur-out, 180ms);
+  --_spring: var(--menu-spring, cubic-bezier(0.34, 1.3, 0.64, 1));
+  --_ease-out: var(--menu-ease-out, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+/* Above the phone's bottom menu (MobileNavPanel, z-index 9998). */
+.account-menu--phone {
+  --account-menu-z: 10000;
+}
+
+.account-menu__trigger {
+  display: inline-flex;
+}
+
+/* visibility, not v-show: the button must keep its box so the card can be
+   measured against it and the bar doesn't reflow while the menu is open */
+.account-menu__trigger--hidden {
+  visibility: hidden;
+}
+
+/* Phone (NEO-159): the bar avatar swells under the finger and settles back
+   when the finger leaves without opening the menu. */
+.account-menu__trigger :deep([data-motion="trigger-avatar"]) {
+  transition: transform 320ms var(--menu-ease-out, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.account-menu__trigger--pressed :deep([data-motion="trigger-avatar"]) {
+  transform: scale(1.12);
+  transition: transform 260ms var(--menu-spring, cubic-bezier(0.34, 1.3, 0.64, 1));
+}
+
+/* A plain dim, no blur: cheap to fade on any phone. Desktop barely dims. */
+.account-menu__dim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--account-menu-z);
+  background: rgb(0 0 0 / 0.06);
+  opacity: 0;
+  transition: opacity var(--_dur-out) linear;
+}
+
+.account-menu--phone .account-menu__dim {
+  background: var(--mobile-nav-scrim, rgb(0 0 0 / 0.28));
+}
+
+.account-menu--open .account-menu__dim {
+  opacity: 1;
+  transition-duration: 240ms;
+}
+
+/* The glass card. Closed it is slightly shrunk around the header avatar's
+   corner and transparent; open it springs out while the avatar flies in.
+   Transform + opacity only — the blur sits on the card, never animated. */
+.account-menu__card {
+  position: fixed;
+  z-index: calc(var(--account-menu-z) + 1);
+  outline: none;
+  width: 340px;
+  max-height: calc(100dvh - 16px);
+  overflow-y: auto;
+  border-radius: var(--account-menu-radius);
+  background: var(--glass-surface, rgb(var(--v-theme-surface)));
+  -webkit-backdrop-filter: var(--glass-blur, none);
+  backdrop-filter: var(--glass-blur, none);
+  box-shadow:
+    inset 0 1px 0 var(--glass-edge, transparent),
+    var(--glass-shadow, 0 18px 48px rgb(0 0 0 / 0.2));
+  /* the header avatar's centre: that point stays put while the card grows */
+  transform-origin: var(--account-menu-origin, calc(100% - 44px) 44px);
+  transform: scale(0.94);
+  opacity: 0;
+  will-change: transform, opacity;
+  transition:
+    transform var(--_dur-out) var(--_ease-out),
+    opacity var(--_dur-out) linear;
+}
+
+.account-menu--open .account-menu__card {
+  transform: none;
+  opacity: 1;
+  transition:
+    transform var(--_dur-in) var(--_spring),
+    opacity 120ms linear;
+}
+
+/* Phone: a floating capsule across the screen, like the bottom pill. */
+.account-menu--phone .account-menu__card {
+  width: auto;
+}
+
+/* Swipe: the card takes the gesture itself (no page scroll behind it). */
+.account-menu__card--swipe {
+  touch-action: none;
+  user-select: none;
+}
+
+.account-menu--dragging .account-menu__card,
+.account-menu--dragging .account-menu__dim {
+  transition: none;
+}
+
+/* Same grabber as the bottom nav's module capsule (MobileNavPanel). */
+.account-menu__handle {
+  width: 36px;
+  height: 4px;
+  margin: 2px auto 10px;
+  border-radius: 2px;
+  background: rgb(var(--v-theme-on-surface));
+  opacity: 0.25;
+}
+
+/* The avatar flies from the app bar into the card's top-right corner and
+   grows there (useAccountMenuMotion.placeCard sets --account-menu-fly: the
+   transform that lays it over the bar avatar). A phone press (NEO-159)
+   starts the flight from the swollen size. Transform only. */
+.account-menu__card :deep([data-motion="avatar"]) {
+  transform: var(--account-menu-fly, scale(0.6)) scale(var(--_press, 1));
+  transition: transform var(--_dur-out) var(--_ease-out);
+}
+
+.account-menu--from-press .account-menu__card :deep([data-motion="avatar"]) {
+  --_press: 1.12;
+}
+
+.account-menu--open .account-menu__card :deep([data-motion="avatar"]) {
+  transform: none;
+  transition: transform 520ms var(--_spring);
+}
+
+.account-menu__card :deep(:is([data-motion="name"], [data-motion="role"], [data-motion="extra"], [data-motion="row"])) {
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 100ms linear,
+    transform 100ms linear;
+}
+
+.account-menu--open .account-menu__card :deep(:is([data-motion="name"], [data-motion="role"], [data-motion="extra"])) {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 200ms linear 90ms,
+    transform 260ms var(--_ease-out) 90ms;
+}
+
+.account-menu--open .account-menu__card :deep([data-motion="row"]) {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 200ms linear calc(120ms + var(--account-menu-i, 0) * 35ms),
+    transform 260ms var(--_ease-out) calc(120ms + var(--account-menu-i, 0) * 35ms);
+}
+
+/* The handle keeps its own resting look once it has faded in. */
+.account-menu--open .account-menu__card .account-menu__handle {
+  opacity: 0.25;
+}
+
+/* No glass where the browser can't blur, or the user asked for less
+   transparency: the same card in a solid surface. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .account-menu__card {
+    background: var(--glass-solid, rgb(var(--v-theme-surface)));
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .account-menu__card {
+    background: var(--glass-solid, rgb(var(--v-theme-surface)));
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .account-menu__card,
+  .account-menu__card :deep([data-motion]),
+  .account-menu__trigger :deep([data-motion="trigger-avatar"]) {
+    transform: none !important;
+    animation: none !important;
+    transition-duration: 0s !important;
+    transition-delay: 0s !important;
+  }
+}
+</style>

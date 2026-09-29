@@ -1,7 +1,14 @@
 <template>
-  <VMenu v-model="menuOpen" :close-on-content-click="false" location="bottom start" class="app-filter-bar">
+  <VMenu
+    v-model="menuOpen"
+    :close-on-content-click="false"
+    :activator="anchor ?? undefined"
+    :open-on-click="!anchor"
+    :location="anchor ? 'bottom end' : 'bottom start'"
+    class="app-filter-bar"
+  >
     <template #activator="{ props: menuProps }">
-      <VTooltip location="bottom">
+      <VTooltip v-if="!anchor" location="bottom">
         <template #activator="{ props: tooltipProps }">
           <VBadge
             :content="activeFilterCount"
@@ -24,7 +31,7 @@
         <span>{{ t(titleKey) }}</span>
       </VTooltip>
     </template>
-    <VCard min-width="260" class="app-filter-bar__card" elevation="2">
+    <VCard min-width="260" class="app-filter-bar__card" elevation="1">
       <VCardTitle class="app-filter-bar__card-title">
         {{ t(titleKey) }}
       </VCardTitle>
@@ -48,7 +55,7 @@
             class="app-filter-bar__field"
             @update:model-value="(v: string | string[]) => updateField(def.key, v)"
           >
-            <template v-if="hasChipOptions(def)" #chip="{ item }">
+            <template v-if="hasChipOptions(def)" #chip="{ internalItem: item }">
               <span
                 :class="['pwa-lead-status-chip', 'app-filter-bar__chip', item.raw?.chipClass ?? '']"
                 class="app-filter-bar__chip-wrap"
@@ -64,7 +71,7 @@
                 </button>
               </span>
             </template>
-            <template v-if="hasChipOptions(def)" #item="{ item, props: itemProps }">
+            <template v-if="hasChipOptions(def)" #item="{ internalItem: item, props: itemProps }">
               <VListItem v-bind="{ ...itemProps, title: item.raw?.chipClass ? undefined : itemProps.title }">
                 <template v-if="item.raw?.chipClass" #default>
                   <span :class="['pwa-lead-status-chip', item.raw.chipClass]">
@@ -108,6 +115,8 @@ const props = defineProps<{
   clearKey: string;
   /** Number of filters currently active (for badge). */
   activeFilterCount: number;
+  /** NEO-113: opened from another element (the list's "⋯" menu) instead of its own button, which is then not shown. */
+  anchor?: HTMLElement | null;
 }>();
 
 const emit = defineEmits<{
@@ -117,6 +126,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const menuOpen = ref(false);
+defineExpose({ open: () => (menuOpen.value = true) });
 
 function hasChipOptions(def: { options?: { chipClass?: string }[] }): boolean {
   return (def.options ?? []).some((o) => o.chipClass);
@@ -163,8 +173,11 @@ function removeChip(def: FilterDefinition, value: string) {
 
 .app-filter-bar__badge :deep(.v-badge__badge) {
   min-width: 18px;
-  height: 18px;
+  min-height: 18px;
+  height: auto;
+  padding: 0 4px;
   font-size: 0.7rem;
+  line-height: 18px;
 }
 
 .app-filter-bar__btn {
@@ -184,8 +197,9 @@ function removeChip(def: FilterDefinition, value: string) {
 }
 
 .app-filter-bar__icon {
-  width: 24px;
-  height: 24px;
+  /* NEO-152: same 22 px as the list toolbar's other glyphs. */
+  width: 22px;
+  height: 22px;
   display: block;
   color: inherit;
 }

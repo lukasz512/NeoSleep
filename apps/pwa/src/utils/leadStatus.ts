@@ -41,3 +41,15 @@ export function leadInstitution(lead: { metadata?: Record<string, unknown> | nul
   const v = lead.metadata?.institution;
   return typeof v === "string" ? v : "";
 }
+
+/** Licence number captured on a doctor lead (leadForm.ts nests pwz/cedula under
+ *  metadata) — reshaped into practitioner.national_ids' own shape so the HCP
+ *  and invite forms can prefill it (NEO-51). */
+export function leadNationalIds(lead: { metadata?: Record<string, unknown> | null }): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const key of ["pwz", "cedula"] as const) {
+    const v = lead.metadata?.[key];
+    if (typeof v === "string" && v.trim()) out[key] = v.trim();
+  }
+  return out;
+}

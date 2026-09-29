@@ -1,5 +1,6 @@
 import type { TenantContext } from "../context/TenantContext.js";
 import { getAuditLogForEntities, getSleepStudiesPaginated, getTreatmentPlansPaginated, findLeadConvertedToPatient } from "../db.js";
+import { requirePatientInScope, requirePractitionerInScope, requireOrganizationInScope } from "./entityAccess.js";
 
 /**
  * QUERY — Patient history.
@@ -63,6 +64,7 @@ function redactAuditFields(
 }
 
 export async function GetHistoryForPatientQuery(ctx: TenantContext, patientId: string): Promise<PatientHistoryDto> {
+  await requirePatientInScope(ctx, patientId);
   // Sleep studies and treatment plans linked to this patient — no pagination
   // limit needed here since a patient realistically has a handful of each,
   // not thousands.
@@ -119,11 +121,13 @@ function toEntries(rows: Awaited<ReturnType<typeof getAuditLogForEntities>>): Pa
 /** No sleep-study/treatment-plan/lead-conversion composition like the Patient
  *  timeline above — a practitioner's own audit_log rows are the whole story. */
 export async function GetHistoryForPractitionerQuery(ctx: TenantContext, practitionerId: string): Promise<EntityHistoryDto> {
+  await requirePractitionerInScope(ctx, practitionerId);
   const rows = await getAuditLogForEntities(ctx.client, ["Practitioner"], [practitionerId]);
   return { entries: toEntries(rows) };
 }
 
 export async function GetHistoryForOrganizationQuery(ctx: TenantContext, organizationId: string): Promise<EntityHistoryDto> {
+  await requireOrganizationInScope(ctx, organizationId);
   const rows = await getAuditLogForEntities(ctx.client, ["Organization"], [organizationId]);
   return { entries: toEntries(rows) };
 }

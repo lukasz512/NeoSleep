@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<!--
+  Plantilla de generación — Exploración de cavidad oral (NeoSleep)
+  ================================================================
+  Printable dentist oral-exam form, one item of the patient Estudios
+  checklist (NEO-36 part 2, ADR-024) — filled by the doctor. Fixed clinical
+  instrument, no content slot. Same substitution split as stopBang.html.
+
+  data-field values:
+    nombre_paciente, fecha_nacimiento, nombre_medico, nombre_clinica, fecha, diente
+    q_has_* / q_is_mouth_breather — "Sí" / "No" from the latest oral_exam,
+      or empty Sí / No tick-boxes on a blank form (renderer choiceFields)
+    q_skeletal_class — "I" / "II" / "III", or I / II / III tick-boxes blank
+    firma_doctor — the doctor's signature box (signed on paper)
+-->
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>{{documents.oralExam.title}} (NeoSleep)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: {{brand:primary}};
+    --secondary: {{brand:secondary}};
+    --text: #1a1a1a;
+    --font: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  @page { size: A4; margin: 18mm 14mm 18mm; } /* 18mm: room for the 2-line per-page footer */
+  body { font-family: var(--font); font-weight: 300; color: var(--text); font-size: 9.5pt; line-height: 1.42; max-width: 800px; margin: 0 auto; padding: 28px 24px 20px; background: #fff; }
+  .screen-only.contact-footer { font-size: 8pt; color: var(--secondary); border-top: 1px solid #ccc; padding-top: 8px; margin-top: 24px; }
+  .screen-only.contact-footer .doc-ref { text-align: right; margin-top: 2px; }
+  @media print { body { padding: 0; max-width: none; } .screen-only { display: none; } }
+  {{style:docFields}}
+  {{style:docTheme}}
+</style>
+</head>
+<body>
+
+  <header class="doc-header">
+    <span class="logo">{{brand:logo}}</span>
+    <span class="doc-cat">{{documents.common.category.clinicalRecord}}</span>
+  </header>
+
+  <div class="doc-title">
+    <h1>{{documents.oralExam.title}}</h1>
+    <h2>{{documents.oralExam.subtitle}}</h2>
+  </div>
+
+  <dl class="doc-fields">
+    <div class="doc-field doc-field--patient"><dt>{{documents.historiaEndo.fieldPatientName}}</dt><dd data-field="nombre_paciente"></dd></div>
+    <div class="doc-field doc-field--short"><dt>{{documents.fieldBirthDate}}</dt><dd data-field="fecha_nacimiento"></dd></div>
+    <div class="doc-field"><dt>{{documents.historiaEndo.fieldPractitioner}}</dt><dd data-field="nombre_medico"></dd></div>
+    <div class="doc-field"><dt>{{documents.historiaEndo.fieldClinic}}</dt><dd data-field="nombre_clinica"></dd></div>
+    <div class="doc-field doc-field--tooth"><dt>{{documents.historiaEndo.fieldTooth}}</dt><dd data-field="diente"></dd></div>
+    <div class="doc-field doc-field--short"><dt>{{documents.historiaEndo.fieldDate}}</dt><dd data-field="fecha"></dd></div>
+  </dl>
+
+  <table class="checklist">
+    <tr><td>{{documents.historiaEndo.q.bruxism}}</td><td class="q-answer" data-field="q_has_bruxism"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.narrowPalate}}</td><td class="q-answer" data-field="q_has_narrow_palate"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.geographicTongue}}</td><td class="q-answer" data-field="q_has_geographic_tongue"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.xerostomia}}</td><td class="q-answer" data-field="q_has_xerostomia"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.skeletalClass}}</td><td class="q-answer" data-field="q_skeletal_class"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.mouthBreather}}</td><td class="q-answer" data-field="q_is_mouth_breather"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.missingTeeth}}</td><td class="q-answer" data-field="q_has_missing_teeth"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.periodontalDisease}}</td><td class="q-answer" data-field="q_has_periodontal_disease"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.tmjFinding}}</td><td class="q-answer" data-field="q_has_tmj_finding"></td></tr>
+  </table>
+
+  <div class="doc-notes"><div class="doc-notes-label">{{documents.oralExam.notes}}</div><div class="doc-notes-body"></div></div>
+
+  <div class="sig-panels"><div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.historiaEndo.signatureLabelDoctor}}</div><div class="sig-area" data-field="firma_doctor"></div><dl class="sig-details"><div><dt>{{documents.signature.name}}</dt><dd data-field="nombre_medico"></dd></div><div><dt>{{documents.signature.date}}</dt><dd data-field="fecha"></dd></div></dl><div class="sig-e-note">{{documents.signature.eSigned}}</div></div></div></div>
+
+  <div class="contact-footer screen-only">
+    <div>{{brand:contactLine}}</div>
+    <div class="doc-ref" data-field="doc_ref">{{doc:ref}}</div>
+  </div>
+
+</body>
+</html>

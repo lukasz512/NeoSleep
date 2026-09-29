@@ -10,11 +10,11 @@
       hide-details
     />
     <div class="oa-comments__notify">
-      <VCheckbox v-model="notifyOrthoApnea" :label="t('app.orthoApneaOrder.comments.notifyOrthoApnea')" hide-details density="compact" />
+      <VCheckbox v-model="notifyOrthoApnea" :label="t('app.orthoApneaOrder.comments.notifyOrthoApnea')" color="primary" hide-details density="compact" />
     </div>
-    <VAlert v-if="notifyOrthoApnea" type="warning" variant="tonal" density="comfortable" class="mb-2">
+    <AppInlineAlert v-if="notifyOrthoApnea" type="warning" class="mb-2">
       {{ t("app.orthoApneaOrder.comments.notifyWarning") }}
-    </VAlert>
+    </AppInlineAlert>
     <AppButton color="primary" class="oa-comments__submit" :loading="addLoading" :disabled="!draft.trim()" @click="onAdd">
       {{ t("app.notes.add") }}
     </AppButton>
@@ -22,7 +22,7 @@
     <AppLoadingState v-if="loading && !loaded" />
     <AppErrorState
       v-else-if="loadError"
-      :title="t('app.errorState.title')"
+      :error="loadFailure"
       :subtitle="t('app.notes.errorLoad')"
       :refresh-label="t('app.errorState.refresh')"
       :loading="loading"
@@ -42,6 +42,7 @@
 </template>
 
 <script setup lang="ts">
+import { reportCaught } from "@api";
 import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import AppButton from "../AppButton.vue";
@@ -55,6 +56,7 @@ import { useNotes } from "../../composables/useNotes";
 import { useAuthStore } from "../../stores/auth";
 import EntityLink from "../EntityLink.vue";
 import { userDetailLink } from "../../utils/entityLinks";
+import { AppInlineAlert } from "@ui";
 
 /**
  * Comments on an OrthoApnea order — same underlying `note` table as
@@ -73,7 +75,7 @@ const props = defineProps<{ treatmentPlanId: string }>();
 const { t } = useI18n();
 const notifications = useNotifications();
 const authStore = useAuthStore();
-const { notes, loading, loaded, loadError, loadNotes } = useNotes("treatment_plan", () => props.treatmentPlanId);
+const { notes, loading, loaded, loadError, loadFailure, loadNotes } = useNotes("treatment_plan", () => props.treatmentPlanId);
 
 const draft = ref("");
 const notifyOrthoApnea = ref(false);
@@ -89,16 +91,17 @@ const { loading: addLoading, run: onAdd } = useAsyncAction(async () => {
       handleErrors: false,
     });
     if (res.ok) {
-      notifications.show(t("app.notes.addSuccess"), "success");
+      notifications.show(t("app.notes.addSuccess"), "success", undefined, { icon: "pencil" });
       draft.value = "";
       notifyOrthoApnea.value = false;
       await loadNotes();
       return;
     }
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "OrthoApneaOrderComments.onAdd" });
     // fall through to the error toast below
   }
-  notifications.show(t("app.notes.errorSave"), "error");
+  notifications.show(t("app.notes.errorSave"), "error", undefined, { icon: "pencil" });
 });
 </script>
 

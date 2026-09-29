@@ -1,5 +1,5 @@
 /**
- * Shared Vuetify 3 factory for NeoSleep apps.
+ * Shared Vuetify 4 factory for NeoSleep apps.
  *
  * Usage in plugins/vuetify.ts:
  *   import { createNeoVuetify } from "@vuetify";
@@ -9,6 +9,7 @@
  *   export default createNeoVuetify({ i18n, useI18n }, { colors: { ... } });
  */
 import "vuetify/styles";
+import "./legacy-reset.css";
 import "@mdi/font/css/materialdesignicons.css";
 import { createVuetify } from "vuetify";
 import { VuetifyDateAdapter } from "vuetify/date/adapters/vuetify";
@@ -21,6 +22,9 @@ export const vuetifyLocales: Record<"en" | "pl" | "mx", Record<string, unknown>>
   pl: vuetifyPl,
   mx: vuetifyEs,
 };
+
+/** Vuetify 3's display breakpoints (px), kept on Vuetify 4 — see createNeoVuetify. */
+export const VUETIFY3_THRESHOLDS = { xs: 0, sm: 600, md: 960, lg: 1280, xl: 1920, xxl: 2560 } as const;
 
 export interface NeoVuetifyColors {
   lightPrimary: string;
@@ -51,11 +55,29 @@ export function createNeoVuetify(
   const dark  = options.darkThemeName  ?? "neoDark";
 
   return createVuetify({
-    display: options.mobileBreakpoint !== undefined
-      ? { mobileBreakpoint: options.mobileBreakpoint }
-      : undefined,
-    date: { adapter: VuetifyDateAdapter },
+    display: {
+      // Vuetify 4 lowered md/lg/xl/xxl to 840/1145/1545/2138. Keep the v3
+      // thresholds so useDisplay() flags (smAndUp, md="6" columns, …) flip at
+      // the same widths as before; the matching Sass $grid-breakpoints for the
+      // responsive utility classes live in apps/pwa/src/styles/vuetify-settings.scss.
+      thresholds: VUETIFY3_THRESHOLDS,
+      ...(options.mobileBreakpoint !== undefined ? { mobileBreakpoint: options.mobileBreakpoint } : {}),
+    },
+    // "mx" is the app's key for es-MX, not a BCP 47 tag Intl knows — without
+    // this map the date picker's month and weekday names fall back to English.
+    date: { adapter: VuetifyDateAdapter, locale: { en: "en-US", pl: "pl-PL", mx: "es-MX" } },
     locale: { adapter: createVueI18nAdapter(adapterInput) },
+    defaults: {
+      // The data-table footer's items-per-page VSelect exposes no props of
+      // its own; nested defaults are the only way to tag its teleported
+      // menu so app CSS can style it like the table (see pwa theme.scss).
+      VDataTableFooter: {
+        VSelect: {
+          itemColor: "primary",
+          menuProps: { contentClass: "neo-table-page-size-menu" },
+        },
+      },
+    },
     theme: {
       defaultTheme: light,
       themes: {

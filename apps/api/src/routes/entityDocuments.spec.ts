@@ -38,20 +38,18 @@ const TENANT_SLUG = process.env.DEFAULT_TENANT_SLUG ?? "test";
 describe.each([
   ["practitioner", "/api/v1/practitioner"],
   ["organization", "/api/v1/organization"],
-  ["patient", "/api/v1/patient"],
 ])("GET %s/:id/documents", (_label, basePath) => {
   it("401s with no token", async () => {
     const res = await request(app).get(`${basePath}/${crypto.randomUUID()}/documents`);
     expect(res.status).toBe(401);
   });
 
-  it("200s (empty list) for any authenticated staff role, e.g. rep", async () => {
+  it("404s for a parent record that doesn't exist (NEO-48: the parent is fetched and territory-checked first)", async () => {
     const rep = await withTenant(TENANT_SLUG, (client) => insertTestUser(client, "rep"));
     const res = await request(app)
       .get(`${basePath}/${crypto.randomUUID()}/documents`)
       .set("Authorization", `Bearer ${tokenFor(rep, "rep")}`);
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual([]);
+    expect(res.status).toBe(404);
   });
 
   it("404s a download for a nonexistent document id", async () => {
@@ -60,5 +58,32 @@ describe.each([
       .get(`${basePath}/${crypto.randomUUID()}/documents/00000000-0000-0000-0000-000000000000/download`)
       .set("Authorization", `Bearer ${tokenFor(rep, "rep")}`);
     expect(res.status).toBe(404);
+  });
+});
+
+// Patient documents are health data (clinical PDFs, signed consents, uploaded
+// studies): admin/doctor only since 2026-09-25, and territory-checked.
+describe("GET /api/v1/patient/:id/documents", () => {
+  it("401s with no token", async () => {
+    const res = await request(app).get(`/api/v1/patient/${crypto.randomUUID()}/documents`);
+    expect(res.status).toBe(401);
+  });
+
+  it("403s for a rep — health data is admin/doctor only", async () => {
+    const rep = await withTenant(TENANT_SLUG, (client) => insertTestUser(client, "rep"));
+    const res = await request(app)
+      .get(`/api/v1/patient/${crypto.randomUUID()}/documents`)
+      .set("Authorization", `Bearer ${tokenFor(rep, "rep")}`);
+    expect(res.status).toBe(403);
+  });
+
+  it("404s for a doctor asking about a patient that doesn't exist (list and download)", async () => {
+    const doctor = await withTenant(TENANT_SLUG, (client) => insertTestUser(client, "doctor"));
+    const auth = `Bearer ${tokenFor(doctor, "doctor")}`;
+    const list = await request(app).get(`/api/v1/patient/${crypto.randomUUID()}/documents`).set("Authorization", auth);
+    const download = await request(app)
+      .get(`/api/v1/patient/${crypto.randomUUID()}/documents/00000000-0000-0000-0000-000000000000/download`)
+      .set("Authorization", auth);
+    expect([list.status, download.status]).toEqual([404, 404]);
   });
 });

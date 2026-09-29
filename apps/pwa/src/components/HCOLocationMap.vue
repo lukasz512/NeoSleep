@@ -3,6 +3,7 @@
 </template>
 
 <script setup lang="ts">
+import { reportCaught } from "@api";
 import { ref, onMounted, onBeforeUnmount, watch } from "vue";
 import { loadGoogleMaps, CLEAN_MAP_STYLES } from "../composables/useGoogleMaps";
 
@@ -41,7 +42,8 @@ async function render() {
     }
     marker?.setMap(null);
     marker = new g.maps.Marker({ position, map, title: props.name });
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "HCOLocationMap.render", level: "warn" });
     // No key configured / script failed to load — the map area is simply
     // left blank rather than showing an error state, same as a missing
     // photo would be: address text above still has the full information.

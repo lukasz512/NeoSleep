@@ -1,7 +1,7 @@
 import type { TenantContext } from "../context/TenantContext.js";
 import { insertFileAttachment, getFileAttachmentById, deleteFileAttachment, type FileAttachment } from "../db.js";
 import { insertAuditLog } from "../db.js";
-import { NotFoundError, ValidationError, PartnerServiceError, AppError } from "../errors.js";
+import { NotFoundError, ValidationError } from "../errors.js";
 import { uploadPartnerDocument } from "../services/partnerDocuments.js";
 
 /**
@@ -35,18 +35,10 @@ export async function UploadSleepStudyAttachmentCommand(
   const safeFilename = (input.filename || "results.pdf").trim().slice(0, MAX_FILENAME_LENGTH);
   const path = `sleep-study/${input.sleepStudyId}/${Date.now()}-${safeFilename}`;
 
-  let uploaded: Awaited<ReturnType<typeof uploadPartnerDocument>>;
-  try {
-    uploaded = await uploadPartnerDocument(path, input.bytes, input.mimeType);
-  } catch (err) {
-    // Rethrown as an AppError (not caught/rewrapped by withTenant's generic
-    // DatabaseError — see db/tenant.ts) so the real cause (e.g. "Supabase
-    // Storage not configured — set SUPABASE_URL and SUPABASE_SERVICE_KEY")
-    // reaches the frontend instead of an opaque "Database error: withTenant".
-    // This is a storage/config failure, not a Postgres one.
-    if (err instanceof AppError) throw err;
-    throw new PartnerServiceError("supabase-storage", (err as Error)?.message ?? "upload failed", err);
-  }
+  // uploadPartnerDocument throws PartnerServiceError itself, so a storage
+  // failure reaches the frontend with its real cause rather than being
+  // rewrapped by withTenant as "Database error: withTenant".
+  const uploaded = await uploadPartnerDocument(path, input.bytes, input.mimeType);
 
   const attachment = await insertFileAttachment(ctx.client, {
     entity_type: "sleep_study",

@@ -3,18 +3,15 @@
     :has-content="hasContent"
     :loading="loading"
     :load-error="loadError"
+    :load-error-cause="loadFailure"
     :back-route="{ name: 'document-content' }"
     :back-label="t('user.document-content.editor.back')"
+    :record-title="documentLabel"
+    :action-skeletons="0"
+    :details-skeleton="false"
     :not-found-label="t('user.document-content.editor.notFound')"
     @retry="load"
   >
-    <template #title>
-      <span class="view-item__title-wrap">
-        <AppIcon name="nav-document-content" class="doc-editor__title-icon" />
-        <h1 class="view-item__title">{{ documentLabel }}</h1>
-      </span>
-    </template>
-
     <template #body>
       <DetailViewTabs v-model="activeTab" :tabs="editorTabs">
         <template #editor>
@@ -29,6 +26,27 @@
             <p v-if="currentVersionNumber === null" class="doc-editor__no-content-hint">
               {{ t("user.document-content.editor.noContentYet") }}
             </p>
+
+            <!-- NEO-51: partner agreement / DPA carry a NeoSleep signatory's
+                 signature — only on a version that signatory approved. -->
+            <AppInlineAlert
+              v-if="approval?.countersigned && currentVersionNumber !== null"
+              :type="!approval.signatoryName ? 'error' : isCurrentApproved ? 'success' : 'warning'"
+              class="doc-editor__approval"
+            >
+              <template v-if="!approval.signatoryName">{{ t("user.document-content.approval.noSignatory") }}</template>
+              <template v-else-if="isCurrentApproved">
+                {{ t("user.document-content.approval.approved", { version: currentVersionNumber, name: approval.signatoryName }) }}
+              </template>
+              <template v-else>
+                {{ t("user.document-content.approval.pending", { version: currentVersionNumber, name: approval.signatoryName }) }}
+              </template>
+              <template v-if="approval.canApprove && !isCurrentApproved" #append>
+                <AppButton color="primary" variant="flat" size="small" :loading="approving" @click="onApprove">
+                  {{ t("user.document-content.approval.approve") }}
+                </AppButton>
+              </template>
+            </AppInlineAlert>
 
             <div class="doc-editor__layout">
               <div class="doc-editor__main">
@@ -96,6 +114,9 @@
                     <span class="doc-editor__history-version">
                       v{{ v.version_number }}
                       <span v-if="v.is_current" class="doc-editor__history-badge">{{ t("user.document-content.editor.history.current") }}</span>
+                      <span v-if="approval?.approvedVersionId === v.id" class="doc-editor__history-badge doc-editor__history-badge--approved">
+                        {{ t("user.document-content.editor.history.approved") }}
+                      </span>
                     </span>
                     <span class="doc-editor__history-by">{{ t("user.document-content.editor.history.by", { name: v.created_by_name }) }}</span>
                     <span class="doc-editor__history-date">{{ formatDate(v.created_at) }}</span>
@@ -124,6 +145,35 @@
               density="comfortable"
               class="doc-editor__permissions-field"
             />
+            <!-- Patient Estudios checklist (ADR-024): who fills this document and where it sits. -->
+            <fieldset v-if="selectedEntityTypes.includes('patient')" class="doc-editor__checklist">
+              <legend class="doc-editor__checklist-title">{{ t("user.document-content.permissions.checklist.title") }}</legend>
+              <p class="doc-editor__permissions-hint">{{ t("user.document-content.permissions.checklist.hint") }}</p>
+              <div class="doc-editor__checklist-fields">
+                <VSelect
+                  id="doc-editor-fill-mode"
+                  v-model="checklistFillMode"
+                  :items="fillModeOptions"
+                  item-title="title"
+                  item-value="value"
+                  :label="t('user.document-content.permissions.checklist.fillMode')"
+                  variant="outlined"
+                  density="comfortable"
+                />
+                <VTextField
+                  id="doc-editor-sort-order"
+                  v-model.number="checklistSortOrder"
+                  type="number"
+                  min="0"
+                  max="999"
+                  :label="t('user.document-content.permissions.checklist.sortOrder')"
+                  :hint="t('user.document-content.permissions.checklist.sortOrderHint')"
+                  persistent-hint
+                  variant="outlined"
+                  density="comfortable"
+                />
+              </div>
+            </fieldset>
             <AppButton color="primary" :loading="savingPermissions" @click="onSavePermissions">
               {{ t("user.document-content.permissions.save") }}
             </AppButton>
@@ -135,6 +185,7 @@
 </template>
 
 <script setup lang="ts">
+import { reportCaught, reportFailedResponse } from "@api";
 import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
@@ -144,12 +195,12 @@ import Underline from "@tiptap/extension-underline";
 import { VTextField, VAutocomplete } from "vuetify/components";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import DetailViewTabs, { type DetailViewTab } from "../components/DetailViewTabs.vue";
-import AppIcon from "../components/AppIcon.vue";
 import AppButton from "../components/AppButton.vue";
 import ProtectedToken, { htmlToEditorHtml, editorHtmlToPlainHtml } from "../components/documents/protectedTokenExtension";
 import { apiFetch } from "../composables/useApi";
 import { useNotifications } from "../composables/useNotifications";
 import { documentLabelKey } from "../utils/documentLabels";
+import { AppInlineAlert } from "@ui";
 
 interface DocumentContentVersion {
   id: string;
@@ -173,9 +224,25 @@ const documentLocale = computed(() => route.params.locale as string);
 
 const loading = ref(true);
 const loadError = ref(false);
+/** The error behind loadError (NEO-81) — lets the error state say offline vs. server problem. */
+const loadFailure = ref<unknown>(null);
 const hasContent = ref(false);
 const currentVersionNumber = ref<number | null>(null);
+const currentVersionId = ref<string | null>(null);
 const history = ref<DocumentContentVersion[]>([]);
+
+/** GET .../approval — `countersigned: false` for every template the NeoSleep signatory doesn't sign. */
+interface ApprovalStatus {
+  countersigned: boolean;
+  signatoryName?: string | null;
+  canApprove?: boolean;
+  approvedVersionId?: string | null;
+}
+const approval = ref<ApprovalStatus | null>(null);
+const approving = ref(false);
+const isCurrentApproved = computed(
+  () => !!currentVersionId.value && approval.value?.approvedVersionId === currentVersionId.value
+);
 const changeNote = ref("");
 const saving = ref(false);
 
@@ -223,15 +290,75 @@ async function loadHistory(): Promise<void> {
   if (res.ok) history.value = (await res.json()) as DocumentContentVersion[];
 }
 
+async function loadApproval(): Promise<void> {
+  const res = await apiFetch(`/api/v1/document-content/${templateKey.value}/${documentLocale.value}/approval`, {
+    handleErrors: false,
+  });
+  approval.value = res.ok ? ((await res.json()) as ApprovalStatus) : null;
+}
+
+async function onApprove(): Promise<void> {
+  if (!currentVersionId.value || approving.value) return;
+  approving.value = true;
+  try {
+    const res = await apiFetch(
+      `/api/v1/document-content/${templateKey.value}/${documentLocale.value}/versions/${currentVersionId.value}/approve`,
+      { method: "POST", handleErrors: false },
+    );
+    if (res.ok) {
+      notifications.show(t("user.document-content.approval.approveSuccess"), "success", undefined, { icon: "nav-document-content" });
+      await loadApproval();
+    } else {
+      notifications.show(t("user.document-content.approval.approveError"), "error", undefined, { icon: "nav-document-content" });
+    }
+  } catch (err) {
+    reportCaught(err, { where: "DocumentContentEditorView.onApprove" });
+    notifications.show(t("user.document-content.approval.approveError"), "error", undefined, { icon: "nav-document-content" });
+  } finally {
+    approving.value = false;
+  }
+}
+
 /** Entity-type assignment is keyed by templateKey alone (not templateKey+locale — see ADR-021: assignment is a template-level property). */
 async function loadEntityTypes(): Promise<void> {
   const res = await apiFetch(`/api/v1/document-content/${templateKey.value}/entity-types`, { handleErrors: false });
   if (res.ok) selectedEntityTypes.value = (await res.json()) as string[];
+  await loadChecklistConfig();
+}
+
+// Patient Estudios checklist config — only when the template is assigned to patients.
+const FILL_MODES = ["consent", "patient", "doctor", "external"] as const;
+const fillModeOptions = computed(() =>
+  FILL_MODES.map((value) => ({ value, title: t(`user.document-content.permissions.checklist.fillModes.${value}`) }))
+);
+const checklistFillMode = ref<string | null>(null);
+const checklistSortOrder = ref<number | null>(null);
+
+async function loadChecklistConfig(): Promise<void> {
+  checklistFillMode.value = null;
+  checklistSortOrder.value = null;
+  if (!selectedEntityTypes.value.includes("patient")) return;
+  const res = await apiFetch(`/api/v1/document-content/${templateKey.value}/patient-checklist`, { handleErrors: false });
+  if (!res.ok) return;
+  const config = (await res.json()) as { fillMode: string | null; sortOrder: number | null } | null;
+  checklistFillMode.value = config?.fillMode ?? null;
+  checklistSortOrder.value = config?.sortOrder ?? null;
+}
+
+async function saveChecklistConfig(): Promise<boolean> {
+  if (!selectedEntityTypes.value.includes("patient") || !checklistFillMode.value || checklistSortOrder.value == null) return true;
+  const res = await apiFetch(`/api/v1/document-content/${templateKey.value}/patient-checklist`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fillMode: checklistFillMode.value, sortOrder: checklistSortOrder.value }),
+  });
+  return res.ok;
 }
 
 async function load(): Promise<void> {
   loading.value = true;
   loadError.value = false;
+  loadFailure.value = null;
   hasContent.value = false;
   try {
     const res = await apiFetch(`/api/v1/document-content/${templateKey.value}/${documentLocale.value}`, {
@@ -240,6 +367,7 @@ async function load(): Promise<void> {
     if (res.ok) {
       const version = (await res.json()) as DocumentContentVersion;
       currentVersionNumber.value = version.version_number;
+      currentVersionId.value = version.id;
       editor.value?.commands.setContent(htmlToEditorHtml(version.content_html));
       hasContent.value = true;
     } else if (res.status === 404) {
@@ -252,11 +380,15 @@ async function load(): Promise<void> {
       editor.value?.commands.setContent("");
       hasContent.value = true;
     } else {
+      loadFailure.value = await reportFailedResponse(res, { where: "DocumentContentEditorView.load" });
       loadError.value = true;
     }
     await loadHistory();
     await loadEntityTypes();
-  } catch {
+    await loadApproval();
+  } catch (err) {
+    reportCaught(err, { where: "DocumentContentEditorView.load" });
+    loadFailure.value = err;
     loadError.value = true;
   } finally {
     loading.value = false;
@@ -275,18 +407,23 @@ async function onSave(): Promise<void> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contentHtml, changeNote: changeNote.value || null }),
+      handleErrors: false, // own error toast below — one failure, one toast
     });
     if (res.ok) {
       const version = (await res.json()) as DocumentContentVersion;
       currentVersionNumber.value = version.version_number;
+      currentVersionId.value = version.id;
       changeNote.value = "";
-      notifications.show(t("user.document-content.editor.saveSuccess"), "success");
+      notifications.show(t("user.document-content.editor.saveSuccess"), "success", undefined, { icon: "nav-document-content" });
       await loadHistory();
+      // A new version is never approved — the banner must flip to "pending".
+      await loadApproval();
     } else {
-      notifications.show(t("user.document-content.editor.saveError"), "error");
+      notifications.show(t("user.document-content.editor.saveError"), "error", undefined, { icon: "nav-document-content" });
     }
-  } catch {
-    notifications.show(t("user.document-content.editor.saveError"), "error");
+  } catch (err) {
+    reportCaught(err, { where: "DocumentContentEditorView.onSave" });
+    notifications.show(t("user.document-content.editor.saveError"), "error", undefined, { icon: "nav-document-content" });
   } finally {
     saving.value = false;
   }
@@ -300,15 +437,17 @@ async function onSavePermissions(): Promise<void> {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ entityTypes: selectedEntityTypes.value }),
+      handleErrors: false,
     });
-    if (res.ok) {
+    if (res.ok && (await saveChecklistConfig())) {
       selectedEntityTypes.value = (await res.json()) as string[];
-      notifications.show(t("user.document-content.permissions.saveSuccess"), "success");
+      notifications.show(t("user.document-content.permissions.saveSuccess"), "success", undefined, { icon: "nav-document-content" });
     } else {
-      notifications.show(t("user.document-content.permissions.saveError"), "error");
+      notifications.show(t("user.document-content.permissions.saveError"), "error", undefined, { icon: "nav-document-content" });
     }
-  } catch {
-    notifications.show(t("user.document-content.permissions.saveError"), "error");
+  } catch (err) {
+    reportCaught(err, { where: "DocumentContentEditorView.onSavePermissions" });
+    notifications.show(t("user.document-content.permissions.saveError"), "error", undefined, { icon: "nav-document-content" });
   } finally {
     savingPermissions.value = false;
   }
@@ -322,11 +461,6 @@ async function onSavePermissions(): Promise<void> {
   gap: 10px;
 }
 
-.doc-editor__title-icon {
-  width: 22px;
-  height: 22px;
-  color: rgb(var(--v-theme-primary));
-}
 
 .doc-editor__meta {
   margin: 0 0 8px;
@@ -453,6 +587,20 @@ async function onSavePermissions(): Promise<void> {
   color: rgb(var(--v-theme-success));
 }
 
+.doc-editor__history-badge--approved {
+  background: rgba(var(--v-theme-primary), 0.12);
+  color: rgb(var(--v-theme-primary));
+}
+
+.doc-editor__approval {
+  margin: 0 0 16px;
+}
+
+.doc-editor__approval :deep(.v-btn) {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
 .doc-editor__history-by,
 .doc-editor__history-date {
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
@@ -470,6 +618,27 @@ async function onSavePermissions(): Promise<void> {
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
+.doc-editor__checklist {
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-radius: var(--pwa-radius);
+  padding: 12px 16px 16px;
+  margin: 0 0 16px;
+  max-width: 560px;
+}
+.doc-editor__checklist-title {
+  padding: 0 6px;
+  font-weight: 600;
+}
+.doc-editor__checklist-fields {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 12px;
+}
+@media (max-width: 600px) {
+  .doc-editor__checklist-fields {
+    grid-template-columns: 1fr;
+  }
+}
 .doc-editor__permissions {
   max-width: 480px;
 }

@@ -4,6 +4,7 @@
       view-id="territories"
       api-endpoint="/api/v1/territory"
       :headers="tableHeaders"
+      :filter-definitions="[]"
       :i18n="territoriesI18n"
       :show-add-button="true"
       @add="onAdd"
@@ -25,7 +26,7 @@
         {{ (item as TerritoryListItem).name }}
       </template>
       <template #feed-card-meta="{ item }">
-        {{ t(`user.territories.form.kind${kindPascal((item as TerritoryListItem).kind)}`) }} — {{ (item as TerritoryListItem).country_code }}
+        {{ territoryCardMeta(item as TerritoryListItem) }}
       </template>
       <template #feed-card-actions="{ item }">
         <AppListItemMenu :aria-label="t('app.common.moreActions')">
@@ -57,36 +58,39 @@
       @submit="onEditSubmit"
     />
 
-    <VDialog v-model="showDeleteConfirm" max-width="360" :transition="originDialogTransition" persistent>
-      <VCard>
-        <VCardText>{{ t("user.territories.actions.deleteConfirmText") }}</VCardText>
-        <VCardActions>
-          <VSpacer />
-          <AppButton variant="text" @click="showDeleteConfirm = false">
-            {{ t("app.common.cancel") }}
-          </AppButton>
-          <AppButton color="error" variant="text" :loading="deleteLoading" @click="onDelete">
-            {{ t("user.territories.actions.delete") }}
-          </AppButton>
-        </VCardActions>
-      </VCard>
-    </VDialog>
+    <AppConfirmDialog
+      v-model="showDeleteConfirm"
+      :text="t('user.territories.actions.deleteConfirmText')"
+      :secondary-label="t('app.common.cancel')"
+      :secondary-color="null"
+      :primary-label="t('user.territories.actions.delete')"
+      primary-color="error"
+      primary-variant="text"
+      :loading="deleteLoading"
+      max-width="360"
+      @secondary="showDeleteConfirm = false"
+      @primary="onDelete"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
+import { reportCaught } from "@api";
+import { showErrorToast } from "../composables/useErrorToast";
 import { ref, computed, defineAsyncComponent } from "vue";
-import { originDialogTransition } from "@ui";
 import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
-import AppButton from "../components/AppButton.vue";
+import AppConfirmDialog from "../components/AppConfirmDialog.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppListItemMenu from "../components/AppListItemMenu.vue";
 import { entityActionIcon, entityActionMenuIconClass } from "../config/entityActions";
 import { apiFetch } from "../composables/useApi";
+import { fieldErrorsFromResponse } from "../composables/useFormErrors";
+import type { SubmitDone } from "../composables/useEntitySubmit";
 import { useNotifications } from "../composables/useNotifications";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import { territoryFormFields } from "../config/forms/territoryForm";
+import { kindPascal, territoryCardMeta as territoryCardMetaFormatter } from "../utils/mobileCardMeta";
 
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
 
@@ -122,14 +126,17 @@ const territoriesI18n = computed(() => ({
   add: "user.territories.add",
   emptyTitle: "user.territories.emptyTitle",
   emptySubtitle: "user.territories.emptySubtitle",
+  countNoun: "territories" as const,
   noResultsForCriteria: "user.territories.noResultsForCriteria",
   noResultsForCriteriaSubtitle: "user.territories.noResultsForCriteriaSubtitle",
   tableNoResults: "user.territories.table.noResults",
   errorLoad: "user.territories.errorLoad",
 }));
 
-function kindPascal(kind: string): string {
-  return kind.charAt(0).toUpperCase() + kind.slice(1);
+/** Mobile card's second line — same kind/country_code/code the desktop
+ *  table already shows in separate columns (NEO-19). */
+function territoryCardMeta(territory: TerritoryListItem): string {
+  return territoryCardMetaFormatter(territory, t);
 }
 
 function onAdd() {
@@ -141,7 +148,7 @@ function onEdit(territory: TerritoryListItem) {
   showEditModal.value = true;
 }
 
-async function onSubmit(payload: Record<string, unknown>, done: (ok: boolean) => void) {
+async function onSubmit(payload: Record<string, unknown>, done: SubmitDone) {
   try {
     const res = await apiFetch("/api/v1/territory", {
       method: "POST",
@@ -149,18 +156,22 @@ async function onSubmit(payload: Record<string, unknown>, done: (ok: boolean) =>
       body: JSON.stringify(payload),
     });
     if (res.ok) {
-      notifications.show(t("user.territories.form.success"), "success");
+      notifications.show(t("user.territories.form.success"), "success", undefined, { icon: "nav-territories" });
       window.dispatchEvent(new Event("entity-list-refresh"));
       done(true);
     } else {
-      done(false);
+      // A 400 naming a field is marked in the form (NEO-109); anything else was already toasted by apiFetch.
+      done(false, (await fieldErrorsFromResponse(res)) ?? undefined);
     }
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "TerritoriesView.onSubmit" });
+    // A non-2xx already toasts via apiFetch; a thrown error (offline, bad response) had no feedback at all.
+    showErrorToast(err, { icon: "nav-territories" });
     done(false);
   }
 }
 
-async function onEditSubmit(payload: Record<string, unknown>, done: (ok: boolean) => void) {
+async function onEditSubmit(payload: Record<string, unknown>, done: SubmitDone) {
   const id = selectedTerritory.value?.id;
   if (!id) { done(false); return; }
   try {
@@ -170,13 +181,16 @@ async function onEditSubmit(payload: Record<string, unknown>, done: (ok: boolean
       body: JSON.stringify(payload),
     });
     if (res.ok) {
-      notifications.show(t("user.territories.form.editSuccess"), "success");
+      notifications.show(t("user.territories.form.editSuccess"), "success", undefined, { icon: "nav-territories" });
       window.dispatchEvent(new Event("entity-list-refresh"));
       done(true);
     } else {
-      done(false);
+      // A 400 naming a field is marked in the form (NEO-109); anything else was already toasted by apiFetch.
+      done(false, (await fieldErrorsFromResponse(res)) ?? undefined);
     }
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "TerritoriesView.onEditSubmit" });
+    showErrorToast(err, { icon: "nav-territories" });
     done(false);
   }
 }
@@ -193,7 +207,7 @@ const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
   if (res.ok) {
     showDeleteConfirm.value = false;
     deletingId.value = null;
-    notifications.show(t("user.territories.actions.deleteSuccess"), "success");
+    notifications.show(t("user.territories.actions.deleteSuccess"), "success", undefined, { icon: "nav-territories" });
     window.dispatchEvent(new Event("entity-list-refresh"));
   }
 });

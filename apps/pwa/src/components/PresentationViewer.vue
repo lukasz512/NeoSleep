@@ -122,18 +122,23 @@ onUnmounted(() => {
   width: 100vw;
   background: #1a1a1a;
 
-  &--rotated {
-    .presentation-viewer__content {
-      transform: rotate(90deg);
-      transform-origin: center center;
-      width: 100vh;
-      height: 100vw;
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      margin-top: -50vw;
-      margin-left: -50vh;
-    }
+  /* Native CSS nesting (this file has no `lang="scss"`, unlike apps/web) can't
+     resolve "&--rotated" as a concatenated class name the way Sass does — "&"
+     directly before a bare "--..." identifier is invalid nesting syntax and
+     esbuild silently drops the whole block. The element always also carries
+     the base class when rotated (see the template's merged static + dynamic
+     :class), so "&.presentation-viewer__container--rotated" is an equivalent,
+     valid compound selector. */
+  &.presentation-viewer__container--rotated .presentation-viewer__content {
+    transform: rotate(90deg);
+    transform-origin: center center;
+    width: 100vh;
+    height: 100vw;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    margin-top: -50vw;
+    margin-left: -50vh;
   }
 }
 

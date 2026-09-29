@@ -160,6 +160,8 @@
 </template>
 
 <script setup lang="ts">
+import { reportCaught } from "@api";
+import { submitWeb3Form } from "../utils/web3forms";
 import { reactive, ref, computed, watch, onMounted, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
@@ -258,16 +260,13 @@ async function onSubmit() {
             countryCode: professionalForm.value.countryCode,
           };
 
-    const res = await fetch("https://api.web3forms.com/submit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ access_key: "669fb922-3b25-4b2c-8d6d-a6bd86b9d5a4", ...payload }),
-    });
-    const data = await res.json();
-    if (!data.success) throw new Error(data.message);
+    await submitWeb3Form({ access_key: "669fb922-3b25-4b2c-8d6d-a6bd86b9d5a4", ...payload });
     status.value = "success";
     resetForm();
-  } catch {
+  } catch (err) {
+    // A lost lead must never be silent (NEO-81): console + diagnostics, with the
+    // form type and HTTP status only — never the submitted fields.
+    reportCaught(err, { where: "web.ContactView.submit", extra: { form_type: formType.value } });
     status.value = "error";
   }
 }

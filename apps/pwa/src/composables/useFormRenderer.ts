@@ -1,6 +1,6 @@
 import { ref, computed, watch, type Ref } from "vue";
 import { useI18n } from "vue-i18n";
-import type { FormFieldDef, FormFieldOption } from "../types/formField";
+import type { FormDerive, FormFieldDef, FormFieldOption } from "../types/formField";
 
 /**
  * Generic form-state engine behind FormRenderer.vue.
@@ -18,7 +18,7 @@ import type { FormFieldDef, FormFieldOption } from "../types/formField";
 export function useFormRenderer(
   fields: FormFieldDef[],
   initialData: Ref<Record<string, unknown> | undefined>,
-  derive?: (form: Record<string, unknown>) => Partial<Record<string, unknown>> | void,
+  derive?: FormDerive,
 ) {
   const { t } = useI18n();
 
@@ -77,24 +77,28 @@ export function useFormRenderer(
   function resetForm() {
     form.value = buildFormState(initialData.value);
     snapshot.value = { ...form.value };
+    lastSeen = { ...form.value };
   }
+
+  /** Whether one field differs from its value when the dialog opened (trimmed strings, arrays by content). */
+  function isFieldChanged(key: string): boolean {
+    const a = form.value[key];
+    const b = snapshot.value[key];
+    if (Array.isArray(a) || Array.isArray(b)) {
+      return JSON.stringify(Array.isArray(a) ? a : []) !== JSON.stringify(Array.isArray(b) ? b : []);
+    }
+    if (typeof a === "string" || typeof b === "string") {
+      return (a ?? "").toString().trim() !== (b ?? "").toString().trim();
+    }
+    return a !== b;
+  }
+
+  /** Keys of the fields changed since the dialog opened — the folder's section dots and change counter (NEO-92). */
+  const changedKeys = computed(() => fields.filter((f) => isFieldChanged(f.key)).map((f) => f.key));
 
   /** Dirty-check on close attempt — call before letting the dialog close. */
   function hasChanged(): boolean {
-    for (const f of fields) {
-      const a = form.value[f.key];
-      const b = snapshot.value[f.key];
-      if (Array.isArray(a) || Array.isArray(b)) {
-        const aArr = Array.isArray(a) ? a : [];
-        const bArr = Array.isArray(b) ? b : [];
-        if (JSON.stringify(aArr) !== JSON.stringify(bArr)) return true;
-      } else if (typeof a === "string" || typeof b === "string") {
-        if ((a ?? "").toString().trim() !== (b ?? "").toString().trim()) return true;
-      } else if (a !== b) {
-        return true;
-      }
-    }
-    return false;
+    return fields.some((f) => isFieldChanged(f.key));
   }
 
   function resolvedOptions(field: FormFieldDef): FormFieldOption[] {
@@ -102,7 +106,9 @@ export function useFormRenderer(
       // Static options: `title` is an i18n key (see formField.ts's doc
       // comment on FormFieldOption) — resolve it here so it stays reactive
       // to locale switches without the config file needing a translator.
-      return field.options.map((o) => ({ ...o, title: t(o.title) }));
+      const filter = field.optionFilter;
+      const options = filter ? field.options.filter((o) => filter(o, form.value)) : field.options;
+      return options.map((o) => ({ ...o, title: t(o.title) }));
     }
     // Async-loaded options (API-fetched names, etc.) are already final
     // display strings — never routed through t().
@@ -145,18 +151,27 @@ export function useFormRenderer(
 
   // Optional entity-specific derived-fields hook (e.g. a hidden field synced
   // live from another field's value, like HCP.region from the selected clinic).
+  // `lastSeen` is the form as of the previous run — fields are edited in
+  // place, so the deep watcher's own oldValue is the same object as the new
+  // one and can't say WHICH field just changed; two-way syncs (patient
+  // salutation <-> sex) need exactly that. resetForm() re-seeds it so a
+  // freshly opened record never reads as "both fields just changed".
+  let lastSeen: Record<string, unknown> = {};
   if (derive) {
     watch(
       form,
       (val) => {
-        const patch = derive(val);
-        if (!patch) return;
-        let changed = false;
-        const next = { ...val };
-        for (const k in patch) {
-          if (next[k] !== patch[k]) { next[k] = patch[k]; changed = true; }
+        const patch = derive(val, lastSeen);
+        let next = val;
+        if (patch) {
+          const merged = { ...val };
+          let changed = false;
+          for (const k in patch) {
+            if (merged[k] !== patch[k]) { merged[k] = patch[k]; changed = true; }
+          }
+          if (changed) { next = merged; form.value = merged; }
         }
-        if (changed) form.value = next;
+        lastSeen = { ...next };
       },
       { deep: true },
     );
@@ -244,5 +259,6 @@ export function useFormRenderer(
     buildPayload,
     resetForm,
     hasChanged,
+    changedKeys,
   };
 }

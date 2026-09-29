@@ -8,10 +8,23 @@ import { DatabaseError } from "../errors.js";
  * back to the originating Lead so acceptance can convert it.
  */
 
+/**
+ * invite_tokens.metadata (JSONB). NEO-51: `counterparty_signed_at` is the
+ * moment NeoSleep's signatory countersigns — the activation that minted
+ * this token — and is the date printed next to NeoSleep's signature on the
+ * partner agreement; `jurisdiction` pins which country's documents apply.
+ * A resend mints a new token, so it gets a new date.
+ */
+export interface InviteTokenMetadata {
+  counterparty_signed_at?: string;
+  jurisdiction?: "PL" | "MX";
+}
+
 export interface InviteToken {
   id: string;
   user_id: string;
   lead_id: string | null;
+  metadata: InviteTokenMetadata | null;
 }
 
 export interface InviteTokenWithIdentity extends InviteToken {
@@ -27,13 +40,14 @@ export async function createInviteToken(
   leadId: string | null,
   tokenHash: string,
   expiresAt: Date,
-  createdBy: string
+  createdBy: string,
+  metadata: InviteTokenMetadata | null = null
 ): Promise<string> {
   try {
     const r = await client.query<{ id: string }>(
-      `INSERT INTO invite_tokens (user_id, lead_id, token_hash, expires_at, created_by)
-       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-      [userId, leadId, tokenHash, expiresAt, createdBy]
+      `INSERT INTO invite_tokens (user_id, lead_id, token_hash, expires_at, created_by, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+      [userId, leadId, tokenHash, expiresAt, createdBy, metadata ? JSON.stringify(metadata) : null]
     );
     return r.rows[0]!.id;
   } catch (err) {
@@ -48,7 +62,7 @@ export async function getInviteTokenByHash(
 ): Promise<InviteTokenWithIdentity | null> {
   try {
     const r = await client.query<InviteTokenWithIdentity>(
-      `SELECT it.id, it.user_id, it.lead_id, u.identity_id, i.email, i.first_name, i.last_name
+      `SELECT it.id, it.user_id, it.lead_id, it.metadata, u.identity_id, i.email, i.first_name, i.last_name
        FROM invite_tokens it
        JOIN users u ON u.id = it.user_id
        JOIN identities i ON i.id = u.identity_id

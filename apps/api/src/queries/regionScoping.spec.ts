@@ -65,11 +65,15 @@ describe("Row-level region scoping (ADR: requireScope applied to patient/practit
       const plRepCtx = await buildTestContext(client, "rep", plId);
 
       const plPatient = await CreatePatientCommand(adminCtx, {
+        gender: "female",
+        date_of_birth: "1980-01-01",
         first_name: "PL", last_name: `Patient-${uniqueSuffix()}`,
         email: `pl-patient-${uniqueSuffix()}@example.com`, phone: "600100200",
         country_code: "PL", territory_id: plId,
       });
       const mxPatient = await CreatePatientCommand(adminCtx, {
+        gender: "female",
+        date_of_birth: "1980-01-01",
         first_name: "MX", last_name: `Patient-${uniqueSuffix()}`,
         email: `mx-patient-${uniqueSuffix()}@example.com`, phone: "600100201",
         country_code: "MX", territory_id: mxId,

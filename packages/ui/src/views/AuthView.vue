@@ -1,50 +1,11 @@
 <template>
-  <div class="auth-view">
-    <AuthChrome ref="authChromeRef" :auto-play="false" />
+  <div class="auth-view" :class="{ 'auth-view--backdrop-exiting': backdropExiting }">
+    <AuthChrome ref="authChromeRef" :auto-play="false" :dots-busy="isLoading" :dots-anchor="cardSlotEl" />
 
     <div ref="cardSlotEl" class="auth-view__card-slot">
-      <!-- Purely decorative, behind the card (z-index below it) — three
-           semi-transparent brand-teal circles, gently pulsing (see
-           auth-view-orb-pulse) so they interweave with the animated page
-           background showing through the gaps, rather than sitting static.
-           Anchor divs own the static position/centering transform; the span
-           inside each owns the continuous per-frame magnetic transform (see
-           useMagneticPointer) — same split as AuthChrome's halo/logo, so the
-           two transforms never fight each other on one element. Smaller
-           circles float more (see script's strengths) — same "lighter things
-           move more" depth logic as the logo/badge split in AuthChrome.
-           Height is locked to the card-slot's size on first paint (see
-           orbsFrameStyle) rather than tracking it live — AuthCard animates
-           its own height on every step change (signin ↔ forgot ↔ reset), and
-           since the anchors below are positioned in % of this box, letting it
-           track that live would drag the orbs along with every step
-           transition instead of leaving them planted behind the card.
-           Each anchor pops in/out via a scale keyframe (see bigOrbPhase etc.
-           and the auth-view-orb-pop-in/-out animations below) — a separate
-           transform-only animation from the span's continuous pulse and
-           magnetic-pointer transform inside, so the three never fight over
-           the same property. -->
-      <div class="auth-view__orbs" aria-hidden="true" :style="orbsFrameStyle">
-        <div
-          class="auth-view__orb-anchor auth-view__orb-anchor--big"
-          :class="orbAnchorPhaseClass(bigOrbPhase)"
-        >
-          <span ref="bigOrbEl" class="auth-view__orb auth-view__orb--big" />
-        </div>
-        <div
-          class="auth-view__orb-anchor auth-view__orb-anchor--medium"
-          :class="orbAnchorPhaseClass(mediumOrbPhase)"
-        >
-          <span ref="mediumOrbEl" class="auth-view__orb auth-view__orb--medium" />
-        </div>
-        <div
-          class="auth-view__orb-anchor auth-view__orb-anchor--small"
-          :class="orbAnchorPhaseClass(smallOrbPhase)"
-        >
-          <span ref="smallOrbEl" class="auth-view__orb auth-view__orb--small" />
-        </div>
-      </div>
-
+      <!-- The breathing orbs behind this card live in the public layout
+           (AuthOrbs, see AuthBackdrop) so they're on screen before this view
+           even mounts — this slot is only registered as their anchor. -->
       <AuthCard
         ref="authCardRef"
         class="auth-view__card"
@@ -54,6 +15,7 @@
         :loading="isLoading"
         :step-key="stepKey"
         :auto-play="false"
+        motion="zoom"
       >
       <div v-if="step === 'signin'" class="auth-view__body">
         <h1 class="auth-view__title-visually-hidden">{{ t('user.login.title') }}</h1>
@@ -63,30 +25,23 @@
              heading on the page. -->
         <p class="auth-view__heading">{{ t('user.login.heading') }}</p>
 
-        <VAlert
-          v-if="loginFlow.errorKey.value"
-          type="error"
-          variant="tonal"
-          density="compact"
-          class="auth-view__alert"
-          closable
-          @click:close="loginFlow.errorKey.value = null"
-        >
-          {{ t(loginFlow.errorKey.value) }}
-        </VAlert>
-
         <VForm ref="signinForm" class="auth-view__form" @submit.prevent="handleSignIn">
+          <FormErrorSummary :errors="signinSummary.lines.value" :title="signinSummary.title.value" @select="focusField" />
+
           <VTextField
             ref="loginEmailFieldRef"
             v-model="loginFlow.email.value"
+            data-field="email"
             type="email"
             :label="t('user.login.email')"
             variant="outlined"
             density="comfortable"
             autocomplete="email"
             :rules="[ruleEmailRequired, ruleEmailFormat]"
+            :error-messages="signinSummary.serverError('email')"
             class="auth-view__field"
             :disabled="loginFlow.loading.value"
+            @update:model-value="signinSummary.clearServerError('email')"
           >
             <template #prepend-inner>
               <button
@@ -102,6 +57,7 @@
 
           <VTextField
             v-model="loginFlow.password.value"
+            data-field="password"
             :type="showPassword ? 'text' : 'password'"
             :label="t('user.login.password')"
             variant="outlined"
@@ -109,16 +65,19 @@
             autocomplete="current-password"
             prepend-inner-icon="mdi-lock-outline"
             :rules="[rulePasswordRequired]"
+            :error-messages="signinSummary.serverError('password')"
             class="auth-view__field"
             :disabled="loginFlow.loading.value"
             :append-inner-icon="showPassword ? 'mdi-eye-off' : 'mdi-eye'"
             @click:append-inner="showPassword = !showPassword"
+            @update:model-value="signinSummary.clearServerError('password')"
           />
 
           <div class="auth-view__row">
             <VCheckbox
               v-model="loginFlow.rememberMe.value"
               :label="t('user.login.rememberMe')"
+              color="primary"
               density="compact"
               hide-details
               class="auth-view__remember"
@@ -137,6 +96,22 @@
           </VBtn>
         </VForm>
 
+        <!-- Only where this environment has a Google OAuth client configured
+             (GET /auth/providers, see useGoogleSignIn) — NEO-78. -->
+        <template v-if="googleSignIn.available.value">
+          <div class="auth-view__divider" role="separator">
+            <span>{{ t('user.login.google.or') }}</span>
+          </div>
+          <GoogleSignInButton
+            :href="googleSignIn.href.value"
+            :label="t('user.login.google.signIn')"
+            :dark="themeStore.mode === 'dark'"
+            :loading="googleSignIn.redirecting.value"
+            :disabled="loginFlow.loading.value"
+            @start="googleSignIn.redirecting.value = true"
+          />
+        </template>
+
         <div class="auth-view__footer">
           <VBtn
             variant="text"
@@ -154,17 +129,22 @@
         <p class="auth-view__subtitle">{{ t('user.forgotPassword.subtitle') }}</p>
 
         <VForm ref="forgotForm" class="auth-view__form" @submit.prevent="handleForgotSubmit">
+          <FormErrorSummary :errors="forgotSummary.lines.value" :title="forgotSummary.title.value" @select="focusField" />
+
           <VTextField
             ref="forgotEmailFieldRef"
             v-model="forgotFlow.email.value"
+            data-field="email"
             type="email"
             :label="t('user.login.email')"
             variant="outlined"
             density="comfortable"
             autocomplete="email"
             :rules="[ruleEmailRequired, ruleEmailFormat]"
+            :error-messages="forgotSummary.serverError('email')"
             class="auth-view__field"
             :disabled="forgotFlow.loading.value"
+            @update:model-value="forgotSummary.clearServerError('email')"
           >
             <template #prepend-inner>
               <button
@@ -191,20 +171,12 @@
         </VForm>
       </div>
 
+      <!-- Only ever reached on success (NEO-109): a failure keeps the form
+           open with its error in the form (or a toast for no connection). -->
       <div v-else-if="step === 'sent'" class="auth-view__body">
-        <template v-if="forgotFlow.submitted.value">
-          <VAlert type="success" variant="tonal" density="comfortable" class="auth-view__result-alert">
-            {{ t('user.forgotPassword.successMessage') }}
-          </VAlert>
-        </template>
-        <template v-else>
-          <VAlert type="error" variant="tonal" density="comfortable" class="auth-view__result-alert">
-            {{ t(forgotFlow.errorKey.value ?? 'user.forgotPassword.error.network') }}
-          </VAlert>
-          <VBtn variant="outlined" color="primary" size="large" block class="auth-view__submit auth-view__retry" @click="retryForgot">
-            {{ t('user.forgotPassword.tryAgain') }}
-          </VBtn>
-        </template>
+        <AppInlineAlert type="success" class="auth-view__result-alert">
+          {{ t('user.forgotPassword.successMessage') }}
+        </AppInlineAlert>
       </div>
 
       <div v-else class="auth-view__body">
@@ -218,21 +190,12 @@
         <template v-else-if="resetFlow.tokenValid.value === true">
           <p class="auth-view__subtitle">{{ t('user.resetPassword.subtitle') }}</p>
 
-          <VAlert
-            v-if="resetFlow.errorKey.value"
-            type="error"
-            variant="tonal"
-            density="compact"
-            class="auth-view__alert"
-            closable
-            @click:close="resetFlow.errorKey.value = null"
-          >
-            {{ t(resetFlow.errorKey.value) }}
-          </VAlert>
-
           <VForm ref="resetForm" class="auth-view__form" @submit.prevent="handleResetSubmit">
+            <FormErrorSummary :errors="resetSummary.lines.value" :title="resetSummary.title.value" @select="focusField" />
+
             <VTextField
               v-model="resetFlow.newPassword.value"
+              data-field="new_password"
               :type="showResetPassword ? 'text' : 'password'"
               :label="t('user.resetPassword.newPassword')"
               variant="outlined"
@@ -240,14 +203,17 @@
               autocomplete="new-password"
               prepend-inner-icon="mdi-lock-outline"
               :rules="[ruleResetPasswordRequired, ruleResetPasswordLength]"
+              :error-messages="resetSummary.serverError('new_password')"
               class="auth-view__field"
               :disabled="resetFlow.loading.value"
               :append-inner-icon="showResetPassword ? 'mdi-eye-off' : 'mdi-eye'"
               @click:append-inner="showResetPassword = !showResetPassword"
+              @update:model-value="resetSummary.clearServerError('new_password')"
             />
 
             <VTextField
               v-model="resetFlow.confirmPassword.value"
+              data-field="confirm_password"
               :type="showResetConfirmPassword ? 'text' : 'password'"
               :label="t('user.resetPassword.confirmPassword')"
               variant="outlined"
@@ -279,13 +245,36 @@
     </AuthCard>
     </div>
 
-    <img
-      ref="pwaBadgeEl"
-      :src="pwaBadgeUrl"
-      :alt="t('user.login.pwaBadge')"
-      class="auth-view__pwa-badge"
-      :class="{ 'auth-view__pwa-badge--visible': badgeVisible }"
-    />
+    <!-- Badge (with the same halo as the logo's, see AuthChrome, at half
+         size) and the app version under it. The wrap owns the badge's
+         entrance/exit opacity so halo and badge fade together; the img keeps
+         the magnetic transform. -->
+    <div class="auth-view__badge-footer">
+      <div
+        class="auth-view__pwa-badge-wrap"
+        :class="{ 'auth-view__pwa-badge-wrap--visible': badgeVisible }"
+      >
+        <div class="auth-view__pwa-badge-halo">
+          <AuthHalo :dark="themeStore.mode === 'dark'" size="sm" />
+        </div>
+      <img
+        ref="pwaBadgeEl"
+        :src="pwaBadgeUrl"
+        :alt="t('user.login.pwaBadge')"
+        class="auth-view__pwa-badge"
+        />
+      </div>
+      <p
+        v-if="appVersionLabel"
+        class="auth-view__app-version"
+        :class="{
+          'auth-view__app-version--visible': badgeVisible,
+          'auth-view__app-version--dark': themeStore.mode === 'dark',
+        }"
+      >
+        {{ appVersionLabel }}
+      </p>
+    </div>
   </div>
 </template>
 
@@ -295,20 +284,35 @@ import type { Ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 import { brandColors } from "@brand/colors";
-import { BRAND_PWA_BADGE_URL } from "@brand/logos";
+import { BRAND_PWA_BADGE_URL, BRAND_PWA_BADGE_DARK_URL } from "@brand/logos";
 import { createUseLoginFlow } from "../composables/useLoginFlow";
 import { createUseForgotPasswordFlow } from "../composables/useForgotPasswordFlow";
+import { PASSWORD_CHANGED_NOTICE } from "../composables/useChangePasswordFlow";
 import { createUseResetPasswordFlow } from "../composables/useResetPasswordFlow";
 import { useMagneticPointer } from "../composables/useMagneticPointer";
-import { AUTH_BACKGROUND_EXIT_KEY } from "../composables/authBackgroundExit";
+import { AUTH_BACKDROP_KEY } from "../composables/authBackdrop";
 import type { ApiFetchOptions } from "@api";
-import type { AuthTokenStorage } from "@stores";
+import { useThemeStore, type AuthTokenStorage } from "@stores";
+import { useAppVersionLabel } from "../composables/useAppVersionLabel";
 import AuthChrome from "../components/AuthChrome.vue";
 import AuthCard from "../components/AuthCard.vue";
+import AuthHalo from "../components/AuthHalo.vue";
+import GoogleSignInButton from "../components/GoogleSignInButton.vue";
+import { API_URL_KEY, googleSignInErrorKey, useGoogleSignIn } from "../composables/useGoogleSignIn";
+import AppInlineAlert from "../components/AppInlineAlert.vue";
+import FormErrorSummary from "../components/FormErrorSummary.vue";
+import { focusFormField, useFormErrorSummary, type FieldErrors, type FormErrorSummaryState } from "../composables/useFormErrorSummary";
 
-const pwaBadgeUrl = BRAND_PWA_BADGE_URL;
+// White badge in light mode, dark badge in dark mode (NEO-12) — same theme
+// source AuthChrome uses for its logo.
+const themeStore = useThemeStore();
+const pwaBadgeUrl = computed(() =>
+  themeStore.mode === "dark" ? BRAND_PWA_BADGE_DARK_URL : BRAND_PWA_BADGE_URL,
+);
 
 type ApiFetchFn = (path: string, options?: ApiFetchOptions) => Promise<Response>;
+type NotifyType = "success" | "info" | "warning" | "error";
+type NotifyFn = (message: string, type: NotifyType, key?: string) => void;
 type Step = "signin" | "forgot" | "sent" | "reset";
 
 function stepFromPath(path: string): Step {
@@ -323,15 +327,64 @@ const router = useRouter();
 
 const apiFetch = inject<ApiFetchFn>("neo:apiFetch")!;
 const authTokenStorage = inject<AuthTokenStorage>("neo:authTokenStorage")!;
+const notify = inject<NotifyFn>("neo:notify")!;
 
 const useLoginFlow = createUseLoginFlow(apiFetch, authTokenStorage);
 const loginFlow = useLoginFlow();
+
+// ?email= prefill — e.g. the "Go to login" button a doctor sees right after
+// finishing partner registration (NEO-51), so they only type the password
+// they just chose. Never overwrites something already typed.
+if (typeof route.query.email === "string" && !loginFlow.email.value) {
+  loginFlow.email.value = route.query.email;
+}
+
+// NEO-109 reverses the earlier move of the sign-in error onto a toast:
+// every form shows its errors in the form — under the field and in the summary
+// box on top — so "wrong email or password" (loginFlow.errorKey) is a line in
+// the sign-in summary. Only what no field or form can fix (no connection,
+// server error — loginFlow.toastKey) is still a toast.
+function toastOn(key: Ref<string | null>) {
+  watch(key, (k) => {
+    if (k) notify(t(k), "error", k);
+  });
+}
+toastOn(loginFlow.toastKey);
+
+// "Sign in with Google" (NEO-78): shown only when the API says it's configured.
+const googleSignIn = useGoogleSignIn(apiFetch, inject<string | null>(API_URL_KEY, null));
+onMounted(() => googleSignIn.load());
+
+// The Google callback sends refusals/failures back as /login?error=<code>
+// (e.g. an email no admin has invited). Shown once — as a line in the sign-in
+// form's summary (NEO-109; a toast only if the sign-in form isn't on screen) —
+// then dropped from the URL so a reload or back-navigation doesn't repeat it.
+const initialGoogleErrorKey = googleSignInErrorKey(route.query.error);
+const googleErrorKey = ref<string | null>(null);
+if (initialGoogleErrorKey) {
+  if (stepFromPath(route.path) === "signin") googleErrorKey.value = initialGoogleErrorKey;
+  else notify(t(initialGoogleErrorKey), "error", initialGoogleErrorKey);
+  void router.replace({
+    query: Object.fromEntries(Object.entries(route.query).filter(([key]) => key !== "error")),
+  });
+}
+
+// After a password change the account is signed out everywhere, this device
+// included (NEO-102) — say so once, then drop the flag from the URL.
+if (route.query.notice === PASSWORD_CHANGED_NOTICE) {
+  notify(t("user.changePassword.success"), "success", "user.changePassword.success");
+  void router.replace({
+    query: Object.fromEntries(Object.entries(route.query).filter(([key]) => key !== "notice")),
+  });
+}
 
 const useForgotPasswordFlow = createUseForgotPasswordFlow(apiFetch);
 const forgotFlow = useForgotPasswordFlow();
 
 const useResetPasswordFlow = createUseResetPasswordFlow(apiFetch);
 const resetFlow = useResetPasswordFlow();
+toastOn(forgotFlow.toastKey);
+toastOn(resetFlow.toastKey);
 
 // /login, /forgot-password and /reset-password share one route component
 // (see routes.ts), so this instance — and the AuthChrome/AuthCard it
@@ -365,7 +418,11 @@ const cardTitle = computed(() => {
   return null;
 });
 const isLoading = computed(
-  () => loginFlow.loading.value || forgotFlow.loading.value || resetFlow.loading.value,
+  () =>
+    loginFlow.loading.value ||
+    forgotFlow.loading.value ||
+    resetFlow.loading.value ||
+    googleSignIn.redirecting.value,
 );
 
 const showPassword = ref(false);
@@ -379,78 +436,43 @@ const authChromeRef = ref<{ playEnter: () => Promise<void>; playExit: () => Prom
 const loginEmailFieldRef = ref<{ $el?: HTMLElement } | null>(null);
 const forgotEmailFieldRef = ref<{ $el?: HTMLElement } | null>(null);
 
-// Decorative orbs behind the card — small floats the most, medium a middle
-// amount, big the least, same "lighter things move more" depth logic as the
-// logo/badge split in AuthChrome.
-const bigOrbEl = ref<HTMLElement | null>(null);
-const mediumOrbEl = ref<HTMLElement | null>(null);
-const smallOrbEl = ref<HTMLElement | null>(null);
-useMagneticPointer(bigOrbEl, { strength: 8, ease: 0.06 });
-useMagneticPointer(mediumOrbEl, { strength: 16, ease: 0.11 });
-useMagneticPointer(smallOrbEl, { strength: 26, ease: 0.18 });
+// Shared auth backdrop (photo, gradient, breathing orbs) owned by the public
+// layout — optional, so this view still works mounted on its own (tests).
+const backdrop = inject(AUTH_BACKDROP_KEY, null);
 
-// The orb anchors below are positioned in % of .auth-view__orbs' own box, so
-// that box needs a stable height — but its parent (.auth-view__card-slot)
-// wraps AuthCard, which animates its own height on every step change (see
-// AuthCard.vue's viewportHeight). Left alone, the orbs box would inherit that
-// live height and drag the orbs along with each signin/forgot/reset
-// transition. Instead, measure the card-slot's box once on first paint and
-// freeze it — the observer disconnects itself after the first reading, so
-// later step transitions never touch orbsFrameHeight again.
+// The orbs sit behind this slot (the card's box) rather than a guessed spot.
 const cardSlotEl = ref<HTMLElement | null>(null);
-const orbsFrameHeight = ref("auto");
-const orbsFrameStyle = computed(() => ({ height: orbsFrameHeight.value }));
-let orbsResizeObserver: ResizeObserver | null = null;
+onMounted(() => backdrop?.registerAnchor(cardSlotEl.value));
+onBeforeUnmount(() => backdrop?.registerAnchor(null));
 
-onMounted(() => {
-  if (!cardSlotEl.value) return;
-  orbsResizeObserver = new ResizeObserver((entries) => {
-    const height = entries[0]?.contentRect.height;
-    if (!height) return;
-    orbsFrameHeight.value = `${Math.ceil(height)}px`;
-    orbsResizeObserver?.disconnect();
-    orbsResizeObserver = null;
-  });
-  orbsResizeObserver.observe(cardSlotEl.value);
-});
-
-onBeforeUnmount(() => orbsResizeObserver?.disconnect());
+// Every wait in this view — sign-in, forgot-password, reset-token validation
+// and reset submit — makes the orbs breathe faster until it settles.
+const backdropBusy = computed(
+  () => isLoading.value || (step.value === "reset" && resetFlow.tokenValid.value === null),
+);
+watch(backdropBusy, (busy) => backdrop?.setBusy("auth-view", busy), { immediate: true });
+onBeforeUnmount(() => backdrop?.setBusy("auth-view", false));
 
 // Barely-there — "bardzo malutko" — unlike the logo/badge pair in AuthChrome,
 // which float noticeably more.
 const pwaBadgeEl = ref<HTMLElement | null>(null);
 useMagneticPointer(pwaBadgeEl, { strength: 4, ease: 0.14 });
 
-// Whole-screen entrance/exit choreography: orbs (big → medium → small), then
-// the card, then the logo, then the PWA badge — each one only starts once
-// the previous has visibly settled, rather than everything popping in at
-// once. playExitSequence() runs the same list in reverse (badge → logo →
-// card → orbs) on successful login, plus the shared page background (see
-// authBackgroundExit, injected from PublicLayout) — router.push only fires
-// once the whole thing has faded, see handleSignIn.
-//
-// Each orb's own "life" comes from a scale keyframe rather than a plain fade
-// (see auth-view-orb-pop-in/-out in <style>): grows from 0 past its resting
-// size to a slight overshoot before settling back — pop-out mirrors that,
-// growing a touch bigger before shrinking away to nothing.
-type OrbPhase = "hidden" | "enter" | "exit";
-const bigOrbPhase = ref<OrbPhase>("hidden");
-const mediumOrbPhase = ref<OrbPhase>("hidden");
-const smallOrbPhase = ref<OrbPhase>("hidden");
+// Whole-screen entrance/exit choreography. The layout's intro plays first
+// (orbs pop in on a plain ground, the background spreads out from under them,
+// see AuthBackdrop) — then the card zooms out of the orbs, then the logo, then
+// the PWA badge, each starting once the previous has settled.
+// playExitSequence() on successful login: badge + logo leave, the card melts
+// forward, then the orbs rush toward the user and dissolve together with the
+// background — router.push only fires once all of that has finished, see
+// handleSignIn.
 const badgeVisible = ref(false);
-const authBackgroundExit = inject(AUTH_BACKGROUND_EXIT_KEY, undefined);
+// AuthChrome's dot field and settings chip are part of the "canvas" too —
+// they dissolve together with the layout's background, not before or after it.
+const backdropExiting = ref(false);
 
-function orbAnchorPhaseClass(phase: OrbPhase): Record<string, boolean> {
-  return {
-    "auth-view__orb-anchor--enter": phase === "enter",
-    "auth-view__orb-anchor--exit": phase === "exit",
-  };
-}
-
-// The gaps between each orb starting, and how long each one's own pop
-// animation takes, all come from the Fibonacci sequence (in ms) instead of
-// evenly-spaced numbers — a growing, organic rhythm rather than a metronome.
-const FIB = { orbGap1: 89, orbGap2: 144, popInDuration: 610, popOutDuration: 377 };
+// "Version 1.0.0 (build 12) · DEV" under the badge (see useAppVersionLabel).
+const appVersionLabel = useAppVersionLabel();
 const BADGE_ENTER_DELAY = 150;
 const BADGE_EXIT_DURATION = 250;
 
@@ -463,18 +485,14 @@ function wait(ms: number): Promise<void> {
 
 onMounted(async () => {
   if (prefersReducedMotion) {
-    bigOrbPhase.value = "enter";
-    mediumOrbPhase.value = "enter";
-    smallOrbPhase.value = "enter";
+    // Both resolve instantly under reduced motion — still needed, since
+    // autoPlay=false means nothing else ever makes the card/logo visible.
+    await authCardRef.value?.playEnter();
+    await authChromeRef.value?.playEnter();
     badgeVisible.value = true;
     return;
   }
-  bigOrbPhase.value = "enter";
-  await wait(FIB.orbGap1);
-  mediumOrbPhase.value = "enter";
-  await wait(FIB.orbGap2);
-  smallOrbPhase.value = "enter";
-  await wait(FIB.popInDuration);
+  await backdrop?.whenEntered();
   await authCardRef.value?.playEnter();
   await authChromeRef.value?.playEnter();
   await wait(BADGE_ENTER_DELAY);
@@ -483,20 +501,14 @@ onMounted(async () => {
 
 async function playExitSequence(): Promise<void> {
   if (prefersReducedMotion) {
-    await authBackgroundExit?.();
+    await backdrop?.playExit();
     return;
   }
   badgeVisible.value = false;
-  await wait(BADGE_EXIT_DURATION);
-  await authChromeRef.value?.playExit();
+  await Promise.all([wait(BADGE_EXIT_DURATION), authChromeRef.value?.playExit()]);
   await authCardRef.value?.playExit();
-  smallOrbPhase.value = "exit";
-  await wait(FIB.orbGap2);
-  mediumOrbPhase.value = "exit";
-  await wait(FIB.orbGap1);
-  bigOrbPhase.value = "exit";
-  await wait(FIB.popOutDuration);
-  await authBackgroundExit?.();
+  backdropExiting.value = true;
+  await backdrop?.playExit();
 }
 
 /** Inserts "@" at the caret in an email field — a no-op once one is already present (an email has at most one). */
@@ -514,23 +526,79 @@ function insertAtSign(emailModel: Ref<string>, fieldRef: Ref<{ $el?: HTMLElement
     try {
       inputEl?.setSelectionRange(start + 1, start + 1);
     } catch {
-      // no-op: unsupported input type, focus() above is enough
+      // benign: unsupported input type for setSelectionRange — focus() above is enough.
     }
   });
 }
 
-const ruleEmailRequired = (v: string) =>
+const ruleEmailRequired = (v: string): true | string =>
   !!v.trim() || t("user.login.validation.emailRequired");
-const ruleEmailFormat = (v: string) =>
+const ruleEmailFormat = (v: string): true | string =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()) || t("user.login.validation.emailInvalid");
-const rulePasswordRequired = (v: string) =>
+const rulePasswordRequired = (v: string): true | string =>
   !!v || t("user.login.validation.passwordRequired");
-const ruleResetPasswordRequired = (v: string) =>
+const ruleResetPasswordRequired = (v: string): true | string =>
   !!v || t("user.resetPassword.validation.passwordRequired");
-const ruleResetPasswordLength = (v: string) =>
+const ruleResetPasswordLength = (v: string): true | string =>
   v.length >= 8 || t("user.resetPassword.validation.passwordTooShort");
-const ruleResetPasswordsMatch = (v: string) =>
+const ruleResetPasswordsMatch = (v: string): true | string =>
   v === resetFlow.newPassword.value || t("user.resetPassword.validation.passwordMismatch");
+
+// Errors live in the form (NEO-109, see FormErrorSummary): each form's summary
+// box lists its field errors (after the first submit) and any form-level one.
+const signinSummary = useFormErrorSummary({
+  fields: () => [
+    { key: "email", label: t("user.login.email"), value: loginFlow.email.value, rules: [ruleEmailRequired, ruleEmailFormat] },
+    { key: "password", label: t("user.login.password"), value: loginFlow.password.value, rules: [rulePasswordRequired] },
+  ],
+  formErrorKeys: () => [loginFlow.errorKey.value, googleErrorKey.value],
+  formTitleKey: "user.login.errorSummary.title",
+});
+const forgotSummary = useFormErrorSummary({
+  fields: () => [
+    { key: "email", label: t("user.login.email"), value: forgotFlow.email.value, rules: [ruleEmailRequired, ruleEmailFormat] },
+  ],
+  formErrorKeys: () => [forgotFlow.errorKey.value],
+  formTitleKey: "user.forgotPassword.errorSummary.title",
+});
+const resetSummary = useFormErrorSummary({
+  fields: () => [
+    {
+      key: "new_password",
+      label: t("user.resetPassword.newPassword"),
+      value: resetFlow.newPassword.value,
+      rules: [ruleResetPasswordRequired, ruleResetPasswordLength],
+    },
+    {
+      key: "confirm_password",
+      label: t("user.resetPassword.confirmPassword"),
+      value: resetFlow.confirmPassword.value,
+      rules: [ruleResetPasswordRequired, ruleResetPasswordsMatch],
+    },
+  ],
+  formErrorKeys: () => [resetFlow.errorKey.value],
+  formTitleKey: "user.resetPassword.errorSummary.title",
+});
+
+/** A 400 naming a field marks it; one this form doesn't show falls back to the form's own line. */
+function markFieldErrors(
+  fieldErrors: Ref<FieldErrors | null>,
+  summary: FormErrorSummaryState,
+  errorKey: Ref<string | null>,
+  fallbackKey: string,
+) {
+  watch(fieldErrors, (errors) => {
+    if (errors && !summary.setServerErrors(errors)) errorKey.value = fallbackKey;
+  });
+}
+markFieldErrors(loginFlow.fieldErrors, signinSummary, loginFlow.errorKey, "user.login.error.network");
+markFieldErrors(forgotFlow.fieldErrors, forgotSummary, forgotFlow.errorKey, "user.forgotPassword.error.network");
+markFieldErrors(resetFlow.fieldErrors, resetSummary, resetFlow.errorKey, "user.resetPassword.error.invalidToken");
+
+/** The summary's links: scroll to the field and put the cursor in it. */
+function focusField(key: string) {
+  focusFormField(cardSlotEl.value?.querySelector(`[data-field="${key}"]`));
+}
 
 // Carries whatever's already typed in the sign-in form over to the
 // forgot-password step, so the user isn't asked to retype their email.
@@ -538,13 +606,10 @@ function goToForgot() {
   forgotFlow.email.value = loginFlow.email.value.trim();
 }
 
-function retryForgot() {
-  forgotFlow.errorKey.value = null;
-  step.value = "forgot";
-}
-
 async function handleSignIn() {
   if (!signinForm.value) return;
+  signinSummary.attempted.value = true;
+  googleErrorKey.value = null;
   const { valid } = await signinForm.value.validate();
   if (!valid) return;
   // Retract everything (see playExitSequence) before router.push actually
@@ -557,17 +622,18 @@ async function handleSignIn() {
 
 async function handleForgotSubmit() {
   if (!forgotForm.value) return;
+  forgotSummary.attempted.value = true;
   const { valid } = await forgotForm.value.validate();
   if (!valid) return;
   await forgotFlow.submit();
+  if (!forgotFlow.submitted.value) return;
   step.value = "sent";
-  if (forgotFlow.submitted.value) {
-    window.setTimeout(() => router.push("/login"), 3000);
-  }
+  window.setTimeout(() => router.push("/login"), 3000);
 }
 
 async function handleResetSubmit() {
   if (!resetForm.value) return;
+  resetSummary.attempted.value = true;
   const { valid } = await resetForm.value.validate();
   if (valid) await resetFlow.submit();
 }
@@ -600,236 +666,105 @@ const cardAccentStyle = {
   gap: 16px;
 }
 
-/* Shared positioning box for the card and the decorative orbs behind it
-   (see .auth-view__orbs) — orbs size themselves as a percentage of this, so
-   they scale with the card instead of needing separate fixed px math. */
+/* Same 1.4s / easing as the layout's background dissolve (PublicLayout's
+   .layout-public__bg--dissolving), so the dot field and the settings chip
+   melt away with the rest of the canvas instead of lingering on the bare page. */
+.auth-view--backdrop-exiting :deep(.auth-dot-grid),
+.auth-view--backdrop-exiting :deep(.auth-chrome__topbar) {
+  opacity: 0;
+  transition: opacity 1.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* The card's box — also the anchor the layout's breathing orbs (AuthOrbs)
+   align behind, sized as a percentage of it so they scale with the card. */
 .auth-view__card-slot {
   position: relative;
   width: 100%;
   max-width: 420px;
 }
 
+/* z-index 2, above the logo (AuthChrome) and PWA badge wraps (both 1) —
+   their halos bleed past their own boxes and must never paint over the card. */
 .auth-view__card {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   width: 100%;
   /* No background here — VCard already themes its own surface color (light
      vs dark) via --v-theme-surface; a fixed white would fight that. */
   border: 1px solid color-mix(in srgb, var(--auth-view-card-accent) 28%, transparent);
 }
 
-/* Behind the card (z-index: 0 < the card's 1), overflowing its box on
-   purpose so the three circles peek out around its edges. Height comes from
-   orbsFrameStyle (frozen on first paint, see script), not inset:0 — this box
-   must NOT track .auth-view__card-slot's live height, which animates on
-   every step change. */
-.auth-view__orbs {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  z-index: 0;
-  overflow: visible;
-  pointer-events: none;
-}
-
-/* Static position/size only — the magnetic transform lives on the .auth-view__orb
-   span inside each (see script), never on the same element as this one.
-   Entrance/exit "life" comes from a scale keyframe here too (see
-   auth-view-orb-pop-in/-out below) rather than on the span: the span's own
-   auth-view-orb-pulse animation touches transform every frame too (for the
-   magnetic pointer), which would fight a keyframe placed on that element. */
-.auth-view__orb-anchor {
-  position: absolute;
-  aspect-ratio: 1;
-  transform: scale(0);
-}
-
-.auth-view__orb-anchor--big {
-  width: 150%;
-  top: 56%;
-  left: 70%;
-  transform: translate(-50%, -50%) scale(0);
-}
-
-.auth-view__orb-anchor--medium {
-  width: 78%;
-  bottom: 35%;
-  left: -17%;
-}
-
-.auth-view__orb-anchor--small {
-  width: 102%;
-  top: -11%;
-  left: -48%;
-}
-
-/* Grows past its resting size (105%) before settling back to 100% — a small
-   bounce rather than a flat fade, so the orbs read as more alive while they
-   sit there. --big carries its own centering translate (see above), so it
-   gets its own keyframes that keep that translate at every step instead of
-   one transform declaration clobbering the other. */
-.auth-view__orb-anchor--enter {
-  animation: auth-view-orb-pop-in 610ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-}
-
-.auth-view__orb-anchor--big.auth-view__orb-anchor--enter {
-  animation-name: auth-view-orb-pop-in-centered;
-}
-
-/* Mirrors the entrance the other way — grows to 110% first, then shrinks
-   away to nothing, instead of just fading out. */
-.auth-view__orb-anchor--exit {
-  animation: auth-view-orb-pop-out 377ms cubic-bezier(0.4, 0, 0.7, 0.4) forwards;
-}
-
-.auth-view__orb-anchor--big.auth-view__orb-anchor--exit {
-  animation-name: auth-view-orb-pop-out-centered;
-}
-
-@keyframes auth-view-orb-pop-in {
-  0% {
-    transform: scale(0);
-  }
-  65% {
-    transform: scale(1.05);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
-@keyframes auth-view-orb-pop-in-centered {
-  0% {
-    transform: translate(-50%, -50%) scale(0);
-  }
-  65% {
-    transform: translate(-50%, -50%) scale(1.05);
-  }
-  100% {
-    transform: translate(-50%, -50%) scale(1);
-  }
-}
-
-@keyframes auth-view-orb-pop-out {
-  0% {
-    transform: scale(1);
-  }
-  35% {
-    transform: scale(1.1);
-  }
-  100% {
-    transform: scale(0);
-  }
-}
-
-@keyframes auth-view-orb-pop-out-centered {
-  0% {
-    transform: translate(-50%, -50%) scale(1);
-  }
-  35% {
-    transform: translate(-50%, -50%) scale(1.1);
-  }
-  100% {
-    transform: translate(-50%, -50%) scale(0);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .auth-view__orb-anchor--enter {
-    animation: none;
-    transform: scale(1);
-  }
-
-  .auth-view__orb-anchor--big.auth-view__orb-anchor--enter {
-    transform: translate(-50%, -50%) scale(1);
-  }
-
-  .auth-view__orb-anchor--exit {
-    animation: none;
-    transform: scale(0);
-  }
-
-  .auth-view__orb-anchor--big.auth-view__orb-anchor--exit {
-    transform: translate(-50%, -50%) scale(0);
-  }
-}
-
-.auth-view__orb {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: rgb(var(--v-theme-primary));
-  animation: auth-view-orb-pulse 8s ease-in-out infinite alternate;
-  will-change: transform;
-}
-
-.auth-view__orb--big {
-  opacity: 0.42;
-}
-
-.auth-view__orb--medium {
-  /* Lighter than the other two (which stay plain rgb(var(--v-theme-primary)))
-     so the three don't read as one flat, same-toned shape. */
-  background: color-mix(in srgb, rgb(var(--v-theme-primary)) 55%, white 45%);
-  opacity: 0.5;
-  animation-delay: -1.5s;
-}
-
-.auth-view__orb--small {
-  opacity: 0.55;
-  animation-delay: -3s;
-}
-
-/* Gentle breathing, not synced 1:1 with the page background's own flow
-   animation (they'd fight for attention) — just a similar unhurried pace,
-   staggered per orb (animation-delay above) so the three drift out of phase.
-   Raised from the original 0.22–0.5 range so the orbs cover the photo/gradient
-   underneath more (see PublicLayout.vue) — capped below 0.7 so even at their
-   most opaque point, what's behind still shows through a little. */
-@keyframes auth-view-orb-pulse {
-  0% {
-    opacity: 0.34;
-  }
-  100% {
-    opacity: 0.68;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .auth-view__orb {
-    animation: none;
-  }
-}
-
 /* Below the card now, not next to the logo (see AuthChrome) — logo, card,
-   badge, top to bottom. Magnetic transform target (see useMagneticPointer in
-   <script>) — written to directly every frame, so it stays free of any CSS
-   transition of its own. */
-.auth-view__pwa-badge {
+   badge, app version, top to bottom. Stacked tighter than the page's own
+   16px gap. */
+.auth-view__badge-footer {
   position: relative;
   z-index: 1;
   flex: none;
-  height: 24px;
-  width: auto;
-  object-fit: contain;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.auth-view__pwa-badge-wrap {
+  position: relative;
+  display: flex;
   opacity: 0;
-  will-change: transform;
-  /* opacity only, not transform — transform is written to directly every
-     frame by the magnetic pointer above; transitioning it too would make
-     that continuous per-frame tracking lag/animate instead of following the
-     pointer 1:1. */
   transition: opacity 0.3s ease-out;
 }
 
-.auth-view__pwa-badge--visible {
+.auth-view__pwa-badge-wrap--visible {
   opacity: 1;
 }
 
+/* Same ink as the badge's P/A letters in each theme (white in light,
+   #3d3d3d in dark — see packages/brand/logos/pwa/), same 70% and fade-in. */
+.auth-view__app-version {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  color: #ffffff;
+  opacity: 0;
+  transition: opacity 0.3s ease-out;
+}
+
+.auth-view__app-version--dark {
+  color: #3d3d3d;
+}
+
+.auth-view__app-version--visible {
+  opacity: 0.7;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .auth-view__pwa-badge {
+  .auth-view__pwa-badge-wrap,
+  .auth-view__app-version {
     transition: none;
   }
+}
+
+/* Half of AuthChrome's logo halo bleed (-30px -70px). */
+.auth-view__pwa-badge-halo {
+  position: absolute;
+  inset: -15px -35px;
+  pointer-events: none;
+}
+
+/* Magnetic transform target (see useMagneticPointer in <script>) — written
+   to directly every frame, so it stays free of any CSS transition of its own. */
+.auth-view__pwa-badge {
+  position: relative;
+  height: 20px;
+  width: auto;
+  object-fit: contain;
+  /* 70%, not full — the badge is a quiet footnote under the card (NEO-12).
+     On the img, not the wrap, so the halo behind it keeps its own strength. */
+  opacity: 0.7;
+  will-change: transform;
 }
 
 .auth-view__body {
@@ -867,10 +802,6 @@ const cardAccentStyle = {
 
 .auth-view__subtitle--break {
   white-space: pre-line;
-}
-
-.auth-view__alert {
-  margin-bottom: 20px;
 }
 
 .auth-view__result-alert {
@@ -923,6 +854,25 @@ const cardAccentStyle = {
   transform: none !important;
 }
 
+/* "or" between the password form and the Google button: hairlines in the
+   same muted on-surface ink the subtitles use, so it reads in both themes. */
+.auth-view__divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+  font-size: 0.8125rem;
+  color: rgba(var(--v-theme-on-surface), 0.6);
+}
+
+.auth-view__divider::before,
+.auth-view__divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(var(--v-theme-on-surface), 0.16);
+}
+
 .auth-view__footer {
   display: flex;
   justify-content: center;
@@ -932,16 +882,13 @@ const cardAccentStyle = {
 /* Flat text buttons (not the block submit) — same reasoning: the app-wide
    hover/active scale reads as a stray zoom on a small flat button, so these
    stay plain and just take the standard text-button hover tint instead. */
-.auth-view__forgot,
-.auth-view__retry {
+.auth-view__forgot {
   text-transform: none;
   letter-spacing: normal;
 }
 
 .auth-view__forgot:hover,
-.auth-view__forgot:active,
-.auth-view__retry:hover,
-.auth-view__retry:active {
+.auth-view__forgot:active {
   transform: none !important;
 }
 

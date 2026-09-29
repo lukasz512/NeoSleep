@@ -1,7 +1,10 @@
 import type { FormFieldDef } from "../../types/formField";
 import { useAuthStore } from "../../stores/auth";
 import { identityFields } from "./identityFields";
+import { licenseNumberFields } from "./licenseNumberFields";
+import { inSection } from "./sections";
 import { i18n } from "../../plugins/i18n";
+import { LEAD_SOURCES } from "../../utils/leadSource";
 
 /**
  * Lead entity config for the generic FormRenderer. A Lead is deliberately
@@ -37,6 +40,7 @@ export const leadFormFields: FormFieldDef[] = [
   ...identity,
   {
     key: "institution",
+    section: "profile",
     type: "text",
     labelKey: "user.leads.form.institution",
     icon: "nav-hco",
@@ -45,8 +49,12 @@ export const leadFormFields: FormFieldDef[] = [
     nestUnder: "metadata",
     cols: 12,
   },
+  // Optional on a lead; carried over to practitioner.national_ids when the
+  // lead becomes an HCP (moveToDoctorsInitialData / InvitePractitionerCommand).
+  ...inSection("profile", ...licenseNumberFields({ nestUnder: "metadata", hiddenWhen: (form) => !isDoctorType(form) })),
   {
     key: "diagnosis",
+    section: "clinical",
     type: "text",
     labelKey: "user.leads.form.diagnosis",
     icon: "nav-patients",
@@ -57,6 +65,7 @@ export const leadFormFields: FormFieldDef[] = [
   },
   {
     key: "type",
+    section: "status",
     type: "select",
     labelKey: "user.leads.filters.type",
     options: [
@@ -73,8 +82,20 @@ export const leadFormFields: FormFieldDef[] = [
     default: "doctor",
     cols: 12,
   },
+  // NEO-155: every lead names the channel it came in through — its icon is
+  // the badge on the lead's avatar. Values = LEAD_SOURCES (utils/leadSource.ts).
+  {
+    key: "source",
+    section: "status",
+    type: "select",
+    labelKey: "user.leads.form.source",
+    options: LEAD_SOURCES.map((value) => ({ title: `user.leads.source.${value}`, value })),
+    required: true,
+    cols: 12,
+  },
   {
     key: "status",
+    section: "status",
     type: "select",
     labelKey: "user.leads.form.status",
     options: [
@@ -89,6 +110,7 @@ export const leadFormFields: FormFieldDef[] = [
   },
   {
     key: "region",
+    section: "territory",
     type: "text",
     labelKey: "user.leads.form.region",
     default: () => useAuthStore().user?.region ?? "",
@@ -98,6 +120,7 @@ export const leadFormFields: FormFieldDef[] = [
   // `region` above (see migration 013's comment), same hidden-default pattern.
   {
     key: "country_code",
+    section: "territory",
     type: "text",
     labelKey: "user.leads.form.countryCode",
     default: () => useAuthStore().user?.country_code ?? "",

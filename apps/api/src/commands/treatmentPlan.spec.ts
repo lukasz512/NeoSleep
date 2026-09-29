@@ -30,7 +30,7 @@ async function buildTestContext(client: Parameters<typeof CreatePatientCommand>[
 }
 
 async function createTestPatient(ctx: TenantContext) {
-  return CreatePatientCommand(ctx, { first_name: "Test", last_name: `Patient-${uniqueSuffix()}`, email: `qa-patient-${uniqueSuffix()}@example.com`, phone: "600100200" });
+  return CreatePatientCommand(ctx, { gender: "female", date_of_birth: "1980-01-01", first_name: "Test", last_name: `Patient-${uniqueSuffix()}`, email: `qa-patient-${uniqueSuffix()}@example.com`, phone: "600100200" });
 }
 
 describe("CreateTreatmentPlanCommand", () => {
@@ -56,6 +56,29 @@ describe("CreateTreatmentPlanCommand", () => {
       await expect(
         CreateTreatmentPlanCommand(ctx, { patient_id: patientA.id, sleep_study_id: studyForB.id, type: "dental_appliance" })
       ).rejects.toThrow(ValidationError);
+    });
+  });
+
+  // NEO-109: the order wizard marks its Doctor field from `field`, so the
+  // error has to name dentist_id, not surface as an opaque database error.
+  it.each([
+    ["an unknown practitioner", "00000000-0000-0000-0000-000000000000"],
+    ["a malformed id", "not-a-uuid"],
+  ])("rejects a dentist_id of %s, naming the field", async (_label, dentistId) => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const patient = await createTestPatient(ctx);
+      const study = await CreateSleepStudyCommand(ctx, { patient_id: patient.id });
+
+      const error = await CreateTreatmentPlanCommand(ctx, {
+        patient_id: patient.id,
+        sleep_study_id: study.id,
+        type: "dental_appliance",
+        dentist_id: dentistId,
+      }).catch((err: unknown) => err);
+
+      expect(error).toBeInstanceOf(ValidationError);
+      expect((error as ValidationError).field).toBe("dentist_id");
     });
   });
 

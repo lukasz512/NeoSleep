@@ -1,0 +1,193 @@
+/*
+ * Page-change motion (NEO-85, reworked NEO-97 and NEO-152) — keyframes for
+ * router/pageTransitions.ts. The content sheet (`view-transition-name:
+ * pwa-page`, AppLayout) stays still; its content changes inside it. The app
+ * bar and side menu stay put (the root group crossfades nothing, they are
+ * identical before and after).
+ *
+ * NEO-152: the new page starts to appear 40–60 ms in, while the old one is
+ * still fading, so the sheet is never blank between the two (before, the old
+ * page was gone at 120 ms and the new one only began at 100–140 ms, both on
+ * accelerating curves — a visible blink of empty paper).
+ *
+ * <html data-page-transition=…>:
+ *   open   — list → record: the tapped row's avatar travels into the record
+ *            header as a drop (520 ms, "the drop", Łukasz 2026-09-27 from the
+ *            liquid prototype): it stretches along its path, lands squashed
+ *            and wobbles once into a circle. Its initials go out to 0 first
+ *            and come back at 100 % once it lands; the record's name fades in
+ *            at its full size (no longer grown out of the row's name). The
+ *            list is gone in 150 ms, the record fades in from 60 ms.
+ *   back   — record → list: the avatar travels back into its row the same
+ *            way; the record is gone in 120 ms, the list fades in from 40 ms.
+ *   module — menu / bottom nav: a crossfade, the new page settling from 98 %.
+ *
+ * The avatar (pwa-hero-*) is tagged by router/pageTransitionHero.ts only when
+ * both ends are on screen; without it open/back are the same fades minus the
+ * flight. Movement and opacity are separate animations on each snapshot, so
+ * each keeps its own clock and easing.
+ */
+
+/* The group itself doesn't morph between the two pages' sizes — only the
+   snapshots change — so a long list and a short record don't stretch. It
+   paints the paper itself (sheet colour, radius, shadow) and clips to it, so
+   the sheet stays still: no desk showing through mid-fade, nothing drawn
+   over the side menu. */
+::view-transition-group(pwa-page) {
+  animation-duration: 0s;
+  overflow: clip;
+  background: var(--pwa-sheet);
+  border-radius: var(--pwa-sheet-radius);
+  box-shadow: var(--pwa-sheet-shadow);
+}
+/* Snapshots keep their own size, pinned to the sheet's top. */
+::view-transition-old(pwa-page),
+::view-transition-new(pwa-page) {
+  height: auto;
+  mix-blend-mode: normal;
+}
+
+/* ── open / back: the avatar as a drop ─────────────────────────── */
+::view-transition-group(pwa-hero-avatar),
+::view-transition-group(pwa-hero-initials) {
+  animation-duration: 520ms;
+  animation-timing-function: var(--pwa-hero-ease);
+}
+/* Squash and stretch along the flight (its angle set by pageTransitionHero.ts):
+   long and thin while moving, short and wide on landing, one small wobble. */
+::view-transition-image-pair(pwa-hero-avatar) {
+  animation: pwa-hero-drop 520ms var(--pwa-hero-ease) both;
+}
+::view-transition-old(pwa-hero-avatar) {
+  animation: pwa-page-fade-out 260ms linear both;
+}
+::view-transition-new(pwa-hero-avatar) {
+  animation: pwa-page-fade-in 200ms linear both;
+}
+/* The letters: out to nothing at once, back in only once the drop has landed. */
+::view-transition-old(pwa-hero-initials) {
+  animation: pwa-page-fade-out 100ms linear both;
+}
+::view-transition-new(pwa-hero-initials) {
+  animation: pwa-page-fade-in 180ms linear 400ms both;
+}
+
+html[data-page-transition="open"]::view-transition-old(pwa-page) {
+  animation: pwa-page-fade-out 150ms var(--pwa-page-ease-out) both;
+}
+html[data-page-transition="open"]::view-transition-new(pwa-page) {
+  animation:
+    pwa-page-fade-in 220ms var(--pwa-page-ease-in) 60ms both,
+    pwa-page-rise 300ms var(--pwa-page-ease) 60ms both;
+}
+/* The record's name and identity line: opacity only, after the drop lands. */
+html[data-page-transition="open"]::view-transition-new(pwa-hero-title) {
+  animation: pwa-page-fade-in 220ms linear 320ms both;
+}
+html[data-page-transition="open"]::view-transition-new(pwa-hero-details) {
+  animation: pwa-page-fade-in 220ms linear 360ms both;
+}
+
+html[data-page-transition="back"]::view-transition-old(pwa-page) {
+  animation: pwa-page-fade-out 120ms var(--pwa-page-ease-out) both;
+}
+html[data-page-transition="back"]::view-transition-old(pwa-hero-title),
+html[data-page-transition="back"]::view-transition-old(pwa-hero-details) {
+  animation: pwa-page-fade-out 100ms linear both;
+}
+html[data-page-transition="back"]::view-transition-new(pwa-page) {
+  animation: pwa-page-fade-in 220ms var(--pwa-page-ease-in) 40ms both;
+}
+
+/* ── module: crossfade ─────────────────────────────────────────── */
+html[data-page-transition="module"]::view-transition-old(pwa-page) {
+  animation: pwa-page-fade-out 150ms var(--pwa-page-ease-out) both;
+}
+html[data-page-transition="module"]::view-transition-new(pwa-page) {
+  animation:
+    pwa-page-settle 260ms var(--pwa-page-ease) 40ms both,
+    pwa-page-fade-in 220ms var(--pwa-page-ease-in) 40ms both;
+}
+
+/* M3 standard easing — gentle start, long soft landing — plus the quick
+   accelerate/decelerate pair used for things leaving/arriving, and the drop's
+   own curve (a firm start, a long settle for the wobble to read). */
+:root {
+  --pwa-page-ease: cubic-bezier(0.2, 0, 0, 1);
+  --pwa-page-ease-out: cubic-bezier(0.4, 0, 1, 1);
+  --pwa-page-ease-in: cubic-bezier(0, 0, 0.2, 1);
+  --pwa-hero-ease: cubic-bezier(0.3, 0, 0.2, 1);
+}
+
+@keyframes pwa-page-rise {
+  from { transform: translateY(6px); }
+}
+@keyframes pwa-page-settle {
+  from { transform: scale(0.98); }
+}
+@keyframes pwa-page-fade-out {
+  to { opacity: 0; }
+}
+@keyframes pwa-page-fade-in {
+  from { opacity: 0; }
+}
+/* Stretch along the flight's angle: rotate into it, scale, rotate back. */
+@keyframes pwa-hero-drop {
+  0% { transform: none; }
+  18% { transform: rotate(var(--pwa-hero-angle, 0deg)) scale(1.22, 0.84) rotate(calc(-1 * var(--pwa-hero-angle, 0deg))); }
+  55% { transform: rotate(var(--pwa-hero-angle, 0deg)) scale(1.16, 0.88) rotate(calc(-1 * var(--pwa-hero-angle, 0deg))); }
+  80% { transform: rotate(var(--pwa-hero-angle, 0deg)) scale(0.9, 1.1) rotate(calc(-1 * var(--pwa-hero-angle, 0deg))); }
+  92% { transform: rotate(var(--pwa-hero-angle, 0deg)) scale(1.04, 0.97) rotate(calc(-1 * var(--pwa-hero-angle, 0deg))); }
+  100% { transform: none; }
+}
+
+/* Reduce motion: a short crossfade, nothing moves, stretches or flies. */
+@media (prefers-reduced-motion: reduce) {
+  html[data-page-transition]::view-transition-group(*) {
+    animation-duration: 0s;
+  }
+  html[data-page-transition]::view-transition-image-pair(*) {
+    animation: none;
+  }
+  html[data-page-transition]::view-transition-old(*) {
+    animation: pwa-page-fade-out 120ms linear both;
+  }
+  html[data-page-transition]::view-transition-new(*) {
+    animation: pwa-page-fade-in 160ms linear both;
+  }
+}
+
+/* ── chrome stays on top (NEO-161) ─────────────────────────────────
+   The page sheet has its own view-transition-name, so during a page change
+   it is drawn in the ::view-transition overlay — above the whole document,
+   z-index 9998 of the bottom nav included. That is why the card used to
+   slide over the menu. The app bar and the bottom pill get their own names
+   too, and their groups are stacked above the page and never animate: they
+   stay exactly where they are while the page changes underneath. */
+.app-shell__bar {
+  view-transition-name: pwa-top-bar;
+}
+.app-shell__bottom-nav {
+  view-transition-name: pwa-bottom-nav;
+}
+/* Listed with the html[data-page-transition] prefix too, so the reduce-motion
+   crossfade above (which targets every snapshot) never fades them. */
+::view-transition-group(pwa-top-bar),
+::view-transition-group(pwa-bottom-nav),
+html[data-page-transition]::view-transition-group(pwa-top-bar),
+html[data-page-transition]::view-transition-group(pwa-bottom-nav) {
+  z-index: 10;
+  animation: none;
+}
+::view-transition-old(pwa-top-bar),
+::view-transition-old(pwa-bottom-nav),
+html[data-page-transition]::view-transition-old(pwa-top-bar),
+html[data-page-transition]::view-transition-old(pwa-bottom-nav) {
+  display: none;
+}
+::view-transition-new(pwa-top-bar),
+::view-transition-new(pwa-bottom-nav),
+html[data-page-transition]::view-transition-new(pwa-top-bar),
+html[data-page-transition]::view-transition-new(pwa-bottom-nav) {
+  animation: none;
+}

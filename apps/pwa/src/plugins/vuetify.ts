@@ -1,5 +1,5 @@
 /**
- * Vuetify 3 plugin for the app.
+ * Vuetify 4 plugin for the app.
  * Theme names and brand colors are passed to the shared factory.
  */
 import { createNeoVuetify } from "@vuetify";

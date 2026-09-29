@@ -3,12 +3,13 @@
   "private": true,
   "packageManager": "pnpm@9.15.0",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.12.0"
   },
   "workspaces": [
     "apps/*",
     "apps/api/client",
-    "packages/*"
+    "packages/*",
+    "clients/*/*"
   ],
   "scripts": {
     "format": "prettier --write .",
@@ -16,6 +17,7 @@
     "typecheck": "tsc -b",
     "i18n:extract": "node infrastructure/scripts/i18n/extract.mjs",
     "i18n:unused": "node infrastructure/scripts/i18n/unused.mjs",
+    "i18n:parity": "node infrastructure/scripts/i18n/parity.mjs",
     "i18n:prune": "node infrastructure/scripts/i18n/prune.mjs",
     "build:web": "pnpm --filter @neo/web build",
     "build:pwa": "pnpm --filter @neo/pwa build",
@@ -29,21 +31,25 @@
     "prepare": "husky || true",
     "start": "./infrastructure/scripts/start.sh",
     "worker:test": "./infrastructure/scripts/worker-test.sh",
+    "worktree:clean": "./infrastructure/scripts/worktree-clean.sh",
+    "worktree:clean:test": "./infrastructure/scripts/worktree-clean.test.sh",
+    "tooling:test": "node --test .claude/skills/ship-artifact/ticket.test.mjs && bash .claude/hooks/pre-tool-linear-ticket-format.test.sh && ./infrastructure/scripts/worktree-clean.test.sh",
     "dev": "pnpm exec concurrently --names api,pwa,web -c blue,green,magenta \"pnpm --filter @neo/api dev\" \"pnpm --filter @neo/pwa dev\" \"pnpm --filter @neo/web dev\"",
     "db:seed": "pnpm --filter @neo/api seed:demo"
   },
   "devDependencies": {
-    "@typescript-eslint/eslint-plugin": "^8.70.0",
-    "@typescript-eslint/parser": "^8.70.0",
+    "@typescript-eslint/eslint-plugin": "^8.70.1",
+    "@typescript-eslint/parser": "^8.70.1",
     "@vitejs/plugin-basic-ssl": "^2.3.0",
-    "concurrently": "^9.1.0",
-    "dependency-cruiser": "^18.3.1",
-    "eslint": "^9.0.0",
-    "eslint-config-prettier": "^9.0.0",
-    "eslint-plugin-vue": "^9.0.0",
+    "concurrently": "^10.0.5",
+    "dependency-cruiser": "^18.4.0",
+    "eslint": "catalog:",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-vue": "catalog:",
     "husky": "^9.1.7",
-    "prettier": "^3.9.6",
-    "typescript": "^5.6.0",
-    "vite": "catalog:"
+    "prettier": "^3.9.9",
+    "typescript": "^5.9.3",
+    "vite": "catalog:",
+    "vue-eslint-parser": "^10.4.1"
   }
 }

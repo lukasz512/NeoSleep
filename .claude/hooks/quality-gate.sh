@@ -17,6 +17,16 @@
 # a marker file was written recording that an artifact was published and attached. See the
 # ARTIFACT MARKER block for what Claude is expected to do when this fires.
 #
+# 2026-09-20 (same day, NEO-9): the marker's presence didn't guarantee the artifact actually
+# showed the change — NEO-9's first artifact had three text sections but no before/after
+# visual, which is exactly the "AI slop" the check above was meant to stop. Two fixes: (1)
+# VISUAL_SHAPE below widens the trigger beyond FEATURE_SHAPE's views/routes/migrations-only
+# regex — a layout/component-only Vue diff (no new view or route) previously skipped the
+# artifact gate entirely, which is how NEO-9 (a layouts/ + packages/ui/ change) slipped
+# through the first time; (2) the marker now also requires a non-empty `visualComparison`
+# field whenever Vue/style files changed, so "I wrote three sections" no longer satisfies
+# the gate without an actual before/after shown somewhere.
+#
 # Caveat: this checks the CURRENT WORKING TREE STATE (git status), not strictly "what this
 # one turn changed" — if the tree already had unrelated uncommitted changes before this
 # session started, they're included in what gets checked. Known limitation, not a bug.
@@ -24,6 +34,9 @@ set -uo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
 cd "$REPO_ROOT" || exit 0
+# ticket_of <branch> → NEO-n / CORE-n / … (team keys in .claude/ticket-teams, CORE-23)
+# shellcheck source=lib/ticket.sh
+source "$REPO_ROOT/.claude/hooks/lib/ticket.sh"
 
 # --- Manual human-only override -------------------------------------------------------
 # Claude cannot create or edit this file (it must ask the user to run this outside the
@@ -37,14 +50,215 @@ if [ -f "$OVERRIDE_FILE" ]; then
   fi
 fi
 
-CHANGED="$(git status --porcelain -- apps packages docs 2>/dev/null | awk '{ $1=""; print substr($0,2) }')"
-SRC_CHANGED="$(printf '%s\n' "$CHANGED" | grep -E '^(apps|packages)/[^/]+/src/' || true)"
+CHANGED="$(git status --porcelain -- apps packages clients docs 2>/dev/null | awk '{ $1=""; print substr($0,2) }')"
+SRC_CHANGED="$(printf '%s\n' "$CHANGED" | grep -E '^((apps|packages)/[^/]+|clients/[^/]+/[^/]+)/src/' || true)"
 
-if [ -z "$SRC_CHANGED" ]; then
-  exit 0
+# --- Branch-level view ------------------------------------------------------------------
+# 2026-09-24: "every change ships with an Artifact, always" (Łukasz). The checks below this
+# block only ever looked at UNCOMMITTED changes, so committing before the turn ended skipped
+# the artifact requirement entirely (it happened on the app-shell inset-card change that
+# prompted this). BRANCH_CHANGED is everything this branch changed vs. its fork point from
+# origin/dev, committed or not — the artifact check runs on that, not just on git status.
+# lint/typecheck/test stay scoped to uncommitted src changes (pre-commit/pre-push cover the
+# committed part, and re-running the suite on every Stop would be too slow).
+BASE="$(git merge-base HEAD origin/dev 2>/dev/null || true)"
+BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo detached)"
+BRANCH_CHANGED=""
+if [ -n "$BASE" ]; then
+  BRANCH_CHANGED="$( { git diff --name-only "$BASE" HEAD 2>/dev/null; git status --porcelain 2>/dev/null | awk '{ $1=""; print substr($0,2) }'; } | grep -v '^$' | sort -u || true)"
 fi
 
 FAILS=()
+WARNS=()
+
+# Every branch with any change needs a published Artifact recorded in a marker — ticket or
+# no ticket. A ticket-named branch (worktree-neo-123-…, worker/neo-123-…) is satisfied by
+# that ticket's own marker (full schema, checked further down when src changed); any other
+# branch needs .claude/local/artifacts/branch-<branch>.json with at least:
+#   { "url": "<artifact url>", "sections": ["summary","run-locally","qa-checklist"],
+#     "visualComparison": "<required when any .vue/.css changed: real before/after
+#       screenshots, or a labeled mockup when no live render was possible>" }
+# The artifact must also be shown to Łukasz in the reply (link), not just recorded.
+branch_artifact_check() {
+  [ -z "$BRANCH_CHANGED" ] && return 0
+  local ticket marker visual
+  ticket="$(ticket_of "$BRANCH" || true)"
+  # 2026-09-26 (Łukasz, NEO-84): every change has a NEO ticket — trivial ones too. The
+  # ticket ID in the branch name is what links branch, PR, Artifact and ticket.
+  if [ -z "$ticket" ]; then
+    FAILS+=("Branch '${BRANCH}' has changes but no ticket ID (<key>-<n>, keys in .claude/ticket-teams) in its name. Every change needs a ticket (NEO-84): create one in Linear (template: ## Problem / ## Change / ## Done when, short and only about this change), then move the work to a branch named after it (EnterWorktree name '<key>-<n>-<slug>', e.g. core-23-team-split, or git branch -m worktree-<key>-<n>-<slug>).")
+    return 0
+  fi
+  if [ -f ".claude/local/artifacts/${ticket}.json" ]; then
+    marker=".claude/local/artifacts/${ticket}.json"
+  else
+    marker=".claude/local/artifacts/branch-$(printf '%s' "$BRANCH" | tr '/' '-').json"
+  fi
+  if [ ! -f "$marker" ]; then
+    FAILS+=("Branch '${BRANCH}' has changes ($(printf '%s' "$BRANCH_CHANGED" | wc -l | tr -d ' ') file(s) vs origin/dev) but no Artifact marker ($marker). Standing rule: every change ships with a published Artifact — build it (What changed / Run it locally / Verify it, plus a real before/after for UI changes), publish it, give Łukasz the link, then write the marker.")
+    return 0
+  fi
+  jq -e '.url != null and .url != ""' "$marker" >/dev/null 2>&1 \
+    || FAILS+=("$marker has no non-empty 'url' — record the published Artifact's link.")
+  jq -e '(.sections // []) | index("summary") != null and index("run-locally") != null and index("qa-checklist") != null' "$marker" >/dev/null 2>&1 \
+    || FAILS+=("$marker 'sections' must cover summary, run-locally and qa-checklist.")
+  # Once the branch is pushed, the Artifact must carry a "Create PR" button at the top
+  # (Łukasz, 2026-09-24: "niech pr przycisk będzie na górze artefaktu") — the pre-filled
+  # compare URL from CLAUDE.md's Linear traceability section. He still clicks Create himself.
+  # Once he has opened the PR, ship-artifact's build.mjs links the button to it instead
+  # (…/pull/<n>) — accept that too, or every refresh after the PR exists would be blocked.
+  if git rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1; then
+    jq -e '(.prUrl // "") | test("^https://github.com/.+/(compare/|pull/[0-9]+$)")' "$marker" >/dev/null 2>&1 \
+      || FAILS+=("$marker has no 'prUrl' but '${BRANCH}' is pushed — put a 'Create PR' button (pre-filled https://github.com/<org>/<repo>/compare/dev...<branch>?quick_pull=1&title=…&body=… URL) at the TOP of the Artifact, republish, and record it as 'prUrl'.")
+  fi
+  visual="$(printf '%s\n' "$BRANCH_CHANGED" | grep -E '\.(vue|css|scss)$' || true)"
+  if [ -n "$visual" ]; then
+    jq -e '.visualComparison != null and .visualComparison != ""' "$marker" >/dev/null 2>&1 \
+      || FAILS+=("$marker has no 'visualComparison' but this branch changes UI files ($(printf '%s' "$visual" | tr '\n' ' ')) — the Artifact must show a real before/after.")
+  fi
+  # 2026-09-25 (Łukasz, NEO-47/48): the Artifact is the one deliverable, and it has to be
+  # ON the ticket, not only in chat — "zawsze ma byc po sesji w tasku albo tutaj". A ticket
+  # branch needs it attached (save_issue links) and commented (save_comment). The
+  # ship-artifact skill does both and records them via `build.mjs finalize`.
+  if [ -n "$ticket" ] && [ "$marker" = ".claude/local/artifacts/${ticket}.json" ]; then
+    jq -e '.linearAttached == true and .linearCommented == true' "$marker" >/dev/null 2>&1 \
+      || FAILS+=("$marker: the Artifact isn't attached to and commented on ${ticket} yet. Attach it (save_issue links), post the summary comment (save_comment), then record both — see .claude/skills/ship-artifact/SKILL.md Steps 4-5.")
+    # NEO-84: the 3 fixed links (Artifact, Linear, VS Code session) on the Artifact and the
+    # ticket, and the change listed in the shared artifact index.
+    jq -e '(.url // "") != "" and (.linearUrl // "") != "" and ((.vscodeUrl // "") | startswith("vscode://"))' "$marker" >/dev/null 2>&1 \
+      || FAILS+=("$marker is missing one of the 3 links (url = Artifact, linearUrl, vscodeUrl). Re-run .claude/skills/ship-artifact/build.mjs render + finalize from this Claude session.")
+    jq -e '.indexed == true' "$marker" >/dev/null 2>&1 \
+      || FAILS+=("${ticket} isn't in the artifact index yet: node .claude/skills/ship-artifact/build.mjs index, publish the page (url from its output), then build.mjs index --published <url> — ship-artifact Step 5.")
+  fi
+  dev_mergeable_check
+  ci_green_check "$marker"
+}
+
+# 2026-09-28 (Łukasz, NEO-182): a pushed branch isn't done until GitHub's CI is green on
+# its HEAD — NEO-132 went out with green local tests and red e2e on GitHub, and nobody
+# was told. Rules (attempt limit, allowed fix scope) live in .claude/ci-autofix.json and
+# are shared with the GitHub handoff and the nightly linear-worker; the verdict comes from
+# infrastructure/scripts/ci-status.mjs. Pending blocks (wait — the PR link is handed over
+# only once green); red blocks with the failing tests (fix + push, max maxFixAttempts);
+# red after the limit blocks until the escalation to Łukasz is recorded as
+# "ciEscalated": {"sha": "<HEAD>"} in the marker.
+ci_green_check() {
+  local marker="$1" head upstream_sha status state
+  git rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1 || return 0
+  head="$(git rev-parse HEAD 2>/dev/null)" || return 0
+  # Already merged: dev_deploy_check takes over.
+  git merge-base --is-ancestor "$head" origin/dev 2>/dev/null && return 0
+  upstream_sha="$(git rev-parse '@{upstream}' 2>/dev/null || true)"
+  if [ "$head" != "$upstream_sha" ]; then
+    WARNS+=("'${BRANCH}' has commits that aren't pushed — after pushing, wait for CI (the next turn end checks it).")
+    return 0
+  fi
+  local on_ci=0 pattern
+  # read, not a for-loop: the patterns contain '*' and must not glob against the tree.
+  while IFS= read -r pattern; do
+    # shellcheck disable=SC2254
+    [ -n "$pattern" ] && case "$BRANCH" in $pattern) on_ci=1 ;; esac
+  done < <(jq -r '.ciBranchPatterns[]' .claude/ci-autofix.json 2>/dev/null)
+  if ! command -v gh >/dev/null 2>&1 || ! status="$(node infrastructure/scripts/ci-status.mjs --branch "$BRANCH" --sha "$head" 2>/dev/null)"; then
+    WARNS+=("Couldn't read GitHub CI for '${BRANCH}' (gh missing or offline) — check CI is green before handing over the PR link.")
+    return 0
+  fi
+  state="$(printf '%s' "$status" | jq -r '.state')"
+  case "$state" in
+    success) return 0 ;;
+    none)
+      if [ "$on_ci" -eq 1 ]; then
+        FAILS+=("CI hasn't started for '${BRANCH}' @ ${head:0:7} yet (it runs on every push to this branch). Wait a minute, then check: node infrastructure/scripts/ci-status.mjs. Don't hand over the PR link before CI is green.")
+      else
+        WARNS+=("'${BRANCH}' doesn't match .claude/ci-autofix.json ciBranchPatterns, so CI only runs once a PR exists — check it then.")
+      fi ;;
+    pending)
+      FAILS+=("CI is running for '${BRANCH}' @ ${head:0:7}: $(printf '%s' "$status" | jq -r '.runUrl'). Wait for it (run in the background: gh run watch $(printf '%s' "$status" | jq -r '.runId') --exit-status) — the PR link goes to Łukasz only once CI is green (.claude/ci-autofix.json waitForGreenBeforePrLink).") ;;
+    failure)
+      local failures attempt max
+      failures="$(printf '%s' "$status" | jq -r '(if (.failures | length) > 0 then .failures else .failedSteps end) | .[:15] | map("    · " + .) | join("\n")')"
+      max="$(printf '%s' "$status" | jq -r '.maxFixAttempts')"
+      attempt="$(printf '%s' "$status" | jq -r '.failedRuns')"
+      if [ "$(printf '%s' "$status" | jq -r '.exhausted')" = "true" ]; then
+        jq -e --arg sha "$head" '.ciEscalated.sha == $sha' "$marker" >/dev/null 2>&1 \
+          || FAILS+=("CI is still red on '${BRANCH}' after ${max} fix attempts — stop fixing. Tell Łukasz which tests fail and why you're stuck (reply + ticket comment), then record \"ciEscalated\": {\"sha\": \"${head}\", \"at\": \"<ISO time>\"} in $marker. Failing:
+${failures}")
+      else
+        FAILS+=("CI failed on '${BRANCH}' @ ${head:0:7} ($(printf '%s' "$status" | jq -r '.runUrl')) — fix attempt ${attempt} of ${max}. Failing:
+${failures}
+Scope ($(jq -r '.allowedFixScope' .claude/ci-autofix.json)). Reproduce locally (gh run view $(printf '%s' "$status" | jq -r '.runId') --log-failed), fix, push, then wait for CI again.")
+      fi ;;
+  esac
+}
+
+# 2026-09-25 (Łukasz, NEO-57): a "Create PR" link is only useful if GitHub can actually
+# merge it — he hit a PR that couldn't merge into dev because dev had moved on (NEO-56 /
+# NEO-61 landed underneath). Once the branch is pushed, fetch the latest dev and do a
+# trial merge IN MEMORY (git merge-tree --write-tree: no checkout, no index, no files
+# touched). Conflicts block the turn, so the Artifact link is never handed over for a
+# branch that can't merge. Needs git >= 2.38; an unreachable remote only warns, never
+# blocks (offline shouldn't strand the turn).
+dev_mergeable_check() {
+  git rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1 || return 0
+  # macOS has no `timeout`; bound the fetch via ssh's own connect timeout instead.
+  if ! GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh} -o ConnectTimeout=10 -o BatchMode=yes" git fetch --quiet origin dev 2>/dev/null; then
+    WARNS+=("Couldn't fetch origin/dev to check that '${BRANCH}' still merges cleanly — check before handing over the PR link.")
+    return 0
+  fi
+  local out conflicts
+  if ! out="$(git merge-tree --write-tree --name-only origin/dev HEAD 2>/dev/null)"; then
+    # First line is the tree id; the conflicted paths follow until the first blank line.
+    conflicts="$(printf '%s\n' "$out" | sed -n '2,/^$/p' | grep -v '^$' | sort -u | tr '\n' ' ')"
+    FAILS+=("Branch '${BRANCH}' does NOT merge cleanly into origin/dev — the PR link would be unmergeable. Conflicts in: ${conflicts:-(see git merge-tree)}. Merge origin/dev into the branch, resolve, re-run tests, push, refresh the Artifact, and only then give Łukasz the link.")
+  fi
+}
+
+# 2026-09-25 (Łukasz, NEO-57): "after merge, test it on pwa-dev too". Once everything this
+# branch shipped is in origin/dev (the PR was merged), the turn can't end until the deployed
+# pwa-dev has been checked and the result recorded in the branch's Artifact marker as
+#   "devVerified": { "sha": "<HEAD sha>", "ok": true, "at": "<ISO time>", "summary": "..." }
+# Checking means: the "Deploy NeoSleepCare App" run on dev for a commit containing HEAD
+# finished green (gh run list --workflow deploy-pwa.yml --branch dev), then
+# infrastructure/scripts/smoke-dev-bundle.mjs finds the change's markers in the deployed
+# bundle (marker file "smokeMarkers": [{label,text}]), plus a logged-in click-through when a
+# QA account is configured. Runs outside branch_artifact_check on purpose: after a merge the
+# branch has no diff vs origin/dev, so that check exits early.
+dev_deploy_check() {
+  local ticket marker head
+  ticket="$(printf '%s' "$BRANCH" | grep -oiE '[a-z]{2,10}-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]' || true)"
+  if [ -n "$ticket" ] && [ -f ".claude/local/artifacts/${ticket}.json" ]; then
+    marker=".claude/local/artifacts/${ticket}.json"
+  else
+    marker=".claude/local/artifacts/branch-$(printf '%s' "$BRANCH" | tr '/' '-').json"
+  fi
+  # Only for work that was actually shipped: a marker with a PR link.
+  [ -f "$marker" ] || return 0
+  jq -e '(.prUrl // "") != ""' "$marker" >/dev/null 2>&1 || return 0
+  GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh} -o ConnectTimeout=10 -o BatchMode=yes" git fetch --quiet origin dev 2>/dev/null || return 0
+  head="$(git rev-parse HEAD 2>/dev/null)" || return 0
+  git merge-base --is-ancestor "$head" origin/dev 2>/dev/null || return 0
+  if ! jq -e --arg sha "$head" '.devVerified.sha == $sha and .devVerified.ok == true' "$marker" >/dev/null 2>&1; then
+    FAILS+=("'${BRANCH}' is merged into dev (HEAD ${head:0:7} is in origin/dev) but not verified on pwa-dev yet. Wait for the dev 'Deploy NeoSleepCare App' run containing it to finish green (gh run list --workflow deploy-pwa.yml --branch dev), run node infrastructure/scripts/smoke-dev-bundle.mjs --markers <this change's markers> (store them as 'smokeMarkers' in $marker), then node infrastructure/scripts/smoke-dev-ui.mjs --check '<route>=<selector>' ... (logged-in click-through with the QA account in .claude/local/qa-dev.json; skip only if that file doesn't exist and say so), then record devVerified {sha, ok, at, summary} in $marker and tell Łukasz the result.")
+  fi
+}
+
+emit_result() {
+  dev_deploy_check
+  if [ "${#FAILS[@]}" -eq 0 ]; then
+    if [ "${#WARNS[@]}" -gt 0 ]; then
+      jq -n --arg msg "$(printf '%s\n' "${WARNS[@]}" | sed 's/^/- /')" '{systemMessage: ("Quality gate warnings:\n" + $msg)}'
+    fi
+    exit 0
+  fi
+  jq -n --arg reason "$(printf '%s\n' "${FAILS[@]}" | sed 's/^/- /')" \
+    '{continue: false, decision: "block", reason: ("Quality gate failed — fix before this turn can end:\n" + $reason)}'
+  exit 0
+}
+
+if [ -z "$SRC_CHANGED" ]; then
+  branch_artifact_check
+  emit_result
+fi
 mkdir -p /tmp/neocrm-gate
 
 run_check() {
@@ -93,7 +307,7 @@ if [ -n "$DB_HOST" ] && node -e "
   # vitest config choking on a Vuetify CSS import) would otherwise permanently block
   # every future turn regardless of what's being worked on, which defeats the point of
   # a per-change gate.
-  AFFECTED_DIRS="$(printf '%s\n' "$SRC_CHANGED" | sed -E 's#^(apps/[^/]+|packages/[^/]+)/.*#\1#' | sort -u)"
+  AFFECTED_DIRS="$(printf '%s\n' "$SRC_CHANGED" | "$REPO_ROOT/infrastructure/scripts/affected-workspaces.sh")"
   FILTER_ARGS=()
   while IFS= read -r dir; do
     [ -n "$dir" ] && FILTER_ARGS+=(--filter "./$dir")
@@ -133,11 +347,22 @@ if [ -n "$FEATURE_SHAPE" ]; then
   if [ -z "$STORY_FILE" ]; then
     FAILS+=("Diff looks feature-shaped (new view/route/migration: $(printf '%s' "$FEATURE_SHAPE" | tr '\n' ' ')) but no docs/stories/*.md was added. Run /enrich-user-story first and save its 'Refined User Story' output there.")
   fi
+fi
 
+# Any Vue/style change — not just FEATURE_SHAPE's views/routes/migrations regex. A
+# layout/component-only diff (e.g. apps/*/src/layouts/, packages/*/src/components/) is
+# exactly as "visual" as a new view, but FEATURE_SHAPE alone missed it (confirmed gap:
+# NEO-9 touched only layouts/ + packages/ui/, so the artifact gate below never fired on
+# the first pass of that ticket). This variable exists purely to decide whether a
+# before/after visual comparison should be required in the artifact marker below — it does
+# NOT require a docs/stories entry the way FEATURE_SHAPE does.
+VISUAL_SHAPE="$(printf '%s\n' "$SRC_CHANGED" | grep -E '\.(vue|css)$' || true)"
+
+if [ -n "$FEATURE_SHAPE" ] || [ -n "$VISUAL_SHAPE" ]; then
   # --- ARTIFACT MARKER -----------------------------------------------------------------
-  # A feature-shaped diff almost always maps to a Linear ticket (referenced in the story
-  # doc and/or recent commit messages). If any such ticket is found, require proof that a
-  # visual Artifact was published and attached to it: a marker file at
+  # A feature- or visual-shaped diff almost always maps to a Linear ticket (referenced in
+  # the story doc and/or recent commit messages). If any such ticket is found, require
+  # proof that a visual Artifact was published and attached to it: a marker file at
   # .claude/local/artifacts/<TICKET-ID>.json (gitignored — .claude/local/ — so this is a
   # per-machine, per-session discipline check, not repo state).
   #
@@ -151,15 +376,31 @@ if [ -n "$FEATURE_SHAPE" ]; then
   #      artifact-diagramming skills), "Run it locally" (name the ".vscode/tasks.json"
   #      "Start NeoCRM Dev Stack" task), "Verify it" (a QA checklist mirroring the
   #      Acceptance Criteria 1:1).
-  #   2. Publish it, then attach it to the ticket via save_issue's `links` param so it's
+  #   2. When VISUAL_SHAPE is non-empty (any .vue/.css file changed): "What changed" must
+  #      also show an actual before/after — either the two PNGs from Step 9's screenshot
+  #      convention (docs/worker-screenshots/<ticket>/{before,after}.png) if a real render
+  #      was possible, or, when no live-app/DB access was available, a hand-built HTML/CSS
+  #      mockup reproducing the real component's colors/spacing/layout, clearly labeled as
+  #      a mockup rather than a live screenshot. A wall of prose describing the change is
+  #      not a substitute — this is the exact "AI slop" gap that prompted this check.
+  #   3. Publish it, then attach it to the ticket via save_issue's `links` param so it's
   #      visible ON the Linear issue itself.
-  #   3. Write the marker: mkdir -p .claude/local/artifacts && write
+  #   4. Write the marker: mkdir -p .claude/local/artifacts && write
   #      .claude/local/artifacts/<TICKET-ID>.json with:
   #      { "url": "<artifact url>",
   #        "hoisting": "platform" | "client:<slug>" | "n/a — infra/tooling",
   #        "sections": ["summary", "run-locally", "qa-checklist"],
-  #        "testCoverageMap": [ { "ac": "<short AC text>", "tests": ["<file> › <test name>"] } ] }
-  TICKET_REFS="$( { [ -n "$STORY_FILE" ] && cat $STORY_FILE 2>/dev/null; git log --format=%B -n 20 2>/dev/null; } \
+  #        "testCoverageMap": [ { "ac": "<short AC text>", "tests": ["<file> › <test name>"] } ],
+  #        "visualComparison": "<omit entirely when VISUAL_SHAPE is empty; otherwise a short
+  #          description of what before/after evidence exists and where, e.g. 'mockup
+  #          embedded in artifact What changed section' or 'docs/worker-screenshots/NEO-9/
+  #          before.png + after.png'>" }
+  # Commit messages from THIS branch only (BASE..HEAD). The old `git log -n 20` also swept
+  # in tickets from already-merged dev commits, so a fresh worktree off dev demanded
+  # artifacts for other people's finished tickets (NEO-17 etc.) on its first src edit.
+  if [ -n "$BASE" ]; then LOG_RANGE="$BASE..HEAD"; else LOG_RANGE="-n 20"; fi
+  # shellcheck disable=SC2086 # LOG_RANGE is intentionally word-split in the fallback case
+  TICKET_REFS="$( { [ -n "${STORY_FILE:-}" ] && cat $STORY_FILE 2>/dev/null; git log --format=%B $LOG_RANGE 2>/dev/null; } \
     | grep -oE '\b[A-Z]{2,10}-[0-9]+\b' | sort -u || true)"
   if [ -n "$TICKET_REFS" ]; then
     while IFS= read -r ticket; do
@@ -174,15 +415,14 @@ if [ -n "$FEATURE_SHAPE" ]; then
           || FAILS+=("$MARKER exists but its 'sections' array doesn't cover all three required sections (summary, run-locally, qa-checklist) — the artifact for ${ticket} must have all three.")
         jq -e '(.testCoverageMap // []) | length > 0' "$MARKER" >/dev/null 2>&1 \
           || FAILS+=("$MARKER exists but 'testCoverageMap' is empty — map each Acceptance Criterion for ${ticket} to the test(s) that verify it before ending this turn.")
+        if [ -n "$VISUAL_SHAPE" ]; then
+          jq -e '.visualComparison != null and .visualComparison != ""' "$MARKER" >/dev/null 2>&1 \
+            || FAILS+=("$MARKER exists but this diff changes Vue/CSS files ($(printf '%s' "$VISUAL_SHAPE" | tr '\n' ' ')) and the marker has no non-empty 'visualComparison' field — the artifact for ${ticket} must show an actual before/after (real screenshots or a labeled mockup), not just text sections.")
+        fi
       fi
     done <<< "$TICKET_REFS"
   fi
 fi
 
-if [ "${#FAILS[@]}" -eq 0 ]; then
-  exit 0
-fi
-
-jq -n --arg reason "$(printf '%s\n' "${FAILS[@]}" | sed 's/^/- /')" \
-  '{continue: false, decision: "block", reason: ("Quality gate failed — fix before this turn can end:\n" + $reason)}'
-exit 0
+branch_artifact_check
+emit_result

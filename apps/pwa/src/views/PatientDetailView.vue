@@ -3,6 +3,7 @@
     <FormRenderer
       v-model="showEditModal"
       :fields="patientFormFields"
+      :derive="patientFormDerive"
       :initial-data="patient ?? undefined"
       title-key="app.patients.form.title"
       edit-title-key="app.patients.form.editTitle"
@@ -11,27 +12,28 @@
       avatar-entity-type="patient"
       @submit="onPatientSubmit"
     />
-    <EventForm
-      v-model="showEventForm"
-      :initial-data="eventFormInitial"
-      @submit="onEventFormSubmit"
+    <AppointmentDialog
+      v-model="showAppointmentDialog"
+      :patient="appointmentPatient"
     />
     <ItemDetailLayout
       :has-content="!!patient"
       :loading="loading"
       :load-error="loadFailed"
+      :load-error-cause="loadFailure"
       :back-route="{ name: 'patients' }"
       :back-label="t('app.patients.detail.back')"
+      :record-title="patient?.name ?? ''"
       :not-found-label="t('app.patients.detail.notFound')"
       @retry="loadPatient"
     >
-      <template #title v-if="patient">
-        <span class="view-item__title-wrap">
-          <AppAvatar :name="patient.name" :first-name="patient.first_name" :last-name="patient.last_name" entity-type="patient" :size="40" />
-          <h1 class="view-item__title">{{ patient.name }}</h1>
-        </span>
+      <template v-if="patient" #record-tile>
+        <AppAvatar :name="patient.name" entity-type="patient" :first-name="patient.first_name" :last-name="patient.last_name" :size="48" />
       </template>
-      <template #header-actions v-if="patient">
+      <template v-if="patient" #record-details>
+        <IdentityDetails :details="patientDetails(patient, { long: true }).details" />
+      </template>
+      <template v-if="patient" #header-actions>
         <VTooltip location="bottom">
           <template #activator="{ props: tooltipProps }">
             <AppButton
@@ -39,14 +41,15 @@
               icon
               variant="flat"
               size="large"
-              :class="entityActionBtnClass('scheduleVisit')"
-              :aria-label="t('user.detail.scheduleVisit')"
-              @click="onScheduleVisit"
+              :class="entityActionBtnClass('bookAppointment')"
+              :aria-label="t('user.detail.bookAppointment')"
+              data-testid="patient-book-appointment"
+              @click="onBookAppointment"
             >
-              <AppIcon :name="entityActionIcon('scheduleVisit')" class="view-item__action-icon" />
+              <AppIcon :name="entityActionIcon('bookAppointment')" class="view-item__action-icon" />
             </AppButton>
           </template>
-          <span>{{ t('user.detail.scheduleVisit') }}</span>
+          <span>{{ t('user.detail.bookAppointment') }}</span>
         </VTooltip>
         <VTooltip v-if="canEditPatients" location="bottom">
           <template #activator="{ props: tooltipProps }">
@@ -81,7 +84,7 @@
           <span>{{ t('app.patients.actions.delete') }}</span>
         </VTooltip>
       </template>
-      <template #sections v-if="patient">
+      <template v-if="patient" #sections>
         <DetailViewTabs v-model="activeTab" :tabs="patientTabs">
           <template #details>
             <div class="view-item__row">
@@ -104,6 +107,11 @@
                 <EntityLink
                   :to="patient.practitioner_id ? { name: 'hcp-detail', params: { id: patient.practitioner_id } } : null"
                   :label="patient.practitioner_name"
+                  entity-type="hcp"
+                  :specialty="patient.practitioner_specialty"
+                  :details="specialtySet(patient.practitioner_specialty, patient.practitioner_specialties).details"
+                  :more-details="specialtySet(patient.practitioner_specialty, patient.practitioner_specialties).more"
+                  :avatar-size="32"
                 />
               </dd>
             </div>
@@ -131,12 +139,13 @@
               <dt class="view-item__label">{{ t("app.patients.detail.medicalRecord") }}</dt>
               <dd class="view-item__value">{{ patient.medical_record || "—" }}</dd>
             </div>
+            <PatientStudiesSummary v-if="canSeeStudies" :patient-id="patient.id" @open="openStudy" />
           </template>
           <template #notes>
             <PatientNotesPanel entity-type="patient" :entity-id="patient.id" />
           </template>
           <template #studies>
-            <PatientStudiesPanel :patient-id="patient.id" />
+            <PatientStudiesPanel :patient-id="patient.id" :focus-item="studyItem" :date-of-birth="patient.date_of_birth" :gender="patient.gender" :qr-request-nonce="qrRequestNonce" />
           </template>
           <template #orthoapnea>
             <PatientOrthoApneaPanel :patient-id="patient.id" />
@@ -144,38 +153,43 @@
           <template #documents>
             <EntityDocumentsPanel :endpoint="`/api/v1/patient/${patient.id}/documents`" />
           </template>
-          <template #endoIntake>
-            <PatientEndoIntakePanel :patient-id="patient.id" />
-            <VDivider class="endo-intake-divider" />
-            <PatientStopBangPanel :patient-id="patient.id" />
-          </template>
           <template #history>
             <EntityHistoryPanel :endpoint="`/api/v1/patient/${patient.id}/history`" />
           </template>
         </DetailViewTabs>
       </template>
+      <template v-if="patient" #aside>
+        <PatientAsidePanel
+          :patient="patient"
+          :can-see-studies="canSeeStudies"
+          :active-tab="activeTab"
+          @open-notes="activeTab = 'notes'"
+          @open-study="openStudy"
+          @open-tab="(tab: string) => (activeTab = tab)"
+          @qr="onAsideQr"
+        />
+      </template>
     </ItemDetailLayout>
 
-    <VDialog v-model="showDeleteConfirm" max-width="360" :transition="originDialogTransition" persistent>
-      <VCard>
-        <VCardText>{{ t("app.patients.actions.deleteConfirmText") }}</VCardText>
-        <VCardActions>
-          <VSpacer />
-          <AppButton variant="text" @click="showDeleteConfirm = false">
-            {{ t("app.common.cancel") }}
-          </AppButton>
-          <AppButton color="error" variant="text" :loading="deleteLoading" @click="onDelete">
-            {{ t("app.patients.actions.delete") }}
-          </AppButton>
-        </VCardActions>
-      </VCard>
-    </VDialog>
+    <AppConfirmDialog
+      v-model="showDeleteConfirm"
+      :text="t('app.patients.actions.deleteConfirmText')"
+      :secondary-label="t('app.common.cancel')"
+      :secondary-color="null"
+      :primary-label="t('app.patients.actions.delete')"
+      primary-color="error"
+      primary-variant="text"
+      :loading="deleteLoading"
+      max-width="360"
+      @secondary="showDeleteConfirm = false"
+      @primary="onDelete"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
+import { reportCaught, reportFailedResponse } from "@api";
 import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
-import { originDialogTransition } from "@ui";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { usePermissions } from "../composables/usePermissions";
@@ -185,25 +199,31 @@ import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import AppButton from "../components/AppButton.vue";
+import AppConfirmDialog from "../components/AppConfirmDialog.vue";
 import AppIcon from "../components/AppIcon.vue";
-import AppAvatar from "../components/AppAvatar.vue";
 import DetailViewTabs from "../components/DetailViewTabs.vue";
 import EntityLink from "../components/EntityLink.vue";
+import { useIdentity } from "../composables/useIdentity";
+import AppAvatar from "../components/AppAvatar.vue";
+import IdentityDetails from "../components/IdentityDetails.vue";
 import PatientNotesPanel from "../components/patient/PatientNotesPanel.vue";
+import PatientAsidePanel from "../components/patient/PatientAsidePanel.vue";
 import PatientStudiesPanel from "../components/patient/PatientStudiesPanel.vue";
+import PatientStudiesSummary from "../components/patient/PatientStudiesSummary.vue";
 import PatientOrthoApneaPanel from "../components/patient/PatientOrthoApneaPanel.vue";
 import EntityHistoryPanel from "../components/EntityHistoryPanel.vue";
 import EntityDocumentsPanel from "../components/EntityDocumentsPanel.vue";
-import PatientEndoIntakePanel from "../components/patient/PatientEndoIntakePanel.vue";
-import PatientStopBangPanel from "../components/patient/PatientStopBangPanel.vue";
-import { patientFormFields } from "../config/forms/patientForm";
+import { patientFormFields, patientFormDerive } from "../config/forms/patientForm";
+import { STUDY_ROLES } from "../config/questionnaires";
+import { useAuthStore } from "../stores/auth";
 import { entityActionIcon, entityActionBtnClass } from "../config/entityActions";
 import { patientStatusColor, patientStatusLabel } from "../utils/patientStatus";
 
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
-const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
+const AppointmentDialog = defineAsyncComponent(() => import("../components/AppointmentDialog.vue"));
 
 const { canEditPatients, isAdmin } = usePermissions();
+const authStore = useAuthStore();
 
 interface PatientDetail {
   id: string;
@@ -215,6 +235,10 @@ interface PatientDetail {
   phone?: string | null;
   practitioner_id?: string | null;
   practitioner_name?: string | null;
+  practitioner_specialty?: string | null;
+  practitioner_specialties?: string[] | null;
+  gender?: string | null;
+  date_of_birth?: string | null;
   status?: string;
   region?: string;
   territory_id?: string | null;
@@ -225,15 +249,19 @@ interface PatientDetail {
   ahi_baseline?: number | null;
   cpap_device?: string | null;
   medical_record?: string | null;
+  /** ICD-10 JSONB — nothing writes it yet; the side panel shows it when present (NEO-153). */
+  diagnosis_code?: Record<string, unknown> | null;
 }
 
 const { t } = useI18n();
+const { patientDetails, specialtySet } = useIdentity();
 const route = useRoute();
 const router = useRouter();
 const notifications = useNotifications();
 const { submit } = useEntitySubmit();
 
 const patient = ref<PatientDetail | null>(null);
+
 
 /** territory_path (when set) as "mx/cdmx/polanco" — each ancestor's own short
  *  `code`, root-first, lowercased. Falls back to the flat identities.region
@@ -250,60 +278,57 @@ const regionBreadcrumb = computed(() => {
 const loading = ref(true);
 /** True when loadPatient() failed for a reason other than a genuine 404 (network/server) — see loadPatient(). */
 const loadFailed = ref(false);
+/** The error behind loadFailed (NEO-81) — lets the error state say offline vs. server problem. */
+const loadFailure = ref<unknown>(null);
 const showEditModal = ref(false);
-const showEventForm = ref(false);
-const eventFormInitial = ref<{ start_at: string; end_at: string; patientIds?: string[] } | undefined>(undefined);
+const showAppointmentDialog = ref(false);
+/** "Umów wizytę" books a patient↔doctor appointment (NEO-34), with the patient's assigned doctor pre-selected. */
+const appointmentPatient = computed(() =>
+  patient.value ? { id: patient.value.id, name: patient.value.name, practitioner_id: patient.value.practitioner_id ?? null } : null,
+);
 const showDeleteConfirm = ref(false);
 
-const patientTabs = [
+const ALL_PATIENT_TABS = [
   { value: "details", labelKey: "app.patients.detail.tabs.details" },
   { value: "notes", labelKey: "app.patients.detail.tabs.notes" },
-  { value: "studies", labelKey: "app.patients.detail.tabs.studies" },
+  { value: "studies", labelKey: "app.patients.detail.tabs.studies", roles: STUDY_ROLES },
   { value: "orthoapnea", labelKey: "app.patients.detail.tabs.orthoapnea" },
-  { value: "documents", labelKey: "app.patients.detail.tabs.documents" },
-  { value: "endoIntake", labelKey: "app.patients.detail.tabs.endoIntake" },
+  { value: "documents", labelKey: "app.patients.detail.tabs.documents", roles: STUDY_ROLES },
   { value: "history", labelKey: "app.patients.detail.tabs.history" },
 ];
+/** Studies and Documents hold health data — admin, doctor and manager only (NEO-83); the API enforces the same. */
+const userRole = computed(() => authStore.user?.role ?? "");
+const canSeeStudies = computed(() => STUDY_ROLES.includes(userRole.value));
+const patientTabs = computed(() => ALL_PATIENT_TABS.filter((tab) => !tab.roles || tab.roles.includes(userRole.value)));
 /** Deep-linkable via ?tab= — see SleepStudiesView/TreatmentPlansView row clicks. */
 const activeTab = ref((route.query.tab as string) || "details");
-watch(activeTab, (tab) => {
-  router.replace({ query: { ...route.query, tab } });
-});
+/** Details → Estudios card click: open that item in the Estudios tab (?tab=studies&item=…). */
+const studyItem = ref<string | null>((route.query.item as string) || null);
+function syncQuery() {
+  const item = activeTab.value === "studies" ? studyItem.value ?? undefined : undefined;
+  router.replace({ query: { ...route.query, tab: activeTab.value, item } });
+}
+watch(activeTab, syncQuery);
+function openStudy(itemKey: string) {
+  studyItem.value = itemKey;
+  if (activeTab.value === "studies") syncQuery();
+  else activeTab.value = "studies";
+}
+
+/** Side panel "QR for the patient" (NEO-153): the Estudios tab owns the QR flow (status button, polling), so open it there. */
+const qrRequestNonce = ref(0);
+function onAsideQr() {
+  studyItem.value = null;
+  activeTab.value = "studies";
+  qrRequestNonce.value += 1;
+}
 
 function onEdit() {
   showEditModal.value = true;
 }
 
-function onScheduleVisit() {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  eventFormInitial.value = {
-    start_at: new Date(`${date} 09:00`).toISOString(),
-    end_at: new Date(`${date} 10:00`).toISOString(),
-    patientIds: patient.value?.id ? [patient.value.id] : [],
-  };
-  showEventForm.value = true;
-}
-
-async function onEventFormSubmit(
-  payload: import("../components/EventForm.vue").EventSubmitPayload,
-  done: (ok: boolean) => void,
-) {
-  await submit(
-    {
-      request: () =>
-        apiFetch("/api/v1/encounter", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: payload.title, start_at: payload.start_at, end_at: payload.end_at, type: payload.type, status: payload.status, location: payload.location, video_link: payload.video_link, notes: payload.notes, region: payload.region, attendees: payload.attendees }),
-        }),
-      successMessage: t("user.planner.form.success"),
-      errorMessage: t("user.planner.form.errorSave"),
-      refresh: false,
-    },
-    done,
-  );
+function onBookAppointment() {
+  showAppointmentDialog.value = true;
 }
 
 async function onPatientSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
@@ -318,6 +343,8 @@ async function onPatientSubmit(data: Record<string, unknown>, done: (ok: boolean
           body: JSON.stringify(data),
         }),
       successMessage: t("app.patients.form.editSuccess"),
+      icon: "nav-patients",
+      context: patient.value?.name,
       errorMessage: t("app.patients.form.errorSave"),
       onSuccess: () => loadPatient(),
     },
@@ -333,7 +360,7 @@ const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
   });
   if (res.ok) {
     showDeleteConfirm.value = false;
-    notifications.show(t("app.patients.actions.deleteSuccess"), "success");
+    notifications.show(t("app.patients.actions.deleteSuccess"), "success", undefined, { icon: "nav-patients", context: patient.value?.name });
     window.dispatchEvent(new Event("entity-list-refresh"));
     router.push({ name: "patients" });
   }
@@ -356,9 +383,12 @@ async function loadPatient() {
       // Not a genuine 404 — ItemDetailLayout renders its own "connection
       // problem" + retry state for this (see :load-error), so no separate
       // toast on top of it.
+      loadFailure.value = await reportFailedResponse(res, { where: "PatientDetailView.load", path: "/api/v1/patient/:id" });
       loadFailed.value = true;
     }
-  } catch {
+  } catch (err) {
+    reportCaught(err, { where: "PatientDetailView.load" });
+    loadFailure.value = err;
     loadFailed.value = true;
     patient.value = null;
   } finally {
@@ -380,9 +410,5 @@ watch(() => route.params.id, loadPatient);
      20px from .view-item__title read as cramped, especially for a long
      name that wraps to two lines. */
   margin-bottom: 12px;
-}
-
-.endo-intake-divider {
-  margin: 28px 0;
 }
 </style>

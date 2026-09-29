@@ -53,11 +53,22 @@ describe("theme store", () => {
       expect(store.mode).toBe("light");
     });
 
-    it("tenant default wins over system preference when no explicit choice exists", () => {
+    // NEO-102: "Auto" (follow the OS) is the default for anyone who never
+    // picked — every tenant row has color_scheme='light', so letting it win
+    // here would mean nobody ever starts on Auto.
+    it("system preference wins over tenant default when no explicit choice exists (Auto by default)", () => {
       stubMatchMedia(true); // system wants dark
       const store = useThemeStore();
       store.setTenantDefault("light");
-      expect(store.mode).toBe("light");
+      expect(store.preference).toBe("system");
+      expect(store.mode).toBe("dark");
+    });
+
+    it("tenant default applies only when the system preference can't be determined", () => {
+      stubMatchMedia(null);
+      const store = useThemeStore();
+      store.setTenantDefault("dark");
+      expect(store.mode).toBe("dark");
     });
 
     it("falls back to system preference when no explicit choice or tenant default", () => {

@@ -1,6 +1,7 @@
 import type { PoolClient } from "pg";
 import { AppError, DatabaseError } from "../errors.js";
 import { isoDate } from "../routes/utils.js";
+import { formatOptionalDisplayName } from "../utils/personName.js";
 
 export const NOTE_ENTITY_TYPES = ["patient", "practitioner", "organization", "lead", "treatment_plan"] as const;
 export type NoteEntityType = (typeof NOTE_ENTITY_TYPES)[number];
@@ -31,6 +32,7 @@ type NoteRow = {
   entity_type: string;
   entity_id: string;
   author_id: string | null;
+  author_salutation: string | null;
   author_first_name: string | null;
   author_last_name: string | null;
   body: string;
@@ -42,7 +44,7 @@ type NoteRow = {
 const NOTE_SELECT_COLS = `
   n.id, n.entity_type, n.entity_id, n.author_id, n.body, n.metadata,
   n.created_at, n.updated_at,
-  ai.first_name AS author_first_name, ai.last_name AS author_last_name`.trim();
+  ai.title AS author_salutation, ai.first_name AS author_first_name, ai.last_name AS author_last_name`.trim();
 
 const NOTE_JOIN = `
   FROM note n
@@ -50,13 +52,16 @@ const NOTE_JOIN = `
   LEFT JOIN identities ai ON au.identity_id = ai.id`.trim();
 
 function serialize(row: NoteRow): Note {
-  const authorName = [row.author_first_name, row.author_last_name].filter(Boolean).join(" ").trim();
   return {
     id: row.id,
     entity_type: row.entity_type,
     entity_id: row.entity_id,
     author_id: row.author_id,
-    author_name: authorName || null,
+    author_name: formatOptionalDisplayName({
+      salutation: row.author_salutation,
+      first_name: row.author_first_name,
+      last_name: row.author_last_name,
+    }),
     body: row.body,
     metadata: row.metadata,
     created_at: isoDate(row.created_at),

@@ -11,6 +11,19 @@ import {
 } from "../db.js";
 import { insertAuditLog } from "../db.js";
 import { ConflictError, ValidationError } from "../errors.js";
+
+/**
+ * Whether the organization appears on the public website's find-a-specialist
+ * map is a tenant-level publishing decision, so only an admin can change it
+ * (NEO-79). The PWA form hides the switch from everyone else, but it still
+ * submits the loaded value with every save, so a non-admin's value is
+ * silently ignored rather than rejected — rejecting would break every
+ * ordinary HCO edit by a rep.
+ */
+function publicMapFlagFor(ctx: TenantContext, value: boolean | undefined): boolean | undefined {
+  if (value === undefined || ctx.user.role !== "admin") return undefined;
+  return value;
+}
 import { geocodeAddress } from "../services/geocoding.js";
 
 /**
@@ -70,6 +83,8 @@ export interface CreateOrganizationInput {
   website?: string | null;
   google_link?: string | null;
   specialties?: string[];
+  /** Admin-only (NEO-79) — ignored for any other role, see publicMapFlagFor(). */
+  show_on_public_map?: boolean;
   metadata?: Record<string, unknown> | null;
 }
 
@@ -129,6 +144,7 @@ export async function CreateOrganizationCommand(
     latitude:      coordinates?.lat ?? null,
     longitude:     coordinates?.lng ?? null,
     specialties:   input.specialties,
+    show_on_public_map: publicMapFlagFor(ctx, input.show_on_public_map),
     metadata:      input.metadata ?? null,
   };
 
@@ -145,6 +161,7 @@ export async function CreateOrganizationCommand(
       type:   organization.type,
       status: organization.status,
       region: organization.region,
+      show_on_public_map: organization.show_on_public_map,
     },
     request_id: ctx.requestId,
   });
@@ -172,6 +189,8 @@ export interface UpdateOrganizationPayload {
   website?: string | null;
   google_link?: string | null;
   specialties?: string[];
+  /** Admin-only (NEO-79) — ignored for any other role, see publicMapFlagFor(). */
+  show_on_public_map?: boolean;
   metadata?: Record<string, unknown> | null;
 }
 
@@ -250,6 +269,7 @@ export async function UpdateOrganizationCommand(
     latitude:      coordinates ? coordinates.lat : undefined,
     longitude:     coordinates ? coordinates.lng : undefined,
     specialties:   input.specialties,
+    show_on_public_map: publicMapFlagFor(ctx, input.show_on_public_map),
     metadata:      input.metadata,
   };
 
@@ -261,8 +281,8 @@ export async function UpdateOrganizationCommand(
     action:        "update",
     entity_type:   "Organization",
     entity_id:     id,
-    entity_before: { name: before.name, type: before.type, status: before.status, region: before.region },
-    entity_after:  { name: after.name,  type: after.type,  status: after.status,  region: after.region },
+    entity_before: { name: before.name, type: before.type, status: before.status, region: before.region, show_on_public_map: before.show_on_public_map },
+    entity_after:  { name: after.name,  type: after.type,  status: after.status,  region: after.region,  show_on_public_map: after.show_on_public_map },
     request_id:    ctx.requestId,
   });
 

@@ -35,10 +35,15 @@ const ICONS = {
   },
   "sad-cloud": {
     strokeWidth: 1.8,
-    paths: `<path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" pathLength="1" />
+    // The raw cloud outline touches x=0 and x=24 exactly, so its 1.8px stroke
+    // overflows the viewBox and gets clipped left/right. Scale it down around
+    // the viewBox center to leave room for the stroke on every side.
+    paths: `<g transform="translate(12 12) scale(0.8) translate(-12 -12)">
+            <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" pathLength="1" />
             <path d="M7.4 10.6L9.2 12.4M7.4 12.4L9.2 10.6" stroke-width="1.3" pathLength="1" />
             <path d="M14.8 10.6L16.6 12.4M14.8 12.4L16.6 10.6" stroke-width="1.3" pathLength="1" />
-            <path d="M8 17 Q12 14 16 17" stroke-width="1.3" pathLength="1" />`,
+            <path d="M8 17 Q12 14 16 17" stroke-width="1.3" pathLength="1" />
+            </g>`,
   },
   "file": {
     strokeWidth: 1.5,
@@ -92,6 +97,11 @@ const ICONS = {
             <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
             <path d="M16 21h5v-5" />`,
   },
+  "eye": {
+    strokeWidth: 1.8,
+    paths: `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+            <circle cx="12" cy="12" r="3" />`,
+  },
   "logout": {
     strokeWidth: 1.5,
     paths: `<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -116,11 +126,47 @@ const ICONS = {
             <rect x="14" y="14" width="7" height="7" />
             <rect x="3" y="14" width="7" height="7" />`,
   },
+  // Sprout (NEO-155): a lead is someone not grown into a patient/partner yet.
   "nav-leads": {
     strokeWidth: 2,
-    paths: `<path d="M7 20v-8a5 5 0 0 1 10 0v8" />
-            <line x1="5" y1="20" x2="9" y2="20" />
-            <line x1="15" y1="20" x2="19" y2="20" />`,
+    paths: `<path d="M12 21v-9" />
+            <path d="M12 12c0-4-3-6-7-6 0 4 3 6 7 6z" />
+            <path d="M12 14c0-3.5 2.5-5.5 7-5.5 0 3.5-2.5 5.5-7 5.5z" />
+            <line x1="8" y1="21" x2="16" y2="21" />`,
+  },
+  // ── Lead channel badges (NEO-155), one per lead.source value ───────────────
+  "lead-source-website": {
+    strokeWidth: 2,
+    paths: `<circle cx="12" cy="12" r="9" />
+            <path d="M3 12h18" />
+            <path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18z" />`,
+  },
+  "lead-source-social": {
+    strokeWidth: 2,
+    paths: `<rect x="3.5" y="3.5" width="17" height="17" rx="5" />
+            <circle cx="12" cy="12" r="4" />`,
+  },
+  "lead-source-whatsapp": {
+    strokeWidth: 2,
+    paths: `<path d="M4 20l1.3-3.8A8 8 0 1 1 8 19z" />`,
+  },
+  "lead-source-phone": {
+    strokeWidth: 2,
+    paths: `<path d="M5 4h3.5l1.5 4-2 1.5a11 11 0 0 0 6.5 6.5L16 14l4 1.5V19a1 1 0 0 1-1 1A16 16 0 0 1 4 5a1 1 0 0 1 1-1z" />`,
+  },
+  "lead-source-referral": {
+    strokeWidth: 2,
+    paths: `<circle cx="9" cy="8" r="3.5" />
+            <path d="M2.5 20v-1a5.5 5.5 0 0 1 11 0v1" />
+            <line x1="18" y1="8" x2="18" y2="14" />
+            <line x1="15" y1="11" x2="21" y2="11" />`,
+  },
+  "lead-source-event": {
+    strokeWidth: 2,
+    paths: `<rect x="3.5" y="5" width="17" height="15" rx="2" />
+            <line x1="3.5" y1="10" x2="20.5" y2="10" />
+            <line x1="8" y1="3" x2="8" y2="7" />
+            <line x1="16" y1="3" x2="16" y2="7" />`,
   },
   "nav-hcp": {
     strokeWidth: 2,
@@ -141,23 +187,24 @@ const ICONS = {
   // "clinic" keeps the "nav-hco" icon above (unchanged, matches the ticket).
   "hco-hospital": {
     strokeWidth: 2,
-    paths: `<rect x="3" y="4" width="18" height="17" />
-            <line x1="7" y1="4" x2="7" y2="21" />
-            <line x1="17" y1="4" x2="17" y2="21" />
-            <line x1="12" y1="8" x2="12" y2="14" />
-            <line x1="9" y1="11" x2="15" y2="11" />`,
+    // NEO-155: the "H" road sign — the most widely recognised hospital mark
+    // (Łukasz's pick, 2026-09-28), replacing the building + cross.
+    paths: `<rect x="3.5" y="3.5" width="17" height="17" rx="3" />
+            <path d="M9 8v8M15 8v8M9 12h6" />`,
   },
   "hco-pharmacy": {
     strokeWidth: 2,
+    // Dividing line spans exactly the pre-rotation rect's own y-bounds (8..16),
+    // flush with its top/bottom edge, so it never overshoots the pill outline.
     paths: `<rect x="2" y="8" width="20" height="8" rx="4" transform="rotate(45 12 12)" />
-            <line x1="12" y1="6.34" x2="12" y2="17.66" transform="rotate(45 12 12)" />`,
+            <line x1="12" y1="8" x2="12" y2="16" transform="rotate(45 12 12)" />`,
   },
   "hco-practice": {
     strokeWidth: 2,
-    paths: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-            <circle cx="12" cy="7" r="4" />
-            <line x1="12" y1="16.5" x2="12" y2="19.5" stroke-width="1.4" />
-            <line x1="10.5" y1="18" x2="13.5" y2="18" stroke-width="1.4" />`,
+    // NEO-155: doctor's bag — a one-person practice (JDG), not a building.
+    paths: `<rect x="3" y="8" width="18" height="12" rx="2" />
+            <path d="M9 8V6a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+            <path d="M12 11v6M9 14h6" />`,
   },
   "hco-other": {
     strokeWidth: 2,
@@ -172,12 +219,88 @@ const ICONS = {
     paths: `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
             <circle cx="12" cy="7" r="4" />`,
   },
+  // ── HCP specialty icons (practitioner list mobile card, NEO-19) ────────────
+  // Keyed by the `specialty` lookup's seeded codes (apps/api/migrations/002_seed.sql).
+  // A tenant-added or unseeded code falls back to "nav-hcp" — see hcpLabels.ts.
+  "specialty-dentist": {
+    // A symmetric molar (NEO-57 redraw): two rounded cusps meeting in a soft
+    // dip at the top center, straight flanks, two roots with an arch between
+    // them. Mirrored exactly around x=12 so it reads as a tooth down to the
+    // ~9px doctor badge; the old outline was lopsided on the right.
+    strokeWidth: 1.8,
+    paths: `<path d="M12 4.1C10.3 4.1 9.1 3 7.5 3 5.3 3 4 4.6 4 7c0 1.8.5 3.3 1 4.8.6 1.7.9 3.5 1.2 5.6.3 2 .8 3.6 1.9 3.6 1.2 0 1.5-1.6 1.8-3.4.2-1.4.6-2.6 2.1-2.6s1.9 1.2 2.1 2.6c.3 1.8.6 3.4 1.8 3.4 1.1 0 1.6-1.6 1.9-3.6.3-2.1.6-3.9 1.2-5.6.5-1.5 1-3 1-4.8 0-2.4-1.3-4-3.5-4-1.6 0-2.8 1.1-4.5 1.1z" />`,
+  },
+  "specialty-ent": {
+    strokeWidth: 1.6,
+    paths: `<path d="M9 12c0-3.3 2.2-5.5 5-5.5a4.5 4.5 0 0 1 4.5 4.5c0 2.2-1.3 3.2-1.3 5.2a3.2 3.2 0 0 1-6.4 0" />
+            <path d="M9 12v1" />`,
+  },
+  "specialty-gp": {
+    strokeWidth: 1.6,
+    paths: `<path d="M6 3v6a4 4 0 0 0 8 0V3" />
+            <path d="M10 13v3a5 5 0 0 0 10 0v-2" />
+            <circle cx="20" cy="12" r="2" />`,
+  },
+  "specialty-neurologist": {
+    strokeWidth: 1.6,
+    paths: `<path d="M9 4a3 3 0 0 0-3 3 3 3 0 0 0-2 5 3 3 0 0 0 2 5h2a3 3 0 0 0 3-3V7a3 3 0 0 0-2-3z" />
+            <path d="M15 4a3 3 0 0 1 3 3 3 3 0 0 1 2 5 3 3 0 0 1-2 5h-2a3 3 0 0 1-3-3V7a3 3 0 0 1 2-3z" />`,
+  },
+  "specialty-psychiatrist": {
+    strokeWidth: 1.6,
+    paths: `<path d="M9 21v-3.5c-2-1-3-3-3-5.5a6 6 0 0 1 12 0c0 1.2-.3 2.2-.8 3.1" />
+            <path d="M15 21v-2" />
+            <path d="M11 9a2 2 0 1 1 2 2" />`,
+  },
+  "specialty-cardiologist": {
+    strokeWidth: 1.6,
+    paths: `<path d="M20.8 8.6a5.5 5.5 0 0 0-9.8-3.4 5.5 5.5 0 0 0-9.8 3.4c0 5 9.8 10.4 9.8 10.4s9.8-5.4 9.8-10.4z" stroke-linejoin="round" />
+            <polyline points="3 12 7 12 9 8 12 16 14 12 21 12" />`,
+  },
+  "specialty-pulmonologist": {
+    strokeWidth: 1.6,
+    paths: `<path d="M12 3v7" />
+            <path d="M12 10c-1-3-3-4-5-4-2 0-3 2-3 5 0 4 1 7 3 8 1.5 1 2.5 0 3-2l1-3" />
+            <path d="M12 10c1-3 3-4 5-4 2 0 3 2 3 5 0 4-1 7-3 8-1.5 1-2.5 0-3-2l-1-3" />`,
+  },
   "nav-planner": {
     strokeWidth: 2,
     paths: `<rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
             <line x1="16" y1="2" x2="16" y2="6" />
             <line x1="8" y1="2" x2="8" y2="6" />
             <line x1="3" y1="10" x2="21" y2="10" />`,
+  },
+  // Patient↔doctor appointments (NEO-34) — the planner's calendar with a tick, so the two don't read as the same module.
+  "nav-appointments": {
+    strokeWidth: 2,
+    paths: `<rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+            <line x1="16" y1="2" x2="16" y2="6" />
+            <line x1="8" y1="2" x2="8" y2="6" />
+            <line x1="3" y1="10" x2="21" y2="10" />
+            <path d="M9 15.5l2 2 4-4" />`,
+  },
+  // Appointment actions (NEO-34): move to another time, patient didn't come, call it off.
+  "calendar-clock": {
+    strokeWidth: 1.75,
+    paths: `<path d="M20 11V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h6" />
+            <line x1="15" y1="2" x2="15" y2="6" />
+            <line x1="8" y1="2" x2="8" y2="6" />
+            <line x1="3" y1="10" x2="20" y2="10" />
+            <circle cx="17.5" cy="17.5" r="4" />
+            <path d="M17.5 15.8v1.9l1.2 1.1" />`,
+  },
+  "user-x": {
+    strokeWidth: 1.75,
+    paths: `<path d="M15 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+            <circle cx="8.5" cy="7" r="4" />
+            <line x1="17" y1="8" x2="22" y2="13" />
+            <line x1="22" y1="8" x2="17" y2="13" />`,
+  },
+  "x-circle": {
+    strokeWidth: 1.75,
+    paths: `<circle cx="12" cy="12" r="9" />
+            <line x1="9" y1="9" x2="15" y2="15" />
+            <line x1="15" y1="9" x2="9" y2="15" />`,
   },
   "nav-presentations": {
     strokeWidth: 2,
@@ -220,7 +343,48 @@ const ICONS = {
             <line x1="8" y1="17" x2="16" y2="17" />
             <line x1="8" y1="9" x2="10" y2="9" />`,
   },
+  // ── Patient intake form icons (NEO-54, see config/patientIntakeForms.ts) ──
+  "form-consent": {
+    strokeWidth: 2,
+    paths: `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <polyline points="9 15 11 17 15 13" />`,
+  },
+  "form-history": {
+    strokeWidth: 2,
+    paths: `<rect x="5" y="4" width="14" height="18" rx="2" />
+            <path d="M9 4V2.5h6V4" />
+            <line x1="9" y1="10" x2="15" y2="10" />
+            <line x1="9" y1="14" x2="15" y2="14" />
+            <line x1="9" y1="18" x2="12" y2="18" />`,
+  },
+  "form-screening": {
+    strokeWidth: 2,
+    paths: `<line x1="4" y1="6" x2="6" y2="6" />
+            <line x1="4" y1="12" x2="6" y2="12" />
+            <line x1="4" y1="18" x2="6" y2="18" />
+            <line x1="10" y1="6" x2="20" y2="6" />
+            <line x1="10" y1="12" x2="20" y2="12" />
+            <line x1="10" y1="18" x2="20" y2="18" />`,
+  },
   // ── Generic UI icons ──────────────────────────────────────────────────────
+  "view-grid": {
+    strokeWidth: 2,
+    paths: `<rect x="4" y="4" width="7" height="7" rx="1.5" />
+            <rect x="13" y="4" width="7" height="7" rx="1.5" />
+            <rect x="4" y="13" width="7" height="7" rx="1.5" />
+            <rect x="13" y="13" width="7" height="7" rx="1.5" />`,
+  },
+  "view-list": {
+    strokeWidth: 2,
+    paths: `<rect x="3.5" y="5" width="5" height="4" rx="1" />
+            <rect x="3.5" y="15" width="5" height="4" rx="1" />
+            <path d="M11.5 6.5h9M11.5 16.5h9" />`,
+  },
+  "play": {
+    strokeWidth: 2,
+    paths: `<path d="M7 4.5v15l12.5-7.5z" fill="currentColor" />`,
+  },
   "close": {
     strokeWidth: 2,
     paths: `<path d="M18 6L6 18M6 6l12 12" />`,
@@ -251,7 +415,9 @@ const ICONS = {
   },
   "filter": {
     strokeWidth: 2,
-    paths: `<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />`,
+    // NEO-152: drawn 16 units wide (x 4–20), the same optical size as "search"
+    // and "plus" — the old 20-unit funnel read a size larger in the toolbar.
+    paths: `<polygon points="20 5 4 5 10.5 12.4 10.5 18.2 13.5 19.7 13.5 12.4 20 5" />`,
   },
   "video-camera": {
     strokeWidth: 2,
@@ -267,8 +433,8 @@ const ICONS = {
   },
   "search": {
     strokeWidth: 2,
-    paths: `<circle cx="11" cy="11" r="8" pathLength="1" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" pathLength="1" />`,
+    paths: `<circle cx="11" cy="11" r="7" pathLength="1" />
+            <line x1="20" y1="20" x2="15.95" y2="15.95" pathLength="1" />`,
   },
   "menu": {
     strokeWidth: 2,
@@ -282,6 +448,61 @@ const ICONS = {
             <line x1="16" y1="2" x2="16" y2="6" />
             <line x1="8" y1="2" x2="8" y2="6" />
             <line x1="3" y1="10" x2="21" y2="10" />`,
+  },
+  // Checklist status shapes (Estudios) — shape carries the state, not only color.
+  "circle-outline": {
+    strokeWidth: 2,
+    paths: `<circle cx="12" cy="12" r="9" />`,
+  },
+  "circle-half": {
+    strokeWidth: 2,
+    paths: `<circle cx="12" cy="12" r="9" />
+            <path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" />`,
+  },
+  "clock": {
+    strokeWidth: 2,
+    paths: `<circle cx="12" cy="12" r="9" />
+            <polyline points="12 7 12 12 15.5 14" />`,
+  },
+  "upload": {
+    strokeWidth: 2,
+    paths: `<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="17 8 12 3 7 8" />
+            <line x1="12" y1="3" x2="12" y2="15" />`,
+  },
+  // Install app (NEO-87): arrow down into a phone — "put this on your device".
+  "install": {
+    strokeWidth: 2,
+    paths: `<rect x="6" y="2" width="12" height="20" rx="2.5" />
+            <polyline points="9 10 12 13 15 10" />
+            <line x1="12" y1="6" x2="12" y2="13" />
+            <line x1="10.5" y1="18" x2="13.5" y2="18" />`,
+  },
+  // iOS Share glyph — the button the install how-to points at.
+  "share-ios": {
+    strokeWidth: 2,
+    paths: `<path d="M8 9H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2h-2" />
+            <polyline points="8 6 12 2 16 6" />
+            <line x1="12" y1="2" x2="12" y2="15" />`,
+  },
+  "add-square": {
+    strokeWidth: 2,
+    paths: `<rect x="3" y="3" width="18" height="18" rx="3" />
+            <line x1="12" y1="8" x2="12" y2="16" />
+            <line x1="8" y1="12" x2="16" y2="12" />`,
+  },
+  "printer": {
+    strokeWidth: 2,
+    paths: `<polyline points="6 9 6 2 18 2 18 9" />
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+            <rect x="6" y="14" width="12" height="8" />`,
+  },
+  "qr-code": {
+    strokeWidth: 1.75,
+    paths: `<rect x="3" y="3" width="7" height="7" rx="1" />
+            <rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="3" y="14" width="7" height="7" rx="1" />
+            <path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3" />`,
   },
   "pencil": {
     strokeWidth: 2,
@@ -328,11 +549,46 @@ const ICONS = {
     strokeWidth: 2,
     paths: `<path d="M4 3h4l2 6-3 2a12 12 0 0 0 6 6l2-3 6 2v4a2 2 0 0 1-2 2A17 17 0 0 1 2 5a2 2 0 0 1 2-2z" />`,
   },
+  "phone-rotate": {
+    strokeWidth: 2,
+    paths: `<rect x="5" y="8" width="8" height="14" rx="2" transform="rotate(-45 9 15)" />
+            <path d="M14 3a7 7 0 0 1 7 7" />
+            <polyline points="19 8 21 10 23 8" />`,
+  },
   "globe": {
     strokeWidth: 1.5,
     paths: `<circle cx="12" cy="12" r="10" />
             <line x1="2" y1="12" x2="22" y2="12" />
             <path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z" />`,
+  },
+  // ── Patient signing page (NEO-126) ───────────────────────────────────────
+  "lock": {
+    strokeWidth: 2,
+    paths: `<rect x="4" y="10" width="16" height="11" rx="2" />
+            <path d="M8 10V7a4 4 0 0 1 8 0v3" />`,
+  },
+  "shield-check": {
+    strokeWidth: 1.8,
+    paths: `<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" />
+            <path d="M8.5 12l2.5 2.5 4.5-5" />`,
+  },
+  "help-circle": {
+    strokeWidth: 1.8,
+    paths: `<circle cx="12" cy="12" r="9" />
+            <path d="M9.5 9a2.5 2.5 0 1 1 4 2c-1 .7-1.5 1.2-1.5 2.5" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />`,
+  },
+  "download": {
+    strokeWidth: 2,
+    paths: `<path d="M12 4v11" />
+            <path d="M7 10l5 5 5-5" />
+            <path d="M5 20h14" />`,
+  },
+  "external-link": {
+    strokeWidth: 2,
+    paths: `<path d="M14 4h6v6" />
+            <path d="M20 4l-9 9" />
+            <path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5" />`,
   },
   "id-card": {
     strokeWidth: 2,
@@ -397,6 +653,31 @@ const ICONS = {
     paths: `<circle cx="12" cy="12" r="9" />
             <line x1="12" y1="7.5" x2="12" y2="13" />
             <circle cx="12" cy="16.5" r="0.6" fill="currentColor" stroke="none" />`,
+  },
+  // ── Primary-clinic toggle (practitioner affiliations panel, NEO-17) ────────
+  "star": {
+    strokeWidth: 1.5,
+    paths: `<path d="M12 2.5l2.9 6.3 6.9.8-5.1 4.8 1.4 6.9L12 17.7l-6.1 3.6 1.4-6.9-5.1-4.8 6.9-.8z" fill="currentColor" stroke-linejoin="round" />`,
+  },
+  "star-outline": {
+    strokeWidth: 1.5,
+    paths: `<path d="M12 2.5l2.9 6.3 6.9.8-5.1 4.8 1.4 6.9L12 17.7l-6.1 3.6 1.4-6.9-5.1-4.8 6.9-.8z" stroke-linejoin="round" />`,
+  },
+  // ── Bare status glyphs (toast status badge, NEO-76) — no enclosing circle,
+  //    the badge itself is the circle ─────────────────────────────────────────
+  "check": {
+    strokeWidth: 2.6,
+    paths: `<path d="M5.5 12.5l4 4L18.5 8" />`,
+  },
+  "info-mark": {
+    strokeWidth: 2.6,
+    paths: `<line x1="12" y1="10.5" x2="12" y2="17.5" />
+            <circle cx="12" cy="6.5" r="1.3" fill="currentColor" stroke="none" />`,
+  },
+  "exclamation": {
+    strokeWidth: 2.6,
+    paths: `<line x1="12" y1="5.5" x2="12" y2="13.5" />
+            <circle cx="12" cy="18" r="1.3" fill="currentColor" stroke="none" />`,
   },
 } as const;
 </script>

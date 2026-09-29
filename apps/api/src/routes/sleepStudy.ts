@@ -1,7 +1,7 @@
 import { Router, type Router as RouterType, type Request, type Response } from "express";
 import multer from "multer";
 import { asyncHandler } from "../middleware/errorHandler.js";
-import { requireAuth } from "../middleware/requireAuth.js";
+import { requireStudyRole } from "../middleware/requireClinicalRole.js";
 import { requireRole } from "../middleware/requireRole.js";
 import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
@@ -9,8 +9,9 @@ import { CreateSleepStudyCommand, UpdateSleepStudyCommand, DeleteSleepStudyComma
 import { UploadSleepStudyAttachmentCommand, DeleteSleepStudyAttachmentCommand } from "../commands/sleepStudyAttachment.js";
 import { GetSleepStudyListQuery, GetSleepStudyByIdQuery } from "../queries/sleepStudy.js";
 import { GetSleepStudyAttachmentsQuery, GetSleepStudyAttachmentDownloadUrlQuery } from "../queries/sleepStudyAttachment.js";
+import { AuditHealthDataReadCommand } from "../commands/healthDataReadAudit.js";
 import { ValidationError } from "../errors.js";
-import { parsePaginationParams } from "./utils.js";
+import { parsePaginationParams, routeParam } from "./utils.js";
 
 // In-memory buffer — attachments are small PDFs (results reports), never
 // streamed to disk. 15MB is generous headroom over a typical few-hundred-KB
@@ -98,7 +99,7 @@ function parseBody(body: SleepStudyBody) {
 // ---------------------------------------------------------------------------
 sleepStudyRouter.get(
   "/sleep-study",
-  requireAuth,
+  requireStudyRole,
   asyncHandler(async (req: Request, res: Response) => {
     const slug = tenantSlugFromHost(req.hostname);
     const { page, limit, sortBy, sortOrder } = parsePaginationParams(req);
@@ -108,7 +109,7 @@ sleepStudyRouter.get(
 
     const result = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
-      return GetSleepStudyListQuery(ctx, {
+      const list = await GetSleepStudyListQuery(ctx, {
         patient_id: patientId || undefined,
         status: status || undefined,
         search: search || undefined,
@@ -117,6 +118,8 @@ sleepStudyRouter.get(
         sortBy,
         sortOrder,
       });
+      await AuditHealthDataReadCommand(ctx, { entity_type: "SleepStudy", entity_id: null, patient_id: patientId || null, view: "sleep-study-list" });
+      return list;
     });
     res.json(result);
   })
@@ -127,15 +130,19 @@ sleepStudyRouter.get(
 // ---------------------------------------------------------------------------
 sleepStudyRouter.get(
   "/sleep-study/:id",
-  requireAuth,
+  requireStudyRole,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing sleep study id");
 
     const slug = tenantSlugFromHost(req.hostname);
     const study = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
-      return GetSleepStudyByIdQuery(ctx, id);
+      const found = await GetSleepStudyByIdQuery(ctx, id);
+      if (found) {
+        await AuditHealthDataReadCommand(ctx, { entity_type: "SleepStudy", entity_id: id, patient_id: found.patient_id, view: "sleep-study" });
+      }
+      return found;
     });
 
     if (!study) { res.status(404).json({ error: "Sleep study not found" }); return; }
@@ -148,7 +155,7 @@ sleepStudyRouter.get(
 // ---------------------------------------------------------------------------
 sleepStudyRouter.post(
   "/sleep-study",
-  requireAuth,
+  requireStudyRole,
   asyncHandler(async (req: Request, res: Response) => {
     const body = req.body as SleepStudyBody;
     const patientId = str(body.patient_id);
@@ -169,9 +176,9 @@ sleepStudyRouter.post(
 // ---------------------------------------------------------------------------
 sleepStudyRouter.patch(
   "/sleep-study/:id",
-  requireAuth,
+  requireStudyRole,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing sleep study id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -191,15 +198,17 @@ sleepStudyRouter.patch(
 // ---------------------------------------------------------------------------
 sleepStudyRouter.get(
   "/sleep-study/:id/attachments",
-  requireAuth,
+  requireStudyRole,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing sleep study id");
 
     const slug = tenantSlugFromHost(req.hostname);
     const attachments = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
-      return GetSleepStudyAttachmentsQuery(ctx, id);
+      const items = await GetSleepStudyAttachmentsQuery(ctx, id);
+      await AuditHealthDataReadCommand(ctx, { entity_type: "SleepStudy", entity_id: id, view: "sleep-study-attachments" });
+      return items;
     });
     res.json({ items: attachments });
   })
@@ -210,10 +219,10 @@ sleepStudyRouter.get(
 // ---------------------------------------------------------------------------
 sleepStudyRouter.post(
   "/sleep-study/:id/attachments",
-  requireAuth,
+  requireStudyRole,
   upload.single("file"),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing sleep study id");
     if (!req.file) throw new ValidationError("file is required");
 
@@ -236,16 +245,18 @@ sleepStudyRouter.post(
 // ---------------------------------------------------------------------------
 sleepStudyRouter.get(
   "/sleep-study/:id/attachments/:attachmentId/download",
-  requireAuth,
+  requireStudyRole,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
-    const attachmentId = req.params.attachmentId?.trim();
+    const id = routeParam(req, "id")?.trim();
+    const attachmentId = routeParam(req, "attachmentId")?.trim();
     if (!id || !attachmentId) throw new ValidationError("Missing sleep study id or attachment id");
 
     const slug = tenantSlugFromHost(req.hostname);
     const url = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
-      return GetSleepStudyAttachmentDownloadUrlQuery(ctx, id, attachmentId);
+      const signedUrl = await GetSleepStudyAttachmentDownloadUrlQuery(ctx, id, attachmentId);
+      await AuditHealthDataReadCommand(ctx, { entity_type: "DocumentReference", entity_id: attachmentId, view: "sleep-study-attachment-download" });
+      return signedUrl;
     });
     res.json({ url });
   })
@@ -256,10 +267,10 @@ sleepStudyRouter.get(
 // ---------------------------------------------------------------------------
 sleepStudyRouter.delete(
   "/sleep-study/:id/attachments/:attachmentId",
-  requireAuth,
+  requireStudyRole,
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
-    const attachmentId = req.params.attachmentId?.trim();
+    const id = routeParam(req, "id")?.trim();
+    const attachmentId = routeParam(req, "attachmentId")?.trim();
     if (!id || !attachmentId) throw new ValidationError("Missing sleep study id or attachment id");
 
     const slug = tenantSlugFromHost(req.hostname);
@@ -278,7 +289,7 @@ sleepStudyRouter.delete(
   "/sleep-study/:id",
   requireRole("admin"),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = req.params.id?.trim();
+    const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing sleep study id");
 
     const slug = tenantSlugFromHost(req.hostname);

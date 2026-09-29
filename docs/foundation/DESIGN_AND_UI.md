@@ -116,7 +116,7 @@ for new/touched code going forward.
 |---|---|---|
 | `--pwa-fib-xs` … `--pwa-fib-3xl` | 5 / 8 / 13 / 21 / 34 / 55 / 89px | Fibonacci spacing/shape scale — expressive surfaces (feed cards) |
 | `--pwa-radius` | 10px | Flat controls: inputs, buttons |
-| `--pwa-modal-radius` | 16px | Dialogs/modals |
+| `--pwa-modal-radius` | 28px | Dialogs/modals (M3 extra-large) |
 | `--pwa-radius-sm` | 2px | Small elements (loader bars) |
 | `--pwa-shadow-sm` / `--pwa-shadow-md` | soft, low-alpha black | Supporting elevation only — never the primary depth cue |
 | `--pwa-ease-out-smooth` | `cubic-bezier(0.22, 1, 0.36, 1)` | Default transition easing |
@@ -159,6 +159,26 @@ not a `background-color` swap, which would replace the tone instead of tinting i
 .card--clickable:active::after { opacity: 0.08; }
 ```
 
+## Identity avatars & entity links
+
+Every patient, doctor (HCP) and organization (HCO) name in the PWA shows up with an avatar,
+whether it's a table cell, a mobile card line, a detail panel or a note author. It is never plain text.
+
+- **Primary name of a row** (the entity the row opens): `AppAvatar` + name
+  (32px in table cells, 55px as the mobile card avatar).
+- **Any related entity** (the doctor on a patient row, the dentist on a plan, a doctor's
+  clinics, a lead's institution): `EntityLink`, i.e. a 20px avatar + link to that entity's
+  detail page. Use the `utils/entityLinks.ts` helpers (`hcpDetailLink`, `hcoDetailLink`,
+  `patientDetailLink`, `hcoListLink`). They return `null` for a missing id, and in that case the
+  name renders unlinked. Mobile card second lines use `EntityMetaLine` (meta text + EntityLink),
+  because a `" · "`-joined string can't carry a link.
+- **Organizations always get the avatar and the link together.** When there's no organization
+  id (a lead's free-text institution), link to the filtered HCO list and pass `entity-type="hco"`.
+- **Patient vs. doctor at a glance:** doctors, reps and leads get a solid fill with white initials.
+  Patients get the negative: a white fill, with the ring and initials in the same seeded color. The ring
+  scales with size (`size / 19`, min 1px) and outlined initials are bold (700), so the ring
+  and the letter strokes match at every size. Organizations get their type icon, never initials.
+
 ## Rollout status
 
 - **Piloted**: `AppEntityList.vue` / `.css` mobile feed cards — Fibonacci shape/spacing,
@@ -176,9 +196,72 @@ not a `background-color` swap, which would replace the tone instead of tinting i
     on-surface `currentColor`) was still applying on top of the already-light `outline-variant`
     gray, double-dimming it. Forced to full opacity at rest since the color itself is already
     the subtle element; hover/error still layer their own opacity bump on top unchanged.
-  - Dialogs: `.pwa-form-dialog__card` and the new shared `.pwa-confirm-dialog__card` (nested
-    discard/confirm dialogs, previously a bare `elevation="8"` VCard) both use
-    `surface-container-high` tone + `--pwa-shadow-md` as a supporting cue only.
+  - Dialogs (2026-09-26): exactly two shells — `AppFormDialog.vue` for every form-style dialog
+    and `AppConfirmDialog.vue` for every two-option confirm. A raw `<VDialog>` anywhere else
+    fails `AppFormDialog.spec.ts` (only the full-screen presentation/legal-document viewers are
+    exempt). Surface is plain white (`surface`), not the `surface-container-high` grey tone
+    used before — forms read as paper, the scrim already separates them from the page;
+    `--pwa-shadow-md` stays as a supporting cue.
+  - "Record stack" paper look (NEO-85, 2026-09-26, variant C picked from a live proposal): the
+    chrome and everything behind the content is a teal-grey desk (`--pwa-desk`); the routed
+    content is one white sheet (`AppLayout .layout-main__inner`, AppShell `sheet` mode keeps its
+    top corners round) with two more sheets peeking out under its bottom edge; list rows are
+    ruled lines (`--pwa-rule`) under a brand-coloured header rule; dialogs are a single lifted
+    sheet with no stack under it (decided 2026-09-26), the main action a filled pill. The peeking sheets are extra `box-shadow`
+    layers (offset down, negative spread), not elements, so nothing can clip or mis-stack them.
+    Every tint mixes from `--pwa-primary`, which the tenant config overrides at runtime.
+    Motion: rows stagger in with M3 emphasized-decelerate; dialogs grow from the tap and close
+    faster (180ms emphasized-accelerate); on phones (< 600px) form dialogs are a bottom sheet
+    (`sheetDialogTransition`); focused fields get a brand halo; all of it honours
+    `prefers-reduced-motion`.
+  - Page changes (NEO-85, picked from a live proposal): list → record slides the record in
+    from the right over the list (which dims and drifts left), Back slides it off again, and
+    every other move (menu / bottom nav) is a 90/210ms M3 fade-through. Built on the View
+    Transitions API (`router/pageTransitions.ts` + `assets/page-transitions.css`) with only the
+    content sheet named, so the bar and menu never move; browsers without it keep the old
+    `view-fade-lift`. Don't wrap the routed view in a CSS-less `<Transition>` where View
+    Transitions run: the synchronous swap made Vue throw and the list stayed empty after Back.
+  - "Carpeta" form folder (NEO-92, 2026-09-26, variant C picked from a live proposal): a
+    FormRenderer form whose fields span ≥ 2 sections (`FormFieldDef.section`, labels
+    `app.formRenderer.section.*`) opens as a folder. A tinted spine on the left
+    (`FormFolderSpine.vue`) holds the avatar, the live name, the record header's detail line
+    (`useIdentity().detailsFor`), the status pill and a scroll-spy section index. The page on
+    the right holds the title + X, one sheet with a ruled heading per section, and the actions
+    with an "Unsaved changes: n" counter. Sections with unsaved changes get a warning-colour
+    dot. The spine is desktop-only (≥ 960px). Tablets (600–959px, decided 2026-09-26: "like
+    mobile but still on a tile") keep a floating tile and phones the bottom sheet; both show the
+    index as chips under the header (`FormSectionChips.vue`).
+    Create and edit are the same view. Content scrolled behind the header or the actions fades
+    out over `--pwa-dialog-fade` (20px, a mask on the body) instead of meeting a hairline:
+    the hairline let a floating field label touch the header. No serif (decided); hierarchy
+    comes from weight and size.
+  - Phone list toolbar: three icons (search, filter, add); focused search grows over the row
+    while the others step aside; a query left behind stays as a tinted pill on the left.
+  - Dialog scroll model: the dialog is capped at the viewport, header and actions stay pinned,
+    only the body scrolls, and a hairline divider shows under the header / above the actions
+    only while content runs behind them (M3). **Bugfix** (Vuetify 4): Vuetify ships all of its
+    CSS in cascade layers, so our unlayered `overflow: hidden` on the card beat Vuetify's own
+    `overflow-y: auto` and no form taller than the screen could scroll or reach Save. The scroll
+    model now lives only in `theme.scss`'s `.pwa-form-dialog*` rules + `AppFormDialog.vue`;
+    measured at real phone/laptop heights by `apps/pwa/e2e/dialog-scroll.spec.ts` on all three
+    engines. General rule after Vuetify 4: any unlayered app CSS on a Vuetify class wins over
+    Vuetify regardless of specificity — never set layout properties (overflow, display,
+    height) on Vuetify elements outside a shell that owns the whole model.
+  - Dialog headers: every titled dialog uses `AppDialogHeader.vue` — optional avatar, 16px gap,
+    title, close X pinned right (`closable=false` only for confirm dialogs). Never a hand-built
+    `VCardTitle`: Vuetify injects its component CSS after `theme.scss`, so a global flex rule on
+    a card title silently loses (`display: block`) and the X wraps under the avatar. Guarded by
+    `AppDialogHeader.spec.ts` (no `VCardTitle` in any dialog file) and
+    `apps/pwa/e2e/dialog-header.spec.ts` (real-browser layout on Chromium/Firefox/WebKit).
+  - Dialog spacing (M3 dialog spec, 2026-09-25): every dialog card carries
+    `pwa-form-dialog__card` (forms) or `pwa-confirm-dialog__card` (confirmations) and gets
+    one spacing system from `theme.scss`'s `--pwa-dialog-*` tokens — 24dp container padding,
+    16dp header→content, 16dp between fields, 24dp content→actions, 8dp between actions,
+    28dp corner radius (`--pwa-modal-radius`), M3 headline-small title (24/32), sentence-case
+    text buttons with 12dp side padding. Vuetify's always-reserved error line under each field
+    only takes space while it shows a message. The same e2e spec measures all of these in
+    pixels; the unit guard fails on a dialog card missing one of the two classes.
+    Uppercase buttons outside dialogs are unchanged (still Vuetify's M2-style default).
   - Desktop data table: `.app-entity-list__table-wrap` border moved from generic
     `--v-border-color` to `outline-variant`; header row (`.v-data-table__th`) now sits on
     `surface-container-low` as a distinct tonal layer instead of Vuetify's own header

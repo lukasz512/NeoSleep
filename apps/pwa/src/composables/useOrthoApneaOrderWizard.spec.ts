@@ -10,7 +10,7 @@ vi.mock("vue-i18n", () => ({
   useI18n: () => ({ t: (k: string) => k }),
 }));
 
-import { useOrthoApneaOrderWizard, type OrthoApneaProduct } from "./useOrthoApneaOrderWizard";
+import { useOrthoApneaOrderWizard, toWizardFieldErrors, type OrthoApneaProduct } from "./useOrthoApneaOrderWizard";
 import { useNotifications } from "./useNotifications";
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -206,6 +206,69 @@ describe("useOrthoApneaOrderWizard", () => {
     });
   });
 
+  // NEO-109: a 400 naming a field is marked in the wizard, never toasted.
+  describe("field errors from the API", () => {
+    const DENTIST_REJECTED = {
+      status: 400,
+      body: { error: "dentist_id does not reference an existing practitioner", code: "VALIDATION_ERROR", field: "dentist_id", reason: "invalid" },
+    };
+
+    it("maps API field keys (snake_case and nested deliveryAddress.*) to the wizard's form keys", () => {
+      expect(toWizardFieldErrors({ dentist_id: "invalid", "deliveryAddress.city": "required" })).toEqual({ doctorId: "invalid", altCity: "required" });
+      expect(toWizardFieldErrors({ patient_id: "required" })).toBeNull();
+      expect(toWizardFieldErrors(null)).toBeNull();
+    });
+
+    it("confirmOrder: a rejected dentist_id keeps the dialog open, names doctorId, and shows no toast", async () => {
+      const { calls } = stubFetchRoutes([
+        ["/patients/patient-1/ensure", () => ({ status: 200, body: { externalId: "oa-1" } })],
+        ["/treatment-plan", () => DENTIST_REJECTED],
+      ]);
+      const wizard = useOrthoApneaOrderWizard();
+      wizard.form.products = [NOA, MORNING_ALIGNER];
+
+      const result = await wizard.confirmOrder("patient-1", "study-1");
+
+      expect(result).toBe(false);
+      expect(wizard.rejectedFields.value).toEqual({ doctorId: "invalid" });
+      expect(useNotifications().notifications.value).toHaveLength(0);
+      // Stops at the first plan — every product would be rejected on the same field.
+      expect(calls.filter((c) => c.url.includes("/treatment-plan"))).toHaveLength(1);
+      expect(wizard.submitLoading.value).toBe(false);
+    });
+
+    it("confirmOrder: a 400 naming a field the wizard doesn't have keeps the existing toast", async () => {
+      stubFetchRoutes([
+        ["/patients/patient-1/ensure", () => ({ status: 200, body: { externalId: "oa-1" } })],
+        ["/treatment-plan", () => ({ status: 400, body: { error: "sleep_study_id is required", code: "VALIDATION_ERROR", field: "sleep_study_id", reason: "required" } })],
+      ]);
+      const wizard = useOrthoApneaOrderWizard();
+      wizard.form.products = [NOA];
+
+      const result = await wizard.confirmOrder("patient-1", "study-1");
+
+      expect(result).toBe(true);
+      expect(wizard.rejectedFields.value).toBeNull();
+      expect(useNotifications().notifications.value[0]?.message).toBe("app.orthoApneaOrder.error");
+    });
+
+    it("persistDraft: a rejected dentist_id returns false and names doctorId; the next success clears it", async () => {
+      let reject = true;
+      stubFetchRoutes([
+        ["/treatment-plan", () => (reject ? DENTIST_REJECTED : { status: 201, body: { id: "plan-1" } })],
+      ]);
+      const wizard = useOrthoApneaOrderWizard();
+      wizard.form.doctorId = "gone-doctor";
+
+      expect(await wizard.persistDraft("patient-1", "study-1")).toBe(false);
+      expect(wizard.rejectedFields.value).toEqual({ doctorId: "invalid" });
+
+      reject = false;
+      expect(await wizard.persistDraft("patient-1", "study-1")).toBe(true);
+      expect(wizard.rejectedFields.value).toBeNull();
+    });
+  });
+
   describe("confirmOrder", () => {
     it("returns false and makes no API calls when no products are selected", async () => {
       const { calls } = stubFetchRoutes([]);
@@ -252,6 +315,47 @@ describe("useOrthoApneaOrderWizard", () => {
 
       expect(result).toBe(true); // dialog still closes — some orders did go through
       expect(useNotifications().notifications.value[0]?.message).toBe("app.orthoApneaOrder.partialFailure");
+    });
+
+    it("Retry on the partial-failure toast re-sends only the unsent order (same plan), then reports success", async () => {
+      let planCounter = 0;
+      let treatmentCalls = 0;
+      const { calls } = stubFetchRoutes([
+        ["/patients/patient-1/ensure", () => ({ status: 200, body: { externalId: "oa-1" } })],
+        ["/treatment-plan", () => ({ status: 201, body: { id: `plan-${++planCounter}` } })],
+        ["/partners/orthoapnea/treatments", () => {
+          treatmentCalls += 1;
+          return treatmentCalls === 2 ? { status: 503, body: { error: "down" } } : { status: 201, body: {} };
+        }],
+      ]);
+      const wizard = useOrthoApneaOrderWizard();
+      wizard.form.products = [NOA, MORNING_ALIGNER];
+      await wizard.confirmOrder("patient-1", "study-1");
+
+      const toast = useNotifications().notifications.value[0]!;
+      expect(toast.action?.labelKey).toBe("notification.action.retry");
+      useNotifications().notifications.value = [];
+      await toast.action!.run();
+
+      const orderCalls = calls.filter((c) => c.url.includes("/partners/orthoapnea/treatments"));
+      expect(orderCalls).toHaveLength(3); // 2 in the wizard + exactly 1 retry
+      expect(JSON.parse(orderCalls[2]!.init!.body as string).treatment_plan_id).toBe("plan-2"); // no new plan created
+      expect(planCounter).toBe(2);
+      expect(useNotifications().notifications.value[0]?.message).toBe("app.orthoApneaOrder.success");
+    });
+
+    it("no Retry when every failure happened before a plan existed (nothing to re-send)", async () => {
+      stubFetchRoutes([
+        ["/patients/patient-1/ensure", () => ({ status: 200, body: { externalId: "oa-1" } })],
+        ["/treatment-plan", () => ({ status: 500, body: { error: "boom" } })],
+      ]);
+      const wizard = useOrthoApneaOrderWizard();
+      wizard.form.products = [NOA];
+      await wizard.confirmOrder("patient-1", "study-1");
+
+      const toast = useNotifications().notifications.value[0]!;
+      expect(toast.message).toBe("app.orthoApneaOrder.error");
+      expect(toast.action).toBeUndefined();
     });
 
     it("returns false and shows the generic error when the initial ensure-patient call throws", async () => {

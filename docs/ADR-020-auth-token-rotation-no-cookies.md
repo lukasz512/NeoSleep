@@ -50,3 +50,12 @@ Constraints from this decision: minimal new dependencies, robust/medical-grade, 
 | GDPR Art. 5(1)(f) (integrity/confidentiality) | Logout now provably ends a session — auditable, testable claim for a DPA review. |
 | ISO 27001 / SOC 2 (access control, session management) | Token lifetime, revocation, and theft-detection behavior are now all things that can be demonstrated to an auditor with a test suite, not asserted from reading code. |
 | Future HIPAA (US expansion) | §164.312(a)(2)(iii) (automatic logoff) and (d) (person/entity authentication) are both strengthened by short-lived access tokens and real revocation. |
+
+## Addendum (2026-09-25): partner media tokens
+
+A `<video src>` / `<a href>` cannot send `Authorization: Bearer`, so OrthoApnea webinars and documents could never load (the PWA also pointed them at its own static host). Rather than reintroduce a cookie, `GET /api/v1/partners/orthoapnea/resources` now also returns a **media token**: a JWT signed with the same secret, `purpose: "partner-media"`, 4-hour expiry, carrying only the user id.
+
+- It is accepted **only** by `GET /api/v1/partners/orthoapnea/resources/:id/media`, via `?t=` (`requirePartnerMediaAuth`); a normal Bearer login still works there too.
+- `verifyAuthToken` rejects any token with a `purpose`, so a media token can never act as a login; `verifyMediaToken` rejects access tokens, so an access token is never put in a URL.
+- It lives longer than the 15-minute access token because one webinar keeps issuing Range requests for up to an hour; the PWA refetches the list (and a fresh token) after 3 hours.
+- Accepted risk: the URL can end up in logs or be copied, granting ≤4 h of read access to partner training media only — no patient data, no other route. Same shape as a signed media URL. If partner media ever carries personal data, move to a same-origin proxy instead.

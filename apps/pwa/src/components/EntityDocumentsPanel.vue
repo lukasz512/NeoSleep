@@ -17,6 +17,7 @@
 </template>
 
 <script setup lang="ts">
+import { reportCaught } from "@api";
 /**
  * Entity-agnostic "Documents" tab panel — one file instead of duplicating
  * UserDetailView.vue's inline fetch/list/download logic on HCP/HCO/Patient
@@ -30,7 +31,7 @@ import { useI18n } from "vue-i18n";
 import AppButton from "./AppButton.vue";
 import AppLoadingState from "./AppLoadingState.vue";
 import { apiFetch } from "../composables/useApi";
-import { useNotifications } from "../composables/useNotifications";
+import { retryAction, useNotifications } from "../composables/useNotifications";
 
 interface EntityDocument {
   id: string;
@@ -59,6 +60,10 @@ function documentTypeLabel(doc: EntityDocument): string {
   return translated !== key ? translated : doc.documentType;
 }
 
+function failLoad(): void {
+  notifications.show(t("user.entityDocuments.errorLoad"), "error", undefined, { icon: "file", action: retryAction(load) });
+}
+
 async function load(): Promise<void> {
   loading.value = true;
   try {
@@ -66,10 +71,11 @@ async function load(): Promise<void> {
     if (res.ok) {
       documents.value = (await res.json()) as EntityDocument[];
     } else {
-      notifications.show(t("user.entityDocuments.errorLoad"), "error");
+      failLoad();
     }
-  } catch {
-    notifications.show(t("user.entityDocuments.errorLoad"), "error");
+  } catch (err) {
+    reportCaught(err, { where: "EntityDocumentsPanel.load" });
+    failLoad();
   } finally {
     loading.value = false;
   }
@@ -81,7 +87,10 @@ async function onDownload(documentId: string): Promise<void> {
     const { url } = (await res.json()) as { url: string };
     window.open(url, "_blank", "noopener");
   } else {
-    notifications.show(t("user.entityDocuments.errorLoad"), "error");
+    notifications.show(t("user.entityDocuments.errorLoad"), "error", undefined, {
+      icon: "file",
+      action: retryAction(() => onDownload(documentId)),
+    });
   }
 }
 

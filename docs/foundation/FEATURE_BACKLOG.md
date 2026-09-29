@@ -62,6 +62,7 @@
 | SMS via Twilio | `planned` | same webhook_event queue |
 | Inbound message sync (webhook workers) | `planned` | webhook_event → conversation → message |
 | Notification Center (bell + badge, in-app inbox) | `in_progress` | `notification`/`notification_delivery` tables, GET/PATCH routes, Dashboard-only bell with pulsing unread dot on nav — see ADR-012. Inbox is empty until real event producers are wired (see next two rows). **No tests yet** — see memory `project_test_suite_weak` for the concrete file list, deferred to a dedicated session |
+| Patient QR submission → staff notification | `planned` — **still to do** | Decided 2026-09-28 (NEO-173 scoping form): when a patient saves a questionnaire/consent via QR, notify the QR creator + the patient's treating doctor + admins + every clinical role with access to the patient (dedupe per user). Bell moves to the top app bar for **every role** (today Dashboard-only, and Dashboard is admin-only → doctors see no bell). In-app only — no push, no email yet. Build on the NEO-134 notification engine (`notify()` + catalog). NEO-173 shipped the prerequisite: live refresh of the open Estudios tab + per-user "Nuevo" marker (opened = audit_log `read` on `ChecklistEntry`) |
 | Push notifications | `planned` | push_subscription schema fixed to match routes/push.ts (ADR-012 §1); still no real send call wired to a domain event |
 | Notification preferences | `planned` | app_config.notification_defaults exists; per-user category opt-out not built — MVP-only for now per user, revisit as needs get concrete. Non-optional categories (security, legal, operational) classified in ADR-012 |
 | First real event producer (sleep_study → pulmonologist notification) | `planned` | assign practitioner (reuse `interpreted_by`/`interpreted_at` as assign+complete) → notify; on complete → notify their manager. sleep_study has zero app code today (schema only) |
@@ -130,6 +131,7 @@
 | PDPA consent flow (TH) | `planned` | same table, jurisdiction='TH' |
 | EFPIA annual disclosure report | `planned` | encounter.transfer_of_value + event_attendee.cost_allocated |
 | Sample audit trail (EFPIA) | `planned` | sample_transaction ledger + signature_url |
+| Document authenticity verification (ID + QR in the PDF footer) | `deferred` | Requested 2026-09-26 with the clinical document theme: a public check page, a PDF hash compared in the browser, and revocation. No Linear ticket yet (connector not authorised). Spec: `docs/stories/document-authenticity-verification.md` |
 | SaaS billing (Stripe) | `planned` | platform.invoice + platform.payment_method; replaces "manual for MVP" |
 | Supabase → Hetzner VPS migration | `deferred` | post-MVP, when cost justifies |
 | Two Supabase projects (platform / client) | `deferred` | Option B; viable at 5+ paying clients |

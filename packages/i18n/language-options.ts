@@ -14,3 +14,12 @@ export const LANGUAGE_OPTIONS: {
   { id: "pl", labelKey: "app.language.pl", nativeLabel: "Polski", flag: "🇵🇱" },
   { id: "mx", labelKey: "app.language.mx", nativeLabel: "Español (MX)", flag: "🇲🇽" },
 ];
+
+/**
+ * App locale id → BCP 47 tag for Intl APIs (dates, numbers). `mx` is an
+ * internal short key, not a valid BCP 47 language tag, so Intl would silently
+ * fall back to the runtime default without this mapping.
+ */
+export function intlLocale(id: string): string {
+  return id === "mx" ? "es-MX" : id;
+}

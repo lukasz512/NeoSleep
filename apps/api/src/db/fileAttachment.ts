@@ -19,6 +19,8 @@ export interface FileAttachment {
   mime_type: string | null;
   size_bytes: number | null;
   is_public: boolean;
+  /** users.id of the staff member who uploaded it; null for patient-signed files. */
+  uploaded_by: string | null;
   metadata: Record<string, unknown> | null;
   created_at: Date;
 }
@@ -39,7 +41,7 @@ export interface InsertFileAttachmentInput {
 }
 
 const FILE_ATTACHMENT_COLS =
-  "id, entity_type, entity_id, url, storage_provider, bucket, path, filename, mime_type, size_bytes, is_public, metadata, created_at";
+  "id, entity_type, entity_id, url, storage_provider, bucket, path, filename, mime_type, size_bytes, is_public, uploaded_by, metadata, created_at";
 
 export async function insertFileAttachment(
   client: PoolClient,

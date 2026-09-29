@@ -1,8 +1,30 @@
 <template>
-  <VAvatar :size="size" :color="avatarUrl ? undefined : bgColor" class="app-avatar">
+  <VAvatar
+    :size="size"
+    class="app-avatar"
+    :class="[`app-avatar--${tone}`, { 'app-avatar--photo': !!avatarUrl }]"
+    :data-tint="`${tone}-${tintIndex}`"
+    :style="avatarStyle"
+  >
     <VImg v-if="avatarUrl" :src="avatarUrl" :alt="name || ''" cover />
     <span v-else-if="initials" class="app-avatar__initials" :style="{ fontSize: initialsFontSize }">{{ initials }}</span>
     <AppIcon v-else :name="iconName" class="app-avatar__icon" />
+    <!-- Doctor badge (NEO-57): a small disc on the bottom-right corner with
+         the doctor's specialty icon (tooth for a dentist, lungs for a
+         pulmonologist, ...; stethoscope when unknown), so a doctor reads as
+         a doctor — and as which kind — while keeping their initials. -->
+    <span v-if="showDoctorBadge" class="app-avatar__badge" data-testid="app-avatar-doctor-badge" aria-hidden="true">
+      <AppIcon :name="badgeIcon" class="app-avatar__badge-icon" />
+    </span>
+    <!-- Lead channel badge (NEO-155): where the lead came from (website,
+         WhatsApp, referral, ...), sitting over the dashed outline. -->
+    <span v-else-if="leadBadgeIcon" class="app-avatar__badge app-avatar__badge--lead" data-testid="app-avatar-lead-badge" aria-hidden="true">
+      <AppIcon :name="leadBadgeIcon" class="app-avatar__badge-icon" />
+    </span>
+    <!-- Patient device-order ring (NEO-155): an arc around the avatar filled
+         to the order's step (pending -> delivered), only while an order is
+         live; the status itself is spelled out wherever the order is shown. -->
+    <span v-if="orderProgress !== null" class="app-avatar__order-ring" data-testid="app-avatar-order-ring" aria-hidden="true" />
   </VAvatar>
 </template>
 
@@ -10,15 +32,32 @@
 import { computed } from "vue";
 import AppIcon, { type AppIconName } from "./AppIcon.vue";
 import { getInitials, getInitialsFromParts } from "../utils/initials";
-import { getAvatarColor } from "../utils/avatarColor";
 import { hcoTypeIcon } from "../utils/hcoLabels";
+import { identityTone } from "../utils/identityTone";
+import { avatarTintIndex } from "../utils/avatarHue";
+import { leadSourceIcon } from "../utils/leadSource";
+import { deviceOrderProgress } from "../utils/deviceOrderStage";
+import { practitionerSpecialtyIcon } from "../utils/hcpLabels";
 
 /**
  * Placeholder identity photo, shared by HCP/HCO/patient/lead/user lists,
  * detail headers, and FormRenderer's edit/add dialog. Falls back in order:
  * real photo (avatarUrl) -> initials on a brand-derived color -> a generic
- * icon for the entity type (used when there's no name yet, e.g. a fresh
- * "add" form).
+ * icon for the entity type. An *identity* (hcp/patient/lead/user - a person)
+ * follows that full chain; a *place* (hco - a clinic/org, not a person)
+ * always gets its entity icon instead, regardless of name - "Dra. Laura
+ * Cuicas" as a clinic name is not a person to initial. This is enforced here
+ * so every caller gets it right for free, rather than each call site having
+ * to remember to withhold `name` for place types.
+ *
+ * NEO-155 identity ("quiet + accent"): a circle tinted from its type's color
+ * family (theme.scss $pwa-avatar-families) — patients in the brand teal, the
+ * rest in the desk's greys: doctors cool graphite, organizations warm stone
+ * (tinted by organization type), users neutral. Within a family the tint is
+ * seeded from the name (utils/avatarHue.ts), so a person keeps one color
+ * everywhere. Marks carry the details: a doctor's specialty badge, a lead's
+ * dashed outline (no fill — not in the system yet) with its channel badge, a
+ * patient's device-order ring.
  */
 export type AppAvatarEntityType = "hcp" | "hco" | "patient" | "lead" | "user" | "event";
 
@@ -46,22 +85,44 @@ const props = withDefaults(
     lastName?: string | null;
     avatarUrl?: string | null;
     entityType?: AppAvatarEntityType;
-    /** Only meaningful when entityType is "hco" — organization.type (clinic/hospital/pharmacy/practice/other), selects the type-specific icon. */
+    /** Only meaningful when entityType is "hco" — organization.type (clinic/hospital/pharmacy/practice/other), selects the type-specific icon and tint. */
     orgType?: string | null;
     size?: number | string;
+    /** Only for entityType "hcp": the doctor's (first) specialty code — picks the badge icon. */
+    specialty?: string | null;
+    /** Only for entityType "patient": latest device purchase_order.status — draws the order ring. */
+    orderStatus?: string | null;
+    /** Only for entityType "lead": lead.source (utils/leadSource.ts) — picks the channel badge. */
+    leadSource?: string | null;
   }>(),
-  { entityType: "user", size: 40 },
+  { entityType: "user", size: 40, specialty: null, orderStatus: null, leadSource: null },
 );
 
+const tone = computed(() => identityTone(props.entityType));
+// Organizations are tinted by what they are; people by who they are.
+const tintIndex = computed(() => {
+  if (tone.value === "org") return avatarTintIndex("org", props.orgType);
+  const seed = props.name?.trim() || [props.firstName, props.lastName].filter(Boolean).join(" ");
+  return avatarTintIndex(tone.value, seed);
+});
+const orderProgress = computed(() => (props.entityType === "patient" ? deviceOrderProgress(props.orderStatus) : null));
+const avatarStyle = computed(() => {
+  const tint = `--pwa-avatar-${tone.value}-${tintIndex.value}`;
+  return {
+    "--app-avatar-bg": `var(${tint}-bg)`,
+    "--app-avatar-fg": `var(${tint}-fg)`,
+    ...(orderProgress.value === null ? {} : { "--app-avatar-order-progress": String(orderProgress.value) }),
+  };
+});
+
 const initials = computed(() => {
+  if (props.entityType === "hco") return "";
   if (props.firstName?.trim() && props.lastName?.trim()) {
     return getInitialsFromParts(props.firstName, props.lastName);
   }
   return props.name?.trim() ? getInitials(props.name) : "";
 });
-// Falls back to the entity-type string as the color seed so even a nameless
-// placeholder gets a stable, on-brand color instead of Vuetify's flat gray.
-const bgColor = computed(() => getAvatarColor(props.name?.trim() || props.entityType));
+
 const iconName = computed(() =>
   props.entityType === "hco" ? hcoTypeIcon(props.orgType ?? undefined) : ENTITY_ICONS[props.entityType],
 );
@@ -74,19 +135,97 @@ const FIBONACCI_INITIALS_RATIO = 21 / 55;
 // `size` must be numeric (px) here: percentage/keyword sizes (e.g. "100%")
 // resolve their real pixel size only via CSS, so callers relying on that
 // must also pass the equivalent numeric size for this calculation.
-const initialsFontSize = computed(() => {
-  const sizeNum = typeof props.size === "number" ? props.size : parseFloat(String(props.size)) || 40;
-  return `${Math.max(sizeNum * FIBONACCI_INITIALS_RATIO, 8)}px`;
-});
+const sizePx = computed(() => (typeof props.size === "number" ? props.size : parseFloat(String(props.size)) || 40));
+// Every doctor avatar carries the badge, at every size — the disc has its
+// own minimum size (CSS below), so it stays readable on a 20px mention.
+const showDoctorBadge = computed(() => props.entityType === "hcp");
+const badgeIcon = computed(() => practitionerSpecialtyIcon(props.specialty ?? undefined));
+const leadBadgeIcon = computed(() => (props.entityType === "lead" ? leadSourceIcon(props.leadSource) : null));
+const initialsFontSize = computed(() => `${Math.max(sizePx.value * FIBONACCI_INITIALS_RATIO, 8)}px`);
+
 </script>
 
 <style scoped>
 .app-avatar {
   flex-shrink: 0;
+  /* Circle (NEO-155). overflow stays visible so the badges and the lead /
+     order rings can sit over the edge; the photo clips itself. */
+  overflow: visible !important;
+  position: relative;
+  isolation: isolate;
+  background: var(--app-avatar-bg);
+  color: var(--app-avatar-fg);
+}
+
+.app-avatar :deep(.v-img) {
+  border-radius: 50%;
+}
+
+/* Lead: outline only — a dashed teal ring and no fill — someone on the way
+   in, not in the system yet. The channel badge sits above the ring. */
+.app-avatar--lead {
+  background: transparent;
+}
+
+.app-avatar--lead::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px dashed var(--pwa-identity-lead);
+  pointer-events: none;
+}
+
+.app-avatar__order-ring {
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: conic-gradient(
+    var(--pwa-identity-patient) calc(var(--app-avatar-order-progress) * 1turn),
+    color-mix(in srgb, var(--pwa-identity-patient) 22%, transparent) 0
+  );
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+}
+
+.app-avatar__badge {
+  position: absolute;
+  /* Fixed small overhang (not a % of the avatar): enough to sit on the
+     corner, never so much that a table cell or card clips it. The disc is
+     never smaller than 12px, so the icon stays legible on a 20px mention;
+     on big avatars it scales with them. Above the lead's dashed ring. */
+  right: -3px;
+  bottom: -3px;
+  width: max(44%, 12px);
+  height: max(44%, 12px);
+  z-index: 2;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--pwa-avatar-doctor-badge);
+  color: rgb(var(--v-theme-surface));
+  /* Ring in the surface color separates the disc from the avatar under it. */
+  box-shadow: 0 0 0 2px rgb(var(--v-theme-surface));
+}
+
+.app-avatar__badge--lead {
+  background: var(--pwa-identity-lead);
+}
+
+.app-avatar__badge-icon {
+  width: 72%;
+  height: 72%;
+  /* Thicker than the icon's own stroke so it survives at ~9px. */
+  stroke-width: 2.8 !important;
+}
+
+.app-avatar--photo {
+  background: transparent;
 }
 
 .app-avatar__initials {
-  color: #fff;
+  color: inherit;
   font-weight: 600;
   letter-spacing: 0.02em;
 }
@@ -94,6 +233,6 @@ const initialsFontSize = computed(() => {
 .app-avatar__icon {
   width: 55%;
   height: 55%;
-  color: #fff;
+  color: inherit;
 }
 </style>

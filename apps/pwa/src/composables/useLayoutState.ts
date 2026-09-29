@@ -3,14 +3,16 @@ import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useTheme } from "vuetify";
 import { useDebounceFn } from "@vueuse/core";
-import { useThemeStore } from "@stores";
-import { SIDEBAR_DEFAULT_COLLAPSED, MOBILE_BREAKPOINT } from "../constants";
+import { useThemeStore, type ThemePreference } from "@stores";
+import { SIDEBAR_DEFAULT_COLLAPSED, SIDEBAR_COLLAPSE_ENABLED, MOBILE_BREAKPOINT } from "../constants";
 import { getUserSettings, setUserSettings } from "../utils/user-settings";
 import { getInitials } from "../utils/initials";
 import { lightTheme, darkTheme } from "../plugins/vuetify";
 import { useAuthStore } from "../stores/auth";
 import { useConfigStore } from "../stores/config";
 import { loadLocale } from "../plugins/i18n";
+import { getPrefsIdentity } from "@prefs";
+import { saveUserLocale } from "../utils/prefsSession";
 
 export function useLayoutState() {
   const router = useRouter();
@@ -31,12 +33,11 @@ export function useLayoutState() {
     { immediate: true, flush: "sync" }
   );
 
-  function setTheme(id: "light" | "dark") {
-    themeStore.setPreference(id);
-  }
+  /** Light / Dark / Auto ("system") — what the account menu's segment shows. */
+  const themePreference = computed(() => themeStore.preference);
 
-  function toggleTheme() {
-    themeStore.toggleMode();
+  function setThemePreference(preference: ThemePreference) {
+    themeStore.setPreference(preference);
   }
 
   const sidebarCollapsed = ref(SIDEBAR_DEFAULT_COLLAPSED);
@@ -46,7 +47,10 @@ export function useLayoutState() {
     setUserSettings({ sidebarCollapsed: sidebarCollapsed.value });
   }
 
-  const isMobile = ref(false);
+  // Read synchronously on setup: starting at false and flipping after the
+  // debounced resize check made phones render the desktop account chip
+  // (avatar + name) for a moment, so the app bar jumped on every launch.
+  const isMobile = ref(typeof window !== "undefined" && window.innerWidth < MOBILE_BREAKPOINT);
   const mobileDrawerOpen = ref(false);
 
   const updateMobile = useDebounceFn(() => {
@@ -82,6 +86,9 @@ export function useLayoutState() {
     await loadLocale(lang);
     locale.value = lang;
     setUserSettings({ locale: lang });
+    // Language is per person (CORE-45): it follows this user on this device after sign-in.
+    const id = getPrefsIdentity();
+    if (id) saveUserLocale(id, lang);
     await nextTick();
     localeTransitioning.value = false;
   }
@@ -102,7 +109,7 @@ export function useLayoutState() {
 
   onMounted(async () => {
     const settings = getUserSettings();
-    if (typeof settings.sidebarCollapsed === "boolean") {
+    if (SIDEBAR_COLLAPSE_ENABLED && typeof settings.sidebarCollapsed === "boolean") {
       sidebarCollapsed.value = settings.sidebarCollapsed;
     }
     const [cfg] = await Promise.all([configStore.load(), configStore.loadOptions(), configStore.loadI18nOverrides()]);
@@ -121,12 +128,16 @@ export function useLayoutState() {
 
   const user = computed(() => ({
     displayName: userDisplayName.value,
+    email: authStore.user?.email,
     role: userRole.value,
     initials: userInitials.value,
+    region: authStore.user?.country_code,
+    // Google-only accounts have no password to change (NEO-102).
+    canChangePassword: authStore.user?.hasPassword === true,
   }));
 
   return {
-    theme, toggleTheme, setTheme,
+    theme, themePreference, setThemePreference,
     sidebarCollapsed, toggleSidebar,
     isMobile, mobileDrawerOpen,
     user,

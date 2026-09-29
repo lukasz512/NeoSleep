@@ -10,6 +10,7 @@ import {
 } from "../db.js";
 import { insertAuditLog } from "../db.js";
 import { ValidationError } from "../errors.js";
+import { assertTerritoryAccessByTerritoryId } from "../middleware/requireScope.js";
 import { ConvertLeadCommand } from "./lead.js";
 
 /**
@@ -21,6 +22,32 @@ import { ConvertLeadCommand } from "./lead.js";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/** Same set as the identities.gender CHECK constraint (001_tenant_schema.sql). */
+const GENDERS = ["male", "female", "other", "prefer_not_to_say"] as const;
+
+/** undefined = not sent (leave as is), null/"" = clear, otherwise must be a known value. */
+function normalizeGender(value: string | null | undefined): string | null | undefined {
+  if (value === undefined) return undefined;
+  const v = value?.trim() ?? "";
+  if (!v) return null;
+  if (!(GENDERS as readonly string[]).includes(v)) throw new ValidationError("Invalid gender", "gender");
+  return v;
+}
+
+/** undefined = not sent, null/"" = clear, otherwise a real calendar date
+ *  (YYYY-MM-DD) between 1900-01-01 and today. */
+function normalizeDateOfBirth(value: string | null | undefined): string | null | undefined {
+  if (value === undefined) return undefined;
+  const v = value?.trim() ?? "";
+  if (!v) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  if (!m) throw new ValidationError("date_of_birth must be YYYY-MM-DD", "date_of_birth");
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  if (d.toISOString().slice(0, 10) !== v) throw new ValidationError("date_of_birth is not a valid date", "date_of_birth");
+  if (v < "1900-01-01" || d.getTime() > Date.now()) throw new ValidationError("date_of_birth is out of range", "date_of_birth");
+  return v;
+}
+
 // ---------------------------------------------------------------------------
 // CREATE PATIENT
 // ---------------------------------------------------------------------------
@@ -31,6 +58,8 @@ export interface CreatePatientInput {
   last_name: string;
   email?: string;
   phone?: string;
+  gender?: string | null;
+  date_of_birth?: string | null;
   practitioner_id?: string;
   // Legacy alias: hcp_id maps to practitioner_id
   hcp_id?: string;
@@ -58,16 +87,22 @@ export async function CreatePatientCommand(
 ): Promise<Patient & { name: string }> {
   const firstName = input.first_name?.trim() ?? "";
   const lastName  = input.last_name?.trim() ?? "";
-  if (!firstName) throw new ValidationError("first_name is required");
-  if (!lastName)  throw new ValidationError("last_name is required");
+  if (!firstName) throw new ValidationError("first_name is required", "first_name");
+  if (!lastName)  throw new ValidationError("last_name is required", "last_name");
 
   const email = input.email?.trim() ?? "";
-  if (!email) throw new ValidationError("email is required");
-  if (!EMAIL_REGEX.test(email)) throw new ValidationError("Invalid email format");
+  if (!email) throw new ValidationError("email is required", "email");
+  if (!EMAIL_REGEX.test(email)) throw new ValidationError("Invalid email format", "email");
 
   const phone = input.phone?.trim() ?? "";
-  if (!phone) throw new ValidationError("phone is required");
-  if (phone.replace(/\D/g, "").length < 9) throw new ValidationError("Phone must contain at least 9 digits");
+  if (!phone) throw new ValidationError("phone is required", "phone");
+  if (phone.replace(/\D/g, "").length < 9) throw new ValidationError("Phone must contain at least 9 digits", "phone");
+
+  // Required for patients only (doctors share identities but never record these).
+  const gender = normalizeGender(input.gender);
+  if (!gender) throw new ValidationError("gender is required", "gender");
+  const dateOfBirth = normalizeDateOfBirth(input.date_of_birth);
+  if (!dateOfBirth) throw new ValidationError("date_of_birth is required", "date_of_birth");
 
   // Support legacy hcp_id → practitioner_id
   const practitionerId = input.practitioner_id?.trim() || input.hcp_id?.trim() || undefined;
@@ -78,6 +113,8 @@ export async function CreatePatientCommand(
     last_name:      lastName,
     email,
     phone,
+    gender,
+    date_of_birth:  dateOfBirth,
     practitioner_id: practitionerId,
     diagnosis_code: input.diagnosis_code,
     ahi_baseline:   input.ahi_baseline,
@@ -124,6 +161,8 @@ export interface UpdatePatientPayload {
   last_name?: string;
   email?: string;
   phone?: string;
+  gender?: string | null;
+  date_of_birth?: string | null;
   practitioner_id?: string;
   hcp_id?: string;
   diagnosis_code?: Record<string, unknown>;
@@ -149,18 +188,31 @@ export async function UpdatePatientCommand(
 
   if (input.email !== undefined) {
     const email = input.email?.trim() ?? "";
-    if (!email) throw new ValidationError("email cannot be blank");
-    if (!EMAIL_REGEX.test(email)) throw new ValidationError("Invalid email format");
+    if (!email) throw new ValidationError("email cannot be blank", "email");
+    if (!EMAIL_REGEX.test(email)) throw new ValidationError("Invalid email format", "email");
   }
 
   if (input.phone !== undefined) {
     const phone = input.phone?.trim() ?? "";
-    if (!phone) throw new ValidationError("phone cannot be blank");
-    if (phone.replace(/\D/g, "").length < 9) throw new ValidationError("Phone must contain at least 9 digits");
+    if (!phone) throw new ValidationError("phone cannot be blank", "phone");
+    if (phone.replace(/\D/g, "").length < 9) throw new ValidationError("Phone must contain at least 9 digits", "phone");
   }
+
+  // Can be filled in on an older patient that lacks them, never cleared.
+  const gender = normalizeGender(input.gender);
+  if (gender === null) throw new ValidationError("gender cannot be blank", "gender");
+  const dateOfBirth = normalizeDateOfBirth(input.date_of_birth);
+  if (dateOfBirth === null) throw new ValidationError("date_of_birth cannot be blank", "date_of_birth");
 
   const before = await getPatientById(ctx.client, id);
   if (!before) return null;
+  // Same scope check as GetPatientByIdQuery — editing must not reach further
+  // than reading. A territory change is checked against the target too, so a
+  // patient can't be moved into a territory the caller doesn't cover.
+  await assertTerritoryAccessByTerritoryId(ctx, before.territory_id);
+  if (input.territory_id && input.territory_id !== before.territory_id) {
+    await assertTerritoryAccessByTerritoryId(ctx, input.territory_id);
+  }
 
   // Support legacy hcp_id → practitioner_id
   const practitionerId = input.practitioner_id !== undefined
@@ -175,6 +227,8 @@ export async function UpdatePatientCommand(
     last_name:      input.last_name?.trim() || undefined,
     email:          input.email !== undefined ? input.email : undefined,
     phone:          input.phone !== undefined ? input.phone : undefined,
+    gender,
+    date_of_birth:  dateOfBirth,
     practitioner_id: practitionerId,
     diagnosis_code: input.diagnosis_code,
     ahi_baseline:   input.ahi_baseline,
@@ -209,6 +263,10 @@ export async function UpdatePatientCommand(
 
 export async function DeletePatientCommand(ctx: TenantContext, id: string): Promise<void> {
   if (!id?.trim()) throw new ValidationError("patient id is required");
+
+  // Admin-only route, but admins can be region-scoped too.
+  const before = await getPatientById(ctx.client, id);
+  if (before) await assertTerritoryAccessByTerritoryId(ctx, before.territory_id);
 
   await softDeletePatient(ctx.client, id);
 

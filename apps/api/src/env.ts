@@ -28,6 +28,9 @@ export const FRONTEND_URL: string = process.env.FRONTEND_URL ?? "http://localhos
  */
 export const FRONTEND_URLS: string[] = FRONTEND_URL.split(",").map((s) => s.trim()).filter(Boolean);
 
+/** Full privacy notice linked from the patient self-fill consent (the layered notice there is the short version). */
+export const PRIVACY_NOTICE_URL: string = process.env.PRIVACY_NOTICE_URL ?? "https://neosleepcare.com/privacy";
+
 /** Supabase Storage — signed documents (GDPR consent, partner agreement PDFs). Backend-only, never sent to the frontend. */
 export const SUPABASE_URL: string | undefined = process.env.SUPABASE_URL;
 export const SUPABASE_SERVICE_KEY: string | undefined = process.env.SUPABASE_SERVICE_KEY;
@@ -96,6 +99,12 @@ export const GOOGLE_MAPS_SERVER_API_KEY: string | undefined = process.env.GOOGLE
  */
 export const RESEND_API_KEY: string | undefined = process.env.RESEND_API_KEY;
 export const RESEND_FROM_EMAIL: string | undefined = process.env.RESEND_FROM_EMAIL;
+/**
+ * Signing secret of the Resend webhook (whsec_…, Resend dashboard → Webhooks).
+ * routes/webhooks.ts refuses every call without it (503), so patient emails'
+ * delivery status stays "sent" until it is set (NEO-190).
+ */
+export const RESEND_WEBHOOK_SECRET: string | undefined = process.env.RESEND_WEBHOOK_SECRET;
 /** Fixed admin inbox for internal notifications (e.g. contact form). */
 export const RESEND_NOTIFY_TO: string | undefined = process.env.RESEND_NOTIFY_TO;
 /** Fixed compliance inbox cc'd on every signed partner-registration document email (interim

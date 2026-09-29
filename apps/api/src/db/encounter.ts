@@ -5,7 +5,9 @@ import { AppError, DatabaseError } from "../errors.js";
 // TYPES
 // ---------------------------------------------------------------------------
 
-export type EncounterStatus = "planned" | "completed" | "cancelled" | "no_show";
+// Same set as the encounter_status_check constraint. "planned" was listed here
+// instead of "scheduled", so every create hit the DB check (NEO-112).
+export type EncounterStatus = "scheduled" | "completed" | "cancelled" | "no_show";
 export type EncounterType   = "visit" | "call" | "email" | "congress" | "webinar" | "other";
 
 /**
@@ -101,7 +103,7 @@ const ENCOUNTER_SELECT_COLS = `
   metadata, created_at, updated_at
 `.trim();
 
-const VALID_STATUSES: EncounterStatus[] = ["planned", "completed", "cancelled", "no_show"];
+const VALID_STATUSES: EncounterStatus[] = ["scheduled", "completed", "cancelled", "no_show"];
 const VALID_TYPES: EncounterType[]      = ["visit", "call", "email", "congress", "webinar", "other"];
 
 export function isEncounterStatus(s: string): s is EncounterStatus {
@@ -201,7 +203,7 @@ export async function insertEncounter(
         input.practitioner_id  ?? null,
         input.organization_id  ?? null,
         input.type,
-        input.status           ?? "planned",
+        input.status           ?? "scheduled",
         fhirClass,
         input.start_at,
         input.end_at           ?? null,

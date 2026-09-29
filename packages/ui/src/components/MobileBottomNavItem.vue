@@ -1,5 +1,5 @@
 <template>
-  <RouterLink v-slot="{ navigate, isActive, href }" :to="to" custom>
+  <RouterLink v-if="to" v-slot="{ navigate, isActive, href }" :to="to" custom>
     <a
       :href="href"
       class="mobile-bottom-nav-item"
@@ -11,6 +11,20 @@
       <span class="mobile-bottom-nav-item__label">{{ label }}</span>
     </a>
   </RouterLink>
+  <!-- No `to`: an action item (e.g. apps/pwa's "More" tab opening a sheet),
+       same look, but a real button whose active state the parent decides. -->
+  <button
+    v-else
+    type="button"
+    class="mobile-bottom-nav-item"
+    :class="{ 'mobile-bottom-nav-item--active': active, 'mobile-bottom-nav-item--label': showLabel }"
+    :aria-label="showLabel ? undefined : label"
+    :aria-expanded="expanded"
+    @click="emit('click', $event)"
+  >
+    <span class="mobile-bottom-nav-item__icon" aria-hidden="true"><slot /></span>
+    <span class="mobile-bottom-nav-item__label">{{ label }}</span>
+  </button>
 </template>
 
 <script setup lang="ts">
@@ -28,11 +42,16 @@
  */
 withDefaults(
   defineProps<{
-    to: string;
+    /** Route to link to. Omit for an action item rendered as a <button>. */
+    to?: string;
     label: string;
     showLabel?: boolean;
+    /** Action items only — link items derive active state from the router. */
+    active?: boolean;
+    /** Action items only — aria-expanded for an item that opens a sheet/menu. */
+    expanded?: boolean;
   }>(),
-  { showLabel: false },
+  { to: undefined, showLabel: false, active: false, expanded: undefined },
 );
 
 const emit = defineEmits<{

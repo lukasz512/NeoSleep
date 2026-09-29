@@ -13,10 +13,20 @@
       :filter-param-keys="['status']"
     >
       <template #item.patient_name="{ item }">
-        {{ (item as { patient_name?: string }).patient_name || "—" }}
+        <EntityLink
+          :to="null"
+          entity-type="patient"
+          :label="(item as SleepStudyRow).patient_name"
+          :first-name="(item as SleepStudyRow).patient_first_name"
+          :last-name="(item as SleepStudyRow).patient_last_name"
+          :avatar-size="32"
+        />
+      </template>
+      <template #feed-card-avatar="{ item }">
+        <AppAvatar :name="(item as SleepStudyRow).patient_name" entity-type="patient" :size="55" />
       </template>
       <template #feed-card-title="{ item }">
-        {{ (item as { patient_name?: string }).patient_name || "—" }}
+        {{ shortPersonName((item as SleepStudyRow).patient_name, (item as SleepStudyRow).patient_first_name, (item as SleepStudyRow).patient_last_name) || "—" }}
       </template>
       <template #item.study_type="{ item }">
         <VChip color="info" size="small" variant="tonal">
@@ -33,6 +43,17 @@
           {{ statusLabel((item as { status?: string }).status) }}
         </VChip>
       </template>
+      <template #feed-card-meta="{ item }">
+        <EntityMetaLine
+          :text="sleepStudyCardMeta(item as SleepStudyRow)"
+          :to="hcpDetailLink((item as SleepStudyRow).interpreted_by)"
+          :label="(item as SleepStudyRow).interpreted_by_name"
+          :first-name="(item as SleepStudyRow).interpreted_by_first_name"
+          :last-name="(item as SleepStudyRow).interpreted_by_last_name"
+          entity-type="hcp"
+          :specialty="(item as SleepStudyRow).interpreted_by_specialty"
+        />
+      </template>
       <template #item.study_date="{ item }">
         {{ (item as { study_date?: string }).study_date ? new Date((item as { study_date?: string }).study_date!).toLocaleDateString() : "—" }}
       </template>
@@ -41,8 +62,15 @@
       </template>
       <template #item.interpreted_by_name="{ item }">
         <EntityLink
-          :to="(item as SleepStudyRow).interpreted_by ? { name: 'hcp-detail', params: { id: (item as SleepStudyRow).interpreted_by } } : null"
+          :to="hcpDetailLink((item as SleepStudyRow).interpreted_by)"
           :label="(item as SleepStudyRow).interpreted_by_name"
+          :first-name="(item as SleepStudyRow).interpreted_by_first_name"
+          :last-name="(item as SleepStudyRow).interpreted_by_last_name"
+          entity-type="hcp"
+          :specialty="(item as SleepStudyRow).interpreted_by_specialty"
+          :details="doctorOf(item as SleepStudyRow).details"
+          :more-details="doctorOf(item as SleepStudyRow).more"
+          :avatar-size="32"
         />
       </template>
     </AppEntityList>
@@ -54,14 +82,34 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
 import EntityLink from "../components/EntityLink.vue";
+import { useIdentity } from "../composables/useIdentity";
+import { shortPersonName } from "../utils/shortPersonName";
+import EntityMetaLine from "../components/EntityMetaLine.vue";
+import AppAvatar from "../components/AppAvatar.vue";
 import type { FilterDefinition } from "../composables/useFilters";
+import { sleepStudyCardMeta as sleepStudyCardMetaFormatter } from "../utils/mobileCardMeta";
+import { hcpDetailLink } from "../utils/entityLinks";
 
 interface SleepStudyRow {
+  patient_name?: string | null;
+  study_type?: string;
+  study_date?: string;
+  ahi_score?: number | null;
   interpreted_by?: string | null;
   interpreted_by_name?: string | null;
+  interpreted_by_first_name?: string | null;
+  interpreted_by_last_name?: string | null;
+  patient_first_name?: string | null;
+  patient_last_name?: string | null;
+  interpreted_by_specialty?: string | null;
+  interpreted_by_specialties?: string[] | null;
 }
 
 const { t } = useI18n();
+const { specialtySet } = useIdentity();
+function doctorOf(row: SleepStudyRow) {
+  return specialtySet(row.interpreted_by_specialty, row.interpreted_by_specialties);
+}
 
 const STATUSES = ["ordered", "device_shipped", "device_delivered", "study_complete", "results_received", "interpreted", "cancelled"];
 
@@ -96,6 +144,13 @@ function studyTypeLabel(studyType?: string): string {
   return studyType ? t(`app.sleepStudies.type.${statusKey(studyType)}`) : "—";
 }
 
+/** Mobile card's second line — study type/date/AHI; the interpreting doctor
+ *  is appended as an EntityLink by EntityMetaLine (status is shown via the
+ *  chip already, not repeated here — NEO-19). */
+function sleepStudyCardMeta(study: SleepStudyRow): string {
+  return sleepStudyCardMetaFormatter(study, studyTypeLabel, t);
+}
+
 const tableHeaders = computed(() => [
   { title: t("app.sleepStudies.table.patient"), key: "patient_name", sortable: false },
   { title: t("app.sleepStudies.table.studyType"), key: "study_type", sortable: false },
@@ -112,6 +167,7 @@ const listI18n = computed(() => ({
   add: "app.sleepStudies.title",
   emptyTitle: "app.sleepStudies.emptyTitle",
   emptySubtitle: "app.sleepStudies.emptySubtitle",
+  countNoun: "studies" as const,
   noResultsForCriteria: "app.patients.noResultsForCriteria",
   noResultsForCriteriaSubtitle: "app.patients.noResultsForCriteriaSubtitle",
   tableNoResults: "app.sleepStudies.table.noResults",

@@ -1,7 +1,8 @@
 import { ref, computed } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { createAuthStore, type AuthTokenStorage } from "@stores";
-import type { ApiFetchOptions } from "@api";
+import { reportCaught, reportFailedResponse, type ApiFetchOptions } from "@api";
+import { applyCaughtError, applyFailedResponse, clearFlowErrors, createFlowErrors } from "./flowErrors";
 
 type ApiFetchFn = (path: string, options?: ApiFetchOptions) => Promise<Response>;
 
@@ -22,12 +23,14 @@ export function createUseLoginFlow(apiFetch: ApiFetchFn, tokenStorage: AuthToken
     const password = ref("");
     const rememberMe = ref(true);
     const loading = ref(false);
-    const errorKey = ref<string | null>(null);
+    // NEO-109: errorKey = a line in the form's summary box, toastKey = a toast
+    // (connection / server only), fieldErrors = fields the API rejected.
+    const errors = createFlowErrors();
 
     const redirectPath = computed(() => getRedirectPath(route.query.redirect));
 
     async function submit(options?: { onSuccess?: () => Promise<void> | void }): Promise<void> {
-      errorKey.value = null;
+      clearFlowErrors(errors);
       loading.value = true;
       try {
         const res = await apiFetch("/api/v1/auth/login", {
@@ -42,15 +45,17 @@ export function createUseLoginFlow(apiFetch: ApiFetchFn, tokenStorage: AuthToken
         });
 
         if (res.status === 401) {
-          errorKey.value = "user.login.error.invalidCredentials";
+          errors.errorKey.value = "user.login.error.invalidCredentials";
           return;
         }
         if (res.status === 429) {
-          errorKey.value = "user.login.error.tooManyAttempts";
+          errors.errorKey.value = "user.login.error.tooManyAttempts";
           return;
         }
         if (!res.ok) {
-          errorKey.value = "user.login.error.network";
+          // Status/code only — the payload (email, password) never leaves this function.
+          const failure = await reportFailedResponse(res, { where: "useLoginFlow.submit" });
+          await applyFailedResponse(errors, res, failure, "user.login.error.network");
           return;
         }
 
@@ -73,13 +78,24 @@ export function createUseLoginFlow(apiFetch: ApiFetchFn, tokenStorage: AuthToken
         } else {
           await router.push(redirectPath.value);
         }
-      } catch {
-        errorKey.value = "user.login.error.network";
+      } catch (err) {
+        reportCaught(err, { where: "useLoginFlow.submit" });
+        applyCaughtError(errors, err, "user.login.error.network");
       } finally {
         loading.value = false;
       }
     }
 
-    return { email, password, rememberMe, loading, errorKey, redirectPath, submit };
+    return {
+      email,
+      password,
+      rememberMe,
+      loading,
+      errorKey: errors.errorKey,
+      toastKey: errors.toastKey,
+      fieldErrors: errors.fieldErrors,
+      redirectPath,
+      submit,
+    };
   };
 }
