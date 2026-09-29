@@ -92,16 +92,20 @@ test("the account avatar grows into the card's top-right corner, inset like the 
   await open(page);
   await page.locator(".harness-avatar-btn").click();
   await expect(page.getByRole("dialog", { name: "User menu" })).toBeVisible();
-  // Wait for the grow motion to land: the avatar's box holds still across
-  // frames (a fixed 800ms delay raced it on WebKit CI).
+  // Wait for the grow motion to land: the menu is open, the avatar has no
+  // running transition and its box holds still. (A fixed 800ms delay raced it
+  // on WebKit CI; the avatar also sits still at scale(0.6) before the open
+  // class lands, so stillness alone isn't enough.)
   await expect
     .poll(() =>
       page.evaluate(async () => {
         const el = document.querySelector('.account-menu__card [data-motion="avatar"]');
-        const read = () => JSON.stringify(el?.getBoundingClientRect());
+        if (!el?.closest(".account-menu--open")) return false;
+        if (el.getAnimations().some((a) => a.playState === "running")) return false;
+        const read = () => JSON.stringify(el.getBoundingClientRect());
         const before = read();
         await new Promise((r) => setTimeout(r, 100));
-        return !!el && before === read();
+        return before === read();
       }),
     )
     .toBe(true);
