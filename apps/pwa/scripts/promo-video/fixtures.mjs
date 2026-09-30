@@ -167,11 +167,23 @@ export function history(id) {
   };
 }
 
-export const notes = (id) => ({
-  items: [
-    { id: "n1", entity_type: "patient", entity_id: id, author_id: DOCTOR.id, author_name: DOCTOR.name, body: "Feels more rested after two weeks with the appliance. Daytime sleepiness down.", created_at: daysAgo(2) },
-    { id: "n2", entity_type: "patient", entity_id: id, author_id: DOCTOR.id, author_name: DOCTOR.name, body: "Follow-up sleep study scheduled.", created_at: daysAgo(9) },
-  ],
+// Demo copy per market (PL/MX content is intentional demo data, like the seeds).
+const NOTES = {
+  en: ["Feels more rested after two weeks with the appliance. Daytime sleepiness down.", "Follow-up sleep study scheduled."],
+  pl: ["Po dwóch tygodniach z aparatem czuje się bardziej wypoczęta. Mniejsza senność w ciągu dnia.", "Zaplanowane badanie kontrolne snu."],
+  mx: ["Se siente más descansada tras dos semanas con el aparato. Menos somnolencia diurna.", "Estudio de sueño de control programado."],
+};
+
+export const notes = (id, lang = "en") => ({
+  items: (NOTES[lang] ?? NOTES.en).map((body, i) => ({
+    id: `n${i + 1}`,
+    entity_type: "patient",
+    entity_id: id,
+    author_id: DOCTOR.id,
+    author_name: DOCTOR.name,
+    body,
+    created_at: daysAgo(i ? 9 : 2),
+  })),
 });
 
 // Appointments across the current Mon–Sun week, positioned in the browser's zone.
@@ -231,37 +243,67 @@ export function appointments(startIso) {
 }
 
 const RESOURCES = [
-  ["r1", "Recognizing sleep apnea in the dental chair", "Dr. Marco Salinas", "detect", 412, "#128F83"],
-  ["r2", "STOP-Bang: screening in five minutes", "NeoSleep Academy", "detect", 298, "#10544E"],
-  ["r3", "Reading a polysomnography report", "Dr. Elena Vargas", "diagnose", 655, "#082A27"],
-  ["r4", "Home sleep tests vs. lab studies", "NeoSleep Academy", "diagnose", 537, "#17b5a5"],
-  ["r5", "Ordering a mandibular advancement device", "NeoSleep Academy", "order", 344, "#128F83"],
-  ["r6", "Titration and follow-up visits", "Dr. Marco Salinas", "followup", 479, "#10544E"],
+  ["r1", "Dr. Marco Salinas", "detect", 412, "#128F83"],
+  ["r2", "NeoSleep Academy", "detect", 298, "#10544E"],
+  ["r3", "Dr. Elena Vargas", "diagnose", 655, "#082A27"],
+  ["r4", "NeoSleep Academy", "diagnose", 537, "#17b5a5"],
+  ["r5", "NeoSleep Academy", "order", 344, "#128F83"],
+  ["r6", "Dr. Marco Salinas", "followup", 479, "#10544E"],
 ];
 
-export const resources = {
-  resources: RESOURCES.map(([id, title, author, topic, durationSec], i) => ({
+const RESOURCE_TITLES = {
+  en: [
+    "Recognizing sleep apnea in the dental chair",
+    "STOP-Bang: screening in five minutes",
+    "Reading a polysomnography report",
+    "Home sleep tests vs. lab studies",
+    "Ordering a mandibular advancement device",
+    "Titration and follow-up visits",
+  ],
+  pl: [
+    "Jak rozpoznać bezdech senny na fotelu dentystycznym",
+    "STOP-Bang: przesiew w pięć minut",
+    "Jak czytać wynik polisomnografii",
+    "Badanie domowe czy w pracowni snu",
+    "Zamawianie aparatu wysuwającego żuchwę",
+    "Titracja i wizyty kontrolne",
+  ],
+  mx: [
+    "Cómo detectar la apnea del sueño en el sillón dental",
+    "STOP-Bang: tamizaje en cinco minutos",
+    "Cómo leer una polisomnografía",
+    "Estudio en casa vs. en laboratorio",
+    "Cómo pedir un dispositivo de avance mandibular",
+    "Titulación y visitas de seguimiento",
+  ],
+};
+
+const titleOf = (id, lang) => (RESOURCE_TITLES[lang] ?? RESOURCE_TITLES.en)[RESOURCES.findIndex((r) => r[0] === id)];
+
+export const resources = (lang = "en") => ({
+  resources: RESOURCES.map(([id, author, topic, durationSec], i) => ({
     id,
     partner: "orthoapnea",
     kind: "video",
-    title,
+    title: titleOf(id, lang),
     description: author,
     mediaUrl: `/api/v1/partners/orthoapnea/resources/${id}/media`,
     fileType: "video",
-    languages: [{ code: "en", mediaUrl: `/api/v1/partners/orthoapnea/resources/${id}/media` }],
+    languages: [{ code: lang === "mx" ? "es" : lang, mediaUrl: `/api/v1/partners/orthoapnea/resources/${id}/media` }],
     category: "webinars",
     subcategory: null,
     weight: i,
-    posterUrl: `/api/v1/partners/orthoapnea/resources/${id}/poster?locale=en`,
+    posterUrl: `/api/v1/partners/orthoapnea/resources/${id}/poster?locale=${lang}`,
     durationSec,
     topic,
   })),
   mediaToken: "demo",
-};
+});
 
-export function poster(id) {
+export function poster(id, lang = "en") {
   const r = RESOURCES.find((x) => x[0] === id) ?? RESOURCES[0];
-  const [, title, , , , color] = r;
+  const title = titleOf(r[0], lang);
+  const color = r[4];
   const words = title.split(" ");
   const lines = [];
   for (const w of words) {

@@ -82,19 +82,19 @@
 
   <div id="laptop" class="abs">
     <div class="lid"><div class="screen">
-      <img class="shot" id="s-patients" src="out/shots/patients-desktop.png" />
-      <img class="shot" id="s-detail" src="out/shots/patient-detail-desktop.png" />
-      <img class="shot" id="s-calendar" src="out/shots/calendar-desktop.png" />
-      <img class="shot" id="s-resources" src="out/shots/resources-desktop.png" />
+      <img class="shot" id="s-patients" data-shot="patients-desktop.png" />
+      <img class="shot" id="s-detail" data-shot="patient-detail-desktop.png" />
+      <img class="shot" id="s-calendar" data-shot="calendar-desktop.png" />
+      <img class="shot" id="s-resources" data-shot="resources-desktop.png" />
     </div></div>
     <div class="base"></div>
   </div>
 
   <div id="phone" class="abs"><div class="screen">
     <div class="island"></div>
-    <img class="shot" id="p-patients" src="out/shots/patients-phone.png" />
-    <img class="shot" id="p-calendar" src="out/shots/calendar-phone.png" />
-    <img class="shot" id="p-resources" src="out/shots/resources-phone.png" />
+    <img class="shot" id="p-patients" data-shot="patients-phone.png" />
+    <img class="shot" id="p-calendar" data-shot="calendar-phone.png" />
+    <img class="shot" id="p-resources" data-shot="resources-phone.png" />
   </div></div>
 
   <div id="photo" class="abs"><img src="out/stock/wake-up.jpg" /></div>
@@ -123,7 +123,7 @@
       hook: "Więcej energii,<br><em>każdego dnia.</em>",
       patients: ["Pacjenci", "Cała ścieżka pacjenta<br>w jednym miejscu."],
       calendar: ["Kalendarz", "Każda wizyta<br>na czas."],
-      resources: ["Zasoby", "Wiedza<br>zawsze pod ręką."],
+      resources: ["Materiały", "Wiedza<br>zawsze pod ręką."],
       tag: "Zaprojektowane ze specjalistami snu.",
       sub: "Lepszy sen. Więcej energii.",
     },
@@ -140,6 +140,8 @@
   const params = new URLSearchParams(location.search);
   const lang = params.get("lang") || "en";
   if (params.get("format") === "9x16") document.documentElement.classList.add("f916");
+  // Screens captured in the same language (capture.mjs --lang).
+  for (const img of document.querySelectorAll("img[data-shot]")) img.src = `out/shots/${lang}/${img.dataset.shot}`;
   const C = COPY[lang] || COPY.en;
   document.documentElement.lang = lang === "mx" ? "es-MX" : lang;
   document.getElementById("photoText").innerHTML = C.photo;
@@ -207,14 +209,14 @@
       set($(id), { o: window_(t, a, b, 0.35), s: lerp(z0, z1, prog(t, a, b)), origin });
     }
 
-    // phone: calendar + resources scenes
-    set($("phone"), {
-      o: window_(t, 5.4, 24.8, 0.5),
-      x: lerp(360, 0, prog(t, 5.4, 6.3, easeOut)) + lerp(0, 360, prog(t, 24.2, 24.9)),
-    });
-    set($("p-patients"), { o: window_(t, 5.4, 12.6, 0.35) });
-    set($("p-calendar"), { o: window_(t, 12.2, 19.2, 0.35) });
-    set($("p-resources"), { o: window_(t, 18.9, 25, 0.35) });
+    // phone: patients and resources scenes; it steps aside for the calendar so
+    // the week grid gets the whole frame (the phone's day list truncates names).
+    const phoneIn = (a, b) => Math.max(0, Math.min(1, prog(t, a, a + 0.9, easeOut) - prog(t, b - 0.7, b)));
+    const shown = Math.max(phoneIn(5.4, 11.4), phoneIn(18.4, 24.9));
+    set($("phone"), { o: shown > 0 ? 1 : 0, x: lerp(360, 0, shown) });
+    set($("p-patients"), { o: t < 15 ? 1 : 0 });
+    set($("p-calendar"), { o: 0 });
+    set($("p-resources"), { o: t >= 15 ? 1 : 0 });
 
     // orbs drift
     set($("orb1"), { x: lerp(0, -120, t / 30), y: lerp(0, 60, t / 30) });

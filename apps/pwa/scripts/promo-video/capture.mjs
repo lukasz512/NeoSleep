@@ -3,7 +3,8 @@
 // fixtures.mjs (fictional demo data, no DB), and screenshots the screens the
 // promo video shows: desktop 1440×900 @2x and phone 390×844 @3x.
 //
-//   node apps/pwa/scripts/promo-video/capture.mjs   → apps/pwa/scripts/promo-video/out/shots/*.png
+//   node apps/pwa/scripts/promo-video/capture.mjs [--lang en|pl|mx]   → out/shots/<lang>/*.png
+//   PWA_DIR=<other worktree>/apps/pwa …   captures another checkout's app (e.g. an unmerged UI fix)
 
 import { spawn } from "node:child_process";
 import { mkdirSync } from "node:fs";
@@ -13,8 +14,11 @@ import { chromium } from "@playwright/test";
 import * as fx from "./fixtures.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const PWA = join(HERE, "../..");
-const OUT = join(HERE, "out/shots");
+const PWA = process.env.PWA_DIR ?? join(HERE, "../..");
+const langArg = process.argv.indexOf("--lang");
+const LANG = langArg > 0 ? process.argv[langArg + 1] : "en";
+const BROWSER_LOCALE = { en: "en-US", pl: "pl-PL", mx: "es-MX" }[LANG] ?? "en-US";
+const OUT = join(HERE, "out/shots", LANG);
 const PORT = 5197;
 const BASE = `http://localhost:${PORT}`;
 mkdirSync(OUT, { recursive: true });
@@ -39,13 +43,13 @@ async function api(route) {
   if (path.endsWith("/checklist/version")) return json(route, { version: "v1" });
   if ((m = path.match(/^\/patient\/([^/]+)\/history$/))) return json(route, fx.history(m[1]));
   if (path.endsWith("/sleep-study-ref")) return json(route, { id: "s1" });
-  if (path === "/note") return json(route, fx.notes(q.get("entity_id")));
+  if (path === "/note") return json(route, fx.notes(q.get("entity_id"), LANG));
   if (path === "/treatment-plan") return json(route, fx.treatmentPlans(q.get("patient_id")));
   if (path === "/appointments") return json(route, fx.appointments(q.get("start")));
   if (path === "/encounter") return json(route, { items: [] });
   if (path === "/partners/orthoapnea/status") return json(route, { connected: true, attemptsExhausted: false });
-  if (path === "/partners/orthoapnea/resources") return json(route, fx.resources);
-  if ((m = path.match(/resources\/([^/]+)\/poster$/))) return route.fulfill({ status: 200, contentType: "image/svg+xml", body: fx.poster(m[1]) });
+  if (path === "/partners/orthoapnea/resources") return json(route, fx.resources(LANG));
+  if ((m = path.match(/resources\/([^/]+)\/poster$/))) return route.fulfill({ status: 200, contentType: "image/svg+xml", body: fx.poster(m[1], LANG) });
   if (route.request().method() === "GET") return json(route, { items: [], total: 0 });
   return json(route, {});
 }
@@ -63,13 +67,10 @@ async function waitForVite() {
 const SHOTS = [
   // [name, device, path, text that proves the screen rendered, prepare?]
   ["patients", "desktop", "/patients", "Sofía Ramírez"],
-  ["patient-detail", "desktop", "/patients/p1?tab=details", "Informed consent"],
-  ["patient-studies", "desktop", "/patients/p1?tab=studies", "Polysomnography"],
-  ["patient-treatment", "desktop", "/patients/p1?tab=orthoapnea", "Marco Salinas"],
-  ["calendar", "desktop", "/appointments", "Book appointment", async (page) => page.getByRole("button", { name: "Week" }).first().click()],
+  ["patient-detail", "desktop", "/patients/p1?tab=details", "NS-2400"],
+  ["calendar", "desktop", "/appointments", "Sofía", async (page) => page.locator("button[value=week]").first().click()],
   ["resources", "desktop", "/resources", "STOP-Bang"],
   ["patients", "phone", "/patients", "Sofía Ramírez"],
-  ["patient-detail", "phone", "/patients/p1?tab=details", "Informed consent"],
   ["calendar", "phone", "/appointments", "Sofía"],
   ["resources", "phone", "/resources", "STOP-Bang"],
 ];
@@ -88,11 +89,11 @@ try {
   await waitForVite();
   const browser = await chromium.launch();
   for (const [name, device, path, proof, prepare] of SHOTS) {
-    const ctx = await browser.newContext({ ...DEVICES[device], serviceWorkers: "block", locale: "en-US", colorScheme: "light" });
-    await ctx.addInitScript(() => {
+    const ctx = await browser.newContext({ ...DEVICES[device], serviceWorkers: "block", locale: BROWSER_LOCALE, colorScheme: "light" });
+    await ctx.addInitScript((locale) => {
       localStorage.setItem("app-refresh-token", "demo");
-      localStorage.setItem("app-settings", JSON.stringify({ locale: "en", theme: "light" }));
-    });
+      localStorage.setItem("app-settings", JSON.stringify({ locale, theme: "light" }));
+    }, LANG);
     await ctx.route("**/api/v1/**", api);
     await ctx.route("**/health", (r) => r.fulfill({ status: 200, body: "ok" }));
     const page = await ctx.newPage();
