@@ -1,7 +1,7 @@
 <!doctype html>
 <!-- NEO-204 — the promo video as one deterministic page: render.mjs calls
      window.renderAt(seconds) for every frame and screenshots the stage.
-     Query: ?lang=en|pl|mx  (copy lives in COPY below; the screens stay the captured ones). -->
+     Query: ?lang=en|pl|mx&format=4x5|9x16  (copy lives in COPY below; the screens stay the captured ones). -->
 <html lang="en">
 <head>
 <meta charset="utf-8" />
@@ -59,6 +59,17 @@
   #end img { width: 640px; }
   #end .tag { margin-top: 56px; font-size: 56px; font-weight: 700; letter-spacing: -1px; }
   #end .sub { margin-top: 18px; font-size: 32px; color: var(--teal); font-weight: 600; }
+
+  /* 9:16 (Reels / Stories): same scenes, taller stage. */
+  html.f916 { --h: 1920px; }
+  html.f916 #photoText { bottom: 300px; font-size: 112px; }
+  html.f916 #hook { top: 760px; font-size: 112px; }
+  html.f916 #cap { top: 200px; }
+  html.f916 #cap .line { font-size: 76px; }
+  html.f916 #laptop { top: 620px; }
+  html.f916 #phone { left: 640px; top: 1060px; width: 380px; height: 800px; border-radius: 64px; padding: 13px; }
+  html.f916 #phone .screen { border-radius: 52px; }
+  html.f916 #end .tag { font-size: 60px; }
 </style>
 </head>
 <body>
@@ -104,7 +115,7 @@
       patients: ["Patients", "Every patient's path<br>in one place."],
       calendar: ["Calendar", "Every visit<br>on schedule."],
       resources: ["Resources", "Know-how,<br>always at hand."],
-      tag: "Built with sleep doctors.",
+      tag: "Designed with sleep specialists.",
       sub: "Better sleep. More energy.",
     },
     pl: {
@@ -113,7 +124,7 @@
       patients: ["Pacjenci", "Cała ścieżka pacjenta<br>w jednym miejscu."],
       calendar: ["Kalendarz", "Każda wizyta<br>na czas."],
       resources: ["Zasoby", "Wiedza<br>zawsze pod ręką."],
-      tag: "Zbudowane z lekarzami snu.",
+      tag: "Zaprojektowane ze specjalistami snu.",
       sub: "Lepszy sen. Więcej energii.",
     },
     mx: {
@@ -122,11 +133,13 @@
       patients: ["Pacientes", "Todo el camino del paciente<br>en un solo lugar."],
       calendar: ["Agenda", "Cada cita<br>a tiempo."],
       resources: ["Recursos", "El conocimiento,<br>siempre a la mano."],
-      tag: "Creado con médicos del sueño.",
+      tag: "Diseñado con especialistas del sueño.",
       sub: "Dormir mejor. Más energía.",
     },
   };
-  const lang = new URLSearchParams(location.search).get("lang") || "en";
+  const params = new URLSearchParams(location.search);
+  const lang = params.get("lang") || "en";
+  if (params.get("format") === "9x16") document.documentElement.classList.add("f916");
   const C = COPY[lang] || COPY.en;
   document.documentElement.lang = lang === "mx" ? "es-MX" : lang;
   document.getElementById("photoText").innerHTML = C.photo;
