@@ -1,13 +1,13 @@
 /**
  * Rep app: light / dark theme.
- * Primary and brand colors come from assets/scss/_brand-colors.scss (aligned with NeoSleep.pdf in repo root brand/).
+ * Primary and brand colors come from styles/_brand-colors.scss (aligned with NeoSleep.pdf in repo root brand/).
  * Can be overridden from admin later.
  * Design tokens: foundation/docs/DESIGN_AND_UI.md.
  */
 @use "sass:list";
 @use "sass:map";
 @use "sass:math";
-@use "./scss/brand-colors" as brand;
+@use "./brand-colors" as brand;
 
 $pwa-breakpoint-mobile: 768px;
 $pwa-touch-target-min: 44px; // Mobile/tablet: min touch target (SPEC-0042)

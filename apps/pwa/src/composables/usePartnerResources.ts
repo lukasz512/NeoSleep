@@ -1,7 +1,7 @@
 import { reportCaught, reportFailedResponse } from "@api";
 import { ref, computed } from "vue";
 import { apiFetch } from "./useApi";
-import { getApiUrl } from "../constants";
+import { getApiUrl } from "../config/env";
 
 /**
  * OrthoApnea resources (documents/videos) — ADR-015 discussion. Module-level

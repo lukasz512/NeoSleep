@@ -10,8 +10,8 @@ import { createApp, defineComponent, h, ref } from "vue";
 import { createPinia } from "pinia";
 import vuetify, { lightTheme, darkTheme } from "../../src/plugins/vuetify";
 import { i18n, loadLocale } from "../../src/plugins/i18n";
-import "../../src/assets/theme.scss";
-import "../../src/assets/app-responsive.scss";
+import "../../src/styles/theme.scss";
+import "../../src/styles/app-responsive.scss";
 import SendEmailDialog from "../../src/components/questionnaire/SendEmailDialog.vue";
 import type { ChecklistItem, EmailSend } from "../../src/composables/usePatientChecklist";
 

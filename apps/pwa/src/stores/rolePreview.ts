@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { useLocalStorage } from "@vueuse/core";
-import { APP_STORAGE_KEYS } from "../constants";
+import { APP_STORAGE_KEYS } from "../config/storageKeys";
 import type { UserRole } from "./auth";
 
 /**

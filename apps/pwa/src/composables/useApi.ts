@@ -24,7 +24,8 @@
 import { useLocalStorage } from "@vueuse/core";
 import { ApiError, classifyStatus, createApiFetch, extractErrorMessage, isFieldErrorStatus, messageKeyForCode, reportCaught, type ApiFetchOptions } from "@api";
 import { useGlobalLoaderStore } from "@stores";
-import { getApiUrl, APP_STORAGE_KEYS } from "../constants";
+import { getApiUrl } from "../config/env";
+import { APP_STORAGE_KEYS } from "../config/storageKeys";
 import { useNotifications } from "../composables/useNotifications";
 
 export type { ApiFetchOptions };

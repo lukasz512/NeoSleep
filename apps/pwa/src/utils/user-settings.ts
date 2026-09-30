@@ -6,7 +6,7 @@
  */
 
 import { useLocalStorage } from "@vueuse/core";
-import { APP_STORAGE_KEYS } from "../constants";
+import { APP_STORAGE_KEYS } from "../config/storageKeys";
 
 /** Per-view filter state: key -> value. Single select: string. Multi-select: string[]. */
 export type ViewFilters = Record<string, string | string[]>;

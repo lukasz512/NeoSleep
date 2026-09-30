@@ -55,7 +55,7 @@ import {
   type NotificationIcon,
   type NotificationType,
 } from "../composables/useNotifications";
-import { MOBILE_BREAKPOINT } from "../constants";
+import { MOBILE_BREAKPOINT } from "../config/layout";
 
 const DURATION = 8000;
 /** A toast with a button (Retry…) stays longer, so there is time to reach it. */

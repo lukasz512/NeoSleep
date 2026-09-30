@@ -46,3 +46,14 @@ test("typecheck (tsc -b) writes declarations outside src", () => {
     assert.match(out, /node_modules/, `${app} declarations must land in node_modules, not next to sources`);
   }
 });
+
+test("apps/pwa/src root holds only the entry files; everything else lives in a folder (CORE-84)", () => {
+  const ROOT_FILES = new Set(["apps/pwa/src/main.ts", "apps/pwa/src/App.vue", "apps/pwa/src/vite-env.d.ts"]);
+  const offenders = tracked.filter((f) => /^apps\/pwa\/src\/[^/]+$/.test(f) && !ROOT_FILES.has(f));
+  assert.deepEqual(offenders, [], "move these into boot/, config/, router/, styles/ …");
+});
+
+test("apps/pwa global stylesheets live in src/styles, assets/ is for images (CORE-84)", () => {
+  const offenders = tracked.filter((f) => /^apps\/pwa\/src\/assets\/.*\.s?css$/.test(f));
+  assert.deepEqual(offenders, []);
+});

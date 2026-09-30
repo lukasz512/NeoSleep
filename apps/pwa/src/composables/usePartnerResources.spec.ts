@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const apiFetch = vi.fn();
 vi.mock("./useApi", () => ({ apiFetch: (...args: unknown[]) => apiFetch(...args) }));
-vi.mock("../constants", () => ({ getApiUrl: () => "https://api.example.test" }));
+vi.mock("../config/env", () => ({ getApiUrl: () => "https://api.example.test" }));
 
 async function load() {
   vi.resetModules(); // module-level cache per test
