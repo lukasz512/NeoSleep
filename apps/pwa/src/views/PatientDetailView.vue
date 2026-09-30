@@ -152,7 +152,7 @@
           </template>
           <template #documents>
             <!-- NEO-193: consent + the Historia Clínica parts; the patient QR lives here. -->
-            <PatientChecklistPanel category="document" :patient-id="patient.id" :focus-item="studyItem" :date-of-birth="patient.date_of_birth" :gender="patient.gender" :qr-request-nonce="qrRequestNonce" />
+            <PatientChecklistPanel category="document" :patient-id="patient.id" :focus-item="studyItem" :date-of-birth="patient.date_of_birth" :gender="patient.gender" :qr-request-nonce="qrRequestNonce" :hide-qr-button="asideShown" />
           </template>
           <template #history>
             <EntityHistoryPanel :endpoint="`/api/v1/patient/${patient.id}/history`" />
@@ -194,6 +194,7 @@ import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { usePermissions } from "../composables/usePermissions";
+import { useDetailAsideShown } from "../composables/useDetailAside";
 import { apiFetch } from "../composables/useApi";
 import { useNotifications } from "../composables/useNotifications";
 import { useEntitySubmit } from "../composables/useEntitySubmit";
@@ -319,6 +320,8 @@ function openStudy(itemKey: string, category: ChecklistCategory) {
 
 /** Side panel "QR for the patient" (NEO-153): the Documentos tab owns the QR flow (status button, polling) since NEO-193, so open it there. */
 const qrRequestNonce = ref(0);
+/** NEO-203: while the side panel shows (desktop), its QR is the only one — the Documentos tab drops its own. */
+const asideShown = useDetailAsideShown();
 function onAsideQr() {
   studyItem.value = null;
   activeTab.value = CHECKLIST_TAB.document;

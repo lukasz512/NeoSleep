@@ -24,16 +24,13 @@ const item = (key: string, group: string, status: string, qr = true) => ({
 });
 
 let checklistItems: ReturnType<typeof item>[];
-let plans: unknown[];
 
 beforeEach(() => {
   checklistItems = [item("informedConsent", "consent", "missing"), item("medicalHistory", "patient", "done"), item("polysomnography", "results", "done", false)];
-  plans = [{ status: "in_progress", dentist_name: "Dr Ana Ruiz", metadata: null }];
   apiFetch.mockImplementation(async (path: string) => {
     if (path.startsWith("/api/v1/note?")) {
       return ok({ items: [{ id: "n1", entity_type: "patient", entity_id: "p-1", author_id: "u-1", author_name: "Rep One", body: "Latest note", created_at: "2026-09-24T10:00:00Z" }] });
     }
-    if (path.startsWith("/api/v1/treatment-plan?")) return ok({ items: plans });
     if (path === "/api/v1/patient/p-1/checklist") {
       return ok({ items: checklistItems, other_uploads: [], pending_requests: [], expired_request: null, summary: { done: 2, total: 3 } });
     }
@@ -68,59 +65,90 @@ async function mountPanel(props: Record<string, unknown> = {}): Promise<VueWrapp
 
 const qrButton = (w: VueWrapper) => w.find(".patient-aside__qr");
 
-describe("PatientAsidePanel (NEO-153)", () => {
-  it("shows the profile diagnosis in the key facts, or a dash when there is none", async () => {
-    expect((await mountPanel()).find(".patient-aside__diagnosis").text()).toBe("G47.33 · OSA");
-    const empty = await mountPanel({ patient: { id: "p-1", diagnosis_code: null } });
-    expect(empty.find(".patient-aside__diagnosis").text()).toBe("—");
-  });
-
-  it("shows the latest OrthoApnea order's status, and 'No order yet' without one", async () => {
+describe("PatientAsidePanel (NEO-153, NEO-203)", () => {
+  it("opens with the next-step card, the QR button inside it", async () => {
     const wrapper = await mountPanel();
-    expect(wrapper.find(".patient-aside__oa").text()).toContain("Dr Ana Ruiz");
-    const [path] = apiFetch.mock.calls.find(([p]) => String(p).startsWith("/api/v1/treatment-plan?"))!;
-    expect(path).toContain("type=dental_appliance");
-    expect(path).toContain("limit=1");
-
-    plans = [];
-    expect((await mountPanel()).find(".patient-aside__oa").text()).toContain("No order yet");
+    const first = wrapper.find(".patient-aside").element.firstElementChild;
+    expect(first?.classList.contains("patient-aside__next")).toBe(true);
+    expect(wrapper.find(".patient-aside__next .patient-aside__qr").exists()).toBe(true);
   });
 
-  it("the Device link asks the view to open that tab", async () => {
-    const wrapper = await mountPanel();
-    await wrapper.find(".patient-aside__oa .patient-aside__all").trigger("click");
-    expect(wrapper.emitted("open-tab")).toEqual([["orthoapnea"]]);
+  it("names what the patient still has to fill in", async () => {
+    const next = (await mountPanel()).find(".patient-aside__next");
+    expect(next.text()).toContain("Waiting on the patient: 1");
+    expect(next.find(".patient-aside__next-items").text()).toBe("Informed consent");
   });
 
-  it("lists the consent documents still to sign, and says so when all are signed", async () => {
-    const wrapper = await mountPanel();
-    const toSign = wrapper.find(".patient-aside__to-sign");
-    expect(toSign.findAll("li")).toHaveLength(1);
-    await toSign.find("button").trigger("click");
-    expect(wrapper.emitted("open-study")).toEqual([["informedConsent", "document"]]);
-
-    checklistItems = [item("informedConsent", "consent", "done")];
-    expect((await mountPanel()).find(".patient-aside__to-sign").text()).toContain("Everything is signed");
-  });
-
-  it("'QR for the patient' emits qr, and is disabled when the patient has nothing left to fill", async () => {
+  it("'QR for the patient' emits qr; with nothing left for the patient it is disabled and says All done", async () => {
     const wrapper = await mountPanel();
     await qrButton(wrapper).trigger("click");
     expect(wrapper.emitted("qr")).toHaveLength(1);
 
     checklistItems = [item("informedConsent", "consent", "done"), item("polysomnography", "results", "missing", false)];
-    expect(qrButton(await mountPanel()).attributes("disabled")).toBeDefined();
+    const done = await mountPanel();
+    expect(qrButton(done).attributes("disabled")).toBeDefined();
+    expect(qrButton(done).text()).toContain("All done");
+    expect(done.find(".patient-aside__next").text()).toContain("Nothing left for the patient");
   });
 
-  it("hides its QR button on the Estudios tab, where that tab's own QR button already is", async () => {
-    const wrapper = await mountPanel({ activeTab: "studies" });
-    expect(qrButton(wrapper).exists()).toBe(false);
+  it("keeps its QR button on every tab — on desktop the Documentos tab drops its own instead (NEO-203)", async () => {
+    for (const activeTab of ["details", "documents", "studies"]) {
+      expect(qrButton(await mountPanel({ activeTab })).exists()).toBe(true);
+    }
   });
 
-  it("hides studies and documents to sign from roles without access to health data", async () => {
+  it("does not show the OrthoApnea card nor load the order", async () => {
+    const wrapper = await mountPanel();
+    expect(wrapper.find(".patient-aside__oa").exists()).toBe(false);
+    expect(apiFetch.mock.calls.some(([p]) => String(p).includes("/treatment-plan"))).toBe(false);
+  });
+
+  it("shows the key facts as one line under the next-step card", async () => {
+    const wrapper = await mountPanel();
+    const facts = wrapper.find(".patient-aside__facts");
+    expect(facts.element.previousElementSibling?.classList.contains("patient-aside__next")).toBe(true);
+    expect(facts.find(".patient-aside__diagnosis").text()).toBe("G47.33 · OSA");
+    expect(facts.text()).toContain("AHI 32");
+    expect(facts.find("a").text()).toBe("Dr Marta Nowak");
+
+    const empty = await mountPanel({ patient: { id: "p-1", diagnosis_code: null } });
+    expect(empty.find(".patient-aside__diagnosis").exists()).toBe(false);
+  });
+
+  it("lists unfinished documents first and cuts the list at 6 rows with a link to the rest", async () => {
+    checklistItems = [
+      item("medicalHistory", "patient", "done"),
+      item("stopBang", "patient", "done"),
+      item("oralExam", "doctor", "done"),
+      item("historiaEndo", "doctor", "done"),
+      item("polysomnography", "results", "done", false),
+      item("extra1", "results", "done", false),
+      item("informedConsent", "consent", "missing"),
+      item("extra2", "results", "missing", false),
+    ];
+    const wrapper = await mountPanel();
+    const rows = wrapper.findAll(".patient-aside__docs li");
+    expect(rows).toHaveLength(6);
+    expect(rows[0]!.text()).toBe("Informed consent");
+    expect(rows[1]!.text()).toBe("extra2");
+    await rows[0]!.find("button").trigger("click");
+    expect(wrapper.emitted("open-study")).toEqual([["informedConsent", "document"]]);
+
+    await wrapper.find(".patient-aside__docs .patient-aside__all").trigger("click");
+    expect(wrapper.emitted("open-tab")).toEqual([["documents"]]);
+  });
+
+  it("with 6 documents or fewer shows them all and no 'see all' link", async () => {
+    const wrapper = await mountPanel();
+    expect(wrapper.findAll(".patient-aside__docs li")).toHaveLength(3);
+    expect(wrapper.find(".patient-aside__docs .patient-aside__all").exists()).toBe(false);
+  });
+
+  it("hides the next step and the documents from roles without access to health data", async () => {
     const wrapper = await mountPanel({ canSeeStudies: false });
-    expect(wrapper.find(".patient-aside__to-sign").exists()).toBe(false);
-    expect(qrButton(wrapper).exists()).toBe(false);
+    expect(wrapper.find(".patient-aside__next").exists()).toBe(false);
+    expect(wrapper.find(".patient-aside__docs").exists()).toBe(false);
+    expect(wrapper.find(".patient-aside__facts").exists()).toBe(true);
     expect(apiFetch.mock.calls.some(([p]) => String(p).includes("/checklist"))).toBe(false);
   });
 
