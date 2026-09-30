@@ -1014,7 +1014,6 @@
   "app.patients.detail.aside.allNotes": "Wszystkie notatki ({count}) →",
   "app.patients.detail.aside.qr": "QR dla pacjenta",
   "app.patients.detail.aside.lastNote": "Ostatnia notatka",
-  "app.patients.detail.aside.diagnosis": "Rozpoznanie",
   "app.patients.detail.aside.nextStep": "Następny krok",
   "app.patients.detail.aside.waitingOnPatient": "Czeka na pacjenta: {n}",
   "app.patients.detail.aside.nothingForPatient": "Pacjent nie ma nic do uzupełnienia",

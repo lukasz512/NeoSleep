@@ -1095,7 +1095,6 @@
   "app.patients.detail.aside.allNotes": "All notes ({count}) →",
   "app.patients.detail.aside.qr": "QR for the patient",
   "app.patients.detail.aside.lastNote": "Last note",
-  "app.patients.detail.aside.diagnosis": "Diagnosis",
   "app.patients.detail.aside.nextStep": "Next step",
   "app.patients.detail.aside.waitingOnPatient": "Waiting on the patient: {n}",
   "app.patients.detail.aside.nothingForPatient": "Nothing left for the patient",
