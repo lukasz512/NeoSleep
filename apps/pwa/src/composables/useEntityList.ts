@@ -5,7 +5,7 @@ import { useDebounceFn } from "@vueuse/core";
 import { apiErrorFromResponse, isOfflineError, readJson, reportCaught } from "@api";
 import { apiFetch } from "./useApi";
 import { useFilters, type FilterDefinition } from "./useFilters";
-import { useListTableState } from "./useListTableState";
+import { useListTableState, DEFAULT_TABLE_STATE } from "./useListTableState";
 import { CACHEABLE_ENTITIES, type CacheableEntity } from "../utils/offlineCache";
 import { useEntityCacheStore } from "../stores/entityCache";
 import { useAuthStore } from "../stores/auth";
@@ -130,10 +130,17 @@ export function useEntityList(opts: EntityListOptions) {
     loadData();
   }
 
+  /** "Clear filters" puts the whole list back to its first state (CORE-45): filters, search,
+   *  sort, rows per page and page. Clearing only the search box (onSearchClear) keeps the rest. */
   async function onFiltersClear() {
     searchQuery.value = "";
     clearFilters();
-    tableOptions.value.page = 1;
+    tableOptions.value = {
+      ...tableOptions.value,
+      page: 1,
+      itemsPerPage: DEFAULT_TABLE_STATE.itemsPerPage,
+      sortBy: DEFAULT_TABLE_STATE.sortBy.map((s) => ({ ...s })),
+    };
     (debouncedSearch as unknown as { cancel: () => void }).cancel?.();
     clearingFilters.value = true;
     try {
