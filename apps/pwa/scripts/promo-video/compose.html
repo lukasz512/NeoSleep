@@ -172,8 +172,25 @@
   ];
   let lastCap = null;
 
-  window.DURATION = 30;
-  window.renderAt = (t) => {
+  // The timeline below is written for 30 s. Shorter cuts (?duration=15|20) map
+  // each output second onto it piecewise, so every scene keeps its place and
+  // only gets shorter: photo · hook · patients · calendar · resources · logo.
+  const MASTER = [0, 2.7, 4.4, 11.2, 18.2, 25.0, 30];
+  const CUTS = { 30: MASTER, 20: [0, 2.0, 3.6, 8.2, 12.2, 16.2, 20], 15: [0, 1.6, 3.0, 6.5, 9.5, 12.5, 15] };
+  const cut = CUTS[params.get("duration")] || MASTER;
+  const toMaster = (t) => {
+    for (let i = 1; i < cut.length; i++) {
+      if (t <= cut[i] || i === cut.length - 1) {
+        const p = (t - cut[i - 1]) / (cut[i] - cut[i - 1]);
+        return MASTER[i - 1] + (MASTER[i] - MASTER[i - 1]) * Math.min(1, Math.max(0, p));
+      }
+    }
+    return t;
+  };
+
+  window.DURATION = cut[cut.length - 1];
+  window.renderAt = (outT) => {
+    const t = toMaster(outT);
     // 0–2.6 s: rested person, "Better sleep."
     set($("photo"), { o: 1 - prog(t, 2.1, 2.7) });
     set($("photo").querySelector("img"), { s: lerp(1.0, 1.12, prog(t, 0, 2.7, (x) => x)) });
