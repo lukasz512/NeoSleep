@@ -574,5 +574,18 @@ describe("AppEntityList", () => {
       expect(wrap.exists()).toBe(true);
       expect(wrap.find(".v-data-table-footer").exists()).toBe(true);
     });
+
+    it("shows Reset view in the footer only while sort or rows differ from the default (CORE-45)", async () => {
+      const wrapper = await mountEntityList({ items: [{ id: "a", name: "Alpha" }] });
+      const reset = () => wrapper.find('[data-testid="entity-list-reset-view"]');
+      expect(reset().exists()).toBe(false);
+      await wrapper.find(".app-entity-list__table-wrap th.v-data-table__th--sortable").trigger("click");
+      await flushPromises();
+      expect(reset().exists()).toBe(true);
+      expect(wrapper.find(".v-data-table-footer").element.contains(reset().element)).toBe(true);
+      await reset().trigger("click");
+      await flushPromises();
+      expect(reset().exists()).toBe(false);
+    });
   });
 });

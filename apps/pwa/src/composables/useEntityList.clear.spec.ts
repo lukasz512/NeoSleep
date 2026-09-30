@@ -83,4 +83,36 @@ describe("useEntityList › Clear filters (CORE-45)", () => {
     expect(list.tableOptions.value).toEqual({ page: 1, itemsPerPage: 25, sortBy: [{ key: "name", order: "asc" }] });
     stop();
   });
+
+  it("Reset view (table footer) restores sort, rows per page and page but keeps filters and search", async () => {
+    const { list, stop } = mount();
+    expect(list.isTableAtDefault.value).toBe(true);
+    list.filterState.value = { status: ["new"] };
+    list.searchQuery.value = "lopez";
+    list.tableOptions.value = { page: 3, itemsPerPage: 50, sortBy: [{ key: "name", order: "asc" }] };
+    await nextTick();
+    expect(list.isTableAtDefault.value).toBe(false);
+
+    const done = list.onTableReset();
+    await vi.runAllTimersAsync();
+    await done;
+
+    expect(list.tableOptions.value).toEqual({ page: 1, ...DEFAULT_TABLE_STATE });
+    expect(list.isTableAtDefault.value).toBe(true);
+    expect(list.filterState.value).toEqual({ status: ["new"] });
+    expect(list.searchQuery.value).toBe("lopez");
+    const last = new URLSearchParams(requests.at(-1)!.split("?")[1]);
+    expect(last.get("limit")).toBe("10");
+    expect(last.get("sortBy")).toBe("created_at");
+    expect(last.get("status")).toBe("new");
+    stop();
+  });
+
+  it("only a different page does not count as a changed view", async () => {
+    const { list, stop } = mount();
+    list.tableOptions.value = { ...list.tableOptions.value, page: 4 };
+    await nextTick();
+    expect(list.isTableAtDefault.value).toBe(true);
+    stop();
+  });
 });

@@ -10,6 +10,7 @@
   "app.common.discardChanges": "Odrzucić niezapisane zmiany?",
   "app.common.moreActions": "Więcej opcji",
   "app.list.rowsPerPage": "Wiersze:",
+  "app.list.resetView": "Przywróć widok",
   "app.list.count.one": "{count} rekord",
   "app.list.count.few": "{count} rekordy",
   "app.list.count.many": "{count} rekordów",
