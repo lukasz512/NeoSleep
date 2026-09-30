@@ -76,6 +76,16 @@ describe("useFilters", () => {
     stop();
   });
 
+  it("keeps saved values while a filter only offers 'All' (lookups not loaded yet — Doctors list on pwa-dev)", () => {
+    writePref(localStorage, prefsKey(alice, slot), { status: ["pulmonologist"], region: ["North"] });
+    const allOnly = [{ title: "All", value: "" }];
+    const { filterState, stop } = mount(() =>
+      useFilters("leads", [{ ...defs[0], options: allOnly }, { ...defs[1], options: allOnly }]),
+    );
+    expect(filterState.value).toEqual({ status: ["pulmonologist"], region: ["North"] });
+    stop();
+  });
+
   it("keeps saved values when a filter's options aren't known yet", () => {
     writePref(localStorage, prefsKey(alice, slot), { status: ["new"], region: ["North"] });
     const { filterState, stop } = mount(() => useFilters("leads", [{ ...defs[0], options: [] }, defs[1]]));
