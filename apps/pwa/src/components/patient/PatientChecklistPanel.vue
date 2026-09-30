@@ -89,7 +89,7 @@
         <div class="studies__header-actions">
           <!-- The QR button is also the link's status (NEO-93) — no separate "waiting" banner. -->
           <QrStatusButton
-            v-if="showsPatientActions"
+            v-if="showsPatientActions && !hideQrButton"
             class="studies__qr"
             :request="checklist.pending_requests[0] ?? null"
             :expired="checklist.expired_request ?? null"
@@ -370,6 +370,8 @@ const props = defineProps<{
   gender?: string | null;
   /** NEO-153: bumped by the side panel's "QR for the patient" button — opens the everything-QR here, where its status and polling live. */
   qrRequestNonce?: number;
+  /** NEO-203: the desktop side panel has the patient QR on every tab, so this tab drops its own QR button (the dialog still opens via qrRequestNonce). */
+  hideQrButton?: boolean;
   /** NEO-193: Documentos ("document") or Estudios ("study") — only that tab's items; omitted = everything. */
   category?: ChecklistCategory;
 }>();

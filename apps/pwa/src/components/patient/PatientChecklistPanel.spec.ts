@@ -171,6 +171,12 @@ describe("PatientChecklistPanel — the Estudios checklist", () => {
     expect(wrapper.find(".studies__qr").exists()).toBe(true);
   });
 
+  it("hideQrButton (desktop, the side panel has the QR — NEO-203) drops only the QR button; the email button stays", async () => {
+    const wrapper = await mountPanel({ category: "document", hideQrButton: true });
+    expect(wrapper.find(".studies__qr").exists()).toBe(false);
+    expect(wrapper.find(".studies__compact-btn").exists()).toBe(true);
+  });
+
   it("category='study' shows only results and other studies, without the patient QR or email", async () => {
     (checklistBody.other_uploads as unknown[]).push({ id: "up-9", type: "upload", created_at: "2026-09-22T10:00:00Z", source: "staff", by: null, title: "CBCT", file_attachment_id: "up-9" });
     const wrapper = await mountPanel({ category: "study" });

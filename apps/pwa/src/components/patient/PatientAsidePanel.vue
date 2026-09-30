@@ -6,9 +6,8 @@
         {{ patientItems.length ? t("app.patients.detail.aside.waitingOnPatient", { n: patientItems.length }) : t("app.patients.detail.aside.nothingForPatient") }}
       </p>
       <p v-if="patientItems.length" class="patient-aside__next-items">{{ patientItems.map((item) => checklistItemTitle(t, item.key, item.label)).join(" · ") }}</p>
-      <!-- Hidden on the Documentos tab, whose own QR status button is right there (NEO-193) — never two QR buttons on screen. -->
+      <!-- On every tab: while this panel shows, the Documentos tab drops its own QR button (NEO-203) — never two on screen. -->
       <AppButton
-        v-if="activeTab !== CHECKLIST_TAB.document"
         color="primary"
         variant="flat"
         size="large"

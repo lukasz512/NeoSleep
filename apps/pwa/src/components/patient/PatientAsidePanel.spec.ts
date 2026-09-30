@@ -91,9 +91,10 @@ describe("PatientAsidePanel (NEO-153, NEO-203)", () => {
     expect(done.find(".patient-aside__next").text()).toContain("Nothing left for the patient");
   });
 
-  it("hides its QR button on the Documentos tab, which has its own QR button since NEO-193", async () => {
-    expect(qrButton(await mountPanel({ activeTab: "documents" })).exists()).toBe(false);
-    expect(qrButton(await mountPanel({ activeTab: "studies" })).exists()).toBe(true);
+  it("keeps its QR button on every tab — on desktop the Documentos tab drops its own instead (NEO-203)", async () => {
+    for (const activeTab of ["details", "documents", "studies"]) {
+      expect(qrButton(await mountPanel({ activeTab })).exists()).toBe(true);
+    }
   });
 
   it("does not show the OrthoApnea card nor load the order", async () => {
