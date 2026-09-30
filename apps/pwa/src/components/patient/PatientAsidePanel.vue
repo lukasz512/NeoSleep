@@ -20,19 +20,9 @@
       </AppButton>
     </section>
 
-    <p class="patient-aside__facts" :aria-label="t('app.patients.detail.aside.keyFacts')">
-      <VChip v-if="patient.status" :color="patientStatusColor(patient.status)" size="small" variant="tonal">
-        {{ patientStatusLabel(t, patient.status) }}
-      </VChip>
+    <!-- Status and doctor live on Details, not here (NEO-205). -->
+    <p v-if="patient.ahi_baseline != null || diagnosis" class="patient-aside__facts" :aria-label="t('app.patients.detail.aside.keyFacts')">
       <span v-if="patient.ahi_baseline != null">{{ t("app.patients.detail.aside.ahi", { n: patient.ahi_baseline }) }}</span>
-      <RouterLink
-        v-if="patient.practitioner_id && patient.practitioner_name"
-        class="patient-aside__link"
-        :to="{ name: 'hcp-detail', params: { id: patient.practitioner_id } }"
-      >
-        {{ patient.practitioner_name }}
-      </RouterLink>
-      <span v-else-if="patient.practitioner_name">{{ patient.practitioner_name }}</span>
       <!-- Last, so a long diagnosis is the one cut with an ellipsis; the full text is in its tooltip and on Details. -->
       <span v-if="diagnosis" class="patient-aside__diagnosis" :title="diagnosis">{{ diagnosis }}</span>
     </p>
@@ -93,7 +83,8 @@
  * NEO-153, reworked in NEO-203 to fit one screen without scrolling:
  * 1. "Next step": what the patient still has to fill in, with the big
  *    "QR for the patient" button;
- * 2. the key facts on one line;
+ * 2. the key facts (IAH, diagnosis) on one line — status and doctor stay
+ *    on Details (NEO-205);
  * 3. documents and studies, unfinished first, at most DOC_ROWS rows;
  * 4. the latest note with a quick-add box — it takes what height is left.
  * Below 1280px ItemDetailLayout does not mount it; the Details, Documentos,
@@ -105,7 +96,6 @@
  */
 import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { VChip } from "vuetify/components";
 import AppButton from "../AppButton.vue";
 import AppIcon from "../AppIcon.vue";
 import AppSegmentProgress from "../AppSegmentProgress.vue";
@@ -117,7 +107,6 @@ import { checklistItemTitle } from "../../config/questionnaires";
 import { formatDiagnosis } from "../../utils/diagnosis";
 import { useNotes } from "../../composables/useNotes";
 import { useAsyncAction } from "../../composables/useAsyncAction";
-import { patientStatusColor, patientStatusLabel } from "../../utils/patientStatus";
 
 const RECENT_NOTES = 1;
 /** Rows the documents card shows before "See all" — what fits a 720px-tall window with the rest of the panel. */
@@ -126,10 +115,7 @@ const DOC_ROWS = 6;
 const props = defineProps<{
   patient: {
     id: string;
-    status?: string;
     ahi_baseline?: number | null;
-    practitioner_id?: string | null;
-    practitioner_name?: string | null;
     diagnosis_code?: Record<string, unknown> | null;
   };
   /** Documentos and Estudios hold health data — admin, doctor and manager only (NEO-83), same rule as the tabs. */
@@ -292,7 +278,6 @@ watch(() => props.activeTab, loadStudies);
   overflow: hidden;
 }
 
-.patient-aside__link,
 .patient-aside__all {
   color: rgb(var(--v-theme-primary));
   text-decoration: none;
@@ -385,8 +370,7 @@ watch(() => props.activeTab, loadStudies);
   cursor: pointer;
 }
 
-.patient-aside__all:focus-visible,
-.patient-aside__link:focus-visible {
+.patient-aside__all:focus-visible {
   outline: 2px solid rgb(var(--v-theme-primary));
   outline-offset: 2px;
   border-radius: 4px;

@@ -109,10 +109,20 @@ describe("PatientAsidePanel (NEO-153, NEO-203)", () => {
     expect(facts.element.previousElementSibling?.classList.contains("patient-aside__next")).toBe(true);
     expect(facts.find(".patient-aside__diagnosis").text()).toBe("G47.33 · OSA");
     expect(facts.text()).toContain("AHI 32");
-    expect(facts.find("a").text()).toBe("Dr Marta Nowak");
 
     const empty = await mountPanel({ patient: { id: "p-1", diagnosis_code: null } });
     expect(empty.find(".patient-aside__diagnosis").exists()).toBe(false);
+  });
+
+  it("leaves status and doctor to Details: no status chip, no doctor in the panel (NEO-205)", async () => {
+    const wrapper = await mountPanel();
+    expect(wrapper.find(".patient-aside__facts .v-chip").exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("Dr Marta Nowak");
+  });
+
+  it("drops the key-facts line when there is neither IAH nor diagnosis", async () => {
+    const wrapper = await mountPanel({ patient: { id: "p-1", status: "active", practitioner_name: "Dr Marta Nowak", diagnosis_code: null } });
+    expect(wrapper.find(".patient-aside__facts").exists()).toBe(false);
   });
 
   it("lists unfinished documents first and cuts the list at 6 rows with a link to the rest", async () => {
@@ -148,7 +158,7 @@ describe("PatientAsidePanel (NEO-153, NEO-203)", () => {
     const wrapper = await mountPanel({ canSeeStudies: false });
     expect(wrapper.find(".patient-aside__next").exists()).toBe(false);
     expect(wrapper.find(".patient-aside__docs").exists()).toBe(false);
-    expect(wrapper.find(".patient-aside__facts").exists()).toBe(true);
+    expect(wrapper.find(".patient-aside__facts").text()).toContain("AHI 32");
     expect(apiFetch.mock.calls.some(([p]) => String(p).includes("/checklist"))).toBe(false);
   });
 
