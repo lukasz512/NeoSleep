@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { APP_STORAGE_KEYS } from "../constants";
+import { APP_STORAGE_KEYS } from "../config/storageKeys";
 import type { getUserSettings as GetUserSettings, setUserSettings as SetUserSettings, takeLegacyFilters as TakeLegacyFilters } from "./user-settings";
 
 const storage: Record<string, string> = {};

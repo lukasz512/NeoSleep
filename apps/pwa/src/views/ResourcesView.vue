@@ -172,9 +172,9 @@ import { usePartnerResources, type PartnerResourceFileType, type PartnerResource
 import { usePageHeaderRow, usePageHeaderTeleport } from "../composables/usePageHeader";
 import { useMediaQuery } from "@vueuse/core";
 import { getUserSettings, setUserSettings } from "../utils/user-settings";
-import { MOBILE_BREAKPOINT } from "../constants";
+import { MOBILE_BREAKPOINT } from "../config/layout";
 import { useAuthStore } from "../stores/auth";
-import { SUPPORT_EMAIL } from "../constants";
+import { SUPPORT_EMAIL } from "../config/support";
 
 const { t, locale } = useI18n();
 const { documents, videos, documentGroups, loading, loadError, loadFailure, load } = usePartnerResources();
@@ -289,7 +289,7 @@ onUnmounted(() => {
   window.removeEventListener("scroll", handleWindowScroll);
 });
 
-/** Interim manual reporting — see constants.ts SUPPORT_EMAIL comment. */
+/** Interim manual reporting — see config/support.ts. */
 const incidentMailtoHref = computed(() => {
   const subject = "NeoSleep — OrthoApnea connection issue";
   const body = [

@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { getApiUrl, APP_STORAGE_KEYS, SIDEBAR_DEFAULT_COLLAPSED } from "./constants";
+import { getApiUrl } from "./env";
+import { APP_STORAGE_KEYS } from "./storageKeys";
+import { SIDEBAR_DEFAULT_COLLAPSED } from "./layout";
 
 describe("constants", () => {
   it("getApiUrl returns a string (empty in dev for proxy, or http URL)", () => {

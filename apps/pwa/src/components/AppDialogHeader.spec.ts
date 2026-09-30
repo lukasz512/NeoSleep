@@ -106,7 +106,7 @@ describe("dialog headers — one shared component, everywhere", () => {
   );
 
   it("theme.scss no longer styles dialog titles globally", () => {
-    const scss = readFileSync(path.join(SRC, "assets/theme.scss"), "utf-8");
+    const scss = readFileSync(path.join(SRC, "styles/theme.scss"), "utf-8");
     expect(scss).not.toMatch(/\.pwa-form-dialog__card \.v-card-title|\.pwa-form-dialog__title-row \{/);
   });
 });

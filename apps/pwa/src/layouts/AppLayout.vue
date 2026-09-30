@@ -263,7 +263,7 @@ import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
 import { useNotificationCenter } from "../composables/useNotificationCenter";
 import { onAppReady, markAppReady } from "../composables/useAppReady";
 import { usePartnerResources } from "../composables/usePartnerResources";
-import { SIDEBAR_COLLAPSE_ENABLED } from "../constants";
+import { SIDEBAR_COLLAPSE_ENABLED } from "../config/layout";
 
 const route = useRoute();
 const router = useRouter();

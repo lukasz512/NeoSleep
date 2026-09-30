@@ -12,7 +12,7 @@
  * once (page scroll stays on the window). The content sheet has a
  * view-transition-name (AppLayout), so the app bar and side menu stay still;
  * the travelling avatar gets its name from pageTransitionHero.ts for the length
- * of one transition. The keyframes live in assets/page-transitions.css, keyed
+ * of one transition. The keyframes live in styles/page-transitions.css, keyed
  * on <html data-page-transition="open|back|module">.
  *
  * Browsers without the API (and reduced-motion users, via CSS) keep what
