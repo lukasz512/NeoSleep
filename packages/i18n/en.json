@@ -359,7 +359,7 @@
   "user.patients.title": "Patients",
   "user.patients.subtitle": "Patients (placeholder).",
   "user.planner.title": "Planner",
-  "user.appointments.title": "Appointments",
+  "user.appointments.title": "Calendar",
   "user.appointments.add": "Book appointment",
   "user.appointments.empty": "No appointments in this period",
   "user.appointments.status.scheduled": "Scheduled",
