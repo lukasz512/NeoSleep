@@ -1,0 +1,219 @@
+<!doctype html>
+<!-- NEO-204 — the promo video as one deterministic page: render.mjs calls
+     window.renderAt(seconds) for every frame and screenshots the stage.
+     Query: ?lang=en|pl|mx  (copy lives in COPY below; the screens stay the captured ones). -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>NeoSleep promo</title>
+<style>
+  :root {
+    --teal: #128f83;
+    --teal-dark: #082a27;
+    --mint: #8ed6ce;
+    --ink: #1d2b2a;
+    --w: 1080px;
+    --h: 1350px;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: var(--w); height: var(--h); overflow: hidden; background: #fff; }
+  body { font-family: -apple-system, "SF Pro Display", "Helvetica Neue", Arial, sans-serif; color: var(--ink); }
+  #stage { position: relative; width: var(--w); height: var(--h); overflow: hidden;
+    background: radial-gradient(120% 80% at 80% 0%, #e6f4f2 0%, #f6faf9 55%, #ffffff 100%); }
+  .abs { position: absolute; will-change: transform, opacity; }
+
+  #orb1 { width: 900px; height: 900px; border-radius: 50%; left: 520px; top: -380px; background: var(--mint); opacity: .18; }
+  #orb2 { width: 600px; height: 600px; border-radius: 50%; left: -260px; top: 900px; background: var(--teal); opacity: .08; }
+
+  #photo { inset: 0; overflow: hidden; }
+  #photo img { width: 100%; height: 100%; object-fit: cover; object-position: 55% 50%; transform-origin: 52% 40%; }
+  #photo::after { content: ""; position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(8,42,39,0) 45%, rgba(8,42,39,.72) 100%); }
+  #photoText { left: 80px; right: 80px; bottom: 150px; color: #fff; font-size: 104px; font-weight: 700; letter-spacing: -2px; line-height: 1; }
+
+  #hook { left: 80px; right: 80px; top: 470px; font-size: 104px; font-weight: 700; letter-spacing: -2.5px; line-height: 1.02; }
+  #hook em { font-style: normal; color: var(--teal); }
+
+  #cap { left: 80px; right: 80px; top: 120px; }
+  #cap .kicker { font-size: 26px; font-weight: 700; letter-spacing: 5px; color: var(--teal); text-transform: uppercase; }
+  #cap .line { margin-top: 18px; font-size: 68px; font-weight: 700; letter-spacing: -1.5px; line-height: 1.05; }
+
+  /* Laptop: 16:10 screen matching the 1440×900 captures. */
+  #laptop { left: 50px; top: 420px; width: 980px; }
+  #laptop .lid { background: #1b1f1f; border-radius: 28px 28px 10px 10px; padding: 18px 18px 22px; box-shadow: 0 40px 90px rgba(8,42,39,.28); }
+  #laptop .screen { position: relative; width: 944px; height: 590px; border-radius: 8px; overflow: hidden; background: #e0e9e8; }
+  #laptop .base { height: 26px; margin: 0 -34px; border-radius: 0 0 26px 26px;
+    background: linear-gradient(180deg, #d6dbdb 0%, #aab1b1 100%); position: relative; }
+  #laptop .base::before { content: ""; position: absolute; left: 50%; top: 0; width: 150px; height: 9px; transform: translateX(-50%);
+    border-radius: 0 0 10px 10px; background: #9ba2a2; }
+  .shot { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top left; opacity: 0; }
+
+  /* Phone: 390×844 captures. */
+  #phone { left: 748px; top: 700px; width: 290px; height: 610px; border-radius: 52px; background: #111; padding: 11px;
+    box-shadow: 0 40px 80px rgba(8,42,39,.35); }
+  #phone .screen { position: relative; width: 100%; height: 100%; border-radius: 42px; overflow: hidden; background: #e0e9e8; }
+  #phone .island { position: absolute; top: 12px; left: 50%; width: 86px; height: 24px; transform: translateX(-50%); border-radius: 14px; background: #111; z-index: 2; }
+
+  #end { inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+    background: radial-gradient(90% 70% at 50% 40%, #ffffff 0%, #eef7f6 70%, #e2f1ef 100%); }
+  #end img { width: 640px; }
+  #end .tag { margin-top: 56px; font-size: 56px; font-weight: 700; letter-spacing: -1px; }
+  #end .sub { margin-top: 18px; font-size: 32px; color: var(--teal); font-weight: 600; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="orb1" class="abs"></div>
+  <div id="orb2" class="abs"></div>
+
+  <div id="hook" class="abs"></div>
+  <div id="cap" class="abs"><div class="kicker"></div><div class="line"></div></div>
+
+  <div id="laptop" class="abs">
+    <div class="lid"><div class="screen">
+      <img class="shot" id="s-patients" src="out/shots/patients-desktop.png" />
+      <img class="shot" id="s-detail" src="out/shots/patient-detail-desktop.png" />
+      <img class="shot" id="s-calendar" src="out/shots/calendar-desktop.png" />
+      <img class="shot" id="s-resources" src="out/shots/resources-desktop.png" />
+    </div></div>
+    <div class="base"></div>
+  </div>
+
+  <div id="phone" class="abs"><div class="screen">
+    <div class="island"></div>
+    <img class="shot" id="p-patients" src="out/shots/patients-phone.png" />
+    <img class="shot" id="p-calendar" src="out/shots/calendar-phone.png" />
+    <img class="shot" id="p-resources" src="out/shots/resources-phone.png" />
+  </div></div>
+
+  <div id="photo" class="abs"><img src="out/stock/wake-up.jpg" /></div>
+  <div id="photoText" class="abs"></div>
+
+  <div id="end" class="abs">
+    <img src="../../../../packages/brand/logos/logo/logo_light.svg" />
+    <div class="tag"></div>
+    <div class="sub"></div>
+  </div>
+</div>
+
+<script>
+  const COPY = {
+    en: {
+      photo: "Better sleep.",
+      hook: "More energy,<br><em>every day.</em>",
+      patients: ["Patients", "Every patient's path<br>in one place."],
+      calendar: ["Calendar", "Every visit<br>on schedule."],
+      resources: ["Resources", "Know-how,<br>always at hand."],
+      tag: "Built with sleep doctors.",
+      sub: "Better sleep. More energy.",
+    },
+    pl: {
+      photo: "Lepszy sen.",
+      hook: "Więcej energii,<br><em>każdego dnia.</em>",
+      patients: ["Pacjenci", "Cała ścieżka pacjenta<br>w jednym miejscu."],
+      calendar: ["Kalendarz", "Każda wizyta<br>na czas."],
+      resources: ["Zasoby", "Wiedza<br>zawsze pod ręką."],
+      tag: "Zbudowane z lekarzami snu.",
+      sub: "Lepszy sen. Więcej energii.",
+    },
+    mx: {
+      photo: "Dormir mejor.",
+      hook: "Más energía,<br><em>cada día.</em>",
+      patients: ["Pacientes", "Todo el camino del paciente<br>en un solo lugar."],
+      calendar: ["Agenda", "Cada cita<br>a tiempo."],
+      resources: ["Recursos", "El conocimiento,<br>siempre a la mano."],
+      tag: "Creado con médicos del sueño.",
+      sub: "Dormir mejor. Más energía.",
+    },
+  };
+  const lang = new URLSearchParams(location.search).get("lang") || "en";
+  const C = COPY[lang] || COPY.en;
+  document.documentElement.lang = lang === "mx" ? "es-MX" : lang;
+  document.getElementById("photoText").innerHTML = C.photo;
+  document.getElementById("hook").innerHTML = C.hook;
+  document.querySelector("#end .tag").textContent = C.tag;
+  document.querySelector("#end .sub").textContent = C.sub;
+
+  // ── tiny deterministic tween engine ─────────────────────────────────────
+  const clamp = (x) => Math.max(0, Math.min(1, x));
+  const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+  const easeOut = (x) => 1 - Math.pow(1 - x, 3);
+  const prog = (t, a, b, f = ease) => f(clamp((t - a) / (b - a)));
+  const lerp = (a, b, p) => a + (b - a) * p;
+  // Visible between a..b, fading d seconds at both ends.
+  const window_ = (t, a, b, d = 0.45) => Math.min(prog(t, a, a + d), 1 - prog(t, b - d, b));
+  const $ = (id) => document.getElementById(id);
+  const set = (el, { o, x = 0, y = 0, s = 1, origin }) => {
+    if (o !== undefined) el.style.opacity = o;
+    el.style.transform = `translate(${x}px, ${y}px) scale(${s})`;
+    if (origin) el.style.transformOrigin = origin;
+  };
+
+  const SCENES = [
+    // [caption key, from, to]
+    ["patients", 4.3, 11.2],
+    ["calendar", 11.2, 18.2],
+    ["resources", 18.2, 25.0],
+  ];
+  let lastCap = null;
+
+  window.DURATION = 30;
+  window.renderAt = (t) => {
+    // 0–2.6 s: rested person, "Better sleep."
+    set($("photo"), { o: 1 - prog(t, 2.1, 2.7) });
+    set($("photo").querySelector("img"), { s: lerp(1.0, 1.12, prog(t, 0, 2.7, (x) => x)) });
+    set($("photoText"), { o: window_(t, 0.35, 2.5, 0.5), y: lerp(30, 0, prog(t, 0.35, 1.1, easeOut)) });
+
+    // 2.6–4.4 s: "More energy, every day."
+    set($("hook"), { o: window_(t, 2.55, 4.45, 0.4), y: lerp(40, 0, prog(t, 2.55, 3.2, easeOut)) });
+
+    // captions
+    const scene = SCENES.find(([, a, b]) => t >= a && t < b);
+    const cap = $("cap");
+    if (scene) {
+      const [key, a, b] = scene;
+      if (lastCap !== key) {
+        cap.querySelector(".kicker").textContent = C[key][0];
+        cap.querySelector(".line").innerHTML = C[key][1];
+        lastCap = key;
+      }
+      set(cap, { o: window_(t, a, b, 0.4), y: lerp(24, 0, prog(t, a, a + 0.6, easeOut)) });
+    } else set(cap, { o: 0 });
+
+    // laptop in at 4.1, out at 24.8
+    set($("laptop"), { o: window_(t, 4.1, 25.0, 0.5), y: lerp(160, 0, prog(t, 4.1, 5.0, easeOut)) - lerp(0, 60, prog(t, 24.4, 25.0)) });
+
+    // laptop screens: [id, visible from, to, zoom from→to, origin]
+    const screens = [
+      ["s-patients", 4.1, 7.9, 1.0, 1.18, "22% 30%"],
+      ["s-detail", 7.6, 11.5, 1.05, 1.9, "44% 66%"],
+      ["s-calendar", 11.2, 18.5, 1.0, 1.35, "48% 42%"],
+      ["s-resources", 18.2, 25.2, 1.0, 1.3, "30% 30%"],
+    ];
+    for (const [id, a, b, z0, z1, origin] of screens) {
+      set($(id), { o: window_(t, a, b, 0.35), s: lerp(z0, z1, prog(t, a, b)), origin });
+    }
+
+    // phone: calendar + resources scenes
+    set($("phone"), {
+      o: window_(t, 5.4, 24.8, 0.5),
+      x: lerp(360, 0, prog(t, 5.4, 6.3, easeOut)) + lerp(0, 360, prog(t, 24.2, 24.9)),
+    });
+    set($("p-patients"), { o: window_(t, 5.4, 12.6, 0.35) });
+    set($("p-calendar"), { o: window_(t, 12.2, 19.2, 0.35) });
+    set($("p-resources"), { o: window_(t, 18.9, 25, 0.35) });
+
+    // orbs drift
+    set($("orb1"), { x: lerp(0, -120, t / 30), y: lerp(0, 60, t / 30) });
+    set($("orb2"), { x: lerp(0, 140, t / 30), y: lerp(0, -80, t / 30) });
+
+    // 25–30 s: logo + tagline
+    set($("end"), { o: prog(t, 24.9, 25.6) });
+    set($("end").querySelector("img"), { s: lerp(0.92, 1, prog(t, 25.0, 26.2, easeOut)) });
+    set($("end").querySelector(".tag"), { o: prog(t, 25.8, 26.5), y: lerp(20, 0, prog(t, 25.8, 26.6, easeOut)) });
+    set($("end").querySelector(".sub"), { o: prog(t, 26.6, 27.3) });
+  };
+  window.renderAt(0);
+</script>
+</body>
+</html>
