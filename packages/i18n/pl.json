@@ -2377,5 +2377,6 @@
   "app.clinical.email.status.bounced": "Nie dotarł",
   "app.clinical.email.status.failed": "Błąd",
   "app.clinical.email.status.suppressed": "Zablokowany",
-  "app.clinical.email.status.complained": "Oznaczony jako spam"
+  "app.clinical.email.status.complained": "Oznaczony jako spam",
+  "app.clinical.email.rejected": "Serwer pocztowy odrzucił ten adres. Sprawdź e-mail pacjenta w karcie."
 }

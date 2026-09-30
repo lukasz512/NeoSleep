@@ -9,6 +9,7 @@ import {
   type EmailAttachment,
 } from "@neo/email";
 import { maskEmail } from "./utils/maskEmail.js";
+import { AppError } from "./errors.js";
 import { RESEND_API_KEY, RESEND_FROM_EMAIL, RESEND_NOTIFY_TO, PARTNER_DOCS_CC_EMAIL, RESEND_WEBHOOK_SECRET } from "./env.js";
 
 /** Every personalized email needs at least these to build a proper "Hi {title} {name}," greeting,
@@ -106,6 +107,12 @@ async function sendEmail(logLabel: string, args: SendEmailArgs): Promise<string 
       ...(args.tags ? { tags: [{ name: "tenant", value: args.tags.tenant }, { name: "kind", value: args.tags.kind }] } : {}),
     });
     if (error) {
+      // Resend refused this recipient (a test domain like example.com, a
+      // malformed or suppressed address): the address is the problem, not
+      // the server — say so instead of a generic failure (NEO-202).
+      if (error.name === "validation_error" && /`to`|\bto\b field|recipient/i.test(error.message)) {
+        throw new EmailRejectedError(`${error.name}: ${error.message}`);
+      }
       throw new Error(`${error.name}: ${error.message}`);
     }
     console.log(`[mailer] Sent ${logLabel} to ${maskEmail(args.to)}${data?.id ? ` (${data.id})` : ""}`);
@@ -502,6 +509,13 @@ export async function sendSignedDocumentsEmail(
 }
 
 export class ResendWebhookNotConfiguredError extends Error {}
+
+/** The mail provider refused the recipient address — 422 EMAIL_REJECTED, shown as "check the address". */
+export class EmailRejectedError extends AppError {
+  constructor(detail: string) {
+    super("The mail server rejected this email address", "EMAIL_REJECTED", 422, detail);
+  }
+}
 
 /**
  * Checks a Resend webhook's signature (Svix / Standard Webhooks: svix-id,

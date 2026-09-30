@@ -2377,5 +2377,6 @@
   "app.clinical.email.status.bounced": "No llegó",
   "app.clinical.email.status.failed": "Error",
   "app.clinical.email.status.suppressed": "Bloqueado",
-  "app.clinical.email.status.complained": "Marcado como spam"
+  "app.clinical.email.status.complained": "Marcado como spam",
+  "app.clinical.email.rejected": "El servidor de correo rechazó esta dirección. Revisa el correo del paciente en el expediente."
 }

@@ -138,6 +138,17 @@ describe("SendQuestionnaireEmailCommand", () => {
     });
   });
 
+  it("a rejected address reaches the caller as EMAIL_REJECTED through withTenant, not DB_ERROR (NEO-202)", async () => {
+    const { EmailRejectedError } = await import("../mailer.js");
+    sendMock.mockRejectedValue(new EmailRejectedError("validation_error: Invalid `to` field"));
+    const err = await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const patient = await insertPatient(client, { first_name: "Quique", last_name: `Rechazo-${uniqueSuffix()}`, email: `q.${uniqueSuffix()}@example.com` });
+      return SendQuestionnaireEmailCommand(ctx, patient.id, ORIGIN);
+    }).catch((e: unknown) => e);
+    expect(err).toMatchObject({ code: "EMAIL_REJECTED", statusCode: 422 });
+  });
+
   it("reports a failure instead of 'sent' when email isn't available", async () => {
     sendMock.mockResolvedValue(null);
     await withTenant(TENANT_SLUG, async (client) => {
