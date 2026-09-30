@@ -1,17 +1,10 @@
-# Stopgap for NEO-45 (apps/api feels slow on Render's free plan).
-# Render's free plan spins a service down after ~15 min with no HTTP traffic,
-# then pays a cold-start cost (container boot) on the next request. This job
-# pings /health every 10 minutes so the service never goes idle long enough
-# to spin down.
-#
-# This does NOT fix CPU throttling under real load if that turns out to be
-# the actual cause of the slowness (Render free plan also has a small shared
-# CPU allocation) — see docs/stories/api-hosting-migration-render-to-railway.md
-# for the paid-migration path if this stopgap isn't enough.
-#
-# Remove this workflow once apps/api is off Render's free plan.
+# Pings the Cloud Run APIs every 10 minutes and fails loudly if one is down,
+# so an outage shows up as a red run before someone opens the app (CORE-66).
+# Cold starts themselves are handled by MIN_INSTANCES in deploy-api.yml.
+# The URLs are public (same values as OAUTH_REDIRECT_ORIGIN in
+# infrastructure/cloud-run/<env>.env.yaml).
 
-name: Keep API warm (Render free-tier stopgap)
+name: Keep API warm (Cloud Run health ping)
 
 on:
   schedule:
@@ -22,15 +15,16 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        target: [prod, dev]
+        include:
+          - target: prod
+            url: https://neosleep-api-prod-692668694184.us-west2.run.app
+          - target: dev
+            url: https://neosleep-api-dev-692668694184.us-west2.run.app
     steps:
       - name: Ping health endpoint
-        env:
-          API_URL: ${{ matrix.target == 'prod' && secrets.RENDER_API_URL_PROD || secrets.RENDER_API_URL_DEV }}
         run: |
-          if [ -z "$API_URL" ]; then
-            echo "No URL configured for ${{ matrix.target }}, skipping."
-            exit 0
-          fi
-          curl -sf -o /dev/null -w "${{ matrix.target }}: HTTP %{http_code} in %{time_total}s\n" "$API_URL/health"
+          curl -sf --retry 2 --retry-delay 5 -o /dev/null \
+            -w "${{ matrix.target }}: HTTP %{http_code} in %{time_total}s\n" \
+            "${{ matrix.url }}/health"

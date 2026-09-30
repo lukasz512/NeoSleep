@@ -47,7 +47,9 @@ Console → service → **Logs**, or
 
 - `max-instances=1` is deliberate: the OrthoApnea queue and rate limiters are in-memory.
 - Both services share one Supabase DB, so migrations must be additive only.
-- The first request after idle waits for a cold start (a few seconds).
+- The first request after idle waits for a cold start (a few seconds). `MIN_INSTANCES` in
+  `.github/workflows/deploy-api.yml` is `1` for the 2026-10-07 demo week (CORE-66), so one
+  instance stays warm; set it back to `0` afterwards and push to dev + promote to prod.
 
 ## One-time setup (done once, kept for reference / a future EU stack)
 

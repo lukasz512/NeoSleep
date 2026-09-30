@@ -4,7 +4,7 @@
 #   push to prod -> neosleep-api-prod
 #
 # Both run in us-west2 (Los Angeles), next to the Supabase DB (us-west-1), with
-# min 0 / max 1 instance: scale-to-zero keeps it ~free, and max 1 is required
+# min MIN_INSTANCES / max 1 instance: scale-to-zero (0) keeps it ~free, and max 1 is required
 # while the OrthoApnea mutation queue and the rate limiters live in memory
 # (services/partners/orthoapnea.ts). Raise it only after those move to the DB.
 #
@@ -42,6 +42,9 @@ permissions:
 env:
   REGION: us-west2
   IMAGE: us-west2-docker.pkg.dev/${{ secrets.GCP_API_PROJECT }}/api/neosleep-api
+  # 1 = one instance always warm (no 5 s cold start) for the 2026-10-07 live demo
+  # (CORE-66). Costs a few $/month per service; set back to 0 after the demo week.
+  MIN_INSTANCES: "1"
 
 jobs:
   deploy:
@@ -74,7 +77,7 @@ jobs:
             --image "$IMAGE:$GITHUB_SHA" \
             --service-account "${{ secrets.GCP_API_RUNTIME_SA }}" \
             --allow-unauthenticated \
-            --min-instances 0 --max-instances 1 \
+            --min-instances "$MIN_INSTANCES" --max-instances 1 \
             --execution-environment gen2 --cpu 1 --memory 1Gi --concurrency 40 --timeout 300 \
             --env-vars-file "infrastructure/cloud-run/${GITHUB_REF_NAME}.env.yaml" \
             --set-secrets "$SECRETS" \
