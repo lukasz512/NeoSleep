@@ -87,21 +87,25 @@ describe("PatientDetailView — health-data tabs", () => {
 });
 
 describe("PatientDetailView — Documents tab", () => {
-  it("lists 'Documents' among the tabs and wires it to the patient's /documents endpoint", async () => {
-    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, PATIENT));
+  // NEO-193: Documents = consent + the Historia Clínica parts, from the same checklist as Studies (no duplicate file list).
+  it("shows Documents before Studies; Documents lists only the document items, Studies only the results", async () => {
+    routeApi();
     const { wrapper } = await mountPatientDetail();
-
     await vi.waitFor(() => expect(wrapper.text()).toContain("Jan Kowalski"));
 
-    const documentsTab = wrapper.findAll('[role="tab"]').find((t) => t.text() === "Documents");
-    expect(documentsTab?.exists()).toBe(true);
+    const tabs = wrapper.findAll('[role="tab"]');
+    const labels = tabs.map((t) => t.text());
+    expect(labels.indexOf("Documents")).toBeLessThan(labels.indexOf("Studies"));
 
-    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, []));
-    await documentsTab?.trigger("click");
+    await tabs.find((t) => t.text() === "Documents")!.trigger("click");
+    await vi.waitFor(() => expect(wrapper.find(".studies__item").exists()).toBe(true));
+    expect(wrapper.findAll(".studies__item-title").map((r) => r.text())).toEqual(["Informed consent"]);
+    expect(apiFetch.mock.calls.some(([path]) => String(path).endsWith("/documents"))).toBe(false);
 
-    await vi.waitFor(() =>
-      expect(apiFetch).toHaveBeenCalledWith("/api/v1/patient/patient-1/documents", { handleErrors: false })
-    );
+    await tabs.find((t) => t.text() === "Studies")!.trigger("click");
+    // Visited tabs stay mounted — each panel holds only its own items.
+    const panelTitles = () => wrapper.findAll(".studies").map((panel) => panel.findAll(".studies__item-title").map((r) => r.text()));
+    await vi.waitFor(() => expect(panelTitles()).toEqual([["Informed consent"], ["Polysomnography"]]));
 
     // See HCPDetailView.spec.ts's own comment: flushes FormRenderer/EventForm's
     // in-flight dynamic import before afterEach() unmounts.
@@ -111,8 +115,8 @@ describe("PatientDetailView — Documents tab", () => {
 
 const CHECKLIST = {
   items: [
-    { key: "informedConsent", templateKey: "informedConsent", label: "informedConsent", fillMode: "consent", group: "consent", status: "done", completed_at: null, history: [], pending_request_id: null, actions: {} },
-    { key: "polysomnography", templateKey: null, label: "polysomnography", fillMode: "external", group: "results", status: "missing", completed_at: null, history: [], pending_request_id: null, actions: {} },
+    { key: "informedConsent", templateKey: "informedConsent", label: "informedConsent", fillMode: "consent", group: "consent", category: "document", status: "done", completed_at: null, history: [], pending_request_id: null, actions: {} },
+    { key: "polysomnography", templateKey: null, label: "polysomnography", fillMode: "external", group: "results", category: "study", status: "missing", completed_at: null, history: [], pending_request_id: null, actions: {} },
   ],
   other_uploads: [],
   pending_requests: [],
@@ -144,6 +148,15 @@ describe("PatientDetailView — Estudios checklist (NEO-36)", () => {
     await icons[1]!.trigger("click");
     await vi.waitFor(() => expect(router.currentRoute.value.query).toMatchObject({ tab: "studies", item: "polysomnography" }));
     await vi.waitFor(() => expect(wrapper.find(".studies__item").exists()).toBe(true));
+    await flushPromises();
+  });
+
+  it("a click on a document item (consent) opens it in the Documents tab (NEO-193)", async () => {
+    routeApi();
+    const { wrapper, router } = await mountPatientDetail();
+    await vi.waitFor(() => expect(wrapper.find(".studies-summary__item").exists()).toBe(true));
+    await wrapper.findAll(".studies-summary__item")[0]!.trigger("click");
+    await vi.waitFor(() => expect(router.currentRoute.value.query).toMatchObject({ tab: "documents", item: "informedConsent" }));
     await flushPromises();
   });
 

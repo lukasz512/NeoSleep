@@ -82,13 +82,14 @@
       <header class="studies__header">
         <AppSegmentProgress
           class="studies__progress"
-          :segments="checklistSegments(checklist.items)"
-          :label="t('app.clinical.progress', checklist.summary)"
+          :segments="checklistSegments(items)"
+          :label="t('app.clinical.progress', summary)"
           :meta="waitingCount ? t('app.clinical.progressWaiting', { n: waitingCount }) : undefined"
         />
         <div class="studies__header-actions">
           <!-- The QR button is also the link's status (NEO-93) — no separate "waiting" banner. -->
           <QrStatusButton
+            v-if="showsPatientActions"
             class="studies__qr"
             :request="checklist.pending_requests[0] ?? null"
             :expired="checklist.expired_request ?? null"
@@ -102,7 +103,7 @@
             @cancel="checklistApi.cancelRequest"
           />
           <AppButton
-            v-if="patientCanStillDoSomething"
+            v-if="showsPatientActions && patientCanStillDoSomething"
             class="studies__compact-btn"
             color="primary"
             variant="tonal"
@@ -117,8 +118,8 @@
             class="studies__compact-btn studies__add"
             color="success"
             variant="tonal"
-            :aria-label="t('app.clinical.addStudy')"
-            :title="t('app.clinical.addStudy')"
+            :aria-label="addLabel"
+            :title="addLabel"
             @click="openUpload(null)"
           >
             <AppIcon name="plus" class="studies__add-icon" />
@@ -264,7 +265,7 @@
         </ul>
       </section>
 
-      <section v-if="checklist.other_uploads.length" class="studies__group" aria-labelledby="studies-group-other">
+      <section v-if="props.category !== 'document' && checklist.other_uploads.length" class="studies__group" aria-labelledby="studies-group-other">
         <h3 id="studies-group-other" class="studies__group-title">{{ t("app.clinical.group.other") }}</h3>
         <ul class="studies__list">
           <li
@@ -335,6 +336,7 @@ import {
   type ChecklistItem,
   type ChecklistRecord,
   type ChecklistGroup,
+  type ChecklistCategory,
   type EmailSend,
   checklistSegments,
   checklistEntries,
@@ -352,7 +354,8 @@ import {
 const FormRenderer = defineAsyncComponent(() => import("../FormRenderer.vue"));
 
 /**
- * Estudios tab — the patient's checklist (NEO-36 part 2, ADR-024): every
+ * Documentos + Estudios tabs — the patient's checklist, one panel per tab
+ * filtered by `category` (NEO-193; NEO-36 part 2, ADR-024): every
  * document assigned to patients in the Documents admin, grouped consent →
  * patient → doctor → results (polysomnography always last), each with its
  * status, history and actions (QR for the patient, fill, print, upload).
@@ -367,6 +370,8 @@ const props = defineProps<{
   gender?: string | null;
   /** NEO-153: bumped by the side panel's "QR for the patient" button — opens the everything-QR here, where its status and polling live. */
   qrRequestNonce?: number;
+  /** NEO-193: Documentos ("document") or Estudios ("study") — only that tab's items; omitted = everything. */
+  category?: ChecklistCategory;
 }>();
 
 const { t, locale } = useI18n();
@@ -377,7 +382,11 @@ const isAdmin = computed(() => authStore.user?.role === "admin");
 const checklistApi = usePatientChecklist(() => props.patientId);
 const checklist = computed(() => checklistApi.checklist.value);
 const waitingCount = computed(() => checklist.value?.items.filter((i) => i.status === "pending_patient").length ?? 0);
-const items = computed(() => checklist.value?.items ?? []);
+const items = computed(() => (checklist.value?.items ?? []).filter((item) => !props.category || item.category === props.category));
+const summary = computed(() => ({ done: items.value.filter((i) => i.status === "done").length, total: items.value.length }));
+/** The patient QR and email only carry documents (consent, questionnaires) — never shown on Estudios. */
+const showsPatientActions = computed(() => props.category !== "study");
+const addLabel = computed(() => t(props.category === "document" ? "app.clinical.addDocument" : "app.clinical.addStudy"));
 
 const GROUP_ORDER: ChecklistGroup[] = ["consent", "patient", "doctor", "results"];
 const groups = computed(() =>

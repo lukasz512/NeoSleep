@@ -19,6 +19,10 @@ import type { ClinicalRecordKind } from "../config/questionnaires";
 
 export type ChecklistStatus = "missing" | "pending_patient" | "partial" | "done";
 export type ChecklistGroup = "consent" | "patient" | "doctor" | "results";
+/** Which patient tab an item lives in (NEO-193) — Documentos ("document") or Estudios ("study"); the API decides. */
+export type ChecklistCategory = "document" | "study";
+/** The patient-detail tab that shows a category's items. */
+export const CHECKLIST_TAB: Record<ChecklistCategory, "documents" | "studies"> = { document: "documents", study: "studies" };
 
 export interface ChecklistRecord {
   kind: ClinicalRecordKind;
@@ -73,6 +77,7 @@ export interface ChecklistItem {
   label: string;
   fillMode: "consent" | "patient" | "doctor" | "external";
   group: ChecklistGroup;
+  category: ChecklistCategory;
   status: ChecklistStatus;
   completed_at: string | null;
   history: ChecklistHistoryEntry[];

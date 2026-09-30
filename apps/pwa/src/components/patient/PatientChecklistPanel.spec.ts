@@ -21,7 +21,7 @@ vi.mock("../../composables/useNotifications", () => ({
 
 import "../FormRenderer.vue";
 import { useAuthStore } from "../../stores/auth";
-import PatientStudiesPanel from "./PatientStudiesPanel.vue";
+import PatientChecklistPanel from "./PatientChecklistPanel.vue";
 import QuestionnaireQrDialog from "../questionnaire/QuestionnaireQrDialog.vue";
 
 function jsonResponse(ok: boolean, status: number, body: unknown, contentType = "application/json") {
@@ -42,6 +42,7 @@ const item = (key: string, group: string, status: string, over: Record<string, u
   label: key,
   fillMode: group === "results" ? "external" : group,
   group,
+  category: group === "results" ? "study" : "document",
   status,
   completed_at: null,
   history: [],
@@ -129,7 +130,7 @@ async function mountPanel(extraProps: Record<string, unknown> = {}): Promise<Vue
   useAuthStore().user = { id: "u-1", email: "doc@clinic.test", name: "Dra. Test", role: "doctor" } as ReturnType<typeof useAuthStore>["user"];
   const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
   const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
-  const wrapper = mount(PatientStudiesPanel, { props: { patientId: "patient-1", ...extraProps }, attachTo: document.body, global: { plugins: [i18n, vuetify] } });
+  const wrapper = mount(PatientChecklistPanel, { props: { patientId: "patient-1", ...extraProps }, attachTo: document.body, global: { plugins: [i18n, vuetify] } });
   mounted.push(wrapper);
   await flushPromises();
   return wrapper;
@@ -139,7 +140,7 @@ const rows = (wrapper: VueWrapper) => wrapper.findAll(".studies__item");
 type Scope = Pick<VueWrapper, "findAll">;
 const button = (scope: Scope, text: string) => scope.findAll("button").find((b) => b.text().includes(text));
 
-describe("PatientStudiesPanel — the Estudios checklist", () => {
+describe("PatientChecklistPanel — the Estudios checklist", () => {
   it("shows every item grouped consent → patient → doctor → results, polysomnography last, with done/total", async () => {
     const wrapper = await mountPanel();
     expect(wrapper.findAll(".studies__group-title").map((h) => h.text())).toEqual(["Consent", "Completed by the patient", "Completed by the doctor", "Results"]);
@@ -152,6 +153,31 @@ describe("PatientStudiesPanel — the Estudios checklist", () => {
       "Polysomnography",
     ]);
     expect(wrapper.text()).toContain("1 of 6 done");
+  });
+
+  // NEO-193: Documentos and Estudios are the same panel, each showing only its own items.
+  it("category='document' shows consent + the Historia Clínica parts with the patient QR; no results, no other studies", async () => {
+    (checklistBody.other_uploads as unknown[]).push({ id: "up-9", type: "upload", created_at: "2026-09-22T10:00:00Z", source: "staff", by: null, title: "CBCT", file_attachment_id: "up-9" });
+    const wrapper = await mountPanel({ category: "document" });
+    expect(rows(wrapper).map((r) => r.find(".studies__item-title").text())).toEqual([
+      "Informed consent",
+      "Medical history",
+      "STOP-Bang questionnaire",
+      "Oral cavity exam",
+      "Clinical history",
+    ]);
+    expect(wrapper.text()).toContain("1 of 5 done");
+    expect(wrapper.text()).not.toContain("CBCT");
+    expect(wrapper.find(".studies__qr").exists()).toBe(true);
+  });
+
+  it("category='study' shows only results and other studies, without the patient QR or email", async () => {
+    (checklistBody.other_uploads as unknown[]).push({ id: "up-9", type: "upload", created_at: "2026-09-22T10:00:00Z", source: "staff", by: null, title: "CBCT", file_attachment_id: "up-9" });
+    const wrapper = await mountPanel({ category: "study" });
+    expect(rows(wrapper).map((r) => r.find(".studies__item-title").text())).toEqual(["Polysomnography", "CBCT"]);
+    expect(wrapper.text()).toContain("0 of 1 done");
+    expect(wrapper.find(".studies__qr").exists()).toBe(false);
+    expect(wrapper.find(".studies__add").exists()).toBe(true);
   });
 
   it("a done item shows its result instead of its buttons (actions move under ⋯); missing ones keep their buttons", async () => {

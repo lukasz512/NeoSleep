@@ -145,13 +145,14 @@
             <PatientNotesPanel entity-type="patient" :entity-id="patient.id" />
           </template>
           <template #studies>
-            <PatientStudiesPanel :patient-id="patient.id" :focus-item="studyItem" :date-of-birth="patient.date_of_birth" :gender="patient.gender" :qr-request-nonce="qrRequestNonce" />
+            <PatientChecklistPanel category="study" :patient-id="patient.id" :focus-item="studyItem" :date-of-birth="patient.date_of_birth" :gender="patient.gender" />
           </template>
           <template #orthoapnea>
             <PatientOrthoApneaPanel :patient-id="patient.id" />
           </template>
           <template #documents>
-            <EntityDocumentsPanel :endpoint="`/api/v1/patient/${patient.id}/documents`" />
+            <!-- NEO-193: consent + the Historia Clínica parts; the patient QR lives here. -->
+            <PatientChecklistPanel category="document" :patient-id="patient.id" :focus-item="studyItem" :date-of-birth="patient.date_of_birth" :gender="patient.gender" :qr-request-nonce="qrRequestNonce" />
           </template>
           <template #history>
             <EntityHistoryPanel :endpoint="`/api/v1/patient/${patient.id}/history`" />
@@ -208,13 +209,13 @@ import AppAvatar from "../components/AppAvatar.vue";
 import IdentityDetails from "../components/IdentityDetails.vue";
 import PatientNotesPanel from "../components/patient/PatientNotesPanel.vue";
 import PatientAsidePanel from "../components/patient/PatientAsidePanel.vue";
-import PatientStudiesPanel from "../components/patient/PatientStudiesPanel.vue";
+import PatientChecklistPanel from "../components/patient/PatientChecklistPanel.vue";
 import PatientStudiesSummary from "../components/patient/PatientStudiesSummary.vue";
 import PatientOrthoApneaPanel from "../components/patient/PatientOrthoApneaPanel.vue";
 import EntityHistoryPanel from "../components/EntityHistoryPanel.vue";
-import EntityDocumentsPanel from "../components/EntityDocumentsPanel.vue";
 import { patientFormFields, patientFormDerive } from "../config/forms/patientForm";
 import { STUDY_ROLES } from "../config/questionnaires";
+import { CHECKLIST_TAB, type ChecklistCategory } from "../composables/usePatientChecklist";
 import { useAuthStore } from "../stores/auth";
 import { entityActionIcon, entityActionBtnClass } from "../config/entityActions";
 import { patientStatusColor, patientStatusLabel } from "../utils/patientStatus";
@@ -291,9 +292,9 @@ const showDeleteConfirm = ref(false);
 const ALL_PATIENT_TABS = [
   { value: "details", labelKey: "app.patients.detail.tabs.details" },
   { value: "notes", labelKey: "app.patients.detail.tabs.notes" },
+  { value: "documents", labelKey: "app.patients.detail.tabs.documents", roles: STUDY_ROLES },
   { value: "studies", labelKey: "app.patients.detail.tabs.studies", roles: STUDY_ROLES },
   { value: "orthoapnea", labelKey: "app.patients.detail.tabs.orthoapnea" },
-  { value: "documents", labelKey: "app.patients.detail.tabs.documents", roles: STUDY_ROLES },
   { value: "history", labelKey: "app.patients.detail.tabs.history" },
 ];
 /** Studies and Documents hold health data — admin, doctor and manager only (NEO-83); the API enforces the same. */
@@ -302,24 +303,25 @@ const canSeeStudies = computed(() => STUDY_ROLES.includes(userRole.value));
 const patientTabs = computed(() => ALL_PATIENT_TABS.filter((tab) => !tab.roles || tab.roles.includes(userRole.value)));
 /** Deep-linkable via ?tab= — see SleepStudiesView/TreatmentPlansView row clicks. */
 const activeTab = ref((route.query.tab as string) || "details");
-/** Details → Estudios card click: open that item in the Estudios tab (?tab=studies&item=…). */
+/** Details → checklist card click: open that item in its tab (?tab=documents|studies&item=…, NEO-193). */
 const studyItem = ref<string | null>((route.query.item as string) || null);
 function syncQuery() {
-  const item = activeTab.value === "studies" ? studyItem.value ?? undefined : undefined;
+  const item = activeTab.value === "studies" || activeTab.value === "documents" ? studyItem.value ?? undefined : undefined;
   router.replace({ query: { ...route.query, tab: activeTab.value, item } });
 }
 watch(activeTab, syncQuery);
-function openStudy(itemKey: string) {
+function openStudy(itemKey: string, category: ChecklistCategory) {
   studyItem.value = itemKey;
-  if (activeTab.value === "studies") syncQuery();
-  else activeTab.value = "studies";
+  const tab = CHECKLIST_TAB[category];
+  if (activeTab.value === tab) syncQuery();
+  else activeTab.value = tab;
 }
 
-/** Side panel "QR for the patient" (NEO-153): the Estudios tab owns the QR flow (status button, polling), so open it there. */
+/** Side panel "QR for the patient" (NEO-153): the Documentos tab owns the QR flow (status button, polling) since NEO-193, so open it there. */
 const qrRequestNonce = ref(0);
 function onAsideQr() {
   studyItem.value = null;
-  activeTab.value = "studies";
+  activeTab.value = CHECKLIST_TAB.document;
   qrRequestNonce.value += 1;
 }
 

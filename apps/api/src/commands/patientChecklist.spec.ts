@@ -83,6 +83,24 @@ describe("GetPatientChecklistQuery", () => {
     });
   }, 20000);
 
+  // NEO-193 (Dra. Lorena + legal, NOM-004): consent and the Historia Clínica parts are Documentos; lab/device results are Estudios.
+  it("puts every item in one tab: consent, questionnaires, exploration and Historia Clínica are documents, results are studies", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const patient = await newPatient(client);
+      const checklist = await GetPatientChecklistQuery(ctx, patient.id);
+
+      expect(Object.fromEntries(checklist.items.map((i) => [i.key, i.category]))).toEqual({
+        informedConsent: "document",
+        medicalHistory: "document",
+        stopBang: "document",
+        oralExam: "document",
+        historiaEndo: "document",
+        polysomnography: "study",
+      });
+    });
+  }, 20000);
+
   it("statuses follow the records: done, STOP-Bang partial until B-A-N-G, PSG partial until the study completes; history newest first", async () => {
     await withTenant(TENANT_SLUG, async (client) => {
       const ctx = await buildContext(client);
