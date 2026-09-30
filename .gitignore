@@ -18,6 +18,11 @@ packages/*/src/**/*.js
 packages/*/src/**/*.d.ts
 **/i18n/*.js
 **/i18n/*.d.ts
+# Packages without a src/ folder (brand, i18n) — same rule, one level up (CORE-77)
+packages/*/*.js
+packages/*/*.d.ts
+# i18n:prune script output
+packages/i18n/_*
 
 # Build output
 apps/*/tsconfig.tsbuildinfo

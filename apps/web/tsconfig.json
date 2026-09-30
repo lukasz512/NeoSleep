@@ -3,6 +3,8 @@
   "compilerOptions": {
     "composite": true,
     "emitDeclarationOnly": true,
+    "declarationDir": "node_modules/.tmp/tsc-declarations",
+    "rootDir": "../..",
     "types": ["vitest/globals", "vite/client", "google.maps"],
     "baseUrl": ".",
     "paths": {
