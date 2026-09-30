@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Build the AJM portfolio for alfredjan.com/corporativo and pack it as one zip to upload into
+# Build the AJM corporativo site for alfredjan.com/corporativo and pack it as one zip to upload into
 # GoDaddy's public_html and extract there (cPanel File Manager → Upload → Extract).
 #
-#   bash clients/ajm/portfolio/scripts/package-godaddy.sh   → clients/ajm/portfolio/ajm-corporativo.zip
+#   bash clients/ajm/corporativo/scripts/package-godaddy.sh   → clients/ajm/corporativo/ajm-corporativo.zip
 #
 # One address, one page (Łukasz, 2026-09-29): Spanish by default, the header switch reloads it with
 # ?lang=en. The zip holds a single folder, corporativo/ (index.html, assets/, media/, .htaccess).
