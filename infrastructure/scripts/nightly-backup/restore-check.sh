@@ -36,13 +36,21 @@ if [ "${#SCHEMAS[@]}" -eq 0 ]; then
 fi
 echo "Application schemas: ${SCHEMAS[*]}"
 
-# Our migrations install extensions into Supabase's `extensions` schema.
-psql "$RESTORE_URL" -v ON_ERROR_STOP=1 -q <<'SQL'
-CREATE SCHEMA IF NOT EXISTS extensions;
-CREATE EXTENSION IF NOT EXISTS ltree SCHEMA extensions;
-CREATE EXTENSION IF NOT EXISTS pgcrypto SCHEMA extensions;
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp" SCHEMA extensions;
-SQL
+# Our migrations install extensions into Supabase's `extensions` schema. Create every
+# extension the dump lists instead of a fixed set, so a migration that adds one
+# (btree_gist in 035 broke the backup on 2026-09-27, CORE-71) can't break the check.
+# Supabase-only extensions (pg_graphql, pgsodium, ...) don't exist in vanilla
+# Postgres; they are skipped, since no application table depends on them.
+psql "$RESTORE_URL" -v ON_ERROR_STOP=1 -q -c "CREATE SCHEMA IF NOT EXISTS extensions"
+# TOC line: "<id>; <oid> <oid> EXTENSION - <name> <owner>"
+while IFS= read -r ext; do
+  [ "$ext" = plpgsql ] && continue
+  if psql "$RESTORE_URL" -q -c "CREATE EXTENSION IF NOT EXISTS \"$ext\" SCHEMA extensions" 2>/dev/null; then
+    echo "Extension: $ext"
+  else
+    echo "Extension: $ext (not available in vanilla Postgres, skipped)"
+  fi
+done < <(awk '$4 == "EXTENSION" && $5 == "-" { print $6 }' "$TOC" | sort -u)
 
 SCHEMA_ARGS=()
 for s in "${SCHEMAS[@]}"; do

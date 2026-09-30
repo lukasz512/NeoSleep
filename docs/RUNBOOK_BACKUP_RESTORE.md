@@ -11,6 +11,10 @@ At 09:00 UTC (03:00 Mexico City) GitHub Actions:
 2. Restores that dump into a throwaway Postgres 17 and compares the table count of every
    application schema with the dump ([restore-check.sh](../infrastructure/scripts/nightly-backup/restore-check.sh)).
    Any mismatch or restore error fails the run **before** anything is uploaded.
+   The check creates every extension the dump lists (CORE-71), and a failed night opens a
+   GitHub issue "Nightly backup failed" assigned to the repo owner, or adds a comment to it
+   if one is already open. Regression test (Docker):
+   `bash infrastructure/scripts/nightly-backup/restore-check.test.sh`.
 3. Copies every object from every Supabase Storage bucket ([storage-export.mjs](../infrastructure/scripts/nightly-backup/storage-export.mjs)).
 4. Encrypts both archives with [`age`](https://github.com/FiloSottile/age) to a public key.
 5. Uploads to `gs://<bucket>/YYYY/MM/DD/`:
