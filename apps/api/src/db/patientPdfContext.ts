@@ -77,7 +77,17 @@ export async function getPatientPdfContext(
           LIMIT 1)
        )
        LEFT JOIN identities pri ON pr.identity_id = pri.id
-       LEFT JOIN organization o ON pr.organization_id = o.id
+       -- The doctor's clinic: the legacy practitioner.organization_id when set, otherwise their
+       -- primary affiliation, otherwise the first by name — doctors added via affiliations
+       -- (practitioner_organization) often have no organization_id (NEO-178).
+       LEFT JOIN organization o ON o.id = COALESCE(
+         pr.organization_id,
+         (SELECT po.organization_id FROM practitioner_organization po
+            JOIN organization ao ON ao.id = po.organization_id
+          WHERE po.practitioner_id = pr.id
+          ORDER BY po.is_primary DESC, ao.name ASC
+          LIMIT 1)
+       )
        WHERE p.id = $1 AND p.deleted_at IS NULL`,
       [patientId, fallbackUserId]
     );
