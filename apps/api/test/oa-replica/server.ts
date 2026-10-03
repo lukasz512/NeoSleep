@@ -312,7 +312,7 @@ export async function startOaReplica(): Promise<OaReplica> {
       const page = Number(url.searchParams.get("page") ?? "0");
       const size = Number(url.searchParams.get("size") ?? "20");
       const all = [...replica.treatments.values()]
-        .map((t) => ({ ...t, patientId: Number((t.patient as Json | undefined)?.id ?? t.patientId) }))
+        .map((t): Json => ({ ...t, patientId: Number((t.patient as Json | undefined)?.id ?? t.patientId) }))
         .sort((a, b) => Number(b.id) - Number(a.id));
       const content = all.slice(page * size, page * size + size);
       const totalPages = Math.ceil(all.length / size);

@@ -16,7 +16,7 @@ import {
 import { ConflictError } from "../../src/errors.js";
 import { signAuthToken } from "../../src/utils/jwt.js";
 import { startOaReplica, type OaReplica } from "../oa-replica/server.js";
-import { COMPLETE_HCO, setup, TENANT_SLUG, validOrder } from "./fixtures.js";
+import { COMPLETE_HCO, setup, TENANT_SLUG, validOrder, type Setup } from "./fixtures.js";
 
 /**
  * POST /api/v1/device-orders and GET /api/v1/device-orders/context (CORE-95)
