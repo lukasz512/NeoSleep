@@ -880,3 +880,37 @@ Files compared: `OrthoApneaOrderWizard.vue`, `useOrthoApneaOrderWizard.ts`, and 
 ## Live order results
 
 Filled in after each approved test order (raw: `.claude/local/oa-shots/shot-N.result.json`). Scrubbed copies become the OA replica fixtures (CORE-95).
+
+### Results 2026-10-03
+
+Shots S1, S3 and S4 were approved by Łukasz and sent. S2 was skipped, because nobody at OA changes a status before Monday. Raw records are in `.claude/local/oa-shots/`. Scrubbed fixtures are in `apps/api/test/oa-replica/fixtures/`.
+
+| Shot | What was sent | OA ids | Result |
+|---|---|---|---|
+| S1 | One patient with every form field, plus `observations`/`diagnosis`. Then the same name again. | patients 44169, 44170 | Both 200 |
+| S3 | Full NOA order in OA's own format: multipart `treatmentDTO`, alternative MX address, Morning Aligner flag | patient 44171, order **454012** | 200, `statusId` 1, `total` 607 |
+| S4 | NOA order with MR −1 / MP 2, a 3 mm advance range | patient 44172, order **454013** | **200, accepted**, `total` 459 |
+
+What we learned (each item becomes a rule or test in CORE-95):
+
+1. **OA's server does not validate the device geometry.** An advance range of 3 mm (`invalidAdvancedLess5` in OA's form) was stored as sent. **Our validation is the only guard.** Every rule in §1–2 must therefore be enforced by our front end and by our API.
+2. **OA's server does not enforce unique patient names.** A duplicate name was accepted, so the uniqueness check exists only in OA's form. We must check it ourselves before creating the OA patient, or reuse the existing link.
+3. **The patient record keeps keys that OA's form never shows.** `observations` (free text) is stored. `diagnosis` is a list and silently ignored a string. `userId` comes back as a `user` object.
+4. **The order DTO in OA's own format is stored field for field.** All of these came back exactly as sent:
+   - `sequence` with `seq4` (the additional splint)
+   - `teethStatus` (a JSON string)
+   - `verticalDimension` 2000
+   - band designs and finish
+   - laterality and limit opening
+   - deviation
+   - `morningAligner`
+
+   OA overrides `statusId` (sent 3, stored **1**), `requestDate`/`lastActivity` (server time) and `customerCountryId` (29). `workSheets` and `techObservations` are not echoed.
+5. **OA upper-cases the delivery address** (`name`, `address`, `city`). The phone and email we sent are kept.
+6. **Prices:** `total` is 459 for NOA and 607 for NOA with the Morning Aligner flag, so the flag adds 148.
+7. **Response shape:** create returns the full treatment, with 91 top-level keys and `patient` as an object. `GET /api/treatments/DTO/:id` returns the same order.
+8. **Initial status of a doctor order:** `statusId` 1. See §4.1 for the names.
+
+Still open:
+- Our app's own JSON/flat payload was never sent, because Łukasz chose a patient-only S1. CORE-95 replaces it with the OA-format adapter in any case.
+- Status transitions get read from Monday 2026-10-06, on 454012 and 454013.
