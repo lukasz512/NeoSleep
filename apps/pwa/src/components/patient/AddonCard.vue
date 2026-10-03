@@ -29,7 +29,8 @@
 
     <!-- Teleported to <body>, so its clicks never reach the card's toggle. -->
     <AppFormDialog v-model="lightbox" :title="title" :max-width="560" @close="lightbox = false">
-      <div data-testid="addon-lightbox">
+      <!-- No actions row under it, so the body needs its own bottom breathing room. -->
+      <div data-testid="addon-lightbox" class="pb-4">
         <img :src="image" :alt="title" class="addon-card__lightbox-img" @click="lightbox = false" />
         <p class="text-body-2 mt-4 mb-0">{{ details }}</p>
       </div>
@@ -185,6 +186,9 @@ function toggle() {
 .addon-card__lightbox-img {
   display: block;
   width: 100%;
+  /* Leaves room for the description under it without scrolling. */
+  max-height: 45vh;
+  object-fit: contain;
   border-radius: 8px;
   cursor: zoom-out;
 }
