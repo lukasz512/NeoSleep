@@ -242,7 +242,19 @@ dev_deploy_check() {
   fi
 }
 
+# On-screen video titles carry no punctuation (Łukasz, 2026-10-03, NEO-204). Runs on every
+# Stop, not only when a composition changed: it takes milliseconds and also catches a title
+# that slipped in on an earlier turn.
+video_titles_check() {
+  local script="infrastructure/scripts/check-video-titles.mjs" out
+  [ -f "$script" ] || return 0
+  if ! out="$(node "$script" 2>&1)"; then
+    FAILS+=("Video titles with punctuation (forbidden: . , ; : ! ? …). Rewrite them without it, using a line break (<br>) where two phrases meet, then re-render:"$'\n'"$out")
+  fi
+}
+
 emit_result() {
+  video_titles_check
   dev_deploy_check
   if [ "${#FAILS[@]}" -eq 0 ]; then
     if [ "${#WARNS[@]}" -gt 0 ]; then

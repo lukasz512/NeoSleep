@@ -130,6 +130,9 @@ jobs:
       - name: Test — infrastructure scripts (blocking)
         run: node --test "infrastructure/scripts/*.test.mjs"
 
+      - name: Video titles have no punctuation (blocking)
+        run: node infrastructure/scripts/check-video-titles.mjs
+
       - name: Test — api (blocking)
         run: pnpm --filter @neo/api test
 
