@@ -7,7 +7,8 @@
  * layout facts only a real browser engine computes.
  *
  * `?state=record` (default) · `loading` · `long` (very long name) · `notfound` ·
- * `scroll` (a record with a tall body, for the NEO-181 phone toolbar and collapse).
+ * `scroll` (a record with a tall body, for the NEO-181 phone toolbar and collapse) ·
+ * `aside` (a record with an #aside side panel, CORE-96).
  */
 import { createApp, defineComponent, h } from "vue";
 import { createPinia } from "pinia";
@@ -77,6 +78,9 @@ const Harness = defineComponent({
             "record-details": () => h("span", "M · 46 y"),
             sections: () =>
               state === "scroll" ? h("div", { style: "height: 2000px" }, "Details") : h("p", "Details"),
+            ...(state === "aside"
+              ? { aside: () => h("div", { "data-testid": "harness-aside", style: "height: 240px; background: #eef3f2" }, "Next step") }
+              : {}),
           },
         ),
       ]);

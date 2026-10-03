@@ -574,10 +574,13 @@ defineEmits<{
 }
 
 /* NEO-153: 720px content column (DetailViewTabs caps itself there) + a 320px
-   side panel that stays in view while the column scrolls. */
+   side panel that stays in view while the column scrolls. CORE-96: on a wide
+   screen the spare width goes between them, so the panel ends on the right
+   content edge, under the header actions. */
 .view-item__card--with-aside {
   display: grid;
   grid-template-columns: minmax(0, 720px) 320px;
+  justify-content: space-between;
   gap: var(--space-8, 32px);
   align-items: start;
 }
