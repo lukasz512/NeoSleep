@@ -45,7 +45,11 @@
           :class="`view-appointments__row--${a.status}`"
           @click="openDetail(a)"
         >
-          <span class="view-appointments__row-time">{{ timeOf(a) }}</span>
+          <!-- Start over end: "10:00 a.m.–11:00 a.m." on one line left no room for the name in es-MX. -->
+          <span class="view-appointments__row-time" :aria-label="timeOf(a)">
+            <span>{{ timeParts(a)[0] }}</span>
+            <span class="view-appointments__row-end">{{ timeParts(a)[1] }}</span>
+          </span>
           <span class="view-appointments__row-main">
             <span class="view-appointments__row-patient">
               <span class="view-appointments__row-name">{{ a.patient_name }}</span>
@@ -227,6 +231,11 @@ const groups = computed(() => {
 
 function timeOf(a: Appointment): string {
   return formatTimeRange(a.start_at, a.end_at, a.timezone, lang.value);
+}
+/** [start, end] of the formatted range — split on the en dash formatTimeRange puts between them. */
+function timeParts(a: Appointment): [string, string] {
+  const [start = "", end = ""] = timeOf(a).split("–");
+  return [start.trim(), end.trim()];
 }
 function metaOf(a: Appointment): string {
   return [a.practitioner_name, a.organization_name].filter(Boolean).join(" · ");
@@ -492,10 +501,17 @@ function onBookNext(a: Appointment) {
 }
 
 .view-appointments__row-time {
+  display: grid;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   font-size: 0.875rem;
   white-space: nowrap;
+}
+
+.view-appointments__row-end {
+  font-weight: 400;
+  font-size: 0.8125rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
 .view-appointments__row-main {

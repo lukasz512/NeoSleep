@@ -84,6 +84,8 @@ export interface EmailLayoutOptions {
   cta?: { text: string; href: string };
   /** Rendered below `cta`, same button style but with an outlined/lighter look — for a second action (e.g. "View the offer" + "Book a demo"). Ignored if `cta` isn't set. */
   secondaryCta?: { text: string; href: string };
+  /** Pre-built small print under the buttons (already escaped) — e.g. add-to-calendar and unsubscribe links. */
+  afterCtaHtml?: string;
   footerTagline: string;
   footerCities: string;
   footerCopyright: string;
@@ -135,12 +137,18 @@ function renderCtaButton(cta: { text: string; href: string }, variant: "primary"
     <!--<![endif]-->`;
 }
 
-export function renderEmailLayout({ preheader, bodyHtml, cta, secondaryCta, footerTagline, footerCities, footerCopyright, supportLeadIn, socials }: EmailLayoutOptions): string {
+export function renderEmailLayout({ preheader, bodyHtml, cta, secondaryCta, afterCtaHtml, footerTagline, footerCities, footerCopyright, supportLeadIn, socials }: EmailLayoutOptions): string {
   const ctaHtml = cta
     ? `
   <tr><td align="center" style="padding:8px 32px 28px;">
     ${renderCtaButton(cta, "primary")}
     ${secondaryCta ? `<div style="height:12px;line-height:12px;font-size:12px;">&nbsp;</div>${renderCtaButton(secondaryCta, "secondary")}` : ""}
+  </td></tr>`
+    : "";
+  const afterHtml = afterCtaHtml
+    ? `
+  <tr><td style="padding:0 32px 24px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.6;color:${BRAND.charcoal};">
+    ${afterCtaHtml}
   </td></tr>`
     : "";
 
@@ -164,7 +172,7 @@ ${preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;"
   </td></tr>
   <tr><td style="padding:16px 32px 8px;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.6;color:${BRAND.charcoal};">
     ${bodyHtml}
-  </td></tr>${ctaHtml}${renderFooter(footerTagline, footerCities, footerCopyright, supportLeadIn, socials)}
+  </td></tr>${ctaHtml}${afterHtml}${renderFooter(footerTagline, footerCities, footerCopyright, supportLeadIn, socials)}
 </table>
 </td></tr>
 </table>

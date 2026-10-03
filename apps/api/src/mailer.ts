@@ -533,9 +533,11 @@ export async function sendAppointmentPatientEmail(to: string, recipient: EmailRe
     <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.greeting", { name: greetingName }))}</p>
     <p style="margin:0 0 16px;">${escapeHtml(t(`${appointment.kind}.body`, { clinic: clinicName }))}</p>
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 16px;font-size:15px;">${details}</table>
-    ${contactHtml}
-    ${!cancelled && calendarLinks.length ? `<p style="margin:0 0 16px;font-size:13px;">${escapeHtml(t("addToCalendar"))} ${calendarLinks.join(" · ")}</p>` : ""}
-    <p style="margin:0;font-size:12px;color:#7a827e;">${escapeHtml(t("optOutLead"))} <a href="${escapeHtml(appointment.links.optOut)}" style="color:#7a827e;">${escapeHtml(t("optOut"))}</a></p>`;
+    ${contactHtml}`;
+  // Under the buttons: the calendar links, then the stop link as small print.
+  const afterCtaHtml = `
+    ${!cancelled && calendarLinks.length ? `<p style="margin:0 0 12px;text-align:center;">${escapeHtml(t("addToCalendar"))} ${calendarLinks.join(" · ")}</p>` : ""}
+    <p style="margin:0;font-size:12px;color:#7a827e;text-align:center;">${escapeHtml(t("optOutLead"))} <a href="${escapeHtml(appointment.links.optOut)}" style="color:#7a827e;">${escapeHtml(t("optOut"))}</a></p>`;
 
   const socials = getSocialsForRegion(recipient.region);
   const html = renderEmailLayout({
@@ -543,6 +545,7 @@ export async function sendAppointmentPatientEmail(to: string, recipient: EmailRe
     bodyHtml,
     cta: appointment.links.confirm ? { text: t("confirm"), href: appointment.links.confirm } : undefined,
     secondaryCta: appointment.links.cannotAttend ? { text: t("cannotAttend"), href: appointment.links.cannotAttend } : undefined,
+    afterCtaHtml,
     footerTagline: emailT(locale, "email.footer.tagline"),
     footerCities: emailT(locale, "email.footer.cities"),
     footerCopyright: emailT(locale, "email.footer.copyright", { year: String(new Date().getFullYear()) }),
