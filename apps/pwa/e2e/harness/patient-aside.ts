@@ -14,8 +14,8 @@ import { createPinia } from "pinia";
 import { createRouter, createMemoryHistory } from "vue-router";
 import vuetify, { lightTheme, darkTheme } from "../../src/plugins/vuetify";
 import { i18n, loadLocale } from "../../src/plugins/i18n";
-import "../../src/assets/theme.scss";
-import "../../src/assets/app-responsive.scss";
+import "../../src/styles/theme.scss";
+import "../../src/styles/app-responsive.scss";
 import PatientAsidePanel from "../../src/components/patient/PatientAsidePanel.vue";
 
 const params = new URLSearchParams(location.search);
