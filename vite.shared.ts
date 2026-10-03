@@ -31,6 +31,7 @@ function workspaceAliases(): Alias[] {
     { find: "@prefs",      replacement: path.resolve(rootDir, "packages/prefs/src/index.ts") },
     { find: /^@vuetify$/,  replacement: path.resolve(rootDir, "packages/vuetify/src/index.ts") },
     { find: "@documents-browser", replacement: path.resolve(rootDir, "packages/documents/src/browser/index.ts") },
+    { find: "@device-order", replacement: path.resolve(rootDir, "packages/device-order/src/index.ts") },
   ];
 }
 

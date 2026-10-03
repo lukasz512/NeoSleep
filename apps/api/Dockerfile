@@ -56,6 +56,10 @@ COPY --from=build /app/packages/documents/dist ./packages/documents/dist
 COPY --from=build /app/packages/documents/templates ./packages/documents/templates
 COPY --from=build /app/packages/documents/assets ./packages/documents/assets
 
+COPY --from=build /app/packages/device-order/package.json ./packages/device-order/package.json
+COPY --from=build /app/packages/device-order/dist ./packages/device-order/dist
+COPY --from=build /app/packages/device-order/node_modules ./packages/device-order/node_modules
+
 COPY --from=build /app/packages/email/package.json ./packages/email/package.json
 COPY --from=build /app/packages/email/dist ./packages/email/dist
 COPY --from=build /app/packages/email/assets ./packages/email/assets

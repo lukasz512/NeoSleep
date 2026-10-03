@@ -18,6 +18,7 @@
     "seed:qa-user": "tsx --env-file=../../.env scripts/seed-qa-user.ts"
   },
   "dependencies": {
+    "@neo/device-order": "workspace:*",
     "@neo/documents": "workspace:*",
     "@neo/email": "workspace:*",
     "@sparticuz/chromium": "153.0.0",
