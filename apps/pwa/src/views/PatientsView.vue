@@ -83,7 +83,7 @@
         <PatientIntakeForms kind="studies" :forms="formsOf(item as PatientListItem, 'study')" />
       </template>
       <template #item.next_step="{ item }">
-        <PatientNextStep :patient-id="(item as PatientListItem).id" :forms="(item as PatientListItem).intake_forms ?? []" />
+        <PatientNextStep :patient-id="(item as PatientListItem).id" :forms="(item as PatientListItem).intake_forms ?? []" :device-order="(item as PatientListItem).device_order" />
       </template>
       <template #feed-card-meta="{ item }">
         <!-- Mobile card (NEO-57): the patient's quiet line incl. date of
@@ -107,7 +107,7 @@
         </span>
       </template>
       <template #feed-card-status="{ item }">
-        <PatientNextStep compact :patient-id="(item as PatientListItem).id" :forms="(item as PatientListItem).intake_forms ?? []" />
+        <PatientNextStep compact :patient-id="(item as PatientListItem).id" :forms="(item as PatientListItem).intake_forms ?? []" :device-order="(item as PatientListItem).device_order" />
       </template>
       <template #feed-card-actions="{ item }">
         <AppListItemMenu :aria-label="t('app.common.moreActions')">
@@ -130,7 +130,7 @@ import AppEntityList from "../components/AppEntityList.vue";
 import AppAvatar from "../components/AppAvatar.vue";
 import PatientIntakeForms from "../components/patient/PatientIntakeForms.vue";
 import PatientNextStep from "../components/patient/PatientNextStep.vue";
-import type { PatientIntakeFormStatus } from "../types/patientIntakeForm";
+import type { PatientIntakeFormStatus, PatientDeviceOrder } from "../types/patientIntakeForm";
 import EntityLink from "../components/EntityLink.vue";
 import { intlLocale } from "@i18n/language-options";
 import IdentityDetails from "../components/IdentityDetails.vue";
@@ -173,6 +173,7 @@ interface PatientListItem {
   region?: string;
   territory_name?: string | null;
   intake_forms?: PatientIntakeFormStatus[];
+  device_order?: PatientDeviceOrder | null;
   ahi_baseline?: number | null;
   cpap_device?: string | null;
   medical_record?: string | null;
@@ -187,9 +188,9 @@ function doctorOf(p: PatientListItem) {
 }
 const { submit } = useEntitySubmit();
 const authStore = useAuthStore();
-// Direct add is its own, narrower admin/manager-only shortcut — everyone
-// else still adds patients through the lead pipeline.
-const canAdd = computed(() => authStore.user?.role === "admin" || authStore.user?.role === "manager");
+// Direct add: admin/manager, and a doctor for their own practice (NEO-223 — the API assigns the
+// patient to them, CORE-104). Reps still add patients through the lead pipeline.
+const canAdd = computed(() => ["admin", "manager", "doctor"].includes(authStore.user?.role ?? ""));
 const isDoctor = computed(() => authStore.user?.role === "doctor");
 const { canEditPatients } = usePermissions();
 const showAddModal = ref(false);

@@ -421,3 +421,56 @@ export async function restoreTreatmentPlan(client: PoolClient, id: string): Prom
     throw new DatabaseError("restoreTreatmentPlan", err);
   }
 }
+
+/** NEO-223: the latest device order of each patient — just the fields the PWA's deviceOrderState() reads. */
+export interface PatientDeviceOrder {
+  status: string;
+  metadata: { orthoapneaDraft: true } | null;
+  order_sync_status: "pending" | "synced" | "failed" | null;
+  appliance_delivered_at: string | null;
+}
+
+export async function getLatestDeviceOrderByPatient(
+  client: PoolClient,
+  patientIds: string[],
+): Promise<Map<string, PatientDeviceOrder>> {
+  const byPatient = new Map<string, PatientDeviceOrder>();
+  if (patientIds.length === 0) return byPatient;
+  try {
+    const result = await client.query<{
+      patient_id: string;
+      status: string;
+      is_draft: boolean;
+      order_sync_status: PatientDeviceOrder["order_sync_status"];
+      appliance_delivered_at: Date | null;
+    }>(
+      `SELECT DISTINCT ON (t.patient_id)
+              t.patient_id, t.status,
+              (COALESCE(t.metadata, '{}'::jsonb) ? 'orthoapneaDraft') AS is_draft,
+              ord.sync_status AS order_sync_status, t.appliance_delivered_at
+         FROM treatment_plan t
+         LEFT JOIN LATERAL (
+           SELECT pl.sync_status
+             FROM partner_link pl
+            WHERE pl.entity_type = 'treatment_plan' AND pl.entity_id = t.id
+            ORDER BY pl.updated_at DESC
+            LIMIT 1
+         ) ord ON true
+        WHERE t.deleted_at IS NULL AND t.patient_id = ANY($1::uuid[])
+        ORDER BY t.patient_id, t.created_at DESC`,
+      [patientIds],
+    );
+    for (const row of result.rows) {
+      byPatient.set(row.patient_id, {
+        status: row.status,
+        metadata: row.is_draft ? { orthoapneaDraft: true } : null,
+        order_sync_status: row.order_sync_status,
+        appliance_delivered_at: row.appliance_delivered_at ? isoDate(row.appliance_delivered_at) : null,
+      });
+    }
+    return byPatient;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getLatestDeviceOrderByPatient", err);
+  }
+}

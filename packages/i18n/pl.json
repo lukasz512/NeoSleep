@@ -987,6 +987,7 @@
   "app.patients.searchPlaceholder": "Szukaj",
   "app.patients.errorLoad": "Nie udało się załadować pacjentów.",
   "app.patients.add": "Dodaj pacjenta",
+  "app.patients.nextStep.deviceTracking": "Śledzenie urządzenia",
   "app.patients.emptyTitle": "Brak pacjentów",
   "app.patients.emptySubtitle": "Pacjenci pojawią się tutaj.",
   "app.patients.noResultsForCriteria": "Brak wyników dla podanych kryteriów",
