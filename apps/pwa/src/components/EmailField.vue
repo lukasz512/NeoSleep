@@ -29,9 +29,8 @@
  * insert-@ helper button (mousedown.prevent so the button never steals
  * focus from the input first), plus whatever format rule the caller passes
  * in via `rules`. Was previously FormRenderer-only machinery
- * (insertAtSign()); extracted so bespoke, non-FormRenderer forms (e.g.
- * OrthoApneaOrderWizard's alternative-address sub-form) get the same input,
- * not a plain VTextField. FormRenderer itself now renders this too (see
+ * (insertAtSign()); extracted so bespoke, non-FormRenderer forms get the
+ * same input, not a plain VTextField. FormRenderer itself now renders this too (see
  * componentFor("email")) instead of its own inline prepend-inner branch —
  * one email input, not two copies of the same button.
  */

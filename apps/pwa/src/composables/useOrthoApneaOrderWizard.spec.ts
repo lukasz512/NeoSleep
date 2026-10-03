@@ -1,16 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
+import { PRODUCT_CODES, defaultDeviceOrder, type DeviceOrder } from "@device-order";
 
 // useOrthoApneaOrderWizard calls vue-i18n's useI18n(), which throws outside a
-// real component setup() context — mock it with a passthrough translator so
-// the composable's actual logic can be exercised directly without mounting
-// OrthoApneaOrderWizard.vue (that's the whole point of this extraction — see
-// that component's own header comment). Same pattern as useFormRenderer.spec.ts.
+// component setup() — a passthrough translator lets the composable run directly.
 vi.mock("vue-i18n", () => ({
   useI18n: () => ({ t: (k: string) => k }),
 }));
 
-import { useOrthoApneaOrderWizard, toWizardFieldErrors, type OrthoApneaProduct } from "./useOrthoApneaOrderWizard";
+import { useOrthoApneaOrderWizard, stepOfPath, fallbackDesiredDate } from "./useOrthoApneaOrderWizard";
 import { useNotifications } from "./useNotifications";
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -18,10 +16,7 @@ function jsonResponse(status: number, body: unknown): Response {
     ok: status >= 200 && status < 300,
     status,
     json: async () => body,
-    // apiFetch's error-path calls res.clone().text() on any non-ok response
-    // (apps/api/client/src/index.ts) — a real Response supports this, so the
-    // mock must too, or a stubbed 4xx/5xx throws inside apiFetch itself
-    // instead of just returning a not-ok Response.
+    // apiFetch's error path reads res.clone().text(); fieldErrorsFromResponse reads clone().json().
     clone() {
       return { ...res, text: async () => JSON.stringify(body) };
     },
@@ -45,8 +40,26 @@ function stubFetchRoutes(routes: [string, RouteHandler][]) {
   return { calls };
 }
 
-const NOA: OrthoApneaProduct = { id: 1, code: "NOA", nameEs: "NOA", category: "device" };
-const MORNING_ALIGNER: OrthoApneaProduct = { id: 2, code: "MA", nameEs: "MORNING ALIGNER", category: "device" };
+function bodyOf(call: { init?: RequestInit } | undefined): Record<string, unknown> {
+  return JSON.parse(String(call?.init?.body)) as Record<string, unknown>;
+}
+
+/** A complete, valid order (MR −2, MP 6, SP 2 mm). */
+function fillValidOrder(order: DeviceOrder) {
+  Object.assign(order, defaultDeviceOrder("doc-1"), {
+    retrusionMaxMm: -2,
+    protrusionMaxMm: 6,
+    startingPoint: { unit: "mm", value: 2 },
+    desiredDate: "2026-10-20",
+  });
+}
+
+const CONTEXT = {
+  delivery: { name: "Clínica Centro", address: "Av. Reforma 1", city: "CDMX", postalCode: "06600", countryCode: "MX", phone: "+52 55 0000 0000", email: "c@example.com" },
+  deliveryIssues: [],
+  minDesiredDate: "2026-10-21",
+  rulesVersion: "2026-10-03.1",
+};
 
 beforeEach(() => {
   setActivePinia(createPinia());
@@ -58,342 +71,368 @@ afterEach(() => {
 });
 
 describe("useOrthoApneaOrderWizard", () => {
-  describe("buildWizardPayload", () => {
-    it("sends deliveryAddress: null when shipping to the clinic (the default)", () => {
+  describe("the form is the canonical DeviceOrder", () => {
+    it("opens on OA's defaults: NOA, Estándar sequence, no Morning Aligner, a desired date set", () => {
       const wizard = useOrthoApneaOrderWizard();
-      wizard.internalClinicId.value = 42;
-      const payload = wizard.buildWizardPayload(NOA);
-      expect(payload.clinic).toBe(42);
-      expect(payload.deliveryAddress).toBeNull();
-      expect(payload.product).toEqual({ id: 1 });
+      wizard.resetForOpen(null);
+      expect(wizard.order.productCode).toBe(PRODUCT_CODES.NOA);
+      expect(wizard.order.sequence).toEqual({ type: "standard" });
+      expect(wizard.order.morningAligner).toBe(false);
+      expect(wizard.order.desiredDate).toBe(fallbackDesiredDate());
     });
 
-    it("builds deliveryAddress from the alt* fields when addressSend is 'alternative'", () => {
+    it("validation is the shared validator: MR = MP = 0 is advanceZero; under 5 mm only warns", () => {
       const wizard = useOrthoApneaOrderWizard();
-      wizard.form.addressSend = "alternative";
-      wizard.form.altCountryId = 29;
-      wizard.form.altPostalCode = "01000";
-      wizard.form.altCity = "CDMX";
-      wizard.form.altAddress = "Calle Falsa 123";
-      wizard.form.altName = "Dr. Test";
-      wizard.form.altEmail = "dr@example.com";
-      wizard.form.altPhone = "555-0100";
+      fillValidOrder(wizard.order);
+      wizard.order.retrusionMaxMm = 0;
+      wizard.order.protrusionMaxMm = 0;
+      expect(wizard.validation.value.errors).toContainEqual({ path: "protrusionMaxMm", code: "advanceZero" });
 
-      const payload = wizard.buildWizardPayload(NOA);
-      expect(payload.deliveryAddress).toEqual({
-        country: 29,
-        postalCode: "01000",
-        city: "CDMX",
-        address: "Calle Falsa 123",
-        name: "Dr. Test",
-        email: "dr@example.com",
-        phone: "555-0100",
-      });
+      wizard.order.protrusionMaxMm = 3;
+      wizard.order.startingPoint = { unit: "mm", value: 1 };
+      expect(wizard.validation.value.errors).toEqual([]);
+      expect(wizard.validation.value.warnings).toEqual([{ path: "protrusionMaxMm", code: "advanceUnder5", params: { min: 5 } }]);
     });
 
-    it("sends sequence only when sequenceTypePersonalized is true", () => {
-      const wizard = useOrthoApneaOrderWizard();
-      wizard.form.sequenceTypePersonalized = false;
-      expect(wizard.buildWizardPayload(NOA).sequence).toBeNull();
-
-      wizard.form.sequenceTypePersonalized = true;
-      wizard.sequence.seq1 = 61;
-      expect(wizard.buildWizardPayload(NOA).sequence).toEqual({ seq1: 61, seq2: 70, seq3: 80 });
-    });
-
-    // The "identical JSON" invariant this repo cares about (see ADR-017 /
-    // orthoapnea.spec.ts's backend-side version): the object returned here is
-    // exactly what confirmOrder() JSON.stringifies into the HTTP body — no
-    // separate "display copy" that could drift from what's actually sent.
-    it("round-trips cleanly through JSON.stringify/parse with no dropped or mutated fields", () => {
-      const wizard = useOrthoApneaOrderWizard();
-      wizard.internalClinicId.value = 7;
-      wizard.form.retrusionMax = -5;
-      wizard.form.protrusionMax = 5;
-      const payload = wizard.buildWizardPayload(NOA);
-      const roundTripped = JSON.parse(JSON.stringify(payload));
-      // undefined-valued keys vanish through JSON (expected/standard) — compare
-      // against the same round-trip of the original rather than the original itself.
-      expect(roundTripped).toEqual(JSON.parse(JSON.stringify(payload)));
-      expect(roundTripped.retrusionMax).toBe(-5);
-      expect(roundTripped.protrusionMax).toBe(5);
+    it("maps issue paths to the step that shows them; delivery belongs to step 1", () => {
+      expect(stepOfPath("dentistId")).toBe(1);
+      expect(stepOfPath("delivery.phone")).toBe(1);
+      expect(stepOfPath("startingPoint.value")).toBe(2);
+      expect(stepOfPath("sequence.values.1")).toBe(2);
+      expect(stepOfPath("desiredDate")).toBe(4);
+      expect(stepOfPath("treatment_plan_id")).toBeUndefined();
     });
   });
 
-  describe("resetForOpen", () => {
-    it("resets to defaults and sets a +15 day desiredDate when opening fresh (no draft)", () => {
+  describe("sequence type", () => {
+    it("Individualizada starts empty in mm with 3 main splints for NOA, 2 for NOA TMJ", () => {
       const wizard = useOrthoApneaOrderWizard();
-      wizard.form.retrusionMax = -99; // dirty it first
-      wizard.resetForOpen(null);
+      wizard.setSequenceType("personalized");
+      expect(wizard.order.sequence).toEqual({ type: "personalized", unit: "mm", values: [null, null, null], additionalSplints: [] });
 
-      expect(wizard.form.retrusionMax).toBe(0);
-      expect(wizard.currentDraftPlanId.value).toBeNull();
-      expect(wizard.form.date).not.toBeNull();
-      const expected = new Date();
-      expected.setDate(expected.getDate() + 15);
-      expect(wizard.form.date).toBe(
-        `${expected.getFullYear()}-${String(expected.getMonth() + 1).padStart(2, "0")}-${String(expected.getDate()).padStart(2, "0")}`
-      );
+      wizard.setProductCode(PRODUCT_CODES.NOA_TMJ);
+      expect(wizard.order.sequence).toMatchObject({ values: [null, null] });
     });
 
-    it("applies a resumed draft's snapshot (form + sequence) instead of setting a default date", () => {
+    it("switching to Estándar resets every personalized value (OA's selectTypeStandard)", () => {
+      const wizard = useOrthoApneaOrderWizard();
+      wizard.setSequenceType("personalized");
+      wizard.setSequenceUnit("%");
+      wizard.setSequenceValue(0, 10);
+      wizard.addAdditionalSplint();
+      wizard.setAdditionalSplint(0, 5);
+
+      wizard.setSequenceType("standard");
+      expect(wizard.order.sequence).toEqual({ type: "standard" });
+      expect(wizard.additionalSplintInputs.value).toEqual([]);
+
+      wizard.setSequenceType("personalized");
+      expect(wizard.order.sequence).toEqual({ type: "personalized", unit: "mm", values: [null, null, null], additionalSplints: [] });
+    });
+
+    it("additional splints: at most 3, only filled ones go into the order", () => {
+      const wizard = useOrthoApneaOrderWizard();
+      wizard.addAdditionalSplint(); // ignored on Estándar
+      expect(wizard.additionalSplintInputs.value).toEqual([]);
+
+      wizard.setSequenceType("personalized");
+      for (let i = 0; i < 5; i++) wizard.addAdditionalSplint();
+      expect(wizard.additionalSplintInputs.value).toHaveLength(3);
+      wizard.setAdditionalSplint(0, 4);
+      wizard.setAdditionalSplint(2, 6);
+      expect(wizard.order.sequence).toMatchObject({ additionalSplints: [4, 6] });
+    });
+  });
+
+  describe("starting point", () => {
+    it("carries the field the doctor filled; clearing it frees the other unit", () => {
+      const wizard = useOrthoApneaOrderWizard();
+      wizard.setStartingPoint("%", 50);
+      expect(wizard.order.startingPoint).toEqual({ unit: "%", value: 50 });
+      wizard.setStartingPoint("mm", null); // the locked mm field can't wipe the %
+      expect(wizard.order.startingPoint).toEqual({ unit: "%", value: 50 });
+      wizard.setStartingPoint("%", null);
+      wizard.setStartingPoint("mm", 3);
+      expect(wizard.order.startingPoint).toEqual({ unit: "mm", value: 3 });
+    });
+  });
+
+  describe("drafts", () => {
+    it("persistDraft stores the DeviceOrder: POST the first time, PATCH the same plan after", async () => {
+      const { calls } = stubFetchRoutes([
+        ["/treatment-plan", (_url, init) => (init?.method === "POST" ? { status: 201, body: { id: "plan-99" } } : { status: 200, body: {} })],
+      ]);
+      const wizard = useOrthoApneaOrderWizard();
+      fillValidOrder(wizard.order);
+      wizard.order.morningAligner = true;
+
+      expect(await wizard.persistDraft("patient-1", "study-1")).toBe(true);
+      expect(wizard.currentDraftPlanId.value).toBe("plan-99");
+      const first = bodyOf(calls[0]);
+      expect(first).toMatchObject({ patient_id: "patient-1", sleep_study_id: "study-1", dentist_id: "doc-1" });
+      expect(first.metadata).toMatchObject({ orthoapneaDraft: { schema: "deviceOrder", order: { dentistId: "doc-1", morningAligner: true } } });
+
+      expect(await wizard.persistDraft("patient-1", "study-1")).toBe(true);
+      expect(calls[1]!.url).toContain("/treatment-plan/plan-99");
+      expect(calls[1]!.init?.method).toBe("PATCH");
+    });
+
+    it("resumes a saved DeviceOrder draft", () => {
+      const wizard = useOrthoApneaOrderWizard();
+      const saved = { ...defaultDeviceOrder("doc-7"), productCode: PRODUCT_CODES.NOA_TMJ, retrusionMaxMm: -3, protrusionMaxMm: 7, teeth: { "11": "relieve" } };
+      wizard.resetForOpen({ id: "plan-1", metadata: { orthoapneaDraft: { schema: "deviceOrder", order: saved, extras: { registrationMethod: "scanner", scanner: "Medit" } } } });
+
+      expect(wizard.currentDraftPlanId.value).toBe("plan-1");
+      expect(wizard.order).toMatchObject({ dentistId: "doc-7", productCode: "003", retrusionMaxMm: -3, protrusionMaxMm: 7, teeth: { "11": "relieve" } });
+      expect(wizard.extras).toEqual({ registrationMethod: "scanner", scanner: "Medit" });
+    });
+
+    it("maps an old (pre-CORE-95) draft best-effort", () => {
       const wizard = useOrthoApneaOrderWizard();
       wizard.resetForOpen({
-        id: "plan-1",
+        id: "plan-2",
         metadata: {
           orthoapneaDraft: {
+            doctorId: "doc-1",
+            products: [{ id: 3, code: "002", nameEs: "NOA", category: "x" }],
             retrusionMax: -3,
             protrusionMax: 7,
-            date: "2026-01-01",
+            startingPointPorcentage: 40,
+            sequenceTypePersonalized: true,
+            sequenceUnitInMM: false,
             sequence: { seq1: 11, seq2: 22, seq3: 33 },
+            additionalSplints: ["5", ""],
+            upperBandSplintDesign: "2",
+            finish: "scallopedSplintDesign",
+            verticalDimension: "minimal",
+            teethStatus: ["11", "26", "99"],
           },
         },
       });
 
-      expect(wizard.currentDraftPlanId.value).toBe("plan-1");
-      expect(wizard.form.retrusionMax).toBe(-3);
-      expect(wizard.form.protrusionMax).toBe(7);
-      expect(wizard.form.date).toBe("2026-01-01"); // NOT overwritten by setDefaultDesiredDate
-      expect(wizard.sequence).toEqual({ seq1: 11, seq2: 22, seq3: 33 });
+      expect(wizard.order).toMatchObject({
+        dentistId: "doc-1",
+        productCode: "002",
+        retrusionMaxMm: -3,
+        protrusionMaxMm: 7,
+        startingPoint: { unit: "%", value: 40 },
+        sequence: { type: "personalized", unit: "%", values: [11, 22, 33], additionalSplints: [5] },
+        upperBand: 2,
+        finish: "scalloped",
+        verticalDimension: { kind: "minimal" },
+        teeth: { "11": "relieve", "26": "relieve" },
+      });
+      expect(wizard.additionalSplintInputs.value).toEqual([5]);
+    });
+
+    it("never crashes on a broken draft — it opens as a fresh order", () => {
+      const wizard = useOrthoApneaOrderWizard();
+      wizard.resetForOpen({ id: "plan-3", metadata: { orthoapneaDraft: { schema: "deviceOrder", order: "garbage" } } });
+      expect(wizard.order.productCode).toBe(PRODUCT_CODES.NOA);
+      wizard.resetForOpen({ id: "plan-4", metadata: { orthoapneaDraft: { products: "nope", sequence: 5, teethStatus: { a: 1 } } } });
+      expect(wizard.order.sequence).toEqual({ type: "standard" });
     });
   });
 
-  describe("loadProducts", () => {
-    it("defaults the selection to NOA when none is already selected", async () => {
-      stubFetchRoutes([["/partners/orthoapnea/products", () => ({ status: 200, body: { items: [NOA, MORNING_ALIGNER] } })]]);
+  describe("context (delivery + earliest date)", () => {
+    it("loads the doctor's HCO for the product and sets the hidden desired date to OA's minimum", async () => {
+      const { calls } = stubFetchRoutes([["/device-orders/context", () => ({ status: 200, body: CONTEXT })]]);
       const wizard = useOrthoApneaOrderWizard();
+      wizard.resetForOpen(null);
+      wizard.order.dentistId = "doc-1";
 
-      await wizard.loadProducts();
+      await wizard.loadContext();
 
-      expect(wizard.products.value).toEqual([NOA, MORNING_ALIGNER]);
-      expect(wizard.form.products).toEqual([NOA]);
+      expect(calls[0]!.url).toContain("/api/v1/device-orders/context?dentist_id=doc-1&product_code=002");
+      expect(wizard.context.value?.delivery?.name).toBe("Clínica Centro");
+      expect(wizard.order.desiredDate).toBe("2026-10-21");
+      expect(wizard.deliveryIssues.value).toEqual([]);
     });
 
-    it("does not override an already-selected product set (e.g. a resumed draft)", async () => {
-      stubFetchRoutes([["/partners/orthoapnea/products", () => ({ status: 200, body: { items: [NOA, MORNING_ALIGNER] } })]]);
+    it("no HCO or missing fields become delivery issues; a failed call too", async () => {
+      let body: unknown = { ...CONTEXT, delivery: null, minDesiredDate: null };
+      let status = 200;
+      stubFetchRoutes([["/device-orders/context", () => ({ status, body })]]);
       const wizard = useOrthoApneaOrderWizard();
-      wizard.form.products = [MORNING_ALIGNER];
+      wizard.order.dentistId = "doc-1";
 
-      await wizard.loadProducts();
+      await wizard.loadContext();
+      expect(wizard.deliveryIssues.value).toEqual([{ path: "delivery", code: "required" }]);
+      expect(wizard.order.desiredDate).toBe(fallbackDesiredDate());
 
-      expect(wizard.form.products).toEqual([MORNING_ALIGNER]);
-    });
-  });
+      body = { ...CONTEXT, deliveryIssues: [{ path: "delivery.phone", code: "required" }] };
+      await wizard.loadContext();
+      expect(wizard.deliveryIssues.value).toEqual([{ path: "delivery.phone", code: "required" }]);
 
-  describe("persistDraft", () => {
-    it("POSTs a new treatment_plan the first time, then PATCHes the same plan on subsequent saves", async () => {
-      const { calls } = stubFetchRoutes([
-        ["/treatment-plan", (url, init) => {
-          if (init?.method === "POST") return { status: 201, body: { id: "plan-99" } };
-          return { status: 200, body: {} };
-        }],
-      ]);
-      const wizard = useOrthoApneaOrderWizard();
-      wizard.form.doctorId = "doc-1";
-
-      const firstOk = await wizard.persistDraft("patient-1", "study-1");
-      expect(firstOk).toBe(true);
-      expect(wizard.currentDraftPlanId.value).toBe("plan-99");
-      expect(calls[0]!.init?.method).toBe("POST");
-      const firstBody = JSON.parse(calls[0]!.init!.body as string);
-      expect(firstBody).toMatchObject({ patient_id: "patient-1", sleep_study_id: "study-1", dentist_id: "doc-1" });
-      expect(firstBody.metadata.orthoapneaDraft).toMatchObject({ doctorId: "doc-1" });
-
-      const secondOk = await wizard.persistDraft("patient-1", "study-1");
-      expect(secondOk).toBe(true);
-      expect(calls[1]!.url).toContain("/treatment-plan/plan-99");
-      expect(calls[1]!.init?.method).toBe("PATCH");
-    });
-  });
-
-  // NEO-109: a 400 naming a field is marked in the wizard, never toasted.
-  describe("field errors from the API", () => {
-    const DENTIST_REJECTED = {
-      status: 400,
-      body: { error: "dentist_id does not reference an existing practitioner", code: "VALIDATION_ERROR", field: "dentist_id", reason: "invalid" },
-    };
-
-    it("maps API field keys (snake_case and nested deliveryAddress.*) to the wizard's form keys", () => {
-      expect(toWizardFieldErrors({ dentist_id: "invalid", "deliveryAddress.city": "required" })).toEqual({ doctorId: "invalid", altCity: "required" });
-      expect(toWizardFieldErrors({ patient_id: "required" })).toBeNull();
-      expect(toWizardFieldErrors(null)).toBeNull();
-    });
-
-    it("confirmOrder: a rejected dentist_id keeps the dialog open, names doctorId, and shows no toast", async () => {
-      const { calls } = stubFetchRoutes([
-        ["/patients/patient-1/ensure", () => ({ status: 200, body: { externalId: "oa-1" } })],
-        ["/treatment-plan", () => DENTIST_REJECTED],
-      ]);
-      const wizard = useOrthoApneaOrderWizard();
-      wizard.form.products = [NOA, MORNING_ALIGNER];
-
-      const result = await wizard.confirmOrder("patient-1", "study-1");
-
-      expect(result).toBe(false);
-      expect(wizard.rejectedFields.value).toEqual({ doctorId: "invalid" });
-      expect(useNotifications().notifications.value).toHaveLength(0);
-      // Stops at the first plan — every product would be rejected on the same field.
-      expect(calls.filter((c) => c.url.includes("/treatment-plan"))).toHaveLength(1);
-      expect(wizard.submitLoading.value).toBe(false);
-    });
-
-    it("confirmOrder: a 400 naming a field the wizard doesn't have keeps the existing toast", async () => {
-      stubFetchRoutes([
-        ["/patients/patient-1/ensure", () => ({ status: 200, body: { externalId: "oa-1" } })],
-        ["/treatment-plan", () => ({ status: 400, body: { error: "sleep_study_id is required", code: "VALIDATION_ERROR", field: "sleep_study_id", reason: "required" } })],
-      ]);
-      const wizard = useOrthoApneaOrderWizard();
-      wizard.form.products = [NOA];
-
-      const result = await wizard.confirmOrder("patient-1", "study-1");
-
-      expect(result).toBe(true);
-      expect(wizard.rejectedFields.value).toBeNull();
-      expect(useNotifications().notifications.value[0]?.message).toBe("app.orthoApneaOrder.error");
-    });
-
-    it("persistDraft: a rejected dentist_id returns false and names doctorId; the next success clears it", async () => {
-      let reject = true;
-      stubFetchRoutes([
-        ["/treatment-plan", () => (reject ? DENTIST_REJECTED : { status: 201, body: { id: "plan-1" } })],
-      ]);
-      const wizard = useOrthoApneaOrderWizard();
-      wizard.form.doctorId = "gone-doctor";
-
-      expect(await wizard.persistDraft("patient-1", "study-1")).toBe(false);
-      expect(wizard.rejectedFields.value).toEqual({ doctorId: "invalid" });
-
-      reject = false;
-      expect(await wizard.persistDraft("patient-1", "study-1")).toBe(true);
-      expect(wizard.rejectedFields.value).toBeNull();
+      status = 500;
+      body = { error: "boom" };
+      await wizard.loadContext();
+      expect(wizard.contextFailed.value).toBe(true);
+      expect(wizard.deliveryIssues.value).toEqual([{ path: "delivery", code: "invalid" }]);
     });
   });
 
   describe("confirmOrder", () => {
-    it("returns false and makes no API calls when no products are selected", async () => {
-      const { calls } = stubFetchRoutes([]);
-      const wizard = useOrthoApneaOrderWizard();
-      wizard.form.products = [];
-
-      const result = await wizard.confirmOrder("patient-1", "study-1");
-
-      expect(result).toBe(false);
-      expect(calls).toHaveLength(0);
-    });
-
-    it("ensures the patient, creates one plan+order per product, and reports success", async () => {
-      let planCounter = 0;
-      stubFetchRoutes([
-        ["/patients/patient-1/ensure", () => ({ status: 200, body: { externalId: "oa-1" } })],
-        ["/treatment-plan", () => ({ status: 201, body: { id: `plan-${++planCounter}` } })],
-        ["/partners/orthoapnea/treatments", () => ({ status: 201, body: { externalId: "oa-treat-1" } })],
+    it("creates the plan, then posts the canonical order to /api/v1/device-orders — no ensure-patient call", async () => {
+      const { calls } = stubFetchRoutes([
+        ["/treatment-plan", () => ({ status: 201, body: { id: "plan-1" } })],
+        ["/device-orders", () => ({ status: 201, body: { externalId: "oa-9", externalStatus: "1", warnings: [] } })],
       ]);
       const wizard = useOrthoApneaOrderWizard();
-      wizard.form.products = [NOA];
+      fillValidOrder(wizard.order);
 
-      const result = await wizard.confirmOrder("patient-1", "study-1");
+      expect(await wizard.confirmOrder("patient-1", "study-1")).toBe(true);
 
-      expect(result).toBe(true);
+      expect(calls.map((c) => c.url)).toEqual(["/api/v1/treatment-plan", "/api/v1/device-orders"]);
+      const sent = bodyOf(calls[1]);
+      expect(sent.treatment_plan_id).toBe("plan-1");
+      expect(sent.patient_id).toBe("patient-1");
+      expect(sent.order).toEqual(JSON.parse(JSON.stringify(wizard.order)));
       expect(useNotifications().notifications.value[0]?.message).toBe("app.orthoApneaOrder.success");
     });
 
-    it("reports partialFailure when some (but not all) product orders fail", async () => {
-      let planCounter = 0;
-      let treatmentCalls = 0;
-      stubFetchRoutes([
-        ["/patients/patient-1/ensure", () => ({ status: 200, body: { externalId: "oa-1" } })],
-        ["/treatment-plan", () => ({ status: 201, body: { id: `plan-${++planCounter}` } })],
-        ["/partners/orthoapnea/treatments", () => {
-          treatmentCalls += 1;
-          return treatmentCalls === 1 ? { status: 201, body: {} } : { status: 500, body: { error: "boom" } };
-        }],
-      ]);
-      const wizard = useOrthoApneaOrderWizard();
-      wizard.form.products = [NOA, MORNING_ALIGNER];
-
-      const result = await wizard.confirmOrder("patient-1", "study-1");
-
-      expect(result).toBe(true); // dialog still closes — some orders did go through
-      expect(useNotifications().notifications.value[0]?.message).toBe("app.orthoApneaOrder.partialFailure");
-    });
-
-    it("Retry on the partial-failure toast re-sends only the unsent order (same plan), then reports success", async () => {
-      let planCounter = 0;
-      let treatmentCalls = 0;
+    it("Morning Aligner is a flag on the one order, never a second order", async () => {
       const { calls } = stubFetchRoutes([
-        ["/patients/patient-1/ensure", () => ({ status: 200, body: { externalId: "oa-1" } })],
-        ["/treatment-plan", () => ({ status: 201, body: { id: `plan-${++planCounter}` } })],
-        ["/partners/orthoapnea/treatments", () => {
-          treatmentCalls += 1;
-          return treatmentCalls === 2 ? { status: 503, body: { error: "down" } } : { status: 201, body: {} };
-        }],
+        ["/treatment-plan", () => ({ status: 201, body: { id: "plan-1" } })],
+        ["/device-orders", () => ({ status: 201, body: { externalId: "oa-9" } })],
       ]);
       const wizard = useOrthoApneaOrderWizard();
-      wizard.form.products = [NOA, MORNING_ALIGNER];
+      fillValidOrder(wizard.order);
+      wizard.order.morningAligner = true;
+
       await wizard.confirmOrder("patient-1", "study-1");
 
+      const orders = calls.filter((c) => c.url.endsWith("/device-orders"));
+      expect(orders).toHaveLength(1);
+      expect(bodyOf(orders[0]).order).toMatchObject({ productCode: "002", morningAligner: true });
+    });
+
+    it("reuses a resumed draft's plan and clears its draft marker", async () => {
+      const { calls } = stubFetchRoutes([
+        ["/treatment-plan/plan-7", () => ({ status: 200, body: {} })],
+        ["/device-orders", () => ({ status: 201, body: {} })],
+      ]);
+      const wizard = useOrthoApneaOrderWizard();
+      wizard.resetForOpen({ id: "plan-7", metadata: { orthoapneaDraft: { schema: "deviceOrder", order: defaultDeviceOrder("doc-1") } } });
+      fillValidOrder(wizard.order);
+
+      await wizard.confirmOrder("patient-1", "study-1");
+
+      expect(calls[0]!.init?.method).toBe("PATCH");
+      expect(bodyOf(calls[0])).toEqual({ dentist_id: "doc-1", metadata: {} });
+      expect(bodyOf(calls[1]).treatment_plan_id).toBe("plan-7");
+    });
+
+    it("a 400 validation keeps the dialog open with the API's issues — no toast — and a resubmit reuses the plan", async () => {
+      let reject = true;
+      let plans = 0;
+      const { calls } = stubFetchRoutes([
+        ["/treatment-plan", (_url, init) => (init?.method === "POST" ? { status: 201, body: { id: `plan-${++plans}` } } : { status: 200, body: {} })],
+        [
+          "/device-orders",
+          () =>
+            reject
+              ? { status: 400, body: { error: "validation", fields: [{ path: "startingPoint.value", code: "startingPointOutside", params: { min: -2, max: 6 } }], warnings: [], rulesVersion: "x" } }
+              : { status: 201, body: {} },
+        ],
+      ]);
+      const wizard = useOrthoApneaOrderWizard();
+      fillValidOrder(wizard.order);
+
+      expect(await wizard.confirmOrder("patient-1", "study-1")).toBe(false);
+      expect(wizard.serverIssues.value).toEqual([{ path: "startingPoint.value", code: "startingPointOutside", params: { min: -2, max: 6 } }]);
+      expect(useNotifications().notifications.value).toHaveLength(0);
+
+      reject = false;
+      expect(await wizard.confirmOrder("patient-1", "study-1")).toBe(true);
+      expect(plans).toBe(1);
+      expect(calls.filter((c) => c.url.includes("/treatment-plan"))[1]!.init?.method).toBe("PATCH");
+    });
+
+    it("a rejected dentist_id on the plan marks the doctor field — no toast, no order sent", async () => {
+      const { calls } = stubFetchRoutes([
+        ["/treatment-plan", () => ({ status: 400, body: { error: "dentist_id does not reference an existing practitioner", code: "VALIDATION_ERROR", field: "dentist_id", reason: "invalid" } })],
+      ]);
+      const wizard = useOrthoApneaOrderWizard();
+      fillValidOrder(wizard.order);
+
+      expect(await wizard.confirmOrder("patient-1", "study-1")).toBe(false);
+      expect(wizard.serverIssues.value).toEqual([{ path: "dentistId", code: "invalid" }]);
+      expect(useNotifications().notifications.value).toHaveLength(0);
+      expect(calls.some((c) => c.url.includes("/device-orders"))).toBe(false);
+    });
+
+    it("a partner failure closes with an error toast whose Retry re-sends the same order (same plan)", async () => {
+      let attempt = 0;
+      const { calls } = stubFetchRoutes([
+        ["/treatment-plan", () => ({ status: 201, body: { id: "plan-1" } })],
+        ["/device-orders", () => (++attempt === 1 ? { status: 503, body: { error: "down" } } : { status: 201, body: {} })],
+      ]);
+      const wizard = useOrthoApneaOrderWizard();
+      fillValidOrder(wizard.order);
+
+      expect(await wizard.confirmOrder("patient-1", "study-1")).toBe(true);
       const toast = useNotifications().notifications.value[0]!;
+      expect(toast.message).toBe("app.orthoApneaOrder.error");
       expect(toast.action?.labelKey).toBe("notification.action.retry");
+
       useNotifications().notifications.value = [];
       await toast.action!.run();
-
-      const orderCalls = calls.filter((c) => c.url.includes("/partners/orthoapnea/treatments"));
-      expect(orderCalls).toHaveLength(3); // 2 in the wizard + exactly 1 retry
-      expect(JSON.parse(orderCalls[2]!.init!.body as string).treatment_plan_id).toBe("plan-2"); // no new plan created
-      expect(planCounter).toBe(2);
+      const orders = calls.filter((c) => c.url.endsWith("/device-orders"));
+      expect(orders).toHaveLength(2);
+      expect(orders[1]!.init?.body).toBe(orders[0]!.init?.body);
       expect(useNotifications().notifications.value[0]?.message).toBe("app.orthoApneaOrder.success");
     });
 
-    it("no Retry when every failure happened before a plan existed (nothing to re-send)", async () => {
+    it.each([
+      ["PARTNER_ORDER_ALREADY_SUBMITTED", "app.orthoApneaOrder.alreadySubmitted"],
+      ["PARTNER_ORDER_SUBMISSION_PENDING", "app.orthoApneaOrder.submissionPending"],
+    ])("a 409 %s gets its own message and no Retry (a retry would only 409 again)", async (code, message) => {
       stubFetchRoutes([
-        ["/patients/patient-1/ensure", () => ({ status: 200, body: { externalId: "oa-1" } })],
-        ["/treatment-plan", () => ({ status: 500, body: { error: "boom" } })],
+        ["/treatment-plan", () => ({ status: 201, body: { id: "plan-1" } })],
+        ["/device-orders", () => ({ status: 409, body: { error: "conflict", code } })],
       ]);
       const wizard = useOrthoApneaOrderWizard();
-      wizard.form.products = [NOA];
-      await wizard.confirmOrder("patient-1", "study-1");
+      fillValidOrder(wizard.order);
 
+      expect(await wizard.confirmOrder("patient-1", "study-1")).toBe(true);
+      const toast = useNotifications().notifications.value[0]!;
+      expect(toast.message).toBe(message);
+      expect(toast.action).toBeUndefined();
+    });
+
+    it("no Retry when the plan itself couldn't be saved", async () => {
+      stubFetchRoutes([["/treatment-plan", () => ({ status: 500, body: { error: "boom" } })]]);
+      const wizard = useOrthoApneaOrderWizard();
+      fillValidOrder(wizard.order);
+
+      expect(await wizard.confirmOrder("patient-1", "study-1")).toBe(false);
       const toast = useNotifications().notifications.value[0]!;
       expect(toast.message).toBe("app.orthoApneaOrder.error");
       expect(toast.action).toBeUndefined();
     });
 
-    it("returns false and shows the generic error when the initial ensure-patient call throws", async () => {
-      vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
-      const wizard = useOrthoApneaOrderWizard();
-      wizard.form.products = [NOA];
-
-      const result = await wizard.confirmOrder("patient-1", "study-1");
-
-      expect(result).toBe(false);
-      expect(useNotifications().notifications.value[0]?.message).toBe("app.orthoApneaOrder.error");
-    });
-
-    it("guards against re-entrant submission while one is already in flight", async () => {
-      // Only the FIRST fetch call (the "ensure patient" one) hangs — every
-      // later call in the flow (treatment-plan create, order submit) resolves
-      // immediately, so `first` can run to completion once released without
-      // needing a stub per downstream call.
-      let resolveEnsure!: () => void;
+    it("guards against re-entrant submission while one is in flight", async () => {
+      let release!: () => void;
       let callCount = 0;
       vi.stubGlobal(
         "fetch",
         vi.fn(() => {
           callCount += 1;
-          if (callCount === 1) return new Promise((resolve) => { resolveEnsure = () => resolve(jsonResponse(200, {})); });
-          return Promise.resolve(jsonResponse(200, { id: "plan-1" }));
-        })
+          if (callCount === 1) return new Promise((resolve) => { release = () => resolve(jsonResponse(201, { id: "plan-1" })); });
+          return Promise.resolve(jsonResponse(201, {}));
+        }),
       );
       const wizard = useOrthoApneaOrderWizard();
-      wizard.form.products = [NOA];
+      fillValidOrder(wizard.order);
 
       const first = wizard.confirmOrder("patient-1", "study-1");
       expect(wizard.submitLoading.value).toBe(true);
-      const second = await wizard.confirmOrder("patient-1", "study-1");
-      expect(second).toBe(false); // rejected immediately — first call still in flight
+      expect(await wizard.confirmOrder("patient-1", "study-1")).toBe(false);
 
-      resolveEnsure();
-      await first;
+      release();
+      expect(await first).toBe(true);
+      expect(wizard.submitLoading.value).toBe(false);
     });
   });
 });

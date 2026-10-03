@@ -102,6 +102,10 @@ not verified.
   as the deviation diagram); only the lower incisor moves, tracking the current Starting
   Point position. An earlier version bound the two images directly to MR/MP, which at
   extreme values sent them to opposite ends of the ruler — fixed.
+- Both images are placed by their incisal **tip**, not their centre (2026-10-03): with default
+  values the tips touch the 0 line, as on OA's ruler. The tip offsets are measured from the PNGs
+  (`INCISOR_TIP` in `mandibularRuler.ts`); the upper image sits on top of the track, the lower
+  one under it.
 - The exact value→pixel curve beyond "±20mm maps to full width" is still an approximation.
 
 ## Product catalog filtering

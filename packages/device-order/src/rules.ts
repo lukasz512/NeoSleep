@@ -86,9 +86,19 @@ const deviceOrderShape = z.object({
 });
 
 /** Maps a zod issue to our codes: missing → required, a range → outOfRange with its bounds, anything else → invalid. */
-function fromZod(issue: z.core.$ZodIssue): OrderIssue {
+function valueAt(input: unknown, path: readonly PropertyKey[]): unknown {
+  let cur: unknown = input;
+  for (const key of path) {
+    if (typeof cur !== "object" || cur === null) return undefined;
+    cur = (cur as Record<PropertyKey, unknown>)[key];
+  }
+  return cur;
+}
+
+// zod 4 leaves issue.input unset unless asked, so "missing" is read from the input itself.
+function fromZod(issue: z.core.$ZodIssue, input: unknown): OrderIssue {
   const path = issue.path.join(".");
-  if (issue.code === "invalid_type" && issue.input === undefined) return { path, code: "required" };
+  if (issue.code === "invalid_type" && valueAt(input, issue.path) === undefined) return { path, code: "required" };
   if (issue.code === "too_small" || issue.code === "too_big") {
     if (issue.origin === "string" && issue.code === "too_small") return { path, code: "required" };
     const bound = Number(issue.code === "too_small" ? issue.minimum : issue.maximum);
@@ -97,30 +107,39 @@ function fromZod(issue: z.core.$ZodIssue): OrderIssue {
   return { path, code: "invalid" };
 }
 
-/** Cross-field rules — each names the OA validator it mirrors. */
-function crossFieldIssues(order: DeviceOrder, ctx: OrderContext): OrderValidation {
+/**
+ * Cross-field rules — each names the OA validator it mirrors. A rule runs only
+ * when every field it reads passed the shape check (`broken` = top-level keys
+ * that failed), so one step's typo never hides another step's errors.
+ */
+function crossFieldIssues(order: DeviceOrder, ctx: OrderContext, broken: ReadonlySet<string> = new Set()): OrderValidation {
   const errors: OrderIssue[] = [];
   const warnings: OrderIssue[] = [];
+  const usable = (...keys: (keyof DeviceOrder)[]) => keys.every((k) => !broken.has(k));
   const mr = order.retrusionMaxMm;
   const mp = order.protrusionMaxMm;
 
-  // XAt invalidAdvanced: MR and MP both 0 means nothing was measured.
-  if (mr === 0 && mp === 0) errors.push({ path: "protrusionMaxMm", code: "advanceZero" });
-  // isMaxRetrusionBiggerMaxProtrusion: MR must sit behind MP — a device can't advance backwards.
-  else if (mr >= mp) errors.push({ path: "retrusionMaxMm", code: "retrusionNotBelowProtrusion" });
-  // XAt invalidAdvancedLess5: OA's form only warns; its server accepted 3 mm (shot S4, 2026-10-03).
-  else if (mp - mr < 5) warnings.push({ path: "protrusionMaxMm", code: "advanceUnder5", params: { min: 5 } });
-
-  // YAt invalidStartPoint: SP is required and must lie between MR and MP.
-  const sp = startingPointMm(order);
-  if (sp === null) errors.push({ path: "startingPoint.value", code: "required" });
-  else if (order.startingPoint.unit === "%" && (order.startingPoint.value! < 0 || order.startingPoint.value! > 100)) {
-    errors.push({ path: "startingPoint.value", code: "outOfRange", params: { min: 0, max: 100 } });
-  } else if (mr < mp && (sp < mr || sp > mp)) {
-    errors.push({ path: "startingPoint.value", code: "startingPointOutside", params: { min: mr, max: mp } });
+  if (usable("retrusionMaxMm", "protrusionMaxMm")) {
+    // XAt invalidAdvanced: MR and MP both 0 means nothing was measured.
+    if (mr === 0 && mp === 0) errors.push({ path: "protrusionMaxMm", code: "advanceZero" });
+    // isMaxRetrusionBiggerMaxProtrusion: MR must sit behind MP — a device can't advance backwards.
+    else if (mr >= mp) errors.push({ path: "retrusionMaxMm", code: "retrusionNotBelowProtrusion" });
+    // XAt invalidAdvancedLess5: OA's form only warns; its server accepted 3 mm (shot S4, 2026-10-03).
+    else if (mp - mr < 5) warnings.push({ path: "protrusionMaxMm", code: "advanceUnder5", params: { min: 5 } });
   }
 
-  if (order.sequence.type === "personalized") {
+  // YAt invalidStartPoint: SP is required and must lie between MR and MP.
+  if (usable("retrusionMaxMm", "protrusionMaxMm", "startingPoint")) {
+    const sp = startingPointMm(order);
+    if (sp === null) errors.push({ path: "startingPoint.value", code: "required" });
+    else if (order.startingPoint.unit === "%" && (order.startingPoint.value! < 0 || order.startingPoint.value! > 100)) {
+      errors.push({ path: "startingPoint.value", code: "outOfRange", params: { min: 0, max: 100 } });
+    } else if (mr < mp && (sp < mr || sp > mp)) {
+      errors.push({ path: "startingPoint.value", code: "startingPointOutside", params: { min: mr, max: mp } });
+    }
+  }
+
+  if (usable("sequence", "productCode") && order.sequence.type === "personalized") {
     const needed = mainSplintCount(order.productCode);
     // KAt invalidPersonalizedSequence: the first two main splints must be filled (OA blocks on this).
     order.sequence.values.slice(0, Math.min(2, needed)).forEach((v, i) => {
@@ -134,7 +153,7 @@ function crossFieldIssues(order: DeviceOrder, ctx: OrderContext): OrderValidatio
   }
 
   // The desired date can't be earlier than OA's manufacturing date for the product.
-  if (ctx.minDesiredDate && order.desiredDate && order.desiredDate < ctx.minDesiredDate) {
+  if (usable("desiredDate") && ctx.minDesiredDate && order.desiredDate && order.desiredDate < ctx.minDesiredDate) {
     errors.push({ path: "desiredDate", code: "desiredDateTooEarly", params: { min: ctx.minDesiredDate } });
   }
   return { errors, warnings };
@@ -143,8 +162,12 @@ function crossFieldIssues(order: DeviceOrder, ctx: OrderContext): OrderValidatio
 /** The one validator the wizard (per step) and the API (before any partner call) both run. */
 export function validateDeviceOrder(input: unknown, ctx: OrderContext = {}): OrderValidation {
   const parsed = deviceOrderShape.safeParse(input);
-  if (!parsed.success) return { errors: parsed.error.issues.map(fromZod), warnings: [] };
-  return crossFieldIssues(parsed.data as DeviceOrder, ctx);
+  if (parsed.success) return crossFieldIssues(parsed.data as DeviceOrder, ctx);
+  const shapeErrors = parsed.error.issues.map((i) => fromZod(i, input));
+  if (typeof input !== "object" || input === null) return { errors: shapeErrors, warnings: [] };
+  const broken = new Set(parsed.error.issues.map((i) => String(i.path[0] ?? "")));
+  const cross = crossFieldIssues(input as DeviceOrder, ctx, broken);
+  return { errors: [...shapeErrors, ...cross.errors], warnings: cross.warnings };
 }
 
 /** KJ (rules §1.2): when shipping to an address OA requires every field; name ≤ 40 chars; email format. */
@@ -166,7 +189,7 @@ export function validateDeliveryAddress(input: Partial<DeliveryAddress> | null |
     const field = issue.path[0];
     if (issue.code === "too_big" && field === "name") return { path, code: "tooLong", params: { max: 40 } };
     if (field === "email" && issue.code !== "too_small" && issue.code !== "invalid_type") return { path, code: "emailInvalid" };
-    if (issue.code === "too_small" || (issue.code === "invalid_type" && issue.input === undefined)) return { path, code: "required" };
+    if (issue.code === "too_small" || (issue.code === "invalid_type" && valueAt(input ?? {}, issue.path) === undefined)) return { path, code: "required" };
     return { path, code: "invalid" };
   });
 }

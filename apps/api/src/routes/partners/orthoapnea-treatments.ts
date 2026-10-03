@@ -7,7 +7,6 @@ import { withTenant, tenantSlugFromHost, insertAuditLog, getPartnerTransactionHi
 import { buildContext } from "../../context/TenantContext.js";
 import {
   ensureOrthoApneaPatient,
-  createOrthoApneaTreatment,
   addOrthoApneaComment,
   fetchOrthoApneaProducts,
   fetchOrthoApneaClinics,
@@ -87,39 +86,19 @@ orthoapneaTreatmentsRouter.get(
 );
 
 // ---------------------------------------------------------------------------
-// POST /api/v1/partners/orthoapnea/treatments
-// body: { treatment_plan_id, ...wizardPayload } — wizardPayload keys are
-// OrthoApnea's own field names verbatim (see the implementation plan).
+// POST /api/v1/partners/orthoapnea/treatments — 410 Gone (CORE-95).
+// It passed the client's body to OrthoApnea unvalidated, in OA's own field
+// names. Orders now go through POST /api/v1/device-orders, which validates
+// our DeviceOrder with the shared rules first and builds OA's DTO itself, so
+// an arbitrary body can never reach OrthoApnea again.
 // ---------------------------------------------------------------------------
-orthoapneaTreatmentsRouter.post(
-  "/partners/orthoapnea/treatments",
-  requireAuth,
-  asyncHandler(async (req: Request, res: Response) => {
-    const { treatment_plan_id, ...wizardPayload } = req.body as { treatment_plan_id?: string; [key: string]: unknown };
-    const treatmentPlanId = treatment_plan_id?.trim();
-    if (!treatmentPlanId) throw new ValidationError("Missing treatment_plan_id");
-
-    const slug = tenantSlugFromHost(req.hostname);
-    const ctx = await withTenant(slug, (client) => buildContext(req, client, slug));
-    const outcome = await createOrthoApneaTreatment(slug, treatmentPlanId, wizardPayload);
-
-    // Separate short transaction for the audit-log write — createOrthoApneaTreatment
-    // already committed its own transactions around the OrthoApnea HTTP call
-    // (see ADR-017), so this is deliberately not part of that call.
-    await withTenant(slug, (client) =>
-      insertAuditLog(client, {
-        user_id: ctx.user.id,
-        action: "create",
-        entity_type: "PartnerOrder",
-        entity_id: treatmentPlanId,
-        entity_after: outcome.responsePayload,
-        request_id: ctx.requestId,
-      })
-    );
-
-    res.status(201).json(outcome);
-  })
-);
+orthoapneaTreatmentsRouter.post("/partners/orthoapnea/treatments", requireAuth, (_req: Request, res: Response) => {
+  res.status(410).json({
+    error: "This endpoint was removed. Submit device orders to POST /api/v1/device-orders.",
+    code: "GONE",
+    replacement: "/api/v1/device-orders",
+  });
+});
 
 // ---------------------------------------------------------------------------
 // POST /api/v1/partners/orthoapnea/treatments/:treatmentPlanId/comments

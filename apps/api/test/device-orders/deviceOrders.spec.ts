@@ -1,0 +1,452 @@
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
+import request from "supertest";
+import bcrypt from "bcrypt";
+import { RULES_VERSION, type DeviceOrder } from "@neo/device-order";
+import { app } from "../../src/server.js";
+import { withTenant, insertStaffUser, getGlobalTerritoryId, getAuditLogForEntities } from "../../src/db.js";
+import { getPartnerLink } from "../../src/db/partnerLink.js";
+import type { TenantContext } from "../../src/context/TenantContext.js";
+import { CreatePatientCommand } from "../../src/commands/patient.js";
+import { CreatePractitionerCommand } from "../../src/commands/practitioner.js";
+import { CreateSleepStudyCommand } from "../../src/commands/sleepStudy.js";
+import { CreateTreatmentPlanCommand } from "../../src/commands/treatmentPlan.js";
+import {
+  __resetOrthoApneaStateForTests,
+  __setOrthoApneaBaseUrlForTests,
+  createOrthoApneaTreatment,
+  ensureOrthoApneaPatient,
+} from "../../src/services/partners/orthoapnea.js";
+import { ConflictError } from "../../src/errors.js";
+import { signAuthToken } from "../../src/utils/jwt.js";
+import { startOaReplica, type OaReplica } from "../oa-replica/server.js";
+
+/**
+ * POST /api/v1/device-orders and GET /api/v1/device-orders/context (CORE-95)
+ * end to end: real Postgres ("test" tenant schema), real HTTP to the
+ * in-process OrthoApnea replica — no fetch stub, and the fetch guard
+ * (test/fetch-guard.ts) makes sure nothing reaches the real OA.
+ */
+vi.setConfig({ testTimeout: 30_000 });
+
+const TENANT_SLUG = process.env.DEFAULT_TENANT_SLUG ?? "test";
+const TREATMENTS = "/api/treatments";
+
+let replica: OaReplica;
+
+beforeAll(async () => {
+  replica = await startOaReplica();
+  __setOrthoApneaBaseUrlForTests(replica.url);
+});
+
+afterAll(async () => {
+  __setOrthoApneaBaseUrlForTests(null);
+  await replica.close();
+});
+
+beforeEach(() => {
+  __resetOrthoApneaStateForTests();
+  replica.reset();
+});
+
+const createdPartnerLinkIds: string[] = [];
+afterEach(async () => {
+  if (createdPartnerLinkIds.length > 0) {
+    const ids = createdPartnerLinkIds.splice(0, createdPartnerLinkIds.length);
+    await withTenant(TENANT_SLUG, (client) => client.query("DELETE FROM partner_link WHERE id = ANY($1)", [ids]));
+  }
+});
+
+function uniqueSuffix(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** What a complete HCO looks like; individual tests blank fields out. */
+const COMPLETE_HCO = {
+  address_line1: "Calle de Prueba 1, Col. Juarez",
+  city: "Ciudad de Mexico",
+  postal_code: "06600",
+  country_code: "MX",
+  phone: "+520000000000",
+  email: "qa-clinic@example.com",
+};
+
+interface Setup {
+  token: string;
+  userId: string;
+  patientId: string;
+  planId: string;
+  dentistId: string;
+}
+
+/** One committed transaction: an admin user, a dentist with a primary HCO, a patient, a study and a dental-appliance plan. */
+async function setup(hco: Partial<typeof COMPLETE_HCO> | null = COMPLETE_HCO): Promise<Setup> {
+  return withTenant(TENANT_SLUG, async (client) => {
+    const email = `qa-device-order-${uniqueSuffix()}@neosleepcare.com`;
+    const hash = await bcrypt.hash("irrelevant-not-logged-in-with", 4);
+    const user = await insertStaffUser(client, email, "QA", "Pilot", "admin", hash, false);
+    const ctx: TenantContext = {
+      slug: TENANT_SLUG,
+      client,
+      user: { id: user!.id, email, role: "admin", roles: [{ role: "admin", territory_id: await getGlobalTerritoryId(client) }] },
+      requestId: `test-${uniqueSuffix()}`,
+    };
+    const patient = await CreatePatientCommand(ctx, {
+      gender: "male",
+      date_of_birth: "1975-06-15",
+      first_name: "Tester",
+      last_name: `Patient-${uniqueSuffix()}`,
+      email: `qa-patient-${uniqueSuffix()}@example.com`,
+      phone: "600100200",
+      region: "MX",
+    });
+    const dentist = await CreatePractitionerCommand(ctx, {
+      first_name: "Test",
+      last_name: `Dentist-${uniqueSuffix()}`,
+      email: `qa-dentist-${uniqueSuffix()}@example.com`,
+      phone: "600100200",
+    });
+    if (hco) {
+      const { rows } = await client.query<{ id: string }>(
+        `INSERT INTO organization (name, address_line1, city, postal_code, country_code, phone, email)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+        [`QA Clinic ${uniqueSuffix()}`, hco.address_line1 ?? null, hco.city ?? null, hco.postal_code ?? null, hco.country_code ?? null, hco.phone ?? null, hco.email ?? null]
+      );
+      await client.query(
+        `INSERT INTO practitioner_organization (practitioner_id, organization_id, is_primary) VALUES ($1, $2, true)`,
+        [dentist.id, rows[0]!.id]
+      );
+    }
+    const study = await CreateSleepStudyCommand(ctx, { patient_id: patient.id });
+    const plan = await CreateTreatmentPlanCommand(ctx, {
+      patient_id: patient.id,
+      sleep_study_id: study.id,
+      type: "dental_appliance",
+      dentist_id: dentist.id,
+    });
+    const token = signAuthToken({ id: user!.id, email, role: "admin", token_version: 0 });
+    return { token, userId: user!.id, patientId: patient.id, planId: plan.id, dentistId: dentist.id };
+  });
+}
+
+/** A valid NOA order: standard sequence, desired date well past OA's manufacturing date. */
+function validOrder(dentistId: string, overrides: Partial<DeviceOrder> = {}): DeviceOrder {
+  return {
+    dentistId,
+    productCode: "002",
+    retrusionMaxMm: -4,
+    protrusionMaxMm: 6,
+    startingPoint: { unit: "mm", value: 1 },
+    sequence: { type: "standard" },
+    deviation: { rightMm: 0, rightAdvanceMm: 0, leftMm: 0, leftAdvanceMm: 0 },
+    morningAligner: false,
+    verticalDimension: { kind: "registro" },
+    anteriorFrontalOpening: false,
+    slotsForElasticBands: false,
+    laterality: 3,
+    limitOpening: 7,
+    upperBand: 3,
+    lowerBand: 3,
+    finish: "mixed",
+    teeth: { "16": "crown" },
+    observations: "QA replica order",
+    desiredDate: new Date(Date.now() + 60 * 86_400_000).toISOString().slice(0, 10),
+    noContactDoctorForRedesign: false,
+    ...overrides,
+  };
+}
+
+async function trackLink(planId: string): Promise<void> {
+  const link = await withTenant(TENANT_SLUG, (client) => getPartnerLink(client, "orthoapnea", "treatment_plan", planId));
+  if (link) createdPartnerLinkIds.push(link.id);
+}
+
+describe("POST /api/v1/device-orders", () => {
+  it("401 without a token, 403 for a rep (reps can't place real orders, NEO-199)", async () => {
+    expect((await request(app).post("/api/v1/device-orders").send({})).status).toBe(401);
+    const repToken = signAuthToken({ id: crypto.randomUUID(), email: "qa-rep@example.com", role: "rep", token_version: 0 });
+    const res = await request(app).post("/api/v1/device-orders").set("Authorization", `Bearer ${repToken}`).send({});
+    expect(res.status).toBe(403);
+    expect(replica.requests).toHaveLength(0);
+  });
+
+  it("400 with field issues for an invalid order — and OrthoApnea receives nothing", async () => {
+    const s = await setup();
+    const order = validOrder(s.dentistId, { retrusionMaxMm: 0, protrusionMaxMm: 0, startingPoint: { unit: "mm", value: null } });
+    const res = await request(app)
+      .post("/api/v1/device-orders")
+      .set("Authorization", `Bearer ${s.token}`)
+      .send({ treatment_plan_id: s.planId, patient_id: s.patientId, order: { ...order, upperBand: 9 } });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ error: "validation", rulesVersion: RULES_VERSION, warnings: [] });
+    expect(res.body.fields).toEqual(expect.arrayContaining([{ path: "upperBand", code: "outOfRange", params: { max: 6 } }]));
+    expect(replica.count("POST", TREATMENTS)).toBe(0);
+    expect(replica.requests).toHaveLength(0);
+  });
+
+  it("400 with cross-field issues (MR/MP zero, no starting point)", async () => {
+    const s = await setup();
+    const order = validOrder(s.dentistId, { retrusionMaxMm: 0, protrusionMaxMm: 0, startingPoint: { unit: "mm", value: null } });
+    const res = await request(app)
+      .post("/api/v1/device-orders")
+      .set("Authorization", `Bearer ${s.token}`)
+      .send({ treatment_plan_id: s.planId, patient_id: s.patientId, order });
+
+    expect(res.status).toBe(400);
+    expect(res.body.fields).toEqual(
+      expect.arrayContaining([
+        { path: "protrusionMaxMm", code: "advanceZero" },
+        { path: "startingPoint.value", code: "required" },
+      ])
+    );
+    expect(replica.requests).toHaveLength(0);
+  });
+
+  it("400 with delivery issues when the dentist's primary HCO is incomplete — zero OrthoApnea calls", async () => {
+    const s = await setup({ ...COMPLETE_HCO, phone: undefined, postal_code: undefined });
+    const res = await request(app)
+      .post("/api/v1/device-orders")
+      .set("Authorization", `Bearer ${s.token}`)
+      .send({ treatment_plan_id: s.planId, patient_id: s.patientId, order: validOrder(s.dentistId) });
+
+    expect(res.status).toBe(400);
+    expect(res.body.fields).toEqual(
+      expect.arrayContaining([
+        { path: "delivery.phone", code: "required" },
+        { path: "delivery.postalCode", code: "required" },
+      ])
+    );
+    expect(replica.requests).toHaveLength(0);
+  });
+
+  it("400 delivery required when the dentist has no HCO at all", async () => {
+    const s = await setup(null);
+    const res = await request(app)
+      .post("/api/v1/device-orders")
+      .set("Authorization", `Bearer ${s.token}`)
+      .send({ treatment_plan_id: s.planId, patient_id: s.patientId, order: validOrder(s.dentistId) });
+    expect(res.status).toBe(400);
+    expect(res.body.fields).toEqual([{ path: "delivery", code: "required" }]);
+    expect(replica.requests).toHaveLength(0);
+  });
+
+  it("400 desiredDateTooEarly against OA's manufacturing date — no patient or order is created", async () => {
+    const s = await setup();
+    const today = new Date().toISOString().slice(0, 10);
+    const res = await request(app)
+      .post("/api/v1/device-orders")
+      .set("Authorization", `Bearer ${s.token}`)
+      .send({ treatment_plan_id: s.planId, patient_id: s.patientId, order: validOrder(s.dentistId, { desiredDate: today }) });
+    expect(res.status).toBe(400);
+    expect(res.body.fields).toEqual([{ path: "desiredDate", code: "desiredDateTooEarly", params: { min: expect.any(String) } }]);
+    expect(replica.count("POST", "/api/patient")).toBe(0);
+    expect(replica.count("POST", TREATMENTS)).toBe(0);
+  });
+
+  it("201 through the replica: multipart DTO, partner_link synced, audit row with the DTO + rulesVersion", async () => {
+    const s = await setup();
+    const order = validOrder(s.dentistId, { protrusionMaxMm: -1, retrusionMaxMm: -4, startingPoint: { unit: "mm", value: -2 } });
+    const res = await request(app)
+      .post("/api/v1/device-orders")
+      .set("Authorization", `Bearer ${s.token}`)
+      .send({ treatment_plan_id: s.planId, patient_id: s.patientId, order });
+    await trackLink(s.planId);
+
+    expect(res.status).toBe(201);
+    expect(res.body.externalStatus).toBe("1");
+    // 3 mm advance range: OA's form only warns (rules §2), so do we.
+    expect(res.body.warnings).toEqual([{ path: "protrusionMaxMm", code: "advanceUnder5", params: { min: 5 } }]);
+
+    // Exactly one order, sent the way OA's portal sends it.
+    const posts = replica.requests.filter((r) => r.method === "POST" && r.path === TREATMENTS);
+    expect(posts).toHaveLength(1);
+    expect(posts[0]!.contentType).toMatch(/^multipart\/form-data/);
+    const dto = posts[0]!.body as Record<string, unknown>;
+    expect(dto).toMatchObject({ retrusionMax: -4, protrusionMax: -1, startingPoint: -2, sequenceTypeStandard: true, sequence: {} });
+    expect(dto.deliveryAddress).toMatchObject({ address: COMPLETE_HCO.address_line1, countryId: 29, active: true });
+    expect(dto).not.toHaveProperty("startingPointPorcentage");
+
+    // The OA patient got what our record has (OA's form requires birthDate + country).
+    const patientPost = replica.requests.find((r) => r.method === "POST" && r.path === "/api/patient");
+    expect(patientPost?.body).toMatchObject({ birthDate: "1975-06-15T00:00:00", male: true, countryId: 29, userId: 15682 });
+    expect(dto.patientId).toBe(Number(replica.patients.keys().next().value));
+
+    const link = await withTenant(TENANT_SLUG, (client) => getPartnerLink(client, "orthoapnea", "treatment_plan", s.planId));
+    expect(link).toMatchObject({ sync_status: "synced", external_id: res.body.externalId, external_status: "1" });
+
+    const audit = await withTenant(TENANT_SLUG, (client) => getAuditLogForEntities(client, ["PartnerOrder"], [s.planId]));
+    const created = audit.find((e) => e.action === "create");
+    expect(created).toBeDefined();
+    const after = created!.entity_after as Record<string, unknown>;
+    expect(after).toMatchObject({ provider: "orthoapnea", externalId: res.body.externalId, rulesVersion: RULES_VERSION });
+    expect(after.dto).toEqual(dto);
+  });
+
+  it("409 on a second submit of the same plan — still one OrthoApnea order", async () => {
+    const s = await setup();
+    const send = () =>
+      request(app)
+        .post("/api/v1/device-orders")
+        .set("Authorization", `Bearer ${s.token}`)
+        .send({ treatment_plan_id: s.planId, patient_id: s.patientId, order: validOrder(s.dentistId) });
+    expect((await send()).status).toBe(201);
+    await trackLink(s.planId);
+    const second = await send();
+    expect(second.status).toBe(409);
+    expect(second.body.code).toBe("PARTNER_ORDER_ALREADY_SUBMITTED");
+    expect(replica.count("POST", TREATMENTS)).toBe(1);
+  });
+
+  it("two concurrent submits for the same plan produce exactly ONE OrthoApnea order (and one OA patient)", async () => {
+    const s = await setup();
+    const send = () =>
+      request(app)
+        .post("/api/v1/device-orders")
+        .set("Authorization", `Bearer ${s.token}`)
+        .send({ treatment_plan_id: s.planId, patient_id: s.patientId, order: validOrder(s.dentistId) });
+
+    // Five at once: without the advisory lock in claimTreatmentSubmission this
+    // let two or more through in most runs (checked by removing the lock).
+    const results = await Promise.all([send(), send(), send(), send(), send()]);
+    await trackLink(s.planId);
+
+    expect(results.map((r) => r.status).sort()).toEqual([201, 409, 409, 409, 409]);
+    expect(replica.count("POST", TREATMENTS)).toBe(1);
+    expect(replica.count("POST", "/api/patient")).toBe(1);
+  });
+
+  it("service level: ten simultaneous createOrthoApneaTreatment calls for one plan → one POST, nine ConflictErrors", async () => {
+    const s = await setup();
+    const oaPatient = await ensureOrthoApneaPatient(TENANT_SLUG, s.patientId);
+    const dto = { patientId: Number(oaPatient), product: { id: 3, code: "002" }, deliveryAddress: {} };
+
+    const results = await Promise.allSettled(Array.from({ length: 10 }, () => createOrthoApneaTreatment(TENANT_SLUG, s.planId, dto)));
+    await trackLink(s.planId);
+
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    const rejected = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+    expect(rejected).toHaveLength(9);
+    expect(rejected.every((r) => r.reason instanceof ConflictError)).toBe(true);
+    expect(replica.count("POST", TREATMENTS)).toBe(1);
+  });
+
+  it("service level: a claim racing another claimer's uncommitted marker waits for it, then 409s — no OA call", async () => {
+    // Deterministic version of the race: transaction T plays "the other
+    // submit", holding its fresh 'pending' row uncommitted while this submit
+    // claims. A check-then-insert claim would see no row and go on to POST.
+    const s = await setup();
+    let submit: Promise<unknown> = Promise.resolve();
+    await withTenant(TENANT_SLUG, async (client) => {
+      const { rows } = await client.query<{ id: string }>(
+        `INSERT INTO partner_link (partner, entity_type, entity_id, sync_status) VALUES ('orthoapnea', 'treatment_plan', $1, 'pending') RETURNING id`,
+        [s.planId]
+      );
+      createdPartnerLinkIds.push(rows[0]!.id);
+      submit = createOrthoApneaTreatment(TENANT_SLUG, s.planId, { patientId: 1 }).then(
+        () => "sent",
+        (err: unknown) => err
+      );
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+
+    const outcome = await submit;
+    expect(outcome).toBeInstanceOf(ConflictError);
+    expect((outcome as ConflictError).code).toBe("PARTNER_ORDER_SUBMISSION_PENDING");
+    expect(replica.count("POST", TREATMENTS)).toBe(0);
+  });
+
+  it("502 when OrthoApnea rejects the order; the link is 'failed' and a retry is allowed", async () => {
+    const s = await setup();
+    replica.failNext(TREATMENTS, 500);
+    const send = () =>
+      request(app)
+        .post("/api/v1/device-orders")
+        .set("Authorization", `Bearer ${s.token}`)
+        .send({ treatment_plan_id: s.planId, patient_id: s.patientId, order: validOrder(s.dentistId) });
+
+    const first = await send();
+    await trackLink(s.planId);
+    expect(first.status).toBe(502);
+    const failed = await withTenant(TENANT_SLUG, (client) => getPartnerLink(client, "orthoapnea", "treatment_plan", s.planId));
+    expect(failed?.sync_status).toBe("failed");
+
+    const retry = await send();
+    expect(retry.status).toBe(201);
+    expect(replica.treatments.size).toBe(1);
+  });
+
+  it("a link left 'pending' (interrupted submit) is never retried silently — 409 until someone checks OA", async () => {
+    const s = await setup();
+    const link = await withTenant(TENANT_SLUG, async (client) => {
+      const { rows } = await client.query<{ id: string }>(
+        `INSERT INTO partner_link (partner, entity_type, entity_id, sync_status) VALUES ('orthoapnea', 'treatment_plan', $1, 'pending') RETURNING id`,
+        [s.planId]
+      );
+      return rows[0]!;
+    });
+    createdPartnerLinkIds.push(link.id);
+
+    const res = await request(app)
+      .post("/api/v1/device-orders")
+      .set("Authorization", `Bearer ${s.token}`)
+      .send({ treatment_plan_id: s.planId, patient_id: s.patientId, order: validOrder(s.dentistId) });
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe("PARTNER_ORDER_SUBMISSION_PENDING");
+    expect(replica.count("POST", TREATMENTS)).toBe(0);
+    expect(replica.count("POST", "/api/patient")).toBe(0);
+  });
+});
+
+describe("GET /api/v1/device-orders/context", () => {
+  it("returns the primary HCO as the delivery address, no issues, OA's minimum date and the rules version", async () => {
+    const s = await setup();
+    const res = await request(app)
+      .get(`/api/v1/device-orders/context?dentist_id=${s.dentistId}&product_code=002`)
+      .set("Authorization", `Bearer ${s.token}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      delivery: {
+        address: COMPLETE_HCO.address_line1,
+        city: COMPLETE_HCO.city,
+        postalCode: "06600",
+        countryCode: "MX",
+        organizationId: expect.any(String),
+      },
+      deliveryIssues: [],
+      rulesVersion: RULES_VERSION,
+    });
+    expect(res.body.minDesiredDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("delivery null + a 'required' issue when the dentist has no HCO; minDesiredDate null when OA is down", async () => {
+    const s = await setup(null);
+    replica.failNext("/api/products/manufacturingDate", 503);
+    const res = await request(app)
+      .get(`/api/v1/device-orders/context?dentist_id=${s.dentistId}&product_code=002`)
+      .set("Authorization", `Bearer ${s.token}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ delivery: null, deliveryIssues: [{ path: "delivery", code: "required" }], minDesiredDate: null });
+  });
+
+  it("400 for a missing dentist_id or an unknown product code", async () => {
+    const s = await setup();
+    const res = await request(app).get("/api/v1/device-orders/context?product_code=999").set("Authorization", `Bearer ${s.token}`);
+    expect(res.status).toBe(400);
+    expect(res.body.fields).toEqual([
+      { path: "dentist_id", code: "required" },
+      { path: "product_code", code: "invalid" },
+    ]);
+  });
+});
+
+describe("POST /api/v1/partners/orthoapnea/treatments (removed pass-through)", () => {
+  it("410 Gone — an arbitrary body can never reach OrthoApnea", async () => {
+    const s = await setup();
+    const res = await request(app)
+      .post("/api/v1/partners/orthoapnea/treatments")
+      .set("Authorization", `Bearer ${s.token}`)
+      .send({ treatment_plan_id: s.planId, retrusionMax: -5, protrusionMax: 5 });
+    expect(res.status).toBe(410);
+    expect(replica.requests).toHaveLength(0);
+  });
+});

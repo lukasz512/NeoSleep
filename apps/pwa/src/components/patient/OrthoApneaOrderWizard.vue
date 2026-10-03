@@ -53,108 +53,66 @@
         <!-- NEO-109: this step's errors, only after a Next/Confirm attempt on it. -->
         <FormErrorSummary :errors="errorList" :title="t('app.formRenderer.errorSummary.title', { n: errorList.length })" @select="focusField" />
 
-        <!-- Step 1 — Envío -->
+        <!-- Step 1 — Envío: who orders, and (read-only) where it ships: the doctor's primary HCO. -->
         <div v-if="step === 1">
-          <div data-field="doctorId">
+          <div data-field="dentistId">
             <VAutocomplete
-              v-model="form.doctorId"
+              :model-value="order.dentistId || null"
               :items="doctorOptions"
               item-title="title"
               item-value="value"
               :label="t('app.orthoApneaOrder.form.doctor')"
               :loading="loadingDoctors"
-              :error-messages="fieldError('doctorId')"
+              :error-messages="fieldError('dentistId')"
               variant="outlined"
               density="comfortable"
+              @update:model-value="onDoctorPicked"
             />
           </div>
-          <VRadioGroup v-model="form.addressSend" color="primary" :label="t('app.orthoApneaOrder.form.addressSend')" inline>
-            <VRadio value="clinic" :label="t('app.orthoApneaOrder.form.addressSendClinic')" />
-            <VRadio value="alternative" :label="t('app.orthoApneaOrder.form.addressSendAlternative')" />
-          </VRadioGroup>
 
-          <VRow v-if="form.addressSend === 'alternative'" class="mt-2">
-            <VCol cols="6" data-field="altCountryId">
-              <VSelect
-                v-model="form.altCountryId"
-                :items="countryOptions"
-                item-title="title"
-                item-value="value"
-                :label="t('app.orthoApneaOrder.form.country')"
-                :loading="loadingCountries"
-                :error-messages="fieldError('altCountryId')"
-                variant="outlined"
-                density="comfortable"
-              />
-            </VCol>
-            <VCol cols="6" data-field="altPostalCode">
-              <VTextField v-model="form.altPostalCode" :label="t('app.orthoApneaOrder.form.postalCode')" :error-messages="fieldError('altPostalCode')" variant="outlined" density="comfortable" />
-            </VCol>
-            <VCol cols="12" data-field="altCity">
-              <VTextField v-model="form.altCity" :label="t('app.orthoApneaOrder.form.city')" :error-messages="fieldError('altCity')" variant="outlined" density="comfortable" />
-            </VCol>
-            <VCol cols="12" data-field="altAddress">
-              <VTextField v-model="form.altAddress" :label="t('app.orthoApneaOrder.form.address')" :error-messages="fieldError('altAddress')" variant="outlined" density="comfortable" />
-            </VCol>
-            <VCol cols="12" data-field="altName">
-              <VTextField v-model="form.altName" :label="t('app.orthoApneaOrder.form.name')" maxlength="40" :error-messages="fieldError('altName')" variant="outlined" density="comfortable" />
-            </VCol>
-            <VCol cols="12" data-field="altEmail">
-              <EmailField
-                v-model="form.altEmail"
-                :label="t('app.orthoApneaOrder.form.email')"
-                :error-messages="fieldError('altEmail')"
-                variant="outlined"
-                density="comfortable"
-              />
-            </VCol>
-            <VCol cols="6" data-field="altPhone">
-              <PhoneField
-                v-model="form.altPhone"
-                :label="t('app.orthoApneaOrder.form.phone')"
-                :default-country-code="patientRegion"
-                :error-messages="fieldError('altPhone')"
-                variant="outlined"
-                density="comfortable"
-              />
-            </VCol>
-          </VRow>
+          <div v-if="order.dentistId" class="oa-wizard__ship-to" data-field="delivery" data-testid="ship-to">
+            <p class="oa-wizard__field-label">{{ t("app.deviceOrder.delivery.title") }}</p>
+            <p v-if="contextLoading" class="text-body-medium text-medium-emphasis">{{ t("app.deviceOrder.delivery.loading") }}</p>
+            <address v-else-if="context?.delivery" class="oa-wizard__address">
+              <strong>{{ context.delivery.name }}</strong><br />
+              {{ context.delivery.address }}<br />
+              {{ [context.delivery.postalCode, context.delivery.city].filter(Boolean).join(" ") }}<template v-if="context.delivery.countryCode">, {{ context.delivery.countryCode }}</template><br />
+              {{ [context.delivery.phone, context.delivery.email].filter(Boolean).join(" · ") }}
+            </address>
+            <AppInlineAlert v-if="deliveryMessage" type="error" class="mt-2" data-testid="ship-to-error">
+              {{ deliveryMessage }}
+              <a v-if="recordHref && !contextFailed" :href="recordHref" target="_blank" rel="noopener" class="oa-wizard__alert-link">{{ t("app.deviceOrder.delivery.openRecord") }}</a>
+              <AppButton v-if="contextFailed" variant="text" size="small" color="primary" @click="refreshContext(true)">{{ t("app.deviceOrder.delivery.retry") }}</AppButton>
+            </AppInlineAlert>
+          </div>
         </div>
 
         <!-- Step 2 — Datos de construcción -->
         <div v-else-if="step === 2">
-          <div data-field="products">
-            <VAutocomplete
-              v-model="selectedProductIds"
-              :items="sortedProductOptions"
-              item-title="title"
-              item-value="value"
-              :label="t('app.orthoApneaOrder.selectProduct')"
-              :loading="loadingProducts"
-              :error-messages="fieldError('products')"
-              variant="outlined"
-              density="comfortable"
-              multiple
-              chips
-              closable-chips
-              hide-selected
-            >
-              <template #chip="{ internalItem: item, props: chipProps }">
-                <VChip v-bind="chipProps" :color="productChipColor(item.title)" />
-              </template>
-            </VAutocomplete>
+          <div data-field="productCode">
+            <p class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.selectProduct") }}</p>
+            <AppSegmentedTabs :model-value="order.productCode" :options="productOptions" fit class="oa-wizard__switch" @update:model-value="onProductPicked" />
           </div>
 
           <p class="text-subtitle2 mt-6 mb-3 text-primary">{{ t("app.orthoApneaOrder.paso1.title") }}</p>
           <VRow>
             <VCol cols="6">
               <p class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.form.retrusionMax") }}<FieldTooltip :text="t('app.orthoApneaOrder.tooltip.retrusionMax')" /></p>
-              <NumberStepperField v-model="form.retrusionMax" data-field="retrusionMax" :error="!!fieldError('retrusionMax')" class="mb-4" />
-              <!-- No tooltip icon here — confirmed via live capture that
-                   Máxima protrusión has no (i) at all on the real site,
-                   unlike Máxima retrusión right above it. -->
+              <NumberStepperField
+                :model-value="order.retrusionMaxMm"
+                data-field="retrusionMaxMm"
+                :error="!!fieldError('retrusionMaxMm')"
+                class="mb-4"
+                @update:model-value="(v) => (order.retrusionMaxMm = v ?? 0)"
+              />
+              <!-- No tooltip icon here — Máxima protrusión has no (i) on OA's own form. -->
               <p class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.form.protrusionMax") }}</p>
-              <NumberStepperField v-model="form.protrusionMax" data-field="protrusionMax" :error="!!fieldError('protrusionMax')" />
+              <NumberStepperField
+                :model-value="order.protrusionMaxMm"
+                data-field="protrusionMaxMm"
+                :error="!!fieldError('protrusionMaxMm')"
+                @update:model-value="(v) => (order.protrusionMaxMm = v ?? 0)"
+              />
             </VCol>
             <VCol cols="6" class="oa-wizard__range-col">
               <span class="text-body-small text-medium-emphasis">{{ t("app.orthoApneaOrder.form.mandibularRange") }}</span>
@@ -162,37 +120,37 @@
             </VCol>
           </VRow>
           <Transition name="oa-wizard__validation">
-            <AppInlineAlert v-if="mrMpMessage" type="error" class="mt-4">
-              {{ mrMpMessage }}
+            <AppInlineAlert v-if="mrMpError" type="error" class="mt-4" data-testid="mr-mp-error">
+              {{ mrMpError }}
+            </AppInlineAlert>
+            <AppInlineAlert v-else-if="mrMpWarning" type="warning" class="mt-4" data-testid="mr-mp-warning">
+              {{ mrMpWarning }}
             </AppInlineAlert>
           </Transition>
 
           <p class="text-subtitle2 mt-6 mb-3 text-primary">{{ t("app.orthoApneaOrder.form.deviationSectionTitle") }}</p>
-          <!-- Izquierda / diagram / Derecha side by side, matching
-               OrthoApnea's own layout — the diagram sits between its two
-               fields, not stacked below them. -->
           <div class="oa-wizard__section--centered mt-2">
             <div class="oa-wizard__deviation-row mb-4">
               <div class="oa-wizard__deviation-field">
                 <p class="oa-wizard__field-label oa-wizard__field-label--centered">{{ t("app.orthoApneaOrder.form.deviationLeft") }}</p>
-                <NumberStepperField v-model="form.deviationLeft" />
+                <NumberStepperField :model-value="order.deviation.leftMm" @update:model-value="(v) => (order.deviation.leftMm = v ?? 0)" />
               </div>
-              <DeviationDiagram :label="t('app.orthoApneaOrder.form.deviationOcclusion')" :right="form.deviationRight" :left="form.deviationLeft" :size="deviationDiagramSize" />
+              <DeviationDiagram :label="t('app.orthoApneaOrder.form.deviationOcclusion')" :right="order.deviation.rightMm" :left="order.deviation.leftMm" :size="deviationDiagramSize" />
               <div class="oa-wizard__deviation-field">
                 <p class="oa-wizard__field-label oa-wizard__field-label--centered">{{ t("app.orthoApneaOrder.form.deviationRight") }}</p>
-                <NumberStepperField v-model="form.deviationRight" />
+                <NumberStepperField :model-value="order.deviation.rightMm" @update:model-value="(v) => (order.deviation.rightMm = v ?? 0)" />
               </div>
             </div>
 
             <div class="oa-wizard__deviation-row mb-4">
               <div class="oa-wizard__deviation-field">
                 <p class="oa-wizard__field-label oa-wizard__field-label--centered">{{ t("app.orthoApneaOrder.form.deviationAdvanceLeft") }}</p>
-                <NumberStepperField v-model="form.deviationAdvanceLeft" />
+                <NumberStepperField :model-value="order.deviation.leftAdvanceMm" @update:model-value="(v) => (order.deviation.leftAdvanceMm = v ?? 0)" />
               </div>
-              <DeviationDiagram :label="t('app.orthoApneaOrder.form.deviationProtrusion')" :right="form.deviationAdvanceRight" :left="form.deviationAdvanceLeft" :size="deviationDiagramSize" />
+              <DeviationDiagram :label="t('app.orthoApneaOrder.form.deviationProtrusion')" :right="order.deviation.rightAdvanceMm" :left="order.deviation.leftAdvanceMm" :size="deviationDiagramSize" />
               <div class="oa-wizard__deviation-field">
                 <p class="oa-wizard__field-label oa-wizard__field-label--centered">{{ t("app.orthoApneaOrder.form.deviationAdvanceRight") }}</p>
-                <NumberStepperField v-model="form.deviationAdvanceRight" />
+                <NumberStepperField :model-value="order.deviation.rightAdvanceMm" @update:model-value="(v) => (order.deviation.rightAdvanceMm = v ?? 0)" />
               </div>
             </div>
           </div>
@@ -201,79 +159,117 @@
 
           <p class="text-subtitle2 mb-3 text-primary">{{ t("app.orthoApneaOrder.paso2.title") }}</p>
 
-          <!-- Starting Point belongs under Paso 2 on OrthoApnea's own site,
-               not Paso 1 — moved here from its previous spot right after the
-               deviation section. -->
-          <div class="oa-wizard__sp-header">
-            <span class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.form.startingPointHeader") }}</span>
-            <FieldTooltip :text="t('app.orthoApneaOrder.tooltip.startingPoint')" />
-          </div>
-          <div class="oa-wizard__sp-fields">
-            <div class="oa-wizard__sp-field-row">
-              <span class="oa-wizard__sp-field-label">{{ t("app.orthoApneaOrder.form.unitPercent") }}:</span>
-              <NumberStepperField v-model="form.startingPointPorcentage" :disabled="form.startingPoint != null" class="oa-wizard__sp-field-input" />
+          <!-- Starting Point: % or mm, whichever the doctor fills (the other is locked);
+               the order carries that one, the hint shows it in mm. -->
+          <div data-field="startingPoint">
+            <div class="oa-wizard__sp-header">
+              <span class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.form.startingPointHeader") }}</span>
+              <FieldTooltip :text="t('app.orthoApneaOrder.tooltip.startingPoint')" />
             </div>
-            <div class="oa-wizard__sp-field-row">
-              <span class="oa-wizard__sp-field-label">{{ t("app.orthoApneaOrder.form.unitMm") }}:</span>
-              <NumberStepperField v-model="form.startingPoint" :disabled="form.startingPointPorcentage != null" class="oa-wizard__sp-field-input" />
+            <div class="oa-wizard__sp-fields">
+              <div class="oa-wizard__sp-field-row">
+                <span class="oa-wizard__sp-field-label">{{ t("app.orthoApneaOrder.form.unitPercent") }}:</span>
+                <NumberStepperField
+                  :model-value="spInput('%')"
+                  :disabled="spLocked('%')"
+                  :error="!!fieldError('startingPoint')"
+                  class="oa-wizard__sp-field-input"
+                  data-testid="sp-percent"
+                  @update:model-value="(v) => setStartingPoint('%', v)"
+                />
+              </div>
+              <div class="oa-wizard__sp-field-row">
+                <span class="oa-wizard__sp-field-label">{{ t("app.orthoApneaOrder.form.unitMm") }}:</span>
+                <NumberStepperField
+                  :model-value="spInput('mm')"
+                  :disabled="spLocked('mm')"
+                  :error="!!fieldError('startingPoint')"
+                  class="oa-wizard__sp-field-input"
+                  data-testid="sp-mm"
+                  @update:model-value="(v) => setStartingPoint('mm', v)"
+                />
+              </div>
+              <span v-if="spHint" class="text-body-small text-medium-emphasis" data-testid="sp-hint">{{ spHint }}</span>
+              <span v-if="fieldError('startingPoint')" class="oa-wizard__field-error">{{ fieldError("startingPoint") }}</span>
             </div>
           </div>
-          <MandibularRuler
-            :retrusion-max="form.retrusionMax"
-            :protrusion-max="form.protrusionMax"
-            :starting-point="form.startingPoint"
-            :starting-point-percent="form.startingPointPorcentage"
-          />
+          <MandibularRuler :retrusion-max="order.retrusionMaxMm" :protrusion-max="order.protrusionMaxMm" :starting-point-mm="spMm" />
 
-          <div class="d-flex align-center flex-wrap mb-1 mt-4">
-            <span class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.form.sequenceType") }}</span>
-            <FieldTooltip :text="t('app.orthoApneaOrder.tooltip.sequenceType')" />
-            <span class="text-body-small text-medium-emphasis ml-2">{{ t("app.orthoApneaOrder.form.sequenceTypeHint") }}</span>
-          </div>
-          <div class="d-flex align-center flex-wrap ga-4 mb-2">
-            <VCheckbox v-model="form.sequenceTypeStandard" color="primary" :label="t('app.orthoApneaOrder.form.sequenceTypeStandard')" hide-details density="compact" @update:model-value="onSequenceTypeStandard" />
-            <VCheckbox v-model="form.sequenceTypePersonalized" color="primary" :label="t('app.orthoApneaOrder.form.sequenceTypePersonalized')" hide-details density="compact" @update:model-value="onSequenceTypePersonalized" />
-          </div>
-          <!-- Shown for both Estándar and Individualizada — confirmed from a
-               live OA screenshot that Estándar still displays this row, just
-               disabled with its fixed standard values, rather than hiding it
-               entirely. Our "standard" values are our own default sequence
-               (60/70/80) — OA's own exact standard preset wasn't captured. -->
-          <VRadioGroup
-            v-model="form.sequenceUnitInMM"
-            color="primary"
-            inline
-            hide-details
-            density="compact"
-            class="mb-2"
-            :disabled="form.sequenceTypeStandard"
-          >
-            <VRadio :value="true" :label="t('app.orthoApneaOrder.form.unitMm')" />
-            <VRadio :value="false" :label="t('app.orthoApneaOrder.form.unitPercent')" />
-          </VRadioGroup>
-          <p class="oa-wizard__field-label">SP</p>
-          <VRow class="mb-1" density="compact">
-            <VCol cols="4"><NumberStepperField v-model="sequence.seq1" :disabled="form.sequenceTypeStandard" /></VCol>
-            <VCol cols="4"><NumberStepperField v-model="sequence.seq2" :disabled="form.sequenceTypeStandard" /></VCol>
-            <VCol cols="4"><NumberStepperField v-model="sequence.seq3" :disabled="form.sequenceTypeStandard" /></VCol>
-          </VRow>
+          <!-- Sequence type: one choice, same segmented switch as Paso 4's Normal/Aliviar. -->
+          <div data-field="sequence" data-testid="sequence">
+            <div class="d-flex align-center flex-wrap mb-1 mt-4">
+              <span class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.form.sequenceType") }}</span>
+              <FieldTooltip :text="t('app.orthoApneaOrder.tooltip.sequenceType')" />
+              <span class="text-body-small text-medium-emphasis ml-2">{{ sequenceHint }}</span>
+            </div>
+            <AppSegmentedTabs :model-value="order.sequence.type" :options="sequenceTypeOptions" fit class="oa-wizard__switch mb-3" @update:model-value="onSequenceTypePicked" />
 
-          <div class="d-flex align-center flex-wrap mt-3 mb-2">
-            <span class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.form.additionalSplints") }}</span>
-            <AppButton icon size="small" variant="tonal" color="primary" class="ml-2" :aria-label="t('app.orthoApneaOrder.form.additionalSplintsAdd')" @click="form.additionalSplints.push('')">
-              <AppIcon name="plus" />
-            </AppButton>
-            <span class="text-body-small text-medium-emphasis font-italic ml-2">{{ t("app.orthoApneaOrder.form.additionalSplintsHint") }}</span>
-          </div>
-          <div v-for="(_, idx) in form.additionalSplints" :key="idx" class="d-flex align-center ga-2 mb-2">
-            <VTextField v-model="form.additionalSplints[idx]" variant="outlined" density="comfortable" hide-details />
-            <AppButton icon size="small" variant="tonal" color="error" :aria-label="t('app.orthoApneaOrder.form.additionalSplintsRemove')" @click="form.additionalSplints.splice(idx, 1)">
-              <AppIcon name="trash" />
-            </AppButton>
+            <div v-if="!personalized" class="oa-wizard__seq-row" data-testid="standard-sequence">
+              <span class="oa-wizard__seq-unit">{{ t("app.orthoApneaOrder.form.unitMm") }}</span>
+              <span class="oa-wizard__seq-cell">{{ t("app.deviceOrder.sequence.sp") }}</span>
+              <span v-for="offset in standardOffsets" :key="offset" class="oa-wizard__seq-cell">{{ offset }}</span>
+            </div>
+
+            <template v-else>
+              <div class="oa-wizard__seq-row" data-testid="personalized-sequence">
+                <VRadioGroup :model-value="personalized.unit" color="primary" hide-details density="compact" class="oa-wizard__seq-units" @update:model-value="onSequenceUnitPicked">
+                  <VRadio value="mm" :label="t('app.orthoApneaOrder.form.unitMm')" />
+                  <VRadio value="%" :label="t('app.orthoApneaOrder.form.unitPercent')" />
+                </VRadioGroup>
+                <span class="oa-wizard__seq-cell">{{ t("app.deviceOrder.sequence.sp") }}</span>
+                <VTextField
+                  v-for="(value, idx) in personalized.values"
+                  :key="idx"
+                  :model-value="value"
+                  type="number"
+                  variant="outlined"
+                  density="compact"
+                  hide-details
+                  class="oa-wizard__seq-input"
+                  :aria-label="t('app.deviceOrder.sequence.splint', { n: idx + 1 })"
+                  :error="hasIssueAt(`sequence.values.${idx}`)"
+                  @update:model-value="(v) => setSequenceValue(idx, toNumber(v))"
+                />
+              </div>
+              <span v-if="fieldError('sequence')" class="oa-wizard__field-error">{{ fieldError("sequence") }}</span>
+
+              <div class="d-flex align-center flex-wrap mt-3 mb-2" data-field="sequence.additionalSplints">
+                <span class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.form.additionalSplints") }}</span>
+                <AppButton
+                  icon
+                  size="small"
+                  variant="tonal"
+                  color="primary"
+                  class="ml-2"
+                  :disabled="additionalSplintInputs.length >= 3"
+                  :aria-label="t('app.orthoApneaOrder.form.additionalSplintsAdd')"
+                  @click="addAdditionalSplint"
+                >
+                  <AppIcon name="plus" />
+                </AppButton>
+                <span class="text-body-small text-medium-emphasis font-italic ml-2">{{ t("app.orthoApneaOrder.form.additionalSplintsHint") }} · {{ t("app.deviceOrder.sequence.additionalSplintsMax") }}</span>
+              </div>
+              <div v-for="(value, idx) in additionalSplintInputs" :key="idx" class="d-flex align-center ga-2 mb-2">
+                <VTextField
+                  :model-value="value"
+                  type="number"
+                  variant="outlined"
+                  density="comfortable"
+                  hide-details
+                  :aria-label="t('app.orthoApneaOrder.form.additionalSplints')"
+                  @update:model-value="(v) => setAdditionalSplint(idx, toNumber(v))"
+                />
+                <AppButton icon size="small" variant="tonal" color="error" :aria-label="t('app.orthoApneaOrder.form.additionalSplintsRemove')" @click="removeAdditionalSplint(idx)">
+                  <AppIcon name="trash" />
+                </AppButton>
+              </div>
+              <span v-if="fieldError('sequence.additionalSplints')" class="oa-wizard__field-error">{{ fieldError("sequence.additionalSplints") }}</span>
+            </template>
           </div>
 
+          <!-- Morning Aligner is a flag on this NOA / NOA TMJ order (add-on), never a second order. -->
           <div class="d-flex align-center mt-2">
-            <VCheckbox v-model="form.morningAligner" color="primary" :label="t('app.orthoApneaOrder.form.morningAligner')" hide-details density="compact" />
+            <VCheckbox v-model="order.morningAligner" color="primary" :label="t('app.orthoApneaOrder.form.morningAligner')" hide-details density="compact" />
             <FieldTooltip
               :text="t('app.orthoApneaOrder.tooltip.morningAligner')"
               :image="TOOLTIP_IMG.morningAligner"
@@ -285,65 +281,68 @@
 
           <p class="text-subtitle2 mb-2 text-primary">{{ t("app.orthoApneaOrder.paso3.title") }}</p>
           <VSelect
-            v-model="form.verticalDimension"
-            :items="VERTICAL_DIMENSION_OPTIONS"
+            :model-value="order.verticalDimension.kind"
+            :items="verticalDimensionOptions"
             item-title="title"
             item-value="value"
             :label="t('app.orthoApneaOrder.form.verticalDimension')"
             variant="outlined"
             density="comfortable"
+            @update:model-value="onVerticalDimensionPicked"
           />
           <VRow class="mb-4">
             <VCol cols="6" class="d-flex align-center">
-              <VCheckbox v-model="form.anteriorFrontalOpening" color="primary" :label="t('app.orthoApneaOrder.form.anteriorFrontalOpening')" hide-details density="compact" />
+              <VCheckbox v-model="order.anteriorFrontalOpening" color="primary" :label="t('app.orthoApneaOrder.form.anteriorFrontalOpening')" hide-details density="compact" />
               <!-- Image-only on the real site — no explanatory text exists to translate. -->
               <FieldTooltip :image="TOOLTIP_IMG.anteriorFrontalOpening" :image-alt="t('app.orthoApneaOrder.form.anteriorFrontalOpening')" />
             </VCol>
             <VCol cols="6" class="d-flex align-center">
-              <VCheckbox v-model="form.slotsForElasticBands" color="primary" :label="t('app.orthoApneaOrder.form.slotsForElasticBands')" hide-details density="compact" />
+              <VCheckbox v-model="order.slotsForElasticBands" color="primary" :label="t('app.orthoApneaOrder.form.slotsForElasticBands')" hide-details density="compact" />
               <!-- Image-only on the real site — no explanatory text exists to translate. -->
               <FieldTooltip :image="TOOLTIP_IMG.slotsForElasticBands" :image-alt="t('app.orthoApneaOrder.form.slotsForElasticBands')" />
             </VCol>
-            <VCol cols="6">
+            <VCol cols="6" data-field="laterality">
               <p class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.form.laterality") }}<FieldTooltip :text="t('app.orthoApneaOrder.tooltip.laterality')" :image="TOOLTIP_IMG.laterality" :image-alt="t('app.orthoApneaOrder.form.laterality')" /></p>
-              <NumberStepperField v-model="form.laterality" />
+              <NumberStepperField v-model="order.laterality" :error="!!fieldError('laterality')" />
+              <span v-if="fieldError('laterality')" class="oa-wizard__field-error">{{ fieldError("laterality") }}</span>
             </VCol>
-            <VCol cols="6">
+            <VCol cols="6" data-field="limitOpening">
               <p class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.form.limitOpening") }}<FieldTooltip :text="t('app.orthoApneaOrder.tooltip.limitOpening')" :image="TOOLTIP_IMG.limitOpening" :image-alt="t('app.orthoApneaOrder.form.limitOpening')" /></p>
-              <NumberStepperField v-model="form.limitOpening" />
+              <NumberStepperField v-model="order.limitOpening" :error="!!fieldError('limitOpening')" />
+              <span v-if="fieldError('limitOpening')" class="oa-wizard__field-error">{{ fieldError("limitOpening") }}</span>
             </VCol>
           </VRow>
           <div class="oa-wizard__section--centered">
             <p class="text-body-small mb-1">{{ t("app.orthoApneaOrder.form.splintDesignUpperBand") }}</p>
-            <IconOptionPicker v-model="form.upperBandSplintDesign" :options="BAND_OPTIONS" large hide-labels class="mb-3" />
+            <IconOptionPicker :model-value="String(order.upperBand)" :options="BAND_OPTIONS" large hide-labels class="mb-3" @update:model-value="(v) => (order.upperBand = Number(v))" />
             <p class="text-body-small mb-1">{{ t("app.orthoApneaOrder.form.splintDesignLowerBand") }}</p>
-            <IconOptionPicker v-model="form.lowerBandSplintDesign" :options="BAND_OPTIONS" large hide-labels class="mb-3" />
+            <IconOptionPicker :model-value="String(order.lowerBand)" :options="BAND_OPTIONS" large hide-labels class="mb-3" @update:model-value="(v) => (order.lowerBand = Number(v))" />
             <p class="text-body-small mb-1">{{ t("app.orthoApneaOrder.form.finish") }}</p>
-            <IconOptionPicker v-model="form.finish" :options="FINISH_OPTIONS" fill large class="mb-4" />
+            <IconOptionPicker :model-value="order.finish" :options="finishOptions" fill large class="mb-4" @update:model-value="onFinishPicked" />
           </div>
 
           <VDivider class="my-5" />
 
           <p class="text-subtitle2 mb-2 text-primary">{{ t("app.orthoApneaOrder.paso4.title") }}</p>
           <div class="oa-wizard__section--centered">
-            <TeethDiagram v-model="form.teethStatus" class="mb-4" />
+            <TeethDiagram :model-value="relievedTeeth" class="mb-4" @update:model-value="setRelievedTeeth" />
           </div>
-          <VTextarea v-model="form.observations" :label="t('app.orthoApneaOrder.form.observations')" variant="outlined" density="comfortable" auto-grow rows="2" />
+          <VTextarea v-model="order.observations" :label="t('app.orthoApneaOrder.form.observations')" variant="outlined" density="comfortable" auto-grow rows="2" />
           <AppInlineAlert type="info" class="mt-2">
             {{ t("app.orthoApneaOrder.photoUploadDeferredNotice") }}
           </AppInlineAlert>
         </div>
 
-        <!-- Step 3 — Registro dental -->
+        <!-- Step 3 — Registro dental (wizard-only for now: not part of the order model) -->
         <div v-else-if="step === 3">
-          <VRadioGroup v-model="form.registrationMethod" color="primary" :label="t('app.orthoApneaOrder.form.registrationMethod')">
+          <VRadioGroup v-model="extras.registrationMethod" color="primary" :label="t('app.orthoApneaOrder.form.registrationMethod')">
             <VRadio value="impression" :label="t('app.orthoApneaOrder.form.impressionTraditional')" />
             <VRadio value="scanner" :label="t('app.orthoApneaOrder.form.scannerIntraoral')" />
           </VRadioGroup>
 
-          <template v-if="form.registrationMethod === 'scanner'">
+          <template v-if="extras.registrationMethod === 'scanner'">
             <VSelect
-              v-model="form.scanner"
+              v-model="extras.scanner"
               :items="SCANNER_OPTIONS"
               :label="t('app.orthoApneaOrder.form.scanner')"
               variant="outlined"
@@ -355,18 +354,10 @@
           </template>
         </div>
 
-        <!-- Review -->
+        <!-- Review. "¿Cuándo desea el producto?" stays hidden: it defaults to OA's
+             earliest date for the product (context.minDesiredDate). -->
         <div v-else-if="step === 4">
-          <!-- "¿Cuándo desea el producto?" stays hidden per product decision — auto-defaulted
-               to +15 days (see setDefaultDesiredDate()) and still sent as desiredDate below. -->
-          <div class="oa-wizard__promo-row">
-            <VTextField v-model="form.promotionCode" :label="t('app.orthoApneaOrder.form.promotionCode')" variant="outlined" density="comfortable" hide-details />
-          </div>
-          <VCheckbox v-model="form.noContactDoctorForRedesign" color="primary" :label="t('app.orthoApneaOrder.form.noContactDoctorForRedesign')" />
-
-          <AppInlineAlert v-if="form.products.length === 0" type="warning">
-            {{ t("app.orthoApneaOrder.missingProduct") }}
-          </AppInlineAlert>
+          <VCheckbox v-model="order.noContactDoctorForRedesign" color="primary" :label="t('app.orthoApneaOrder.form.noContactDoctorForRedesign')" />
         </div>
       </div>
       </Transition>
@@ -401,9 +392,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, reactive, ref, watch } from "vue";
+import { computed, getCurrentInstance, nextTick, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useDisplay } from "vuetify";
+import {
+  issuesFor,
+  PRODUCT_CODES,
+  standardSequenceOffsets,
+  startingPointMm,
+  type OrderIssue,
+  type ProductCode,
+  type SequenceUnit,
+} from "@device-order";
 import AppButton from "../AppButton.vue";
 import AppIcon from "../AppIcon.vue";
 import IconOptionPicker, { type IconOption } from "./IconOptionPicker.vue";
@@ -412,68 +412,40 @@ import DeviationDiagram from "./DeviationDiagram.vue";
 import MandibularRuler from "./MandibularRuler.vue";
 import FieldTooltip from "./FieldTooltip.vue";
 import NumberStepperField from "./NumberStepperField.vue";
-import PhoneField from "../PhoneField.vue";
-import EmailField from "../EmailField.vue";
 import AppConfirmDialog from "../AppConfirmDialog.vue";
 import AppFormDialog from "../AppFormDialog.vue";
 import { useNotifications } from "../../composables/useNotifications";
 import { useAsyncAction } from "../../composables/useAsyncAction";
-import { emailFormatRule } from "../../config/forms/identityFields";
-import { useFormErrors, focusFormField, type FieldErrors, type FormErrorField } from "../../composables/useFormErrors";
+import { focusFormField, type FormErrorSummaryLine } from "../../composables/useFormErrors";
 import { scrollToFormTop } from "../../utils/scrollToFormTop";
+import { hcoDetailLink, hcpDetailLink } from "../../utils/entityLinks";
 import {
   useOrthoApneaOrderWizard,
-  WIZARD_FIELD_FOR_API_FIELD,
-  type OrthoApneaProduct,
+  stepOfPath,
+  STEP_PATHS,
+  WIZARD_STEPS,
   type OrthoApneaDraftPlan,
 } from "../../composables/useOrthoApneaOrderWizard";
-import { AppInlineAlert, FormErrorSummary } from "@ui";
+import { AppInlineAlert, AppSegmentedTabs, FormErrorSummary } from "@ui";
 
 /**
- * Full-fidelity replica of OrthoApnea's own 3-step order wizard (Envío →
- * Datos de construcción → Registro dental), field names kept identical to
- * OrthoApnea's own API (see apps/api's orthoapnea.ts field-mapping) so the
- * payload sent to POST /api/v1/partners/orthoapnea/treatments is a direct
- * pass-through, not a translation layer.
+ * The device order wizard (Envío → Datos de construcción → Registro dental →
+ * Review), a replica of OrthoApnea's own form. Since CORE-95 its state is
+ * the canonical DeviceOrder (@device-order) and every rule comes from that
+ * package's validateDeviceOrder — the same validator the API runs — so the
+ * wizard shows exactly what the API would reject, at the same field.
  *
- * Paso 3 ("Diseño del dispositivo") and Paso 4's teeth diagram are built with
- * NeoSleep's own redrawn icons (TeethDiagram.vue, IconOptionPicker.vue) —
- * OrthoApnea's own icon/tooth artwork isn't ours to embed, see those files'
- * own comments. Deliberately still deferred for a fast-follow (flagged
- * inline via AppInlineAlert, not silently dropped): the dynamic "+" secondary
- * splints list, and both file upload widgets (photo/CBCT here, digital scan
- * files in step 3) — their OrthoApnea-side request shape is still
- * unconfirmed (see the consolidated live-capture round in the project plan).
- * None of these block a real order: OrthoApnea's own wizard marks all of
- * them optional, and "Registro dental" can be submitted via the
- * "Impresión tradicional" (physical) path without any upload at all.
+ * - Delivery is not chosen here: the device ships to the ordering doctor's
+ *   primary HCO, read from /api/v1/device-orders/context (missing data
+ *   blocks step 1 and points at the record to fix).
+ * - One product per order (NOA or NOA TMJ); Morning Aligner is a flag on it.
+ * - Sequence: Estándar (OA's fixed SP, −1, +1, +2) or Individualizada.
+ * - The desired date is hidden and defaults to OA's earliest date.
  *
- * "Médico" vs. OrthoApnea's "clinic": OrthoApnea's own Step 1 field
- * (formcontrolname="clinic") actually renders a doctor's name on the shared
- * account (there's exactly one clinic tied to it), not a location picker.
- * Rather than surface that single fixed value as a no-op dropdown, this
- * field is repurposed as a real choice from OUR OWN practitioner list —
- * defaults to the patient's assigned HCP, falling back to "Lorena" (the
- * OrthoApnea account holder) when the patient has none — and sets
- * treatment_plan.dentist_id locally. The one real OA `clinic` id is still
- * resolved and sent silently (loadClinic()), since that's what their API
- * actually expects; the user never needs to see or choose it.
- *
- * Product selection is multi-select (chips, removable) per product decision
- * — see buildWizardPayload()'s own comment for why that becomes N separate
- * local orders rather than one order with an array of products (unconfirmed
- * shape). "¿Cuándo desea el producto?" is intentionally not shown anywhere
- * in this UI — see setDefaultDesiredDate() for why a value is still computed
- * and sent. The deviation diagrams and mandibular-advancement ruler render
- * OrthoApnea's own downloaded images with NeoSleep's own approximated
- * value→position math (their internal formula wasn't captured) — see
- * DeviationDiagram.vue / MandibularRuler.vue.
+ * Still deferred (flagged inline): photo/CBCT and scan-file upload. Step 3's
+ * registration method is collected (and kept in drafts) but is not part of
+ * the order model yet.
  */
-
-// OrthoApneaProduct/OrthoApneaDraftPlan now live in useOrthoApneaOrderWizard.ts
-// (the composable owns the reactive state built from them) — re-exported here
-// so PatientOrthoApneaPanel.vue's existing `import { type OrthoApneaDraftPlan }
-// from "./OrthoApneaOrderWizard.vue"` keeps working unchanged.
 export type { OrthoApneaDraftPlan };
 
 const props = defineProps<{
@@ -488,22 +460,16 @@ const emit = defineEmits<{
   submitted: [];
 }>();
 
-const { t } = useI18n();
+const { t, te } = useI18n();
 const notifications = useNotifications();
-/** Shrinks the deviation diagrams on narrow viewports so the Izquierda/
- * diagram/Derecha row fits without horizontal overflow — the fixed-px
- * "large" size only fits comfortably on wider screens. */
+/** Shrinks the deviation diagrams on narrow viewports so the row fits without horizontal overflow. */
 const { mobile } = useDisplay();
 const deviationDiagramSize = computed(() => (mobile.value ? "normal" : "large"));
+const router = getCurrentInstance()?.appContext.config.globalProperties.$router;
 
 const SCANNER_OPTIONS = [
   "Aoralscan Shining 3D", "Carestream", "Dental Wings", "Heron", "Itero", "Medit",
   "NeoScan 1000", "Sirona", "Planmeca Emerald", "3Shape Trios", "Shining 3D", "Desconocido",
-];
-
-const VERTICAL_DIMENSION_OPTIONS = [
-  { title: "Mínima", value: "minimal" },
-  { title: "Registro", value: "registro" },
 ];
 
 /** OrthoApnea's own reference images, downloaded locally (see assets/orthoapnea/ — public static files, not behind their auth). */
@@ -512,14 +478,17 @@ function bandImg(n: number): string {
 }
 const BAND_OPTIONS: IconOption[] = [1, 2, 3, 4, 5, 6].map((n) => ({ value: String(n), label: String(n), imgSrc: bandImg(n) }));
 
-const FINISH_OPTIONS: IconOption[] = [
-  { value: "mixedSplintDesign", label: "Normal", imgSrc: new URL("../../assets/orthoapnea/splint-design/mixedSplintDesign.png", import.meta.url).href },
-  { value: "scallopedSplintDesign", label: "Aliviar", imgSrc: new URL("../../assets/orthoapnea/splint-design/scallopedSplintDesign.png", import.meta.url).href },
-];
+const finishOptions = computed<IconOption[]>(() => [
+  { value: "mixed", label: t("app.orthoApneaOrder.form.toothNormal"), imgSrc: new URL("../../assets/orthoapnea/splint-design/mixedSplintDesign.png", import.meta.url).href },
+  { value: "scalloped", label: t("app.orthoApneaOrder.form.toothRelieve"), imgSrc: new URL("../../assets/orthoapnea/splint-design/scallopedSplintDesign.png", import.meta.url).href },
+]);
 
-/** OrthoApnea's own tooltip images, confirmed via live capture and
- * downloaded locally (see assets/orthoapnea/tooltips/ — public static
- * files, not behind their auth). See docs/orthoapnea-wizard-fidelity.md. */
+const verticalDimensionOptions = computed(() => [
+  { title: t("app.deviceOrder.verticalDimension.minimal"), value: "minimal" },
+  { title: t("app.deviceOrder.verticalDimension.registro"), value: "registro" },
+]);
+
+/** OrthoApnea's own tooltip images (see assets/orthoapnea/tooltips/ and docs/orthoapnea-wizard-fidelity.md). */
 const TOOLTIP_IMG = {
   morningAligner: new URL("../../assets/orthoapnea/tooltips/morning-aligner.jpg", import.meta.url).href,
   anteriorFrontalOpening: new URL("../../assets/orthoapnea/tooltips/frontal-opening.jpeg", import.meta.url).href,
@@ -528,230 +497,291 @@ const TOOLTIP_IMG = {
   limitOpening: new URL("../../assets/orthoapnea/tooltips/limit-opening.png", import.meta.url).href,
 };
 
-/** NOA and Morning Aligner are pinned first (NOA auto-selected too), then
- * each family's own variants (reimpresión/replanificación etc.), then
- * Orthobrux's variants, then everything else — per product decision, not
- * OrthoApnea's own catalog order. */
-/** Family color for a product chip, matching OrthoApnea's own catalog
- * coloring — NOA (dark blue) and Morning Aligner (blue) so the two most
- * commonly ordered families are visually distinct at a glance. */
-function productChipColor(name: string): string | undefined {
-  const upper = name.toUpperCase();
-  if (upper.includes("NOA")) return "primary-darken-1";
-  if (upper.includes("MORNING ALIGNER")) return "blue";
-  return undefined;
+/** Each order path's field: the i18n label key; the matching prefix is also the field's data-field / error key. */
+const FIELD_LABELS: Readonly<Record<string, string>> = {
+  dentistId: "app.orthoApneaOrder.form.doctor",
+  delivery: "app.deviceOrder.delivery.title",
+  productCode: "app.orthoApneaOrder.selectProduct",
+  retrusionMaxMm: "app.orthoApneaOrder.form.retrusionMax",
+  protrusionMaxMm: "app.orthoApneaOrder.form.protrusionMax",
+  startingPoint: "app.orthoApneaOrder.form.startingPointHeader",
+  sequence: "app.orthoApneaOrder.form.sequenceType",
+  "sequence.additionalSplints": "app.orthoApneaOrder.form.additionalSplints",
+  deviation: "app.orthoApneaOrder.form.deviationSectionTitle",
+  morningAligner: "app.orthoApneaOrder.form.morningAligner",
+  verticalDimension: "app.orthoApneaOrder.form.verticalDimension",
+  anteriorFrontalOpening: "app.orthoApneaOrder.form.anteriorFrontalOpening",
+  slotsForElasticBands: "app.orthoApneaOrder.form.slotsForElasticBands",
+  laterality: "app.orthoApneaOrder.form.laterality",
+  limitOpening: "app.orthoApneaOrder.form.limitOpening",
+  upperBand: "app.orthoApneaOrder.form.splintDesignUpperBand",
+  lowerBand: "app.orthoApneaOrder.form.splintDesignLowerBand",
+  finish: "app.orthoApneaOrder.form.finish",
+  teeth: "app.orthoApneaOrder.paso4.title",
+  observations: "app.orthoApneaOrder.form.observations",
+  desiredDate: "app.deviceOrder.desiredDate",
+  noContactDoctorForRedesign: "app.orthoApneaOrder.form.noContactDoctorForRedesign",
+};
+const FIELD_KEYS = Object.keys(FIELD_LABELS).sort((a, b) => b.length - a.length);
+
+/** An issue path → the field that shows it (longest matching prefix), e.g. sequence.values.1 → sequence. */
+function fieldKeyOf(path: string): string {
+  return FIELD_KEYS.find((k) => path === k || path.startsWith(`${k}.`)) ?? path;
 }
 
-function productSortRank(p: OrthoApneaProduct): number {
-  const name = p.nameEs.toUpperCase();
-  if (name === "NOA") return 0;
-  if (name === "MORNING ALIGNER") return 1;
-  if (name.includes("NOA")) return 2;
-  if (name.includes("MORNING ALIGNER")) return 3;
-  if (name.includes("ORTHOBRUX")) return 4;
-  return 5;
-}
-
-/** OrthoApnea's full catalog has many products this rep never orders — only
- * the NOA/Morning Aligner/Orthobrux families are offered here, per product
- * decision (everything else stays selectable directly in OrthoApnea if ever
- * needed, this wizard just doesn't surface it). */
-function isOfferedProductFamily(p: OrthoApneaProduct): boolean {
-  const name = p.nameEs.toUpperCase();
-  return name.includes("NOA") || name.includes("MORNING ALIGNER") || name.includes("ORTHOBRUX");
-}
+const isDeliveryPath = (path: string) => path === "delivery" || path.startsWith("delivery.");
 
 const step = ref(1);
 const maxReachedStep = ref(1);
-/** Drives the step content's slide direction (see .oa-wizard__step-slide-*
- *  transitions) — set right before `step` itself changes, from whichever of
- *  goNext/goBack/goToStep is doing the navigating. */
+/** Slide direction for the step transition — set right before `step` changes. */
 const stepTransitionName = ref<"oa-wizard-step-slide-forward" | "oa-wizard-step-slide-back">("oa-wizard-step-slide-forward");
 
-/** True once the form differs from what it was right after opening — drives
- * whether closing prompts "save as draft?" at all (a wizard opened and
- * immediately closed has nothing worth saving). */
+/** True once the order differs from how it opened — only then does closing offer "save as draft?". */
 const touched = ref(false);
 const showDraftPrompt = ref(false);
 
 const {
-  form,
-  sequence,
-  products,
-  loadingProducts,
+  order,
+  extras,
+  additionalSplintInputs,
+  availableProductCodes,
   doctorOptions,
   loadingDoctors,
-  countryOptions,
-  loadingCountries,
-  patientRegion,
+  context,
+  contextLoading,
+  contextFailed,
+  submitLoading,
+  serverIssues,
+  validation,
+  deliveryIssues,
+  setSequenceType,
+  setSequenceUnit,
+  setSequenceValue,
+  addAdditionalSplint,
+  setAdditionalSplint,
+  removeAdditionalSplint,
+  setProductCode,
+  setStartingPoint,
   resetForOpen,
   loadProducts,
-  loadClinic,
   loadDoctorsAndDefault,
-  loadCountries,
+  loadContext,
   confirmOrder,
   persistDraft,
-  rejectedFields,
 } = useOrthoApneaOrderWizard();
 
-const sortedProductOptions = computed(() =>
-  products.value
-    .filter(isOfferedProductFamily)
-    .sort((a, b) => productSortRank(a) - productSortRank(b) || a.nameEs.localeCompare(b.nameEs))
-    .map((p) => ({ title: p.nameEs, value: p.id }))
+watch([order, extras], () => { touched.value = true; }, { deep: true });
+
+// ── Product + sequence ──────────────────────────────────────────────────────
+
+const productOptions = computed(() =>
+  availableProductCodes.value.map((code) => ({
+    value: code,
+    label: t(code === PRODUCT_CODES.NOA ? "app.deviceOrder.product.noa" : "app.deviceOrder.product.noaTmj"),
+  })),
 );
 
-const selectedProductIds = computed<number[]>({
-  get: () => form.products.map((p) => p.id),
-  set: (ids) => {
-    form.products = ids
-      .map((id) => products.value.find((p) => p.id === id))
-      .filter((p): p is OrthoApneaProduct => !!p);
-  },
-});
-
-// See the open-watcher's nextTick() call for why this doesn't false-positive
-// right after loading defaults/a resumed draft.
-watch(form, () => { touched.value = true; }, { deep: true });
-
-/** Morning Aligner is both a standalone checkbox AND a selectable product in
- * OrthoApnea's own catalog — the two must always agree, in either direction:
- * checking the box adds "MORNING ALIGNER" to the selected-products chips,
- * and removing that chip directly (or adding it) must update the checkbox
- * too, not just the one-directional case. Each watcher only writes when the
- * derived state actually differs, so the pair settles in one tick instead of
- * ping-ponging. */
-watch(
-  () => form.morningAligner,
-  (checked) => {
-    const morningAligner = products.value.find((p) => p.nameEs.toUpperCase() === "MORNING ALIGNER");
-    if (!morningAligner) return;
-    const idx = form.products.findIndex((p) => p.id === morningAligner.id);
-    if (checked && idx === -1) form.products.push(morningAligner);
-    else if (!checked && idx !== -1) form.products.splice(idx, 1);
-  }
-);
-watch(
-  () => form.products.some((p) => p.nameEs.toUpperCase() === "MORNING ALIGNER"),
-  (present) => {
-    form.morningAligner = present;
-  }
-);
-
-const mandibularRange = computed(() => (form.protrusionMax ?? 0) - (form.retrusionMax ?? 0));
-
-/** emailFormatRule (config/forms/identityFields.ts) returns an untranslated
- * i18n key on failure, meant to be translated by FormRenderer's rulesFor() —
- * this wizard isn't FormRenderer-driven, so it translates the key itself. */
-function translatedEmailRule(v: unknown): true | string {
-  const result = emailFormatRule(v);
-  return result === true ? true : t(result);
+function onProductPicked(value: string) {
+  const code = availableProductCodes.value.find((c): c is ProductCode => c === value);
+  if (code) setProductCode(code);
 }
 
-/** Confirmed real OA constraints (live-captured): MR and MP must each fall
- * within [-20, 20]mm, and MR must be strictly less than MP — their form
- * blocks advancing with an inline error otherwise. */
-const MR_MP_RANGE_MM = 20;
-const mrInRange = computed(() => {
-  const mr = form.retrusionMax ?? 0;
-  return mr >= -MR_MP_RANGE_MM && mr <= MR_MP_RANGE_MM;
+const sequenceTypeOptions = computed(() => [
+  { value: "standard", label: t("app.orthoApneaOrder.form.sequenceTypeStandard") },
+  { value: "personalized", label: t("app.orthoApneaOrder.form.sequenceTypePersonalized") },
+]);
+
+function onSequenceTypePicked(value: string) {
+  if (value === "standard" || value === "personalized") setSequenceType(value);
+}
+
+function onSequenceUnitPicked(value: unknown) {
+  if (value === "mm" || value === "%") setSequenceUnit(value);
+}
+
+/** The personalized sequence, or null on Estándar — narrows the union for the template. */
+const personalized = computed(() => (order.sequence.type === "personalized" ? order.sequence : null));
+const standardOffsets = computed(() => standardSequenceOffsets(order.productCode).map(String));
+const sequenceHint = computed(() =>
+  t(order.productCode === PRODUCT_CODES.NOA ? "app.orthoApneaOrder.form.sequenceTypeHint" : "app.deviceOrder.sequence.hintTmj"),
+);
+
+function toNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+// ── Starting point ──────────────────────────────────────────────────────────
+
+/** The value shown in the % or mm input: only the one the doctor filled. */
+function spInput(unit: SequenceUnit): number | null {
+  return order.startingPoint.unit === unit ? order.startingPoint.value : null;
+}
+
+/** The other input is locked while one holds a value (OA: mutually disabled). */
+function spLocked(unit: SequenceUnit): boolean {
+  return order.startingPoint.unit !== unit && order.startingPoint.value !== null;
+}
+
+const spMm = computed(() => startingPointMm(order));
+const spHint = computed(() =>
+  order.startingPoint.unit === "%" && spMm.value !== null ? t("app.deviceOrder.startingPointMmHint", { mm: spMm.value }) : null,
+);
+
+const mandibularRange = computed(() => order.protrusionMaxMm - order.retrusionMaxMm);
+
+// ── Paso 3 / Paso 4 pickers ─────────────────────────────────────────────────
+
+function onVerticalDimensionPicked(value: unknown) {
+  order.verticalDimension = value === "minimal" ? { kind: "minimal" } : { kind: "registro" };
+}
+
+function onFinishPicked(value: string) {
+  if (value === "mixed" || value === "scalloped") order.finish = value;
+}
+
+/** The teeth picker only knows "relieve" for now; other tooth states can come later. */
+const relievedTeeth = computed(() => Object.keys(order.teeth).filter((tooth) => order.teeth[tooth] === "relieve"));
+
+function setRelievedTeeth(teeth: string[]) {
+  const next: typeof order.teeth = {};
+  for (const [tooth, state] of Object.entries(order.teeth)) if (state !== "relieve") next[tooth] = state;
+  for (const tooth of teeth) next[tooth] = "relieve";
+  order.teeth = next;
+}
+
+// ── Delivery (step 1) ───────────────────────────────────────────────────────
+
+let contextKey: string | null = null;
+/** (Re)loads the doctor's HCO and OA's earliest date — only when the doctor or product actually changed, unless forced. */
+function refreshContext(force = false) {
+  const key = `${order.dentistId}|${order.productCode}`;
+  if (!force && key === contextKey) return;
+  contextKey = key;
+  void loadContext();
+}
+
+function onDoctorPicked(value: unknown) {
+  order.dentistId = typeof value === "string" ? value : "";
+}
+
+watch(() => [order.dentistId, order.productCode], () => {
+  if (!props.modelValue) return;
+  // A rejected delivery belonged to the previous doctor's HCO.
+  serverIssues.value = serverIssues.value.filter((i) => !isDeliveryPath(i.path));
+  refreshContext();
 });
-const mpInRange = computed(() => {
-  const mp = form.protrusionMax ?? 0;
-  return mp >= -MR_MP_RANGE_MM && mp <= MR_MP_RANGE_MM;
-});
-const mrLessThanMp = computed(() => (form.retrusionMax ?? 0) < (form.protrusionMax ?? 0));
-const mrMpValid = computed(() => mrInRange.value && mpInRange.value && mrLessThanMp.value);
 
-/** Range errors take priority over the relational one — fixing the range
- * usually also needs addressing first, and showing both at once is noisy. */
-const mrMpErrorMessage = computed(() => {
-  if (!mrInRange.value || !mpInRange.value) return t("app.orthoApneaOrder.validation.mrMpOutOfRange");
-  return t("app.orthoApneaOrder.validation.mrMustBeLessThanMp");
+const deliveryMessage = computed(() => {
+  const issues = deliveryIssues.value;
+  if (issues.length === 0) return undefined;
+  if (contextFailed.value) return t("app.deviceOrder.delivery.loadFailed");
+  if (issues.some((i) => i.path === "delivery")) return t("app.deviceOrder.delivery.noClinic");
+  const fields = [...new Set(issues.map((i) => i.path.slice("delivery.".length)))].map((f) =>
+    te(`app.deviceOrder.delivery.field.${f}`) ? t(`app.deviceOrder.delivery.field.${f}`) : f,
+  );
+  return t("app.deviceOrder.delivery.incomplete", { fields: fields.join(", ") });
 });
 
-/** Suppressed until the rep actually edits MR/MP — both start at 0 (0 is not
- * < 0), which would otherwise show an error before any real input. Reset
- * alongside `touched` on wizard open (see that watcher's own nextTick note —
- * same reason: resetForOpen()'s own assignment must not count as "touched"). */
-const mrMpTouched = ref(false);
-watch(() => [form.retrusionMax, form.protrusionMax], () => { mrMpTouched.value = true; });
+/** Where to fix the address: the HCO itself when the API names it, else the doctor's record (where the primary HCO is set). */
+const recordHref = computed(() => {
+  const link = hcoDetailLink(context.value?.delivery?.organizationId) ?? hcpDetailLink(order.dentistId);
+  return link && router ? router.resolve(link).href : null;
+});
 
-const WIZARD_STEPS = [1, 2, 3, 4] as const;
+// ── Errors (NEO-109): the shared validator per step, plus what the API returned ──
 
-/**
- * NEO-109 — errors show in the form, never as a toast: under the field, and
- * in the summary box on top of the step (only that step's errors). Each step
- * shows them only after a Next/Confirm attempt on it, so a step you just
- * arrived at never opens red. A field the API rejected clears on its first
- * edit (see the watchers below).
- */
-const { attempted, clearServerError, setServerErrors, reset: resetErrors, firstError, errorListFor } = useFormErrors();
 const attemptedSteps = reactive(new Set<number>());
-watch(step, (n) => { attempted.value = attemptedSteps.has(n); }, { flush: "sync" });
+/** MR/MP errors show live once either was edited, as before — the rest waits for Next. */
+const mrMpTouched = ref(false);
+watch(() => [order.retrusionMaxMm, order.protrusionMaxMm], () => { mrMpTouched.value = true; });
 
-function requiredRule(v: unknown): true | string {
-  const filled = Array.isArray(v) ? v.length > 0 : v != null && String(v).trim() !== "";
-  return filled || t("app.formRenderer.validation.required");
+function sameIssue(a: OrderIssue, b: OrderIssue): boolean {
+  return a.path === b.path && a.code === b.code;
 }
 
-/**
- * The fields each step validates, in on-screen order. OrthoApnea's own
- * required set for the alternative address isn't confirmed (pending live
- * capture), so everything shown there except the phone is required as a
- * safe default. Step 2 needs a product (a real order needs one) and the
- * confirmed MR/MP constraints; steps 3–4 have nothing to block on.
- * protrusionMax / altPhone carry no rule of their own — they're listed so an
- * API rejection of them can still be marked.
- */
-function stepFields(n: number): FormErrorField[] {
-  if (n === 1) {
-    const fields: FormErrorField[] = [
-      { key: "doctorId", label: t("app.orthoApneaOrder.form.doctor"), value: form.doctorId, rules: [requiredRule] },
-    ];
-    if (form.addressSend === "alternative") {
-      fields.push(
-        { key: "altCountryId", label: t("app.orthoApneaOrder.form.country"), value: form.altCountryId, rules: [requiredRule] },
-        { key: "altPostalCode", label: t("app.orthoApneaOrder.form.postalCode"), value: form.altPostalCode, rules: [requiredRule] },
-        { key: "altCity", label: t("app.orthoApneaOrder.form.city"), value: form.altCity, rules: [requiredRule] },
-        { key: "altAddress", label: t("app.orthoApneaOrder.form.address"), value: form.altAddress, rules: [requiredRule] },
-        { key: "altName", label: t("app.orthoApneaOrder.form.name"), value: form.altName, rules: [requiredRule] },
-        { key: "altEmail", label: t("app.orthoApneaOrder.form.email"), value: form.altEmail, rules: [requiredRule, translatedEmailRule] },
-        { key: "altPhone", label: t("app.orthoApneaOrder.form.phone"), value: form.altPhone },
-      );
-    }
-    return fields;
+/** Everything blocking step n: the shared validator's errors for its paths, the API's, and (step 1) the delivery. */
+function stepErrors(n: number): OrderIssue[] {
+  const paths = STEP_PATHS[n] ?? [];
+  const server = serverIssues.value.filter((i) => !isDeliveryPath(i.path) && stepOfPath(i.path) === n);
+  const local = issuesFor(validation.value.errors, paths).filter((i) => !server.some((s) => sameIssue(s, i)));
+  return [...server, ...local, ...(n === 1 ? deliveryIssues.value : [])];
+}
+
+function stepBlocked(n: number): boolean {
+  return stepErrors(n).length > 0 || (n === 1 && !!order.dentistId && contextLoading.value);
+}
+
+/** Errors shown on the current step: all of them after an attempt, otherwise only the live MR/MP check. */
+const visibleErrors = computed<OrderIssue[]>(() => {
+  const all = stepErrors(step.value);
+  if (attemptedSteps.has(step.value)) return all;
+  return mrMpTouched.value ? all.filter((i) => ["retrusionMaxMm", "protrusionMaxMm"].includes(fieldKeyOf(i.path))) : [];
+});
+
+function issueMessage(issue: OrderIssue): string {
+  const params = issue.params ?? {};
+  if (issue.code === "outOfRange") {
+    const variant = params.min !== undefined && params.max !== undefined ? "outOfRange" : params.min !== undefined ? "outOfRangeMin" : "outOfRangeMax";
+    return t(`app.deviceOrder.errors.${variant}`, params);
   }
-  if (n === 2) {
-    return [
-      { key: "products", label: t("app.orthoApneaOrder.selectProduct"), value: form.products, rules: [requiredRule] },
-      { key: "retrusionMax", label: t("app.orthoApneaOrder.form.retrusionMax"), value: form.retrusionMax, rules: [() => mrMpValid.value || mrMpErrorMessage.value] },
-      { key: "protrusionMax", label: t("app.orthoApneaOrder.form.protrusionMax"), value: form.protrusionMax },
-    ];
-  }
-  return [];
+  return t(`app.deviceOrder.errors.${issue.code}`, params);
 }
 
-function stepValid(n: number): boolean {
-  return stepFields(n).every((f) => !firstError(f));
+function messageFor(issue: OrderIssue): string {
+  return isDeliveryPath(issue.path) ? (deliveryMessage.value ?? issueMessage(issue)) : issueMessage(issue);
 }
 
-/** The summary's lines for the step on screen — empty until that step's first attempt. */
-const errorList = errorListFor(() => stepFields(step.value));
-
+/** The message under a field — its first visible error. */
 function fieldError(key: string): string | undefined {
-  return errorList.value.find((e) => e.key === key)?.message;
+  const issue = visibleErrors.value.find((i) => fieldKeyOf(i.path) === key);
+  return issue ? messageFor(issue) : undefined;
 }
 
-/** Under MR/MP: the attempted step's error, or — as before — the live check once MR/MP were edited. */
-const mrMpMessage = computed(() =>
-  fieldError("retrusionMax") ?? fieldError("protrusionMax") ?? (mrMpTouched.value && !mrMpValid.value ? mrMpErrorMessage.value : undefined),
-);
-
-// An API-rejected value's error goes the moment that field is edited.
-for (const key of new Set(Object.values(WIZARD_FIELD_FOR_API_FIELD))) {
-  watch(() => form[key], () => clearServerError(key), { deep: true });
+function hasIssueAt(path: string): boolean {
+  return visibleErrors.value.some((i) => i.path === path);
 }
+
+/** The summary's lines: one per field, in step order — empty until that step's first attempt. */
+const errorList = computed<FormErrorSummaryLine[]>(() => {
+  if (!attemptedSteps.has(step.value)) return [];
+  const lines: FormErrorSummaryLine[] = [];
+  for (const issue of visibleErrors.value) {
+    const key = fieldKeyOf(issue.path);
+    if (lines.some((l) => l.key === key)) continue;
+    const label = FIELD_LABELS[key];
+    lines.push({ key, label: label ? t(label) : undefined, message: messageFor(issue) });
+  }
+  return lines;
+});
+
+const mrMpError = computed(() => fieldError("retrusionMaxMm") ?? fieldError("protrusionMaxMm"));
+/** OA only warns when the advance is under 5 mm (its server accepted 3 mm) — shown, never blocking. */
+const mrMpWarning = computed(() => {
+  const warning = validation.value.warnings.find((w) => ["retrusionMaxMm", "protrusionMaxMm"].includes(fieldKeyOf(w.path)));
+  return warning ? issueMessage(warning) : undefined;
+});
+
+/** The value an issue path points at in the order — an API error goes once that value is edited. */
+function valueAt(path: string): string {
+  let node: unknown = order;
+  for (const part of path.split(".")) {
+    if (typeof node !== "object" || node === null) return "undefined";
+    node = (node as Record<string, unknown>)[part];
+  }
+  return JSON.stringify(node) ?? "undefined";
+}
+
+let serverSnapshot = new Map<string, string>();
+function snapshotServerIssues() {
+  serverSnapshot = new Map(serverIssues.value.filter((i) => !isDeliveryPath(i.path)).map((i) => [i.path, valueAt(i.path)]));
+}
+watch(order, () => {
+  if (serverIssues.value.length === 0) return;
+  const kept = serverIssues.value.filter((i) => isDeliveryPath(i.path) || serverSnapshot.get(i.path) === valueAt(i.path));
+  if (kept.length !== serverIssues.value.length) serverIssues.value = kept;
+}, { deep: true });
 
 const stepEl = ref<HTMLElement | null>(null);
 
@@ -770,24 +800,20 @@ function moveTo(target: number) {
 function showStepErrors(n: number) {
   if (n !== step.value) moveTo(n);
   attemptedSteps.add(n);
-  attempted.value = true;
   nextTick(() => scrollToFormTop(stepEl.value));
 }
 
-/**
- * Marks the fields a save was rejected on and opens the first step holding
- * one. False when none of them is on the wizard — the caller then toasts.
- */
-function showServerErrors(errors: FieldErrors): boolean {
-  const target = WIZARD_STEPS.find((n) => stepFields(n).some((f) => f.key in errors));
+/** Opens the first step holding an issue the API returned. False when none is on the wizard. */
+function showServerIssues(): boolean {
+  const target = WIZARD_STEPS.find((n) => serverIssues.value.some((i) => (isDeliveryPath(i.path) ? 1 : stepOfPath(i.path)) === n));
   if (target === undefined) return false;
-  setServerErrors(errors, WIZARD_STEPS.flatMap((n) => stepFields(n).map((f) => f.key)));
+  snapshotServerIssues();
   showStepErrors(target);
   return true;
 }
 
 function goNext() {
-  if (!stepValid(step.value)) {
+  if (stepBlocked(step.value)) {
     showStepErrors(step.value);
     return;
   }
@@ -801,22 +827,14 @@ function goBack() {
 /** Only steps already reached are clickable; jumping forward still stops at the first step with something to fix. */
 function goToStep(target: number) {
   if (target > maxReachedStep.value) return;
-  const blocking = target > step.value ? WIZARD_STEPS.find((n) => n >= step.value && n < target && !stepValid(n)) : undefined;
+  const blocking = target > step.value ? WIZARD_STEPS.find((n) => n >= step.value && n < target && stepBlocked(n)) : undefined;
   if (blocking !== undefined) showStepErrors(blocking);
   else moveTo(target);
 }
 
-function onSequenceTypeStandard(value: boolean | null) {
-  if (value) form.sequenceTypePersonalized = false;
-}
-function onSequenceTypePersonalized(value: boolean | null) {
-  if (value) form.sequenceTypeStandard = false;
-}
-
-const { loading: submitLoading, run: onConfirm } = useAsyncAction(async () => {
-  // A step passed earlier can have been broken since (e.g. products removed
-  // after jumping back) — the review step reopens the first one to fix.
-  const invalid = WIZARD_STEPS.find((n) => n < 4 && !stepValid(n));
+async function onConfirm() {
+  // A step passed earlier can have been broken since — reopen the first one to fix.
+  const invalid = WIZARD_STEPS.find((n) => stepBlocked(n));
   if (invalid !== undefined) {
     showStepErrors(invalid);
     return;
@@ -825,10 +843,10 @@ const { loading: submitLoading, run: onConfirm } = useAsyncAction(async () => {
   if (shouldClose) {
     emit("submitted");
     emit("update:modelValue", false);
-  } else if (rejectedFields.value) {
-    showServerErrors(rejectedFields.value);
+  } else if (serverIssues.value.length > 0) {
+    showServerIssues();
   }
-});
+}
 
 function closeImmediately() {
   showDraftPrompt.value = false;
@@ -837,11 +855,8 @@ function closeImmediately() {
 
 /** X button / Cancel — prompts to save a draft only if something actually changed since opening. */
 function requestClose() {
-  if (touched.value) {
-    showDraftPrompt.value = true;
-  } else {
-    closeImmediately();
-  }
+  if (touched.value) showDraftPrompt.value = true;
+  else closeImmediately();
 }
 
 function discardDraft() {
@@ -854,7 +869,7 @@ const { loading: savingDraft, run: saveDraftAndClose } = useAsyncAction(async ()
     notifications.show(t("app.orthoApneaOrder.draftSaved"), "success", undefined, { icon: "nav-treatment-plans" });
     emit("submitted"); // refresh the panel's list so the new/updated draft shows up
     closeImmediately();
-  } else if (rejectedFields.value && showServerErrors(rejectedFields.value)) {
+  } else if (serverIssues.value.length > 0 && showServerIssues()) {
     // The rep fixes the marked field in the wizard instead of reading a toast (NEO-109).
     showDraftPrompt.value = false;
   } else {
@@ -872,28 +887,24 @@ function onCancelClick() {
 watch(
   () => props.modelValue,
   (open) => {
-    if (open) {
-      resetForOpen(props.draftPlan);
+    if (!open) return;
+    resetForOpen(props.draftPlan);
+    step.value = 1;
+    maxReachedStep.value = 1;
+    showDraftPrompt.value = false;
+    attemptedSteps.clear();
+    contextKey = null;
+    refreshContext(true);
+    void loadProducts();
+    void loadDoctorsAndDefault(props.patientId);
 
-      step.value = 1;
-      maxReachedStep.value = 1;
-      showDraftPrompt.value = false;
-      attemptedSteps.clear();
-      resetErrors();
-      loadProducts();
-      loadClinic();
-      loadDoctorsAndDefault(props.patientId);
-      loadCountries();
-
-      // Reset the "touched" flags AFTER resetForOpen()'s Object.assign calls
-      // have already triggered the deep watcher once — nextTick so it
-      // doesn't immediately flip back to true from our own initialization.
-      nextTick(() => {
-        touched.value = false;
-        mrMpTouched.value = false;
-      });
-    }
-  }
+    // After resetForOpen()'s own assignments have triggered the watchers once —
+    // so opening (or resuming a draft) doesn't count as an edit.
+    nextTick(() => {
+      touched.value = false;
+      mrMpTouched.value = false;
+    });
+  },
 );
 </script>
 
@@ -1084,5 +1095,69 @@ watch(
 
 .oa-wizard__step--clickable {
   cursor: pointer;
+}
+
+/* Product and sequence-type switches: the same segmented control (and width)
+   as Paso 4's Normal/Aliviar switch (TeethDiagram). */
+.oa-wizard__switch {
+  /* fit: each option is as wide as its label, so "Individualizada" is never cut (NEO-213). */
+  max-width: 100%;
+}
+
+.oa-wizard__ship-to {
+  margin-top: 8px;
+}
+
+.oa-wizard__address {
+  font-style: normal;
+  line-height: 1.5;
+  padding: 12px 14px;
+  border-radius: var(--pwa-radius);
+  background: rgba(var(--v-theme-on-surface), 0.04);
+}
+
+.oa-wizard__alert-link {
+  margin-left: 4px;
+  color: inherit;
+  font-weight: 600;
+}
+
+/* SP + splint boxes, OA's grey read-only cells (standard) or inputs (personalized). */
+.oa-wizard__seq-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.oa-wizard__seq-unit {
+  font-size: 0.8125rem;
+  min-width: 32px;
+}
+
+.oa-wizard__seq-cell {
+  display: inline-flex;
+  align-items: center;
+  min-width: 64px;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: var(--pwa-radius);
+  background: rgba(var(--v-theme-on-surface), 0.08);
+  font-size: 0.9375rem;
+}
+
+.oa-wizard__seq-input {
+  flex: 0 0 80px;
+}
+
+.oa-wizard__seq-units {
+  flex: 0 0 auto;
+}
+
+.oa-wizard__field-error {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: rgb(var(--v-theme-error));
 }
 </style>

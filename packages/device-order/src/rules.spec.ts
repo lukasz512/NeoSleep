@@ -77,6 +77,16 @@ describe("validateDeviceOrder — one table, run identically by the PWA and the 
     expect(validateDeviceOrder(order({ sequence })).errors).toEqual([]);
   });
 
+  it("still reports another step's cross-field error when an unrelated field fails its shape check", () => {
+    const result = validateDeviceOrder(order({ upperBand: 9, startingPoint: { unit: "mm", value: 7 } }));
+    expect(codes(result.errors)).toEqual(["upperBand:outOfRange", "startingPoint.value:startingPointOutside"]);
+  });
+
+  it("skips a cross-field rule whose own field is malformed instead of guessing", () => {
+    const result = validateDeviceOrder({ ...order(), retrusionMaxMm: "x" });
+    expect(codes(result.errors)).toEqual(["retrusionMaxMm:invalid"]);
+  });
+
   it("names a missing field as required, not invalid", () => {
     const { dentistId: _omit, ...rest } = order();
     expect(codes(validateDeviceOrder(rest).errors)).toEqual(["dentistId:required"]);

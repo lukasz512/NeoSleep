@@ -36,6 +36,21 @@ Base: `/api`
 - `GET /api/v1/partners/orthoapnea/resources?locale=` – `{ resources: [...], mediaToken }`; each `mediaUrl` is relative to the API
 - `GET /api/v1/partners/orthoapnea/resources/:id/media?locale=&lang=&t=<mediaToken>` – streams the file; auth by Bearer or `?t=` media token (ADR-020 addendum); forwards `Range` → `206` + `Content-Range`, capped at 8 MiB per response (Cloud Run refuses non-streamed responses over 32 MiB, and Chrome opens video with `bytes=0-`; the player fetches the next slice itself); always `Accept-Ranges: bytes`; `Cross-Origin-Resource-Policy: cross-origin`
 
+- `POST /api/v1/partners/orthoapnea/treatments` – **410 Gone** (CORE-95). It passed the client's body to OrthoApnea unvalidated; orders go through `POST /api/v1/device-orders`.
+
+## Device orders (CORE-95, ADR-028)
+Roles: `admin`, `doctor`, `manager` (reps/KAMs/MSLs get 403 — NEO-199). The order body is our own `DeviceOrder` (`packages/device-order`); the lab's wire format never appears in this API.
+
+- `GET /api/v1/device-orders/context?dentist_id=<practitioner uuid>&product_code=002|003` →
+  `200 { delivery: { organizationId, name, address, city, postalCode, countryCode, phone, email } | null, deliveryIssues: OrderIssue[], minDesiredDate: "YYYY-MM-DD" | null, rulesVersion }`.
+  `delivery` is the dentist's primary HCO (`practitioner_organization.is_primary`, else their only affiliation, else `null` with `deliveryIssues: [{ path: "delivery", code: "required" }]`). Missing HCO fields come back as `delivery.<field>` issues. `minDesiredDate` is OrthoApnea's manufacturing date for the product (cached 10 min); `null` when OA can't be reached — the endpoint still answers.
+- `POST /api/v1/device-orders` body `{ treatment_plan_id: uuid, patient_id: uuid, order: DeviceOrder }`:
+  - `201 { externalId, externalStatus, warnings: OrderIssue[] }` — sent; `partner_link` synced; an `audit_log` row (`entity_type: "PartnerOrder"`, `entity_id` = plan) holds the acting user, `rulesVersion`, our order, the delivery address and the exact DTO sent.
+  - `400 { error: "validation", fields: OrderIssue[], warnings: OrderIssue[], rulesVersion }` — nothing was sent to the lab. Checked in this order: ids, plan (must be the patient's `dental_appliance` plan), `validateDeviceOrder`, `validateDeliveryAddress` on the dentist's primary HCO — all with **no** lab call; then the desired date against the lab's minimum (one read call, `desiredDateTooEarly`).
+  - `409 { code: "PARTNER_ORDER_ALREADY_SUBMITTED" }` — this plan already has an order. `409 { code: "PARTNER_ORDER_SUBMISSION_PENDING" }` — another submit is running, or one was interrupted (timeout / crash) and may have reached the lab: never retried automatically; someone checks OrthoApnea and resets the `partner_link` row.
+  - `502 { code: "PARTNER_SERVICE_ERROR" }` — the lab refused or was unreachable; the link is `failed` and the same body can be sent again.
+  - `OrderIssue` = `{ path, code, params? }`; `path` is a dot path into `DeviceOrder` (or `delivery.<field>`, `treatment_plan_id`, `patient_id`), `code` is the i18n key suffix `app.deviceOrder.errors.<code>`.
+
 ## Planner events (calendar)
 - `GET /api/events?start=&end=&region=` – list events (filtered by rep/region)
 - `GET /api/events/:id` – event detail with attendees
