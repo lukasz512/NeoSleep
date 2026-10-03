@@ -15,8 +15,8 @@
 - 👤 **User:** the same rules as OA's own portal, shown inline per step. No surprise rejection after sending. The delivery address is the doctor's own clinic, so there is nothing to retype.
 - 🏢 **Client (NeoSleep):** every order is real and billed (OA has no sandbox). The 2026-10-03 live shots showed OA's server accepts geometrically invalid orders (order 454013, a 3 mm range), so our validation is the only guard.
 - 🩺 **Patient:** a wrong MR/MP/SP produces a wrong device. These rules protect the patient directly.
-- 🚀 **NeoCRM/Platform:** the canonical order model and rules live in `@neo/device-order` (CORE). The OA adapter is one provider, so a future real OA API is a second adapter with no view change (ADR-028).
-- ⚖️ **Compliance:** personal data sent to OA is limited to what OA's form asks for. Every order is audited with the exact DTO, the rules version and the acting user. Reps cannot place orders (NEO-199 gate).
+- 🚀 **NeoCRM/Platform:** the canonical order model and rules live in `@neo/device-order` (CORE). The OA adapter is one provider, so a future real OA API is a second adapter with no view change (ADR 028 (the device-order provider adapter ADR in docs/)).
+- ⚖️ **Compliance:** personal data sent to OA is limited to what OA's form asks for. Every order is audited with the exact DTO, the rules version and the acting user. Reps cannot place orders (admin/doctor/manager only).
 
 ### Medical-Industry Trend Check
 - n/a. This is partner-integration correctness. The rule sources are OA's own portal, harvested in `docs/partners/orthoapnea-order-rules.md`.
@@ -35,7 +35,7 @@
 ### Open Questions
 - [ ] Should an advance range under 5 mm stay a warning, as in OA's form, or become a block? OA's server accepts it either way.
 - [ ] Promotion code and scanner choice are not sent today (OA needs a promo-code object and a scanner enum). Add them later?
-- [ ] Status tracking: reads on 454012 and 454013 start Monday 2026-10-06 (CORE-67).
+- [ ] Status tracking: reads on 454012 and 454013 start Monday 2026-10-06 (the scheduled status-sync job).
 
 ### Hand-off
-→ `/dev feat` — built on branch `worktree-neo-210-oa-live-test-orders`; ADR-028 records the architecture.
+→ `/dev feat` — built on branch `worktree-neo-210-oa-live-test-orders`; ADR 028 (the device-order provider adapter ADR in docs/) records the architecture.
