@@ -365,6 +365,8 @@ const FormRenderer = defineAsyncComponent(() => import("../FormRenderer.vue"));
 const props = defineProps<{
   patientId: string;
   focusItem?: string | null;
+  /** NEO-222: a sleep_study id from the Estudios list — opened as soon as the checklist has it. */
+  focusStudy?: string | null;
   /** From the patient record — STOP-Bang works A (age) and G (sex) out from them. */
   dateOfBirth?: string | null;
   gender?: string | null;
@@ -845,7 +847,20 @@ async function onConfirmDeleteSleepStudy() {
 onMounted(async () => {
   await checklistApi.load();
   await highlightItem(props.focusItem);
+  await openFocusedStudy(props.focusStudy);
 });
+watch(() => props.focusStudy, (id) => openFocusedStudy(id));
+
+async function openFocusedStudy(id: string | null | undefined) {
+  if (!id) return;
+  for (const item of items.value) {
+    const entry = item.history.find((e) => e.sleep_study?.id === id);
+    if (!entry) continue;
+    await openEntry(item, entry);
+    await highlightItem(item.key);
+    return;
+  }
+}
 watch(() => props.patientId, () => checklistApi.load());
 watch(() => props.focusItem, (key) => highlightItem(key));
 </script>
