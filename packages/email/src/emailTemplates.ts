@@ -13,6 +13,8 @@ export interface EmailAttachment {
   filename: string;
   content: Buffer;
   contentId?: string;
+  /** e.g. "text/calendar; method=REQUEST" — calendar apps need it to treat an .ics as an invitation. */
+  contentType?: string;
 }
 
 /** `diskFilename` must match the real file under assets/email/ — `displayFilename` is just the name

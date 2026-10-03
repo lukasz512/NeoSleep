@@ -5,7 +5,7 @@ import type { PoolClient } from "pg";
  * written when Resend accepts the email; Resend's webhook then moves `status`
  * forward (routes/webhooks.ts). No health data, no full address, no link.
  */
-export type PatientEmailKind = "questionnaire_link" | "signed_copy";
+export type PatientEmailKind = "questionnaire_link" | "signed_copy" | "appointment";
 export type PatientEmailStatus = "sent" | "delayed" | "delivered" | "bounced" | "failed" | "suppressed" | "complained";
 
 export interface PatientEmailSend {
@@ -14,6 +14,7 @@ export interface PatientEmailSend {
   sent_by: string | null;
   kind: PatientEmailKind;
   questionnaire_request_id: string | null;
+  appointment_id: string | null;
   sent_to_masked: string;
   provider_message_id: string | null;
   status: PatientEmailStatus;
@@ -44,15 +45,16 @@ export async function insertPatientEmailSend(
     sentBy: string | null;
     kind: PatientEmailKind;
     questionnaireRequestId?: string | null;
+    appointmentId?: string | null;
     sentToMasked: string;
     providerMessageId: string | null;
   }
 ): Promise<PatientEmailSend> {
   const { rows } = await client.query<PatientEmailSend>(
-    `INSERT INTO patient_email_send (patient_id, sent_by, kind, questionnaire_request_id, sent_to_masked, provider_message_id)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO patient_email_send (patient_id, sent_by, kind, questionnaire_request_id, appointment_id, sent_to_masked, provider_message_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING *`,
-    [input.patientId, input.sentBy, input.kind, input.questionnaireRequestId ?? null, input.sentToMasked, input.providerMessageId]
+    [input.patientId, input.sentBy, input.kind, input.questionnaireRequestId ?? null, input.appointmentId ?? null, input.sentToMasked, input.providerMessageId]
   );
   return rows[0]!;
 }

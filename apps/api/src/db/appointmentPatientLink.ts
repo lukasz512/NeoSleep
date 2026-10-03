@@ -1,0 +1,139 @@
+import type { PoolClient } from "pg";
+import { DatabaseError } from "../errors.js";
+import { formatOptionalDisplayName } from "../utils/personName.js";
+import type { AppointmentPatientResponse } from "./appointment.js";
+
+/**
+ * CORE-25: the patient's personal link in appointment emails, the data the
+ * email needs, and the patient's "no more appointment emails" choice.
+ * Only the sha256 of a link token is stored (migration 043).
+ */
+
+/** Stores the hash of the token the next email carries; any older link stops working. A reschedule clears the patient's earlier answer. */
+export async function setAppointmentPatientToken(
+  client: PoolClient,
+  appointmentId: string,
+  tokenHash: string,
+  expiresAt: Date,
+  opts: { clearResponse: boolean }
+): Promise<void> {
+  try {
+    await client.query(
+      `UPDATE appointment
+          SET patient_token_hash = $2,
+              patient_token_expires_at = $3
+              ${opts.clearResponse ? ", patient_response = NULL, patient_responded_at = NULL" : ""}
+        WHERE id = $1`,
+      [appointmentId, tokenHash, expiresAt]
+    );
+  } catch (err) {
+    throw new DatabaseError("setAppointmentPatientToken", err);
+  }
+}
+
+/** The appointment a live link points to, or null (unknown, expired, deleted). */
+export async function getAppointmentIdByPatientTokenHash(client: PoolClient, tokenHash: string, opts: { forUpdate?: boolean } = {}): Promise<string | null> {
+  try {
+    const { rows } = await client.query<{ id: string }>(
+      `SELECT id FROM appointment
+        WHERE patient_token_hash = $1 AND patient_token_expires_at > now() AND deleted_at IS NULL
+        ${opts.forUpdate ? "FOR UPDATE" : ""}`,
+      [tokenHash]
+    );
+    return rows[0]?.id ?? null;
+  } catch (err) {
+    throw new DatabaseError("getAppointmentIdByPatientTokenHash", err);
+  }
+}
+
+export async function setAppointmentPatientResponse(client: PoolClient, appointmentId: string, response: AppointmentPatientResponse): Promise<void> {
+  try {
+    await client.query(
+      `UPDATE appointment SET patient_response = $2, patient_responded_at = now(), updated_at = now() WHERE id = $1`,
+      [appointmentId, response]
+    );
+  } catch (err) {
+    throw new DatabaseError("setAppointmentPatientResponse", err);
+  }
+}
+
+/** Everything an appointment email shows: no notes, no study, no treatment (ADR-027 §6). */
+export interface AppointmentEmailContext {
+  patient_identity_id: string;
+  patient_email: string | null;
+  patient_language: string | null;
+  patient_region: string | null;
+  patient_salutation: string | null;
+  patient_first_name: string | null;
+  patient_last_name: string | null;
+  practitioner_name: string | null;
+  organization_name: string | null;
+  organization_phone: string | null;
+  organization_email: string | null;
+  /** "Av. Reforma 1, 06600 Ciudad de México" — null when the clinic has no address. */
+  organization_address: string | null;
+  /** app_config.support_email — the contact when the clinic has neither phone nor email. */
+  tenant_support_email: string | null;
+}
+
+export async function getAppointmentEmailContext(client: PoolClient, appointmentId: string): Promise<AppointmentEmailContext | null> {
+  try {
+    const { rows } = await client.query<Omit<AppointmentEmailContext, "practitioner_name" | "organization_address"> & {
+      practitioner_salutation: string | null;
+      practitioner_first_name: string | null;
+      practitioner_last_name: string | null;
+      address_line1: string | null;
+      postal_code: string | null;
+      city: string | null;
+    }>(
+      `SELECT pi.id AS patient_identity_id, pi.email AS patient_email, pi.language AS patient_language, pi.region AS patient_region,
+              pi.title AS patient_salutation, pi.first_name AS patient_first_name, pi.last_name AS patient_last_name,
+              di.title AS practitioner_salutation, di.first_name AS practitioner_first_name, di.last_name AS practitioner_last_name,
+              o.name AS organization_name, o.phone AS organization_phone, o.email AS organization_email,
+              o.address_line1, o.postal_code, o.city,
+              (SELECT support_email FROM app_config LIMIT 1) AS tenant_support_email
+         FROM appointment a
+         JOIN patient p ON a.patient_id = p.id
+         JOIN identities pi ON p.identity_id = pi.id
+         JOIN practitioner d ON a.practitioner_id = d.id
+         JOIN identities di ON d.identity_id = di.id
+         LEFT JOIN organization o ON a.organization_id = o.id
+        WHERE a.id = $1`,
+      [appointmentId]
+    );
+    const row = rows[0];
+    if (!row) return null;
+    const cityLine = [row.postal_code, row.city].filter((v) => v?.trim()).join(" ");
+    const address = [row.address_line1, cityLine].filter((v) => v?.trim()).join(", ");
+    return {
+      patient_identity_id: row.patient_identity_id,
+      patient_email: row.patient_email,
+      patient_language: row.patient_language,
+      patient_region: row.patient_region,
+      patient_salutation: row.patient_salutation,
+      patient_first_name: row.patient_first_name,
+      patient_last_name: row.patient_last_name,
+      practitioner_name: formatOptionalDisplayName({ salutation: row.practitioner_salutation, first_name: row.practitioner_first_name, last_name: row.practitioner_last_name }),
+      organization_name: row.organization_name,
+      organization_phone: row.organization_phone?.trim() || null,
+      organization_email: row.organization_email?.trim() || null,
+      organization_address: address || null,
+      tenant_support_email: row.tenant_support_email?.trim() || null,
+    };
+  } catch (err) {
+    throw new DatabaseError("getAppointmentEmailContext", err);
+  }
+}
+
+/** Appointment emails are "operational / email" in notification_preference (migration 039); the patient's "stop" link turns that off. */
+export async function isAppointmentEmailOptedOut(client: PoolClient, identityId: string): Promise<boolean> {
+  try {
+    const { rows } = await client.query<{ enabled: boolean }>(
+      `SELECT enabled FROM notification_preference WHERE identity_id = $1 AND category = 'operational' AND channel = 'email'`,
+      [identityId]
+    );
+    return rows[0]?.enabled === false;
+  } catch (err) {
+    throw new DatabaseError("isAppointmentEmailOptedOut", err);
+  }
+}

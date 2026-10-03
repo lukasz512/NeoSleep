@@ -5,6 +5,8 @@ import { requireRole } from "../middleware/requireRole.js";
 import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
 import { CreateAppointmentCommand, UpdateAppointmentCommand, DeleteAppointmentCommand } from "../commands/appointment.js";
+import { newAppointmentEffects, deliverAppointmentPatientEmail, type AppointmentEffects } from "../commands/appointmentPatient.js";
+import { resolveFrontendOrigin } from "../utils/frontendOrigin.js";
 import { GetAppointmentsQuery, GetAppointmentByIdQuery } from "../queries/appointment.js";
 import { AuditHealthDataReadCommand } from "../commands/healthDataReadAudit.js";
 import { ValidationError } from "../errors.js";
@@ -93,6 +95,11 @@ appointmentRouter.get(
   })
 );
 
+/** After the commit: the patient's email about the booking (CORE-25). Never fails the request. */
+async function sendPatientEmails(req: Request, slug: string, effects: AppointmentEffects): Promise<void> {
+  for (const plan of effects.patientEmails) await deliverAppointmentPatientEmail(slug, plan, resolveFrontendOrigin(req));
+}
+
 // POST /api/v1/appointments
 appointmentRouter.post(
   "/appointments",
@@ -111,10 +118,12 @@ appointmentRouter.post(
       treatment_plan_id: uuid(body.treatment_plan_id, "treatment_plan_id"),
     };
     const slug = tenantSlugFromHost(req.hostname);
+    const effects = newAppointmentEffects();
     const appointment = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
-      return CreateAppointmentCommand(ctx, input);
+      return CreateAppointmentCommand(ctx, input, effects);
     });
+    await sendPatientEmails(req, slug, effects);
     res.status(201).json(appointment);
   })
 );
@@ -136,10 +145,12 @@ appointmentRouter.patch(
       treatment_plan_id: nullableUuid(body.treatment_plan_id, "treatment_plan_id"),
     };
     const slug = tenantSlugFromHost(req.hostname);
+    const effects = newAppointmentEffects();
     const appointment = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
-      return UpdateAppointmentCommand(ctx, id, input);
+      return UpdateAppointmentCommand(ctx, id, input, effects);
     });
+    await sendPatientEmails(req, slug, effects);
     res.json(appointment);
   })
 );

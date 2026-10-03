@@ -43,6 +43,8 @@ export const NOTIFICATION_TYPES = [
   "appointment_booked",
   "appointment_rescheduled",
   "appointment_cancelled",
+  "appointment_patient_cannot_attend",
+  "appointment_patient_no_email",
   "partner_order_status_changed",
 ] as const;
 
@@ -70,6 +72,24 @@ export const NOTIFICATION_CATALOG: Readonly<Record<NotificationType, Notificatio
     priority: "normal",
     channels: ["in_app", "push"],
     escalateAfterMin: 30,
+    link: appointmentLink,
+    entityType: "Appointment",
+  },
+  /** The patient pressed "I can't come" in the appointment email (CORE-25) — the clinic finds a new time. */
+  appointment_patient_cannot_attend: {
+    category: "operational",
+    priority: "normal",
+    channels: ["in_app", "push"],
+    escalateAfterMin: 30,
+    link: appointmentLink,
+    entityType: "Appointment",
+  },
+  /** Booked, but the patient has no email on file — whoever booked tells them another way (CORE-25). */
+  appointment_patient_no_email: {
+    category: "operational",
+    priority: "normal",
+    channels: ["in_app"],
+    escalateAfterMin: null,
     link: appointmentLink,
     entityType: "Appointment",
   },

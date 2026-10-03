@@ -452,6 +452,122 @@ export async function sendPatientSignedCopyEmail(
   return id;
 }
 
+export type AppointmentEmailKind = "booked" | "rescheduled" | "cancelled";
+
+export interface AppointmentEmail {
+  kind: AppointmentEmailKind;
+  startAt: string;
+  endAt: string;
+  /** IANA zone of the clinic — times are shown as the clinic's local time. */
+  timezone: string;
+  clinicName: string | null;
+  clinicAddress: string | null;
+  doctorName: string | null;
+  onlineUrl: string | null;
+  /** Who to call or write to change the appointment (CORE-25: no self-service rescheduling yet). */
+  contact: { phone: string | null; email: string | null };
+  links: {
+    /** null on a cancellation — nothing left to confirm. */
+    confirm: string | null;
+    cannotAttend: string | null;
+    optOut: string;
+    google: string | null;
+    outlook: string | null;
+  };
+  ics: { content: string; method: "REQUEST" | "CANCEL" };
+}
+
+/** "Wednesday, January 15, 2031" + "09:00 – 10:00" in the clinic's zone and the patient's language. */
+export function formatAppointmentWhen(startAt: string, endAt: string, timezone: string, locale: string | null | undefined): { date: string; time: string } {
+  const intlLocale = INTL_LOCALE[locale ?? "en"] ?? INTL_LOCALE.en;
+  const date = new Intl.DateTimeFormat(intlLocale, { timeZone: timezone, weekday: "long", year: "numeric", month: "long", day: "numeric" }).format(new Date(startAt));
+  const clock = new Intl.DateTimeFormat(intlLocale, { timeZone: timezone, hour: "2-digit", minute: "2-digit" });
+  return { date, time: `${clock.format(new Date(startAt))} – ${clock.format(new Date(endAt))}` };
+}
+
+const LINK_STYLE = "color:#128F83;";
+
+/**
+ * CORE-25 / CORE-26: the patient's appointment email — booked, moved or
+ * cancelled. Organizational only (date, time, clinic, doctor, how to reach
+ * the clinic); never notes, studies or treatment (ADR-027 §6). Carries the
+ * .ics invitation, "Confirm" / "I can't come" buttons and a one-click stop
+ * link. The clinic leads the sender name and receives replies.
+ */
+export async function sendAppointmentPatientEmail(to: string, recipient: EmailRecipient, appointment: AppointmentEmail, tags?: EmailTags): Promise<string | null> {
+  const locale = recipient.language;
+  const t = (key: string, params?: Record<string, string>): string => emailT(locale, `email.appointment.${key}`, params);
+  const greetingName = formatGreetingName(recipient, to);
+  const clinicName = appointment.clinicName ?? emailT(locale, "email.questionnaireLink.yourClinic");
+  const { date, time } = formatAppointmentWhen(appointment.startAt, appointment.endAt, appointment.timezone, locale);
+  const cancelled = appointment.kind === "cancelled";
+
+  const row = (label: string, value: string, href?: string): string => `
+      <tr><td style="padding:6px 12px 6px 0;color:#7a827e;white-space:nowrap;vertical-align:top;">${escapeHtml(label)}</td>
+      <td style="padding:6px 0;font-weight:bold;${cancelled ? "text-decoration:line-through;" : ""}">${href ? `<a href="${escapeHtml(href)}" style="${LINK_STYLE}">${escapeHtml(value)}</a>` : escapeHtml(value)}</td></tr>`;
+  const details = [
+    row(t("date"), date),
+    row(t("time"), time),
+    row(t("clinic"), clinicName),
+    ...(appointment.clinicAddress ? [row(t("address"), appointment.clinicAddress)] : []),
+    ...(appointment.onlineUrl ? [row(t("online"), t("joinOnline"), appointment.onlineUrl)] : []),
+    ...(appointment.doctorName ? [row(t("doctor"), appointment.doctorName)] : []),
+  ].join("");
+
+  const { phone, email } = appointment.contact;
+  const contactParts = [
+    ...(phone ? [`<a href="tel:${escapeHtml(phone.replace(/[^0-9+]/g, ""))}" style="${LINK_STYLE}">${escapeHtml(phone)}</a>`] : []),
+    ...(email ? [`<a href="mailto:${escapeHtml(email)}" style="${LINK_STYLE}">${escapeHtml(email)}</a>`] : []),
+  ];
+  const contactHtml = contactParts.length
+    ? `<p style="margin:0 0 16px;padding:12px 16px;background:#f2f8f6;border-radius:8px;">${escapeHtml(t(cancelled ? "contactCancelled" : "contactToChange", { clinic: clinicName }))}<br>${contactParts.join(" · ")}</p>`
+    : "";
+
+  const calendarLinks = [
+    ...(appointment.links.google ? [`<a href="${escapeHtml(appointment.links.google)}" style="${LINK_STYLE}">Google Calendar</a>`] : []),
+    ...(appointment.links.outlook ? [`<a href="${escapeHtml(appointment.links.outlook)}" style="${LINK_STYLE}">Outlook</a>`] : []),
+  ];
+
+  const bodyHtml = `
+    <h1 style="margin:0 0 16px;font-size:20px;font-weight:bold;color:#128F83;text-align:center;">${escapeHtml(t(`${appointment.kind}.title`))}</h1>
+    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.greeting", { name: greetingName }))}</p>
+    <p style="margin:0 0 16px;">${escapeHtml(t(`${appointment.kind}.body`, { clinic: clinicName }))}</p>
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 16px;font-size:15px;">${details}</table>
+    ${contactHtml}
+    ${!cancelled && calendarLinks.length ? `<p style="margin:0 0 16px;font-size:13px;">${escapeHtml(t("addToCalendar"))} ${calendarLinks.join(" · ")}</p>` : ""}
+    <p style="margin:0;font-size:12px;color:#7a827e;">${escapeHtml(t("optOutLead"))} <a href="${escapeHtml(appointment.links.optOut)}" style="color:#7a827e;">${escapeHtml(t("optOut"))}</a></p>`;
+
+  const socials = getSocialsForRegion(recipient.region);
+  const html = renderEmailLayout({
+    preheader: `${t(`${appointment.kind}.title`)} · ${date}`,
+    bodyHtml,
+    cta: appointment.links.confirm ? { text: t("confirm"), href: appointment.links.confirm } : undefined,
+    secondaryCta: appointment.links.cannotAttend ? { text: t("cannotAttend"), href: appointment.links.cannotAttend } : undefined,
+    footerTagline: emailT(locale, "email.footer.tagline"),
+    footerCities: emailT(locale, "email.footer.cities"),
+    footerCopyright: emailT(locale, "email.footer.copyright", { year: String(new Date().getFullYear()) }),
+    supportLeadIn: emailT(locale, "email.footer.support"),
+    socials,
+  });
+
+  return sendEmail(`appointment ${appointment.kind} email`, {
+    to,
+    subject: t(`${appointment.kind}.subject`, { clinic: clinicName, date }),
+    html,
+    attachments: [
+      ...getEmailAttachments(socials),
+      {
+        filename: cancelled ? "cancelled.ics" : "appointment.ics",
+        content: Buffer.from(appointment.ics.content, "utf8"),
+        contentType: `text/calendar; charset=utf-8; method=${appointment.ics.method}`,
+      },
+    ],
+    ...(email ? { replyTo: email } : {}),
+    fromName: clinicFromName(appointment.clinicName),
+    ...(tags ? { tags } : {}),
+  });
+}
+
 /** One signed document ready to attach — plain PDF bytes, not yet an EmailAttachment
  * (no inline contentId, unlike the logo/social icons the layout also attaches). */
 export interface SignedDocumentAttachment {

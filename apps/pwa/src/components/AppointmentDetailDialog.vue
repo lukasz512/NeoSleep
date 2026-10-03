@@ -16,6 +16,18 @@
             {{ t(`user.appointments.status.${appointment.status}`) }}
           </VChip>
         </div>
+        <!-- The patient's answer from the appointment email (CORE-25). -->
+        <VChip
+          v-if="appointment.status === 'scheduled' && appointment.patient_response"
+          :color="appointment.patient_response === 'confirmed' ? 'success' : 'warning'"
+          size="small"
+          variant="tonal"
+          class="appointment-detail__response"
+          data-testid="appointment-patient-response"
+        >
+          <AppIcon :name="appointment.patient_response === 'confirmed' ? 'check-circle' : 'alert-triangle'" class="appointment-detail__response-icon" />
+          {{ t(`user.appointments.patientResponse.${appointment.patient_response}`) }}
+        </VChip>
         <dl class="appointment-detail__facts">
           <dt>{{ t('user.appointments.form.fieldPatient') }}</dt>
           <dd>
@@ -224,6 +236,15 @@ async function onConfirmCancel() {
 .appointment-detail__status {
   grid-column: 2;
   grid-row: 1 / span 2;
+}
+
+.appointment-detail__response {
+  justify-self: start;
+}
+
+.appointment-detail__response-icon {
+  margin-inline-end: 4px;
+  font-size: 16px;
 }
 
 .appointment-detail__facts {

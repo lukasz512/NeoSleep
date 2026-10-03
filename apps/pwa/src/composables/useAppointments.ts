@@ -26,7 +26,11 @@ export interface Appointment {
   timezone: string;
   location_type: string;
   notes: string | null;
+  /** The patient's answer from the appointment email (CORE-25); cleared when the appointment moves. */
+  patient_response?: AppointmentPatientResponse | null;
 }
+
+export type AppointmentPatientResponse = "confirmed" | "cannot_attend";
 
 export type AppointmentStatus = "scheduled" | "completed" | "cancelled" | "no_show";
 

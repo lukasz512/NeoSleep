@@ -223,3 +223,60 @@ describe("mailer — configured", () => {
     errorSpy.mockRestore();
   });
 });
+
+describe("sendAppointmentPatientEmail (CORE-25 / CORE-26)", () => {
+  const appointment = {
+    kind: "booked" as const,
+    startAt: "2031-01-15T15:00:00.000Z",
+    endAt: "2031-01-15T16:00:00.000Z",
+    timezone: "America/Mexico_City",
+    clinicName: "Clínica Sonrisa",
+    clinicAddress: "Av. Reforma 1, 06600 CDMX",
+    doctorName: "Dra. Ana López",
+    onlineUrl: null,
+    contact: { phone: "+52 55 1234 5678", email: "hola@sonrisa.mx" },
+    links: {
+      confirm: "https://pwa.example/a?r=confirm#tok",
+      cannotAttend: "https://pwa.example/a?r=cannot#tok",
+      optOut: "https://pwa.example/a?r=stop#tok",
+      google: "https://calendar.google.com/x",
+      outlook: "https://outlook.live.com/x",
+    },
+    ics: { content: "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n", method: "REQUEST" as const },
+  };
+  const patient = { firstName: "Luis", lastName: "Pérez", language: "mx", region: "MX" };
+
+  it("shows the clinic's local time, how to reach the clinic, both buttons and the stop link; attaches the .ics as an invitation; replies go to the clinic", async () => {
+    const { sendAppointmentPatientEmail } = await importMailer(true);
+    await sendAppointmentPatientEmail("luis@example.org", patient, appointment, { tenant: "neosleep", kind: "appointment" });
+
+    const args = sendMock.mock.calls[0]![0];
+    expect(args.subject).toContain("Clínica Sonrisa");
+    expect(args.html).toContain("09:00"); // 15:00 UTC = 09:00 in Mexico City
+    expect(args.html).toContain("tel:+525512345678");
+    expect(args.html).toContain("mailto:hola@sonrisa.mx");
+    expect(args.html).toContain("Confirmo mi asistencia");
+    expect(args.html).toContain("No puedo asistir");
+    expect(args.html).toContain(appointment.links.optOut);
+    expect(args.replyTo).toBe("hola@sonrisa.mx");
+    expect(args.from).toContain("Clínica Sonrisa | NeoSleep");
+    const ics = args.attachments.find((a: { filename: string }) => a.filename.endsWith(".ics"));
+    expect(ics.contentType).toBe("text/calendar; charset=utf-8; method=REQUEST");
+  });
+
+  it("a cancellation has no buttons and no add-to-calendar links, only how to book again", async () => {
+    const { sendAppointmentPatientEmail } = await importMailer(true);
+    await sendAppointmentPatientEmail("luis@example.org", patient, {
+      ...appointment,
+      kind: "cancelled",
+      links: { ...appointment.links, confirm: null, cannotAttend: null, google: null, outlook: null },
+      ics: { ...appointment.ics, method: "CANCEL" },
+    });
+
+    const args = sendMock.mock.calls[0]![0];
+    expect(args.html).not.toContain("Confirmo mi asistencia");
+    expect(args.html).not.toContain("calendar.google.com");
+    expect(args.html).toContain("Para agendar una nueva cita");
+    expect(args.attachments.find((a: { filename: string }) => a.filename === "cancelled.ics").contentType).toContain("method=CANCEL");
+  });
+});

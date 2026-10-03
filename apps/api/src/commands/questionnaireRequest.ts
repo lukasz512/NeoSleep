@@ -32,6 +32,7 @@ import { sendQuestionnaireLinkEmail, sendPatientSignedCopyEmail, sendEmailSentCo
 import { isPatientEmailHeldByAnother } from "../db/identityEmail.js";
 import { insertPatientEmailSend } from "../db/patientEmailSend.js";
 import { maskEmail } from "../utils/maskEmail.js";
+import { patientEmailLocale } from "../utils/patientEmailLocale.js";
 import { PRIVACY_NOTICE_URL } from "../env.js";
 import { validateMedicalHistory, validateStop } from "./clinicalRecordFields.js";
 
@@ -159,16 +160,6 @@ export async function CreateQuestionnaireRequestCommand(
 
 export { maskEmail };
 
-/** Email language from the patient's own settings: Polish, Mexican Spanish, else by region, else English. */
-function patientEmailLocale(language: string | null, region: string | null): string {
-  const lang = (language ?? "").toLowerCase();
-  if (lang.startsWith("pl")) return "pl";
-  if (lang.startsWith("es") || lang === "mx") return "mx";
-  const reg = (region ?? "").toUpperCase();
-  if (reg === "PL") return "pl";
-  if (reg === "MX") return "mx";
-  return "en";
-}
 
 /**
  * "Send questionnaires by email" on the patient (Łukasz, 2026-09-26): one
