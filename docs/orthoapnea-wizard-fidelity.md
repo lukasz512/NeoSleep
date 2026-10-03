@@ -35,6 +35,12 @@ drifted from the code. NEO-16 replaces this whole branding scheme with the gener
 
 ## Confirmed validation rules (from a live OA screenshot)
 
+> **Superseded for rules and payload shape (2026-10-03, NEO-210):** see
+> [partners/orthoapnea-order-rules.md](partners/orthoapnea-order-rules.md). It is
+> harvested from OA's own portal code and covers every validator, the real order DTO
+> (multipart `treatmentDTO`), the status enum, and the differences from this wizard.
+> The notes below remain only as layout history.
+
 - **MR must be strictly less than MP** (`retrusionMax < protrusionMax`). OA shows a red
   inline error below the fields when violated, doesn't block typing, blocks advancing.
 - **MR and MP must each be within `[-20, 20]` mm.** Confirmed via a live OA screenshot
@@ -96,6 +102,10 @@ not verified.
   as the deviation diagram); only the lower incisor moves, tracking the current Starting
   Point position. An earlier version bound the two images directly to MR/MP, which at
   extreme values sent them to opposite ends of the ruler — fixed.
+- Both images are placed by their incisal **tip**, not their centre (2026-10-03): with default
+  values the tips touch the 0 line, as on OA's ruler. The tip offsets are measured from the PNGs
+  (`INCISOR_TIP` in `mandibularRuler.ts`); the upper image sits on top of the track, the lower
+  one under it.
 - The exact value→pixel curve beyond "±20mm maps to full width" is still an approximation.
 
 ## Product catalog filtering

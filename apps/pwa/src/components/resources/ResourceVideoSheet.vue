@@ -49,9 +49,6 @@
             <small>{{ slow ? t("user.resources.video.slow") : t("user.resources.video.largeFile") }}</small>
             <small class="video-sheet__elapsed">{{ t("user.resources.video.elapsed", { s: elapsed }) }}</small>
           </div>
-          <div v-else-if="state === 'buffering'" class="video-sheet__overlay video-sheet__overlay--light" aria-live="polite">
-            <VProgressCircular indeterminate color="primary" size="40" width="3" />
-          </div>
           <div v-else-if="state === 'error'" class="video-sheet__overlay" data-testid="resource-video-error" role="alert">
             <AppIcon name="alert-circle" class="video-sheet__error-icon" />
             <strong>{{ t("user.resources.video.error") }}</strong>
@@ -299,9 +296,6 @@ onBeforeUnmount(() => {
 .video-sheet__overlay small {
   color: rgba(255, 255, 255, 0.7);
   max-width: 36ch;
-}
-.video-sheet__overlay--light {
-  pointer-events: none;
 }
 .video-sheet__elapsed {
   font-variant-numeric: tabular-nums;

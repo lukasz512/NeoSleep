@@ -230,6 +230,37 @@ describe.skipIf(!launch)("renderHtmlToPdf (real Chromium)", () => {
       expect(countPdfPages(pdf)).toBe(countPdfPages(await print()));
     });
 
+    it("roomy layout that would add a page is dropped — compact page count wins", { timeout: 60_000 }, async () => {
+      browser ??= await puppeteer.launch({ ...launch!, headless: true });
+      const page = await browser.newPage();
+      // Roomy adds 300px above the text: a document that just fits on 2 compact pages would spill onto a 3rd.
+      const style = `@page { size: A4; margin: 18mm 14mm 18mm; } body { margin: 0; font: 11pt sans-serif; } .sig-panels { margin-top: 20px; height: 60px; } .doc-roomy h1 { margin-bottom: 300px; }`;
+      const para = "<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore.</p>";
+      const print = () => page.pdf({ format: "A4", margin });
+      let paragraphs = 30;
+      for (;;) {
+        await page.setContent(`<html><head><style>${style}</style></head><body><h1>Title</h1>${para.repeat(paragraphs)}<div class="sig-panels">signatures</div></body></html>`);
+        if (countPdfPages(await print()) > 1) break;
+        paragraphs += 5;
+      }
+      // Grow until the roomy version of the text needs one more page than the compact one.
+      for (;;) {
+        await page.setContent(`<html><head><style>${style}</style></head><body><h1>Title</h1>${para.repeat(paragraphs)}<div class="sig-panels">signatures</div></body></html>`);
+        const compact = countPdfPages(await print());
+        await page.evaluate(() => document.documentElement.classList.add("doc-roomy"));
+        const roomy = countPdfPages(await print());
+        await page.evaluate(() => document.documentElement.classList.remove("doc-roomy"));
+        if (roomy > compact) break;
+        paragraphs += 1;
+      }
+      const compactPages = countPdfPages(await print());
+
+      const pdf = await fitPageLayout(page, print, margin);
+
+      expect(countPdfPages(pdf)).toBe(compactPages);
+      expect(await page.evaluate(() => document.documentElement.classList.contains("doc-roomy"))).toBe(false);
+    });
+
     it("no signature block: returns the first print untouched", { timeout: 60_000 }, async () => {
       browser ??= await puppeteer.launch({ ...launch!, headless: true });
       const page = await browser.newPage();

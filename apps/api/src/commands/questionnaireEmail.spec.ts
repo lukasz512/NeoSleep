@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import bcrypt from "bcrypt";
 import { withTenant, insertStaffUser, insertPatient, getGlobalTerritoryId } from "../db.js";
+import { insertOrganization } from "../db/organization.js";
+import { insertPractitioner } from "../db/practitioner.js";
+import { linkPractitionerOrganization, setGlobalPrimaryOrganization } from "../db/practitionerOrganization.js";
 import { getAuditLogForEntities } from "../db/audit-log.js";
 import type { TenantContext } from "../context/TenantContext.js";
 import {
@@ -82,6 +85,30 @@ describe("SendQuestionnaireEmailCommand", () => {
         [messageId]
       );
       expect(rows).toEqual([{ kind: "questionnaire_link", sent_to_masked: "l***@example.mx", status: "sent", questionnaire_request_id: request.id, sent_by: ctx.user.id }]);
+    });
+  });
+
+  it("names the doctor's clinic from their affiliations when practitioner.organization_id is empty (NEO-178)", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const other = await insertOrganization(client, { name: `A Otra Clínica ${uniqueSuffix()}` });
+      const primary = await insertOrganization(client, { name: `Z Clínica Sonrisa ${uniqueSuffix()}` });
+      const doctor = await insertPractitioner(client, { first_name: "Ana", last_name: `Afiliada-${uniqueSuffix()}` });
+      await linkPractitionerOrganization(client, doctor.id, other.id, null);
+      await linkPractitionerOrganization(client, doctor.id, primary.id, null);
+      await setGlobalPrimaryOrganization(client, doctor.id, primary.id);
+      const patient = await insertPatient(client, {
+        first_name: "Paz",
+        last_name: `Clinica-${uniqueSuffix()}`,
+        email: `paz.clinica.${uniqueSuffix()}@example.mx`,
+        region: "MX",
+        practitioner_id: doctor.id,
+      });
+
+      await SendQuestionnaireEmailCommand(ctx, patient.id, ORIGIN);
+
+      const [, , , clinic] = sendMock.mock.calls[0]!;
+      expect(clinic).toMatchObject({ name: primary.name });
     });
   });
 

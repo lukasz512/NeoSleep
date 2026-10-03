@@ -2,7 +2,7 @@ import type { PoolClient } from "pg";
 import { DatabaseError } from "../errors.js";
 import type { ProgressState, ProgressStatus } from "../services/partners/resourceProgress.js";
 
-/** Watch progress per user and partner video (NEO-209, migration 041). */
+/** Watch progress per user and partner video (NEO-209, migration 043). */
 
 export interface ResourceProgressRow {
   resource_id: string;

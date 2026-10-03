@@ -44,5 +44,7 @@ export default defineConfig({
     // still gets caught well before this.
     testTimeout: 15_000,
     globalSetup: ["./vitest.global-setup.ts"],
+    // Blocks every fetch to apneadock.* — see the file's own comment.
+    setupFiles: ["./test/fetch-guard.ts"],
   },
 });

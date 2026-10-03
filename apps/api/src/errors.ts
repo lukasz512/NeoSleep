@@ -93,6 +93,20 @@ export class ConflictError extends AppError {
 }
 
 /**
+ * 409 PARTNER_ORDER_ALREADY_SUBMITTED: the partner already holds an order for
+ * this plan. `externalId` (the partner's order id) is sent with the 409 body so
+ * the client can point at the order that exists.
+ */
+export class PartnerOrderAlreadySubmittedError extends ConflictError {
+  constructor(
+    message: string,
+    readonly externalId: string
+  ) {
+    super(message, "PARTNER_ORDER_ALREADY_SUBMITTED");
+  }
+}
+
+/**
  * NEO-111: identities.email is unique among everyone except patients (users,
  * doctors, leads — migration 037), so saving one of those with an email
  * another of them already has would otherwise surface as an opaque 23505

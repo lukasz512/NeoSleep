@@ -28,6 +28,24 @@ export const FRONTEND_URL: string = process.env.FRONTEND_URL ?? "http://localhos
  */
 export const FRONTEND_URLS: string[] = FRONTEND_URL.split(",").map((s) => s.trim()).filter(Boolean);
 
+/**
+ * Which environment this API is (NEO-218). It goes into the environment tag on
+ * every device order, so the reconciliation can tell "sent by the other
+ * environment" apart from "placed directly in the lab". Set explicitly in
+ * infrastructure/cloud-run/*.env.yaml. When unset, it is derived from the
+ * first FRONTEND_URL (pwa-dev → dev, pwa → prod); anything else is "local".
+ */
+export function resolveDeployEnv(explicit: string | undefined, frontendUrls: readonly string[]): "dev" | "prod" | "local" {
+  const value = explicit?.trim().toLowerCase();
+  if (value === "dev" || value === "prod" || value === "local") return value;
+  const first = frontendUrls[0] ?? "";
+  if (/\/\/pwa-dev\./.test(first)) return "dev";
+  if (/\/\/pwa\.neosleepcare\.com/.test(first)) return "prod";
+  return "local";
+}
+
+export const DEPLOY_ENV: "dev" | "prod" | "local" = resolveDeployEnv(process.env.DEPLOY_ENV, FRONTEND_URLS);
+
 /** Full privacy notice linked from the patient self-fill consent (the layered notice there is the short version). */
 export const PRIVACY_NOTICE_URL: string = process.env.PRIVACY_NOTICE_URL ?? "https://neosleepcare.com/privacy";
 

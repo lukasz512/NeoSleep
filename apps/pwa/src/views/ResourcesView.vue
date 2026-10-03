@@ -344,7 +344,7 @@ onUnmounted(() => {
 
 /** Interim manual reporting — see config/support.ts. */
 const incidentMailtoHref = computed(() => {
-  const subject = "NeoSleep — OrthoApnea connection issue";
+  const subject = "NeoSleep — device lab connection issue";
   const body = [
     `Reported by: ${authStore.user?.email ?? "unknown"}`,
     `Time: ${new Date().toISOString()}`,

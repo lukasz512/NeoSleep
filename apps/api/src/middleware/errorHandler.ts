@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import type { RequestWithId } from "./requestId.js";
-import { AppError, EmailInUseError, ValidationError } from "../errors.js";
+import { AppError, EmailInUseError, PartnerOrderAlreadySubmittedError, ValidationError } from "../errors.js";
 import { insertDiagnostic } from "../db.js";
 
 function isDiagnosticsEnabled(): boolean {
@@ -28,6 +28,7 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
       const field =
         err instanceof ValidationError && err.field ? { field: err.field, reason: err.reason }
         : err instanceof EmailInUseError ? { field: err.field, reason: err.reason }
+        : err instanceof PartnerOrderAlreadySubmittedError ? { externalId: err.externalId }
         : {};
       res.status(err.statusCode).json({ error: err.message, code: err.code, ...field });
     }

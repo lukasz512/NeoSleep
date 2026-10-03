@@ -36,6 +36,39 @@ Base: `/api`
 - `GET /api/v1/partners/orthoapnea/resources?locale=` – `{ resources: [...], mediaToken }`; each `mediaUrl` is relative to the API
 - `GET /api/v1/partners/orthoapnea/resources/:id/media?locale=&lang=&t=<mediaToken>` – streams the file; auth by Bearer or `?t=` media token (ADR-020 addendum); forwards `Range` → `206` + `Content-Range`, capped at 8 MiB per response (Cloud Run refuses non-streamed responses over 32 MiB, and Chrome opens video with `bytes=0-`; the player fetches the next slice itself); always `Accept-Ranges: bytes`; `Cross-Origin-Resource-Policy: cross-origin`
 
+- `POST /api/v1/partners/orthoapnea/treatments` – **410 Gone** (CORE-95). It passed the client's body to OrthoApnea unvalidated; orders go through `POST /api/v1/device-orders`.
+
+## Device orders (CORE-95, ADR-028)
+Roles: `admin`, `doctor`, `manager` (reps/KAMs/MSLs get 403 — NEO-199). The order body is our own `DeviceOrder` (`packages/device-order`); the lab's wire format never appears in this API.
+
+- `GET /api/v1/device-orders/context?dentist_id=<practitioner uuid>&product_code=002|003` →
+  `200 { delivery: { organizationId, name, address, city, postalCode, countryCode, phone, email } | null, deliveryIssues: OrderIssue[], minDesiredDate: "YYYY-MM-DD" | null, rulesVersion }`.
+  `delivery` is the dentist's primary HCO (`practitioner_organization.is_primary`, else their only affiliation, else `null` with `deliveryIssues: [{ path: "delivery", code: "required" }]`). Missing HCO fields come back as `delivery.<field>` issues. `minDesiredDate` is OrthoApnea's manufacturing date for the product (cached 10 min); `null` when OA can't be reached — the endpoint still answers.
+- `POST /api/v1/device-orders` body `{ treatment_plan_id: uuid, patient_id: uuid, order: DeviceOrder }`:
+  - `201 { externalId, externalStatus, warnings: OrderIssue[] }` — sent; `partner_link` synced; an `audit_log` row (`entity_type: "PartnerOrder"`, `entity_id` = plan) holds the acting user, `rulesVersion`, our order, the delivery address and the exact DTO sent.
+  - `400 { error: "validation", fields: OrderIssue[], warnings: OrderIssue[], rulesVersion }` — nothing was sent to the lab. Checked in this order: ids, plan (must be the patient's `dental_appliance` plan), `validateDeviceOrder`, `validateDeliveryAddress` on the dentist's primary HCO — all with **no** lab call; then the desired date against the lab's minimum (one read call, `desiredDateTooEarly`).
+  - `409 { code: "PARTNER_ORDER_ALREADY_SUBMITTED", externalId }` — this plan already has an order (`externalId` = the lab's order id). `409 { code: "PARTNER_ORDER_SUBMISSION_PENDING" }` — another submit is running, or one was interrupted (timeout / crash) less than 10 min ago (`RECONCILE_AFTER_MS`), or the lab couldn't be asked. An interrupted submit older than that is first looked up in the lab (read-only `GET /api/treatments/byPatient/{oaPatientId}`, same product, `requestDate` ≥ claim − 1 min): found → the link is synced to it and the answer is `ALREADY_SUBMITTED`; not found → this request sends the order once (`201`). Each lookup leaves a `partner_transaction` row with `action: "reconcile"`.
+  - `502 { code: "PARTNER_SERVICE_ERROR" }` — the lab refused or was unreachable; the link is `failed` and the same body can be sent again.
+  - `OrderIssue` = `{ path, code, params? }`; `path` is a dot path into `DeviceOrder` (or `delivery.<field>`, `treatment_plan_id`, `patient_id`), `code` is the i18n key suffix `app.deviceOrder.errors.<code>`.
+  - `DeviceOrder` fields added 2026-10-03 (`RULES_VERSION` `2026-10-03.2`), both optional on input:
+    - `acknowledgedWarnings: string[]` (default `[]`) — warning codes the doctor confirmed. A confirmable warning (`advanceUnder5`, MP − MR under 5 mm) not listed here is a `400` error `{ path: "protrusionMaxMm", code: "warningNotConfirmed", params: { warning: "advanceUnder5" } }`; once listed, only the warning is returned.
+    - `registration` (default `{ method: "impression" }`) — `{ method: "impression" } | { method: "scanner", scannerTreatment } | { method: "platform", scannerPlatform }`, names from OA's enums (`SCANNER_TREATMENTS` / `SCANNER_PLATFORMS` in `@neo/device-order`). A missing name is `required`, an unknown one `invalid` (`registration.scannerTreatment` / `registration.scannerPlatform`). Sent to OA as `scannerTreatment` / `scannerPlatform`, the other one `null`. No promotion code is ever sent.
+  - The order is stored and sent as parsed (defaults filled, unknown keys dropped).
+
+### Reconciliation (NEO-218)
+Compares the orders this environment sent (`partner_link` + the payload of its `create_treatment` call) with the lab's order list, read through the lab's own list endpoint with GET only. Runs are stored in `device_order_reconciliation_run` and kept for 90 days. `ReconciliationItem.reason` takes these values:
+- Mismatches: `missing_in_lab`, `field_drift` (with `drift: [{ field, ours, lab }]`), `untracked` (the lab order carries this environment's tag but has no link here), `submission_pending`.
+- Info: `test_order`, `other_env`, `unknown_env`, `outside` (placed directly in the lab).
+- Plus `matched`.
+
+The lab's status is reported as `labStatus` and is never a mismatch.
+
+- `POST /api/v1/device-orders/reconciliation/run` (**admin**) → `201 { environment, run }`, where `run` = `{ id, provider, trigger: "manual", triggered_by, status: "ok"|"mismatch"|"failed", summary: { oursSent, labTotal, matched, mismatches, info, byReason, matchLevel }, items: ReconciliationItem[], error, started_at, finished_at }`. When the lab can't be read, `status: "failed"`, `items: []` and `error` is set. A manual run sends no email.
+- `GET /api/v1/device-orders/reconciliation/latest` (**admin, manager**) → `200 { environment, counter: { status, matchLevel, matched, mismatches, finishedAt } | null, run? }`. Only admins get `run`, and each admin read writes an `audit_log` row (`action: "read"`, `entity_type: "DeviceOrderReconciliation"`) because items carry the lab's patient names. A manager gets the counter only (Łukasz Q3).
+- `GET /api/v1/device-orders/reconciliation/runs?limit=30` (**admin**, max 100) → `{ items: run summaries without items }`.
+- `POST /api/v1/device-orders/jobs/reconcile` (machine-to-machine, `Authorization: Bearer <RECONCILIATION_JOB_SECRET>`, its own secret, Łukasz D2 — the shared job secret is refused): the daily job (`.github/workflows/device-order-reconciliation.yml`, 07:00 Mexico City). Runs for the default tenant and every tenant with a device-order link → `{ tenants: { <slug>: { status, runId } | { error } }, tenantsFailed }`. A scheduled run with `mismatch` or `failed` emails the active admins counts and lab order numbers only, with no patient data (Łukasz Q1).
+- Environment tag: the last line of every new order's notes is `[NeoSleep DEV|PROD|LOCAL · ref <first 8 hex of the plan id>] — referencia interna NeoSleep, no requiere acción` (`DEPLOY_ENV`; wording approved by Łukasz 2026-10-03, D1).
+
 ## Planner events (calendar)
 - `GET /api/events?start=&end=&region=` – list events (filtered by rep/region)
 - `GET /api/events/:id` – event detail with attendees
