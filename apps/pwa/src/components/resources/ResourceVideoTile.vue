@@ -1,7 +1,8 @@
 <template>
   <div
     class="video-card"
-    :class="{ 'video-card--pressing': pressing, 'video-card--row': layout === 'row' }"
+    :class="{ 'video-card--pressing': pressing, 'video-card--row': layout === 'row', 'video-card--done': status === 'completed' }"
+    :data-status="status"
     role="button"
     tabindex="0"
     :aria-label="t('user.resources.video.play', { title: video.title })"
@@ -22,11 +23,47 @@
         @load="posterState = 'ready'"
         @error="posterState = 'error'"
       />
+      <span class="video-card__status" :class="`video-card__status--${status}`" data-testid="video-status">{{ statusLabel }}</span>
       <span v-if="video.durationSec" class="video-card__duration">{{ formatDuration(video.durationSec) }}</span>
       <span class="video-card__drop" aria-hidden="true"><AppIcon name="play" /></span>
+      <span v-if="status !== 'not_started'" class="video-card__progress" aria-hidden="true"><i :style="{ width: `${percent}%` }" /></span>
     </div>
     <span class="video-card__body">
-      <span class="video-card__title">{{ video.title }}</span>
+      <span class="video-card__title-row">
+        <span class="video-card__title">{{ video.title }}</span>
+        <VMenu location="bottom end">
+          <template #activator="{ props: menuProps }">
+            <button
+              v-bind="menuProps"
+              type="button"
+              class="video-card__menu"
+              data-testid="video-menu"
+              :title="t('user.resources.menu.label')"
+              :aria-label="t('user.resources.menu.label')"
+              @click.stop
+              @keydown.enter.stop
+              @keydown.space.stop
+            >
+              <AppIcon name="dots-vertical" />
+            </button>
+          </template>
+          <VList density="compact" class="video-card__menu-list">
+            <VListItem
+              v-if="status === 'completed'"
+              data-testid="video-mark-not_started"
+              :title="t('user.resources.menu.markUnwatched')"
+              @click="markStatus(video.id, 'not_started')"
+            />
+            <VListItem
+              v-else
+              data-testid="video-mark-completed"
+              :title="t('user.resources.menu.markWatched')"
+              @click="markStatus(video.id, 'completed')"
+            />
+          </VList>
+        </VMenu>
+      </span>
+      <span v-if="statusLine" class="video-card__status-line" :class="`video-card__status-line--${status}`">{{ statusLine }}</span>
       <span class="video-card__meta">
         <span class="video-card__author">{{ video.description }}</span>
         <span class="video-card__langs">
@@ -41,12 +78,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { ref, watch, computed } from "vue";
 import { useI18n } from "vue-i18n";
 import AppIcon from "../AppIcon.vue";
 import PartnerLanguageFlag from "./PartnerLanguageFlag.vue";
 import { formatDuration, languageName } from "./videoFormat";
 import type { PartnerResourceItem } from "../../composables/usePartnerResources";
+import { useResourceProgress, statusOf } from "../../composables/useResourceProgress";
 
 /**
  * One video as a small card (NEO-151, variant B): a 16:9 frame with its length,
@@ -66,6 +104,28 @@ watch(
   () => props.video.posterUrl,
   (url) => (posterState.value = url ? "loading" : "error")
 );
+
+/**
+ * Watch status (NEO-209): a badge on the frame, a thin bar under it for how
+ * far, and one line under the title (where to continue / when watched).
+ * Watched tiles dim a little so the unseen ones stand out. The ⋯ menu marks
+ * by hand (D4) without opening the video.
+ */
+const { progress, markStatus } = useResourceProgress();
+const row = computed(() => progress[props.video.id]);
+const status = computed(() => statusOf(progress, props.video.id));
+const percent = computed(() => row.value?.percent ?? 0);
+const statusLabel = computed(() =>
+  status.value === "in_progress" ? t("user.resources.status.in_progress", { percent: percent.value }) : t(`user.resources.status.${status.value}`)
+);
+const statusLine = computed(() => {
+  if (status.value === "in_progress" && row.value) return t("user.resources.status.continueFrom", { time: formatDuration(row.value.positionSec) });
+  if (status.value === "completed" && row.value?.completedAt) {
+    const date = new Date(row.value.completedAt).toLocaleDateString(locale.value, { day: "numeric", month: "short" });
+    return t("user.resources.status.watchedOn", { date });
+  }
+  return "";
+});
 
 const pressing = ref(false);
 function open(): void {
@@ -291,6 +351,103 @@ function open(): void {
 .video-card--row .video-card__title {
   min-height: 0;
   font-size: 0.9375rem;
+}
+
+/* Watch status (NEO-209). Badge top-left on the frame, same pill shape as the
+   duration chip; colours from the theme so dark mode follows. */
+.video-card__status {
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.video-card__status--not_started {
+  background: rgba(16, 22, 21, 0.72);
+  color: #fff;
+}
+.video-card__status--in_progress {
+  background: rgb(var(--v-theme-surface));
+  color: rgb(var(--v-theme-primary));
+}
+.video-card__status--completed {
+  background: rgb(var(--v-theme-success));
+  color: rgb(var(--v-theme-on-success));
+}
+/* How far: a thin bar along the bottom edge of the frame. */
+.video-card__progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.35);
+}
+.video-card__progress i {
+  display: block;
+  height: 100%;
+  background: rgb(var(--v-theme-primary));
+  transition: width 0.3s ease;
+}
+.video-card--done .video-card__image {
+  filter: saturate(0.6) brightness(0.88);
+}
+.video-card--done .video-card__progress i {
+  background: rgb(var(--v-theme-success));
+}
+
+.video-card__title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+.video-card__title-row .video-card__title {
+  flex: 1;
+  min-width: 0;
+}
+.video-card__menu {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin: -4px -6px 0 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.video-card__menu:hover,
+.video-card__menu[aria-expanded="true"] {
+  background: rgba(var(--v-theme-on-surface), 0.08);
+}
+.video-card__menu:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 1px;
+}
+.video-card__menu .app-icon {
+  width: 16px;
+  height: 16px;
+}
+.video-card__status-line {
+  margin-top: -2px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.video-card__status-line--in_progress {
+  color: rgb(var(--v-theme-primary));
+}
+.video-card__status-line--completed {
+  color: rgb(var(--v-theme-success));
 }
 
 @media (prefers-reduced-motion: reduce) {

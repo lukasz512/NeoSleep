@@ -7,6 +7,15 @@ import { fetchResources, fetchResourceMedia } from "../../services/partners/orth
 import { getPoster, warmPosters, knownDurationSec, posterSupported } from "../../services/partners/resourcePosters.js";
 import { ValidationError } from "../../errors.js";
 import { routeParam } from "../utils.js";
+import { withTenant, tenantSlugFromHost } from "../../db.js";
+import { buildContext } from "../../context/TenantContext.js";
+import {
+  listResourceProgress,
+  getResourceProgressForUpdate,
+  saveResourceProgress,
+  type ResourceProgressRow,
+} from "../../db/resourceProgress.js";
+import { nextProgress, progressPercent, type ProgressState } from "../../services/partners/resourceProgress.js";
 
 /**
  * OrthoApnea resources (documents/videos library) — read-only, no queueing
@@ -97,5 +106,106 @@ orthoapneaResourcesRouter.get(
     const stream = Readable.fromWeb(media.body as import("node:stream/web").ReadableStream<Uint8Array>);
     res.on("close", () => stream.destroy());
     stream.pipe(res);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// Watch progress per user (NEO-209) — status per video + where to resume.
+// Only for the user's own "what have I seen" list (Łukasz, D5): every role has
+// its own, nobody reads another user's, nothing records how a status was set.
+// ---------------------------------------------------------------------------
+const PARTNER = "orthoapnea";
+const RESOURCE_ID = /^[A-Za-z0-9_-]{1,64}$/;
+/** Longest webinar is ~1 h; anything past a day is a client bug, not a video. */
+const MAX_DURATION_SEC = 24 * 3600;
+
+function resourceIdParam(req: Request): string {
+  const id = routeParam(req, "id")?.trim() ?? "";
+  if (!RESOURCE_ID.test(id)) throw new ValidationError("Invalid resource id", "id");
+  return id;
+}
+
+function seconds(value: unknown, field: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > MAX_DURATION_SEC) {
+    throw new ValidationError(`${field} must be a number of seconds`, field);
+  }
+  return value;
+}
+
+function toState(row: ResourceProgressRow | null): ProgressState {
+  return row
+    ? { status: row.status, positionSec: row.position_sec, maxPositionSec: row.max_position_sec, durationSec: row.duration_sec }
+    : { status: "not_started", positionSec: 0, maxPositionSec: 0, durationSec: null };
+}
+
+function toDto(row: ResourceProgressRow) {
+  return {
+    resourceId: row.resource_id,
+    status: row.status,
+    positionSec: row.position_sec,
+    durationSec: row.duration_sec,
+    percent: progressPercent({ status: row.status, maxPositionSec: row.max_position_sec, durationSec: row.duration_sec }),
+    completedAt: row.completed_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+// GET /api/v1/partners/orthoapnea/resources/progress — the caller's own rows
+orthoapneaResourcesRouter.get(
+  "/partners/orthoapnea/resources/progress",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const slug = tenantSlugFromHost(req.hostname);
+    const rows = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return listResourceProgress(client, ctx.user.id, PARTNER);
+    });
+    res.json({ progress: rows.map(toDto) });
+  })
+);
+
+// PUT /api/v1/partners/orthoapnea/resources/:id/progress — player report
+orthoapneaResourcesRouter.put(
+  "/partners/orthoapnea/resources/:id/progress",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = resourceIdParam(req);
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const report = {
+      positionSec: seconds(body.positionSec, "positionSec"),
+      durationSec: seconds(body.durationSec, "durationSec"),
+      ended: body.ended === true,
+    };
+    const slug = tenantSlugFromHost(req.hostname);
+    const row = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      const prev = await getResourceProgressForUpdate(client, ctx.user.id, PARTNER, id);
+      return saveResourceProgress(client, ctx.user.id, PARTNER, id, nextProgress(toState(prev), report));
+    });
+    res.json(toDto(row));
+  })
+);
+
+// PUT /api/v1/partners/orthoapnea/resources/:id/status — tile menu mark/unmark (D4)
+orthoapneaResourcesRouter.put(
+  "/partners/orthoapnea/resources/:id/status",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = resourceIdParam(req);
+    const status = (req.body as Record<string, unknown> | undefined)?.status;
+    if (status !== "completed" && status !== "not_started") {
+      throw new ValidationError("status must be completed or not_started", "status");
+    }
+    const slug = tenantSlugFromHost(req.hostname);
+    const row = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      const prev = toState(await getResourceProgressForUpdate(client, ctx.user.id, PARTNER, id));
+      const next: ProgressState =
+        status === "completed"
+          ? { ...prev, status }
+          : { ...prev, status, positionSec: 0, maxPositionSec: 0 };
+      return saveResourceProgress(client, ctx.user.id, PARTNER, id, next);
+    });
+    res.json(toDto(row));
   })
 );
