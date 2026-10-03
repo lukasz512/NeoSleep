@@ -13,8 +13,11 @@ STATE_DIR="$LOCAL_DIR/hook-state"
 mkdir -p "$STATE_DIR" 2>/dev/null || exit 0
 
 LINES=()
-HANDOFFS="$(find "$LOCAL_DIR/handoff" -name '*.md' -mtime -7 2>/dev/null | xargs -n1 basename 2>/dev/null | sort | tr '\n' ' ')"
-[ -n "$HANDOFFS" ] && LINES+=("Handoff files (.claude/local/handoff/, last 7 days): ${HANDOFFS}— if this session continues one of them, read that file instead of re-exploring.")
+# A worktree session can only write its own .claude/local/, so look in every worktree too.
+MAIN="$(dirname "$COMMON")"
+HANDOFFS="$(find "$LOCAL_DIR/handoff" "$MAIN"/.claude/worktrees/*/.claude/local/handoff -name '*.md' -mtime -7 2>/dev/null \
+  | sed "s|^$MAIN/||" | sort | tr '\n' ' ')"
+[ -n "$HANDOFFS" ] && LINES+=("Handoff files (last 7 days): ${HANDOFFS}— if this session continues one of them, read that file instead of re-exploring.")
 
 STAMP="$STATE_DIR/skill-doctor.last"
 if [ -z "$(find "$STAMP" -mtime -30 2>/dev/null)" ]; then
