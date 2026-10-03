@@ -11,6 +11,7 @@ import { withPlatform } from "../db/tenant.js";
 import { listPatientChecklistConfig, type ChecklistFillMode } from "../db/documentTemplateEntityType.js";
 import { getPatientFormStatus, POLYSOMNOGRAPHY_FORM_KEY, type FormCompletionItem } from "../db/patientFormCompletion.js";
 import { DOCUMENT_MANIFEST } from "@neo/documents";
+import { getLatestDeviceOrderByPatient, type PatientDeviceOrder } from "../db/treatmentPlan.js";
 import { getViewer, patientListScope, assertCanSeePatient } from "./entityAccess.js";
 
 /**
@@ -72,7 +73,11 @@ export interface PatientIntakeFormStatus {
   waiting_on_patient: boolean;
 }
 
-export type PatientListItemDto = PatientDto & { intake_forms: PatientIntakeFormStatus[] };
+export type PatientListItemDto = PatientDto & {
+  intake_forms: PatientIntakeFormStatus[];
+  /** Latest device order (NEO-223) — once one is placed, the list's Next step follows it instead of the QR. */
+  device_order: PatientDeviceOrder | null;
+};
 
 function toDto(p: Patient & { name: string }, territoryPath: TerritoryPathNode[] | null = null): PatientDto {
   return {
@@ -146,7 +151,9 @@ export async function GetPatientListQuery(
   const { rows, total } = await getPatientsPaginated(ctx.client, filters, page, limit, sortBy, sortOrder);
 
   const forms = await getPatientIntakeForms();
-  const status = await getPatientFormStatus(ctx.client, rows.map((row) => row.id), forms);
+  const ids = rows.map((row) => row.id);
+  const status = await getPatientFormStatus(ctx.client, ids, forms);
+  const deviceOrders = await getLatestDeviceOrderByPatient(ctx.client, ids);
   const items = rows.map((row) => {
     const s = status.get(row.id);
     return {
@@ -157,6 +164,7 @@ export async function GetPatientListQuery(
         category: fillMode === null || fillMode === "external" ? ("study" as const) : ("document" as const),
         waiting_on_patient: s?.waitingOnPatient.has(key) ?? false,
       })),
+      device_order: deviceOrders.get(row.id) ?? null,
     };
   });
   return { items, total };

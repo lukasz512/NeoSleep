@@ -2,6 +2,28 @@
   <!-- NEO-221 (D1/D2): the patient list's "Next step" — what still waits on the patient, plus the QR that gets it done.
        Same rule as the patient's side panel (PatientAsidePanel); `compact` (phone card) keeps only the QR. -->
   <span class="next-step" :class="{ 'next-step--compact': compact }">
+    <!-- NEO-223: once a device is ordered, following the order is the next step — device tracking replaces the QR. -->
+    <template v-if="tracking">
+      <span v-if="!compact" class="next-step__text">
+        <span class="next-step__title">{{ t("app.patients.nextStep.deviceTracking") }}</span>
+        <span class="next-step__items">{{ t(`app.deviceOrder.state.${tracking}`) }}</span>
+      </span>
+      <button
+        type="button"
+        class="next-step__device"
+        :class="`next-step__device--${tracking}`"
+        :aria-label="`${t('app.patients.nextStep.deviceTracking')} — ${t(`app.deviceOrder.state.${tracking}`)}`"
+        :title="t(`app.deviceOrder.state.${tracking}`)"
+        @click.stop="openDevice"
+      >
+        <AppIcon name="nav-treatment-plans" class="next-step__icon" />
+        <span class="next-step__badge" aria-hidden="true">
+          <svg v-if="tracking === 'received'" viewBox="0 0 12 12"><path d="M2.5 6.2l2.3 2.3 4.7-5" /></svg>
+          <template v-else-if="tracking === 'attention'">!</template>
+        </span>
+      </button>
+    </template>
+    <template v-else>
     <span v-if="!compact" class="next-step__text">
       <span class="next-step__title" :class="{ 'next-step__title--done': !waiting.length }">
         {{ waiting.length ? t("app.patients.detail.aside.waitingOnPatient", { n: waiting.length }) : t("app.patients.detail.aside.allDone") }}
@@ -25,6 +47,7 @@
         <svg v-else viewBox="0 0 12 12"><path d="M2.5 6.2l2.3 2.3 4.7-5" /></svg>
       </span>
     </button>
+    </template>
   </span>
 </template>
 
@@ -34,14 +57,30 @@ import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
 import AppIcon from "../AppIcon.vue";
 import { intakeFormAbbr, intakeFormLabel } from "../../config/patientIntakeForms";
-import type { PatientIntakeFormStatus } from "../../types/patientIntakeForm";
+import type { PatientIntakeFormStatus, PatientDeviceOrder } from "../../types/patientIntakeForm";
+import { deviceOrderState, type DeviceOrderState } from "../../utils/treatmentPlanStatus";
 
-const props = withDefaults(defineProps<{ patientId: string; forms: PatientIntakeFormStatus[]; compact?: boolean }>(), { compact: false });
+const props = withDefaults(
+  defineProps<{ patientId: string; forms: PatientIntakeFormStatus[]; compact?: boolean; deviceOrder?: PatientDeviceOrder | null }>(),
+  { compact: false, deviceOrder: null },
+);
 
 const { t } = useI18n();
 const router = useRouter();
 
 const waiting = computed(() => props.forms.filter((f) => f.waiting_on_patient));
+
+/** The order state worth tracking; a draft never sent or a cancelled order leaves the QR in place. */
+const tracking = computed<Exclude<DeviceOrderState, "draft" | "cancelled"> | null>(() => {
+  if (!props.deviceOrder) return null;
+  const state = deviceOrderState(props.deviceOrder);
+  return state === "draft" || state === "cancelled" ? null : state;
+});
+
+/** The order's tracking lives on the patient's Dispositivo tab (PatientOrthoApneaPanel). */
+function openDevice(): void {
+  void router.push({ name: "patient-detail", params: { id: props.patientId }, query: { tab: "orthoapnea" } });
+}
 
 /** The QR flow (request, live status, polling) lives on the patient's Documentos tab — open it there (?qr=1, PatientDetailView). */
 function openQr(): void {
@@ -80,7 +119,8 @@ function openQr(): void {
   white-space: nowrap;
 }
 
-.next-step__qr {
+.next-step__qr,
+.next-step__device {
   position: relative;
   flex: none;
   width: 36px;
@@ -94,7 +134,8 @@ function openQr(): void {
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-.next-step__qr:focus-visible {
+.next-step__qr:focus-visible,
+.next-step__device:focus-visible {
   outline: 2px solid rgba(var(--v-theme-primary), 0.5);
   outline-offset: 2px;
 }
@@ -103,6 +144,31 @@ function openQr(): void {
   background: rgba(var(--v-theme-primary), 0.12);
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   cursor: default;
+}
+
+/* Device tracking: a quiet tint (not the QR's call-to-action fill); the badge says where the order stands. */
+.next-step__device {
+  background: rgba(var(--v-theme-primary), 0.12);
+  color: rgb(var(--v-theme-primary));
+}
+
+.next-step__device--ordered .next-step__badge {
+  min-width: 10px;
+  height: 10px;
+  top: -2px;
+  right: -2px;
+  padding: 0;
+  background: rgb(var(--v-theme-info));
+}
+
+.next-step__device--received .next-step__badge {
+  background: rgb(var(--v-theme-success));
+  color: rgb(var(--v-theme-on-success));
+}
+
+.next-step__device--attention .next-step__badge {
+  background: rgb(var(--v-theme-error));
+  color: rgb(var(--v-theme-on-error));
 }
 
 .next-step__icon {
@@ -150,7 +216,8 @@ function openQr(): void {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .next-step__qr {
+  .next-step__qr,
+  .next-step__device {
     transition: none;
   }
 }
