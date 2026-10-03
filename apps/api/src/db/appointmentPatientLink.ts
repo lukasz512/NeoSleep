@@ -72,6 +72,10 @@ export interface AppointmentEmailContext {
   organization_email: string | null;
   /** "Av. Reforma 1, 06600 Ciudad de México" — null when the clinic has no address. */
   organization_address: string | null;
+  /** The clinic's Google Maps link, if it set one — else directions are searched by address. */
+  organization_maps_url: string | null;
+  /** The clinic's “what to bring” text (organization.visit_instructions). */
+  organization_visit_instructions: string | null;
   /** app_config.support_email — the contact when the clinic has neither phone nor email. */
   tenant_support_email: string | null;
 }
@@ -85,12 +89,14 @@ export async function getAppointmentEmailContext(client: PoolClient, appointment
       address_line1: string | null;
       postal_code: string | null;
       city: string | null;
+      google_link: string | null;
+      visit_instructions: string | null;
     }>(
       `SELECT pi.id AS patient_identity_id, pi.email AS patient_email, pi.language AS patient_language, pi.region AS patient_region,
               pi.title AS patient_salutation, pi.first_name AS patient_first_name, pi.last_name AS patient_last_name,
               di.title AS practitioner_salutation, di.first_name AS practitioner_first_name, di.last_name AS practitioner_last_name,
               o.name AS organization_name, o.phone AS organization_phone, o.email AS organization_email,
-              o.address_line1, o.postal_code, o.city,
+              o.address_line1, o.postal_code, o.city, o.google_link, o.visit_instructions,
               (SELECT support_email FROM app_config LIMIT 1) AS tenant_support_email
          FROM appointment a
          JOIN patient p ON a.patient_id = p.id
@@ -118,6 +124,8 @@ export async function getAppointmentEmailContext(client: PoolClient, appointment
       organization_phone: row.organization_phone?.trim() || null,
       organization_email: row.organization_email?.trim() || null,
       organization_address: address || null,
+      organization_maps_url: row.google_link?.trim() || null,
+      organization_visit_instructions: row.visit_instructions?.trim() || null,
       tenant_support_email: row.tenant_support_email?.trim() || null,
     };
   } catch (err) {

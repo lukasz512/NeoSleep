@@ -4,9 +4,12 @@ import {
   escapeHtml,
   formatGreetingName,
   getEmailAttachments,
+  getEmailIconAttachments,
+  emailIconCid,
   getSocialsForRegion,
   emailT,
   type EmailAttachment,
+  type EmailIconName,
 } from "@neo/email";
 import { maskEmail } from "./utils/maskEmail.js";
 import { AppError } from "./errors.js";
@@ -462,8 +465,12 @@ export interface AppointmentEmail {
   timezone: string;
   clinicName: string | null;
   clinicAddress: string | null;
+  /** The clinic's own maps link, else directions are searched by address. */
+  clinicMapsUrl?: string | null;
   doctorName: string | null;
   onlineUrl: string | null;
+  /** The clinic's “what to bring” text (organization.visit_instructions); left out when empty or cancelled. */
+  visitInstructions?: string | null;
   /** Who to call or write to change the appointment (CORE-25: no self-service rescheduling yet). */
   contact: { phone: string | null; email: string | null };
   links: {
@@ -485,57 +492,131 @@ export function formatAppointmentWhen(startAt: string, endAt: string, timezone: 
   return { date, time: `${clock.format(new Date(startAt))} – ${clock.format(new Date(endAt))}` };
 }
 
-const LINK_STYLE = "color:#128F83;";
+/** The pieces of the calendar-page date tile: "OCT 2031", "15", "WEDNESDAY", plus the start time on its own. */
+function dateTileParts(startAt: string, timezone: string, locale: string | null | undefined): { monthYear: string; day: string; weekday: string; start: string } {
+  const intlLocale = INTL_LOCALE[locale ?? "en"] ?? INTL_LOCALE.en;
+  const at = new Date(startAt);
+  const part = (opts: Intl.DateTimeFormatOptions): string => new Intl.DateTimeFormat(intlLocale, { timeZone: timezone, ...opts }).format(at);
+  return {
+    monthYear: `${part({ month: "short" }).replace(".", "")} ${part({ year: "numeric" })}`.toUpperCase(),
+    day: part({ day: "numeric" }),
+    weekday: part({ weekday: "long" }).toUpperCase(),
+    start: part({ hour: "2-digit", minute: "2-digit" }),
+  };
+}
+
+/** "Cómo llegar": the clinic's own maps link if it set one, else a Google Maps search for the address. */
+export function directionsUrl(mapsUrl: string | null | undefined, address: string | null): string | null {
+  if (mapsUrl) return /^https?:\/\//i.test(mapsUrl) ? mapsUrl : `https://${mapsUrl}`;
+  return address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}` : null;
+}
+
+const APPT = { teal: "#128F83", ink: "#1d2b29", muted: "#6b7a77", soft: "#eef7f5", line: "#dbe8e5" };
+
+/** Status at a glance (calendar-r1 D3, layout A): colour + icon + one sentence. */
+const APPOINTMENT_STATUS: Record<AppointmentEmailKind, { icon: EmailIconName; color: string; bg: string }> = {
+  booked: { icon: "check", color: APPT.teal, bg: APPT.soft },
+  rescheduled: { icon: "calendar", color: "#B26A00", bg: "#FFF4E0" },
+  cancelled: { icon: "x", color: "#B3261E", bg: "#FDECEA" },
+};
+
+const iconImg = (name: EmailIconName, size = 20): string =>
+  `<img src="cid:${emailIconCid(name)}" width="${size}" height="${size}" alt="" style="display:block;border:0;width:${size}px;height:${size}px;">`;
 
 /**
  * CORE-25 / CORE-26: the patient's appointment email — booked, moved or
  * cancelled. Organizational only (date, time, clinic, doctor, how to reach
- * the clinic); never notes, studies or treatment (ADR-027 §6). Carries the
- * .ics invitation, "Confirm" / "I can't come" buttons and a one-click stop
- * link. The clinic leads the sender name and receives replies.
+ * the clinic); never notes, studies or treatment (ADR-027 §6). Layout A
+ * (calendar-r1 D3): a status banner, a calendar-page date tile, icon rows,
+ * "Confirm" / "I can't come", the clinic's own "what to bring" text and how
+ * to reach the clinic. Carries the .ics invitation and a one-click stop
+ * link; the clinic leads the sender name and receives replies.
  */
 export async function sendAppointmentPatientEmail(to: string, recipient: EmailRecipient, appointment: AppointmentEmail, tags?: EmailTags): Promise<string | null> {
   const locale = recipient.language;
   const t = (key: string, params?: Record<string, string>): string => emailT(locale, `email.appointment.${key}`, params);
   const greetingName = formatGreetingName(recipient, to);
   const clinicName = appointment.clinicName ?? emailT(locale, "email.questionnaireLink.yourClinic");
-  const { date, time } = formatAppointmentWhen(appointment.startAt, appointment.endAt, appointment.timezone, locale);
+  const { date } = formatAppointmentWhen(appointment.startAt, appointment.endAt, appointment.timezone, locale);
+  const tile = dateTileParts(appointment.startAt, appointment.timezone, locale);
+  const minutes = Math.round((new Date(appointment.endAt).getTime() - new Date(appointment.startAt).getTime()) / 60_000);
   const cancelled = appointment.kind === "cancelled";
+  const status = APPOINTMENT_STATUS[appointment.kind];
+  const strike = cancelled ? "text-decoration:line-through;" : "";
+  const fade = cancelled ? "opacity:.5;" : "";
+  const icons: EmailIconName[] = [status.icon, "pin", "person", "phone", "mail"];
 
-  const row = (label: string, value: string, href?: string): string => `
-      <tr><td style="padding:6px 12px 6px 0;color:#7a827e;white-space:nowrap;vertical-align:top;">${escapeHtml(label)}</td>
-      <td style="padding:6px 0;font-weight:bold;${cancelled ? "text-decoration:line-through;" : ""}">${href ? `<a href="${escapeHtml(href)}" style="${LINK_STYLE}">${escapeHtml(value)}</a>` : escapeHtml(value)}</td></tr>`;
-  const details = [
-    row(t("date"), date),
-    row(t("time"), time),
-    row(t("clinic"), clinicName),
-    ...(appointment.clinicAddress ? [row(t("address"), appointment.clinicAddress)] : []),
-    ...(appointment.onlineUrl ? [row(t("online"), t("joinOnline"), appointment.onlineUrl)] : []),
-    ...(appointment.doctorName ? [row(t("doctor"), appointment.doctorName)] : []),
+  const banner = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${status.bg};border-radius:12px;margin:0 0 18px;"><tr>
+      <td width="44" valign="top" style="padding:14px 0 14px 16px;">${iconImg(status.icon, 28)}</td>
+      <td style="padding:14px 16px 14px 10px;"><div style="font-size:19px;font-weight:bold;color:${status.color};">${escapeHtml(t(`${appointment.kind}.title`))}</div>
+      <div style="font-size:14px;color:${APPT.ink};margin-top:2px;">${escapeHtml(t(`${appointment.kind}.banner`, { date }))}</div></td>
+    </tr></table>`;
+
+  const ticket = `
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 6px;${fade}"><tr>
+      <td valign="top"><table role="presentation" cellpadding="0" cellspacing="0" style="border:1px solid ${APPT.line};border-radius:10px;width:84px;text-align:center;border-collapse:separate;">
+        <tr><td style="background:${cancelled ? APPT.muted : APPT.teal};color:#ffffff;font-size:11px;font-weight:bold;letter-spacing:1px;padding:4px 0;border-radius:9px 9px 0 0;">${escapeHtml(tile.monthYear)}</td></tr>
+        <tr><td style="font-size:30px;font-weight:bold;color:${APPT.ink};padding:6px 0 0;${strike}">${escapeHtml(tile.day)}</td></tr>
+        <tr><td style="font-size:11px;color:${APPT.muted};padding:0 0 6px;">${escapeHtml(tile.weekday)}</td></tr>
+      </table></td>
+      <td valign="middle" style="padding-left:16px;"><div style="font-size:26px;font-weight:bold;color:${APPT.ink};${strike}">${escapeHtml(tile.start)}</div>
+      <div style="font-size:13px;color:${APPT.muted};">${escapeHtml(t("clinicTime"))} · ${escapeHtml(t("minutes", { n: String(minutes) }))}</div></td>
+    </tr></table>`;
+
+  const row = (icon: EmailIconName, label: string, valueHtml: string): string => `
+      <tr><td width="34" valign="top" style="padding:10px 0;">${iconImg(icon)}</td>
+      <td style="padding:10px 0;border-bottom:1px solid ${APPT.line};"><div style="font-size:12px;color:${APPT.muted};">${escapeHtml(label)}</div>${valueHtml}</td></tr>`;
+  const directions = cancelled ? null : directionsUrl(appointment.clinicMapsUrl, appointment.clinicAddress);
+  const whereHtml = `<div style="font-size:15px;font-weight:bold;color:${APPT.ink};">${escapeHtml(clinicName)}</div>${
+    appointment.clinicAddress ? `<div style="font-size:13px;color:${APPT.ink};">${escapeHtml(appointment.clinicAddress)}</div>` : ""}${
+    directions ? `<a href="${escapeHtml(directions)}" style="display:inline-block;margin-top:6px;font-size:13px;font-weight:bold;color:${APPT.teal};text-decoration:none;">${escapeHtml(t("directions"))} &rarr;</a>` : ""}`;
+  const rows = [
+    row("pin", t("where"), whereHtml),
+    ...(appointment.onlineUrl && !cancelled ? [row("pin", t("online"), `<a href="${escapeHtml(appointment.onlineUrl)}" style="font-size:15px;font-weight:bold;color:${APPT.teal};">${escapeHtml(t("joinOnline"))}</a>`)] : []),
+    ...(appointment.doctorName ? [row("person", t("withWhom"), `<div style="font-size:15px;font-weight:bold;color:${APPT.ink};">${escapeHtml(appointment.doctorName)}</div>`)] : []),
   ].join("");
 
+  const bodyHtml = `
+    ${banner}
+    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.greeting", { name: greetingName }))}<br>${escapeHtml(t(`${appointment.kind}.body`, { clinic: clinicName }))}</p>
+    ${ticket}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;font-size:15px;${fade}">${rows}</table>
+    ${appointment.links.confirm ? `<p style="margin:18px 0 0;font-size:15px;font-weight:bold;">${escapeHtml(t("question"))}</p>` : ""}`;
+
+  const instructions = !cancelled && appointment.visitInstructions?.trim()
+    ? `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid ${APPT.line};border-radius:12px;margin:0 0 14px;"><tr><td style="padding:14px 16px;">
+      <table role="presentation" cellpadding="0" cellspacing="0"><tr><td valign="top">${iconImg("list")}</td>
+      <td style="padding-left:10px;"><div style="font-size:14px;font-weight:bold;color:${APPT.ink};margin-bottom:4px;">${escapeHtml(t("prepareTitle"))}</div>
+      <div style="font-size:14px;color:${APPT.ink};line-height:1.5;">${escapeHtml(appointment.visitInstructions.trim()).replace(/\r?\n/g, "<br>")}</div></td></tr></table>
+    </td></tr></table>`
+    : "";
+  if (instructions) icons.push("list");
+
   const { phone, email } = appointment.contact;
-  const contactParts = [
-    ...(phone ? [`<a href="tel:${escapeHtml(phone.replace(/[^0-9+]/g, ""))}" style="${LINK_STYLE}">${escapeHtml(phone)}</a>`] : []),
-    ...(email ? [`<a href="mailto:${escapeHtml(email)}" style="${LINK_STYLE}">${escapeHtml(email)}</a>`] : []),
+  const contactRows = [
+    ...(phone ? [`<tr><td style="padding:3px 0;">${iconImg("phone", 18)}</td><td style="padding:3px 0 3px 8px;"><a href="tel:${escapeHtml(phone.replace(/[^0-9+]/g, ""))}" style="font-size:15px;font-weight:bold;color:${APPT.teal};text-decoration:none;white-space:nowrap;">${escapeHtml(phone)}</a></td></tr>`] : []),
+    ...(email ? [`<tr><td style="padding:3px 0;">${iconImg("mail", 18)}</td><td style="padding:3px 0 3px 8px;"><a href="mailto:${escapeHtml(email)}" style="font-size:15px;font-weight:bold;color:${APPT.teal};text-decoration:none;">${escapeHtml(email)}</a></td></tr>`] : []),
   ];
-  const contactHtml = contactParts.length
-    ? `<p style="margin:0 0 16px;padding:12px 16px;background:#f2f8f6;border-radius:8px;">${escapeHtml(t(cancelled ? "contactCancelled" : "contactToChange", { clinic: clinicName }))}<br>${contactParts.join(" · ")}</p>`
+  const contactHtml = contactRows.length
+    ? `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${APPT.soft};border-radius:12px;margin:0 0 14px;"><tr><td style="padding:14px 16px;">
+      <div style="font-size:14px;font-weight:bold;color:${APPT.ink};margin-bottom:8px;">${escapeHtml(t(cancelled ? "contactCancelled" : "contactToChange", { clinic: clinicName }))}</div>
+      <table role="presentation" cellpadding="0" cellspacing="0">${contactRows.join("")}</table>
+    </td></tr></table>`
     : "";
 
   const calendarLinks = [
-    ...(appointment.links.google ? [`<a href="${escapeHtml(appointment.links.google)}" style="${LINK_STYLE}">Google Calendar</a>`] : []),
-    ...(appointment.links.outlook ? [`<a href="${escapeHtml(appointment.links.outlook)}" style="${LINK_STYLE}">Outlook</a>`] : []),
+    ...(appointment.links.google ? [`<a href="${escapeHtml(appointment.links.google)}" style="color:${APPT.teal};">Google Calendar</a>`] : []),
+    ...(appointment.links.outlook ? [`<a href="${escapeHtml(appointment.links.outlook)}" style="color:${APPT.teal};">Outlook</a>`] : []),
   ];
 
-  const bodyHtml = `
-    <h1 style="margin:0 0 16px;font-size:20px;font-weight:bold;color:#128F83;text-align:center;">${escapeHtml(t(`${appointment.kind}.title`))}</h1>
-    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.greeting", { name: greetingName }))}</p>
-    <p style="margin:0 0 16px;">${escapeHtml(t(`${appointment.kind}.body`, { clinic: clinicName }))}</p>
-    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 16px;font-size:15px;">${details}</table>
-    ${contactHtml}`;
-  // Under the buttons: the calendar links, then the stop link as small print.
+  // Under the buttons: the answer hint, the clinic's own text, how to reach the clinic, calendar links, the stop link.
   const afterCtaHtml = `
+    ${appointment.links.confirm ? `<p style="margin:0 0 16px;font-size:12.5px;color:${APPT.muted};text-align:center;">${escapeHtml(t("tapHint"))}</p>` : ""}
+    ${instructions}
+    ${contactHtml}
     ${!cancelled && calendarLinks.length ? `<p style="margin:0 0 12px;text-align:center;">${escapeHtml(t("addToCalendar"))} ${calendarLinks.join(" · ")}</p>` : ""}
     <p style="margin:0;font-size:12px;color:#7a827e;text-align:center;">${escapeHtml(t("optOutLead"))} <a href="${escapeHtml(appointment.links.optOut)}" style="color:#7a827e;">${escapeHtml(t("optOut"))}</a></p>`;
 
@@ -559,6 +640,7 @@ export async function sendAppointmentPatientEmail(to: string, recipient: EmailRe
     html,
     attachments: [
       ...getEmailAttachments(socials),
+      ...getEmailIconAttachments(icons),
       {
         filename: cancelled ? "cancelled.ics" : "appointment.ics",
         content: Buffer.from(appointment.ics.content, "utf8"),

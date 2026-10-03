@@ -82,10 +82,23 @@ export interface CreateOrganizationInput {
   email?: string | null;
   website?: string | null;
   google_link?: string | null;
+  /** “What to bring” in the patient's appointment email (CORE-25). */
+  visit_instructions?: string | null;
   specialties?: string[];
   /** Admin-only (NEO-79) — ignored for any other role, see publicMapFlagFor(). */
   show_on_public_map?: boolean;
   metadata?: Record<string, unknown> | null;
+}
+
+/** Plain text the patient reads in the appointment email — trimmed, empty = none, at most 500 characters. */
+export const VISIT_INSTRUCTIONS_MAX = 500;
+function normalizeVisitInstructions(value: string | null | undefined): string | null | undefined {
+  if (value === undefined) return undefined;
+  const text = value?.trim() ?? "";
+  if (text.length > VISIT_INSTRUCTIONS_MAX) {
+    throw new ValidationError(`Visit instructions can be at most ${VISIT_INSTRUCTIONS_MAX} characters`, "visit_instructions");
+  }
+  return text || null;
 }
 
 /**
@@ -141,6 +154,7 @@ export async function CreateOrganizationCommand(
     email,
     website:       input.website?.trim() ?? null,
     google_link:   input.google_link?.trim() ?? null,
+    visit_instructions: normalizeVisitInstructions(input.visit_instructions) ?? null,
     latitude:      coordinates?.lat ?? null,
     longitude:     coordinates?.lng ?? null,
     specialties:   input.specialties,
@@ -188,6 +202,8 @@ export interface UpdateOrganizationPayload {
   email?: string | null;
   website?: string | null;
   google_link?: string | null;
+  /** “What to bring” in the patient's appointment email (CORE-25). */
+  visit_instructions?: string | null;
   specialties?: string[];
   /** Admin-only (NEO-79) — ignored for any other role, see publicMapFlagFor(). */
   show_on_public_map?: boolean;
@@ -263,6 +279,7 @@ export async function UpdateOrganizationCommand(
     email:         input.email,
     website:       input.website,
     google_link:   input.google_link,
+    visit_instructions: normalizeVisitInstructions(input.visit_instructions),
     // A failed/unconfigured geocode leaves the existing coordinates untouched
     // (undefined) rather than nulling them out — a transient API hiccup on an
     // unrelated address tweak shouldn't erase a pin that already worked.

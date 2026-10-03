@@ -42,6 +42,17 @@ function socialCid(id: string): string {
 /** Inline-image attachments for the given (already region-resolved) social set — pass as `attachments`
  * on the resend.emails.send() call alongside these socials, so the cid: references in the footer
  * always resolve. */
+/** Line icons for patient emails (CORE-25) — PNG under assets/email/icon-*.png; mail clients drop inline SVG. */
+export type EmailIconName = "check" | "calendar" | "x" | "pin" | "person" | "phone" | "mail" | "list" | "video";
+
+export function emailIconCid(name: EmailIconName): string {
+  return `icon-${name}`;
+}
+
+export function getEmailIconAttachments(names: readonly EmailIconName[]): EmailAttachment[] {
+  return Array.from(new Set(names)).map((name) => assetAttachment(`icon-${name}.png`, `icon-${name}.png`, emailIconCid(name)));
+}
+
 export function getEmailAttachments(socials: SocialLink[]): EmailAttachment[] {
   return [LOGO_ATTACHMENT, ...socials.map((s) => assetAttachment(s.file, s.file, socialCid(s.id)))];
 }

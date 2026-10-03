@@ -157,6 +157,8 @@ export async function deliverAppointmentPatientEmail(tenantSlug: string, plan: A
         timezone: appointment.timezone,
         clinicName: context.organization_name,
         clinicAddress: context.organization_address,
+        clinicMapsUrl: context.organization_maps_url,
+        visitInstructions: context.organization_visit_instructions,
         doctorName: context.practitioner_name,
         onlineUrl: appointment.location_type === "online" ? appointment.online_url : null,
         contact,

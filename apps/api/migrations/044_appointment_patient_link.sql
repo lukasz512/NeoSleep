@@ -12,6 +12,9 @@
 --   patient_response          confirmed | cannot_attend — cleared on reschedule
 --   patient_responded_at      when the patient answered
 --
+-- organization gains visit_instructions: the clinic's own “what to bring”
+-- text, shown in the patient's appointment email (calendar-r1 D4).
+--
 -- patient_email_send gains kind 'appointment' and an appointment_id, so the
 -- Resend webhook (NEO-190) tracks delivery of these emails too.
 --
@@ -37,6 +40,8 @@ BEGIN
     EXECUTE format($f$ALTER TABLE %I.appointment ADD CONSTRAINT appointment_patient_response_check
       CHECK (patient_response IN ('confirmed', 'cannot_attend'))$f$, r.db_schema);
     EXECUTE format('CREATE UNIQUE INDEX IF NOT EXISTS appointment_patient_token_hash_idx ON %I.appointment (patient_token_hash) WHERE patient_token_hash IS NOT NULL', r.db_schema);
+
+    EXECUTE format('ALTER TABLE %I.organization ADD COLUMN IF NOT EXISTS visit_instructions TEXT', r.db_schema);
 
     EXECUTE format('ALTER TABLE %I.patient_email_send ADD COLUMN IF NOT EXISTS appointment_id UUID REFERENCES %I.appointment(id) ON DELETE SET NULL', r.db_schema, r.db_schema);
     EXECUTE format('ALTER TABLE %I.patient_email_send DROP CONSTRAINT IF EXISTS patient_email_send_kind_check', r.db_schema);
@@ -682,6 +687,7 @@ BEGIN
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     show_on_public_map boolean DEFAULT true NOT NULL,
+    visit_instructions text,
     CONSTRAINT organization_status_check CHECK ((status = ANY (ARRAY['pending_approval'::text, 'active'::text, 'inactive'::text]))),
     CONSTRAINT organization_type_check CHECK ((type = ANY (ARRAY['clinic'::text, 'hospital'::text, 'pharmacy'::text, 'practice'::text, 'other'::text])))
 );$tenant_ddl$;

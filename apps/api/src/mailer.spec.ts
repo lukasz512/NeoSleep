@@ -264,6 +264,34 @@ describe("sendAppointmentPatientEmail (CORE-25 / CORE-26)", () => {
     expect(ics.contentType).toBe("text/calendar; charset=utf-8; method=REQUEST");
   });
 
+  it("layout A: status banner, date tile, icon rows, directions and the clinic's own 'what to bring' text; icons travel as inline PNGs", async () => {
+    const { sendAppointmentPatientEmail } = await importMailer(true);
+    await sendAppointmentPatientEmail("luis@example.org", patient, {
+      ...appointment,
+      visitInstructions: "Llegue 10 minutos antes.\nTraiga una identificación.",
+      clinicMapsUrl: "maps.app.goo.gl/abc",
+    });
+
+    const args = sendMock.mock.calls[0]![0];
+    expect(args.html).toContain("Su cita está agendada");
+    expect(args.html).toContain("Le esperamos el");
+    expect(args.html).toContain(">15<"); // the date tile's day
+    expect(args.html).toContain("Para su visita");
+    expect(args.html).toContain("Llegue 10 minutos antes.<br>Traiga una identificación.");
+    expect(args.html).toContain('href="https://maps.app.goo.gl/abc"');
+    expect(args.html).toContain("cid:icon-check");
+    const cids = args.attachments.map((a: { contentId?: string }) => a.contentId).filter(Boolean);
+    expect(cids).toEqual(expect.arrayContaining(["icon-check", "icon-pin", "icon-person", "icon-list"]));
+  });
+
+  it("without a clinic maps link, directions search the address; without instructions the section is left out", async () => {
+    const { sendAppointmentPatientEmail } = await importMailer(true);
+    await sendAppointmentPatientEmail("luis@example.org", patient, appointment);
+    const args = sendMock.mock.calls[0]![0];
+    expect(args.html).toContain("https://www.google.com/maps/search/?api=1&amp;query=Av.%20Reforma%201");
+    expect(args.html).not.toContain("Para su visita");
+  });
+
   it("a cancellation has no buttons and no add-to-calendar links, only how to book again", async () => {
     const { sendAppointmentPatientEmail } = await importMailer(true);
     await sendAppointmentPatientEmail("luis@example.org", patient, {

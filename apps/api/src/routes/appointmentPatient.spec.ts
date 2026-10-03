@@ -41,11 +41,11 @@ async function admin(): Promise<{ id: string; auth: string }> {
   });
 }
 
-async function setup(opts: { patientEmail?: string | null; clinic?: { phone?: string; email?: string } } = {}): Promise<{ practitionerId: string; practitionerIdentityId: string; patientId: string; patientIdentityId: string; organizationId: string | null }> {
+async function setup(opts: { patientEmail?: string | null; clinic?: { phone?: string; email?: string; visitInstructions?: string } } = {}): Promise<{ practitionerId: string; practitionerIdentityId: string; patientId: string; patientIdentityId: string; organizationId: string | null }> {
   return withTenant(TENANT_SLUG, async (client) => {
     const practitioner = await insertPractitioner(client, { first_name: "Ana", last_name: `Doc-${uniqueSuffix()}`, email: `qa-appt-doc-${uniqueSuffix()}@neosleepcare.com` });
     const org = opts.clinic
-      ? await insertOrganization(client, { name: `Clínica QA ${uniqueSuffix()}`, address_line1: "Av. Reforma 1", city: "CDMX", postal_code: "06600", country_code: "MX", phone: opts.clinic.phone ?? null, email: opts.clinic.email ?? null })
+      ? await insertOrganization(client, { name: `Clínica QA ${uniqueSuffix()}`, address_line1: "Av. Reforma 1", city: "CDMX", postal_code: "06600", country_code: "MX", phone: opts.clinic.phone ?? null, email: opts.clinic.email ?? null, visit_instructions: opts.clinic.visitInstructions ?? null })
       : null;
     const patient = await insertPatient(client, {
       first_name: "Pac",
@@ -104,6 +104,17 @@ describe("appointment emails to the patient (CORE-25)", () => {
       const audit = await client.query(`SELECT legal_basis FROM audit_log WHERE entity_id = $1 AND action = 'notify'`, [res.body.id]);
       expect(audit.rows).toEqual([{ legal_basis: "contract" }]);
     });
+  });
+
+  it("the clinic's own 'what to bring' text reaches the email; a clinic without one sends none", async () => {
+    const a = await admin();
+    const withText = await setup({ clinic: { phone: "+52 55 1111 2222", visitInstructions: "Llegue 10 minutos antes." } });
+    await book(a.auth, { patient_id: withText.patientId, organization_id: withText.organizationId, start_at: futureSlot() });
+    expect(lastEmail().appointment.visitInstructions).toBe("Llegue 10 minutos antes.");
+
+    const withoutText = await setup({ clinic: { phone: "+52 55 1111 3333" } });
+    await book(a.auth, { patient_id: withoutText.patientId, organization_id: withoutText.organizationId, start_at: futureSlot() });
+    expect(lastEmail().appointment.visitInstructions).toBeNull();
   });
 
   it("without a clinic phone/email the contact falls back to the tenant's support address", async () => {
@@ -168,6 +179,24 @@ describe("appointment emails to the patient (CORE-25)", () => {
     expect(lookup.body.status).toBe("cancelled");
     expect((await request(app).post("/api/v1/public/appointment/respond").send({ token, response: "confirmed" })).status).toBe(409);
     expect((await request(app).post("/api/v1/public/appointment/opt-out").send({ token })).status).toBe(200);
+  });
+});
+
+describe("clinic 'what to bring' text (organization.visit_instructions)", () => {
+  it("is saved and returned trimmed through the organization API; over 500 characters is a 400 on that field; empty clears it", async () => {
+    const a = await admin();
+    const created = await request(app).post("/api/v1/organization").set("Authorization", a.auth)
+      .send({ name: `Clínica Instrucciones ${uniqueSuffix()}`, country_code: "MX", email: `qa-clinic-${uniqueSuffix()}@example.org`, phone: "+52 55 1234 5678", visit_instructions: "  Traiga una identificación.  " });
+    expect(created.status).toBe(201);
+    expect(created.body.visit_instructions).toBe("Traiga una identificación.");
+
+    const tooLong = await request(app).patch(`/api/v1/organization/${created.body.id}`).set("Authorization", a.auth).send({ visit_instructions: "x".repeat(501) });
+    expect(tooLong.status).toBe(400);
+    expect(JSON.stringify(tooLong.body)).toContain("visit_instructions");
+
+    const cleared = await request(app).patch(`/api/v1/organization/${created.body.id}`).set("Authorization", a.auth).send({ visit_instructions: "" });
+    expect(cleared.status).toBe(200);
+    expect(cleared.body.visit_instructions ?? "").toBe(""); // PATCH returns the row (null), GET the DTO ("")
   });
 });
 

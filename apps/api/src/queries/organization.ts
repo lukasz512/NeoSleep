@@ -43,6 +43,7 @@ export interface OrganizationDto {
   email: string;
   website: string;
   google_link: string;
+  visit_instructions: string;
   /** Geocoded from the address fields (see services/geocoding.ts) — null
    *  until geocoded. Powers HCODetailView's location map. */
   latitude: number | null;
@@ -75,6 +76,7 @@ function toDto(o: Organization, territoryPath: TerritoryPathNode[] | null = null
     email:         o.email ?? "",
     website:       o.website ?? "",
     google_link:   o.google_link ?? "",
+    visit_instructions: o.visit_instructions ?? "",
     latitude:      o.latitude ?? null,
     longitude:     o.longitude ?? null,
     specialties:   o.specialties ?? [],
