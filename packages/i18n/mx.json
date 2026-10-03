@@ -2322,6 +2322,8 @@
   "user.hcp.form.googleLink": "Enlace de Google",
   "user.hco.detail.delete": "Eliminar clínica",
   "user.hco.detail.deleteConfirmText": "¿Eliminar esta clínica? Esta acción no se puede deshacer desde aquí.",
+  "user.hco.detail.noPrivacyNotice": "Sin aviso de privacidad",
+  "user.hco.detail.noPrivacyNoticeHint": "Antes de firmar, el paciente ve el aviso de privacidad de la plataforma. Agregue el enlace de la clínica en Editar.",
   "user.hco.detail.deleteSuccess": "Clínica eliminada",
   "app.formRenderer.unresolvedOption": "Desconocido",
   "app.formRenderer.choiceMore": "Más opciones",

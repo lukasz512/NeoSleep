@@ -2322,6 +2322,8 @@
   "user.hcp.form.googleLink": "Google link",
   "user.hco.detail.delete": "Delete clinic",
   "user.hco.detail.deleteConfirmText": "Delete this clinic? This can't be undone from here.",
+  "user.hco.detail.noPrivacyNotice": "No privacy notice",
+  "user.hco.detail.noPrivacyNoticeHint": "Patients see the platform privacy notice before signing. Add the clinic's own link in Edit.",
   "user.hco.detail.deleteSuccess": "Clinic deleted",
   "app.formRenderer.unresolvedOption": "Unknown",
   "app.formRenderer.choiceMore": "More options",
