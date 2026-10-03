@@ -51,6 +51,20 @@
 
           <div v-if="order.dentistId" class="oa-wizard__ship-to" data-field="delivery" data-testid="ship-to">
             <p class="oa-wizard__field-label">{{ t("app.deviceOrder.delivery.title") }}</p>
+            <!-- Admin only, when the doctor has several clinics: ship to another one than the primary (NEO-210 D2). -->
+            <div v-if="clinicItems.length > 1" data-field="deliveryOrganizationId" class="mb-2">
+              <VSelect
+                :model-value="selectedClinicId"
+                :items="clinicItems"
+                item-title="title"
+                item-value="value"
+                :aria-label="t('app.deviceOrder.delivery.chooseClinic')"
+                variant="outlined"
+                density="comfortable"
+                hide-details
+                @update:model-value="onClinicPicked"
+              />
+            </div>
             <p v-if="contextLoading" class="text-body-medium text-medium-emphasis">{{ t("app.deviceOrder.delivery.loading") }}</p>
             <address v-else-if="context?.delivery" class="oa-wizard__address">
               <strong>{{ context.delivery.name }}</strong><br />
@@ -75,7 +89,8 @@
               <AppButton v-if="contextFailed" variant="text" size="small" color="primary" @click="refreshContext(true)">{{ t("app.deviceOrder.delivery.retry") }}</AppButton>
             </AppInlineAlert>
           </div>
-          <div data-field="productCode">
+          <!-- Only shown when there is a choice: today the wizard orders NOA only. -->
+          <div v-if="productOptions.length > 1" data-field="productCode">
             <p class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.selectProduct") }}</p>
             <AppSegmentedTabs :model-value="order.productCode" :options="productOptions" fit class="oa-wizard__switch" @update:model-value="onProductPicked" />
           </div>
@@ -603,6 +618,7 @@ const {
   context,
   contextLoading,
   contextFailed,
+  deliveryOrganizationId,
   submitLoading,
   serverIssues,
   validation,
@@ -713,19 +729,37 @@ let contextKey: string | null = null;
 /** (Re)loads the doctor's HCO and OA's earliest date — only when the doctor or product actually changed, unless forced. */
 function refreshContext(force = false) {
   // A doctor's context is always their own; the dentistId the API hands back must not trigger a reload.
-  const key = `${isDoctor.value ? "self" : order.dentistId}|${order.productCode}`;
+  const key = `${isDoctor.value ? "self" : order.dentistId}|${order.productCode}|${deliveryOrganizationId.value ?? ""}`;
   if (!force && key === contextKey) return;
   contextKey = key;
   void loadContext();
 }
 
 function onDoctorPicked(value: unknown) {
+  // Another doctor has other clinics: back to their primary.
+  if (value !== order.dentistId) deliveryOrganizationId.value = null;
   order.dentistId = typeof value === "string" ? value : "";
 }
 
-watch(() => [order.dentistId, order.productCode], () => {
+/** The doctor's clinics as an admin's choice (the API sends them to an admin only), primary marked. */
+const clinicItems = computed(() =>
+  (context.value?.deliveryOptions ?? []).map((o) => ({
+    value: o.organizationId,
+    title: [o.name, o.city].filter(Boolean).join(" · ") + (o.isPrimary ? ` (${t("app.deviceOrder.delivery.primary")})` : ""),
+  })),
+);
+const selectedClinicId = computed(
+  () => deliveryOrganizationId.value ?? context.value?.delivery?.organizationId ?? context.value?.deliveryOptions.find((o) => o.isPrimary)?.organizationId ?? null,
+);
+function onClinicPicked(value: unknown) {
+  const primaryId = context.value?.deliveryOptions.find((o) => o.isPrimary)?.organizationId;
+  // Picking the primary again is the default, not a choice.
+  deliveryOrganizationId.value = typeof value === "string" && value !== primaryId ? value : null;
+}
+
+watch(() => [order.dentistId, order.productCode, deliveryOrganizationId.value], () => {
   if (!props.modelValue) return;
-  // A rejected delivery belonged to the previous doctor's HCO.
+  // A rejected delivery belonged to the previous doctor's (or clinic's) HCO.
   serverIssues.value = serverIssues.value.filter((i) => !isDeliveryPath(i.path));
   refreshContext();
 });
@@ -754,7 +788,10 @@ const doctorDeliveryMessage = computed(() => {
   const fields = [...new Set(issues.map((i) => i.path.slice("delivery.".length)))].map((f) =>
     te(`app.deviceOrder.delivery.field.${f}`) ? t(`app.deviceOrder.delivery.field.${f}`) : f,
   );
-  return t("app.deviceOrder.delivery.doctorIncomplete", { fields: fields.join(", ") });
+  const clinic = context.value?.delivery?.name?.trim();
+  return clinic
+    ? t("app.deviceOrder.delivery.doctorIncompleteNamed", { clinic, fields: fields.join(", ") })
+    : t("app.deviceOrder.delivery.doctorIncomplete", { fields: fields.join(", ") });
 });
 
 /** Where to fix the address: the HCO itself when the API names it, else the doctor's record (where the primary HCO is set). */

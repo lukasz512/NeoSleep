@@ -49,17 +49,40 @@ export interface OrthoApneaDraftPlan {
   metadata: Record<string, unknown> | null;
 }
 
+/** One of the ordering doctor's clinics, as offered to an admin. */
+export interface DeliveryOption {
+  organizationId: string;
+  name: string;
+  city: string | null;
+  isPrimary: boolean;
+}
+
+function parseDeliveryOptions(raw: unknown): DeliveryOption[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(
+    (o): o is DeliveryOption =>
+      typeof o === "object" && o !== null && typeof (o as DeliveryOption).organizationId === "string" && typeof (o as DeliveryOption).name === "string",
+  );
+}
+
 /** GET /api/v1/device-orders/context — where the device ships and OA's earliest delivery date. */
 export interface DeviceOrderContext {
   /** The ordering doctor's primary HCO; `organizationId` only when the API names the record. */
   delivery: (DeliveryAddress & { organizationId?: string }) | null;
+  /** The doctor's clinics, primary first — sent to an admin only, who may ship to another one (NEO-210 D2). */
+  deliveryOptions: DeliveryOption[];
   deliveryIssues: OrderIssue[];
   minDesiredDate: string | null;
   rulesVersion: string;
 }
 
-/** The only products the wizard orders: NOA and NOA TMJ, one per order (Morning Aligner is a flag on it). */
-export const ORDERABLE_PRODUCT_CODES: readonly ProductCode[] = [PRODUCT_CODES.NOA, PRODUCT_CODES.NOA_TMJ];
+/**
+ * The products the wizard orders, one per order (Morning Aligner is a flag on
+ * it). Only NOA (Łukasz, 2026-10-03): with a single product the wizard shows
+ * no product choice at all. NOA TMJ stays in the shared rules; adding it back
+ * here brings the switch back.
+ */
+export const ORDERABLE_PRODUCT_CODES: readonly ProductCode[] = [PRODUCT_CODES.NOA];
 
 /** Which DeviceOrder paths each wizard step owns — `delivery.*` issues belong to step 1. */
 export const STEP_PATHS: Readonly<Record<number, readonly string[]>> = {
@@ -149,6 +172,8 @@ export function useOrthoApneaOrderWizard(asDoctor: () => boolean = () => false) 
   const contextLoading = ref(false);
   const contextFailed = ref(false);
   let contextRequest = 0;
+  /** The clinic an admin chose to ship to; null = the doctor's primary (NEO-210 D2). */
+  const deliveryOrganizationId = ref<string | null>(null);
   /** The treatment_plan this session saves into — a resumed draft's, or the one created on the first save/confirm. */
   const currentDraftPlanId = ref<string | null>(null);
   const submitLoading = ref(false);
@@ -275,6 +300,7 @@ export function useOrthoApneaOrderWizard(asDoctor: () => boolean = () => false) 
     serverIssues.value = [];
     context.value = null;
     contextFailed.value = false;
+    deliveryOrganizationId.value = null;
     const draft = draftPlan?.metadata?.orthoapneaDraft;
     const resumed = draft ? draftToOrder(draft) : defaultDeviceOrder();
     Object.assign(order, resumed);
@@ -341,6 +367,7 @@ export function useOrthoApneaOrderWizard(asDoctor: () => boolean = () => false) 
     contextLoading.value = true;
     try {
       const params = new URLSearchParams(doctor ? { product_code: order.productCode } : { dentist_id: order.dentistId, product_code: order.productCode });
+      if (!doctor && deliveryOrganizationId.value) params.set("organization_id", deliveryOrganizationId.value);
       const res = await apiFetch(`/api/v1/device-orders/context?${params.toString()}`, { handleErrors: false });
       if (request !== contextRequest) return;
       if (!res.ok) {
@@ -353,6 +380,7 @@ export function useOrthoApneaOrderWizard(asDoctor: () => boolean = () => false) 
       if (doctor && typeof body.dentistId === "string") order.dentistId = body.dentistId;
       context.value = {
         delivery: body.delivery ?? null,
+        deliveryOptions: parseDeliveryOptions(body.deliveryOptions),
         deliveryIssues: parseIssues(body.deliveryIssues),
         minDesiredDate: typeof body.minDesiredDate === "string" ? body.minDesiredDate : null,
         rulesVersion: typeof body.rulesVersion === "string" ? body.rulesVersion : "",
@@ -404,9 +432,18 @@ export function useOrthoApneaOrderWizard(asDoctor: () => boolean = () => false) 
   }
 
   /** The exact body POST /api/v1/device-orders receives. */
-  function buildOrderBody(patientId: string, planId: string): { treatment_plan_id: string; patient_id: string; order: DeviceOrder } {
+  function buildOrderBody(
+    patientId: string,
+    planId: string,
+  ): { treatment_plan_id: string; patient_id: string; delivery_organization_id?: string; order: DeviceOrder } {
     syncAdditionalSplints();
-    return { treatment_plan_id: planId, patient_id: patientId, order: JSON.parse(JSON.stringify(order)) as DeviceOrder };
+    return {
+      treatment_plan_id: planId,
+      patient_id: patientId,
+      // Only an admin's explicit choice; without it the API ships to the doctor's primary clinic.
+      ...(deliveryOrganizationId.value && !asDoctor() ? { delivery_organization_id: deliveryOrganizationId.value } : {}),
+      order: JSON.parse(JSON.stringify(order)) as DeviceOrder,
+    };
   }
 
   /**
@@ -547,6 +584,7 @@ export function useOrthoApneaOrderWizard(asDoctor: () => boolean = () => false) 
     context,
     contextLoading,
     contextFailed,
+    deliveryOrganizationId,
     currentDraftPlanId,
     submitLoading,
     serverIssues,

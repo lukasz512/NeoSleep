@@ -16,7 +16,7 @@ import {
 import { ConflictError } from "../../src/errors.js";
 import { signAuthToken } from "../../src/utils/jwt.js";
 import { startOaReplica, type OaReplica } from "../oa-replica/server.js";
-import { COMPLETE_HCO, doctorLoginFor, setup, TENANT_SLUG, validOrder, type Setup } from "./fixtures.js";
+import { addClinic, COMPLETE_HCO, doctorLoginFor, setup, TENANT_SLUG, validOrder, type Setup } from "./fixtures.js";
 
 /**
  * POST /api/v1/device-orders and GET /api/v1/device-orders/context (CORE-95)
@@ -493,6 +493,80 @@ describe("a doctor orders only as themselves, to their own clinic (NEO-210, 2026
     const res = await request(app).get("/api/v1/device-orders/context?product_code=002").set("Authorization", `Bearer ${s.token}`);
     expect(res.status).toBe(400);
     expect(res.body.fields).toEqual([{ path: "dentist_id", code: "required" }]);
+  });
+});
+
+describe("admin picks another of the doctor's clinics as the delivery address (NEO-210 D2, 2026-10-03)", () => {
+  const TOLUCA = { ...COMPLETE_HCO, city: "Toluca", postal_code: "50000" };
+
+  it("context: admin gets every clinic of the doctor (primary first) and the chosen one as delivery", async () => {
+    const s = await setup();
+    const tolucaId = await addClinic(s.dentistId, TOLUCA, "QA Toluca Clinic");
+
+    const primary = await request(app)
+      .get(`/api/v1/device-orders/context?dentist_id=${s.dentistId}&product_code=002`)
+      .set("Authorization", `Bearer ${s.token}`);
+    expect(primary.body.delivery).toMatchObject({ city: COMPLETE_HCO.city });
+    expect(primary.body.deliveryOptions).toHaveLength(2);
+    expect(primary.body.deliveryOptions[0]).toMatchObject({ isPrimary: true, city: COMPLETE_HCO.city });
+    expect(primary.body.deliveryOptions[1]).toMatchObject({ organizationId: tolucaId, name: "QA Toluca Clinic", isPrimary: false, city: "Toluca" });
+
+    const chosen = await request(app)
+      .get(`/api/v1/device-orders/context?dentist_id=${s.dentistId}&product_code=002&organization_id=${tolucaId}`)
+      .set("Authorization", `Bearer ${s.token}`);
+    expect(chosen.status).toBe(200);
+    expect(chosen.body).toMatchObject({ delivery: { city: "Toluca", organizationId: tolucaId }, deliveryIssues: [] });
+  });
+
+  it("a clinic the doctor isn't affiliated with is an invalid choice, not a delivery address", async () => {
+    const s = await setup();
+    const stranger = await setup({ ...COMPLETE_HCO, city: "Monterrey" });
+    const strangerClinic = await addClinic(stranger.dentistId);
+
+    const res = await request(app)
+      .get(`/api/v1/device-orders/context?dentist_id=${s.dentistId}&product_code=002&organization_id=${strangerClinic}`)
+      .set("Authorization", `Bearer ${s.token}`);
+    expect(res.body).toMatchObject({ delivery: null, deliveryIssues: [{ path: "delivery_organization_id", code: "invalid" }] });
+  });
+
+  it("only an admin may choose: a manager gets 403, a doctor sees no list", async () => {
+    const s = await setup(COMPLETE_HCO, "manager");
+    const otherId = await addClinic(s.dentistId, TOLUCA);
+    const managerRes = await request(app)
+      .get(`/api/v1/device-orders/context?dentist_id=${s.dentistId}&product_code=002&organization_id=${otherId}`)
+      .set("Authorization", `Bearer ${s.token}`);
+    expect(managerRes.status).toBe(403);
+
+    const doctorToken = await doctorLoginFor(s);
+    const doctorRes = await request(app).get("/api/v1/device-orders/context?product_code=002").set("Authorization", `Bearer ${doctorToken}`);
+    expect(doctorRes.body.deliveryOptions).toBeUndefined();
+    expect(doctorRes.body.delivery).toMatchObject({ city: COMPLETE_HCO.city });
+  });
+
+  it("POST: the order ships to the clinic the admin chose", async () => {
+    const s = await setup();
+    const tolucaId = await addClinic(s.dentistId, TOLUCA);
+    const res = await request(app)
+      .post("/api/v1/device-orders")
+      .set("Authorization", `Bearer ${s.token}`)
+      .send({ treatment_plan_id: s.planId, patient_id: s.patientId, delivery_organization_id: tolucaId, order: validOrder(s.dentistId) });
+    await trackLink(s.planId);
+
+    expect(res.status).toBe(201);
+    const dto = replica.requests.find((r) => r.method === "POST" && r.path === TREATMENTS)!.body as Record<string, unknown>;
+    expect(dto.deliveryAddress).toMatchObject({ city: "Toluca", postalCode: "50000" });
+  });
+
+  it("POST: a doctor can't redirect the delivery — 403, OrthoApnea receives nothing", async () => {
+    const s = await setup();
+    const otherId = await addClinic(s.dentistId, TOLUCA);
+    const doctorToken = await doctorLoginFor(s);
+    const res = await request(app)
+      .post("/api/v1/device-orders")
+      .set("Authorization", `Bearer ${doctorToken}`)
+      .send({ treatment_plan_id: s.planId, patient_id: s.patientId, delivery_organization_id: otherId, order: validOrder(s.dentistId) });
+    expect(res.status).toBe(403);
+    expect(replica.count("POST", TREATMENTS)).toBe(0);
   });
 });
 
