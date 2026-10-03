@@ -11,6 +11,7 @@ import {
   type ToothState,
   type VerticalDimension,
 } from "@neo/device-order";
+import { withEnvTag, type DeployEnv } from "../reconcile.js";
 
 /**
  * Our DeviceOrder → OrthoApnea's treatment DTO, the exact shape OA's portal
@@ -42,6 +43,13 @@ export interface OaTreatmentContext {
   countryIdByIso: (iso: string) => number | null;
   /** Today as YYYY-MM-DD — OA overwrites requestDate with server time anyway. */
   today: string;
+  /**
+   * When set, the environment tag (reconcile.ts withEnvTag) goes on the last
+   * line of the order's notes, so the reconciliation can trace a lab-only
+   * order back to the environment that sent it (NEO-218, Łukasz Q4). The
+   * provider sets it only once Łukasz has approved the wording OA will see.
+   */
+  envTag?: { env: DeployEnv; treatmentPlanId: string } | null;
 }
 
 /** OA's date format: "YYYY-MM-DDT00:00:00" (rules §1.1 `hr()`). */
@@ -168,7 +176,7 @@ export function toOaTreatmentDto(order: DeviceOrder, ctx: OaTreatmentContext): R
     expectedDeliveryDate: desiredDate,
     requestDate: oaDate(ctx.today),
     teethStatus: oaTeethStatus(order.teeth),
-    observations: order.observations,
+    observations: ctx.envTag ? withEnvTag(order.observations, ctx.envTag.env, ctx.envTag.treatmentPlanId) : order.observations,
     multimedias: [],
     collectionRequest: false,
     // Always an object; active:true = ship to this address, which is always

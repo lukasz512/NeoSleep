@@ -1,15 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
 import request from "supertest";
-import bcrypt from "bcrypt";
-import { RULES_VERSION, type DeviceOrder } from "@neo/device-order";
+import { RULES_VERSION } from "@neo/device-order";
 import { app } from "../../src/server.js";
-import { withTenant, insertStaffUser, getGlobalTerritoryId, getAuditLogForEntities } from "../../src/db.js";
+import { withTenant, getAuditLogForEntities } from "../../src/db.js";
 import { getPartnerLink } from "../../src/db/partnerLink.js";
-import type { TenantContext } from "../../src/context/TenantContext.js";
-import { CreatePatientCommand } from "../../src/commands/patient.js";
-import { CreatePractitionerCommand } from "../../src/commands/practitioner.js";
-import { CreateSleepStudyCommand } from "../../src/commands/sleepStudy.js";
-import { CreateTreatmentPlanCommand } from "../../src/commands/treatmentPlan.js";
 import {
   __resetOrthoApneaStateForTests,
   __setOrthoApneaBaseUrlForTests,
@@ -22,6 +16,7 @@ import {
 import { ConflictError } from "../../src/errors.js";
 import { signAuthToken } from "../../src/utils/jwt.js";
 import { startOaReplica, type OaReplica } from "../oa-replica/server.js";
+import { COMPLETE_HCO, setup, TENANT_SLUG, validOrder } from "./fixtures.js";
 
 /**
  * POST /api/v1/device-orders and GET /api/v1/device-orders/context (CORE-95)
@@ -31,7 +26,6 @@ import { startOaReplica, type OaReplica } from "../oa-replica/server.js";
  */
 vi.setConfig({ testTimeout: 30_000 });
 
-const TENANT_SLUG = process.env.DEFAULT_TENANT_SLUG ?? "test";
 const TREATMENTS = "/api/treatments";
 const RECONCILE_AFTER_MINUTES = RECONCILE_AFTER_MS / 60_000;
 
@@ -59,107 +53,6 @@ afterEach(async () => {
     await withTenant(TENANT_SLUG, (client) => client.query("DELETE FROM partner_link WHERE id = ANY($1)", [ids]));
   }
 });
-
-function uniqueSuffix(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-/** What a complete HCO looks like; individual tests blank fields out. */
-const COMPLETE_HCO = {
-  address_line1: "Calle de Prueba 1, Col. Juarez",
-  city: "Ciudad de Mexico",
-  postal_code: "06600",
-  country_code: "MX",
-  phone: "+520000000000",
-  email: "qa-clinic@example.com",
-};
-
-interface Setup {
-  token: string;
-  userId: string;
-  patientId: string;
-  planId: string;
-  dentistId: string;
-}
-
-/** One committed transaction: an admin user, a dentist with a primary HCO, a patient, a study and a dental-appliance plan. */
-async function setup(hco: Partial<typeof COMPLETE_HCO> | null = COMPLETE_HCO): Promise<Setup> {
-  return withTenant(TENANT_SLUG, async (client) => {
-    const email = `qa-device-order-${uniqueSuffix()}@neosleepcare.com`;
-    const hash = await bcrypt.hash("irrelevant-not-logged-in-with", 4);
-    const user = await insertStaffUser(client, email, "QA", "Pilot", "admin", hash, false);
-    const ctx: TenantContext = {
-      slug: TENANT_SLUG,
-      client,
-      user: { id: user!.id, email, role: "admin", roles: [{ role: "admin", territory_id: await getGlobalTerritoryId(client) }] },
-      requestId: `test-${uniqueSuffix()}`,
-    };
-    const patient = await CreatePatientCommand(ctx, {
-      gender: "male",
-      date_of_birth: "1975-06-15",
-      first_name: "Tester",
-      last_name: `Patient-${uniqueSuffix()}`,
-      email: `qa-patient-${uniqueSuffix()}@example.com`,
-      phone: "600100200",
-      region: "MX",
-    });
-    const dentist = await CreatePractitionerCommand(ctx, {
-      first_name: "Test",
-      last_name: `Dentist-${uniqueSuffix()}`,
-      email: `qa-dentist-${uniqueSuffix()}@example.com`,
-      phone: "600100200",
-    });
-    if (hco) {
-      const { rows } = await client.query<{ id: string }>(
-        `INSERT INTO organization (name, address_line1, city, postal_code, country_code, phone, email)
-         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-        [`QA Clinic ${uniqueSuffix()}`, hco.address_line1 ?? null, hco.city ?? null, hco.postal_code ?? null, hco.country_code ?? null, hco.phone ?? null, hco.email ?? null]
-      );
-      await client.query(
-        `INSERT INTO practitioner_organization (practitioner_id, organization_id, is_primary) VALUES ($1, $2, true)`,
-        [dentist.id, rows[0]!.id]
-      );
-    }
-    const study = await CreateSleepStudyCommand(ctx, { patient_id: patient.id });
-    const plan = await CreateTreatmentPlanCommand(ctx, {
-      patient_id: patient.id,
-      sleep_study_id: study.id,
-      type: "dental_appliance",
-      dentist_id: dentist.id,
-    });
-    const token = signAuthToken({ id: user!.id, email, role: "admin", token_version: 0 });
-    return { token, userId: user!.id, patientId: patient.id, planId: plan.id, dentistId: dentist.id };
-  });
-}
-
-/** A valid NOA order: standard sequence, desired date well past OA's manufacturing date. */
-function validOrder(dentistId: string, overrides: Partial<DeviceOrder> = {}): DeviceOrder {
-  return {
-    dentistId,
-    productCode: "002",
-    retrusionMaxMm: -4,
-    protrusionMaxMm: 6,
-    startingPoint: { unit: "mm", value: 1 },
-    sequence: { type: "standard" },
-    deviation: { rightMm: 0, rightAdvanceMm: 0, leftMm: 0, leftAdvanceMm: 0 },
-    morningAligner: false,
-    verticalDimension: { kind: "registro" },
-    anteriorFrontalOpening: false,
-    slotsForElasticBands: false,
-    laterality: 3,
-    limitOpening: 7,
-    upperBand: 3,
-    lowerBand: 3,
-    finish: "mixed",
-    teeth: { "16": "crown" },
-    observations: "QA replica order",
-    desiredDate: new Date(Date.now() + 60 * 86_400_000).toISOString().slice(0, 10),
-    noContactDoctorForRedesign: false,
-    registration: { method: "impression" },
-    acknowledgedWarnings: [],
-    ...overrides,
-  };
-}
 
 async function trackLink(planId: string): Promise<void> {
   const link = await withTenant(TENANT_SLUG, (client) => getPartnerLink(client, "orthoapnea", "treatment_plan", planId));

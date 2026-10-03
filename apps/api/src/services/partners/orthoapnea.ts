@@ -1774,3 +1774,33 @@ export async function fetchOrthoApneaClinics(): Promise<OrthoApneaClinic[]> {
   clinicsCache = { rows, fetchedAt: Date.now() };
   return rows;
 }
+
+const TREATMENT_LIST_PAGE_SIZE = 100;
+/** A runaway guard, not a business limit: 100 pages × 100 orders. */
+const TREATMENT_LIST_MAX_PAGES = 100;
+
+/**
+ * Every order on the shared account, as OA's own order list returns them
+ * (GET /api/treatments/DTO?treatmentSearchForm={}&page=&size= — a Spring page
+ * of full treatment DTOs, read live on 2026-10-03, NEO-218). Read-only: a GET,
+ * so it skips the mutation queue. Throws PartnerServiceError when OA answers
+ * anything but a page, so the reconciliation records a failed run instead of
+ * reporting every order as missing.
+ */
+export async function listOrthoApneaTreatments(): Promise<Record<string, unknown>[]> {
+  const form = encodeURIComponent(JSON.stringify({}));
+  const all: Record<string, unknown>[] = [];
+  for (let page = 0; page < TREATMENT_LIST_MAX_PAGES; page++) {
+    const res = await authedFetch(`${TREATMENT_DETAIL_PATH}?treatmentSearchForm=${form}&page=${page}&size=${TREATMENT_LIST_PAGE_SIZE}`, {
+      method: "GET",
+    });
+    if (!res.ok) throw new PartnerServiceError(PARTNER_NAME, `order list answered ${res.status}`);
+    const body = await safeJson(res);
+    const content = body?.content;
+    if (!body || !Array.isArray(content)) throw new PartnerServiceError(PARTNER_NAME, "order list answered without a content list");
+    all.push(...(content as Record<string, unknown>[]));
+    const totalPages = typeof body.totalPages === "number" ? body.totalPages : null;
+    if (body.last === true || content.length < TREATMENT_LIST_PAGE_SIZE || (totalPages !== null && page + 1 >= totalPages)) return all;
+  }
+  throw new PartnerServiceError(PARTNER_NAME, `order list has more than ${TREATMENT_LIST_MAX_PAGES} pages`);
+}

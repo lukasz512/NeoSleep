@@ -10,6 +10,8 @@ import {
   type DeliveryAddress,
 } from "@neo/device-order";
 import { oaRegistration, oaSequence, oaTeethStatus, oaVerticalDimension, toOaTreatmentDto, type OaTreatmentContext } from "./toOaTreatmentDto.js";
+import { ENV_TAG_APPROVED, toRemoteOrder } from "./provider.js";
+import { parseEnvTag } from "../reconcile.js";
 
 const FIXTURES = new URL("../../../../test/oa-replica/fixtures/", import.meta.url);
 const fixture = <T>(name: string): T => JSON.parse(readFileSync(new URL(name, FIXTURES), "utf-8")) as T;
@@ -203,5 +205,29 @@ describe("toOaTreatmentDto — field mappings", () => {
 
   it("refuses to build a DTO for a country OA doesn't list (it would reach OA without a country)", () => {
     expect(() => toOaTreatmentDto(shot3Order, { ...shot3Context, delivery: { ...shot3Delivery, countryCode: "ZZ" } })).toThrow(/country/);
+  });
+});
+
+describe("toOaTreatmentDto — environment tag (NEO-218)", () => {
+  const planId = "1a2b3c4d-0000-4000-8000-000000000001";
+
+  it("with envTag, the notes end with the tag line the reconciliation reads back", () => {
+    const dto = toOaTreatmentDto(shot3Order, { ...shot3Context, envTag: { env: "dev", treatmentPlanId: planId } });
+    expect(dto.observations).toBe(`${shot3Order.observations}\n[NeoSleep DEV · ref 1a2b3c4d]`);
+    expect(parseEnvTag(dto.observations as string)).toEqual({ env: "dev", ref: "1a2b3c4d" });
+  });
+
+  it("without envTag (until Łukasz approves the wording), the notes go exactly as written", () => {
+    expect(ENV_TAG_APPROVED).toBe(false);
+    expect(toOaTreatmentDto(shot3Order, shot3Context).observations).toBe(shot3Order.observations);
+  });
+});
+
+describe("toRemoteOrder — OA's order list entry → what the reconciliation reads", () => {
+  it("maps id, status, notes and patient name from OA's stored DTO for 454012", () => {
+    const stored = fixture<Record<string, unknown>>("treatment-dto-full.response.json");
+    const remote = toRemoteOrder(stored);
+    expect(remote).toMatchObject({ externalId: String(stored.id), status: String(stored.statusId), observations: stored.observations });
+    expect(remote.payload).toBe(stored);
   });
 });

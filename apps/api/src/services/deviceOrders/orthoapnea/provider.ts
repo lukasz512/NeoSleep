@@ -10,8 +10,11 @@ import {
   fetchOrthoApneaCurrentUser,
   fetchOrthoApneaManufacturingDate,
   findOrthoApneaProduct,
+  listOrthoApneaTreatments,
 } from "../../partners/orthoapnea.js";
+import { DEPLOY_ENV } from "../../../env.js";
 import type { DeviceOrderProvider, DeviceOrderReceipt, DeviceOrderSubmission } from "../provider.js";
+import type { RemoteOrder } from "../reconcile.js";
 import { toOaTreatmentDto } from "./toOaTreatmentDto.js";
 
 /**
@@ -20,8 +23,84 @@ import { toOaTreatmentDto } from "./toOaTreatmentDto.js";
  * owns the session, queue and partner_transaction log); this file only
  * gathers OA's objects and hands them to the pure DTO mapper.
  */
+/**
+ * The environment tag goes into OA's order notes, which OA staff read, so it
+ * stays off until Łukasz approves the exact wording (NEO-218, Q4). Flip it on
+ * in the same PR that records his approval.
+ */
+export const ENV_TAG_APPROVED = false;
+
+/**
+ * Every field we send that OA stores back unchanged (sent DTO vs OA's stored
+ * DTO for order 454012, shot S3, 2026-10-03). Server-owned keys (id, status,
+ * dates OA sets, user/clinic objects) are left out.
+ */
+const OA_COMPARED_PATHS = [
+  "patientId",
+  "product.code",
+  "desiredDate",
+  "teethStatus",
+  "observations",
+  "deliveryAddress.name",
+  "deliveryAddress.address",
+  "deliveryAddress.city",
+  "deliveryAddress.province",
+  "deliveryAddress.countryId",
+  "deliveryAddress.postalCode",
+  "deliveryAddress.phone",
+  "deliveryAddress.email",
+  "verticalDimension",
+  "retrusionMax",
+  "protrusionMax",
+  "startingPoint",
+  "sequenceTypeStandard",
+  "sequenceTypePersonalized",
+  "sequenceUnitInMM",
+  "sequence",
+  "deviationRight",
+  "deviationAdvanceRight",
+  "deviationLeft",
+  "deviationAdvanceLeft",
+  "laterality",
+  "limitOpening",
+  "anteriorFrontalOpening",
+  "mixedSplintDesign",
+  "scallopedSplintDesign",
+  "slotsForElasticBands",
+  "upperBandSplintDesign",
+  "lowerBandSplintDesign",
+  "scannerPlatform",
+  "scannerTreatment",
+  "morningAligner",
+  "noContactDoctorForRedesign",
+  "facialBiotype",
+] as const;
+
+function str(value: unknown): string | null {
+  return value === null || value === undefined || value === "" ? null : String(value);
+}
+
+/** One entry of OA's order list → the neutral shape the reconciliation reads. */
+export function toRemoteOrder(dto: Record<string, unknown>): RemoteOrder {
+  const patient = dto.patient as { name?: unknown } | null | undefined;
+  return {
+    externalId: String(dto.id),
+    status: str(dto.statusId),
+    requestDate: str(dto.requestDate),
+    observations: typeof dto.observations === "string" ? dto.observations : "",
+    patientName: str(dto.patientName) ?? str(patient?.name),
+    payload: dto,
+  };
+}
+
 export const orthoApneaDeviceOrderProvider: DeviceOrderProvider = {
   name: "orthoapnea",
+  comparedPaths: OA_COMPARED_PATHS,
+  comparedDatePaths: ["desiredDate"],
+
+  async listRemoteOrders(): Promise<RemoteOrder[]> {
+    return (await listOrthoApneaTreatments()).map(toRemoteOrder);
+  },
 
   async minDesiredDate(productCode: ProductCode): Promise<string | null> {
     try {
@@ -63,6 +142,7 @@ export const orthoApneaDeviceOrderProvider: DeviceOrderProvider = {
         delivery,
         countryIdByIso: (iso) => countries.find((c) => c.code?.toUpperCase() === iso.toUpperCase())?.id ?? null,
         today: new Date().toISOString().slice(0, 10),
+        envTag: ENV_TAG_APPROVED ? { env: DEPLOY_ENV, treatmentPlanId } : null,
       });
     };
 

@@ -18,6 +18,14 @@ import { buildContext, type TenantContext } from "../context/TenantContext.js";
 import { requirePatientInScope, requirePractitionerInScope } from "../queries/entityAccess.js";
 import { getDeviceOrderProvider } from "../services/deviceOrders/index.js";
 import { NotFoundError } from "../errors.js";
+import { requireRole } from "../middleware/requireRole.js";
+import { requireInternalJobSecret } from "../middleware/requireInternalJobSecret.js";
+import { getLatestReconciliationRun, listReconciliationRuns } from "../db/deviceOrderReconciliation.js";
+import {
+  RunDeviceOrderReconciliationAllTenantsCommand,
+  RunDeviceOrderReconciliationCommand,
+} from "../commands/deviceOrderReconciliation.js";
+import { DEPLOY_ENV } from "../env.js";
 
 /**
  * Device orders (CORE-95) — the one way an order reaches a lab. The body is
@@ -197,5 +205,88 @@ deviceOrdersRouter.post(
     );
 
     res.status(201).json({ externalId: receipt.externalId, externalStatus: receipt.externalStatus, warnings: validation.warnings });
+  })
+);
+
+// ---------------------------------------------------------------------------
+// Reconciliation (NEO-218): do our orders match the lab's?
+// The full run lists lab patient names → admin only, and every read of it is
+// audited. A manager sees the match counter only (Łukasz Q3).
+// ---------------------------------------------------------------------------
+
+/** What a manager may see of a run: no orders, no names. */
+function counterOnly(run: { status: string; summary: { matchLevel?: number | null; matched?: number; mismatches?: number }; finished_at: string } | null) {
+  if (!run) return null;
+  return {
+    status: run.status,
+    matchLevel: run.summary.matchLevel ?? null,
+    matched: run.summary.matched ?? 0,
+    mismatches: run.summary.mismatches ?? 0,
+    finishedAt: run.finished_at,
+  };
+}
+
+// POST /api/v1/device-orders/reconciliation/run — "Check now" (admin).
+deviceOrdersRouter.post(
+  "/device-orders/reconciliation/run",
+  requireRole("admin"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const slug = tenantSlugFromHost(req.hostname);
+    const ctx = await withTenant(slug, (client) => buildContext(req, client, slug));
+    const run = await RunDeviceOrderReconciliationCommand(slug, { trigger: "manual", userId: ctx.user.id, requestId: ctx.requestId });
+    res.status(201).json({ environment: DEPLOY_ENV, run });
+  })
+);
+
+// GET /api/v1/device-orders/reconciliation/latest — admin: full run; manager: counter only.
+deviceOrdersRouter.get(
+  "/device-orders/reconciliation/latest",
+  requireRole("admin", "manager"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const slug = tenantSlugFromHost(req.hostname);
+    const provider = getDeviceOrderProvider();
+    const body = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      const run = await getLatestReconciliationRun(client, provider.name);
+      if (ctx.user.role !== "admin") return { environment: DEPLOY_ENV, counter: counterOnly(run) };
+      if (run) {
+        await insertAuditLog(client, {
+          user_id: ctx.user.id,
+          action: "read",
+          entity_type: "DeviceOrderReconciliation",
+          entity_id: run.id,
+          request_id: ctx.requestId,
+        });
+      }
+      return { environment: DEPLOY_ENV, counter: counterOnly(run), run };
+    });
+    res.json(body);
+  })
+);
+
+// GET /api/v1/device-orders/reconciliation/runs?limit=30 — admin history (summaries, no orders).
+deviceOrdersRouter.get(
+  "/device-orders/reconciliation/runs",
+  requireRole("admin"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const raw = Number(req.query.limit ?? 30);
+    const limit = Number.isInteger(raw) && raw > 0 ? Math.min(raw, 100) : 30;
+    const slug = tenantSlugFromHost(req.hostname);
+    const items = await withTenant(slug, async (client) => {
+      await buildContext(req, client, slug);
+      return listReconciliationRuns(client, getDeviceOrderProvider().name, limit);
+    });
+    res.json({ items });
+  })
+);
+
+// POST /api/v1/device-orders/jobs/reconcile — the daily job (GitHub Actions),
+// machine-to-machine only; runs for every tenant that uses device orders.
+deviceOrdersRouter.post(
+  "/device-orders/jobs/reconcile",
+  requireInternalJobSecret,
+  asyncHandler(async (req: Request, res: Response) => {
+    const requestId = (req.headers["x-request-id"] as string | undefined) ?? crypto.randomUUID();
+    res.json(await RunDeviceOrderReconciliationAllTenantsCommand(requestId));
   })
 );

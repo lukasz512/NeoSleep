@@ -1,4 +1,5 @@
 import type { DeliveryAddress, DeviceOrder, ProductCode } from "@neo/device-order";
+import type { RemoteOrder } from "./reconcile.js";
 
 /**
  * A device-order provider: the lab that manufactures the appliance. The
@@ -29,7 +30,14 @@ export interface DeviceOrderReceipt {
 }
 
 export interface DeviceOrderProvider {
+  /** Also the `partner_link.partner` value of this provider's links. */
   readonly name: string;
+  /** Dotted paths into the provider's wire-format order that the reconciliation compares — the fields we send (NEO-218). */
+  readonly comparedPaths: readonly string[];
+  /** The subset of comparedPaths compared by day only. */
+  readonly comparedDatePaths: readonly string[];
+  /** Every order the lab lists for our account. Read-only. Throws when the lab can't be read — never returns a partial list. */
+  listRemoteOrders(): Promise<RemoteOrder[]>;
   /** Earliest desired date the provider accepts for the product (YYYY-MM-DD), or null when unknown / unreachable. Never throws. */
   minDesiredDate(productCode: ProductCode): Promise<string | null>;
   /** Places the order. Throws ConflictError (409) when this plan was already submitted or a submit is in flight. */

@@ -59,6 +59,11 @@ export interface OaReplica {
   reset(): void;
   /** Requests to one method + path (no query). */
   count(method: string, path: string): number;
+  /**
+   * Stores an order that never came through our API — one "placed directly in
+   * OA" (NEO-218). Starts from the captured accepted order; returns its id.
+   */
+  seedTreatment(overrides?: Json): number;
   close(): Promise<void>;
 }
 
@@ -163,6 +168,11 @@ export async function startOaReplica(): Promise<OaReplica> {
     },
     count(method, path) {
       return replica.requests.filter((r) => r.method === method && r.path === path).length;
+    },
+    seedTreatment(overrides = {}) {
+      const id = nextTreatmentId++;
+      replica.treatments.set(id, { ...TREATMENT_RESPONSE, statusId: 1, requestDate: serverNow(), lastActivity: serverNow(), ...overrides, id });
+      return id;
     },
     close: async () => {},
   };
@@ -279,6 +289,31 @@ export async function startOaReplica(): Promise<OaReplica> {
       const all = [...replica.treatments.values()]
         .filter((t) => Number((t.patient as Json | undefined)?.id) === patientId)
         .map((t) => ({ ...t, patientId }));
+      const content = all.slice(page * size, page * size + size);
+      const totalPages = Math.ceil(all.length / size);
+      return send(res, 200, {
+        content,
+        totalElements: all.length,
+        totalPages,
+        size,
+        number: page,
+        numberOfElements: content.length,
+        first: page === 0,
+        last: page + 1 >= totalPages,
+        empty: content.length === 0,
+      });
+    }
+
+    // The account's order list: a Spring page of full DTOs, newest first (read live on 2026-10-03, NEO-218).
+    if (method === "GET" && path === "/api/treatments/DTO") {
+      if (!url.searchParams.has("treatmentSearchForm")) {
+        return send(res, 400, springError(400, "Bad Request", "Required request parameter 'treatmentSearchForm' is not present", path));
+      }
+      const page = Number(url.searchParams.get("page") ?? "0");
+      const size = Number(url.searchParams.get("size") ?? "20");
+      const all = [...replica.treatments.values()]
+        .map((t) => ({ ...t, patientId: Number((t.patient as Json | undefined)?.id ?? t.patientId) }))
+        .sort((a, b) => Number(b.id) - Number(a.id));
       const content = all.slice(page * size, page * size + size);
       const totalPages = Math.ceil(all.length / size);
       return send(res, 200, {
