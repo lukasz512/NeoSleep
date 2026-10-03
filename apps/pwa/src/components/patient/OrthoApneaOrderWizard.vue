@@ -8,42 +8,21 @@
     @close="onCancelClick"
   >
     <template #header-extra>
-      <VStepper v-model="step" flat class="oa-wizard__stepper" hide-actions>
+      <VStepper :model-value="step - firstStep + 1" flat class="oa-wizard__stepper" hide-actions>
         <VStepperHeader>
-          <VStepperItem
-            color="primary"
-            :title="t('app.orthoApneaOrder.step1.title')"
-            :value="1"
-            :complete="step > 1"
-            :class="{ 'oa-wizard__step--clickable': maxReachedStep >= 1 }"
-            @click="goToStep(1)"
-          />
-          <VDivider />
-          <VStepperItem
-            color="primary"
-            :title="t('app.orthoApneaOrder.step2.title')"
-            :value="2"
-            :complete="step > 2"
-            :class="{ 'oa-wizard__step--clickable': maxReachedStep >= 2 }"
-            @click="goToStep(2)"
-          />
-          <VDivider />
-          <VStepperItem
-            color="primary"
-            :title="t('app.orthoApneaOrder.step3.title')"
-            :value="3"
-            :complete="step > 3"
-            :class="{ 'oa-wizard__step--clickable': maxReachedStep >= 3 }"
-            @click="goToStep(3)"
-          />
-          <VDivider />
-          <VStepperItem
-            color="primary"
-            :title="t('app.orthoApneaOrder.review.title')"
-            :value="4"
-            :class="{ 'oa-wizard__step--clickable': maxReachedStep >= 4 }"
-            @click="goToStep(4)"
-          />
+          <!-- Numbered 1..n over the steps this user walks: a doctor has no step 1 (NEO-210). -->
+          <template v-for="(s, i) in stepperItems" :key="s.step">
+            <VDivider v-if="i > 0" />
+            <VStepperItem
+              color="primary"
+              :title="s.title"
+              :value="i + 1"
+              :complete="s.step < 4 && step > s.step"
+              :class="{ 'oa-wizard__step--clickable': maxReachedStep >= s.step }"
+              :data-testid="`wizard-step-${s.step}`"
+              @click="goToStep(s.step)"
+            />
+          </template>
         </VStepperHeader>
       </VStepper>
     </template>
@@ -89,6 +68,13 @@
 
         <!-- Step 2 — Datos de construcción -->
         <div v-else-if="step === 2">
+          <!-- A doctor has no step 1: a problem with their clinic's address shows here, with whom to contact (NEO-210). -->
+          <div v-if="isDoctor && doctorDeliveryMessage" data-field="delivery" class="mb-4">
+            <AppInlineAlert type="error" :title="t('app.deviceOrder.delivery.doctorTitle')" data-testid="doctor-address-error">
+              {{ doctorDeliveryMessage }}
+              <AppButton v-if="contextFailed" variant="text" size="small" color="primary" @click="refreshContext(true)">{{ t("app.deviceOrder.delivery.retry") }}</AppButton>
+            </AppInlineAlert>
+          </div>
           <div data-field="productCode">
             <p class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.selectProduct") }}</p>
             <AppSegmentedTabs :model-value="order.productCode" :options="productOptions" fit class="oa-wizard__switch" @update:model-value="onProductPicked" />
@@ -399,7 +385,7 @@
       </Transition>
 
     <template #actions>
-      <AppButton v-if="step > 1" icon size="x-large" variant="text" color="primary" :aria-label="t('app.orthoApneaOrder.actions.back')" @click="goBack">
+      <AppButton v-if="step > firstStep" icon size="x-large" variant="text" color="primary" :aria-label="t('app.orthoApneaOrder.actions.back')" @click="goBack">
         <AppIcon name="arrow-left" class="oa-wizard__nav-arrow" />
       </AppButton>
       <VSpacer />
@@ -466,6 +452,7 @@ import {
   type OrthoApneaDraftPlan,
 } from "../../composables/useOrthoApneaOrderWizard";
 import { AppInlineAlert, AppSegmentedTabs, FormErrorSummary } from "@ui";
+import { useAuthStore } from "../../stores/auth";
 
 /**
  * The device order wizard (Envío → Datos de construcción → Registro dental →
@@ -581,6 +568,23 @@ function fieldKeyOf(path: string): string {
 
 const isDeliveryPath = (path: string) => path === "delivery" || path.startsWith("delivery.");
 
+const authStore = useAuthStore();
+/**
+ * A doctor orders only as themselves, so only to their own clinic (Łukasz,
+ * 2026-10-03, NEO-210): step 1 (who orders, where it ships) is skipped and
+ * the remaining steps are numbered 1–3. The API enforces the same rule.
+ */
+const isDoctor = computed(() => authStore.user?.role === "doctor");
+const firstStep = computed(() => (isDoctor.value ? 2 : 1));
+/** The steps this user walks through. */
+const visibleSteps = computed(() => WIZARD_STEPS.filter((n) => n >= firstStep.value));
+const stepperItems = computed(() =>
+  visibleSteps.value.map((n) => ({
+    step: n,
+    title: t(n === 4 ? "app.orthoApneaOrder.review.title" : `app.orthoApneaOrder.step${n}.title`),
+  })),
+);
+
 const step = ref(1);
 const maxReachedStep = ref(1);
 /** Slide direction for the step transition — set right before `step` changes. */
@@ -620,7 +624,7 @@ const {
   loadContext,
   confirmOrder,
   persistDraft,
-} = useOrthoApneaOrderWizard();
+} = useOrthoApneaOrderWizard(() => isDoctor.value);
 
 watch(order, () => { touched.value = true; }, { deep: true });
 
@@ -708,7 +712,8 @@ function setRelievedTeeth(teeth: string[]) {
 let contextKey: string | null = null;
 /** (Re)loads the doctor's HCO and OA's earliest date — only when the doctor or product actually changed, unless forced. */
 function refreshContext(force = false) {
-  const key = `${order.dentistId}|${order.productCode}`;
+  // A doctor's context is always their own; the dentistId the API hands back must not trigger a reload.
+  const key = `${isDoctor.value ? "self" : order.dentistId}|${order.productCode}`;
   if (!force && key === contextKey) return;
   contextKey = key;
   void loadContext();
@@ -736,6 +741,22 @@ const deliveryMessage = computed(() => {
   return t("app.deviceOrder.delivery.incomplete", { fields: fields.join(", ") });
 });
 
+/**
+ * The same problem, worded for the doctor themselves: it is their clinic's
+ * address, and they can't fix it here — they contact NeoSleep (Łukasz,
+ * 2026-10-03, NEO-210; a link to open a support ticket comes later).
+ */
+const doctorDeliveryMessage = computed(() => {
+  const issues = deliveryIssues.value;
+  if (issues.length === 0) return undefined;
+  if (contextFailed.value) return t("app.deviceOrder.delivery.loadFailed");
+  if (issues.some((i) => i.path === "delivery")) return t("app.deviceOrder.delivery.doctorNoClinic");
+  const fields = [...new Set(issues.map((i) => i.path.slice("delivery.".length)))].map((f) =>
+    te(`app.deviceOrder.delivery.field.${f}`) ? t(`app.deviceOrder.delivery.field.${f}`) : f,
+  );
+  return t("app.deviceOrder.delivery.doctorIncomplete", { fields: fields.join(", ") });
+});
+
 /** Where to fix the address: the HCO itself when the API names it, else the doctor's record (where the primary HCO is set). */
 const recordHref = computed(() => {
   const link = hcoDetailLink(context.value?.delivery?.organizationId) ?? hcpDetailLink(order.dentistId);
@@ -753,16 +774,34 @@ function sameIssue(a: OrderIssue, b: OrderIssue): boolean {
   return a.path === b.path && a.code === b.code;
 }
 
-/** Everything blocking step n: the shared validator's errors for its paths, the API's, and (step 1) the delivery. */
-function stepErrors(n: number): OrderIssue[] {
+/** The shared validator's errors for step n's own paths, plus the API's for them. */
+function errorsOfStep(n: number): OrderIssue[] {
   const paths = STEP_PATHS[n] ?? [];
   const server = serverIssues.value.filter((i) => !isDeliveryPath(i.path) && stepOfPath(i.path) === n);
   const local = issuesFor(validation.value.errors, paths).filter((i) => !server.some((s) => sameIssue(s, i)));
-  return [...server, ...local, ...(n === 1 ? deliveryIssues.value : [])];
+  return [...server, ...local];
+}
+
+/**
+ * Everything blocking step n. The first step this user sees also carries the
+ * delivery check and any skipped step's errors (a doctor has no step 1, so
+ * their doctor/clinic problems show on step 2).
+ */
+function stepErrors(n: number): OrderIssue[] {
+  if (n < firstStep.value) return [];
+  if (n !== firstStep.value) return errorsOfStep(n);
+  return [...WIZARD_STEPS.filter((m) => m <= n).flatMap(errorsOfStep), ...deliveryIssues.value];
 }
 
 function stepBlocked(n: number): boolean {
-  return stepErrors(n).length > 0 || (n === 1 && !!order.dentistId && contextLoading.value);
+  const loadingDelivery = n === firstStep.value && (isDoctor.value || !!order.dentistId) && contextLoading.value;
+  return stepErrors(n).length > 0 || loadingDelivery;
+}
+
+/** The step that shows an issue: its own, never one this user skips. */
+function visibleStepOf(path: string): number | undefined {
+  const own = isDeliveryPath(path) ? 1 : stepOfPath(path);
+  return own === undefined ? undefined : Math.max(own, firstStep.value);
 }
 
 /** Errors shown on the current step: all of them after an attempt, otherwise only the live MR/MP check. */
@@ -782,7 +821,7 @@ function issueMessage(issue: OrderIssue): string {
 }
 
 function messageFor(issue: OrderIssue): string {
-  return isDeliveryPath(issue.path) ? (deliveryMessage.value ?? issueMessage(issue)) : issueMessage(issue);
+  return isDeliveryPath(issue.path) ? ((isDoctor.value ? doctorDeliveryMessage.value : deliveryMessage.value) ?? issueMessage(issue)) : issueMessage(issue);
 }
 
 /** The message under a field — its first visible error. */
@@ -880,7 +919,7 @@ function showStepErrors(n: number) {
 
 /** Opens the first step holding an issue the API returned. False when none is on the wizard. */
 function showServerIssues(): boolean {
-  const target = WIZARD_STEPS.find((n) => serverIssues.value.some((i) => (isDeliveryPath(i.path) ? 1 : stepOfPath(i.path)) === n));
+  const target = visibleSteps.value.find((n) => serverIssues.value.some((i) => visibleStepOf(i.path) === n));
   if (target === undefined) return false;
   snapshotServerIssues();
   showStepErrors(target);
@@ -902,14 +941,14 @@ function goBack() {
 /** Only steps already reached are clickable; jumping forward still stops at the first step with something to fix. */
 function goToStep(target: number) {
   if (target > maxReachedStep.value) return;
-  const blocking = target > step.value ? WIZARD_STEPS.find((n) => n >= step.value && n < target && stepBlocked(n)) : undefined;
+  const blocking = target > step.value ? visibleSteps.value.find((n) => n >= step.value && n < target && stepBlocked(n)) : undefined;
   if (blocking !== undefined) showStepErrors(blocking);
   else moveTo(target);
 }
 
 async function onConfirm() {
   // A step passed earlier can have been broken since — reopen the first one to fix.
-  const invalid = WIZARD_STEPS.find((n) => stepBlocked(n));
+  const invalid = visibleSteps.value.find((n) => stepBlocked(n));
   if (invalid !== undefined) {
     showStepErrors(invalid);
     return;
@@ -964,8 +1003,8 @@ watch(
   (open) => {
     if (!open) return;
     resetForOpen(props.draftPlan);
-    step.value = 1;
-    maxReachedStep.value = 1;
+    step.value = firstStep.value;
+    maxReachedStep.value = firstStep.value;
     showDraftPrompt.value = false;
     attemptedSteps.clear();
     contextKey = null;

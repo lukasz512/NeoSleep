@@ -16,7 +16,7 @@ import {
 import { ConflictError } from "../../src/errors.js";
 import { signAuthToken } from "../../src/utils/jwt.js";
 import { startOaReplica, type OaReplica } from "../oa-replica/server.js";
-import { COMPLETE_HCO, setup, TENANT_SLUG, validOrder, type Setup } from "./fixtures.js";
+import { COMPLETE_HCO, doctorLoginFor, setup, TENANT_SLUG, validOrder, type Setup } from "./fixtures.js";
 
 /**
  * POST /api/v1/device-orders and GET /api/v1/device-orders/context (CORE-95)
@@ -449,6 +449,50 @@ describe("POST /api/v1/device-orders — reconcile of an interrupted submit", ()
     const link = await withTenant(TENANT_SLUG, (client) => getPartnerLink(client, "orthoapnea", "treatment_plan", s.planId));
     expect(link?.sync_status).toBe("pending");
     expect(await reconcileRows(linkId)).toEqual([expect.objectContaining({ success: false })]);
+  });
+});
+
+describe("a doctor orders only as themselves, to their own clinic (NEO-210, 2026-10-03)", () => {
+  it("context: a doctor sends no dentist_id and gets their own practitioner and clinic; another dentist_id is ignored", async () => {
+    const s = await setup();
+    const other = await setup({ ...COMPLETE_HCO, city: "Guadalajara" });
+    const doctorToken = await doctorLoginFor(s);
+
+    const own = await request(app).get("/api/v1/device-orders/context?product_code=002").set("Authorization", `Bearer ${doctorToken}`);
+    expect(own.status).toBe(200);
+    expect(own.body).toMatchObject({ dentistId: s.dentistId, delivery: { city: COMPLETE_HCO.city }, deliveryIssues: [] });
+
+    const spoofed = await request(app)
+      .get(`/api/v1/device-orders/context?dentist_id=${other.dentistId}&product_code=002`)
+      .set("Authorization", `Bearer ${doctorToken}`);
+    expect(spoofed.body).toMatchObject({ dentistId: s.dentistId, delivery: { city: COMPLETE_HCO.city } });
+  });
+
+  it("POST: a doctor ordering as another dentist → 403 and OrthoApnea receives nothing; as themselves → 201", async () => {
+    const s = await setup();
+    const other = await setup();
+    const doctorToken = await doctorLoginFor(s);
+
+    const forbidden = await request(app)
+      .post("/api/v1/device-orders")
+      .set("Authorization", `Bearer ${doctorToken}`)
+      .send({ treatment_plan_id: s.planId, patient_id: s.patientId, order: validOrder(other.dentistId) });
+    expect(forbidden.status).toBe(403);
+    expect(replica.count("POST", TREATMENTS)).toBe(0);
+
+    const ok = await request(app)
+      .post("/api/v1/device-orders")
+      .set("Authorization", `Bearer ${doctorToken}`)
+      .send({ treatment_plan_id: s.planId, patient_id: s.patientId, order: validOrder(s.dentistId) });
+    expect(ok.status).toBe(201);
+    await trackLink(s.planId);
+  });
+
+  it("context for a non-doctor still requires dentist_id", async () => {
+    const s = await setup();
+    const res = await request(app).get("/api/v1/device-orders/context?product_code=002").set("Authorization", `Bearer ${s.token}`);
+    expect(res.status).toBe(400);
+    expect(res.body.fields).toEqual([{ path: "dentist_id", code: "required" }]);
   });
 });
 
