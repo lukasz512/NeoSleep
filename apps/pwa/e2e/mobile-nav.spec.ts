@@ -44,6 +44,27 @@ test("collapsed: the pill's four buttons sit in its row, evenly spaced up to the
   for (const s of steps) expect(Math.abs(s - steps[0])).toBeLessThan(2);
 });
 
+const labelLines = (el: HTMLElement | SVGElement) => {
+  const style = getComputedStyle(el);
+  const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.2;
+  return Math.round(el.getBoundingClientRect().height / lineHeight);
+};
+
+// CORE-91: English "Appointments" showed as "Appointment" / "s" in the pill.
+test("collapsed: long module names stay on one line in the pill's row", async ({ page }) => {
+  await open(page, "?labels=long");
+  for (const label of await page.locator(".mobile-nav-panel__cell--primary .mobile-bottom-nav-item__label").all()) {
+    expect(await label.evaluate(labelLines)).toBe(1);
+  }
+});
+
+test("open: the module grid still allows a long name a second line", async ({ page }) => {
+  await open(page, "?labels=long");
+  await toggle(page).click();
+  const label = page.locator(".mobile-nav-panel__cell--primary .mobile-bottom-nav-item__label", { hasText: "Appointments" });
+  await expect.poll(() => label.evaluate((el) => getComputedStyle(el).getPropertyValue("-webkit-line-clamp"))).toBe("2");
+});
+
 test("Close sits exactly where More was, and the box grows upwards over the grid", async ({ page }) => {
   await open(page);
   const more = (await toggle(page).boundingBox())!;

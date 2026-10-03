@@ -16,6 +16,7 @@
       "@prefs":     ["../../packages/prefs/src/index.ts"],
       "@vuetify":   ["../../packages/vuetify/src/index.ts"],
       "@documents-browser": ["../../packages/documents/src/browser/index.ts"],
+      "@device-order": ["../../packages/device-order/src/index.ts"],
       "vue":        ["node_modules/vue/dist/vue.d.ts"]
     }
   },
@@ -27,6 +28,7 @@
     "../../packages/stores/src",
     "../../packages/prefs/src",
     "../../packages/documents/src/browser",
+    "../../packages/device-order/src",
     "../../apps/api/client/src"
   ]
 }

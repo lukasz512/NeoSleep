@@ -68,12 +68,12 @@ header.doc-header .doc-cat {
  * both cases the renderer moves the signatures to the bottom of the last
  * page.
  */
-.doc-roomy header.doc-header { padding-bottom: 10px; margin-bottom: 26px; }
-.doc-roomy .doc-title { margin: 0 0 22px; padding-block: 3px; }
+.doc-roomy header.doc-header { padding-bottom: 10px; margin-bottom: 20px; }
+.doc-roomy .doc-title { margin: 0 0 16px; padding-block: 3px; }
 .doc-roomy .doc-title h1 { font-size: 19pt; }
 .doc-roomy .doc-title h2,
 .doc-roomy .doc-title .date-line { margin-top: 5px; font-size: 10.5pt; }
-.doc-roomy .doc-fields { margin-bottom: 22px; }
+.doc-roomy .doc-fields { margin-bottom: 16px; }
 
 /* Orphan control: no heading alone at the bottom of a page, no lone line of a paragraph at either end, no split question row. */
 p, li { orphans: 3; widows: 3; }

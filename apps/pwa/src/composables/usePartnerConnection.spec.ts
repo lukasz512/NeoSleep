@@ -31,7 +31,8 @@ describe("ensurePartnerConnection", () => {
 
     const warning = useNotifications().notifications.value[0]!;
     expect(warning.type).toBe("warning");
-    expect(warning.context).toBe("OrthoApnea");
+    expect(warning.context).toBe("app.partners.label");
+    expect(warning.message).not.toMatch(/orthoapnea/i);
     expect(warning.action?.labelKey).toBe("notification.action.retry");
 
     useNotifications().notifications.value = [];
@@ -40,7 +41,7 @@ describe("ensurePartnerConnection", () => {
 
     const restored = useNotifications().notifications.value[0]!;
     expect(restored.type).toBe("success");
-    expect(restored.message).toBe("app.partners.connectionRestored:OrthoApnea");
+    expect(restored.message).toBe("app.partners.connectionRestored");
   });
 
   it("a Retry that still fails answers again, even inside the navigation cooldown", async () => {
@@ -64,6 +65,6 @@ describe("ensurePartnerConnection", () => {
       json: async () => ({ connected: false, attemptsExhausted: true, reason: "credentials_rejected" }),
     } as Response);
     await ensurePartnerConnection("watchpat");
-    expect(useNotifications().notifications.value[0]?.message).toBe("app.partners.connectionErrorConfig:watchpat");
+    expect(useNotifications().notifications.value[0]?.message).toBe("app.partners.connectionErrorConfig");
   });
 });

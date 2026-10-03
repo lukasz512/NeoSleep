@@ -376,8 +376,8 @@ const SIGNATURE_PUSH_ATTEMPTS = 4;
  * - fits on one page → keep the compact layout, only move the signatures
  *   down to the bottom of the page;
  * - runs onto more pages → switch to the roomier layout (`doc-roomy` on
- *   <html>: more air around the title, see docTheme.css), then move the
- *   signatures to the bottom of the last page.
+ *   <html>: more air around the title, see docTheme.css) unless that adds
+ *   a page, then move the signatures to the bottom of the last page.
  * Orphan control (a heading never ends a page, question rows and signature
  * blocks never split) is plain CSS in the templates.
  *
@@ -397,8 +397,10 @@ export async function fitPageLayout(
   let pages = countPdfPages(pdf);
   if (pages > 1) {
     await page.evaluate(() => document.documentElement.classList.add("doc-roomy"));
-    pdf = await print();
-    pages = countPdfPages(pdf);
+    const roomy = await print();
+    // The extra air must never cost a page: a consent that fits on 2 compact pages left only its signature on a 3rd (2026-09-29).
+    if (countPdfPages(roomy) === pages) pdf = roomy;
+    else await page.evaluate(() => document.documentElement.classList.remove("doc-roomy"));
   }
 
   const mm = (value: string) => parseFloat(value);

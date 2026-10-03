@@ -430,6 +430,16 @@ defineExpose({ expanded, setExpanded });
   line-height: 1.2;
 }
 
+/* CORE-91: collapsed, the pill's row is one line — a long name ("Tratamientos")
+   ends in "…" instead of breaking mid-word ("Appointment" / "s"). */
+.mobile-nav-panel:not(.mobile-nav-panel--expanded) .mobile-nav-panel__cell--primary :deep(.mobile-bottom-nav-item__label) {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: normal;
+}
+
 /* The pill's own buttons. Collapsed: moved from grid position i (row 0,
    column i) to pill slot i. Open: they rise into the grid, top left first.
      x in the grid  = pad-grid + i·(cell + gap) + cell/2

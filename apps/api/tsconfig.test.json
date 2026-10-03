@@ -1,0 +1,8 @@
+{
+  "//": "Typechecks apps/api/test/ (the OA replica and the specs that drive it), which tsconfig.json's rootDir: src can't include. Never emits.",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": ["test", "src/types"]
+}

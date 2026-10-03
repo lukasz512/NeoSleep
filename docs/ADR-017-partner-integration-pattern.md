@@ -120,3 +120,7 @@ routes is a separate, larger auth/routing decision.
   manual test session can watch these happen live in server logs — added
   alongside the new admin-only transaction-log UI that reads this same table
   (`GET /partners/orthoapnea/treatments/:id/transactions`).
+- 2026-10-03 (CORE-95): the "residual risk" of two concurrent first-time order
+  creates is closed — the submit claim is now one conditional upsert under an
+  advisory lock, and orders arrive through a provider adapter with shared
+  validation. See ADR-028.

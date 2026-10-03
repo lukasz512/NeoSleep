@@ -20,6 +20,7 @@ echo "pre-commit: apps/*/src or packages/*/src changed — running lint + typech
 # ERR_MODULE_NOT_FOUND-style errors regardless of what this commit touched.
 pnpm --filter @neo/email build >/dev/null
 pnpm --filter @neo/documents build >/dev/null
+pnpm --filter @neo/device-order build >/dev/null
 
 if ! pnpm lint; then
   echo "pre-commit: lint failed — fix the errors above, or commit with --no-verify if you really must skip this." >&2

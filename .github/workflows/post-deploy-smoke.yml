@@ -4,7 +4,8 @@
 # (or never went live); GitHub notifies whoever merged.
 #
 # - api:      the API the PWA uses (Cloud Run via deploy-api.yml, or Render).
-#             Waits until /health reports the pushed commit, then renders one
+#             Waits until /health reports the newest commit that triggers
+#             deploy-api.yml (not every push does), then renders one
 #             real PDF via /health/pdf (bundled Chromium is the most fragile
 #             piece of the API).
 # - frontend: after each FTP deploy workflow finishes, fails if the deploy
@@ -38,11 +39,21 @@ jobs:
       # The same API the PWA talks to (deploy-pwa.yml): Cloud Run once API_URL_DEV
       # is set (NEO-45), Render before that.
       API_URL: ${{ secrets.API_URL_DEV || secrets.RENDER_API_URL_DEV }}
-      EXPECTED_COMMIT: ${{ github.sha }}
     steps:
-      - name: Wait for the API to serve this commit
+      # Full history: the expected commit can be many merges back.
+      - uses: actions/checkout@v4
+        if: github.event_name == 'push'
+        with:
+          fetch-depth: 0
+
+      # CORE-99: deploy-api.yml only runs when API paths change, so after a
+      # frontend-only merge the API keeps serving the last commit that touched
+      # them. Waiting for github.sha timed out on every such merge.
+      - name: Wait for the API to serve its latest deployable commit
         if: github.event_name == 'push'
         run: |
+          EXPECTED_COMMIT=$(node infrastructure/scripts/api-deploy-commit.mjs "$GITHUB_SHA")
+          echo "Pushed $GITHUB_SHA; the API should serve $EXPECTED_COMMIT"
           for i in $(seq 1 80); do
             live=$(curl -sf --max-time 20 "$API_URL/health" | jq -r '.commit // empty' || true)
             if [ "$live" = "$EXPECTED_COMMIT" ]; then

@@ -31,8 +31,21 @@ function timingSafeStringEqual(a: string, b: string): boolean {
  * rejected — never falls back to "no auth required".
  */
 export function requireInternalJobSecret(req: Request, _res: Response, next: NextFunction): void {
+  checkJobSecret(req, INTERNAL_JOB_SECRET, next);
+}
+
+/**
+ * The daily device-order reconciliation job's own secret (NEO-218, Łukasz D2:
+ * a dedicated secret, so a leak of it opens no other job and it rotates on its
+ * own). Read per request, same fail-closed rule: unset → every call is 401.
+ */
+export function requireReconciliationJobSecret(req: Request, _res: Response, next: NextFunction): void {
+  checkJobSecret(req, process.env.RECONCILIATION_JOB_SECRET, next);
+}
+
+function checkJobSecret(req: Request, secret: string | undefined, next: NextFunction): void {
   const provided = getBearerToken(req);
-  if (!INTERNAL_JOB_SECRET || !provided || !timingSafeStringEqual(provided, INTERNAL_JOB_SECRET)) {
+  if (!secret || !provided || !timingSafeStringEqual(provided, secret)) {
     next(new AuthError("Invalid or missing job secret"));
     return;
   }
