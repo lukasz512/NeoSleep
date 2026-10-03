@@ -15,6 +15,7 @@ import {
 import { SyncOrthoApneaTreatmentStatusesAllTenantsCommand } from "../../commands/orthoapneaSync.js";
 import { CreateNoteCommand } from "../../commands/note.js";
 import { ValidationError } from "../../errors.js";
+import { requirePatientInScope } from "../../queries/entityAccess.js";
 import { routeParam } from "../utils.js";
 
 /**
@@ -42,7 +43,11 @@ orthoapneaTreatmentsRouter.post(
     // touching the partner API — ensureOrthoApneaPatient manages its own
     // (separate, short) transactions around the OrthoApnea HTTP call itself
     // (see ADR-017 / that function's own doc comment for why).
-    await withTenant(slug, (client) => buildContext(req, client, slug));
+    // CORE-104: only a patient the caller may see — this pushes their PII to the partner.
+    await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      await requirePatientInScope(ctx, patientId);
+    });
     const externalId = await ensureOrthoApneaPatient(slug, patientId);
 
     res.json({ externalId });

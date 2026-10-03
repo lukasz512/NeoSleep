@@ -5,12 +5,23 @@ import {
   type GetTreatmentPlansFilters,
   type TreatmentPlan,
 } from "../db.js";
+import { NotFoundError } from "../errors.js";
+import { getViewer, patientListScope, requirePatientInScope } from "./entityAccess.js";
 
 /**
  * QUERIES — Treatment plan domain.
  *
- * Read-only. No writes, no audit log.
+ * Read-only. No writes, no audit log. Every read is limited to patients the
+ * viewer may see (CORE-104, entityAccess.ts).
  */
+
+/** The plan, 404 when missing or its patient is out of the viewer's reach — guard for plan writes and comments. */
+export async function requireTreatmentPlanInScope(ctx: TenantContext, id: string): Promise<TreatmentPlan> {
+  const plan = await getTreatmentPlanById(ctx.client, id);
+  if (!plan) throw new NotFoundError("TreatmentPlan", id);
+  await requirePatientInScope(ctx, plan.patient_id);
+  return plan;
+}
 
 export type TreatmentPlanDto = TreatmentPlan;
 
@@ -43,6 +54,8 @@ export async function GetTreatmentPlanListQuery(
     type: input.type,
     status: input.status,
     search: input.search,
+    // CORE-104: only plans of patients the viewer may see (a doctor: their own).
+    patientScope: patientListScope(await getViewer(ctx)),
   };
 
   const page = input.page ?? 1;
@@ -57,5 +70,6 @@ export async function GetTreatmentPlanListQuery(
 export async function GetTreatmentPlanByIdQuery(ctx: TenantContext, id: string): Promise<TreatmentPlanDto | null> {
   const plan = await getTreatmentPlanById(ctx.client, id);
   if (!plan) return null;
+  await requirePatientInScope(ctx, plan.patient_id);
   return toDto(plan);
 }

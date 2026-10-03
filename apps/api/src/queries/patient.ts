@@ -11,7 +11,7 @@ import { withPlatform } from "../db/tenant.js";
 import { listPatientChecklistConfig, type ChecklistFillMode } from "../db/documentTemplateEntityType.js";
 import { getPatientFormCompletion, POLYSOMNOGRAPHY_FORM_KEY, type FormCompletionItem } from "../db/patientFormCompletion.js";
 import { DOCUMENT_MANIFEST } from "@neo/documents";
-import { getAllowedScopePaths, assertTerritoryAccessByTerritoryId } from "../middleware/requireScope.js";
+import { getViewer, patientListScope, assertCanSeePatient } from "./entityAccess.js";
 
 /**
  * QUERIES — Patient domain.
@@ -130,8 +130,8 @@ export async function GetPatientListQuery(
     search: input.search,
     status: input.status,
     region: input.region,
-    practitioner_id: input.practitioner_id,
-    scopePaths: await getAllowedScopePaths(ctx.client, ctx.user.roles),
+    // CORE-104: a doctor's list is always their own, whatever practitioner_id was sent.
+    ...patientListScope(await getViewer(ctx), input.practitioner_id),
   };
 
   const page      = input.page ?? 1;
@@ -182,7 +182,7 @@ export async function GetPatientByIdQuery(
 ): Promise<PatientDto | null> {
   const patient = await getPatientById(ctx.client, id);
   if (!patient) return null;
-  await assertTerritoryAccessByTerritoryId(ctx, patient.territory_id);
+  await assertCanSeePatient(ctx, patient);
   const territoryPath = patient.territory_id ? await getTerritoryPath(ctx.client, patient.territory_id) : null;
   return toDto(patient, territoryPath);
 }

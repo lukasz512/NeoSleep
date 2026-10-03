@@ -28,3 +28,4 @@ export * from "./appointment.js";
 export * from "./treatmentPlan.js";
 export * from "./partnerLink.js";
 export * from "./territory.js";
+export * from "./patientScope.js";

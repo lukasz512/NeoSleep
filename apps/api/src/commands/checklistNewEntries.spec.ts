@@ -26,7 +26,8 @@ type Client = TenantContext["client"];
 
 const uniqueSuffix = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-async function staff(client: Client, role: "doctor" | "manager" = "doctor"): Promise<TenantContext> {
+/** A global staff member. Manager by default: a doctor only reaches their own patients (CORE-104), and these patients have none. */
+async function staff(client: Client, role: "doctor" | "manager" = "manager"): Promise<TenantContext> {
   const email = `qa-nuevo-${uniqueSuffix()}@neosleepcare.com`;
   const hash = await bcrypt.hash("irrelevant-not-logged-in-with", 4);
   const territory = await getGlobalTerritoryId(client);

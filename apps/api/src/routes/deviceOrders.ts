@@ -18,12 +18,10 @@ import {
   insertAuditLog,
   getDeliveryOrganization,
   getTreatmentPlanById,
-  getIdentityIdForUser,
-  getPractitionerIdByIdentityId,
 } from "../db.js";
 import type { DeliveryOrganization } from "../db/practitionerOrganization.js";
 import { buildContext, type TenantContext } from "../context/TenantContext.js";
-import { requirePatientInScope, requirePractitionerInScope } from "../queries/entityAccess.js";
+import { getViewer, requirePatientInScope, requirePractitionerInScope } from "../queries/entityAccess.js";
 import { getDeviceOrderProvider } from "../services/deviceOrders/index.js";
 import { ForbiddenError, NotFoundError } from "../errors.js";
 import { requireRole } from "../middleware/requireRole.js";
@@ -84,11 +82,7 @@ async function resolveDelivery(
  * as themselves, so only to their own clinic (Łukasz, 2026-10-03, NEO-210).
  */
 async function ownPractitionerId(ctx: TenantContext): Promise<string | null> {
-  if (ctx.user.role !== "doctor") return null;
-  const identityId = await getIdentityIdForUser(ctx.client, ctx.user.id);
-  const practitionerId = identityId ? await getPractitionerIdByIdentityId(ctx.client, identityId) : null;
-  if (!practitionerId) throw new ForbiddenError("This doctor account is not linked to a practitioner record");
-  return practitionerId;
+  return (await getViewer(ctx)).practitionerId;
 }
 
 /** The 400 every device-order validation failure answers with. */
