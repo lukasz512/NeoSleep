@@ -59,6 +59,10 @@ export interface TreatmentPlan {
   notes: string | null;
   status: string;
   metadata: Record<string, unknown> | null;
+  /** NEO-217: the partner order behind this plan (partner_link, migration 018) — null until it was ever sent. Partner-neutral on purpose. */
+  order_number: string | null;
+  order_sync_status: "pending" | "synced" | "failed" | null;
+  order_sent_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -130,6 +134,9 @@ type TreatmentPlanRow = {
   notes: string | null;
   status: string;
   metadata: Record<string, unknown> | null;
+  order_number: string | null;
+  order_sync_status: "pending" | "synced" | "failed" | null;
+  order_sent_at: Date | null;
   created_at: Date;
   updated_at: Date;
 };
@@ -145,7 +152,8 @@ const TREATMENT_PLAN_SELECT_COLS = `
   t.recommended_by, t.notes, t.status, t.metadata, t.created_at, t.updated_at,
   pi.title AS patient_salutation, pi.first_name AS patient_first_name, pi.last_name AS patient_last_name,
   di.title AS dentist_salutation, di.first_name AS dentist_first_name, di.last_name AS dentist_last_name,
-  den.primary_specialty AS dentist_specialty, den.specialties AS dentist_specialties`.trim();
+  den.primary_specialty AS dentist_specialty, den.specialties AS dentist_specialties,
+  ord.external_id AS order_number, ord.sync_status AS order_sync_status, ord.created_at AS order_sent_at`.trim();
 
 const TREATMENT_PLAN_JOIN = `
   FROM treatment_plan t
@@ -154,7 +162,14 @@ const TREATMENT_PLAN_JOIN = `
   LEFT JOIN practitioner den ON t.dentist_id = den.id
   LEFT JOIN identities di ON den.identity_id = di.id
   LEFT JOIN supplier scansup ON t.scan_supplier_id = scansup.id
-  LEFT JOIN supplier applsup ON t.appliance_supplier_id = applsup.id`.trim();
+  LEFT JOIN supplier applsup ON t.appliance_supplier_id = applsup.id
+  LEFT JOIN LATERAL (
+    SELECT pl.external_id, pl.sync_status, pl.created_at
+      FROM partner_link pl
+     WHERE pl.entity_type = 'treatment_plan' AND pl.entity_id = t.id
+     ORDER BY pl.updated_at DESC
+     LIMIT 1
+  ) ord ON true`.trim();
 
 function serialize(row: TreatmentPlanRow): TreatmentPlan {
   return {
@@ -197,6 +212,9 @@ function serialize(row: TreatmentPlanRow): TreatmentPlan {
     notes: row.notes,
     status: row.status,
     metadata: row.metadata,
+    order_number: row.order_number,
+    order_sync_status: row.order_sync_status,
+    order_sent_at: row.order_sent_at ? isoDate(row.order_sent_at) : null,
     created_at: isoDate(row.created_at),
     updated_at: isoDate(row.updated_at),
   };

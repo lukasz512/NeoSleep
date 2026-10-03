@@ -126,6 +126,53 @@ export async function getNotesForEntity(
   }
 }
 
+/** NEO-217: a comment on a device order, with the patient and lab order it belongs to (admin Panel). */
+export interface DeviceOrderComment extends Note {
+  treatment_plan_id: string;
+  patient_id: string;
+  patient_name: string | null;
+  order_number: string | null;
+}
+
+export async function getRecentDeviceOrderComments(client: PoolClient, limit: number): Promise<DeviceOrderComment[]> {
+  try {
+    const result = await client.query<
+      NoteRow & { patient_id: string; patient_salutation: string | null; patient_first_name: string | null; patient_last_name: string | null; order_number: string | null }
+    >(
+      `SELECT ${NOTE_SELECT_COLS},
+              t.patient_id, pi.title AS patient_salutation, pi.first_name AS patient_first_name, pi.last_name AS patient_last_name,
+              ord.external_id AS order_number
+       ${NOTE_JOIN}
+       JOIN treatment_plan t ON t.id = n.entity_id AND t.deleted_at IS NULL
+       JOIN patient p ON p.id = t.patient_id
+       JOIN identities pi ON pi.id = p.identity_id
+       LEFT JOIN LATERAL (
+         SELECT pl.external_id FROM partner_link pl
+          WHERE pl.entity_type = 'treatment_plan' AND pl.entity_id = t.id
+          ORDER BY pl.updated_at DESC LIMIT 1
+       ) ord ON true
+       WHERE n.entity_type = 'treatment_plan' AND n.deleted_at IS NULL
+       ORDER BY n.created_at DESC
+       LIMIT $1`,
+      [limit]
+    );
+    return result.rows.map((row) => ({
+      ...serialize(row),
+      treatment_plan_id: row.entity_id,
+      patient_id: row.patient_id,
+      patient_name: formatOptionalDisplayName({
+        salutation: row.patient_salutation,
+        first_name: row.patient_first_name,
+        last_name: row.patient_last_name,
+      }),
+      order_number: row.order_number,
+    }));
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getRecentDeviceOrderComments", err);
+  }
+}
+
 export async function softDeleteNote(client: PoolClient, id: string): Promise<void> {
   try {
     await client.query(`UPDATE note SET deleted_at = now() WHERE id = $1`, [id]);

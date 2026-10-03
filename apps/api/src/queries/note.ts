@@ -1,7 +1,7 @@
 import type { TenantContext } from "../context/TenantContext.js";
 import { getNotesForEntity, type Note } from "../db.js";
-import { NotFoundError, ValidationError } from "../errors.js";
-import { NOTE_ENTITY_TYPES, type NoteEntityType } from "../db/note.js";
+import { ForbiddenError, NotFoundError, ValidationError } from "../errors.js";
+import { NOTE_ENTITY_TYPES, getRecentDeviceOrderComments, type DeviceOrderComment, type NoteEntityType } from "../db/note.js";
 import { getViewer, requirePatientInScope, requirePractitionerInScope, requireOrganizationInScope } from "./entityAccess.js";
 import { requireTreatmentPlanInScope } from "./treatmentPlan.js";
 import { GetLeadByIdQuery } from "./lead.js";
@@ -74,4 +74,16 @@ export async function GetNotesForEntityQuery(
 
   const rows = await getNotesForEntity(ctx.client, entityType, entityId);
   return rows.map(toDto);
+}
+
+export type DeviceOrderCommentDto = DeviceOrderComment;
+
+/** NEO-217: latest comments on device orders across all patients — the admin Panel's overview. */
+export async function GetRecentDeviceOrderCommentsQuery(
+  ctx: TenantContext,
+  input: { limit?: number }
+): Promise<DeviceOrderCommentDto[]> {
+  if (ctx.user.role !== "admin") throw new ForbiddenError("Only admins can see all device-order comments");
+  const limit = Math.min(Math.max(Math.trunc(input.limit ?? 10), 1), 50);
+  return getRecentDeviceOrderComments(ctx.client, limit);
 }

@@ -545,6 +545,10 @@ const ICONS = {
     paths: `<rect x="2" y="4" width="20" height="16" rx="2" />
             <polyline points="2 6 12 13 22 6" />`,
   },
+  "message": {
+    strokeWidth: 2,
+    paths: `<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" />`,
+  },
   "phone": {
     strokeWidth: 2,
     paths: `<path d="M4 3h4l2 6-3 2a12 12 0 0 0 6 6l2-3 6 2v4a2 2 0 0 1-2 2A17 17 0 0 1 2 5a2 2 0 0 1 2-2z" />`,
