@@ -43,7 +43,7 @@ function socialCid(id: string): string {
  * on the resend.emails.send() call alongside these socials, so the cid: references in the footer
  * always resolve. */
 /** Line icons for patient emails (CORE-25) — PNG under assets/email/icon-*.png; mail clients drop inline SVG. */
-export type EmailIconName = "check" | "calendar" | "x" | "pin" | "person" | "phone" | "mail" | "list" | "video";
+export type EmailIconName = "check" | "calendar" | "x" | "pin" | "person" | "phone" | "mail" | "list" | "video" | "doc";
 
 export function emailIconCid(name: EmailIconName): string {
   return `icon-${name}`;

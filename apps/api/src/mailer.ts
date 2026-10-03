@@ -471,6 +471,8 @@ export interface AppointmentEmail {
   onlineUrl: string | null;
   /** The clinic's “what to bring” text (organization.visit_instructions); left out when empty or cancelled. */
   visitInstructions?: string | null;
+  /** CORE-113: the informed consent still to sign — a link, or null when the address is shared (signed at the clinic instead). Absent = nothing to sign. */
+  consent?: { link: string | null } | null;
   /** Who to call or write to change the appointment (CORE-25: no self-service rescheduling yet). */
   contact: { phone: string | null; email: string | null };
   links: {
@@ -594,6 +596,18 @@ export async function sendAppointmentPatientEmail(to: string, recipient: EmailRe
     : "";
   if (instructions) icons.push("list");
 
+  const consentHtml = !cancelled && appointment.consent
+    ? `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:2px solid ${APPT.teal};border-radius:14px;margin:0 0 14px;"><tr><td style="padding:16px;">
+      <table role="presentation" cellpadding="0" cellspacing="0"><tr><td valign="top">${iconImg("doc", 26)}</td>
+      <td style="padding-left:10px;"><div style="font-size:16px;font-weight:bold;color:${APPT.ink};">${escapeHtml(t("consent.title"))}</div>
+      <div style="font-size:14px;color:${APPT.ink};margin-top:4px;line-height:1.45;">${escapeHtml(t(appointment.consent.link ? "consent.body" : "consent.atClinic"))}</div></td></tr></table>
+      ${appointment.consent.link ? `<a href="${escapeHtml(appointment.consent.link)}" style="display:block;margin-top:12px;padding:12px 18px;border-radius:999px;background:${APPT.teal};color:#ffffff;font-size:15px;font-weight:bold;text-align:center;text-decoration:none;">${escapeHtml(t("consent.cta"))}</a>
+      <div style="font-size:12.5px;color:${APPT.muted};text-align:center;margin-top:8px;">${escapeHtml(t("consent.hint"))}</div>` : ""}
+    </td></tr></table>`
+    : "";
+  if (consentHtml) icons.push("doc");
+
   const { phone, email } = appointment.contact;
   const contactRows = [
     ...(phone ? [`<tr><td style="padding:3px 0;">${iconImg("phone", 18)}</td><td style="padding:3px 0 3px 8px;"><a href="tel:${escapeHtml(phone.replace(/[^0-9+]/g, ""))}" style="font-size:15px;font-weight:bold;color:${APPT.teal};text-decoration:none;white-space:nowrap;">${escapeHtml(phone)}</a></td></tr>`] : []),
@@ -615,6 +629,7 @@ export async function sendAppointmentPatientEmail(to: string, recipient: EmailRe
   // Under the buttons: the answer hint, the clinic's own text, how to reach the clinic, calendar links, the stop link.
   const afterCtaHtml = `
     ${appointment.links.confirm ? `<p style="margin:0 0 16px;font-size:12.5px;color:${APPT.muted};text-align:center;">${escapeHtml(t("tapHint"))}</p>` : ""}
+    ${consentHtml}
     ${instructions}
     ${contactHtml}
     ${!cancelled && calendarLinks.length ? `<p style="margin:0 0 12px;text-align:center;">${escapeHtml(t("addToCalendar"))} ${calendarLinks.join(" · ")}</p>` : ""}

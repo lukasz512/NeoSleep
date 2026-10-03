@@ -27,6 +27,9 @@ import { hashToken } from "../utils/hashToken.js";
 import { maskEmail } from "../utils/maskEmail.js";
 import { patientEmailLocale } from "../utils/patientEmailLocale.js";
 import { buildAppointmentIcs, googleCalendarLink, outlookCalendarLink } from "../utils/ics.js";
+import { getInformedConsentState, INFORMED_CONSENT_KEY } from "../db/informedConsentState.js";
+import { isPatientEmailHeldByAnother } from "../db/identityEmail.js";
+import { insertQuestionnaireRequest } from "../db/questionnaireRequest.js";
 
 /**
  * CORE-25 / CORE-26 — the patient's side of an appointment (decision form
@@ -131,11 +134,12 @@ export async function deliverAppointmentPatientEmail(tenantSlug: string, plan: A
         }
         return { outcome: "no_email" as const };
       }
-      return { outcome: "ready" as const, appointment, context, email: context.patient_email };
+      const consent = plan.kind === "cancelled" ? null : await consentToSign(client, appointment, context.patient_email, plan, frontendOrigin);
+      return { outcome: "ready" as const, appointment, context, email: context.patient_email, consent };
     });
     if (prepared.outcome !== "ready") return prepared.outcome;
 
-    const { appointment, context, email } = prepared;
+    const { appointment, context, email, consent } = prepared;
     const locale = patientEmailLocale(context.patient_language, context.patient_region);
     const cancelled = plan.kind === "cancelled";
     const contact = appointmentContact(context);
@@ -161,6 +165,7 @@ export async function deliverAppointmentPatientEmail(tenantSlug: string, plan: A
         visitInstructions: context.organization_visit_instructions,
         doctorName: context.practitioner_name,
         onlineUrl: appointment.location_type === "online" ? appointment.online_url : null,
+        consent,
         contact,
         links: {
           confirm: cancelled ? null : links.confirm,
@@ -210,6 +215,47 @@ export async function deliverAppointmentPatientEmail(tenantSlug: string, plan: A
     console.error(`[appointmentPatient] ${plan.kind} email for appointment ${plan.appointmentId} not sent:`, err);
     return "failed";
   }
+}
+
+/**
+ * CORE-113 (decision form consent-visit-r1, Z1 + Z2): the confirmation email
+ * already carries the informed consent to sign, so the patient has time to
+ * read it before the visit. Only when the current text is unsigned, and only
+ * to an address that is the patient's alone — from a family inbox someone
+ * else could sign for them, so a shared address gets "you'll sign at the
+ * clinic" instead. The link covers just the consent, lives until the visit
+ * ends and leaves any QR / emailed link the doctor already gave untouched.
+ */
+async function consentToSign(
+  client: PoolClient,
+  appointment: Appointment,
+  email: string,
+  plan: AppointmentPatientEmailPlan,
+  frontendOrigin: string
+): Promise<{ link: string | null } | null> {
+  const context = await getAppointmentEmailContext(client, appointment.id);
+  const locale = patientEmailLocale(context?.patient_language ?? null, context?.patient_region ?? null);
+  const state = await getInformedConsentState(client, appointment.patient_id, locale);
+  if (!state.applicable || state.signed) return null;
+  if (await isPatientEmailHeldByAnother(client, appointment.patient_id, email)) return { link: null };
+  if (!plan.sentBy) return { link: null };
+
+  const token = generateToken();
+  const request = await insertQuestionnaireRequest(client, {
+    patient_id: appointment.patient_id,
+    items: [INFORMED_CONSENT_KEY],
+    token_hash: hashToken(token),
+    expires_at: new Date(appointment.end_at),
+    created_by: plan.sentBy,
+  });
+  await insertAuditLog(client, {
+    user_id: plan.sentBy,
+    action: "create",
+    entity_type: "QuestionnaireRequest",
+    entity_id: request.id,
+    entity_after: { patient_id: appointment.patient_id, items: [INFORMED_CONSENT_KEY], expires_at: appointment.end_at, via: "appointment_email" },
+  });
+  return { link: `${frontendOrigin}/q#${token}` };
 }
 
 // ---------------------------------------------------------------------------

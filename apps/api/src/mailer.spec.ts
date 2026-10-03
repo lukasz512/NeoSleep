@@ -292,6 +292,21 @@ describe("sendAppointmentPatientEmail (CORE-25 / CORE-26)", () => {
     expect(args.html).not.toContain("Para su visita");
   });
 
+  it("CORE-113: an unsigned consent shows '1 documento por firmar' with its own button; a shared address says it's signed at the clinic", async () => {
+    const { sendAppointmentPatientEmail } = await importMailer(true);
+    await sendAppointmentPatientEmail("luis@example.org", patient, { ...appointment, consent: { link: "https://pwa.example/q#tok" } });
+    const withLink = sendMock.mock.calls[0]![0];
+    expect(withLink.html).toContain("Antes de su cita: 1 documento por firmar");
+    expect(withLink.html).toContain('href="https://pwa.example/q#tok"');
+    expect(withLink.html).toContain("Leer y firmar");
+    expect(withLink.attachments.map((a: { contentId?: string }) => a.contentId)).toContain("icon-doc");
+
+    await sendAppointmentPatientEmail("luis@example.org", patient, { ...appointment, consent: { link: null } });
+    const shared = sendMock.mock.calls[1]![0];
+    expect(shared.html).toContain("en la clínica, antes de su cita");
+    expect(shared.html).not.toContain("Leer y firmar");
+  });
+
   it("a cancellation has no buttons and no add-to-calendar links, only how to book again", async () => {
     const { sendAppointmentPatientEmail } = await importMailer(true);
     await sendAppointmentPatientEmail("luis@example.org", patient, {
