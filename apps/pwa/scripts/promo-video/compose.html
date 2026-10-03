@@ -110,33 +110,34 @@
 <script>
   const COPY = {
     en: {
-      photo: "Better sleep.",
-      hook: "More energy,<br><em>every day.</em>",
-      patients: ["Patients", "Every patient's path<br>in one place."],
-      calendar: ["Calendar", "Every visit<br>on schedule."],
-      resources: ["Resources", "Know-how,<br>always at hand."],
-      tag: "Designed with sleep specialists.",
-      sub: "Better sleep. More energy.",
+      photo: "Better sleep",
+      hook: "More energy<br><em>every day</em>",
+      patients: ["Patients", "Every patient's path<br>in one place"],
+      calendar: ["Calendar", "Every visit<br>on schedule"],
+      resources: ["Resources", "Know-how<br>always at hand"],
+      tag: "Designed with sleep specialists",
+      sub: "Better sleep<br>More energy",
     },
     pl: {
-      photo: "Lepszy sen.",
-      hook: "Więcej energii,<br><em>każdego dnia.</em>",
-      patients: ["Pacjenci", "Cała ścieżka pacjenta<br>w jednym miejscu."],
-      calendar: ["Kalendarz", "Każda wizyta<br>na czas."],
-      resources: ["Materiały", "Wiedza<br>zawsze pod ręką."],
-      tag: "Zaprojektowane ze specjalistami snu.",
-      sub: "Lepszy sen. Więcej energii.",
+      photo: "Lepszy sen",
+      hook: "Więcej energii<br><em>każdego dnia</em>",
+      patients: ["Pacjenci", "Cała ścieżka pacjenta<br>w jednym miejscu"],
+      calendar: ["Kalendarz", "Każda wizyta<br>na czas"],
+      resources: ["Materiały", "Wiedza<br>zawsze pod ręką"],
+      tag: "Zaprojektowane ze specjalistami snu",
+      sub: "Lepszy sen<br>Więcej energii",
     },
     mx: {
-      photo: "Dormir mejor.",
-      hook: "Más energía,<br><em>cada día.</em>",
-      patients: ["Pacientes", "Todo el camino del paciente<br>en un solo lugar."],
-      calendar: ["Agenda", "Cada cita<br>a tiempo."],
-      resources: ["Recursos", "El conocimiento,<br>siempre a la mano."],
-      tag: "Diseñado con especialistas del sueño.",
-      sub: "Dormir mejor. Más energía.",
+      photo: "Dormir mejor",
+      hook: "Más energía<br><em>cada día</em>",
+      patients: ["Pacientes", "Todo el camino del paciente<br>en un solo lugar"],
+      calendar: ["Agenda", "Cada cita<br>a tiempo"],
+      resources: ["Recursos", "El conocimiento<br>siempre a la mano"],
+      tag: "Diseñado con especialistas del sueño",
+      sub: "Dormir mejor<br>Más energía",
     },
   };
+  // On-screen titles never carry punctuation (Łukasz, 2026-10-03); check-video-titles.mjs enforces it.
   const params = new URLSearchParams(location.search);
   const lang = params.get("lang") || "en";
   if (params.get("format") === "9x16") document.documentElement.classList.add("f916");
@@ -147,7 +148,7 @@
   document.getElementById("photoText").innerHTML = C.photo;
   document.getElementById("hook").innerHTML = C.hook;
   document.querySelector("#end .tag").textContent = C.tag;
-  document.querySelector("#end .sub").textContent = C.sub;
+  document.querySelector("#end .sub").innerHTML = C.sub;
 
   // ── tiny deterministic tween engine ─────────────────────────────────────
   const clamp = (x) => Math.max(0, Math.min(1, x));
