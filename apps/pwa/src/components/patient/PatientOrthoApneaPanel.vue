@@ -1,7 +1,7 @@
 <template>
   <div class="patient-orthoapnea-panel">
     <OrthoApneaOrderWizard
-      v-if="latestSleepStudyId"
+      v-if="canOrder && latestSleepStudyId"
       v-model="showOrderWizard"
       :patient-id="props.patientId"
       :sleep-study-id="latestSleepStudyId"
@@ -54,7 +54,7 @@
 
     <div class="patient-orthoapnea-panel__toolbar">
       <h3 class="patient-orthoapnea-panel__section">{{ t("app.deviceOrder.section") }}</h3>
-      <VTooltip location="top">
+      <VTooltip v-if="canOrder" location="top">
         <template #activator="{ props: tooltipProps }">
           <span v-bind="tooltipProps">
             <AppButton
@@ -134,7 +134,7 @@
         </template>
 
         <template #actions>
-          <AppButton v-if="row.state === 'draft'" variant="text" size="small" color="primary" data-testid="device-order-continue" @click="onEdit(row.plan)">
+          <AppButton v-if="canOrder && row.state === 'draft'" variant="text" size="small" color="primary" data-testid="device-order-continue" @click="onEdit(row.plan)">
             <template #prepend><AppIcon name="pencil" /></template>
             {{ t("app.deviceOrder.action.continue") }}
           </AppButton>
@@ -193,6 +193,7 @@ import { apiFetch } from "../../composables/useApi";
 import { DEVICE_ORDER_TONE, deviceOrderState, type DeviceOrderState } from "../../utils/treatmentPlanStatus";
 import { useNotifications } from "../../composables/useNotifications";
 import { useAuthStore } from "../../stores/auth";
+import { STUDY_ROLES } from "../../config/questionnaires";
 import OrthoApneaOrderWizard, { type OrthoApneaDraftPlan } from "./OrthoApneaOrderWizard.vue";
 import OrthoApneaOrderComments from "./OrthoApneaOrderComments.vue";
 import OrthoApneaTransactionLog from "./OrthoApneaTransactionLog.vue";
@@ -234,6 +235,8 @@ const { specialtySet } = useIdentity();
 const notifications = useNotifications();
 const authStore = useAuthStore();
 const isAdmin = computed(() => authStore.user?.role === "admin");
+/** Placing a real, billable lab order: admin / doctor / manager only (NEO-199); the API enforces the same. */
+const canOrder = computed(() => STUDY_ROLES.includes(authStore.user?.role ?? ""));
 
 const plans = ref<TreatmentPlanItem[]>([]);
 const loading = ref(false);
