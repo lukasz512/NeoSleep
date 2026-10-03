@@ -61,13 +61,6 @@ function openQr(): void {
   display: inline-flex;
 }
 
-/* Tablet and narrower desktops (< Vuetify lg): the text yields its width to the table; the QR with its count stays (NEO-221 follow-up). */
-@media (max-width: 1279.98px) {
-  .next-step__text {
-    display: none;
-  }
-}
-
 .next-step__text {
   display: flex;
   flex-direction: column;
@@ -146,6 +139,14 @@ function openQr(): void {
   stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+/* Tablet and narrower desktops (< Vuetify lg): the text yields its width to the table; the QR with its count stays (NEO-221 follow-up).
+   After the base .next-step__text rule on purpose — same specificity, so order decides. */
+@media (max-width: 1279.98px) {
+  .next-step__text {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
