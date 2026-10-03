@@ -175,40 +175,50 @@
           <p class="text-subtitle2 mb-3 text-primary">{{ t("app.orthoApneaOrder.paso2.title") }}</p>
 
           <!-- Starting Point: % or mm, whichever the doctor fills (the other is locked);
-               the order carries that one, the hint shows it in mm. -->
-          <div data-field="startingPoint">
+               the order carries that one, the hint shows it in mm. The ruler sits beside
+               the steppers (under them in a narrow dialog) and can be dragged: a drag writes mm (NEO-225). -->
+          <div data-field="startingPoint" class="oa-wizard__sp">
             <div class="oa-wizard__sp-header">
               <span class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.form.startingPointHeader") }}</span>
               <FieldTooltip :text="t('app.orthoApneaOrder.tooltip.startingPoint')" />
             </div>
-            <div class="oa-wizard__sp-fields">
-              <div class="oa-wizard__sp-field-row">
-                <span class="oa-wizard__sp-field-label">{{ t("app.orthoApneaOrder.form.unitPercent") }}:</span>
-                <NumberStepperField
-                  :model-value="spInput('%')"
-                  :disabled="spLocked('%')"
-                  :error="!!fieldError('startingPoint')"
-                  class="oa-wizard__sp-field-input"
-                  data-testid="sp-percent"
-                  @update:model-value="(v) => setStartingPoint('%', v)"
-                />
+            <div class="oa-wizard__sp-body">
+              <MandibularRuler
+                class="oa-wizard__sp-ruler"
+                :retrusion-max="order.retrusionMaxMm"
+                :protrusion-max="order.protrusionMaxMm"
+                :starting-point-mm="spMm"
+                :slider-label="t('app.deviceOrder.startingPointRuler')"
+                @update:starting-point-mm="(mm) => setStartingPoint('mm', mm)"
+              />
+              <div class="oa-wizard__sp-fields">
+                <div class="oa-wizard__sp-field-row">
+                  <span class="oa-wizard__sp-field-label">{{ t("app.orthoApneaOrder.form.unitPercent") }}:</span>
+                  <NumberStepperField
+                    :model-value="spInput('%')"
+                    :disabled="spLocked('%')"
+                    :error="!!fieldError('startingPoint')"
+                    class="oa-wizard__sp-field-input"
+                    data-testid="sp-percent"
+                    @update:model-value="(v) => setStartingPoint('%', v)"
+                  />
+                </div>
+                <div class="oa-wizard__sp-field-row">
+                  <span class="oa-wizard__sp-field-label">{{ t("app.orthoApneaOrder.form.unitMm") }}:</span>
+                  <NumberStepperField
+                    :model-value="spInput('mm')"
+                    :disabled="spLocked('mm')"
+                    :error="!!fieldError('startingPoint')"
+                    class="oa-wizard__sp-field-input"
+                    data-testid="sp-mm"
+                    @update:model-value="(v) => setStartingPoint('mm', v)"
+                  />
+                </div>
+                <span v-if="spHint" class="text-body-small text-medium-emphasis" data-testid="sp-hint">{{ spHint }}</span>
+                <span v-if="fieldError('startingPoint')" class="oa-wizard__field-error">{{ fieldError("startingPoint") }}</span>
               </div>
-              <div class="oa-wizard__sp-field-row">
-                <span class="oa-wizard__sp-field-label">{{ t("app.orthoApneaOrder.form.unitMm") }}:</span>
-                <NumberStepperField
-                  :model-value="spInput('mm')"
-                  :disabled="spLocked('mm')"
-                  :error="!!fieldError('startingPoint')"
-                  class="oa-wizard__sp-field-input"
-                  data-testid="sp-mm"
-                  @update:model-value="(v) => setStartingPoint('mm', v)"
-                />
-              </div>
-              <span v-if="spHint" class="text-body-small text-medium-emphasis" data-testid="sp-hint">{{ spHint }}</span>
-              <span v-if="fieldError('startingPoint')" class="oa-wizard__field-error">{{ fieldError("startingPoint") }}</span>
             </div>
           </div>
-          <MandibularRuler :retrusion-max="order.retrusionMaxMm" :protrusion-max="order.protrusionMaxMm" :starting-point-mm="spMm" />
 
           <!-- Sequence type: one choice, same segmented switch as Paso 4's Normal/Aliviar. -->
           <div data-field="sequence" data-testid="sequence">
@@ -282,15 +292,17 @@
             </template>
           </div>
 
-          <!-- Morning Aligner is a flag on this NOA / NOA TMJ order (add-on), never a second order. -->
-          <div class="d-flex align-center mt-2">
-            <VCheckbox v-model="order.morningAligner" color="primary" :label="t('app.orthoApneaOrder.form.morningAligner')" hide-details density="compact" />
-            <FieldTooltip
-              :text="t('app.orthoApneaOrder.tooltip.morningAligner')"
-              :image="TOOLTIP_IMG.morningAligner"
-              :image-alt="t('app.orthoApneaOrder.form.morningAligner')"
-            />
-          </div>
+          <!-- Morning Aligner is a flag on this NOA / NOA TMJ order (add-on), never a second order.
+               Its own photo card under "Add-ons", still in Paso 2 (NEO-225). -->
+          <p class="oa-wizard__subsection mt-6 mb-2">{{ t("app.orthoApneaOrder.form.addonsTitle") }}</p>
+          <AddonCard
+            v-model="order.morningAligner"
+            data-field="morningAligner"
+            :title="t('app.orthoApneaOrder.form.morningAligner')"
+            :description="t('app.orthoApneaOrder.form.morningAlignerShort')"
+            :details="t('app.orthoApneaOrder.tooltip.morningAligner')"
+            :image="TOOLTIP_IMG.morningAligner"
+          />
 
           <VDivider class="my-5" />
 
@@ -450,6 +462,7 @@ import TeethDiagram from "./TeethDiagram.vue";
 import DeviationDiagram from "./DeviationDiagram.vue";
 import MandibularRuler from "./MandibularRuler.vue";
 import FieldTooltip from "./FieldTooltip.vue";
+import AddonCard from "./AddonCard.vue";
 import NumberStepperField from "./NumberStepperField.vue";
 import AppConfirmDialog from "../AppConfirmDialog.vue";
 import AppFormDialog from "../AppFormDialog.vue";
@@ -1131,12 +1144,54 @@ watch(
   margin-bottom: 8px;
 }
 
+/* NEO-225: ruler beside the steppers, so no empty band above it; a narrow
+   dialog (phone) stacks the steppers first, the ruler full width under them. */
+.oa-wizard__sp {
+  container-type: inline-size;
+}
+
+.oa-wizard__sp-body {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.oa-wizard__sp-ruler {
+  flex: 1;
+  min-width: 0;
+}
+
 .oa-wizard__sp-fields {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  align-items: flex-end;
-  margin-bottom: 12px;
+  flex: none;
+}
+
+@container (max-width: 520px) {
+  .oa-wizard__sp-body {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    gap: 4px;
+  }
+}
+
+.oa-wizard__subsection {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+.oa-wizard__subsection::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(var(--v-theme-on-surface), 0.12);
 }
 
 .oa-wizard__sp-field-row {
@@ -1153,7 +1208,7 @@ watch(
 }
 
 .oa-wizard__sp-field-input {
-  width: 220px;
+  width: 180px;
 }
 
 /* Izquierda / diagram / Derecha side by side — matches OrthoApnea's own

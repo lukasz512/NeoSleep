@@ -13,6 +13,19 @@ export function rulerPercent(mm: number): number {
 }
 
 /**
+ * A pointer x (clientX) over the track → mm, snapped to the ruler's 1 mm
+ * ticks and clamped to ±20 (NEO-225 drag). null when the track has no width
+ * yet (not laid out).
+ */
+export function mmFromPointer(clientX: number, track: { left: number; width: number }): number | null {
+  if (track.width <= 0) return null;
+  const fraction = (clientX - track.left) / track.width;
+  // `|| 0` turns Math.round's -0 into 0.
+  const mm = Math.round(fraction * 2 * RULER_RANGE_MM - RULER_RANGE_MM) || 0;
+  return Math.max(-RULER_RANGE_MM, Math.min(RULER_RANGE_MM, mm));
+}
+
+/**
  * Where each incisor image's incisal tip sits, as a fraction of the image's
  * own width, plus the width it is drawn at. Measured from the PNGs in
  * assets/orthoapnea/teeth/: incisor-sup.png (36×48) ends in a 2-px tip at
