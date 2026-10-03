@@ -10,12 +10,15 @@
         tabindex="0"
       >
         <span
-          v-for="form in forms"
+          v-for="form in shownForms"
           :key="form.key"
           class="intake-forms__tile"
           :class="{ 'intake-forms__tile--done': form.done }"
         >
           {{ formAbbr(form.key) }}
+        </span>
+        <span v-if="hiddenCount" class="intake-forms__tile intake-forms__tile--more" :aria-label="t('app.patients.forms.more', { n: hiddenCount })">
+          +{{ hiddenCount }}
         </span>
       </span>
     </template>
@@ -41,42 +44,37 @@
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import AppIcon from "../AppIcon.vue";
-import { documentLabelKey } from "../../utils/documentLabels";
-import { intakeFormAbbrKey, intakeFormIcon, initialsAbbr } from "../../config/patientIntakeForms";
+import { INTAKE_TILES_PER_ROW, intakeFormAbbr, intakeFormIcon, intakeFormLabel } from "../../config/patientIntakeForms";
 import type { PatientIntakeFormStatus } from "../../types/patientIntakeForm";
 
 // Order is the API's (assigned templates in DOCUMENT_MANIFEST order, then
 // polysomnography) — never re-sorted here, so the icons and the tooltip
 // list line up with each other on every row.
-const props = defineProps<{ forms: PatientIntakeFormStatus[] }>();
+const props = withDefaults(defineProps<{ forms: PatientIntakeFormStatus[]; kind?: "forms" | "studies" }>(), { kind: "forms" });
 
 const { t } = useI18n();
 
+/** NEO-221: the cell is at most 2 rows of 3 tiles; past that the last slot becomes "+N" and the tooltip lists everything. */
+const MAX_TILES = INTAKE_TILES_PER_ROW * 2;
+const shownForms = computed(() => (props.forms.length > MAX_TILES ? props.forms.slice(0, MAX_TILES - 1) : props.forms));
+const hiddenCount = computed(() => props.forms.length - shownForms.value.length);
+
 const doneCount = computed(() => props.forms.filter((f) => f.done).length);
 const progressLabel = computed(() =>
-  t("app.patients.forms.progress", { done: doneCount.value, total: props.forms.length }),
+  t(props.kind === "studies" ? "app.patients.studies.progress" : "app.patients.forms.progress", { done: doneCount.value, total: props.forms.length }),
 );
 
-/** Clinical abbreviation (CI / HE / SB / PSG), or initials of the form's label for a template without one. */
-function formAbbr(key: string): string {
-  const abbrKey = intakeFormAbbrKey(key);
-  const translated = abbrKey ? t(abbrKey) : "";
-  return translated && translated !== abbrKey ? translated : initialsAbbr(formLabel(key));
-}
-
-function formLabel(key: string): string {
-  // Same fallback as DocumentsView's documentLabel(): te() misses these flat dotted keys, so compare t()'s output instead.
-  const labelKey = documentLabelKey(key);
-  const translated = labelKey ? t(labelKey) : "";
-  return translated && translated !== labelKey ? translated : key;
-}
+const formAbbr = (key: string) => intakeFormAbbr(t, key);
+const formLabel = (key: string) => intakeFormLabel(t, key);
 </script>
 
 <style scoped>
+/* NEO-221: wraps after 3 tiles; the script caps it at 2 rows. */
 .intake-forms {
-  display: inline-flex;
+  display: inline-grid;
+  grid-template-columns: repeat(3, max-content);
   align-items: center;
-  gap: 6px;
+  gap: 4px 6px;
   padding: 2px;
   border-radius: 8px;
   outline: none;

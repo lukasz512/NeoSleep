@@ -114,12 +114,38 @@
               <!-- "Webinars" appears once per page (NEO-151): under the title on desktop
                    (page-header subtitle), and here only on phones, where the header has no subtitle line. -->
               <p class="view-resources__phone-subtitle">{{ videosSubtitle }}</p>
+              <!-- Watch progress (NEO-209): overall meter + status chips (last choice remembered per user, D3). -->
+              <div class="view-resources__progress" data-testid="resources-progress">
+                <div class="view-resources__meter" role="progressbar" :aria-valuenow="counts.completed" aria-valuemin="0" :aria-valuemax="counts.all" :aria-label="watchedSummary">
+                  <i :style="{ width: `${counts.all ? (counts.completed / counts.all) * 100 : 0}%` }" />
+                </div>
+                <span class="view-resources__meter-label">{{ watchedSummary }}</span>
+              </div>
+              <div class="view-resources__chips" role="group" :aria-label="t('user.resources.filter.label')">
+                <button
+                  v-for="option in STATUS_FILTERS"
+                  :key="option"
+                  type="button"
+                  class="view-resources__chip"
+                  :aria-pressed="statusFilter === option"
+                  :data-testid="`resources-filter-${option}`"
+                  @click="statusFilter = option"
+                >
+                  {{ t(`user.resources.filter.${option}`) }}
+                  <span class="view-resources__chip-count">{{ counts[option] }}</span>
+                </button>
+              </div>
+              <div v-if="topicGroups.length === 0" class="view-resources__state view-resources__state--filtered">
+                <AppEmptyState :title="t('user.resources.filter.empty')" />
+              </div>
               <!-- Topics = stages of the dentist's work with a patient (NEO-151), in that order. -->
               <div class="view-resources__topics">
                 <section v-for="group in topicGroups" :key="group.topic" class="view-resources__topic">
                   <h2 class="view-resources__topic-title">
                     {{ t(`user.resources.topic.${group.topic}`) }}
-                    <span class="view-resources__topic-count">{{ group.videos.length }}</span>
+                    <span class="view-resources__topic-count">
+                      {{ t("user.resources.progress.summary", { watched: group.watched, total: group.total }) }}
+                    </span>
                   </h2>
                   <div class="view-resources__video-grid" :class="{ 'view-resources__video-grid--list': layout === 'list' }">
                     <ResourceVideoTile
@@ -169,6 +195,8 @@ import AppEmptyState from "../components/AppEmptyState.vue";
 import ResourceVideoTile from "../components/resources/ResourceVideoTile.vue";
 import ResourceVideoSheet from "../components/resources/ResourceVideoSheet.vue";
 import { usePartnerResources, type PartnerResourceFileType, type PartnerResourceItem } from "../composables/usePartnerResources";
+import { useResourceProgress, countByStatus, filterByStatus, type StatusFilter } from "../composables/useResourceProgress";
+import { usePersistedState } from "@prefs";
 import { usePageHeaderRow, usePageHeaderTeleport } from "../composables/usePageHeader";
 import { useMediaQuery } from "@vueuse/core";
 import { getUserSettings, setUserSettings } from "../utils/user-settings";
@@ -189,14 +217,39 @@ const tabOptions = computed(() => [{ value: "videos", label: t("user.resources.t
 
 watch(locale, (l) => load(l), { immediate: true });
 
+/**
+ * Watch progress (NEO-209): each user's own, from the API on every visit so
+ * another device's progress shows up. Counts are over all videos; the chip
+ * only filters which tiles show.
+ */
+const { progress, load: loadProgress } = useResourceProgress();
+onMounted(() => void loadProgress());
+const STATUS_FILTERS: StatusFilter[] = ["all", "not_started", "in_progress", "completed"];
+const statusFilter = usePersistedState<StatusFilter>("view:resources:statusFilter", "all", {
+  validate: (v) => (STATUS_FILTERS.includes(v) ? v : "all"),
+});
+const counts = computed(() => countByStatus(videos.value, progress));
+const watchedSummary = computed(() => t("user.resources.progress.summary", { watched: counts.value.completed, total: counts.value.all }));
+
 /** Stage order comes from the API (VIDEO_TOPICS); a video without a known stage goes last, under "other". */
 const TOPIC_ORDER = ["detect", "diagnose", "records", "order", "followup", "other"] as const;
 type Topic = (typeof TOPIC_ORDER)[number];
+interface TopicGroup {
+  topic: Topic;
+  videos: PartnerResourceItem[];
+  watched: number;
+  total: number;
+}
 const topicGroups = computed(() =>
-  TOPIC_ORDER.map((topic) => ({
-    topic,
-    videos: videos.value.filter((v) => ((TOPIC_ORDER as readonly string[]).includes(v.topic ?? "") ? v.topic : "other") === topic),
-  })).filter((g): g is { topic: Topic; videos: PartnerResourceItem[] } => g.videos.length > 0)
+  TOPIC_ORDER.map((topic): TopicGroup => {
+    const all = videos.value.filter((v) => ((TOPIC_ORDER as readonly string[]).includes(v.topic ?? "") ? v.topic : "other") === topic);
+    return {
+      topic,
+      videos: filterByStatus(all, progress, statusFilter.value),
+      watched: countByStatus(all, progress).completed,
+      total: all.length,
+    };
+  }).filter((g) => g.videos.length > 0)
 );
 
 /**
@@ -513,6 +566,88 @@ const incidentMailtoHref = computed(() => {
 .view-resources__video-grid--list {
   grid-template-columns: minmax(0, 1fr) !important;
   gap: 0 !important;
+}
+
+/* Watch progress (NEO-209): one meter line, then the status chips. */
+.view-resources__progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 480px;
+  margin-bottom: 12px;
+}
+.view-resources__meter {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: rgba(var(--v-theme-on-surface), 0.08);
+}
+.view-resources__meter i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: rgb(var(--v-theme-primary));
+  transition: width 0.4s ease;
+}
+.view-resources__meter-label {
+  flex: none;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.view-resources__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+/* Phones: one scrolling row, like the record tabs (NEO-61), never two lines of chips. */
+@media (max-width: 599.98px) {
+  .view-resources__chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .view-resources__chips::-webkit-scrollbar {
+    display: none;
+  }
+}
+.view-resources__chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid rgb(var(--v-theme-outline-variant));
+  border-radius: 999px;
+  background: rgb(var(--v-theme-surface));
+  color: rgb(var(--v-theme-on-surface));
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+.view-resources__chip:hover {
+  background: rgba(var(--v-theme-primary), 0.06);
+}
+.view-resources__chip[aria-pressed="true"] {
+  border-color: rgb(var(--v-theme-primary));
+  background: rgba(var(--v-theme-primary), 0.12);
+  color: rgb(var(--v-theme-primary));
+  font-weight: 600;
+}
+.view-resources__chip:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 1px;
+}
+.view-resources__chip-count {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.72;
+}
+.view-resources__state--filtered {
+  padding-block: 32px;
 }
 
 /* Cards | list toggle: a quiet segmented pair, like the theme row in the account menu. */

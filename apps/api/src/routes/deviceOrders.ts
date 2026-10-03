@@ -12,12 +12,18 @@ import {
 } from "@neo/device-order";
 import { asyncHandler } from "../middleware/errorHandler.js";
 import { requireStudyRole } from "../middleware/requireClinicalRole.js";
-import { withTenant, tenantSlugFromHost, insertAuditLog, getDeliveryOrganization, getTreatmentPlanById } from "../db.js";
+import {
+  withTenant,
+  tenantSlugFromHost,
+  insertAuditLog,
+  getDeliveryOrganization,
+  getTreatmentPlanById,
+} from "../db.js";
 import type { DeliveryOrganization } from "../db/practitionerOrganization.js";
 import { buildContext, type TenantContext } from "../context/TenantContext.js";
-import { requirePatientInScope, requirePractitionerInScope } from "../queries/entityAccess.js";
+import { getViewer, requirePatientInScope, requirePractitionerInScope } from "../queries/entityAccess.js";
 import { getDeviceOrderProvider } from "../services/deviceOrders/index.js";
-import { NotFoundError } from "../errors.js";
+import { ForbiddenError, NotFoundError } from "../errors.js";
 import { requireRole } from "../middleware/requireRole.js";
 import { requireReconciliationJobSecret } from "../middleware/requireInternalJobSecret.js";
 import { getLatestReconciliationRun, listReconciliationRuns } from "../db/deviceOrderReconciliation.js";
@@ -70,6 +76,15 @@ async function resolveDelivery(
   return { delivery, organizationId: org.id, issues: validateDeliveryAddress(delivery) };
 }
 
+/**
+ * The caller's own practitioner id when they are a doctor (users and
+ * practitioner share identity_id, ADR-014), else null. A doctor orders only
+ * as themselves, so only to their own clinic (Łukasz, 2026-10-03, NEO-210).
+ */
+async function ownPractitionerId(ctx: TenantContext): Promise<string | null> {
+  return (await getViewer(ctx)).practitionerId;
+}
+
 /** The 400 every device-order validation failure answers with. */
 function sendValidationError(res: Response, fields: OrderIssue[], warnings: OrderIssue[] = []): void {
   res.status(400).json({ error: "validation", fields, warnings, rulesVersion: RULES_VERSION });
@@ -84,10 +99,12 @@ deviceOrdersRouter.get(
   "/device-orders/context",
   requireStudyRole,
   asyncHandler(async (req: Request, res: Response) => {
-    const dentistId = typeof req.query.dentist_id === "string" ? req.query.dentist_id.trim() : "";
+    const requested = typeof req.query.dentist_id === "string" ? req.query.dentist_id.trim() : "";
     const productCode = typeof req.query.product_code === "string" ? req.query.product_code.trim() : PRODUCT_CODES.NOA;
+    // A doctor always orders as themselves, so they send no dentist_id (Łukasz, 2026-10-03, NEO-210).
+    const isDoctor = req.user?.role === "doctor";
     const fields: OrderIssue[] = [];
-    if (!UUID_RE.test(dentistId)) fields.push({ path: "dentist_id", code: dentistId ? "invalid" : "required" });
+    if (!isDoctor && !UUID_RE.test(requested)) fields.push({ path: "dentist_id", code: requested ? "invalid" : "required" });
     if (!isProductCode(productCode)) fields.push({ path: "product_code", code: "invalid" });
     if (fields.length > 0 || !isProductCode(productCode)) {
       sendValidationError(res, fields);
@@ -95,13 +112,16 @@ deviceOrdersRouter.get(
     }
 
     const slug = tenantSlugFromHost(req.hostname);
-    const { delivery, organizationId, issues } = await withTenant(slug, async (client) => {
+    const { dentistId, delivery, organizationId, issues } = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
-      return resolveDelivery(ctx, dentistId);
+      const dentistId = (await ownPractitionerId(ctx)) ?? requested;
+      return { dentistId, ...(await resolveDelivery(ctx, dentistId)) };
     });
     const minDesiredDate = await getDeviceOrderProvider().minDesiredDate(productCode);
 
     res.json({
+      // The doctor the order is for — the caller's own practitioner record when they are a doctor.
+      dentistId,
       // organizationId lets the wizard link to the HCO record to complete it.
       delivery: delivery ? { ...delivery, organizationId } : null,
       deliveryIssues: issues,
@@ -155,6 +175,9 @@ deviceOrdersRouter.post(
       if (typeof dentistId !== "string" || !UUID_RE.test(dentistId)) {
         return { ctx, delivery: null, deliveryIssues: [], planIssues };
       }
+      // A doctor orders only as themselves, hence only to their own clinic (NEO-210).
+      const own = await ownPractitionerId(ctx);
+      if (own !== null && own !== dentistId) throw new ForbiddenError("A doctor can only order as themselves");
       const { delivery, issues } = await resolveDelivery(ctx, dentistId);
       return { ctx, delivery, deliveryIssues: issues, planIssues };
     });

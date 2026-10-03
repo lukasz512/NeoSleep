@@ -128,7 +128,12 @@ interface UnsentOrder {
 
 const ORDER_TOAST: ShowOptions = { icon: "nav-treatment-plans" };
 
-export function useOrthoApneaOrderWizard() {
+/**
+ * `asDoctor`: the user is a doctor. A doctor orders only as themselves, so only
+ * to their own clinic (Łukasz, 2026-10-03, NEO-210): there is no doctor to pick,
+ * and the API answers the context with the doctor's own practitioner id.
+ */
+export function useOrthoApneaOrderWizard(asDoctor: () => boolean = () => false) {
   const { t } = useI18n();
   const notifications = useNotifications();
 
@@ -301,6 +306,8 @@ export function useOrthoApneaOrderWizard() {
    * holder).
    */
   async function loadDoctorsAndDefault(patientId: string) {
+    // A doctor has no choice to make: loadContext() sets the doctor from the API.
+    if (asDoctor()) return;
     loadingDoctors.value = true;
     try {
       const [doctorsRes, patientRes] = await Promise.all([
@@ -329,18 +336,21 @@ export function useOrthoApneaOrderWizard() {
     const request = ++contextRequest;
     context.value = null;
     contextFailed.value = false;
-    if (!order.dentistId) return;
+    const doctor = asDoctor();
+    if (!order.dentistId && !doctor) return;
     contextLoading.value = true;
     try {
-      const params = new URLSearchParams({ dentist_id: order.dentistId, product_code: order.productCode });
+      const params = new URLSearchParams(doctor ? { product_code: order.productCode } : { dentist_id: order.dentistId, product_code: order.productCode });
       const res = await apiFetch(`/api/v1/device-orders/context?${params.toString()}`, { handleErrors: false });
       if (request !== contextRequest) return;
       if (!res.ok) {
         contextFailed.value = true;
         return;
       }
-      const body = (await res.json()) as Partial<DeviceOrderContext>;
+      const body = (await res.json()) as Partial<DeviceOrderContext> & { dentistId?: unknown };
       if (request !== contextRequest) return;
+      // A doctor's order is always theirs: take the id the API resolved.
+      if (doctor && typeof body.dentistId === "string") order.dentistId = body.dentistId;
       context.value = {
         delivery: body.delivery ?? null,
         deliveryIssues: parseIssues(body.deliveryIssues),

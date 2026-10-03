@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import request from "supertest";
 import bcrypt from "bcrypt";
 import { app } from "../server.js";
-import { withTenant, insertStaffUser, insertPatient } from "../db.js";
+import { withTenant, insertStaffUser, insertPatient, insertPractitioner } from "../db.js";
 import { signAuthToken } from "../utils/jwt.js";
 import type { StaffRole } from "../db/users.js";
 import { MEDICAL_HISTORY_QUESTIONS } from "../commands/clinicalRecordFields.js";
@@ -34,10 +34,22 @@ async function insertTestUser(client: Parameters<typeof insertStaffUser>[0], rol
   return { id: user!.id, email };
 }
 
+/**
+ * A login plus a patient it may reach. A doctor is linked to a practitioner
+ * (shared identity, ADR-014) and the patient is assigned to them — a doctor
+ * sees only their own patients (CORE-104).
+ */
 async function authAndPatient(role: StaffRole = "doctor"): Promise<{ auth: string; patientId: string }> {
-  const user = await withTenant(TENANT_SLUG, (client) => insertTestUser(client, role));
+  const { user, practitionerId } = await withTenant(TENANT_SLUG, async (client) => {
+    if (role !== "doctor") return { user: await insertTestUser(client, role), practitionerId: undefined };
+    const email = `qa-patient-route-doctor-${uniqueSuffix()}@neosleepcare.com`;
+    const practitioner = await insertPractitioner(client, { first_name: "Route", last_name: `Doc-${uniqueSuffix()}`, email });
+    const hash = await bcrypt.hash("irrelevant-not-logged-in-with", 4);
+    const created = await insertStaffUser(client, email, "Route", "Doc", "doctor", hash, false);
+    return { user: { id: created!.id, email }, practitionerId: practitioner.id };
+  });
   const patient = await withTenant(TENANT_SLUG, (client) =>
-    insertPatient(client, { first_name: "Route", last_name: `Test-${uniqueSuffix()}` })
+    insertPatient(client, { first_name: "Route", last_name: `Test-${uniqueSuffix()}`, practitioner_id: practitionerId })
   );
   return { auth: `Bearer ${signAuthToken({ id: user.id, email: user.email, role, token_version: 0 })}`, patientId: patient.id };
 }

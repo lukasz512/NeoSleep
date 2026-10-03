@@ -1,7 +1,10 @@
 import type { TenantContext } from "../context/TenantContext.js";
 import { getNotesForEntity, type Note } from "../db.js";
-import { ForbiddenError, ValidationError } from "../errors.js";
+import { ForbiddenError, NotFoundError, ValidationError } from "../errors.js";
 import { NOTE_ENTITY_TYPES, getRecentDeviceOrderComments, type DeviceOrderComment, type NoteEntityType } from "../db/note.js";
+import { getViewer, requirePatientInScope, requirePractitionerInScope, requireOrganizationInScope } from "./entityAccess.js";
+import { requireTreatmentPlanInScope } from "./treatmentPlan.js";
+import { GetLeadByIdQuery } from "./lead.js";
 
 /**
  * QUERIES — Note domain.
@@ -41,6 +44,25 @@ export function assertNoteEntityType(entityType: string): asserts entityType is 
   }
 }
 
+/**
+ * A note is never more visible than the record it's on (CORE-104): reading or
+ * writing notes reaches exactly as far as GET /<entity>/:id does. Doctors have
+ * no lead access at all (leads routes exclude them).
+ */
+export async function requireNoteParentInScope(ctx: TenantContext, entityType: NoteEntityType, entityId: string): Promise<void> {
+  switch (entityType) {
+    case "patient":        await requirePatientInScope(ctx, entityId); return;
+    case "treatment_plan": await requireTreatmentPlanInScope(ctx, entityId); return;
+    case "practitioner":   await requirePractitionerInScope(ctx, entityId); return;
+    case "organization":   await requireOrganizationInScope(ctx, entityId); return;
+    case "lead": {
+      const viewer = await getViewer(ctx);
+      if (viewer.kind === "doctor" || !(await GetLeadByIdQuery(ctx, entityId))) throw new NotFoundError("Lead", entityId);
+      return;
+    }
+  }
+}
+
 export async function GetNotesForEntityQuery(
   ctx: TenantContext,
   entityType: string,
@@ -48,6 +70,7 @@ export async function GetNotesForEntityQuery(
 ): Promise<NoteDto[]> {
   assertNoteEntityType(entityType);
   if (!entityId?.trim()) throw new ValidationError("entity_id is required");
+  await requireNoteParentInScope(ctx, entityType, entityId);
 
   const rows = await getNotesForEntity(ctx.client, entityType, entityId);
   return rows.map(toDto);

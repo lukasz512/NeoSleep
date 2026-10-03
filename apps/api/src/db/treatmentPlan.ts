@@ -1,4 +1,5 @@
 import type { PoolClient } from "pg";
+import { patientScopeCondition, type PatientScope } from "./patientScope.js";
 import { AppError, DatabaseError } from "../errors.js";
 import { isoDate } from "../routes/utils.js";
 import { formatOptionalDisplayName } from "../utils/personName.js";
@@ -72,6 +73,8 @@ export interface GetTreatmentPlansFilters {
   status?: string;
   /** Matches against the patient's name — the sidebar cross-patient list's only searchable field. */
   search?: string;
+  /** Viewer's patient access (CORE-104, db/patientScope.ts); undefined = unrestricted. */
+  patientScope?: PatientScope;
 }
 
 export interface TreatmentPlanInsert {
@@ -248,6 +251,8 @@ export async function getTreatmentPlansPaginated(
     params.push(`%${filters.search.trim().toLowerCase()}%`);
     conditions.push(`LOWER(pi.first_name || ' ' || pi.last_name) LIKE $${params.length}`);
   }
+  const scoped = patientScopeCondition(filters.patientScope, params, "t.patient_id");
+  if (scoped) conditions.push(scoped);
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
