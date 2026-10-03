@@ -141,6 +141,14 @@ function openQr(): void {
   stroke-linejoin: round;
 }
 
+/* Tablet and narrower desktops (< Vuetify lg): the text yields its width to the table; the QR with its count stays (NEO-221 follow-up).
+   After the base .next-step__text rule on purpose — same specificity, so order decides. */
+@media (max-width: 1279.98px) {
+  .next-step__text {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .next-step__qr {
     transition: none;

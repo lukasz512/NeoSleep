@@ -75,7 +75,8 @@ const formLabel = (key: string) => intakeFormLabel(t, key);
   grid-template-columns: repeat(3, max-content);
   align-items: center;
   gap: 4px 6px;
-  padding: 2px;
+  /* Breathing room so a 2-row cell never touches the row lines (NEO-221 follow-up). */
+  padding: 8px 2px;
   border-radius: 8px;
   outline: none;
 }
