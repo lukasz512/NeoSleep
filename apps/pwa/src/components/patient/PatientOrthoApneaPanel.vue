@@ -33,17 +33,44 @@
       @primary="confirmDelete"
     />
 
+    <!-- NEO-217: comments open beside the list (bottom sheet on a phone), so the rows never jump. -->
+    <component
+      :is="sheet ? VBottomSheet : VDialog"
+      :model-value="commentsPlan !== null"
+      :max-width="sheet ? undefined : 440"
+      :content-class="sheet ? undefined : 'device-order-comments--side'"
+      @update:model-value="(open: boolean) => !open && (commentsPlanId = null)"
+    >
+      <div v-if="commentsPlan" class="device-order-comments" data-testid="device-order-comments">
+        <header class="device-order-comments__header">
+          <h3 class="device-order-comments__title">{{ t("app.deviceOrder.comments.title", { n: commentsPlan.order_number ?? "" }) }}</h3>
+          <AppButton icon variant="text" size="small" :aria-label="t('app.common.close')" @click="commentsPlanId = null">
+            <AppIcon name="close" />
+          </AppButton>
+        </header>
+        <OrthoApneaOrderComments :treatment-plan-id="commentsPlan.id" />
+      </div>
+    </component>
+
     <div class="patient-orthoapnea-panel__toolbar">
-      <VTooltip :disabled="!!latestSleepStudyId" location="top">
+      <h3 class="patient-orthoapnea-panel__section">{{ t("app.deviceOrder.section") }}</h3>
+      <VTooltip location="top">
         <template #activator="{ props: tooltipProps }">
           <span v-bind="tooltipProps">
-            <AppButton color="primary" :disabled="!latestSleepStudyId" @click="startNewOrder">
-              <template #prepend><AppIcon name="plus" /></template>
-              {{ t("app.orthoApneaOrder.title") }}
+            <AppButton
+              class="patient-orthoapnea-panel__add"
+              color="success"
+              variant="tonal"
+              :disabled="!latestSleepStudyId"
+              :aria-label="t('app.orthoApneaOrder.title')"
+              data-testid="device-order-new"
+              @click="startNewOrder"
+            >
+              <AppIcon name="plus" />
             </AppButton>
           </span>
         </template>
-        <span>{{ t("app.treatmentPlans.needsSleepStudy") }}</span>
+        <span>{{ latestSleepStudyId ? t("app.orthoApneaOrder.title") : t("app.treatmentPlans.needsSleepStudy") }}</span>
       </VTooltip>
     </div>
 
@@ -58,78 +85,102 @@
     />
     <AppEmptyState v-else-if="plans.length === 0" :title="t('app.treatmentPlans.emptyTitle')" :subtitle="t('app.treatmentPlans.emptySubtitle')" />
     <ul v-else class="patient-orthoapnea-panel__list">
-      <li
-        v-for="plan in plans"
-        :key="plan.id"
-        class="patient-orthoapnea-panel__item"
-        :class="{ 'patient-orthoapnea-panel__item--static': !isDraft(plan) }"
+      <AppStatusRow
+        v-for="(row, index) in rows"
+        :key="row.plan.id"
+        :tone="DEVICE_ORDER_TONE[row.state]"
+        :label="t(`app.deviceOrder.state.${row.state}`)"
+        :data-state="row.state"
+        data-testid="device-order-row"
       >
-        <div class="patient-orthoapnea-panel__item-header" @click="isDraft(plan) && onEdit(plan)">
+        <!-- D2: only the newest order shows dentist + track; an older one opens on click. -->
+        <component
+          :is="index === 0 ? 'div' : 'button'"
+          v-bind="index === 0 ? {} : { type: 'button', 'aria-expanded': isOpen(row, index) }"
+          class="patient-orthoapnea-panel__head"
+          @click="index > 0 && toggleOpen(row.plan.id)"
+        >
+          <span class="patient-orthoapnea-panel__title">{{ rowTitle(row.plan) }}</span>
+          <span class="patient-orthoapnea-panel__status" :class="{ 'patient-orthoapnea-panel__status--attention': row.state === 'attention' }">
+            {{ statusLine(row) }}
+          </span>
+        </component>
+        <template v-if="isOpen(row, index)">
           <EntityLink
+            v-if="row.plan.dentist_id"
             class="patient-orthoapnea-panel__dentist"
-            :to="hcpDetailLink(plan.dentist_id)"
+            :to="hcpDetailLink(row.plan.dentist_id)"
             entity-type="hcp"
-            :specialty="plan.dentist_specialty"
-            :label="plan.dentist_name"
-            :details="specialtySet(plan.dentist_specialty, plan.dentist_specialties).details"
-            :more-details="specialtySet(plan.dentist_specialty, plan.dentist_specialties).more"
+            :specialty="row.plan.dentist_specialty"
+            :label="row.plan.dentist_name"
+            :details="specialtySet(row.plan.dentist_specialty, row.plan.dentist_specialties).details"
+            :more-details="specialtySet(row.plan.dentist_specialty, row.plan.dentist_specialties).more"
           />
-          <VChip v-if="isDraft(plan)" color="warning" size="small" variant="tonal">{{ t("app.orthoApneaOrder.draftBadge") }}</VChip>
-          <VChip v-else :color="statusColor(plan.status)" size="small" variant="tonal">{{ statusLabel(plan.status) }}</VChip>
-          <VSpacer />
-          <AppButton
-            v-if="isAdmin"
-            icon
-            variant="text"
-            size="small"
-            :aria-label="t('app.orthoApneaOrder.transactionLog.openButton')"
-            @click.stop="openTransactionLog(plan.id)"
-          >
-            <VIcon icon="mdi-information-outline" size="20" />
+          <a v-if="row.plan.scan_file_url" :href="row.plan.scan_file_url" target="_blank" rel="noopener" class="patient-orthoapnea-panel__scan-link">
+            {{ t("app.treatmentPlans.form.scanFileUrl") }}
+          </a>
+          <ol class="patient-orthoapnea-panel__track" :aria-label="t('app.deviceOrder.track')" data-testid="device-order-track">
+            <li
+              v-for="step in trackSteps(row)"
+              :key="step.key"
+              class="patient-orthoapnea-panel__step"
+              :class="`patient-orthoapnea-panel__step--${step.mark}`"
+            >
+              <span class="patient-orthoapnea-panel__dot" aria-hidden="true" />
+              <strong>{{ t(`app.deviceOrder.step.${step.key}`) }}</strong>
+              <span v-if="step.note">{{ step.note }}</span>
+            </li>
+          </ol>
+        </template>
+
+        <template #actions>
+          <AppButton v-if="row.state === 'draft'" variant="text" size="small" color="primary" data-testid="device-order-continue" @click="onEdit(row.plan)">
+            <template #prepend><AppIcon name="pencil" /></template>
+            {{ t("app.deviceOrder.action.continue") }}
           </AppButton>
-          <AppButton
-            v-if="isAdmin"
-            icon
-            variant="text"
-            size="small"
-            color="error"
-            :aria-label="t('app.treatmentPlans.delete')"
-            @click.stop="requestDelete(plan.id)"
-          >
-            <AppIcon name="trash" />
+          <AppButton v-if="row.plan.order_number" variant="text" size="small" data-testid="device-order-comments-open" @click="commentsPlanId = row.plan.id">
+            <template #prepend><AppIcon name="message" /></template>
+            {{ t("app.deviceOrder.action.comments") }}
           </AppButton>
-        </div>
-        <div class="patient-orthoapnea-panel__meta" @click="isDraft(plan) && onEdit(plan)">
-          <span v-if="plan.scan_ordered_at">{{ t("app.treatmentPlans.table.scanOrdered") }}: {{ new Date(plan.scan_ordered_at).toLocaleDateString() }}</span>
-          <span v-if="plan.appliance_delivered_at">{{ t("app.treatmentPlans.table.applianceDelivered") }}: {{ new Date(plan.appliance_delivered_at).toLocaleDateString() }}</span>
-        </div>
-        <a v-if="plan.scan_file_url" :href="plan.scan_file_url" target="_blank" rel="noopener" class="patient-orthoapnea-panel__scan-link" @click.stop>
-          {{ t("app.treatmentPlans.form.scanFileUrl") }}
-        </a>
-        <AppButton variant="text" size="small" @click.stop="toggleComments(plan.id)">
-          {{ expandedCommentsId === plan.id ? t("app.orthoApneaOrder.hideComments") : t("app.orthoApneaOrder.showComments") }}
-        </AppButton>
-        <OrthoApneaOrderComments v-if="expandedCommentsId === plan.id" :treatment-plan-id="plan.id" />
-      </li>
+        </template>
+
+        <!-- D3: admin tools live under ⋯; hiding is offered on drafts only. -->
+        <template v-if="isAdmin" #menu>
+          <AppListItemMenu :aria-label="t('app.common.moreActions')">
+            <VListItem :title="t('app.orthoApneaOrder.transactionLog.openButton')" @click="openTransactionLog(row.plan.id)">
+              <template #prepend><AppIcon name="info-circle" /></template>
+            </VListItem>
+            <VListItem v-if="row.state === 'draft'" :title="t('app.deviceOrder.action.hideDraft')" base-color="error" @click="requestDelete(row.plan.id)">
+              <template #prepend><AppIcon name="trash" /></template>
+            </VListItem>
+          </AppListItemMenu>
+        </template>
+      </AppStatusRow>
     </ul>
   </div>
 </template>
 
 <script setup lang="ts">
 import { reportCaught, reportFailedResponse } from "@api";
+import { intlLocale } from "@i18n/language-options";
 import { ref, computed, onMounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { useDisplay } from "vuetify";
+import { VBottomSheet } from "vuetify/components/VBottomSheet";
+import { VDialog } from "vuetify/components/VDialog";
 import AppButton from "../AppButton.vue";
 import AppConfirmDialog from "../AppConfirmDialog.vue";
 import AppIcon from "../AppIcon.vue";
+import AppListItemMenu from "../AppListItemMenu.vue";
 import AppLoadingState from "../AppLoadingState.vue";
 import AppErrorState from "../AppErrorState.vue";
 import AppEmptyState from "../AppEmptyState.vue";
+import AppStatusRow from "../AppStatusRow.vue";
 import EntityLink from "../EntityLink.vue";
 import { useIdentity } from "../../composables/useIdentity";
 import { hcpDetailLink } from "../../utils/entityLinks";
 import { apiFetch } from "../../composables/useApi";
-import { isDraftTreatmentPlan, treatmentPlanStatusColor, treatmentPlanStatusLabel } from "../../utils/treatmentPlanStatus";
+import { DEVICE_ORDER_TONE, deviceOrderState, type DeviceOrderState } from "../../utils/treatmentPlanStatus";
 import { useNotifications } from "../../composables/useNotifications";
 import { useAuthStore } from "../../stores/auth";
 import OrthoApneaOrderWizard, { type OrthoApneaDraftPlan } from "./OrthoApneaOrderWizard.vue";
@@ -153,17 +204,21 @@ interface TreatmentPlanItem {
   notes: string | null;
   status: string;
   metadata: Record<string, unknown> | null;
+  /** NEO-217: the lab order behind the plan (partner_link) — null until it was ever sent. */
+  order_number: string | null;
+  order_sync_status: "pending" | "synced" | "failed" | null;
+  order_sent_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
-/** A draft is a treatment_plan we've saved locally with a wizard snapshot
- * but never actually sent to OrthoApnea — see OrthoApneaOrderWizard's own
- * persistDraft() for how it gets there, and onConfirm() for how the
- * `orthoapneaDraft` marker gets cleared once a real order goes out. */
-function isDraft(plan: TreatmentPlanItem): boolean {
-  return isDraftTreatmentPlan(plan);
+interface OrderRow {
+  plan: TreatmentPlanItem;
+  state: DeviceOrderState;
 }
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
+const { smAndDown: sheet } = useDisplay();
 const { specialtySet } = useIdentity();
 const notifications = useNotifications();
 const authStore = useAuthStore();
@@ -181,8 +236,71 @@ const transactionLogPlanId = ref<string | null>(null);
 const showDeleteConfirm = ref(false);
 const deleting = ref(false);
 const deleteTargetPlanId = ref<string | null>(null);
-const expandedCommentsId = ref<string | null>(null);
+const commentsPlanId = ref<string | null>(null);
+const openIds = ref(new Set<string>());
 const resumeDraftPlan = ref<OrthoApneaDraftPlan | null>(null);
+
+/** Newest first (the API's created_at desc) — the first row is always open. */
+const rows = computed<OrderRow[]>(() => plans.value.map((plan) => ({ plan, state: deviceOrderState(plan) })));
+const commentsPlan = computed(() => plans.value.find((p) => p.id === commentsPlanId.value) ?? null);
+
+function isOpen(row: OrderRow, index: number): boolean {
+  return index === 0 || openIds.value.has(row.plan.id);
+}
+
+function toggleOpen(planId: string) {
+  const next = new Set(openIds.value);
+  if (!next.delete(planId)) next.add(planId);
+  openIds.value = next;
+}
+
+// Two-digit day and month, the same as Documentos and the printed forms.
+const formatDate = (value: string) =>
+  new Date(value).toLocaleDateString(intlLocale(locale.value), { day: "2-digit", month: "2-digit", year: "numeric" });
+
+function rowTitle(plan: TreatmentPlanItem): string {
+  const title = t("app.deviceOrder.title");
+  return plan.order_number ? t("app.deviceOrder.titleNumber", { title, n: plan.order_number }) : title;
+}
+
+/** The date each state's line talks about. */
+function stateDate({ plan, state }: OrderRow): string {
+  switch (state) {
+    case "draft":
+    case "cancelled":
+      return plan.updated_at;
+    case "attention":
+    case "ordered":
+      return plan.order_sent_at ?? plan.created_at;
+    case "received":
+      return plan.appliance_delivered_at ?? plan.updated_at;
+  }
+}
+
+function statusLine(row: OrderRow): string {
+  return t(`app.deviceOrder.line.${row.state}`, { date: formatDate(stateDate(row)) });
+}
+
+type StepMark = "on" | "now" | "failed" | "off";
+
+/** Creado → Pedido → Recibido, each with its date once reached. */
+function trackSteps(row: OrderRow): { key: "created" | "ordered" | "received"; mark: StepMark; note: string | null }[] {
+  const { plan, state } = row;
+  const sent = state === "ordered" || state === "received" || (state === "cancelled" && !!plan.order_sent_at);
+  return [
+    { key: "created", mark: state === "draft" ? "now" : "on", note: formatDate(plan.created_at) },
+    {
+      key: "ordered",
+      mark: state === "attention" ? "failed" : state === "ordered" ? "now" : sent ? "on" : "off",
+      note: state === "attention" ? t("app.deviceOrder.step.failed") : sent ? formatDate(plan.order_sent_at ?? plan.created_at) : null,
+    },
+    {
+      key: "received",
+      mark: state === "received" ? "on" : "off",
+      note: state === "received" ? formatDate(stateDate(row)) : null,
+    },
+  ];
+}
 
 function startNewOrder() {
   resumeDraftPlan.value = null;
@@ -192,10 +310,6 @@ function startNewOrder() {
 function onWizardSubmitted() {
   resumeDraftPlan.value = null;
   loadPlans();
-}
-
-function toggleComments(planId: string) {
-  expandedCommentsId.value = expandedCommentsId.value === planId ? null : planId;
 }
 
 /** Admin-only — opens OrthoApneaTransactionLog.vue for this order (see ADR-017). */
@@ -266,14 +380,6 @@ async function loadPlans() {
   }
 }
 
-function statusColor(status: string): string {
-  return treatmentPlanStatusColor(status);
-}
-
-function statusLabel(status: string): string {
-  return treatmentPlanStatusLabel(t, status);
-}
-
 /** Only drafts are clickable — resumes the wizard where it was left off. A
  * submitted plan has no editing UI anymore (see the removed Add/Edit NOA
  * plan FormRenderer form — unused, dropped entirely). */
@@ -287,12 +393,27 @@ watch(() => props.patientId, loadPlans);
 </script>
 
 <style scoped>
+/* Section header like Documentos: label on the left, green ＋ on the right. */
 .patient-orthoapnea-panel__toolbar {
   display: flex;
-  justify-content: flex-end;
-  margin-bottom: 16px;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
 }
-
+.patient-orthoapnea-panel__section {
+  flex: 1;
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+.patient-orthoapnea-panel__add {
+  min-width: var(--pwa-btn-min-height, 44px);
+  min-height: var(--pwa-btn-min-height, 44px);
+  padding: 0;
+}
 
 .patient-orthoapnea-panel__list {
   list-style: none;
@@ -300,50 +421,159 @@ watch(() => props.patientId, loadPlans);
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 8px;
 }
 
-.patient-orthoapnea-panel__item {
-  padding: 12px 16px;
-  border-radius: var(--pwa-radius);
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+.patient-orthoapnea-panel__head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+}
+button.patient-orthoapnea-panel__head {
   cursor: pointer;
 }
-.patient-orthoapnea-panel__item:hover {
-  background: rgba(var(--v-theme-on-surface), 0.04);
+button.patient-orthoapnea-panel__head:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 2px;
+  border-radius: 4px;
 }
-
-/* Submitted plans have no click-to-edit anymore (the old Add/Edit NOA plan
-   form was removed entirely — unused). Only drafts stay clickable. */
-.patient-orthoapnea-panel__item--static {
-  cursor: default;
-}
-.patient-orthoapnea-panel__item--static:hover {
-  background: transparent;
-}
-
-.patient-orthoapnea-panel__item-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 6px;
-}
-
-.patient-orthoapnea-panel__dentist {
+.patient-orthoapnea-panel__title {
   font-weight: 600;
   font-size: 0.9375rem;
 }
-
-.patient-orthoapnea-panel__meta {
-  display: flex;
-  gap: 16px;
+.patient-orthoapnea-panel__status {
   font-size: 0.8125rem;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  margin-bottom: 6px;
+}
+.patient-orthoapnea-panel__status--attention {
+  color: rgb(var(--v-theme-error));
+}
+.patient-orthoapnea-panel__dentist {
+  margin-top: 2px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+/* Creado → Pedido → Recibido: three equal columns, dot + line on top, the
+   date under the label — never wraps mid-track, on a phone either. A step's
+   line is coloured once the order has gone past it; the current step is ringed. */
+.patient-orthoapnea-panel__track {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  max-width: 420px;
+  font-size: 0.75rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+.patient-orthoapnea-panel__step {
+  --step: rgba(var(--v-theme-on-surface), 0.25);
+  --line: rgba(var(--v-theme-on-surface), 0.15);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding-top: 14px;
+  min-width: 0;
+}
+.patient-orthoapnea-panel__step::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--line);
+}
+.patient-orthoapnea-panel__step:last-child::before {
+  display: none;
+}
+.patient-orthoapnea-panel__step--on {
+  --line: rgb(var(--v-theme-primary));
+}
+.patient-orthoapnea-panel__step strong {
+  font-weight: 500;
+  color: rgb(var(--v-theme-on-surface));
+}
+.patient-orthoapnea-panel__step--off strong {
+  font-weight: 400;
+  color: inherit;
+}
+.patient-orthoapnea-panel__step--on,
+.patient-orthoapnea-panel__step--now {
+  --step: rgb(var(--v-theme-primary));
+}
+.patient-orthoapnea-panel__step--failed {
+  --step: rgb(var(--v-theme-error));
+}
+.patient-orthoapnea-panel__step--failed strong {
+  color: rgb(var(--v-theme-error));
+}
+.patient-orthoapnea-panel__dot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  background: rgb(var(--v-theme-surface));
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  border: 2px solid var(--step);
+}
+.patient-orthoapnea-panel__step--on .patient-orthoapnea-panel__dot,
+.patient-orthoapnea-panel__step--failed .patient-orthoapnea-panel__dot {
+  background: var(--step);
+}
+.patient-orthoapnea-panel__step--now .patient-orthoapnea-panel__dot {
+  box-shadow: 0 0 0 3px rgba(var(--v-theme-primary), 0.2);
 }
 
 .patient-orthoapnea-panel__scan-link {
-  font-size: 0.875rem;
+  margin-top: 4px;
+  font-size: 0.8125rem;
   color: rgb(var(--v-theme-primary));
+}
+
+.device-order-comments {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  padding: 16px;
+  overflow-y: auto;
+  background: rgb(var(--v-theme-surface));
+}
+.device-order-comments__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.device-order-comments__title {
+  flex: 1;
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+</style>
+
+<style>
+/* D4: on desktop the comments dialog docks to the right edge as a side panel. */
+.device-order-comments--side {
+  position: fixed !important;
+  inset: 0 0 0 auto !important;
+  margin: 0 !important;
+  width: min(440px, 100vw) !important;
+  max-height: 100% !important;
+  height: 100%;
+  border-left: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
 </style>
