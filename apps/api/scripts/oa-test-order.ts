@@ -17,7 +17,7 @@
  * learn OA's error format), so a non-2xx never aborts the recording.
  */
 import { createHash } from "node:crypto";
-import { mkdirSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, writeFileSync, existsSync, appendFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -138,8 +138,13 @@ function summary(steps: Record<string, unknown>) {
     return { status: rec.status, id: body?.id ?? null, statusId: body?.statusId ?? null, error: failed };
   };
   const echo = (steps.echo as { verdict: string; key: string }[] | undefined) ?? [];
+  const patientEcho = (steps.patientEcho as { verdict: string; key: string }[] | undefined) ?? [];
+  const probes = (steps.patientProbes as { create: unknown }[] | undefined) ?? [];
   return {
     patient: pick(steps.createPatient),
+    patientDroppedKeys: patientEcho.filter((e) => e.verdict === "dropped").map((e) => e.key),
+    patientChangedKeys: patientEcho.filter((e) => e.verdict === "changed").map((e) => e.key),
+    patientProbes: probes.map((p) => pick(p.create)),
     order: pick(steps.createTreatment),
     readBack: pick(steps.readBack),
     droppedKeys: echo.filter((e) => e.verdict === "dropped").map((e) => e.key),
@@ -163,6 +168,26 @@ async function main() {
     return;
   }
 
+  // Read-only status snapshot of an order we placed (tracking groundwork):
+  // appends {statusId, histories, ...} to oa-shots/status-<id>.jsonl.
+  const statusOf = argValue("--status");
+  if (statusOf) {
+    const rec = await call("GET", `/api/treatments/DTO/${encodeURIComponent(statusOf)}`);
+    const body = rec.body as Record<string, unknown> | null;
+    const snapshot = {
+      at: rec.at,
+      status: rec.status,
+      statusId: body?.statusId ?? null,
+      lastActivity: body?.lastActivity ?? null,
+      expectedDeliveryDate: body?.expectedDeliveryDate ?? null,
+      histories: body?.histories ?? null,
+      notifications: body?.notifications ?? null,
+    };
+    appendFileSync(join(OUT_DIR, `status-${statusOf}.jsonl`), `${JSON.stringify(snapshot)}\n`);
+    console.log(JSON.stringify({ order: statusOf, status: rec.status, statusId: snapshot.statusId, histories: Array.isArray(snapshot.histories) ? snapshot.histories.length : null }));
+    return;
+  }
+
   const n = Number(argValue("--shot"));
   const shot = SHOTS.find((s) => s.n === n);
   if (!shot) throw new Error(`--shot must be one of ${SHOTS.map((s) => s.n).join(", ")}`);
@@ -174,7 +199,8 @@ async function main() {
     learns: shot.learns,
     transport: shot.transport,
     patient: shot.patient(ctx),
-    treatment: shot.treatment(ctx, PATIENT_PLACEHOLDER),
+    patientProbes: shot.patientProbes?.(ctx) ?? [],
+    treatment: shot.treatment?.(ctx, PATIENT_PLACEHOLDER) ?? null,
   });
   const plan = buildPlan();
   const hash = hashOf(plan);
@@ -194,8 +220,20 @@ async function main() {
   const patientRec = await call("POST", "/api/patient", plan.patient);
   steps.createPatient = patientRec;
   const patientId = (patientRec.body as { id?: number } | null)?.id;
-
   if (patientId != null) {
+    const back = await call("GET", `/api/patient/${patientId}`);
+    steps.patientReadBack = back;
+    steps.patientEcho = diffEcho(plan.patient, back.body as Record<string, unknown> | null);
+  }
+  const probes: unknown[] = [];
+  for (const probe of plan.patientProbes) {
+    const rec = await call("POST", "/api/patient", probe);
+    const id = (rec.body as { id?: number } | null)?.id;
+    probes.push({ create: rec, readBack: id != null ? await call("GET", `/api/patient/${id}`) : null });
+  }
+  if (probes.length) steps.patientProbes = probes;
+
+  if (patientId != null && shot.treatment) {
     const order = shot.treatment(ctx, patientId);
     const orderRec = await call("POST", "/api/treatments", order, shot.transport);
     steps.createTreatment = orderRec;

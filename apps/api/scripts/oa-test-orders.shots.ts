@@ -26,7 +26,10 @@ export interface Shot {
   learns: string[];
   transport: "json" | "multipart";
   patient: (ctx: ShotContext) => Record<string, unknown>;
-  treatment: (ctx: ShotContext, patientId: number | string) => Record<string, unknown>;
+  /** Absent = a patient-only shot (no order is placed). */
+  treatment?: (ctx: ShotContext, patientId: number | string) => Record<string, unknown>;
+  /** Extra POST /api/patient calls after the main one, each read back — to learn OA's patient rules. */
+  patientProbes?: (ctx: ShotContext) => Record<string, unknown>[];
 }
 
 const NOA = "002";
@@ -46,24 +49,31 @@ function oaDate(value: unknown, fallbackDaysAhead = 15): string {
 const today = () => `${new Date().toISOString().slice(0, 10)}T00:00:00`;
 
 /** Patient as OA's own create-patient form sends it (birthDate + country are required there). */
+/**
+ * Every field OA's create-patient form has, filled (Łukasz, 2026-10-03: OA
+ * links orders to the patient, so they should get as much as we know).
+ */
 function oaPatient(ctx: ShotContext, n: number): Record<string, unknown> {
   return {
     name: `Tester Patient ${n}`,
-    email: "",
+    email: TEST_CONTACT.email,
     identityNumber: "",
     insuranceNumber: "",
-    birthDate: "1980-01-01T00:00:00",
-    male: "",
-    phone: "",
+    birthDate: "1975-06-15T00:00:00",
+    male: true,
+    phone: TEST_CONTACT.phone,
     countryId: ctx.country("MX").id,
     province: "",
-    city: "",
-    address: "",
-    postalCode: "",
+    city: "Ciudad de Mexico",
+    address: "Calle de Prueba 1, Col. Juarez",
+    postalCode: "06600",
     userId: ctx.me.id,
-    profession: "",
+    profession: "PACIENTE DE PRUEBA",
   };
 }
+
+/** NeoSleep's own test contact (Łukasz, 2026-10-03) — never a real patient's. */
+const TEST_CONTACT = { email: "lukasz.ostrowski@neosleepcare.com", phone: "+34600854382" };
 
 const userRef = (ctx: ShotContext) => ({ id: ctx.me.id, name: "", email: "", identityNumber: "", role: "", signupDate: null });
 
@@ -156,63 +166,19 @@ function oaTreatment(ctx: ShotContext, patientId: number | string, n: number, ov
 export const SHOTS: Shot[] = [
   {
     n: 1,
-    purpose: "What our app sends today (JSON, our field names), plus only the missing patient link",
+    purpose: "Patient only, no order: every form field filled plus the diagnosis/observations keys OA's patient record has",
     learns: [
-      "Does POST /api/treatments accept a JSON body at all, or only multipart?",
-      "Does OA reject unknown keys (addressSend, startingPointPorcentage, additionalSplints) or wrong types (teethStatus array, verticalDimension text, clinic as a number, product as {id})?",
-      "OA's error response: status code + body shape (what our form must map)",
-      "Is a patient without birthDate/country accepted (our current patient payload)?",
+      "Which patient fields OA stores (read-back diff), incl. diagnosis/observations that its create form does not show",
+      "Does OA's server enforce the unique patient name per doctor, or only its form? (probe: same name again)",
+      "The patient error format, if a probe is rejected",
     ],
     transport: "json",
     patient: (ctx) => ({
-      name: "Tester Patient 1",
-      email: "",
-      identityNumber: "",
-      insuranceNumber: "",
-      birthDate: "",
-      male: "",
-      phone: "",
-      countryId: ctx.country("MX").id,
-      province: "",
-      city: "",
-      address: "",
-      postalCode: "",
-      userId: ctx.me.id,
-      profession: "",
+      ...oaPatient(ctx, 1),
+      observations: "PACIENTE DE PRUEBA – NeoSleep, Łukasz Ostrowski. Diagnóstico de prueba: SAOS moderado, IAH 22/h (estudio de sueño de prueba).",
+      diagnosis: "SAOS moderado (IAH 22/h) – PRUEBA",
     }),
-    treatment: (ctx, patientId) => ({
-      patientId,
-      patientName: "Tester Patient 1",
-      clinic: ctx.clinic.id,
-      addressSend: "clinic",
-      deliveryAddress: null,
-      product: { id: ctx.product(NOA).id },
-      retrusionMax: -5,
-      protrusionMax: 5,
-      deviationRight: 0,
-      deviationLeft: 0,
-      deviationAdvanceRight: 0,
-      deviationAdvanceLeft: 0,
-      startingPointPorcentage: 50,
-      startingPoint: null,
-      sequenceTypeStandard: false,
-      sequenceTypePersonalized: true,
-      sequenceUnitInMM: false,
-      sequence: { seq1: 60, seq2: 70, seq3: 80 },
-      morningAligner: false,
-      verticalDimension: "registro",
-      anteriorFrontalOpening: false,
-      slotsForElasticBands: false,
-      upperBandSplintDesign: "3",
-      lowerBandSplintDesign: "3",
-      mixedSplintDesign: true,
-      scallopedSplintDesign: false,
-      additionalSplints: ["1"],
-      teethStatus: ["16"],
-      observations: observations(1),
-      desiredDate: oaDate(ctx.minDate).slice(0, 10),
-      noContactDoctorForRedesign: false,
-    }),
+    patientProbes: (ctx) => [{ ...oaPatient(ctx, 1) }],
   },
   {
     n: 2,
@@ -270,8 +236,8 @@ export const SHOTS: Shot[] = [
           province: "",
           countryId: ctx.country("MX").id,
           postalCode: "06600",
-          phone: "+525500000000",
-          email: "pruebas@neosleepcare.com",
+          phone: TEST_CONTACT.phone,
+          email: TEST_CONTACT.email,
           active: true,
           ...ADDRESS_DEFAULTS,
         },
@@ -279,28 +245,14 @@ export const SHOTS: Shot[] = [
   },
   {
     n: 4,
-    purpose: "OA-faithful order with an incomplete alternative address (no phone, no postal code) — a rule OA's form blocks",
+    purpose: "OA-faithful order with an advance range of 3 mm (MP − MR < 5), which OA's form only warns about",
     learns: [
-      "Does OA's server re-check the delivery address, or only their form? (decides whether our check is the only guard)",
+      "Does OA's server enforce invalidAdvancedLess5 (MP − MR ≥ 5 mm), or only its form's warning? (decides block vs warning on our side)",
       "The error format for a field-level rejection, if any",
     ],
     transport: "multipart",
     patient: (ctx) => oaPatient(ctx, 4),
-    treatment: (ctx, patientId) =>
-      oaTreatment(ctx, patientId, 4, {
-        deliveryAddress: {
-          name: "PRUEBA Lukasz Ostrowski",
-          address: "Calle de Prueba 1, Col. Juarez",
-          city: "Ciudad de Mexico",
-          province: "",
-          countryId: ctx.country("MX").id,
-          postalCode: "",
-          phone: "",
-          email: "pruebas@neosleepcare.com",
-          active: true,
-          ...ADDRESS_DEFAULTS,
-        },
-      }),
+    treatment: (ctx, patientId) => oaTreatment(ctx, patientId, 4, { retrusionMax: -1, protrusionMax: 2, startingPoint: 0 }),
   },
   {
     n: 5,
