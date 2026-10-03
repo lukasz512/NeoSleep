@@ -6,7 +6,7 @@ argument-hint: "[questions.json path]"
 
 # Decision Form
 
-Łukasz's rule (NEO-88, reshaped by CORE-44 on 2026-09-28): questions never arrive as a chat list. Each one is **three buttons** he clicks. "Send to Claude" delivers the answers to the VS Code session, and the thread continues from there. This is the standard channel for anything Claude needs from neoCRM staff. `.claude/hooks/prompt-submit-decision-form.sh` injects the rule on every prompt.
+Łukasz's rule (NEO-88, reshaped by CORE-44 on 2026-09-28): questions never arrive as a chat list. Each one is **three buttons** he clicks. "Send to Claude" delivers the answers to the VS Code session, and the thread continues from there. This is the standard channel for anything Claude needs from neoCRM staff. `.claude/hooks/prompt-submit-rules.sh` injects the rule on the first prompt of each session (CORE-103).
 
 ## Step 0: TDD first, fewer questions
 

@@ -6,7 +6,7 @@ import { insertMedicalHistory, insertOralExam, insertStopBang } from "./clinical
 import { insertConsent } from "./consent.js";
 import { insertFileAttachment } from "./fileAttachment.js";
 import { insertSleepStudy } from "./sleepStudy.js";
-import { getPatientFormCompletion, POLYSOMNOGRAPHY_FORM_KEY, type FormCompletionItem } from "./patientFormCompletion.js";
+import { getPatientFormCompletion, getPatientFormStatus, POLYSOMNOGRAPHY_FORM_KEY, type FormCompletionItem } from "./patientFormCompletion.js";
 import { GetPatientChecklistQuery } from "../queries/patientChecklist.js";
 import { MEDICAL_HISTORY_QUESTIONS, ORAL_EXAM_QUESTIONS, STOP_QUESTIONS, BANG_QUESTIONS } from "../commands/clinicalRecordFields.js";
 
@@ -99,6 +99,37 @@ describe("getPatientFormCompletion — the patient list's dots", () => {
       );
       expect([...(completion.get(partial.id) ?? [])]).toEqual([]);
       expect([...(completion.get(files.id) ?? [])].sort()).toEqual(["informedConsent", POLYSOMNOGRAPHY_FORM_KEY]);
+    });
+  }, 30000);
+
+  it("waiting on the patient agrees with the checklist's QR items (NEO-221)", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const patient = (label: string) => insertPatient(client, { first_name: "Forms", last_name: `${label}-${uniqueSuffix()}` });
+
+      const empty = await patient("WaitEmpty");
+      // S-T-O-P only waits on the doctor (partial) and the history is done — only the consent is left for the patient.
+      const mixed = await patient("WaitMixed");
+      await insertStopBang(client, meta(mixed.id), STOP_YES, all(BANG_QUESTIONS, null));
+      await insertMedicalHistory(client, meta(mixed.id), { ...all(MEDICAL_HISTORY_QUESTIONS, false), medical_history_other: null });
+      const done = await patient("WaitDone");
+      await upload(client, done.id, "informedConsent");
+      await upload(client, done.id, "medicalHistory");
+      await upload(client, done.id, "stopBang");
+
+      const patients = [empty, mixed, done];
+      const status = await getPatientFormStatus(client, patients.map((p) => p.id), ITEMS);
+      for (const p of patients) {
+        const checklist = await GetPatientChecklistQuery(ctx, p.id);
+        const fromChecklist = checklist.items
+          .filter((i) => i.actions.qr && (i.status === "missing" || i.status === "pending_patient"))
+          .map((i) => i.key)
+          .sort();
+        expect([...(status.get(p.id)?.waitingOnPatient ?? [])].sort(), p.last_name).toEqual(fromChecklist);
+      }
+      expect([...(status.get(empty.id)?.waitingOnPatient ?? [])].sort()).toEqual(["informedConsent", "medicalHistory", "stopBang"]);
+      expect([...(status.get(mixed.id)?.waitingOnPatient ?? [])]).toEqual(["informedConsent"]);
+      expect(status.get(done.id)?.waitingOnPatient.size).toBe(0);
     });
   }, 30000);
 

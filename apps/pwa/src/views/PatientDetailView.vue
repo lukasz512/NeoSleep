@@ -311,7 +311,8 @@ const focusStudy = ref<string | null>((route.query.study as string) || null);
 function syncQuery() {
   const item = activeTab.value === "studies" || activeTab.value === "documents" ? studyItem.value ?? undefined : undefined;
   if (activeTab.value !== "studies") focusStudy.value = null;
-  router.replace({ query: { ...route.query, tab: activeTab.value, item, study: focusStudy.value ?? undefined } });
+  // qr is a one-shot request (NEO-221) — never left in the URL, so a reload doesn't create another link.
+  router.replace({ query: { ...route.query, tab: activeTab.value, item, study: focusStudy.value ?? undefined, qr: undefined } });
 }
 watch(activeTab, syncQuery);
 function openStudy(itemKey: string, category: ChecklistCategory) {
@@ -329,6 +330,11 @@ function onAsideQr() {
   studyItem.value = null;
   activeTab.value = CHECKLIST_TAB.document;
   qrRequestNonce.value += 1;
+}
+/** Patients list "Next step" QR (NEO-221) opens the record with ?qr=1 — same as pressing the side panel's QR. */
+if (route.query.qr === "1" && canSeeStudies.value) {
+  onAsideQr();
+  syncQuery();
 }
 
 function onEdit() {

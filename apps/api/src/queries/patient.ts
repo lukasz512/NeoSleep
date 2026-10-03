@@ -9,7 +9,7 @@ import {
 } from "../db.js";
 import { withPlatform } from "../db/tenant.js";
 import { listPatientChecklistConfig, type ChecklistFillMode } from "../db/documentTemplateEntityType.js";
-import { getPatientFormCompletion, POLYSOMNOGRAPHY_FORM_KEY, type FormCompletionItem } from "../db/patientFormCompletion.js";
+import { getPatientFormStatus, POLYSOMNOGRAPHY_FORM_KEY, type FormCompletionItem } from "../db/patientFormCompletion.js";
 import { DOCUMENT_MANIFEST } from "@neo/documents";
 import { getAllowedScopePaths, assertTerritoryAccessByTerritoryId } from "../middleware/requireScope.js";
 
@@ -66,6 +66,10 @@ export interface PatientDto {
 export interface PatientIntakeFormStatus {
   key: string;
   done: boolean;
+  /** Which list column it belongs to (NEO-221): "study" = lab/device results (fill_mode external + polysomnography), like the patient's Estudios tab. */
+  category: "document" | "study";
+  /** The patient can still fill it through a QR link — the list's "Next step" (NEO-221). */
+  waiting_on_patient: boolean;
 }
 
 export type PatientListItemDto = PatientDto & { intake_forms: PatientIntakeFormStatus[] };
@@ -142,12 +146,17 @@ export async function GetPatientListQuery(
   const { rows, total } = await getPatientsPaginated(ctx.client, filters, page, limit, sortBy, sortOrder);
 
   const forms = await getPatientIntakeForms();
-  const completion = await getPatientFormCompletion(ctx.client, rows.map((row) => row.id), forms);
+  const status = await getPatientFormStatus(ctx.client, rows.map((row) => row.id), forms);
   const items = rows.map((row) => {
-    const done = completion.get(row.id);
+    const s = status.get(row.id);
     return {
       ...toDto(row),
-      intake_forms: forms.map(({ key }) => ({ key, done: done?.has(key) ?? false })),
+      intake_forms: forms.map(({ key, fillMode }) => ({
+        key,
+        done: s?.done.has(key) ?? false,
+        category: fillMode === null || fillMode === "external" ? ("study" as const) : ("document" as const),
+        waiting_on_patient: s?.waitingOnPatient.has(key) ?? false,
+      })),
     };
   });
   return { items, total };

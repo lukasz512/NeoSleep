@@ -30,6 +30,21 @@
             "command": "bash .claude/hooks/session-start-stale-worktrees.sh",
             "timeout": 15,
             "statusMessage": "Cleaning up merged worktrees in the background..."
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/session-start-lean.sh",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "compact|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/prompt-submit-rules.sh --reset",
+            "timeout": 10
           }
         ]
       }
@@ -39,18 +54,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/prompt-submit-planning-check.sh",
-            "timeout": 10,
-            "statusMessage": "Checking planning gate..."
-          },
-          {
-            "type": "command",
-            "command": "bash .claude/hooks/prompt-submit-reply-brevity.sh",
+            "command": "bash .claude/hooks/prompt-submit-rules.sh",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "bash .claude/hooks/prompt-submit-decision-form.sh",
+            "command": "bash .claude/hooks/context-guard.sh",
             "timeout": 10
           }
         ]
@@ -105,5 +114,13 @@
         ]
       }
     ]
+  },
+  "env": {
+    "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet"
+  },
+  "cleanupPeriodDays": 30,
+  "enabledPlugins": {
+    "marketing@knowledge-work-plugins": false,
+    "engineering@knowledge-work-plugins": false
   }
 }
