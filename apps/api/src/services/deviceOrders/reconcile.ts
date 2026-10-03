@@ -133,11 +133,13 @@ export function withEnvTag(observations: string, env: DeployEnv, treatmentPlanId
   return base ? `${base}\n${tag}` : tag;
 }
 
-// Our own live test orders (NEO-210): notes start with "PEDIDO DE PRUEBA", patients are "Tester Patient N".
-const TEST_ORDER_RE = /PEDIDO DE PRUEBA|\bTester Patient\b/i;
+// Our own test orders: the notes say so ("PEDIDO DE PRUEBA … NO FABRICAR" in NEO-210, "PRUEBA / TEST - por
+// favor NO PROCESAR" on 452434, "PRUEBA DEMO" for demos) and the patient is "Tester Patient N" or "patient test".
+const TEST_NOTES_RE = /PEDIDO DE PRUEBA|PRUEBA\s*\/\s*TEST|PRUEBA DEMO|\bNO (PROCESAR|FABRICAR)\b/i;
+const TEST_PATIENT_RE = /^\s*(Tester Patient\b|patient test\s*$)/i;
 
 export function isTestOrder(remote: Pick<RemoteOrder, "observations" | "patientName">): boolean {
-  return TEST_ORDER_RE.test(remote.observations) || TEST_ORDER_RE.test(remote.patientName ?? "");
+  return TEST_NOTES_RE.test(remote.observations) || TEST_PATIENT_RE.test(remote.patientName ?? "");
 }
 
 // ---------------------------------------------------------------------------

@@ -86,7 +86,11 @@ describe("isTestOrder", () => {
   it("recognises our live test shots by note or patient name", () => {
     expect(isTestOrder({ observations: "PEDIDO DE PRUEBA 4 – NeoSleep", patientName: null })).toBe(true);
     expect(isTestOrder({ observations: "", patientName: "Tester Patient 3" })).toBe(true);
+    // 452434 (2026-09-06), read live: an earlier integration test.
+    expect(isTestOrder({ observations: "PRUEBA / TEST - por favor NO PROCESAR. Solicitud de prueba…", patientName: "patient test" })).toBe(true);
+    expect(isTestOrder({ observations: "PRUEBA DEMO 7.10", patientName: null })).toBe(true);
     expect(isTestOrder({ observations: "Paciente con bruxismo", patientName: "Ana López" })).toBe(false);
+    expect(isTestOrder({ observations: "Prueba de mordida tomada el lunes", patientName: "Ana López" })).toBe(false);
   });
 });
 
