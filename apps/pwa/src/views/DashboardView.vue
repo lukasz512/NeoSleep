@@ -19,6 +19,8 @@ const { t } = useI18n();
 <style scoped>
 .dashboard-view {
   display: grid;
+  /* Rows as tall as their content: the view fills the page, and stretched rows made the card full-height (NEO-218 dev check). */
+  align-content: start;
   gap: 16px;
   max-width: 100%;
   padding: 16px 0;
