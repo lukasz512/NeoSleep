@@ -568,7 +568,29 @@ export async function fetchResources(locale: string): Promise<PartnerResourceIte
     })
     .filter((item) => item.title) // no usable title in any language — not worth showing
     .sort((a, b) => a.weight - b.weight);
-  return mergeLanguageTwins(items, locale);
+  return curateResources(mergeLanguageTwins(items, locale), locale);
+}
+
+/**
+ * Our editorial layer over the partner's list (Łukasz, 2026-10-03, NEO-214).
+ * Hidden: WatchPAT (31), and the two ordering videos (55, 30) that show the
+ * partner's own platform instead of NeoSleep's — "Pedir el dispositivo" stays
+ * empty until our own walkthrough (NEO-215) exists. Retitled: video 52, whose
+ * partner title names the device brand.
+ */
+const HIDDEN_RESOURCE_IDS = new Set(["31", "55", "30"]);
+const TITLE_BY_ID: Record<string, Record<string, string>> = {
+  "52": { mx: "Colocación de DAM", en: "Fitting the DAM", pl: "Zakładanie DAM" },
+};
+
+export function curateResources(items: PartnerResourceItem[], locale: string): PartnerResourceItem[] {
+  return items
+    .filter((item) => !HIDDEN_RESOURCE_IDS.has(item.id))
+    .map((item) => {
+      const titles = TITLE_BY_ID[item.id];
+      const title = titles?.[locale] ?? titles?.en;
+      return title ? { ...item, title } : item;
+    });
 }
 
 /** Resource id -> the video media path that actually worked, so repeat requests for the same video don't pay the two-path probe again. */
