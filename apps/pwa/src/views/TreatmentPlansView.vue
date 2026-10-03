@@ -10,7 +10,7 @@
       :i18n="listI18n"
       detail-route-name="patient-detail"
       detail-route-param="patient_id"
-      :detail-route-query="detailRouteQuery"
+      :detail-route-query="treatmentPlanDetailQuery"
       :filter-param-keys="['status', 'type']"
     >
       <template #item.patient_name="{ item }">
@@ -82,6 +82,7 @@ import AppAvatar from "../components/AppAvatar.vue";
 import type { FilterDefinition } from "../composables/useFilters";
 import { treatmentPlanCardMeta as treatmentPlanCardMetaFormatter } from "../utils/mobileCardMeta";
 import { hcpDetailLink } from "../utils/entityLinks";
+import { treatmentPlanDetailQuery } from "../utils/clinicalListLinks";
 import DeviceOrderReconciliationCard from "../components/DeviceOrderReconciliationCard.vue";
 import { useAuthStore } from "../stores/auth";
 
@@ -153,11 +154,6 @@ function typeLabel(type?: string): string {
  *  repeated here — NEO-19). */
 function treatmentPlanCardMeta(plan: TreatmentPlanRow): string {
   return treatmentPlanCardMetaFormatter(plan, typeLabel);
-}
-
-/** Only dental_appliance plans have their own tab today — everything else lands on Details. */
-function detailRouteQuery(item: Record<string, unknown>): Record<string, string> {
-  return { tab: item.type === "dental_appliance" ? "orthoapnea" : "details" };
 }
 
 const tableHeaders = computed(() => [

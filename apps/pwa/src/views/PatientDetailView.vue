@@ -145,7 +145,7 @@
             <PatientNotesPanel entity-type="patient" :entity-id="patient.id" />
           </template>
           <template #studies>
-            <PatientChecklistPanel category="study" :patient-id="patient.id" :focus-item="studyItem" :date-of-birth="patient.date_of_birth" :gender="patient.gender" />
+            <PatientChecklistPanel category="study" :patient-id="patient.id" :focus-item="studyItem" :focus-study="focusStudy" :date-of-birth="patient.date_of_birth" :gender="patient.gender" />
           </template>
           <template #orthoapnea>
             <PatientOrthoApneaPanel :patient-id="patient.id" />
@@ -306,9 +306,12 @@ const patientTabs = computed(() => ALL_PATIENT_TABS.filter((tab) => !tab.roles |
 const activeTab = ref((route.query.tab as string) || "details");
 /** Details → checklist card click: open that item in its tab (?tab=documents|studies&item=…, NEO-193). */
 const studyItem = ref<string | null>((route.query.item as string) || null);
+/** Estudios list row click: open that sleep study on the Estudios tab (?tab=studies&study=<id>, NEO-222). */
+const focusStudy = ref<string | null>((route.query.study as string) || null);
 function syncQuery() {
   const item = activeTab.value === "studies" || activeTab.value === "documents" ? studyItem.value ?? undefined : undefined;
-  router.replace({ query: { ...route.query, tab: activeTab.value, item } });
+  if (activeTab.value !== "studies") focusStudy.value = null;
+  router.replace({ query: { ...route.query, tab: activeTab.value, item, study: focusStudy.value ?? undefined } });
 }
 watch(activeTab, syncQuery);
 function openStudy(itemKey: string, category: ChecklistCategory) {
