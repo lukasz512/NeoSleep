@@ -251,7 +251,7 @@ describe("OrthoApneaOrderWizard — a doctor orders only as themselves (NEO-210,
     expect(order.dentistId).toBe("doc-self");
   });
 
-  it("an incomplete clinic address says so and tells the doctor to contact NeoSleep, and blocks Next", async () => {
+  it("an incomplete clinic address names the clinic, says what is wrong, tells the doctor to contact NeoSleep, and blocks Next", async () => {
     stubBackend({
       context: doctorContext({
         delivery: { ...DELIVERY, phone: "" },
@@ -262,7 +262,7 @@ describe("OrthoApneaOrderWizard — a doctor orders only as themselves (NEO-210,
 
     const alert = $("[data-testid=doctor-address-error]").textContent ?? "";
     expect(alert).toContain(messages["app.deviceOrder.delivery.doctorTitle"]);
-    expect(alert).toContain(msg("app.deviceOrder.delivery.doctorIncomplete", { fields: messages["app.deviceOrder.delivery.field.phone"] }));
+    expect(alert).toContain(msg("app.deviceOrder.delivery.doctorIncompleteNamed", { clinic: DELIVERY.name, fields: messages["app.deviceOrder.delivery.field.phone"] }));
     expect(alert).not.toContain(messages["app.deviceOrder.delivery.openRecord"]);
 
     await type('[data-field="retrusionMaxMm"]', "-2");
@@ -271,7 +271,7 @@ describe("OrthoApneaOrderWizard — a doctor orders only as themselves (NEO-210,
     await next();
     expect(stepTitle()).toBe(messages["app.orthoApneaOrder.step2.title"]);
     expect(summaryLines()).toContain(
-      `${messages["app.deviceOrder.delivery.title"]} — ${msg("app.deviceOrder.delivery.doctorIncomplete", { fields: messages["app.deviceOrder.delivery.field.phone"] })}`,
+      `${messages["app.deviceOrder.delivery.title"]} — ${msg("app.deviceOrder.delivery.doctorIncompleteNamed", { clinic: DELIVERY.name, fields: messages["app.deviceOrder.delivery.field.phone"] })}`,
     );
   });
 

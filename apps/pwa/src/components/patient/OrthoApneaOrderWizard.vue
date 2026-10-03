@@ -755,7 +755,10 @@ const doctorDeliveryMessage = computed(() => {
   const fields = [...new Set(issues.map((i) => i.path.slice("delivery.".length)))].map((f) =>
     te(`app.deviceOrder.delivery.field.${f}`) ? t(`app.deviceOrder.delivery.field.${f}`) : f,
   );
-  return t("app.deviceOrder.delivery.doctorIncomplete", { fields: fields.join(", ") });
+  const clinic = context.value?.delivery?.name?.trim();
+  return clinic
+    ? t("app.deviceOrder.delivery.doctorIncompleteNamed", { clinic, fields: fields.join(", ") })
+    : t("app.deviceOrder.delivery.doctorIncomplete", { fields: fields.join(", ") });
 });
 
 /** Where to fix the address: the HCO itself when the API names it, else the doctor's record (where the primary HCO is set). */

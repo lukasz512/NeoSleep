@@ -216,6 +216,28 @@ export async function getOrganizationIdByName(
 }
 
 /**
+ * A clinic's country is a fact of its address, not of who typed it in: when
+ * the clinic sits in a territory, copy the country of the nearest territory
+ * (itself or an ancestor) that has one. Without a territory the stored value
+ * stays as sent. Fixes MX clinics saved as PL by a PL-based user (NEO-210).
+ */
+async function syncCountryFromTerritory(client: PoolClient, id: string): Promise<void> {
+  await client.query(
+    `UPDATE organization o
+        SET country_code = COALESCE((
+              SELECT a.country_code
+                FROM territory t
+                JOIN territory a ON t.path <@ a.path
+               WHERE t.id = o.territory_id
+                 AND NULLIF(a.country_code, '') IS NOT NULL
+               ORDER BY extensions.nlevel(a.path) DESC
+               LIMIT 1), o.country_code)
+      WHERE o.id = $1 AND o.territory_id IS NOT NULL`,
+    [id]
+  );
+}
+
+/**
  * Inserts an organization record using the provided client.
  * The client must already be in a transaction (withTenant handles this).
  * No BEGIN/COMMIT here — the caller owns the transaction boundary.
@@ -253,6 +275,7 @@ export async function insertOrganization(client: PoolClient, input: InsertOrgani
       ]
     );
     const id = result.rows[0]!.id;
+    await syncCountryFromTerritory(client, id);
 
     const org = await getOrganizationById(client, id);
     if (!org) throw new DatabaseError("insertOrganization", new Error("Insert returned no rows"));
@@ -355,6 +378,7 @@ export async function updateOrganization(client: PoolClient, id: string, input: 
 
     params.push(id);
     await client.query(`UPDATE organization SET ${sets.join(", ")} WHERE id = $${idx}`, params);
+    await syncCountryFromTerritory(client, id);
   } catch (err) {
     if (err instanceof AppError) throw err;
     throw new DatabaseError("updateOrganization", err);

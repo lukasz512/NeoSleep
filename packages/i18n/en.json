@@ -1649,6 +1649,7 @@
   "app.deviceOrder.delivery.doctorTitle": "Your clinic's address",
   "app.deviceOrder.delivery.doctorNoClinic": "No clinic is linked to your account, so the device has nowhere to ship. Contact NeoSleep to fix it.",
   "app.deviceOrder.delivery.doctorIncomplete": "Your clinic's address is missing or has an invalid {fields}. Contact NeoSleep to correct it before ordering.",
+  "app.deviceOrder.delivery.doctorIncompleteNamed": "The address of your clinic “{clinic}” is missing or has an invalid {fields}. Contact NeoSleep to correct it before ordering.",
   "app.deviceOrder.product.noa": "NOA",
   "app.deviceOrder.product.noaTmj": "NOA TMJ",
   "app.deviceOrder.sequence.hintTmj": "(1 upper + 3 lower)",
