@@ -1,0 +1,54 @@
+# Daily device-order reconciliation (NEO-218): asks each API to compare the
+# orders it sent to the lab with the orders the lab lists, store the run, and
+# email the admins when something needs a look (a clean run sends nothing).
+# The result is on the admin dashboard ("Device orders vs. the lab").
+#
+# 13:00 UTC = 07:00 in Mexico City (no daylight saving since 2022).
+#
+# Secrets: API_URL_DEV / API_URL_PROD (falls back to RENDER_API_URL_PROD), and
+# INTERNAL_JOB_SECRET_DEV / INTERNAL_JOB_SECRET_PROD — the same values as the
+# APIs' INTERNAL_JOB_SECRET (Secret Manager, infrastructure/cloud-run/secrets.list).
+# Dev fails loudly when its secret is missing; prod is skipped with a warning
+# until the reconciliation has been promoted there.
+
+name: Device order reconciliation (daily)
+
+on:
+  schedule:
+    - cron: "0 13 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [dev, prod]
+    steps:
+      - name: Run the reconciliation
+        env:
+          TARGET: ${{ matrix.target }}
+          API_URL: ${{ matrix.target == 'prod' && (secrets.API_URL_PROD || secrets.RENDER_API_URL_PROD) || secrets.API_URL_DEV }}
+          JOB_SECRET: ${{ matrix.target == 'prod' && secrets.INTERNAL_JOB_SECRET_PROD || secrets.INTERNAL_JOB_SECRET_DEV }}
+        run: |
+          if [ -z "$API_URL" ] || [ -z "$JOB_SECRET" ]; then
+            if [ "$TARGET" = "prod" ]; then
+              echo "::warning::prod API URL or INTERNAL_JOB_SECRET_PROD not set — skipped."
+              exit 0
+            fi
+            echo "::error::dev API URL or INTERNAL_JOB_SECRET_DEV not set."
+            exit 1
+          fi
+          status=$(curl -s -o result.json -w "%{http_code}" --max-time 300 -X POST \
+            -H "Authorization: Bearer $JOB_SECRET" -H "Content-Type: application/json" -d '{}' \
+            "$API_URL/api/v1/device-orders/jobs/reconcile")
+          echo "$TARGET: HTTP $status"
+          jq '{tenantsFailed, tenants}' result.json || cat result.json
+          [ "$status" = "200" ] || exit 1
+          # A tenant whose run itself crashed is a failure of the job, not a finding.
+          [ "$(jq '.tenantsFailed' result.json)" = "0" ]

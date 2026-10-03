@@ -55,6 +55,20 @@ Roles: `admin`, `doctor`, `manager` (reps/KAMs/MSLs get 403 — NEO-199). The or
     - `registration` (default `{ method: "impression" }`) — `{ method: "impression" } | { method: "scanner", scannerTreatment } | { method: "platform", scannerPlatform }`, names from OA's enums (`SCANNER_TREATMENTS` / `SCANNER_PLATFORMS` in `@neo/device-order`). A missing name is `required`, an unknown one `invalid` (`registration.scannerTreatment` / `registration.scannerPlatform`). Sent to OA as `scannerTreatment` / `scannerPlatform`, the other one `null`. No promotion code is ever sent.
   - The order is stored and sent as parsed (defaults filled, unknown keys dropped).
 
+### Reconciliation (NEO-218)
+Compares the orders this environment sent (`partner_link` + the payload of its `create_treatment` call) with the lab's order list, read through the lab's own list endpoint with GET only. Runs are stored in `device_order_reconciliation_run` and kept for 90 days. `ReconciliationItem.reason` takes these values:
+- Mismatches: `missing_in_lab`, `field_drift` (with `drift: [{ field, ours, lab }]`), `untracked` (the lab order carries this environment's tag but has no link here), `submission_pending`.
+- Info: `test_order`, `other_env`, `unknown_env`, `outside` (placed directly in the lab).
+- Plus `matched`.
+
+The lab's status is reported as `labStatus` and is never a mismatch.
+
+- `POST /api/v1/device-orders/reconciliation/run` (**admin**) → `201 { environment, run }`, where `run` = `{ id, provider, trigger: "manual", triggered_by, status: "ok"|"mismatch"|"failed", summary: { oursSent, labTotal, matched, mismatches, info, byReason, matchLevel }, items: ReconciliationItem[], error, started_at, finished_at }`. When the lab can't be read, `status: "failed"`, `items: []` and `error` is set. A manual run sends no email.
+- `GET /api/v1/device-orders/reconciliation/latest` (**admin, manager**) → `200 { environment, counter: { status, matchLevel, matched, mismatches, finishedAt } | null, run? }`. Only admins get `run`, and each admin read writes an `audit_log` row (`action: "read"`, `entity_type: "DeviceOrderReconciliation"`) because items carry the lab's patient names. A manager gets the counter only (Łukasz Q3).
+- `GET /api/v1/device-orders/reconciliation/runs?limit=30` (**admin**, max 100) → `{ items: run summaries without items }`.
+- `POST /api/v1/device-orders/jobs/reconcile` (machine-to-machine, `Authorization: Bearer <INTERNAL_JOB_SECRET>`): the daily job (`.github/workflows/device-order-reconciliation.yml`, 07:00 Mexico City). Runs for the default tenant and every tenant with a device-order link → `{ tenants: { <slug>: { status, runId } | { error } }, tenantsFailed }`. A scheduled run with `mismatch` or `failed` emails the active admins counts and lab order numbers only, with no patient data (Łukasz Q1).
+- Environment tag: `[NeoSleep DEV|PROD|LOCAL · ref <first 8 hex of the plan id>]` on the last line of the order's notes (`DEPLOY_ENV`). **Off** (`ENV_TAG_APPROVED = false`) until Łukasz approves the wording OA will see.
+
 ## Planner events (calendar)
 - `GET /api/events?start=&end=&region=` – list events (filtered by rep/region)
 - `GET /api/events/:id` – event detail with attendees

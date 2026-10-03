@@ -40,6 +40,20 @@ OA's form only warns about an advance range under 5 mm, and OA's server accepts 
 
 `DeviceOrder.registration` carries the "Registro dental" choice: impression, a scanner (OA enum `ba`) or a scanner platform (OA enum `bZ`), as OA's enum names. The adapter sends `scannerTreatment` / `scannerPlatform` with the other one null, as OA's form does. The promotion code is never shown nor sent.
 
+### Reconciliation (NEO-218, 2026-10-03)
+
+Admins need to see, continuously, whether our orders and the lab's are the same orders, in the same number, and the reason for any difference. The provider interface gains three members, so a future real OA API (or a second lab) plugs in the same way:
+
+- `listRemoteOrders()`: a read-only list of every order on the account. For OA, the adapter reads `GET /api/treatments/DTO?treatmentSearchForm={}` page by page.
+- `comparedPaths`: the wire-format fields we send, which the lab stores back. They were confirmed field for field on order 454012.
+- `comparedDatePaths`: the subset compared by day only.
+
+`services/deviceOrders/reconcile.ts` compares these fields against our stored request payload (`partner_transaction`). It is pure and has no lab field names. Values are normalised the way the lab stores them (upper-cased and trimmed text, `1.0` = `1`), so OA's normalisation is never reported as drift.
+
+A lab that can't be read gives a `failed` run, never a list of "missing" orders. The lab's status is shown but is not a mismatch; tracking (CORE-67) owns status.
+
+An environment tag in the order notes lets a lab-only order be attributed to dev or prod. The tag is written only after Łukasz approves the text OA will see. Until then, an untagged lab-only order is `outside` on prod and `unknown_env` elsewhere.
+
 ## Consequences
 
 - Arbitrary bodies can no longer reach OA: the old pass-through route answers 410.

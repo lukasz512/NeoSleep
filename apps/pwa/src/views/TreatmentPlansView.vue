@@ -1,5 +1,6 @@
 <template>
   <div class="treatment-plans-view">
+    <DeviceOrderReconciliationCard v-if="isManager" mode="counter" />
     <AppEntityList
       view-id="treatment-plans"
       api-endpoint="/api/v1/treatment-plan"
@@ -81,6 +82,8 @@ import AppAvatar from "../components/AppAvatar.vue";
 import type { FilterDefinition } from "../composables/useFilters";
 import { treatmentPlanCardMeta as treatmentPlanCardMetaFormatter } from "../utils/mobileCardMeta";
 import { hcpDetailLink } from "../utils/entityLinks";
+import DeviceOrderReconciliationCard from "../components/DeviceOrderReconciliationCard.vue";
+import { useAuthStore } from "../stores/auth";
 
 interface TreatmentPlanRow {
   patient_name?: string | null;
@@ -97,6 +100,9 @@ interface TreatmentPlanRow {
 
 const { t } = useI18n();
 const { specialtySet } = useIdentity();
+const authStore = useAuthStore();
+// Managers see whether device orders match the lab, as a counter only (NEO-218, Łukasz Q3); admins see the full card on the dashboard.
+const isManager = computed(() => authStore.user?.role === "manager");
 function doctorOf(row: TreatmentPlanRow) {
   return specialtySet(row.dentist_specialty, row.dentist_specialties);
 }

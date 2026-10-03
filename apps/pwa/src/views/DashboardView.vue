@@ -4,18 +4,22 @@
       <p class="dashboard-view__placeholder">{{ t("user.dashboard.title") }}</p>
       <AppNotificationCenter />
     </div>
+    <DeviceOrderReconciliationCard mode="full" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { useI18n } from "vue-i18n";
 import AppNotificationCenter from "../components/AppNotificationCenter.vue";
+import DeviceOrderReconciliationCard from "../components/DeviceOrderReconciliationCard.vue";
 
 const { t } = useI18n();
 </script>
 
 <style scoped>
 .dashboard-view {
+  display: grid;
+  gap: 16px;
   max-width: 100%;
   padding: 16px 0;
 }
