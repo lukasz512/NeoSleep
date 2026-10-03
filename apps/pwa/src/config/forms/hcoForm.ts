@@ -132,6 +132,19 @@ export const hcoFormFields: FormFieldDef[] = [
     cols: 12,
   },
   {
+    // CORE-113 (consent-visit-r1 Z3): the clinic's own aviso de privacidad —
+    // patients open and accept it before signing a consent. Empty = the
+    // platform notice is shown instead.
+    key: "privacy_notice_url",
+    section: "contact",
+    type: "text",
+    labelKey: "user.hco.form.privacyNoticeUrl",
+    hint: "user.hco.form.privacyNoticeUrlHint",
+    icon: "shield-check",
+    rules: [websiteRule],
+    cols: 12,
+  },
+  {
     // CORE-25 (calendar-r1 D4): the clinic's own "what to bring" text, shown in
     // the patient's appointment email. Empty = the section is left out.
     key: "visit_instructions",

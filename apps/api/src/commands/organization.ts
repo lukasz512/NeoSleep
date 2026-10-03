@@ -84,6 +84,8 @@ export interface CreateOrganizationInput {
   google_link?: string | null;
   /** “What to bring” in the patient's appointment email (CORE-25). */
   visit_instructions?: string | null;
+  /** The clinic's own aviso de privacidad (https URL), CORE-113. */
+  privacy_notice_url?: string | null;
   specialties?: string[];
   /** Admin-only (NEO-79) — ignored for any other role, see publicMapFlagFor(). */
   show_on_public_map?: boolean;
@@ -99,6 +101,23 @@ function normalizeVisitInstructions(value: string | null | undefined): string | 
     throw new ValidationError(`Visit instructions can be at most ${VISIT_INSTRUCTIONS_MAX} characters`, "visit_instructions");
   }
   return text || null;
+}
+
+/** The clinic's aviso de privacidad — a public https page patients open before signing; empty = none. */
+function normalizePrivacyNoticeUrl(value: string | null | undefined): string | null | undefined {
+  if (value === undefined) return undefined;
+  const text = value?.trim() ?? "";
+  if (!text) return null;
+  let url: URL;
+  try {
+    url = new URL(/^https?:\/\//i.test(text) ? text : `https://${text}`);
+  } catch {
+    throw new ValidationError("The privacy notice must be a web address", "privacy_notice_url");
+  }
+  if (url.protocol !== "https:" || !url.hostname.includes(".")) {
+    throw new ValidationError("The privacy notice must be an https web address", "privacy_notice_url");
+  }
+  return url.toString();
 }
 
 /**
@@ -155,6 +174,7 @@ export async function CreateOrganizationCommand(
     website:       input.website?.trim() ?? null,
     google_link:   input.google_link?.trim() ?? null,
     visit_instructions: normalizeVisitInstructions(input.visit_instructions) ?? null,
+    privacy_notice_url: normalizePrivacyNoticeUrl(input.privacy_notice_url) ?? null,
     latitude:      coordinates?.lat ?? null,
     longitude:     coordinates?.lng ?? null,
     specialties:   input.specialties,
@@ -204,6 +224,8 @@ export interface UpdateOrganizationPayload {
   google_link?: string | null;
   /** “What to bring” in the patient's appointment email (CORE-25). */
   visit_instructions?: string | null;
+  /** The clinic's own aviso de privacidad (https URL), CORE-113. */
+  privacy_notice_url?: string | null;
   specialties?: string[];
   /** Admin-only (NEO-79) — ignored for any other role, see publicMapFlagFor(). */
   show_on_public_map?: boolean;
@@ -280,6 +302,7 @@ export async function UpdateOrganizationCommand(
     website:       input.website,
     google_link:   input.google_link,
     visit_instructions: normalizeVisitInstructions(input.visit_instructions),
+    privacy_notice_url: normalizePrivacyNoticeUrl(input.privacy_notice_url),
     // A failed/unconfigured geocode leaves the existing coordinates untouched
     // (undefined) rather than nulling them out — a transient API hiccup on an
     // unrelated address tweak shouldn't erase a pin that already worked.

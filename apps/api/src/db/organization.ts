@@ -25,6 +25,8 @@ export interface Organization {
   google_link: string | null;
   /** Shown to patients in appointment emails under “what to bring” (CORE-25); plain text, ≤ 500 chars. */
   visit_instructions: string | null;
+  /** The clinic's own aviso de privacidad (CORE-113) — shown to patients before they sign a consent. */
+  privacy_notice_url: string | null;
   /** Geocoded from the address fields — see services/geocoding.ts. Null until geocoded (unconfigured key, geocode failure, or no address yet). */
   latitude: number | null;
   longitude: number | null;
@@ -61,6 +63,7 @@ export interface InsertOrganizationInput {
   website?: string | null;
   google_link?: string | null;
   visit_instructions?: string | null;
+  privacy_notice_url?: string | null;
   /** Set by the command layer after geocoding the address fields above — not user input. */
   latitude?: number | null;
   longitude?: number | null;
@@ -85,6 +88,7 @@ export interface UpdateOrganizationInput {
   website?: string | null;
   google_link?: string | null;
   visit_instructions?: string | null;
+  privacy_notice_url?: string | null;
   /** Set by the command layer after geocoding the address fields above — not user input. */
   latitude?: number | null;
   longitude?: number | null;
@@ -102,7 +106,7 @@ function isOrgSortColumn(s: string): s is (typeof ORG_SORT_COLUMNS)[number] {
 
 const ORG_SELECT_COLS = `
   o.id, o.name, o.type, o.identifiers, o.address_line1, o.city, o.state, o.postal_code,
-  o.country_code, o.region, o.territory_id, t.name AS territory_name, o.phone, o.email, o.website, o.google_link, o.visit_instructions,
+  o.country_code, o.region, o.territory_id, t.name AS territory_name, o.phone, o.email, o.website, o.google_link, o.visit_instructions, o.privacy_notice_url,
   o.latitude, o.longitude, o.specialties, o.status, o.show_on_public_map, o.metadata, o.created_at, o.updated_at`.trim();
 
 export async function getOrganizationPaginated(
@@ -231,8 +235,8 @@ export async function insertOrganization(client: PoolClient, input: InsertOrgani
   try {
     const result = await client.query<{ id: string }>(
       `INSERT INTO organization
-         (name, type, address_line1, city, state, postal_code, country_code, region, territory_id, phone, email, website, google_link, latitude, longitude, specialties, status, metadata, show_on_public_map, visit_instructions)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+         (name, type, address_line1, city, state, postal_code, country_code, region, territory_id, phone, email, website, google_link, latitude, longitude, specialties, status, metadata, show_on_public_map, visit_instructions, privacy_notice_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
        RETURNING id`,
       [
         name,
@@ -255,6 +259,7 @@ export async function insertOrganization(client: PoolClient, input: InsertOrgani
         input.metadata ? JSON.stringify(input.metadata) : null,
         input.show_on_public_map ?? true,
         trimOrNull(input.visit_instructions),
+        trimOrNull(input.privacy_notice_url),
       ]
     );
     const id = result.rows[0]!.id;
@@ -336,6 +341,10 @@ export async function updateOrganization(client: PoolClient, id: string, input: 
     if (input.visit_instructions !== undefined) {
       params.push(trimOrNull(input.visit_instructions));
       sets.push(`visit_instructions = $${idx++}`);
+    }
+    if (input.privacy_notice_url !== undefined) {
+      params.push(trimOrNull(input.privacy_notice_url));
+      sets.push(`privacy_notice_url = $${idx++}`);
     }
     if (input.latitude !== undefined) {
       params.push(input.latitude);

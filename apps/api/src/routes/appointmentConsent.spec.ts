@@ -80,6 +80,23 @@ function lastEmail(): AppointmentEmail {
 const book = (auth: string, patientId: string) =>
   request(app).post("/api/v1/appointments").set("Authorization", auth).send({ patient_id: patientId, start_at: futureSlot() });
 
+describe("clinic's own aviso de privacidad (organization.privacy_notice_url, CORE-113 Z3)", () => {
+  it("is stored as an https URL (scheme added when missing); http or a non-address is a 400 on that field", async () => {
+    const auth = await admin();
+    const base = { country_code: "MX", phone: "+52 55 1234 5678" };
+    const ok = await request(app).post("/api/v1/organization").set("Authorization", auth)
+      .send({ ...base, name: `Clínica Aviso ${unique()}`, email: `qa-aviso-${unique()}@example.org`, privacy_notice_url: "clinica.mx/aviso" });
+    expect(ok.status).toBe(201);
+    expect(ok.body.privacy_notice_url).toBe("https://clinica.mx/aviso");
+
+    for (const bad of ["http://clinica.mx/aviso", "no es un enlace"]) {
+      const res = await request(app).patch(`/api/v1/organization/${ok.body.id}`).set("Authorization", auth).send({ privacy_notice_url: bad });
+      expect(res.status).toBe(400);
+      expect(JSON.stringify(res.body)).toContain("privacy_notice_url");
+    }
+  });
+});
+
 describe("informed consent in the appointment confirmation (CORE-113)", () => {
   beforeEach(() => sendMock.mockClear());
 
