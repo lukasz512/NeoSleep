@@ -391,15 +391,21 @@ describe("OrthoApneaOrderWizard — step 2: shared rules and the sequence switch
     expect(document.querySelector("[data-testid=standard-sequence]")).toBeNull();
   });
 
-  it("NOA TMJ: Estándar shows SP, -1, 1 and Individualizada has 2 inputs", async () => {
+  it("one product only (Łukasz, 2026-10-03): no product choice, the order goes as NOA with Morning Aligner as a checkbox", async () => {
     stubBackend();
     await openWizard();
     await next();
 
-    await click(tab("[data-field=productCode]", "app.deviceOrder.product.noaTmj"));
-    expect(cells("[data-testid=standard-sequence]")).toEqual(["SP", "-1", "1"]);
-    await click(tab("[data-testid=sequence]", "app.orthoApneaOrder.form.sequenceTypePersonalized"));
-    expect(document.querySelectorAll("[data-testid=personalized-sequence] input[type=number]")).toHaveLength(2);
+    expect(document.querySelector("[data-field=productCode]")).toBeNull();
+    expect(document.querySelector('input[type="checkbox"][aria-label], .v-checkbox')).not.toBeNull();
+    await type('[data-field="retrusionMaxMm"]', "-2");
+    await type('[data-field="protrusionMaxMm"]', "6");
+    await type("[data-testid=sp-mm]", "2");
+    await next();
+    await next();
+    await confirm();
+    const order = JSON.parse(String((apiFetch.mock.calls.find((c) => c[0] === "/api/v1/device-orders")![1] as RequestInit).body)).order;
+    expect(order.productCode).toBe("002");
   });
 
   it("Individualizada without its first splints blocks with personalizedValuesRequired", async () => {

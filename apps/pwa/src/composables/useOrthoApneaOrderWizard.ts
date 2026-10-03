@@ -58,8 +58,13 @@ export interface DeviceOrderContext {
   rulesVersion: string;
 }
 
-/** The only products the wizard orders: NOA and NOA TMJ, one per order (Morning Aligner is a flag on it). */
-export const ORDERABLE_PRODUCT_CODES: readonly ProductCode[] = [PRODUCT_CODES.NOA, PRODUCT_CODES.NOA_TMJ];
+/**
+ * The products the wizard orders, one per order (Morning Aligner is a flag on
+ * it). Only NOA (Łukasz, 2026-10-03): with a single product the wizard shows
+ * no product choice at all. NOA TMJ stays in the shared rules; adding it back
+ * here brings the switch back.
+ */
+export const ORDERABLE_PRODUCT_CODES: readonly ProductCode[] = [PRODUCT_CODES.NOA];
 
 /** Which DeviceOrder paths each wizard step owns — `delivery.*` issues belong to step 1. */
 export const STEP_PATHS: Readonly<Record<number, readonly string[]>> = {

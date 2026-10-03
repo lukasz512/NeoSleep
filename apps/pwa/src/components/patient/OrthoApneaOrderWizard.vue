@@ -75,7 +75,8 @@
               <AppButton v-if="contextFailed" variant="text" size="small" color="primary" @click="refreshContext(true)">{{ t("app.deviceOrder.delivery.retry") }}</AppButton>
             </AppInlineAlert>
           </div>
-          <div data-field="productCode">
+          <!-- Only shown when there is a choice: today the wizard orders NOA only. -->
+          <div v-if="productOptions.length > 1" data-field="productCode">
             <p class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.selectProduct") }}</p>
             <AppSegmentedTabs :model-value="order.productCode" :options="productOptions" fit class="oa-wizard__switch" @update:model-value="onProductPicked" />
           </div>
