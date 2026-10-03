@@ -111,3 +111,22 @@ export function validOrder(dentistId: string, overrides: Partial<DeviceOrder> = 
     ...overrides,
   };
 }
+
+/**
+ * A doctor login for the setup's dentist: same email, so the user shares the
+ * practitioner's identity (ADR-014). The patient becomes the doctor's own, so
+ * the doctor may order for them. Returns the doctor's bearer token.
+ */
+export async function doctorLoginFor(s: Setup): Promise<string> {
+  return withTenant(TENANT_SLUG, async (client) => {
+    const { rows } = await client.query<{ email: string }>(
+      `SELECT i.email FROM practitioner p JOIN identities i ON i.id = p.identity_id WHERE p.id = $1`,
+      [s.dentistId]
+    );
+    const email = rows[0]!.email;
+    const hash = await bcrypt.hash("irrelevant-not-logged-in-with", 4);
+    const user = await insertStaffUser(client, email, "Doc", "Test", "doctor", hash, false);
+    await client.query(`UPDATE patient SET practitioner_id = $1 WHERE id = $2`, [s.dentistId, s.patientId]);
+    return signAuthToken({ id: user!.id, email, role: "doctor", token_version: 0 });
+  });
+}

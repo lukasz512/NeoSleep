@@ -5,7 +5,7 @@
 #
 # 13:00 UTC = 07:00 in Mexico City (no daylight saving since 2022).
 #
-# Secrets: API_URL_DEV / API_URL_PROD (falls back to RENDER_API_URL_PROD), and
+# Secrets: API_URL_DEV / API_URL_PROD (Cloud Run; prod is skipped while unset), and
 # RECONCILIATION_JOB_SECRET — this job's own secret (Łukasz D2), the same value
 # as the APIs' RECONCILIATION_JOB_SECRET in Secret Manager (one GCP project
 # serves both Cloud Run services; infrastructure/cloud-run/secrets.list).
@@ -34,9 +34,18 @@ jobs:
       - name: Run the reconciliation
         env:
           TARGET: ${{ matrix.target }}
-          API_URL: ${{ matrix.target == 'prod' && (secrets.API_URL_PROD || secrets.RENDER_API_URL_PROD) || secrets.API_URL_DEV }}
+          API_URL_DEV: ${{ secrets.API_URL_DEV }}
+          API_URL_PROD: ${{ secrets.API_URL_PROD }}
           JOB_SECRET: ${{ secrets.RECONCILIATION_JOB_SECRET }}
         run: |
+          # Chosen here, not with `&&/||` in the expression: an empty prod URL must
+          # never fall through to dev's. Prod is the Cloud Run API only (CORE-66);
+          # the old Render service has no RECONCILIATION_JOB_SECRET and answers 401.
+          if [ "$TARGET" = "prod" ]; then API_URL="$API_URL_PROD"; else API_URL="$API_URL_DEV"; fi
+          if [ "$TARGET" = "prod" ] && [ -z "$API_URL" ]; then
+            echo "::warning::API_URL_PROD not set (prod still on Render, CORE-66) — skipped."
+            exit 0
+          fi
           if [ -z "$API_URL" ] || [ -z "$JOB_SECRET" ]; then
             echo "::error::$TARGET API URL or RECONCILIATION_JOB_SECRET not set."
             exit 1

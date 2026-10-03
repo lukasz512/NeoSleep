@@ -20,6 +20,7 @@ vi.mock("../../composables/useNotifications", async (importOriginal) => ({
 }));
 
 import OrthoApneaOrderWizard from "./OrthoApneaOrderWizard.vue";
+import { useAuthStore } from "../../stores/auth";
 
 /**
  * CORE-95 — the wizard runs the shared @device-order rules per step and shows
@@ -70,13 +71,18 @@ afterEach(() => {
   notify.mockReset();
 });
 
-async function openWizard(): Promise<VueWrapper> {
-  setActivePinia(createPinia());
+async function openWizard(role: string = "admin"): Promise<VueWrapper> {
+  const pinia = createPinia();
+  setActivePinia(pinia);
+  // The wizard reads the role from the auth store: a doctor skips step 1 (NEO-210).
+  const auth = useAuthStore();
+  // Only the role matters here; the rest of AuthUser is irrelevant to the wizard.
+  auth.$patch({ user: { id: "u-1", email: "u@example.com", role } as never });
   const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
   const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
   const wrapper = mount(OrthoApneaOrderWizard, {
     props: { modelValue: false, patientId: "patient-1", sleepStudyId: "study-1" },
-    global: { plugins: [i18n, vuetify, createPinia()] },
+    global: { plugins: [i18n, vuetify, pinia] },
     attachTo: document.body,
   });
   mounted.push(wrapper);
@@ -203,6 +209,85 @@ describe("OrthoApneaOrderWizard — step 1: doctor and ship-to", () => {
     });
     expect($("[data-testid=ship-to-error]").textContent).toContain(expected);
     await next();
+    expect(stepTitle()).toBe(messages["app.orthoApneaOrder.step1.title"]);
+  });
+});
+
+describe("OrthoApneaOrderWizard — a doctor orders only as themselves (NEO-210, 2026-10-03)", () => {
+  const doctorContext = (extra: Record<string, unknown> = {}) => () =>
+    response(200, { dentistId: "doc-self", delivery: DELIVERY, deliveryIssues: [], minDesiredDate: "2026-10-21", rulesVersion: "1", ...extra });
+
+  function stepNumbers(): string[] {
+    return Array.from(document.querySelectorAll(".v-stepper-item")).map((el) => el.querySelector(".v-avatar")?.textContent?.trim() ?? "");
+  }
+
+  it("opens on construction data, with three steps numbered 1–3 and no doctor or clinic choice", async () => {
+    stubBackend({ context: doctorContext() });
+    await openWizard("doctor");
+
+    expect(stepTitle()).toBe(messages["app.orthoApneaOrder.step2.title"]);
+    expect(document.querySelectorAll(".v-stepper-item")).toHaveLength(3);
+    expect(stepNumbers()).toEqual(["1", "2", "3"]);
+    expect(document.querySelector('[data-field="dentistId"]')).toBeNull();
+    expect(document.querySelector("[data-testid=wizard-step-1]")).toBeNull();
+    // No Back button on the first step the doctor sees.
+    expect(document.querySelector(`button[aria-label="${messages["app.orthoApneaOrder.actions.back"]}"]`)).toBeNull();
+  });
+
+  it("asks the API for the doctor's own context (no dentist_id, no doctor list) and orders with the id the API returned", async () => {
+    stubBackend({ context: doctorContext() });
+    await openWizard("doctor");
+
+    expect(apiFetch).toHaveBeenCalledWith("/api/v1/device-orders/context?product_code=002", expect.anything());
+    expect(apiFetch.mock.calls.some((c) => String(c[0]).startsWith("/api/v1/practitioner"))).toBe(false);
+
+    await type('[data-field="retrusionMaxMm"]', "-2");
+    await type('[data-field="protrusionMaxMm"]', "6");
+    await type("[data-testid=sp-mm]", "2");
+    await next();
+    await next();
+    await confirm();
+    const order = JSON.parse(String((apiFetch.mock.calls.find((c) => c[0] === "/api/v1/device-orders")![1] as RequestInit).body)).order;
+    expect(order.dentistId).toBe("doc-self");
+  });
+
+  it("an incomplete clinic address says so and tells the doctor to contact NeoSleep, and blocks Next", async () => {
+    stubBackend({
+      context: doctorContext({
+        delivery: { ...DELIVERY, phone: "" },
+        deliveryIssues: [{ path: "delivery.phone", code: "required" }],
+      }),
+    });
+    await openWizard("doctor");
+
+    const alert = $("[data-testid=doctor-address-error]").textContent ?? "";
+    expect(alert).toContain(messages["app.deviceOrder.delivery.doctorTitle"]);
+    expect(alert).toContain(msg("app.deviceOrder.delivery.doctorIncomplete", { fields: messages["app.deviceOrder.delivery.field.phone"] }));
+    expect(alert).not.toContain(messages["app.deviceOrder.delivery.openRecord"]);
+
+    await type('[data-field="retrusionMaxMm"]', "-2");
+    await type('[data-field="protrusionMaxMm"]', "6");
+    await type("[data-testid=sp-mm]", "2");
+    await next();
+    expect(stepTitle()).toBe(messages["app.orthoApneaOrder.step2.title"]);
+    expect(summaryLines()).toContain(
+      `${messages["app.deviceOrder.delivery.title"]} — ${msg("app.deviceOrder.delivery.doctorIncomplete", { fields: messages["app.deviceOrder.delivery.field.phone"] })}`,
+    );
+  });
+
+  it("no clinic linked: the doctor message, not the admin's 'assign it in the record'", async () => {
+    stubBackend({ context: doctorContext({ delivery: null, deliveryIssues: [{ path: "delivery", code: "required" }] }) });
+    await openWizard("doctor");
+
+    const alert = $("[data-testid=doctor-address-error]").textContent ?? "";
+    expect(alert).toContain(messages["app.deviceOrder.delivery.doctorNoClinic"]);
+    expect(alert).not.toContain(messages["app.deviceOrder.delivery.noClinic"]);
+  });
+
+  it("an admin still sees all four steps, starting at step 1", async () => {
+    stubBackend();
+    await openWizard();
+    expect(document.querySelectorAll(".v-stepper-item")).toHaveLength(4);
     expect(stepTitle()).toBe(messages["app.orthoApneaOrder.step1.title"]);
   });
 });

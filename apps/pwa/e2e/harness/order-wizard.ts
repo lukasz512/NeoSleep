@@ -4,10 +4,12 @@
  * OrthoApneaOrderWizard open on a patient; the API is answered in the page
  * (window.fetch stub), the same way as patient-aside.ts.
  * `?theme=dark`, `?lang=pl|en` (default mx), `?hco=incomplete` (the doctor's
- * clinic has no phone or postal code), `?hco=none` (no clinic at all).
+ * clinic has no phone or postal code), `?hco=none` (no clinic at all),
+ * `?role=doctor` (signed in as the doctor: no step 1, NEO-210).
  */
 import { createApp, defineComponent, h, ref } from "vue";
 import { createPinia } from "pinia";
+import { useAuthStore } from "../../src/stores/auth";
 import { createRouter, createMemoryHistory } from "vue-router";
 import vuetify, { lightTheme, darkTheme } from "../../src/plugins/vuetify";
 import { i18n, loadLocale } from "../../src/plugins/i18n";
@@ -56,7 +58,7 @@ window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
   }
   if (url.includes("/api/v1/practitioner")) return json({ items: [{ id: "hcp-1", name: "Dr. Andrzej Testerski" }] });
   if (url.includes("/api/v1/patient/")) return json({ id: "p-1", practitioner_id: "hcp-1", region: "MX" });
-  if (url.includes("/api/v1/device-orders/context")) return json({ ...context, minDesiredDate: "2026-10-19", rulesVersion: "2026-10-03.1" });
+  if (url.includes("/api/v1/device-orders/context")) return json({ ...context, dentistId: "hcp-1", minDesiredDate: "2026-10-19", rulesVersion: "2026-10-03.1" });
   return realFetch(input, init);
 };
 
@@ -90,6 +92,9 @@ const style = document.createElement("style");
 style.textContent = `body { margin: 0; background: rgb(var(--v-theme-surface)); }`;
 document.head.append(style);
 
-createApp(Harness).use(createPinia()).use(router).use(vuetify).use(i18n).mount("#app");
+const pinia = createPinia();
+// `?role=doctor`: a doctor skips step 1 and orders for their own clinic (NEO-210).
+useAuthStore(pinia).$patch({ user: { id: "u-1", email: "doctor@example.com", role: params.get("role") ?? "admin" } as never });
+createApp(Harness).use(pinia).use(router).use(vuetify).use(i18n).mount("#app");
 // Same as dialog-header.ts: the boot splash vite.config.ts injects isn't dismissed here.
 document.getElementById("boot-splash")?.remove();
