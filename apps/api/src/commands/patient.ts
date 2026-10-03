@@ -11,6 +11,7 @@ import {
 import { insertAuditLog } from "../db.js";
 import { ValidationError } from "../errors.js";
 import { assertTerritoryAccessByTerritoryId } from "../middleware/requireScope.js";
+import { assertCanSeePatient, practitionerIdForWrite } from "../queries/entityAccess.js";
 import { ConvertLeadCommand } from "./lead.js";
 
 /**
@@ -104,8 +105,8 @@ export async function CreatePatientCommand(
   const dateOfBirth = normalizeDateOfBirth(input.date_of_birth);
   if (!dateOfBirth) throw new ValidationError("date_of_birth is required", "date_of_birth");
 
-  // Support legacy hcp_id → practitioner_id
-  const practitionerId = input.practitioner_id?.trim() || input.hcp_id?.trim() || undefined;
+  // Support legacy hcp_id → practitioner_id. A doctor's new patient is always their own (CORE-104).
+  const practitionerId = (await practitionerIdForWrite(ctx, input.practitioner_id?.trim() || input.hcp_id?.trim() || undefined)) ?? undefined;
 
   const insertInput: PatientInsert = {
     salutation:     input.salutation?.trim() || undefined,
@@ -206,20 +207,25 @@ export async function UpdatePatientCommand(
 
   const before = await getPatientById(ctx.client, id);
   if (!before) return null;
-  // Same scope check as GetPatientByIdQuery — editing must not reach further
-  // than reading. A territory change is checked against the target too, so a
-  // patient can't be moved into a territory the caller doesn't cover.
-  await assertTerritoryAccessByTerritoryId(ctx, before.territory_id);
+  // Same check as GetPatientByIdQuery — editing must not reach further than
+  // reading (CORE-104: a doctor only their own patients). A territory change is
+  // checked against the target too, so a patient can't be moved into a
+  // territory the caller doesn't cover.
+  await assertCanSeePatient(ctx, before);
   if (input.territory_id && input.territory_id !== before.territory_id) {
     await assertTerritoryAccessByTerritoryId(ctx, input.territory_id);
   }
 
   // Support legacy hcp_id → practitioner_id
-  const practitionerId = input.practitioner_id !== undefined
+  const requestedPractitionerId = input.practitioner_id !== undefined
     ? input.practitioner_id
     : input.hcp_id !== undefined
       ? input.hcp_id
       : undefined;
+  // A doctor can't hand their patient to another doctor (or unassign it).
+  const practitionerId = requestedPractitionerId === undefined
+    ? undefined
+    : (await practitionerIdForWrite(ctx, requestedPractitionerId)) ?? undefined;
 
   const updateInput: PatientUpdate = {
     salutation:     input.salutation !== undefined ? (input.salutation || undefined) : undefined,
@@ -266,7 +272,7 @@ export async function DeletePatientCommand(ctx: TenantContext, id: string): Prom
 
   // Admin-only route, but admins can be region-scoped too.
   const before = await getPatientById(ctx.client, id);
-  if (before) await assertTerritoryAccessByTerritoryId(ctx, before.territory_id);
+  if (before) await assertCanSeePatient(ctx, before);
 
   await softDeletePatient(ctx.client, id);
 

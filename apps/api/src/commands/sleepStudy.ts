@@ -1,4 +1,5 @@
 import type { TenantContext } from "../context/TenantContext.js";
+import { requirePatientInScope } from "../queries/entityAccess.js";
 import { insertSleepStudy, updateSleepStudy, deleteSleepStudy, getSleepStudyById, updatePatient, type SleepStudy } from "../db.js";
 import { insertAuditLog } from "../db.js";
 import { ValidationError, NotFoundError } from "../errors.js";
@@ -52,6 +53,8 @@ export async function CreateSleepStudyCommand(
   assertValidStatus(input.status);
   assertValidType(input.study_type);
   assertStudyDateNotFuture(input.study_date);
+  // CORE-104: only for a patient the caller may see (a doctor: their own).
+  await requirePatientInScope(ctx, input.patient_id);
 
   const study = await insertSleepStudy(ctx.client, input);
 
@@ -81,6 +84,7 @@ export async function UpdateSleepStudyCommand(
 
   const before = await getSleepStudyById(ctx.client, id);
   if (!before) return null;
+  await requirePatientInScope(ctx, before.patient_id);
 
   const after = await updateSleepStudy(ctx.client, id, input);
   if (!after) return null;
@@ -116,6 +120,7 @@ export async function DeleteSleepStudyCommand(ctx: TenantContext, id: string): P
 
   const existing = await getSleepStudyById(ctx.client, id);
   if (!existing) throw new NotFoundError("SleepStudy", id);
+  await requirePatientInScope(ctx, existing.patient_id);
 
   await deleteSleepStudy(ctx.client, id);
 
