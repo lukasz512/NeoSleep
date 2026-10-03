@@ -48,8 +48,8 @@ export function parseFailures(log) {
 
 /**
  * The verdict for `sha` from the branch's CI runs (newest first, as gh lists
- * them). Cancelled runs are ignored — the CI concurrency group cancels the
- * push-triggered twin of a pull_request run. `failedRuns` counts distinct
+ * them). Cancelled runs are ignored (a newer push of the same branch cancels
+ * the older one), and so are skipped ones. `failedRuns` counts distinct
  * commits whose CI went red: the first red is the original push, every one
  * after it a failed fix attempt, so the loop is exhausted once
  * failedRuns > maxFixAttempts.
@@ -58,14 +58,14 @@ export function verdict(runs, sha, maxFixAttempts = RULES.maxFixAttempts) {
   const live = runs.filter((r) => r.conclusion !== "cancelled" && r.conclusion !== "skipped");
   const forSha = live.filter((r) => r.headSha.startsWith(sha));
   const failedShas = new Set(live.filter((r) => r.status === "completed" && r.conclusion === "failure").map((r) => r.headSha));
-  const latest = forSha[0];
+  // Every live run on the commit counts (CORE-98): a red push run is not hidden by
+  // a newer green twin — e.g. the PR run whose jobs ci.yml skips for work branches.
+  const failed = forSha.find((r) => r.status === "completed" && r.conclusion !== "success");
+  const latest = failed ?? forSha[0];
   let state = "none";
-  if (latest) {
-    if (latest.status !== "completed") state = "pending";
-    else state = latest.conclusion === "success" ? "success" : "failure";
-    // A second run on the same commit (the PR run after the push run) decides once it finishes.
-    if (state !== "pending" && forSha.some((r) => r.status !== "completed")) state = "pending";
-  }
+  if (failed) state = "failure";
+  else if (forSha.some((r) => r.status !== "completed")) state = "pending";
+  else if (latest) state = "success";
   const failedRuns = failedShas.size;
   return {
     state,

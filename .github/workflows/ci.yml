@@ -19,15 +19,20 @@ on:
     # Keep in sync with .claude/ci-autofix.json "ciBranchPatterns".
     branches: [dev, prod, "worktree-*", "worker/*", "claude/*"]
 
-# Once the PR is opened, its pull_request run and a push run of the same commit
-# can overlap — the newer one cancels the older (cancelled runs are ignored by
-# infrastructure/scripts/ci-status.mjs).
+# One run per commit (CORE-98). Work branches are already tested by their push
+# run, so their pull_request twin skips its jobs (see JOB_IF below) instead of
+# racing the push run — a cancelled twin showed as a red "test" on the PR.
+# The group is per event + branch: a newer push cancels only an older push of
+# the same branch, never the run GitHub shows on the PR.
 concurrency:
-  group: ci-${{ github.event.pull_request.head.sha || github.sha }}
+  group: ci-${{ github.event_name }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 jobs:
   test:
+    # JOB_IF (CORE-98): pull_request runs only for heads the push trigger doesn't cover
+    # (e.g. renovate/*); a skipped job counts as passed for required checks.
+    if: github.event_name != 'pull_request' || !(startsWith(github.head_ref, 'worktree-') || startsWith(github.head_ref, 'worker/') || startsWith(github.head_ref, 'claude/'))
     runs-on: ubuntu-latest
 
     services:
@@ -179,6 +184,7 @@ jobs:
   # every PR/push so a broken Dockerfile fails here, not during a deploy. Build only,
   # nothing is pushed.
   api-image:
+    if: github.event_name != 'pull_request' || !(startsWith(github.head_ref, 'worktree-') || startsWith(github.head_ref, 'worker/') || startsWith(github.head_ref, 'claude/'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -201,6 +207,7 @@ jobs:
   # Claude Code tooling (hooks, ship-artifact, worktree cleanup) has its own self-tests.
   # They need only git, jq, bash and Node, no install and no database (CORE-23).
   tooling:
+    if: github.event_name != 'pull_request' || !(startsWith(github.head_ref, 'worktree-') || startsWith(github.head_ref, 'worker/') || startsWith(github.head_ref, 'claude/'))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
