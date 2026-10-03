@@ -43,7 +43,7 @@ const DELIVERY = { name: "Clínica Centro", address: "Av. Reforma 1", city: "CDM
 
 interface Backend {
   doctors?: { id: string; name: string }[];
-  context?: () => Response;
+  context?: (url: string) => Response;
   deviceOrder?: () => Response;
 }
 
@@ -56,7 +56,7 @@ function stubBackend({
     if (url.startsWith("/api/v1/practitioner")) return response(200, { items: doctors });
     if (url.startsWith("/api/v1/patient/")) return response(200, { practitioner_id: doctors[0]?.id ?? null, region: "MX" });
     if (url.endsWith("/orthoapnea/products")) return response(200, { items: [{ id: 3, code: "002", nameEs: "NOA", category: "x" }, { id: 4, code: "003", nameEs: "NOA TMJ", category: "x" }] });
-    if (url.startsWith("/api/v1/device-orders/context")) return context();
+    if (url.startsWith("/api/v1/device-orders/context")) return context(url);
     if (url === "/api/v1/device-orders") return deviceOrder();
     if (url.startsWith("/api/v1/treatment-plan")) return response(201, { id: "plan-1" });
     throw new Error(`Unmocked apiFetch call in test: ${url}`);
@@ -150,6 +150,64 @@ async function confirm() {
   if (!btn) throw new Error("No confirm button");
   await click(btn);
 }
+
+describe("OrthoApneaOrderWizard — step 1: admin picks which of the doctor's clinics it ships to (NEO-210 D2)", () => {
+  const TOLUCA = { ...DELIVERY, name: "Clínica Toluca", city: "Toluca", postalCode: "50000" };
+  const OPTIONS = [
+    { organizationId: "org-1", name: DELIVERY.name, city: DELIVERY.city, isPrimary: true },
+    { organizationId: "org-2", name: TOLUCA.name, city: TOLUCA.city, isPrimary: false },
+  ];
+  const twoClinics = (url: string) =>
+    response(200, {
+      delivery: url.includes("organization_id=org-2") ? { ...TOLUCA, organizationId: "org-2" } : { ...DELIVERY, organizationId: "org-1" },
+      deliveryOptions: OPTIONS,
+      deliveryIssues: [],
+      minDesiredDate: "2026-10-21",
+      rulesVersion: "1",
+    });
+
+  function clinicSelect() {
+    return document.querySelector('[data-field="deliveryOrganizationId"]');
+  }
+
+  it("the primary clinic is preselected; picking another reloads the address and the order ships there", async () => {
+    stubBackend({ context: twoClinics });
+    const wizard = await openWizard("admin");
+    expect(clinicSelect()).not.toBeNull();
+    expect($("[data-testid=ship-to]").textContent).toContain(DELIVERY.name);
+
+    const select = wizard.findAllComponents({ name: "VSelect" }).find((s) => s.element.closest('[data-field="deliveryOrganizationId"]'));
+    expect((select!.props("items") as { title: string }[]).map((i) => i.title)).toEqual([
+      `${DELIVERY.name} · ${DELIVERY.city} (${messages["app.deviceOrder.delivery.primary"]})`,
+      `${TOLUCA.name} · ${TOLUCA.city}`,
+    ]);
+    select!.vm.$emit("update:modelValue", "org-2");
+    await flushPromises();
+
+    expect(apiFetch.mock.calls.some((c) => String(c[0]).includes("organization_id=org-2"))).toBe(true);
+    expect($("[data-testid=ship-to]").textContent).toContain("Toluca");
+
+    await fillStep2();
+    await next();
+    await next();
+    await confirm();
+    const body = JSON.parse(String((apiFetch.mock.calls.find((c) => c[0] === "/api/v1/device-orders")![1] as RequestInit).body));
+    expect(body.delivery_organization_id).toBe("org-2");
+  });
+
+  it("with one clinic there is nothing to choose and the order names none", async () => {
+    stubBackend();
+    await openWizard("admin");
+    expect(clinicSelect()).toBeNull();
+
+    await fillStep2();
+    await next();
+    await next();
+    await confirm();
+    const body = JSON.parse(String((apiFetch.mock.calls.find((c) => c[0] === "/api/v1/device-orders")![1] as RequestInit).body));
+    expect(body).not.toHaveProperty("delivery_organization_id");
+  });
+});
 
 describe("OrthoApneaOrderWizard — step 1: doctor and ship-to", () => {
   it("opens without any error — errors wait for the first Next", async () => {

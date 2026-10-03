@@ -83,6 +83,22 @@ export async function setup(hco: Partial<typeof COMPLETE_HCO> | null = COMPLETE_
   });
 }
 
+/** Affiliates one more (non-primary) clinic to the dentist; returns its organization id. */
+export async function addClinic(dentistId: string, hco: Partial<typeof COMPLETE_HCO> = COMPLETE_HCO, name = `QA Clinic ${uniqueSuffix()}`): Promise<string> {
+  return withTenant(TENANT_SLUG, async (client) => {
+    const { rows } = await client.query<{ id: string }>(
+      `INSERT INTO organization (name, address_line1, city, postal_code, country_code, phone, email)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+      [name, hco.address_line1 ?? null, hco.city ?? null, hco.postal_code ?? null, hco.country_code ?? null, hco.phone ?? null, hco.email ?? null]
+    );
+    await client.query(
+      `INSERT INTO practitioner_organization (practitioner_id, organization_id, is_primary) VALUES ($1, $2, false)`,
+      [dentistId, rows[0]!.id]
+    );
+    return rows[0]!.id;
+  });
+}
+
 /** A valid NOA order: standard sequence, desired date well past OA's manufacturing date. */
 export function validOrder(dentistId: string, overrides: Partial<DeviceOrder> = {}): DeviceOrder {
   return {

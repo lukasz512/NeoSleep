@@ -1569,6 +1569,8 @@
   "app.deviceOrder.delivery.doctorNoClinic": "Su cuenta no tiene una clínica asignada, así que el dispositivo no tiene a dónde enviarse. Contacte con NeoSleep para corregirlo.",
   "app.deviceOrder.delivery.doctorIncomplete": "En la dirección de su clínica falta o no es válido: {fields}. Contacte con NeoSleep para corregirla antes de pedir.",
   "app.deviceOrder.delivery.doctorIncompleteNamed": "En la dirección de su clínica «{clinic}» falta o no es válido: {fields}. Contacte con NeoSleep para corregirla antes de pedir.",
+  "app.deviceOrder.delivery.chooseClinic": "Enviar a la clínica",
+  "app.deviceOrder.delivery.primary": "principal",
   "app.deviceOrder.product.noa": "NOA",
   "app.deviceOrder.product.noaTmj": "NOA TMJ",
   "app.deviceOrder.sequence.hintTmj": "(1 superior + 3 inferiores)",

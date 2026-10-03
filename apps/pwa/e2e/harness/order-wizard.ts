@@ -5,7 +5,8 @@
  * (window.fetch stub), the same way as patient-aside.ts.
  * `?theme=dark`, `?lang=pl|en` (default mx), `?hco=incomplete` (the doctor's
  * clinic has no phone or postal code), `?hco=none` (no clinic at all),
- * `?role=doctor` (signed in as the doctor: no step 1, NEO-210).
+ * `?role=doctor` (signed in as the doctor: no step 1, NEO-210), `?clinics=2`
+ * (an admin may ship to the doctor's second clinic, NEO-210 D2).
  */
 import { createApp, defineComponent, h, ref } from "vue";
 import { createPinia } from "pinia";
@@ -58,7 +59,25 @@ window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
   }
   if (url.includes("/api/v1/practitioner")) return json({ items: [{ id: "hcp-1", name: "Dr. Andrzej Testerski" }] });
   if (url.includes("/api/v1/patient/")) return json({ id: "p-1", practitioner_id: "hcp-1", region: "MX" });
-  if (url.includes("/api/v1/device-orders/context")) return json({ ...context, dentistId: "hcp-1", minDesiredDate: "2026-10-19", rulesVersion: "2026-10-03.1" });
+  if (url.includes("/api/v1/device-orders/context")) {
+    // `?clinics=2`: the doctor has a second clinic an admin may ship to instead (NEO-210 D2).
+    const second = { ...HCO, name: "Clínica Ejemplo Toluca", address: "Av. Ejemplo 200", city: "Toluca", postalCode: "50000" };
+    const twoClinics = params.get("clinics") === "2" && params.get("role") !== "doctor";
+    const chosenSecond = twoClinics && url.includes("organization_id=org-2");
+    return json({
+      ...context,
+      ...(chosenSecond ? { delivery: { ...second, organizationId: "org-2" } } : {}),
+      ...(twoClinics
+        ? { deliveryOptions: [
+            { organizationId: "org-1", name: HCO.name, city: HCO.city, isPrimary: true },
+            { organizationId: "org-2", name: second.name, city: second.city, isPrimary: false },
+          ] }
+        : {}),
+      dentistId: "hcp-1",
+      minDesiredDate: "2026-10-19",
+      rulesVersion: "2026-10-03.1",
+    });
+  }
   return realFetch(input, init);
 };
 
