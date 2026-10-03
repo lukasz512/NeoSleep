@@ -18,7 +18,7 @@
           :src="src"
           :poster="video.posterUrl ?? undefined"
           controls
-          autoplay
+          :autoplay="resumeFrom === null"
           playsinline
           preload="auto"
           @loadstart="onStart"
@@ -26,7 +26,20 @@
           @playing="state = 'playing'"
           @waiting="state === 'playing' && (state = 'buffering')"
           @error="state = 'error'"
+          @timeupdate="onTimeUpdate"
+          @pause="save(false)"
+          @ended="save(true)"
         />
+
+        <!-- D1 (NEO-209): a half-watched video opens paused and asks, instead of jumping on its own. -->
+        <div v-if="resumeFrom !== null && state !== 'loading' && state !== 'error'" class="video-sheet__resume" data-testid="resume-prompt">
+          <AppButton variant="flat" color="primary" @click="startAt(resumeFrom)">
+            {{ t("user.resources.resume.continue", { time: formatDuration(resumeFrom) }) }}
+          </AppButton>
+          <AppButton variant="tonal" class="video-sheet__resume-restart" @click="startAt(0)">
+            {{ t("user.resources.resume.restart") }}
+          </AppButton>
+        </div>
 
         <Transition name="video-sheet-fade">
           <div v-if="state === 'loading'" class="video-sheet__overlay" data-testid="resource-video-loading" aria-live="polite">
@@ -102,6 +115,7 @@ import AppIcon from "../AppIcon.vue";
 import PartnerLanguageFlag from "./PartnerLanguageFlag.vue";
 import { formatDuration, languageName } from "./videoFormat";
 import type { PartnerResourceItem } from "../../composables/usePartnerResources";
+import { useResourceProgress, resumeAt } from "../../composables/useResourceProgress";
 
 /**
  * The one place a webinar plays (NEO-151, option 2). Webinars are hundreds of
@@ -163,17 +177,64 @@ function retry(): void {
   player.value?.load();
 }
 
+/**
+ * Watch progress (NEO-209). The position goes to the API every SAVE_EVERY_MS
+ * of playback, on pause, on end and when the sheet closes — never per frame.
+ * Progress is keyed by the merged video id, so ES/EN/DE share one position.
+ */
+const { progress, reportPosition } = useResourceProgress();
+const SAVE_EVERY_MS = 10_000;
+let lastSavedAt = 0;
+let lastPositionSec = 0;
+/** Second to offer "Continue from" for the open video; null = just play from 0. */
+const resumeFrom = ref<number | null>(null);
+
+function durationSec(): number | null {
+  const d = player.value?.duration;
+  if (d && Number.isFinite(d)) return d;
+  return props.video?.durationSec ?? null;
+}
+
+function save(ended: boolean, video = props.video): void {
+  const duration = durationSec();
+  if (!video || !duration || resumeFrom.value !== null) return;
+  if (player.value) lastPositionSec = player.value.currentTime;
+  lastSavedAt = Date.now();
+  void reportPosition(video.id, Math.round(lastPositionSec), Math.round(duration), ended);
+}
+
+function onTimeUpdate(): void {
+  if (player.value) lastPositionSec = player.value.currentTime;
+  if (Date.now() - lastSavedAt >= SAVE_EVERY_MS) save(false);
+}
+
+function startAt(sec: number): void {
+  resumeFrom.value = null;
+  const el = player.value;
+  if (!el) return;
+  el.currentTime = sec;
+  lastPositionSec = sec;
+  void el.play();
+}
+
 watch(
   () => props.video,
-  (video) => {
+  (video, previous) => {
+    if (previous) save(false, previous);
     stopTimer();
     state.value = "loading";
     src.value = video ? (video.languages.find((l) => l.mediaUrl === video.mediaUrl)?.mediaUrl ?? video.mediaUrl) : "";
+    resumeFrom.value = video ? resumeAt(progress[video.id], video.durationSec ?? null) : null;
+    lastSavedAt = Date.now();
+    lastPositionSec = 0;
   },
   { immediate: true }
 );
 
-onBeforeUnmount(stopTimer);
+onBeforeUnmount(() => {
+  save(false);
+  stopTimer();
+});
 </script>
 
 <style scoped>
@@ -280,6 +341,23 @@ onBeforeUnmount(stopTimer);
   50% {
     height: 22px;
   }
+}
+
+/* Resume choice (NEO-209, D1): over the paused first frame, under the close button. */
+.video-sheet__resume {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.45);
+}
+.video-sheet__resume-restart {
+  color: #fff;
 }
 
 .video-sheet__close {
