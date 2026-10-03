@@ -2,7 +2,7 @@
 // NEO-204 — renders compose.html frame by frame into an MP4 with ffmpeg.
 //
 //   node apps/pwa/scripts/promo-video/render.mjs [--lang en|pl|mx] [--format 4x5|9x16]
-//        [--music calm|uplifting|pad] [--duration 30|20|15] [--fps 30] [--preview 4,8,14,21,28]
+//        [--music calm|uplifting|pad] [--duration 15|20|30] [--fps 30] [--preview 4,8,14,21,28]
 //
 // Needs out/shots/* (capture.mjs) and ffmpeg on PATH. Downloaded on first run:
 // the opening photo (Pexels #7622509, Pexels license) and the music tracks
@@ -26,7 +26,7 @@ const FPS = Number(arg("fps", "30"));
 const PREVIEW = arg("preview", null);
 const FORMAT = arg("format", "4x5");
 const MUSIC = arg("music", "calm");
-const DURATION = arg("duration", "30");
+const DURATION = arg("duration", "15");
 const W = 1080;
 const H = FORMAT === "9x16" ? 1920 : 1350;
 
