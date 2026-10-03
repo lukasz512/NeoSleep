@@ -61,6 +61,13 @@ function openQr(): void {
   display: inline-flex;
 }
 
+/* Tablet and narrower desktops (< Vuetify lg): the text yields its width to the table; the QR with its count stays (NEO-221 follow-up). */
+@media (max-width: 1279.98px) {
+  .next-step__text {
+    display: none;
+  }
+}
+
 .next-step__text {
   display: flex;
   flex-direction: column;
