@@ -40,6 +40,17 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe("withoutPartnerBrand (NEO-212: no partner names on screen)", () => {
+  it("shows the NOA model as DAM and drops the brand everywhere else", async () => {
+    const { withoutPartnerBrand } = await importService(true);
+    expect(withoutPartnerBrand("Ficha de Paciente previa al tratamiento OrthoApnea NOA")).toBe("Ficha de Paciente previa al tratamiento DAM");
+    expect(withoutPartnerBrand("OrthoApnea Classic")).toBe("DAM Classic");
+    expect(withoutPartnerBrand("Vídeo ORTHOAPNEA")).toBe("Vídeo DAM");
+    expect(withoutPartnerBrand("Morning aligner")).toBe("Morning aligner");
+    expect(withoutPartnerBrand(null)).toBeNull();
+  });
+});
+
 describe("checkConnection", () => {
   it("reports not connected, without calling fetch, when credentials aren't configured", async () => {
     const { checkConnection } = await importService(false);

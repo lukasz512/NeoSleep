@@ -17,13 +17,6 @@ import { i18n } from "../plugins/i18n";
  * CTA) regardless of this notification.
  */
 
-const PARTNER_DISPLAY_NAMES: Record<string, string> = {
-  orthoapnea: "OrthoApnea",
-};
-
-function partnerDisplayName(partner: string): string {
-  return PARTNER_DISPLAY_NAMES[partner] ?? partner;
-}
 
 interface ConnectionStatus {
   connected: boolean;
@@ -65,13 +58,14 @@ async function checkPartnerConnection(partner: string): Promise<ConnectionStatus
  */
 export async function ensurePartnerConnection(partner: string, { fromRetry = false } = {}): Promise<void> {
   const status = await checkPartnerConnection(partner);
-  const toast = { icon: "globe" as const, context: partnerDisplayName(partner) };
+  // Partner names never reach the screen (NEO-212): the toast says "the lab", whichever partner it is.
+  const toast = { icon: "globe" as const, context: i18n.global.t("app.partners.label") };
   if (status.connected) {
     // Only a Retry the user clicked gets a confirmation — a silent pass on
     // every navigation would be noise.
     if (fromRetry) {
       useNotifications().show(
-        i18n.global.t("app.partners.connectionRestored", { partner: partnerDisplayName(partner) }),
+        i18n.global.t("app.partners.connectionRestored"),
         "success",
         undefined,
         toast,
@@ -93,7 +87,7 @@ export async function ensurePartnerConnection(partner: string, { fromRetry = fal
         ? "app.partners.connectionErrorPersistent"
         : "app.partners.connectionError";
   useNotifications().show(
-    i18n.global.t(key, { partner: partnerDisplayName(partner) }),
+    i18n.global.t(key),
     "warning",
     undefined,
     { ...toast, action: retryAction(() => ensurePartnerConnection(partner, { fromRetry: true })) },
