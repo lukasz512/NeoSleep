@@ -62,6 +62,40 @@ test("no partner name anywhere on the tab", async ({ page }) => {
   await expect(page.getByTestId("panel")).not.toContainText(/orthoapnea/i);
 });
 
+test("comments is an icon only, right next to ⋯ (desktop and phone)", async ({ page }) => {
+  for (const width of [1280, 360]) {
+    await page.setViewportSize({ width, height: 800 });
+    await open(page, "?lang=mx");
+    const row = page.getByTestId("device-order-row").first();
+    const comments = row.getByTestId("device-order-comments-open");
+    await expect(comments).toHaveAccessibleName("Comentarios");
+    await expect(comments).toHaveText("");
+    const c = (await comments.boundingBox())!;
+    const m = (await row.locator(".app-list-item-menu__trigger").boundingBox())!;
+    expect(m.x - (c.x + c.width)).toBeLessThanOrEqual(8);
+    expect(Math.abs(m.y - c.y)).toBeLessThanOrEqual(4);
+  }
+});
+
+test("a Panel link (?comments=) opens that order's comments", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await open(page, "?lang=mx&comments=tp-1");
+  await expect(page.getByTestId("device-order-comments")).toBeVisible();
+});
+
+test("admin Panel lists the latest order comments, each linking to the patient's comments", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/e2e/harness/device-orders.html?lang=mx&view=dashboard");
+  const card = page.getByTestId("device-order-comments-card");
+  await expect(card).toContainText("Comentarios de pedidos");
+  const items = card.getByTestId("device-order-comment");
+  await expect(items).toHaveCount(3);
+  await expect(items.first()).toContainText("María Fernanda Ríos Ochoa");
+  await expect(items.first()).toContainText("nº 454012");
+  await expect(items.first()).toHaveAttribute("href", /\/patients\/p-1\?tab=orthoapnea&comments=tp-1/);
+  await expect(card).not.toContainText(/orthoapnea/i);
+});
+
 test("comments open in a side panel on desktop", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await open(page, "?lang=mx");

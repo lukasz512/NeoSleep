@@ -138,15 +138,24 @@
             <template #prepend><AppIcon name="pencil" /></template>
             {{ t("app.deviceOrder.action.continue") }}
           </AppButton>
-          <AppButton v-if="row.plan.order_number" variant="text" size="small" data-testid="device-order-comments-open" @click="commentsPlanId = row.plan.id">
-            <template #prepend><AppIcon name="message" /></template>
-            {{ t("app.deviceOrder.action.comments") }}
-          </AppButton>
         </template>
 
-        <!-- D3: admin tools live under ⋯; hiding is offered on drafts only. -->
-        <template v-if="isAdmin" #menu>
-          <AppListItemMenu :aria-label="t('app.common.moreActions')">
+        <!-- Comments: icon only, next to ⋯ (as everywhere else). D3: admin tools live
+             under ⋯; hiding is offered on drafts only. -->
+        <template v-if="isAdmin || row.plan.order_number" #menu>
+          <AppButton
+            v-if="row.plan.order_number"
+            icon
+            variant="text"
+            class="patient-orthoapnea-panel__icon-btn"
+            :aria-label="t('app.deviceOrder.action.comments')"
+            :title="t('app.deviceOrder.action.comments')"
+            data-testid="device-order-comments-open"
+            @click="commentsPlanId = row.plan.id"
+          >
+            <AppIcon name="message" />
+          </AppButton>
+          <AppListItemMenu v-if="isAdmin" :aria-label="t('app.common.moreActions')">
             <VListItem :title="t('app.orthoApneaOrder.transactionLog.openButton')" @click="openTransactionLog(row.plan.id)">
               <template #prepend><AppIcon name="info-circle" /></template>
             </VListItem>
@@ -165,6 +174,7 @@ import { reportCaught, reportFailedResponse } from "@api";
 import { intlLocale } from "@i18n/language-options";
 import { ref, computed, onMounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { useRoute } from "vue-router";
 import { useDisplay } from "vuetify";
 import { VBottomSheet } from "vuetify/components/VBottomSheet";
 import { VDialog } from "vuetify/components/VDialog";
@@ -219,6 +229,7 @@ interface OrderRow {
 
 const { t, locale } = useI18n();
 const { smAndDown: sheet } = useDisplay();
+const route = useRoute();
 const { specialtySet } = useIdentity();
 const notifications = useNotifications();
 const authStore = useAuthStore();
@@ -258,6 +269,9 @@ function toggleOpen(planId: string) {
 const formatDate = (value: string) =>
   new Date(value).toLocaleDateString(intlLocale(locale.value), { day: "2-digit", month: "2-digit", year: "numeric" });
 
+// The track only needs day/month — the status line above carries the full date.
+const formatShortDate = (value: string) => new Date(value).toLocaleDateString(intlLocale(locale.value), { day: "2-digit", month: "2-digit" });
+
 function rowTitle(plan: TreatmentPlanItem): string {
   const title = t("app.deviceOrder.title");
   return plan.order_number ? t("app.deviceOrder.titleNumber", { title, n: plan.order_number }) : title;
@@ -288,16 +302,16 @@ function trackSteps(row: OrderRow): { key: "created" | "ordered" | "received"; m
   const { plan, state } = row;
   const sent = state === "ordered" || state === "received" || (state === "cancelled" && !!plan.order_sent_at);
   return [
-    { key: "created", mark: state === "draft" ? "now" : "on", note: formatDate(plan.created_at) },
+    { key: "created", mark: state === "draft" ? "now" : "on", note: formatShortDate(plan.created_at) },
     {
       key: "ordered",
       mark: state === "attention" ? "failed" : state === "ordered" ? "now" : sent ? "on" : "off",
-      note: state === "attention" ? t("app.deviceOrder.step.failed") : sent ? formatDate(plan.order_sent_at ?? plan.created_at) : null,
+      note: state === "attention" ? t("app.deviceOrder.step.failed") : sent ? formatShortDate(plan.order_sent_at ?? plan.created_at) : null,
     },
     {
       key: "received",
       mark: state === "received" ? "on" : "off",
-      note: state === "received" ? formatDate(stateDate(row)) : null,
+      note: state === "received" ? formatShortDate(stateDate(row)) : null,
     },
   ];
 }
@@ -362,6 +376,9 @@ async function loadPlans() {
     if (plansRes.ok) {
       const data = (await plansRes.json()) as { items: TreatmentPlanItem[] };
       plans.value = data.items;
+      // ?comments=<plan id> (the admin Panel's comment list) opens that order's comments.
+      const linked = route.query.comments;
+      if (typeof linked === "string" && plans.value.some((p) => p.id === linked)) commentsPlanId.value = linked;
     } else {
       loadFailure.value = await reportFailedResponse(plansRes, { where: "PatientOrthoApneaPanel.loadPlans" });
       loadError.value = true;
@@ -535,6 +552,13 @@ button.patient-orthoapnea-panel__head:focus-visible {
 }
 .patient-orthoapnea-panel__step--now .patient-orthoapnea-panel__dot {
   box-shadow: 0 0 0 3px rgba(var(--v-theme-primary), 0.2);
+}
+
+/* Same footprint and tone as the ⋯ trigger beside it. */
+.patient-orthoapnea-panel__icon-btn {
+  min-width: var(--pwa-btn-min-width, 44px);
+  min-height: var(--pwa-btn-min-height, 44px);
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
 .patient-orthoapnea-panel__scan-link {

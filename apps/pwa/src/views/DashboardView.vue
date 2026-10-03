@@ -4,20 +4,30 @@
       <p class="dashboard-view__placeholder">{{ t("user.dashboard.title") }}</p>
       <AppNotificationCenter />
     </div>
+    <DeviceOrderCommentsCard v-if="isAdmin" />
   </div>
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import AppNotificationCenter from "../components/AppNotificationCenter.vue";
+import DeviceOrderCommentsCard from "../components/dashboard/DeviceOrderCommentsCard.vue";
+import { useAuthStore } from "../stores/auth";
 
 const { t } = useI18n();
+const authStore = useAuthStore();
+/** The Panel is admin-only today; the guard keeps the card admin-only if that ever changes. */
+const isAdmin = computed(() => authStore.user?.role === "admin");
 </script>
 
 <style scoped>
 .dashboard-view {
   max-width: 100%;
   padding: 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .dashboard-view__header {

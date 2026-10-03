@@ -5,7 +5,8 @@
  * in the state picked by `?case=ordered|draft|attention|received` (default
  * ordered), then a received and a cancelled one. The API is answered in the
  * page (window.fetch stub). `?theme=dark`, `?lang=pl|mx|en`, `?role=rep`
- * (default admin, who gets the ⋯ menu).
+ * (default admin, who gets the ⋯ menu), `?comments=tp-1` (opened from the
+ * Panel link), `?view=dashboard` (the admin Panel's comments card instead).
  */
 import { createApp, defineComponent, h } from "vue";
 import { createPinia } from "pinia";
@@ -16,6 +17,7 @@ import "../../src/styles/theme.scss";
 import "../../src/styles/app-responsive.scss";
 import { useAuthStore } from "../../src/stores/auth";
 import PatientOrthoApneaPanel from "../../src/components/patient/PatientOrthoApneaPanel.vue";
+import DeviceOrderCommentsCard from "../../src/components/dashboard/DeviceOrderCommentsCard.vue";
 
 const params = new URLSearchParams(location.search);
 vuetify.theme.change(params.get("theme") === "dark" ? darkTheme : lightTheme);
@@ -59,12 +61,20 @@ const NOTE = {
   body: "Paciente prefiere color transparente.",
 };
 
+/** The admin Panel's list (`?view=dashboard`): newest first, across patients. */
+const RECENT = [
+  { ...NOTE, id: "c1", treatment_plan_id: "tp-1", patient_id: "p-1", patient_name: "María Fernanda Ríos Ochoa", order_number: "454012", created_at: "2026-10-03T16:05:00Z", body: "El laboratorio pide confirmar la mordida constructiva antes del lunes; llamar a la Dra. González." },
+  { ...NOTE, id: "c2", treatment_plan_id: "tp-9", patient_id: "p-2", patient_name: "José Luis Hernández", order_number: "453990", author_name: "Dra. Lorena González", created_at: "2026-10-02T11:20:00Z", body: "OK, confirmado." },
+  { ...NOTE, id: "c3", treatment_plan_id: "tp-8", patient_id: "p-3", patient_name: "Carmen Aguilar Soto", order_number: null, created_at: "2026-09-30T09:00:00Z", body: "Paciente prefiere color transparente." },
+];
+
 const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } }));
 const realFetch = window.fetch.bind(window);
 window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
   if (url.includes("/api/v1/treatment-plan?")) return json({ items: PLANS, total: PLANS.length });
   if (url.includes("/sleep-study-ref")) return json({ id: "ss-1" });
+  if (url.includes("/api/v1/note/device-orders/recent")) return json({ items: RECENT });
   if (url.includes("/comments") || url.includes("/api/v1/note")) return json({ items: [NOTE], total: 1 });
   return realFetch(input, init);
 };
@@ -72,12 +82,19 @@ window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
 const Stub = { render: () => null };
 const router = createRouter({
   history: createMemoryHistory(),
-  routes: [{ path: "/", component: Stub }, { path: "/hcp/:id", name: "hcp-detail", component: Stub }],
+  routes: [
+    { path: "/", component: Stub },
+    { path: "/hcp/:id", name: "hcp-detail", component: Stub },
+    { path: "/patients/:id", name: "patient-detail", component: Stub },
+  ],
 });
+// `?comments=tp-1` stands in for the Panel link's query on the patient page.
+await router.push({ path: "/", query: params.get("comments") ? { comments: params.get("comments")! } : {} });
 
 const Harness = defineComponent({
   setup() {
-    return () => h("main", { class: "harness-main", "data-testid": "panel" }, [h(PatientOrthoApneaPanel, { patientId: "p-1" })]);
+    const view = params.get("view") === "dashboard" ? h(DeviceOrderCommentsCard) : h(PatientOrthoApneaPanel, { patientId: "p-1" });
+    return () => h("main", { class: "harness-main", "data-testid": "panel" }, [view]);
   },
 });
 

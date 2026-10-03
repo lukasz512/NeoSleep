@@ -1,5 +1,5 @@
 <template>
-  <component :is="tag" class="app-status-row" :class="[`app-status-row--${tone}`, { 'app-status-row--has-menu': $slots.menu }]">
+  <component :is="tag" class="app-status-row" :class="`app-status-row--${tone}`">
     <span class="app-status-row__rail">
       <span class="app-status-row__icon" role="img" :aria-label="label">
         <AppIcon :name="ICON[tone]" />
@@ -21,8 +21,9 @@ import type { StatusTone } from "../utils/statusTone";
  * NEO-217: the Documentos row (rail + status icon + text + actions), shared so
  * every status list reads the same way. The shape carries the state, the
  * colour only backs it up: ○ missing · ◐ partial · ⏱ waiting · ✓ done ·
- * ! attention · ✕ cancelled. The ⋯ menu slot is always pinned to the right
- * edge, on a phone too.
+ * ! attention · ✕ cancelled. The `menu` slot (icon buttons + ⋯) is always
+ * pinned to the right edge of the top line, on a phone too; text buttons go
+ * in `actions`.
  */
 withDefaults(defineProps<{ tone: StatusTone; label: string; tag?: string }>(), { tag: "li" });
 
@@ -100,8 +101,13 @@ const ICON = {
   align-items: center;
   gap: 2px;
 }
+/* Icon buttons (e.g. comments) + ⋯ — always the right edge, top line. */
 .app-status-row__menu {
   flex: none;
+  display: flex;
+  align-items: center;
+  /* 44px touch targets, centred on the title line rather than pushing the row taller. */
+  margin: -6px 0;
 }
 
 /* Phone: actions drop under the text, ⋯ stays at the top-right edge. */
@@ -114,23 +120,21 @@ const ICON = {
     height: 20px;
   }
   .app-status-row__body {
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     padding: 10px 4px 10px 12px;
   }
   .app-status-row__text {
-    flex-basis: 100%;
-  }
-  .app-status-row--has-menu .app-status-row__text {
-    padding-right: 40px;
-  }
-  .app-status-row__actions {
-    flex-basis: 100%;
-    margin-left: -8px;
+    grid-column: 1;
+    grid-row: 1;
   }
   .app-status-row__menu {
-    position: absolute;
-    top: 0;
-    right: 0;
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .app-status-row__actions {
+    grid-column: 1 / -1;
+    margin-left: -8px;
   }
 }
 </style>
