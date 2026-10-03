@@ -14,6 +14,8 @@
             :content="activeFilterCount"
             color="primary"
             :model-value="activeFilterCount > 0"
+            :offset-x="8"
+            :offset-y="8"
             class="app-filter-bar__badge"
           >
             <AppButton
@@ -171,6 +173,11 @@ function removeChip(def: FilterDefinition, value: string) {
   flex-shrink: 0;
 }
 
+/* offset-x/y="8" in the template: by default the 18 px badge pokes 6 px above
+   the button, but AppEntityList's toolbar only leaves 4 px of halo room
+   before its overflow:hidden (scroll collapse) — the count's top got cut
+   off. Tucked 8 px in, it sits fully inside the button's 56 px box, still
+   top-right of the 22 px icon. */
 .app-filter-bar__badge :deep(.v-badge__badge) {
   min-width: 18px;
   min-height: 18px;
