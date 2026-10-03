@@ -152,6 +152,19 @@ describe("ResourceVideoSheet", () => {
     expect($(".video-sheet__stage")?.getAttribute("data-state")).toBe("playing");
   });
 
+  it("while buffering mid-play it adds no spinner of its own — the browser's player already shows one (NEO-214)", async () => {
+    mountSheet();
+    await nextTick();
+    const player = $("video") as HTMLVideoElement;
+    player.dispatchEvent(new Event("canplay"));
+    player.dispatchEvent(new Event("playing"));
+    player.dispatchEvent(new Event("waiting"));
+    await nextTick();
+    expect($(".video-sheet__stage")?.getAttribute("data-state")).toBe("buffering");
+    expect($(".video-sheet__overlay")).toBeNull();
+    expect($(".v-progress-circular")).toBeNull();
+  });
+
   it("shows an error with Try again, which reloads the player", async () => {
     mountSheet();
     await nextTick();
