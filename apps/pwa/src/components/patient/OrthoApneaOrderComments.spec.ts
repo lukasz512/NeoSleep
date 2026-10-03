@@ -17,6 +17,7 @@ const notify = vi.fn();
 vi.mock("../../composables/useNotifications", () => ({ useNotifications: () => ({ show: notify }) }));
 
 import OrthoApneaOrderComments from "./OrthoApneaOrderComments.vue";
+import { useAuthStore } from "../../stores/auth";
 
 function jsonResponse(ok: boolean, body: unknown) {
   return { ok, json: async () => body } as Response;
@@ -29,8 +30,9 @@ afterEach(() => {
   notify.mockReset();
 });
 
-function mountComments(): VueWrapper {
+function mountComments(role = "doctor"): VueWrapper {
   setActivePinia(createPinia());
+  useAuthStore().user = { id: "u-1", email: "qa@clinic.test", role } as ReturnType<typeof useAuthStore>["user"];
   const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
   const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
   const wrapper = mount(OrthoApneaOrderComments, {
@@ -90,5 +92,17 @@ describe("OrthoApneaOrderComments — checkbox styling (NEO-11)", () => {
     expect(url).toBe("/api/v1/partners/orthoapnea/treatments/plan-1/comments");
     const body = JSON.parse((options as RequestInit).body as string);
     expect(body).toEqual({ body: "Please redesign the splint.", notifyOrthoApnea: true });
+  });
+});
+
+describe("OrthoApneaOrderComments — who may notify OrthoApnea (NEO-199)", () => {
+  it.each(["rep", "kam", "msl"])("a %s can comment locally but never sees the notify-OrthoApnea checkbox", (role) => {
+    const wrapper = mountComments(role);
+    expect(wrapper.find('input[type="checkbox"]').exists()).toBe(false);
+    expect(wrapper.find("textarea").exists()).toBe(true);
+  });
+
+  it.each(["admin", "doctor", "manager"])("a %s sees the checkbox", (role) => {
+    expect(mountComments(role).find('input[type="checkbox"]').exists()).toBe(true);
   });
 });
