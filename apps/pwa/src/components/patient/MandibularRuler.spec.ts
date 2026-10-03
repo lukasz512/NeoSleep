@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
 import MandibularRuler from "./MandibularRuler.vue";
-import { INCISOR_TIP, rulerPercent } from "./mandibularRuler";
+import { INCISOR_TIP, mmFromPointer, rulerPercent } from "./mandibularRuler";
 
 /**
  * Łukasz, 2026-10-03: on OrthoApnea's ruler the incisal TIPS touch the 0 line
@@ -56,5 +56,45 @@ describe("MandibularRuler", () => {
     expect(rulerPercent(0)).toBe(50);
     expect(rulerPercent(20)).toBe(100);
     expect(rulerPercent(35)).toBe(100);
+  });
+});
+
+/** NEO-225 (Łukasz D1): the Starting Point can be dragged along the ruler, snapping to its 1 mm ticks. */
+describe("MandibularRuler — drag the starting point", () => {
+  const TRACK = { left: 100, width: 400 };
+  const props = { retrusionMax: -2, protrusionMax: 8, startingPointMm: null, sliderLabel: "SP" };
+
+  it("a pointer x maps to mm on the track, snapped to 1 mm and clamped to ±20", () => {
+    expect(mmFromPointer(300, TRACK)).toBe(0);
+    expect(mmFromPointer(300 + 10.4, TRACK)).toBe(1);
+    expect(mmFromPointer(300 - 26, TRACK)).toBe(-3);
+    expect(mmFromPointer(500, TRACK)).toBe(20);
+    expect(mmFromPointer(900, TRACK)).toBe(20);
+    expect(mmFromPointer(0, TRACK)).toBe(-20);
+    expect(mmFromPointer(300, { left: 0, width: 0 })).toBeNull();
+  });
+
+  it("pressing on the ruler emits the snapped mm", async () => {
+    const wrapper = mount(MandibularRuler, { props });
+    const track = wrapper.find(".mandibular-ruler__track").element;
+    track.getBoundingClientRect = () => ({ left: TRACK.left, width: TRACK.width }) as DOMRect;
+    await wrapper.find('[role="slider"]').trigger("pointerdown", { clientX: 300 + 41, pointerId: 1 });
+    expect(wrapper.emitted("update:startingPointMm")).toEqual([[4]]);
+  });
+
+  it("is a keyboard slider: arrows step 1 mm (from 0 when unset), Home/End jump to the ends", async () => {
+    const wrapper = mount(MandibularRuler, { props });
+    const slider = wrapper.find('[role="slider"]');
+    expect(slider.attributes("tabindex")).toBe("0");
+    expect(slider.attributes("aria-label")).toBe("SP");
+    expect(slider.attributes("aria-valuemin")).toBe("-20");
+    expect(slider.attributes("aria-valuemax")).toBe("20");
+    await slider.trigger("keydown", { key: "ArrowRight" });
+    await wrapper.setProps({ startingPointMm: 3 });
+    expect(slider.attributes("aria-valuenow")).toBe("3");
+    await slider.trigger("keydown", { key: "ArrowLeft" });
+    await slider.trigger("keydown", { key: "Home" });
+    await slider.trigger("keydown", { key: "End" });
+    expect(wrapper.emitted("update:startingPointMm")).toEqual([[1], [2], [-20], [20]]);
   });
 });

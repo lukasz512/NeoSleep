@@ -20,6 +20,7 @@ vi.mock("../../composables/useNotifications", async (importOriginal) => ({
 }));
 
 import OrthoApneaOrderWizard from "./OrthoApneaOrderWizard.vue";
+import MandibularRuler from "./MandibularRuler.vue";
 import { useAuthStore } from "../../stores/auth";
 
 /**
@@ -364,6 +365,20 @@ describe("OrthoApneaOrderWizard — step 2: shared rules and the sequence switch
     expect(($("[data-testid=sp-mm] input") as HTMLInputElement).disabled).toBe(true);
   });
 
+  it("dragging SP on the ruler writes the mm field (and takes over from a typed %) — NEO-225", async () => {
+    stubBackend();
+    const wrapper = await openWizard();
+    await fillStep2();
+    await type("[data-testid=sp-mm]", "");
+    await type("[data-testid=sp-percent]", "50");
+    wrapper.findComponent(MandibularRuler).vm.$emit("update:startingPointMm", 3);
+    await flushPromises();
+
+    expect(($("[data-testid=sp-mm] input") as HTMLInputElement).value).toBe("3");
+    expect(($("[data-testid=sp-percent] input") as HTMLInputElement).value).toBe("");
+    expect(document.querySelector("[data-testid=sp-hint]")).toBeNull();
+  });
+
   it("Estándar is the default and shows SP, -1, 1, 2 read-only in mm", async () => {
     stubBackend();
     await openWizard();
@@ -492,10 +507,10 @@ describe("OrthoApneaOrderWizard — submit", () => {
     stubBackend();
     const wrapper = await openWizard();
     await fillStep2();
-    const ma = Array.from(document.querySelectorAll<HTMLInputElement>("input[type=checkbox]")).find((i) =>
-      i.closest(".v-checkbox")?.textContent?.includes(messages["app.orthoApneaOrder.form.morningAligner"]),
-    )!;
-    ma.click();
+    // NEO-225: Morning Aligner is a photo card with a switch under "Add-ons".
+    const card = $('[data-field="morningAligner"]');
+    expect(card.textContent).toContain(messages["app.orthoApneaOrder.form.morningAligner"]);
+    ($('[data-field="morningAligner"] [data-testid=addon-switch] input') as HTMLInputElement).click();
     await flushPromises();
     await next();
     await next();
