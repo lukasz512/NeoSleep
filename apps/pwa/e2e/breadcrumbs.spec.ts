@@ -135,3 +135,17 @@ test("desktop (1280px): the actions are centred on the name, not on the whole te
   const action = (await page.locator(".harness-action").first().boundingBox())!;
   expect(Math.abs(action.y + action.height / 2 - (title.y + title.height / 2))).toBeLessThanOrEqual(3);
 });
+
+// CORE-96: on a wide screen the side panel ends on the right content edge,
+// under the header actions — it used to float mid-screen right after the
+// 720px column. The column itself stays capped at 720px.
+test("wide desktop (1600px): the side panel ends on the right edge, under the actions (CORE-96)", async ({ page }) => {
+  await open(page, "aside", 1600);
+  const aside = (await page.locator(".view-item__aside").boundingBox())!;
+  const head = (await header(page).boundingBox())!;
+  const main = (await page.locator(".view-item__main").boundingBox())!;
+  expect(Math.abs(aside.x + aside.width - (head.x + head.width))).toBeLessThanOrEqual(1);
+  expect(main.width).toBeLessThanOrEqual(720);
+  expect(Math.abs(main.x - head.x)).toBeLessThanOrEqual(1);
+  expect(await noSideScroll(page)).toBe(true);
+});
