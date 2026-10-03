@@ -296,6 +296,17 @@ async function authedFetch(path: string, init: RequestInit = {}, isRetry = false
   return res;
 }
 
+/**
+ * Raw authenticated call for hand-run scripts only (scripts/oa-test-order.ts,
+ * NEO-210) — returns the untouched Response so the script can record status,
+ * headers and body verbatim. Mutations still go through the same queue as the
+ * app, so a script can never race a real order on the shared account.
+ */
+export function orthoApneaRawRequest(path: string, init: RequestInit = {}): Promise<Response> {
+  const method = (init.method ?? "GET").toUpperCase();
+  return method === "GET" ? authedFetch(path, init) : enqueueOrthoApneaMutation(() => authedFetch(path, init));
+}
+
 interface RawOrthoApneaResource {
   id: number;
   type: number;

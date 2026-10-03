@@ -35,6 +35,12 @@ drifted from the code. NEO-16 replaces this whole branding scheme with the gener
 
 ## Confirmed validation rules (from a live OA screenshot)
 
+> **Superseded for rules and payload shape (2026-10-03, NEO-210):** see
+> [partners/orthoapnea-order-rules.md](partners/orthoapnea-order-rules.md). It is
+> harvested from OA's own portal code and covers every validator, the real order DTO
+> (multipart `treatmentDTO`), the status enum, and the differences from this wizard.
+> The notes below remain only as layout history.
+
 - **MR must be strictly less than MP** (`retrusionMax < protrusionMax`). OA shows a red
   inline error below the fields when violated, doesn't block typing, blocks advancing.
 - **MR and MP must each be within `[-20, 20]` mm.** Confirmed via a live OA screenshot
