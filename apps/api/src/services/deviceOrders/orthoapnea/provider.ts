@@ -24,11 +24,11 @@ import { toOaTreatmentDto } from "./toOaTreatmentDto.js";
  * gathers OA's objects and hands them to the pure DTO mapper.
  */
 /**
- * The environment tag goes into OA's order notes, which OA staff read, so it
- * stays off until Łukasz approves the exact wording (NEO-218, Q4). Flip it on
- * in the same PR that records his approval.
+ * The environment tag goes into OA's order notes, which OA staff read.
+ * Approved by Łukasz on 2026-10-03 (NEO-218 D1) as
+ * "[NeoSleep PROD · ref 1a2b3c4d] — referencia interna NeoSleep, no requiere acción".
  */
-export const ENV_TAG_APPROVED = false;
+export const ENV_TAG_APPROVED = true;
 
 /**
  * Every field we send that OA stores back unchanged (sent DTO vs OA's stored

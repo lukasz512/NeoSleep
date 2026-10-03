@@ -213,12 +213,12 @@ describe("toOaTreatmentDto — environment tag (NEO-218)", () => {
 
   it("with envTag, the notes end with the tag line the reconciliation reads back", () => {
     const dto = toOaTreatmentDto(shot3Order, { ...shot3Context, envTag: { env: "dev", treatmentPlanId: planId } });
-    expect(dto.observations).toBe(`${shot3Order.observations}\n[NeoSleep DEV · ref 1a2b3c4d]`);
+    expect(dto.observations).toBe(`${shot3Order.observations}\n[NeoSleep DEV · ref 1a2b3c4d] — referencia interna NeoSleep, no requiere acción`);
     expect(parseEnvTag(dto.observations as string)).toEqual({ env: "dev", ref: "1a2b3c4d" });
   });
 
-  it("without envTag (until Łukasz approves the wording), the notes go exactly as written", () => {
-    expect(ENV_TAG_APPROVED).toBe(false);
+  it("without envTag in the context, the notes go exactly as written (the provider sets it; approved 2026-10-03)", () => {
+    expect(ENV_TAG_APPROVED).toBe(true);
     expect(toOaTreatmentDto(shot3Order, shot3Context).observations).toBe(shot3Order.observations);
   });
 });

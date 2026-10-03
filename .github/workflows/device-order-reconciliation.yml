@@ -6,10 +6,11 @@
 # 13:00 UTC = 07:00 in Mexico City (no daylight saving since 2022).
 #
 # Secrets: API_URL_DEV / API_URL_PROD (falls back to RENDER_API_URL_PROD), and
-# INTERNAL_JOB_SECRET_DEV / INTERNAL_JOB_SECRET_PROD — the same values as the
-# APIs' INTERNAL_JOB_SECRET (Secret Manager, infrastructure/cloud-run/secrets.list).
-# Dev fails loudly when its secret is missing; prod is skipped with a warning
-# until the reconciliation has been promoted there.
+# RECONCILIATION_JOB_SECRET — this job's own secret (Łukasz D2), the same value
+# as the APIs' RECONCILIATION_JOB_SECRET in Secret Manager (one GCP project
+# serves both Cloud Run services; infrastructure/cloud-run/secrets.list).
+# Prod answers 404 until the reconciliation is promoted there: that is a
+# warning, not a failure. Dev must answer 200.
 
 name: Device order reconciliation (daily)
 
@@ -34,20 +35,20 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
           API_URL: ${{ matrix.target == 'prod' && (secrets.API_URL_PROD || secrets.RENDER_API_URL_PROD) || secrets.API_URL_DEV }}
-          JOB_SECRET: ${{ matrix.target == 'prod' && secrets.INTERNAL_JOB_SECRET_PROD || secrets.INTERNAL_JOB_SECRET_DEV }}
+          JOB_SECRET: ${{ secrets.RECONCILIATION_JOB_SECRET }}
         run: |
           if [ -z "$API_URL" ] || [ -z "$JOB_SECRET" ]; then
-            if [ "$TARGET" = "prod" ]; then
-              echo "::warning::prod API URL or INTERNAL_JOB_SECRET_PROD not set — skipped."
-              exit 0
-            fi
-            echo "::error::dev API URL or INTERNAL_JOB_SECRET_DEV not set."
+            echo "::error::$TARGET API URL or RECONCILIATION_JOB_SECRET not set."
             exit 1
           fi
           status=$(curl -s -o result.json -w "%{http_code}" --max-time 300 -X POST \
             -H "Authorization: Bearer $JOB_SECRET" -H "Content-Type: application/json" -d '{}' \
             "$API_URL/api/v1/device-orders/jobs/reconcile")
           echo "$TARGET: HTTP $status"
+          if [ "$TARGET" = "prod" ] && [ "$status" = "404" ]; then
+            echo "::warning::prod has no reconciliation yet (404) — skipped until it is promoted."
+            exit 0
+          fi
           jq '{tenantsFailed, tenants}' result.json || cat result.json
           [ "$status" = "200" ] || exit 1
           # A tenant whose run itself crashed is a failure of the job, not a finding.

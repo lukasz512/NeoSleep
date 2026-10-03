@@ -33,7 +33,7 @@
 - [ ] The daily run happens at 07:00 America/Mexico_City (GitHub Actions cron → internal endpoint with a service token). The token is never in the frontend.
 - [ ] A run with mismatches or a failure emails the admins (counts + OA order numbers, no patient data). A clean run sends nothing.
 - [ ] Runs are stored for 90 days, then pruned.
-- [ ] New orders carry the environment tag in `observations`. The tag text is shown to Łukasz and only ships after his approval.
+- [ ] New orders carry the environment tag line in `observations` (approved 2026-10-03, D1: tag + "— referencia interna NeoSleep, no requiere acción").
 - [ ] Tests use only the in-repo OA replica; there is no live OA in CI.
 
 ### Open Questions

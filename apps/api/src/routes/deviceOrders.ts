@@ -19,7 +19,7 @@ import { requirePatientInScope, requirePractitionerInScope } from "../queries/en
 import { getDeviceOrderProvider } from "../services/deviceOrders/index.js";
 import { NotFoundError } from "../errors.js";
 import { requireRole } from "../middleware/requireRole.js";
-import { requireInternalJobSecret } from "../middleware/requireInternalJobSecret.js";
+import { requireReconciliationJobSecret } from "../middleware/requireInternalJobSecret.js";
 import { getLatestReconciliationRun, listReconciliationRuns } from "../db/deviceOrderReconciliation.js";
 import {
   RunDeviceOrderReconciliationAllTenantsCommand,
@@ -284,7 +284,7 @@ deviceOrdersRouter.get(
 // machine-to-machine only; runs for every tenant that uses device orders.
 deviceOrdersRouter.post(
   "/device-orders/jobs/reconcile",
-  requireInternalJobSecret,
+  requireReconciliationJobSecret,
   asyncHandler(async (req: Request, res: Response) => {
     const requestId = (req.headers["x-request-id"] as string | undefined) ?? crypto.randomUUID();
     res.json(await RunDeviceOrderReconciliationAllTenantsCommand(requestId));

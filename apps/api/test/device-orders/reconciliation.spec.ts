@@ -7,7 +7,7 @@ import {
   RunDeviceOrderReconciliationAllTenantsCommand,
 } from "../../src/commands/deviceOrderReconciliation.js";
 import type { ReconciliationAlert } from "../../src/mailer.js";
-import { formatEnvTag, type ReconciliationItem } from "../../src/services/deviceOrders/reconcile.js";
+import { ENV_TAG_NOTE, formatEnvTag, type ReconciliationItem } from "../../src/services/deviceOrders/reconcile.js";
 import { DEPLOY_ENV } from "../../src/env.js";
 import { __resetOrthoApneaStateForTests, __setOrthoApneaBaseUrlForTests } from "../../src/services/partners/orthoapnea.js";
 import { signAuthToken } from "../../src/utils/jwt.js";
@@ -80,6 +80,16 @@ describe("POST /api/v1/device-orders/reconciliation/run (Check now)", () => {
     expect(run.summary).toMatchObject({ oursSent: 2, labTotal: 2, matched: 2, mismatches: 0, matchLevel: 1 });
     expect(itemFor(run.items, idA)).toMatchObject({ reason: "matched", treatmentPlanId: a.planId, labStatus: "1" });
     expect(itemFor(run.items, idB)).toMatchObject({ reason: "matched", treatmentPlanId: b.planId });
+  });
+
+  it("a placed order carries this environment's tag line in OA's notes, and still matches (D1)", async () => {
+    const a = await setup();
+    const id = await placeOrder(a);
+    const notes = String(replica.treatments.get(id)!.observations);
+    expect(notes).toBe(`QA replica order\n${formatEnvTag(DEPLOY_ENV, a.planId)} — ${ENV_TAG_NOTE}`);
+
+    const run = (await checkNow(a.token)).body.run;
+    expect(itemFor(run.items, id)!.reason).toBe("matched");
   });
 
   it("only GET requests reach OA during a run (it can never place or change an order)", async () => {
@@ -220,6 +230,23 @@ describe("daily job", () => {
     const res = await request(app).post("/api/v1/device-orders/jobs/reconcile").send({});
     expect(res.status).toBe(401);
     expect(replica.requests).toHaveLength(0);
+  });
+
+  it("the job takes only its own secret (D2): the shared job secret is refused, its own runs every tenant", async () => {
+    const previous = process.env.RECONCILIATION_JOB_SECRET;
+    process.env.RECONCILIATION_JOB_SECRET = "qa-reconciliation-job-secret";
+    try {
+      const wrong = await request(app).post("/api/v1/device-orders/jobs/reconcile").set("Authorization", "Bearer some-other-job-secret").send({});
+      expect(wrong.status).toBe(401);
+
+      const ok = await request(app).post("/api/v1/device-orders/jobs/reconcile").set("Authorization", "Bearer qa-reconciliation-job-secret").send({});
+      expect(ok.status).toBe(200);
+      expect(ok.body.tenantsFailed).toBe(0);
+      expect(ok.body.tenants[TENANT_SLUG]).toMatchObject({ status: "ok" });
+    } finally {
+      if (previous === undefined) delete process.env.RECONCILIATION_JOB_SECRET;
+      else process.env.RECONCILIATION_JOB_SECRET = previous;
+    }
   });
 
   it("a scheduled run with a mismatch emails every active admin; counts and OA numbers only, no patient name", async () => {

@@ -126,11 +126,18 @@ export function parseEnvTag(text: string | null | undefined): EnvTag | null {
   return env ? { env, ref: m[2]!.toLowerCase() } : null;
 }
 
-/** Observations with the tag on its own last line (replacing any tag already there). */
+/**
+ * The note after the tag, so the lab's staff read it as ours and not as an
+ * instruction for the device (Łukasz D1, 2026-10-03: "with a note in Spanish").
+ */
+export const ENV_TAG_NOTE = "referencia interna NeoSleep, no requiere acción";
+const TAG_LINE_RE = new RegExp(`\\n?${TAG_RE.source}(?: — ${ENV_TAG_NOTE})?`, "i");
+
+/** Observations with the tag line (tag + note) as the last line, replacing any tag line already there. */
 export function withEnvTag(observations: string, env: DeployEnv, treatmentPlanId: string): string {
-  const base = observations.replace(TAG_RE, "").trimEnd();
-  const tag = formatEnvTag(env, treatmentPlanId);
-  return base ? `${base}\n${tag}` : tag;
+  const base = observations.replace(TAG_LINE_RE, "").trimEnd();
+  const line = `${formatEnvTag(env, treatmentPlanId)} — ${ENV_TAG_NOTE}`;
+  return base ? `${base}\n${line}` : line;
 }
 
 // Our own test orders: the notes say so ("PEDIDO DE PRUEBA … NO FABRICAR" in NEO-210, "PRUEBA / TEST - por

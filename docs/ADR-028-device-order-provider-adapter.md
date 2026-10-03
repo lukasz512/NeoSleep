@@ -52,7 +52,7 @@ Admins need to see, continuously, whether our orders and the lab's are the same 
 
 A lab that can't be read gives a `failed` run, never a list of "missing" orders. The lab's status is shown but is not a mismatch; tracking (CORE-67) owns status.
 
-An environment tag in the order notes lets a lab-only order be attributed to dev or prod. The tag is written only after Łukasz approves the text OA will see. Until then, an untagged lab-only order is `outside` on prod and `unknown_env` elsewhere.
+An environment tag on the last line of the order notes (`[NeoSleep PROD · ref …] — referencia interna NeoSleep, no requiere acción`, approved by Łukasz 2026-10-03) lets a lab-only order be attributed to dev or prod. An untagged lab-only order (older than the tag) is `outside` on prod and `unknown_env` elsewhere. The daily job has its own secret (RECONCILIATION_JOB_SECRET), separate from the shared job secret.
 
 ## Consequences
 

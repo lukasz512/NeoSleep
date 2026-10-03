@@ -72,11 +72,11 @@ describe("environment tag", () => {
   it("replaces an existing tag instead of stacking a second one", () => {
     const once = withEnvTag("Notes", "dev", PLAN_A);
     const twice = withEnvTag(once, "prod", PLAN_A);
-    expect(twice).toBe("Notes\n[NeoSleep PROD · ref 1a2b3c4d]");
+    expect(twice).toBe("Notes\n[NeoSleep PROD · ref 1a2b3c4d] — referencia interna NeoSleep, no requiere acción");
   });
 
   it("an empty note becomes just the tag; no tag reads as null", () => {
-    expect(withEnvTag("  ", "local", PLAN_A)).toBe("[NeoSleep LOCAL · ref 1a2b3c4d]");
+    expect(withEnvTag("  ", "local", PLAN_A)).toBe("[NeoSleep LOCAL · ref 1a2b3c4d] — referencia interna NeoSleep, no requiere acción");
     expect(parseEnvTag("no tag here")).toBeNull();
     expect(parseEnvTag(null)).toBeNull();
   });
