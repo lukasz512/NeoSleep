@@ -6,11 +6,13 @@ import {
   TOOTH_STATES,
   type DeviceOrder,
   type ProductCode,
+  type Registration,
   type Sequence,
   type SequenceUnit,
   type ToothState,
   type VerticalDimension,
 } from "@device-order";
+import { isScannerPlatform, isScannerTreatment, scannerFromLegacyLabel } from "./deviceOrderRegistration";
 
 /**
  * treatment_plan.metadata.orthoapneaDraft — the order wizard's saved
@@ -18,26 +20,20 @@ import {
  * wizard-only choices the order model doesn't carry). Drafts saved before
  * that hold the old OA-shaped form; `draftToOrder` maps those best-effort and
  * never throws — a field it can't read just keeps its default.
+ *
+ * Drafts saved before Łukasz's D1/D2 (2026-10-03) have no
+ * `acknowledgedWarnings` (→ []) and keep the scanner choice beside the order,
+ * in `extras: { registrationMethod, scanner: <brand label> }` — mapped to
+ * `order.registration` with OA's scanner name.
  */
-
-/** Wizard choices that are not part of the order (yet) — kept so a resumed draft shows them again. */
-export interface WizardExtras {
-  registrationMethod: "impression" | "scanner";
-  scanner: string | null;
-}
 
 export interface DeviceOrderDraft {
   schema: "deviceOrder";
   order: DeviceOrder;
-  extras: WizardExtras;
 }
 
-export function defaultWizardExtras(): WizardExtras {
-  return { registrationMethod: "impression", scanner: null };
-}
-
-export function toDraft(order: DeviceOrder, extras: WizardExtras): DeviceOrderDraft {
-  return { schema: "deviceOrder", order: JSON.parse(JSON.stringify(order)) as DeviceOrder, extras: { ...extras } };
+export function toDraft(order: DeviceOrder): DeviceOrderDraft {
+  return { schema: "deviceOrder", order: JSON.parse(JSON.stringify(order)) as DeviceOrder };
 }
 
 type Loose = Record<string, unknown>;
@@ -141,6 +137,8 @@ function fromCanonical(o: Loose): DeviceOrder {
     observations: str(o.observations, ""),
     desiredDate: str(o.desiredDate, ""),
     noContactDoctorForRedesign: bool(o.noContactDoctorForRedesign, false),
+    registration: base.registration,
+    acknowledgedWarnings: Array.isArray(o.acknowledgedWarnings) ? o.acknowledgedWarnings.filter((w): w is string => typeof w === "string") : [],
   };
 }
 
@@ -196,18 +194,34 @@ function fromLegacy(d: Loose): DeviceOrder {
   };
 }
 
-/** Any saved draft → the order + extras to resume with. Unknown or broken input yields the defaults. */
-export function draftToOrder(draft: unknown): { order: DeviceOrder; extras: WizardExtras } {
-  const extras = defaultWizardExtras();
-  if (!isObject(draft)) return { order: defaultDeviceOrder(), extras };
+/** A registration as the order stores it; a name OA doesn't know becomes null (the doctor picks again). */
+function registrationFrom(v: unknown): Registration | null {
+  if (!isObject(v)) return null;
+  if (v.method === "impression") return { method: "impression" };
+  if (v.method === "scanner") return { method: "scanner", scannerTreatment: isScannerTreatment(v.scannerTreatment) ? v.scannerTreatment : null };
+  if (v.method === "platform") return { method: "platform", scannerPlatform: isScannerPlatform(v.scannerPlatform) ? v.scannerPlatform : null };
+  return null;
+}
+
+/** Before D2 the choice lived beside the order: `{ registrationMethod, scanner: <brand label> }`. */
+function registrationFromLegacy(v: Loose): Registration {
+  if (v.registrationMethod !== "scanner") return { method: "impression" };
+  return { method: "scanner", scannerTreatment: scannerFromLegacyLabel(v.scanner) };
+}
+
+/** Any saved draft → the order to resume with. Unknown or broken input yields the defaults. */
+export function draftToOrder(draft: unknown): DeviceOrder {
+  if (!isObject(draft)) return defaultDeviceOrder();
   try {
-    const rawExtras = draft.schema === "deviceOrder" && isObject(draft.extras) ? draft.extras : draft;
-    if (rawExtras.registrationMethod === "scanner") extras.registrationMethod = "scanner";
-    if (typeof rawExtras.scanner === "string") extras.scanner = rawExtras.scanner;
-    const order = draft.schema === "deviceOrder" && isObject(draft.order) ? fromCanonical(draft.order) : fromLegacy(draft);
-    return { order, extras };
+    if (draft.schema === "deviceOrder" && isObject(draft.order)) {
+      const order = fromCanonical(draft.order);
+      order.registration =
+        registrationFrom(draft.order.registration) ?? registrationFromLegacy(isObject(draft.extras) ? draft.extras : {});
+      return order;
+    }
+    return { ...fromLegacy(draft), registration: registrationFromLegacy(draft) };
   } catch {
     // benign: a draft we can't read at all resumes as a fresh order instead of breaking the wizard.
-    return { order: defaultDeviceOrder(), extras: defaultWizardExtras() };
+    return defaultDeviceOrder();
   }
 }

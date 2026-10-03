@@ -224,7 +224,7 @@ describe("OrthoApneaOrderWizard — step 2: shared rules and the sequence switch
     ]);
   });
 
-  it("SP outside MR..MP blocks; an advance under 5 mm only warns", async () => {
+  it("SP outside MR..MP blocks; an advance under 5 mm warns and blocks until the doctor ticks the confirmation (Łukasz D1)", async () => {
     stubBackend();
     await openWizard();
     await next();
@@ -233,14 +233,39 @@ describe("OrthoApneaOrderWizard — step 2: shared rules and the sequence switch
     await type("[data-testid=sp-mm]", "9");
 
     expect($("[data-testid=mr-mp-warning]").textContent).toContain(msg("app.deviceOrder.errors.advanceUnder5", { min: 5 }));
+    expect(document.querySelector("[data-testid=mr-mp-error]")).toBeNull();
+    expect($("[data-testid=confirm-advance-under5]").textContent).toContain(messages["app.deviceOrder.confirmAdvanceUnder5"]);
     await next();
     expect(summaryLines()).toEqual([
       `${messages["app.orthoApneaOrder.form.startingPointHeader"]} — ${msg("app.deviceOrder.errors.startingPointOutside", { min: 0, max: 3 })}`,
+      `${messages["app.orthoApneaOrder.form.protrusionMax"]} — ${messages["app.deviceOrder.errors.warningNotConfirmed"]}`,
     ]);
 
     await type("[data-testid=sp-mm]", "1");
     await next();
+    expect(stepTitle()).toBe(messages["app.orthoApneaOrder.step2.title"]);
+
+    const confirmBox = $("[data-testid=confirm-advance-under5] input") as HTMLInputElement;
+    await click(confirmBox);
+    expect(summaryLines()).toEqual([]);
+    // Unticking re-blocks.
+    await click(confirmBox);
+    expect(summaryLines()).toHaveLength(1);
+    await click(confirmBox);
+    await next();
     expect(stepTitle()).toBe(messages["app.orthoApneaOrder.step3.title"]);
+  });
+
+  it("the confirmation goes away with the warning — no checkbox once the range is 5 mm or more", async () => {
+    stubBackend();
+    await openWizard();
+    await next();
+    await type('[data-field="retrusionMaxMm"]', "0");
+    await type('[data-field="protrusionMaxMm"]', "3");
+    expect(document.querySelector("[data-testid=confirm-advance-under5]")).not.toBeNull();
+    await type('[data-field="protrusionMaxMm"]', "6");
+    expect(document.querySelector("[data-testid=confirm-advance-under5]")).toBeNull();
+    expect(document.querySelector("[data-testid=mr-mp-warning]")).toBeNull();
   });
 
   it("a % starting point shows its mm conversion and locks the mm field", async () => {
@@ -304,6 +329,79 @@ describe("OrthoApneaOrderWizard — step 2: shared rules and the sequence switch
   });
 });
 
+describe("OrthoApneaOrderWizard — step 3: registration (Łukasz D2)", () => {
+  let wizard: VueWrapper;
+  async function toStep3() {
+    stubBackend();
+    wizard = await openWizard();
+    await fillStep2();
+    await next();
+    expect(stepTitle()).toBe(messages["app.orthoApneaOrder.step3.title"]);
+  }
+
+  function radio(labelKey: string): HTMLInputElement {
+    const el = Array.from(document.querySelectorAll<HTMLInputElement>("input[type=radio]")).find((i) =>
+      i.closest(".v-radio")?.textContent?.includes(messages[labelKey]!),
+    );
+    if (!el) throw new Error(`No radio ${labelKey}`);
+    return el;
+  }
+
+  /** Picks by the label the doctor sees (VSelect's menu is a teleported overlay, so the pick is the component's own event). */
+  async function pick(field: string, label: string) {
+    const select = wizard
+      .findAllComponents({ name: "VSelect" })
+      .find((s) => (s.attributes("data-field") ?? s.element.getAttribute("data-field")) === field);
+    if (!select) throw new Error(`No select ${field}`);
+    const items = select.props("items") as { title: string; value: string }[];
+    const item = items.find((i) => i.title === label);
+    if (!item) throw new Error(`No option ${label} in ${field}: ${items.map((i) => i.title).join(", ")}`);
+    select.vm.$emit("update:modelValue", item.value);
+    await flushPromises();
+  }
+
+  it("scanner: Next without one is 'required'; the picker shows brand names and the order carries OA's name", async () => {
+    await toStep3();
+    await click(radio("app.orthoApneaOrder.form.scannerIntraoral"));
+    await next();
+    expect(summaryLines()).toEqual([`${messages["app.orthoApneaOrder.form.scanner"]} — ${messages["app.deviceOrder.errors.required"]}`]);
+
+    await pick("registration.scannerTreatment", "3Shape Trios");
+    await next();
+    await confirm();
+    const order = JSON.parse(String((apiFetch.mock.calls.find((c) => c[0] === "/api/v1/device-orders")![1] as RequestInit).body)).order;
+    expect(order.registration).toEqual({ method: "scanner", scannerTreatment: "SHAPE_TRIOS" });
+  });
+
+  it("platform: the picker lists OA's platforms and the order carries OA's name, never a scanner", async () => {
+    await toStep3();
+    await click(radio("app.deviceOrder.registration.platform"));
+    await pick("registration.scannerPlatform", "Medit Link");
+    await next();
+    await confirm();
+    const order = JSON.parse(String((apiFetch.mock.calls.find((c) => c[0] === "/api/v1/device-orders")![1] as RequestInit).body)).order;
+    expect(order.registration).toEqual({ method: "platform", scannerPlatform: "MEDIT_LINK" });
+  });
+
+  it("no promotion-code field on any step, and none in the order sent", async () => {
+    stubBackend();
+    await openWizard();
+    const promoVisible = () =>
+      document.querySelector("[data-field*=promo i], [data-testid*=promo i], .oa-wizard__promo-row") !== null ||
+      /promo/i.test(Array.from(document.querySelectorAll("label")).map((l) => l.textContent ?? "").join(" "));
+    expect(promoVisible()).toBe(false);
+    await fillStep2();
+    expect(promoVisible()).toBe(false);
+    await next();
+    expect(promoVisible()).toBe(false);
+    await next();
+    expect(promoVisible()).toBe(false);
+    await confirm();
+    const body = String((apiFetch.mock.calls.find((c) => c[0] === "/api/v1/device-orders")![1] as RequestInit).body);
+    expect(body).not.toMatch(/promo/i);
+  });
+});
+
 describe("OrthoApneaOrderWizard — submit", () => {
   it("posts the canonical order once to /api/v1/device-orders; Morning Aligner is a flag, not a second order", async () => {
     stubBackend();
@@ -335,6 +433,8 @@ describe("OrthoApneaOrderWizard — submit", () => {
         sequence: { type: "standard" },
         morningAligner: true,
         desiredDate: "2026-10-21",
+        registration: { method: "impression" },
+        acknowledgedWarnings: [],
       },
     });
     expect(notify).toHaveBeenCalledWith(messages["app.orthoApneaOrder.success"], "success", undefined, expect.anything());

@@ -834,7 +834,7 @@ Files compared: `OrthoApneaOrderWizard.vue`, `useOrthoApneaOrderWizard.ts`, and 
 15. **One product per treatment.** OA has a single product selector. Our multi-product loop is our own invention, which is acceptable (one order per product), but OA never sends Orthobrux or MA settings mixed with NOA fields.
 16. **Fields we never send that OA always sends:**
     - `camType: false`, `facialBiotype: "1"`, `theramonNeeded: false`, `maxOpening: 0`
-    - `scannerPlatform` and `scannerTreatment` as enum names. **Our scanner choice and `registrationMethod` are collected but never sent.** Our SCANNER_OPTIONS are display labels, not enum names.
+    - `scannerPlatform` and `scannerTreatment` as enum names. **Our scanner choice and `registrationMethod` are collected but never sent.** Our SCANNER_OPTIONS are display labels, not enum names. *Resolved 2026-10-03 (Łukasz D2): `DeviceOrder.registration` carries OA's enum names and the adapter sends them, the other one null — ADR-028.*
     - `collectionRequest`, `collectionAddress`
     - `michiganTypeOfGuide`, `michiganLingualPalatineFinish`, `michiganMaterial`, `upperSplint`, `lowerSplint` (needed for Orthobrux)
     - `accessories {quantity}`, `attachmentsUpper/Lower`, `statusId: 3`, `editable`, `paid`, `billed`, `fsEntries: []`, `insuranceNumber`, `distributorSendAddressActive`, `archived`, `estimate`, `productDiscount`, `techObservations`

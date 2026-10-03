@@ -5,6 +5,9 @@ import {
   startingPointMm,
   type DeliveryAddress,
   type DeviceOrder,
+  type Registration,
+  type ScannerPlatform,
+  type ScannerTreatment,
   type ToothState,
   type VerticalDimension,
 } from "@neo/device-order";
@@ -103,6 +106,20 @@ export function oaSequence(order: Pick<DeviceOrder, "sequence" | "productCode">)
   return { sequenceTypeStandard: false, sequenceTypePersonalized: true, sequenceUnitInMM: seq.unit === "mm", sequence };
 }
 
+/**
+ * Registration → OA's scannerTreatment / scannerPlatform, as enum NAMES
+ * (rules "Enums" `ba` / `bZ`). OA keeps only one: choosing a platform nulls
+ * the scanner and vice versa; an impression sends both null (order 454012).
+ */
+export function oaRegistration(registration: Registration): {
+  scannerTreatment: ScannerTreatment | null;
+  scannerPlatform: ScannerPlatform | null;
+} {
+  if (registration.method === "scanner") return { scannerTreatment: registration.scannerTreatment, scannerPlatform: null };
+  if (registration.method === "platform") return { scannerTreatment: null, scannerPlatform: registration.scannerPlatform };
+  return { scannerTreatment: null, scannerPlatform: null };
+}
+
 /** `user` / `creator` as OA's portal sends them: only the id is real. */
 function oaUserRef(id: number) {
   return { id, name: "", email: "", identityNumber: "", role: "", signupDate: null };
@@ -169,6 +186,7 @@ export function toOaTreatmentDto(order: DeviceOrder, ctx: OaTreatmentContext): R
       active: true,
       ...OA_ADDRESS_DEFAULTS,
     },
+    // Never sent: the wizard has no promotion-code field (Łukasz D2, 2026-10-03).
     promotionCode: null,
     camType: false,
     verticalDimension: oaVerticalDimension(order.verticalDimension),
@@ -193,8 +211,7 @@ export function toOaTreatmentDto(order: DeviceOrder, ctx: OaTreatmentContext): R
     slotsForElasticBands: order.slotsForElasticBands,
     upperBandSplintDesign: order.upperBand,
     lowerBandSplintDesign: order.lowerBand,
-    scannerPlatform: null,
-    scannerTreatment: null,
+    ...oaRegistration(order.registration),
     fsDoctorId: ctx.me.fsDoctorId ?? 0,
     workSheets: [],
     techObservations: "",

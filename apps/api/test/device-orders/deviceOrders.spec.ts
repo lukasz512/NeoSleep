@@ -15,6 +15,9 @@ import {
   __setOrthoApneaBaseUrlForTests,
   createOrthoApneaTreatment,
   ensureOrthoApneaPatient,
+  orthoApneaRawRequest,
+  orthoApneaTreatmentForm,
+  RECONCILE_AFTER_MS,
 } from "../../src/services/partners/orthoapnea.js";
 import { ConflictError } from "../../src/errors.js";
 import { signAuthToken } from "../../src/utils/jwt.js";
@@ -30,6 +33,7 @@ vi.setConfig({ testTimeout: 30_000 });
 
 const TENANT_SLUG = process.env.DEFAULT_TENANT_SLUG ?? "test";
 const TREATMENTS = "/api/treatments";
+const RECONCILE_AFTER_MINUTES = RECONCILE_AFTER_MS / 60_000;
 
 let replica: OaReplica;
 
@@ -151,6 +155,8 @@ function validOrder(dentistId: string, overrides: Partial<DeviceOrder> = {}): De
     observations: "QA replica order",
     desiredDate: new Date(Date.now() + 60 * 86_400_000).toISOString().slice(0, 10),
     noContactDoctorForRedesign: false,
+    registration: { method: "impression" },
+    acknowledgedWarnings: [],
     ...overrides,
   };
 }
@@ -243,9 +249,31 @@ describe("POST /api/v1/device-orders", () => {
     expect(replica.count("POST", TREATMENTS)).toBe(0);
   });
 
-  it("201 through the replica: multipart DTO, partner_link synced, audit row with the DTO + rulesVersion", async () => {
+  it("400 warningNotConfirmed for an advance under 5 mm the doctor didn't confirm (Łukasz D1) — OrthoApnea receives nothing", async () => {
     const s = await setup();
     const order = validOrder(s.dentistId, { protrusionMaxMm: -1, retrusionMaxMm: -4, startingPoint: { unit: "mm", value: -2 } });
+    const { acknowledgedWarnings: _old, ...oldClientOrder } = order;
+    for (const body of [order, oldClientOrder]) {
+      const res = await request(app)
+        .post("/api/v1/device-orders")
+        .set("Authorization", `Bearer ${s.token}`)
+        .send({ treatment_plan_id: s.planId, patient_id: s.patientId, order: body });
+      expect(res.status).toBe(400);
+      expect(res.body.fields).toEqual([{ path: "protrusionMaxMm", code: "warningNotConfirmed", params: { warning: "advanceUnder5" } }]);
+      expect(res.body.warnings).toEqual([{ path: "protrusionMaxMm", code: "advanceUnder5", params: { min: 5 } }]);
+    }
+    expect(replica.requests).toHaveLength(0);
+  });
+
+  it("201 through the replica: multipart DTO, partner_link synced, audit row with the DTO + rulesVersion", async () => {
+    const s = await setup();
+    const order = validOrder(s.dentistId, {
+      protrusionMaxMm: -1,
+      retrusionMaxMm: -4,
+      startingPoint: { unit: "mm", value: -2 },
+      acknowledgedWarnings: ["advanceUnder5"],
+      registration: { method: "scanner", scannerTreatment: "MEDIT" },
+    });
     const res = await request(app)
       .post("/api/v1/device-orders")
       .set("Authorization", `Bearer ${s.token}`)
@@ -254,7 +282,7 @@ describe("POST /api/v1/device-orders", () => {
 
     expect(res.status).toBe(201);
     expect(res.body.externalStatus).toBe("1");
-    // 3 mm advance range: OA's form only warns (rules §2), so do we.
+    // 3 mm advance range, confirmed by the doctor: still reported as OA's warning, no longer blocking.
     expect(res.body.warnings).toEqual([{ path: "protrusionMaxMm", code: "advanceUnder5", params: { min: 5 } }]);
 
     // Exactly one order, sent the way OA's portal sends it.
@@ -265,6 +293,9 @@ describe("POST /api/v1/device-orders", () => {
     expect(dto).toMatchObject({ retrusionMax: -4, protrusionMax: -1, startingPoint: -2, sequenceTypeStandard: true, sequence: {} });
     expect(dto.deliveryAddress).toMatchObject({ address: COMPLETE_HCO.address_line1, countryId: 29, active: true });
     expect(dto).not.toHaveProperty("startingPointPorcentage");
+    // Łukasz D2: the scanner goes as OA's enum name, the platform nulled; no promotion code, ever.
+    expect(dto).toMatchObject({ scannerTreatment: "MEDIT", scannerPlatform: null, promotionCode: null });
+    expect(dto).not.toHaveProperty("acknowledgedWarnings");
 
     // The OA patient got what our record has (OA's form requires birthDate + country).
     const patientPost = replica.requests.find((r) => r.method === "POST" && r.path === "/api/patient");
@@ -280,6 +311,23 @@ describe("POST /api/v1/device-orders", () => {
     const after = created!.entity_after as Record<string, unknown>;
     expect(after).toMatchObject({ provider: "orthoapnea", externalId: res.body.externalId, rulesVersion: RULES_VERSION });
     expect(after.dto).toEqual(dto);
+    // The doctor's confirmation is part of the audited order.
+    expect(after.order).toMatchObject({ acknowledgedWarnings: ["advanceUnder5"], registration: { method: "scanner", scannerTreatment: "MEDIT" } });
+  });
+
+  it("an order from an older client (no registration / acknowledgedWarnings) is audited with the defaults", async () => {
+    const s = await setup();
+    const { registration: _r, acknowledgedWarnings: _a, ...oldClientOrder } = validOrder(s.dentistId);
+    const res = await request(app)
+      .post("/api/v1/device-orders")
+      .set("Authorization", `Bearer ${s.token}`)
+      .send({ treatment_plan_id: s.planId, patient_id: s.patientId, order: { ...oldClientOrder, notAField: "dropped" } });
+    await trackLink(s.planId);
+    expect(res.status).toBe(201);
+    const audit = await withTenant(TENANT_SLUG, (client) => getAuditLogForEntities(client, ["PartnerOrder"], [s.planId]));
+    const after = audit.find((e) => e.action === "create")!.entity_after as { order: Record<string, unknown> };
+    expect(after.order).toMatchObject({ registration: { method: "impression" }, acknowledgedWarnings: [] });
+    expect(after.order).not.toHaveProperty("notAField");
   });
 
   it("409 on a second submit of the same plan — still one OrthoApnea order", async () => {
@@ -375,25 +423,139 @@ describe("POST /api/v1/device-orders", () => {
     expect(replica.treatments.size).toBe(1);
   });
 
-  it("a link left 'pending' (interrupted submit) is never retried silently — 409 until someone checks OA", async () => {
-    const s = await setup();
-    const link = await withTenant(TENANT_SLUG, async (client) => {
-      const { rows } = await client.query<{ id: string }>(
-        `INSERT INTO partner_link (partner, entity_type, entity_id, sync_status) VALUES ('orthoapnea', 'treatment_plan', $1, 'pending') RETURNING id`,
-        [s.planId]
-      );
-      return rows[0]!;
-    });
-    createdPartnerLinkIds.push(link.id);
+});
 
-    const res = await request(app)
+/**
+ * Łukasz D3 (2026-10-03): a submit that finds a link left 'pending' for more
+ * than RECONCILE_AFTER_MS first asks OrthoApnea whether the interrupted
+ * submit reached it (GET /api/treatments/byPatient/{oaPatientId}).
+ */
+describe("POST /api/v1/device-orders — reconcile of an interrupted submit", () => {
+  /** A 'pending' treatment_plan link as an interrupted submit leaves it, last touched `minutesAgo` minutes ago. */
+  async function pendingLink(planId: string, minutesAgo: number): Promise<string> {
+    const id = await withTenant(TENANT_SLUG, async (client) => {
+      const { rows } = await client.query<{ id: string }>(
+        `INSERT INTO partner_link (partner, entity_type, entity_id, sync_status, created_at, updated_at)
+         VALUES ('orthoapnea', 'treatment_plan', $1, 'pending', now() - make_interval(mins => $2), now() - make_interval(mins => $2))
+         RETURNING id`,
+        [planId, minutesAgo]
+      );
+      return rows[0]!.id;
+    });
+    createdPartnerLinkIds.push(id);
+    return id;
+  }
+
+  /** The order the interrupted submit would have created: POSTed straight to the replica, as OA would have stored it. */
+  async function orderAlreadyInOa(oaPatientId: string, productCode = "002"): Promise<number> {
+    const res = await orthoApneaRawRequest(TREATMENTS, {
+      method: "POST",
+      body: orthoApneaTreatmentForm({ patientId: Number(oaPatientId), product: { id: 3, code: productCode }, deliveryAddress: {} }),
+    });
+    expect(res.status).toBe(200);
+    return ((await res.json()) as { id: number }).id;
+  }
+
+  const reads = (oaPatientId: string) => replica.requests.filter((r) => r.method === "GET" && r.path === `${TREATMENTS}/byPatient/${oaPatientId}`).length;
+
+  async function reconcileRows(linkId: string) {
+    return withTenant(TENANT_SLUG, async (client) => {
+      const { rows } = await client.query<{ action: string; success: boolean; response_payload: Record<string, unknown> | null; error_message: string | null }>(
+        `SELECT action, success, response_payload, error_message FROM partner_transaction WHERE partner_link_id = $1 AND action = 'reconcile'`,
+        [linkId]
+      );
+      return rows;
+    });
+  }
+
+  function submit(s: Setup) {
+    return request(app)
       .post("/api/v1/device-orders")
       .set("Authorization", `Bearer ${s.token}`)
       .send({ treatment_plan_id: s.planId, patient_id: s.patientId, order: validOrder(s.dentistId) });
+  }
+
+  it("(a) stale pending + the order is in OA → link synced to it, 409 already submitted with its id, zero new orders", async () => {
+    const s = await setup();
+    const oaPatientId = await ensureOrthoApneaPatient(TENANT_SLUG, s.patientId);
+    const linkId = await pendingLink(s.planId, RECONCILE_AFTER_MINUTES + 1);
+    const externalId = await orderAlreadyInOa(oaPatientId);
+    const postsBefore = replica.count("POST", TREATMENTS);
+
+    const res = await submit(s);
+
+    expect(res.status).toBe(409);
+    expect(res.body).toMatchObject({ code: "PARTNER_ORDER_ALREADY_SUBMITTED", externalId: String(externalId) });
+    expect(replica.count("POST", TREATMENTS)).toBe(postsBefore);
+    expect(reads(oaPatientId)).toBe(1);
+    const link = await withTenant(TENANT_SLUG, (client) => getPartnerLink(client, "orthoapnea", "treatment_plan", s.planId));
+    expect(link).toMatchObject({ sync_status: "synced", external_id: String(externalId), external_status: "1" });
+    const rows = await reconcileRows(linkId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ success: true, response_payload: { id: externalId, product: { code: "002" } } });
+  });
+
+  it("(b) stale pending + nothing in OA → link failed (reconcile not_found), then exactly one POST and 201", async () => {
+    const s = await setup();
+    const oaPatientId = await ensureOrthoApneaPatient(TENANT_SLUG, s.patientId);
+    const linkId = await pendingLink(s.planId, RECONCILE_AFTER_MINUTES + 1);
+
+    const res = await submit(s);
+
+    expect(res.status).toBe(201);
+    expect(replica.count("POST", TREATMENTS)).toBe(1);
+    expect(reads(oaPatientId)).toBe(1);
+    const link = await withTenant(TENANT_SLUG, (client) => getPartnerLink(client, "orthoapnea", "treatment_plan", s.planId));
+    expect(link).toMatchObject({ id: linkId, sync_status: "synced", external_id: res.body.externalId });
+    expect(await reconcileRows(linkId)).toEqual([expect.objectContaining({ success: true, error_message: "not_found" })]);
+  });
+
+  it("(b') an order in OA for another product doesn't count — one new POST, 201", async () => {
+    const s = await setup();
+    const oaPatientId = await ensureOrthoApneaPatient(TENANT_SLUG, s.patientId);
+    await pendingLink(s.planId, RECONCILE_AFTER_MINUTES + 1);
+    await orderAlreadyInOa(oaPatientId, "003");
+    const postsBefore = replica.count("POST", TREATMENTS);
+
+    const res = await submit(s);
+    expect(res.status).toBe(201);
+    expect(replica.count("POST", TREATMENTS)).toBe(postsBefore + 1);
+  });
+
+  it("(b'') no OA patient was ever created → nothing to look for: no read, one POST, 201", async () => {
+    const s = await setup();
+    await pendingLink(s.planId, RECONCILE_AFTER_MINUTES + 1);
+    const res = await submit(s);
+    expect(res.status).toBe(201);
+    expect(replica.requests.some((r) => r.path.startsWith(`${TREATMENTS}/byPatient/`))).toBe(false);
+    expect(replica.count("POST", TREATMENTS)).toBe(1);
+  });
+
+  it("(c) a fresh pending link → 409 submission pending, zero reads, zero POSTs (a submit may still be running)", async () => {
+    const s = await setup();
+    await pendingLink(s.planId, 1);
+
+    const res = await submit(s);
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe("PARTNER_ORDER_SUBMISSION_PENDING");
+    expect(replica.requests.some((r) => r.path.startsWith(`${TREATMENTS}/byPatient/`))).toBe(false);
+    expect(replica.count("POST", TREATMENTS)).toBe(0);
+    expect(replica.count("POST", "/api/patient")).toBe(0);
+  });
+
+  it("(d) OrthoApnea down during reconcile → the link stays pending, 409 submission pending, zero POSTs", async () => {
+    const s = await setup();
+    const oaPatientId = await ensureOrthoApneaPatient(TENANT_SLUG, s.patientId);
+    const linkId = await pendingLink(s.planId, RECONCILE_AFTER_MINUTES + 1);
+    replica.failNext(`${TREATMENTS}/byPatient/${oaPatientId}`, 503);
+
+    const res = await submit(s);
     expect(res.status).toBe(409);
     expect(res.body.code).toBe("PARTNER_ORDER_SUBMISSION_PENDING");
     expect(replica.count("POST", TREATMENTS)).toBe(0);
-    expect(replica.count("POST", "/api/patient")).toBe(0);
+    const link = await withTenant(TENANT_SLUG, (client) => getPartnerLink(client, "orthoapnea", "treatment_plan", s.planId));
+    expect(link?.sync_status).toBe("pending");
+    expect(await reconcileRows(linkId)).toEqual([expect.objectContaining({ success: false })]);
   });
 });
 

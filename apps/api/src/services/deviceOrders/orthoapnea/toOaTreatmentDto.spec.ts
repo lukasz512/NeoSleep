@@ -1,7 +1,15 @@
 import { readFileSync } from "node:fs";
 import { describe, it, expect } from "vitest";
-import { defaultDeviceOrder, validateDeviceOrder, validateDeliveryAddress, type DeviceOrder, type DeliveryAddress } from "@neo/device-order";
-import { oaSequence, oaTeethStatus, oaVerticalDimension, toOaTreatmentDto, type OaTreatmentContext } from "./toOaTreatmentDto.js";
+import {
+  defaultDeviceOrder,
+  SCANNER_PLATFORMS,
+  SCANNER_TREATMENTS,
+  validateDeviceOrder,
+  validateDeliveryAddress,
+  type DeviceOrder,
+  type DeliveryAddress,
+} from "@neo/device-order";
+import { oaRegistration, oaSequence, oaTeethStatus, oaVerticalDimension, toOaTreatmentDto, type OaTreatmentContext } from "./toOaTreatmentDto.js";
 
 const FIXTURES = new URL("../../../../test/oa-replica/fixtures/", import.meta.url);
 const fixture = <T>(name: string): T => JSON.parse(readFileSync(new URL(name, FIXTURES), "utf-8")) as T;
@@ -33,6 +41,9 @@ const shot3Order: DeviceOrder = {
   observations: acceptedDto.observations as string,
   desiredDate: "2026-10-19",
   noContactDoctorForRedesign: false,
+  // Order 454012 went with scannerPlatform / scannerTreatment null: an impression.
+  registration: { method: "impression" },
+  acknowledgedWarnings: [],
 };
 
 const sentAddress = acceptedDto.deliveryAddress as Record<string, string>;
@@ -155,6 +166,39 @@ describe("toOaTreatmentDto — field mappings", () => {
   it("delivery always ships to the HCO: active:true with OA's address defaults and the HCO's country id", () => {
     const dto = toOaTreatmentDto(shot3Order, shot3Context);
     expect(dto.deliveryAddress).toMatchObject({ active: true, countryId: 29, province: "", type: 0, sendSms: false });
+  });
+
+  it("registration: impression → scannerTreatment and scannerPlatform both null (order 454012)", () => {
+    const dto = toOaTreatmentDto(shot3Order, shot3Context);
+    expect(dto).toMatchObject({ scannerTreatment: null, scannerPlatform: null });
+    expect(oaRegistration({ method: "impression" })).toEqual({ scannerTreatment: null, scannerPlatform: null });
+  });
+
+  it("registration: a scanner is sent as OA's enum name, the platform nulled (OA nulls the other one)", () => {
+    const dto = toOaTreatmentDto({ ...shot3Order, registration: { method: "scanner", scannerTreatment: "MEDIT" } }, shot3Context);
+    expect(dto).toMatchObject({ scannerTreatment: "MEDIT", scannerPlatform: null });
+  });
+
+  it("registration: a platform is sent as OA's enum name, the scanner nulled", () => {
+    const dto = toOaTreatmentDto({ ...shot3Order, registration: { method: "platform", scannerPlatform: "MEDIT_LINK" } }, shot3Context);
+    expect(dto).toMatchObject({ scannerPlatform: "MEDIT_LINK", scannerTreatment: null });
+  });
+
+  it("registration: every scanner / platform name maps 1:1 (no label ever reaches OA)", () => {
+    for (const name of SCANNER_TREATMENTS) expect(oaRegistration({ method: "scanner", scannerTreatment: name }).scannerTreatment).toBe(name);
+    for (const name of SCANNER_PLATFORMS) expect(oaRegistration({ method: "platform", scannerPlatform: name }).scannerPlatform).toBe(name);
+  });
+
+  it("never sends a promotion code — the wizard has no promo field (Łukasz D2, 2026-10-03)", () => {
+    const dto = toOaTreatmentDto(shot3Order, shot3Context);
+    expect(dto.promotionCode).toBeNull();
+    expect(acceptedDto.promotionCode).toBeNull();
+  });
+
+  it("never sends acknowledgedWarnings or registration as keys of their own (OA has no such fields)", () => {
+    const dto = toOaTreatmentDto({ ...shot3Order, acknowledgedWarnings: ["advanceUnder5"] }, shot3Context);
+    expect(dto).not.toHaveProperty("acknowledgedWarnings");
+    expect(dto).not.toHaveProperty("registration");
   });
 
   it("refuses to build a DTO for a country OA doesn't list (it would reach OA without a country)", () => {

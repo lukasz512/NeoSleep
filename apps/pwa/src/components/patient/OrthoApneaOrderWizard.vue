@@ -123,9 +123,23 @@
             <AppInlineAlert v-if="mrMpError" type="error" class="mt-4" data-testid="mr-mp-error">
               {{ mrMpError }}
             </AppInlineAlert>
-            <AppInlineAlert v-else-if="mrMpWarning" type="warning" class="mt-4" data-testid="mr-mp-warning">
-              {{ mrMpWarning }}
-            </AppInlineAlert>
+            <div v-else-if="mrMpWarning" class="mt-4">
+              <AppInlineAlert type="warning" data-testid="mr-mp-warning">
+                {{ mrMpWarning.message }}
+              </AppInlineAlert>
+              <!-- Łukasz D1: OA only warns; we also make the doctor confirm it. -->
+              <VCheckbox
+                v-if="mrMpWarning.confirmable"
+                :model-value="order.acknowledgedWarnings.includes(mrMpWarning.code)"
+                color="primary"
+                density="compact"
+                hide-details="auto"
+                data-testid="confirm-advance-under5"
+                :label="t('app.deviceOrder.confirmAdvanceUnder5')"
+                :error-messages="mrMpConfirmError"
+                @update:model-value="onWarningConfirmed"
+              />
+            </div>
           </Transition>
 
           <p class="text-subtitle2 mt-6 mb-3 text-primary">{{ t("app.orthoApneaOrder.form.deviationSectionTitle") }}</p>
@@ -333,20 +347,42 @@
           </AppInlineAlert>
         </div>
 
-        <!-- Step 3 — Registro dental (wizard-only for now: not part of the order model) -->
+        <!-- Step 3 — Registro dental: sent to OA as scannerTreatment / scannerPlatform (Łukasz D2). -->
         <div v-else-if="step === 3">
-          <VRadioGroup v-model="extras.registrationMethod" color="primary" :label="t('app.orthoApneaOrder.form.registrationMethod')">
+          <VRadioGroup
+            :model-value="order.registration.method"
+            color="primary"
+            data-field="registration"
+            :label="t('app.orthoApneaOrder.form.registrationMethod')"
+            @update:model-value="onRegistrationMethodPicked"
+          >
             <VRadio value="impression" :label="t('app.orthoApneaOrder.form.impressionTraditional')" />
             <VRadio value="scanner" :label="t('app.orthoApneaOrder.form.scannerIntraoral')" />
+            <VRadio value="platform" :label="t('app.deviceOrder.registration.platform')" />
           </VRadioGroup>
 
-          <template v-if="extras.registrationMethod === 'scanner'">
+          <template v-if="order.registration.method !== 'impression'">
             <VSelect
-              v-model="extras.scanner"
-              :items="SCANNER_OPTIONS"
+              v-if="order.registration.method === 'scanner'"
+              :model-value="order.registration.scannerTreatment"
+              :items="scannerOptions"
               :label="t('app.orthoApneaOrder.form.scanner')"
+              :error-messages="fieldError('registration.scannerTreatment')"
+              data-field="registration.scannerTreatment"
               variant="outlined"
               density="comfortable"
+              @update:model-value="setScanner"
+            />
+            <VSelect
+              v-else
+              :model-value="order.registration.scannerPlatform"
+              :items="platformOptions"
+              :label="t('app.deviceOrder.registration.platformField')"
+              :error-messages="fieldError('registration.scannerPlatform')"
+              data-field="registration.scannerPlatform"
+              variant="outlined"
+              density="comfortable"
+              @update:model-value="setScanner"
             />
             <AppInlineAlert type="info">
               {{ t("app.orthoApneaOrder.fileUploadDeferredNotice") }}
@@ -396,8 +432,10 @@ import { computed, getCurrentInstance, nextTick, reactive, ref, watch } from "vu
 import { useI18n } from "vue-i18n";
 import { useDisplay } from "vuetify";
 import {
+  CONFIRMABLE_WARNINGS,
   issuesFor,
   PRODUCT_CODES,
+  SCANNER_PLATFORMS,
   standardSequenceOffsets,
   startingPointMm,
   type OrderIssue,
@@ -419,6 +457,7 @@ import { useAsyncAction } from "../../composables/useAsyncAction";
 import { focusFormField, type FormErrorSummaryLine } from "../../composables/useFormErrors";
 import { scrollToFormTop } from "../../utils/scrollToFormTop";
 import { hcoDetailLink, hcpDetailLink } from "../../utils/entityLinks";
+import { PLATFORM_BRANDS, SCANNER_BRANDS, UNKNOWN_SCANNER_I18N_KEY, WIZARD_SCANNERS } from "../../utils/deviceOrderRegistration";
 import {
   useOrthoApneaOrderWizard,
   stepOfPath,
@@ -442,9 +481,12 @@ import { AppInlineAlert, AppSegmentedTabs, FormErrorSummary } from "@ui";
  * - Sequence: Estándar (OA's fixed SP, −1, +1, +2) or Individualizada.
  * - The desired date is hidden and defaults to OA's earliest date.
  *
- * Still deferred (flagged inline): photo/CBCT and scan-file upload. Step 3's
- * registration method is collected (and kept in drafts) but is not part of
- * the order model yet.
+ * - An advance range under 5 mm shows OA's warning plus a confirmation the
+ *   doctor must tick (Łukasz D1, order.acknowledgedWarnings).
+ * - Step 3's registration is part of the order: the pickers show brand names
+ *   and the order carries OA's enum names (Łukasz D2). No promotion-code field.
+ *
+ * Still deferred (flagged inline): photo/CBCT and scan-file upload.
  */
 export type { OrthoApneaDraftPlan };
 
@@ -467,10 +509,15 @@ const { mobile } = useDisplay();
 const deviationDiagramSize = computed(() => (mobile.value ? "normal" : "large"));
 const router = getCurrentInstance()?.appContext.config.globalProperties.$router;
 
-const SCANNER_OPTIONS = [
-  "Aoralscan Shining 3D", "Carestream", "Dental Wings", "Heron", "Itero", "Medit",
-  "NeoScan 1000", "Sirona", "Planmeca Emerald", "3Shape Trios", "Shining 3D", "Desconocido",
-];
+/** Brand names shown, OA's enum names sent (Łukasz D2). */
+const scannerOptions = computed(() =>
+  WIZARD_SCANNERS.map((name) => ({ value: name, title: SCANNER_BRANDS[name] ?? t(UNKNOWN_SCANNER_I18N_KEY) })),
+);
+const platformOptions = SCANNER_PLATFORMS.map((name) => ({ value: name, title: PLATFORM_BRANDS[name] }));
+
+function onRegistrationMethodPicked(value: unknown) {
+  if (value === "impression" || value === "scanner" || value === "platform") setRegistrationMethod(value);
+}
 
 /** OrthoApnea's own reference images, downloaded locally (see assets/orthoapnea/ — public static files, not behind their auth). */
 function bandImg(n: number): string {
@@ -521,6 +568,9 @@ const FIELD_LABELS: Readonly<Record<string, string>> = {
   observations: "app.orthoApneaOrder.form.observations",
   desiredDate: "app.deviceOrder.desiredDate",
   noContactDoctorForRedesign: "app.orthoApneaOrder.form.noContactDoctorForRedesign",
+  registration: "app.orthoApneaOrder.form.registrationMethod",
+  "registration.scannerTreatment": "app.orthoApneaOrder.form.scanner",
+  "registration.scannerPlatform": "app.deviceOrder.registration.platformField",
 };
 const FIELD_KEYS = Object.keys(FIELD_LABELS).sort((a, b) => b.length - a.length);
 
@@ -542,7 +592,6 @@ const showDraftPrompt = ref(false);
 
 const {
   order,
-  extras,
   additionalSplintInputs,
   availableProductCodes,
   doctorOptions,
@@ -562,6 +611,9 @@ const {
   removeAdditionalSplint,
   setProductCode,
   setStartingPoint,
+  setWarningAcknowledged,
+  setRegistrationMethod,
+  setScanner,
   resetForOpen,
   loadProducts,
   loadDoctorsAndDefault,
@@ -570,7 +622,7 @@ const {
   persistDraft,
 } = useOrthoApneaOrderWizard();
 
-watch([order, extras], () => { touched.value = true; }, { deep: true });
+watch(order, () => { touched.value = true; }, { deep: true });
 
 // ── Product + sequence ──────────────────────────────────────────────────────
 
@@ -756,12 +808,35 @@ const errorList = computed<FormErrorSummaryLine[]>(() => {
   return lines;
 });
 
-const mrMpError = computed(() => fieldError("retrusionMaxMm") ?? fieldError("protrusionMaxMm"));
-/** OA only warns when the advance is under 5 mm (its server accepted 3 mm) — shown, never blocking. */
-const mrMpWarning = computed(() => {
-  const warning = validation.value.warnings.find((w) => ["retrusionMaxMm", "protrusionMaxMm"].includes(fieldKeyOf(w.path)));
-  return warning ? issueMessage(warning) : undefined;
+const isMrMpPath = (path: string) => ["retrusionMaxMm", "protrusionMaxMm"].includes(fieldKeyOf(path));
+
+/** The MR/MP error alert — an unconfirmed warning is shown on its checkbox instead, under the warning. */
+const mrMpError = computed(() => {
+  const issue = visibleErrors.value.find((i) => isMrMpPath(i.path) && i.code !== "warningNotConfirmed");
+  return issue ? messageFor(issue) : undefined;
 });
+
+/**
+ * OA only warns when the advance is under 5 mm (its server accepted 3 mm); a
+ * confirmable warning also asks the doctor to confirm it (Łukasz D1).
+ */
+const mrMpWarning = computed(() => {
+  const warning = validation.value.warnings.find((w) => isMrMpPath(w.path));
+  if (!warning) return undefined;
+  const confirmable = CONFIRMABLE_WARNINGS.some((code) => code === warning.code);
+  return { code: warning.code, message: issueMessage(warning), confirmable };
+});
+
+/** Red on the confirmation once the doctor tried to leave the step without it. */
+const mrMpConfirmError = computed(() => {
+  if (!attemptedSteps.has(step.value)) return undefined;
+  const issue = visibleErrors.value.find((i) => isMrMpPath(i.path) && i.code === "warningNotConfirmed");
+  return issue ? issueMessage(issue) : undefined;
+});
+
+function onWarningConfirmed(value: boolean | null) {
+  if (mrMpWarning.value) setWarningAcknowledged(mrMpWarning.value.code, value === true);
+}
 
 /** The value an issue path points at in the order — an API error goes once that value is edited. */
 function valueAt(path: string): string {
@@ -1044,10 +1119,6 @@ watch(
      .oa-wizard__deviation-field width above should already fit narrow
      viewports without ever needing to actually scroll. */
   overflow-x: auto;
-}
-
-.oa-wizard__promo-row {
-  margin: 8px 0;
 }
 
 .oa-wizard__nav-arrow {

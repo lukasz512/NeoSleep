@@ -1,5 +1,6 @@
 import { Router, type Router as RouterType, type Request, type Response } from "express";
 import {
+  parseDeviceOrder,
   PRODUCT_CODES,
   RULES_VERSION,
   validateDeliveryAddress,
@@ -106,7 +107,9 @@ deviceOrdersRouter.get(
 // POST /api/v1/device-orders
 // body: { treatment_plan_id, patient_id, order: DeviceOrder }
 // 400 { error: "validation", fields, warnings, rulesVersion } — nothing sent.
-// 409 already submitted / submit in progress. 502 the lab refused or is down.
+// 409 { code: PARTNER_ORDER_ALREADY_SUBMITTED, externalId } / PARTNER_ORDER_SUBMISSION_PENDING
+//   (an interrupted submit older than RECONCILE_AFTER_MS is first looked up in the lab).
+// 502 the lab refused or is down.
 // 201 { externalId, externalStatus, warnings }.
 // ---------------------------------------------------------------------------
 deviceOrdersRouter.post(
@@ -154,7 +157,12 @@ deviceOrdersRouter.post(
       return;
     }
 
-    const order = rawOrder as DeviceOrder;
+    // The parsed order (defaults filled, unknown keys dropped) is what gets sent and audited — never the raw body.
+    const order: DeviceOrder | null = parseDeviceOrder(rawOrder);
+    if (!order) {
+      sendValidationError(res, [{ path: "order", code: "invalid" }], localValidation.warnings);
+      return;
+    }
     // Then the one rule that needs the lab: the earliest desired date. When the
     // lab can't be asked (null), the lab itself is the judge on submit.
     const minDesiredDate = await provider.minDesiredDate(order.productCode);

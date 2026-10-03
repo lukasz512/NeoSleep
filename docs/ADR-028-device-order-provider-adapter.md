@@ -21,10 +21,29 @@ Until now the order wizard built OrthoApnea's field names in the browser and `PO
 5. **Audit.** Every order writes `audit_log` (`PartnerOrder`) with the acting user, `rulesVersion`, our order and the exact DTO; `partner_transaction` keeps the request/response pair (ADR-017).
 6. **Lab replica for tests.** `apps/api/test/oa-replica/server.ts` is an in-process, stateful `node:http` replica of the OA endpoints we use, built from scrubbed live captures (`fixtures/`). It enforces multipart, requires a known patient, answers like the captured order (statusId 1, upper-cased address, price) and has `failNext` / `delayNext` controls. Specs point the service at it with `__setOrthoApneaBaseUrlForTests` (env.ts reads the base URL once at import). A vitest setupFile (`test/fetch-guard.ts`) rejects any fetch to an `apneadock` host, because a local run sources the real credentials from `.env`. A contract test pins `toOaTreatmentDto` against the DTO OA accepted.
 
+### Reconcile (Łukasz D3, 2026-10-03)
+
+A `pending` treatment_plan link older than `RECONCILE_AFTER_MS` (10 min, `services/partners/orthoapnea.ts`) is no longer a 409 forever. The next submit first asks OA, read-only, `GET /api/treatments/byPatient/{oaPatientId}?page=&size=50` (a Spring page of full treatment DTOs) for an order with the same product code and a `requestDate` no earlier than the link's last update minus 1 minute, not already linked to another plan. OA writes `requestDate` in Spanish local time with no zone (`OA_SERVER_TIME_ZONE = "Europe/Madrid"`, measured on shot S3), so it is converted before the comparison.
+
+- Found: the link is synced to that order, a `partner_transaction` row `reconcile` keeps OA's DTO, and the answer is 409 `ALREADY_SUBMITTED` with the order id.
+- Not found (or no OA patient was ever created): the link is marked `failed` (row `reconcile`, `not_found`) and re-claimed in the same locked transaction, so the doctor's click sends the order exactly once.
+- OA unreachable: the link stays `pending` (row `reconcile`, failed) and the answer stays 409 `SUBMISSION_PENDING`.
+- Younger than 10 minutes: 409 `SUBMISSION_PENDING` without asking OA (a submit may still be running).
+
+The outcome is written only if the link is unchanged since it was read (same `updated_at`, still `pending`), under the plan's advisory lock, so two racing submits can't both re-claim it.
+
+### Warnings need confirmation (Łukasz D1, 2026-10-03)
+
+OA's form only warns about an advance range under 5 mm, and OA's server accepts it. We keep the warning and add a confirmation: `DeviceOrder.acknowledgedWarnings` lists the warning codes the doctor confirmed (the wizard's "I confirm the advance range below 5 mm" checkbox). A confirmable warning (`CONFIRMABLE_WARNINGS`) without its confirmation is an error, `warningNotConfirmed`, in the shared rules — so the API enforces it too. The confirmation is audited with the order; the wizard drops it when the warning goes away, so a new range under 5 mm needs a new one.
+
+### Registration (Łukasz D2, 2026-10-03)
+
+`DeviceOrder.registration` carries the "Registro dental" choice: impression, a scanner (OA enum `ba`) or a scanner platform (OA enum `bZ`), as OA's enum names. The adapter sends `scannerTreatment` / `scannerPlatform` with the other one null, as OA's form does. The promotion code is never shown nor sent.
+
 ## Consequences
 
 - Arbitrary bodies can no longer reach OA: the old pass-through route answers 410.
 - Changing a rule means changing `packages/device-order` and bumping `RULES_VERSION`; every stored order says which version it passed.
 - The replica only knows what we captured. When OA behaves differently live (new required field, different error), capture it, scrub it into `fixtures/`, and teach the replica — not the other way round.
-- An interrupted submit needs a person: check OA for the order, then set the `partner_link` to `synced` (with its id) or `failed`. There is no UI for that yet.
+- An interrupted submit resolves itself on the next submit after 10 minutes (Reconcile above). It still needs a person only when OA stays unreachable, or when the order was placed for another product.
 - The `POST /partners/orthoapnea/patients/:id/ensure` route still exists; its own create is not guarded against concurrent calls (a duplicate OA patient is harmless to billing, unlike a duplicate order).

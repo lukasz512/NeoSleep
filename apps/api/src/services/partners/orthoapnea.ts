@@ -1,6 +1,7 @@
 import { ORTHOAPNEA_BASE_URL, ORTHOAPNEA_EMAIL, ORTHOAPNEA_PASSWORD } from "../../env.js";
-import { PartnerServiceError, ConflictError } from "../../errors.js";
+import { PartnerServiceError, ConflictError, PartnerOrderAlreadySubmittedError } from "../../errors.js";
 import { getPatientById, type Patient } from "../../db/patient.js";
+import { getTreatmentPlanById } from "../../db/treatmentPlan.js";
 import { withTenant } from "../../db/tenant.js";
 import {
   getPartnerLink,
@@ -1112,32 +1113,259 @@ export function orthoApneaTreatmentForm(dto: Record<string, unknown>): FormData 
  * The marker is partner_link.sync_status = 'pending' (no new status value
  * needed): on a treatment_plan link it only ever means "a submit is running
  * or was interrupted". A link left 'pending' (process died, or OA timed out
- * after the request may have reached it) is NOT retried automatically —
- * OA might already hold the order, and a second one would be a second
- * billable device. Someone checks OA and resets the link by hand. A link in
+ * after the request may have reached it) is never blindly retried — OA might
+ * already hold the order, and a second one would be a second billable
+ * device. Once it is older than RECONCILE_AFTER_MS, a submit first looks the
+ * order up in OA (reconcilePendingTreatment, Łukasz D3 2026-10-03). A link in
  * 'failed' (OA answered with an error, or we never got as far as sending)
  * can be submitted again.
  */
-async function claimTreatmentSubmission(tenantSlug: string, treatmentPlanId: string): Promise<PartnerLink> {
-  return withTenant(tenantSlug, async (client) => {
-    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
-      `partner_link:${PARTNER_NAME}:treatment_plan:${treatmentPlanId}`,
-    ]);
-    const claimed = await claimPartnerLink(client, PARTNER_NAME, "treatment_plan", treatmentPlanId);
-    if (claimed) return claimed;
+type ClaimOutcome = { kind: "claimed"; link: PartnerLink } | { kind: "pending"; link: PartnerLink };
 
-    const existing = await getPartnerLink(client, PARTNER_NAME, "treatment_plan", treatmentPlanId);
-    if (existing?.external_id) {
-      throw new ConflictError(
-        `treatment_plan '${treatmentPlanId}' was already submitted to OrthoApnea (external id '${existing.external_id}')`,
-        "PARTNER_ORDER_ALREADY_SUBMITTED"
-      );
-    }
-    throw new ConflictError(
-      `treatment_plan '${treatmentPlanId}' has an OrthoApnea submission in progress or interrupted — check OrthoApnea before retrying`,
-      "PARTNER_ORDER_SUBMISSION_PENDING"
-    );
+function planLockKey(treatmentPlanId: string): string {
+  return `partner_link:${PARTNER_NAME}:treatment_plan:${treatmentPlanId}`;
+}
+
+function alreadySubmitted(treatmentPlanId: string, externalId: string): PartnerOrderAlreadySubmittedError {
+  return new PartnerOrderAlreadySubmittedError(
+    `treatment_plan '${treatmentPlanId}' was already submitted to OrthoApnea (external id '${externalId}')`,
+    externalId
+  );
+}
+
+function submissionPending(treatmentPlanId: string): ConflictError {
+  return new ConflictError(
+    `treatment_plan '${treatmentPlanId}' has an OrthoApnea submission in progress or interrupted — check OrthoApnea before retrying`,
+    "PARTNER_ORDER_SUBMISSION_PENDING"
+  );
+}
+
+/** Claims, or reports the 'pending' link someone else holds; throws 409 when the plan is already synced. Caller holds the plan lock. */
+async function claimOrReport(client: Parameters<typeof claimPartnerLink>[0], treatmentPlanId: string): Promise<ClaimOutcome> {
+  const claimed = await claimPartnerLink(client, PARTNER_NAME, "treatment_plan", treatmentPlanId);
+  if (claimed) return { kind: "claimed", link: claimed };
+  const existing = await getPartnerLink(client, PARTNER_NAME, "treatment_plan", treatmentPlanId);
+  if (existing?.external_id) throw alreadySubmitted(treatmentPlanId, existing.external_id);
+  if (!existing) throw submissionPending(treatmentPlanId);
+  return { kind: "pending", link: existing };
+}
+
+async function claimTreatmentSubmission(tenantSlug: string, treatmentPlanId: string): Promise<ClaimOutcome> {
+  return withTenant(tenantSlug, async (client) => {
+    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [planLockKey(treatmentPlanId)]);
+    return claimOrReport(client, treatmentPlanId);
   });
+}
+
+// ── Reconcile of an interrupted submit (Łukasz D3, 2026-10-03) ──────────────
+
+/** A treatment_plan link left 'pending' longer than this is looked up in OA before a submit answers "pending". */
+export const RECONCILE_AFTER_MS = 10 * 60_000;
+/** An OA order may carry a requestDate up to this much before our claim and still be ours (clock skew, the claim → send gap). */
+const RECONCILE_CLOCK_SLACK_MS = 60_000;
+/**
+ * OA writes requestDate in its server's local time with no zone. Measured on
+ * shot S3 (2026-10-03): OA stored 17:33:13.049 for a request sent at
+ * 15:33:12.8Z, i.e. CEST — Spain's zone.
+ */
+export const OA_SERVER_TIME_ZONE = "Europe/Madrid";
+const TREATMENTS_BY_PATIENT_PATH = "/api/treatments/byPatient";
+const RECONCILE_PAGE_SIZE = 50;
+/** 20 × 50 orders for one patient is far beyond any real case; stops a misbehaving pager. */
+const RECONCILE_MAX_PAGES = 20;
+
+const zoneFormatters = new Map<string, Intl.DateTimeFormat>();
+
+/** The zone's UTC offset (ms) at an instant. */
+function zoneOffsetMs(instant: number, timeZone: string): number {
+  let fmt = zoneFormatters.get(timeZone);
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+    zoneFormatters.set(timeZone, fmt);
+  }
+  const part = (type: Intl.DateTimeFormatPartTypes) => Number(fmt.formatToParts(new Date(instant)).find((p) => p.type === type)?.value);
+  const wallAsUtc = Date.UTC(part("year"), part("month") - 1, part("day"), part("hour"), part("minute"), part("second"));
+  return wallAsUtc - Math.floor(instant / 1000) * 1000;
+}
+
+/** OA's zone-less "YYYY-MM-DDTHH:mm:ss(.SSS)" in OA_SERVER_TIME_ZONE → epoch ms, or null when it isn't one. */
+export function oaLocalTimeToEpochMs(value: unknown, timeZone = OA_SERVER_TIME_ZONE): number | null {
+  if (typeof value !== "string") return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3})\d*)?$/.exec(value);
+  if (!m) return null;
+  const n = m.slice(1, 7).map(Number) as [number, number, number, number, number, number];
+  const wall = Date.UTC(n[0], n[1] - 1, n[2], n[3], n[4], n[5], m[7] ? Number(m[7].padEnd(3, "0")) : 0);
+  // Two passes settle the offset on the right side of a DST switch.
+  const first = wall - zoneOffsetMs(wall, timeZone);
+  return wall - zoneOffsetMs(first, timeZone);
+}
+
+/** The parts of OA's treatment DTO the reconcile reads (GET /api/treatments/byPatient/{id} content[]). */
+export interface OaTreatmentSummary {
+  id: number | string;
+  statusId?: number | string | null;
+  requestDate?: string | null;
+  product?: { code?: string | null } | null;
+}
+
+export interface ReconcileCriteria {
+  productCode: string;
+  /** When our claim was made (epoch ms). */
+  claimedAt: number;
+  /** OA order ids already linked to another plan — never ours. */
+  excludeIds: readonly string[];
+}
+
+/**
+ * The interrupted submit's order among a patient's OA orders: same product,
+ * requestDate no earlier than the claim minus RECONCILE_CLOCK_SLACK_MS, not
+ * linked to another plan; the earliest such order. Null when none.
+ */
+export function findReconcileMatch<T extends OaTreatmentSummary>(content: readonly T[], criteria: ReconcileCriteria): T | null {
+  const from = criteria.claimedAt - RECONCILE_CLOCK_SLACK_MS;
+  const candidates = content
+    .map((t) => ({ t, at: oaLocalTimeToEpochMs(t.requestDate) }))
+    .filter(
+      ({ t, at }) => t.product?.code === criteria.productCode && at !== null && at >= from && !criteria.excludeIds.includes(String(t.id))
+    )
+    .sort((a, b) => (a.at ?? 0) - (b.at ?? 0));
+  return candidates[0]?.t ?? null;
+}
+
+type OaLookup = { kind: "found"; order: OaTreatmentSummary & Record<string, unknown> } | { kind: "notFound" } | { kind: "unreachable"; error: string };
+
+/** Reads every page of the patient's OA orders and picks the match. Read-only; never throws. */
+async function lookUpOaOrder(oaPatientId: string, criteria: ReconcileCriteria): Promise<OaLookup> {
+  const content: (OaTreatmentSummary & Record<string, unknown>)[] = [];
+  try {
+    for (let page = 0; page < RECONCILE_MAX_PAGES; page++) {
+      const res = await authedFetch(
+        `${TREATMENTS_BY_PATIENT_PATH}/${encodeURIComponent(oaPatientId)}?page=${page}&size=${RECONCILE_PAGE_SIZE}`
+      );
+      if (!res.ok) return { kind: "unreachable", error: `byPatient answered ${res.status}` };
+      const body = await safeJson(res);
+      if (!body || !Array.isArray(body.content)) return { kind: "unreachable", error: "byPatient answered without a content list" };
+      for (const item of body.content as unknown[]) {
+        if (typeof item === "object" && item !== null && "id" in item) content.push(item as OaTreatmentSummary & Record<string, unknown>);
+      }
+      const totalPages = typeof body.totalPages === "number" ? body.totalPages : 1;
+      if (page + 1 >= totalPages || body.content.length === 0) break;
+    }
+  } catch (cause) {
+    return { kind: "unreachable", error: cause instanceof Error ? cause.message : String(cause) };
+  }
+  const order = findReconcileMatch(content, criteria);  return order ? { kind: "found", order } : { kind: "notFound" };
+}
+
+export interface ReconcileOptions {
+  /** OA product code of the order being submitted (enum `an`, e.g. "002"). */
+  productCode: string;
+}
+
+/**
+ * A submit found the plan's link 'pending'. Younger than RECONCILE_AFTER_MS:
+ * a submit may still be running — 409 SUBMISSION_PENDING, OA isn't asked.
+ * Older: asks OA (read-only) whether the interrupted submit reached it.
+ * - found → the link is synced to that order (+ a 'reconcile' transaction
+ *   with OA's DTO) and the caller gets 409 ALREADY_SUBMITTED with its id;
+ * - not found → the link is marked failed (transaction 'reconcile',
+ *   not_found) and re-claimed for this submit, under the same lock — the
+ *   doctor's one click sends the order exactly once;
+ * - OA unreachable → the link stays pending, 409 SUBMISSION_PENDING.
+ * The outcome is written only if the link is still the one we looked at
+ * (same updated_at, still pending), so two racing reconciles can't both
+ * re-claim it.
+ */
+async function reconcilePendingTreatment(
+  tenantSlug: string,
+  treatmentPlanId: string,
+  pending: PartnerLink,
+  options: ReconcileOptions
+): Promise<PartnerLink> {
+  const claimedAt = new Date(pending.updated_at).getTime();
+  if (Date.now() - claimedAt < RECONCILE_AFTER_MS) throw submissionPending(treatmentPlanId);
+
+  const lookup = await withTenant(tenantSlug, async (client) => {
+    const plan = await getTreatmentPlanById(client, treatmentPlanId);
+    const patientLink = plan ? await getPartnerLink(client, PARTNER_NAME, "patient", plan.patient_id) : null;
+    const { rows } = await client.query<{ external_id: string }>(
+      `SELECT external_id FROM partner_link
+       WHERE partner = $1 AND entity_type = 'treatment_plan' AND entity_id <> $2 AND external_id IS NOT NULL`,
+      [PARTNER_NAME, treatmentPlanId]
+    );
+    return { oaPatientId: patientLink?.external_id ?? null, excludeIds: rows.map((r) => r.external_id) };
+  });
+
+  // No OA patient → the interrupted submit never got as far as the order POST.
+  const outcome: OaLookup = lookup.oaPatientId
+    ? await lookUpOaOrder(lookup.oaPatientId, { productCode: options.productCode, claimedAt, excludeIds: lookup.excludeIds })
+    : { kind: "notFound" };
+
+  // The transaction returns its verdict and the 409s are thrown after it
+  // commits — a throw inside withTenant would roll the recorded outcome back.
+  const verdict = await withTenant(
+    tenantSlug,
+    async (client): Promise<{ kind: "claimed"; link: PartnerLink } | { kind: "pending" } | { kind: "submitted"; externalId: string }> => {
+      await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [planLockKey(treatmentPlanId)]);
+      const current = await getPartnerLink(client, PARTNER_NAME, "treatment_plan", treatmentPlanId);
+      const unchanged =
+        current?.id === pending.id && current.sync_status === "pending" && new Date(current.updated_at).getTime() === claimedAt;
+      if (!unchanged) {
+        // Someone else moved the link while OA was being asked: the usual rules decide.
+        const again = await claimOrReport(client, treatmentPlanId);
+        return again.kind === "claimed" ? again : { kind: "pending" };
+      }
+
+      const request = { oaPatientId: lookup.oaPatientId, productCode: options.productCode, claimedAt: new Date(claimedAt).toISOString() };
+      if (outcome.kind === "unreachable") {
+        await logPartnerTransaction(client, {
+          partner_link_id: pending.id,
+          action: "reconcile",
+          request_payload: request,
+          success: false,
+          error_message: outcome.error,
+        });
+        return { kind: "pending" };
+      }
+      if (outcome.kind === "found") {
+        const externalId = String(outcome.order.id);
+        const externalStatus = outcome.order.statusId != null ? String(outcome.order.statusId) : null;
+        await logPartnerTransaction(client, {
+          partner_link_id: pending.id,
+          action: "reconcile",
+          request_payload: request,
+          response_payload: outcome.order,
+          success: true,
+        });
+        await markPartnerLinkSynced(client, pending.id, externalId, externalStatus);
+        return { kind: "submitted", externalId };
+      }
+
+      await logPartnerTransaction(client, {
+        partner_link_id: pending.id,
+        action: "reconcile",
+        request_payload: request,
+        success: true,
+        error_message: "not_found",
+      });
+      await markPartnerLinkFailed(client, pending.id, "reconcile: the interrupted submit never reached OrthoApnea");
+      const reclaimed = await claimOrReport(client, treatmentPlanId);
+      return reclaimed.kind === "claimed" ? reclaimed : { kind: "pending" };
+    }
+  );
+
+  if (verdict.kind === "claimed") return verdict.link;
+  if (verdict.kind === "submitted") throw alreadySubmitted(treatmentPlanId, verdict.externalId);
+  throw submissionPending(treatmentPlanId);
 }
 
 /**
@@ -1156,13 +1384,22 @@ async function claimTreatmentSubmission(tenantSlug: string, treatmentPlanId: str
  * TRANSACTION SHAPE (see ADR-017): short transaction (claim) → payload build
  * and HTTP call with no transaction open → short transaction (record the
  * outcome).
+ *
+ * `reconcile` (the device-order path passes it): a link left 'pending' past
+ * RECONCILE_AFTER_MS is looked up in OA first (reconcilePendingTreatment).
+ * Without it, a pending link is always 409 SUBMISSION_PENDING.
  */
 export async function createOrthoApneaTreatment(
   tenantSlug: string,
   treatmentPlanId: string,
-  payload: OrthoApneaTreatmentPayload
+  payload: OrthoApneaTreatmentPayload,
+  reconcile?: ReconcileOptions
 ): Promise<CreateOrthoApneaTreatmentResult> {
-  const link = await claimTreatmentSubmission(tenantSlug, treatmentPlanId);
+  const claim = await claimTreatmentSubmission(tenantSlug, treatmentPlanId);
+  let link: PartnerLink;
+  if (claim.kind === "claimed") link = claim.link;
+  else if (reconcile) link = await reconcilePendingTreatment(tenantSlug, treatmentPlanId, claim.link, reconcile);
+  else throw submissionPending(treatmentPlanId);
 
   let requestPayload: Record<string, unknown>;
   try {

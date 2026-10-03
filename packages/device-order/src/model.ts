@@ -11,7 +11,7 @@
  */
 
 /** Bumped whenever a rule changes; stored with every submitted order for audit. */
-export const RULES_VERSION = "2026-10-03.1";
+export const RULES_VERSION = "2026-10-03.2";
 
 /** OA product codes (enum `an`, rules §4.4). Only these two are orderable from the wizard today. */
 export const PRODUCT_CODES = { NOA: "002", NOA_TMJ: "003" } as const;
@@ -36,6 +36,62 @@ export type Sequence =
       /** Additional splints (OA seq4..seq6): personalized only, at most 3, same unit as the sequence. */
       additionalSplints: number[];
     };
+
+/**
+ * OA's scanner enum `ba` (rules "Enums" `ba`), sent as the NAME — the
+ * intraoral or desk scanner the doctor scanned with.
+ */
+export const SCANNER_TREATMENTS = [
+  "SHAPE_TRIOS",
+  "SHAPE_DESK_SCANNER",
+  "SIRONA",
+  "CARESTREAM",
+  "MEDIT",
+  "DENTALWINGS",
+  "ITERO",
+  "HERON",
+  "PLANMECA_EMERALD",
+  "EXOCAD_DESK_SCANNER",
+  "IMETRIC_DESK_SCANNER",
+  "FINOSCAN_RELATION_DESK_SCANNER",
+  "DENTALWINGS_SERIES_3_DESK_SCANNER",
+  "AORALSCAN_SHINING_3D",
+  "SHINING_3D",
+  "NEOSCAN_1000",
+  "UNKNOWN",
+  "UNKNOWN_DESK",
+] as const;
+export type ScannerTreatment = (typeof SCANNER_TREATMENTS)[number];
+
+/** OA's scanner-platform enum `bZ` (rules "Enums" `bZ`), sent as the NAME — the cloud the scan is shared through. */
+export const SCANNER_PLATFORMS = [
+  "SHAPE_COMMUNICATE",
+  "SIRONA_CONNECT",
+  "ITERO_RESTAURATIVE",
+  "CSCONNECT",
+  "MEDIT_LINK",
+  "DWOS_CONNECT",
+  "HERON_CLOUD",
+  "ROMEXIS_CLOUD",
+  "SHINING_3D_DENTAL_CLOUD",
+  "DEXIS_IS",
+] as const;
+export type ScannerPlatform = (typeof SCANNER_PLATFORMS)[number];
+
+/**
+ * How the bite reaches the lab (OA's "Registro dental", rules §1.5): a
+ * physical impression, a scanner, or a scanner platform. OA keeps only one of
+ * scanner/platform (choosing one nulls the other). The name is null while the
+ * doctor hasn't picked one yet; the rules then answer "required".
+ */
+export type Registration =
+  | { method: "impression" }
+  | { method: "scanner"; scannerTreatment: ScannerTreatment | null }
+  | { method: "platform"; scannerPlatform: ScannerPlatform | null };
+
+/** Warnings the doctor must confirm before the order can be sent (Łukasz D1, 2026-10-03). */
+export const CONFIRMABLE_WARNINGS = ["advanceUnder5"] as const;
+export type ConfirmableWarning = (typeof CONFIRMABLE_WARNINGS)[number];
 
 export type VerticalDimension = { kind: "registro" } | { kind: "minimal" } | { kind: "mm"; value: number };
 
@@ -69,6 +125,14 @@ export interface DeviceOrder {
   /** YYYY-MM-DD; must not be before OA's manufacturing date for the product. */
   desiredDate: string;
   noContactDoctorForRedesign: boolean;
+  /** How the bite reaches the lab; sent to OA as scannerTreatment / scannerPlatform. Missing → impression. */
+  registration: Registration;
+  /**
+   * Warning codes the doctor confirmed (e.g. "advanceUnder5"). A confirmable
+   * warning not listed here blocks the order (warningNotConfirmed). Missing → []
+   * (old drafts and clients).
+   */
+  acknowledgedWarnings: string[];
 }
 
 /** Where the device ships: the ordering doctor's primary HCO (NEO-213). OA requires every field (KJ, rules §1.2). */
@@ -104,5 +168,7 @@ export function defaultDeviceOrder(dentistId = ""): DeviceOrder {
     observations: "",
     desiredDate: "",
     noContactDoctorForRedesign: false,
+    registration: { method: "impression" },
+    acknowledgedWarnings: [],
   };
 }

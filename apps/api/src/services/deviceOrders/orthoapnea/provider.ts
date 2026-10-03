@@ -66,7 +66,8 @@ export const orthoApneaDeviceOrderProvider: DeviceOrderProvider = {
       });
     };
 
-    const result = await createOrthoApneaTreatment(tenantSlug, treatmentPlanId, buildDto);
+    // A submit interrupted more than RECONCILE_AFTER_MS ago is first looked up in OA by product (Łukasz D3).
+    const result = await createOrthoApneaTreatment(tenantSlug, treatmentPlanId, buildDto, { productCode: order.productCode });
     return { externalId: result.externalId, externalStatus: result.externalStatus, sentPayload: result.requestPayload };
   },
 };

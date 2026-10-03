@@ -22,6 +22,10 @@ import type { AddressInfo } from "node:net";
  *   requestDate/lastActivity, upper-cased delivery name/address/city, `patient` object,
  *   total 459 (+148 with morningAligner).
  * - GET /api/treatments/DTO/:id, POST /api/notifications.
+ * - GET /api/treatments/byPatient/:oaPatientId?page=&size=: a Spring page
+ *   `{ content: [<full treatment DTO>], totalElements, totalPages, … }` filtered
+ *   by patientId (live shape read 2026-10-03). requestDate is OA's server
+ *   local time (Europe/Madrid), zone-less, like the real one.
  */
 
 const FIXTURES = new URL("./fixtures/", import.meta.url);
@@ -93,8 +97,28 @@ function jwt(nonce: number): string {
   return `header.${payload}.signature`;
 }
 
+/**
+ * OA's server clock: local Spanish time with no zone, as OA writes requestDate
+ * (shot S3: 17:33:13.049 stored for a request sent at 15:33:12.8Z).
+ */
 function serverNow(): string {
-  return new Date().toISOString().slice(0, 23);
+  const now = new Date();
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "Europe/Madrid",
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    })
+      .formatToParts(now)
+      .map((p) => [p.type, p.value])
+  );
+  const ms = String(now.getMilliseconds()).padStart(3, "0");
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}.${ms}`;
 }
 
 async function readBody(req: IncomingMessage): Promise<Buffer> {
@@ -245,6 +269,31 @@ export async function startOaReplica(): Promise<OaReplica> {
       replica.treatments.set(id, stored);
       return send(res, 200, stored);
     }
+    // Spring page of the patient's full treatment DTOs, as read live on 2026-10-03.
+    const byPatientMatch = /^\/api\/treatments\/byPatient\/(\d+)$/.exec(path);
+    if (method === "GET" && byPatientMatch) {
+      const patientId = Number(byPatientMatch[1]);
+      const page = Number(url.searchParams.get("page") ?? "0");
+      const size = Number(url.searchParams.get("size") ?? "20");
+      // The create response carries `patient` as an object; the list DTO (like GET /DTO/:id) also has patientId.
+      const all = [...replica.treatments.values()]
+        .filter((t) => Number((t.patient as Json | undefined)?.id) === patientId)
+        .map((t) => ({ ...t, patientId }));
+      const content = all.slice(page * size, page * size + size);
+      const totalPages = Math.ceil(all.length / size);
+      return send(res, 200, {
+        content,
+        totalElements: all.length,
+        totalPages,
+        size,
+        number: page,
+        numberOfElements: content.length,
+        first: page === 0,
+        last: page + 1 >= totalPages,
+        empty: content.length === 0,
+      });
+    }
+
     const treatmentMatch = /^\/api\/treatments\/DTO\/(\d+)$/.exec(path);
     if (method === "GET" && treatmentMatch) {
       const stored = replica.treatments.get(Number(treatmentMatch[1]));

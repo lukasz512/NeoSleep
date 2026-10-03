@@ -12,14 +12,16 @@ import {
   type OrderIssueCode,
   type OrderValidation,
   type ProductCode,
+  type Registration,
   type SequenceUnit,
 } from "@device-order";
-import { computed, reactive, ref } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { apiFetch } from "./useApi";
 import { fieldErrorsFromResponse } from "./useFormErrors";
 import { retryAction, useNotifications, type ShowOptions } from "./useNotifications";
-import { defaultWizardExtras, draftToOrder, toDraft, type WizardExtras } from "../utils/deviceOrderDraft";
+import { draftToOrder, toDraft } from "../utils/deviceOrderDraft";
+import { isScannerPlatform, isScannerTreatment } from "../utils/deviceOrderRegistration";
 
 /**
  * The device-order wizard's state and every API call it makes (CORE-95).
@@ -81,7 +83,7 @@ export const STEP_PATHS: Readonly<Record<number, readonly string[]>> = {
     "teeth",
     "observations",
   ],
-  3: [],
+  3: ["registration"],
   4: ["desiredDate", "noContactDoctorForRedesign"],
 };
 export const WIZARD_STEPS = [1, 2, 3, 4] as const;
@@ -131,7 +133,6 @@ export function useOrthoApneaOrderWizard() {
   const notifications = useNotifications();
 
   const order = reactive<DeviceOrder>(defaultDeviceOrder());
-  const extras = reactive<WizardExtras>(defaultWizardExtras());
   /** The additional-splint inputs as typed (an empty one is allowed while editing); the order carries the filled ones. */
   const additionalSplintInputs = ref<(number | null)[]>([]);
 
@@ -153,6 +154,43 @@ export function useOrthoApneaOrderWizard() {
   const validation = computed<OrderValidation>(() =>
     validateDeviceOrder(JSON.parse(JSON.stringify(order)), { minDesiredDate: context.value?.minDesiredDate ?? null }),
   );
+
+  /**
+   * Łukasz D1: a confirmation belongs to the warning it confirmed — once the
+   * warning is gone (MR/MP changed), the confirmation goes too, so a later
+   * range under 5 mm has to be confirmed again.
+   */
+  watch(
+    () => validation.value.warnings.map((w) => w.code),
+    (codes) => {
+      const kept = order.acknowledgedWarnings.filter((code) => codes.some((c) => c === code));
+      if (kept.length !== order.acknowledgedWarnings.length) order.acknowledgedWarnings = kept;
+    },
+  );
+
+  /** The doctor ticks / unticks "I confirm ..." under a confirmable warning. */
+  function setWarningAcknowledged(code: string, acknowledged: boolean) {
+    const others = order.acknowledgedWarnings.filter((c) => c !== code);
+    order.acknowledgedWarnings = acknowledged ? [...others, code] : others;
+  }
+
+  /** OA's "Registro dental": a new method starts without a name; OA nulls the other one, so does the order. */
+  function setRegistrationMethod(method: Registration["method"]) {
+    if (order.registration.method === method) return;
+    order.registration =
+      method === "scanner"
+        ? { method: "scanner", scannerTreatment: null }
+        : method === "platform"
+          ? { method: "platform", scannerPlatform: null }
+          : { method: "impression" };
+  }
+
+  /** The picked scanner / platform, as OA's enum name; a name from the other list is ignored. */
+  function setScanner(name: unknown) {
+    const reg = order.registration;
+    if (reg.method === "scanner" && (name === null || isScannerTreatment(name))) order.registration = { method: "scanner", scannerTreatment: name };
+    if (reg.method === "platform" && (name === null || isScannerPlatform(name))) order.registration = { method: "platform", scannerPlatform: name };
+  }
 
   /**
    * What's wrong with the shipping address: no doctor's HCO, missing fields
@@ -233,10 +271,9 @@ export function useOrthoApneaOrderWizard() {
     context.value = null;
     contextFailed.value = false;
     const draft = draftPlan?.metadata?.orthoapneaDraft;
-    const resumed = draft ? draftToOrder(draft) : { order: defaultDeviceOrder(), extras: defaultWizardExtras() };
-    Object.assign(order, resumed.order);
-    Object.assign(extras, resumed.extras);
-    additionalSplintInputs.value = resumed.order.sequence.type === "personalized" ? [...resumed.order.sequence.additionalSplints] : [];
+    const resumed = draft ? draftToOrder(draft) : defaultDeviceOrder();
+    Object.assign(order, resumed);
+    additionalSplintInputs.value = resumed.sequence.type === "personalized" ? [...resumed.sequence.additionalSplints] : [];
     applyDesiredDate();
   }
 
@@ -335,7 +372,7 @@ export function useOrthoApneaOrderWizard() {
   async function persistDraft(patientId: string, sleepStudyId: string): Promise<boolean> {
     serverIssues.value = [];
     syncAdditionalSplints();
-    const metadata = { orthoapneaDraft: toDraft(order, extras) };
+    const metadata = { orthoapneaDraft: toDraft(order) };
     const dentist = order.dentistId || undefined;
 
     const res = currentDraftPlanId.value
@@ -492,7 +529,6 @@ export function useOrthoApneaOrderWizard() {
 
   return {
     order,
-    extras,
     additionalSplintInputs,
     availableProductCodes,
     loadingProducts,
@@ -514,6 +550,9 @@ export function useOrthoApneaOrderWizard() {
     removeAdditionalSplint,
     setProductCode,
     setStartingPoint,
+    setWarningAcknowledged,
+    setRegistrationMethod,
+    setScanner,
     resetForOpen,
     loadProducts,
     loadDoctorsAndDefault,

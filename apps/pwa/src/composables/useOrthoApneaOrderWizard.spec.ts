@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
+import { nextTick } from "vue";
 import { PRODUCT_CODES, defaultDeviceOrder, type DeviceOrder } from "@device-order";
 
 // useOrthoApneaOrderWizard calls vue-i18n's useI18n(), which throws outside a
@@ -81,7 +82,7 @@ describe("useOrthoApneaOrderWizard", () => {
       expect(wizard.order.desiredDate).toBe(fallbackDesiredDate());
     });
 
-    it("validation is the shared validator: MR = MP = 0 is advanceZero; under 5 mm only warns", () => {
+    it("validation is the shared validator: MR = MP = 0 is advanceZero; under 5 mm warns and blocks until confirmed", async () => {
       const wizard = useOrthoApneaOrderWizard();
       fillValidOrder(wizard.order);
       wizard.order.retrusionMaxMm = 0;
@@ -90,8 +91,63 @@ describe("useOrthoApneaOrderWizard", () => {
 
       wizard.order.protrusionMaxMm = 3;
       wizard.order.startingPoint = { unit: "mm", value: 1 };
-      expect(wizard.validation.value.errors).toEqual([]);
+      await nextTick();
       expect(wizard.validation.value.warnings).toEqual([{ path: "protrusionMaxMm", code: "advanceUnder5", params: { min: 5 } }]);
+      expect(wizard.validation.value.errors).toEqual([{ path: "protrusionMaxMm", code: "warningNotConfirmed", params: { warning: "advanceUnder5" } }]);
+
+      wizard.setWarningAcknowledged("advanceUnder5", true);
+      expect(wizard.order.acknowledgedWarnings).toEqual(["advanceUnder5"]);
+      expect(wizard.validation.value.errors).toEqual([]);
+      expect(wizard.validation.value.warnings).toHaveLength(1);
+
+      // Unticking re-blocks.
+      wizard.setWarningAcknowledged("advanceUnder5", false);
+      expect(wizard.validation.value.errors).toHaveLength(1);
+    });
+
+    it("an MR/MP change that clears the warning drops its confirmation — going back under 5 mm asks again", async () => {
+      const wizard = useOrthoApneaOrderWizard();
+      fillValidOrder(wizard.order);
+      wizard.order.retrusionMaxMm = 0;
+      wizard.order.protrusionMaxMm = 3;
+      wizard.order.startingPoint = { unit: "mm", value: 1 };
+      await nextTick();
+      wizard.setWarningAcknowledged("advanceUnder5", true);
+      await nextTick();
+      expect(wizard.order.acknowledgedWarnings).toEqual(["advanceUnder5"]);
+
+      wizard.order.protrusionMaxMm = 6;
+      await nextTick();
+      expect(wizard.order.acknowledgedWarnings).toEqual([]);
+
+      wizard.order.protrusionMaxMm = 3;
+      await nextTick();
+      expect(wizard.validation.value.errors.map((i) => i.code)).toEqual(["warningNotConfirmed"]);
+    });
+
+    it("registration: picking a method keeps only its own name (OA nulls the other); the picked name is OA's enum name", () => {
+      const wizard = useOrthoApneaOrderWizard();
+      fillValidOrder(wizard.order);
+      expect(wizard.order.registration).toEqual({ method: "impression" });
+
+      wizard.setRegistrationMethod("scanner");
+      expect(wizard.order.registration).toEqual({ method: "scanner", scannerTreatment: null });
+      expect(wizard.validation.value.errors).toEqual([{ path: "registration.scannerTreatment", code: "required" }]);
+      wizard.setScanner("MEDIT");
+      expect(wizard.order.registration).toEqual({ method: "scanner", scannerTreatment: "MEDIT" });
+      expect(wizard.validation.value.errors).toEqual([]);
+
+      wizard.setRegistrationMethod("platform");
+      expect(wizard.order.registration).toEqual({ method: "platform", scannerPlatform: null });
+      wizard.setScanner("MEDIT_LINK");
+      expect(wizard.order.registration).toEqual({ method: "platform", scannerPlatform: "MEDIT_LINK" });
+
+      // A name from the other list is ignored rather than sent under the wrong field.
+      wizard.setScanner("MEDIT");
+      expect(wizard.order.registration).toEqual({ method: "platform", scannerPlatform: "MEDIT_LINK" });
+
+      wizard.setRegistrationMethod("impression");
+      expect(wizard.order.registration).toEqual({ method: "impression" });
     });
 
     it("maps issue paths to the step that shows them; delivery belongs to step 1", () => {
@@ -100,6 +156,7 @@ describe("useOrthoApneaOrderWizard", () => {
       expect(stepOfPath("startingPoint.value")).toBe(2);
       expect(stepOfPath("sequence.values.1")).toBe(2);
       expect(stepOfPath("desiredDate")).toBe(4);
+      expect(stepOfPath("registration.scannerTreatment")).toBe(3);
       expect(stepOfPath("treatment_plan_id")).toBeUndefined();
     });
   });
@@ -180,11 +237,36 @@ describe("useOrthoApneaOrderWizard", () => {
     it("resumes a saved DeviceOrder draft", () => {
       const wizard = useOrthoApneaOrderWizard();
       const saved = { ...defaultDeviceOrder("doc-7"), productCode: PRODUCT_CODES.NOA_TMJ, retrusionMaxMm: -3, protrusionMaxMm: 7, teeth: { "11": "relieve" } };
-      wizard.resetForOpen({ id: "plan-1", metadata: { orthoapneaDraft: { schema: "deviceOrder", order: saved, extras: { registrationMethod: "scanner", scanner: "Medit" } } } });
+      wizard.resetForOpen({
+        id: "plan-1",
+        metadata: { orthoapneaDraft: { schema: "deviceOrder", order: { ...saved, registration: { method: "platform", scannerPlatform: "MEDIT_LINK" }, acknowledgedWarnings: ["advanceUnder5"] } } },
+      });
 
       expect(wizard.currentDraftPlanId.value).toBe("plan-1");
-      expect(wizard.order).toMatchObject({ dentistId: "doc-7", productCode: "003", retrusionMaxMm: -3, protrusionMaxMm: 7, teeth: { "11": "relieve" } });
-      expect(wizard.extras).toEqual({ registrationMethod: "scanner", scanner: "Medit" });
+      expect(wizard.order).toMatchObject({
+        dentistId: "doc-7",
+        productCode: "003",
+        retrusionMaxMm: -3,
+        protrusionMaxMm: 7,
+        teeth: { "11": "relieve" },
+        registration: { method: "platform", scannerPlatform: "MEDIT_LINK" },
+        acknowledgedWarnings: ["advanceUnder5"],
+      });
+    });
+
+    it("a DeviceOrder draft saved before D1/D2 (no acknowledgedWarnings, scanner as a label in extras) still loads", () => {
+      const wizard = useOrthoApneaOrderWizard();
+      const { registration: _r, acknowledgedWarnings: _a, ...older } = defaultDeviceOrder("doc-7");
+      wizard.resetForOpen({ id: "plan-1", metadata: { orthoapneaDraft: { schema: "deviceOrder", order: older, extras: { registrationMethod: "scanner", scanner: "3Shape Trios" } } } });
+      expect(wizard.order.acknowledgedWarnings).toEqual([]);
+      expect(wizard.order.registration).toEqual({ method: "scanner", scannerTreatment: "SHAPE_TRIOS" });
+
+      wizard.resetForOpen({ id: "plan-2", metadata: { orthoapneaDraft: { schema: "deviceOrder", order: older, extras: { registrationMethod: "scanner", scanner: "Some new brand" } } } });
+      expect(wizard.order.registration).toEqual({ method: "scanner", scannerTreatment: null });
+
+      wizard.resetForOpen({ id: "plan-3", metadata: { orthoapneaDraft: { schema: "deviceOrder", order: { ...older, registration: { method: "scanner", scannerTreatment: "Medit" }, acknowledgedWarnings: "x" } } } });
+      expect(wizard.order.registration).toEqual({ method: "scanner", scannerTreatment: null });
+      expect(wizard.order.acknowledgedWarnings).toEqual([]);
     });
 
     it("maps an old (pre-CORE-95) draft best-effort", () => {
@@ -206,6 +288,8 @@ describe("useOrthoApneaOrderWizard", () => {
             finish: "scallopedSplintDesign",
             verticalDimension: "minimal",
             teethStatus: ["11", "26", "99"],
+            registrationMethod: "scanner",
+            scanner: "Itero",
           },
         },
       });
@@ -221,6 +305,8 @@ describe("useOrthoApneaOrderWizard", () => {
         finish: "scalloped",
         verticalDimension: { kind: "minimal" },
         teeth: { "11": "relieve", "26": "relieve" },
+        registration: { method: "scanner", scannerTreatment: "ITERO" },
+        acknowledgedWarnings: [],
       });
       expect(wizard.additionalSplintInputs.value).toEqual([5]);
     });

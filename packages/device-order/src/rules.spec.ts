@@ -1,7 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
   defaultDeviceOrder,
+  parseDeviceOrder,
   PRODUCT_CODES,
+  SCANNER_PLATFORMS,
+  SCANNER_TREATMENTS,
   standardSequenceOffsets,
   startingPointMm,
   validateDeliveryAddress,
@@ -52,6 +55,8 @@ describe("validateDeviceOrder — one table, run identically by the PWA and the 
     ["vertical dimension above 20 mm", { verticalDimension: { kind: "mm", value: 21 } }, ["verticalDimension.value:outOfRange"]],
     ["unknown tooth", { teeth: { "99": "crown" } }, ["teeth:invalid"]],
     ["no doctor", { dentistId: "" }, ["dentistId:required"]],
+    ["scanner without its scanner (OA scannerTreatment)", { registration: { method: "scanner", scannerTreatment: null } }, ["registration.scannerTreatment:required"]],
+    ["platform without its platform (OA scannerPlatform)", { registration: { method: "platform", scannerPlatform: null } }, ["registration.scannerPlatform:required"]],
   ];
   it.each(errorCases)("blocks: %s", (_name, patch, expected) => {
     expect(codes(validateDeviceOrder(order(patch)).errors)).toEqual(expected);
@@ -61,15 +66,58 @@ describe("validateDeviceOrder — one table, run identically by the PWA and the 
     expect(codes(validateDeviceOrder({ ...order(), productCode: "004" }).errors)).toEqual(["productCode:invalid"]);
   });
 
+  it("blocks a scanner or platform name OA doesn't know (enums ba / bZ, rules §4)", () => {
+    expect(codes(validateDeviceOrder({ ...order(), registration: { method: "scanner", scannerTreatment: "Medit" } }).errors)).toEqual([
+      "registration.scannerTreatment:invalid",
+    ]);
+    expect(codes(validateDeviceOrder({ ...order(), registration: { method: "platform", scannerPlatform: "MEDIT" } }).errors)).toEqual([
+      "registration.scannerPlatform:invalid",
+    ]);
+    expect(codes(validateDeviceOrder({ ...order(), registration: { method: "fax" } }).errors)).toEqual(["registration.method:invalid"]);
+  });
+
+  it("accepts every OA scanner and platform name", () => {
+    for (const scannerTreatment of SCANNER_TREATMENTS) {
+      expect(validateDeviceOrder(order({ registration: { method: "scanner", scannerTreatment } })).errors).toEqual([]);
+    }
+    for (const scannerPlatform of SCANNER_PLATFORMS) {
+      expect(validateDeviceOrder(order({ registration: { method: "platform", scannerPlatform } })).errors).toEqual([]);
+    }
+    expect(SCANNER_TREATMENTS).toContain("MEDIT");
+    expect(SCANNER_PLATFORMS).toContain("MEDIT_LINK");
+  });
+
   it("blocks a desired date before OA's manufacturing date", () => {
     const result = validateDeviceOrder(order({ desiredDate: "2026-10-10" }), { minDesiredDate: "2026-10-19" });
     expect(codes(result.errors)).toEqual(["desiredDate:desiredDateTooEarly"]);
   });
 
-  it("only warns on an advance range under 5 mm — OA's form warns and its server accepted 3 mm (S4)", () => {
+  it("an advance range under 5 mm warns (OA's form) and blocks until the doctor confirms it (Łukasz D1, 2026-10-03)", () => {
     const result = validateDeviceOrder(order({ retrusionMaxMm: -1, protrusionMaxMm: 2 }));
+    expect(codes(result.warnings)).toEqual(["protrusionMaxMm:advanceUnder5"]);
+    expect(result.errors).toEqual([{ path: "protrusionMaxMm", code: "warningNotConfirmed", params: { warning: "advanceUnder5" } }]);
+  });
+
+  it("a confirmed advance under 5 mm only warns — OA's server accepted 3 mm (S4)", () => {
+    const result = validateDeviceOrder(order({ retrusionMaxMm: -1, protrusionMaxMm: 2, acknowledgedWarnings: ["advanceUnder5"] }));
     expect(result.errors).toEqual([]);
     expect(codes(result.warnings)).toEqual(["protrusionMaxMm:advanceUnder5"]);
+  });
+
+  it("an acknowledgement with no matching warning is harmless", () => {
+    expect(validateDeviceOrder(order({ acknowledgedWarnings: ["advanceUnder5"] }))).toEqual({ errors: [], warnings: [] });
+  });
+
+  it("an order without acknowledgedWarnings / registration (old drafts and clients) reads them as [] / impression", () => {
+    const { acknowledgedWarnings: _a, registration: _r, ...old } = order();
+    expect(validateDeviceOrder(old)).toEqual({ errors: [], warnings: [] });
+    expect(parseDeviceOrder(old)).toMatchObject({ acknowledgedWarnings: [], registration: { method: "impression" } });
+    const under5 = { ...old, retrusionMaxMm: -1, protrusionMaxMm: 2 };
+    expect(codes(validateDeviceOrder(under5).errors)).toEqual(["protrusionMaxMm:warningNotConfirmed"]);
+  });
+
+  it("parseDeviceOrder returns null for an order that fails the shape check", () => {
+    expect(parseDeviceOrder({ ...order(), upperBand: 9 })).toBeNull();
   });
 
   it("accepts NOA personalized with three values and three additional splints", () => {

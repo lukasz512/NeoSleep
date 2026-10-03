@@ -1,5 +1,14 @@
 import { z } from "zod";
-import { FDI_TEETH, PRODUCT_CODES, TOOTH_STATES, type DeliveryAddress, type DeviceOrder } from "./model.js";
+import {
+  CONFIRMABLE_WARNINGS,
+  FDI_TEETH,
+  PRODUCT_CODES,
+  SCANNER_PLATFORMS,
+  SCANNER_TREATMENTS,
+  TOOTH_STATES,
+  type DeliveryAddress,
+  type DeviceOrder,
+} from "./model.js";
 import { mainSplintCount, startingPointMm } from "./sequence.js";
 
 /**
@@ -26,13 +35,18 @@ export const ORDER_ISSUE_CODES = [
   "desiredDateTooEarly",
   "emailInvalid",
   "tooLong",
+  "warningNotConfirmed",
 ] as const;
 export type OrderIssueCode = (typeof ORDER_ISSUE_CODES)[number];
 
 export interface OrderValidation {
   /** Block sending. */
   errors: OrderIssue[];
-  /** Shown, never block — OA's own form only warns about these (rules §2). */
+  /**
+   * Shown the way OA's own form shows them (rules §2). A confirmable one
+   * (CONFIRMABLE_WARNINGS) also adds a warningNotConfirmed error until the
+   * order lists it in acknowledgedWarnings (Łukasz D1, 2026-10-03).
+   */
   warnings: OrderIssue[];
 }
 
@@ -83,6 +97,14 @@ const deviceOrderShape = z.object({
   observations: z.string(),
   desiredDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   noContactDoctorForRedesign: z.boolean(),
+  registration: z
+    .discriminatedUnion("method", [
+      z.object({ method: z.literal("impression") }),
+      z.object({ method: z.literal("scanner"), scannerTreatment: z.enum(SCANNER_TREATMENTS).nullable() }),
+      z.object({ method: z.literal("platform"), scannerPlatform: z.enum(SCANNER_PLATFORMS).nullable() }),
+    ])
+    .default({ method: "impression" }),
+  acknowledgedWarnings: z.array(z.string()).default([]),
 });
 
 /** Maps a zod issue to our codes: missing → required, a range → outOfRange with its bounds, anything else → invalid. */
@@ -152,9 +174,25 @@ function crossFieldIssues(order: DeviceOrder, ctx: OrderContext, broken: Readonl
     }
   }
 
+  // OA's "Registro dental": a scanner or a platform needs its name (OA nulls the other one).
+  if (usable("registration")) {
+    const reg = order.registration;
+    if (reg?.method === "scanner" && reg.scannerTreatment === null) errors.push({ path: "registration.scannerTreatment", code: "required" });
+    if (reg?.method === "platform" && reg.scannerPlatform === null) errors.push({ path: "registration.scannerPlatform", code: "required" });
+  }
+
   // The desired date can't be earlier than OA's manufacturing date for the product.
   if (usable("desiredDate") && ctx.minDesiredDate && order.desiredDate && order.desiredDate < ctx.minDesiredDate) {
     errors.push({ path: "desiredDate", code: "desiredDateTooEarly", params: { min: ctx.minDesiredDate } });
+  }
+
+  // Łukasz D1 (2026-10-03): a confirmable warning blocks until the doctor confirms it.
+  const acknowledged = usable("acknowledgedWarnings") && Array.isArray(order.acknowledgedWarnings) ? order.acknowledgedWarnings : [];
+  const confirmable: readonly string[] = CONFIRMABLE_WARNINGS;
+  for (const warning of warnings) {
+    if (confirmable.includes(warning.code) && !acknowledged.includes(warning.code)) {
+      errors.push({ path: warning.path, code: "warningNotConfirmed", params: { warning: warning.code } });
+    }
   }
   return { errors, warnings };
 }
@@ -168,6 +206,16 @@ export function validateDeviceOrder(input: unknown, ctx: OrderContext = {}): Ord
   const broken = new Set(parsed.error.issues.map((i) => String(i.path[0] ?? "")));
   const cross = crossFieldIssues(input as DeviceOrder, ctx, broken);
   return { errors: [...shapeErrors, ...cross.errors], warnings: cross.warnings };
+}
+
+/**
+ * The order with its defaults filled in (registration → impression,
+ * acknowledgedWarnings → []) and unknown keys dropped, or null when it fails
+ * the shape check. The API stores and sends this, never the raw body.
+ */
+export function parseDeviceOrder(input: unknown): DeviceOrder | null {
+  const parsed = deviceOrderShape.safeParse(input);
+  return parsed.success ? (parsed.data as DeviceOrder) : null;
 }
 
 /** KJ (rules §1.2): when shipping to an address OA requires every field; name ≤ 40 chars; email format. */
