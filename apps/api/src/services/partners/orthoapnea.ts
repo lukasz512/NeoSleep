@@ -543,6 +543,17 @@ export function mergeLanguageTwins(items: PartnerResourceItem[], locale: string)
   return items.filter((i) => !dropped.has(i.id)).map((i) => merged.get(i.id) ?? i);
 }
 
+/**
+ * Partner names never reach the screen (Łukasz, 2026-10-03, NEO-212): the
+ * partner's own titles say "OrthoApnea NOA", the app says "DAM" (dispositivo
+ * de avance mandibular). Applied to every user-visible resource text.
+ */
+export function withoutPartnerBrand(text: string): string;
+export function withoutPartnerBrand(text: string | null): string | null;
+export function withoutPartnerBrand(text: string | null): string | null {
+  return text === null ? null : text.replace(/ortho\s?apnea(\s+noa\b)?/gi, "DAM");
+}
+
 export async function fetchResources(locale: string): Promise<PartnerResourceItem[]> {
   const rows = await fetchRawResources();
 
@@ -555,13 +566,13 @@ export async function fetchResources(locale: string): Promise<PartnerResourceIte
         id: String(row.id),
         partner: "orthoapnea",
         kind: row.type === VIDEO_TYPE ? "video" : "document",
-        title: pickLocalized(row, "title", locale),
-        description: pickLocalized(row, "description", locale),
+        title: withoutPartnerBrand(pickLocalized(row, "title", locale)),
+        description: withoutPartnerBrand(pickLocalized(row, "description", locale)),
         mediaUrl: `/api/v1/partners/orthoapnea/resources/${row.id}/media?locale=${locale}`,
         fileType: row.type === VIDEO_TYPE ? "video" : detectFileType(defaultFilename),
         languages: collectLanguageVariants(row, row.id),
         category: labels?.category ?? UNKNOWN_CATEGORY,
-        subcategory: labels?.subcategory ?? null,
+        subcategory: withoutPartnerBrand(labels?.subcategory ?? null),
         weight: row.weight,
         ...(row.type === VIDEO_TYPE ? { topic: VIDEO_TOPIC_BY_ID[row.id] ?? "other" } : {}),
       };
