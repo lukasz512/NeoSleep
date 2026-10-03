@@ -2,7 +2,7 @@
   <!-- NEO-221 (D1/D2): the patient list's "Next step" — what still waits on the patient, plus the QR that gets it done.
        Same rule as the patient's side panel (PatientAsidePanel); `compact` (phone card) keeps only the QR. -->
   <span class="next-step" :class="{ 'next-step--compact': compact }">
-    <!-- NEO-223: once a device is ordered, following the order is the next step — device tracking replaces the QR. -->
+    <!-- NEO-223: once a device order exists (a local draft too), following it is the next step — device tracking replaces the QR. -->
     <template v-if="tracking">
       <span v-if="!compact" class="next-step__text">
         <span class="next-step__title">{{ t("app.patients.nextStep.deviceTracking") }}</span>
@@ -70,11 +70,11 @@ const router = useRouter();
 
 const waiting = computed(() => props.forms.filter((f) => f.waiting_on_patient));
 
-/** The order state worth tracking; a draft never sent or a cancelled order leaves the QR in place. */
-const tracking = computed<Exclude<DeviceOrderState, "draft" | "cancelled"> | null>(() => {
+/** The order state to track — from the moment the order exists locally (a draft too); only a cancelled one leaves the QR. */
+const tracking = computed<Exclude<DeviceOrderState, "cancelled"> | null>(() => {
   if (!props.deviceOrder) return null;
   const state = deviceOrderState(props.deviceOrder);
-  return state === "draft" || state === "cancelled" ? null : state;
+  return state === "cancelled" ? null : state;
 });
 
 /** The order's tracking lives on the patient's Dispositivo tab (PatientOrthoApneaPanel). */
@@ -159,6 +159,15 @@ function openQr(): void {
   right: -2px;
   padding: 0;
   background: rgb(var(--v-theme-info));
+}
+
+.next-step__device--draft .next-step__badge {
+  min-width: 10px;
+  height: 10px;
+  top: -2px;
+  right: -2px;
+  padding: 0;
+  background: rgba(var(--v-theme-on-surface), 0.38);
 }
 
 .next-step__device--received .next-step__badge {

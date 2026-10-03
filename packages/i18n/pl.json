@@ -1483,6 +1483,7 @@
   "app.treatmentPlans.form.scanFileUrl": "Link do skanu 3D",
   "app.orthoApneaOrder.title": "Nowe zamówienie urządzenia",
   "app.deviceOrder.section": "Zamówienia urządzenia",
+  "app.deviceOrder.oneActive": "Jedno urządzenie naraz: pacjent ma zamówienie w toku. Dodaj komentarz do tego zamówienia.",
   "app.deviceOrder.title": "Aparat wysuwający żuchwę",
   "app.deviceOrder.titleNumber": "{title} · nr {n}",
   "app.deviceOrder.state.draft": "Niewysłane",

@@ -1564,6 +1564,7 @@
   "app.treatmentPlans.form.scanFileUrl": "3D scan file URL",
   "app.orthoApneaOrder.title": "New device order",
   "app.deviceOrder.section": "Device orders",
+  "app.deviceOrder.oneActive": "One device at a time: this patient has an order in progress. Add a comment to that order instead.",
   "app.deviceOrder.title": "Mandibular advancement device",
   "app.deviceOrder.titleNumber": "{title} · No. {n}",
   "app.deviceOrder.state.draft": "Not sent",

@@ -474,3 +474,23 @@ export async function getLatestDeviceOrderByPatient(
     throw new DatabaseError("getLatestDeviceOrderByPatient", err);
   }
 }
+
+/**
+ * NEO-223: whether the patient already has an open plan of this type — not deleted, not
+ * completed/cancelled, no appliance delivered. Drafts count (the clinic continues that one).
+ */
+export async function hasActiveTreatmentPlan(client: PoolClient, patientId: string, type: string): Promise<boolean> {
+  try {
+    const result = await client.query(
+      `SELECT 1 FROM treatment_plan
+        WHERE patient_id = $1 AND type = $2 AND deleted_at IS NULL
+          AND status NOT IN ('completed', 'cancelled') AND appliance_delivered_at IS NULL
+        LIMIT 1`,
+      [patientId, type],
+    );
+    return (result.rowCount ?? 0) > 0;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("hasActiveTreatmentPlan", err);
+  }
+}

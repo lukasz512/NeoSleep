@@ -48,3 +48,11 @@ export function deviceOrderState(plan: {
   if (plan.order_sync_status === "failed") return "attention";
   return "ordered";
 }
+
+/**
+ * NEO-223: an order still in progress — one per patient (the API refuses a second, DEVICE_ORDER_ACTIVE);
+ * the clinic follows up on it through its comments. Received and cancelled orders are closed.
+ */
+export function isActiveDeviceOrder(state: DeviceOrderState): boolean {
+  return state === "draft" || state === "attention" || state === "ordered";
+}

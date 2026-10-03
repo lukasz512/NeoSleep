@@ -6,7 +6,7 @@ import { CreatePatientCommand } from "./patient.js";
 import { CreateSleepStudyCommand } from "./sleepStudy.js";
 import { CreateTreatmentPlanCommand, DeleteTreatmentPlanCommand, RestoreTreatmentPlanCommand, UpdateTreatmentPlanCommand } from "./treatmentPlan.js";
 import { getTreatmentPlanById } from "../db.js";
-import { ValidationError } from "../errors.js";
+import { ValidationError, ConflictError } from "../errors.js";
 
 // Command-level integration test — hits the real tenant DB via withTenant(),
 // per CLAUDE.md's "No mock-only tests for the API server" rule. Needs a running
@@ -98,6 +98,48 @@ describe("CreateTreatmentPlanCommand", () => {
       expect(plan.status).toBe("initiated");
       expect(plan.patient_id).toBe(patient.id);
       expect(plan.sleep_study_id).toBe(study.id);
+    });
+  });
+});
+
+// NEO-223: one active device per patient — while an order is in progress (draft, sent, needs attention)
+// a new one is refused; the clinic comments on the open order instead.
+describe("CreateTreatmentPlanCommand — one active device order (NEO-223)", () => {
+  it("refuses a second order while one is active, allows it once the first is received or cancelled", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const patient = await createTestPatient(ctx);
+      const study = await CreateSleepStudyCommand(ctx, { patient_id: patient.id });
+      const create = () => CreateTreatmentPlanCommand(ctx, { patient_id: patient.id, sleep_study_id: study.id, type: "dental_appliance" });
+
+      const first = await create();
+      const error = await create().catch((err: unknown) => err);
+      expect(error).toBeInstanceOf(ConflictError);
+      expect((error as ConflictError).code).toBe("DEVICE_ORDER_ACTIVE");
+
+      await UpdateTreatmentPlanCommand(ctx, first.id, { status: "completed" });
+      const second = await create();
+      await UpdateTreatmentPlanCommand(ctx, second.id, { status: "cancelled" });
+      await expect(create()).resolves.toMatchObject({ patient_id: patient.id });
+    });
+  });
+
+  it("a draft counts as active; a deleted (hidden) one doesn't", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const patient = await createTestPatient(ctx);
+      const study = await CreateSleepStudyCommand(ctx, { patient_id: patient.id });
+      const draft = await CreateTreatmentPlanCommand(ctx, {
+        patient_id: patient.id, sleep_study_id: study.id, type: "dental_appliance", metadata: { orthoapneaDraft: { step: 1 } },
+      });
+      await expect(
+        CreateTreatmentPlanCommand(ctx, { patient_id: patient.id, sleep_study_id: study.id, type: "dental_appliance" }),
+      ).rejects.toThrow(ConflictError);
+
+      await DeleteTreatmentPlanCommand(ctx, draft.id);
+      await expect(
+        CreateTreatmentPlanCommand(ctx, { patient_id: patient.id, sleep_study_id: study.id, type: "dental_appliance" }),
+      ).resolves.toMatchObject({ patient_id: patient.id });
     });
   });
 });
