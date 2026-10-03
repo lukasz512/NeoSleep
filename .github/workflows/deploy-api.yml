@@ -24,6 +24,7 @@ on:
       - "apps/api/**"
       - "packages/documents/**"
       - "packages/email/**"
+      - "packages/device-order/**"
       - "packages/i18n/*.json"
       - "infrastructure/cloud-run/**"
       - "pnpm-lock.yaml"

@@ -134,6 +134,45 @@ export async function markPartnerLinkFailed(client: PoolClient, id: string, erro
   }
 }
 
+/**
+ * Takes a link for a new submit in ONE statement: inserts it as 'pending', or
+ * flips an existing 'failed' link (never sent, no external_id) back to
+ * 'pending'. Returns null when the link is synced or already 'pending' —
+ * someone else holds it. ON CONFLICT re-checks the WHERE against the latest
+ * committed row, so two racing callers can't both get a row back, even
+ * without the advisory lock the caller also takes.
+ */
+export async function claimPartnerLink(
+  client: PoolClient,
+  partner: string,
+  entityType: string,
+  entityId: string
+): Promise<PartnerLink | null> {
+  try {
+    const { rows } = await client.query<PartnerLink>(
+      `INSERT INTO partner_link (partner, entity_type, entity_id, sync_status)
+       VALUES ($1, $2, $3, 'pending')
+       ON CONFLICT (partner, entity_type, entity_id) DO UPDATE
+         SET sync_status = 'pending', last_error = NULL, updated_at = now()
+         WHERE partner_link.sync_status = 'failed' AND partner_link.external_id IS NULL
+       RETURNING ${PARTNER_LINK_COLS}`,
+      [partner, entityType, entityId]
+    );
+    return rows[0] ?? null;
+  } catch (err) {
+    throw new DatabaseError("claimPartnerLink", err);
+  }
+}
+
+/** Records an error without changing sync_status — used when the outcome is unknown and the link must stay blocked. */
+export async function setPartnerLinkError(client: PoolClient, id: string, errorMessage: string): Promise<void> {
+  try {
+    await client.query(`UPDATE partner_link SET last_error = $2, updated_at = now() WHERE id = $1`, [id, errorMessage]);
+  } catch (err) {
+    throw new DatabaseError("setPartnerLinkError", err);
+  }
+}
+
 /** Updates only external_status/last_synced_at — used by the status-poll job, which doesn't touch external_id/sync_status (those are set once, at creation). */
 export async function updatePartnerLinkStatus(client: PoolClient, id: string, externalStatus: string | null): Promise<PartnerLink> {
   try {

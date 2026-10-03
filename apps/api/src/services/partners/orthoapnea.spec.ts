@@ -139,3 +139,27 @@ describe("validatePartnerResponse", () => {
     expect(report.unexpectedTopLevelFields).toEqual(["status"]);
   });
 });
+
+describe("reconcile helpers (Łukasz D3, 2026-10-03)", () => {
+  it("reads OA's zone-less requestDate as Europe/Madrid time — 17:33:13 local was 15:33:13Z (shot S3, CEST)", async () => {
+    const { oaLocalTimeToEpochMs } = await importService(true);
+    expect(oaLocalTimeToEpochMs("2026-10-03T17:33:13.049")).toBe(Date.parse("2026-10-03T15:33:13.049Z"));
+    // Winter time (CET, UTC+1).
+    expect(oaLocalTimeToEpochMs("2026-01-15T10:00:00")).toBe(Date.parse("2026-01-15T09:00:00Z"));
+    expect(oaLocalTimeToEpochMs("not a date")).toBeNull();
+  });
+
+  it("matches an OA order for the same product placed no earlier than the claim minus the slack; skips other products and older orders", async () => {
+    const { findReconcileMatch } = await importService(true);
+    const claimedAt = Date.parse("2026-10-03T15:33:00Z");
+    const content = [
+      { id: 1, product: { code: "002" }, requestDate: "2026-10-03T17:20:00.000" }, // 13 min before the claim
+      { id: 2, product: { code: "003" }, requestDate: "2026-10-03T17:33:10.000" }, // other product
+      { id: 3, product: { code: "002" }, requestDate: "2026-10-03T17:32:30.000" }, // 30 s before the claim: within the slack
+      { id: 4, product: { code: "002" }, requestDate: "2026-10-03T17:40:00.000" },
+    ];
+    expect(findReconcileMatch(content, { productCode: "002", claimedAt, excludeIds: [] })?.id).toBe(3);
+    expect(findReconcileMatch(content, { productCode: "002", claimedAt, excludeIds: ["3"] })?.id).toBe(4);
+    expect(findReconcileMatch(content, { productCode: "004", claimedAt, excludeIds: [] })).toBeNull();
+  });
+});

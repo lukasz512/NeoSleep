@@ -567,3 +567,64 @@ export async function sendEmailSentConfirmation(
     fromName: clinicFromName(info.clinic),
   });
 }
+
+export interface ReconciliationAlert {
+  status: "mismatch" | "failed";
+  /** "dev" / "prod" / "local" — whose orders were compared. */
+  environment: string;
+  matched: number;
+  mismatches: number;
+  oursSent: number;
+  labTotal: number;
+  /** One line per order that needs attention: reason + lab order number. No patient data. */
+  lines: string[];
+  error: string | null;
+  /** Absolute link to the admin panel. */
+  panelUrl: string;
+}
+
+/**
+ * Device-order reconciliation alert (NEO-218, Łukasz Q1): sent to admins only
+ * when a run finds a mismatch or can't read the lab — a clean run sends
+ * nothing. Internal notification like sendContactEmail, so unlocalized; it
+ * carries counts, reason codes and lab order numbers only, never patient
+ * names (the details stay behind the admin panel's login).
+ */
+export async function sendDeviceOrderReconciliationAlert(to: string, alert: ReconciliationAlert): Promise<void> {
+  const env = alert.environment.toUpperCase();
+  const subject =
+    alert.status === "failed"
+      ? `[NeoSleep ${env}] Device order check failed`
+      : `[NeoSleep ${env}] ${alert.mismatches} device order(s) need attention`;
+  const rows: [string, string][] = [
+    ["Environment", alert.environment],
+    ["Result", alert.status === "failed" ? `could not read the lab: ${alert.error ?? "unknown error"}` : "mismatch"],
+    ["Matched", `${alert.matched} of ${alert.matched + alert.mismatches}`],
+    ["Sent from NeoSleep", String(alert.oursSent)],
+    ["Listed by the lab", String(alert.labTotal)],
+  ];
+  const tableRows = rows
+    .map(([label, value]) => `<tr><td style="padding:4px 12px 4px 0;font-weight:600;white-space:nowrap;vertical-align:top">${escapeHtml(label)}</td><td style="padding:4px 0">${escapeHtml(value)}</td></tr>`)
+    .join("");
+  const list =
+    alert.lines.length > 0
+      ? `<ul style="margin:12px 0;padding-left:20px;font-size:15px;">${alert.lines.map((l) => `<li>${escapeHtml(l)}</li>`).join("")}</ul>`
+      : "";
+  const bodyHtml = `
+    <h1 style="margin:0 0 16px;font-size:19px;font-weight:bold;color:#128F83;">${escapeHtml(subject)}</h1>
+    <table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;font-family:Arial,Helvetica,sans-serif;font-size:15px;">${tableRows}</table>
+    ${list}
+    <p style="margin:16px 0 0;font-size:15px;"><a href="${escapeHtml(alert.panelUrl)}" style="color:#128F83;">Open the admin panel</a> for the details.</p>`;
+
+  const socials = getSocialsForRegion(null);
+  const html = renderEmailLayout({
+    bodyHtml,
+    footerTagline: "NeoSleep — internal notification",
+    footerCities: emailT(null, "email.footer.cities"),
+    footerCopyright: emailT(null, "email.footer.copyright", { year: String(new Date().getFullYear()) }),
+    supportLeadIn: emailT(null, "email.footer.support"),
+    socials,
+  });
+
+  await sendEmail("device order reconciliation alert", { to, subject, html, attachments: getEmailAttachments(socials) });
+}

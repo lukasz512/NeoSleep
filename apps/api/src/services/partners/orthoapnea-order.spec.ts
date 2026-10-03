@@ -268,6 +268,36 @@ describe("createOrthoApneaTreatment", () => {
     expect(transactions[0]!.validation_report.missingFields).toEqual([]);
   });
 
+  it("sends the DTO as OA's portal does: multipart/form-data with one `treatmentDTO` JSON-string field (rules §3.2)", async () => {
+    const { plan } = await setupPatientAndPlan();
+    const inits: RequestInit[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init: RequestInit = {}) => {
+        if (url.includes("/api/login")) return { ok: true, status: 200, json: async () => ({ token: fakeJwt(1800) }) } as Response;
+        if (url.includes("/api/treatments")) {
+          inits.push(init);
+          return { ok: true, status: 200, json: async () => treatmentDtoFixture } as Response;
+        }
+        throw new Error(`Unmocked fetch call in test: ${url}`);
+      })
+    );
+
+    const dto = { patientId: 44171, retrusionMax: -4, protrusionMax: 6, sequence: { seq1: 0 } };
+    await createOrthoApneaTreatment(TENANT_SLUG, plan.id, dto);
+    const link = await withTenant(TENANT_SLUG, (client) => getPartnerLink(client, "orthoapnea", "treatment_plan", plan.id));
+    createdPartnerLinkIds.push(link!.id);
+
+    expect(inits).toHaveLength(1);
+    const body = inits[0]!.body;
+    expect(body).toBeInstanceOf(FormData);
+    const form = body as FormData;
+    expect([...form.keys()]).toEqual(["treatmentDTO"]);
+    expect(JSON.parse(form.get("treatmentDTO") as string)).toEqual(dto);
+    // No hand-set Content-Type: fetch must write the multipart boundary itself.
+    expect(new Headers(inits[0]!.headers).has("Content-Type")).toBe(false);
+  });
+
   it("marks partner_link failed and logs a failed transaction when OrthoApnea returns an error status", async () => {
     const { plan } = await setupPatientAndPlan();
 

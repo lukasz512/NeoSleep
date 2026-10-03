@@ -1,12 +1,15 @@
 import { ORTHOAPNEA_BASE_URL, ORTHOAPNEA_EMAIL, ORTHOAPNEA_PASSWORD } from "../../env.js";
-import { PartnerServiceError, ConflictError } from "../../errors.js";
-import { getPatientById } from "../../db/patient.js";
+import { PartnerServiceError, ConflictError, PartnerOrderAlreadySubmittedError } from "../../errors.js";
+import { getPatientById, type Patient } from "../../db/patient.js";
+import { getTreatmentPlanById } from "../../db/treatmentPlan.js";
 import { withTenant } from "../../db/tenant.js";
 import {
   getPartnerLink,
   ensurePendingPartnerLink,
   markPartnerLinkSynced,
   markPartnerLinkFailed,
+  claimPartnerLink,
+  setPartnerLinkError,
   updatePartnerLinkStatus,
   insertPartnerTransaction,
   type PartnerLink,
@@ -42,6 +45,23 @@ import type { PartnerResourceItem } from "./types.js";
  */
 
 const LOGIN_PATH = "/api/login";
+
+/**
+ * Integration specs point this module at the in-process OA replica
+ * (test/oa-replica/server.ts), which listens on a random port chosen after
+ * this module is loaded — env.ts reads ORTHOAPNEA_BASE_URL once at import, so
+ * the replica's URL is injected here instead. Always null in production.
+ */
+let baseUrlOverrideForTests: string | null = null;
+
+function oaBaseUrl(): string {
+  return baseUrlOverrideForTests ?? ORTHOAPNEA_BASE_URL;
+}
+
+/** Test-only: route every OrthoApnea call to `url` (the replica), or back to ORTHOAPNEA_BASE_URL with null. */
+export function __setOrthoApneaBaseUrlForTests(url: string | null): void {
+  baseUrlOverrideForTests = url;
+}
 const RESOURCES_PATH = "/api/resources";
 /** Confirmed from captured page renders — apneadock.es serves documents from exactly this path (e.g. /media/doc/OA010.pdf). */
 const DOCUMENT_MEDIA_PATH = "/media/doc";
@@ -129,7 +149,7 @@ async function login(): Promise<OrthoApneaSession> {
   const timeout = setTimeout(() => controller.abort(), LOGIN_TIMEOUT_MS);
   let res: Response;
   try {
-    res = await fetch(`${ORTHOAPNEA_BASE_URL}${LOGIN_PATH}`, {
+    res = await fetch(`${oaBaseUrl()}${LOGIN_PATH}`, {
       method: "POST",
       headers: { Authorization: `Basic ${basicAuth}` },
       signal: controller.signal,
@@ -223,6 +243,12 @@ export function __resetOrthoApneaStateForTests(): void {
   lastLoginFailureAt = null;
   lastFailureReason = null;
   consecutiveFailures = 0;
+  countriesCache = null;
+  productsCache = null;
+  clinicsCache = null;
+  currentUserIdCache = null;
+  currentUserCache = null;
+  manufacturingDateCache.clear();
 }
 
 export interface ConnectionStatus {
@@ -266,20 +292,23 @@ export async function checkConnection(): Promise<ConnectionStatus> {
  */
 const FETCH_TIMEOUT_MS = 20_000;
 
+/** The request was sent and OA did not answer in time — it may or may not have acted on it. */
+class OrthoApneaTimeoutError extends PartnerServiceError {}
+
 async function authedFetch(path: string, init: RequestInit = {}, isRetry = false): Promise<Response> {
   const { token } = await ensureSession();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   let res: Response;
   try {
-    res = await fetch(`${ORTHOAPNEA_BASE_URL}${path}`, {
+    res = await fetch(`${oaBaseUrl()}${path}`, {
       ...init,
       headers: { ...init.headers, Authorization: `Bearer ${token}` },
       signal: controller.signal,
     });
   } catch (cause) {
     if (controller.signal.aborted) {
-      throw new PartnerServiceError("orthoapnea", `request to ${path} timed out after ${FETCH_TIMEOUT_MS}ms`, cause);
+      throw new OrthoApneaTimeoutError("orthoapnea", `request to ${path} timed out after ${FETCH_TIMEOUT_MS}ms`, cause);
     }
     throw cause;
   } finally {
@@ -294,6 +323,17 @@ async function authedFetch(path: string, init: RequestInit = {}, isRetry = false
     return authedFetch(path, init, true);
   }
   return res;
+}
+
+/**
+ * Raw authenticated call for hand-run scripts only (scripts/oa-test-order.ts,
+ * NEO-210) — returns the untouched Response so the script can record status,
+ * headers and body verbatim. Mutations still go through the same queue as the
+ * app, so a script can never race a real order on the shared account.
+ */
+export function orthoApneaRawRequest(path: string, init: RequestInit = {}): Promise<Response> {
+  const method = (init.method ?? "GET").toUpperCase();
+  return method === "GET" ? authedFetch(path, init) : enqueueOrthoApneaMutation(() => authedFetch(path, init));
 }
 
 interface RawOrthoApneaResource {
@@ -758,7 +798,7 @@ export async function resolveVideoSource(resourceId: string, locale: string): Pr
 
   const { token } = await ensureSession();
   return {
-    url: `${ORTHOAPNEA_BASE_URL}${path}`,
+    url: `${oaBaseUrl()}${path}`,
     headers: { Authorization: `Bearer ${token}` },
     version: `${filename}:${total}`,
   };
@@ -848,9 +888,10 @@ const EXPECTED_RESPONSE_FIELDS: Record<string, string[]> = {
     "user", "creator", "treatments", "diagnosis", "profession", "observer",
     "userDiagnosis", "userDiagnosisSignupDate", "customerId", "clinicId",
   ],
+  // Confirmed by order 454012 (2026-10-03): create returns the full treatment
+  // (91 keys) with `patient` as an object and no patientId/patientName.
   create_treatment: [
-    "id", "statusId", "patientId", "patientName", "clinicName", "product",
-    "requestDate", "expectedDeliveryDate", "editable", "paid", "billed",
+    "id", "statusId", "product", "requestDate", "expectedDeliveryDate", "deliveryAddress",
   ],
   add_comment: [
     "id", "action", "type", "note", "receiverRole", "creationDate", "treatmentId", "emailed",
@@ -938,6 +979,40 @@ async function logPartnerTransaction(
 }
 
 /**
+ * POST /api/patient body, field set confirmed verbatim from a live capture
+ * and from shot S1 (2026-10-03, rules "Results"): OA stored every field sent.
+ * OA's own form requires birthDate ("YYYY-MM-DDT00:00:00") and a country, so
+ * both are sent whenever our record has them. We hold no patient postal
+ * address, ID or insurance number, so those go as "" — OA's own form sends
+ * "" for an empty field, not a missing key. `male` is null when the gender
+ * is other / not stated (OA's form allows null).
+ */
+export function buildOrthoApneaPatientPayload(
+  patient: Pick<Patient, "first_name" | "last_name" | "email" | "phone" | "gender" | "date_of_birth">,
+  countryId: number | null,
+  userId: string | null
+): Record<string, unknown> {
+  const male = patient.gender === "male" ? true : patient.gender === "female" ? false : null;
+  return {
+    name: [patient.first_name, patient.last_name].filter(Boolean).join(" "),
+    email: patient.email ?? "",
+    identityNumber: "",
+    insuranceNumber: "",
+    birthDate: patient.date_of_birth ? `${patient.date_of_birth.slice(0, 10)}T00:00:00` : "",
+    male,
+    phone: patient.phone ?? "",
+    countryId: countryId ?? undefined,
+    province: "",
+    city: "",
+    address: "",
+    postalCode: "",
+    // The captured payload has userId as a JSON number, not a numeric string.
+    userId: userId != null ? Number(userId) : undefined,
+    profession: "",
+  };
+}
+
+/**
  * Ensures a NeoSleep patient has a corresponding OrthoApnea patient, creating
  * one if needed. Idempotent — safe to call every time the order wizard
  * opens, per the product requirement that opening the form is what creates
@@ -950,7 +1025,16 @@ async function logPartnerTransaction(
  * transaction open → short transaction (record the outcome) — so a slow or
  * hung partner API never pins a DB connection.
  */
-export async function ensureOrthoApneaPatient(tenantSlug: string, patientId: string): Promise<string> {
+export interface EnsureOrthoApneaPatientOptions {
+  /** ISO2 country used when the patient's own region doesn't map to an OA country (OA's patient form requires one). */
+  fallbackCountryCode?: string | null;
+}
+
+export async function ensureOrthoApneaPatient(
+  tenantSlug: string,
+  patientId: string,
+  options: EnsureOrthoApneaPatientOptions = {}
+): Promise<string> {
   const setup = await withTenant(tenantSlug, async (client) => {
     const existing = await getPartnerLink(client, PARTNER_NAME, "patient", patientId);
     if (existing?.external_id) return { done: true as const, externalId: existing.external_id };
@@ -964,42 +1048,13 @@ export async function ensureOrthoApneaPatient(tenantSlug: string, patientId: str
   if (setup.done) return setup.externalId;
   const { link, patient } = setup;
 
-  // NOTE: `patient.region` is a territory code (e.g. "PL"/"MX"), used here as
-  // a best-effort ISO2 guess for OrthoApnea's countryId mapping — still not
-  // verified against a real create call (the live-capture round confirmed
-  // the PAYLOAD SHAPE below, but the actual country used in every captured
-  // example was Mexico (id 29), never cross-checked against a non-MX patient).
-  const countryId = await resolveCountryId(patient.region);
+  // `patient.region` is a territory code ("PL"/"MX"), used as the ISO2 guess
+  // for OA's countryId; the ordering doctor's HCO country is the fallback
+  // (OA's create-patient form requires a country, rules §1.1).
+  const countryId = (await resolveCountryId(patient.region)) ?? (await resolveCountryId(options.fallbackCountryCode));
   const userId = await resolveCurrentUserId().catch(() => null);
 
-  // Confirmed verbatim from a live capture (PUT /api/patient for an edit,
-  // POST /api/patient for a create — same shape, POST just omits `id`):
-  // name, email, identityNumber, insuranceNumber, birthDate, male, phone,
-  // countryId, province, city, address, postalCode, userId, profession.
-  // Our own `patient` table has no equivalent for identityNumber/
-  // insuranceNumber/birthDate/male/province/address/postalCode/profession —
-  // those genuinely don't exist in our schema yet, so they're sent empty
-  // ("") to match the confirmed shape rather than omitted (OrthoApnea's own
-  // captured examples send "" for unknown fields, not a missing key).
-  const requestPayload: Record<string, unknown> = {
-    name: [patient.first_name, patient.last_name].filter(Boolean).join(" "),
-    email: patient.email ?? "",
-    identityNumber: "",
-    insuranceNumber: "",
-    birthDate: "",
-    male: "",
-    phone: patient.phone ?? "",
-    countryId: countryId ?? undefined,
-    province: "",
-    city: "",
-    address: "",
-    postalCode: "",
-    // resolveCurrentUserId() returns a string (it's also used to build query
-    // strings elsewhere) — the confirmed captured payload has userId as a
-    // JSON number, not a numeric string.
-    userId: userId != null ? Number(userId) : undefined,
-    profession: "",
-  };
+  const requestPayload = buildOrthoApneaPatientPayload(patient, countryId, userId);
 
   let response: Response;
   try {
@@ -1061,70 +1116,354 @@ export async function ensureOrthoApneaPatient(tenantSlug: string, patientId: str
 export interface CreateOrthoApneaTreatmentResult {
   externalId: string;
   externalStatus: string | null;
+  /** The exact DTO sent (also stored on the partner_transaction row). */
+  requestPayload: Record<string, unknown>;
   responsePayload: Record<string, unknown> | null;
 }
 
+/** The order DTO in OA's own format, or a builder that runs only once this caller holds the submission claim. */
+export type OrthoApneaTreatmentPayload = Record<string, unknown> | (() => Promise<Record<string, unknown>>);
+
 /**
- * Creates a treatment order in OrthoApnea mirroring the local treatment_plan
- * row. `wizardPayload` is expected to use OrthoApnea's own field names
- * verbatim (see the implementation plan's field-mapping table) — this
- * function is a thin, auditable pass-through, not a translation layer.
+ * POST /api/treatments body exactly as OA's portal sends it (rules §3.2):
+ * multipart/form-data with one text field `treatmentDTO` holding the JSON
+ * string, plus `file` parts (none from us yet). Shot S3 (order 454012,
+ * 2026-10-03) was sent this way and stored field for field.
+ */
+export function orthoApneaTreatmentForm(dto: Record<string, unknown>): FormData {
+  const form = new FormData();
+  form.append("treatmentDTO", JSON.stringify(dto));
+  return form;
+}
+
+/**
+ * Takes the one right to submit an order for this treatment_plan, or throws
+ * 409. The check and the "submitting" marker are one conditional upsert
+ * (claimPartnerLink), run under a transaction-level advisory lock keyed by
+ * the plan: two concurrent submits serialize here, and the second one sees
+ * the first one's marker and stops before any OA call.
  *
- * Guards against double-submission: unlike ensureOrthoApneaPatient (a plain
- * "ensure it exists" that's safe to call repeatedly), an order create is not
- * idempotent on OrthoApnea's side as far as we know — calling this twice for
- * the same treatment_plan would create two real, billable orders. A prior
- * *failed* attempt is still retried (its link has no external_id yet).
+ * The marker is partner_link.sync_status = 'pending' (no new status value
+ * needed): on a treatment_plan link it only ever means "a submit is running
+ * or was interrupted". A link left 'pending' (process died, or OA timed out
+ * after the request may have reached it) is never blindly retried — OA might
+ * already hold the order, and a second one would be a second billable
+ * device. Once it is older than RECONCILE_AFTER_MS, a submit first looks the
+ * order up in OA (reconcilePendingTreatment, Łukasz D3 2026-10-03). A link in
+ * 'failed' (OA answered with an error, or we never got as far as sending)
+ * can be submitted again.
+ */
+type ClaimOutcome = { kind: "claimed"; link: PartnerLink } | { kind: "pending"; link: PartnerLink };
+
+function planLockKey(treatmentPlanId: string): string {
+  return `partner_link:${PARTNER_NAME}:treatment_plan:${treatmentPlanId}`;
+}
+
+function alreadySubmitted(treatmentPlanId: string, externalId: string): PartnerOrderAlreadySubmittedError {
+  return new PartnerOrderAlreadySubmittedError(
+    `treatment_plan '${treatmentPlanId}' was already submitted to OrthoApnea (external id '${externalId}')`,
+    externalId
+  );
+}
+
+function submissionPending(treatmentPlanId: string): ConflictError {
+  return new ConflictError(
+    `treatment_plan '${treatmentPlanId}' has an OrthoApnea submission in progress or interrupted — check OrthoApnea before retrying`,
+    "PARTNER_ORDER_SUBMISSION_PENDING"
+  );
+}
+
+/** Claims, or reports the 'pending' link someone else holds; throws 409 when the plan is already synced. Caller holds the plan lock. */
+async function claimOrReport(client: Parameters<typeof claimPartnerLink>[0], treatmentPlanId: string): Promise<ClaimOutcome> {
+  const claimed = await claimPartnerLink(client, PARTNER_NAME, "treatment_plan", treatmentPlanId);
+  if (claimed) return { kind: "claimed", link: claimed };
+  const existing = await getPartnerLink(client, PARTNER_NAME, "treatment_plan", treatmentPlanId);
+  if (existing?.external_id) throw alreadySubmitted(treatmentPlanId, existing.external_id);
+  if (!existing) throw submissionPending(treatmentPlanId);
+  return { kind: "pending", link: existing };
+}
+
+async function claimTreatmentSubmission(tenantSlug: string, treatmentPlanId: string): Promise<ClaimOutcome> {
+  return withTenant(tenantSlug, async (client) => {
+    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [planLockKey(treatmentPlanId)]);
+    return claimOrReport(client, treatmentPlanId);
+  });
+}
+
+// ── Reconcile of an interrupted submit (Łukasz D3, 2026-10-03) ──────────────
+
+/** A treatment_plan link left 'pending' longer than this is looked up in OA before a submit answers "pending". */
+export const RECONCILE_AFTER_MS = 10 * 60_000;
+/** An OA order may carry a requestDate up to this much before our claim and still be ours (clock skew, the claim → send gap). */
+const RECONCILE_CLOCK_SLACK_MS = 60_000;
+/**
+ * OA writes requestDate in its server's local time with no zone. Measured on
+ * shot S3 (2026-10-03): OA stored 17:33:13.049 for a request sent at
+ * 15:33:12.8Z, i.e. CEST — Spain's zone.
+ */
+export const OA_SERVER_TIME_ZONE = "Europe/Madrid";
+const TREATMENTS_BY_PATIENT_PATH = "/api/treatments/byPatient";
+const RECONCILE_PAGE_SIZE = 50;
+/** 20 × 50 orders for one patient is far beyond any real case; stops a misbehaving pager. */
+const RECONCILE_MAX_PAGES = 20;
+
+const zoneFormatters = new Map<string, Intl.DateTimeFormat>();
+
+/** The zone's UTC offset (ms) at an instant. */
+function zoneOffsetMs(instant: number, timeZone: string): number {
+  let fmt = zoneFormatters.get(timeZone);
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+    zoneFormatters.set(timeZone, fmt);
+  }
+  const part = (type: Intl.DateTimeFormatPartTypes) => Number(fmt.formatToParts(new Date(instant)).find((p) => p.type === type)?.value);
+  const wallAsUtc = Date.UTC(part("year"), part("month") - 1, part("day"), part("hour"), part("minute"), part("second"));
+  return wallAsUtc - Math.floor(instant / 1000) * 1000;
+}
+
+/** OA's zone-less "YYYY-MM-DDTHH:mm:ss(.SSS)" in OA_SERVER_TIME_ZONE → epoch ms, or null when it isn't one. */
+export function oaLocalTimeToEpochMs(value: unknown, timeZone = OA_SERVER_TIME_ZONE): number | null {
+  if (typeof value !== "string") return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3})\d*)?$/.exec(value);
+  if (!m) return null;
+  const n = m.slice(1, 7).map(Number) as [number, number, number, number, number, number];
+  const wall = Date.UTC(n[0], n[1] - 1, n[2], n[3], n[4], n[5], m[7] ? Number(m[7].padEnd(3, "0")) : 0);
+  // Two passes settle the offset on the right side of a DST switch.
+  const first = wall - zoneOffsetMs(wall, timeZone);
+  return wall - zoneOffsetMs(first, timeZone);
+}
+
+/** The parts of OA's treatment DTO the reconcile reads (GET /api/treatments/byPatient/{id} content[]). */
+export interface OaTreatmentSummary {
+  id: number | string;
+  statusId?: number | string | null;
+  requestDate?: string | null;
+  product?: { code?: string | null } | null;
+}
+
+export interface ReconcileCriteria {
+  productCode: string;
+  /** When our claim was made (epoch ms). */
+  claimedAt: number;
+  /** OA order ids already linked to another plan — never ours. */
+  excludeIds: readonly string[];
+}
+
+/**
+ * The interrupted submit's order among a patient's OA orders: same product,
+ * requestDate no earlier than the claim minus RECONCILE_CLOCK_SLACK_MS, not
+ * linked to another plan; the earliest such order. Null when none.
+ */
+export function findReconcileMatch<T extends OaTreatmentSummary>(content: readonly T[], criteria: ReconcileCriteria): T | null {
+  const from = criteria.claimedAt - RECONCILE_CLOCK_SLACK_MS;
+  const candidates = content
+    .map((t) => ({ t, at: oaLocalTimeToEpochMs(t.requestDate) }))
+    .filter(
+      ({ t, at }) => t.product?.code === criteria.productCode && at !== null && at >= from && !criteria.excludeIds.includes(String(t.id))
+    )
+    .sort((a, b) => (a.at ?? 0) - (b.at ?? 0));
+  return candidates[0]?.t ?? null;
+}
+
+type OaLookup = { kind: "found"; order: OaTreatmentSummary & Record<string, unknown> } | { kind: "notFound" } | { kind: "unreachable"; error: string };
+
+/** Reads every page of the patient's OA orders and picks the match. Read-only; never throws. */
+async function lookUpOaOrder(oaPatientId: string, criteria: ReconcileCriteria): Promise<OaLookup> {
+  const content: (OaTreatmentSummary & Record<string, unknown>)[] = [];
+  try {
+    for (let page = 0; page < RECONCILE_MAX_PAGES; page++) {
+      const res = await authedFetch(
+        `${TREATMENTS_BY_PATIENT_PATH}/${encodeURIComponent(oaPatientId)}?page=${page}&size=${RECONCILE_PAGE_SIZE}`
+      );
+      if (!res.ok) return { kind: "unreachable", error: `byPatient answered ${res.status}` };
+      const body = await safeJson(res);
+      if (!body || !Array.isArray(body.content)) return { kind: "unreachable", error: "byPatient answered without a content list" };
+      for (const item of body.content as unknown[]) {
+        if (typeof item === "object" && item !== null && "id" in item) content.push(item as OaTreatmentSummary & Record<string, unknown>);
+      }
+      const totalPages = typeof body.totalPages === "number" ? body.totalPages : 1;
+      if (page + 1 >= totalPages || body.content.length === 0) break;
+    }
+  } catch (cause) {
+    return { kind: "unreachable", error: cause instanceof Error ? cause.message : String(cause) };
+  }
+  const order = findReconcileMatch(content, criteria);  return order ? { kind: "found", order } : { kind: "notFound" };
+}
+
+export interface ReconcileOptions {
+  /** OA product code of the order being submitted (enum `an`, e.g. "002"). */
+  productCode: string;
+}
+
+/**
+ * A submit found the plan's link 'pending'. Younger than RECONCILE_AFTER_MS:
+ * a submit may still be running — 409 SUBMISSION_PENDING, OA isn't asked.
+ * Older: asks OA (read-only) whether the interrupted submit reached it.
+ * - found → the link is synced to that order (+ a 'reconcile' transaction
+ *   with OA's DTO) and the caller gets 409 ALREADY_SUBMITTED with its id;
+ * - not found → the link is marked failed (transaction 'reconcile',
+ *   not_found) and re-claimed for this submit, under the same lock — the
+ *   doctor's one click sends the order exactly once;
+ * - OA unreachable → the link stays pending, 409 SUBMISSION_PENDING.
+ * The outcome is written only if the link is still the one we looked at
+ * (same updated_at, still pending), so two racing reconciles can't both
+ * re-claim it.
+ */
+async function reconcilePendingTreatment(
+  tenantSlug: string,
+  treatmentPlanId: string,
+  pending: PartnerLink,
+  options: ReconcileOptions
+): Promise<PartnerLink> {
+  const claimedAt = new Date(pending.updated_at).getTime();
+  if (Date.now() - claimedAt < RECONCILE_AFTER_MS) throw submissionPending(treatmentPlanId);
+
+  const lookup = await withTenant(tenantSlug, async (client) => {
+    const plan = await getTreatmentPlanById(client, treatmentPlanId);
+    const patientLink = plan ? await getPartnerLink(client, PARTNER_NAME, "patient", plan.patient_id) : null;
+    const { rows } = await client.query<{ external_id: string }>(
+      `SELECT external_id FROM partner_link
+       WHERE partner = $1 AND entity_type = 'treatment_plan' AND entity_id <> $2 AND external_id IS NOT NULL`,
+      [PARTNER_NAME, treatmentPlanId]
+    );
+    return { oaPatientId: patientLink?.external_id ?? null, excludeIds: rows.map((r) => r.external_id) };
+  });
+
+  // No OA patient → the interrupted submit never got as far as the order POST.
+  const outcome: OaLookup = lookup.oaPatientId
+    ? await lookUpOaOrder(lookup.oaPatientId, { productCode: options.productCode, claimedAt, excludeIds: lookup.excludeIds })
+    : { kind: "notFound" };
+
+  // The transaction returns its verdict and the 409s are thrown after it
+  // commits — a throw inside withTenant would roll the recorded outcome back.
+  const verdict = await withTenant(
+    tenantSlug,
+    async (client): Promise<{ kind: "claimed"; link: PartnerLink } | { kind: "pending" } | { kind: "submitted"; externalId: string }> => {
+      await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [planLockKey(treatmentPlanId)]);
+      const current = await getPartnerLink(client, PARTNER_NAME, "treatment_plan", treatmentPlanId);
+      const unchanged =
+        current?.id === pending.id && current.sync_status === "pending" && new Date(current.updated_at).getTime() === claimedAt;
+      if (!unchanged) {
+        // Someone else moved the link while OA was being asked: the usual rules decide.
+        const again = await claimOrReport(client, treatmentPlanId);
+        return again.kind === "claimed" ? again : { kind: "pending" };
+      }
+
+      const request = { oaPatientId: lookup.oaPatientId, productCode: options.productCode, claimedAt: new Date(claimedAt).toISOString() };
+      if (outcome.kind === "unreachable") {
+        await logPartnerTransaction(client, {
+          partner_link_id: pending.id,
+          action: "reconcile",
+          request_payload: request,
+          success: false,
+          error_message: outcome.error,
+        });
+        return { kind: "pending" };
+      }
+      if (outcome.kind === "found") {
+        const externalId = String(outcome.order.id);
+        const externalStatus = outcome.order.statusId != null ? String(outcome.order.statusId) : null;
+        await logPartnerTransaction(client, {
+          partner_link_id: pending.id,
+          action: "reconcile",
+          request_payload: request,
+          response_payload: outcome.order,
+          success: true,
+        });
+        await markPartnerLinkSynced(client, pending.id, externalId, externalStatus);
+        return { kind: "submitted", externalId };
+      }
+
+      await logPartnerTransaction(client, {
+        partner_link_id: pending.id,
+        action: "reconcile",
+        request_payload: request,
+        success: true,
+        error_message: "not_found",
+      });
+      await markPartnerLinkFailed(client, pending.id, "reconcile: the interrupted submit never reached OrthoApnea");
+      const reclaimed = await claimOrReport(client, treatmentPlanId);
+      return reclaimed.kind === "claimed" ? reclaimed : { kind: "pending" };
+    }
+  );
+
+  if (verdict.kind === "claimed") return verdict.link;
+  if (verdict.kind === "submitted") throw alreadySubmitted(treatmentPlanId, verdict.externalId);
+  throw submissionPending(treatmentPlanId);
+}
+
+/**
+ * Creates a treatment order in OrthoApnea for the local treatment_plan.
+ * The payload is OA's own DTO, built by the device-order adapter
+ * (services/deviceOrders/orthoapnea/toOaTreatmentDto.ts) — this function is
+ * the transport: claim, send, record. The exact DTO sent is stored on the
+ * partner_transaction row.
  *
- * Residual risk (documented, not solved here): the "already synced?" check
- * and the actual API call are not atomic, so two truly concurrent first-time
- * calls for the same treatment_plan could both pass the check before either
- * finishes — enqueueOrthoApneaMutation still serializes the two API calls,
- * but does not prevent the second one from happening. A page double-click or
- * accidental resubmit (the common real-world case) is fully covered; a
- * proper fix for the race would need a DB-level lock keyed by
- * treatmentPlanId (e.g. pg_advisory_xact_lock), not implemented here.
+ * Double submit: OA's create is not idempotent (two calls = two real,
+ * billable orders). claimTreatmentSubmission() makes the "already sent?"
+ * check atomic, so a second concurrent caller gets a 409 and never reaches
+ * OA. A builder payload runs after the claim, so a rejected duplicate never
+ * creates an OA patient either.
  *
- * TRANSACTION SHAPE (see ADR-017): same three-phase split as
- * ensureOrthoApneaPatient — short transaction (duplicate check + ensure
- * pending link), HTTP call with no transaction open, short transaction
- * (record the outcome).
+ * TRANSACTION SHAPE (see ADR-017): short transaction (claim) → payload build
+ * and HTTP call with no transaction open → short transaction (record the
+ * outcome).
+ *
+ * `reconcile` (the device-order path passes it): a link left 'pending' past
+ * RECONCILE_AFTER_MS is looked up in OA first (reconcilePendingTreatment).
+ * Without it, a pending link is always 409 SUBMISSION_PENDING.
  */
 export async function createOrthoApneaTreatment(
   tenantSlug: string,
   treatmentPlanId: string,
-  wizardPayload: Record<string, unknown>
+  payload: OrthoApneaTreatmentPayload,
+  reconcile?: ReconcileOptions
 ): Promise<CreateOrthoApneaTreatmentResult> {
-  const link = await withTenant(tenantSlug, async (client) => {
-    const existing = await getPartnerLink(client, PARTNER_NAME, "treatment_plan", treatmentPlanId);
-    if (existing?.external_id) {
-      throw new ConflictError(
-        `treatment_plan '${treatmentPlanId}' was already submitted to OrthoApnea (external id '${existing.external_id}')`
-      );
-    }
-    return ensurePendingPartnerLink(client, PARTNER_NAME, "treatment_plan", treatmentPlanId);
-  });
+  const claim = await claimTreatmentSubmission(tenantSlug, treatmentPlanId);
+  let link: PartnerLink;
+  if (claim.kind === "claimed") link = claim.link;
+  else if (reconcile) link = await reconcilePendingTreatment(tenantSlug, treatmentPlanId, claim.link, reconcile);
+  else throw submissionPending(treatmentPlanId);
+
+  let requestPayload: Record<string, unknown>;
+  try {
+    requestPayload = typeof payload === "function" ? await payload() : payload;
+  } catch (cause) {
+    // Nothing reached OA's order endpoint — safe to allow a retry.
+    const message = cause instanceof Error ? cause.message : String(cause);
+    await withTenant(tenantSlug, (client) => markPartnerLinkFailed(client, link.id, `order not sent: ${message}`));
+    throw cause;
+  }
 
   let response: Response;
   try {
     response = await enqueueOrthoApneaMutation(() =>
-      authedFetch(TREATMENT_CREATE_PATH, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(wizardPayload),
-      })
+      authedFetch(TREATMENT_CREATE_PATH, { method: "POST", body: orthoApneaTreatmentForm(requestPayload) })
     );
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
+    // A timeout means the request may have reached OA and created the order:
+    // keep the link 'pending' (blocks a silent retry), only record why.
+    const ambiguous = cause instanceof OrthoApneaTimeoutError;
     await withTenant(tenantSlug, async (client) => {
       await logPartnerTransaction(client, {
         partner_link_id: link.id,
         action: "create_treatment",
-        request_payload: wizardPayload,
+        request_payload: requestPayload,
         success: false,
         error_message: message,
       });
-      await markPartnerLinkFailed(client, link.id, message);
+      if (ambiguous) await setPartnerLinkError(client, link.id, `${message} — OrthoApnea may have created the order; check before retrying`);
+      else await markPartnerLinkFailed(client, link.id, message);
     });
     throw cause;
   }
@@ -1138,7 +1477,7 @@ export async function createOrthoApneaTreatment(
     await logPartnerTransaction(client, {
       partner_link_id: link.id,
       action: "create_treatment",
-      request_payload: wizardPayload,
+      request_payload: requestPayload,
       response_payload: responsePayload,
       http_status: httpStatus,
       success,
@@ -1154,7 +1493,7 @@ export async function createOrthoApneaTreatment(
     const externalId = String(responsePayload!.id);
     const externalStatus = responsePayload!.statusId != null ? String(responsePayload!.statusId) : null;
     await markPartnerLinkSynced(client, link.id, externalId, externalStatus);
-    return { externalId, externalStatus, responsePayload } satisfies CreateOrthoApneaTreatmentResult;
+    return { externalId, externalStatus, requestPayload, responsePayload } satisfies CreateOrthoApneaTreatmentResult;
   });
 
   if (!outcome) {
@@ -1363,22 +1702,40 @@ const PRODUCTS_PATH = "/api/products";
 const CLINICS_PATH = "/api/clinics";
 const CURRENT_USER_PATH = "/api/user/me";
 
+/**
+ * OA's product and clinic objects. The order DTO carries both as the FULL
+ * object OA returned (rules §3.2), so every other key is kept as-is.
+ */
 export interface OrthoApneaProduct {
   id: number;
   code: string;
   nameEs: string;
   category: string;
+  [key: string]: unknown;
 }
 
 export interface OrthoApneaClinic {
   id: number;
   name: string;
+  [key: string]: unknown;
+}
+
+/** GET /api/user/me — the shared account. `customers[0]` is the invoice customer, `fsDoctorId` goes on every order. */
+export interface OrthoApneaCurrentUser {
+  id: number;
+  fsDoctorId?: number;
+  customers?: { id: number; name: string; [key: string]: unknown }[];
+  [key: string]: unknown;
 }
 
 const CATALOG_CACHE_TTL_MS = 60 * 60 * 1000;
+/** The minimum desired date moves daily (today + manufacturingDays), so it is cached only briefly. */
+const MANUFACTURING_DATE_CACHE_TTL_MS = 10 * 60 * 1000;
 let productsCache: { rows: OrthoApneaProduct[]; fetchedAt: number } | null = null;
 let clinicsCache: { rows: OrthoApneaClinic[]; fetchedAt: number } | null = null;
 let currentUserIdCache: { id: string; fetchedAt: number } | null = null;
+let currentUserCache: { user: OrthoApneaCurrentUser; fetchedAt: number } | null = null;
+const manufacturingDateCache = new Map<number, { date: string; fetchedAt: number }>();
 
 export async function fetchOrthoApneaProducts(): Promise<OrthoApneaProduct[]> {
   if (productsCache && Date.now() - productsCache.fetchedAt < CATALOG_CACHE_TTL_MS) return productsCache.rows;
@@ -1390,24 +1747,54 @@ export async function fetchOrthoApneaProducts(): Promise<OrthoApneaProduct[]> {
   return rows;
 }
 
+/** The OA product object for one of our product codes ("002" NOA, "003" NOA TMJ), or null if OA doesn't list it. */
+export async function findOrthoApneaProduct(code: string): Promise<OrthoApneaProduct | null> {
+  return (await fetchOrthoApneaProducts()).find((p) => p.code === code) ?? null;
+}
+
+/** The shared account's own user record (GET /api/user/me), cached like the catalog. */
+export async function fetchOrthoApneaCurrentUser(): Promise<OrthoApneaCurrentUser> {
+  if (currentUserCache && Date.now() - currentUserCache.fetchedAt < CATALOG_CACHE_TTL_MS) return currentUserCache.user;
+  const res = await authedFetch(CURRENT_USER_PATH);
+  if (!res.ok) throw new PartnerServiceError(PARTNER_NAME, `current user fetch failed with status ${res.status}`);
+  const body = (await res.json()) as Partial<OrthoApneaCurrentUser>;
+  if (body.id == null) throw new PartnerServiceError(PARTNER_NAME, "current user response has no id field");
+  const user = { ...body, id: Number(body.id) } as OrthoApneaCurrentUser;
+  currentUserCache = { user, fetchedAt: Date.now() };
+  currentUserIdCache = { id: String(user.id), fetchedAt: currentUserCache.fetchedAt };
+  return user;
+}
+
 /**
  * The shared account represents one fixed OrthoApnea user/doctor persona —
- * `/api/clinics` needs that persona's own userId (not anything of ours), so
- * this resolves and caches it via `/api/user/me` first. Response shape is
- * unconfirmed beyond "has an id" (never captured in full) — tightens once
- * the consolidated live-capture round confirms it.
+ * `/api/clinics` and the patient/notification bodies need that persona's own
+ * userId (not anything of ours).
  */
 async function resolveCurrentUserId(): Promise<string> {
   if (currentUserIdCache && Date.now() - currentUserIdCache.fetchedAt < CATALOG_CACHE_TTL_MS) {
     return currentUserIdCache.id;
   }
-  const res = await authedFetch(CURRENT_USER_PATH);
-  if (!res.ok) throw new PartnerServiceError(PARTNER_NAME, `current user fetch failed with status ${res.status}`);
-  const body = (await res.json()) as { id?: number | string };
-  if (body.id == null) throw new PartnerServiceError(PARTNER_NAME, "current user response has no id field");
-  const id = String(body.id);
-  currentUserIdCache = { id, fetchedAt: Date.now() };
-  return id;
+  return String((await fetchOrthoApneaCurrentUser()).id);
+}
+
+/**
+ * OA's earliest desired date for a product, as YYYY-MM-DD
+ * (GET /api/products/manufacturingDate?productId=, which answers
+ * "2026-10-19T00:00:00"; rules "Live read results"). Throws when OA is
+ * unreachable — callers that must not fail on it catch and use null.
+ */
+export async function fetchOrthoApneaManufacturingDate(productId: number): Promise<string> {
+  const cached = manufacturingDateCache.get(productId);
+  if (cached && Date.now() - cached.fetchedAt < MANUFACTURING_DATE_CACHE_TTL_MS) return cached.date;
+  const res = await authedFetch(`${PRODUCTS_PATH}/manufacturingDate?productId=${encodeURIComponent(String(productId))}`);
+  if (!res.ok) throw new PartnerServiceError(PARTNER_NAME, `manufacturing date fetch failed with status ${res.status}`);
+  const body: unknown = await res.json();
+  if (typeof body !== "string" || !/^\d{4}-\d{2}-\d{2}/.test(body)) {
+    throw new PartnerServiceError(PARTNER_NAME, "manufacturing date response is not a date string");
+  }
+  const date = body.slice(0, 10);
+  manufacturingDateCache.set(productId, { date, fetchedAt: Date.now() });
+  return date;
 }
 
 export async function fetchOrthoApneaClinics(): Promise<OrthoApneaClinic[]> {
@@ -1419,4 +1806,34 @@ export async function fetchOrthoApneaClinics(): Promise<OrthoApneaClinic[]> {
   const rows = Array.isArray(body) ? body : (body.content ?? []);
   clinicsCache = { rows, fetchedAt: Date.now() };
   return rows;
+}
+
+const TREATMENT_LIST_PAGE_SIZE = 100;
+/** A runaway guard, not a business limit: 100 pages × 100 orders. */
+const TREATMENT_LIST_MAX_PAGES = 100;
+
+/**
+ * Every order on the shared account, as OA's own order list returns them
+ * (GET /api/treatments/DTO?treatmentSearchForm={}&page=&size= — a Spring page
+ * of full treatment DTOs, read live on 2026-10-03, NEO-218). Read-only: a GET,
+ * so it skips the mutation queue. Throws PartnerServiceError when OA answers
+ * anything but a page, so the reconciliation records a failed run instead of
+ * reporting every order as missing.
+ */
+export async function listOrthoApneaTreatments(): Promise<Record<string, unknown>[]> {
+  const form = encodeURIComponent(JSON.stringify({}));
+  const all: Record<string, unknown>[] = [];
+  for (let page = 0; page < TREATMENT_LIST_MAX_PAGES; page++) {
+    const res = await authedFetch(`${TREATMENT_DETAIL_PATH}?treatmentSearchForm=${form}&page=${page}&size=${TREATMENT_LIST_PAGE_SIZE}`, {
+      method: "GET",
+    });
+    if (!res.ok) throw new PartnerServiceError(PARTNER_NAME, `order list answered ${res.status}`);
+    const body = await safeJson(res);
+    const content = body?.content;
+    if (!body || !Array.isArray(content)) throw new PartnerServiceError(PARTNER_NAME, "order list answered without a content list");
+    all.push(...(content as Record<string, unknown>[]));
+    const totalPages = typeof body.totalPages === "number" ? body.totalPages : null;
+    if (body.last === true || content.length < TREATMENT_LIST_PAGE_SIZE || (totalPages !== null && page + 1 >= totalPages)) return all;
+  }
+  throw new PartnerServiceError(PARTNER_NAME, `order list has more than ${TREATMENT_LIST_MAX_PAGES} pages`);
 }
