@@ -8,19 +8,16 @@
  *   completed   — COMPLETED_RATIO reached or the video ended; sticky, a rewatch
  *                 only moves the resume position
  *
- * `source` says how the status was set: "watched" by playback, "marked" by
- * hand from the tile menu (D4). A manager report (follow-up) needs to tell
- * the two apart, so it is stored from the start.
+ * Only for the user's own "what have I seen" list (Łukasz, D5): nobody else
+ * reads it, and nothing records how a status was set.
  */
 export type ProgressStatus = "not_started" | "in_progress" | "completed";
-export type ProgressSource = "watched" | "marked";
 
 export interface ProgressState {
   status: ProgressStatus;
   positionSec: number;
   maxPositionSec: number;
   durationSec: number | null;
-  source: ProgressSource;
 }
 
 export interface PlaybackReport {
@@ -38,14 +35,13 @@ export function nextProgress(prev: ProgressState, report: PlaybackReport): Progr
   const maxPositionSec = Math.max(prev.maxPositionSec, positionSec);
   const reachedEnd = report.ended === true || (durationSec > 0 && maxPositionSec / durationSec >= COMPLETED_RATIO);
 
-  if (reachedEnd) return { status: "completed", positionSec, maxPositionSec, durationSec, source: "watched" };
+  if (reachedEnd) return { status: "completed", positionSec, maxPositionSec, durationSec };
   if (prev.status === "completed") return { ...prev, positionSec, maxPositionSec, durationSec };
   return {
     status: maxPositionSec >= STARTED_SEC ? "in_progress" : "not_started",
     positionSec,
     maxPositionSec,
     durationSec,
-    source: prev.source,
   };
 }
 

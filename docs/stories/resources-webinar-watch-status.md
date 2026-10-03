@@ -4,9 +4,15 @@
 
 ## Decisions (Łukasz, 2026-10-03, decision form on the proposal Artifact)
 - **D1 Resume:** ask first. A video with a saved position opens paused and offers "Continuar desde m:ss" or "Desde el inicio".
-- **D2 Storage:** on the server (`resource_progress`, migration 041), per user, so progress follows the doctor across devices. The manager team report was split out as **NEO-211** because it needs a privacy note for doctors first.
+- **D2 Storage:** on the server (`resource_progress`, migration 041), per user, so progress follows the doctor across devices.
 - **D3 Filter chips:** Todos / Sin ver / En curso / Vistos, with the last choice remembered per user (`@neo/prefs`, slot `view:resources:statusFilter`).
-- **D4 Manual mark:** the tile ⋯ menu has "Marcar como visto" and "Marcar como no visto". `status_source` records `watched` vs `marked` so NEO-211 can tell the two apart.
+- **D4 Manual mark:** the tile ⋯ menu has "Marcar como visto" and "Marcar como no visto".
+- **D5 No tracking:** there is no manager report (NEO-211 was canceled) and nothing records how a status was set. The status is only the user's own "what have I seen" hint, and nobody else can read it.
+
+## Legal check (2026-10-03)
+- The partner privacy notice (`apps/api/scripts/seed-content/partnerPrivacyNotice.{mx,pl}.html`) already lists "historial de uso" / "historia korzystania z Platformy" among account data. Its purposes include "administrar su cuenta en la Plataforma" (PL: Art. 6(1)(b)).
+- Showing a user their own watched list is part of managing their account: a primary purpose, with no profiling and no third party. No consent and no change to the Contrato de Colaboración are needed.
+- Optional at the notice's next revision: one sentence saying that the Platform remembers which training materials the user has viewed, only to show them that status.
 
 ## Rules (each one has a test)
 - Under 10 s watched → Sin ver. Started → En curso (x %, measured to the furthest point reached). 90 % or the end → Visto.

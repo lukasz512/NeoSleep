@@ -3,7 +3,7 @@ import { resumeAt, filterByStatus, countByStatus, type ResourceProgress } from "
 
 /** NEO-209: when a webinar offers to resume, and how the status chips count. */
 function p(resourceId: string, status: ResourceProgress["status"], positionSec = 0): ResourceProgress {
-  return { resourceId, status, source: "watched", positionSec, durationSec: 600, percent: 0, completedAt: null, updatedAt: "" };
+  return { resourceId, status, positionSec, durationSec: 600, percent: 0, completedAt: null, updatedAt: "" };
 }
 
 describe("resumeAt", () => {

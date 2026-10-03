@@ -31,7 +31,7 @@ describe("resource progress API", () => {
 
     const put = await request(app).put(`${BASE}/47/progress`).set("Authorization", doc.auth).send({ positionSec: 252, durationSec: 665 });
     expect(put.status).toBe(200);
-    expect(put.body).toMatchObject({ resourceId: "47", status: "in_progress", positionSec: 252, durationSec: 665, percent: 38, source: "watched" });
+    expect(put.body).toMatchObject({ resourceId: "47", status: "in_progress", positionSec: 252, durationSec: 665, percent: 38 });
 
     const read = await request(app).get(`${BASE}/progress`).set("Authorization", doc.auth);
     expect(read.body.progress).toHaveLength(1);
@@ -46,14 +46,15 @@ describe("resource progress API", () => {
     expect(again.body.completedAt).toBeTruthy();
   });
 
-  it("manual mark and unmark record the source", async () => {
+  it("manual mark and unmark set only the status — nothing records how it was set", async () => {
     const doc = await staff("doctor");
     const marked = await request(app).put(`${BASE}/9/status`).set("Authorization", doc.auth).send({ status: "completed" });
     expect(marked.status).toBe(200);
-    expect(marked.body).toMatchObject({ status: "completed", source: "marked" });
+    expect(marked.body).toMatchObject({ status: "completed", percent: 100 });
+    expect(Object.keys(marked.body).sort()).toEqual(["completedAt", "durationSec", "percent", "positionSec", "resourceId", "status", "updatedAt"]);
 
     const unmarked = await request(app).put(`${BASE}/9/status`).set("Authorization", doc.auth).send({ status: "not_started" });
-    expect(unmarked.body).toMatchObject({ status: "not_started", source: "marked", positionSec: 0, percent: 0 });
+    expect(unmarked.body).toMatchObject({ status: "not_started", positionSec: 0, percent: 0 });
   });
 
   it("user isolation: nobody reads or overwrites another user's progress", async () => {

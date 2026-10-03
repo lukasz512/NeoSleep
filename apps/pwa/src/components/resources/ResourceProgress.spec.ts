@@ -56,7 +56,7 @@ function video(): PartnerResourceItem {
   };
 }
 function saved(status: string, positionSec: number, percent: number) {
-  progress["47"] = { resourceId: "47", status, source: "watched", positionSec, durationSec: 665, percent, completedAt: null, updatedAt: "" };
+  progress["47"] = { resourceId: "47", status, positionSec, durationSec: 665, percent, completedAt: null, updatedAt: "" };
 }
 const plugins = () => [
   createI18n({ legacy: false, locale: "en", messages: { en } }),

@@ -1,13 +1,12 @@
 import type { PoolClient } from "pg";
 import { DatabaseError } from "../errors.js";
-import type { ProgressSource, ProgressState, ProgressStatus } from "../services/partners/resourceProgress.js";
+import type { ProgressState, ProgressStatus } from "../services/partners/resourceProgress.js";
 
 /** Watch progress per user and partner video (NEO-209, migration 041). */
 
 export interface ResourceProgressRow {
   resource_id: string;
   status: ProgressStatus;
-  status_source: ProgressSource;
   position_sec: number;
   max_position_sec: number;
   duration_sec: number | null;
@@ -15,7 +14,7 @@ export interface ResourceProgressRow {
   updated_at: Date;
 }
 
-const COLUMNS = "resource_id, status, status_source, position_sec, max_position_sec, duration_sec, completed_at, updated_at";
+const COLUMNS = "resource_id, status, position_sec, max_position_sec, duration_sec, completed_at, updated_at";
 
 export async function listResourceProgress(client: PoolClient, userId: string, partner: string): Promise<ResourceProgressRow[]> {
   try {
@@ -57,11 +56,10 @@ export async function saveResourceProgress(
   try {
     const { rows } = await client.query<ResourceProgressRow>(
       `INSERT INTO resource_progress
-         (user_id, partner, resource_id, status, status_source, position_sec, max_position_sec, duration_sec, completed_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CASE WHEN $4 = 'completed' THEN now() END)
+         (user_id, partner, resource_id, status, position_sec, max_position_sec, duration_sec, completed_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, CASE WHEN $4 = 'completed' THEN now() END)
        ON CONFLICT (user_id, partner, resource_id) DO UPDATE SET
          status           = EXCLUDED.status,
-         status_source    = EXCLUDED.status_source,
          position_sec     = EXCLUDED.position_sec,
          max_position_sec = EXCLUDED.max_position_sec,
          duration_sec     = COALESCE(EXCLUDED.duration_sec, resource_progress.duration_sec),
@@ -71,7 +69,7 @@ export async function saveResourceProgress(
                             END,
          updated_at       = now()
        RETURNING ${COLUMNS}`,
-      [userId, partner, resourceId, state.status, state.source, state.positionSec, state.maxPositionSec, state.durationSec]
+      [userId, partner, resourceId, state.status, state.positionSec, state.maxPositionSec, state.durationSec]
     );
     return rows[0]!;
   } catch (err) {

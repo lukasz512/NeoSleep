@@ -14,7 +14,6 @@ export type StatusFilter = "all" | ResourceProgressStatus;
 export interface ResourceProgress {
   resourceId: string;
   status: ResourceProgressStatus;
-  source: "watched" | "marked";
   positionSec: number;
   durationSec: number | null;
   percent: number;

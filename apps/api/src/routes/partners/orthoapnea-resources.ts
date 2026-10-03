@@ -111,8 +111,8 @@ orthoapneaResourcesRouter.get(
 
 // ---------------------------------------------------------------------------
 // Watch progress per user (NEO-209) — status per video + where to resume.
-// Every role has its own; nobody reads another user's here (a manager team
-// report is a separate, privacy-reviewed ticket).
+// Only for the user's own "what have I seen" list (Łukasz, D5): every role has
+// its own, nobody reads another user's, nothing records how a status was set.
 // ---------------------------------------------------------------------------
 const PARTNER = "orthoapnea";
 const RESOURCE_ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -134,15 +134,14 @@ function seconds(value: unknown, field: string): number {
 
 function toState(row: ResourceProgressRow | null): ProgressState {
   return row
-    ? { status: row.status, source: row.status_source, positionSec: row.position_sec, maxPositionSec: row.max_position_sec, durationSec: row.duration_sec }
-    : { status: "not_started", source: "watched", positionSec: 0, maxPositionSec: 0, durationSec: null };
+    ? { status: row.status, positionSec: row.position_sec, maxPositionSec: row.max_position_sec, durationSec: row.duration_sec }
+    : { status: "not_started", positionSec: 0, maxPositionSec: 0, durationSec: null };
 }
 
 function toDto(row: ResourceProgressRow) {
   return {
     resourceId: row.resource_id,
     status: row.status,
-    source: row.status_source,
     positionSec: row.position_sec,
     durationSec: row.duration_sec,
     percent: progressPercent({ status: row.status, maxPositionSec: row.max_position_sec, durationSec: row.duration_sec }),
@@ -203,8 +202,8 @@ orthoapneaResourcesRouter.put(
       const prev = toState(await getResourceProgressForUpdate(client, ctx.user.id, PARTNER, id));
       const next: ProgressState =
         status === "completed"
-          ? { ...prev, status, source: "marked" }
-          : { ...prev, status, source: "marked", positionSec: 0, maxPositionSec: 0 };
+          ? { ...prev, status }
+          : { ...prev, status, positionSec: 0, maxPositionSec: 0 };
       return saveResourceProgress(client, ctx.user.id, PARTNER, id, next);
     });
     res.json(toDto(row));

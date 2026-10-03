@@ -8,7 +8,8 @@
 --     position_sec      — where to resume
 --     max_position_sec  — furthest point reached (drives the percent)
 --     status            — not_started | in_progress | completed (sticky)
---     status_source     — watched (by playback) | marked (by hand, tile menu)
+--   Only for the user's own "what have I seen" list (D5): no manager report,
+--   no record of how a status was set.
 --
 -- Tenant-table change → create_tenant_schema() regenerated at the bottom.
 --
@@ -30,8 +31,6 @@ BEGIN
       duration_sec     INTEGER     CHECK (duration_sec >= 0),
       status           TEXT        NOT NULL DEFAULT 'not_started'
                          CHECK (status IN ('not_started', 'in_progress', 'completed')),
-      status_source    TEXT        NOT NULL DEFAULT 'watched'
-                         CHECK (status_source IN ('watched', 'marked')),
       completed_at     TIMESTAMPTZ,
       created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
       updated_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -939,15 +938,13 @@ BEGIN
     max_position_sec integer DEFAULT 0 NOT NULL,
     duration_sec integer,
     status text DEFAULT 'not_started'::text NOT NULL,
-    status_source text DEFAULT 'watched'::text NOT NULL,
     completed_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT resource_progress_duration_sec_check CHECK ((duration_sec >= 0)),
     CONSTRAINT resource_progress_max_position_sec_check CHECK ((max_position_sec >= 0)),
     CONSTRAINT resource_progress_position_sec_check CHECK ((position_sec >= 0)),
-    CONSTRAINT resource_progress_status_check CHECK ((status = ANY (ARRAY['not_started'::text, 'in_progress'::text, 'completed'::text]))),
-    CONSTRAINT resource_progress_status_source_check CHECK ((status_source = ANY (ARRAY['watched'::text, 'marked'::text])))
+    CONSTRAINT resource_progress_status_check CHECK ((status = ANY (ARRAY['not_started'::text, 'in_progress'::text, 'completed'::text])))
 );$tenant_ddl$;
 
   EXECUTE $tenant_ddl$CREATE TABLE IF NOT EXISTS sample_batch (
