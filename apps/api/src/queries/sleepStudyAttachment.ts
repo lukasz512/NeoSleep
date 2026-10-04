@@ -1,6 +1,7 @@
 import type { TenantContext } from "../context/TenantContext.js";
 import { getFileAttachmentsForEntity, getFileAttachmentById, type FileAttachment } from "../db.js";
 import { NotFoundError } from "../errors.js";
+import { requireSleepStudyInScope } from "./sleepStudy.js";
 import { getPartnerDocumentSignedUrl } from "../services/partnerDocuments.js";
 
 /**
@@ -37,6 +38,7 @@ export async function GetSleepStudyAttachmentsQuery(
   ctx: TenantContext,
   sleepStudyId: string
 ): Promise<SleepStudyAttachmentDto[]> {
+  await requireSleepStudyInScope(ctx, sleepStudyId);
   const rows = await getFileAttachmentsForEntity(ctx.client, "sleep_study", sleepStudyId);
   return rows.map(toDto);
 }
@@ -47,6 +49,7 @@ export async function GetSleepStudyAttachmentDownloadUrlQuery(
   sleepStudyId: string,
   attachmentId: string
 ): Promise<string> {
+  await requireSleepStudyInScope(ctx, sleepStudyId);
   const attachment = await getFileAttachmentById(ctx.client, attachmentId);
   if (!attachment || attachment.entity_type !== "sleep_study" || attachment.entity_id !== sleepStudyId || !attachment.path) {
     throw new NotFoundError("Attachment", attachmentId);

@@ -188,6 +188,8 @@ export const patientFormFields: FormFieldDef[] = [
     // an unset field register as empty and actually show the placeholder.
     default: null,
     options: loadPractitionerOptions,
+    // NEO-223: a doctor's new patient is always their own (the API assigns it, CORE-104) — no picker to get wrong.
+    hidden: () => useAuthStore().user?.role === "doctor",
     icon: "nav-hcp",
     avatarEntityType: "hcp",
     cols: 12,

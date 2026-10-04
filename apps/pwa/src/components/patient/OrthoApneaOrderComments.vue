@@ -9,7 +9,7 @@
       auto-grow
       hide-details
     />
-    <div class="oa-comments__notify">
+    <div v-if="canNotifyOrthoApnea" class="oa-comments__notify">
       <VCheckbox v-model="notifyOrthoApnea" :label="t('app.orthoApneaOrder.comments.notifyOrthoApnea')" color="primary" hide-details density="compact" />
     </div>
     <AppInlineAlert v-if="notifyOrthoApnea" type="warning" class="mb-2">
@@ -43,7 +43,7 @@
 
 <script setup lang="ts">
 import { reportCaught } from "@api";
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import AppButton from "../AppButton.vue";
 import AppLoadingState from "../AppLoadingState.vue";
@@ -56,6 +56,7 @@ import { useNotes } from "../../composables/useNotes";
 import { useAuthStore } from "../../stores/auth";
 import EntityLink from "../EntityLink.vue";
 import { userDetailLink } from "../../utils/entityLinks";
+import { STUDY_ROLES } from "../../config/questionnaires";
 import { AppInlineAlert } from "@ui";
 
 /**
@@ -79,6 +80,8 @@ const { notes, loading, loaded, loadError, loadFailure, loadNotes } = useNotes("
 
 const draft = ref("");
 const notifyOrthoApnea = ref(false);
+/** Only admin / doctor / manager may email OrthoApnea (NEO-199); the API enforces the same. */
+const canNotifyOrthoApnea = computed(() => STUDY_ROLES.includes(authStore.user?.role ?? ""));
 
 const { loading: addLoading, run: onAdd } = useAsyncAction(async () => {
   const text = draft.value.trim();

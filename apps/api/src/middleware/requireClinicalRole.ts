@@ -1,4 +1,5 @@
 import { requireRole } from "./requireRole.js";
+import type { StaffRole } from "../db/users.js";
 
 /**
  * Patient health data — clinical questionnaires, sleep studies (AHI, SpO2,
@@ -9,4 +10,5 @@ import { requireRole } from "./requireRole.js";
  * GDPR Art.9 / LFPDPPP sensitive data. Hard deletes stay admin-only on their
  * own routes.
  */
-export const requireStudyRole = requireRole("admin", "doctor", "manager");
+export const STUDY_ROLES: readonly StaffRole[] = ["admin", "doctor", "manager"];
+export const requireStudyRole = requireRole(...STUDY_ROLES);

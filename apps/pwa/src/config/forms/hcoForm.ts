@@ -10,7 +10,9 @@ import { PHONE_MIN_DIGITS, phoneDigitCount } from "../../utils/phone";
  * block here — an organization has no person. `status` is hidden for
  * everyone except admin (pending_approval is the record's real default,
  * non-admins never see/set it); `country_code` is always hidden, defaulted
- * to the creating user's own country. `email` reuses identityFields'
+ * to the creating user's own country — only a fallback: when the clinic has a
+ * territory, the API overwrites it with that territory's country (NEO-210).
+ * `email` reuses identityFields'
  * emailField() (not required here — an org's email is optional) so there is
  * exactly one email input style across the whole PWA.
  */

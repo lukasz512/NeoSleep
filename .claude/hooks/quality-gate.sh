@@ -104,7 +104,7 @@ branch_artifact_check() {
     || FAILS+=("$marker 'sections' must cover summary, run-locally and qa-checklist.")
   # Once the branch is pushed, the Artifact must carry a "Create PR" button at the top
   # (Łukasz, 2026-09-24: "niech pr przycisk będzie na górze artefaktu") — the pre-filled
-  # compare URL from CLAUDE.md's Linear traceability section. He still clicks Create himself.
+  # compare URL from docs/CLAUDE_WORKFLOW.md "Linear traceability". He still clicks Create himself.
   # Once he has opened the PR, ship-artifact's build.mjs links the button to it instead
   # (…/pull/<n>) — accept that too, or every refresh after the PR exists would be blocked.
   if git rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1; then

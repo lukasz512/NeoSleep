@@ -20,6 +20,7 @@ vi.mock("../../composables/useNotifications", async (importOriginal) => ({
 }));
 
 import OrthoApneaOrderWizard from "./OrthoApneaOrderWizard.vue";
+import MandibularRuler from "./MandibularRuler.vue";
 import { useAuthStore } from "../../stores/auth";
 
 /**
@@ -43,7 +44,7 @@ const DELIVERY = { name: "Clínica Centro", address: "Av. Reforma 1", city: "CDM
 
 interface Backend {
   doctors?: { id: string; name: string }[];
-  context?: () => Response;
+  context?: (url: string) => Response;
   deviceOrder?: () => Response;
 }
 
@@ -56,7 +57,7 @@ function stubBackend({
     if (url.startsWith("/api/v1/practitioner")) return response(200, { items: doctors });
     if (url.startsWith("/api/v1/patient/")) return response(200, { practitioner_id: doctors[0]?.id ?? null, region: "MX" });
     if (url.endsWith("/orthoapnea/products")) return response(200, { items: [{ id: 3, code: "002", nameEs: "NOA", category: "x" }, { id: 4, code: "003", nameEs: "NOA TMJ", category: "x" }] });
-    if (url.startsWith("/api/v1/device-orders/context")) return context();
+    if (url.startsWith("/api/v1/device-orders/context")) return context(url);
     if (url === "/api/v1/device-orders") return deviceOrder();
     if (url.startsWith("/api/v1/treatment-plan")) return response(201, { id: "plan-1" });
     throw new Error(`Unmocked apiFetch call in test: ${url}`);
@@ -150,6 +151,64 @@ async function confirm() {
   if (!btn) throw new Error("No confirm button");
   await click(btn);
 }
+
+describe("OrthoApneaOrderWizard — step 1: admin picks which of the doctor's clinics it ships to (NEO-210 D2)", () => {
+  const TOLUCA = { ...DELIVERY, name: "Clínica Toluca", city: "Toluca", postalCode: "50000" };
+  const OPTIONS = [
+    { organizationId: "org-1", name: DELIVERY.name, city: DELIVERY.city, isPrimary: true },
+    { organizationId: "org-2", name: TOLUCA.name, city: TOLUCA.city, isPrimary: false },
+  ];
+  const twoClinics = (url: string) =>
+    response(200, {
+      delivery: url.includes("organization_id=org-2") ? { ...TOLUCA, organizationId: "org-2" } : { ...DELIVERY, organizationId: "org-1" },
+      deliveryOptions: OPTIONS,
+      deliveryIssues: [],
+      minDesiredDate: "2026-10-21",
+      rulesVersion: "1",
+    });
+
+  function clinicSelect() {
+    return document.querySelector('[data-field="deliveryOrganizationId"]');
+  }
+
+  it("the primary clinic is preselected; picking another reloads the address and the order ships there", async () => {
+    stubBackend({ context: twoClinics });
+    const wizard = await openWizard("admin");
+    expect(clinicSelect()).not.toBeNull();
+    expect($("[data-testid=ship-to]").textContent).toContain(DELIVERY.name);
+
+    const select = wizard.findAllComponents({ name: "VSelect" }).find((s) => s.element.closest('[data-field="deliveryOrganizationId"]'));
+    expect((select!.props("items") as { title: string }[]).map((i) => i.title)).toEqual([
+      `${DELIVERY.name} · ${DELIVERY.city} (${messages["app.deviceOrder.delivery.primary"]})`,
+      `${TOLUCA.name} · ${TOLUCA.city}`,
+    ]);
+    select!.vm.$emit("update:modelValue", "org-2");
+    await flushPromises();
+
+    expect(apiFetch.mock.calls.some((c) => String(c[0]).includes("organization_id=org-2"))).toBe(true);
+    expect($("[data-testid=ship-to]").textContent).toContain("Toluca");
+
+    await fillStep2();
+    await next();
+    await next();
+    await confirm();
+    const body = JSON.parse(String((apiFetch.mock.calls.find((c) => c[0] === "/api/v1/device-orders")![1] as RequestInit).body));
+    expect(body.delivery_organization_id).toBe("org-2");
+  });
+
+  it("with one clinic there is nothing to choose and the order names none", async () => {
+    stubBackend();
+    await openWizard("admin");
+    expect(clinicSelect()).toBeNull();
+
+    await fillStep2();
+    await next();
+    await next();
+    await confirm();
+    const body = JSON.parse(String((apiFetch.mock.calls.find((c) => c[0] === "/api/v1/device-orders")![1] as RequestInit).body));
+    expect(body).not.toHaveProperty("delivery_organization_id");
+  });
+});
 
 describe("OrthoApneaOrderWizard — step 1: doctor and ship-to", () => {
   it("opens without any error — errors wait for the first Next", async () => {
@@ -251,7 +310,7 @@ describe("OrthoApneaOrderWizard — a doctor orders only as themselves (NEO-210,
     expect(order.dentistId).toBe("doc-self");
   });
 
-  it("an incomplete clinic address says so and tells the doctor to contact NeoSleep, and blocks Next", async () => {
+  it("an incomplete clinic address names the clinic, says what is wrong, tells the doctor to contact NeoSleep, and blocks Next", async () => {
     stubBackend({
       context: doctorContext({
         delivery: { ...DELIVERY, phone: "" },
@@ -262,7 +321,7 @@ describe("OrthoApneaOrderWizard — a doctor orders only as themselves (NEO-210,
 
     const alert = $("[data-testid=doctor-address-error]").textContent ?? "";
     expect(alert).toContain(messages["app.deviceOrder.delivery.doctorTitle"]);
-    expect(alert).toContain(msg("app.deviceOrder.delivery.doctorIncomplete", { fields: messages["app.deviceOrder.delivery.field.phone"] }));
+    expect(alert).toContain(msg("app.deviceOrder.delivery.doctorIncompleteNamed", { clinic: DELIVERY.name, fields: messages["app.deviceOrder.delivery.field.phone"] }));
     expect(alert).not.toContain(messages["app.deviceOrder.delivery.openRecord"]);
 
     await type('[data-field="retrusionMaxMm"]', "-2");
@@ -271,7 +330,7 @@ describe("OrthoApneaOrderWizard — a doctor orders only as themselves (NEO-210,
     await next();
     expect(stepTitle()).toBe(messages["app.orthoApneaOrder.step2.title"]);
     expect(summaryLines()).toContain(
-      `${messages["app.deviceOrder.delivery.title"]} — ${msg("app.deviceOrder.delivery.doctorIncomplete", { fields: messages["app.deviceOrder.delivery.field.phone"] })}`,
+      `${messages["app.deviceOrder.delivery.title"]} — ${msg("app.deviceOrder.delivery.doctorIncompleteNamed", { clinic: DELIVERY.name, fields: messages["app.deviceOrder.delivery.field.phone"] })}`,
     );
   });
 
@@ -364,6 +423,20 @@ describe("OrthoApneaOrderWizard — step 2: shared rules and the sequence switch
     expect(($("[data-testid=sp-mm] input") as HTMLInputElement).disabled).toBe(true);
   });
 
+  it("dragging SP on the ruler writes the mm field (and takes over from a typed %) — NEO-225", async () => {
+    stubBackend();
+    const wrapper = await openWizard();
+    await fillStep2();
+    await type("[data-testid=sp-mm]", "");
+    await type("[data-testid=sp-percent]", "50");
+    wrapper.findComponent(MandibularRuler).vm.$emit("update:startingPointMm", 3);
+    await flushPromises();
+
+    expect(($("[data-testid=sp-mm] input") as HTMLInputElement).value).toBe("3");
+    expect(($("[data-testid=sp-percent] input") as HTMLInputElement).value).toBe("");
+    expect(document.querySelector("[data-testid=sp-hint]")).toBeNull();
+  });
+
   it("Estándar is the default and shows SP, -1, 1, 2 read-only in mm", async () => {
     stubBackend();
     await openWizard();
@@ -391,15 +464,21 @@ describe("OrthoApneaOrderWizard — step 2: shared rules and the sequence switch
     expect(document.querySelector("[data-testid=standard-sequence]")).toBeNull();
   });
 
-  it("NOA TMJ: Estándar shows SP, -1, 1 and Individualizada has 2 inputs", async () => {
+  it("one product only (Łukasz, 2026-10-03): no product choice, the order goes as NOA with Morning Aligner as a checkbox", async () => {
     stubBackend();
     await openWizard();
     await next();
 
-    await click(tab("[data-field=productCode]", "app.deviceOrder.product.noaTmj"));
-    expect(cells("[data-testid=standard-sequence]")).toEqual(["SP", "-1", "1"]);
-    await click(tab("[data-testid=sequence]", "app.orthoApneaOrder.form.sequenceTypePersonalized"));
-    expect(document.querySelectorAll("[data-testid=personalized-sequence] input[type=number]")).toHaveLength(2);
+    expect(document.querySelector("[data-field=productCode]")).toBeNull();
+    expect(document.querySelector('input[type="checkbox"][aria-label], .v-checkbox')).not.toBeNull();
+    await type('[data-field="retrusionMaxMm"]', "-2");
+    await type('[data-field="protrusionMaxMm"]', "6");
+    await type("[data-testid=sp-mm]", "2");
+    await next();
+    await next();
+    await confirm();
+    const order = JSON.parse(String((apiFetch.mock.calls.find((c) => c[0] === "/api/v1/device-orders")![1] as RequestInit).body)).order;
+    expect(order.productCode).toBe("002");
   });
 
   it("Individualizada without its first splints blocks with personalizedValuesRequired", async () => {
@@ -492,10 +571,10 @@ describe("OrthoApneaOrderWizard — submit", () => {
     stubBackend();
     const wrapper = await openWizard();
     await fillStep2();
-    const ma = Array.from(document.querySelectorAll<HTMLInputElement>("input[type=checkbox]")).find((i) =>
-      i.closest(".v-checkbox")?.textContent?.includes(messages["app.orthoApneaOrder.form.morningAligner"]),
-    )!;
-    ma.click();
+    // NEO-225: Morning Aligner is a photo card with a switch under "Add-ons".
+    const card = $('[data-field="morningAligner"]');
+    expect(card.textContent).toContain(messages["app.orthoApneaOrder.form.morningAligner"]);
+    ($('[data-field="morningAligner"] [data-testid=addon-switch] input') as HTMLInputElement).click();
     await flushPromises();
     await next();
     await next();

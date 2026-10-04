@@ -240,6 +240,36 @@ describe("PatientChecklistPanel — the Estudios checklist", () => {
     expect(button(row, "Upload file")).toBeUndefined();
   });
 
+  it("focusStudy (Estudios list row click, NEO-222) opens that sleep study once the checklist has loaded", async () => {
+    const psg = (checklistBody.items as Record<string, unknown>[])[5]!;
+    Object.assign(psg, {
+      status: "done",
+      history: [
+        {
+          id: "ss-1",
+          type: "sleep_study",
+          created_at: "2026-09-22T10:00:00Z",
+          source: "staff",
+          by: null,
+          sleep_study: { id: "ss-1", status: "interpreted", study_date: "2026-09-22", ahi_score: 18.4, spo2_nadir: 84, odi: 16.2, interpretation: null },
+        },
+      ],
+    });
+    const base = apiFetch.getMockImplementation()!;
+    apiFetch.mockImplementation(async (path: string, init?: RequestInit) =>
+      path === "/api/v1/sleep-study/ss-1" ? jsonResponse(true, 200, { id: "ss-1", patient_id: "patient-1", status: "interpreted" }) : base(path, init)
+    );
+    Element.prototype.scrollIntoView = vi.fn(); // jsdom has none
+    await mountPanel({ category: "study", focusStudy: "ss-1" });
+    await flushPromises();
+    expect(apiFetch).toHaveBeenCalledWith("/api/v1/sleep-study/ss-1", expect.anything());
+  });
+
+  it("focusStudy that is not in the checklist opens nothing", async () => {
+    await mountPanel({ category: "study", focusStudy: "ss-unknown" });
+    expect(apiFetch).not.toHaveBeenCalledWith("/api/v1/sleep-study/ss-unknown", expect.anything());
+  });
+
   it("a sleep study can still be deleted from the polysomnography history, after confirming", async () => {
     const psg = (checklistBody.items as Record<string, unknown>[])[5]!;
     Object.assign(psg, {

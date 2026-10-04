@@ -9,6 +9,7 @@ vi.mock("../../composables/useApi", async (importOriginal) => ({
 import { createPinia, setActivePinia } from "pinia";
 import { patientFormFields, patientFormDerive } from "./patientForm";
 import { useConfigStore } from "../../stores/config";
+import { useAuthStore } from "../../stores/auth";
 import type { FormFieldOption } from "../../types/formField";
 
 function jsonResponse(ok: boolean, body: unknown) {
@@ -27,6 +28,17 @@ describe("patientFormFields", () => {
     const practitioner = patientFormFields.find((f) => f.key === "practitioner_id")!;
     expect(practitioner.type).toBe("autocomplete");
     expect(typeof practitioner.options).toBe("function");
+  });
+
+  it("the doctor picker is hidden for a doctor (their patient is always their own, NEO-223), shown for admin", () => {
+    setActivePinia(createPinia());
+    const practitioner = patientFormFields.find((f) => f.key === "practitioner_id")!;
+    const hidden = () => (typeof practitioner.hidden === "function" ? practitioner.hidden({}) : !!practitioner.hidden);
+    type AuthUser = NonNullable<ReturnType<typeof useAuthStore>["user"]>;
+    useAuthStore().user = { role: "doctor" } as AuthUser;
+    expect(hidden()).toBe(true);
+    useAuthStore().user = { role: "admin" } as AuthUser;
+    expect(hidden()).toBe(false);
   });
 
   it("status defaults to active; ahi_baseline is a number field", () => {

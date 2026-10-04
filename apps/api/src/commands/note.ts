@@ -2,7 +2,7 @@ import type { TenantContext } from "../context/TenantContext.js";
 import { insertNote, softDeleteNote, getNoteById } from "../db.js";
 import { insertAuditLog } from "../db.js";
 import { ValidationError, NotFoundError, ForbiddenError } from "../errors.js";
-import { assertNoteEntityType, type NoteDto } from "../queries/note.js";
+import { assertNoteEntityType, requireNoteParentInScope, type NoteDto } from "../queries/note.js";
 
 /**
  * COMMANDS — Note domain.
@@ -23,6 +23,7 @@ export async function CreateNoteCommand(ctx: TenantContext, input: CreateNoteInp
   if (!input.entity_id?.trim()) throw new ValidationError("entity_id is required");
   const body = input.body?.trim() ?? "";
   if (!body) throw new ValidationError("body is required");
+  await requireNoteParentInScope(ctx, input.entity_type, input.entity_id.trim());
 
   // author_id always comes from the authenticated session — never client-supplied.
   const note = await insertNote(ctx.client, {

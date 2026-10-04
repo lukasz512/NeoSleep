@@ -75,17 +75,15 @@
           <span class="patients-view__updated-ago">{{ formatRelativeToNow((item as PatientListItem).updated_at, dateLocale) }}</span>
         </span>
       </template>
-      <template #item.intake_forms="{ item }">
-        <PatientIntakeForms :forms="(item as PatientListItem).intake_forms ?? []" />
+      <!-- NEO-221: Documents and Studies split the patient's checklist items; Next step replaces Status. -->
+      <template #item.documents="{ item }">
+        <PatientIntakeForms :forms="formsOf(item as PatientListItem, 'document')" />
       </template>
-      <template #item.status="{ item }">
-        <VChip
-          :color="statusColor((item as { status?: string }).status)"
-          size="small"
-          variant="tonal"
-        >
-          {{ statusLabel((item as { status?: string }).status) }}
-        </VChip>
+      <template #item.studies="{ item }">
+        <PatientIntakeForms kind="studies" :forms="formsOf(item as PatientListItem, 'study')" />
+      </template>
+      <template #item.next_step="{ item }">
+        <PatientNextStep :patient-id="(item as PatientListItem).id" :forms="(item as PatientListItem).intake_forms ?? []" :device-order="(item as PatientListItem).device_order" />
       </template>
       <template #feed-card-meta="{ item }">
         <!-- Mobile card (NEO-57): the patient's quiet line incl. date of
@@ -109,13 +107,7 @@
         </span>
       </template>
       <template #feed-card-status="{ item }">
-        <VChip
-          :color="statusColor((item as { status?: string }).status)"
-          size="x-small"
-          variant="tonal"
-        >
-          {{ statusLabel((item as { status?: string }).status) }}
-        </VChip>
+        <PatientNextStep compact :patient-id="(item as PatientListItem).id" :forms="(item as PatientListItem).intake_forms ?? []" :device-order="(item as PatientListItem).device_order" />
       </template>
       <template #feed-card-actions="{ item }">
         <AppListItemMenu :aria-label="t('app.common.moreActions')">
@@ -137,7 +129,8 @@ import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
 import AppAvatar from "../components/AppAvatar.vue";
 import PatientIntakeForms from "../components/patient/PatientIntakeForms.vue";
-import type { PatientIntakeFormStatus } from "../types/patientIntakeForm";
+import PatientNextStep from "../components/patient/PatientNextStep.vue";
+import type { PatientIntakeFormStatus, PatientDeviceOrder } from "../types/patientIntakeForm";
 import EntityLink from "../components/EntityLink.vue";
 import { intlLocale } from "@i18n/language-options";
 import IdentityDetails from "../components/IdentityDetails.vue";
@@ -156,7 +149,6 @@ import { useConfigStore } from "../stores/config";
 import { apiFetch } from "../composables/useApi";
 import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { patientFormFields, patientFormDerive } from "../config/forms/patientForm";
-import { patientStatusColor, patientStatusLabel } from "../utils/patientStatus";
 
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
 const AppointmentDialog = defineAsyncComponent(() => import("../components/AppointmentDialog.vue"));
@@ -181,6 +173,7 @@ interface PatientListItem {
   region?: string;
   territory_name?: string | null;
   intake_forms?: PatientIntakeFormStatus[];
+  device_order?: PatientDeviceOrder | null;
   ahi_baseline?: number | null;
   cpap_device?: string | null;
   medical_record?: string | null;
@@ -195,9 +188,9 @@ function doctorOf(p: PatientListItem) {
 }
 const { submit } = useEntitySubmit();
 const authStore = useAuthStore();
-// Direct add is its own, narrower admin/manager-only shortcut — everyone
-// else still adds patients through the lead pipeline.
-const canAdd = computed(() => authStore.user?.role === "admin" || authStore.user?.role === "manager");
+// Direct add: admin/manager, and a doctor for their own practice (NEO-223 — the API assigns the
+// patient to them, CORE-104). Reps still add patients through the lead pipeline.
+const canAdd = computed(() => ["admin", "manager", "doctor"].includes(authStore.user?.role ?? ""));
 const isDoctor = computed(() => authStore.user?.role === "doctor");
 const { canEditPatients } = usePermissions();
 const showAddModal = ref(false);
@@ -234,9 +227,15 @@ const tableHeaders = computed(() => [
   isDoctor.value
     ? { title: t("app.patients.table.lastUpdated"),  key: "updated_at",        sortable: true }
     : { title: t("app.patients.table.practitioner"), key: "practitioner_name", sortable: false },
-  { title: t("app.patients.table.forms"),            key: "intake_forms",      sortable: false },
-  { title: t("app.patients.table.status"),           key: "status",            sortable: true },
+  { title: t("app.patients.table.documents"),        key: "documents",         sortable: false },
+  { title: t("app.patients.table.studies"),          key: "studies",           sortable: false },
+  { title: t("app.patients.table.nextStep"),         key: "next_step",         sortable: false },
 ]);
+
+/** An item without a category (an older API) counts as a document, so nothing disappears mid-deploy. */
+function formsOf(patient: PatientListItem, category: "document" | "study"): PatientIntakeFormStatus[] {
+  return (patient.intake_forms ?? []).filter((f) => (f.category ?? "document") === category);
+}
 
 const patientsI18n = computed(() => ({
   searchPlaceholder:            "app.patients.searchPlaceholder",
@@ -251,11 +250,6 @@ const patientsI18n = computed(() => ({
   tableNoResults:               "app.patients.table.noResults",
   errorLoad:                    "app.patients.errorLoad",
 }));
-
-const statusColor = patientStatusColor;
-function statusLabel(status?: string): string {
-  return patientStatusLabel(t, status);
-}
 
 function onAddPatient() {
   showAddModal.value = true;

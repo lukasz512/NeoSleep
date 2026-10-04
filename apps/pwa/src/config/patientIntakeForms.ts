@@ -1,4 +1,5 @@
 import type AppIcon from "../components/AppIcon.vue";
+import { documentLabelKey } from "../utils/documentLabels";
 
 type AppIconName = InstanceType<typeof AppIcon>["$props"]["name"];
 
@@ -40,6 +41,26 @@ const INTAKE_FORM_ABBR_KEYS: Record<string, string> = {
 
 export function intakeFormAbbrKey(key: string): string | undefined {
   return INTAKE_FORM_ABBR_KEYS[key];
+}
+
+/** Tiles per row in the patient list's Documents / Studies cells — at most 2 rows (NEO-221; mirrored in PatientIntakeForms.vue's grid). */
+export const INTAKE_TILES_PER_ROW = 3;
+
+type Translate = (key: string) => string;
+
+/** The form's own title, or its key when the template has none. */
+export function intakeFormLabel(t: Translate, key: string): string {
+  // Same fallback as DocumentsView's documentLabel(): te() misses these flat dotted keys, so compare t()'s output instead.
+  const labelKey = documentLabelKey(key);
+  const translated = labelKey ? t(labelKey) : "";
+  return translated && translated !== labelKey ? translated : key;
+}
+
+/** Clinical abbreviation (CI / HC / SB / PSG), or initials of the form's label for a template without one. */
+export function intakeFormAbbr(t: Translate, key: string): string {
+  const abbrKey = intakeFormAbbrKey(key);
+  const translated = abbrKey ? t(abbrKey) : "";
+  return translated && translated !== abbrKey ? translated : initialsAbbr(intakeFormLabel(t, key));
 }
 
 /** "Informed consent" -> "IC"; at most 3 letters, for templates without an abbreviation of their own. */

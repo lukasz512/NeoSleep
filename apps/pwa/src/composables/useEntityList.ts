@@ -196,7 +196,8 @@ export function useEntityList(opts: EntityListOptions) {
       if (preview) rememberRecordPreview(opts.detailRouteName, String(id), preview);
       router.push({
         name: opts.detailRouteName,
-        params: { [opts.detailRouteParam ?? "id"]: String(id) },
+        // detailRouteParam names the row field; every detail route's param is `id` (NEO-224).
+        params: { id: String(id) },
         query: opts.detailRouteQuery?.(item),
       });
     }

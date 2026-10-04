@@ -235,6 +235,12 @@ describe("createOrthoApneaTreatment", () => {
   it("records the request/response and marks partner_link synced with the returned statusId", async () => {
     const { plan } = await setupPatientAndPlan();
 
+    // NEO-217: before any partner call the plan carries no order state.
+    const unsent = await withTenant(TENANT_SLUG, (client) => getTreatmentPlanById(client, plan.id));
+    expect(unsent?.order_sync_status).toBeNull();
+    expect(unsent?.order_number).toBeNull();
+    expect(unsent?.order_sent_at).toBeNull();
+
     stubFetchRoutes({
       [LOGIN_ROUTE[0]]: LOGIN_ROUTE[1],
       "/api/treatments": () => ({ status: 200, body: treatmentDtoFixture }),
@@ -250,6 +256,12 @@ describe("createOrthoApneaTreatment", () => {
     expect(link?.sync_status).toBe("synced");
     expect(link?.external_status).toBe("1");
     createdPartnerLinkIds.push(link!.id);
+
+    // NEO-217: the plan read (list + detail) carries the order number and state for the device tile.
+    const sent = await withTenant(TENANT_SLUG, (client) => getTreatmentPlanById(client, plan.id));
+    expect(sent?.order_sync_status).toBe("synced");
+    expect(sent?.order_number).toBe("452434");
+    expect(sent?.order_sent_at).not.toBeNull();
 
     const transactions = await query<{
       action: string;
@@ -326,6 +338,9 @@ describe("createOrthoApneaTreatment", () => {
     const localPlan = await withTenant(TENANT_SLUG, (client) => getTreatmentPlanById(client, plan.id));
     expect(localPlan).not.toBeNull();
     expect(localPlan?.status).toBe(plan.status);
+    // NEO-217: …but the tile must show it as "Requiere atención".
+    expect(localPlan?.order_sync_status).toBe("failed");
+    expect(localPlan?.order_number).toBeNull();
   });
 
   it("marks partner_link failed (distinct from an HTTP error) when OrthoApnea is unreachable", async () => {
