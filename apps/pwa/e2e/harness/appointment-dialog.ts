@@ -4,7 +4,8 @@
  * AppointmentDialog for a fixed patient, booked by an admin with a fixed
  * doctor; the API is answered in the page (window.fetch stub).
  * `?doctor=team` books with a doctor already on the patient's care team,
- * anything else with one outside it. `?lang=pl|mx|en`, `?theme=dark`.
+ * `?doctor=unknown` makes the team list fail and the API refuse the booking (CORE-138),
+ * anything else books with one outside it. `?lang=pl|mx|en`, `?theme=dark`.
  */
 import { createApp, defineComponent, h } from "vue";
 import { createPinia } from "pinia";
@@ -23,11 +24,18 @@ if (lang === "pl" || lang === "mx") {
   i18n.global.locale.value = lang;
 }
 const onTeam = params.get("doctor") === "team";
+/** CORE-138: the team list fails to load and the API then refuses the booking without grant_access. */
+const teamUnknown = params.get("doctor") === "unknown";
 
-const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } }));
+const json = (body: unknown, status = 200) =>
+  Promise.resolve(new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }));
 const realFetch = window.fetch.bind(window);
 window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+  if (teamUnknown && url.includes("/care-team")) return json({ error: "unavailable" }, 503);
+  if (teamUnknown && init?.method === "POST" && /\/api\/v1\/appointments$/.test(url)) {
+    return json({ error: "grant_access must be confirmed", code: "VALIDATION_ERROR", field: "grant_access" }, 400);
+  }
   if (url.includes("/care-team")) return json(onTeam ? [{ practitioner_id: "h-1" }, { practitioner_id: "h-2" }] : [{ practitioner_id: "h-1" }]);
   if (url.includes("/booking-zone")) return json({ timezone: "America/Mexico_City" });
   if (url.includes("/api/v1/")) return json({ items: [] });

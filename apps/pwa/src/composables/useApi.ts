@@ -135,6 +135,7 @@ const REQUEST_TIMEOUT_MS = 20_000;
 async function fetchWithAuth(
   input: RequestInfo | URL,
   init?: RequestInit,
+  trackLoader = true,
 ): Promise<Response> {
   const url =
     typeof input === "string"
@@ -156,8 +157,8 @@ async function fetchWithAuth(
     return headers;
   }
 
-  const loader = useGlobalLoaderStore();
-  loader.startLoading();
+  const loader = trackLoader ? useGlobalLoaderStore() : null;
+  loader?.startLoading();
   try {
     let res = await fetch(input, { ...init, headers: buildHeaders(), signal: timeoutController.signal });
 
@@ -176,7 +177,7 @@ async function fetchWithAuth(
     return res;
   } finally {
     clearTimeout(timeoutId);
-    loader.stopLoading();
+    loader?.stopLoading();
   }
 }
 
@@ -212,4 +213,14 @@ export const apiFetch = createApiFetch({
       { where: "apiFetch" },
     );
   },
+});
+
+/**
+ * apiFetch for work the user didn't ask for (a background sync): it never
+ * drives the global loader, so buttons stay enabled while it runs, and never
+ * toasts. Callers report failures themselves (CORE-67).
+ */
+export const backgroundApiFetch = createApiFetch({
+  getApiBase: getApiUrl,
+  fetchFn: (input, init) => fetchWithAuth(input, init, false),
 });

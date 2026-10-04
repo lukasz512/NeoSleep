@@ -162,7 +162,9 @@ describe("PatientDetailsTab — every appointment (CORE-133)", () => {
     apiFetch.mockImplementation(async (path: string) =>
       path.startsWith("/api/v1/appointments?")
         ? { ok: true, status: 200, json: async () => ({ items: APPTS }) }
-        : { ok: true, status: 200, json: async () => EMPTY },
+        : path.endsWith("/care-team")
+          ? { ok: true, status: 200, json: async () => [] }
+          : { ok: true, status: 200, json: async () => EMPTY },
     );
     const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/", component: { template: "<div />" } }, { path: "/hcp/:id", name: "hcp-detail", component: { template: "<div />" } }] });
     const wrapper = mount(PatientDetailsTab, {
