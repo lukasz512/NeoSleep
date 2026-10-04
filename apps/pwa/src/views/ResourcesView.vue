@@ -410,6 +410,11 @@ const incidentMailtoHref = computed(() => {
   min-height: 0;
   overflow-y: auto;
   padding-top: 4px;
+  /* Room for the video cards' 6 px hover bleed (ResourceVideoTile's margin: -6px):
+     overflow-y: auto makes overflow-x auto too, so without it the right column
+     scrolled sideways (NEO-234). Content stays on the same line as the title. */
+  margin-inline: -6px;
+  padding-inline: 6px;
 }
 
 .view-resources__group + .view-resources__group {

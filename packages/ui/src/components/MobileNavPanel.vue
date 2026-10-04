@@ -103,7 +103,7 @@ export interface MobileNavPanelItem {
  * "More" was.
  *
  * All motion is CSS on a class this component toggles: the glass reveals
- * upwards through clip-path, the grid fades in, shadows crossfade. Nothing is
+ * upwards (its top edge moves), the grid fades in, shadows crossfade. Nothing is
  * measured or laid out from script per frame, so it stays smooth on slow
  * phones. Opens on: "More", or pulling the pill up. Closes on: the same
  * button, a tap on the scrim, a drag down on the open box, Escape, and any
@@ -256,6 +256,8 @@ defineExpose({ expanded, setExpanded });
   --_glass-solid: var(--glass-solid, #fff);
   --_glass-blur: var(--glass-blur, blur(18px) saturate(170%));
   --_glass-edge: var(--glass-edge, rgb(255 255 255 / 0.7));
+  --_glass-rim: var(--glass-rim, 0 0 transparent);
+  --_glass-sheen: var(--glass-sheen, none);
   --_glass-shadow: var(--glass-shadow, 0 12px 32px -10px rgb(0 0 0 / 0.28));
   --_dur-in: var(--menu-dur-in, 420ms);
   --_dur-out: var(--menu-dur-out, 180ms);
@@ -299,29 +301,36 @@ defineExpose({ expanded, setExpanded });
   transition: none;
 }
 
-/* The glass: one surface behind the grid and the row. Collapsed it is
-   clipped to the pill at the bottom; open it reveals upwards to the whole
-   box. clip-path + opacity only — no height, no layout per frame. */
+/* The glass: one surface behind the grid and the row. Collapsed it is the
+   pill at the bottom; open it grows upwards to the whole box. CORE-119: it
+   moves its top edge, not a clip-path — Chromium drops the backdrop blur of a
+   clip-pathed element, which left the pill a flat milky plate. The glass is
+   an empty absolutely positioned leaf, so moving `top` lays out nothing else. */
 .mobile-nav-panel__glass {
   position: absolute;
-  inset: 0;
+  inset: calc(100% - var(--_height)) 0 0 0;
   z-index: -1;
-  background: var(--_glass);
+  background: var(--_glass-sheen), var(--_glass);
   -webkit-backdrop-filter: var(--_glass-blur);
   backdrop-filter: var(--_glass-blur);
-  box-shadow: inset 0 1px 0 var(--_glass-edge);
-  border-radius: var(--_radius-open);
-  clip-path: inset(calc(100% - var(--_height)) 0 0 0 round calc(var(--_height) / 2));
-  transition: clip-path var(--_dur-out) var(--_ease-out);
+  box-shadow:
+    inset 0 1px 0 var(--_glass-edge),
+    var(--_glass-rim);
+  border-radius: calc(var(--_height) / 2);
+  transition:
+    top var(--_dur-out) var(--_ease-out),
+    border-radius var(--_dur-out) var(--_ease-out);
 }
 
 /* Open, the glass gets denser: the module labels sit on top of the page's
    own text, which must not read through them. */
 .mobile-nav-panel--expanded .mobile-nav-panel__glass {
-  clip-path: inset(0 0 0 0 round var(--_radius-open));
+  top: 0;
+  border-radius: var(--_radius-open);
   background: color-mix(in srgb, var(--_glass-solid) 94%, transparent);
   transition:
-    clip-path var(--_dur-in) var(--_spring),
+    top var(--_dur-in) var(--_spring),
+    border-radius var(--_dur-in) var(--_spring),
     background-color 200ms linear;
 }
 

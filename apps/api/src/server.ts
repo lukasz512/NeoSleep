@@ -32,6 +32,7 @@ import { sleepStudyRouter } from "./routes/sleepStudy.js";
 import { appointmentRouter } from "./routes/appointment.js";
 import { treatmentPlanRouter } from "./routes/treatmentPlan.js";
 import { territoryRouter } from "./routes/territory.js";
+import { doctorPanelRouter } from "./routes/doctorPanel.js";
 import { runMigrations, getDb } from "./db.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { apiLimiter, smokePdfLimiter } from "./middleware/rateLimiter.js";
@@ -188,6 +189,7 @@ app.use("/api/v1", sleepStudyRouter);
 app.use("/api/v1", appointmentRouter);
 app.use("/api/v1", treatmentPlanRouter);
 app.use("/api/v1", territoryRouter);
+app.use("/api/v1", doctorPanelRouter);
 
 app.use(errorHandler);
 

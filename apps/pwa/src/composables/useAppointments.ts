@@ -98,7 +98,8 @@ export function useAppointments() {
   function create(body: {
     patient_id: string;
     practitioner_id?: string;
-    start_at: string;
+    /** Clinic wall-clock "YYYY-MM-DDTHH:mm"; the API converts it in the clinic's zone (CORE-120). */
+    start_local: string;
     duration_minutes: number;
     notes?: string;
     treatment_plan_id?: string;

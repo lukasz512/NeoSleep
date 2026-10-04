@@ -135,8 +135,8 @@ describe("AppLayout", () => {
       expect(navRoutesForRole("admin").map((r) => r.path)).toEqual(expectedPaths);
     });
 
-    it("doctor sees patients, the clinical aggregates, calendar, and resources — never leads, hcp, hco, or users", () => {
-      const expectedPaths = ["/patients", "/calendar", "/sleep-studies", "/treatment-plans", "/resources"];
+    it("doctor sees the Panel, patients, the clinical aggregates, calendar, and resources — never leads, hcp, hco, or users", () => {
+      const expectedPaths = ["/dashboard", "/patients", "/calendar", "/sleep-studies", "/treatment-plans", "/resources"];
       expect(navRoutesForRole("doctor").map((r) => r.path)).toEqual(expectedPaths);
     });
   });
@@ -196,7 +196,8 @@ describe("AppLayout", () => {
     it("the folded logo is the avatar's size, and folding is measured from the bar, not a breakpoint", () => {
       const layout = readLayout();
       expect(slotBlock(layout, "app-bar-start")).toContain(':mark-size="AVATAR_SIZE"');
-      expect(slotBlock(layout, "app-bar-actions")).toContain('<VAvatar :size="AVATAR_SIZE"');
+      // CORE-114: the bar avatar is AppAvatar, carrying the user's role badge.
+      expect(slotBlock(layout, "app-bar-actions")).toMatch(/<AppAvatar[^>]*:role="user\.roleKey"[^>]*:size="AVATAR_SIZE"/);
       // The DEV badge after the logo counts towards the room the logo needs.
       expect(layout).toMatch(/useBarLogoFit\(barLogo, barActions, wordmarkWidth, isMobile, \{ el: envBadge, gap: BRAND_GAP \}\)/);
       expect(slotBlock(layout, "app-bar-actions")).toContain('ref="barActions"');
@@ -303,7 +304,8 @@ describe("AppLayout", () => {
       // NEO-113: views teleport into it on phones too, and an open icon search covers it.
       expect(source).toContain("providePageHeader(computed(() => true))");
       expect(source).toContain("'layout-page-header--search': pageHeaderRow.searchTakesRow.value");
-      expect(source).toContain("const pageHeaderVisible = computed(() => !recordHeaderClaim.value)");
+      // The rule itself (record header, CORE-129 phone-own-header routes) is tested in usePageHeader.spec.ts.
+      expect(source).toMatch(/const pageHeaderVisible = computed\(\(\) =>\s+isPageHeaderVisible\(\{ recordHeaderClaimed: recordHeaderClaim.value/);
       expect(source).toContain("provideRecordHeaderClaim()");
       expect(header).toMatch(/v-if="parentRoute"[\s\S]*?:to="parentRoute"/);
       expect(header).toContain("{{ moduleTitle }}");

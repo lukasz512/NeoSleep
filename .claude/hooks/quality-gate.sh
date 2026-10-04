@@ -168,12 +168,14 @@ ci_green_check() {
     success) return 0 ;;
     none)
       if [ "$on_ci" -eq 1 ]; then
-        FAILS+=("CI hasn't started for '${BRANCH}' @ ${head:0:7} yet (it runs on every push to this branch). Wait a minute, then check: node infrastructure/scripts/ci-status.mjs. Don't hand over the PR link before CI is green.")
+        FAILS+=("CI hasn't started for '${BRANCH}' @ ${head:0:7} yet (it runs on every push to this branch). Wait for it in the background with: node infrastructure/scripts/ci-wait.mjs --branch ${BRANCH} --sha ${head}. Don't hand over the PR link before CI is green.")
       else
         WARNS+=("'${BRANCH}' doesn't match .claude/ci-autofix.json ciBranchPatterns, so CI only runs once a PR exists — check it then.")
       fi ;;
     pending)
-      FAILS+=("CI is running for '${BRANCH}' @ ${head:0:7}: $(printf '%s' "$status" | jq -r '.runUrl'). Wait for it (run in the background: gh run watch $(printf '%s' "$status" | jq -r '.runId') --exit-status) — the PR link goes to Łukasz only once CI is green (.claude/ci-autofix.json waitForGreenBeforePrLink).") ;;
+      FAILS+=("CI is running for '${BRANCH}' @ ${head:0:7}: $(printf '%s' "$status" | jq -r '.runUrl'). Wait for it in the background with: node infrastructure/scripts/ci-wait.mjs --branch ${BRANCH} --sha ${head} (one GitHub call a minute, shared with every session — never gh run watch, which polls every 3 s and drains the API limit, CORE-128) — the PR link goes to Łukasz only once CI is green (.claude/ci-autofix.json waitForGreenBeforePrLink).") ;;
+    rate_limited)
+      WARNS+=("GitHub is rate limiting the API until $(printf '%s' "$status" | jq -r '.until') (shared limit for all sessions, CORE-128) — CI for '${BRANCH}' is unknown. Don't retry sooner; check CI on github.com before handing over the PR link.") ;;
     failure)
       local failures attempt max
       failures="$(printf '%s' "$status" | jq -r '(if (.failures | length) > 0 then .failures else .failedSteps end) | .[:15] | map("    · " + .) | join("\n")')"

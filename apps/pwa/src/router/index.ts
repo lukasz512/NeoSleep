@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router";
-import { routes, isRoleAllowed, homePathForRole } from "./routes";
+import { routes, isRoleAllowed, homePathForRole, DOCTOR_FALLBACK_HOME } from "./routes";
+import { loadDoctorPanelEnabled } from "../composables/useDoctorPanelSwitch";
 import { useAuthStore } from "../stores/auth";
 import { useRolePreviewStore } from "../stores/rolePreview";
 import type { UserRole } from "../stores/auth";
@@ -76,6 +77,11 @@ router.beforeEach(async (to) => {
     const effectiveRole = rolePreview.previewRole ?? auth.user?.role;
     if (!isRoleAllowed(roles, effectiveRole)) {
       return { path: homePathForRole(effectiveRole) };
+    }
+
+    // NEO-233: the doctor's Panel exists only while its per-tenant switch is on (off on prod until released).
+    if (to.name === "dashboard" && effectiveRole === "doctor" && !(await loadDoctorPanelEnabled(auth.user?.id ?? ""))) {
+      return { path: DOCTOR_FALLBACK_HOME };
     }
 
     // Fire-and-forget: retries the partner connection if it's down and

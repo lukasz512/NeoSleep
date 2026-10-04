@@ -30,6 +30,8 @@ export interface Patient {
   practitioner_id: string | null;
   diagnosis_code: Record<string, unknown> | null;
   ahi_baseline: number | null;
+  /** Height in cm (NEO-231): entered once here, STOP-Bang measures the weight against it. */
+  height_cm: number | null;
   cpap_device: string | null;
   medical_record: string | null;
   region: string;
@@ -77,6 +79,7 @@ export interface PatientInsert {
   practitioner_id?: string;
   diagnosis_code?: Record<string, unknown>;
   ahi_baseline?: number;
+  height_cm?: number | null;
   cpap_device?: string;
   medical_record?: string;
   status?: string;
@@ -98,6 +101,7 @@ export interface PatientUpdate {
   practitioner_id?: string;
   diagnosis_code?: Record<string, unknown>;
   ahi_baseline?: number;
+  height_cm?: number | null;
   cpap_device?: string;
   medical_record?: string;
   status?: string;
@@ -112,7 +116,7 @@ function buildName(p: { salutation: string | null; first_name: string; last_name
 }
 
 const PATIENT_SELECT_COLS = `
-  p.id, p.identity_id, p.practitioner_id, p.diagnosis_code, p.ahi_baseline,
+  p.id, p.identity_id, p.practitioner_id, p.diagnosis_code, p.ahi_baseline, p.height_cm,
   p.cpap_device, p.medical_record, p.status, p.metadata,
   p.created_at, p.updated_at,
   i.title AS salutation, i.first_name, i.last_name, i.email, i.phone,
@@ -151,6 +155,7 @@ type PatientRow = {
   diagnosis_code: Record<string, unknown> | null;
   // NUMERIC(6,2) column — pg driver returns it as a string, not a number.
   ahi_baseline: string | null;
+  height_cm: string | null;
   cpap_device: string | null;
   medical_record: string | null;
   region: string;
@@ -191,6 +196,7 @@ function serialize(row: PatientRow): Patient & { name: string } {
     practitioner_id: row.practitioner_id,
     diagnosis_code: row.diagnosis_code,
     ahi_baseline: optNum(row.ahi_baseline),
+    height_cm: optNum(row.height_cm),
     cpap_device: row.cpap_device,
     medical_record: row.medical_record,
     region: row.region,
@@ -324,8 +330,8 @@ export async function insertPatient(client: PoolClient, data: PatientInsert): Pr
     const identityId = identityResult.rows[0]!.id;
 
     const patientResult = await client.query<{ id: string }>(
-      `INSERT INTO patient (identity_id, practitioner_id, diagnosis_code, ahi_baseline, cpap_device, medical_record, status, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO patient (identity_id, practitioner_id, diagnosis_code, ahi_baseline, cpap_device, medical_record, status, metadata, height_cm)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING id`,
       [
         identityId,
@@ -336,6 +342,7 @@ export async function insertPatient(client: PoolClient, data: PatientInsert): Pr
         data.medical_record ?? null,
         data.status ?? "active",
         data.metadata ? JSON.stringify(data.metadata) : null,
+        data.height_cm ?? null,
       ]
     );
     const patientId = patientResult.rows[0]!.id;
@@ -398,7 +405,7 @@ export async function updatePatient(
     let pidx = 1;
 
     const patientFields: (keyof PatientUpdate)[] = [
-      "practitioner_id", "diagnosis_code", "ahi_baseline",
+      "practitioner_id", "diagnosis_code", "ahi_baseline", "height_cm",
       "cpap_device", "medical_record", "status", "metadata",
     ];
     for (const field of patientFields) {

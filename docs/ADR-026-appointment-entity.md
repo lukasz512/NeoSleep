@@ -29,7 +29,8 @@ A new tenant table `appointment`, created in migration `035_appointment.sql`:
 | `type` | Only `visit` in v1. More types and durations come later. |
 | `status` | `scheduled` / `completed` / `cancelled` / `no_show`. A booking is confirmed immediately; there is no pending state in v1. Rescheduling is an UPDATE of `start_at`/`end_at`, not a status. |
 | `start_at`, `end_at` | `end_at > start_at`. Default length is 60 minutes, with slots expected later. |
-| `timezone` | The clinic's IANA zone, taken at booking time from the clinic's country (PL → Europe/Warsaw, MX → America/Mexico_City, TH → Asia/Bangkok), falling back to `app_config.timezone`. Times are shown in this zone, not the viewer's. |
+| `timezone` | The clinic's IANA zone, taken at booking time from the clinic's country (PL → Europe/Warsaw, MX → America/Mexico_City, TH → Asia/Bangkok), then from the patient's country, then `app_config.timezone`. The clinic is the one sent, else the doctor's primary clinic, else their only one. Times are shown in this zone, not the viewer's. |
+| Entering a time (CORE-120) | The form sends `start_local` (`YYYY-MM-DDTHH:mm`, clinic wall-clock) and the **server** converts it in the zone above, so whoever books, from any device, gets what they see. `GET /appointments/booking-zone` tells the form that zone up front. `start_at` (an absolute instant) is still accepted for API clients; sending both is a 400. A time that doesn't exist (DST spring-forward) is a 400; an ambiguous one takes the earlier instant. Before CORE-120 the PWA converted in the device's zone, so a PL admin's 15:00 at an MX clinic was stored as 07:00. |
 | `location_type`, `online_url` | `clinic` / `online`. The v1 UI books clinic visits only. |
 | `notes`, `metadata`, timestamps, `deleted_at` | `deleted_at` is an admin soft delete for mistakes. Cancelling is a status. |
 
@@ -53,7 +54,7 @@ A new tenant table `appointment`, created in migration `035_appointment.sql`:
 
 - Enables NEO-28 (emails), NEO-29 (`.ics` with stable UID `appointment-{id}@neosleepcare.com`) and NEO-34 (screen) without touching `encounter` or reviving `visit_plan`.
 - Patient self-booking (form answer I1: after the patient panel exists) needs no schema change. `created_by_user_id` would become a patient-identity reference or a separate column at that point.
-- Known v1 limits: a single zone per country (MX's other zones need per-clinic settings), and a doctor without a primary clinic gets a location-less appointment.
+- Known v1 limits: a single zone per country (MX's other zones need per-clinic settings), and a doctor with several clinics and none marked primary gets a location-less appointment.
 
 ## Compliance Impact
 

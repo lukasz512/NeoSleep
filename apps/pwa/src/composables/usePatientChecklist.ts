@@ -33,7 +33,11 @@ export interface ChecklistRecord {
   score?: number | null;
   medical_history_other?: string | null;
   skeletal_class?: "I" | "II" | "III" | null;
+  /** Oral exam: no longer asked (NEO-231), kept for older rows. */
   tooth?: string | null;
+  has_tmj_finding?: boolean | null;
+  /** ATM evaluation (NEO-231): maximum opening in mm. */
+  max_opening_mm?: number | null;
   /** STOP-Bang measurements (migration 034) — null when B/N were answered as a plain yes/no. */
   height_cm?: number | null;
   weight_kg?: number | null;

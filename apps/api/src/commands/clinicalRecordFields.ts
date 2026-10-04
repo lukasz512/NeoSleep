@@ -1,8 +1,8 @@
 import { ValidationError } from "../errors.js";
 
 /**
- * Field definitions + validation for the three clinical questionnaires
- * (migration 030, ADR-023), shared by the staff commands
+ * Field definitions + validation for the clinical questionnaires
+ * (migration 030, ADR-023; the ATM evaluation since migration 049), shared by the staff commands
  * (commands/clinicalRecords.ts) and the patient self-fill flow
  * (commands/questionnaireRequest.ts) — one validator per questionnaire, so
  * a patient-submitted answer can never pass a rule a staff-entered one
@@ -10,8 +10,8 @@ import { ValidationError } from "../errors.js";
  * config-driven.
  */
 
-export type ClinicalRecordKind = "medical_history" | "oral_exam" | "stop_bang";
-export const CLINICAL_RECORD_KINDS: readonly ClinicalRecordKind[] = ["medical_history", "oral_exam", "stop_bang"];
+export type ClinicalRecordKind = "medical_history" | "oral_exam" | "stop_bang" | "tmj_exam";
+export const CLINICAL_RECORD_KINDS: readonly ClinicalRecordKind[] = ["medical_history", "oral_exam", "stop_bang", "tmj_exam"];
 
 /** Only these can be sent to the patient as a QR self-fill link — the oral exam is a clinical finding, never self-reported. */
 export type PatientFillableKind = Extract<ClinicalRecordKind, "medical_history" | "stop_bang">;
@@ -45,6 +45,17 @@ export const ORAL_EXAM_QUESTIONS = [
   "has_tmj_finding",
 ] as const;
 
+/**
+ * "Evaluación del ATM" (migration 049, NEO-231): five findings, each per side.
+ * Replaces the oral exam's single has_tmj_finding yes/no, which is no longer
+ * asked (the column stays for old rows).
+ */
+export const TMJ_FINDINGS = ["pain_palpation", "joint_sounds", "opening_limitation", "opening_deviation", "muscle_pain"] as const;
+export const TMJ_SIDES = ["right", "left"] as const;
+export const TMJ_COLUMNS = TMJ_FINDINGS.flatMap((finding) => TMJ_SIDES.map((side) => `${finding}_${side}` as const));
+/** Maximum mouth opening, whole millimetres — the same range as migration 049's CHECK. */
+export const TMJ_OPENING_RANGE = [0, 80] as const;
+
 /** S-T-O-P: self-reported — the patient can answer these. */
 export const STOP_QUESTIONS = ["snoring", "tiredness", "observed_apnea", "pressure"] as const;
 /** B-A-N-G: measured/known by the clinician (BMI, age, neck circumference, sex). */
@@ -60,6 +71,8 @@ export type OralExamAnswers = Record<OralExamQuestion, boolean | null> & {
   skeletal_class: "I" | "II" | "III" | null;
   tooth: string | null;
 };
+export type TmjColumn = (typeof TMJ_COLUMNS)[number];
+export type TmjExamAnswers = Record<TmjColumn, boolean> & { max_opening_mm: number | null };
 export type StopAnswers = Record<StopQuestion, boolean>;
 export type BangAnswers = Record<BangQuestion, boolean | null>;
 
@@ -112,6 +125,27 @@ export function validateOralExam(input: Record<string, unknown>): OralExamAnswer
   answers.tooth = optionalText(input, "tooth");
   if (ORAL_EXAM_QUESTIONS.every((key) => answers[key] === null) && !answers.skeletal_class) {
     throw new ValidationError("At least one finding is required");
+  }
+  return answers;
+}
+
+/** A side left unmarked is "not found" (false), like a paper checkbox; the exam needs at least one finding or the opening. */
+export function validateTmjExam(input: Record<string, unknown>): TmjExamAnswers {
+  const answers = {} as TmjExamAnswers;
+  for (const key of TMJ_COLUMNS) answers[key] = booleanOrNull(input, key, false) ?? false;
+  const opening = input.max_opening_mm;
+  if (opening === undefined || opening === null || opening === "") {
+    answers.max_opening_mm = null;
+  } else {
+    const value = typeof opening === "number" ? opening : typeof opening === "string" ? Number(opening) : Number.NaN;
+    const [min, max] = TMJ_OPENING_RANGE;
+    if (!Number.isInteger(value) || value < min || value > max) {
+      throw new ValidationError(`max_opening_mm must be a whole number between ${min} and ${max}`);
+    }
+    answers.max_opening_mm = value;
+  }
+  if (TMJ_COLUMNS.every((key) => !answers[key]) && answers.max_opening_mm === null) {
+    throw new ValidationError("At least one finding or the maximum opening is required");
   }
   return answers;
 }

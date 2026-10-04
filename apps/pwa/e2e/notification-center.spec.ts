@@ -53,3 +53,17 @@ test("phone: the card spans the screen with an 8 px margin", async ({ page }) =>
   expect(Math.abs(card.width - (390 - 16))).toBeLessThan(1);
   expect(card.y + card.height).toBeLessThanOrEqual(844);
 });
+
+test("phone: pulling the card up from a row closes it, like the account card", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openAndSettle(page);
+  // the fixture list fits on the screen, so the whole card takes the swipe
+  await expect(page.locator(".notif-center__list.glass-popover__scroll--fits")).toHaveCount(1);
+  const row = await box(page, '[data-testid="notif-row-n3"]');
+  await page.mouse.move(row.x + row.width / 2, row.y + row.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(row.x + row.width / 2, row.y - 60, { steps: 4 });
+  await page.mouse.move(row.x + row.width / 2, row.y - 160, { steps: 4 });
+  await page.mouse.up();
+  await expect(page.getByRole("dialog", { name: "Notifications" })).toHaveCount(0);
+});

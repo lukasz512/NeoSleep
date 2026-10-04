@@ -485,6 +485,7 @@ patientRouter.post(
       status?: string; region?: string; territory_id?: string | null;
       country_code?: string;
       ahi_baseline?: number; cpap_device?: string; medical_record?: string;
+      height_cm?: number | string | null;
       diagnosis_code?: Record<string, unknown>;
       metadata?: Record<string, unknown>;
       lead_id?: string;
@@ -507,6 +508,7 @@ patientRouter.post(
         territory_id:    body.territory_id === null ? null : typeof body.territory_id === "string" ? body.territory_id || null : undefined,
         country_code:    typeof body.country_code    === "string" ? body.country_code.trim() || null : undefined,
         ahi_baseline:    typeof body.ahi_baseline    === "number" ? body.ahi_baseline        : undefined,
+        height_cm:       body.height_cm,
         cpap_device:     typeof body.cpap_device     === "string" ? body.cpap_device.trim() || undefined : undefined,
         medical_record:  typeof body.medical_record  === "string" ? body.medical_record.trim() || undefined : undefined,
         diagnosis_code:  body.diagnosis_code,
@@ -538,6 +540,7 @@ patientRouter.patch(
       status?: string; region?: string; territory_id?: string | null;
       country_code?: string | null;
       ahi_baseline?: number; cpap_device?: string; medical_record?: string;
+      height_cm?: number | string | null;
       diagnosis_code?: Record<string, unknown>;
       metadata?: Record<string, unknown>;
     };
@@ -559,6 +562,7 @@ patientRouter.patch(
         territory_id:    body.territory_id === null ? null : typeof body.territory_id === "string" ? body.territory_id || null : undefined,
         country_code:    body.country_code     !== undefined ? body.country_code      : undefined,
         ahi_baseline:    typeof body.ahi_baseline === "number" ? body.ahi_baseline    : undefined,
+        height_cm:       body.height_cm,
         cpap_device:     body.cpap_device      !== undefined ? body.cpap_device       : undefined,
         medical_record:  body.medical_record   !== undefined ? body.medical_record    : undefined,
         diagnosis_code:  body.diagnosis_code,

@@ -15,6 +15,7 @@ export interface FormCompletionItem {
 const FORM_TABLE: Record<string, string> = {
   medicalHistory: "medical_history_questionnaire",
   oralExam: "oral_exam",
+  tmjExam: "tmj_exam",
 };
 
 /**
@@ -25,7 +26,7 @@ const FORM_TABLE: Record<string, string> = {
  * both against the same patient states:
  *   - any item: a file the doctor attached to it ("Agregar estudio")
  *   - fill_mode consent: a non-withdrawn consent with purpose = key
- *   - medicalHistory / oralExam: a record exists
+ *   - medicalHistory / oralExam / tmjExam: a record exists
  *   - stopBang: the LATEST entry decides — an S-T-O-P-only screening
  *     (score NULL, awaiting B-A-N-G) is not done
  *   - polysomnography: a polysomnography study with results in

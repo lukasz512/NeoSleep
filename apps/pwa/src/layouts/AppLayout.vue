@@ -101,9 +101,15 @@
                 <span class="layout-user-name" data-motion="trigger-name">{{ user.displayName }}</span>
                 <span class="layout-user-role" data-motion="trigger-role">{{ user.role }}</span>
               </div>
-              <VAvatar :size="AVATAR_SIZE" color="primary" data-motion="trigger-avatar">
-                <span class="text-body-small font-weight-bold">{{ user.initials }}</span>
-              </VAvatar>
+              <!-- CORE-114: the role badge rides on the app bar avatar too. -->
+              <AppAvatar
+                :name="user.displayName"
+                entity-type="user"
+                :role="user.roleKey"
+                :role-label="user.role"
+                :size="AVATAR_SIZE"
+                data-motion="trigger-avatar"
+              />
             </AppButton>
           </template>
 
@@ -111,6 +117,7 @@
             :name="user.displayName"
             :email="user.email"
             :role-label="user.role"
+            :role="user.roleKey"
             :initials="user.initials"
             :avatar-size="MENU_AVATAR_SIZE"
             :region="user.region"
@@ -245,6 +252,7 @@ import {
   providePageHeader,
   providePageHeaderRow,
   provideRecordHeaderClaim,
+  isPageHeaderVisible,
   PAGE_HEADER_ACTIONS_ID,
 } from "../composables/usePageHeader";
 import { useGlyphInset } from "../composables/useGlyphInset";
@@ -264,6 +272,7 @@ import {
   AppInstallCard,
 } from "./components";
 import AppButton from "../components/AppButton.vue";
+import AppAvatar from "../components/AppAvatar.vue";
 import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
 import AppNotificationCenter from "../components/AppNotificationCenter.vue";
 import { useNotificationCenter } from "../composables/useNotificationCenter";
@@ -334,7 +343,9 @@ const recordHeaderClaim = provideRecordHeaderClaim();
 // Hidden while a record header replaces it — NEO-152: on phones too, whose
 // record header is now the desktop one, its "MODULE ›" link above the name
 // being the way back (no separate "← Module" row).
-const pageHeaderVisible = computed(() => !recordHeaderClaim.value);
+const pageHeaderVisible = computed(() =>
+  isPageHeaderVisible({ recordHeaderClaimed: recordHeaderClaim.value, isMobile: isMobile.value, routeMeta: route.meta }),
+);
 
 // NEO-108: logo sizes. The folded O is exactly the avatar's size, so both
 // corners of the phone bar match.

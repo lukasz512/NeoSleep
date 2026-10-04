@@ -74,11 +74,13 @@ describe("GetPatientChecklistQuery", () => {
         ["medicalHistory", "patient"],
         ["stopBang", "patient"],
         ["oralExam", "doctor"],
+        ["tmjExam", "doctor"],
         ["historiaEndo", "doctor"],
         ["polysomnography", "results"],
       ]);
       expect(checklist.items.every((i) => i.status === "missing")).toBe(true);
-      expect(checklist.summary).toEqual({ done: 0, total: 6 });
+      expect(checklist.summary).toEqual({ done: 0, total: 7 });
+      expect(checklist.items.find((i) => i.key === "tmjExam")!.actions).toMatchObject({ qr: false, fill: "questionnaire", form: "tmj_exam", print: true });
       expect(checklist.items.find((i) => i.key === "oralExam")!.actions).toMatchObject({ qr: false, fill: "questionnaire", print: true });
       expect(checklist.items.find((i) => i.key === "informedConsent")!.actions).toMatchObject({ qr: true, fill: null, print: true });
     });
@@ -96,6 +98,7 @@ describe("GetPatientChecklistQuery", () => {
         medicalHistory: "document",
         stopBang: "document",
         oralExam: "document",
+        tmjExam: "document",
         historiaEndo: "document",
         polysomnography: "study",
       });
@@ -185,7 +188,7 @@ describe("PrintChecklistItemCommand (real rendering)", () => {
     await withTenant(TENANT_SLUG, async (client) => {
       const ctx = await buildContext(client);
       const patient = await newPatient(client);
-      for (const key of ["historiaEndo", "oralExam", "informedConsent", "stopBang"]) {
+      for (const key of ["historiaEndo", "oralExam", "tmjExam", "informedConsent", "stopBang"]) {
         const result = await PrintChecklistItemCommand(ctx, patient.id, key);
         expect(result.kind === "pdf" && isPdf(result.bytes)).toBe(true);
       }
@@ -193,7 +196,7 @@ describe("PrintChecklistItemCommand (real rendering)", () => {
     });
   }, 90000);
 
-  const PATIENT_FORMS = ["medicalHistory", "oralExam", "historiaEndo", "informedConsent", "stopBang"];
+  const PATIENT_FORMS = ["medicalHistory", "oralExam", "tmjExam", "historiaEndo", "informedConsent", "stopBang"];
 
   /** Prints every patient form and returns the header fields each one was filled with. */
   async function printHeaders(ctx: TenantContext, patientId: string) {
@@ -240,4 +243,51 @@ describe("PrintChecklistItemCommand (real rendering)", () => {
       expect((renderSpy.mock.calls[0] as [string, { dataFields: Record<string, string> }])[1].dataFields.nombre_medico).toBe("");
     });
   }, 120000);
+});
+
+// NEO-231 (docs/stories/lorena-clinical-forms-r1.md): the ATM evaluation is its own item, and the Historia clínica prints every section.
+describe("ATM evaluation + Historia clínica print (NEO-231)", () => {
+  const lastRender = () => renderSpy.mock.calls.at(-1) as [string, { dataFields: Record<string, string>; choiceFields: Record<string, unknown> }];
+
+  it("an ATM record completes the tmjExam item and prints per side with the opening", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const patient = await newPatient(client);
+      await RecordClinicalQuestionnaireCommand(ctx, patient.id, "tmj_exam", { pain_palpation_right: true, muscle_pain_left: true, max_opening_mm: 38 });
+
+      const item = (await GetPatientChecklistQuery(ctx, patient.id)).items.find((i) => i.key === "tmjExam")!;
+      expect(item.status).toBe("done");
+      expect(item.history[0]!.record).toMatchObject({ kind: "tmj_exam", pain_palpation_right: true, max_opening_mm: 38 });
+
+      renderSpy.mockClear();
+      await PrintChecklistItemCommand(ctx, patient.id, "tmjExam");
+      const [html, options] = lastRender();
+      expect(html).toContain('data-field="tmj_pain_palpation_right"');
+      expect(options.choiceFields.tmj_pain_palpation_right).toEqual({ options: ["Derecho"], selected: "Derecho" });
+      expect(options.choiceFields.tmj_pain_palpation_left).toEqual({ options: ["Izquierdo"], selected: null });
+      expect(options.choiceFields.tmj_muscle_pain_left).toEqual({ options: ["Izquierdo"], selected: "Izquierdo" });
+      expect(options.dataFields.tmj_max_opening).toBe("38 mm");
+    });
+  }, 60000);
+
+  it("the Historia clínica PDF prints the ATM table and the STOP-Bang score next to the history and the exam", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const patient = await newPatient(client);
+      await RecordClinicalQuestionnaireCommand(ctx, patient.id, "tmj_exam", { joint_sounds_left: true, max_opening_mm: 45 });
+      await RecordClinicalQuestionnaireCommand(ctx, patient.id, "stop_bang", {
+        snoring: true, tiredness: true, observed_apnea: true, pressure: false,
+        bmi_over_35: false, age_over_50: true, neck_circumference_over_40cm: false, is_male: false,
+      });
+
+      renderSpy.mockClear();
+      await PrintChecklistItemCommand(ctx, patient.id, "historiaEndo");
+      const [html, options] = lastRender();
+      for (const field of ["q_has_bruxism", "q_has_diabetes", "tmj_joint_sounds_left", "tmj_max_opening", "score"]) expect(html).toContain(`data-field="${field}"`);
+      expect(html).not.toContain('data-field="q_has_tmj_finding"');
+      expect(options.choiceFields.tmj_joint_sounds_left).toEqual({ options: ["Izquierdo"], selected: "Izquierdo" });
+      expect(options.dataFields.tmj_max_opening).toBe("45 mm");
+      expect(options.dataFields.score).toBe("4");
+    });
+  }, 60000);
 });

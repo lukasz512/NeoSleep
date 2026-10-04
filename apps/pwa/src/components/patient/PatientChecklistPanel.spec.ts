@@ -138,20 +138,24 @@ async function mountPanel(extraProps: Record<string, unknown> = {}): Promise<Vue
 
 const rows = (wrapper: VueWrapper) => wrapper.findAll(".studies__item");
 type Scope = Pick<VueWrapper, "findAll">;
+/** NEO-231 D2: Antecedentes · STOP-Bang · Exploración (· ATM) are tabs of one Historia clínica tile. */
+const hcTile = (wrapper: VueWrapper) => wrapper.find("[data-testid='hc-tile']");
+async function openTab(wrapper: VueWrapper, key: string) {
+  await wrapper.find(`[data-section='${key}']`).trigger("click");
+  return hcTile(wrapper);
+}
 const button = (scope: Scope, text: string) => scope.findAll("button").find((b) => b.text().includes(text));
 
 describe("PatientChecklistPanel — the Estudios checklist", () => {
   it("shows every item grouped consent → patient → doctor → results, polysomnography last, with done/total", async () => {
     const wrapper = await mountPanel();
-    expect(wrapper.findAll(".studies__group-title").map((h) => h.text())).toEqual(["Consent", "Completed by the patient", "Completed by the doctor", "Results"]);
+    expect(wrapper.findAll(".studies__group-title").map((h) => h.text())).toEqual(["Consent", "Clinical history", "Results"]);
     expect(rows(wrapper).map((r) => r.find(".studies__item-title").text())).toEqual([
       "Informed consent",
-      "Medical history",
-      "STOP-Bang questionnaire",
-      "Oral cavity exam",
-      "Clinical history",
+      "1 of 3 sections complete",
       "Polysomnography",
     ]);
+    expect(hcTile(wrapper).findAll("[role='tab']").map((tab) => tab.text())).toEqual(["History", "STOP-Bang", "Oral exam"]);
     expect(wrapper.text()).toContain("1 of 6 done");
   });
 
@@ -159,16 +163,35 @@ describe("PatientChecklistPanel — the Estudios checklist", () => {
   it("category='document' shows consent + the Historia Clínica parts with the patient QR; no results, no other studies", async () => {
     (checklistBody.other_uploads as unknown[]).push({ id: "up-9", type: "upload", created_at: "2026-09-22T10:00:00Z", source: "staff", by: null, title: "CBCT", file_attachment_id: "up-9" });
     const wrapper = await mountPanel({ category: "document" });
-    expect(rows(wrapper).map((r) => r.find(".studies__item-title").text())).toEqual([
-      "Informed consent",
-      "Medical history",
-      "STOP-Bang questionnaire",
-      "Oral cavity exam",
-      "Clinical history",
-    ]);
+    expect(rows(wrapper).map((r) => r.find(".studies__item-title").text())).toEqual(["Informed consent", "1 of 3 sections complete"]);
     expect(wrapper.text()).toContain("1 of 5 done");
     expect(wrapper.text()).not.toContain("CBCT");
     expect(wrapper.find(".studies__qr").exists()).toBe(true);
+  });
+
+  // NEO-231 D2 (Dra. Lorena): one Historia clínica, sections as tabs.
+  it("the Historia clínica tile opens on the first section still to do, counts done sections and prints the whole HC", async () => {
+    const wrapper = await mountPanel({ category: "document" });
+    const tile = hcTile(wrapper);
+    expect(tile.find("[data-testid='hc-progress']").text()).toBe("1 of 3 sections complete");
+    expect(tile.find("[role='tab'][aria-selected='true']").text()).toContain("STOP-Bang");
+    expect(button(tile, "Print clinical history")).toBeTruthy();
+    const oralExam = await openTab(wrapper, "oralExam");
+    expect(oralExam.find("[role='tab'][aria-selected='true']").text()).toContain("Oral exam");
+    expect(button(oralExam, "Fill in")).toBeTruthy();
+  });
+
+  it("an ATM section joins the tabs and its findings read per side", async () => {
+    const items = checklistBody.items as ReturnType<typeof item>[];
+    items.splice(4, 0, item("tmjExam", "doctor", "done", {
+      actions: actions({ fill: "questionnaire", form: "tmj_exam" }),
+      history: [{ id: "tmj-1", type: "record", created_at: "2026-10-04T10:00:00Z", source: "staff", by: "Dra. Test", record: { kind: "tmj_exam", id: "tmj-1", created_at: "2026-10-04T10:00:00Z", source: "staff", recorded_by_name: "Dra. Test", pain_palpation_right: true, max_opening_mm: 38 } }],
+    }));
+    const wrapper = await mountPanel({ category: "document" });
+    expect(hcTile(wrapper).find("[data-testid='hc-progress']").text()).toBe("2 of 4 sections complete");
+    const tmj = await openTab(wrapper, "tmjExam");
+    expect(tmj.text()).toContain("Pain on palpation (Right)");
+    expect(tmj.text()).toContain("Opening 38 mm");
   });
 
   it("hideQrButton (desktop, the side panel has the QR — NEO-203) drops only the QR button; the email button stays", async () => {
@@ -188,25 +211,27 @@ describe("PatientChecklistPanel — the Estudios checklist", () => {
 
   it("a done item shows its result instead of its buttons (actions move under ⋯); missing ones keep their buttons", async () => {
     const wrapper = await mountPanel();
-    const [consent, history, stopBang, oralExam] = rows(wrapper);
-    expect(history!.classes()).toContain("studies__item--done");
-    expect(history!.text()).toContain("Filled in by the patient");
+    const consent = rows(wrapper)[0];
+    expect(wrapper.find("[data-section='medicalHistory']").classes()).toContain("studies__hc-tab--done");
+    const history = await openTab(wrapper, "medicalHistory");
+    expect(history.text()).toContain("Filled in by the patient");
     // Result: yes/no counts + the positive answers as chips.
-    expect(history!.find(".checklist-result__count--yes").text()).toBe("1Yes");
-    expect(history!.findAll(".checklist-result__chip--yes").map((c) => c.text())).toEqual(["Diabetes"]);
-    expect(button(history!, "Fill in")).toBeUndefined();
-    expect(history!.find('[aria-label="More actions for Medical history"]').exists()).toBe(true);
+    expect(history.find(".checklist-result__count--yes").text()).toBe("1Yes");
+    expect(history.findAll(".checklist-result__chip--yes").map((c) => c.text())).toEqual(["Diabetes"]);
+    expect(button(history, "Fill in")).toBeUndefined();
+    expect(history.find('[aria-label="More actions for Medical history"]').exists()).toBe(true);
 
     expect(consent!.classes()).toContain("studies__item--missing");
     expect(button(consent!, "QR")).toBeTruthy();
     // QR only on items the patient completes, never on the doctor's oral exam.
-    expect(button(oralExam!, "QR")).toBeUndefined();
-    expect(button(oralExam!, "Fill in")).toBeTruthy();
+    const oralExam = await openTab(wrapper, "oralExam");
+    expect(button(oralExam, "QR")).toBeUndefined();
+    expect(button(oralExam, "Fill in")).toBeTruthy();
   });
 
   it("STOP-Bang with only S-T-O-P in shows the patient's part and keeps 'Complete B-A-N-G' on top", async () => {
     const wrapper = await mountPanel();
-    const stopBang = rows(wrapper)[2]!;
+    const stopBang = await openTab(wrapper, "stopBang");
     expect(stopBang.text()).toContain("B-A-N-G missing");
     expect(stopBang.find(".checklist-result__score").text()).toBe("1 / 4 S-T-O-P");
     // S answered yes; B-A-N-G not asked yet (dashed).
@@ -232,7 +257,7 @@ describe("PatientChecklistPanel — the Estudios checklist", () => {
       ],
     });
     const wrapper = await mountPanel();
-    const row = rows(wrapper)[5]!;
+    const row = rows(wrapper)[2]!;
     expect(row.text()).toContain("18.4");
     expect(row.text()).toContain("84 %");
     expect(row.text()).toContain("Moderate OSA");
@@ -290,7 +315,7 @@ describe("PatientChecklistPanel — the Estudios checklist", () => {
       path === "/api/v1/sleep-study/ss-2" && init?.method === "DELETE" ? jsonResponse(true, 204, null) : base(path, init)
     );
     const wrapper = await mountPanel();
-    const row = rows(wrapper)[5]!;
+    const row = rows(wrapper)[2]!;
     await button(row, "History (1)")!.trigger("click");
     await row.find('[aria-label="Remove"]').trigger("click");
     await flushPromises();
@@ -309,7 +334,7 @@ describe("PatientChecklistPanel — the Estudios checklist", () => {
     const createObjectURL = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:pdf-1");
     const wrapper = await mountPanel();
 
-    await button(rows(wrapper)[4]!, "Print")!.trigger("click");
+    await button(hcTile(wrapper), "Print clinical history")!.trigger("click");
     await flushPromises();
 
     expect(apiFetch).toHaveBeenCalledWith("/api/v1/patient/patient-1/checklist/historiaEndo/print", expect.objectContaining({ method: "POST" }));
@@ -516,7 +541,7 @@ describe("PatientChecklistPanel — the Estudios checklist", () => {
 
   it("'Upload file' on a row preselects that item in the Add-study dialog", async () => {
     const wrapper = await mountPanel();
-    await button(rows(wrapper)[5]!, "Upload file")!.trigger("click");
+    await button(rows(wrapper)[2]!, "Upload file")!.trigger("click");
     await flushPromises();
     expect(document.body.textContent).toContain("Add study");
     expect((document.body.querySelector("#study-upload-title") as HTMLInputElement).value).toBe("Polysomnography");
@@ -541,9 +566,9 @@ describe("PatientChecklistPanel — the Estudios checklist", () => {
       await vi.advanceTimersByTimeAsync(15_000);
       await flushPromises();
       expect([calls("/checklist/version"), calls("/checklist")]).toEqual([2, 2]);
-      expect(rows(wrapper)[3]!.classes()).toContain("studies__item--arrived");
-      expect(rows(wrapper)[3]!.find("[data-testid='studies-new']").text()).toBe("New");
-      expect(rows(wrapper)[1]!.classes()).not.toContain("studies__item--arrived");
+      expect(hcTile(wrapper).classes()).toContain("studies__item--arrived");
+      expect(wrapper.find("[data-section='oralExam']").text()).toContain("New");
+      expect(rows(wrapper)[0]!.classes()).not.toContain("studies__item--arrived");
     } finally {
       vi.useRealTimers();
     }
@@ -553,15 +578,15 @@ describe("PatientChecklistPanel — the Estudios checklist", () => {
     const history = (checklistBody.items as ReturnType<typeof item>[])[1]!.history as Record<string, unknown>[];
     history[0]!.opened_by = [{ name: "Dra. Ana Ruiz", at: "2026-09-29T10:00:00Z" }, { name: "Dr. Luis Pérez", at: "2026-09-29T11:00:00Z" }];
     const wrapper = await mountPanel();
-    expect(rows(wrapper)[1]!.find("[data-testid='studies-seen-by']").text()).toBe("Seen by Dra. Ana Ruiz, Dr. Luis Pérez");
-    expect(rows(wrapper)[2]!.find("[data-testid='studies-seen-by']").exists()).toBe(false);
+    expect((await openTab(wrapper, "medicalHistory")).find("[data-testid='studies-seen-by']").text()).toBe("Seen by Dra. Ana Ruiz, Dr. Luis Pérez");
+    expect((await openTab(wrapper, "stopBang")).find("[data-testid='studies-seen-by']").exists()).toBe(false);
   });
 
   it("'New' goes away once I open that result, and the open is reported (NEO-173)", async () => {
     const history = (checklistBody.items as ReturnType<typeof item>[])[1]!.history as Record<string, unknown>[];
     history[0]!.is_new = true;
     const wrapper = await mountPanel();
-    const row = rows(wrapper)[1]!;
+    const row = await openTab(wrapper, "medicalHistory");
     expect(row.find("[data-testid='studies-new']").exists()).toBe(true);
 
     await row.find('[aria-label="More actions for Medical history"]').trigger("click");

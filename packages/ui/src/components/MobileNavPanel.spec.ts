@@ -84,6 +84,14 @@ describe("MobileNavPanel", () => {
     expect(source).not.toContain("getBoundingClientRect");
   });
 
+  // CORE-119: Chromium drops the backdrop blur of a clip-pathed element.
+  it("never clip-paths the blurred glass", () => {
+    const source = readFileSync(path.resolve(__dirname, "MobileNavPanel.vue"), "utf-8");
+    const glassRules = [...source.matchAll(/[^{}]*\.mobile-nav-panel__glass\s*\{([^}]*)\}/g)].map((m) => m[1]);
+    expect(glassRules.length).toBeGreaterThan(0);
+    for (const body of glassRules) expect(body).not.toMatch(/clip-path:\s*inset/);
+  });
+
   it("closes from the Close toggle, the scrim, Escape, and any navigation", async () => {
     const { wrapper, router } = await mountPanel();
     const open = async () => {

@@ -116,21 +116,21 @@ $pwa-avatar-dark: (patient: (24, 72), doctor: (23, 78), org: (22, 76), lead: (16
   --pwa-shadow-md: #{$pwa-shadow-md};
   --pwa-primary: #{brand.$pwa-brand-primary};
   --pwa-primary-hover: #{brand.$pwa-brand-primary-hover};
-  --pwa-bg: #ffffff;
-  --pwa-bg-secondary: #f5f5f5;
-  --pwa-border: #e0e0e0;
-  --pwa-text: #212121;
-  --pwa-text-secondary: #666666;
+  --pwa-bg: #FFFFFF;
+  --pwa-bg-secondary: #F3F5F4;
+  --pwa-border: #C5CFCC;
+  --pwa-text: #0E1615;
+  --pwa-text-secondary: #46524F;
   /* App-bar logo text color (AppLogo.vue) — the drawer itself no longer
      shows a logo, this is bar-only. */
-  --pwa-sidebar-text: #1a1a1a;
+  --pwa-sidebar-text: #0E1615;
   /* Maps packages/ui's MobileBottomNavBar/MobileBottomNavItem (shared with
      apps/web) onto the main surface palette — defined once here since var()
      references re-resolve live against whichever [data-theme] block is
      active, no need to repeat in the dark-theme block below. */
   --mobile-bottom-nav-bg: var(--pwa-bg);
   --mobile-bottom-nav-border: var(--pwa-border);
-  --mobile-bottom-nav-item-color: var(--pwa-text-secondary);
+  --mobile-bottom-nav-item-color: var(--glass-ink, var(--pwa-text-secondary));
   --mobile-bottom-nav-item-active-color: var(--pwa-primary);
   --mobile-bottom-nav-radius: var(--pwa-radius);
   /* Was undefined here, silently falling back to MobileBottomNavBar.vue's
@@ -143,16 +143,16 @@ $pwa-avatar-dark: (patient: (24, 72), doctor: (23, 78), org: (22, 76), lead: (16
   --pwa-topbar-height: 56px;
   --pwa-content-padding-x: 16px;
   --pwa-table-row-min-height: 52px;
-  --pwa-table-header-bg: #f5f5f5;
-  --pwa-table-header-text: #424242;
-  --pwa-table-border: #e0e0e0;
+  --pwa-table-header-bg: #EDF0EF;
+  --pwa-table-header-text: #2B3533;
+  --pwa-table-border: #C5CFCC;
   --pwa-table-row-hover: color-mix(in srgb, #{brand.$pwa-brand-primary} 8%, transparent);
   /* "Clinical card" lists (NEO-57, AppEntityList table rows + mobile feed
      cards): each row/card is its own rounded surface with a hairline
      teal-tinted outline, no dividers, on the view's own background. Rows
      reuse the Vuetify surface color so they match every other card. */
   --pwa-list-row-bg: rgb(var(--v-theme-surface));
-  --pwa-list-row-outline: rgba(18, 80, 74, 0.08);
+  --pwa-list-row-outline: rgba(14, 22, 21, 0.1);
   --pwa-list-row-radius: 14px;
   --pwa-list-row-gap: 8px;
   /* Identity tints (NEO-57 "wristband"): every person/place carries its
@@ -160,7 +160,7 @@ $pwa-avatar-dark: (patient: (24, 72), doctor: (23, 78), org: (22, 76), lead: (16
      organization amber, everyone else (users, leads) neutral — so a mixed
      list reads by kind before anyone reads a name. */
   --pwa-identity-patient: #{brand.$pwa-brand-primary};
-  --pwa-identity-patient-soft: rgba(18, 143, 131, 0.1);
+  --pwa-identity-patient-soft: rgba(11, 107, 98, 0.1);
   --pwa-identity-doctor: #2f6fcf;
   --pwa-identity-doctor-soft: rgba(47, 111, 207, 0.09);
   --pwa-identity-org: #8a6a2a;
@@ -175,7 +175,7 @@ $pwa-avatar-dark: (patient: (24, 72), doctor: (23, 78), org: (22, 76), lead: (16
   /* Toasts (AppNotifications.vue, NEO-76 "record context"): white card, the
      entity icon on a neutral grey tile, status only on the small badge and
      the action button. Semantic colors, deliberately not the brand teal. */
-  --pwa-toast-bg: #ffffff;
+  --pwa-toast-bg: #FFFFFF;
   --pwa-toast-border: #e3e6e5;
   --pwa-toast-shadow: 0 6px 24px rgba(8, 42, 39, 0.12), 0 1px 3px rgba(8, 42, 39, 0.08);
   --pwa-toast-tile: #eef0f0;
@@ -253,19 +253,20 @@ $pwa-avatar-dark: (patient: (24, 72), doctor: (23, 78), org: (22, 76), lead: (16
  *   with a layered soft shadow (NEO-97: the two sheets that peeked out
  *   under it were dropped — one clean sheet reads calmer);
  * - rule: list rows are ruled hairlines, the column header a stronger rule.
- * Every tint mixes from --pwa-primary, which config.ts overrides at runtime
- * with the tenant's own colour, so a white-label tenant gets its own hue.
+ * Tints mix from --pwa-primary so a white-label tenant gets its own hue;
+ * rules and shadows are neutral graphite ink, so teal marks only what acts
+ * (NEO-236: less "medical green").
  */
 :root {
-  --pwa-desk: color-mix(in srgb, var(--pwa-primary) 5%, #ebeeed);
+  --pwa-desk: color-mix(in srgb, var(--pwa-primary) 2%, #E9EDEC);
   --pwa-sheet: rgb(var(--v-theme-surface));
   --pwa-sheet-radius: 16px;
-  --pwa-sheet-edge: rgb(16 48 45 / 0.08);
-  --pwa-sheet-ring: rgb(16 48 45 / 0.05);
-  --pwa-sheet-soft: 0 1px 1px rgb(16 48 45 / 0.05), 0 10px 28px -12px rgb(16 48 45 / 0.2), 0 36px 24px -24px rgb(16 48 45 / 0.16);
-  --pwa-dialog-soft: 0 2px 6px rgb(16 48 45 / 0.08), 0 28px 64px -16px rgb(16 48 45 / 0.38);
-  --pwa-rule: color-mix(in srgb, var(--pwa-primary) 15%, transparent);
-  --pwa-rule-strong: color-mix(in srgb, var(--pwa-primary) 40%, transparent);
+  --pwa-sheet-edge: rgb(14 22 21 / 0.1);
+  --pwa-sheet-ring: rgb(14 22 21 / 0.08);
+  --pwa-sheet-soft: 0 1px 1px rgb(14 22 21 / 0.06), 0 10px 28px -12px rgb(14 22 21 / 0.2), 0 36px 24px -24px rgb(14 22 21 / 0.16);
+  --pwa-dialog-soft: 0 2px 6px rgb(14 22 21 / 0.08), 0 28px 64px -16px rgb(14 22 21 / 0.38);
+  --pwa-rule: color-mix(in srgb, var(--pwa-text) 12%, transparent);
+  --pwa-rule-strong: color-mix(in srgb, var(--pwa-text) 32%, transparent);
   --pwa-row-hover: color-mix(in srgb, var(--pwa-primary) 5%, transparent);
   --pwa-focus-halo: 0 0 0 3px color-mix(in srgb, var(--pwa-primary) 16%, transparent);
   /* M3 emphasized easing: decelerate for things arriving, accelerate for
@@ -298,12 +299,22 @@ $pwa-avatar-dark: (patient: (24, 72), doctor: (23, 78), org: (22, 76), lead: (16
  * composite. The surface mixes from the theme's own surface colour, so it
  * follows the tenant palette and the dark theme.
  */
+/*
+ * CORE-119 liquid glass: thinner surface + stronger blur, a bright top edge,
+ * a 1px inner rim and a soft sheen (a background-image layered over the
+ * surface). The labels on it use --glass-ink, darker than the regular
+ * secondary text so they stay AA over a busy backdrop (glassTokens.spec.ts).
+ */
 :root {
-  --glass-surface: color-mix(in srgb, rgb(var(--v-theme-surface)) 82%, transparent);
+  --glass-surface: color-mix(in srgb, rgb(var(--v-theme-surface)) 58%, transparent);
   --glass-solid: rgb(var(--v-theme-surface));
-  --glass-blur: blur(20px) saturate(170%);
-  --glass-edge: rgb(255 255 255 / 0.7);
-  --glass-shadow: 0 0 0 1px rgb(16 48 45 / 0.06), 0 12px 32px -10px rgb(16 48 45 / 0.3);
+  --glass-blur: blur(28px) saturate(190%) brightness(1.05);
+  --glass-edge: rgb(255 255 255 / 0.95);
+  --glass-rim: inset 0 0 0 1px rgb(255 255 255 / 0.45), inset 0 -1px 0 rgb(255 255 255 / 0.35);
+  --glass-sheen: radial-gradient(120% 90% at 18% -20%, rgb(255 255 255 / 0.5), transparent 55%),
+    radial-gradient(80% 70% at 100% 130%, rgb(255 255 255 / 0.25), transparent 60%);
+  --glass-ink: #4d4d4d;
+  --glass-shadow: 0 0 0 0.5px rgb(16 48 45 / 0.1), 0 16px 36px -12px rgb(16 48 45 / 0.35);
   --mobile-nav-scrim: rgb(8 20 19 / 0.28);
   --menu-dur-in: 420ms;
   --menu-dur-out: 180ms;
@@ -317,8 +328,11 @@ $pwa-avatar-dark: (patient: (24, 72), doctor: (23, 78), org: (22, 76), lead: (16
   }
 }
 [data-theme="dark"] {
-  --glass-surface: color-mix(in srgb, rgb(var(--v-theme-surface)) 82%, transparent);
-  --glass-edge: rgb(255 255 255 / 0.1);
+  --glass-surface: color-mix(in srgb, rgb(var(--v-theme-surface)) 76%, transparent);
+  --glass-edge: rgb(255 255 255 / 0.16);
+  --glass-rim: inset 0 0 0 1px rgb(255 255 255 / 0.08), inset 0 -1px 0 rgb(255 255 255 / 0.04);
+  --glass-sheen: radial-gradient(120% 90% at 18% -20%, rgb(255 255 255 / 0.1), transparent 55%);
+  --glass-ink: #d0d0d0;
   --glass-shadow: 0 0 0 1px rgb(255 255 255 / 0.06), 0 14px 36px -10px rgb(0 0 0 / 0.6);
   --mobile-nav-scrim: rgb(0 0 0 / 0.45);
 }

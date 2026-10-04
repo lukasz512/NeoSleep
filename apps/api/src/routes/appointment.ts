@@ -4,7 +4,7 @@ import { requireAuth } from "../middleware/requireAuth.js";
 import { requireRole } from "../middleware/requireRole.js";
 import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
-import { CreateAppointmentCommand, UpdateAppointmentCommand, DeleteAppointmentCommand } from "../commands/appointment.js";
+import { CreateAppointmentCommand, UpdateAppointmentCommand, DeleteAppointmentCommand, GetBookingTimezoneQuery } from "../commands/appointment.js";
 import { newAppointmentEffects, deliverAppointmentPatientEmail, type AppointmentEffects } from "../commands/appointmentPatient.js";
 import { resolveFrontendOrigin } from "../utils/frontendOrigin.js";
 import { GetAppointmentsQuery, GetAppointmentByIdQuery } from "../queries/appointment.js";
@@ -80,6 +80,23 @@ appointmentRouter.get(
   })
 );
 
+// GET /api/v1/appointments/booking-zone?organization_id=&practitioner_id=&patient_id=
+// CORE-120: the clinic zone a new booking's times are entered in. Before /:id.
+appointmentRouter.get(
+  "/appointments/booking-zone",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const input = {
+      organization_id: uuid(queryStr(req, "organization_id"), "organization_id"),
+      practitioner_id: uuid(queryStr(req, "practitioner_id"), "practitioner_id"),
+      patient_id: uuid(queryStr(req, "patient_id"), "patient_id"),
+    };
+    const slug = tenantSlugFromHost(req.hostname);
+    const zone = await withTenant(slug, async (client) => GetBookingTimezoneQuery(await buildContext(req, client, slug), input));
+    res.json(zone);
+  })
+);
+
 // GET /api/v1/appointments/:id
 appointmentRouter.get(
   "/appointments/:id",
@@ -113,6 +130,7 @@ appointmentRouter.post(
       practitioner_id: uuid(body.practitioner_id, "practitioner_id"),
       organization_id: uuid(body.organization_id, "organization_id"),
       start_at: str(body.start_at),
+      start_local: str(body.start_local),
       end_at: str(body.end_at),
       duration_minutes: num(body.duration_minutes, "duration_minutes"),
       notes: str(body.notes),
@@ -139,6 +157,7 @@ appointmentRouter.patch(
     const body = (req.body ?? {}) as Record<string, unknown>;
     const input = {
       start_at: str(body.start_at),
+      start_local: str(body.start_local),
       end_at: str(body.end_at),
       duration_minutes: num(body.duration_minutes, "duration_minutes"),
       status: str(body.status),

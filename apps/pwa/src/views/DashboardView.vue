@@ -1,5 +1,7 @@
 <template>
-  <div class="dashboard-view">
+  <!-- NEO-233: a doctor's Panel is their own start screen; the router only lets them in while its switch is on. -->
+  <DoctorPanel v-if="isDoctor" />
+  <div v-else class="dashboard-view">
     <div class="dashboard-view__header">
       <p class="dashboard-view__placeholder">{{ t("user.dashboard.title") }}</p>
     </div>
@@ -15,12 +17,14 @@ import { useI18n } from "vue-i18n";
 import DeviceOrderReconciliationCard from "../components/DeviceOrderReconciliationCard.vue";
 import DeviceOrderCommentsCard from "../components/dashboard/DeviceOrderCommentsCard.vue";
 import LabOrdersSwitchCard from "../components/dashboard/LabOrdersSwitchCard.vue";
+import DoctorPanel from "../components/doctorPanel/DoctorPanel.vue";
 import { useAuthStore } from "../stores/auth";
 
 const { t } = useI18n();
 const authStore = useAuthStore();
-/** The Panel is admin-only today; the guard keeps the card admin-only if that ever changes. */
+/** The admin cards stay admin-only even though the route now also admits doctors. */
 const isAdmin = computed(() => authStore.user?.role === "admin");
+const isDoctor = computed(() => authStore.user?.role === "doctor");
 </script>
 
 <style scoped>

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { NOTIFICATION_CATALOG, NOTIFICATION_TYPES, copyKeys, GROUPED_BODY_KEY, resolveNotificationActions } from "./catalog.js";
+import { NOTIFICATION_CATALOG, NOTIFICATION_TYPES, copyKeys, GROUPED_BODY_KEY, resolveNotificationActions, resolveNotificationLink } from "./catalog.js";
 
 const I18N_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../packages/i18n");
 const LOCALES = ["en", "pl", "mx"] as const;
@@ -74,5 +74,25 @@ describe("resolveNotificationActions (CORE-4)", () => {
   it("returns no actions for other types or unknown ones", () => {
     expect(resolveNotificationActions("questionnaire_submitted", { phone: "+48 600 000 000", actionUrl: "/patients/1" })).toEqual([]);
     expect(resolveNotificationActions("system", { phone: "+48 600 000 000", actionUrl: null })).toEqual([]);
+  });
+});
+
+// CORE-4 follow-up: a visit notification opens that visit, not just the calendar.
+describe("appointment deep links (CORE-4)", () => {
+  const APPOINTMENT_TYPES = NOTIFICATION_TYPES.filter((t) => NOTIFICATION_CATALOG[t].entityType === "Appointment");
+
+  it("every appointment event links to its own visit in the calendar", () => {
+    expect(APPOINTMENT_TYPES.length).toBeGreaterThan(0);
+    for (const type of APPOINTMENT_TYPES) {
+      expect(NOTIFICATION_CATALOG[type].link({ entityId: "a-1" }), type).toBe("/calendar?appointment=a-1");
+      expect(NOTIFICATION_CATALOG[type].link({}), type).toBe("/calendar");
+    }
+  });
+
+  it("rebuilds the link at read time, so rows stored with the old /appointments link open the visit too", () => {
+    expect(resolveNotificationLink("appointment_patient_cannot_attend", "a-1", "/appointments")).toBe("/calendar?appointment=a-1");
+    expect(resolveNotificationLink("appointment_booked", null, "/appointments")).toBe("/appointments");
+    expect(resolveNotificationLink("questionnaire_submitted", "q-1", "/patients/p-1?tab=studies")).toBe("/patients/p-1?tab=studies");
+    expect(resolveNotificationLink("system", "x", null)).toBeNull();
   });
 });

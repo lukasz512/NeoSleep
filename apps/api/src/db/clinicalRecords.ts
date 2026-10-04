@@ -5,7 +5,9 @@ import {
   ORAL_EXAM_QUESTIONS,
   STOP_QUESTIONS,
   BANG_QUESTIONS,
+  TMJ_COLUMNS,
   type MedicalHistoryAnswers,
+  type TmjExamAnswers,
   type OralExamAnswers,
   type StopAnswers,
   type BangAnswers,
@@ -14,7 +16,7 @@ import {
 
 /**
  * Clinical questionnaire rows — medical_history_questionnaire, oral_exam,
- * stop_bang_screening (migration 030, ADR-023). All three are APPEND-ONLY:
+ * stop_bang_screening (migration 030, ADR-023), tmj_exam (049). All are APPEND-ONLY:
  * every fill is its own dated row (the patient's history is kept), unlike
  * the 026 endo_intake they replace, which was upserted in place. The only
  * UPDATE is completing a STOP-Bang's B-A-N-G half after the patient
@@ -35,6 +37,7 @@ interface RecordMeta {
 
 export type MedicalHistoryRecord = RecordMeta & MedicalHistoryAnswers & { consent_accepted_at: Date | null };
 export type OralExamRecord = Omit<RecordMeta, "source" | "request_id"> & OralExamAnswers;
+export type TmjExamRecord = Omit<RecordMeta, "source" | "request_id"> & TmjExamAnswers;
 export type StopBangRecord = RecordMeta &
   StopAnswers &
   BangAnswers &
@@ -65,6 +68,7 @@ const RECORDER_NAME = `(SELECT NULLIF(concat_ws(' ', ri.first_name, ri.last_name
 const MEDICAL_HISTORY_COLS = [...MEDICAL_HISTORY_QUESTIONS, "medical_history_other"];
 const ORAL_EXAM_COLS = [...ORAL_EXAM_QUESTIONS, "skeletal_class", "tooth"];
 const STOP_BANG_COLS = [...STOP_QUESTIONS, ...BANG_QUESTIONS];
+const TMJ_EXAM_COLS = [...TMJ_COLUMNS, "max_opening_mm"];
 
 function selectList(cols: string[], extra: string[]): string {
   return ["t.id", "t.patient_id", "t.recorded_by", "t.created_at", ...extra, ...cols.map((c) => `t.${c}`), RECORDER_NAME].join(", ");
@@ -72,6 +76,7 @@ function selectList(cols: string[], extra: string[]): string {
 
 const MEDICAL_HISTORY_SELECT = selectList(MEDICAL_HISTORY_COLS, ["t.source", "t.request_id", "t.consent_accepted_at"]);
 const ORAL_EXAM_SELECT = selectList(ORAL_EXAM_COLS, []);
+const TMJ_EXAM_SELECT = selectList(TMJ_EXAM_COLS, []);
 // NUMERIC comes back from pg as a string; the measurements are read as float8 so the record type holds numbers.
 const STOP_BANG_MEASUREMENT_SELECT = ["height_cm", "weight_kg", "neck_cm", "bmi"].map((c) => `t.${c}::float8 AS ${c}`);
 const STOP_BANG_SELECT = selectList(STOP_BANG_COLS, ["t.source", "t.request_id", "t.consent_accepted_at", "t.score", "t.updated_at", ...STOP_BANG_MEASUREMENT_SELECT]);
@@ -160,6 +165,34 @@ export function listOralExamsForPatient(client: PoolClient, patientId: string): 
   return run("listOralExamsForPatient", async () => {
     const result = await client.query<OralExamRecord>(
       `SELECT ${ORAL_EXAM_SELECT} FROM oral_exam t WHERE t.patient_id = $1 ORDER BY t.created_at DESC`,
+      [patientId]
+    );
+    return result.rows;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// tmj_exam — "Evaluación del ATM" (migration 049), dentist-recorded like oral_exam
+// ---------------------------------------------------------------------------
+
+export function insertTmjExam(client: PoolClient, meta: InsertMeta, answers: TmjExamAnswers): Promise<TmjExamRecord> {
+  return run("insertTmjExam", async () => {
+    const id = await insertRow(client, "tmj_exam", { ...metaValues(meta, { withSource: false }), ...answers });
+    return (await getTmjExamById(client, id))!;
+  });
+}
+
+export function getTmjExamById(client: PoolClient, id: string): Promise<TmjExamRecord | null> {
+  return run("getTmjExamById", async () => {
+    const result = await client.query<TmjExamRecord>(`SELECT ${TMJ_EXAM_SELECT} FROM tmj_exam t WHERE t.id = $1`, [id]);
+    return result.rows[0] ?? null;
+  });
+}
+
+export function listTmjExamsForPatient(client: PoolClient, patientId: string): Promise<TmjExamRecord[]> {
+  return run("listTmjExamsForPatient", async () => {
+    const result = await client.query<TmjExamRecord>(
+      `SELECT ${TMJ_EXAM_SELECT} FROM tmj_exam t WHERE t.patient_id = $1 ORDER BY t.created_at DESC`,
       [patientId]
     );
     return result.rows;

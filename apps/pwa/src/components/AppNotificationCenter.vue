@@ -97,6 +97,7 @@
                   :is="item.actionUrl ? RouterLink : 'button'"
                   v-bind="item.actionUrl ? { to: item.actionUrl } : { type: 'button' }"
                   class="notif-row__main"
+                  draggable="false"
                   @click="onItemClick(item)"
                 >
                   <span class="notif-row__icon" :class="`notif-row__icon--${view(item).tone}`">
