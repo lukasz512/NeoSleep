@@ -7,6 +7,8 @@ import type { StaffRole } from "../db/users.js";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../errors.js";
 import { RecordClinicalQuestionnaireCommand, CompleteStopBangCommand } from "./clinicalRecords.js";
 import { ListClinicalRecordsQuery } from "../queries/clinicalRecords.js";
+import { GetPatientByIdQuery } from "../queries/patient.js";
+import { UpdatePatientCommand } from "./patient.js";
 
 const TENANT_SLUG = process.env.DEFAULT_TENANT_SLUG ?? "test";
 type Client = TenantContext["client"];
@@ -181,6 +183,85 @@ describe("STOP-Bang measurements (migration 034)", () => {
       const partial = await RecordClinicalQuestionnaireCommand(ctx, patient.id, "stop_bang", ALL_STOP);
       await expect(CompleteStopBangCommand(ctx, patient.id, partial.id, { ...ALL_BANG, height_cm: 100, weight_kg: 100 })).rejects.toThrow(ValidationError);
       await expect(CompleteStopBangCommand(ctx, patient.id, partial.id, { ...ALL_BANG, height_cm: 230, weight_kg: 25 })).rejects.toThrow(ValidationError);
+    });
+  });
+});
+
+// NEO-231 (docs/stories/lorena-clinical-forms-r1.md): Dra. Lorena's round 1.
+describe("Height on the patient card (NEO-231 D1)", () => {
+  it("stores the patient's height, clears it with null and rejects implausible values", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const patient = await newPatient(client);
+      expect((await UpdatePatientCommand(ctx, patient.id, { height_cm: 172.5 }))?.height_cm).toBe(172.5);
+      expect((await GetPatientByIdQuery(ctx, patient.id))?.height_cm).toBe(172.5);
+      await expect(UpdatePatientCommand(ctx, patient.id, { height_cm: 90 })).rejects.toThrow(ValidationError);
+      await expect(UpdatePatientCommand(ctx, patient.id, { height_cm: 231 })).rejects.toThrow(ValidationError);
+      expect((await UpdatePatientCommand(ctx, patient.id, { height_cm: null }))?.height_cm).toBeNull();
+    });
+  });
+
+  it("STOP-Bang with only the weight takes the height from the patient card and computes BMI and B", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const patient = await newPatient(client);
+      await UpdatePatientCommand(ctx, patient.id, { height_cm: 160 });
+
+      const record = await RecordClinicalQuestionnaireCommand(ctx, patient.id, "stop_bang", { ...ALL_STOP, ...ALL_BANG, bmi_over_35: false, weight_kg: 100 });
+      expect(record).toMatchObject({ height_cm: 160, weight_kg: 100, bmi: 39.1, bmi_over_35: true });
+
+      const partial = await RecordClinicalQuestionnaireCommand(ctx, patient.id, "stop_bang", ALL_STOP);
+      const done = await CompleteStopBangCommand(ctx, patient.id, partial.id, { ...ALL_BANG, bmi_over_35: true, weight_kg: 60 });
+      expect(done).toMatchObject({ height_cm: 160, weight_kg: 60, bmi: 23.4, bmi_over_35: false });
+    });
+  });
+
+  it("a weight without any height (none sent, none on the card) is still rejected", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const patient = await newPatient(client);
+      await expect(
+        RecordClinicalQuestionnaireCommand(ctx, patient.id, "stop_bang", { ...ALL_STOP, ...ALL_BANG, weight_kg: 100 })
+      ).rejects.toThrow(ValidationError);
+    });
+  });
+});
+
+describe("ATM evaluation — tmj_exam (NEO-231 D3)", () => {
+  it("records findings per side and the maximum opening; unmarked sides are false", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const patient = await newPatient(client);
+      const exam = await RecordClinicalQuestionnaireCommand(ctx, patient.id, "tmj_exam", {
+        pain_palpation_right: true,
+        joint_sounds_left: true,
+        max_opening_mm: 38,
+      });
+      expect(exam).toMatchObject({
+        pain_palpation_right: true,
+        pain_palpation_left: false,
+        joint_sounds_left: true,
+        muscle_pain_right: false,
+        max_opening_mm: 38,
+        recorded_by: ctx.user.id,
+      });
+
+      const { records } = await ListClinicalRecordsQuery(ctx, patient.id);
+      expect(records.filter((r) => r.kind === "tmj_exam")).toHaveLength(1);
+      const audit = await getAuditLogForEntities(client, ["TmjExam"], [exam.id]);
+      expect(audit[0]?.action).toBe("create");
+    });
+  });
+
+  it("accepts an opening alone, rejects an empty exam, an opening outside 0–80 mm and a non-boolean finding", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const patient = await newPatient(client);
+      await expect(RecordClinicalQuestionnaireCommand(ctx, patient.id, "tmj_exam", { max_opening_mm: 0 })).resolves.toMatchObject({ max_opening_mm: 0 });
+      await expect(RecordClinicalQuestionnaireCommand(ctx, patient.id, "tmj_exam", {})).rejects.toThrow(ValidationError);
+      await expect(RecordClinicalQuestionnaireCommand(ctx, patient.id, "tmj_exam", { max_opening_mm: 81 })).rejects.toThrow(ValidationError);
+      await expect(RecordClinicalQuestionnaireCommand(ctx, patient.id, "tmj_exam", { max_opening_mm: 40.5 })).rejects.toThrow(ValidationError);
+      await expect(RecordClinicalQuestionnaireCommand(ctx, patient.id, "tmj_exam", { muscle_pain_left: "yes" })).rejects.toThrow(ValidationError);
     });
   });
 });

@@ -48,9 +48,8 @@ describe("StopBangForm — the specialist's view", () => {
     expect(wrapper.text()).toContain("From the record:");
   });
 
-  it("B and N follow the measurements: height + weight → BMI, neck in cm", async () => {
-    const { wrapper, measures } = mountForm();
-    measures.height_cm = "162";
+  it("B and N follow the measurements: card height + weight → BMI, neck in cm", async () => {
+    const { wrapper, measures } = mountForm({ heightCm: 162 });
     measures.weight_kg = "94,5";
     measures.neck_cm = "42";
     await wrapper.vm.$nextTick();
@@ -64,6 +63,28 @@ describe("StopBangForm — the specialist's view", () => {
     expect(wrapper.text()).toContain("Answered by the patient via their personal link");
     // S-T-O-P has no toggles in completeBang mode — only the four answer badges.
     expect(wrapper.findAll(".sb-form__row").slice(0, 4).every((row) => !row.find(".v-btn-toggle").exists())).toBe(true);
+  });
+
+  // NEO-231 D1 (Dra. Lorena): height is entered once, on the patient card — STOP-BANG only asks for the weight.
+  it("has no height field: the height comes from the patient card and the weight alone gives BMI and B", async () => {
+    const { wrapper, measures } = mountForm({ heightCm: 162 });
+    expect(wrapper.findAll("label").map((l) => l.text())).not.toContain("Height");
+    expect(wrapper.text()).toContain("Height 162 cm · from the patient card");
+    measures.weight_kg = "94,5";
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+    expect(measures.height_cm).toBe("162");
+    expect(wrapper.text()).toContain("BMI 36 kg/m²");
+    expect(emitted(wrapper)).toMatchObject({ bmi_over_35: true });
+  });
+
+  it("without a height on the card the weight is disabled with a hint, and B is answered by hand", () => {
+    const { wrapper } = mountForm({ heightCm: null });
+    const weight = wrapper.findAll("input").find((input) => input.attributes("inputmode") === "decimal");
+    expect(weight?.attributes("disabled")).toBeDefined();
+    expect(wrapper.text()).toContain("Add the height on the patient card to calculate BMI");
+    const bmiRow = wrapper.findAll(".sb-form__row").at(4)!;
+    expect(bmiRow.find(".v-btn-toggle").exists()).toBe(true);
   });
 
   it("asks G by hand when the record has no sex", () => {
@@ -109,9 +130,9 @@ describe("STOP-Bang measurement validation", () => {
   it("rejects a height/weight pair whose BMI is outside 5-99.9", async () => {
     expect(stopBangMeasuresValid({ height_cm: "100", weight_kg: "100", neck_cm: "" })).toBe(false);
     expect(stopBangMeasuresValid({ height_cm: "230", weight_kg: "25", neck_cm: "" })).toBe(false);
-    const { wrapper, measures } = mountForm();
-    measures.height_cm = "100";
+    const { wrapper, measures } = mountForm({ heightCm: 100 });
     measures.weight_kg = "100";
+    await wrapper.vm.$nextTick();
     await wrapper.vm.$nextTick();
     expect(wrapper.find(".sb-form__error").exists()).toBe(true);
   });

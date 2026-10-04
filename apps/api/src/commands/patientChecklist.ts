@@ -1,6 +1,6 @@
 import type { TenantContext } from "../context/TenantContext.js";
 import { insertAuditLog, insertFileAttachment, getFileAttachmentById, deleteFileAttachment } from "../db.js";
-import type { MedicalHistoryRecord, OralExamRecord, StopBangRecord } from "../db/clinicalRecords.js";
+import type { MedicalHistoryRecord, OralExamRecord, StopBangRecord, TmjExamRecord } from "../db/clinicalRecords.js";
 import { getPatientPdfContext, formatBirthDate, patientDocumentFooter } from "../db/patientPdfContext.js";
 import {
   GetPatientChecklistQuery,
@@ -16,7 +16,7 @@ import { renderHtmlToPdf, type ChoiceField } from "../services/documentRenderer.
 import { formatFormDate, formatFormDateTime } from "../utils/formDate.js";
 import { uploadPartnerDocument, deletePartnerDocument, getPartnerDocumentSignedUrl } from "../services/partnerDocuments.js";
 import { NotFoundError, ValidationError } from "../errors.js";
-import { MEDICAL_HISTORY_QUESTIONS, ORAL_EXAM_QUESTIONS, STOP_QUESTIONS, BANG_QUESTIONS } from "./clinicalRecordFields.js";
+import { MEDICAL_HISTORY_QUESTIONS, ORAL_EXAM_QUESTIONS, STOP_QUESTIONS, BANG_QUESTIONS, TMJ_FINDINGS } from "./clinicalRecordFields.js";
 
 /**
  * COMMANDS — the patient Estudios checklist (NEO-36 part 2, ADR-024):
@@ -71,6 +71,20 @@ function measurementDetails(locale: string, screening: StopBangRecord | null): R
   }
   if (screening.neck_cm != null) fields.neck_detail = documentT(locale, "documents.stopBang.neckDetail", { neck: formatMeasure(screening.neck_cm, locale) });
   return fields;
+}
+
+/**
+ * The ATM evaluation (NEO-231): one tick-box per finding and side, marked
+ * from the record or left empty to fill by hand, plus the opening in mm.
+ */
+function setTmjFields(locale: string, exam: TmjExamRecord | null, fields: Record<string, string>, choices: Record<string, ChoiceField>): void {
+  const sideLabel = { right: documentT(locale, "documents.tmjExam.colRight"), left: documentT(locale, "documents.tmjExam.colLeft") };
+  for (const finding of TMJ_FINDINGS) {
+    for (const side of ["right", "left"] as const) {
+      choices[`tmj_${finding}_${side}`] = { options: [sideLabel[side]], selected: exam?.[`${finding}_${side}`] ? sideLabel[side] : null };
+    }
+  }
+  fields.tmj_max_opening = exam?.max_opening_mm != null ? `${exam.max_opening_mm} mm` : "";
 }
 
 /** The dental/sleep clinical templates are Mexican Spanish content; fall back to a template's first locale. */
@@ -134,8 +148,21 @@ export async function PrintChecklistItemCommand(
         : recordOf<OralExamRecord>(checklist.items.find((i) => i.key === "oralExam") ?? item, undefined);
     for (const q of ORAL_EXAM_QUESTIONS) setYesNo(choices, `q_${q}`, exam?.[q]);
     choices.q_skeletal_class = exam?.skeletal_class ? { options: SKELETAL_CLASSES, selected: exam.skeletal_class } : SKELETAL_CLASSES;
-    fields.diente = exam?.tooth ?? "";
     if (key === "oralExam" && exam) date = exam.created_at;
+  }
+  if (key === "tmjExam" || key === "historiaEndo") {
+    const exam =
+      key === "tmjExam"
+        ? recordOf<TmjExamRecord>(item, recordId)
+        : recordOf<TmjExamRecord>(checklist.items.find((i) => i.key === "tmjExam") ?? item, undefined);
+    setTmjFields(locale, exam, fields, choices);
+    if (key === "tmjExam" && exam) date = exam.created_at;
+  }
+  if (key === "historiaEndo") {
+    // The Historia clínica carries the latest STOP-Bang result next to the other sections (NEO-231 D2).
+    const screening = recordOf<StopBangRecord>(checklist.items.find((i) => i.key === "stopBang") ?? item, undefined);
+    fields.score = screening?.score == null ? "" : String(screening.score);
+    choices.score_zone = stopBangZones(locale, screening?.score ?? null);
   }
   if (key === "stopBang") {
     const screening = recordOf<StopBangRecord>(item, recordId);

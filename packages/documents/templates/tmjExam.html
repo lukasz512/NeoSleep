@@ -1,22 +1,22 @@
 <!DOCTYPE html>
 <!--
-  Plantilla de generación — Exploración de cavidad oral (NeoSleep)
-  ================================================================
-  Printable dentist oral-exam form, one item of the patient Estudios
-  checklist (NEO-36 part 2, ADR-024) — filled by the doctor. Fixed clinical
-  instrument, no content slot. Same substitution split as stopBang.html.
+  Plantilla de generación — Evaluación del ATM (NeoSleep)
+  ======================================================
+  Printable temporomandibular joint evaluation, a section of the patient's
+  Historia clínica (NEO-231, Dra. Lorena) — filled by the doctor. Fixed
+  clinical instrument, no content slot. Same substitution split as stopBang.html.
 
   data-field values:
     nombre_paciente, fecha_nacimiento, nombre_medico, nombre_clinica, fecha
-    q_has_* / q_is_mouth_breather — "Sí" / "No" from the latest oral_exam,
-      or empty Sí / No tick-boxes on a blank form (renderer choiceFields)
-    q_skeletal_class — "I" / "II" / "III", or I / II / III tick-boxes blank
+    tmj_<finding>_right / tmj_<finding>_left — one tick-box per side, marked
+      from the latest tmj_exam, empty on a blank form (renderer choiceFields)
+    tmj_max_opening — maximum opening, "38 mm"; empty to write by hand
     firma_doctor — the doctor's signature box (signed on paper)
 -->
 <html lang="es">
 <head>
 <meta charset="UTF-8" />
-<title>{{documents.oralExam.title}} (NeoSleep)</title>
+<title>{{documents.tmjExam.title}} (NeoSleep)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -45,8 +45,8 @@
   </header>
 
   <div class="doc-title">
-    <h1>{{documents.oralExam.title}}</h1>
-    <h2>{{documents.oralExam.subtitle}}</h2>
+    <h1>{{documents.tmjExam.title}}</h1>
+    <h2>{{documents.tmjExam.subtitle}}</h2>
   </div>
 
   <dl class="doc-fields">
@@ -57,15 +57,14 @@
     <div class="doc-field doc-field--short"><dt>{{documents.historiaEndo.fieldDate}}</dt><dd data-field="fecha"></dd></div>
   </dl>
 
-  <table class="checklist">
-    <tr><td>{{documents.historiaEndo.q.bruxism}}</td><td class="q-answer" data-field="q_has_bruxism"></td></tr>
-    <tr><td>{{documents.historiaEndo.q.narrowPalate}}</td><td class="q-answer" data-field="q_has_narrow_palate"></td></tr>
-    <tr><td>{{documents.historiaEndo.q.geographicTongue}}</td><td class="q-answer" data-field="q_has_geographic_tongue"></td></tr>
-    <tr><td>{{documents.historiaEndo.q.xerostomia}}</td><td class="q-answer" data-field="q_has_xerostomia"></td></tr>
-    <tr><td>{{documents.historiaEndo.q.skeletalClass}}</td><td class="q-answer" data-field="q_skeletal_class"></td></tr>
-    <tr><td>{{documents.historiaEndo.q.mouthBreather}}</td><td class="q-answer" data-field="q_is_mouth_breather"></td></tr>
-    <tr><td>{{documents.historiaEndo.q.missingTeeth}}</td><td class="q-answer" data-field="q_has_missing_teeth"></td></tr>
-    <tr><td>{{documents.historiaEndo.q.periodontalDisease}}</td><td class="q-answer" data-field="q_has_periodontal_disease"></td></tr>
+  <table class="checklist tmj">
+    <tr><th>{{documents.tmjExam.colFinding}}</th><th class="tmj-side">{{documents.tmjExam.colRight}}</th><th class="tmj-side">{{documents.tmjExam.colLeft}}</th></tr>
+    <tr><td>{{documents.tmjExam.f.painPalpation}}</td><td class="q-answer" data-field="tmj_pain_palpation_right"></td><td class="q-answer" data-field="tmj_pain_palpation_left"></td></tr>
+    <tr><td>{{documents.tmjExam.f.jointSounds}}</td><td class="q-answer" data-field="tmj_joint_sounds_right"></td><td class="q-answer" data-field="tmj_joint_sounds_left"></td></tr>
+    <tr><td>{{documents.tmjExam.f.openingLimitation}}</td><td class="q-answer" data-field="tmj_opening_limitation_right"></td><td class="q-answer" data-field="tmj_opening_limitation_left"></td></tr>
+    <tr><td>{{documents.tmjExam.f.openingDeviation}}</td><td class="q-answer" data-field="tmj_opening_deviation_right"></td><td class="q-answer" data-field="tmj_opening_deviation_left"></td></tr>
+    <tr><td>{{documents.tmjExam.f.musclePain}}</td><td class="q-answer" data-field="tmj_muscle_pain_right"></td><td class="q-answer" data-field="tmj_muscle_pain_left"></td></tr>
+    <tr><td>{{documents.tmjExam.maxOpening}}</td><td class="q-answer" colspan="2" data-field="tmj_max_opening"></td></tr>
   </table>
 
   <div class="doc-notes"><div class="doc-notes-label">{{documents.oralExam.notes}}</div><div class="doc-notes-body"></div></div>

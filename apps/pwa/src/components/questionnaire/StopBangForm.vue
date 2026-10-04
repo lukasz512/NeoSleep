@@ -23,7 +23,7 @@
         <span>{{ t("app.clinical.section.bang") }}</span>
       </div>
 
-      <!-- B: height + weight → BMI -->
+      <!-- B: the card's height + the weight typed here → BMI (NEO-231 D1: height is entered once, on the patient card) -->
       <div class="sb-form__row sb-form__row--measure">
         <span class="sb-form__letter">B</span>
         <!-- eslint-disable-next-line vue/no-v-html -- static SVG paths -->
@@ -31,11 +31,22 @@
         <span id="sb-bmi" class="sb-form__question">
           {{ t("app.clinical.bang.bmi") }}
           <small v-if="bmi != null">{{ t("app.clinical.bang.bmiValue", { bmi: formatNumber(bmi) }) }}</small>
+          <small v-if="!readonly && heightCm != null">{{ t("app.clinical.bang.heightFromCard", { height: formatNumber(heightCm) }) }}</small>
+          <small v-else-if="!readonly" class="sb-form__missing">{{ t("app.clinical.bang.heightMissing") }}</small>
         </span>
         <template v-if="!readonly">
           <span class="sb-form__inputs">
-            <VTextField v-model="measures.height_cm" :label="t('app.clinical.bang.heightCm')" :suffix="t('app.clinical.bang.unitCm')" inputmode="decimal" variant="outlined" density="compact" hide-details class="sb-form__input" />
-            <VTextField v-model="measures.weight_kg" :label="t('app.clinical.bang.weightKg')" :suffix="t('app.clinical.bang.unitKg')" inputmode="decimal" variant="outlined" density="compact" hide-details class="sb-form__input" />
+            <VTextField
+              v-model="measures.weight_kg"
+              :label="t('app.clinical.bang.weightKg')"
+              :suffix="t('app.clinical.bang.unitKg')"
+              :disabled="heightCm == null"
+              inputmode="decimal"
+              variant="outlined"
+              density="compact"
+              hide-details
+              class="sb-form__input"
+            />
           </span>
           <span v-if="bmi != null" class="sb-form__value sb-form__value--auto" :class="valueClass(modelValue.bmi_over_35)">{{ answerText(modelValue.bmi_over_35) }}</span>
           <YesNoToggle v-else :model-value="modelValue.bmi_over_35" labelledby="sb-bmi" @update:model-value="set('bmi_over_35', $event)" />
@@ -114,7 +125,8 @@ import type { ChecklistRecord } from "../../composables/usePatientChecklist";
  * grammar as every other clinical form (letter, illustration, question,
  * answer in one right column). S-T-O-P shows the patient's answers with an
  * attribution stamp when they came from the personal link. B-A-N-G are
- * worked out, not guessed: height + weight → BMI → B, neck cm → N, age from
+ * worked out, not guessed: the patient card's height (NEO-231: entered once,
+ * there) + the weight typed here → BMI → B, neck cm → N, age from
  * the date of birth → A, sex from the record → G. Where a value is missing
  * the specialist answers that letter by hand. The API recomputes B and N
  * from the measurements it receives (it is the trust boundary); the
@@ -133,6 +145,8 @@ const props = defineProps<{
   record?: ChecklistRecord | null;
   dateOfBirth?: string | null;
   gender?: string | null;
+  /** The patient card's height (NEO-231 D1). Without it the weight can't give a BMI, so B is answered by hand. */
+  heightCm?: number | null;
 }>();
 const emit = defineEmits<{ "update:modelValue": [value: Record<string, boolean | null>] }>();
 const { t, locale } = useI18n();
@@ -142,6 +156,18 @@ const readonly = computed(() => props.mode === "view");
 const stopReadonly = computed(() => props.mode !== "create");
 // The parent owns the measures object; editing its fields in place keeps one source of truth.
 const measures = reactive(props.measures);
+
+// The height is the card's, never typed here. It joins the measurements once a weight is typed, so
+// height + weight stay "both or neither" (the API's rule) and an empty weight leaves B to answer by hand.
+watch(
+  [() => props.heightCm, () => measures.weight_kg],
+  ([height, weight]) => {
+    if (readonly.value) return;
+    if (height == null) measures.weight_kg = "";
+    measures.height_cm = height != null && weight.trim() ? String(height) : "";
+  },
+  { immediate: true }
+);
 
 const parseMeasure = (key: StopBangMeasureKey) => parseStopBangMeasure(measures[key], key);
 

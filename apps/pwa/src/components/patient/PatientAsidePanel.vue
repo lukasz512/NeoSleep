@@ -49,9 +49,9 @@
         <AppSegmentProgress :segments="checklistSegments(checklist.items)" :label="t('app.clinical.progress', checklist.summary)" />
         <ul class="patient-aside__studies">
           <li v-for="item in shownDocs" :key="item.key">
-            <button type="button" class="patient-aside__study" @click="$emit('open-study', item.key, item.category)">
+            <button type="button" class="patient-aside__study" @click="$emit('open-study', item.openKey, item.category)">
               <ChecklistStatusIcon :status="item.status" />
-              <span>{{ checklistItemTitle(t, item.key, item.label) }}</span>
+              <span>{{ item.label }}</span>
             </button>
           </li>
         </ul>
@@ -111,9 +111,10 @@ import AppIcon from "../AppIcon.vue";
 import AppSegmentProgress from "../AppSegmentProgress.vue";
 import NoteComposer from "../NoteComposer.vue";
 import ChecklistStatusIcon from "../questionnaire/ChecklistStatusIcon.vue";
-import { CHECKLIST_TAB, checklistSegments, usePatientChecklist, type ChecklistCategory } from "../../composables/usePatientChecklist";
+import { CHECKLIST_TAB, checklistSegments, usePatientChecklist, type ChecklistCategory, type ChecklistItem } from "../../composables/usePatientChecklist";
 import { useVisiblePolling } from "../../composables/useVisiblePolling";
 import { checklistItemTitle } from "../../config/questionnaires";
+import { HC_PRINTABLE_KEY, splitHistoriaClinica } from "../../config/historiaClinica";
 import { formatDiagnosis } from "../../utils/diagnosis";
 import { useNotes } from "../../composables/useNotes";
 import { useAsyncAction } from "../../composables/useAsyncAction";
@@ -158,8 +159,27 @@ const patientItems = computed(
 );
 /** Unfinished first (stable within each half), cut to DOC_ROWS. */
 const shownDocs = computed(() => {
-  const items = checklist.value?.items ?? [];
-  return [...items.filter((item) => item.status !== "done"), ...items.filter((item) => item.status === "done")].slice(0, DOC_ROWS);
+  const all = checklist.value?.items ?? [];
+  // NEO-231 D2: the Historia clínica sections are one row, "Historia clínica · 2/4"; a click opens its first open tab.
+  const { sections, rest } = splitHistoriaClinica(all);
+  const rows: { key: string; label: string; status: ChecklistItem["status"]; category: ChecklistItem["category"]; openKey: string }[] = rest.map((item) => ({
+    key: item.key,
+    label: checklistItemTitle(t, item.key, item.label),
+    status: item.status,
+    category: item.category,
+    openKey: item.key,
+  }));
+  if (sections.length) {
+    const done = sections.filter((s) => s.status === "done").length;
+    rows.splice(rest.findIndex((i) => i.group !== "consent") === -1 ? rows.length : rest.findIndex((i) => i.group !== "consent"), 0, {
+      key: HC_PRINTABLE_KEY,
+      label: `${t("app.clinical.hc.title")} · ${done}/${sections.length}`,
+      status: done === sections.length ? "done" : sections.some((s) => s.status !== "missing") ? "partial" : "missing",
+      category: "document",
+      openKey: (sections.find((s) => s.status !== "done") ?? sections[0]!).key,
+    });
+  }
+  return [...rows.filter((row) => row.status !== "done"), ...rows.filter((row) => row.status === "done")].slice(0, DOC_ROWS);
 });
 
 const diagnosis = computed(() => formatDiagnosis(props.patient.diagnosis_code));

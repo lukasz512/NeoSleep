@@ -193,10 +193,22 @@ describe("document system (header, title, banner, sections, signatures, footer)"
     expect(mx).not.toContain("Ciudad de México"); // the clinic replaces NeoSleep's own contact
   });
 
-  it("informed consent names the partner manufacturers as plain text, no tick-boxes", () => {
-    const html = renderDocumentHtml("informedConsent", "mx");
-    expect(html).toContain("Los dispositivos que utilizamos son fabricados por los socios de NeoSleep: OrthoApnea y Biologix.");
-    expect(html).not.toContain('type="checkbox"');
+  it("informed consent names OrthoApnea as the only manufacturer, as plain text, no tick-boxes (NEO-231)", () => {
+    for (const locale of ["mx", "en", "pl"] as const) {
+      const html = renderDocumentHtml("informedConsent", locale);
+      expect(html).toContain("OrthoApnea");
+      expect(html).not.toContain("Biologix");
+      expect(html).not.toContain('type="checkbox"');
+    }
+    expect(renderDocumentHtml("informedConsent", "mx")).toContain("Los dispositivos que utilizamos son fabricados por OrthoApnea, socio de NeoSleep.");
+  });
+
+  it("oral exam and Historia clínica have no tooth field (NEO-231)", () => {
+    for (const [key, content] of [["oralExam", undefined], ["historiaEndo", "<p>x</p>"]] as const) {
+      const html = renderDocumentHtml(key, "mx", content);
+      expect(html).not.toContain('data-field="diente"');
+      expect(html).not.toContain("Diente");
+    }
   });
 
   it("footer escapes names typed into the app", () => {

@@ -66,6 +66,7 @@ export interface CreatePatientInput {
   hcp_id?: string;
   diagnosis_code?: Record<string, unknown>;
   ahi_baseline?: number;
+  height_cm?: number | string | null;
   cpap_device?: string;
   medical_record?: string;
   status?: string;
@@ -80,6 +81,21 @@ export interface CreatePatientInput {
   /** When set, this patient is being created from a lead ("move to contacts") —
    *  the lead is atomically marked converted in the same transaction. */
   lead_id?: string | null;
+}
+
+/** Same plausibility range as migration 049's CHECK (and STOP-Bang's, migration 034). */
+const HEIGHT_RANGE = [100, 230] as const;
+
+/** Height in cm, one decimal: undefined = not sent, null = cleared ("" too). Accepts a decimal comma. */
+export function normalizeHeight(value: number | string | null | undefined): number | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || (typeof value === "string" && !value.trim())) return null;
+  const number = typeof value === "number" ? value : Number(value.trim().replace(",", "."));
+  const [min, max] = HEIGHT_RANGE;
+  if (!Number.isFinite(number) || number < min || number > max) {
+    throw new ValidationError(`height_cm must be a number between ${min} and ${max}`, "height_cm");
+  }
+  return Math.round(number * 10) / 10;
 }
 
 export async function CreatePatientCommand(
@@ -119,6 +135,7 @@ export async function CreatePatientCommand(
     practitioner_id: practitionerId,
     diagnosis_code: input.diagnosis_code,
     ahi_baseline:   input.ahi_baseline,
+    height_cm:      normalizeHeight(input.height_cm) ?? undefined,
     cpap_device:    input.cpap_device?.trim() || undefined,
     medical_record: input.medical_record?.trim() || undefined,
     status:         input.status || "active",
@@ -168,6 +185,7 @@ export interface UpdatePatientPayload {
   hcp_id?: string;
   diagnosis_code?: Record<string, unknown>;
   ahi_baseline?: number;
+  height_cm?: number | string | null;
   cpap_device?: string;
   medical_record?: string;
   status?: string;
@@ -238,6 +256,7 @@ export async function UpdatePatientCommand(
     practitioner_id: practitionerId,
     diagnosis_code: input.diagnosis_code,
     ahi_baseline:   input.ahi_baseline,
+    height_cm:      normalizeHeight(input.height_cm),
     cpap_device:    input.cpap_device !== undefined ? input.cpap_device : undefined,
     medical_record: input.medical_record !== undefined ? input.medical_record : undefined,
     status:         input.status,
