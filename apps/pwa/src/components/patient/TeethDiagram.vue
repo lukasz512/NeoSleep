@@ -17,8 +17,8 @@
           @click="toggleTooth(tooth)"
         >
           <span class="teeth-diagram__img-wrap">
-            <img :src="toothSrc(tooth)" :alt="tooth" class="teeth-diagram__img" />
             <span v-if="relieved.has(tooth)" class="teeth-diagram__fill" :style="fillStyle(tooth)" />
+            <img :src="toothSrc(tooth)" :alt="tooth" class="teeth-diagram__img" />
           </span>
         </button>
       </div>
@@ -34,8 +34,8 @@
           @click="toggleTooth(tooth)"
         >
           <span class="teeth-diagram__img-wrap">
-            <img :src="toothSrc(tooth)" :alt="tooth" class="teeth-diagram__img" />
             <span v-if="relieved.has(tooth)" class="teeth-diagram__fill" :style="fillStyle(tooth)" />
+            <img :src="toothSrc(tooth)" :alt="tooth" class="teeth-diagram__img" />
           </span>
         </button>
       </div>
@@ -78,12 +78,12 @@ function toothSrc(tooth: string): string {
 }
 
 /**
- * The downloaded tooth PNGs are opaque line art (white canvas, no
- * transparency) — there's no alpha channel to mask a fill through. The
- * `-fill.png` siblings are generated interior masks (flood-filled from the
- * canvas border, stopping at the drawn outline) so a relieved tooth's color
- * lands only inside the crown, matching OrthoApnea's own solid-fill look
- * instead of a rectangular color wash behind the whole glyph.
+ * The tooth PNGs are line art on a transparent canvas (outline + number
+ * only). The `-fill.png` siblings are interior masks with an alpha channel
+ * (flood-filled from the canvas border, stopping at the drawn outline) so a
+ * relieved tooth's color lands only inside the crown, under the outline,
+ * while the surround keeps the form background. CSS masks read alpha, not
+ * luminance: a mask without an alpha channel paints the whole box (NEO-229).
  */
 function toothFillSrc(tooth: string): string {
   return new URL(`../../assets/orthoapnea/teeth/tooth${tooth}-fill.png`, import.meta.url).href;
@@ -107,11 +107,14 @@ function toggleTooth(tooth: string) {
 
 <style scoped>
 .teeth-diagram {
-  padding: 16px 0;
+  padding: 24px 0 8px;
 }
 
+/* overflow-x:auto alone makes overflow-y compute to auto too, so the rows
+   scrolled vertically by a few px inside the form — lock that axis. */
 .teeth-diagram__rows {
   overflow-x: auto;
+  overflow-y: hidden;
   padding-bottom: 2px;
 }
 
@@ -121,7 +124,7 @@ function toggleTooth(tooth: string) {
   justify-content: center;
   width: max-content;
   min-width: 100%;
-  margin: 0 auto 2px;
+  margin: 0 auto 16px;
 }
 
 /* Sized to always fit 16-across within the wizard dialog's own width (see
@@ -152,6 +155,8 @@ function toggleTooth(tooth: string) {
 }
 
 .teeth-diagram__img {
+  position: relative;
+  display: block;
   width: 42px;
   height: 52px;
   object-fit: contain;
@@ -173,6 +178,6 @@ function toggleTooth(tooth: string) {
 
 .teeth-diagram__modes {
   max-width: 260px;
-  margin: 12px auto 0;
+  margin: 8px auto 0;
 }
 </style>

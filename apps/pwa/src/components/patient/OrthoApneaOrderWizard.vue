@@ -95,7 +95,7 @@
             <AppSegmentedTabs :model-value="order.productCode" :options="productOptions" fit class="oa-wizard__switch" @update:model-value="onProductPicked" />
           </div>
 
-          <p class="text-subtitle2 mt-6 mb-3 text-primary">{{ t("app.orthoApneaOrder.paso1.title") }}</p>
+          <p class="text-subtitle2 mt-6 mb-4 text-primary">{{ t("app.orthoApneaOrder.paso1.title") }}</p>
           <VRow>
             <VCol cols="6">
               <p class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.form.retrusionMax") }}<FieldTooltip :text="t('app.orthoApneaOrder.tooltip.retrusionMax')" /></p>
@@ -170,12 +170,12 @@
             </div>
           </div>
 
-          <VDivider class="my-5" />
+          <VDivider class="my-8" />
 
           <!-- Paso 2 is a size container: below 600 px of dialog width (phone, narrow
                tablet) its blocks stack and centre (NEO-225). -->
           <section class="oa-wizard__paso2">
-          <p class="text-subtitle2 mb-3 text-primary">{{ t("app.orthoApneaOrder.paso2.title") }}</p>
+          <p class="text-subtitle2 mb-4 text-primary">{{ t("app.orthoApneaOrder.paso2.title") }}</p>
 
           <!-- Starting Point: % or mm, whichever the doctor fills (the other is locked);
                the order carries that one, the hint shows it in mm. Ruler 7 / steppers 5
@@ -312,9 +312,9 @@
           />
           </section>
 
-          <VDivider class="my-5" />
+          <VDivider class="my-8" />
 
-          <p class="text-subtitle2 mb-2 text-primary">{{ t("app.orthoApneaOrder.paso3.title") }}</p>
+          <p class="text-subtitle2 mb-4 text-primary">{{ t("app.orthoApneaOrder.paso3.title") }}</p>
           <!-- NEO-225: two values only, so the same segmented switch as product / sequence type. -->
           <div data-field="verticalDimension" class="oa-wizard__stepper-col">
             <p class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.form.verticalDimension") }}</p>
@@ -328,7 +328,7 @@
           </div>
           <!-- Design options as photo cards (NEO-225), like Morning Aligner. OA shows these
                with a photo only, so the cards carry no description text. -->
-          <VRow class="mt-2 mb-4" dense>
+          <VRow class="mt-4 mb-6" dense>
             <VCol cols="12" sm="6">
               <AddonCard
                 v-model="order.anteriorFrontalOpening"
@@ -348,7 +348,7 @@
               />
             </VCol>
           </VRow>
-          <VRow class="mb-4">
+          <VRow class="mb-6 oa-wizard__stepper-row">
             <VCol cols="12" sm="6" data-field="laterality" class="oa-wizard__stepper-col">
               <p class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.form.laterality") }}<FieldTooltip :text="t('app.orthoApneaOrder.tooltip.laterality')" :image="TOOLTIP_IMG.laterality" :image-alt="t('app.orthoApneaOrder.form.laterality')" /></p>
               <NumberStepperField v-model="order.laterality" :error="!!fieldError('laterality')" class="oa-wizard__stepper" />
@@ -360,20 +360,26 @@
               <span v-if="fieldError('limitOpening')" class="oa-wizard__field-error">{{ fieldError("limitOpening") }}</span>
             </VCol>
           </VRow>
-          <div class="oa-wizard__section--centered">
-            <p class="text-body-small mb-1">{{ t("app.orthoApneaOrder.form.splintDesignUpperBand") }}</p>
-            <IconOptionPicker :model-value="String(order.upperBand)" :options="BAND_OPTIONS" large hide-labels class="mb-3" @update:model-value="(v) => (order.upperBand = Number(v))" />
-            <p class="text-body-small mb-1">{{ t("app.orthoApneaOrder.form.splintDesignLowerBand") }}</p>
-            <IconOptionPicker :model-value="String(order.lowerBand)" :options="BAND_OPTIONS" large hide-labels class="mb-3" @update:model-value="(v) => (order.lowerBand = Number(v))" />
-            <p class="text-body-small mb-1">{{ t("app.orthoApneaOrder.form.finish") }}</p>
-            <IconOptionPicker :model-value="order.finish" :options="finishOptions" fill large class="mb-4" @update:model-value="onFinishPicked" />
+          <div class="oa-wizard__section--centered oa-wizard__picker-groups">
+            <div class="oa-wizard__picker-group">
+              <p class="oa-wizard__picker-label">{{ t("app.orthoApneaOrder.form.splintDesignUpperBand") }}</p>
+              <IconOptionPicker :model-value="String(order.upperBand)" :options="BAND_OPTIONS" large hide-labels @update:model-value="(v) => (order.upperBand = Number(v))" />
+            </div>
+            <div class="oa-wizard__picker-group">
+              <p class="oa-wizard__picker-label">{{ t("app.orthoApneaOrder.form.splintDesignLowerBand") }}</p>
+              <IconOptionPicker :model-value="String(order.lowerBand)" :options="BAND_OPTIONS" large hide-labels @update:model-value="(v) => (order.lowerBand = Number(v))" />
+            </div>
+            <div class="oa-wizard__picker-group">
+              <p class="oa-wizard__picker-label">{{ t("app.orthoApneaOrder.form.finish") }}</p>
+              <IconOptionPicker :model-value="order.finish" :options="finishOptions" fill large @update:model-value="onFinishPicked" />
+            </div>
           </div>
 
-          <VDivider class="my-5" />
+          <VDivider class="my-8" />
 
-          <p class="text-subtitle2 mb-2 text-primary">{{ t("app.orthoApneaOrder.paso4.title") }}</p>
+          <p class="text-subtitle2 mb-4 text-primary">{{ t("app.orthoApneaOrder.paso4.title") }}</p>
           <div class="oa-wizard__section--centered">
-            <TeethDiagram :model-value="relievedTeeth" class="mb-4" @update:model-value="setRelievedTeeth" />
+            <TeethDiagram :model-value="relievedTeeth" class="mb-6" @update:model-value="setRelievedTeeth" />
           </div>
           <VTextarea v-model="order.observations" :label="t('app.orthoApneaOrder.form.observations')" variant="outlined" density="comfortable" auto-grow rows="2" />
           <AppInlineAlert type="info" class="mt-2">
@@ -1329,6 +1335,48 @@ watch(
      .oa-wizard__deviation-field width above should already fit narrow
      viewports without ever needing to actually scroll. */
   overflow-x: auto;
+  /* overflow-x alone computes overflow-y to auto, which let the teeth
+     diagram scroll up/down inside the form (NEO-229). */
+  overflow-y: hidden;
+}
+
+/* NEO-229: Lateralidad / Limitación de apertura centred in their half, like
+   the band pickers and teeth diagram below them (phone already centres). */
+.oa-wizard__stepper-row .oa-wizard__stepper-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.oa-wizard__stepper-row .oa-wizard__field-label {
+  justify-content: center;
+}
+
+/* NEO-229: each picker's label sits centred over its own tile row instead of
+   at the section's left edge, 24 px between groups. */
+.oa-wizard__picker-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding-bottom: 8px;
+}
+
+.oa-wizard__picker-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.oa-wizard__picker-group > :last-child {
+  width: 100%;
+}
+
+.oa-wizard__picker-label {
+  font-size: 0.8125rem;
+  text-align: center;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  margin: 0;
 }
 
 .oa-wizard__nav-arrow {
