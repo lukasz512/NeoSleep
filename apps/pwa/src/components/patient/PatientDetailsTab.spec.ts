@@ -8,6 +8,8 @@ import { setActivePinia, createPinia } from "pinia";
 import en from "@i18n/en.json";
 import PatientDetailsTab from "./PatientDetailsTab.vue";
 import type { PatientDetailsTabPatient, PatientSummary } from "./patientSummary";
+import type { CareTeamMember } from "../../composables/usePatientCareTeam";
+import { useAuthStore } from "../../stores/auth";
 
 const apiFetch = vi.fn();
 vi.mock("../../composables/useApi", async (importOriginal) => ({
@@ -54,9 +56,16 @@ afterEach(() => {
   apiFetch.mockReset();
 });
 
-async function mountTab(summary: PatientSummary | null, opts: { canSeeStudies?: boolean; patient?: Partial<PatientDetailsTabPatient> } = {}) {
+async function mountTab(
+  summary: PatientSummary | null,
+  opts: { canSeeStudies?: boolean; patient?: Partial<PatientDetailsTabPatient>; careTeam?: CareTeamMember[]; role?: string } = {},
+) {
   setActivePinia(createPinia());
-  apiFetch.mockResolvedValue(summary ? { ok: true, status: 200, json: async () => summary } : { ok: false, status: 500, json: async () => ({}) });
+  if (opts.role) useAuthStore().user = { id: "u-1", role: opts.role } as NonNullable<ReturnType<typeof useAuthStore>["user"]>;
+  apiFetch.mockImplementation(async (path: string) => {
+    if (path.endsWith("/care-team")) return { ok: true, status: 200, json: async () => opts.careTeam ?? [] };
+    return summary ? { ok: true, status: 200, json: async () => summary } : { ok: false, status: 500, json: async () => ({}) };
+  });
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/", component: { template: "<div />" } }, { path: "/hcp/:id", name: "hcp-detail", component: { template: "<div />" } }] });
   const wrapper = mount(PatientDetailsTab, {
     props: { patient: { ...PATIENT, ...opts.patient }, canSeeStudies: opts.canSeeStudies ?? true },
@@ -153,7 +162,9 @@ describe("PatientDetailsTab — every appointment (CORE-133)", () => {
     apiFetch.mockImplementation(async (path: string) =>
       path.startsWith("/api/v1/appointments?")
         ? { ok: true, status: 200, json: async () => ({ items: APPTS }) }
-        : { ok: true, status: 200, json: async () => EMPTY },
+        : path.endsWith("/care-team")
+          ? { ok: true, status: 200, json: async () => [] }
+          : { ok: true, status: 200, json: async () => EMPTY },
     );
     const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/", component: { template: "<div />" } }, { path: "/hcp/:id", name: "hcp-detail", component: { template: "<div />" } }] });
     const wrapper = mount(PatientDetailsTab, {
@@ -180,5 +191,46 @@ describe("PatientDetailsTab — every appointment (CORE-133)", () => {
     const tile = w.find('[data-testid="tile-appointment"]');
     expect(tile.text()).toContain("Mar 4");
     expect(tile.text()).toMatch(/0?3:00\s?PM|15:00/);
+  });
+});
+
+describe("PatientDetailsTab — care team (CORE-132)", () => {
+  const PRIMARY: CareTeamMember = {
+    practitioner_id: "pr-1", name: "Dra. Lorena Ruiz", primary_specialty: "sleep_medicine", specialties: [], primary: true,
+    source: null, appointment_id: null, added_by_name: null, added_at: null,
+  };
+  const ENT: CareTeamMember = {
+    practitioner_id: "pr-2", name: "Dr. Juan Pérez", primary_specialty: "ent", specialties: [], primary: false,
+    source: "appointment", appointment_id: "a-1", added_by_name: "Ana Coordinadora", added_at: "2026-10-04T10:00:00Z",
+  };
+
+  it("lists everyone but the primary doctor, with how and since when they have access", async () => {
+    const w = await mountTab(EMPTY, { careTeam: [PRIMARY, ENT], role: "doctor" });
+    expect(apiFetch).toHaveBeenCalledWith("/api/v1/patient/p-1/care-team", { handleErrors: false });
+    expect(groupTitles(w)).toContain("Care team");
+    expect(w.find('[data-testid="care-team-pr-1"]').exists()).toBe(false);
+    const row = w.find('[data-testid="care-team-pr-2"]').text();
+    expect(row).toContain("Via a visit");
+    expect(row).toContain("Ana Coordinadora");
+    expect(row).toContain("Juan");
+  });
+
+  it("a doctor neither adds nor removes; the field force only adds; a manager does both (D3)", async () => {
+    const doctor = await mountTab(EMPTY, { careTeam: [PRIMARY, ENT], role: "doctor" });
+    expect(doctor.find('[data-testid="care-team-add"]').exists()).toBe(false);
+    expect(doctor.find('[data-testid="care-team-remove-pr-2"]').exists()).toBe(false);
+
+    const rep = await mountTab(EMPTY, { careTeam: [PRIMARY, ENT], role: "rep" });
+    expect(rep.find('[data-testid="care-team-add"]').exists()).toBe(true);
+    expect(rep.find('[data-testid="care-team-remove-pr-2"]').exists()).toBe(false);
+
+    const manager = await mountTab(EMPTY, { careTeam: [PRIMARY, ENT], role: "manager" });
+    expect(manager.find('[data-testid="care-team-add"]').exists()).toBe(true);
+    expect(manager.find('[data-testid="care-team-remove-pr-2"]').exists()).toBe(true);
+  });
+
+  it("no team and no right to add: no Care team group at all", async () => {
+    const w = await mountTab(EMPTY, { careTeam: [PRIMARY], role: "doctor" });
+    expect(groupTitles(w)).not.toContain("Care team");
   });
 });

@@ -1,27 +1,36 @@
 <template>
   <figure class="dp-donut" :class="{ 'dp-donut--drawn': drawn }" data-testid="doctor-panel-donut">
-    <svg viewBox="0 0 120 120" class="dp-donut__chart" role="img" :aria-label="ariaLabel">
-      <circle cx="60" cy="60" :r="RADIUS" class="dp-donut__track" />
-      <circle
-        v-for="(seg, i) in segments"
-        :key="seg.key"
-        cx="60"
-        cy="60"
-        :r="RADIUS"
-        class="dp-donut__seg"
-        :style="{
-          stroke: seg.color,
-          strokeDasharray: `${drawn ? seg.length : 0} ${CIRCUMFERENCE}`,
-          strokeDashoffset: `${-seg.offset}`,
-          transitionDelay: `${(drawn ? i : segments.length - 1 - i) * STAGGER_MS}ms`,
-        }"
-        data-testid="doctor-panel-donut-seg"
-      />
-      <text x="60" y="58" class="dp-donut__total" text-anchor="middle" data-testid="doctor-panel-donut-total">{{ total }}</text>
-      <text x="60" y="74" class="dp-donut__caption" text-anchor="middle">{{ caption }}</text>
-    </svg>
+    <div class="dp-donut__stage">
+      <svg viewBox="0 0 120 120" class="dp-donut__chart" role="img" :aria-label="ariaLabel">
+        <circle cx="60" cy="60" :r="RADIUS" class="dp-donut__track" />
+        <circle
+          v-for="(seg, i) in segments"
+          :key="seg.key"
+          cx="60"
+          cy="60"
+          :r="RADIUS"
+          class="dp-donut__seg"
+          :style="{
+            '--seg-color': seg.color,
+            strokeDasharray: `${drawn ? seg.length : 0} ${CIRCUMFERENCE}`,
+            strokeDashoffset: `${-seg.offset}`,
+            transitionDelay: `${drawn ? SEGMENT_START_MS + i * STAGGER_MS : (segments.length - 1 - i) * 40}ms`,
+          }"
+          data-testid="doctor-panel-donut-seg"
+        />
+      </svg>
+      <div class="dp-donut__centre">
+        <b class="dp-donut__total" data-testid="doctor-panel-donut-total">{{ shownTotal }}</b>
+        <span class="dp-donut__caption">{{ caption }}</span>
+      </div>
+    </div>
     <ul class="dp-donut__legend">
-      <li v-for="seg in legend" :key="seg.key" data-testid="doctor-panel-donut-legend">
+      <li
+        v-for="(seg, i) in legend"
+        :key="seg.key"
+        :style="{ transitionDelay: `${drawn ? LEGEND_START_MS + i * 90 : 0}ms` }"
+        data-testid="doctor-panel-donut-legend"
+      >
         <span class="dp-donut__swatch" :style="{ background: seg.color }" aria-hidden="true" />
         <span class="dp-donut__label">{{ seg.label }}</span>
         <b class="dp-donut__value">{{ seg.value }}</b>
@@ -31,12 +40,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, toRef } from "vue";
+import { useCountUp } from "../../composables/useCountUp";
 
 /**
- * Part-of-whole ring for the Doctor Panel's "patients by stage" card (NEO-233, Łukasz's D1 note:
- * "a pie chart that animates in and out"). `drawn` drives the animation: the parent flips it on
- * after mount and off before the route leaves; CSS skips it for reduced-motion users.
+ * Part-of-whole ring for the Doctor Panel (NEO-233, NEO-238). `drawn` drives the motion:
+ * the ring swings in while its segments draw one after another with a soft glow, the
+ * centre counts up and the legend follows; when `drawn` turns off it all folds back.
+ * Reduced-motion users get the final state without movement.
  */
 export interface DonutSlice {
   key: string;
@@ -47,13 +58,17 @@ export interface DonutSlice {
 
 const props = defineProps<{ slices: DonutSlice[]; drawn: boolean; caption: string; ariaLabel: string }>();
 
-const RADIUS = 46;
+const RADIUS = 48;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
-/** Gap between segments, in user units along the ring, so neighbours read as separate. */
-const GAP = 2;
-const STAGGER_MS = 70;
+/** Gap between segments along the ring, so neighbours read as separate. */
+const GAP = 3;
+const STAGGER_MS = 140;
+/** NEO-239: the ring spins in for ~1.6 s; segments start once it is turning, the legend after. */
+const SEGMENT_START_MS = 250;
+const LEGEND_START_MS = 900;
 
 const total = computed(() => props.slices.reduce((sum, s) => sum + s.value, 0));
+const shownTotal = useCountUp(total, 1600, toRef(props, "drawn"), 300);
 const legend = computed(() => props.slices);
 
 const segments = computed(() => {
@@ -74,58 +89,87 @@ const segments = computed(() => {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   gap: var(--space-4);
   margin: 0;
 }
 
-.dp-donut__chart {
+.dp-donut__stage {
+  position: relative;
   flex: none;
-  width: 140px;
-  height: 140px;
-  /* Segments start at 12 o'clock and run clockwise. */
-  transform: rotate(-90deg);
+  width: 176px;
+  height: 176px;
+}
+
+.dp-donut__chart {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  /* The ring swings in from a quarter turn back while it draws; segments start at 12 o'clock. */
+  transform: rotate(-330deg) scale(0.8);
+  opacity: 0.4;
+  transition:
+    transform 1.6s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.6s ease;
+}
+
+.dp-donut--drawn .dp-donut__chart {
+  transform: rotate(-90deg) scale(1);
+  opacity: 1;
 }
 
 .dp-donut__track,
 .dp-donut__seg {
   fill: none;
-  stroke-width: 14;
+  stroke-width: 13;
 }
 
 .dp-donut__track {
-  stroke: rgba(var(--v-theme-on-surface), 0.06);
+  stroke: rgba(var(--v-theme-on-surface), 0.07);
 }
 
 .dp-donut__seg {
-  transition: stroke-dasharray 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  stroke: var(--seg-color);
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 0 transparent);
+  transition:
+    stroke-dasharray 1.3s cubic-bezier(0.34, 1.15, 0.64, 1),
+    filter 1.3s ease;
 }
 
-.dp-donut__total,
-.dp-donut__caption {
-  /* Undo the chart's rotation for the centre text. */
-  transform: rotate(90deg);
-  transform-origin: 60px 60px;
-  fill: rgb(var(--v-theme-on-surface));
+.dp-donut--drawn .dp-donut__seg {
+  filter: drop-shadow(0 2px 6px color-mix(in srgb, var(--seg-color) 55%, transparent));
+}
+
+.dp-donut__centre {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  pointer-events: none;
 }
 
 .dp-donut__total {
-  font-size: 24px;
-  font-weight: 600;
+  font-size: 2.25rem;
+  font-weight: 650;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
 }
 
 .dp-donut__caption {
-  font-size: 9px;
-  fill: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  letter-spacing: 0.04em;
+  margin-top: 4px;
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
 .dp-donut__legend {
   display: grid;
   flex: 1;
-  gap: var(--space-1);
-  min-width: 160px;
+  gap: 2px;
+  min-width: 170px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -135,15 +179,25 @@ const segments = computed(() => {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  min-height: 28px;
-  font-size: 0.875rem;
+  min-height: 26px;
+  font-size: 0.8125rem;
+  opacity: 0;
+  transform: translateX(8px);
+  transition:
+    opacity 0.4s ease,
+    transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.dp-donut--drawn .dp-donut__legend li {
+  opacity: 1;
+  transform: none;
 }
 
 .dp-donut__swatch {
   flex: none;
   width: 10px;
   height: 10px;
-  border-radius: 3px;
+  border-radius: 50%;
 }
 
 .dp-donut__label {
@@ -155,7 +209,9 @@ const segments = computed(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dp-donut__seg {
+  .dp-donut__chart,
+  .dp-donut__seg,
+  .dp-donut__legend li {
     transition: none;
   }
 }

@@ -102,6 +102,22 @@ withDefaults(
 /* The ring is always there, faded out, so it can animate both ways. It sits
    under the badge (z-index 2 in AppAvatar), whose surface-colored edge
    separates the two. */
+/* CORE-134: on the app bar the user tint (a neutral grey) all but vanished
+   into the bar. Here the avatar sits on the surface colour with a hairline
+   edge, so the circle reads clearly in light and dark. Selector reaches
+   through the button so it outranks AppAvatar's own background. */
+.layout-user-btn .layout-user-avatar {
+  background: rgb(var(--v-theme-surface));
+  box-shadow: 0 0 0 1px rgba(var(--v-theme-on-surface), 0.16);
+}
+
+/* Dark: the surface is nearly the bar's colour, so lift the disc a step and
+   give it a firmer edge. VBtn carries the theme class itself. */
+.layout-user-btn.v-theme--dark .layout-user-avatar {
+  background: color-mix(in srgb, rgb(var(--v-theme-on-surface)) 12%, rgb(var(--v-theme-surface)));
+  box-shadow: 0 0 0 1px rgba(var(--v-theme-on-surface), 0.32);
+}
+
 .layout-user-avatar::after {
   content: "";
   position: absolute;

@@ -1,10 +1,11 @@
 import type { PoolClient } from "pg";
 import { DatabaseError } from "../errors.js";
 import { formatOptionalDisplayName } from "../utils/personName.js";
+import { careTeamCondition } from "./careTeam.js";
 
 /**
  * Doctor Panel "Needs your action" queue (NEO-233) — one row per thing waiting on the doctor,
- * across their own patients only (patient.practitioner_id, CORE-104). Order = kind, then oldest first.
+ * across their own patients only (primary doctor or care team, CORE-104 / CORE-132). Order = kind, then oldest first.
  */
 export const DOCTOR_ACTION_KINDS = ["results_to_interpret", "cannot_attend", "plan_not_notified", "consent_missing"] as const;
 export type DoctorActionKind = (typeof DOCTOR_ACTION_KINDS)[number];
@@ -36,7 +37,7 @@ export async function listDoctorActions(client: PoolClient, practitionerId: stri
          SELECT p.id, p.status, pi.title AS patient_salutation, pi.first_name AS patient_first_name, pi.last_name AS patient_last_name
            FROM patient p
            JOIN identities pi ON pi.id = p.identity_id
-          WHERE p.practitioner_id = $1 AND p.deleted_at IS NULL
+          WHERE ${careTeamCondition("p", "$1")} AND p.deleted_at IS NULL
        ),
        items AS (
          SELECT 1 AS ord, 'results_to_interpret' AS kind, m.id AS patient_id, s.id::text AS ref_id,
@@ -130,7 +131,7 @@ export async function listDoctorPanelPatients(client: PoolClient, practitionerId
               END AS stage
          FROM patient p
          JOIN identities pi ON pi.id = p.identity_id
-        WHERE p.practitioner_id = $1 AND p.deleted_at IS NULL AND p.status <> 'discharged'
+        WHERE ${careTeamCondition("p", "$1")} AND p.deleted_at IS NULL AND p.status <> 'discharged'
         ORDER BY pi.last_name, pi.first_name, p.id`,
       [practitionerId]
     );

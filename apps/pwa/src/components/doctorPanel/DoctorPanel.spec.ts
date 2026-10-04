@@ -17,7 +17,7 @@ vi.mock("../../composables/useApi", async (importOriginal) => ({
 import DoctorPanel from "./DoctorPanel.vue";
 import { useAuthStore } from "../../stores/auth";
 
-/** NEO-233 v2: the doctor's own Panel — 4 indicators, agenda, grouped actions, incomplete files, stage ring. */
+/** NEO-233 / NEO-238: the doctor's own Panel — counting indicators, ring top right, short glass lists. */
 
 function jsonResponse(body: unknown) {
   return { ok: true, status: 200, json: async () => body } as Response;
@@ -102,10 +102,24 @@ async function mountPanel(): Promise<VueWrapper> {
 
 const kpi = (w: VueWrapper, id: string) => w.get(`[data-testid="doctor-panel-kpi-${id}"]`).text();
 
-describe("DoctorPanel (NEO-233 v2)", () => {
-  it("greets the doctor and shows the 4 indicators with their context line", async () => {
+/** Lets the entrance play out: shells rise, the 560 ms wait for the page change, then the counts. */
+async function settle(): Promise<void> {
+  vi.advanceTimersToNextFrame();
+  vi.advanceTimersToNextFrame();
+  await flushPromises();
+  vi.advanceTimersByTime(600);
+  vi.advanceTimersToNextFrame();
+  await flushPromises();
+  vi.advanceTimersByTime(3000);
+  await flushPromises();
+}
+
+describe("DoctorPanel (NEO-233, NEO-238 quick glance)", () => {
+  it("greets the doctor and counts the 4 indicators up to their values", async () => {
     const w = await mountPanel();
     expect(w.get('[data-testid="doctor-panel-greeting"]').text()).toBe("Good morning, Dra. Ramírez");
+    expect(kpi(w, "interpret")).toContain("0");
+    await settle();
     // Today: a1 confirmed + a4 not confirmed; a2 is tomorrow, a3 cancelled.
     expect(kpi(w, "visits")).toContain("2");
     expect(kpi(w, "visits")).toContain("1 not confirmed");
@@ -116,15 +130,31 @@ describe("DoctorPanel (NEO-233 v2)", () => {
     expect(kpi(w, "treatment")).toContain("of 10 active");
   });
 
-  it("groups what waits on the doctor by kind, 3 names then +N", async () => {
+  it("shows one row per kind of waiting item: count, oldest patient, +N", async () => {
     const w = await mountPanel();
     const groups = w.findAll('[data-testid="doctor-panel-action-group"]');
-    expect(groups.map((g) => g.text().split("\n")[0])).toHaveLength(3);
+    expect(groups).toHaveLength(3);
     expect(groups[0].text()).toContain("Results to interpret");
-    expect(groups[0].findAll('[data-testid="doctor-panel-action"]')).toHaveLength(3);
-    await groups[0].get('[data-testid="doctor-panel-action-more"]').trigger("click");
-    expect(groups[0].findAll('[data-testid="doctor-panel-action"]')).toHaveLength(5);
+    expect(groups[0].text()).toContain("Result 1 · +4 more");
+    expect(groups[0].get(".dp__badge").text()).toBe("5");
+    expect(groups[0].attributes("href")).toBe("/patients/r1");
     expect(w.get('[data-testid="doctor-panel-actions-count"]').text()).toBe("7");
+  });
+
+  it("keeps every list to 4 rows", async () => {
+    const many = Array.from({ length: 7 }, (_, n) => ({ ...APPOINTMENTS.items[0], id: `v${n}`, start_at: at(5, 9 + n) }));
+    const incompleteMany = Array.from({ length: 6 }, (_, n) => ({ patient_id: `i${n}`, patient_name: `I ${n}`, missing: ["email"], done: 5, total: 6 }));
+    apiFetch.mockImplementation(async (path: string) => {
+      if (path.startsWith("/api/v1/doctor-panel/actions")) return jsonResponse(ACTIONS);
+      if (path.startsWith("/api/v1/doctor-panel/summary")) return jsonResponse({ ...SUMMARY, incomplete: incompleteMany });
+      if (path.startsWith("/api/v1/appointments")) return jsonResponse({ items: many });
+      throw new Error(`unexpected ${path}`);
+    });
+    const w = await mountPanel();
+    expect(w.findAll('[data-testid="doctor-panel-visit"]')).toHaveLength(4);
+    expect(w.findAll('[data-testid="doctor-panel-incomplete-row"]')).toHaveLength(4);
+    await w.get('[data-testid="doctor-panel-incomplete-more"]').trigger("click");
+    expect(w.findAll('[data-testid="doctor-panel-incomplete-row"]')).toHaveLength(6);
   });
 
   it("lists incomplete files with what is missing, phone and email included", async () => {
@@ -138,35 +168,69 @@ describe("DoctorPanel (NEO-233 v2)", () => {
 
   it("every agenda, action and incomplete row opens its patient", async () => {
     const w = await mountPanel();
-    const rows = w.findAll('[data-testid="doctor-panel-visit"], [data-testid="doctor-panel-action"], [data-testid="doctor-panel-incomplete-row"]');
+    const rows = w.findAll('[data-testid="doctor-panel-visit"], [data-testid="doctor-panel-action-group"], [data-testid="doctor-panel-incomplete-row"]');
     expect(rows.length).toBeGreaterThan(0);
     for (const row of rows) expect(row.attributes("href")).toMatch(/^\/patients\/[a-z0-9]+$/);
   });
 
-  it("the stage ring totals the active patients, skips empty stages and draws in after load", async () => {
+  it("the stage ring sits in the top block, totals the active patients and draws in after load", async () => {
     const w = await mountPanel();
-    expect(w.get('[data-testid="doctor-panel-donut-total"]').text()).toBe("10");
+    expect(w.find('.dp__hero [data-testid="doctor-panel-stages"]').exists()).toBe(true);
     expect(w.findAll('[data-testid="doctor-panel-donut-legend"]')).toHaveLength(5);
     expect(w.findAll('[data-testid="doctor-panel-donut-seg"]')).toHaveLength(4);
     expect(w.get('[data-testid="doctor-panel-donut"]').classes()).not.toContain("dp-donut--drawn");
-    vi.advanceTimersToNextFrame();
-    vi.advanceTimersToNextFrame();
-    await flushPromises();
+    expect(w.get('[data-testid="doctor-panel"]').classes()).not.toContain("dp--in");
+    await settle();
     expect(w.get('[data-testid="doctor-panel-donut"]').classes()).toContain("dp-donut--drawn");
+    expect(w.get('[data-testid="doctor-panel"]').classes()).toContain("dp--in");
+    expect(w.get('[data-testid="doctor-panel-donut-total"]').text()).toBe("10");
   });
 
-  it("folds the ring away before leaving the page", async () => {
+  it("folds everything away before leaving the page", async () => {
     const w = await mountPanel();
-    vi.advanceTimersToNextFrame();
-    vi.advanceTimersToNextFrame();
-    await flushPromises();
+    await settle();
     const leaving = router.push("/patients");
     await flushPromises();
     expect(router.currentRoute.value.name).toBe("dashboard");
     expect(w.find('[data-testid="doctor-panel-donut"]').classes()).not.toContain("dp-donut--drawn");
-    vi.advanceTimersByTime(400);
+    expect(w.find('[data-testid="doctor-panel"]').classes()).toContain("dp--leaving");
+    vi.advanceTimersByTime(450);
     await leaving;
     expect(router.currentRoute.value.name).toBe("patients");
+  });
+
+  it("shows the skeleton until the page change is over, then plays the content in", async () => {
+    const w = await mountPanel();
+    const panel = () => w.get('[data-testid="doctor-panel"]').classes();
+    expect(w.find('[data-testid="doctor-panel-skeleton"]').exists()).toBe(true);
+    vi.advanceTimersToNextFrame();
+    vi.advanceTimersToNextFrame();
+    await flushPromises();
+    // Data is in and the shells are up, but the entrance waits for the page transition.
+    expect(panel()).toEqual(expect.arrayContaining(["dp--shown", "dp--loaded"]));
+    expect(panel()).not.toContain("dp--in");
+    vi.advanceTimersByTime(400);
+    expect(panel()).not.toContain("dp--in");
+    vi.advanceTimersByTime(200);
+    vi.advanceTimersToNextFrame();
+    await flushPromises();
+    expect(panel()).toContain("dp--in");
+  });
+
+  it("with reduced motion the numbers are final at once and leaving doesn't wait", async () => {
+    const matchMedia = vi.fn().mockReturnValue({ matches: true, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {} });
+    vi.stubGlobal("matchMedia", matchMedia);
+    try {
+      const w = await mountPanel();
+      vi.advanceTimersToNextFrame();
+      vi.advanceTimersToNextFrame();
+      await flushPromises();
+      expect(kpi(w, "interpret")).toContain("5");
+      await router.push("/patients");
+      expect(router.currentRoute.value.name).toBe("patients");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("finds a patient from the search box", async () => {

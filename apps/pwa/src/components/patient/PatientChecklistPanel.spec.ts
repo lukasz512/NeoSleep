@@ -192,6 +192,15 @@ describe("PatientChecklistPanel — the Estudios checklist", () => {
     const tmj = await openTab(wrapper, "tmjExam");
     expect(tmj.text()).toContain("Pain on palpation (Right)");
     expect(tmj.text()).toContain("Opening 38 mm");
+    // NEO-237: the ATM result reads per side, not as a yes/no questionnaire.
+    const result = tmj.find(".checklist-result--tmj");
+    expect(result.exists()).toBe(true);
+    expect(result.text()).toContain("Right 1 · Left 0");
+    expect(result.text()).toContain("38 mm");
+    expect(tmj.text()).not.toContain("of 14 questions");
+    // NEO-240: the ATM tab title is text only; the result body keeps its mini skull.
+    expect(wrapper.find("[data-section='tmjExam'] .tmj-skull").exists()).toBe(false);
+    expect(result.find(".tmj-skull--mini [data-joint='right']").attributes("data-level")).toBe("1");
   });
 
   it("hideQrButton (desktop, the side panel has the QR — NEO-203) drops only the QR button; the email button stays", async () => {

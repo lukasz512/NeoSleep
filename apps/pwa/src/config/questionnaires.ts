@@ -85,6 +85,12 @@ export function tmjAnswersValid(answers: Record<string, boolean>, opening: strin
   return parsed !== null || TMJ_COLUMNS.some((key) => answers[key]);
 }
 
+/** Findings per side (0–5) — the skull's colour grows with each one (NEO-237). */
+export function tmjSideCounts(answers: Record<string, unknown>): Record<TmjSide, number> {
+  const count = (side: TmjSide) => TMJ_FINDINGS.filter((f) => answers[`${f.key}_${side}`] === true).length;
+  return { right: count("right"), left: count("left") };
+}
+
 /** Which joints have at least one finding — lights them on the skull. */
 export function tmjMarkedSides(answers: Record<string, boolean | null | undefined>): Record<TmjSide, boolean> {
   const marked = (side: TmjSide) => TMJ_FINDINGS.some((f) => answers[`${f.key}_${side}`] === true);
