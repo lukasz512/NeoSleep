@@ -54,6 +54,7 @@ docs/             → Architecture docs, ADRs, docs/foundation/ (backlog, presen
 - API composable: `apps/pwa/src/composables/useApi.ts` (use this for all API calls)
 - App config: `apps/pwa/src/composables/useAppConfig.ts`
 - Tenant config: DB-driven, `app_config` table (tenant schema) — not a filesystem path
+- Clinical protocol (source of truth for clinical forms and the treatment flow, by Dra. Lorena): `docs/clinical/protocolo-atencion/README.md`; read it before changing any clinical form
 
 ## Database
 
