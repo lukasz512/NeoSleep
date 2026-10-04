@@ -148,6 +148,7 @@
       :patient="bookingPatient"
       :practitioner="bookingPractitioner"
       :start-at="bookingStart"
+      :start-local="bookingStartLocal"
       @saved="onAppointmentSaved"
     />
     <AppointmentDetailDialog
@@ -391,9 +392,12 @@ function timeParts(e: CalendarEntry): [string, string] {
 
 const showAddChoice = ref(false);
 const addPrefillStart = ref<string | null>(null);
+/** The clicked slot as wall time — a booking keeps it in the clinic's zone (CORE-120). */
+const addPrefillWall = ref<string | null>(null);
 
-function openAddChoice(prefillStartIso?: string) {
+function openAddChoice(prefillStartIso?: string, prefillWall?: string) {
   addPrefillStart.value = prefillStartIso ?? null;
+  addPrefillWall.value = prefillWall ?? null;
   showAddChoice.value = true;
 }
 
@@ -409,7 +413,7 @@ function onSlotClick(...args: unknown[]) {
   if (!scope?.date || !scope.time) return;
   const [h, m] = scope.time.split(":").map(Number);
   const rounded = `${scope.date}T${String(h).padStart(2, "0")}:${(m ?? 0) < 30 ? "00" : "30"}`;
-  openAddChoice(zonedInputToIso(rounded, deviceTimeZone()));
+  openAddChoice(zonedInputToIso(rounded, deviceTimeZone()), rounded);
 }
 
 function defaultStart(): string {
@@ -505,20 +509,22 @@ const bookingAppointment = ref<Appointment | null>(null);
 const bookingPatient = ref<{ id: string; name: string; practitioner_id?: string | null } | null>(null);
 const bookingPractitioner = ref<{ id: string; name: string } | null>(null);
 const bookingStart = ref<string | null>(null);
+const bookingStartLocal = ref<string | null>(null);
 const showDetail = ref(false);
 const selectedAppointment = ref<Appointment | null>(null);
 
-function openBooking(opts: { start?: string | null; appointment?: Appointment | null; patient?: typeof bookingPatient.value; practitioner?: typeof bookingPractitioner.value } = {}) {
+function openBooking(opts: { start?: string | null; startLocal?: string | null; appointment?: Appointment | null; patient?: typeof bookingPatient.value; practitioner?: typeof bookingPractitioner.value } = {}) {
   bookingAppointment.value = opts.appointment ?? null;
   bookingPatient.value = opts.patient ?? null;
   bookingPractitioner.value = opts.practitioner ?? null;
   bookingStart.value = opts.start ?? null;
+  bookingStartLocal.value = opts.startLocal ?? null;
   showBooking.value = true;
 }
 
 function onChooseAppointment() {
   showAddChoice.value = false;
-  openBooking({ start: addPrefillStart.value ?? undefined });
+  openBooking({ start: addPrefillStart.value ?? undefined, startLocal: addPrefillWall.value });
 }
 
 function openDetail(appointment: Appointment) {

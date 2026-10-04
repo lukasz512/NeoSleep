@@ -20,7 +20,7 @@ import {
 } from "../db.js";
 import { ForbiddenError, NotFoundError, ValidationError } from "../errors.js";
 import { notify } from "../notifications/notify.js";
-import { timezoneForCountry } from "../utils/timezones.js";
+import { timezoneForCountry, wallTimeToUtc } from "../utils/timezones.js";
 import { assertTerritoryAccessByTerritoryId } from "../middleware/requireScope.js";
 import { getAppointmentViewer, assertCanSeeAppointment, redactForViewer, type AppointmentViewer, type AppointmentView } from "../queries/appointment.js";
 import { planAppointmentPatientEmail, type AppointmentEffects } from "./appointmentPatient.js";
@@ -62,13 +62,53 @@ function resolveEnd(start: Date, endAt: string | undefined, durationMinutes: num
   return end;
 }
 
-async function resolveTimezone(ctx: TenantContext, organizationId: string | null): Promise<string> {
+/**
+ * The start instant: `start_local` is wall-clock time in the clinic's zone
+ * (what the form shows), converted here so every viewer, the calendar and the
+ * patient's email agree (CORE-120); `start_at` is an absolute instant for API
+ * clients that already have one. Never both — they could disagree.
+ */
+function resolveStart(input: { start_at?: string; start_local?: string }, timeZone: string): Date | undefined {
+  if (input.start_local !== undefined && input.start_at !== undefined) {
+    throw new ValidationError("Send start_local or start_at, not both", "start_local");
+  }
+  if (input.start_local !== undefined) return new Date(wallTimeToUtc(input.start_local, timeZone));
+  return input.start_at !== undefined ? parseInstant(input.start_at, "start_at") : undefined;
+}
+
+/** The clinic a booking happens at: the one sent, else the doctor's primary clinic, else their only one. */
+async function resolveClinicId(ctx: TenantContext, organizationId: string | undefined, practitionerId: string | undefined): Promise<string | null> {
+  if (organizationId) {
+    if (!(await getOrganizationById(ctx.client, organizationId))) throw new NotFoundError("Organization", organizationId);
+    return organizationId;
+  }
+  if (!practitionerId) return null;
+  const affiliations = await getOrganizationAffiliations(ctx.client, practitionerId);
+  const primary = affiliations.find((a) => a.is_primary);
+  return primary?.organization_id ?? (affiliations.length === 1 ? affiliations[0]!.organization_id : null);
+}
+
+/** Clinic's country → zone, else the patient's country, else the tenant default. */
+async function resolveTimezone(ctx: TenantContext, organizationId: string | null, patientRegion?: string | null): Promise<string> {
   if (organizationId) {
     const org = await getOrganizationById(ctx.client, organizationId);
     const zone = timezoneForCountry(org?.country_code);
     if (zone) return zone;
   }
-  return getTenantDefaultTimezone(ctx.client);
+  return timezoneForCountry(patientRegion) ?? getTenantDefaultTimezone(ctx.client);
+}
+
+/**
+ * The zone a booking form shows times in before anything is saved — the same
+ * resolution CreateAppointmentCommand uses (CORE-120).
+ */
+export async function GetBookingTimezoneQuery(
+  ctx: TenantContext,
+  input: { organization_id?: string; practitioner_id?: string; patient_id?: string },
+): Promise<{ timezone: string; organization_id: string | null }> {
+  const patient = input.patient_id ? await getPatientById(ctx.client, input.patient_id) : null;
+  const organizationId = await resolveClinicId(ctx, input.organization_id, input.practitioner_id ?? patient?.practitioner_id ?? undefined);
+  return { timezone: await resolveTimezone(ctx, organizationId, patient?.region), organization_id: organizationId };
 }
 
 function canCloseAppointments(viewer: AppointmentViewer): boolean {
@@ -105,6 +145,8 @@ export interface CreateAppointmentInput {
   practitioner_id?: string;
   organization_id?: string;
   start_at?: string;
+  /** Clinic wall-clock "YYYY-MM-DDTHH:mm" — the alternative to start_at (CORE-120). */
+  start_local?: string;
   end_at?: string;
   duration_minutes?: number;
   notes?: string;
@@ -114,9 +156,7 @@ export interface CreateAppointmentInput {
 
 export async function CreateAppointmentCommand(ctx: TenantContext, input: CreateAppointmentInput, effects?: AppointmentEffects): Promise<AppointmentView> {
   if (!input.patient_id) throw new ValidationError("patient_id is required");
-  if (!input.start_at) throw new ValidationError("start_at is required");
-  const start = parseInstant(input.start_at, "start_at");
-  const end = resolveEnd(start, input.end_at, input.duration_minutes);
+  if (!input.start_at && !input.start_local) throw new ValidationError("start_local is required", "start_local");
 
   const viewer = await getAppointmentViewer(ctx);
   const patient = await getPatientById(ctx.client, input.patient_id);
@@ -143,13 +183,10 @@ export async function CreateAppointmentCommand(ctx: TenantContext, input: Create
   }
   await assertClinicalLinks(ctx, patient.id, input.sleep_study_id, input.treatment_plan_id);
 
-  let organizationId = input.organization_id ?? null;
-  if (organizationId) {
-    if (!(await getOrganizationById(ctx.client, organizationId))) throw new NotFoundError("Organization", organizationId);
-  } else {
-    const affiliations = await getOrganizationAffiliations(ctx.client, practitionerId);
-    organizationId = affiliations.find((a) => a.is_primary)?.organization_id ?? null;
-  }
+  const organizationId = await resolveClinicId(ctx, input.organization_id, practitionerId);
+  const timezone = await resolveTimezone(ctx, organizationId, patient.region);
+  const start = resolveStart(input, timezone)!;
+  const end = resolveEnd(start, input.end_at, input.duration_minutes);
 
   const appointment = await insertAppointment(ctx.client, {
     patient_id: patient.id,
@@ -161,7 +198,7 @@ export async function CreateAppointmentCommand(ctx: TenantContext, input: Create
     created_by_user_id: ctx.user.id,
     start_at: start.toISOString(),
     end_at: end.toISOString(),
-    timezone: await resolveTimezone(ctx, organizationId),
+    timezone,
     notes: input.notes ?? null,
   });
 
@@ -181,6 +218,8 @@ export async function CreateAppointmentCommand(ctx: TenantContext, input: Create
 
 export interface UpdateAppointmentInput {
   start_at?: string;
+  /** Wall-clock in the appointment's own zone (CORE-120). */
+  start_local?: string;
   end_at?: string;
   duration_minutes?: number;
   status?: string;
@@ -210,8 +249,8 @@ export async function UpdateAppointmentCommand(ctx: TenantContext, id: string, i
   await assertClinicalLinks(ctx, before.patient_id, input.sleep_study_id, input.treatment_plan_id);
 
   const update: AppointmentUpdate = { status, notes: input.notes, sleep_study_id: input.sleep_study_id, treatment_plan_id: input.treatment_plan_id };
-  if (input.start_at !== undefined || input.end_at !== undefined || input.duration_minutes !== undefined) {
-    const start = parseInstant(input.start_at ?? before.start_at, "start_at");
+  if (input.start_at !== undefined || input.start_local !== undefined || input.end_at !== undefined || input.duration_minutes !== undefined) {
+    const start = resolveStart(input, before.timezone) ?? new Date(before.start_at);
     const keepLength = input.end_at === undefined && input.duration_minutes === undefined;
     const lengthMinutes = (new Date(before.end_at).getTime() - new Date(before.start_at).getTime()) / 60_000;
     const end = resolveEnd(start, input.end_at, keepLength ? lengthMinutes : input.duration_minutes);
