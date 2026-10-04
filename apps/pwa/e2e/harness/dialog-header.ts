@@ -29,6 +29,7 @@ import ClinicalQuestionnaireDialog from "../../src/components/questionnaire/Clin
 import type { FormFieldDef } from "../../src/types/formField";
 import type { SubmitDone } from "../../src/composables/useEntitySubmit";
 import { identityFields } from "../../src/config/forms/identityFields";
+import { patientFormFields } from "../../src/config/forms/patientForm";
 
 const params = new URLSearchParams(location.search);
 const dialog = params.get("dialog") ?? "form";
@@ -84,9 +85,8 @@ const folderFields: FormFieldDef[] = [
     default: "active",
     cols: 6,
   },
-  { key: "ahi_baseline", type: "number", labelKey: "app.patients.form.ahiBaseline", section: "clinical", cols: 6 },
-  { key: "medical_record", type: "text", labelKey: "app.patients.form.medicalRecord", section: "clinical" },
-  { key: "cpap_device", type: "boolean", labelKey: "app.patients.form.cpapDevice", section: "clinical", trueValue: "CPAP", falseValue: "" },
+  // The real Clínico fields (NEO-228: AHI scale, CPAP tiles, Expediente box), not a copy.
+  ...patientFormFields.filter((f) => ["ahi_baseline", "cpap_device", "medical_record"].includes(f.key)),
   { key: "region", type: "text", labelKey: "app.patients.form.region", section: "territory", cols: 6 },
   { key: "city", type: "text", labelKey: "user.hco.form.city", section: "territory", cols: 6 },
 ];
@@ -112,6 +112,7 @@ const Harness = defineComponent({
                 date_of_birth: "1979-03-14",
                 status: "active",
                 ahi_baseline: 23.4,
+                cpap_device: "CPAP",
                 medical_record: "HX-88213",
                 region: "CDMX",
                 city: "Benito Juárez",

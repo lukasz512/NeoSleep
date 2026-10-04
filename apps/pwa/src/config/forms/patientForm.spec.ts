@@ -55,11 +55,26 @@ describe("patientFormFields", () => {
     expect(hiddenKeys()).toEqual([]);
   });
 
-  it("status defaults to active; ahi_baseline is a number field", () => {
+  it("status defaults to active; ahi_baseline is the AHI field with the severity scale (NEO-228)", () => {
     const status = patientFormFields.find((f) => f.key === "status")!;
     const ahi = patientFormFields.find((f) => f.key === "ahi_baseline")!;
     expect(status.default).toBe("active");
-    expect(ahi.type).toBe("number");
+    expect(ahi.type).toBe("ahi");
+  });
+
+  it("CPAP is two icon tiles storing 'CPAP' / '' and starts unanswered (NEO-228)", () => {
+    const cpap = patientFormFields.find((f) => f.key === "cpap_device")!;
+    expect(cpap.type).toBe("choice");
+    expect(cpap.default).toBeNull();
+    const options = cpap.options as FormFieldOption[];
+    expect(options.map((o) => [o.value, o.icon])).toEqual([["CPAP", "cpap-mask"], ["", "cpap-mask-off"]]);
+  });
+
+  it("Expediente médico is a multi-line field with the document icon (NEO-228)", () => {
+    const record = patientFormFields.find((f) => f.key === "medical_record")!;
+    expect(record.type).toBe("textarea");
+    expect(record.icon).toBe("nav-document-content");
+    expect(record.placeholder).toBe("app.patients.form.medicalRecordPlaceholder");
   });
 
   it("sex and date of birth are required for a patient", () => {

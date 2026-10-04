@@ -38,7 +38,9 @@ export type FormFieldType =
   | "date"
   | "boolean"
   /** A few large tappable chips instead of a dropdown — see ChoiceChipsField.vue. */
-  | "choice";
+  | "choice"
+  /** AHI in events/h with the AASM severity scale under it — see AhiField.vue (NEO-228). */
+  | "ahi";
 
 /**
  * One selectable option for 'select'/'autocomplete'/'combobox' fields.
@@ -73,6 +75,8 @@ export interface FormFieldOption {
   symbol?: string;
   /** 'choice' fields: shown as a small link under the main chips instead of a chip of its own. */
   secondary?: boolean;
+  /** 'choice' fields: an AppIcon name drawn above the label; any option with one turns the row into tall tiles (NEO-228). */
+  icon?: AppIconName;
 }
 
 /**
