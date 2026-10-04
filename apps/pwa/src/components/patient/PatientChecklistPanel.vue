@@ -288,25 +288,23 @@
                   </AppButton>
                 </div>
               </div>
-              <div class="studies__hc-tabs" role="tablist" :aria-label="t('app.clinical.hc.title')">
-                <button
-                  v-for="section in historiaClinica.sections"
-                  :id="`hc-tab-${section.key}`"
-                  :key="section.key"
-                  type="button"
-                  role="tab"
-                  class="studies__hc-tab"
-                  :class="[`studies__hc-tab--${section.status}`, { 'studies__hc-tab--active': section.key === activeHcSection?.key }]"
-                  :aria-selected="section.key === activeHcSection?.key"
-                  :aria-controls="'hc-panel'"
-                  :data-section="section.key"
-                  @click="hcTab = section.key"
-                >
-                  <ChecklistStatusIcon :status="section.status" class="studies__hc-tab-icon" />
-                  <span :title="itemTitle(section)">{{ t(`app.clinical.hc.tab.${section.key}`) }}</span>
-                  <span v-if="hasNew(section)" class="studies__new">{{ t("app.clinical.new") }}</span>
-                </button>
-              </div>
+              <!-- CORE-135: the app's one segmented control (the calendar's), each tab with its status. -->
+              <AppSegmentedTabs
+                class="studies__hc-tabs"
+                fit
+                :aria-label="t('app.clinical.hc.title')"
+                :model-value="activeHcSection?.key ?? ''"
+                :options="hcTabOptions(historiaClinica.sections)"
+                @update:model-value="(key: string) => (hcTab = key)"
+              >
+                <template #tab="{ option }">
+                  <span class="studies__hc-tab">
+                    <ChecklistStatusIcon :status="hcSection(historiaClinica.sections, option.value).status" class="studies__hc-tab-icon" />
+                    <span :title="itemTitle(hcSection(historiaClinica.sections, option.value))">{{ option.label }}</span>
+                    <span v-if="hasNew(hcSection(historiaClinica.sections, option.value))" class="studies__new">{{ t("app.clinical.new") }}</span>
+                  </span>
+                </template>
+              </AppSegmentedTabs>
               <div v-if="activeHcSection" id="hc-panel" role="tabpanel" class="studies__hc-panel" :aria-labelledby="`hc-tab-${activeHcSection.key}`">
                 <ItemBody :item="activeHcSection" />
               </div>
@@ -371,6 +369,7 @@
 
 <script setup lang="ts">
 import { createReusableTemplate } from "@vueuse/core";
+import { AppSegmentedTabs, type AppSegmentedTabOption } from "@ui";
 import { computed, defineAsyncComponent, inject, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch, type ComponentPublicInstance } from "vue";
 import { useI18n } from "vue-i18n";
 import { intlLocale } from "@i18n/language-options";
@@ -477,6 +476,14 @@ const historiaClinica = computed(() => {
 });
 /** The open tab: the one the user picked, else the first section still to do. */
 const hcTab = ref<string | null>(null);
+/** The HC sections as segmented-control options; ids and aria-controls tie each tab to the panel below. */
+const hcTabOptions = (sections: ChecklistItem[]): AppSegmentedTabOption[] =>
+  sections.map((section) => ({
+    value: section.key,
+    label: t(`app.clinical.hc.tab.${section.key}`),
+    attrs: { id: `hc-tab-${section.key}`, "aria-controls": "hc-panel", "data-section": section.key, class: `studies__hc-tab--${section.status}` },
+  }));
+const hcSection = (sections: ChecklistItem[], key: string): ChecklistItem => sections.find((section) => section.key === key) ?? sections[0];
 const activeHcSection = computed(() => {
   const sections = historiaClinica.value?.sections ?? [];
   return sections.find((s) => s.key === hcTab.value) ?? sections.find((s) => s.status !== "done") ?? sections[0] ?? null;
@@ -1326,51 +1333,19 @@ watch(() => props.focusItem, (key) => highlightItem(key));
 
 /* NEO-231 D2: the Historia clínica tile — sections as tabs, the open one's row underneath. */
 .studies__hc-tabs {
-  display: flex;
-  gap: 4px;
   margin-top: 12px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  border-bottom: 1px solid rgb(var(--v-theme-outline-variant));
 }
 .studies__hc-tab {
-  flex: none;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 12px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  background: none;
-  font: inherit;
-  font-size: 0.8125rem;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  cursor: pointer;
-  transition: color 200ms ease, border-color 200ms ease;
-}
-.studies__hc-tab:hover {
-  color: rgb(var(--v-theme-on-surface));
-}
-.studies__hc-tab:focus-visible {
-  outline: 2px solid rgb(var(--v-theme-primary));
-  outline-offset: -2px;
-}
-.studies__hc-tab--active {
-  color: rgb(var(--v-theme-primary));
-  border-bottom-color: rgb(var(--v-theme-primary));
-  font-weight: 600;
 }
 .studies__hc-tab-icon {
   width: 16px;
   height: 16px;
+  flex: none;
 }
 .studies__hc-panel {
   padding-top: 12px;
-}
-@media (prefers-reduced-motion: reduce) {
-  .studies__hc-tab {
-    transition: none;
-  }
 }
 </style>
