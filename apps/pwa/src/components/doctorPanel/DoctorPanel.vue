@@ -1,174 +1,78 @@
 <template>
-  <section class="doctor-panel" data-testid="doctor-panel" :aria-label="t('app.doctorPanel.label')">
-    <header class="doctor-panel__top">
-      <div class="doctor-panel__hello">
-        <h1 class="doctor-panel__greeting" data-testid="doctor-panel-greeting">{{ greeting }}</h1>
-        <p class="doctor-panel__date">
-          {{ todayLabel }}<template v-if="summary"> · {{ t("app.doctorPanel.activePatients", { count: activeTotal }) }}</template>
-        </p>
-      </div>
-      <div class="doctor-panel__search">
-        <VTextField
-          v-model="search"
-          :placeholder="t('app.doctorPanel.search.placeholder')"
-          prepend-inner-icon="mdi-magnify"
-          density="comfortable"
-          variant="solo-filled"
-          flat
-          hide-details
-          clearable
-          autocomplete="off"
-          data-testid="doctor-panel-search"
-        />
-        <div v-if="search.trim().length >= MIN_SEARCH" class="doctor-panel__results" data-testid="doctor-panel-search-results">
-          <RouterLink
-            v-for="hit in hits"
-            :key="hit.id"
-            :to="{ name: 'patient-detail', params: { id: hit.id } }"
-            class="doctor-panel__row"
-            data-testid="doctor-panel-search-hit"
-          >
-            <span class="doctor-panel__name">{{ hit.name }}</span>
-          </RouterLink>
-          <p v-if="searched && !hits.length" class="doctor-panel__empty">{{ t("app.doctorPanel.search.empty") }}</p>
-        </div>
-      </div>
-    </header>
-
-    <div class="doctor-panel__kpis">
-      <RouterLink :to="{ name: 'calendar' }" class="doctor-panel__kpi doctor-panel__kpi--primary" data-testid="doctor-panel-kpi-visits">
-        <span class="doctor-panel__kpi-label">{{ t("app.doctorPanel.kpi.visitsToday") }}</span>
-        <b class="doctor-panel__kpi-value">{{ todayVisits.length }}</b>
-        <small class="doctor-panel__kpi-sub">{{ visitsSub }}</small>
-      </RouterLink>
-      <a href="#doctor-panel-actions" class="doctor-panel__kpi doctor-panel__kpi--error" data-testid="doctor-panel-kpi-interpret" @click.prevent="scrollTo('doctor-panel-actions')">
-        <span class="doctor-panel__kpi-label">{{ t("app.doctorPanel.kpi.toInterpret") }}</span>
-        <b class="doctor-panel__kpi-value">{{ toInterpret.length }}</b>
-        <small class="doctor-panel__kpi-sub">{{ interpretSub }}</small>
-      </a>
-      <a href="#doctor-panel-incomplete" class="doctor-panel__kpi doctor-panel__kpi--warning" data-testid="doctor-panel-kpi-incomplete" @click.prevent="scrollTo('doctor-panel-incomplete')">
-        <span class="doctor-panel__kpi-label">{{ t("app.doctorPanel.kpi.incomplete") }}</span>
-        <b class="doctor-panel__kpi-value">{{ incomplete.length }}</b>
-        <small class="doctor-panel__kpi-sub">{{ t("app.doctorPanel.kpi.incompleteSub") }}</small>
-      </a>
-      <RouterLink :to="{ name: 'treatment-plans' }" class="doctor-panel__kpi doctor-panel__kpi--success" data-testid="doctor-panel-kpi-treatment">
-        <span class="doctor-panel__kpi-label">{{ t("app.doctorPanel.kpi.inTreatment") }}</span>
-        <b class="doctor-panel__kpi-value">{{ summary?.stages.treatment ?? 0 }}</b>
-        <small class="doctor-panel__kpi-sub">{{ t("app.doctorPanel.kpi.inTreatmentSub", { count: activeTotal }) }}</small>
-      </RouterLink>
+  <section class="dp" :class="{ 'dp--in': entered }" data-testid="doctor-panel" :aria-label="t('app.doctorPanel.label')">
+    <!-- Soft colour behind the glass, so the blur has something to bend (NEO-238). -->
+    <div class="dp__aurora" aria-hidden="true">
+      <span class="dp__blob dp__blob--a" />
+      <span class="dp__blob dp__blob--b" />
+      <span class="dp__blob dp__blob--c" />
     </div>
 
-    <div class="doctor-panel__grid">
-      <article class="doctor-panel__tile" data-testid="doctor-panel-today">
-        <header class="doctor-panel__head">
-          <h2 class="doctor-panel__title">{{ t("app.doctorPanel.today.title") }}</h2>
-          <span class="doctor-panel__count" data-testid="doctor-panel-today-count">{{ visits.length }}</span>
-        </header>
-        <p v-if="!visits.length" class="doctor-panel__empty" data-testid="doctor-panel-today-empty">{{ t("app.doctorPanel.today.empty") }}</p>
-        <template v-for="day in visitDays" v-else :key="day.key">
-          <h3 class="doctor-panel__day" data-testid="doctor-panel-day">{{ t(`app.doctorPanel.today.day.${day.key}`) }}</h3>
-          <RouterLink
-            v-for="visit in day.visits"
-            :key="visit.id"
-            :to="{ name: 'patient-detail', params: { id: visit.patient_id } }"
-            class="doctor-panel__row"
-            :class="{ 'doctor-panel__row--now': visit.id === nextVisitId }"
-            data-testid="doctor-panel-visit"
-          >
-            <span class="doctor-panel__time">{{ timeOf(visit.start_at) }}</span>
-            <span class="doctor-panel__main">
-              <span class="doctor-panel__name">{{ visit.patient_name }}</span>
-              <span v-if="visit.organization_name" class="doctor-panel__meta">{{ visit.organization_name }}</span>
-            </span>
-            <span v-if="responseOf(visit)" class="doctor-panel__response" :class="`doctor-panel__response--${responseOf(visit)}`">
-              {{ t(`user.appointments.patientResponse.${responseOf(visit)}`) }}
-            </span>
-          </RouterLink>
-        </template>
-        <RouterLink :to="{ name: 'calendar' }" class="doctor-panel__link">{{ t("app.doctorPanel.today.calendar") }}</RouterLink>
-      </article>
-
-      <article id="doctor-panel-actions" class="doctor-panel__tile" data-testid="doctor-panel-actions">
-        <header class="doctor-panel__head">
-          <h2 class="doctor-panel__title">{{ t("app.doctorPanel.actions.title") }}</h2>
-          <span class="doctor-panel__count" :class="{ 'doctor-panel__count--due': actions.length }" data-testid="doctor-panel-actions-count">
-            {{ actions.length }}
-          </span>
-        </header>
-        <p v-if="!actions.length" class="doctor-panel__empty" data-testid="doctor-panel-actions-empty">{{ t("app.doctorPanel.actions.empty") }}</p>
-        <div v-for="group in actionGroups" :key="group.kind" class="doctor-panel__group" data-testid="doctor-panel-action-group">
-          <div class="doctor-panel__group-head">
-            <span class="doctor-panel__dot" :class="`doctor-panel__dot--${group.kind}`" aria-hidden="true" />
-            <span class="doctor-panel__group-label">{{ t(`app.doctorPanel.actions.kind.${group.kind}`) }}</span>
-            <b class="doctor-panel__group-count">{{ group.items.length }}</b>
-          </div>
-          <div class="doctor-panel__names">
+    <div class="dp__hero">
+      <div class="dp__intro dp-in" style="--i: 0">
+        <div class="dp__hello">
+          <h1 class="dp__greeting" data-testid="doctor-panel-greeting">{{ greeting }}</h1>
+          <p class="dp__date">
+            {{ todayLabel }}<template v-if="summary"> · {{ t("app.doctorPanel.activePatients", { count: activeTotal }) }}</template>
+          </p>
+        </div>
+        <div class="dp__search">
+          <VTextField
+            v-model="search"
+            :placeholder="t('app.doctorPanel.search.placeholder')"
+            prepend-inner-icon="mdi-magnify"
+            density="comfortable"
+            variant="solo-filled"
+            flat
+            hide-details
+            clearable
+            autocomplete="off"
+            class="dp__search-field"
+            data-testid="doctor-panel-search"
+          />
+          <div v-if="(search ?? '').trim().length >= MIN_SEARCH" class="dp__results dp-glass" data-testid="doctor-panel-search-results">
             <RouterLink
-              v-for="action in shownOf(group)"
-              :key="`${action.patient_id}:${action.ref_id}`"
-              :to="{ name: 'patient-detail', params: { id: action.patient_id } }"
-              class="doctor-panel__chip"
-              data-testid="doctor-panel-action"
+              v-for="hit in hits"
+              :key="hit.id"
+              :to="{ name: 'patient-detail', params: { id: hit.id } }"
+              class="dp__row"
+              data-testid="doctor-panel-search-hit"
             >
-              {{ action.patient_name }}
+              <span class="dp__name">{{ hit.name }}</span>
             </RouterLink>
-            <button
-              v-if="group.items.length > GROUP_PREVIEW && !openGroups.has(group.kind)"
-              type="button"
-              class="doctor-panel__chip doctor-panel__chip--more"
-              data-testid="doctor-panel-action-more"
-              @click="openGroups.add(group.kind)"
-            >
-              {{ t("app.doctorPanel.actions.more", { count: group.items.length - GROUP_PREVIEW }) }}
-            </button>
+            <p v-if="searched && !hits.length" class="dp__empty">{{ t("app.doctorPanel.search.empty") }}</p>
           </div>
         </div>
-      </article>
 
-      <article id="doctor-panel-incomplete" class="doctor-panel__tile" data-testid="doctor-panel-incomplete">
-        <header class="doctor-panel__head">
-          <h2 class="doctor-panel__title">{{ t("app.doctorPanel.incomplete.title") }}</h2>
-          <span class="doctor-panel__count" :class="{ 'doctor-panel__count--warn': incomplete.length }">{{ incomplete.length }}</span>
-        </header>
-        <p v-if="!incomplete.length" class="doctor-panel__empty" data-testid="doctor-panel-incomplete-empty">{{ t("app.doctorPanel.incomplete.empty") }}</p>
-        <RouterLink
-          v-for="row in shownIncomplete"
-          :key="row.patient_id"
-          :to="{ name: 'patient-detail', params: { id: row.patient_id } }"
-          class="doctor-panel__row"
-          data-testid="doctor-panel-incomplete-row"
-        >
-          <span class="doctor-panel__main">
-            <span class="doctor-panel__name">{{ row.patient_name }}</span>
-            <span class="doctor-panel__meta">{{ t("app.doctorPanel.incomplete.missing", { items: missingLabel(row.missing) }) }}</span>
-          </span>
-          <span
-            class="doctor-panel__meter"
-            role="meter"
-            :aria-valuenow="row.done"
-            aria-valuemin="0"
-            :aria-valuemax="row.total"
-            :aria-label="`${row.done}/${row.total}`"
-          >
-            <i :style="{ width: `${(row.done / row.total) * 100}%` }" />
-          </span>
-        </RouterLink>
-        <button
-          v-if="incomplete.length > INCOMPLETE_PREVIEW"
-          type="button"
-          class="doctor-panel__link"
-          data-testid="doctor-panel-incomplete-more"
-          @click="showAllIncomplete = !showAllIncomplete"
-        >
-          {{ showAllIncomplete ? t("app.doctorPanel.actions.showLess") : t("app.doctorPanel.actions.showAll", { count: incomplete.length }) }}
-        </button>
-      </article>
+        <div class="dp__kpis">
+          <RouterLink :to="{ name: 'calendar' }" class="dp__kpi dp-glass" style="--kpi: var(--v-theme-primary)" data-testid="doctor-panel-kpi-visits">
+            <span class="dp__kpi-label">{{ t("app.doctorPanel.kpi.visitsToday") }}</span>
+            <b class="dp__kpi-value">{{ kpiVisits }}</b>
+            <small class="dp__kpi-sub">{{ visitsSub }}</small>
+          </RouterLink>
+          <a href="#doctor-panel-actions" class="dp__kpi dp-glass" style="--kpi: var(--v-theme-error)" data-testid="doctor-panel-kpi-interpret" @click.prevent="scrollTo('doctor-panel-actions')">
+            <span class="dp__kpi-label">{{ t("app.doctorPanel.kpi.toInterpret") }}</span>
+            <b class="dp__kpi-value">{{ kpiInterpret }}</b>
+            <small class="dp__kpi-sub">{{ interpretSub }}</small>
+          </a>
+          <a href="#doctor-panel-incomplete" class="dp__kpi dp-glass" style="--kpi: var(--v-theme-warning)" data-testid="doctor-panel-kpi-incomplete" @click.prevent="scrollTo('doctor-panel-incomplete')">
+            <span class="dp__kpi-label">{{ t("app.doctorPanel.kpi.incomplete") }}</span>
+            <b class="dp__kpi-value">{{ kpiIncomplete }}</b>
+            <small class="dp__kpi-sub">{{ t("app.doctorPanel.kpi.incompleteSub") }}</small>
+          </a>
+          <RouterLink :to="{ name: 'treatment-plans' }" class="dp__kpi dp-glass" style="--kpi: var(--v-theme-success)" data-testid="doctor-panel-kpi-treatment">
+            <span class="dp__kpi-label">{{ t("app.doctorPanel.kpi.inTreatment") }}</span>
+            <b class="dp__kpi-value">{{ kpiTreatment }}</b>
+            <small class="dp__kpi-sub">{{ t("app.doctorPanel.kpi.inTreatmentSub", { count: activeTotal }) }}</small>
+          </RouterLink>
+        </div>
+      </div>
 
-      <article class="doctor-panel__tile" data-testid="doctor-panel-stages">
-        <header class="doctor-panel__head">
-          <h2 class="doctor-panel__title">{{ t("app.doctorPanel.stages.title") }}</h2>
+      <article class="dp__card dp__ring dp-glass dp-in" style="--i: 1" data-testid="doctor-panel-stages">
+        <header class="dp__head">
+          <h2 class="dp__title">{{ t("app.doctorPanel.stages.title") }}</h2>
+          <RouterLink :to="{ name: 'patients' }" class="dp__more">{{ t("app.doctorPanel.stages.all") }}</RouterLink>
         </header>
-        <p v-if="summary && !activeTotal" class="doctor-panel__empty">{{ t("app.doctorPanel.stages.empty") }}</p>
+        <p v-if="summary && !activeTotal" class="dp__empty">{{ t("app.doctorPanel.stages.empty") }}</p>
         <DoctorPanelDonut
           v-else
           :slices="stageSlices"
@@ -176,26 +80,113 @@
           :caption="t('app.doctorPanel.stages.caption')"
           :aria-label="t('app.doctorPanel.stages.aria', { count: activeTotal })"
         />
-        <RouterLink :to="{ name: 'patients' }" class="doctor-panel__link">{{ t("app.doctorPanel.stages.all") }}</RouterLink>
+      </article>
+    </div>
+
+    <div class="dp__grid">
+      <article class="dp__card dp-glass dp-in" style="--i: 2" data-testid="doctor-panel-today">
+        <header class="dp__head">
+          <h2 class="dp__title">{{ t("app.doctorPanel.today.title") }}</h2>
+          <span class="dp__count" data-testid="doctor-panel-today-count">{{ visits.length }}</span>
+        </header>
+        <p v-if="!visits.length" class="dp__empty" data-testid="doctor-panel-today-empty">{{ t("app.doctorPanel.today.empty") }}</p>
+        <RouterLink
+          v-for="visit in shownVisits"
+          :key="visit.id"
+          :to="{ name: 'patient-detail', params: { id: visit.patient_id } }"
+          class="dp__row"
+          :class="{ 'dp__row--now': visit.id === nextVisitId }"
+          data-testid="doctor-panel-visit"
+        >
+          <span class="dp__time">
+            {{ timeOf(visit.start_at) }}
+            <small v-if="!isToday(visit)" class="dp__day">{{ t("app.doctorPanel.today.day.tomorrow") }}</small>
+          </span>
+          <span class="dp__main">
+            <span class="dp__name">{{ visit.patient_name }}</span>
+            <span v-if="responseOf(visit)" class="dp__meta" :class="`dp__meta--${responseOf(visit)}`">
+              {{ t(`user.appointments.patientResponse.${responseOf(visit)}`) }}
+            </span>
+          </span>
+        </RouterLink>
+        <RouterLink :to="{ name: 'calendar' }" class="dp__more dp__more--foot">{{ t("app.doctorPanel.today.calendar") }}</RouterLink>
+      </article>
+
+      <article id="doctor-panel-actions" class="dp__card dp-glass dp-in" style="--i: 3" data-testid="doctor-panel-actions">
+        <header class="dp__head">
+          <h2 class="dp__title">{{ t("app.doctorPanel.actions.title") }}</h2>
+          <span class="dp__count" :class="{ 'dp__count--due': actions.length }" data-testid="doctor-panel-actions-count">{{ actions.length }}</span>
+        </header>
+        <p v-if="!actions.length" class="dp__empty" data-testid="doctor-panel-actions-empty">{{ t("app.doctorPanel.actions.empty") }}</p>
+        <RouterLink
+          v-for="group in actionGroups"
+          :key="group.kind"
+          :to="{ name: 'patient-detail', params: { id: group.items[0].patient_id } }"
+          class="dp__row"
+          data-testid="doctor-panel-action-group"
+        >
+          <span class="dp__dot" :class="`dp__dot--${group.kind}`" aria-hidden="true" />
+          <span class="dp__main">
+            <span class="dp__name">{{ t(`app.doctorPanel.actions.kind.${group.kind}`) }}</span>
+            <span class="dp__meta" data-testid="doctor-panel-action">
+              {{ group.items[0].patient_name }}<template v-if="group.items.length > 1"> · {{ t("app.doctorPanel.actions.more", { count: group.items.length - 1 }) }}</template>
+            </span>
+          </span>
+          <b class="dp__badge" :class="`dp__badge--${group.kind}`">{{ group.items.length }}</b>
+        </RouterLink>
+      </article>
+
+      <article id="doctor-panel-incomplete" class="dp__card dp-glass dp-in" style="--i: 4" data-testid="doctor-panel-incomplete">
+        <header class="dp__head">
+          <h2 class="dp__title">{{ t("app.doctorPanel.incomplete.title") }}</h2>
+          <span class="dp__count" :class="{ 'dp__count--warn': incomplete.length }">{{ incomplete.length }}</span>
+        </header>
+        <p v-if="!incomplete.length" class="dp__empty" data-testid="doctor-panel-incomplete-empty">{{ t("app.doctorPanel.incomplete.empty") }}</p>
+        <RouterLink
+          v-for="row in shownIncomplete"
+          :key="row.patient_id"
+          :to="{ name: 'patient-detail', params: { id: row.patient_id } }"
+          class="dp__row"
+          data-testid="doctor-panel-incomplete-row"
+        >
+          <span class="dp__main">
+            <span class="dp__name">{{ row.patient_name }}</span>
+            <span class="dp__meta">{{ t("app.doctorPanel.incomplete.missing", { items: missingLabel(row.missing) }) }}</span>
+          </span>
+          <span class="dp__meter" role="meter" :aria-valuenow="row.done" aria-valuemin="0" :aria-valuemax="row.total" :aria-label="`${row.done}/${row.total}`">
+            <i :style="{ width: entered ? `${(row.done / row.total) * 100}%` : '0%' }" />
+          </span>
+        </RouterLink>
+        <button
+          v-if="incomplete.length > LIST_PREVIEW"
+          type="button"
+          class="dp__more dp__more--foot"
+          data-testid="doctor-panel-incomplete-more"
+          @click="showAllIncomplete = !showAllIncomplete"
+        >
+          {{ showAllIncomplete ? t("app.doctorPanel.actions.showLess") : t("app.doctorPanel.actions.showAll", { count: incomplete.length }) }}
+        </button>
       </article>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { onBeforeRouteLeave } from "vue-router";
 import { apiFetch } from "../../composables/useApi";
 import { appointmentResponseState, type Appointment, type AppointmentResponseState } from "../../composables/useAppointments";
+import { useCountUp } from "../../composables/useCountUp";
 import { useAuthStore } from "../../stores/auth";
 import { intlLocaleFor } from "../../utils/notificationFeed";
 import DoctorPanelDonut, { type DonutSlice } from "./DoctorPanelDonut.vue";
 
 /**
- * The doctor's Panel (NEO-233 v2, docs/stories/doctor-panel-today-and-actions.md): their own start
- * screen, like the admin's. 4 indicators over 4 cards — agenda, what waits on them, incomplete
- * files and patients by stage — all from data that already exists, own patients only (CORE-104).
+ * The doctor's Panel (NEO-233; NEO-238 quick-glance redesign): their own start screen.
+ * Top: greeting, search and 4 counting indicators beside the animated stage ring.
+ * Below: three short glass cards — agenda, what waits on them, incomplete files — each
+ * at most LIST_PREVIEW rows. Own patients only (CORE-104); no new data.
  */
 
 type ActionKind = "results_to_interpret" | "cannot_attend" | "plan_not_notified" | "consent_missing";
@@ -212,7 +203,7 @@ interface DoctorAction {
 type Stage = "intake" | "study" | "results" | "plan" | "treatment";
 const STAGES: Stage[] = ["intake", "study", "results", "plan", "treatment"];
 const STAGE_COLORS: Record<Stage, string> = {
-  intake: "rgba(var(--v-theme-on-surface), 0.28)",
+  intake: "rgba(var(--v-theme-on-surface), 0.3)",
   study: "rgb(var(--v-theme-info))",
   results: "rgb(var(--v-theme-primary))",
   plan: "rgb(var(--v-theme-warning))",
@@ -240,13 +231,12 @@ interface Hit {
   name: string | null;
 }
 
-/** Names shown per action group before "+N"; rows of "Por completar" before "Show all". */
-const GROUP_PREVIEW = 3;
-const INCOMPLETE_PREVIEW = 5;
+/** Rows per card: a glance, not a list (Łukasz, NEO-238: "3, 4 items"). */
+const LIST_PREVIEW = 4;
 const MIN_SEARCH = 2;
 const SEARCH_DEBOUNCE_MS = 250;
-/** How long the route waits for the ring to fold away — matches DoctorPanelDonut's transition. */
-const LEAVE_MS = 320;
+/** How long the route waits for the cards and ring to fold away — matches the CSS below. */
+const LEAVE_MS = 380;
 const DAY_MS = 86_400_000;
 
 const { t, te, locale } = useI18n();
@@ -255,11 +245,12 @@ const authStore = useAuthStore();
 const actions = ref<DoctorAction[]>([]);
 const visits = ref<Visit[]>([]);
 const summary = ref<Summary | null>(null);
-const openGroups = reactive(new Set<ActionKind>());
 const showAllIncomplete = ref(false);
+/** Cards rise in; flips back off before the route leaves. */
+const entered = ref(false);
 const donutDrawn = ref(false);
 
-const search = ref("");
+const search = ref<string | null>("");
 const hits = ref<Hit[]>([]);
 const searched = ref(false);
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -282,9 +273,11 @@ const todayLabel = computed(() =>
 
 const activeTotal = computed(() => (summary.value ? STAGES.reduce((sum, s) => sum + summary.value!.stages[s], 0) : 0));
 const incomplete = computed(() => summary.value?.incomplete ?? []);
-const shownIncomplete = computed(() => (showAllIncomplete.value ? incomplete.value : incomplete.value.slice(0, INCOMPLETE_PREVIEW)));
+const shownIncomplete = computed(() => (showAllIncomplete.value ? incomplete.value : incomplete.value.slice(0, LIST_PREVIEW)));
 
-const todayVisits = computed(() => visits.value.filter((v) => new Date(v.start_at).getTime() < startOfDay(1).getTime()));
+const isToday = (v: Visit): boolean => new Date(v.start_at).getTime() < startOfDay(1).getTime();
+const todayVisits = computed(() => visits.value.filter(isToday));
+const shownVisits = computed(() => visits.value.slice(0, LIST_PREVIEW));
 const visitsSub = computed(() => {
   if (!todayVisits.value.length) return t("app.doctorPanel.kpi.noVisits");
   const unconfirmed = todayVisits.value.filter((v) => responseOf(v) !== "confirmed").length;
@@ -302,22 +295,15 @@ const interpretSub = computed(() => {
   return t("app.doctorPanel.kpi.oldest", { days }, days);
 });
 
+const kpiVisits = useCountUp(computed(() => todayVisits.value.length), 900, entered);
+const kpiInterpret = useCountUp(computed(() => toInterpret.value.length), 900, entered);
+const kpiIncomplete = useCountUp(computed(() => incomplete.value.length), 900, entered);
+const kpiTreatment = useCountUp(computed(() => summary.value?.stages.treatment ?? 0), 900, entered);
+
+/** One row per kind of waiting item (at most 4 kinds), its oldest patient first. */
 const actionGroups = computed(() =>
   ACTION_KINDS.map((kind) => ({ kind, items: actions.value.filter((a) => a.kind === kind) })).filter((g) => g.items.length)
 );
-
-function shownOf(group: { kind: ActionKind; items: DoctorAction[] }): DoctorAction[] {
-  return openGroups.has(group.kind) ? group.items : group.items.slice(0, GROUP_PREVIEW);
-}
-
-const visitDays = computed(() => {
-  const tomorrow = startOfDay(1).getTime();
-  const days = [
-    { key: "today" as const, visits: visits.value.filter((v) => new Date(v.start_at).getTime() < tomorrow) },
-    { key: "tomorrow" as const, visits: visits.value.filter((v) => new Date(v.start_at).getTime() >= tomorrow) },
-  ];
-  return days.filter((d) => d.visits.length);
-});
 
 /** The "now" marker: the first of today's visits that hasn't ended its start hour yet. */
 const nextVisitId = computed(() => {
@@ -376,9 +362,14 @@ async function load(): Promise<void> {
   visits.value = (visitsBody?.items ?? [])
     .filter((v) => v.status !== "cancelled")
     .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
-  // Draw the ring after it has rendered empty, so the segments grow in.
+  // Render once at rest, then animate in: cards rise, numbers count, the ring draws.
   await nextTick();
-  requestAnimationFrame(() => requestAnimationFrame(() => (donutDrawn.value = true)));
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      entered.value = true;
+      donutDrawn.value = true;
+    })
+  );
 }
 
 watch(search, (value) => {
@@ -397,9 +388,10 @@ watch(search, (value) => {
   }, SEARCH_DEBOUNCE_MS);
 });
 
-// The ring folds away before the page changes (Łukasz: "animates on the way in and out").
+// Everything folds away before the page changes (Łukasz: "animates on the way in and out").
 onBeforeRouteLeave(async () => {
-  if (!donutDrawn.value || prefersReducedMotion()) return true;
+  if (!entered.value || prefersReducedMotion()) return true;
+  entered.value = false;
   donutDrawn.value = false;
   await new Promise((resolve) => setTimeout(resolve, LEAVE_MS));
   return true;
@@ -415,44 +407,145 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.doctor-panel {
+.dp {
+  position: relative;
+  isolation: isolate;
   display: grid;
   gap: var(--space-4);
   padding: var(--space-4) 0;
 }
 
-.doctor-panel__top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
+/* ---- liquid backdrop --------------------------------------------------- */
+.dp__aurora {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  /* Fade the colour out towards every edge, so the backdrop never shows as a box. */
+  mask-image: radial-gradient(ellipse 60% 60% at 50% 45%, #000 35%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 60% 60% at 50% 45%, #000 35%, transparent 100%);
+}
+
+.dp__blob {
+  position: absolute;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: 0.32;
+  animation: dp-drift 22s ease-in-out infinite alternate;
+}
+
+.dp__blob--a {
+  top: -120px;
+  right: 6%;
+  background: rgb(var(--v-theme-primary));
+}
+
+.dp__blob--b {
+  top: 30%;
+  left: -140px;
+  background: rgb(var(--v-theme-info));
+  opacity: 0.18;
+  animation-duration: 28s;
+}
+
+.dp__blob--c {
+  bottom: -160px;
+  right: 30%;
+  background: rgb(var(--v-theme-success));
+  opacity: 0.16;
+  animation-duration: 34s;
+}
+
+@keyframes dp-drift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(40px, 30px, 0) scale(1.12);
+  }
+}
+
+/* ---- glass surface (CORE-119 tokens) ---------------------------------- */
+.dp-glass {
+  border: 1px solid var(--glass-edge);
+  background: var(--glass-sheen), var(--glass-surface);
+  box-shadow: var(--glass-rim), var(--glass-shadow);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+
+/* ---- staggered entrance / exit ----------------------------------------- */
+.dp-in {
+  opacity: 0;
+  transform: translateY(18px) scale(0.97);
+  filter: blur(8px);
+  transition:
+    opacity 0.5s ease,
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 0.6s ease;
+  transition-delay: calc(var(--i, 0) * 70ms);
+}
+
+.dp--in .dp-in {
+  opacity: 1;
+  transform: none;
+  filter: none;
+}
+
+/* ---- hero: intro + ring top right -------------------------------------- */
+.dp__hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+}
+
+@media (min-width: 960px) {
+  .dp__hero {
+    grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr);
+    align-items: stretch;
+  }
+}
+
+.dp__intro {
+  display: grid;
+  align-content: start;
   gap: var(--space-3);
 }
 
-.doctor-panel__greeting {
+.dp__greeting {
   margin: 0;
-  font-size: 1.5rem;
-  font-weight: 600;
-  line-height: 1.2;
+  font-size: 1.75rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
 }
 
-.doctor-panel__date {
+.dp__date {
   margin: var(--space-1) 0 0;
   font-size: 0.875rem;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
-.doctor-panel__date::first-letter {
+.dp__date::first-letter {
   text-transform: uppercase;
 }
 
-.doctor-panel__search {
+.dp__search {
   position: relative;
-  flex: 0 1 320px;
-  min-width: 220px;
 }
 
-.doctor-panel__results {
+.dp__search-field :deep(.v-field) {
+  border-radius: 14px;
+  background: var(--glass-surface);
+  box-shadow: var(--glass-rim);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+
+.dp__results {
   position: absolute;
   z-index: 5;
   top: calc(100% + var(--space-1));
@@ -460,108 +553,108 @@ onBeforeUnmount(() => {
   left: 0;
   display: grid;
   padding: var(--space-2);
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  border-radius: var(--pwa-radius);
-  background: rgb(var(--v-theme-surface));
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  border-radius: 16px;
 }
 
-.doctor-panel__results .doctor-panel__row {
-  margin: 0;
-}
-
-.doctor-panel__kpis {
+.dp__kpis {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-3);
 }
 
-.doctor-panel__kpi {
-  --kpi: var(--v-theme-primary);
+@media (min-width: 1280px) {
+  .dp__kpis {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.dp__kpi {
   position: relative;
   display: grid;
   gap: 2px;
   overflow: hidden;
   padding: var(--space-3) var(--space-4);
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  border-radius: var(--pwa-radius);
-  background: rgb(var(--v-theme-surface));
+  border-radius: 18px;
   color: inherit;
   text-decoration: none;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.25s ease;
 }
 
-.doctor-panel__kpi::before {
+/* A drop of the indicator's colour in the glass. */
+.dp__kpi::after {
   content: "";
   position: absolute;
-  inset: 0 auto 0 0;
-  width: 4px;
-  background: rgb(var(--kpi));
+  top: -40%;
+  right: -20%;
+  width: 70%;
+  height: 120%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(var(--kpi), 0.22), transparent);
+  pointer-events: none;
 }
 
-.doctor-panel__kpi:hover,
-.doctor-panel__kpi:focus-visible {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+.dp__kpi:hover,
+.dp__kpi:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: var(--glass-rim), 0 18px 40px -16px rgba(var(--kpi), 0.55);
 }
 
-.doctor-panel__kpi--error {
-  --kpi: var(--v-theme-error);
-}
-
-.doctor-panel__kpi--warning {
-  --kpi: var(--v-theme-warning);
-}
-
-.doctor-panel__kpi--success {
-  --kpi: var(--v-theme-success);
-}
-
-.doctor-panel__kpi-label {
-  font-size: 0.75rem;
+.dp__kpi-label {
+  font-size: 0.6875rem;
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
-.doctor-panel__kpi-value {
-  font-size: 1.75rem;
-  line-height: 1.15;
+.dp__kpi-value {
+  font-size: 2rem;
+  font-weight: 650;
+  line-height: 1.1;
   font-variant-numeric: tabular-nums;
 }
 
-.doctor-panel__kpi-sub {
+.dp__kpi-sub {
   font-size: 0.75rem;
   color: rgb(var(--kpi));
 }
 
-/* Four cards: one column on phones, a 2 × 2 grid from tablet up so no card sits alone in a row. */
-.doctor-panel__grid {
+/* ---- cards ------------------------------------------------------------- */
+.dp__grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
 }
 
 @media (min-width: 760px) {
-  .doctor-panel__grid {
+  .dp__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-.doctor-panel__tile {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  min-width: 0;
-  padding: var(--space-4);
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  border-radius: var(--pwa-radius);
-  background: rgb(var(--v-theme-surface));
-  scroll-margin-top: var(--space-6, 24px);
+@media (min-width: 1100px) {
+  .dp__grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
-.doctor-panel__head {
+.dp__card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--space-4);
+  border-radius: 22px;
+  scroll-margin-top: 24px;
+}
+
+.dp__ring {
+  justify-content: center;
+}
+
+.dp__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -569,182 +662,149 @@ onBeforeUnmount(() => {
   margin-bottom: var(--space-2);
 }
 
-.doctor-panel__title {
+.dp__title {
   margin: 0;
   font-size: 0.75rem;
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
-.doctor-panel__count {
-  min-width: 24px;
+.dp__count {
+  min-width: 26px;
   padding: 0 var(--space-2);
-  border-radius: 12px;
+  border-radius: 13px;
   font-size: 0.8125rem;
   font-weight: 600;
-  line-height: 24px;
+  line-height: 26px;
   text-align: center;
   background: rgba(var(--v-theme-on-surface), 0.06);
 }
 
-.doctor-panel__count--due {
+.dp__count--due {
   color: rgb(var(--v-theme-primary));
-  background: rgba(var(--v-theme-primary), 0.12);
+  background: rgba(var(--v-theme-primary), 0.14);
 }
 
-.doctor-panel__count--warn {
+.dp__count--warn {
   color: rgb(var(--v-theme-warning));
-  background: rgba(var(--v-theme-warning), 0.14);
+  background: rgba(var(--v-theme-warning), 0.16);
 }
 
-.doctor-panel__day {
-  margin: var(--space-2) 0 0;
-  font-size: 0.8125rem;
-  font-weight: 600;
-}
-
-.doctor-panel__row {
+.dp__row {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  min-height: 44px;
+  min-height: 52px;
   margin: 0 calc(-1 * var(--space-2));
   padding: var(--space-1) var(--space-2);
-  border-radius: 8px;
+  border-radius: 14px;
   color: inherit;
   text-decoration: none;
-  transition: background-color 0.15s ease;
+  transition:
+    background-color 0.2s ease,
+    transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.doctor-panel__row:hover,
-.doctor-panel__row:focus-visible {
-  background: rgba(var(--v-theme-on-surface), 0.04);
+.dp__row:hover,
+.dp__row:focus-visible {
+  background: rgba(var(--v-theme-on-surface), 0.05);
+  transform: translateX(2px);
 }
 
-.doctor-panel__row--now {
+.dp__row--now {
+  background: rgba(var(--v-theme-primary), 0.1);
   box-shadow: inset 3px 0 0 rgb(var(--v-theme-primary));
-  background: rgba(var(--v-theme-primary), 0.05);
 }
 
-.doctor-panel__time {
+.dp__time {
+  display: grid;
   flex: none;
-  /* es-MX adds "a.m."/"p.m."; one line, same column width for every row. */
-  min-width: 80px;
+  min-width: 78px;
   white-space: nowrap;
-  font-variant-numeric: tabular-nums;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
-.doctor-panel__main {
+.dp__day {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+.dp__main {
   display: flex;
   flex: 1;
   flex-direction: column;
   min-width: 0;
 }
 
-.doctor-panel__name,
-.doctor-panel__meta {
+.dp__name,
+.dp__meta {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.doctor-panel__meta {
-  font-size: 0.8125rem;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-}
-
-.doctor-panel__response {
-  flex: none;
-  font-size: 0.75rem;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-}
-
-.doctor-panel__response--confirmed {
-  color: rgb(var(--v-theme-success));
-}
-
-.doctor-panel__response--cannot_attend {
-  color: rgb(var(--v-theme-error));
-}
-
-.doctor-panel__group {
-  display: grid;
-  gap: var(--space-1);
-  padding: var(--space-2) 0;
-}
-
-.doctor-panel__group + .doctor-panel__group {
-  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-}
-
-.doctor-panel__group-head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.doctor-panel__group-label {
-  flex: 1;
+.dp__name {
   font-weight: 500;
 }
 
-.doctor-panel__group-count {
+.dp__meta {
+  font-size: 0.8125rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+.dp__meta--confirmed {
+  color: rgb(var(--v-theme-success));
+}
+
+.dp__meta--cannot_attend {
+  color: rgb(var(--v-theme-error));
+}
+
+.dp__dot {
+  --dot: var(--v-theme-on-surface);
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgb(var(--dot));
+  box-shadow: 0 0 0 4px rgba(var(--dot), 0.14);
+}
+
+.dp__dot--results_to_interpret,
+.dp__badge--results_to_interpret {
+  --dot: var(--v-theme-primary);
+}
+
+.dp__dot--cannot_attend,
+.dp__badge--cannot_attend {
+  --dot: var(--v-theme-error);
+}
+
+.dp__dot--plan_not_notified,
+.dp__dot--consent_missing,
+.dp__badge--plan_not_notified,
+.dp__badge--consent_missing {
+  --dot: var(--v-theme-warning);
+}
+
+.dp__badge {
+  flex: none;
+  min-width: 26px;
+  padding: 0 var(--space-2);
+  border-radius: 13px;
+  font-size: 0.8125rem;
+  line-height: 26px;
+  text-align: center;
+  color: rgb(var(--dot));
+  background: rgba(var(--dot), 0.14);
   font-variant-numeric: tabular-nums;
 }
 
-.doctor-panel__names {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-  padding-left: var(--space-4);
-}
-
-.doctor-panel__chip {
-  padding: 2px var(--space-2);
-  border: 0;
-  border-radius: 12px;
-  background: rgba(var(--v-theme-on-surface), 0.06);
-  font: inherit;
-  font-size: 0.8125rem;
-  color: inherit;
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.doctor-panel__chip:hover,
-.doctor-panel__chip:focus-visible {
-  background: rgba(var(--v-theme-on-surface), 0.1);
-}
-
-.doctor-panel__chip--more {
-  color: rgb(var(--v-theme-primary));
-}
-
-.doctor-panel__dot {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: rgba(var(--v-theme-on-surface), 0.38);
-}
-
-.doctor-panel__dot--results_to_interpret {
-  background: rgb(var(--v-theme-primary));
-}
-
-.doctor-panel__dot--cannot_attend {
-  background: rgb(var(--v-theme-error));
-}
-
-.doctor-panel__dot--plan_not_notified,
-.doctor-panel__dot--consent_missing {
-  background: rgb(var(--v-theme-warning));
-}
-
-.doctor-panel__meter {
+.dp__meter {
   flex: none;
   width: 64px;
   height: 8px;
@@ -753,36 +813,48 @@ onBeforeUnmount(() => {
   background: rgba(var(--v-theme-on-surface), 0.08);
 }
 
-.doctor-panel__meter i {
+.dp__meter i {
   display: block;
   height: 100%;
   border-radius: 4px;
-  background: rgb(var(--v-theme-success));
+  background: linear-gradient(90deg, rgb(var(--v-theme-success)), color-mix(in srgb, rgb(var(--v-theme-success)) 60%, white));
+  transition: width 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.3s;
 }
 
-.doctor-panel__empty {
+.dp__empty {
   margin: 0;
   padding: var(--space-2) 0;
   font-size: 0.875rem;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
-.doctor-panel__link {
-  align-self: flex-start;
-  margin-top: auto;
-  padding: var(--space-2) 0 0;
+.dp__more {
+  padding: 0;
   border: 0;
   background: none;
   font: inherit;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 500;
   color: rgb(var(--v-theme-primary));
   text-decoration: none;
   cursor: pointer;
 }
 
+.dp__more--foot {
+  align-self: flex-start;
+  margin-top: auto;
+  padding-top: var(--space-2);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .doctor-panel__kpi {
+  .dp__blob {
+    animation: none;
+  }
+
+  .dp-in,
+  .dp__kpi,
+  .dp__row,
+  .dp__meter i {
     transition: none;
   }
 }
