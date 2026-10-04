@@ -1155,10 +1155,15 @@ function onEntryClick(entry: CalendarEntry) {
 }
 
 /* ── phone: two-row header, scrolling week, month + day list ── */
+/* CORE-130: on a phone AppLayout's header row is hidden (CORE-129), so the calendar also takes the
+   sheet's top padding and drops its top rule: the glass bar sits 8 px under the sheet's edge. */
 .cal--phone {
   --cal-hh: 48px;
   --cal-gutter: 44px;
   --cal-day-min: 92px;
+  margin-top: calc(-1 * var(--layout-card-inset, 0px));
+  border-top: 0;
+  border-radius: var(--pwa-sheet-radius, 16px);
 }
 
 /* CORE-129: on a phone this bar is the screen's only header (route meta phoneOwnHeader hides
@@ -1171,6 +1176,7 @@ function onEntryClick(entry: CalendarEntry) {
     "toggle title add"
     "seg seg nav";
   gap: 8px;
+  top: 8px;
   left: 8px;
   right: 8px;
   padding: 8px 8px 8px 8px;
