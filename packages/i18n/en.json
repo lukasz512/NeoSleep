@@ -2195,8 +2195,6 @@
   "user.planner.form.fieldHcpPlaceholder": "Select doctors…",
   "user.planner.form.fieldPatient": "Patients",
   "user.planner.form.fieldPatientPlaceholder": "Select patients…",
-  "user.planner.form.fieldEventPatient": "For patient",
-  "user.planner.form.fieldEventPatientPlaceholder": "Optional — shows on the patient's card",
   "user.planner.form.fieldLocation": "Location",
   "user.planner.form.fieldVideoLink": "Video link",
   "user.planner.form.fieldNotes": "Notes",

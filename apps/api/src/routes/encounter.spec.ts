@@ -98,48 +98,99 @@ async function newPatient(country: "PL" | "MX"): Promise<string> {
   });
 }
 
-describe("/api/v1/encounter — linked to a patient (CORE-137)", () => {
-  it("an event created with a patient returns it, lists under ?patient_id= and shows in the patient's History", async () => {
+type TimelineEntry = { entity_type: string; action: string; entity_id: string };
+
+describe("/api/v1/encounter — linked to patients (CORE-137)", () => {
+  it("an event created with two patients returns both, lists under ?patient_id= for each and shows in each patient's History", async () => {
     const admin = await authFor("admin");
-    const patientId = await newPatient("MX");
-    const created = await request(app).post("/api/v1/encounter").set("Authorization", admin).send({ ...formBody, patient_id: patientId });
+    const [p1, p2] = [await newPatient("MX"), await newPatient("MX")];
+    const created = await request(app).post("/api/v1/encounter").set("Authorization", admin).send({ ...formBody, patient_ids: [p1, p2, p1] });
     expect(created.status).toBe(201);
-    expect(created.body.patient_id).toBe(patientId);
+    expect([...created.body.patient_ids].sort()).toEqual([p1, p2].sort());
 
-    const listed = await request(app).get(`/api/v1/encounter?patient_id=${patientId}`).set("Authorization", admin);
-    expect(listed.status).toBe(200);
-    expect(listed.body.items.map((e: { id: string }) => e.id)).toEqual([created.body.id]);
+    for (const pid of [p1, p2]) {
+      const listed = await request(app).get(`/api/v1/encounter?patient_id=${pid}`).set("Authorization", admin);
+      expect(listed.status).toBe(200);
+      expect(listed.body.items.map((e: { id: string }) => e.id)).toEqual([created.body.id]);
+      expect([...listed.body.items[0].patient_ids].sort()).toEqual([p1, p2].sort());
 
-    const history = await request(app).get(`/api/v1/patient/${patientId}/history`).set("Authorization", admin);
-    expect(history.status).toBe(200);
-    expect(history.body.entries.some((e: { entity_type: string; action: string; entity_id: string }) =>
-      e.entity_type === "Encounter" && e.action === "create" && e.entity_id === created.body.id)).toBe(true);
+      const history = await request(app).get(`/api/v1/patient/${pid}/history`).set("Authorization", admin);
+      expect(history.status).toBe(200);
+      expect(history.body.entries.some((e: TimelineEntry) =>
+        e.entity_type === "Encounter" && e.action === "create" && e.entity_id === created.body.id)).toBe(true);
+    }
+
+    const byId = await request(app).get(`/api/v1/encounter/${created.body.id}`).set("Authorization", admin);
+    expect([...byId.body.patient_ids].sort()).toEqual([p1, p2].sort());
   });
 
-  it("linking a patient on update is audited and shows in History too", async () => {
+  it("update replaces the linked patients (add, remove) and the audit row carries the ids", async () => {
     const admin = await authFor("admin");
-    const patientId = await newPatient("MX");
+    const [p1, p2, p3] = [await newPatient("MX"), await newPatient("MX"), await newPatient("MX")];
     const created = await request(app).post("/api/v1/encounter").set("Authorization", admin).send(formBody);
-    expect(created.body.patient_id).toBeNull();
-    const edited = await request(app).patch(`/api/v1/encounter/${created.body.id}`).set("Authorization", admin).send({ patient_id: patientId });
-    expect(edited.status).toBe(200);
-    expect(edited.body.patient_id).toBe(patientId);
+    expect(created.body.patient_ids).toEqual([]);
 
-    const history = await request(app).get(`/api/v1/patient/${patientId}/history`).set("Authorization", admin);
-    expect(history.body.entries.some((e: { entity_type: string; action: string; entity_id: string }) =>
+    const added = await request(app).patch(`/api/v1/encounter/${created.body.id}`).set("Authorization", admin).send({ patient_ids: [p1, p2] });
+    expect(added.status).toBe(200);
+    expect([...added.body.patient_ids].sort()).toEqual([p1, p2].sort());
+
+    const swapped = await request(app).patch(`/api/v1/encounter/${created.body.id}`).set("Authorization", admin).send({ patient_ids: [p2, p3] });
+    expect([...swapped.body.patient_ids].sort()).toEqual([p2, p3].sort());
+    const listedP1 = await request(app).get(`/api/v1/encounter?patient_id=${p1}`).set("Authorization", admin);
+    expect(listedP1.body.items).toEqual([]);
+
+    // History keeps the removed patient's trail too (the update row names them in entity_before).
+    const historyP1 = await request(app).get(`/api/v1/patient/${p1}/history`).set("Authorization", admin);
+    expect(historyP1.body.entries.some((e: TimelineEntry) => e.entity_type === "Encounter" && e.entity_id === created.body.id)).toBe(true);
+    const historyP3 = await request(app).get(`/api/v1/patient/${p3}/history`).set("Authorization", admin);
+    expect(historyP3.body.entries.some((e: TimelineEntry) =>
       e.entity_type === "Encounter" && e.action === "update" && e.entity_id === created.body.id)).toBe(true);
+
+    const cleared = await request(app).patch(`/api/v1/encounter/${created.body.id}`).set("Authorization", admin).send({ patient_ids: [] });
+    expect(cleared.body.patient_ids).toEqual([]);
+
+    const untouched = await request(app).patch(`/api/v1/encounter/${created.body.id}`).set("Authorization", admin).send({ patient_ids: [p1] });
+    const noField = await request(app).patch(`/api/v1/encounter/${created.body.id}`).set("Authorization", admin).send({ notes: "x" });
+    expect(untouched.body.patient_ids).toEqual([p1]);
+    expect(noField.body.patient_ids).toEqual([p1]);
   });
 
-  it("403 when the patient is outside the user's scope, on create and on update", async () => {
+  it("403 when any added patient is outside the user's scope, on create and on update", async () => {
     const plRep = await authFor("rep", "PL");
+    const plPatient = await newPatient("PL");
     const mxPatient = await newPatient("MX");
-    const denied = await request(app).post("/api/v1/encounter").set("Authorization", plRep).send({ ...formBody, patient_id: mxPatient });
+    const denied = await request(app).post("/api/v1/encounter").set("Authorization", plRep).send({ ...formBody, patient_ids: [plPatient, mxPatient] });
     expect(denied.status).toBe(403);
 
-    const own = await request(app).post("/api/v1/encounter").set("Authorization", plRep).send(formBody);
+    const own = await request(app).post("/api/v1/encounter").set("Authorization", plRep).send({ ...formBody, patient_ids: [plPatient] });
     expect(own.status).toBe(201);
-    const deniedPatch = await request(app).patch(`/api/v1/encounter/${own.body.id}`).set("Authorization", plRep).send({ patient_id: mxPatient });
+    const deniedPatch = await request(app).patch(`/api/v1/encounter/${own.body.id}`).set("Authorization", plRep).send({ patient_ids: [plPatient, mxPatient] });
     expect(deniedPatch.status).toBe(403);
+    const after = await request(app).get(`/api/v1/encounter/${own.body.id}`).set("Authorization", plRep);
+    expect(after.body.patient_ids).toEqual([plPatient]);
+  });
+
+  it("editing an event whose existing linked patient is now out of scope still succeeds", async () => {
+    const plRepEmail = `qa-encounter-owner-${Date.now()}@neosleepcare.com`;
+    const hash = await bcrypt.hash("irrelevant-not-logged-in-with", 4);
+    const owner = await withTenant(TENANT_SLUG, async (client) => {
+      const scope = await getCountryTerritoryId(client, "PL");
+      return insertStaffUser(client, plRepEmail, "QA", "Rep", "rep", hash, false, null, null, scope);
+    });
+    const ownerAuth = `Bearer ${signAuthToken({ id: owner!.id, email: plRepEmail, role: "rep", token_version: 0 })}`;
+    const mxPatient = await newPatient("MX");
+    const plPatient = await newPatient("PL");
+
+    // An MX patient was linked to the PL rep's event while it was in scope (or by an admin); the rep then edits it.
+    const created = await request(app).post("/api/v1/encounter").set("Authorization", ownerAuth).send(formBody);
+    await withTenant(TENANT_SLUG, async (client) => {
+      await client.query("INSERT INTO encounter_patient (encounter_id, patient_id) VALUES ($1, $2)", [created.body.id, mxPatient]);
+    });
+
+    const edited = await request(app).patch(`/api/v1/encounter/${created.body.id}`).set("Authorization", ownerAuth)
+      .send({ notes: "still editable", patient_ids: [mxPatient, plPatient] });
+    expect(edited.status).toBe(200);
+    expect([...edited.body.patient_ids].sort()).toEqual([mxPatient, plPatient].sort());
   });
 
   it("403 when listing another scope's patient events", async () => {
@@ -153,6 +204,6 @@ describe("/api/v1/encounter — linked to a patient (CORE-137)", () => {
     const auth = await repAuth();
     const created = await request(app).post("/api/v1/encounter").set("Authorization", auth).send(formBody);
     expect(created.status).toBe(201);
-    expect(created.body.patient_id).toBeNull();
+    expect(created.body.patient_ids).toEqual([]);
   });
 });

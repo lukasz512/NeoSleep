@@ -228,6 +228,12 @@ describe("PatientDetailsTab — events for the patient (CORE-137)", () => {
     expect(groupTitles(w)).toContain("Events");
   });
 
+  it("lists an event that is shared with other patients", async () => {
+    const w = await mountWithEvents([{ ...EVENTS[1]!, id: "e-shared", patient_ids: ["p-1", "p-2"] }]);
+    const rows = w.findAll('[data-testid="patient-event"]');
+    expect(rows.map((r) => r.attributes("data-id"))).toEqual(["e-shared"]);
+  });
+
   it("shows no Events group for a patient without events", async () => {
     const w = await mountWithEvents([]);
     expect(w.findAll('[data-testid="patient-event"]')).toHaveLength(0);

@@ -30,7 +30,7 @@ export interface EncounterDto {
   user_id: string;
   practitioner_id: string | null;
   organization_id: string | null;
-  patient_id: string | null;
+  patient_ids: string[];
   type: string;
   status: string;
   class: string;
@@ -53,7 +53,7 @@ function toDto(e: Encounter): EncounterDto {
     user_id:           e.user_id,
     practitioner_id:   e.practitioner_id   ?? null,
     organization_id:   e.organization_id   ?? null,
-    patient_id:        e.patient_id        ?? null,
+    patient_ids:       e.patient_ids       ?? [],
     type:              e.type,
     status:            e.status,
     class:             e.class,

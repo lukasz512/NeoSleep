@@ -181,10 +181,12 @@ export async function getPatientTimeline(client: PoolClient, patientId: string):
            || ARRAY(SELECT id::text FROM sleep_study WHERE patient_id = $1::uuid)
            || ARRAY(SELECT id::text FROM treatment_plan WHERE patient_id = $1::uuid)
            || ARRAY(SELECT id::text FROM questionnaire_request WHERE patient_id = $1::uuid)
-           || ARRAY(SELECT id::text FROM encounter WHERE patient_id = $1::uuid)
+           || ARRAY(SELECT encounter_id::text FROM encounter_patient WHERE patient_id = $1::uuid)
          )
          OR a.entity_after->>'patient_id' = $1::text
          OR a.entity_before->>'patient_id' = $1::text
+         OR a.entity_after->'patient_ids' @> to_jsonb($1::text)
+         OR a.entity_before->'patient_ids' @> to_jsonb($1::text)
          OR a.metadata->>'patient_id' = $1::text
        )
      ORDER BY a.created_at DESC`,

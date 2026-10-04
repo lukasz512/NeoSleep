@@ -96,34 +96,37 @@ describe("EventForm errors (NEO-109)", () => {
   });
 });
 
-describe("EventForm patient link (CORE-137)", () => {
-  it("shows an optional single-patient picker", async () => {
+describe("EventForm linked patients (CORE-137)", () => {
+  it("has one Patients field, a multi-select — the old single picker and free field are gone", async () => {
     await openWith((done) => done(true));
-    const field = document.body.querySelector('[data-testid="event-patient"]');
-    expect(field).not.toBeNull();
-    expect(field?.textContent).toContain("For patient");
+    const fields = document.body.querySelectorAll('[data-testid="event-patients"]');
+    expect(fields).toHaveLength(1);
+    expect(fields[0]?.textContent).toContain("Patients");
+    expect(document.body.querySelector('[data-testid="event-patient"]')).toBeNull();
+    expect(document.body.textContent).not.toContain("For patient");
   });
 
-  it("sends the chosen patient as patient_id when saving", async () => {
+  it("sends the chosen patients as patient_ids and none as attendees", async () => {
     let sent: EventSubmitPayload | undefined;
-    await openWith((done) => done(true), { patient_id: "p-1" }, (p) => { sent = p; });
+    await openWith((done) => done(true), { patient_ids: ["p-1", "p-2"] }, (p) => { sent = p; });
     clickSave();
     await flushPromises();
-    expect(sent?.patient_id).toBe("p-1");
+    expect(sent?.patient_ids).toEqual(["p-1", "p-2"]);
+    expect(sent?.attendees.some((a) => (a.attendee_type as string) === "patient")).toBe(false);
   });
 
-  it("an event without a patient sends patient_id null", async () => {
+  it("an event without a patient sends an empty patient_ids", async () => {
     let sent: EventSubmitPayload | undefined;
     await openWith((done) => done(true), {}, (p) => { sent = p; });
     clickSave();
     await flushPromises();
-    expect(sent?.patient_id).toBeNull();
+    expect(sent?.patient_ids).toEqual([]);
   });
 
-  it("a 400 naming patient_id marks the picker", async () => {
-    await openWith((done) => done(false, { patient_id: "invalid" }));
+  it("a 400 naming patient_ids marks the field", async () => {
+    await openWith((done) => done(false, { patient_ids: "invalid" }));
     clickSave();
     await flushPromises();
-    expect(document.body.querySelector('[data-testid="form-error-summary"]')?.textContent).toContain("For patient");
+    expect(document.body.querySelector('[data-testid="form-error-summary"]')?.textContent).toContain("Patients");
   });
 });

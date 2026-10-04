@@ -2113,8 +2113,6 @@
   "user.planner.form.fieldHcpPlaceholder": "Wybierz lekarzy…",
   "user.planner.form.fieldPatient": "Pacjenci",
   "user.planner.form.fieldPatientPlaceholder": "Wybierz pacjentów…",
-  "user.planner.form.fieldEventPatient": "Dla pacjenta",
-  "user.planner.form.fieldEventPatientPlaceholder": "Opcjonalnie — pojawi się na karcie pacjenta",
   "user.planner.form.fieldLocation": "Lokalizacja",
   "user.planner.form.fieldVideoLink": "Link do wideokonferencji",
   "user.planner.form.fieldNotes": "Notatki",

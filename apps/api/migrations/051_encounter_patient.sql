@@ -1,17 +1,27 @@
 -- =============================================================================
--- Migration 051: events can be linked to a patient (CORE-137)
+-- Migration 051: events can be linked to patients (CORE-137)
 --
--- An Evento (encounter) made "for" a patient never showed on that patient's
--- card or in their History because the row had no patient. encounter.patient_id
--- is optional (events about a doctor, a clinic or nobody stay as they are);
--- deleting the patient keeps the event and clears the link (FHIR
--- Encounter.subject). The patient card lists events by this column and
--- getPatientTimeline reads Encounter audit rows through it.
+-- An Evento (encounter) made "for" patients never showed on their cards or in
+-- their History because nothing tied the row to them. The event form had a
+-- "Patients" field, but it only wrote "patient:<id>" strings into
+-- encounter.attendees (a text[] nothing could query or join). One event can
+-- concern several patients, so the link is a join table, encounter_patient;
+-- deleting the encounter or the patient removes the link row and keeps the
+-- other side (FHIR Encounter.subject, one row per patient). The patient card
+-- lists events by this table and getPatientTimeline reads Encounter audit
+-- rows through it.
+--
+-- Existing data: the old field stored real patient ids, so every
+-- "patient:<uuid>" attendee whose patient still exists is copied into
+-- encounter_patient and removed from attendees (one field, one place).
+-- Entries whose patient no longer exists stay in attendees untouched.
 --
 -- Tenant-table change → create_tenant_schema() regenerated at the bottom.
 --
--- ROLLBACK (manual, per tenant): ALTER TABLE encounter DROP COLUMN patient_id;
---   re-run 050's create_tenant_schema() body.
+-- ROLLBACK (manual, per tenant): DROP TABLE encounter_patient;
+--   re-run 050's create_tenant_schema() body. The copied "patient:<id>"
+--   attendee entries are not restored (re-derive them from encounter_patient
+--   before dropping it if needed).
 -- =============================================================================
 
 DO $$
@@ -23,12 +33,34 @@ BEGIN
     END IF;
 
     EXECUTE format('
-      ALTER TABLE %I.encounter
-        ADD COLUMN IF NOT EXISTS patient_id UUID REFERENCES %I.patient(id) ON DELETE SET NULL',
-      r.db_schema, r.db_schema);
+      CREATE TABLE IF NOT EXISTS %I.encounter_patient (
+        encounter_id UUID NOT NULL REFERENCES %I.encounter(id) ON DELETE CASCADE,
+        patient_id   UUID NOT NULL REFERENCES %I.patient(id) ON DELETE CASCADE,
+        PRIMARY KEY (encounter_id, patient_id)
+      )', r.db_schema, r.db_schema, r.db_schema);
 
-    EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %I.encounter (patient_id) WHERE patient_id IS NOT NULL',
-      'encounter_patient_idx', r.db_schema);
+    EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %I.encounter_patient (patient_id)',
+      'encounter_patient_patient_idx', r.db_schema);
+
+    -- The old free-text-field data: "patient:<uuid>" attendees that point at a real patient.
+    EXECUTE format('
+      INSERT INTO %I.encounter_patient (encounter_id, patient_id)
+      SELECT DISTINCT e.id, p.id
+        FROM %I.encounter e
+        CROSS JOIN LATERAL unnest(e.attendees) AS a(entry)
+        JOIN %I.patient p ON p.id::text = substr(a.entry, 9)
+       WHERE a.entry ~ ''^patient:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$''
+      ON CONFLICT DO NOTHING', r.db_schema, r.db_schema, r.db_schema);
+
+    EXECUTE format('
+      UPDATE %I.encounter e
+         SET attendees = ARRAY(
+               SELECT a.entry FROM unnest(e.attendees) AS a(entry)
+                WHERE NOT EXISTS (
+                  SELECT 1 FROM %I.encounter_patient ep
+                   WHERE ep.encounter_id = e.id AND ''patient:'' || ep.patient_id::text = a.entry))
+       WHERE EXISTS (SELECT 1 FROM unnest(e.attendees) AS a(entry) WHERE a.entry LIKE ''patient:%%'')',
+      r.db_schema, r.db_schema);
   END LOOP;
 END $$;
 
@@ -289,12 +321,16 @@ BEGIN
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     voice_note_url text,
     checkin_location jsonb,
-    patient_id uuid,
     CONSTRAINT encounter_class_check CHECK ((class = ANY (ARRAY['AMB'::text, 'VR'::text, 'CONF'::text, 'IMP'::text]))),
     CONSTRAINT encounter_next_action_check CHECK ((next_action = ANY (ARRAY['follow_up_call'::text, 'next_visit'::text, 'send_materials'::text, 'none'::text, NULL::text]))),
     CONSTRAINT encounter_outcome_check CHECK ((outcome = ANY (ARRAY['positive'::text, 'neutral'::text, 'negative'::text, NULL::text]))),
     CONSTRAINT encounter_status_check CHECK ((status = ANY (ARRAY['scheduled'::text, 'completed'::text, 'cancelled'::text, 'no_show'::text]))),
     CONSTRAINT encounter_type_check CHECK ((type = ANY (ARRAY['visit'::text, 'call'::text, 'email'::text, 'congress'::text, 'webinar'::text, 'other'::text])))
+);$tenant_ddl$;
+
+  EXECUTE $tenant_ddl$CREATE TABLE IF NOT EXISTS encounter_patient (
+    encounter_id uuid NOT NULL,
+    patient_id uuid NOT NULL
 );$tenant_ddl$;
 
   EXECUTE $tenant_ddl$CREATE TABLE IF NOT EXISTS encounter_presentation (
@@ -1429,7 +1465,7 @@ END) STORED,
 
   EXECUTE $tenant_ddl$CREATE INDEX IF NOT EXISTS device_order_reconciliation_run_started_idx ON device_order_reconciliation_run USING btree (started_at DESC);$tenant_ddl$;
 
-  EXECUTE $tenant_ddl$CREATE INDEX IF NOT EXISTS encounter_patient_idx ON encounter USING btree (patient_id) WHERE (patient_id IS NOT NULL);$tenant_ddl$;
+  EXECUTE $tenant_ddl$CREATE INDEX IF NOT EXISTS encounter_patient_patient_idx ON encounter_patient USING btree (patient_id);$tenant_ddl$;
 
   EXECUTE $tenant_ddl$CREATE UNIQUE INDEX IF NOT EXISTS identities_email_unique_not_shared ON identities USING btree (email) WHERE (NOT email_shared);$tenant_ddl$;
 
@@ -1772,7 +1808,9 @@ END) STORED,
 
   EXECUTE $tenant_ddl$ALTER TABLE encounter DROP CONSTRAINT IF EXISTS encounter_organization_id_fkey;$tenant_ddl$;
 
-  EXECUTE $tenant_ddl$ALTER TABLE encounter DROP CONSTRAINT IF EXISTS encounter_patient_id_fkey;$tenant_ddl$;
+  EXECUTE $tenant_ddl$ALTER TABLE encounter_patient DROP CONSTRAINT IF EXISTS encounter_patient_encounter_id_fkey;$tenant_ddl$;
+
+  EXECUTE $tenant_ddl$ALTER TABLE encounter_patient DROP CONSTRAINT IF EXISTS encounter_patient_patient_id_fkey;$tenant_ddl$;
 
   EXECUTE $tenant_ddl$ALTER TABLE encounter DROP CONSTRAINT IF EXISTS encounter_practitioner_id_fkey;$tenant_ddl$;
 
@@ -2048,6 +2086,8 @@ END) STORED,
 
   EXECUTE $tenant_ddl$ALTER TABLE efpia_disclosure DROP CONSTRAINT IF EXISTS efpia_disclosure_practitioner_id_year_key;$tenant_ddl$;
 
+  EXECUTE $tenant_ddl$ALTER TABLE encounter_patient DROP CONSTRAINT IF EXISTS encounter_patient_pkey;$tenant_ddl$;
+
   EXECUTE $tenant_ddl$ALTER TABLE encounter DROP CONSTRAINT IF EXISTS encounter_pkey;$tenant_ddl$;
 
   EXECUTE $tenant_ddl$ALTER TABLE encounter_presentation DROP CONSTRAINT IF EXISTS encounter_presentation_encounter_id_presentation_id_key;$tenant_ddl$;
@@ -2290,6 +2330,9 @@ END) STORED,
 
   EXECUTE $tenant_ddl$ALTER TABLE efpia_disclosure
     ADD CONSTRAINT efpia_disclosure_practitioner_id_year_key UNIQUE (practitioner_id, year);$tenant_ddl$;
+
+  EXECUTE $tenant_ddl$ALTER TABLE encounter_patient
+    ADD CONSTRAINT encounter_patient_pkey PRIMARY KEY (encounter_id, patient_id);$tenant_ddl$;
 
   EXECUTE $tenant_ddl$ALTER TABLE encounter
     ADD CONSTRAINT encounter_pkey PRIMARY KEY (id);$tenant_ddl$;
@@ -2639,8 +2682,11 @@ END) STORED,
   EXECUTE $tenant_ddl$ALTER TABLE encounter
     ADD CONSTRAINT encounter_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES organization(id) ON DELETE SET NULL;$tenant_ddl$;
 
-  EXECUTE $tenant_ddl$ALTER TABLE encounter
-    ADD CONSTRAINT encounter_patient_id_fkey FOREIGN KEY (patient_id) REFERENCES patient(id) ON DELETE SET NULL;$tenant_ddl$;
+  EXECUTE $tenant_ddl$ALTER TABLE encounter_patient
+    ADD CONSTRAINT encounter_patient_encounter_id_fkey FOREIGN KEY (encounter_id) REFERENCES encounter(id) ON DELETE CASCADE;$tenant_ddl$;
+
+  EXECUTE $tenant_ddl$ALTER TABLE encounter_patient
+    ADD CONSTRAINT encounter_patient_patient_id_fkey FOREIGN KEY (patient_id) REFERENCES patient(id) ON DELETE CASCADE;$tenant_ddl$;
 
   EXECUTE $tenant_ddl$ALTER TABLE encounter
     ADD CONSTRAINT encounter_practitioner_id_fkey FOREIGN KEY (practitioner_id) REFERENCES practitioner(id) ON DELETE SET NULL;$tenant_ddl$;
