@@ -197,7 +197,7 @@ describe("AppLayout", () => {
       const layout = readLayout();
       expect(slotBlock(layout, "app-bar-start")).toContain(':mark-size="AVATAR_SIZE"');
       // CORE-114: the bar avatar is AppAvatar, carrying the user's role badge.
-      expect(slotBlock(layout, "app-bar-actions")).toMatch(/<AppAvatar[^>]*:role="user\.roleKey"[^>]*:size="AVATAR_SIZE"/);
+      expect(slotBlock(layout, "app-bar-actions")).toMatch(/<AppAccountButton[^>]*:role="user\.roleKey"[^>]*:avatar-size="AVATAR_SIZE"/);
       // The DEV badge after the logo counts towards the room the logo needs.
       expect(layout).toMatch(/useBarLogoFit\(barLogo, barActions, wordmarkWidth, isMobile, \{ el: envBadge, gap: BRAND_GAP \}\)/);
       expect(slotBlock(layout, "app-bar-actions")).toContain('ref="barActions"');
@@ -215,15 +215,13 @@ describe("AppLayout", () => {
       const block = slotBlock(layout, "app-bar-actions");
       expect(block.match(/<AppUserMenuPanel\b/g)).toHaveLength(1);
       expect(block).toMatch(/<AppAccountMenu v-model:open="menuOpen" :mobile="isMobile"/);
-      // the motion reads these marks on the button
-      expect(block).toContain('data-motion="trigger-avatar"');
-      expect(block).toContain('data-motion="trigger-name"');
-      expect(block).toContain(':aria-expanded="accountMenuOpen"');
+      // the trigger is AppAccountButton (CORE-131), which carries the motion marks
+      expect(block).toMatch(/<AppAccountButton[\s\S]*?:expanded="accountMenuOpen"/);
       expect(block).toContain("user.initials");
       expect(block).toContain(':can-change-password="user.canChangePassword"');
       expect(block).toContain(':version="appVersion.version"');
-      // Name + role next to the avatar on desktop only.
-      expect(block).toMatch(/v-if="!isMobile" class="layout-user-info"/);
+      // Name + role next to the avatar on desktop only (compact on phones).
+      expect(block).toContain(':compact="isMobile"');
     });
 
     it("the drawer footer holds only the collapse toggle — no version label (moved to the account menu, NEO-102), no account button", () => {
@@ -241,7 +239,9 @@ describe("AppLayout", () => {
 
     it("the account button never locks while a request is in flight (only view controls do)", () => {
       const block = slotBlock(readLayout(), "app-bar-actions");
-      expect(block).toMatch(/class="layout-user-btn"[\s\S]*?ignore-global-loading/);
+      expect(block).toContain("<AppAccountButton");
+      const button = readFileSync(path.resolve(__dirname, "components/AppAccountButton.vue"), "utf-8");
+      expect(button).toMatch(/class="layout-user-btn"[\s\S]*?ignore-global-loading/);
     });
 
     it("no role-preview select or theme panel sneaks into the app bar", () => {
@@ -426,11 +426,16 @@ describe("AppLayout", () => {
     });
 
     it("account button has no custom hover/focus size animation (two prior attempts both looked broken live)", () => {
-      const source = readLayout();
-      const rule = source.match(/(?<!--compact )\.layout-user-btn\s*\{[\s\S]*?\}/)?.[0] ?? "";
-      expect(rule).not.toMatch(/transition/);
+      // CORE-131: the button's look moved to AppAccountButton. Only its focus
+      // tint (background-color) fades; the button itself never scales or resizes.
+      const source = readFileSync(path.resolve(__dirname, "components/AppAccountButton.vue"), "utf-8");
+      const buttonRules = [...source.matchAll(/\.layout-user-btn(?::focus-visible)?\s*\{[\s\S]*?\}/g)].map((m) => m[0]);
+      expect(buttonRules.length).toBeGreaterThan(0);
+      for (const rule of buttonRules) {
+        expect(rule).not.toMatch(/(^|[\s;{])transform:/);
+        expect(rule).not.toMatch(/transition:[^;]*(width|height|transform|padding)/);
+      }
       expect(source).not.toMatch(/\.layout-user-btn:hover/);
-      expect(source).not.toMatch(/\.layout-user-btn[\s\S]{0,400}transform:\s*scale/);
     });
   });
 
