@@ -87,30 +87,15 @@
                out of it (same on desktop and phone); see AppAccountMenu. -->
           <AppAccountMenu v-model:open="menuOpen" :mobile="isMobile" :label="t('user.user.menu')">
           <template #trigger="{ open: accountMenuOpen }">
-            <AppButton
-              variant="text"
-              class="layout-user-btn"
-              ignore-global-loading
-              :class="{ 'layout-user-btn--compact': isMobile }"
-              :title="t('user.user.menu')"
-              :aria-label="t('user.user.menu')"
-              aria-haspopup="dialog"
-              :aria-expanded="accountMenuOpen"
-            >
-              <div v-if="!isMobile" class="layout-user-info">
-                <span class="layout-user-name" data-motion="trigger-name">{{ user.displayName }}</span>
-                <span class="layout-user-role" data-motion="trigger-role">{{ user.role }}</span>
-              </div>
-              <!-- CORE-114: the role badge rides on the app bar avatar too. -->
-              <AppAvatar
-                :name="user.displayName"
-                entity-type="user"
-                :role="user.roleKey"
-                :role-label="user.role"
-                :size="AVATAR_SIZE"
-                data-motion="trigger-avatar"
-              />
-            </AppButton>
+            <AppAccountButton
+              :name="user.displayName"
+              :role-label="user.role"
+              :role="user.roleKey"
+              :compact="isMobile"
+              :label="t('user.user.menu')"
+              :expanded="accountMenuOpen"
+              :avatar-size="AVATAR_SIZE"
+            />
           </template>
 
           <AppUserMenuPanel
@@ -270,9 +255,9 @@ import {
   AppAccountMenu,
   AppOfflineBar,
   AppInstallCard,
+  AppAccountButton,
 } from "./components";
 import AppButton from "../components/AppButton.vue";
-import AppAvatar from "../components/AppAvatar.vue";
 import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
 import AppNotificationCenter from "../components/AppNotificationCenter.vue";
 import { useNotificationCenter } from "../composables/useNotificationCenter";
@@ -605,18 +590,9 @@ const moduleIcon = computed(() => {
   margin-inline-end: 0;
 }
 
-/* Account button, top right of the app bar (NEO-55). Static sizing only — no
-   hover/focus size change (two earlier animated attempts both read as broken);
-   feedback comes from Vuetify's own text-button overlay. */
-.layout-user-btn {
-  height: auto !important;
-  min-height: 44px;
-  text-transform: none;
-  letter-spacing: normal;
-  border-radius: 999px;
-}
-
-/* theme.scss gives every non-icon button `padding-inline: 24px !important`
+/* Account button (AppAccountButton, NEO-55): its own look lives in that
+   component; only its fit against the shell is set here.
+   theme.scss gives every non-icon button `padding-inline: 24px !important`
    (pill CTA look) via `.v-btn:not(.v-btn--icon):not(…):not(…)`. Left alone,
    that 24px — not the shell's end token — decides where the avatar lands,
    18px short of the header icons; hence !important and a selector scoped
@@ -629,15 +605,6 @@ const moduleIcon = computed(() => {
 .layout-root .layout-user-btn--compact.v-btn:not(.v-btn--icon) {
   min-width: 0;
   padding-inline: var(--layout-user-btn-pad-end) !important;
-}
-
-.layout-user-info {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 1px;
-  min-width: 0;
-  margin-inline-end: 10px;
 }
 
 /* Account slot wrapper: useBarLogoFit measures where the bar's icons start.
@@ -770,24 +737,6 @@ const moduleIcon = computed(() => {
 .layout-back-icon {
   width: 24px;
   height: 24px;
-}
-
-.layout-user-name {
-  font-size: 0.875rem;
-  font-weight: 500;
-  line-height: 1.2;
-  white-space: nowrap;
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.layout-user-role {
-  font-size: 0.7rem;
-  font-weight: 400;
-  line-height: 1.2;
-  opacity: var(--v-medium-emphasis-opacity);
-  white-space: nowrap;
 }
 
 .layout-main--fading {

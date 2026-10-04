@@ -4,3 +4,4 @@ export { default as AppUserMenuPanel } from "./AppUserMenuPanel.vue";
 export { default as AppOfflineBar } from "./AppOfflineBar.vue";
 export { default as AppInstallCard } from "./AppInstallCard.vue";
 export { default as AppAccountMenu } from "./AppAccountMenu.vue";
+export { default as AppAccountButton } from "./AppAccountButton.vue";
