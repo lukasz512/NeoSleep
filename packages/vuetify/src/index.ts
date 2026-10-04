@@ -10,6 +10,7 @@
  */
 import "vuetify/styles";
 import "./legacy-reset.css";
+import "./tooltip.css";
 import "@mdi/font/css/materialdesignicons.css";
 import { createVuetify } from "vuetify";
 import { VuetifyDateAdapter } from "vuetify/date/adapters/vuetify";
@@ -68,6 +69,12 @@ export function createNeoVuetify(
     date: { adapter: VuetifyDateAdapter, locale: { en: "en-US", pl: "pl-PL", mx: "es-MX" } },
     locale: { adapter: createVueI18nAdapter(adapterInput) },
     defaults: {
+      // Tooltips wait half a second (no flash while the pointer passes by)
+      // and fade in softly instead of Vuetify's scale pop (tooltip.css).
+      VTooltip: {
+        openDelay: 500,
+        transition: "neo-tooltip",
+      },
       // The data-table footer's items-per-page VSelect exposes no props of
       // its own; nested defaults are the only way to tag its teleported
       // menu so app CSS can style it like the table (see pwa theme.scss).

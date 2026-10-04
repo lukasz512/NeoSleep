@@ -70,7 +70,7 @@
                       rounded="lg"
                       class="view-resources__card bg-surface-container-low"
                     >
-                      <VTooltip location="bottom" :text="doc.title" open-delay="400" :disabled="!truncatedTitles[doc.id]">
+                      <VTooltip location="bottom" :text="doc.title" :disabled="!truncatedTitles[doc.id]">
                         <template #activator="{ props: tooltipProps }">
                           <a
                             v-bind="tooltipProps"

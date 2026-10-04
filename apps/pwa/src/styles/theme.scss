@@ -1023,6 +1023,13 @@ body {
   z-index: 10002 !important;
 }
 
+/* Same stack problem for tooltips: a VTooltip inside a form dialog got
+   ~2400 and painted behind the 10000 dialog — the info icons in the device
+   order wizard showed nothing. Above menus too, so a tooltip in a menu shows. */
+.v-tooltip {
+  z-index: 10003 !important;
+}
+
 /* Shared two-column responsive row layout used by the same form components. */
 .pwa-form-row {
   display: flex;
