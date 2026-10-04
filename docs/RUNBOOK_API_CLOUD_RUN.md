@@ -48,7 +48,7 @@ Console → service → **Logs**, or
 | Workflow | When | Calls | Secret |
 |---|---|---|---|
 | `appointment-reminders.yml` | every 10 min | dev + prod `/appointments/jobs/reminders` | `INTERNAL_JOB_SECRET` |
-| `orthoapnea-status-sync.yml` | every 15 min | prod `/partners/orthoapnea/jobs/sync-statuses` (dev only if prod is unset/404; one target because the DB is shared) | `INTERNAL_JOB_SECRET` |
+| `orthoapnea-status-sync.yml` | 4x a day (08/11/14/17 Mexico City) | prod `/partners/orthoapnea/jobs/sync-statuses` (dev only if prod is unset/404; one target because the DB is shared) | `INTERNAL_JOB_SECRET` |
 | `device-order-reconciliation.yml` | 13:00 UTC daily | dev + prod `/device-orders/jobs/reconcile` | `RECONCILIATION_JOB_SECRET` |
 
 A red run in Actions = the API answered non-2xx or a tenant crashed; open the run log,

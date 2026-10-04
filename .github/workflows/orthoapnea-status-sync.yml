@@ -1,4 +1,4 @@
-# Lab order status sync (CORE-67): every 15 minutes asks the API to read the
+# Lab order status sync (CORE-67): 4 times a day asks the API to read the
 # status of each open device order from the lab, update our rows, and notify the
 # dentist when a status changed (partner_order_status_changed, ADR-027).
 #
@@ -11,13 +11,14 @@
 # Secrets: API_URL_DEV / API_URL_PROD and INTERNAL_JOB_SECRET — the same value as
 # the APIs' INTERNAL_JOB_SECRET in Secret Manager (infrastructure/cloud-run/secrets.list).
 # A non-2xx answer or a tenant whose sync crashed fails the run (visible in Actions);
-# a single order the lab did not answer for is a warning, retried on the next tick.
+# a single order the lab did not answer for is a warning, retried on the next run.
 
-name: Lab order status sync (every 15 min)
+name: Lab order status sync (4x a day)
 
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    # 08:00, 11:00, 14:00, 17:00 Mexico City (UTC-6, no daylight saving) — Łukasz: 4 checks a day.
+    - cron: "0 14,17,20,23 * * *"
   workflow_dispatch: {}
 
 permissions:
@@ -61,7 +62,7 @@ jobs:
           [ "$status" = "200" ] || exit 1
           failed=$(jq '.failed' result.json)
           if [ "$failed" != "0" ]; then
-            echo "::warning::$target: the lab did not answer for $failed order(s) — retried next tick."
+            echo "::warning::$target: the lab did not answer for $failed order(s) — retried next run."
           fi
           # A tenant whose sync itself crashed is a failure of the job.
           [ "$(jq '.tenantsFailed' result.json)" = "0" ]
