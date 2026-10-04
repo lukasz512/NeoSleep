@@ -1,5 +1,8 @@
 <template>
   <div class="view-resources d-flex flex-column">
+    <!-- Own documents first (NEO-242), outside the partner states so they show even when the lab is down. -->
+    <ResourceFeaturedList />
+
     <div v-if="loadError" class="view-resources__state">
       <AppErrorState
         :error="loadFailure"
@@ -194,6 +197,7 @@ import AppErrorState from "../components/AppErrorState.vue";
 import AppEmptyState from "../components/AppEmptyState.vue";
 import ResourceVideoTile from "../components/resources/ResourceVideoTile.vue";
 import ResourceVideoSheet from "../components/resources/ResourceVideoSheet.vue";
+import ResourceFeaturedList from "../components/resources/ResourceFeaturedList.vue";
 import { usePartnerResources, type PartnerResourceFileType, type PartnerResourceItem } from "../composables/usePartnerResources";
 import { useResourceProgress, countByStatus, filterByStatus, type StatusFilter } from "../composables/useResourceProgress";
 import { usePersistedState } from "@prefs";
