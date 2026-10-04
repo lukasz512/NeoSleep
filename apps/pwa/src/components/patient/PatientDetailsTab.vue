@@ -119,18 +119,11 @@
           <div
             v-for="member in teamMembers"
             :key="member.practitioner_id"
-            class="patient-details__row patient-details__row--entity"
+            class="patient-details__row patient-details__row--member"
             :data-testid="`care-team-${member.practitioner_id}`"
           >
-            <dt class="patient-details__access">
-              <span>{{ t(`app.patients.detail.careTeam.source.${member.source ?? "manual"}`) }}</span>
-              <span v-if="member.added_at" class="patient-details__access-sub">
-                {{ member.added_by_name
-                  ? t("app.patients.detail.careTeam.sinceBy", { date: formatDate(member.added_at), name: member.added_by_name })
-                  : t("app.patients.detail.careTeam.since", { date: formatDate(member.added_at) }) }}
-              </span>
-            </dt>
-            <dd class="patient-details__member">
+            <dt>{{ accessLine(member) }}</dt>
+            <dd>
               <EntityLink
                 :to="{ name: 'hcp-detail', params: { id: member.practitioner_id } }"
                 :label="member.name"
@@ -278,6 +271,15 @@ async function load(): Promise<void> {
 const careTeam = usePatientCareTeam(toRef(() => props.patient.id));
 /** The primary doctor has their own row in "care"; this group lists everyone else. */
 const teamMembers = computed(() => careTeam.members.value.filter((m) => !m.primary));
+/** "Via a visit · Since 4 Oct 2026 · Ana" — how, since when and by whom the HCP got access (D1). */
+function accessLine(member: CareTeamMember): string {
+  const how = t(`app.patients.detail.careTeam.source.${member.source ?? "manual"}`);
+  if (!member.added_at) return how;
+  const since = member.added_by_name
+    ? t("app.patients.detail.careTeam.sinceBy", { date: formatDate(member.added_at), name: member.added_by_name })
+    : t("app.patients.detail.careTeam.since", { date: formatDate(member.added_at) });
+  return `${how} · ${since}`;
+}
 const removing = ref<CareTeamMember | null>(null);
 const adding = ref(false);
 const addPractitionerId = ref<string | null>(null);
@@ -558,18 +560,23 @@ const tiles = computed<Tile[]>(() => {
   justify-content: flex-end;
 }
 
-/* Care team (CORE-132): how and since when on the left, the doctor (+ remove) on the right. */
-.patient-details__access {
-  display: flex;
+/* Care team (CORE-132): the doctor (+ remove) on top, full width; how and since when underneath. */
+.patient-details__row--member {
   flex-direction: column;
-  gap: 2px;
-}
-.patient-details__access-sub {
-  font-size: 0.75rem;
-}
-.patient-details__member {
-  align-items: center;
+  align-items: stretch;
   gap: var(--space-1, 4px);
+}
+.patient-details__row--member dd {
+  order: -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1, 4px);
+  text-align: left;
+}
+.patient-details__row--member dt {
+  max-width: none;
+  font-size: 0.75rem;
 }
 .patient-details__row--add {
   justify-content: flex-end;

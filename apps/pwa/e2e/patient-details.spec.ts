@@ -70,6 +70,27 @@ test("tab focus ring sits inside the tab and is never clipped by the scrolling r
   expect(fits).toBe(true);
 });
 
+test("care team (CORE-132): a manager sees every other doctor with how they got access, and can add and remove", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await open(page, "?lang=mx&role=manager");
+  const team = page.getByTestId("care-team");
+  await expect(team).toContainText("Equipo de atención");
+  await expect(page.getByTestId("care-team-h-2")).toContainText("Por una cita");
+  await expect(page.getByTestId("care-team-h-3")).toContainText("Ex médico principal");
+  await expect(page.getByTestId("care-team-remove-h-2")).toBeVisible();
+  await expect(page.getByTestId("care-team-add")).toBeVisible();
+});
+
+test("care team on a 360px phone: no sideways scroll, a doctor gets no actions", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 780 });
+  await open(page, "?lang=mx&role=doctor");
+  await expect(page.getByTestId("care-team-h-2")).toBeVisible();
+  await expect(page.getByTestId("care-team-add")).toHaveCount(0);
+  await expect(page.getByTestId("care-team-remove-h-2")).toHaveCount(0);
+  const { scrollWidth, clientWidth } = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth }));
+  expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
+});
+
 test("the PSG tile opens the Studies tab", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await open(page);
