@@ -41,6 +41,20 @@ describe("patientFormFields", () => {
     expect(hidden()).toBe(false);
   });
 
+  it("Estado, Región and Territorio are hidden for a doctor (NEO-226), shown for admin", () => {
+    setActivePinia(createPinia());
+    type AuthUser = NonNullable<ReturnType<typeof useAuthStore>["user"]>;
+    const hiddenKeys = () =>
+      patientFormFields
+        .filter((f) => ["status", "region", "territory_id"].includes(f.key))
+        .filter((f) => (typeof f.hidden === "function" ? f.hidden({}) : !!f.hidden))
+        .map((f) => f.key);
+    useAuthStore().user = { role: "doctor" } as AuthUser;
+    expect(hiddenKeys()).toEqual(["status", "region", "territory_id"]);
+    useAuthStore().user = { role: "admin" } as AuthUser;
+    expect(hiddenKeys()).toEqual([]);
+  });
+
   it("status defaults to active; ahi_baseline is a number field", () => {
     const status = patientFormFields.find((f) => f.key === "status")!;
     const ahi = patientFormFields.find((f) => f.key === "ahi_baseline")!;

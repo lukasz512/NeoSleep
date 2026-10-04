@@ -152,6 +152,10 @@ export const patientFormDerive: FormDerive = (form, prev) => {
   return sex ? { gender: sex } : undefined;
 };
 
+function isDoctor(): boolean {
+  return useAuthStore().user?.role === "doctor";
+}
+
 export const patientFormFields: FormFieldDef[] = [
   ...identity,
   {
@@ -189,7 +193,7 @@ export const patientFormFields: FormFieldDef[] = [
     default: null,
     options: loadPractitionerOptions,
     // NEO-223: a doctor's new patient is always their own (the API assigns it, CORE-104) — no picker to get wrong.
-    hidden: () => useAuthStore().user?.role === "doctor",
+    hidden: isDoctor,
     icon: "nav-hcp",
     avatarEntityType: "hcp",
     cols: 12,
@@ -201,6 +205,8 @@ export const patientFormFields: FormFieldDef[] = [
     labelKey: "app.patients.form.status",
     options: STATUS_OPTIONS,
     default: "active",
+    // NEO-226: a doctor's new patient is simply active; Estado stays a staff field.
+    hidden: isDoctor,
     cols: 6,
   },
   {
@@ -209,6 +215,8 @@ export const patientFormFields: FormFieldDef[] = [
     type: "autocomplete",
     labelKey: "app.patients.form.region",
     options: loadRegionOptions,
+    // NEO-226: doctors don't place patients in the territory tree (for now).
+    hidden: isDoctor,
     cols: 6,
   },
   {
@@ -219,6 +227,7 @@ export const patientFormFields: FormFieldDef[] = [
     hint: "app.patients.form.territoryHint",
     default: null,
     options: loadTerritoryOptions,
+    hidden: isDoctor,
     icon: "nav-territories",
     cols: 6,
   },
