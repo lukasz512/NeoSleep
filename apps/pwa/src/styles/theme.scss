@@ -130,7 +130,7 @@ $pwa-avatar-dark: (patient: (24, 72), doctor: (23, 78), org: (22, 76), lead: (16
      active, no need to repeat in the dark-theme block below. */
   --mobile-bottom-nav-bg: var(--pwa-bg);
   --mobile-bottom-nav-border: var(--pwa-border);
-  --mobile-bottom-nav-item-color: var(--pwa-text-secondary);
+  --mobile-bottom-nav-item-color: var(--glass-ink, var(--pwa-text-secondary));
   --mobile-bottom-nav-item-active-color: var(--pwa-primary);
   --mobile-bottom-nav-radius: var(--pwa-radius);
   /* Was undefined here, silently falling back to MobileBottomNavBar.vue's
@@ -298,12 +298,22 @@ $pwa-avatar-dark: (patient: (24, 72), doctor: (23, 78), org: (22, 76), lead: (16
  * composite. The surface mixes from the theme's own surface colour, so it
  * follows the tenant palette and the dark theme.
  */
+/*
+ * CORE-119 liquid glass: thinner surface + stronger blur, a bright top edge,
+ * a 1px inner rim and a soft sheen (a background-image layered over the
+ * surface). The labels on it use --glass-ink, darker than the regular
+ * secondary text so they stay AA over a busy backdrop (glassTokens.spec.ts).
+ */
 :root {
-  --glass-surface: color-mix(in srgb, rgb(var(--v-theme-surface)) 82%, transparent);
+  --glass-surface: color-mix(in srgb, rgb(var(--v-theme-surface)) 58%, transparent);
   --glass-solid: rgb(var(--v-theme-surface));
-  --glass-blur: blur(20px) saturate(170%);
-  --glass-edge: rgb(255 255 255 / 0.7);
-  --glass-shadow: 0 0 0 1px rgb(16 48 45 / 0.06), 0 12px 32px -10px rgb(16 48 45 / 0.3);
+  --glass-blur: blur(28px) saturate(190%) brightness(1.05);
+  --glass-edge: rgb(255 255 255 / 0.95);
+  --glass-rim: inset 0 0 0 1px rgb(255 255 255 / 0.45), inset 0 -1px 0 rgb(255 255 255 / 0.35);
+  --glass-sheen: radial-gradient(120% 90% at 18% -20%, rgb(255 255 255 / 0.5), transparent 55%),
+    radial-gradient(80% 70% at 100% 130%, rgb(255 255 255 / 0.25), transparent 60%);
+  --glass-ink: #4d4d4d;
+  --glass-shadow: 0 0 0 0.5px rgb(16 48 45 / 0.1), 0 16px 36px -12px rgb(16 48 45 / 0.35);
   --mobile-nav-scrim: rgb(8 20 19 / 0.28);
   --menu-dur-in: 420ms;
   --menu-dur-out: 180ms;
@@ -317,8 +327,11 @@ $pwa-avatar-dark: (patient: (24, 72), doctor: (23, 78), org: (22, 76), lead: (16
   }
 }
 [data-theme="dark"] {
-  --glass-surface: color-mix(in srgb, rgb(var(--v-theme-surface)) 82%, transparent);
-  --glass-edge: rgb(255 255 255 / 0.1);
+  --glass-surface: color-mix(in srgb, rgb(var(--v-theme-surface)) 76%, transparent);
+  --glass-edge: rgb(255 255 255 / 0.16);
+  --glass-rim: inset 0 0 0 1px rgb(255 255 255 / 0.08), inset 0 -1px 0 rgb(255 255 255 / 0.04);
+  --glass-sheen: radial-gradient(120% 90% at 18% -20%, rgb(255 255 255 / 0.1), transparent 55%);
+  --glass-ink: #d0d0d0;
   --glass-shadow: 0 0 0 1px rgb(255 255 255 / 0.06), 0 14px 36px -10px rgb(0 0 0 / 0.6);
   --mobile-nav-scrim: rgb(0 0 0 / 0.45);
 }
