@@ -458,6 +458,19 @@ onBeforeUnmount(() => {
   pointer-events: none;
   mask-image: linear-gradient(to bottom, transparent 0, #000 260px);
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 260px);
+  /* The colour fades in with the cards and out with them, never pops or cuts (Łukasz). */
+  opacity: 0;
+  transition: opacity 1.2s ease;
+}
+
+.dp--shown .dp__aurora {
+  opacity: 1;
+}
+
+/* Out within LEAVE_MS, so it is gone before the route changes. */
+.dp--shown.dp--leaving .dp__aurora {
+  opacity: 0;
+  transition: opacity 0.4s ease;
 }
 
 .dp__blob {
@@ -1013,6 +1026,7 @@ onBeforeUnmount(() => {
   }
 
   .dp-in,
+  .dp__aurora,
   .dp-skel,
   .dp__kpi,
   .dp__kpi > *,
