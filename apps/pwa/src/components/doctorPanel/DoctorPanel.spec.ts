@@ -102,12 +102,15 @@ async function mountPanel(): Promise<VueWrapper> {
 
 const kpi = (w: VueWrapper, id: string) => w.get(`[data-testid="doctor-panel-kpi-${id}"]`).text();
 
-/** Lets the entrance play out: two frames to start it, then the 0.9 s count-up. */
+/** Lets the entrance play out: shells rise, the 560 ms wait for the page change, then the counts. */
 async function settle(): Promise<void> {
   vi.advanceTimersToNextFrame();
   vi.advanceTimersToNextFrame();
   await flushPromises();
-  vi.advanceTimersByTime(1500);
+  vi.advanceTimersByTime(600);
+  vi.advanceTimersToNextFrame();
+  await flushPromises();
+  vi.advanceTimersByTime(3000);
   await flushPromises();
 }
 
@@ -190,10 +193,28 @@ describe("DoctorPanel (NEO-233, NEO-238 quick glance)", () => {
     await flushPromises();
     expect(router.currentRoute.value.name).toBe("dashboard");
     expect(w.find('[data-testid="doctor-panel-donut"]').classes()).not.toContain("dp-donut--drawn");
-    expect(w.find('[data-testid="doctor-panel"]').classes()).not.toContain("dp--in");
-    vi.advanceTimersByTime(400);
+    expect(w.find('[data-testid="doctor-panel"]').classes()).toContain("dp--leaving");
+    vi.advanceTimersByTime(450);
     await leaving;
     expect(router.currentRoute.value.name).toBe("patients");
+  });
+
+  it("shows the skeleton until the page change is over, then plays the content in", async () => {
+    const w = await mountPanel();
+    const panel = () => w.get('[data-testid="doctor-panel"]').classes();
+    expect(w.find('[data-testid="doctor-panel-skeleton"]').exists()).toBe(true);
+    vi.advanceTimersToNextFrame();
+    vi.advanceTimersToNextFrame();
+    await flushPromises();
+    // Data is in and the shells are up, but the entrance waits for the page transition.
+    expect(panel()).toEqual(expect.arrayContaining(["dp--shown", "dp--loaded"]));
+    expect(panel()).not.toContain("dp--in");
+    vi.advanceTimersByTime(400);
+    expect(panel()).not.toContain("dp--in");
+    vi.advanceTimersByTime(200);
+    vi.advanceTimersToNextFrame();
+    await flushPromises();
+    expect(panel()).toContain("dp--in");
   });
 
   it("with reduced motion the numbers are final at once and leaving doesn't wait", async () => {
