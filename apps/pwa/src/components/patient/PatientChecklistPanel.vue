@@ -261,8 +261,8 @@
           <!-- NEO-231 D2: the Historia clínica is one tile, its sections are tabs. -->
           <li
             v-if="group.key === 'clinicalHistory' && historiaClinica"
-            data-testid="hc-tile"
             :ref="(el) => setRowRef(HC_TILE_KEY, el)"
+            data-testid="hc-tile"
             class="studies__item studies__item--hc"
             :class="[
               `studies__item--${historiaClinica.status}`,
@@ -302,7 +302,7 @@
                   @click="hcTab = section.key"
                 >
                   <ChecklistStatusIcon :status="section.status" class="studies__hc-tab-icon" />
-                  <span>{{ itemTitle(section) }}</span>
+                  <span :title="itemTitle(section)">{{ t(`app.clinical.hc.tab.${section.key}`) }}</span>
                   <span v-if="hasNew(section)" class="studies__new">{{ t("app.clinical.new") }}</span>
                 </button>
               </div>

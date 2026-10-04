@@ -123,15 +123,16 @@ const openingError = computed(() => (parseTmjOpening(props.opening) === "invalid
 .tmj-form__head,
 .tmj-form__row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 72px 72px;
+  grid-template-columns: minmax(0, 1fr) 92px 92px;
   align-items: center;
   gap: 8px;
 }
 .tmj-form__head {
   font-size: 0.75rem;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
+  white-space: nowrap;
   color: rgb(var(--v-theme-primary));
   padding-bottom: 4px;
   text-align: center;
@@ -141,7 +142,7 @@ const openingError = computed(() => (parseTmjOpening(props.opening) === "invalid
   border-bottom: 1px solid rgb(var(--v-theme-outline-variant));
 }
 .tmj-form__row--opening {
-  grid-template-columns: minmax(0, 1fr) 152px;
+  grid-template-columns: minmax(0, 1fr) 192px;
 }
 .tmj-form__label {
   font-size: 0.875rem;

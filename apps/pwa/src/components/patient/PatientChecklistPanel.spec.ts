@@ -155,7 +155,7 @@ describe("PatientChecklistPanel — the Estudios checklist", () => {
       "1 of 3 sections complete",
       "Polysomnography",
     ]);
-    expect(hcTile(wrapper).findAll("[role='tab']").map((tab) => tab.text())).toEqual(["Medical history", "STOP-Bang questionnaire", "Oral cavity exam"]);
+    expect(hcTile(wrapper).findAll("[role='tab']").map((tab) => tab.text())).toEqual(["History", "STOP-Bang", "Oral exam"]);
     expect(wrapper.text()).toContain("1 of 6 done");
   });
 
@@ -174,10 +174,10 @@ describe("PatientChecklistPanel — the Estudios checklist", () => {
     const wrapper = await mountPanel({ category: "document" });
     const tile = hcTile(wrapper);
     expect(tile.find("[data-testid='hc-progress']").text()).toBe("1 of 3 sections complete");
-    expect(tile.find("[role='tab'][aria-selected='true']").text()).toContain("STOP-Bang questionnaire");
+    expect(tile.find("[role='tab'][aria-selected='true']").text()).toContain("STOP-Bang");
     expect(button(tile, "Print clinical history")).toBeTruthy();
     const oralExam = await openTab(wrapper, "oralExam");
-    expect(oralExam.find("[role='tab'][aria-selected='true']").text()).toContain("Oral cavity exam");
+    expect(oralExam.find("[role='tab'][aria-selected='true']").text()).toContain("Oral exam");
     expect(button(oralExam, "Fill in")).toBeTruthy();
   });
 

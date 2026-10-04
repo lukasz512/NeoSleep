@@ -118,6 +118,12 @@ table.checklist td.q-answer { width: 160px; padding-right: 0; text-align: right;
    look the same in every template; only the result zones below restyle them. */
 table.checklist td.q-answer .choice { font-size: 9pt; }
 
+/* ATM evaluation (NEO-231): a tick-box per side under its own column heading. */
+table.checklist.tmj th { padding: 4px 0; font-size: 8pt; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--primary); text-align: left; }
+table.checklist.tmj th.tmj-side,
+table.checklist.tmj td.q-answer { width: 110px; text-align: center; }
+table.checklist.tmj td.q-answer[colspan] { width: auto; text-align: right; }
+
 /* Result (STOP-Bang score) — number, then the official risk zones as a choice row. */
 .doc-result {
   margin: 10px 0 0;

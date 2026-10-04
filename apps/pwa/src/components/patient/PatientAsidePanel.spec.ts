@@ -128,9 +128,8 @@ describe("PatientAsidePanel (NEO-153, NEO-203)", () => {
     ];
     const wrapper = await mountPanel();
     const rows = wrapper.findAll(".patient-aside__docs li");
-    expect(rows).toHaveLength(6);
-    expect(rows[0]!.text()).toBe("Informed consent");
-    expect(rows[1]!.text()).toBe("extra2");
+    // NEO-231 D2: the three Historia clínica sections + the printable HC are one row.
+    expect(rows.map((r) => r.text())).toEqual(["Informed consent", "extra2", "Clinical history · 3/3", "Polysomnography", "extra1"]);
     await rows[0]!.find("button").trigger("click");
     expect(wrapper.emitted("open-study")).toEqual([["informedConsent", "document"]]);
 
