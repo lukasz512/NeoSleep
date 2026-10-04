@@ -301,7 +301,7 @@
 
           <p class="text-subtitle2 mb-2 text-primary">{{ t("app.orthoApneaOrder.paso3.title") }}</p>
           <!-- NEO-225: two values only, so the same segmented switch as product / sequence type. -->
-          <div data-field="verticalDimension">
+          <div data-field="verticalDimension" class="oa-wizard__stepper-col">
             <p class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.form.verticalDimension") }}</p>
             <AppSegmentedTabs
               :model-value="order.verticalDimension.kind"
@@ -334,14 +334,14 @@
             </VCol>
           </VRow>
           <VRow class="mb-4">
-            <VCol cols="6" data-field="laterality">
+            <VCol cols="12" sm="6" data-field="laterality" class="oa-wizard__stepper-col">
               <p class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.form.laterality") }}<FieldTooltip :text="t('app.orthoApneaOrder.tooltip.laterality')" :image="TOOLTIP_IMG.laterality" :image-alt="t('app.orthoApneaOrder.form.laterality')" /></p>
-              <NumberStepperField v-model="order.laterality" :error="!!fieldError('laterality')" />
+              <NumberStepperField v-model="order.laterality" :error="!!fieldError('laterality')" class="oa-wizard__stepper" />
               <span v-if="fieldError('laterality')" class="oa-wizard__field-error">{{ fieldError("laterality") }}</span>
             </VCol>
-            <VCol cols="6" data-field="limitOpening">
+            <VCol cols="12" sm="6" data-field="limitOpening" class="oa-wizard__stepper-col">
               <p class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.form.limitOpening") }}<FieldTooltip :text="t('app.orthoApneaOrder.tooltip.limitOpening')" :image="TOOLTIP_IMG.limitOpening" :image-alt="t('app.orthoApneaOrder.form.limitOpening')" /></p>
-              <NumberStepperField v-model="order.limitOpening" :error="!!fieldError('limitOpening')" />
+              <NumberStepperField v-model="order.limitOpening" :error="!!fieldError('limitOpening')" class="oa-wizard__stepper" />
               <span v-if="fieldError('limitOpening')" class="oa-wizard__field-error">{{ fieldError("limitOpening") }}</span>
             </VCol>
           </VRow>
@@ -1232,8 +1232,25 @@ watch(
   text-align: right;
 }
 
-.oa-wizard__sp-field-input {
+/* One stepper size for SP, Lateralidad and Limitación de apertura (NEO-225):
+   −/+ and a box wide enough for "-3", and it fits a 320 px phone. */
+.oa-wizard__sp-field-input,
+.oa-wizard__stepper {
   width: 180px;
+  max-width: 100%;
+}
+
+/* Phone: one stepper per row, label and stepper centred like Paso 2. */
+@media (max-width: 599px) {
+  .oa-wizard__stepper-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .oa-wizard__stepper-col .oa-wizard__field-label {
+    justify-content: center;
+  }
 }
 
 /* Izquierda / diagram / Derecha side by side — matches OrthoApnea's own
