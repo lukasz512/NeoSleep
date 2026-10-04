@@ -1,4 +1,5 @@
 import { AppError, DatabaseError } from "../errors.js";
+import { DEPLOY_ENV } from "../env.js";
 import { withTenant, tenantSlugFromHost } from "./tenant.js";
 
 export interface AppConfig {
@@ -128,6 +129,7 @@ export async function updateAppConfig(updates: AppConfigUpdate): Promise<AppConf
     surface_color:        updates.surface_color        ?? current.surface_color,
     hero_container_style: updates.hero_container_style ?? current.hero_container_style,
     color_scheme:         updates.color_scheme         ?? current.color_scheme,
+    integrations:         updates.integrations         ?? current.integrations,
   };
   try {
     await withTenant(tenantSlugFromHost(""), async (client) => {
@@ -135,22 +137,25 @@ export async function updateAppConfig(updates: AppConfigUpdate): Promise<AppConf
         `UPDATE app_config SET
           primary_color = $1, secondary_color = $2, primary_color_dark = $3, secondary_color_dark = $4,
           border_radius = $5, logo_url = $6, surface_color = $7, hero_container_style = $8, color_scheme = $9,
+          integrations = $10,
           updated_at = now()
          WHERE id = (SELECT id FROM app_config LIMIT 1)`,
         [
           row.primary_color, row.secondary_color, row.primary_color_dark, row.secondary_color_dark,
           row.border_radius, row.logo_url, row.surface_color, row.hero_container_style, row.color_scheme,
+          JSON.stringify(row.integrations),
         ]
       );
       if (result.rowCount === 0) {
         await client.query(
           `INSERT INTO app_config
             (primary_color, secondary_color, primary_color_dark, secondary_color_dark,
-             border_radius, logo_url, surface_color, hero_container_style, color_scheme)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+             border_radius, logo_url, surface_color, hero_container_style, color_scheme, integrations)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
           [
             row.primary_color, row.secondary_color, row.primary_color_dark, row.secondary_color_dark,
             row.border_radius, row.logo_url, row.surface_color, row.hero_container_style, row.color_scheme,
+            JSON.stringify(row.integrations),
           ]
         );
       }
@@ -160,4 +165,55 @@ export async function updateAppConfig(updates: AppConfigUpdate): Promise<AppConf
     if (err instanceof AppError) throw err;
     throw new DatabaseError("updateAppConfig", err);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Lab-orders kill switch (NEO-210): integrations.labOrders.sendEnabled.
+//
+// Per-tenant, server-side only. Absent key → enabled, EXCEPT on prod, where
+// it defaults OFF until an admin turns it on himself after his own test
+// (Łukasz, 2026-10-04). Dev stays on by default because dev is used for live
+// tests now. An explicit value (either way) always wins over the default.
+// ---------------------------------------------------------------------------
+
+/** Test-only override of the prod/dev default rule, without touching the process-wide DEPLOY_ENV
+ *  constant (env.ts) that other, unrelated code also reads (e.g. the reconciliation env tag). */
+let deployEnvOverrideForTests: "dev" | "prod" | "local" | null = null;
+export function __setLabOrdersDeployEnvForTests(env: "dev" | "prod" | "local" | null): void {
+  deployEnvOverrideForTests = env;
+}
+
+export interface LabOrdersSendConfig {
+  /** The effective value, after the prod/dev default rule is applied. */
+  sendEnabled: boolean;
+  /** Whether `sendEnabled` came from an explicit app_config write, or the default rule. */
+  isExplicit: boolean;
+}
+
+function readLabOrdersSendEnabled(integrations: Record<string, unknown>): boolean | undefined {
+  const labOrders = integrations.labOrders;
+  if (!labOrders || typeof labOrders !== "object" || Array.isArray(labOrders)) return undefined;
+  const value = (labOrders as Record<string, unknown>).sendEnabled;
+  return typeof value === "boolean" ? value : undefined;
+}
+
+export async function getLabOrdersSendConfig(): Promise<LabOrdersSendConfig> {
+  const config = await getAppConfig();
+  const explicit = readLabOrdersSendEnabled(config.integrations);
+  if (explicit !== undefined) return { sendEnabled: explicit, isExplicit: true };
+  const deployEnv = deployEnvOverrideForTests ?? DEPLOY_ENV;
+  return { sendEnabled: deployEnv !== "prod", isExplicit: false };
+}
+
+/** Admin toggle (routes/deviceOrders.ts) — merges into `integrations` without touching its other keys. */
+export async function setLabOrdersSendEnabled(sendEnabled: boolean): Promise<LabOrdersSendConfig> {
+  const current = await getAppConfig();
+  const existingLabOrders = current.integrations.labOrders;
+  const existing =
+    existingLabOrders && typeof existingLabOrders === "object" && !Array.isArray(existingLabOrders)
+      ? (existingLabOrders as Record<string, unknown>)
+      : {};
+  const integrations = { ...current.integrations, labOrders: { ...existing, sendEnabled } };
+  await updateAppConfig({ integrations });
+  return { sendEnabled, isExplicit: true };
 }

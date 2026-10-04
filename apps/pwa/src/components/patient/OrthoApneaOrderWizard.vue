@@ -34,6 +34,9 @@
 
         <!-- Step 1 — Envío: who orders, and (read-only) where it ships: the doctor's primary HCO. -->
         <div v-if="step === 1">
+          <AppInlineAlert v-if="labOrdersDisabledMessage" type="warning" class="mb-4" data-testid="lab-orders-disabled">
+            {{ labOrdersDisabledMessage }}
+          </AppInlineAlert>
           <div data-field="dentistId">
             <VAutocomplete
               :model-value="order.dentistId || null"
@@ -82,6 +85,10 @@
 
         <!-- Step 2 — Datos de construcción -->
         <div v-else-if="step === 2">
+          <!-- A doctor has no step 1, so the kill-switch notice shows here instead (NEO-210). -->
+          <AppInlineAlert v-if="isDoctor && labOrdersDisabledMessage" type="warning" class="mb-4" data-testid="lab-orders-disabled">
+            {{ labOrdersDisabledMessage }}
+          </AppInlineAlert>
           <!-- A doctor has no step 1: a problem with their clinic's address shows here, with whom to contact (NEO-210). -->
           <div v-if="isDoctor && doctorDeliveryMessage" data-field="delivery" class="mb-4">
             <AppInlineAlert type="error" :title="t('app.deviceOrder.delivery.doctorTitle')" data-testid="doctor-address-error">
@@ -433,6 +440,9 @@
         <!-- Review. "¿Cuándo desea el producto?" stays hidden: it defaults to OA's
              earliest date for the product (context.minDesiredDate). -->
         <div v-else-if="step === 4">
+          <AppInlineAlert v-if="labOrdersDisabledMessage" type="warning" class="mb-4" data-testid="lab-orders-disabled">
+            {{ labOrdersDisabledMessage }}
+          </AppInlineAlert>
           <VCheckbox v-model="order.noContactDoctorForRedesign" color="primary" :label="t('app.orthoApneaOrder.form.noContactDoctorForRedesign')" />
         </div>
       </div>
@@ -661,6 +671,7 @@ const {
   deliveryOrganizationId,
   submitLoading,
   serverIssues,
+  labOrdersDisabled,
   validation,
   deliveryIssues,
   setSequenceType,
@@ -803,6 +814,16 @@ watch(() => [order.dentistId, order.productCode, deliveryOrganizationId.value], 
   serverIssues.value = serverIssues.value.filter((i) => !isDeliveryPath(i.path));
   refreshContext();
 });
+
+/**
+ * NEO-210: the tenant's kill switch. Known ahead of time from the context
+ * call (`context.sendEnabled`) so the doctor sees it before filling anything;
+ * `labOrdersDisabled` covers it turning off mid-session (the 409 on Confirm).
+ * Never names the lab.
+ */
+const labOrdersDisabledMessage = computed(() =>
+  labOrdersDisabled.value || context.value?.sendEnabled === false ? t("app.orthoApneaOrder.labOrdersDisabled") : undefined,
+);
 
 const deliveryMessage = computed(() => {
   const issues = deliveryIssues.value;

@@ -29,7 +29,8 @@ import { buildContext, type TenantContext } from "../context/TenantContext.js";
 import { getViewer, requirePatientInScope, requirePractitionerInScope } from "../queries/entityAccess.js";
 import { getDeviceOrderProvider } from "../services/deviceOrders/index.js";
 import { notify } from "../notifications/notify.js";
-import { ForbiddenError, NotFoundError } from "../errors.js";
+import { ForbiddenError, LabOrdersDisabledError, NotFoundError } from "../errors.js";
+import { getLabOrdersSendConfig, setLabOrdersSendEnabled } from "../db/config.js";
 import { requireRole } from "../middleware/requireRole.js";
 import { requireReconciliationJobSecret } from "../middleware/requireInternalJobSecret.js";
 import { getLatestReconciliationRun, listReconciliationRuns } from "../db/deviceOrderReconciliation.js";
@@ -158,6 +159,9 @@ deviceOrdersRouter.get(
       return { dentistId, isAdmin: ctx.user.role === "admin", ...(await resolveDelivery(ctx, dentistId, chosen)) };
     });
     const minDesiredDate = await getDeviceOrderProvider().minDesiredDate(productCode);
+    // Read-only: the wizard shows this before the doctor fills anything, so the kill
+    // switch itself is never asked to the lab — it's purely our own app_config (NEO-210).
+    const { sendEnabled } = await getLabOrdersSendConfig();
 
     res.json({
       // The doctor the order is for — the caller's own practitioner record when they are a doctor.
@@ -169,6 +173,8 @@ deviceOrdersRouter.get(
       ...(isAdmin ? { deliveryOptions: options } : {}),
       minDesiredDate,
       rulesVersion: RULES_VERSION,
+      // Per-tenant kill switch (NEO-210): false means the wizard's Confirm will 409.
+      sendEnabled,
     });
   })
 );
@@ -196,6 +202,12 @@ deviceOrdersRouter.post(
       sendValidationError(res, idIssues);
       return;
     }
+
+    // Kill switch (NEO-210): checked before the provider is even obtained, so a
+    // disabled tenant makes zero network calls to the lab — not even the
+    // minDesiredDate read a few lines down.
+    const { sendEnabled } = await getLabOrdersSendConfig();
+    if (!sendEnabled) throw new LabOrdersDisabledError();
 
     const provider = getDeviceOrderProvider();
     const rawOrder = body.order;
@@ -376,6 +388,55 @@ deviceOrdersRouter.get(
       return listReconciliationRuns(client, getDeviceOrderProvider().name, limit);
     });
     res.json({ items });
+  })
+);
+
+// ---------------------------------------------------------------------------
+// Lab-orders kill switch (NEO-210): admin reads/sets
+// app_config.integrations.labOrders.sendEnabled. "The lab" on screen, never
+// the partner's name. The three choke points that actually write to the lab
+// (POST /device-orders above, "ensure lab patient" and the notify-the-lab
+// email — both in routes/partners/orthoapnea-treatments.ts) read this same
+// config and 409 LAB_ORDERS_DISABLED before any network call when it's off.
+// ---------------------------------------------------------------------------
+
+// GET /api/v1/device-orders/lab-orders-config — admin only.
+deviceOrdersRouter.get(
+  "/device-orders/lab-orders-config",
+  requireRole("admin"),
+  asyncHandler(async (_req: Request, res: Response) => {
+    const config = await getLabOrdersSendConfig();
+    res.json({ ...config, environment: DEPLOY_ENV });
+  })
+);
+
+// PATCH /api/v1/device-orders/lab-orders-config — body: { sendEnabled: boolean }. Admin only, audited.
+deviceOrdersRouter.patch(
+  "/device-orders/lab-orders-config",
+  requireRole("admin"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const body = req.body as { sendEnabled?: unknown };
+    if (typeof body.sendEnabled !== "boolean") {
+      sendValidationError(res, [{ path: "sendEnabled", code: "invalid" }]);
+      return;
+    }
+    const slug = tenantSlugFromHost(req.hostname);
+    const before = await getLabOrdersSendConfig();
+    const config = await setLabOrdersSendEnabled(body.sendEnabled);
+    await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      await insertAuditLog(client, {
+        user_id: ctx.user.id,
+        action: "update",
+        entity_type: "AppConfig",
+        entity_id: "integrations.labOrders",
+        // LabOrdersSendConfig has no index signature; audit_log's columns are jsonb either way.
+        entity_before: { ...before } as Record<string, unknown>,
+        entity_after: { ...config } as Record<string, unknown>,
+        request_id: ctx.requestId,
+      });
+    });
+    res.json({ ...config, environment: DEPLOY_ENV });
   })
 );
 
