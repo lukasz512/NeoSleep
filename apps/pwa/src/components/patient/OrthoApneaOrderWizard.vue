@@ -172,11 +172,15 @@
 
           <VDivider class="my-5" />
 
+          <!-- Paso 2 is a size container: below 600 px of dialog width (phone, narrow
+               tablet) its blocks stack and centre (NEO-225). -->
+          <section class="oa-wizard__paso2">
           <p class="text-subtitle2 mb-3 text-primary">{{ t("app.orthoApneaOrder.paso2.title") }}</p>
 
           <!-- Starting Point: % or mm, whichever the doctor fills (the other is locked);
-               the order carries that one, the hint shows it in mm. The ruler sits beside
-               the steppers (under them in a narrow dialog) and can be dragged: a drag writes mm (NEO-225). -->
+               the order carries that one, the hint shows it in mm. Ruler 7 / steppers 5
+               when wide, steppers above the ruler when narrow; the ruler can be dragged:
+               a drag writes mm (NEO-225). -->
           <div data-field="startingPoint" class="oa-wizard__sp">
             <div class="oa-wizard__sp-header">
               <span class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.form.startingPointHeader") }}</span>
@@ -214,8 +218,11 @@
                     @update:model-value="(v) => setStartingPoint('mm', v)"
                   />
                 </div>
-                <span v-if="spHint" class="text-body-small text-medium-emphasis" data-testid="sp-hint">{{ spHint }}</span>
-                <span v-if="fieldError('startingPoint')" class="oa-wizard__field-error">{{ fieldError("startingPoint") }}</span>
+                <!-- One line of reserved height: the hint or error fills it, the layout never jumps. -->
+                <div class="oa-wizard__sp-message" data-testid="sp-message" aria-live="polite">
+                  <span v-if="fieldError('startingPoint')" class="oa-wizard__field-error">{{ fieldError("startingPoint") }}</span>
+                  <span v-else-if="spHint" class="text-body-small text-medium-emphasis" data-testid="sp-hint">{{ spHint }}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -303,39 +310,53 @@
             :details="t('app.orthoApneaOrder.tooltip.morningAligner')"
             :image="TOOLTIP_IMG.morningAligner"
           />
+          </section>
 
           <VDivider class="my-5" />
 
           <p class="text-subtitle2 mb-2 text-primary">{{ t("app.orthoApneaOrder.paso3.title") }}</p>
-          <VSelect
-            :model-value="order.verticalDimension.kind"
-            :items="verticalDimensionOptions"
-            item-title="title"
-            item-value="value"
-            :label="t('app.orthoApneaOrder.form.verticalDimension')"
-            variant="outlined"
-            density="comfortable"
-            @update:model-value="onVerticalDimensionPicked"
-          />
+          <!-- NEO-225: two values only, so the same segmented switch as product / sequence type. -->
+          <div data-field="verticalDimension" class="oa-wizard__stepper-col">
+            <p class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.form.verticalDimension") }}</p>
+            <AppSegmentedTabs
+              :model-value="order.verticalDimension.kind"
+              :options="verticalDimensionOptions"
+              fit
+              class="oa-wizard__switch"
+              @update:model-value="onVerticalDimensionPicked"
+            />
+          </div>
+          <!-- Design options as photo cards (NEO-225), like Morning Aligner. OA shows these
+               with a photo only, so the cards carry no description text. -->
+          <VRow class="mt-2 mb-4" dense>
+            <VCol cols="12" sm="6">
+              <AddonCard
+                v-model="order.anteriorFrontalOpening"
+                data-field="anteriorFrontalOpening"
+                :title="t('app.orthoApneaOrder.form.anteriorFrontalOpening')"
+                :image="TOOLTIP_IMG.anteriorFrontalOpening"
+                :show-added="false"
+              />
+            </VCol>
+            <VCol cols="12" sm="6">
+              <AddonCard
+                v-model="order.slotsForElasticBands"
+                data-field="slotsForElasticBands"
+                :title="t('app.orthoApneaOrder.form.slotsForElasticBands')"
+                :image="TOOLTIP_IMG.slotsForElasticBands"
+                :show-added="false"
+              />
+            </VCol>
+          </VRow>
           <VRow class="mb-4">
-            <VCol cols="6" class="d-flex align-center">
-              <VCheckbox v-model="order.anteriorFrontalOpening" color="primary" :label="t('app.orthoApneaOrder.form.anteriorFrontalOpening')" hide-details density="compact" />
-              <!-- Image-only on the real site — no explanatory text exists to translate. -->
-              <FieldTooltip :image="TOOLTIP_IMG.anteriorFrontalOpening" :image-alt="t('app.orthoApneaOrder.form.anteriorFrontalOpening')" />
-            </VCol>
-            <VCol cols="6" class="d-flex align-center">
-              <VCheckbox v-model="order.slotsForElasticBands" color="primary" :label="t('app.orthoApneaOrder.form.slotsForElasticBands')" hide-details density="compact" />
-              <!-- Image-only on the real site — no explanatory text exists to translate. -->
-              <FieldTooltip :image="TOOLTIP_IMG.slotsForElasticBands" :image-alt="t('app.orthoApneaOrder.form.slotsForElasticBands')" />
-            </VCol>
-            <VCol cols="6" data-field="laterality">
+            <VCol cols="12" sm="6" data-field="laterality" class="oa-wizard__stepper-col">
               <p class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.form.laterality") }}<FieldTooltip :text="t('app.orthoApneaOrder.tooltip.laterality')" :image="TOOLTIP_IMG.laterality" :image-alt="t('app.orthoApneaOrder.form.laterality')" /></p>
-              <NumberStepperField v-model="order.laterality" :error="!!fieldError('laterality')" />
+              <NumberStepperField v-model="order.laterality" :error="!!fieldError('laterality')" class="oa-wizard__stepper" />
               <span v-if="fieldError('laterality')" class="oa-wizard__field-error">{{ fieldError("laterality") }}</span>
             </VCol>
-            <VCol cols="6" data-field="limitOpening">
+            <VCol cols="12" sm="6" data-field="limitOpening" class="oa-wizard__stepper-col">
               <p class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.form.limitOpening") }}<FieldTooltip :text="t('app.orthoApneaOrder.tooltip.limitOpening')" :image="TOOLTIP_IMG.limitOpening" :image-alt="t('app.orthoApneaOrder.form.limitOpening')" /></p>
-              <NumberStepperField v-model="order.limitOpening" :error="!!fieldError('limitOpening')" />
+              <NumberStepperField v-model="order.limitOpening" :error="!!fieldError('limitOpening')" class="oa-wizard__stepper" />
               <span v-if="fieldError('limitOpening')" class="oa-wizard__field-error">{{ fieldError("limitOpening") }}</span>
             </VCol>
           </VRow>
@@ -546,8 +567,8 @@ const finishOptions = computed<IconOption[]>(() => [
 ]);
 
 const verticalDimensionOptions = computed(() => [
-  { title: t("app.deviceOrder.verticalDimension.minimal"), value: "minimal" },
-  { title: t("app.deviceOrder.verticalDimension.registro"), value: "registro" },
+  { label: t("app.deviceOrder.verticalDimension.minimal"), value: "minimal" },
+  { label: t("app.deviceOrder.verticalDimension.registro"), value: "registro" },
 ]);
 
 /** OrthoApnea's own tooltip images (see assets/orthoapnea/tooltips/ and docs/orthoapnea-wizard-fidelity.md). */
@@ -1144,35 +1165,76 @@ watch(
   margin-bottom: 8px;
 }
 
-/* NEO-225: ruler beside the steppers, so no empty band above it; a narrow
-   dialog (phone) stacks the steppers first, the ruler full width under them. */
-.oa-wizard__sp {
+/* NEO-225: Paso 2 sizes itself by the dialog, not the viewport (a tablet
+   dialog can be narrower than a desktop one). Narrow (< 600 px): steppers
+   centred above a full-width ruler, % and mm side by side when they fit, the
+   rest of the section centred too. Wide: ruler 7 / steppers 5. */
+.oa-wizard__paso2 {
   container-type: inline-size;
 }
 
 .oa-wizard__sp-body {
-  display: flex;
-  align-items: center;
-  gap: 24px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
 }
 
 .oa-wizard__sp-ruler {
-  flex: 1;
-  min-width: 0;
+  order: 2;
 }
 
 .oa-wizard__sp-fields {
+  order: 1;
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  flex: none;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 24px;
 }
 
-@container (max-width: 520px) {
+/* Fixed height, so a hint or error appearing never moves what is below. */
+.oa-wizard__sp-message {
+  flex-basis: 100%;
+  min-height: 18px;
+  text-align: center;
+}
+
+.oa-wizard__sp-message .oa-wizard__field-error {
+  margin-top: 0;
+}
+
+@container (min-width: 600px) {
   .oa-wizard__sp-body {
-    flex-direction: column-reverse;
-    align-items: stretch;
-    gap: 4px;
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    align-items: center;
+    gap: 24px;
+  }
+
+  .oa-wizard__sp-ruler {
+    order: 1;
+  }
+
+  .oa-wizard__sp-fields {
+    order: 2;
+    flex-direction: column;
+    align-items: center;
+    flex-wrap: nowrap;
+  }
+}
+
+@container (max-width: 599px) {
+  .oa-wizard__paso2 > .text-subtitle2,
+  .oa-wizard__sp-header,
+  .oa-wizard__paso2 [data-testid="sequence"] > .d-flex {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .oa-wizard__paso2 .oa-wizard__switch {
+    margin-inline: auto;
+  }
+
+  .oa-wizard__paso2 .oa-wizard__seq-row {
+    justify-content: center;
   }
 }
 
@@ -1207,8 +1269,25 @@ watch(
   text-align: right;
 }
 
-.oa-wizard__sp-field-input {
+/* One stepper size for SP, Lateralidad and Limitación de apertura (NEO-225):
+   −/+ and a box wide enough for "-3", and it fits a 320 px phone. */
+.oa-wizard__sp-field-input,
+.oa-wizard__stepper {
   width: 180px;
+  max-width: 100%;
+}
+
+/* Phone: one stepper per row, label and stepper centred like Paso 2. */
+@media (max-width: 599px) {
+  .oa-wizard__stepper-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .oa-wizard__stepper-col .oa-wizard__field-label {
+    justify-content: center;
+  }
 }
 
 /* Izquierda / diagram / Derecha side by side — matches OrthoApnea's own

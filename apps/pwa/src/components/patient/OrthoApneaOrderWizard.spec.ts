@@ -437,6 +437,35 @@ describe("OrthoApneaOrderWizard — step 2: shared rules and the sequence switch
     expect(document.querySelector("[data-testid=sp-hint]")).toBeNull();
   });
 
+  it("the SP message line is always there, so a hint or error never pushes the layout — NEO-225", async () => {
+    stubBackend();
+    await openWizard();
+    await fillStep2();
+    expect($("[data-testid=sp-message]").textContent?.trim()).toBe("");
+    await type("[data-testid=sp-mm]", "");
+    await type("[data-testid=sp-percent]", "50");
+    expect($("[data-testid=sp-message] [data-testid=sp-hint]").textContent).toBe(msg("app.deviceOrder.startingPointMmHint", { mm: 2 }));
+  });
+
+  it("Paso 3: Dimensión vertical is a two-option switch, Apertura frontal / Ganchos are photo cards — all reach the order (NEO-225)", async () => {
+    stubBackend();
+    await openWizard();
+    await fillStep2();
+    await click(tab('[data-field="verticalDimension"]', "app.deviceOrder.verticalDimension.minimal"));
+    for (const field of ["anteriorFrontalOpening", "slotsForElasticBands"]) {
+      expect($(`[data-field="${field}"] [data-testid=addon-photo]`)).toBeTruthy();
+      ($(`[data-field="${field}"] [data-testid=addon-switch] input`) as HTMLInputElement).click();
+    }
+    await flushPromises();
+    await next();
+    await next();
+    await confirm();
+
+    const order = apiFetch.mock.calls.find((c) => c[0] === "/api/v1/device-orders")!;
+    const body = JSON.parse(String((order[1] as RequestInit).body)) as { order: Record<string, unknown> };
+    expect(body.order).toMatchObject({ verticalDimension: { kind: "minimal" }, anteriorFrontalOpening: true, slotsForElasticBands: true });
+  });
+
   it("Estándar is the default and shows SP, -1, 1, 2 read-only in mm", async () => {
     stubBackend();
     await openWizard();

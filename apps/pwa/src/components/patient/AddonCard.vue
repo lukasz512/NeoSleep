@@ -6,9 +6,9 @@
     </button>
     <div class="addon-card__body">
       <span class="addon-card__title">{{ title }}</span>
-      <span class="addon-card__description">{{ description }}</span>
+      <span v-if="description" class="addon-card__description">{{ description }}</span>
       <Transition name="addon-card__chip">
-        <span v-if="modelValue" class="addon-card__chip" data-testid="addon-added">
+        <span v-if="modelValue && showAdded" class="addon-card__chip" data-testid="addon-added">
           <AppIcon name="check" class="addon-card__chip-icon" />{{ t("app.deviceOrder.addon.added") }}
         </span>
       </Transition>
@@ -32,7 +32,7 @@
       <!-- No actions row under it, so the body needs its own bottom breathing room. -->
       <div data-testid="addon-lightbox" class="pb-4">
         <img :src="image" :alt="title" class="addon-card__lightbox-img" @click="lightbox = false" />
-        <p class="text-body-2 mt-4 mb-0">{{ details }}</p>
+        <p v-if="details" class="text-body-2 mt-4 mb-0">{{ details }}</p>
       </div>
     </AppFormDialog>
   </div>
@@ -45,19 +45,26 @@ import AppFormDialog from "../AppFormDialog.vue";
 import AppIcon from "../AppIcon.vue";
 
 /**
- * An add-on to a device order (Morning Aligner, NEO-225): photo, short text
- * and a switch. Tapping the photo opens it large with the full description
- * (Esc, X or a tap on the photo closes it); tapping anywhere else toggles.
+ * An on/off choice on a device order shown with its photo (NEO-225): the
+ * Morning Aligner add-on, and Paso 3's Apertura frontal / Ganchos options.
+ * Tapping the photo opens it large with the full description (Esc, X or a tap
+ * on the photo closes it); tapping anywhere else toggles. OA explains some
+ * options with a photo only, so both texts are optional — none is invented.
  */
-const props = defineProps<{
-  modelValue: boolean;
-  title: string;
-  /** One line on the card. */
-  description: string;
-  /** Full text, shown under the large photo. */
-  details: string;
-  image: string;
-}>();
+const props = withDefaults(
+  defineProps<{
+    modelValue: boolean;
+    title: string;
+    /** One line on the card. */
+    description?: string;
+    /** Full text, shown under the large photo. */
+    details?: string;
+    image: string;
+    /** "Added to the order" chip when on — for add-ons, not for design options. */
+    showAdded?: boolean;
+  }>(),
+  { description: "", details: "", showAdded: true },
+);
 
 const emit = defineEmits<{ "update:modelValue": [value: boolean] }>();
 
