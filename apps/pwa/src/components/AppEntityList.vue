@@ -571,8 +571,8 @@ function playOverlay(direction: "open" | "close"): Promise<void> {
   }
   const r = row.getBoundingClientRect();
   const s = slot.getBoundingClientRect();
-  const icon = `inset(0px ${Math.max(0, r.right - s.right)}px 0px ${Math.max(0, s.left - r.left)}px round 24px)`;
-  const full = "inset(0px 0px 0px 0px round 24px)";
+  const icon = `inset(0px ${Math.max(0, r.right - s.right)}px 0px ${Math.max(0, s.left - r.left)}px round 14px)`;
+  const full = "inset(0px 0px 0px 0px round 14px)";
   const frames = direction === "open" ? [{ clipPath: icon }, { clipPath: full }] : [{ clipPath: full }, { clipPath: icon }];
   const animation = field.animate(frames, { duration: direction === "open" ? 320 : 240, easing: OVERLAY_EASE });
   return animation.finished.then(() => undefined, () => undefined);
