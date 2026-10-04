@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mount, flushPromises } from "@vue/test-utils";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { mount, flushPromises, enableAutoUnmount } from "@vue/test-utils";
 import { createI18n } from "vue-i18n";
 import en from "@i18n/en.json";
 
@@ -10,6 +10,7 @@ vi.mock("../../composables/useApi", async (importOriginal) => ({
 }));
 
 import PatientTmjCard from "./PatientTmjCard.vue";
+import { CHECKLIST_UPDATED } from "../../composables/usePatientChecklist";
 
 /** NEO-237 D1: the latest ATM evaluation on Detalles → Clínico, read-only, opening its tab on click. */
 const json = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as Response;
@@ -26,6 +27,7 @@ const mountCard = async () => {
 };
 
 describe("PatientTmjCard", () => {
+  enableAutoUnmount(afterEach);
   beforeEach(() => apiFetch.mockReset());
 
   it("shows the latest ATM evaluation: findings per side, the opening, the date and a lit skull", async () => {
@@ -52,5 +54,21 @@ describe("PatientTmjCard", () => {
     const wrapper = await mountCard();
     await wrapper.find("[data-testid='tmj-card']").trigger("click");
     expect(wrapper.emitted("open")).toEqual([[]]);
+  });
+
+  it("re-reads after a clinical record is saved for this patient, not for another one (NEO-240)", async () => {
+    apiFetch.mockResolvedValue(json({ records: [], pending_requests: [] }));
+    const wrapper = await mountCard();
+    expect(wrapper.text()).toContain("No TMJ evaluation yet");
+
+    apiFetch.mockResolvedValue(json({ records: [tmj()], pending_requests: [] }));
+    window.dispatchEvent(new CustomEvent(CHECKLIST_UPDATED, { detail: { patientId: "p-2", version: "v2" } }));
+    await flushPromises();
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+
+    window.dispatchEvent(new CustomEvent(CHECKLIST_UPDATED, { detail: { patientId: "p-1", version: "v2" } }));
+    await flushPromises();
+    expect(apiFetch).toHaveBeenCalledTimes(2);
+    expect(wrapper.text()).toContain("38 mm");
   });
 });
