@@ -100,6 +100,16 @@ export async function listCachedRecords(entity: CacheableEntity): Promise<Record
   return all.map((r) => r.value);
 }
 
+/**
+ * IndexedDB's put() structured-clones its value and rejects Vue reactive
+ * proxies ("could not be cloned"), which is what detail views hand us
+ * (`ref.value`). Cached records come from JSON API responses, so a JSON
+ * round-trip yields an equal, proxy-free copy at any depth.
+ */
+export function toStorable(value: Record<string, unknown>): Record<string, unknown> {
+  return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
+}
+
 export async function upsertCachedRecord(
   entity: CacheableEntity,
   id: string,
@@ -107,7 +117,7 @@ export async function upsertCachedRecord(
 ): Promise<void> {
   if (!dbPromise) return;
   const db = await dbPromise;
-  await db.put(entity, { value, cachedAt: Date.now() } satisfies CachedRecord, id);
+  await db.put(entity, { value: toStorable(value), cachedAt: Date.now() } satisfies CachedRecord, id);
 }
 
 /** Bulk write for list responses. Records missing `idKey` are skipped — nothing stable to key them by. */
@@ -124,7 +134,7 @@ export async function upsertCachedRecords(
     ...records
       .filter((value) => value[idKey] != null)
       .map((value) =>
-        tx.store.put({ value, cachedAt: now } satisfies CachedRecord, String(value[idKey])),
+        tx.store.put({ value: toStorable(value), cachedAt: now } satisfies CachedRecord, String(value[idKey])),
       ),
     tx.done,
   ]);
