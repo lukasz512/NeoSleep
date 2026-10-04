@@ -60,7 +60,9 @@ describe("router guard: session-check budget on /login", () => {
     pending.resolve(true);
     vi.useRealTimers();
 
-    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe("/patients"));
+    // The redirect lazy-loads the target view; on a loaded full-suite run
+    // that import alone can outlast waitFor's 1 s default.
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe("/patients"), { timeout: 10_000 });
   });
 
   it("still waits for a fast check and redirects an already-signed-in user straight away", async () => {
