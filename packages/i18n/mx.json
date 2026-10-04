@@ -2683,5 +2683,20 @@
   "app.clinical.email.status.failed": "Error",
   "app.clinical.email.status.suppressed": "Bloqueado",
   "app.clinical.email.status.complained": "Marcado como spam",
-  "app.clinical.email.rejected": "El servidor de correo rechazó esta dirección. Revisa el correo del paciente en el expediente."
+  "app.clinical.email.rejected": "El servidor de correo rechazó esta dirección. Revisa el correo del paciente en el expediente.",
+  "app.doctorPanel.label": "Tu día",
+  "app.doctorPanel.today.title": "Próximas citas",
+  "app.doctorPanel.today.day.today": "Hoy",
+  "app.doctorPanel.today.day.tomorrow": "Mañana",
+  "app.doctorPanel.today.empty": "Sin citas hoy ni mañana",
+  "app.doctorPanel.today.calendar": "Abrir calendario",
+  "app.doctorPanel.actions.title": "Requiere tu acción",
+  "app.doctorPanel.actions.empty": "Nada pendiente para ti",
+  "app.doctorPanel.actions.showAll": "Ver todo ({count})",
+  "app.doctorPanel.actions.showLess": "Ver menos",
+  "app.doctorPanel.actions.kind.results_to_interpret": "Resultados por interpretar",
+  "app.doctorPanel.actions.kind.cannot_attend": "No puede asistir, busca otra fecha",
+  "app.doctorPanel.actions.kind.plan_not_notified": "Plan no compartido con el paciente",
+  "app.doctorPanel.actions.kind.consent_missing": "Consentimiento sin firmar",
+  "app.doctorPanel.loadError": "No se pudo cargar tu panel"
 }

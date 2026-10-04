@@ -2683,5 +2683,20 @@
   "app.clinical.email.status.failed": "Błąd",
   "app.clinical.email.status.suppressed": "Zablokowany",
   "app.clinical.email.status.complained": "Oznaczony jako spam",
-  "app.clinical.email.rejected": "Serwer pocztowy odrzucił ten adres. Sprawdź e-mail pacjenta w karcie."
+  "app.clinical.email.rejected": "Serwer pocztowy odrzucił ten adres. Sprawdź e-mail pacjenta w karcie.",
+  "app.doctorPanel.label": "Twój dzień",
+  "app.doctorPanel.today.title": "Najbliższe wizyty",
+  "app.doctorPanel.today.day.today": "Dziś",
+  "app.doctorPanel.today.day.tomorrow": "Jutro",
+  "app.doctorPanel.today.empty": "Brak wizyt dziś i jutro",
+  "app.doctorPanel.today.calendar": "Otwórz kalendarz",
+  "app.doctorPanel.actions.title": "Wymaga Twojej akcji",
+  "app.doctorPanel.actions.empty": "Nic na Ciebie nie czeka",
+  "app.doctorPanel.actions.showAll": "Pokaż wszystkie ({count})",
+  "app.doctorPanel.actions.showLess": "Pokaż mniej",
+  "app.doctorPanel.actions.kind.results_to_interpret": "Wyniki do interpretacji",
+  "app.doctorPanel.actions.kind.cannot_attend": "Nie może przyjść, ustal nowy termin",
+  "app.doctorPanel.actions.kind.plan_not_notified": "Plan nieprzekazany pacjentowi",
+  "app.doctorPanel.actions.kind.consent_missing": "Brak podpisanej zgody",
+  "app.doctorPanel.loadError": "Nie udało się wczytać panelu"
 }

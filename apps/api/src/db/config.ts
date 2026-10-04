@@ -217,3 +217,32 @@ export async function setLabOrdersSendEnabled(sendEnabled: boolean): Promise<Lab
   await updateAppConfig({ integrations });
   return { sendEnabled, isExplicit: true };
 }
+
+// ---------------------------------------------------------------------------
+// Doctor Panel switch (NEO-233): integrations.features.doctorPanel.
+//
+// Same default rule as the lab-orders switch: absent → on in dev/local, off on
+// prod, so the tiles reach prod only when an admin turns them on (D2, 2026-10-04:
+// released together with tiles ③④). An explicit value always wins.
+// ---------------------------------------------------------------------------
+
+function readFeatures(integrations: Record<string, unknown>): Record<string, unknown> {
+  const features = integrations.features;
+  return features && typeof features === "object" && !Array.isArray(features) ? (features as Record<string, unknown>) : {};
+}
+
+export async function isDoctorPanelEnabled(): Promise<boolean> {
+  const { integrations } = await getAppConfig();
+  const explicit = readFeatures(integrations).doctorPanel;
+  if (typeof explicit === "boolean") return explicit;
+  return (deployEnvOverrideForTests ?? DEPLOY_ENV) !== "prod";
+}
+
+/** Explicit on/off; `null` removes the key so the dev/prod default applies again. */
+export async function setDoctorPanelEnabled(enabled: boolean | null): Promise<void> {
+  const current = await getAppConfig();
+  const features = { ...readFeatures(current.integrations) };
+  if (enabled === null) delete features.doctorPanel;
+  else features.doctorPanel = enabled;
+  await updateAppConfig({ integrations: { ...current.integrations, features } });
+}
