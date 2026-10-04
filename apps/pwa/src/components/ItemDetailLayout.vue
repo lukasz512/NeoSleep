@@ -664,9 +664,6 @@ defineEmits<{
   color: rgb(var(--v-theme-primary));
   text-decoration: none;
 }
-.view-item__card :deep(.view-item__link:hover) {
-  text-decoration: underline;
-}
 
 .view-item__card :deep(.view-item__empty) {
   color: rgba(var(--v-theme-on-surface), var(--v-disabled-opacity));
