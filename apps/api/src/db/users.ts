@@ -61,14 +61,17 @@ const USER_JOIN = `
   LEFT JOIN LATERAL (
     SELECT role, territory_id FROM user_roles WHERE user_id = u.id ORDER BY created_at ASC LIMIT 1
   ) ur ON true
-  LEFT JOIN territory st ON ur.territory_id = st.id`.trim();
+  LEFT JOIN territory st ON ur.territory_id = st.id
+  LEFT JOIN territory it ON i.territory_id = it.id`.trim();
 
+// country_code falls back to the user's own territory (NEO-226): a doctor
+// invited without one still gets their country's phone code and patient country.
 const USER_COLS = `
   u.id, u.identity_id, i.email, i.title AS salutation, i.first_name, i.last_name, i.phone,
   ${displayNameSql("i")} AS name,
   COALESCE(ur.role, 'rep') AS role,
   ur.territory_id AS scope_territory_id, st.name AS scope_territory_name, st.kind AS scope_territory_kind,
-  u.google_sub, i.region, i.country_code, i.language, i.territory_id, u.status, u.token_version,
+  u.google_sub, i.region, COALESCE(i.country_code, it.country_code) AS country_code, i.language, i.territory_id, u.status, u.token_version,
   (u.password_hash IS NOT NULL) AS has_password,
   u.created_at, u.updated_at`.trim();
 
