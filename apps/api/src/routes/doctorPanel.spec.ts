@@ -44,6 +44,10 @@ interface Fixture { patientId: string; studyId: string; planId: string; appointm
 
 const inDays = (days: number): Date => new Date(Date.now() + days * 86_400_000);
 
+/** Each fixture visit gets its own 2-hour slot: a doctor can't be double-booked (appointment_no_double_booking). */
+let slot = 0;
+const nextSlot = (): Date => new Date(inDays(2).getTime() + slot++ * 2 * 3_600_000);
+
 /** A patient with one of every waiting state: results received, an initiated plan, a "can't attend" visit, no consent. */
 async function waitingPatient(doc: Doctor | null, owner: Doctor): Promise<Fixture> {
   return withTenant(TENANT_SLUG, async (client) => {
@@ -51,7 +55,7 @@ async function waitingPatient(doc: Doctor | null, owner: Doctor): Promise<Fixtur
     const study = await insertSleepStudy(client, { patient_id: p.id, status: "results_received", results_received_at: new Date().toISOString() });
     const plan = await insertTreatmentPlan(client, { patient_id: p.id, sleep_study_id: study.id, type: "dental_appliance" });
     // Appointments always belong to a real practitioner; an unassigned patient's goes to `owner`.
-    const start = inDays(2 + Math.random());
+    const start = nextSlot();
     const appointment = await insertAppointment(client, {
       patient_id: p.id,
       practitioner_id: (doc ?? owner).practitionerId,
