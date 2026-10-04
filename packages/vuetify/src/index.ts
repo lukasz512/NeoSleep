@@ -27,6 +27,25 @@ export const vuetifyLocales: Record<"en" | "pl" | "mx", Record<string, unknown>>
 /** Vuetify 3's display breakpoints (px), kept on Vuetify 4 — see createNeoVuetify. */
 export const VUETIFY3_THRESHOLDS = { xs: 0, sm: 600, md: 960, lg: 1280, xl: 1920, xxl: 2560 } as const;
 
+/**
+ * Light-theme neutrals (NEO-236, "A · Graphite + deep teal"): white cards on
+ * a cool graphite page, near-black ink. Mirrored by the light tokens in the PWA's
+ * theme.scss (--pwa-bg, --pwa-border, --pwa-text…). The M3 roles (outline,
+ * surface-container-*) aren't in Vuetify's default palette since this
+ * project isn't on the `md3` blueprint.
+ */
+export const lightNeutrals = {
+  background:               "#E9EDEC",
+  surface:                  "#FFFFFF",
+  "on-background":          "#0E1615",
+  "on-surface":             "#0E1615",
+  outline:                  "#66726F",
+  "outline-variant":        "#C5CFCC",
+  "surface-container-low":  "#F3F5F4",
+  "surface-container":      "#EDF0EF",
+  "surface-container-high": "#E6EAE9",
+} as const;
+
 export interface NeoVuetifyColors {
   lightPrimary: string;
   lightPrimaryDarken: string;
@@ -93,17 +112,13 @@ export function createNeoVuetify(
           colors: {
             primary:            options.colors.lightPrimary,
             "primary-darken-1": options.colors.lightPrimaryDarken,
-            // Material 3 neutral roles, not yet part of Vuetify's own default
-            // palette (this project isn't on the `md3` blueprint). Values
-            // pick up the same grays already in use as --pwa-border /
-            // --pwa-bg-secondary (theme.scss) so existing borders/surfaces
-            // don't shift — only their semantic role (and CSS var name)
-            // becomes reusable M3 vocabulary for new components.
-            outline:                 "#79747E",
-            "outline-variant":       "#e0e0e0",
-            "surface-container-low":  "#f7f7f7",
-            "surface-container":      "#f2f2f2",
-            "surface-container-high": "#ececec",
+            ...lightNeutrals,
+          },
+          // Secondary text (Vuetify's medium emphasis) at 0.74 instead of
+          // 0.6 reads ~8:1 on the cream card instead of ~4.7:1 (NEO-236).
+          variables: {
+            "high-emphasis-opacity":   0.92,
+            "medium-emphasis-opacity": 0.74,
           },
         },
         [dark]: {

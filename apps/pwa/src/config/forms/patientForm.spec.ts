@@ -157,8 +157,18 @@ describe("patientFormFields", () => {
   it("carries the full existing field set (no fields dropped in the migration)", () => {
     expect(patientFormFields.map((f) => f.key)).toEqual([
       "salutation", "first_name", "last_name", "email", "phone", "gender", "date_of_birth",
-      "practitioner_id", "status", "region", "territory_id", "country_code", "ahi_baseline", "cpap_device", "medical_record",
+      "practitioner_id", "status", "region", "territory_id", "country_code", "ahi_baseline", "height_cm", "cpap_device", "medical_record",
     ]);
+  });
+
+  // NEO-231 D1 (Dra. Lorena): height is entered once, on the patient card — STOP-BANG takes it from here.
+  it("height is a clinical number field in cm: empty or 100–230 cm", () => {
+    const height = patientFormFields.find((f) => f.key === "height_cm")!;
+    expect(height).toMatchObject({ section: "clinical", type: "number", labelKey: "app.patients.form.heightCm" });
+    const rule = height.rules![0]!;
+    expect([rule(""), rule(null), rule(172.5)]).toEqual([true, true, true]);
+    expect(rule("90")).toBe("app.patients.form.heightCmRange");
+    expect(rule(231)).toBe("app.patients.form.heightCmRange");
   });
 
   // ADR-020's region-scoping fix (middleware/requireScope.ts) needs country_code

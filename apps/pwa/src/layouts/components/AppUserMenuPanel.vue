@@ -21,7 +21,18 @@
           <span v-if="region" class="user-menu__region" data-motion="extra">{{ region }}</span>
         </span>
       </div>
-      <VAvatar :size="avatarSize" color="primary" class="user-menu__avatar" data-motion="avatar">
+      <!-- CORE-114: a signed-in user's avatar carries their role badge. -->
+      <AppAvatar
+        v-if="role"
+        :name="name"
+        entity-type="user"
+        :role="role"
+        :role-label="roleLabel"
+        :size="avatarSize"
+        class="user-menu__avatar"
+        data-motion="avatar"
+      />
+      <VAvatar v-else :size="avatarSize" color="primary" class="user-menu__avatar" data-motion="avatar">
         <span class="text-body-medium font-weight-bold">{{ initials }}</span>
       </VAvatar>
     </div>
@@ -134,12 +145,15 @@ import type { ThemePreference } from "@stores";
 import { LANGUAGE_OPTIONS } from "@i18n/language-options";
 import AppIcon, { type AppIconName } from "../../components/AppIcon.vue";
 import AppFlag from "../../components/AppFlag.vue";
+import AppAvatar from "../../components/AppAvatar.vue";
 import { useInstallPrompt } from "../../composables/useInstallPrompt";
 
 withDefaults(defineProps<{
   name: string;
   email?: string;
   roleLabel: string;
+  /** users.role code — draws the role badge on the avatar (CORE-114). Absent for the patient on a QR link. */
+  role?: string | null;
   initials: string;
   /** Country code shown as a small tag next to the role (e.g. "MX"). */
   region?: string;
@@ -155,7 +169,7 @@ withDefaults(defineProps<{
   avatarSize?: number;
   /** Password / log out / install app — false for someone without an account (the patient on a QR link, NEO-126). */
   accountActions?: boolean;
-}>(), { email: undefined, region: undefined, avatarSize: 56, accountActions: true });
+}>(), { email: undefined, region: undefined, role: null, avatarSize: 56, accountActions: true });
 
 const emit = defineEmits<{
   "set-theme": [preference: ThemePreference];

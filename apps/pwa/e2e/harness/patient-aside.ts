@@ -39,11 +39,14 @@ const ITEMS = [
   item("medicalHistory", "patient", "done"),
   item("stopBang", "patient", done ? "done" : "missing"),
   item("oralExam", "doctor", "done", false),
+  item("tmjExam", "doctor", "missing", false),
   item("historiaEndo", "doctor", "done", false),
   item("polysomnography", "results", "done", false),
   // Tenant-defined extras (no i18n key): the admin manifest label is shown.
+  // Worst case stays 6+ rows although the Historia clínica sections fold into one row (NEO-231).
   item("titration", "results", "missing", false, "Titulación del dispositivo"),
   item("followUp", "results", "missing", false, "Poligrafía de control"),
+  item("cbct", "results", "missing", false, "Tomografía de vía aérea (CBCT)"),
 ];
 const NOTE = {
   id: "n1", entity_type: "patient", entity_id: "p-1", author_id: "u-1", author_name: "Dra. López", created_at: "2026-09-28T10:00:00Z",

@@ -1,7 +1,7 @@
 <template>
   <AppFormDialog
     :model-value="modelValue"
-    :max-width="kind === 'stop_bang' ? '880' : '640'"
+    :max-width="kind === 'stop_bang' || kind === 'tmj_exam' ? '880' : '640'"
     :title="t(KIND_LABEL_KEYS[kind])"
     @update:model-value="emit('update:modelValue', $event)"
     @close="emit('update:modelValue', false)"
@@ -31,15 +31,23 @@
           <VBtn v-for="cls in SKELETAL_CLASSES" :key="cls" :value="cls" size="small">{{ cls }}</VBtn>
         </VBtnToggle>
       </div>
-      <div class="clinical-dialog__row">
-        <span>{{ t("app.clinical.toothLabel") }}</span>
-        <strong v-if="readonly">{{ text.tooth || "—" }}</strong>
-        <VTextField v-else v-model="text.tooth" variant="outlined" density="compact" hide-details class="clinical-dialog__tooth" />
+      <!-- NEO-231: the ATM yes/no moved to its own tab; an older exam's answer stays readable. -->
+      <div v-if="readonly && record?.has_tmj_finding != null" class="clinical-dialog__row">
+        <span>{{ t(LEGACY_TMJ_QUESTION.labelKey) }}</span>
+        <strong>{{ record.has_tmj_finding ? t("app.common.yes") : t("app.common.no") }}</strong>
       </div>
     </template>
 
+    <TmjExamForm
+      v-else-if="kind === 'tmj_exam'"
+      v-model="tmjAnswers"
+      v-model:opening="tmjOpening"
+      :readonly="readonly"
+      :legacy-finding="legacyTmjFinding ?? null"
+    />
+
     <template v-else>
-      <StopBangForm v-model="answers" :measures="measures" :mode="mode" :record="record" :date-of-birth="dateOfBirth" :gender="gender" />
+      <StopBangForm v-model="answers" :measures="measures" :mode="mode" :record="record" :date-of-birth="dateOfBirth" :gender="gender" :height-cm="heightCm ?? null" />
       <p v-if="mode === 'create'" class="clinical-dialog__hint">{{ t("app.clinical.bangOptional") }}</p>
     </template>
 
@@ -68,6 +76,7 @@ import AppButton from "../AppButton.vue";
 import AppIcon from "../AppIcon.vue";
 import QuestionnaireChecklist from "./QuestionnaireChecklist.vue";
 import StopBangForm, { type StopBangMeasures } from "./StopBangForm.vue";
+import TmjExamForm from "./TmjExamForm.vue";
 import {
   MEDICAL_HISTORY_QUESTIONS,
   ORAL_EXAM_QUESTIONS,
@@ -75,6 +84,11 @@ import {
   BANG_QUESTIONS,
   SKELETAL_CLASSES,
   KIND_LABEL_KEYS,
+  LEGACY_TMJ_QUESTION,
+  TMJ_COLUMNS,
+  emptyTmjAnswers,
+  parseTmjOpening,
+  tmjAnswersValid,
   stopBangMeasuresValid,
   type ClinicalRecordKind,
   type QuestionDef,
@@ -82,7 +96,7 @@ import {
 import type { ChecklistRecord as ClinicalRecord } from "../../composables/usePatientChecklist";
 
 /**
- * One clinical questionnaire, three modes:
+ * One clinical questionnaire (medical history, oral exam, STOP-Bang, ATM), three modes:
  * - create: staff fill it in chairside
  * - view: read-only answers of a saved record (+ PDF)
  * - completeBang: a STOP-Bang whose S-T-O-P the patient self-reported —
@@ -98,6 +112,10 @@ const props = defineProps<{
   /** Patient's date of birth (YYYY-MM-DD) and sex — STOP-Bang works A and G out from them. */
   dateOfBirth?: string | null;
   gender?: string | null;
+  /** The patient card's height (NEO-231 D1) — STOP-Bang asks only the weight. */
+  heightCm?: number | null;
+  /** The latest oral exam's old ATM yes/no, shown under a new ATM evaluation. */
+  legacyTmjFinding?: boolean | null;
 }>();
 const emit = defineEmits<{
   "update:modelValue": [open: boolean];
@@ -107,11 +125,13 @@ const emit = defineEmits<{
 const { t, locale } = useI18n();
 
 const answers = ref<Record<string, boolean | null>>({});
-const text = reactive<{ medical_history_other: string; skeletal_class: string | null; tooth: string }>({
+const text = reactive<{ medical_history_other: string; skeletal_class: string | null }>({
   medical_history_other: "",
   skeletal_class: null,
-  tooth: "",
 });
+/** ATM evaluation (NEO-231 D3): a tick per finding and side, the opening as typed. */
+const tmjAnswers = ref<Record<string, boolean>>(emptyTmjAnswers());
+const tmjOpening = ref("");
 
 const readonly = computed(() => props.mode === "view");
 /** STOP-Bang measurements as typed (strings: "94,5" is a valid weight while typing). */
@@ -120,6 +140,7 @@ const measures = reactive<StopBangMeasures>({ height_cm: "", weight_kg: "", neck
 const questionsForKind = computed<QuestionDef[]>(() => {
   if (props.kind === "medical_history") return MEDICAL_HISTORY_QUESTIONS;
   if (props.kind === "oral_exam") return ORAL_EXAM_QUESTIONS;
+  if (props.kind === "tmj_exam") return [];
   return [...STOP_QUESTIONS, ...BANG_QUESTIONS];
 });
 
@@ -134,7 +155,9 @@ watch(
     );
     text.medical_history_other = (props.record?.medical_history_other as string | null) ?? "";
     text.skeletal_class = props.record?.skeletal_class ?? null;
-    text.tooth = (props.record?.tooth as string | null) ?? "";
+    const recordFields = source as Record<string, unknown>;
+    tmjAnswers.value = Object.fromEntries(TMJ_COLUMNS.map((key) => [key, recordFields[key] === true]));
+    tmjOpening.value = recordFields.max_opening_mm != null ? String(recordFields.max_opening_mm) : "";
     measures.height_cm = props.record?.height_cm != null ? String(props.record.height_cm) : "";
     measures.weight_kg = props.record?.weight_kg != null ? String(props.record.weight_kg) : "";
     measures.neck_cm = props.record?.neck_cm != null ? String(props.record.neck_cm) : "";
@@ -158,6 +181,7 @@ const canSave = computed(() => {
     // B-A-N-G: all or nothing — and required when completing.
     return stopDone && stopBangMeasuresValid(measures) && (props.mode === "completeBang" ? bangAnswered === 4 : bangAnswered === 0 || bangAnswered === 4);
   }
+  if (props.kind === "tmj_exam") return tmjAnswersValid(tmjAnswers.value, tmjOpening.value);
   const anyAnswer = Object.values(answers.value).some((v) => v != null);
   return anyAnswer || (props.kind === "medical_history" ? !!text.medical_history_other.trim() : !!text.skeletal_class);
 });
@@ -167,11 +191,15 @@ function onSave() {
     emit("save", { ...Object.fromEntries(BANG_QUESTIONS.map((q) => [q.key, answers.value[q.key]])), ...measurementPayload() });
     return;
   }
+  if (props.kind === "tmj_exam") {
+    const opening = parseTmjOpening(tmjOpening.value);
+    emit("save", { ...tmjAnswers.value, max_opening_mm: typeof opening === "number" ? opening : null });
+    return;
+  }
   const payload: Record<string, unknown> = { ...answers.value };
   if (props.kind === "medical_history") payload.medical_history_other = text.medical_history_other.trim() || null;
   if (props.kind === "oral_exam") {
     payload.skeletal_class = text.skeletal_class;
-    payload.tooth = text.tooth.trim() || null;
   }
   if (props.kind === "stop_bang") Object.assign(payload, measurementPayload());
   emit("save", payload);
@@ -209,9 +237,6 @@ function measurementPayload(): Record<string, string> {
   gap: 12px;
   padding: 8px 0;
   border-bottom: 1px solid rgb(var(--v-theme-outline-variant));
-}
-.clinical-dialog__tooth {
-  max-width: 120px;
 }
 .clinical-dialog__field {
   margin-top: 12px;

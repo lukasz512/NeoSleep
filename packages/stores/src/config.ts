@@ -35,6 +35,8 @@ export interface AppConfig {
   icon_dark_url: string | null;
   surface_color: string;
   color_scheme: "light" | "dark";
+  /** Tenant's role → avatar badge icon overrides (CORE-114, app_config.metadata.userRoleBadges). */
+  user_role_badges: Record<string, string>;
 }
 
 const defaults: AppConfig = {
@@ -49,7 +51,14 @@ const defaults: AppConfig = {
   icon_dark_url:      null,
   surface_color:      "#fafafa",
   color_scheme:       "light",
+  user_role_badges:   {},
 };
+
+/** Keeps only string values — the API passes this map through from a jsonb column. */
+function stringRecord(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).filter((e): e is [string, string] => typeof e[1] === "string"));
+}
 
 function normalizeHex(s: string | undefined | null): string | undefined {
   if (typeof s !== "string" || !s.trim()) return undefined;
@@ -98,6 +107,7 @@ export function createConfigStore(apiFetch: ApiFetchFn, applyI18nOverrides?: I18
           icon_dark_url:       data.icon_dark_url  ?? null,
           surface_color:       normalizeHex(data.surface_color)       ?? defaults.surface_color,
           color_scheme:        data.color_scheme === "dark" ? "dark" : "light",
+          user_role_badges:    stringRecord(data.user_role_badges),
         };
         useThemeStore().setTenantDefault(config.value.color_scheme);
         return config.value;

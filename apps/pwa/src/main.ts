@@ -1,4 +1,4 @@
-import { createApp } from "vue";
+import { computed, createApp } from "vue";
 import { createGtag } from "vue-gtag";
 import { createPinia } from "pinia";
 import App from "./App.vue";
@@ -18,6 +18,8 @@ import { setupOfflineCacheSession } from "./composables/useOfflineCacheSession";
 import { setupPrefsSession } from "./composables/usePrefsSession";
 import { apiFetch } from "./composables/useApi";
 import { authTokenStorage } from "./stores/auth";
+import { useConfigStore } from "./stores/config";
+import { USER_ROLE_BADGE_OVERRIDES } from "./utils/userRoleBadge";
 import { useNotifications } from "./composables/useNotifications";
 import { getApiUrl } from "./config/env";
 import { resolveInitialThemeMode, useMotionPreferenceStore, APP_VERSION_KEY } from "@stores";
@@ -97,6 +99,9 @@ app.provide(APP_VERSION_KEY, resolveAppVersion(import.meta.env));
 // notification without packages/ui depending on apps/pwa's useNotifications
 // module directly — same cross-package DI pattern as apiFetch/authTokenStorage.
 app.provide("neo:notify", useNotifications().show);
+// The tenant's role → avatar badge icons (CORE-114), read by AppAvatar.
+const configStore = useConfigStore();
+app.provide(USER_ROLE_BADGE_OVERRIDES, computed(() => configStore.config.user_role_badges));
 const gaId = import.meta.env.VITE_GA_ID as string | undefined;
 if (import.meta.env.PROD && gaId) {
   // The patient self-fill page is never tracked: its URL carries a live

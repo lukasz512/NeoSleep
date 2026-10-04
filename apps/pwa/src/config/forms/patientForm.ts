@@ -97,6 +97,13 @@ function dateOfBirthInRange(v: unknown): true | string {
   return v >= "1900-01-01" && v <= today ? true : "app.formRenderer.validation.server.date_of_birth";
 }
 
+/** Empty, or a plausible height (100–230 cm, migration 049's CHECK). */
+function heightCmRule(v: unknown): true | string {
+  if (v === null || v === undefined || String(v).trim() === "") return true;
+  const n = Number(String(v).replace(",", "."));
+  return (Number.isFinite(n) && n >= 100 && n <= 230) || "app.patients.form.heightCmRange";
+}
+
 const identity = identityFields();
 identity[0] = { ...identity[0], key: "salutation" };
 
@@ -257,6 +264,16 @@ export const patientFormFields: FormFieldDef[] = [
     type: "ahi",
     labelKey: "app.patients.form.ahiBaseline",
     cols: 12,
+  },
+  {
+    // NEO-231 D1 (Dra. Lorena): entered once here — STOP-BANG asks only the
+    // weight and takes the height from the card. Same range as the API.
+    key: "height_cm",
+    section: "clinical",
+    type: "number",
+    labelKey: "app.patients.form.heightCm",
+    rules: [heightCmRule],
+    cols: 6,
   },
   {
     // TEXT column presented as two tiles (NEO-228; was a switch): "CPAP" or ""

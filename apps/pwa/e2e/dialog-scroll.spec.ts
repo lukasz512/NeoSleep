@@ -119,10 +119,11 @@ for (const vp of VIEWPORTS) {
   }
 }
 
-test("dialog surfaces are white in the light theme, dark in the dark theme", async ({ page }) => {
+test("dialog surfaces are the white card in the light theme, dark in the dark theme", async ({ page }) => {
   for (const dialog of ["form", "event", "wizard", "confirm", "clinical"]) {
     await open(page, dialog, VIEWPORTS[0]);
     const bg = await page.locator(".v-dialog .v-card").first().evaluate((el) => getComputedStyle(el).backgroundColor);
+    // NEO-236: Vuetify light surface #FFFFFF.
     expect(bg, `${dialog} light`).toBe("rgb(255, 255, 255)");
   }
   await open(page, "form", VIEWPORTS[0], "dark");

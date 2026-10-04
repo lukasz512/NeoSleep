@@ -4,9 +4,10 @@
  * SCSS cannot import TypeScript, so values are duplicated here — update both together.
  */
 
-// Primary: brand teal (from brand/colors.ts → brandColors.primary)
-$pwa-brand-primary: #128F83;
-$pwa-brand-primary-hover: #10544E;
+// Primary: app UI teal (from brand/colors.ts → brandColors.appPrimary,
+// NEO-236). The logo keeps brandColors.primary.
+$pwa-brand-primary: #0B6B62;
+$pwa-brand-primary-hover: #08534C;
 $pwa-brand-primary-light: #8ED6CE;
 
 // Dark-mode primary (from brand/colors.ts → brandColors.primaryOnDark)

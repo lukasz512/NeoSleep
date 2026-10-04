@@ -8,9 +8,9 @@ import { harnessPort } from "./harnessPort";
  * Chromium only, on its own port so it never reuses a dev server from another
  * worktree (which would test different code). CI still runs the full suite in
  * three engines via playwright.config.ts.
- * The port is per worktree (CORE-126, harnessPort.ts); HARNESS_PORT overrides it.
+ * The port is per worktree (CORE-126, harnessPort.ts); E2E_HARNESS_PORT overrides it.
  */
-const PORT = Number(process.env.HARNESS_PORT) || harnessPort(fileURLToPath(new URL(".", import.meta.url)));
+const PORT = Number(process.env.E2E_HARNESS_PORT) || harnessPort(fileURLToPath(new URL(".", import.meta.url)));
 
 export default defineConfig({
   testDir: "./e2e",

@@ -34,8 +34,11 @@
        data-field q_<column>          — one per endo_intake checklist
                                           column, rendered as "Sí"/"No"/blank
                                           (blank = not yet answered)
-       data-field diente              — free-text tooth reference (optional)
      This pass also fills the medical_history_other free-text value.
+       data-field tmj_*               — the ATM evaluation (NEO-231), same
+                                          fields as tmjExam.html
+       data-field score / score_zone  — the latest STOP-Bang result, same
+                                          fields as stopBang.html
 
   Signatures (data-field firma_paciente / firma_doctor) are left empty on
   purpose — v1 is print-and-sign-on-paper only, per
@@ -112,7 +115,6 @@
     <div class="doc-field doc-field--short"><dt>{{documents.fieldBirthDate}}</dt><dd data-field="fecha_nacimiento"></dd></div>
     <div class="doc-field"><dt>{{documents.historiaEndo.fieldPractitioner}}</dt><dd data-field="nombre_medico"></dd></div>
     <div class="doc-field"><dt>{{documents.historiaEndo.fieldClinic}}</dt><dd data-field="nombre_clinica"></dd></div>
-    <div class="doc-field doc-field--tooth"><dt>{{documents.historiaEndo.fieldTooth}}</dt><dd data-field="diente"></dd></div>
     <div class="doc-field doc-field--short"><dt>{{documents.historiaEndo.fieldDate}}</dt><dd data-field="fecha"></dd></div>
   </dl>
 
@@ -145,8 +147,27 @@
     <tr><td>{{documents.historiaEndo.q.mouthBreather}}</td><td class="q-answer" data-field="q_is_mouth_breather"></td></tr>
     <tr><td>{{documents.historiaEndo.q.missingTeeth}}</td><td class="q-answer" data-field="q_has_missing_teeth"></td></tr>
     <tr><td>{{documents.historiaEndo.q.periodontalDisease}}</td><td class="q-answer" data-field="q_has_periodontal_disease"></td></tr>
-    <tr><td>{{documents.historiaEndo.q.tmjFinding}}</td><td class="q-answer" data-field="q_has_tmj_finding"></td></tr>
   </table>
+
+  <h3 class="doc-sec">{{documents.historiaEndo.sectionTmj}}</h3>
+  <table class="checklist tmj">
+    <tr><th>{{documents.tmjExam.colFinding}}</th><th class="tmj-side">{{documents.tmjExam.colRight}}</th><th class="tmj-side">{{documents.tmjExam.colLeft}}</th></tr>
+    <tr><td>{{documents.tmjExam.f.painPalpation}}</td><td class="q-answer" data-field="tmj_pain_palpation_right"></td><td class="q-answer" data-field="tmj_pain_palpation_left"></td></tr>
+    <tr><td>{{documents.tmjExam.f.jointSounds}}</td><td class="q-answer" data-field="tmj_joint_sounds_right"></td><td class="q-answer" data-field="tmj_joint_sounds_left"></td></tr>
+    <tr><td>{{documents.tmjExam.f.openingLimitation}}</td><td class="q-answer" data-field="tmj_opening_limitation_right"></td><td class="q-answer" data-field="tmj_opening_limitation_left"></td></tr>
+    <tr><td>{{documents.tmjExam.f.openingDeviation}}</td><td class="q-answer" data-field="tmj_opening_deviation_right"></td><td class="q-answer" data-field="tmj_opening_deviation_left"></td></tr>
+    <tr><td>{{documents.tmjExam.f.musclePain}}</td><td class="q-answer" data-field="tmj_muscle_pain_right"></td><td class="q-answer" data-field="tmj_muscle_pain_left"></td></tr>
+    <tr><td>{{documents.tmjExam.maxOpening}}</td><td class="q-answer" colspan="2" data-field="tmj_max_opening"></td></tr>
+  </table>
+
+  <h3 class="doc-sec">{{documents.historiaEndo.sectionStopBang}}</h3>
+  <div class="doc-result">
+    <div class="doc-result-top">
+      <span class="doc-result-label">{{documents.stopBang.scoreLabel}}</span>
+      <span class="doc-result-score" data-field="score"></span>
+    </div>
+    <div class="doc-result-zones" data-field="score_zone"></div>
+  </div>
 
   <h3 class="doc-sec">{{documents.historiaEndo.sectionNotCaptured}}</h3>
   <p style="font-size:8pt;color:var(--secondary);margin:0 0 6px;">{{documents.historiaEndo.sectionNotCapturedHint}}</p>
