@@ -1,0 +1,67 @@
+# Lab order status sync (CORE-67): every 15 minutes asks the API to read the
+# status of each open device order from the lab, update our rows, and notify the
+# dentist when a status changed (partner_order_status_changed, ADR-027).
+#
+# ONE target per tick, not a dev/prod matrix: both Cloud Run services share one
+# database (docs/RUNBOOK_API_CLOUD_RUN.md, "Limits"), so two calls in the same
+# minute would race on the same links and could notify the dentist twice. Prod is
+# called first (its notifications carry prod links); dev only when prod is not
+# reachable yet (API_URL_PROD unset or the endpoint answers 404).
+#
+# Secrets: API_URL_DEV / API_URL_PROD and INTERNAL_JOB_SECRET — the same value as
+# the APIs' INTERNAL_JOB_SECRET in Secret Manager (infrastructure/cloud-run/secrets.list).
+# A non-2xx answer or a tenant whose sync crashed fails the run (visible in Actions);
+# a single order the lab did not answer for is a warning, retried on the next tick.
+
+name: Lab order status sync (every 15 min)
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: orthoapnea-status-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Sync lab order statuses
+        env:
+          API_URL_DEV: ${{ secrets.API_URL_DEV }}
+          API_URL_PROD: ${{ secrets.API_URL_PROD }}
+          JOB_SECRET: ${{ secrets.INTERNAL_JOB_SECRET }}
+        run: |
+          if [ -z "$JOB_SECRET" ]; then
+            echo "::error::INTERNAL_JOB_SECRET not set in GitHub secrets."
+            exit 1
+          fi
+          call() {
+            curl -s -o result.json -w "%{http_code}" --max-time 300 -X POST \
+              -H "Authorization: Bearer $JOB_SECRET" -H "Content-Type: application/json" -d '{}' \
+              "$1/api/v1/partners/orthoapnea/jobs/sync-statuses"
+          }
+          target=prod
+          status=404
+          if [ -n "$API_URL_PROD" ]; then status=$(call "$API_URL_PROD"); fi
+          if [ "$status" = "404" ]; then
+            echo "::warning::prod not reachable for the sync (URL unset or 404) — using dev."
+            target=dev
+            if [ -z "$API_URL_DEV" ]; then echo "::error::API_URL_DEV not set."; exit 1; fi
+            status=$(call "$API_URL_DEV")
+          fi
+          echo "$target: HTTP $status"
+          jq '{checked, changed, failed, tenantsFailed}' result.json 2>/dev/null || cat result.json
+          [ "$status" = "200" ] || exit 1
+          failed=$(jq '.failed' result.json)
+          if [ "$failed" != "0" ]; then
+            echo "::warning::$target: the lab did not answer for $failed order(s) — retried next tick."
+          fi
+          # A tenant whose sync itself crashed is a failure of the job.
+          [ "$(jq '.tenantsFailed' result.json)" = "0" ]
