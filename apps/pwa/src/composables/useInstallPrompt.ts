@@ -13,7 +13,7 @@
  * those the card shows a short device-specific guide instead of a button.
  */
 import { computed, ref } from "vue";
-import { APP_STORAGE_KEYS } from "../constants";
+import { APP_STORAGE_KEYS } from "../config/storageKeys";
 
 /** Not in lib.dom.d.ts — Chromium-only, still a WICG draft. */
 interface BeforeInstallPromptEvent extends Event {

@@ -8,9 +8,9 @@
       "port": 5173
     },
     {
-      "name": "ajm-portfolio",
+      "name": "ajm-corporativo",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@ajm/portfolio", "dev"],
+      "runtimeArgs": ["--filter", "@ajm/corporativo", "dev"],
       "port": 5180
     }
   ]

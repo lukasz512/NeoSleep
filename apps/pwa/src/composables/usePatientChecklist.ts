@@ -19,6 +19,10 @@ import type { ClinicalRecordKind } from "../config/questionnaires";
 
 export type ChecklistStatus = "missing" | "pending_patient" | "partial" | "done";
 export type ChecklistGroup = "consent" | "patient" | "doctor" | "results";
+/** Which patient tab an item lives in (NEO-193) — Documentos ("document") or Estudios ("study"); the API decides. */
+export type ChecklistCategory = "document" | "study";
+/** The patient-detail tab that shows a category's items. */
+export const CHECKLIST_TAB: Record<ChecklistCategory, "documents" | "studies"> = { document: "documents", study: "studies" };
 
 export interface ChecklistRecord {
   kind: ClinicalRecordKind;
@@ -73,6 +77,7 @@ export interface ChecklistItem {
   label: string;
   fillMode: "consent" | "patient" | "doctor" | "external";
   group: ChecklistGroup;
+  category: ChecklistCategory;
   status: ChecklistStatus;
   completed_at: string | null;
   history: ChecklistHistoryEntry[];
@@ -341,7 +346,10 @@ export function usePatientChecklist(patientId: () => string) {
     const body = { ...(options.items ? { items: options.items } : {}), ...(options.copyToMe ? { copy_to_me: true } : {}) };
     const res = await apiFetch(`/api/v1/patient/${patientId()}/questionnaire-requests/email`, { ...json(body), handleErrors: false });
     if (res.status === 422) {
-      notifications.show(t("app.clinical.email.noEmail"), "warning", undefined, { icon: "mail" });
+      // 422 is either "no email on the record" or "the mail server refused this address" (NEO-202).
+      const { code } = (await res.clone().json().catch(() => ({}))) as { code?: string };
+      const key = code === "EMAIL_REJECTED" ? "app.clinical.email.rejected" : "app.clinical.email.noEmail";
+      notifications.show(t(key), "warning", undefined, { icon: "mail" });
       return null;
     }
     if (!res.ok) {

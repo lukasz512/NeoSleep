@@ -104,4 +104,15 @@ describe("STOP-Bang measurement validation", () => {
     expect(stopBangMeasuresValid({ height_cm: "162", weight_kg: "94", neck_cm: "42" })).toBe(true);
     expect(stopBangMeasuresValid({ height_cm: "", weight_kg: "", neck_cm: "" })).toBe(true);
   });
+
+  // NEO-193: each value in range, but together an impossible BMI (100) — used to reach the DB and fail there.
+  it("rejects a height/weight pair whose BMI is outside 5-99.9", async () => {
+    expect(stopBangMeasuresValid({ height_cm: "100", weight_kg: "100", neck_cm: "" })).toBe(false);
+    expect(stopBangMeasuresValid({ height_cm: "230", weight_kg: "25", neck_cm: "" })).toBe(false);
+    const { wrapper, measures } = mountForm();
+    measures.height_cm = "100";
+    measures.weight_kg = "100";
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find(".sb-form__error").exists()).toBe(true);
+  });
 });

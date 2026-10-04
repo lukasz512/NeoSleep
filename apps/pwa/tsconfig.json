@@ -3,6 +3,8 @@
   "compilerOptions": {
     "composite": true,
     "emitDeclarationOnly": true,
+    "declarationDir": "node_modules/.tmp/tsc-declarations",
+    "rootDir": "../..",
     "types": ["vitest/globals", "node", "vite/client", "google.maps"],
     "baseUrl": ".",
     "paths": {
@@ -14,6 +16,7 @@
       "@prefs":     ["../../packages/prefs/src/index.ts"],
       "@vuetify":   ["../../packages/vuetify/src/index.ts"],
       "@documents-browser": ["../../packages/documents/src/browser/index.ts"],
+      "@device-order": ["../../packages/device-order/src/index.ts"],
       "vue":        ["node_modules/vue/dist/vue.d.ts"]
     }
   },
@@ -25,6 +28,7 @@
     "../../packages/stores/src",
     "../../packages/prefs/src",
     "../../packages/documents/src/browser",
+    "../../packages/device-order/src",
     "../../apps/api/client/src"
   ]
 }

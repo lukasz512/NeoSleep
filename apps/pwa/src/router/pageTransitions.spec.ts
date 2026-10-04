@@ -100,8 +100,8 @@ describe("page transition wiring", () => {
     const layout = readFileSync(path.resolve(__dirname, "../layouts/AppLayout.vue"), "utf-8");
     expect(layout).toMatch(/\.layout-main__inner\s*{[^}]*view-transition-name:\s*pwa-page/);
     const main = readFileSync(path.resolve(__dirname, "../main.ts"), "utf-8");
-    expect(main).toContain('import "./assets/page-transitions.css"');
-    const css = readFileSync(path.resolve(__dirname, "../assets/page-transitions.css"), "utf-8");
+    expect(main).toContain('import "./styles/page-transitions.css"');
+    const css = readFileSync(path.resolve(__dirname, "../styles/page-transitions.css"), "utf-8");
     for (const kind of ["open", "back", "module"]) expect(css).toContain(`html[data-page-transition="${kind}"]`);
     expect(css).toMatch(/prefers-reduced-motion:\s*reduce/);
   });

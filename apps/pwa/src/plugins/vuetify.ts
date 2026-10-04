@@ -6,7 +6,7 @@ import { createNeoVuetify } from "@vuetify";
 import { useI18n } from "vue-i18n";
 import { i18n } from "./i18n";
 import { brandColors } from "@brand/colors";
-import { MOBILE_BREAKPOINT } from "../constants";
+import { MOBILE_BREAKPOINT } from "../config/layout";
 
 export const lightTheme = "light";
 export const darkTheme  = "dark";

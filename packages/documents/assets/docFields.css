@@ -123,10 +123,10 @@ table.checklist:has(+ .doc-notes) { margin-bottom: 0; }
   color: #6b7573;
   margin: 0;
 }
-/* 26mm: at 15mm a phone signature shrank to an unreadable scribble (Łukasz, NEO-100 2026-09-26). */
+/* 20mm: at 15mm a phone signature shrank to an unreadable scribble (Łukasz, NEO-100 2026-09-26); 26mm was more than needed (2026-09-29). */
 .sig-area {
   order: 1;
-  height: 26mm;
+  height: 20mm;
   display: flex;
   align-items: flex-end;
   justify-content: center;

@@ -1,94 +1,70 @@
 <template>
   <div class="patient-aside">
-    <section class="patient-aside__card" :aria-label="t('app.patients.detail.aside.keyFacts')">
-      <h2 class="patient-aside__heading">{{ t("app.patients.detail.aside.keyFacts") }}</h2>
-      <dl class="patient-aside__facts">
-        <dt>{{ t("app.patients.detail.status") }}</dt>
-        <dd>
-          <VChip v-if="patient.status" :color="patientStatusColor(patient.status)" size="small" variant="tonal">
-            {{ patientStatusLabel(t, patient.status) }}
-          </VChip>
-          <span v-else>—</span>
-        </dd>
-        <dt>{{ t("app.patients.detail.aside.diagnosis") }}</dt>
-        <dd class="patient-aside__diagnosis">{{ diagnosis ?? "—" }}</dd>
-        <dt>{{ t("app.patients.detail.ahiBaseline") }}</dt>
-        <dd>{{ patient.ahi_baseline ?? "—" }}</dd>
-        <dt>{{ t("app.patients.detail.cpapDevice") }}</dt>
-        <dd>{{ patient.cpap_device ? t("app.common.yes") : t("app.common.no") }}</dd>
-        <dt>{{ t("app.patients.detail.practitioner") }}</dt>
-        <dd>
-          <RouterLink
-            v-if="patient.practitioner_id && patient.practitioner_name"
-            class="patient-aside__link"
-            :to="{ name: 'hcp-detail', params: { id: patient.practitioner_id } }"
-          >
-            {{ patient.practitioner_name }}
-          </RouterLink>
-          <span v-else>{{ patient.practitioner_name || "—" }}</span>
-        </dd>
-      </dl>
+    <section v-if="canSeeStudies && checklist" class="patient-aside__next" :aria-label="t('app.patients.detail.aside.nextStep')">
+      <h2 class="patient-aside__heading">{{ t("app.patients.detail.aside.nextStep") }}</h2>
+      <p class="patient-aside__next-title">
+        {{ patientItems.length ? t("app.patients.detail.aside.waitingOnPatient", { n: patientItems.length }) : t("app.patients.detail.aside.nothingForPatient") }}
+      </p>
+      <p v-if="patientItems.length" class="patient-aside__next-items">{{ patientItems.map((item) => checklistItemTitle(t, item.key, item.label)).join(" · ") }}</p>
+      <!-- On every tab: while this panel shows, the Documentos tab drops its own QR button (NEO-203) — never two on screen. -->
+      <AppButton
+        color="primary"
+        variant="flat"
+        size="large"
+        class="patient-aside__qr text-none"
+        :disabled="!patientItems.length"
+        @click="$emit('qr')"
+      >
+        <template #prepend><AppIcon name="qr-code" /></template>
+        {{ patientItems.length ? t("app.patients.detail.aside.qr") : t("app.patients.detail.aside.allDone") }}
+      </AppButton>
     </section>
 
-    <section class="patient-aside__card patient-aside__oa" :aria-label="t('app.patients.detail.aside.orthoapnea')">
-      <h2 class="patient-aside__heading">{{ t("app.patients.detail.aside.orthoapnea") }}</h2>
-      <p v-if="oaError" class="patient-aside__muted">{{ t("app.patients.detail.aside.orthoapneaError") }}</p>
-      <div v-else-if="latestPlan" class="patient-aside__row">
-        <VChip v-if="isDraftTreatmentPlan(latestPlan)" color="warning" size="small" variant="tonal">{{ t("app.orthoApneaOrder.draftBadge") }}</VChip>
-        <VChip v-else :color="treatmentPlanStatusColor(latestPlan.status)" size="small" variant="tonal">
-          {{ treatmentPlanStatusLabel(t, latestPlan.status) }}
-        </VChip>
-        <span v-if="latestPlan.dentist_name" class="patient-aside__muted">{{ latestPlan.dentist_name }}</span>
+    <p class="patient-aside__facts" :aria-label="t('app.patients.detail.aside.keyFacts')">
+      <VChip v-if="patient.status" :color="patientStatusColor(patient.status)" size="small" variant="tonal">
+        {{ patientStatusLabel(t, patient.status) }}
+      </VChip>
+      <span v-if="patient.ahi_baseline != null">{{ t("app.patients.detail.aside.ahi", { n: patient.ahi_baseline }) }}</span>
+      <RouterLink
+        v-if="patient.practitioner_id && patient.practitioner_name"
+        class="patient-aside__link"
+        :to="{ name: 'hcp-detail', params: { id: patient.practitioner_id } }"
+      >
+        {{ patient.practitioner_name }}
+      </RouterLink>
+      <span v-else-if="patient.practitioner_name">{{ patient.practitioner_name }}</span>
+      <!-- Last, so a long diagnosis is the one cut with an ellipsis; the full text is in its tooltip and on Details. -->
+      <span v-if="diagnosis" class="patient-aside__diagnosis" :title="diagnosis">{{ diagnosis }}</span>
+    </p>
+
+    <section v-if="canSeeStudies" class="patient-aside__card patient-aside__docs" :aria-label="t('app.clinical.summary.title')">
+      <div class="patient-aside__head">
+        <h2 class="patient-aside__heading">{{ t("app.clinical.summary.title") }}</h2>
+        <button v-if="(checklist?.items.length ?? 0) > DOC_ROWS" type="button" class="patient-aside__all" @click="$emit('open-tab', CHECKLIST_TAB.document)">
+          {{ t("app.patients.detail.aside.allDocuments", { n: checklist?.items.length }) }}
+        </button>
       </div>
-      <p v-else-if="oaLoaded" class="patient-aside__muted">{{ t("app.patients.detail.aside.orthoapneaNone") }}</p>
-      <button type="button" class="patient-aside__all" @click="$emit('open-tab', 'orthoapnea')">
-        {{ t("app.patients.detail.aside.orthoapneaOpen") }}
-      </button>
-    </section>
-
-    <section v-if="canSeeStudies && checklist" class="patient-aside__card patient-aside__to-sign" :aria-label="t('app.patients.detail.aside.toSign')">
-      <h2 class="patient-aside__heading">{{ t("app.patients.detail.aside.toSign") }}</h2>
-      <ul v-if="toSign.length" class="patient-aside__studies">
-        <li v-for="item in toSign" :key="item.key">
-          <button type="button" class="patient-aside__study" @click="$emit('open-study', item.key)">
-            <ChecklistStatusIcon :status="item.status" />
-            <span>{{ checklistItemTitle(t, item.key, item.label) }}</span>
-          </button>
-        </li>
-      </ul>
-      <p v-else class="patient-aside__muted">{{ t("app.patients.detail.aside.allSigned") }}</p>
-    </section>
-
-    <section v-if="canSeeStudies" class="patient-aside__card" :aria-label="t('app.clinical.summary.title')">
-      <h2 class="patient-aside__heading">{{ t("app.clinical.summary.title") }}</h2>
       <p v-if="checklistApi.loadError.value" class="patient-aside__muted">{{ t("app.clinical.errorLoad") }}</p>
       <template v-else-if="checklist">
         <AppSegmentProgress :segments="checklistSegments(checklist.items)" :label="t('app.clinical.progress', checklist.summary)" />
         <ul class="patient-aside__studies">
-          <li v-for="item in checklist.items" :key="item.key">
-            <button type="button" class="patient-aside__study" @click="$emit('open-study', item.key)">
+          <li v-for="item in shownDocs" :key="item.key">
+            <button type="button" class="patient-aside__study" @click="$emit('open-study', item.key, item.category)">
               <ChecklistStatusIcon :status="item.status" />
               <span>{{ checklistItemTitle(t, item.key, item.label) }}</span>
             </button>
           </li>
         </ul>
       </template>
-      <!-- Hidden on the Estudios tab, whose own QR status button is right there — never two QR buttons on screen. -->
-      <AppButton
-        v-if="activeTab !== 'studies'"
-        color="primary"
-        variant="tonal"
-        class="patient-aside__qr text-none"
-        :disabled="!canSendQr"
-        @click="$emit('qr')"
-      >
-        <template #prepend><AppIcon name="qr-code" /></template>
-        {{ t("app.patients.detail.aside.qr") }}
-      </AppButton>
     </section>
 
-    <section class="patient-aside__card" :aria-label="t('app.patients.detail.aside.lastNote')">
-      <h2 class="patient-aside__heading">{{ t("app.patients.detail.aside.lastNote") }}</h2>
+    <section class="patient-aside__card patient-aside__last-note" :aria-label="t('app.patients.detail.aside.lastNote')">
+      <div class="patient-aside__head">
+        <h2 class="patient-aside__heading">{{ t("app.patients.detail.aside.lastNote") }}</h2>
+        <button v-if="notes.length > 0" type="button" class="patient-aside__all" @click="$emit('open-notes')">
+          {{ t("app.patients.detail.aside.allNotes", { count: notes.length }) }}
+        </button>
+      </div>
       <NoteComposer
         v-model="draft"
         :placeholder="t('app.patients.detail.aside.quickNote')"
@@ -107,24 +83,25 @@
           <p class="patient-aside__note-body">{{ note.body }}</p>
         </li>
       </ul>
-      <button v-if="notes.length > 0" type="button" class="patient-aside__all" @click="$emit('open-notes')">
-        {{ t("app.patients.detail.aside.allNotes", { count: notes.length }) }}
-      </button>
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
 /**
- * NEO-153 side panel for PatientDetailView (ItemDetailLayout #aside, from
- * 1280px): key facts (with the profile's diagnosis), the OrthoApnea order
- * status, documents still to sign, the Estudios status with a "QR for the
- * patient" button, and the latest note with a quick-add box — what a rep needs without
- * leaving the tab they are on. Below 1280px ItemDetailLayout does not mount
- * it; the Details, Estudios and Notes tabs carry the same content. A note
- * added here reloads an open Notes tab (and vice versa) through useNotes'
- * change event. The QR itself runs in the Estudios tab (its status button
- * and polling live there), so the button asks the parent to open it.
+ * Side panel for PatientDetailView (ItemDetailLayout #aside, from 1280px),
+ * NEO-153, reworked in NEO-203 to fit one screen without scrolling:
+ * 1. "Next step": what the patient still has to fill in, with the big
+ *    "QR for the patient" button;
+ * 2. the key facts on one line;
+ * 3. documents and studies, unfinished first, at most DOC_ROWS rows;
+ * 4. the latest note with a quick-add box — it takes what height is left.
+ * Below 1280px ItemDetailLayout does not mount it; the Details, Documentos,
+ * Estudios and Notes tabs carry the same content. A note added here reloads
+ * an open Notes tab (and vice versa) through useNotes' change event. The QR
+ * itself runs in the Documentos tab (its status button and polling live
+ * there), so the button asks the parent to open it. The OrthoApnea card is
+ * left out for now (NEO-203); the Device tab still shows the order.
  */
 import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -134,37 +111,36 @@ import AppIcon from "../AppIcon.vue";
 import AppSegmentProgress from "../AppSegmentProgress.vue";
 import NoteComposer from "../NoteComposer.vue";
 import ChecklistStatusIcon from "../questionnaire/ChecklistStatusIcon.vue";
-import { checklistSegments, usePatientChecklist } from "../../composables/usePatientChecklist";
+import { CHECKLIST_TAB, checklistSegments, usePatientChecklist, type ChecklistCategory } from "../../composables/usePatientChecklist";
 import { useVisiblePolling } from "../../composables/useVisiblePolling";
 import { checklistItemTitle } from "../../config/questionnaires";
-import { apiFetch } from "../../composables/useApi";
 import { formatDiagnosis } from "../../utils/diagnosis";
-import { isDraftTreatmentPlan, treatmentPlanStatusColor, treatmentPlanStatusLabel } from "../../utils/treatmentPlanStatus";
 import { useNotes } from "../../composables/useNotes";
 import { useAsyncAction } from "../../composables/useAsyncAction";
 import { patientStatusColor, patientStatusLabel } from "../../utils/patientStatus";
 
 const RECENT_NOTES = 1;
+/** Rows the documents card shows before "See all" — what fits a 720px-tall window with the rest of the panel. */
+const DOC_ROWS = 6;
 
 const props = defineProps<{
   patient: {
     id: string;
     status?: string;
     ahi_baseline?: number | null;
-    cpap_device?: string | null;
     practitioner_id?: string | null;
     practitioner_name?: string | null;
     diagnosis_code?: Record<string, unknown> | null;
   };
-  /** Estudios holds health data — admin, doctor and manager only (NEO-83), same rule as the tab. */
+  /** Documentos and Estudios hold health data — admin, doctor and manager only (NEO-83), same rule as the tabs. */
   canSeeStudies: boolean;
-  /** The detail view's open tab — the Estudios status is reloaded on every switch, so it catches up with what was done there. */
+  /** The detail view's open tab — the checklist is reloaded on every switch, so it catches up with what was done there. */
   activeTab: string;
 }>();
 
 defineEmits<{
   "open-notes": [];
-  "open-study": [itemKey: string];
+  "open-study": [itemKey: string, category: ChecklistCategory];
   "open-tab": [tab: string];
   qr: [];
 }>();
@@ -176,47 +152,22 @@ const recent = computed(() => notes.value.slice(0, RECENT_NOTES));
 
 const checklistApi = usePatientChecklist(() => props.patient.id);
 const checklist = computed(() => checklistApi.checklist.value);
-/** Same rule as the Estudios tab's QR button: something the patient can still fill in. */
-const canSendQr = computed(
-  () => checklist.value?.items.some((item) => item.actions.qr && (item.status === "missing" || item.status === "pending_patient")) ?? false,
+/** Same rule as the Documentos tab's QR button: what the patient can still fill in through the QR. */
+const patientItems = computed(
+  () => checklist.value?.items.filter((item) => item.actions.qr && (item.status === "missing" || item.status === "pending_patient")) ?? [],
 );
-/** Consent-group items not yet done — the documents the patient still has to sign. Kept simple on purpose (NEO-153); a fuller e-signature list comes later. */
-const toSign = computed(() => checklist.value?.items.filter((item) => item.group === "consent" && item.status !== "done") ?? []);
+/** Unfinished first (stable within each half), cut to DOC_ROWS. */
+const shownDocs = computed(() => {
+  const items = checklist.value?.items ?? [];
+  return [...items.filter((item) => item.status !== "done"), ...items.filter((item) => item.status === "done")].slice(0, DOC_ROWS);
+});
 
 const diagnosis = computed(() => formatDiagnosis(props.patient.diagnosis_code));
-
-interface LatestPlan {
-  status: string;
-  dentist_name: string | null;
-  metadata: Record<string, unknown> | null;
-}
-const latestPlan = ref<LatestPlan | null>(null);
-const oaLoaded = ref(false);
-const oaError = ref(false);
-async function loadOrthoApnea(): Promise<void> {
-  oaError.value = false;
-  try {
-    // Newest first is the API's default order; only the latest order matters here.
-    const res = await apiFetch(`/api/v1/treatment-plan?patient_id=${encodeURIComponent(props.patient.id)}&type=dental_appliance&limit=1`, {
-      handleErrors: false,
-    });
-    if (!res.ok) {
-      oaError.value = true;
-      return;
-    }
-    const data = (await res.json()) as { items: LatestPlan[] };
-    latestPlan.value = data.items[0] ?? null;
-  } catch {
-    oaError.value = true;
-  } finally {
-    oaLoaded.value = true;
-  }
-}
 
 function loadStudies(): void {
   if (props.canSeeStudies) void checklistApi.load();
 }
-// The side panel is on every tab, so it keeps its studies card current too (NEO-173) — 60 s fingerprint check.
+// The side panel is on every tab, so it keeps its documents card current too (NEO-173) — 60 s fingerprint check.
 useVisiblePolling(() => (props.canSeeStudies ? 60_000 : null), checklistApi.refreshIfChanged);
 
 const draft = ref("");
@@ -231,41 +182,65 @@ function formatDate(iso: string): string {
 
 onMounted(() => {
   void loadNotes();
-  void loadOrthoApnea();
   loadStudies();
 });
 watch(
   () => props.patient.id,
   () => {
     void loadNotes();
-    void loadOrthoApnea();
     loadStudies();
   },
 );
-// Catch up with what was done in a tab (a QR answered, an order placed).
-watch(
-  () => props.activeTab,
-  () => {
-    loadStudies();
-    void loadOrthoApnea();
-  },
-);
+// Catch up with what was done in a tab (a QR answered, a document signed).
+watch(() => props.activeTab, loadStudies);
 </script>
 
 <style scoped>
+/* Never taller than the window (NEO-203): the note card shrinks and clips, the rest keeps its size. */
 .patient-aside {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4, 16px);
+  gap: var(--space-3, 12px);
+  max-height: calc(100dvh - var(--space-8, 32px));
 }
 
 .patient-aside__card {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3, 12px);
-  padding: var(--space-4, 16px);
+  gap: var(--space-2, 8px);
+  padding: var(--space-3, 12px) var(--space-4, 16px);
   border-radius: var(--pwa-radius, 12px);
   background: rgba(var(--v-theme-on-surface), 0.04);
+}
+
+.patient-aside__next {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+  padding: var(--space-4, 16px);
+  border-radius: var(--pwa-radius, 12px);
+  background: rgba(var(--v-theme-primary), 0.1);
+}
+
+.patient-aside__next-title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.patient-aside__next-items {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.patient-aside__qr {
+  align-self: stretch;
+  margin-top: var(--space-1, 4px);
+  letter-spacing: normal;
 }
 
 .patient-aside__heading {
@@ -277,24 +252,44 @@ watch(
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
+/* One line, whatever the data (NEO-203): only the diagnosis shrinks. */
 .patient-aside__facts {
-  display: grid;
-  /* Labels take their own width on one line; values get the rest and wrap (a long diagnosis). */
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--space-2, 8px) var(--space-3, 12px);
-  align-items: baseline;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
   margin: 0;
-  font-size: 0.875rem;
-}
-
-.patient-aside__facts dt {
+  padding: 0 var(--space-1, 4px);
+  font-size: 0.8125rem;
   white-space: nowrap;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
-.patient-aside__facts dd {
-  margin: 0;
-  text-align: right;
+.patient-aside__facts > * {
+  flex: none;
+}
+
+.patient-aside__facts > .patient-aside__diagnosis {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.patient-aside__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2, 8px);
+}
+
+.patient-aside__docs {
+  flex: none;
+}
+
+.patient-aside__last-note {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .patient-aside__link,
@@ -309,6 +304,7 @@ watch(
   padding: 0;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 .patient-aside__note {
@@ -355,7 +351,7 @@ watch(
   align-items: center;
   gap: var(--space-2, 8px);
   width: 100%;
-  min-height: 36px;
+  min-height: 28px;
   padding: 2px 6px;
   margin: 0 -6px;
   border: none;
@@ -373,22 +369,6 @@ watch(
   background: rgba(var(--v-theme-on-surface), 0.06);
 }
 
-.patient-aside__qr {
-  align-self: stretch;
-  letter-spacing: normal;
-}
-
-.patient-aside__row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-2, 8px);
-}
-
-.patient-aside__diagnosis {
-  overflow-wrap: anywhere;
-}
-
 .patient-aside__muted {
   margin: 0;
   font-size: 0.875rem;
@@ -396,7 +376,7 @@ watch(
 }
 
 .patient-aside__all {
-  align-self: flex-start;
+  flex: none;
   padding: 0;
   border: none;
   background: none;

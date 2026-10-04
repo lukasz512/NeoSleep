@@ -1,4 +1,6 @@
 import type { TenantContext } from "../context/TenantContext.js";
+import { requirePatientInScope } from "../queries/entityAccess.js";
+import { requireTreatmentPlanInScope } from "../queries/treatmentPlan.js";
 import {
   insertTreatmentPlan,
   updateTreatmentPlan,
@@ -68,6 +70,8 @@ export async function CreateTreatmentPlanCommand(
   assertValidType(input.type);
   assertValidStatus(input.status);
   await assertDentistExists(ctx, input.dentist_id);
+  // CORE-104: only for a patient the caller may see (a doctor: their own).
+  await requirePatientInScope(ctx, input.patient_id);
 
   const study = await getSleepStudyById(ctx.client, input.sleep_study_id);
   if (!study) throw new ValidationError("sleep_study_id does not reference an existing sleep study");
@@ -103,6 +107,7 @@ export async function UpdateTreatmentPlanCommand(
 
   const before = await getTreatmentPlanById(ctx.client, id);
   if (!before) return null;
+  await requirePatientInScope(ctx, before.patient_id);
 
   const after = await updateTreatmentPlan(ctx.client, id, input);
   if (!after) return null;
@@ -129,6 +134,7 @@ export async function UpdateTreatmentPlanCommand(
  */
 export async function DeleteTreatmentPlanCommand(ctx: TenantContext, id: string): Promise<void> {
   if (!id?.trim()) throw new ValidationError("treatment plan id is required");
+  await requireTreatmentPlanInScope(ctx, id);
 
   await softDeleteTreatmentPlan(ctx.client, id);
 

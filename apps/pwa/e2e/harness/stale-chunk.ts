@@ -11,7 +11,7 @@ import { createPinia } from "pinia";
 import { createRouter, createMemoryHistory, RouterView, useRouter } from "vue-router";
 import vuetify from "../../src/plugins/vuetify";
 import { i18n } from "../../src/plugins/i18n";
-import "../../src/assets/theme.scss";
+import "../../src/styles/theme.scss";
 import AppNotifications from "../../src/components/AppNotifications.vue";
 import { useNotifications } from "../../src/composables/useNotifications";
 import { installChunkRecovery, browserChunkRecoveryDeps } from "../../src/router/chunkRecovery";

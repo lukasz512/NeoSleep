@@ -151,7 +151,7 @@ Consequences:
 
 ## Planeta events → photos (Łukasz, 2026-09-28)
 
-Colección Bordes 2024: 11, 4, 2, 12 · Novedades 2025: 5, 10 · Novedades 2024: 13, 14, 15, 1, 3, 8, 9 · Crónicas de la capital: 00, 7 · Algún día, hoy 2019: 22 · Duelo de historias: 20, 21, 18, 17. The source of truth is `clients/ajm/portfolio/src/content/planeta.ts`.
+Colección Bordes 2024: 11, 4, 2, 12 · Novedades 2025: 5, 10 · Novedades 2024: 13, 14, 15, 1, 3, 8, 9 · Crónicas de la capital: 00, 7 · Algún día, hoy 2019: 22 · Duelo de historias: 20, 21, 18, 17. The source of truth is `clients/ajm/corporativo/src/content/planeta.ts`.
 
 ## Scope change (Łukasz, 2026-09-28)
 
@@ -160,7 +160,7 @@ Colección Bordes 2024: 11, 4, 2, 12 · Novedades 2025: 5, 10 · Novedades 2024:
 
 ## Slice 1: built (2026-09-28)
 
-`clients/ajm/portfolio` (Vite + Vue + TS, `@ajm/portfolio`):
+`clients/ajm/corporativo` (Vite + Vue + TS, `@ajm/corporativo`):
 - entry: QR mosaic from one photo, link line/AJ, fade on lite
 - hero (12 s montage loop)
 - Qué hacemos (words light up on scroll)
@@ -172,8 +172,8 @@ Colección Bordes 2024: 11, 4, 2, 12 · Novedades 2025: 5, 10 · Novedades 2024:
 
 Supporting pieces:
 - Media pipeline: `scripts/encode-media.sh` (ffmpeg + sips).
-- Repo wiring: `clients/*/*` added to the pnpm workspace, ESLint blocks neoCRM imports, pre-commit/pre-push/quality-gate/affected-workspaces include clients, and CI runs `@ajm/portfolio` tests.
-- Preview: `pnpm --filter @ajm/portfolio build:preview` builds a static copy with relative paths, published as a private Artifact.
+- Repo wiring: `clients/*/*` added to the pnpm workspace, ESLint blocks neoCRM imports, pre-commit/pre-push/quality-gate/affected-workspaces include clients, and CI runs `@ajm/corporativo` tests.
+- Preview: `pnpm --filter @ajm/corporativo build:preview` builds a static copy with relative paths, published as a private Artifact.
 
 Not yet: Privalia timeline, Mendel reel, Capacidades, Cómo trabajamos, Clientes, Sobre, phone stories mode (D3), aggregate analytics, R2 upload + deploy to alfredjan.com.
 
@@ -218,7 +218,7 @@ Not yet: Privalia timeline, Mendel reel, Capacidades, Cómo trabajamos, Clientes
 - **E2**: Pizzería Vesubio is a Grupo Planeta book launch, shown as a new spine. Title and year are still to come.
 - **G1**: the encoded web media (~17 MB) is committed.
 - **G2**: alfredjan.com is on the same GoDaddy account as neosleepcare.com, so the NeoSleep `FTP_*` secrets are reused. Only `AJM_FTP_DIR` is needed.
-- Deploy: `.github/workflows/deploy-ajm-portfolio.yml`, run manually or on prod pushes under `clients/ajm/`. `.htaccess` handles the client-side routes and forces HTTPS.
+- Deploy: `.github/workflows/deploy-ajm-corporativo.yml`, run manually or on prod pushes under `clients/ajm/`. `.htaccess` handles the client-side routes and forces HTTPS.
 - **Later (Łukasz)**: an Apple Wallet business card carrying a QR code that opens the page with the QR entry animation (`?src=qr`). This needs its own ticket, plus a pass-signing certificate from an Apple Developer account.
 
 ## Round 5: Łukasz's review of the preview (2026-09-28)
@@ -257,7 +257,7 @@ Not yet: Privalia timeline, Mendel reel, Capacidades, Cómo trabajamos, Clientes
 
 ## Next (remaining)
 
-Scaffold `clients/ajm/portfolio` (Vite + Vue + TS, GSAP/Lenis, own ES/EN locales, lint rule blocking `@neo/*`), then build the vertical slice: entry (QR + link) → hero montage → Qué hacemos → Universal walk-through, in ES + EN, weak-network rules on.
+Scaffold `clients/ajm/corporativo` (Vite + Vue + TS, GSAP/Lenis, own ES/EN locales, lint rule blocking `@neo/*`), then build the vertical slice: entry (QR + link) → hero montage → Qué hacemos → Universal walk-through, in ES + EN, weak-network rules on.
 
 ## Next
 

@@ -37,7 +37,7 @@ const GREY = "#a6a6a6";
 const PAPER = "#f4f1ea";
 
 // The logo's paths (same file the site uses), split into the dark and grey parts.
-const logoSrc = fs.readFileSync(path.join(ROOT, "clients/ajm/portfolio/src/components/AjLogo.vue"), "utf8");
+const logoSrc = fs.readFileSync(path.join(ROOT, "clients/ajm/corporativo/src/components/AjLogo.vue"), "utf8");
 const paths = [...logoSrc.matchAll(/<path d="([^"]+)" transform="([^"]+)" \/>/g)].map(([, d, t]) => {
   const [, , , , x, y] = t.slice(t.indexOf("(") + 1, -1).split(",").map(Number);
   return { d, t, x, y };

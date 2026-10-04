@@ -65,26 +65,69 @@ function doneSql(item: FormCompletionItem, keyParam: string): string {
   return upload;
 }
 
+/**
+ * stopBang only: the latest entry is an S-T-O-P-only screening (score NULL) —
+ * the checklist's "partial", which waits on the doctor's B-A-N-G, not on the patient.
+ */
+function partialSql(item: FormCompletionItem, keyParam: string): string {
+  if (item.key !== "stopBang") return "false";
+  return `COALESCE((SELECT NOT x.ok FROM (
+             SELECT s.created_at, s.score IS NOT NULL AS ok FROM stop_bang_screening s WHERE s.patient_id = ids.id
+             UNION ALL
+             SELECT f.created_at, true FROM file_attachment f WHERE f.entity_type = 'patient' AND f.entity_id = ids.id
+               AND f.metadata->>'document_type' = 'study_upload' AND f.metadata->>'checklist_item' = ${keyParam}
+           ) x ORDER BY x.created_at DESC LIMIT 1), false)`;
+}
+
+/** Mirrors queries/patientChecklist.ts isPatientCompletable — the items a QR link lets the patient fill. */
+export function isPatientCompletableItem(item: FormCompletionItem): boolean {
+  return item.fillMode === "consent" || item.key === "medicalHistory" || item.key === "stopBang";
+}
+
+export interface PatientFormStatus {
+  done: Set<string>;
+  /** What the patient can still fill through a QR link — the checklist's actions.qr && status missing / pending_patient (NEO-221). */
+  waitingOnPatient: Set<string>;
+}
+
 /** Returns patientId -> set of done item keys, restricted to `items`. */
 export async function getPatientFormCompletion(
   client: PoolClient,
   patientIds: string[],
   items: FormCompletionItem[]
 ): Promise<Map<string, Set<string>>> {
-  const result = new Map<string, Set<string>>(patientIds.map((id) => [id, new Set<string>()]));
+  const status = await getPatientFormStatus(client, patientIds, items);
+  return new Map([...status].map(([id, s]) => [id, s.done]));
+}
+
+/** Done + waiting-on-patient keys per patient, still ONE query for the whole page (NEO-221). */
+export async function getPatientFormStatus(
+  client: PoolClient,
+  patientIds: string[],
+  items: FormCompletionItem[]
+): Promise<Map<string, PatientFormStatus>> {
+  const result = new Map<string, PatientFormStatus>(
+    patientIds.map((id) => [id, { done: new Set<string>(), waitingOnPatient: new Set<string>() }])
+  );
   if (patientIds.length === 0 || items.length === 0) return result;
 
-  const columns = items.map((item, i) => `${doneSql(item, `($2::text[])[${i + 1}]`)} AS c${i}`).join(", ");
+  const columns = items
+    .map((item, i) => {
+      const keyParam = `($2::text[])[${i + 1}]`;
+      return `${doneSql(item, keyParam)} AS c${i}, ${partialSql(item, keyParam)} AS p${i}`;
+    })
+    .join(", ");
   try {
     const { rows } = await client.query<Record<string, string | boolean>>(
       `SELECT ids.id, ${columns} FROM unnest($1::uuid[]) AS ids(id)`,
       [patientIds, items.map((item) => item.key)]
     );
     for (const row of rows) {
-      const done = result.get(String(row.id));
-      if (!done) continue;
+      const status = result.get(String(row.id));
+      if (!status) continue;
       items.forEach((item, i) => {
-        if (row[`c${i}`] === true) done.add(item.key);
+        if (row[`c${i}`] === true) status.done.add(item.key);
+        else if (row[`p${i}`] !== true && isPatientCompletableItem(item)) status.waitingOnPatient.add(item.key);
       });
     }
     return result;

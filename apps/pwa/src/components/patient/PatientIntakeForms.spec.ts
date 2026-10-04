@@ -52,6 +52,32 @@ describe("PatientIntakeForms", () => {
     expect(wrapper.find(".intake-forms").attributes("aria-label")).toBe("2 of 4 forms collected");
   });
 
+  it("caps at two rows: 6 tiles fit, a 7th turns the last slot into +N (NEO-221)", () => {
+    const keys = ["a1", "b2", "c3", "d4", "e5", "f6", "g7", "h8"];
+    const six = mountForms(keys.slice(0, 6).map((key) => ({ key, done: false })));
+    expect(six.findAll(".intake-forms__tile")).toHaveLength(6);
+    expect(six.find(".intake-forms__tile--more").exists()).toBe(false);
+
+    const eight = mountForms(keys.map((key) => ({ key, done: false })));
+    const tiles = eight.findAll(".intake-forms__tile");
+    expect(tiles).toHaveLength(6);
+    expect(tiles.at(-1)!.text()).toBe("+3");
+    expect(tiles.at(-1)!.attributes("aria-label")).toBe("3 more");
+    // The progress still counts every form, hidden ones included.
+    expect(eight.find(".intake-forms").attributes("aria-label")).toBe("0 of 8 forms collected");
+  });
+
+  it("labels a Studies cell as studies (NEO-221)", () => {
+    const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
+    const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
+    const wrapper = mount(PatientIntakeForms, {
+      props: { forms: [{ key: "polysomnography", done: true }], kind: "studies" },
+      global: { plugins: [i18n, vuetify] },
+    });
+    mountedWrappers.push(wrapper);
+    expect(wrapper.find(".intake-forms").attributes("aria-label")).toBe("1 of 1 studies collected");
+  });
+
   it("shows a dash when there are no forms", () => {
     const wrapper = mountForms([]);
     expect(wrapper.find(".intake-forms").exists()).toBe(false);

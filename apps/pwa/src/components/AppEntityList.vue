@@ -284,6 +284,17 @@
           <template v-for="(_, name) in $slots" :key="name" #[name]="slotData">
             <slot :name="name" v-bind="slotData" />
           </template>
+          <template #footer.prepend>
+            <button
+              v-if="!isTableAtDefault"
+              type="button"
+              class="app-entity-list__reset-view"
+              data-testid="entity-list-reset-view"
+              @click="onTableReset"
+            >
+              {{ t("app.list.resetView") }}
+            </button>
+          </template>
           <template v-if="$slots['feed-card-actions']" #item.actions="{ item }">
             <div class="app-entity-list__table-actions" @click.stop>
               <slot name="feed-card-actions" :item="item" />
@@ -463,7 +474,7 @@ const {
   loading, clearingSearch, clearingFilters, loadError, loadFailure, isOffline, items, total,
   mobileItems, mobileHasMore, loadingMore,
   hasActiveFiltersOrSearch, isTrulyEmpty, hasCompletedInitialLoad,
-  onFilterStateUpdate, onFiltersClear, onSearchClear,
+  onFilterStateUpdate, onFiltersClear, onSearchClear, isTableAtDefault, onTableReset,
   onOptionsUpdate, rowProps, onRowClick, loadData, loadMoreMobile,
 } = useEntityList({
   viewId: props.viewId,

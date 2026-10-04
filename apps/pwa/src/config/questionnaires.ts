@@ -106,11 +106,24 @@ export function parseStopBangMeasure(raw: string, key: StopBangMeasureKey): numb
   return Number.isFinite(value) && value >= min && value <= max ? value : "invalid";
 }
 
-/** Measurements can be saved: every typed value in range, and height + weight together or not at all. */
+/** Plausible BMI — the same as migration 034's CHECK (bmi NUMERIC(3,1) holds at most 99.9). */
+export const STOP_BANG_BMI_RANGE = [5, 99.9] as const;
+
+/** BMI rounded to one decimal, as the API stores it. */
+export function stopBangBmi(heightCm: number, weightKg: number): number {
+  return Math.round((weightKg / (heightCm / 100) ** 2) * 10) / 10;
+}
+
+export function stopBangBmiInRange(bmi: number): boolean {
+  return bmi >= STOP_BANG_BMI_RANGE[0] && bmi <= STOP_BANG_BMI_RANGE[1];
+}
+
+/** Measurements can be saved: every typed value in range, height + weight together or not at all, and a plausible BMI. */
 export function stopBangMeasuresValid(measures: Record<StopBangMeasureKey, string>): boolean {
   const height = parseStopBangMeasure(measures.height_cm, "height_cm");
   const weight = parseStopBangMeasure(measures.weight_kg, "weight_kg");
   const neck = parseStopBangMeasure(measures.neck_cm, "neck_cm");
   if (height === "invalid" || weight === "invalid" || neck === "invalid") return false;
+  if (height !== null && weight !== null) return stopBangBmiInRange(stopBangBmi(height, weight));
   return (height === null) === (weight === null);
 }

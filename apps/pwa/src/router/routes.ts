@@ -66,7 +66,7 @@ export const routes: RouteRecordRaw[] = [
   // Admin/manager-only WYSIWYG editor for generated-document body content
   // (GDPR/informed-consent prose) — see docs/stories/document-content-editor.md.
   // Documents are identified by a (templateKey, locale) pair, not a single id.
-  // Route names deliberately avoid the bare "documents" name — App.spec.ts's
+  // Route names deliberately avoid the bare "documents" name — router/app.spec.ts's
   // "pwa app has only rep view routes (no portal-only views)" test already
   // reserves that exact name for a future, separate HCP/patient-portal
   // "my documents" view (a doctor/patient seeing their OWN signed PDFs) —

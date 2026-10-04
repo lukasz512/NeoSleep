@@ -60,6 +60,13 @@ test("verdict: attempts count distinct red commits; exhausted after the original
   assert.deepEqual([fixed.state, fixed.exhausted], ["success", false]);
 });
 
+test("verdict (CORE-98): a red push run is not hidden by a newer green/skipped PR twin on the same commit", () => {
+  // PR twin of a worktree branch: its jobs are skipped by ci.yml, so the run itself reports success.
+  const v = verdict([run("aaa", "completed", "success", 2), run("aaa", "completed", "failure", 1)], "aaa");
+  assert.equal(v.state, "failure");
+  assert.equal(v.runId, 1, "points at the failed run, so the handoff reads its log");
+});
+
 test("commentBody: marker, failing tests, attempt counter; exhausted says it needs Łukasz", () => {
   const base = { branch: "worker/neo-1-x", sha: "abcdef1234", runUrl: "https://gh/run/1", failures: ["[webkit] › e2e/a.spec.ts:1:1 › t"], failedSteps: [], maxFixAttempts: 2 };
   const body = commentBody({ ...base, failedRuns: 1, exhausted: false });

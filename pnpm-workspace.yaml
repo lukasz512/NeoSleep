@@ -33,3 +33,5 @@ catalog:
   "vite-plugin-vuetify": ^2.1.3
   "@types/node": ^22.20.4
   tsx: ^4.23.15
+  # Device-order rules shared by the PWA and the API (CORE-95).
+  zod: ^4.6.5

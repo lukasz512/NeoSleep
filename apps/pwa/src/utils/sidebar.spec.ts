@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parseSidebarCollapsed } from "./sidebar";
-import { SIDEBAR_DEFAULT_COLLAPSED } from "../constants";
+import { SIDEBAR_DEFAULT_COLLAPSED } from "../config/layout";
 
 describe("sidebar utils", () => {
   describe("parseSidebarCollapsed", () => {

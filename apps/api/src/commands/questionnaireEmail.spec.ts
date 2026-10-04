@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import bcrypt from "bcrypt";
 import { withTenant, insertStaffUser, insertPatient, getGlobalTerritoryId } from "../db.js";
+import { insertOrganization } from "../db/organization.js";
+import { insertPractitioner } from "../db/practitioner.js";
+import { linkPractitionerOrganization, setGlobalPrimaryOrganization } from "../db/practitionerOrganization.js";
 import { getAuditLogForEntities } from "../db/audit-log.js";
 import type { TenantContext } from "../context/TenantContext.js";
 import {
@@ -85,6 +88,30 @@ describe("SendQuestionnaireEmailCommand", () => {
     });
   });
 
+  it("names the doctor's clinic from their affiliations when practitioner.organization_id is empty (NEO-178)", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const other = await insertOrganization(client, { name: `A Otra Clínica ${uniqueSuffix()}` });
+      const primary = await insertOrganization(client, { name: `Z Clínica Sonrisa ${uniqueSuffix()}` });
+      const doctor = await insertPractitioner(client, { first_name: "Ana", last_name: `Afiliada-${uniqueSuffix()}` });
+      await linkPractitionerOrganization(client, doctor.id, other.id, null);
+      await linkPractitionerOrganization(client, doctor.id, primary.id, null);
+      await setGlobalPrimaryOrganization(client, doctor.id, primary.id);
+      const patient = await insertPatient(client, {
+        first_name: "Paz",
+        last_name: `Clinica-${uniqueSuffix()}`,
+        email: `paz.clinica.${uniqueSuffix()}@example.mx`,
+        region: "MX",
+        practitioner_id: doctor.id,
+      });
+
+      await SendQuestionnaireEmailCommand(ctx, patient.id, ORIGIN);
+
+      const [, , , clinic] = sendMock.mock.calls[0]!;
+      expect(clinic).toMatchObject({ name: primary.name });
+    });
+  });
+
   it("refuses when the patient has no email — no link is left behind", async () => {
     await withTenant(TENANT_SLUG, async (client) => {
       const ctx = await buildContext(client);
@@ -136,6 +163,17 @@ describe("SendQuestionnaireEmailCommand", () => {
       expect(info).toMatchObject({ patient: "Lucía C.", sentTo: "l***@example.mx", count: 3, language: "mx" });
       expect(JSON.stringify(info)).not.toContain("/q#");
     });
+  });
+
+  it("a rejected address reaches the caller as EMAIL_REJECTED through withTenant, not DB_ERROR (NEO-202)", async () => {
+    const { EmailRejectedError } = await import("../mailer.js");
+    sendMock.mockRejectedValue(new EmailRejectedError("validation_error: Invalid `to` field"));
+    const err = await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const patient = await insertPatient(client, { first_name: "Quique", last_name: `Rechazo-${uniqueSuffix()}`, email: `q.${uniqueSuffix()}@example.com` });
+      return SendQuestionnaireEmailCommand(ctx, patient.id, ORIGIN);
+    }).catch((e: unknown) => e);
+    expect(err).toMatchObject({ code: "EMAIL_REJECTED", statusCode: 422 });
   });
 
   it("reports a failure instead of 'sent' when email isn't available", async () => {

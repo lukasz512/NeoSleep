@@ -326,5 +326,5 @@ const {
 } = useEventForm(props, emit as (event: string, ...args: unknown[]) => void);
 </script>
 
-<!-- .pwa-form-dialog__*/.pwa-form-row* are shared, global classes — see assets/theme.scss -->
+<!-- .pwa-form-dialog__*/.pwa-form-row* are shared, global classes — see styles/theme.scss -->
 

@@ -427,12 +427,12 @@ describe("AppEntityList", () => {
   // from. These read the actual stylesheets instead of asserting on DOM
   // behavior. Styles for this component live in AppEntityList.css (scoped,
   // `<style scoped src>`) and the shared mobile-feed stagger animation in
-  // assets/transitions.css (global, shared with other feeds) — not inlined
+  // styles/transitions.css (global, shared with other feeds) — not inlined
   // in the .vue file, so both are checked here.
-  describe("styling facts (AppEntityList.css / assets/transitions.css)", () => {
+  describe("styling facts (AppEntityList.css / styles/transitions.css)", () => {
     const css = readFileSync(path.resolve(__dirname, "./AppEntityList.css"), "utf-8");
     const transitionsCss = readFileSync(
-      path.resolve(__dirname, "../assets/transitions.css"),
+      path.resolve(__dirname, "../styles/transitions.css"),
       "utf-8",
     );
 
@@ -528,12 +528,12 @@ describe("AppEntityList", () => {
     it("rows/footer separator is a single line: Vuetify's divider in --pwa-table-border, no extra footer border-top", () => {
       // A footer border-top stacked on Vuetify's own <VDivider> rendered as a thick double line.
       expect(css).not.toMatch(/\.v-data-table-footer\)\s*{[^}]*border-top/);
-      const themeScss = readFileSync(path.resolve(__dirname, "../assets/theme.scss"), "utf-8");
+      const themeScss = readFileSync(path.resolve(__dirname, "../styles/theme.scss"), "utf-8");
       expect(themeScss).toMatch(/\.v-data-table > \.v-divider\s*{[^}]*border-color:\s*var\(--pwa-table-border\)[^}]*opacity:\s*1/);
     });
 
     it("footer's items-per-page select renders as plain text: no outline, no chevron", () => {
-      const themeScss = readFileSync(path.resolve(__dirname, "../assets/theme.scss"), "utf-8");
+      const themeScss = readFileSync(path.resolve(__dirname, "../styles/theme.scss"), "utf-8");
       expect(themeScss).toMatch(
         /\.v-data-table-footer__items-per-page \.v-field__outline,\s*\.v-data-table-footer__items-per-page \.v-select__menu-icon\s*{\s*display:\s*none/,
       );
@@ -573,6 +573,19 @@ describe("AppEntityList", () => {
       const wrap = wrapper.find(".app-entity-list__table-wrap");
       expect(wrap.exists()).toBe(true);
       expect(wrap.find(".v-data-table-footer").exists()).toBe(true);
+    });
+
+    it("shows Reset view in the footer only while sort or rows differ from the default (CORE-45)", async () => {
+      const wrapper = await mountEntityList({ items: [{ id: "a", name: "Alpha" }] });
+      const reset = () => wrapper.find('[data-testid="entity-list-reset-view"]');
+      expect(reset().exists()).toBe(false);
+      await wrapper.find(".app-entity-list__table-wrap th.v-data-table__th--sortable").trigger("click");
+      await flushPromises();
+      expect(reset().exists()).toBe(true);
+      expect(wrapper.find(".v-data-table-footer").element.contains(reset().element)).toBe(true);
+      await reset().trigger("click");
+      await flushPromises();
+      expect(reset().exists()).toBe(false);
     });
   });
 });

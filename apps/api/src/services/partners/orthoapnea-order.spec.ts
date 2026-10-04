@@ -235,6 +235,12 @@ describe("createOrthoApneaTreatment", () => {
   it("records the request/response and marks partner_link synced with the returned statusId", async () => {
     const { plan } = await setupPatientAndPlan();
 
+    // NEO-217: before any partner call the plan carries no order state.
+    const unsent = await withTenant(TENANT_SLUG, (client) => getTreatmentPlanById(client, plan.id));
+    expect(unsent?.order_sync_status).toBeNull();
+    expect(unsent?.order_number).toBeNull();
+    expect(unsent?.order_sent_at).toBeNull();
+
     stubFetchRoutes({
       [LOGIN_ROUTE[0]]: LOGIN_ROUTE[1],
       "/api/treatments": () => ({ status: 200, body: treatmentDtoFixture }),
@@ -251,6 +257,12 @@ describe("createOrthoApneaTreatment", () => {
     expect(link?.external_status).toBe("1");
     createdPartnerLinkIds.push(link!.id);
 
+    // NEO-217: the plan read (list + detail) carries the order number and state for the device tile.
+    const sent = await withTenant(TENANT_SLUG, (client) => getTreatmentPlanById(client, plan.id));
+    expect(sent?.order_sync_status).toBe("synced");
+    expect(sent?.order_number).toBe("452434");
+    expect(sent?.order_sent_at).not.toBeNull();
+
     const transactions = await query<{
       action: string;
       success: boolean;
@@ -266,6 +278,36 @@ describe("createOrthoApneaTreatment", () => {
     expect(transactions[0]!.request_payload).toEqual(wizardPayload);
     // create_treatment's expected-fields baseline is a deliberate subset — no REQUIRED field should be missing.
     expect(transactions[0]!.validation_report.missingFields).toEqual([]);
+  });
+
+  it("sends the DTO as OA's portal does: multipart/form-data with one `treatmentDTO` JSON-string field (rules §3.2)", async () => {
+    const { plan } = await setupPatientAndPlan();
+    const inits: RequestInit[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init: RequestInit = {}) => {
+        if (url.includes("/api/login")) return { ok: true, status: 200, json: async () => ({ token: fakeJwt(1800) }) } as Response;
+        if (url.includes("/api/treatments")) {
+          inits.push(init);
+          return { ok: true, status: 200, json: async () => treatmentDtoFixture } as Response;
+        }
+        throw new Error(`Unmocked fetch call in test: ${url}`);
+      })
+    );
+
+    const dto = { patientId: 44171, retrusionMax: -4, protrusionMax: 6, sequence: { seq1: 0 } };
+    await createOrthoApneaTreatment(TENANT_SLUG, plan.id, dto);
+    const link = await withTenant(TENANT_SLUG, (client) => getPartnerLink(client, "orthoapnea", "treatment_plan", plan.id));
+    createdPartnerLinkIds.push(link!.id);
+
+    expect(inits).toHaveLength(1);
+    const body = inits[0]!.body;
+    expect(body).toBeInstanceOf(FormData);
+    const form = body as FormData;
+    expect([...form.keys()]).toEqual(["treatmentDTO"]);
+    expect(JSON.parse(form.get("treatmentDTO") as string)).toEqual(dto);
+    // No hand-set Content-Type: fetch must write the multipart boundary itself.
+    expect(new Headers(inits[0]!.headers).has("Content-Type")).toBe(false);
   });
 
   it("marks partner_link failed and logs a failed transaction when OrthoApnea returns an error status", async () => {
@@ -296,6 +338,9 @@ describe("createOrthoApneaTreatment", () => {
     const localPlan = await withTenant(TENANT_SLUG, (client) => getTreatmentPlanById(client, plan.id));
     expect(localPlan).not.toBeNull();
     expect(localPlan?.status).toBe(plan.status);
+    // NEO-217: …but the tile must show it as "Requiere atención".
+    expect(localPlan?.order_sync_status).toBe("failed");
+    expect(localPlan?.order_number).toBeNull();
   });
 
   it("marks partner_link failed (distinct from an HTTP error) when OrthoApnea is unreachable", async () => {

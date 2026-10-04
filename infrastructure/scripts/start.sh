@@ -50,6 +50,8 @@ echo "Building @neo/email..."
 pnpm --filter @neo/email build
 echo "Building @neo/documents..."
 pnpm --filter @neo/documents build
+echo "Building @neo/device-order..."
+pnpm --filter @neo/device-order build
 
 # ─── 5. Start services (API + app + website + telegram) ──────────────────────
 # DB migrations run automatically on API startup (apps/api/src/db/migrations.ts)

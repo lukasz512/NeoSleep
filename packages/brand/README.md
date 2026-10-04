@@ -44,4 +44,4 @@ brand/
 Brand **primary** and **secondary** colours are not stored as image files here; they are defined in:
 
 - **Database**: `app_config` (tenant schema, created in `apps/api/migrations/001_tenant_schema.sql`) holds `primary_color`, `secondary_color`, `border_radius`, etc., shared across website and rep app.
-- **Fallback in code**: Until the app loads config from the API server, the rep app uses `apps/pwa/src/assets/scss/_brand-colors.scss` and the website uses `apps/web/src/assets/website-theme.scss`. The colour in the logo (green) is the **secondary** brand colour; the **primary** is to be set in the brandbook and in `app_config`.
+- **Fallback in code**: Until the app loads config from the API server, the rep app uses `apps/pwa/src/styles/_brand-colors.scss` and the website uses `apps/web/src/assets/website-theme.scss`. The colour in the logo (green) is the **secondary** brand colour; the **primary** is to be set in the brandbook and in `app_config`.

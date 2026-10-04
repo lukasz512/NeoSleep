@@ -1,4 +1,4 @@
-import { APP_STORAGE_KEYS } from "../constants";
+import { APP_STORAGE_KEYS } from "../config/storageKeys";
 
 /**
  * The patient's in-progress answers, kept on their own device until they

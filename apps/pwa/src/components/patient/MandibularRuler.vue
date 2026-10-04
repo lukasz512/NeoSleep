@@ -1,12 +1,31 @@
 <template>
-  <div class="mandibular-ruler">
-    <div class="mandibular-ruler__track">
-      <!-- Both incisors are positioned in the track's own coordinate space
-           (same left:%/toPercent() basis as the MR/MP/SP markers below,
-           instead of the outer .mandibular-ruler box) — that's what
-           guarantees the resting position (sup fixed, inf via spPercent's
-           50% default) lands exactly on the "0" tick, not just close to it. -->
-      <img :src="incisorSup" alt="" class="mandibular-ruler__incisor mandibular-ruler__incisor--sup" style="left: 50%" />
+  <!-- The whole ruler is the SP slider (NEO-225): press or drag anywhere on it
+       to move the lower incisor, snapped to the 1 mm ticks; arrows / Home / End
+       from the keyboard. -->
+  <div
+    ref="root"
+    class="mandibular-ruler"
+    :class="{ 'mandibular-ruler--dragging': dragging }"
+    role="slider"
+    tabindex="0"
+    :aria-label="sliderLabel"
+    :aria-valuemin="-RULER_RANGE_MM"
+    :aria-valuemax="RULER_RANGE_MM"
+    :aria-valuenow="startingPointMm ?? undefined"
+    :aria-valuetext="startingPointMm == null ? undefined : `${startingPointMm} mm`"
+    @pointerdown="onPointerDown"
+    @pointermove="onPointerMove"
+    @pointerup="dragging = false"
+    @pointercancel="dragging = false"
+    @keydown="onKeydown"
+  >
+    <div ref="track" class="mandibular-ruler__track">
+      <!-- Both incisors live in the track's own coordinate space (same
+           left:% basis as the MR/MP/SP markers). Each image is shifted by
+           its own tip offset (INCISOR_TIP), so the incisal TIP — not the
+           image centre — sits on its position: with default values both
+           tips touch the "0" line, as on OrthoApnea's own ruler. -->
+      <img :src="incisorSup" alt="" class="mandibular-ruler__incisor mandibular-ruler__incisor--sup" :style="supStyle" />
       <div class="mandibular-ruler__ticks">
         <span v-for="n in 41" :key="n" class="mandibular-ruler__tick" :class="{ 'mandibular-ruler__tick--major': (n - 1) % 10 === 0 }" />
       </div>
@@ -22,7 +41,7 @@
            marker at dead-center by default (before the rep has entered
            anything) would falsely imply "SP = 0" instead of "not set yet". -->
       <div v-if="spSet" class="mandibular-ruler__marker mandibular-ruler__marker--sp" :style="{ left: spPercent + '%' }" title="SP" />
-      <img :src="incisorInf" alt="" class="mandibular-ruler__incisor mandibular-ruler__incisor--inf" :style="{ left: spPercent + '%' }" />
+      <img :src="incisorInf" alt="" class="mandibular-ruler__incisor mandibular-ruler__incisor--inf" :style="infStyle" />
     </div>
     <div class="mandibular-ruler__scale">
       <span>-2cm</span>
@@ -33,66 +52,113 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, useTemplateRef } from "vue";
+import { INCISOR_TIP, RULER_RANGE_MM, incisorStyle, mmFromPointer, rulerPercent } from "./mandibularRuler";
 
 /**
  * Replica of OrthoApnea's own "app-mandibular-advancement" ruler: a -2cm/+2cm
  * scale with MR/MP/SP markers and incisor graphics (downloaded — see
- * assets/orthoapnea/teeth/) that reposition as the underlying values change.
- * The exact value→position formula their Angular component uses internally
- * wasn't captured (only the visual concept + confirmed value examples) —
- * this maps ±20mm to the ruler's full width as a reasonable approximation,
- * not a verified match. Ruler width itself (60% of its container, see
- * .mandibular-ruler) matches the real site's more compact proportion.
+ * assets/orthoapnea/teeth/). ±20mm maps to the ruler's full width.
  *
- * Upper incisor (sup) stays fixed at center — it's the reference point, same
- * convention as DeviationDiagram's fixed upper arch. Only the lower incisor
- * (inf) moves, tracking the actual configured position (SP) — an earlier
- * version bound sup/inf to mp/mr directly, which at extreme MR/MP values
- * sent the two images to opposite ends of the ruler instead of sitting near
- * each other at the current bite position.
- *
- * MR/MP get small vertical text labels above their tick marks — confirmed
- * from a live OA screenshot, previously missing here (the markers existed
- * but were unlabeled, only distinguishable by a hover title attribute).
+ * Upper incisor (sup) stays fixed with its tip on 0 — it's the reference
+ * point, same convention as DeviationDiagram's fixed upper arch. Only the
+ * lower incisor (inf) moves, its tip tracking the Starting Point in mm (null
+ * = not set yet = resting on 0). The images are positioned by their incisal
+ * tip, not their centre (Łukasz, 2026-10-03: OA's tips touch the 0 line, ours
+ * sat centred on it). MR/MP carry small vertical text labels.
  */
 const props = defineProps<{
   retrusionMax: number | null;
   protrusionMax: number | null;
-  startingPoint: number | null;
-  startingPointPercent: number | null;
+  /** SP already converted to mm (startingPointMm from @device-order), or null when not entered. */
+  startingPointMm: number | null;
+  /** Accessible name of the slider (the parent owns i18n). */
+  sliderLabel?: string;
 }>();
+
+const emit = defineEmits<{ "update:startingPointMm": [mm: number] }>();
+
+const root = useTemplateRef<HTMLElement>("root");
+const track = useTemplateRef<HTMLElement>("track");
+const dragging = ref(false);
+
+function emitAt(clientX: number) {
+  if (!track.value) return;
+  const mm = mmFromPointer(clientX, track.value.getBoundingClientRect());
+  if (mm !== null && mm !== props.startingPointMm) emit("update:startingPointMm", mm);
+}
+
+function onPointerDown(e: PointerEvent) {
+  dragging.value = true;
+  // Keeps the drag alive when the finger leaves the ruler (jsdom has no setPointerCapture).
+  root.value?.setPointerCapture?.(e.pointerId);
+  emitAt(e.clientX);
+}
+
+function onPointerMove(e: PointerEvent) {
+  if (dragging.value) emitAt(e.clientX);
+}
+
+const KEY_STEPS: Record<string, (mm: number) => number> = {
+  ArrowRight: (mm) => mm + 1,
+  ArrowUp: (mm) => mm + 1,
+  ArrowLeft: (mm) => mm - 1,
+  ArrowDown: (mm) => mm - 1,
+  Home: () => -RULER_RANGE_MM,
+  End: () => RULER_RANGE_MM,
+};
+
+function onKeydown(e: KeyboardEvent) {
+  const step = KEY_STEPS[e.key];
+  if (!step) return;
+  e.preventDefault();
+  const next = Math.max(-RULER_RANGE_MM, Math.min(RULER_RANGE_MM, step(Math.round(props.startingPointMm ?? 0))));
+  if (next !== props.startingPointMm) emit("update:startingPointMm", next);
+}
 
 const incisorSup = new URL("../../assets/orthoapnea/teeth/incisor-sup.png", import.meta.url).href;
 const incisorInf = new URL("../../assets/orthoapnea/teeth/incisor-inf.png", import.meta.url).href;
 
-const RANGE_MM = 20;
-function toPercent(mm: number): number {
-  const clamped = Math.max(-RANGE_MM, Math.min(RANGE_MM, mm));
-  return 50 + (clamped / RANGE_MM) * 50;
-}
-
-const mrPercent = computed(() => toPercent(props.retrusionMax ?? 0));
-const mpPercent = computed(() => toPercent(props.protrusionMax ?? 0));
-const spSet = computed(() => props.startingPoint != null || props.startingPointPercent != null);
-const spPercent = computed(() => {
-  if (props.startingPoint != null) return toPercent(props.startingPoint);
-  if (props.startingPointPercent != null) {
-    const mr = props.retrusionMax ?? 0;
-    const mp = props.protrusionMax ?? 0;
-    return toPercent(mr + (props.startingPointPercent / 100) * (mp - mr));
-  }
-  return 50;
-});
+const mrPercent = computed(() => rulerPercent(props.retrusionMax ?? 0));
+const mpPercent = computed(() => rulerPercent(props.protrusionMax ?? 0));
+const spSet = computed(() => props.startingPointMm != null);
+const spPercent = computed(() => rulerPercent(props.startingPointMm ?? 0));
+const supStyle = computed(() => incisorStyle(rulerPercent(0), INCISOR_TIP.sup));
+const infStyle = computed(() => incisorStyle(spPercent.value, INCISOR_TIP.inf));
 </script>
 
 <style scoped>
+/* Width comes from the parent (the order wizard puts it beside the SP steppers, NEO-225). */
 .mandibular-ruler {
   position: relative;
-  width: 60%;
-  margin: 0 auto 0 0;
+  width: 100%;
   padding-top: 44px;
   padding-bottom: 8px;
+  border-radius: var(--pwa-radius);
+  cursor: ew-resize;
+  /* Horizontal drags move SP; vertical swipes still scroll the form on a phone. */
+  touch-action: pan-y;
+  user-select: none;
+}
+
+.mandibular-ruler:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 4px;
+}
+
+/* Follow the finger 1:1 while dragging; the 0.15s glide is for stepper/keyboard changes. */
+.mandibular-ruler--dragging .mandibular-ruler__incisor,
+.mandibular-ruler--dragging .mandibular-ruler__marker {
+  transition: none;
+}
+
+.mandibular-ruler__incisor--inf {
+  cursor: grab;
+}
+
+.mandibular-ruler--dragging,
+.mandibular-ruler--dragging .mandibular-ruler__incisor--inf {
+  cursor: grabbing;
 }
 
 .mandibular-ruler__track {
@@ -165,26 +231,21 @@ const spPercent = computed(() => {
   width: 3px;
 }
 
+/* Size and translate come from incisorStyle() (mandibularRuler.ts) — the
+   tip offset is a fraction of the image's own box, so it holds at any size. */
 .mandibular-ruler__incisor {
   position: absolute;
-  width: 20px;
-  transform: translateX(-50%);
   transition: left 0.15s ease;
 }
 
-/* -44px = the container's 44px padding-top, now measured from the track's
-   own top edge (0) since this image lives inside .mandibular-ruler__track —
-   keeps it visually right above the track, same spot as before the move. */
+/* Tips touch the track: the upper image's bottom edge on its top, the lower
+   image's top edge on its bottom (the tips sit on those edges, see INCISOR_TIP). */
 .mandibular-ruler__incisor--sup {
-  top: -44px;
+  bottom: 100%;
 }
 
-/* 10px clears the track (2px height) plus the tick marks/MR-MP marker
-   labels, which only extend upward from the track — sits right below,
-   mirroring how --sup sits right above. */
 .mandibular-ruler__incisor--inf {
-  top: 10px;
-  height: 18px;
+  top: 100%;
 }
 
 .mandibular-ruler__scale {
@@ -192,9 +253,7 @@ const spPercent = computed(() => {
   justify-content: space-between;
   font-size: 0.6875rem;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  /* Clears the --inf incisor image (top:54px + ~18px tall) with a small gap —
-     22px previously put this row right under the track, overlapping the
-     incisor once it moved below the track instead of above it. */
+  /* Clears the --inf incisor image (~29px tall, right under the track). */
   margin-top: 34px;
 }
 </style>

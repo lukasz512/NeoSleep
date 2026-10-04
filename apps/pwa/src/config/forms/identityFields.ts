@@ -17,11 +17,10 @@ import { useAuthStore } from "../../stores/auth";
 // — kept in sync manually since the two runtimes don't share code.
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** Exported for the one other place outside FormRenderer that needs the same
- * email format check (OrthoApneaOrderWizard's alternative-address sub-form —
- * a bespoke multi-step form, not FormRenderer-driven, so it can't go through
- * rulesFor()'s automatic i18n-key translation and must translate the
- * returned key itself). Returns the raw i18n key on failure, same as before. */
+/** Exported so a bespoke form outside FormRenderer can reuse the same email
+ * format check (it must translate the returned key itself, since it doesn't
+ * go through rulesFor()'s automatic i18n-key translation). Returns the raw
+ * i18n key on failure. */
 export function emailFormatRule(v: unknown): true | string {
   const s = String(v ?? "").trim();
   if (!s) return true;

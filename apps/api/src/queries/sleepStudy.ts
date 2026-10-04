@@ -3,6 +3,7 @@ import { getSleepStudiesPaginated, getSleepStudyById, type GetSleepStudiesFilter
 import { getLatestSleepStudyIdForPatient } from "../db/sleepStudy.js";
 import { GetPatientByIdQuery } from "./patient.js";
 import { NotFoundError } from "../errors.js";
+import { getViewer, patientListScope, requirePatientInScope } from "./entityAccess.js";
 
 /**
  * The latest sleep study's id only — what a device order needs
@@ -20,8 +21,17 @@ export async function GetLatestSleepStudyRefQuery(ctx: TenantContext, patientId:
 /**
  * QUERIES — Sleep study domain.
  *
- * Read-only. No writes, no audit log.
+ * Read-only. No writes, no audit log. Every read is limited to patients the
+ * viewer may see (CORE-104, entityAccess.ts).
  */
+
+/** The study, 404 when missing or its patient is out of the viewer's reach — guard for study writes and sub-resources. */
+export async function requireSleepStudyInScope(ctx: TenantContext, id: string): Promise<SleepStudy> {
+  const study = await getSleepStudyById(ctx.client, id);
+  if (!study) throw new NotFoundError("SleepStudy", id);
+  await requirePatientInScope(ctx, study.patient_id);
+  return study;
+}
 
 export type SleepStudyDto = SleepStudy;
 
@@ -52,6 +62,8 @@ export async function GetSleepStudyListQuery(
     patient_id: input.patient_id,
     status: input.status,
     search: input.search,
+    // CORE-104: only studies of patients the viewer may see (a doctor: their own).
+    patientScope: patientListScope(await getViewer(ctx)),
   };
 
   const page = input.page ?? 1;
@@ -66,5 +78,6 @@ export async function GetSleepStudyListQuery(
 export async function GetSleepStudyByIdQuery(ctx: TenantContext, id: string): Promise<SleepStudyDto | null> {
   const study = await getSleepStudyById(ctx.client, id);
   if (!study) return null;
+  await requirePatientInScope(ctx, study.patient_id);
   return toDto(study);
 }

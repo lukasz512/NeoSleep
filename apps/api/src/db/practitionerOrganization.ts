@@ -158,3 +158,51 @@ export async function setUserPrimaryOrganization(client: PoolClient, practitione
     throw new DatabaseError("setUserPrimaryOrganization", err);
   }
 }
+
+/** The address fields of the HCO a device order ships to (organization columns, as stored). */
+export interface DeliveryOrganization {
+  id: string;
+  name: string;
+  address_line1: string | null;
+  city: string | null;
+  postal_code: string | null;
+  country_code: string | null;
+  phone: string | null;
+  email: string | null;
+  is_primary: boolean;
+}
+
+/**
+ * Where a device ordered by this practitioner ships: their primary HCO
+ * (practitioner_organization.is_primary), else their only affiliation, else
+ * null — with several clinics and none marked primary there is no right one
+ * to pick (Łukasz, 2026-10-03, NEO-213: orders always go to the ordering
+ * doctor's primary HCO).
+ */
+export async function getDeliveryOrganization(client: PoolClient, practitionerId: string): Promise<DeliveryOrganization | null> {
+  const rows = await listDeliveryOrganizations(client, practitionerId);
+  const primary = rows.find((r) => r.is_primary);
+  if (primary) return primary;
+  return rows.length === 1 ? rows[0]! : null;
+}
+
+/**
+ * Every clinic this practitioner is affiliated with, primary first — the
+ * admin's choice of delivery address in the order wizard (NEO-210 D2).
+ */
+export async function listDeliveryOrganizations(client: PoolClient, practitionerId: string): Promise<DeliveryOrganization[]> {
+  try {
+    const { rows } = await client.query<DeliveryOrganization>(
+      `SELECT o.id, o.name, o.address_line1, o.city, o.postal_code, o.country_code, o.phone, o.email, po.is_primary
+       FROM practitioner_organization po
+       JOIN organization o ON o.id = po.organization_id AND o.deleted_at IS NULL
+       WHERE po.practitioner_id = $1
+       ORDER BY po.is_primary DESC, o.name ASC`,
+      [practitionerId]
+    );
+    return rows;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("listDeliveryOrganizations", err);
+  }
+}

@@ -2,7 +2,7 @@
 # PostToolUse hook for mcp__claude_ai_Linear__save_issue.
 # When a NEW Linear ticket is created (no tool_input.id, i.e. not an update),
 # surface its identifier so the session title / branch / PR can lead with it,
-# per CLAUDE.md's "Linear traceability" section.
+# per docs/CLAUDE_WORKFLOW.md "Linear traceability".
 set -euo pipefail
 
 input=$(cat)

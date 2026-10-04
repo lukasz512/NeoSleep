@@ -12,7 +12,7 @@
 <script setup lang="ts">
 /**
  * Single button used app-wide instead of raw <VBtn> — flat styling and
- * hover behavior come from the global `.v-btn` rules in assets/theme.scss,
+ * hover behavior come from the global `.v-btn` rules in styles/theme.scss,
  * so nothing needs to be repeated per call site. All other VBtn props
  * (variant, color, icon, size, ...) and slots pass through untouched.
  *

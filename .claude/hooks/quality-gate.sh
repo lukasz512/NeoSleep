@@ -104,7 +104,7 @@ branch_artifact_check() {
     || FAILS+=("$marker 'sections' must cover summary, run-locally and qa-checklist.")
   # Once the branch is pushed, the Artifact must carry a "Create PR" button at the top
   # (Łukasz, 2026-09-24: "niech pr przycisk będzie na górze artefaktu") — the pre-filled
-  # compare URL from CLAUDE.md's Linear traceability section. He still clicks Create himself.
+  # compare URL from docs/CLAUDE_WORKFLOW.md "Linear traceability". He still clicks Create himself.
   # Once he has opened the PR, ship-artifact's build.mjs links the button to it instead
   # (…/pull/<n>) — accept that too, or every refresh after the PR exists would be blocked.
   if git rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1; then
@@ -242,7 +242,19 @@ dev_deploy_check() {
   fi
 }
 
+# On-screen video titles carry no punctuation (Łukasz, 2026-10-03, NEO-204). Runs on every
+# Stop, not only when a composition changed: it takes milliseconds and also catches a title
+# that slipped in on an earlier turn.
+video_titles_check() {
+  local script="infrastructure/scripts/check-video-titles.mjs" out
+  [ -f "$script" ] || return 0
+  if ! out="$(node "$script" 2>&1)"; then
+    FAILS+=("Video titles with punctuation (forbidden: . , ; : ! ? …). Rewrite them without it, using a line break (<br>) where two phrases meet, then re-render:"$'\n'"$out")
+  fi
+}
+
 emit_result() {
+  video_titles_check
   dev_deploy_check
   if [ "${#FAILS[@]}" -eq 0 ]; then
     if [ "${#WARNS[@]}" -gt 0 ]; then

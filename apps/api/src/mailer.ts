@@ -9,6 +9,7 @@ import {
   type EmailAttachment,
 } from "@neo/email";
 import { maskEmail } from "./utils/maskEmail.js";
+import { AppError } from "./errors.js";
 import { RESEND_API_KEY, RESEND_FROM_EMAIL, RESEND_NOTIFY_TO, PARTNER_DOCS_CC_EMAIL, RESEND_WEBHOOK_SECRET } from "./env.js";
 
 /** Every personalized email needs at least these to build a proper "Hi {title} {name}," greeting,
@@ -106,6 +107,12 @@ async function sendEmail(logLabel: string, args: SendEmailArgs): Promise<string 
       ...(args.tags ? { tags: [{ name: "tenant", value: args.tags.tenant }, { name: "kind", value: args.tags.kind }] } : {}),
     });
     if (error) {
+      // Resend refused this recipient (a test domain like example.com, a
+      // malformed or suppressed address): the address is the problem, not
+      // the server — say so instead of a generic failure (NEO-202).
+      if (error.name === "validation_error" && /`to`|\bto\b field|recipient/i.test(error.message)) {
+        throw new EmailRejectedError(`${error.name}: ${error.message}`);
+      }
       throw new Error(`${error.name}: ${error.message}`);
     }
     console.log(`[mailer] Sent ${logLabel} to ${maskEmail(args.to)}${data?.id ? ` (${data.id})` : ""}`);
@@ -503,6 +510,13 @@ export async function sendSignedDocumentsEmail(
 
 export class ResendWebhookNotConfiguredError extends Error {}
 
+/** The mail provider refused the recipient address — 422 EMAIL_REJECTED, shown as "check the address". */
+export class EmailRejectedError extends AppError {
+  constructor(detail: string) {
+    super("The mail server rejected this email address", "EMAIL_REJECTED", 422, detail);
+  }
+}
+
 /**
  * Checks a Resend webhook's signature (Svix / Standard Webhooks: svix-id,
  * svix-timestamp, svix-signature over the raw body) and returns the parsed
@@ -552,4 +566,65 @@ export async function sendEmailSentConfirmation(
     attachments: getEmailAttachments(socials),
     fromName: clinicFromName(info.clinic),
   });
+}
+
+export interface ReconciliationAlert {
+  status: "mismatch" | "failed";
+  /** "dev" / "prod" / "local" — whose orders were compared. */
+  environment: string;
+  matched: number;
+  mismatches: number;
+  oursSent: number;
+  labTotal: number;
+  /** One line per order that needs attention: reason + lab order number. No patient data. */
+  lines: string[];
+  error: string | null;
+  /** Absolute link to the admin panel. */
+  panelUrl: string;
+}
+
+/**
+ * Device-order reconciliation alert (NEO-218, Łukasz Q1): sent to admins only
+ * when a run finds a mismatch or can't read the lab — a clean run sends
+ * nothing. Internal notification like sendContactEmail, so unlocalized; it
+ * carries counts, reason codes and lab order numbers only, never patient
+ * names (the details stay behind the admin panel's login).
+ */
+export async function sendDeviceOrderReconciliationAlert(to: string, alert: ReconciliationAlert): Promise<void> {
+  const env = alert.environment.toUpperCase();
+  const subject =
+    alert.status === "failed"
+      ? `[NeoSleep ${env}] Device order check failed`
+      : `[NeoSleep ${env}] ${alert.mismatches} device order(s) need attention`;
+  const rows: [string, string][] = [
+    ["Environment", alert.environment],
+    ["Result", alert.status === "failed" ? `could not read the lab: ${alert.error ?? "unknown error"}` : "mismatch"],
+    ["Matched", `${alert.matched} of ${alert.matched + alert.mismatches}`],
+    ["Sent from NeoSleep", String(alert.oursSent)],
+    ["Listed by the lab", String(alert.labTotal)],
+  ];
+  const tableRows = rows
+    .map(([label, value]) => `<tr><td style="padding:4px 12px 4px 0;font-weight:600;white-space:nowrap;vertical-align:top">${escapeHtml(label)}</td><td style="padding:4px 0">${escapeHtml(value)}</td></tr>`)
+    .join("");
+  const list =
+    alert.lines.length > 0
+      ? `<ul style="margin:12px 0;padding-left:20px;font-size:15px;">${alert.lines.map((l) => `<li>${escapeHtml(l)}</li>`).join("")}</ul>`
+      : "";
+  const bodyHtml = `
+    <h1 style="margin:0 0 16px;font-size:19px;font-weight:bold;color:#128F83;">${escapeHtml(subject)}</h1>
+    <table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%;font-family:Arial,Helvetica,sans-serif;font-size:15px;">${tableRows}</table>
+    ${list}
+    <p style="margin:16px 0 0;font-size:15px;"><a href="${escapeHtml(alert.panelUrl)}" style="color:#128F83;">Open the admin panel</a> for the details.</p>`;
+
+  const socials = getSocialsForRegion(null);
+  const html = renderEmailLayout({
+    bodyHtml,
+    footerTagline: "NeoSleep — internal notification",
+    footerCities: emailT(null, "email.footer.cities"),
+    footerCopyright: emailT(null, "email.footer.copyright", { year: String(new Date().getFullYear()) }),
+    supportLeadIn: emailT(null, "email.footer.support"),
+    socials,
+  });
+
+  await sendEmail("device order reconciliation alert", { to, subject, html, attachments: getEmailAttachments(socials) });
 }

@@ -14,7 +14,7 @@
       />
       <ul class="studies-summary__grid">
         <li v-for="item in checklist.items" :key="item.key">
-          <button type="button" class="studies-summary__item" :class="`studies-summary__item--${item.status}`" @click="emit('open', item.key)">
+          <button type="button" class="studies-summary__item" :class="`studies-summary__item--${item.status}`" @click="emit('open', item.key, item.category)">
             <ChecklistStatusIcon :status="item.status" />
             <span class="studies-summary__label">{{ itemTitle(item) }}</span>
           </button>
@@ -29,7 +29,7 @@ import { computed, onMounted } from "vue";
 import { useI18n } from "vue-i18n";
 import AppSegmentProgress from "../AppSegmentProgress.vue";
 import ChecklistStatusIcon from "../questionnaire/ChecklistStatusIcon.vue";
-import { checklistSegments, usePatientChecklist, type ChecklistItem } from "../../composables/usePatientChecklist";
+import { checklistSegments, usePatientChecklist, type ChecklistCategory, type ChecklistItem } from "../../composables/usePatientChecklist";
 import { useVisiblePolling } from "../../composables/useVisiblePolling";
 import { checklistItemTitle } from "../../config/questionnaires";
 
@@ -40,7 +40,7 @@ import { checklistItemTitle } from "../../config/questionnaires";
  * parent renders it only for those roles).
  */
 const props = defineProps<{ patientId: string }>();
-const emit = defineEmits<{ open: [itemKey: string] }>();
+const emit = defineEmits<{ open: [itemKey: string, category: ChecklistCategory] }>();
 const { t } = useI18n();
 
 const checklistApi = usePatientChecklist(() => props.patientId);
