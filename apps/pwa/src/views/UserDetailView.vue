@@ -30,7 +30,15 @@
       @retry="loadUser"
     >
       <template v-if="user" #record-tile>
-        <AppAvatar :name="user.name" entity-type="user" :first-name="user.first_name" :last-name="user.last_name" :size="48" />
+        <AppAvatar
+          :name="user.name"
+          entity-type="user"
+          :first-name="user.first_name"
+          :last-name="user.last_name"
+          :role="roleKey"
+          :role-label="t(`user.users.role.${roleKey}`)"
+          :size="48"
+        />
       </template>
       <template v-if="user" #record-details>
         <IdentityDetails :details="[t(`user.users.role.${roleKey}`)]" />

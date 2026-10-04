@@ -196,7 +196,8 @@ describe("AppLayout", () => {
     it("the folded logo is the avatar's size, and folding is measured from the bar, not a breakpoint", () => {
       const layout = readLayout();
       expect(slotBlock(layout, "app-bar-start")).toContain(':mark-size="AVATAR_SIZE"');
-      expect(slotBlock(layout, "app-bar-actions")).toContain('<VAvatar :size="AVATAR_SIZE"');
+      // CORE-114: the bar avatar is AppAvatar, carrying the user's role badge.
+      expect(slotBlock(layout, "app-bar-actions")).toMatch(/<AppAvatar[^>]*:role="user\.roleKey"[^>]*:size="AVATAR_SIZE"/);
       // The DEV badge after the logo counts towards the room the logo needs.
       expect(layout).toMatch(/useBarLogoFit\(barLogo, barActions, wordmarkWidth, isMobile, \{ el: envBadge, gap: BRAND_GAP \}\)/);
       expect(slotBlock(layout, "app-bar-actions")).toContain('ref="barActions"');

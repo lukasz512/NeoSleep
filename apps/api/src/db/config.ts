@@ -25,6 +25,12 @@ export interface AppConfig {
   font_family: string | null;
   pwa_theme_color: string | null;
   integrations: Record<string, unknown>;
+  /**
+   * Role → avatar badge icon overrides (CORE-114). Read from
+   * app_config.metadata.userRoleBadges — a display preference, no column of
+   * its own; the PWA checks every icon name against its own allowlist.
+   */
+  user_role_badges: Record<string, string>;
 }
 
 export type AppConfigUpdate = Partial<
@@ -68,7 +74,14 @@ const DEFAULT_APP_CONFIG: AppConfig = {
   font_family: null,
   pwa_theme_color: null,
   integrations: {},
+  user_role_badges: {},
 };
+
+/** Keeps only string values of a jsonb object — anything else becomes {}. */
+function stringRecord(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).filter((e): e is [string, string] => typeof e[1] === "string"));
+}
 
 export async function getAppConfig(): Promise<AppConfig> {
   try {
@@ -78,6 +91,7 @@ export async function getAppConfig(): Promise<AppConfig> {
               logo_url, logo_dark_url, icon_url, icon_dark_url,
               font_family, pwa_theme_color,
               COALESCE(integrations, '{}') AS integrations,
+              COALESCE(metadata->'userRoleBadges', '{}') AS user_role_badges,
               COALESCE(NULLIF(tenant_name, ''), $1) AS tenant_name,
               COALESCE(surface_color, $2) AS surface_color,
               COALESCE(surface_color_dark, $3) AS surface_color_dark,
@@ -109,6 +123,7 @@ export async function getAppConfig(): Promise<AppConfig> {
       font_family:          row.font_family          ?? null,
       pwa_theme_color:      row.pwa_theme_color      ?? null,
       integrations:         (row.integrations as Record<string, unknown>) ?? {},
+      user_role_badges:     stringRecord(row.user_role_badges),
     };
   } catch (err) {
     if (err instanceof AppError) throw err;

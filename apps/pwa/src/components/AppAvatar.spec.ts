@@ -151,3 +151,46 @@ describe("AppAvatar (photo)", () => {
     ).toContain("app-avatar--photo");
   });
 });
+
+describe("AppAvatar (user role badge, CORE-114)", () => {
+  const vuetify = () => createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
+  function mountUser(props: Record<string, unknown>) {
+    const w = mount(AppAvatar, { props: { entityType: "user", name: "Ana Ruiz", ...props }, global: { plugins: [vuetify()] } });
+    mountedWrappers.push(w);
+    return w;
+  }
+  const badge = (w: VueWrapper) => w.find("[data-testid=app-avatar-role-badge]");
+  const badgeIcon = (w: VueWrapper) => w.findAllComponents(AppIcon).at(-1)?.props("name");
+
+  it("admin gets the star on a primary disc, labelled with the role name", () => {
+    const w = mountUser({ role: "admin", roleLabel: "Admin" });
+    expect(badge(w).classes()).toContain("app-avatar__badge--primary");
+    expect(badge(w).attributes("aria-label")).toBe("Admin");
+    expect(badgeIcon(w)).toBe("star");
+  });
+
+  it("rep gets the quiet light disc with a pin", () => {
+    const w = mountUser({ role: "rep" });
+    expect(badge(w).classes()).toContain("app-avatar__badge--light");
+    expect(badgeIcon(w)).toBe("map-pin");
+  });
+
+  it("user doctor without specialty shows nav-hcp badge", () => {
+    expect(badgeIcon(mountUser({ role: "doctor" }))).toBe("nav-hcp");
+    expect(badgeIcon(mountUser({ role: "doctor", specialty: "dentist" }))).toBe("specialty-dentist");
+  });
+
+  it("badge rendered with avatarUrl and size 32", () => {
+    const w = mountUser({ role: "manager", avatarUrl: "https://example.com/a.png", size: 32 });
+    expect(badge(w).exists()).toBe(true);
+    expect(badgeIcon(w)).toBe("shield-check");
+  });
+
+  it("no badge for an unknown role, a user without a role, or a non-user entity", () => {
+    expect(badge(mountUser({ role: "superhero" })).exists()).toBe(false);
+    expect(badge(mountUser({})).exists()).toBe(false);
+    const patient = mount(AppAvatar, { props: { entityType: "patient", name: "Ana Ruiz", role: "admin" }, global: { plugins: [vuetify()] } });
+    mountedWrappers.push(patient);
+    expect(badge(patient).exists()).toBe(false);
+  });
+});
