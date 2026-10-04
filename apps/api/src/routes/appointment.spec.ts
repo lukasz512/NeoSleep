@@ -235,7 +235,8 @@ describe("/api/v1/appointments", () => {
     const badStatus = await request(app).get(`/api/v1/appointments/${crypto.randomUUID()}`).set("Authorization", admin.auth);
     expect([badId.status, noStart.status, tooLong.status, noDoctor.status, badStatus.status]).toEqual([400, 400, 400, 400, 404]);
     // NEO-109: each 400 names the field the booking form marks.
-    expect(noStart.body).toMatchObject({ code: "VALIDATION_ERROR", field: "start_at", reason: "required" });
+    // CORE-120: the form sends clinic wall-clock time, so a missing start names start_local.
+    expect(noStart.body).toMatchObject({ code: "VALIDATION_ERROR", field: "start_local", reason: "required" });
     expect(tooLong.body).toMatchObject({ code: "VALIDATION_ERROR", field: "duration_minutes", reason: "invalid" });
   });
 

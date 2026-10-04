@@ -43,13 +43,13 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-async function open(role: string) {
+async function open(role: string, extraProps: Record<string, unknown> = {}) {
   setActivePinia(createPinia());
   useAuthStore().user = { id: "u-1", email: "qa@clinic.test", role } as ReturnType<typeof useAuthStore>["user"];
   const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
   const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
   const wrapper = mount(AppointmentDialog, {
-    props: { modelValue: true, patient: PATIENT, startAt: "2031-09-10T16:00:00.000Z" },
+    props: { modelValue: true, patient: PATIENT, startAt: "2031-09-10T16:00:00.000Z", ...extraProps },
     global: { plugins: [i18n, vuetify] },
     attachTo: document.body,
   });
@@ -72,9 +72,44 @@ describe("AppointmentDialog (NEO-34)", () => {
     const [path, init] = apiFetch.mock.calls.at(-1)! as [string, { method: string }];
     expect([path, init.method]).toEqual(["/api/v1/appointments", "POST"]);
     expect(lastPostBody()).toMatchObject({ patient_id: "p-1", practitioner_id: "doc-1", duration_minutes: 60 });
-    expect(new Date(lastPostBody().start_at).toISOString()).toBe("2031-09-10T16:00:00.000Z");
+    // No clinic zone from the API here → the device zone bridges; the wall time is sent as shown (CORE-120).
+    expect(lastPostBody().start_local).toMatch(/^2031-09-1\dT\d{2}:00$/);
     expect(wrapper.emitted("saved")?.[0]).toEqual([SAVED]);
     expect(notify).toHaveBeenCalledWith("Appointment booked", "success", undefined, expect.objectContaining({ icon: "nav-appointments" }));
+  });
+
+  it("books in the clinic's wall-clock time: shows and sends 10:00 for an MX clinic, whatever the device zone (CORE-120)", async () => {
+    apiFetch.mockImplementation(async (path: string) =>
+      path.startsWith("/api/v1/appointments/booking-zone")
+        ? jsonResponse(true, 200, { timezone: "America/Mexico_City" })
+        : jsonResponse(true, 200, { items: [{ id: "doc-1", name: "Dra. Ruiz" }] }),
+    );
+    await open("admin");
+    const zoneCall = apiFetch.mock.calls.find(([p]) => String(p).startsWith("/api/v1/appointments/booking-zone"));
+    expect(zoneCall?.[0]).toBe("/api/v1/appointments/booking-zone?practitioner_id=doc-1");
+    // 16:00Z is 10:00 in Mexico City (UTC−6, no DST since 2022).
+    const shown = [...(byTestId("appointment-start")?.querySelectorAll("input") ?? [])].map((i) => i.value).join(" ");
+    expect(shown).toContain("10:00");
+
+    apiFetch.mockImplementationOnce(async () => jsonResponse(true, 201, SAVED));
+    byTestId("appointment-submit")!.click();
+    await flushPromises();
+    const body = lastPostBody();
+    expect(body.start_local).toBe("2031-09-10T10:00");
+    expect(body).not.toHaveProperty("start_at");
+  });
+
+  it("a clicked calendar slot is wall time: 15:00 stays 15:00 when the clinic zone arrives (CORE-120)", async () => {
+    apiFetch.mockImplementation(async (path: string) =>
+      path.startsWith("/api/v1/appointments/booking-zone")
+        ? jsonResponse(true, 200, { timezone: "America/Mexico_City" })
+        : jsonResponse(true, 200, { items: [] }),
+    );
+    await open("admin", { startAt: null, startLocal: "2031-09-10T15:00" });
+    apiFetch.mockImplementationOnce(async () => jsonResponse(true, 201, SAVED));
+    byTestId("appointment-submit")!.click();
+    await flushPromises();
+    expect(lastPostBody().start_local).toBe("2031-09-10T15:00");
   });
 
   it("keeps the dialog open and says the slot is taken on 409", async () => {

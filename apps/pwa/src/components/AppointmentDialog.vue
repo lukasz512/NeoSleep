@@ -159,8 +159,10 @@ const props = defineProps<{
   patient?: NamedRef | null;
   /** Book with this doctor (HCP card, "book next"). */
   practitioner?: { id: string; name: string } | null;
-  /** Pre-filled start (agenda slot click, "book next"). */
+  /** Pre-filled start as an instant ("book next"). */
   startAt?: string | null;
+  /** Pre-filled start as wall time "YYYY-MM-DDTHH:mm" (calendar slot click) — kept as is in the clinic zone (CORE-120). */
+  startLocal?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -189,8 +191,14 @@ const loadingPractitioners = ref(false);
 const isEdit = computed(() => !!props.appointment);
 const fixedPatient = computed(() => props.patient ?? null);
 const fixedPractitioner = computed(() => props.practitioner ?? null);
-/** An existing appointment keeps its clinic zone; a new one is entered in the device's zone (same market). */
-const zone = computed(() => props.appointment?.timezone ?? deviceTimeZone());
+/**
+ * Times are entered in the clinic's zone: an existing appointment keeps its
+ * own; a new one asks the API which clinic zone it will be booked in
+ * (CORE-120 — the device zone put a PL admin's 15:00 at an MX clinic at
+ * 07:00). The device zone only bridges the moment before that answer.
+ */
+const clinicZone = ref<string | null>(null);
+const zone = computed(() => props.appointment?.timezone ?? clinicZone.value ?? deviceTimeZone());
 const zoneLabel = computed(() => timeZoneLabel(new Date().toISOString(), zone.value, intlLocale(locale.value)));
 
 const patientName = computed(() => {
@@ -219,6 +227,7 @@ const API_TO_FORM_KEY: Record<string, string> = {
   patient_id: "patient",
   practitioner_id: "practitioner",
   start_at: "start",
+  start_local: "start",
   duration_minutes: "duration",
   notes: "notes",
 };
@@ -276,21 +285,34 @@ function showServerErrors(fieldErrors: FieldErrors): boolean {
   return true;
 }
 
-/** Next full hour, as a wall-clock value in `zone`. */
+/** Next full hour, as an instant. */
 function nextFullHour(): string {
   const d = new Date();
   d.setMinutes(0, 0, 0);
   d.setHours(d.getHours() + 1);
-  return toZonedInputValue(d.toISOString(), zone.value);
+  return d.toISOString();
 }
+
+/**
+ * The instant the form opened on (slot click, "book next", next full hour) —
+ * re-read as wall time when the clinic zone arrives, until the user edits it.
+ */
+let initialStart: string | null = null;
 
 function reset() {
   problem.value = null;
   resetErrors();
+  clinicZone.value = null;
   const a = props.appointment;
   patientId.value = a?.patient_id ?? fixedPatient.value?.id ?? null;
   practitionerId.value = a?.practitioner_id ?? fixedPractitioner.value?.id ?? fixedPatient.value?.practitioner_id ?? null;
-  startWall.value = a ? toZonedInputValue(a.start_at, zone.value) : props.startAt ? toZonedInputValue(props.startAt, zone.value) : nextFullHour();
+  if (!a && props.startLocal) {
+    initialStart = null;
+    startWall.value = props.startLocal;
+  } else {
+    initialStart = a?.start_at ?? props.startAt ?? nextFullHour();
+    startWall.value = toZonedInputValue(initialStart, zone.value);
+  }
   duration.value = a ? Math.round((new Date(a.end_at).getTime() - new Date(a.start_at).getTime()) / 60_000) : DEFAULT_APPOINTMENT_DURATION;
   notes.value = a?.notes ?? "";
 }
@@ -349,6 +371,34 @@ watch(
   { immediate: true },
 );
 
+/** The clinic zone a new booking for this doctor (or, for a doctor booking themself, this patient) lands in. */
+watch(
+  [() => props.modelValue, practitionerId, patientId],
+  async ([open, doctorId, patient]) => {
+    if (!open || isEdit.value) return;
+    const query = new URLSearchParams();
+    if (doctorId) query.set("practitioner_id", doctorId);
+    else if (patient) query.set("patient_id", patient);
+    else return;
+    try {
+      const res = await apiFetch(`/api/v1/appointments/booking-zone?${query.toString()}`, { handleErrors: false });
+      if (!res.ok) return;
+      const { timezone } = (await res.json()) as { timezone?: string };
+      if (timezone && practitionerId.value === doctorId) clinicZone.value = timezone;
+    } catch (err) {
+      reportCaught(err, { where: "AppointmentDialog.bookingZone" });
+    }
+  },
+  { immediate: true },
+);
+
+// A zone change re-reads the opening instant in the new zone — unless the user already picked a time.
+watch(zone, (now, before) => {
+  if (initialStart && startWall.value === toZonedInputValue(initialStart, before)) {
+    startWall.value = toZonedInputValue(initialStart, now);
+  }
+});
+
 // Picking a patient pre-selects their assigned doctor (Łukasz, 2026-09-26) — still changeable.
 watch(patientId, () => {
   if (!isEdit.value && !fixedPractitioner.value && patientDefaultPractitionerId.value) {
@@ -376,17 +426,18 @@ async function onSubmit() {
   problem.value = null;
   submitting.value = true;
   try {
-    const startAt = zonedInputToIso(startWall.value, zone.value);
+    // Wall-clock as shown; the API converts it in the clinic's zone (CORE-120).
+    const startLocal = startWall.value;
     const result = props.appointment
       ? await update(props.appointment.id, {
-          start_at: startAt,
+          start_local: startLocal,
           duration_minutes: duration.value,
           ...(isFieldForce.value ? {} : { notes: notes.value.trim() || null }),
         })
       : await create({
           patient_id: patientId.value!,
           practitioner_id: isDoctor.value ? undefined : practitionerId.value ?? undefined,
-          start_at: startAt,
+          start_local: startLocal,
           duration_minutes: duration.value,
           ...(isFieldForce.value || !notes.value.trim() ? {} : { notes: notes.value.trim() }),
         });
