@@ -1,24 +1,25 @@
 import { onBeforeUnmount, ref, watch, type Ref } from "vue";
 
 /**
- * A number that counts up to `target` with an ease-out curve (NEO-238 Panel indicators).
- * Holds at 0 until `enabled` turns on, then counts; a later target change counts on from
+ * A number that counts up from 0 to `target` with an ease-out curve (NEO-238/239 Panel
+ * indicators). Holds at 0 until `enabled` turns on, then waits `delayMs` and counts, so
+ * a row of numbers can start one after another. A later target change counts on from
  * the shown value. Reduced-motion users get the target straight away.
  */
-export function useCountUp(target: Ref<number>, durationMs = 900, enabled: Ref<boolean> = ref(true)): Ref<number> {
+export function useCountUp(target: Ref<number>, durationMs = 1400, enabled: Ref<boolean> = ref(true), delayMs = 0): Ref<number> {
   const shown = ref(0);
   let frame = 0;
+  let wait: ReturnType<typeof setTimeout> | null = null;
 
   const reduced = (): boolean => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
-  function run(to: number): void {
+  function stop(): void {
     cancelAnimationFrame(frame);
-    if (reduced()) {
-      shown.value = to;
-      return;
-    }
-    // Not started yet (or leaving): hold the current number; the count runs once enabled.
-    if (!enabled.value) return;
+    if (wait) clearTimeout(wait);
+    wait = null;
+  }
+
+  function count(to: number): void {
     const from = shown.value;
     const start = Date.now();
     const step = (): void => {
@@ -30,7 +31,23 @@ export function useCountUp(target: Ref<number>, durationMs = 900, enabled: Ref<b
     frame = requestAnimationFrame(step);
   }
 
-  watch([target, enabled], ([to]) => run(to), { immediate: true });
-  onBeforeUnmount(() => cancelAnimationFrame(frame));
+  function run(to: number, firstStart: boolean): void {
+    stop();
+    if (reduced()) {
+      shown.value = to;
+      return;
+    }
+    // Not started yet (or leaving): hold the current number; the count runs once enabled.
+    if (!enabled.value) return;
+    if (firstStart && delayMs > 0) wait = setTimeout(() => count(to), delayMs);
+    else count(to);
+  }
+
+  watch(
+    [target, enabled],
+    ([to, on], previous) => run(to, on && !(previous?.[1] ?? false)),
+    { immediate: true }
+  );
+  onBeforeUnmount(stop);
   return shown;
 }
