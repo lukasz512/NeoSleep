@@ -22,7 +22,7 @@ async function open(page: Page, query: string, size: { width: number; height: nu
 
 const summary = (page: Page) => page.getByTestId("form-error-summary");
 const save = (page: Page) => page.getByRole("button", { name: "Save", exact: true });
-const genderRow = (page: Page) => page.locator(".choice-chips-field__row");
+const genderRow = (page: Page) => page.getByRole("radiogroup", { name: "Sex" });
 const dobField = (page: Page) => page.locator("[data-section=identity] .v-input").filter({ has: page.getByLabel("Date of birth") });
 
 for (const [name, size] of [["laptop", LAPTOP], ["phone", PHONE]] as const) {

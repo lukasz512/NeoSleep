@@ -7,9 +7,13 @@
     @close="emit('update:modelValue', false)"
   >
     <div class="qr-dialog__body">
-      <p class="qr-dialog__kind">{{ title }}</p>
+      <p class="qr-dialog__kind">{{ title || " " }}</p>
 
-      <img v-if="qrDataUrl" :src="qrDataUrl" :alt="t('app.clinical.qr.title')" class="qr-dialog__code" width="264" height="264" />
+      <img v-if="url && qrDataUrl" :src="qrDataUrl" :alt="t('app.clinical.qr.title')" class="qr-dialog__code" width="264" height="264" />
+      <!-- NEO-235: open from the first tap — a loader in the code's place until the link exists. -->
+      <div v-else class="qr-dialog__loading" role="status" :aria-label="t('app.clinical.qr.loading')">
+        <VProgressCircular indeterminate color="primary" size="48" width="4" />
+      </div>
       <p class="qr-dialog__instructions">{{ t("app.clinical.qr.instructions") }}</p>
     </div>
 
@@ -25,6 +29,7 @@
 import { reportCaught } from "@api";
 import { ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { VProgressCircular } from "vuetify/components";
 import AppFormDialog from "../AppFormDialog.vue";
 import QRCode from "qrcode";
 import AppButton from "../AppButton.vue";
@@ -89,6 +94,15 @@ async function copyLink() {
   image-rendering: pixelated;
   background: #fff;
   border-radius: var(--pwa-radius);
+}
+/* Same box as the code, so the dialog doesn't change size when it arrives. */
+.qr-dialog__loading {
+  width: 264px;
+  height: 264px;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .qr-dialog__instructions {
   margin: 0;

@@ -7,6 +7,9 @@
 //   node infrastructure/scripts/ci-status.mjs [--branch <b>] [--sha <sha>] [--repo owner/name]
 //     → prints JSON: { state: none|pending|success|failure, runId, runUrl, failures[],
 //        failedSteps[], failedRuns, maxFixAttempts, exhausted, allowedFixScope }
+//        or { state: "rate_limited", until } while GitHub refuses (CORE-128)
+//   Answers are cached for all worktrees in .claude/local/gh-cache.json (gh-cache.mjs).
+//   To wait for a run, use ci-wait.mjs (one call a minute), never `gh run watch`.
 //   … --comment   → prints the markdown comment (PR + Linear use the same text)
 //
 // English only (CLAUDE.md). No dependencies beyond Node.
@@ -15,6 +18,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { cacheGet, cacheSet, defaultCachePath, isRateLimitError, noteRateLimit, rateLimitedUntil } from "./gh-cache.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const RULES = JSON.parse(readFileSync(join(HERE, "../../.claude/ci-autofix.json"), "utf-8"));
@@ -94,7 +98,7 @@ export function commentBody(status) {
   return lines.join("\n");
 }
 
-function gh(args) {
+function runGh(args) {
   return execFileSync("gh", args, { encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 256 * 1024 * 1024 });
 }
 
@@ -102,9 +106,41 @@ function git(args) {
   return execFileSync("git", args, { encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] }).trim();
 }
 
-export function ciStatus({ branch, sha, repo } = {}) {
+/**
+ * How long a verdict is reused before GitHub is asked again (CORE-128). A finished
+ * run never changes, so success/failure are kept for good; "pending" and "none" are
+ * what every waiting session polls, so one answer per minute serves all of them.
+ */
+export const PENDING_TTL_MS = 60_000;
+const ttlFor = (state) => (state === "success" || state === "failure" ? null : PENDING_TTL_MS);
+
+/**
+ * `gh` and `cachePath` are injectable for tests. `cachePath: null` turns the cache off.
+ * When GitHub is rate limiting, returns { state: "rate_limited", until } instead of
+ * throwing, and every other session sees the same cooldown without calling GitHub.
+ */
+export function ciStatus({ branch, sha, repo, gh = runGh, cachePath = defaultCachePath(), now = Date.now() } = {}) {
   branch ??= git(["rev-parse", "--abbrev-ref", "HEAD"]);
   sha ??= git(["rev-parse", "HEAD"]);
+  const key = `ci-status:${repo ?? ""}:${branch}@${sha}`;
+  if (cachePath) {
+    const cached = cacheGet(cachePath, key, now);
+    if (cached) return cached;
+    const until = rateLimitedUntil(cachePath, now);
+    if (until) return { branch, sha, state: "rate_limited", until };
+  }
+  try {
+    const status = fetchStatus({ branch, sha, repo, gh });
+    if (cachePath) cacheSet(cachePath, key, status, ttlFor(status.state), now);
+    return status;
+  } catch (err) {
+    if (!isRateLimitError(err)) throw err;
+    const until = cachePath ? noteRateLimit(cachePath, now) : null;
+    return { branch, sha, state: "rate_limited", until };
+  }
+}
+
+function fetchStatus({ branch, sha, repo, gh }) {
   const repoArgs = repo ? ["--repo", repo] : [];
   const runs = JSON.parse(
     gh(["run", "list", ...repoArgs, "--workflow", RULES.workflow, "--branch", branch, "--limit", "40",
@@ -116,11 +152,17 @@ export function ciStatus({ branch, sha, repo } = {}) {
   if (v.state === "failure" && v.runId) {
     try {
       failures = parseFailures(gh(["run", "view", String(v.runId), ...repoArgs, "--log-failed"]));
-    } catch { /* logs can lag a few seconds behind the conclusion */ }
+    } catch (err) {
+      if (isRateLimitError(err)) throw err;
+      /* logs can lag a few seconds behind the conclusion */
+    }
     try {
       const jobs = JSON.parse(gh(["run", "view", String(v.runId), ...repoArgs, "--json", "jobs"])).jobs ?? [];
       failedSteps = jobs.flatMap((j) => (j.steps ?? []).filter((s) => s.conclusion === "failure").map((s) => `${j.name} › ${s.name}`));
-    } catch { /* same */ }
+    } catch (err) {
+      if (isRateLimitError(err)) throw err;
+      /* same */
+    }
   }
   return { branch, sha, ...v, failures, failedSteps, allowedFixScope: RULES.allowedFixScope };
 }

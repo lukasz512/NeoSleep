@@ -55,11 +55,26 @@ describe("patientFormFields", () => {
     expect(hiddenKeys()).toEqual([]);
   });
 
-  it("status defaults to active; ahi_baseline is a number field", () => {
+  it("status defaults to active; ahi_baseline is the AHI field with the severity scale (NEO-228)", () => {
     const status = patientFormFields.find((f) => f.key === "status")!;
     const ahi = patientFormFields.find((f) => f.key === "ahi_baseline")!;
     expect(status.default).toBe("active");
-    expect(ahi.type).toBe("number");
+    expect(ahi.type).toBe("ahi");
+  });
+
+  it("CPAP is two icon tiles storing 'CPAP' / '' and starts unanswered (NEO-228)", () => {
+    const cpap = patientFormFields.find((f) => f.key === "cpap_device")!;
+    expect(cpap.type).toBe("choice");
+    expect(cpap.default).toBeNull();
+    const options = cpap.options as FormFieldOption[];
+    expect(options.map((o) => [o.value, o.icon])).toEqual([["CPAP", "cpap-mask"], ["", "cpap-mask-off"]]);
+  });
+
+  it("Expediente médico is a multi-line field with the document icon (NEO-228)", () => {
+    const record = patientFormFields.find((f) => f.key === "medical_record")!;
+    expect(record.type).toBe("textarea");
+    expect(record.icon).toBe("nav-document-content");
+    expect(record.placeholder).toBe("app.patients.form.medicalRecordPlaceholder");
   });
 
   it("sex and date of birth are required for a patient", () => {
@@ -142,8 +157,18 @@ describe("patientFormFields", () => {
   it("carries the full existing field set (no fields dropped in the migration)", () => {
     expect(patientFormFields.map((f) => f.key)).toEqual([
       "salutation", "first_name", "last_name", "email", "phone", "gender", "date_of_birth",
-      "practitioner_id", "status", "region", "territory_id", "country_code", "ahi_baseline", "cpap_device", "medical_record",
+      "practitioner_id", "status", "region", "territory_id", "country_code", "ahi_baseline", "height_cm", "cpap_device", "medical_record",
     ]);
+  });
+
+  // NEO-231 D1 (Dra. Lorena): height is entered once, on the patient card — STOP-BANG takes it from here.
+  it("height is a clinical number field in cm: empty or 100–230 cm", () => {
+    const height = patientFormFields.find((f) => f.key === "height_cm")!;
+    expect(height).toMatchObject({ section: "clinical", type: "number", labelKey: "app.patients.form.heightCm" });
+    const rule = height.rules![0]!;
+    expect([rule(""), rule(null), rule(172.5)]).toEqual([true, true, true]);
+    expect(rule("90")).toBe("app.patients.form.heightCmRange");
+    expect(rule(231)).toBe("app.patients.form.heightCmRange");
   });
 
   // ADR-020's region-scoping fix (middleware/requireScope.ts) needs country_code

@@ -163,11 +163,14 @@ html[data-page-transition="module"]::view-transition-new(pwa-page) {
    z-index 9998 of the bottom nav included. That is why the card used to
    slide over the menu. The app bar and the bottom pill get their own names
    too, and their groups are stacked above the page and never animate: they
-   stay exactly where they are while the page changes underneath. */
-.app-shell__bar {
+   stay exactly where they are while the page changes underneath.
+   Named only while a page change runs (CORE-119): an element with a
+   view-transition-name is a backdrop root, so at rest the name would cut the
+   glass off from the page and its backdrop blur would see nothing to blur. */
+html[data-page-transition] .app-shell__bar {
   view-transition-name: pwa-top-bar;
 }
-.app-shell__bottom-nav {
+html[data-page-transition] .app-shell__bottom-nav {
   view-transition-name: pwa-bottom-nav;
 }
 /* Listed with the html[data-page-transition] prefix too, so the reduce-motion

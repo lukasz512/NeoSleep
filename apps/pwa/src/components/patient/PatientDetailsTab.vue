@@ -34,6 +34,10 @@
             <dd>{{ patient.ahi_baseline ?? "—" }}</dd>
           </div>
           <div class="patient-details__row">
+            <dt>{{ t("app.patients.detail.heightCm") }}</dt>
+            <dd>{{ patient.height_cm != null ? t("app.patients.detail.heightValue", { cm: patient.height_cm }) : "—" }}</dd>
+          </div>
+          <div class="patient-details__row">
             <dt>{{ t("app.patients.detail.cpapDevice") }}</dt>
             <dd>{{ patient.cpap_device ? t("app.common.yes") : t("app.common.no") }}</dd>
           </div>
@@ -416,8 +420,5 @@ const tiles = computed<Tile[]>(() => {
 .patient-details__link {
   color: rgb(var(--v-theme-primary));
   text-decoration: none;
-}
-.patient-details__link:hover {
-  text-decoration: underline;
 }
 </style>

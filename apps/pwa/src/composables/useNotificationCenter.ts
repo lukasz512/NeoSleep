@@ -1,6 +1,7 @@
 import { isOfflineError, reportCaught, reportFailedResponse } from "@api";
 import { ref } from "vue";
 import { apiFetch } from "./useApi";
+import type { NotificationAction } from "../utils/notificationFeed";
 
 /**
  * Notification Center — in-app inbox (bell + badge). See ADR-012.
@@ -28,6 +29,14 @@ export interface CenterNotification {
   actionUrl: string | null;
   readAt: string | null;
   createdAt: string;
+  /** Folded repeats of the same event (ADR-027 grouping). */
+  groupCount: number;
+  /** Who it is about, joined by the API when the list is read (CORE-4 D1). */
+  subjectName: string | null;
+  /** The appointment's start, for appointment events. */
+  subjectAt: string | null;
+  /** Quick actions, only on events that need someone to act (CORE-4 D2). */
+  actions: NotificationAction[];
 }
 
 interface NotificationApiRow {
@@ -40,6 +49,10 @@ interface NotificationApiRow {
   action_url: string | null;
   read_at: string | null;
   created_at: string;
+  group_count?: number;
+  subject_name?: string | null;
+  subject_at?: string | null;
+  actions?: NotificationAction[];
 }
 
 function fromApi(row: NotificationApiRow): CenterNotification {
@@ -53,6 +66,10 @@ function fromApi(row: NotificationApiRow): CenterNotification {
     actionUrl: row.action_url,
     readAt: row.read_at,
     createdAt: row.created_at,
+    groupCount: row.group_count ?? 1,
+    subjectName: row.subject_name ?? null,
+    subjectAt: row.subject_at ?? null,
+    actions: row.actions ?? [],
   };
 }
 

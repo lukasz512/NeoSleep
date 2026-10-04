@@ -3,8 +3,9 @@ import {
   getIdentityIdForUser,
   getNotificationsPaginated,
   getUnreadNotificationCount,
-  type Notification,
+  type NotificationListRow,
 } from "../db.js";
+import { resolveNotificationActions, resolveNotificationLink, type NotificationAction } from "../notifications/catalog.js";
 
 /**
  * QUERIES — Notification Center domain (ADR-012).
@@ -23,9 +24,18 @@ export interface NotificationDto {
   action_url: string | null;
   read_at: string | null;
   created_at: string;
+  /** Folded repeats of the same event (ADR-027 grouping). */
+  group_count: number;
+  /** Who the row is about, joined at read time — never stored (CORE-4 D1). */
+  subject_name: string | null;
+  /** The appointment's start, for appointment events. */
+  subject_at: string | null;
+  /** Quick actions, only on events that need someone to act (CORE-4 D2). */
+  actions: NotificationAction[];
 }
 
-function toDto(n: Notification): NotificationDto {
+function toDto(n: NotificationListRow): NotificationDto {
+  const actionUrl = resolveNotificationLink(n.type, n.entity_id ?? null, n.action_url ?? null);
   return {
     id:          n.id,
     type:        n.type,
@@ -33,9 +43,13 @@ function toDto(n: Notification): NotificationDto {
     body:        n.body ?? null,
     entity_type: n.entity_type ?? null,
     entity_id:   n.entity_id ?? null,
-    action_url:  n.action_url ?? null,
+    action_url:  actionUrl,
     read_at:     n.read_at instanceof Date ? n.read_at.toISOString() : (n.read_at ?? null),
     created_at:  n.created_at instanceof Date ? n.created_at.toISOString() : String(n.created_at),
+    group_count: n.group_count ?? 1,
+    subject_name: n.subject_name ?? null,
+    subject_at:  n.subject_at instanceof Date ? n.subject_at.toISOString() : (n.subject_at ?? null),
+    actions:     resolveNotificationActions(n.type, { phone: n.subject_phone, actionUrl }),
   };
 }
 

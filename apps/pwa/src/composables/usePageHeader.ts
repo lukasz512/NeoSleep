@@ -12,6 +12,16 @@ import { computed, inject, provide, ref, type InjectionKey, type Ref } from "vue
  */
 export const PAGE_HEADER_ACTIONS_ID = "layout-page-actions";
 
+/**
+ * Whether AppLayout shows its page-header row. Hidden while a detail view shows
+ * its own record header (NEO-56), and on phones for a route whose view draws
+ * its own header there (`meta.phoneOwnHeader`, CORE-129: Calendario's glass bar).
+ */
+export function isPageHeaderVisible(opts: { recordHeaderClaimed: boolean; isMobile: boolean; routeMeta: Record<PropertyKey, unknown> }): boolean {
+  if (opts.recordHeaderClaimed) return false;
+  return !(opts.isMobile && opts.routeMeta.phoneOwnHeader === true);
+}
+
 const PAGE_HEADER_ACTIVE: InjectionKey<Ref<boolean>> = Symbol("pageHeaderActive");
 
 /** AppLayout: whether the desktop page-header slot is currently shown. */

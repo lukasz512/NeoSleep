@@ -89,8 +89,12 @@ const props = withDefaults(
     orgType?: string | null;
     /** A lead's channel (lead.source) — the avatar badge shows its icon (NEO-155). */
     leadSource?: string | null;
+    /** A user's role code — the avatar badge shows it (CORE-114). */
+    role?: string | null;
+    /** The role's translated name, for the badge's aria-label. */
+    roleLabel?: string | null;
   }>(),
-  { entityType: undefined, firstName: null, lastName: null, avatarSize: 20, details: () => [], moreDetails: () => [], specialty: null, orgType: null, leadSource: null },
+  { entityType: undefined, firstName: null, lastName: null, avatarSize: 20, details: () => [], moreDetails: () => [], specialty: null, orgType: null, leadSource: null, role: null, roleLabel: null },
 );
 
 const ROUTE_ENTITY_TYPES: Record<string, AppAvatarEntityType> = {
@@ -130,6 +134,8 @@ const avatarProps = computed(() => {
     specialty: props.specialty,
     orgType: props.orgType,
     leadSource: props.leadSource,
+    role: props.role,
+    roleLabel: props.roleLabel,
   };
 });
 </script>
@@ -140,10 +146,9 @@ const avatarProps = computed(() => {
   align-items: center;
   gap: 6px;
   color: rgb(var(--v-theme-primary));
+  /* CORE-118: card links never underline, hover only swaps the cursor. */
   text-decoration: none;
-}
-.entity-link:hover {
-  text-decoration: underline;
+  cursor: pointer;
 }
 .entity-link__plain {
   display: inline-flex;
@@ -165,19 +170,11 @@ const avatarProps = computed(() => {
   min-width: 0;
   line-height: 1.3;
 }
-/* The hover underline belongs to the name only, never the specialty line. */
-.entity-link--two-line:hover {
-  text-decoration: none;
-}
 .entity-link--two-line .entity-link__label {
   /* Name above the quiet detail line: a touch heavier, so size and weight
      both say which line is which. */
   font-weight: 500;
 }
-.entity-link--two-line:hover .entity-link__label {
-  text-decoration: underline;
-}
-
 .entity-link__empty {
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }

@@ -16,6 +16,8 @@
       v-model="showAppointmentDialog"
       :patient="appointmentPatient"
     />
+    <!-- NEO-235: the patient QR, open as a loader from the first tap; the Documentos tab fills in the code. -->
+    <QuestionnaireQrDialog v-model="qrDialog.open" :title="qrDialog.title" :url="qrDialog.url" />
     <ItemDetailLayout
       :has-content="!!patient"
       :loading="loading"
@@ -90,6 +92,19 @@
             <!-- NEO-206: summary strip + grouped rows; the documents checklist lives in the side panel and on Documentos. -->
             <PatientDetailsTab :patient="patient" :can-see-studies="canSeeStudies" @open-tab="(tab: string) => (activeTab = tab)" />
           </template>
+          <template #nextStep>
+            <!-- NEO-235: below 1280px the side panel is tab 2 ("Siguiente paso", NEO-205 D1). -->
+            <PatientAsidePanel
+              inline
+              :patient="patient"
+              :can-see-studies="canSeeStudies"
+              :active-tab="activeTab"
+              @open-notes="activeTab = 'notes'"
+              @open-study="openStudy"
+              @open-tab="(tab: string) => (activeTab = tab)"
+              @qr="onAsideQr"
+            />
+          </template>
           <template #notes>
             <PatientNotesPanel entity-type="patient" :entity-id="patient.id" />
           </template>
@@ -101,7 +116,7 @@
           </template>
           <template #documents>
             <!-- NEO-193: consent + the Historia Clínica parts; the patient QR lives here. -->
-            <PatientChecklistPanel category="document" :patient-id="patient.id" :focus-item="studyItem" :date-of-birth="patient.date_of_birth" :gender="patient.gender" :qr-request-nonce="qrRequestNonce" :hide-qr-button="asideShown" />
+            <PatientChecklistPanel category="document" :patient-id="patient.id" :focus-item="studyItem" :date-of-birth="patient.date_of_birth" :gender="patient.gender" :height-cm="patient.height_cm ?? null" :qr-request-nonce="qrRequestNonce" :hide-qr-button="asideShown" />
           </template>
           <template #history>
             <EntityHistoryPanel :endpoint="`/api/v1/patient/${patient.id}/history`" />
@@ -139,7 +154,7 @@
 
 <script setup lang="ts">
 import { reportCaught, reportFailedResponse } from "@api";
-import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
+import { ref, computed, onMounted, watch, defineAsyncComponent, provide } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { usePermissions } from "../composables/usePermissions";
@@ -162,6 +177,8 @@ import PatientChecklistPanel from "../components/patient/PatientChecklistPanel.v
 import PatientDetailsTab from "../components/patient/PatientDetailsTab.vue";
 import PatientOrthoApneaPanel from "../components/patient/PatientOrthoApneaPanel.vue";
 import EntityHistoryPanel from "../components/EntityHistoryPanel.vue";
+import QuestionnaireQrDialog from "../components/questionnaire/QuestionnaireQrDialog.vue";
+import { PATIENT_QR_DIALOG, createQrDialogState, openQrLoader } from "../composables/usePatientQrDialog";
 import { patientFormFields, patientFormDerive } from "../config/forms/patientForm";
 import { STUDY_ROLES } from "../config/questionnaires";
 import { CHECKLIST_TAB, type ChecklistCategory } from "../composables/usePatientChecklist";
@@ -196,6 +213,7 @@ interface PatientDetail {
    *  node (see GetPatientByIdQuery in queries/patient.ts). */
   territory_path?: { id: string; name: string; code: string | null; kind: string }[] | null;
   ahi_baseline?: number | null;
+  height_cm?: number | null;
   cpap_device?: string | null;
   medical_record?: string | null;
   /** ICD-10 JSONB — nothing writes it yet; the side panel shows it when present (NEO-153). */
@@ -227,6 +245,7 @@ const showDeleteConfirm = ref(false);
 
 const ALL_PATIENT_TABS = [
   { value: "details", labelKey: "app.patients.detail.tabs.details" },
+  { value: "nextStep", labelKey: "app.patients.detail.tabs.nextStep", narrowOnly: true },
   { value: "notes", labelKey: "app.patients.detail.tabs.notes" },
   { value: "documents", labelKey: "app.patients.detail.tabs.documents", roles: STUDY_ROLES },
   { value: "studies", labelKey: "app.patients.detail.tabs.studies", roles: STUDY_ROLES },
@@ -236,9 +255,18 @@ const ALL_PATIENT_TABS = [
 /** Studies and Documents hold health data — admin, doctor and manager only (NEO-83); the API enforces the same. */
 const userRole = computed(() => authStore.user?.role ?? "");
 const canSeeStudies = computed(() => STUDY_ROLES.includes(userRole.value));
-const patientTabs = computed(() => ALL_PATIENT_TABS.filter((tab) => !tab.roles || tab.roles.includes(userRole.value)));
+/** NEO-203: while the side panel shows (desktop), its QR is the only one — the Documentos tab drops its own. */
+const asideShown = useDetailAsideShown();
+/** "Next step" is a tab only where the side panel isn't shown (NEO-235). */
+const patientTabs = computed(() =>
+  ALL_PATIENT_TABS.filter((tab) => (!tab.roles || tab.roles.includes(userRole.value)) && !(tab.narrowOnly && asideShown.value)),
+);
 /** Deep-linkable via ?tab= — see SleepStudiesView/TreatmentPlansView row clicks. */
 const activeTab = ref((route.query.tab as string) || "details");
+// Widened past 1280px on the "Next step" tab — the panel moved beside the record, so show Details.
+watch(asideShown, (shown) => {
+  if (shown && activeTab.value === "nextStep") activeTab.value = "details";
+});
 /** Details → checklist card click: open that item in its tab (?tab=documents|studies&item=…, NEO-193). */
 const studyItem = ref<string | null>((route.query.item as string) || null);
 /** Estudios list row click: open that sleep study on the Estudios tab (?tab=studies&study=<id>, NEO-222). */
@@ -259,9 +287,11 @@ function openStudy(itemKey: string, category: ChecklistCategory) {
 
 /** Side panel "QR for the patient" (NEO-153): the Documentos tab owns the QR flow (status button, polling) since NEO-193, so open it there. */
 const qrRequestNonce = ref(0);
-/** NEO-203: while the side panel shows (desktop), its QR is the only one — the Documentos tab drops its own. */
-const asideShown = useDetailAsideShown();
+/** NEO-235: one QR dialog for the record — it opens as a loader at once and the Documentos tab fills it, so nothing else shows moving. */
+const qrDialog = createQrDialogState();
+provide(PATIENT_QR_DIALOG, qrDialog);
 function onAsideQr() {
+  openQrLoader(qrDialog);
   studyItem.value = null;
   activeTab.value = CHECKLIST_TAB.document;
   qrRequestNonce.value += 1;
@@ -346,6 +376,10 @@ async function loadPatient() {
 }
 
 onMounted(loadPatient);
+// The record never came (404 / offline): no Documentos tab to fill the QR loader, so close it.
+watch(loading, (isLoading) => {
+  if (!isLoading && !patient.value && !qrDialog.url) qrDialog.open = false;
+});
 watch(() => route.params.id, loadPatient);
 </script>
 

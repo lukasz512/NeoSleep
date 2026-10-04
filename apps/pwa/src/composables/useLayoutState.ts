@@ -130,6 +130,8 @@ export function useLayoutState() {
     displayName: userDisplayName.value,
     email: authStore.user?.email,
     role: userRole.value,
+    /** The raw role code (role badge on the avatar, CORE-114); `role` is its label. */
+    roleKey: authStore.user?.role ?? null,
     initials: userInitials.value,
     region: authStore.user?.country_code,
     // Google-only accounts have no password to change (NEO-102).

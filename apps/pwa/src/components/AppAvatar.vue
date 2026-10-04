@@ -18,6 +18,24 @@
     </span>
     <!-- Lead channel badge (NEO-155): where the lead came from (website,
          WhatsApp, referral, ...), sitting over the dashed outline. -->
+    <!-- User role badge (CORE-114): the same corner disc, carrying the
+         user's role — star for an admin (tenant-primary disc), the specialty
+         for a doctor, a light outline pin for a rep (the quietest, as most
+         users are reps). Labelled with the role name, unlike the decorative
+         badges above, since the icon alone doesn't say "Admin". -->
+    <span
+      v-else-if="roleBadge"
+      class="app-avatar__badge"
+      :class="`app-avatar__badge--${roleBadge.tone}`"
+      data-testid="app-avatar-role-badge"
+      :data-role="roleBadge.role"
+      :role="roleLabel ? 'img' : undefined"
+      :aria-label="roleLabel || undefined"
+      :aria-hidden="roleLabel ? undefined : 'true'"
+      :title="roleLabel || undefined"
+    >
+      <AppIcon :name="roleBadge.icon" class="app-avatar__badge-icon" />
+    </span>
     <span v-else-if="leadBadgeIcon" class="app-avatar__badge app-avatar__badge--lead" data-testid="app-avatar-lead-badge" aria-hidden="true">
       <AppIcon :name="leadBadgeIcon" class="app-avatar__badge-icon" />
     </span>
@@ -29,7 +47,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, inject } from "vue";
+import { userRoleBadge, USER_ROLE_BADGE_OVERRIDES } from "../utils/userRoleBadge";
 import AppIcon, { type AppIconName } from "./AppIcon.vue";
 import { getInitials, getInitialsFromParts } from "../utils/initials";
 import { hcoTypeIcon } from "../utils/hcoLabels";
@@ -94,8 +113,12 @@ const props = withDefaults(
     orderStatus?: string | null;
     /** Only for entityType "lead": lead.source (utils/leadSource.ts) — picks the channel badge. */
     leadSource?: string | null;
+    /** Only for entityType "user": users.role (or several roles) — picks the role badge (utils/userRoleBadge.ts). */
+    role?: string | readonly string[] | null;
+    /** Translated role name for the role badge's aria-label/title. */
+    roleLabel?: string | null;
   }>(),
-  { entityType: "user", size: 40, specialty: null, orderStatus: null, leadSource: null },
+  { entityType: "user", size: 40, specialty: null, orderStatus: null, leadSource: null, role: null, roleLabel: null },
 );
 
 const tone = computed(() => identityTone(props.entityType));
@@ -141,6 +164,13 @@ const sizePx = computed(() => (typeof props.size === "number" ? props.size : par
 const showDoctorBadge = computed(() => props.entityType === "hcp");
 const badgeIcon = computed(() => practitionerSpecialtyIcon(props.specialty ?? undefined));
 const leadBadgeIcon = computed(() => (props.entityType === "lead" ? leadSourceIcon(props.leadSource) : null));
+// The tenant's icon overrides, provided by main.ts (none in a bare mount).
+const roleBadgeOverrides = inject(USER_ROLE_BADGE_OVERRIDES, null);
+const roleBadge = computed(() =>
+  props.entityType === "user"
+    ? userRoleBadge(props.role, { specialty: props.specialty, overrides: roleBadgeOverrides?.value })
+    : null,
+);
 const initialsFontSize = computed(() => `${Math.max(sizePx.value * FIBONACCI_INITIALS_RATIO, 8)}px`);
 
 </script>
@@ -211,6 +241,22 @@ const initialsFontSize = computed(() => `${Math.max(sizePx.value * FIBONACCI_INI
 
 .app-avatar__badge--lead {
   background: var(--pwa-identity-lead);
+}
+
+/* Role badges (CORE-114): dark = the doctor-badge graphite; primary = the
+   tenant's brand color (admin); light = surface disc with a graphite ring
+   and icon (rep — the quietest mark). */
+.app-avatar__badge--primary {
+  background: rgb(var(--v-theme-primary));
+  color: rgb(var(--v-theme-on-primary));
+}
+
+.app-avatar__badge--light {
+  background: rgb(var(--v-theme-surface));
+  color: var(--pwa-avatar-doctor-badge);
+  box-shadow:
+    0 0 0 2px rgb(var(--v-theme-surface)),
+    inset 0 0 0 1.5px var(--pwa-avatar-doctor-badge);
 }
 
 .app-avatar__badge-icon {

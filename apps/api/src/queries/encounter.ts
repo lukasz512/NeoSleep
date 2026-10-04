@@ -79,7 +79,9 @@ function toDto(e: Encounter): EncounterDto {
 // The rule, in ONE place so list/by-id/update (and the upcoming unified
 // Calendar endpoint, CORE-117) all agree:
 //   rep / kam / msl / doctor   only their own encounters (user_id = self)
-//   manager / admin            their own encounters PLUS anything inside
+//   admin                      every encounter in the tenant, regardless of
+//                               territory scope (Łukasz, 2026-10-04)
+//   manager                    their own encounters PLUS anything inside
 //                               their allowed territory scope
 //                               (middleware/requireScope.ts getAllowedScopePaths),
 //                               checked via encounter.territory_id — same
@@ -93,10 +95,10 @@ function toDto(e: Encounter): EncounterDto {
  * to list/by-id/update, instead of re-deriving it.
  */
 export async function encounterVisibilityScope(ctx: TenantContext): Promise<EncounterVisibilityScope> {
-  const widensByScope = ctx.user.role === "manager" || ctx.user.role === "admin";
+  if (ctx.user.role === "admin") return { ownerId: ctx.user.id, scopePaths: null };
   return {
     ownerId: ctx.user.id,
-    scopePaths: widensByScope ? await getAllowedScopePaths(ctx.client, ctx.user.roles) : undefined,
+    scopePaths: ctx.user.role === "manager" ? await getAllowedScopePaths(ctx.client, ctx.user.roles) : undefined,
   };
 }
 
@@ -113,7 +115,7 @@ export async function isEncounterVisible(
   const scope = await encounterVisibilityScope(ctx);
   if (encounter.user_id === scope.ownerId) return true;
   if (scope.scopePaths === undefined) return false; // owner-only role, not the owner
-  if (scope.scopePaths === null) return true;        // manager/admin, global role scope
+  if (scope.scopePaths === null) return true;        // admin, or manager with global role scope
   if (scope.scopePaths.length === 0) return false;
   if (!encounter.territory_id) return true;           // unassigned — rollout-safety fallback
 
@@ -145,8 +147,8 @@ export interface GetEncounterListResult {
 /**
  * Returns a filtered list of encounters for the current user/tenant, scoped
  * by encounterVisibilityScope() (CORE-106): rep/kam/msl/doctor see only
- * their own; manager/admin additionally see anything in their territory
- * scope. input.userId narrows manager/admin to one team member — ignored
+ * their own; admin sees everything; manager additionally sees anything in
+ * their territory scope. input.userId narrows manager/admin to one team member — ignored
  * for owner-only roles, whose own-only restriction is already absolute.
  */
 export async function GetEncounterListQuery(

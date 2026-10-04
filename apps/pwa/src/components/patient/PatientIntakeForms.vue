@@ -1,5 +1,5 @@
 <template>
-  <span v-if="forms.length === 0" class="app-entity-list__cell-empty">—</span>
+  <span v-if="displayForms.length === 0" class="app-entity-list__cell-empty">—</span>
   <VTooltip v-else location="bottom">
     <template #activator="{ props: tooltipProps }">
       <span
@@ -24,9 +24,9 @@
     </template>
     <div class="intake-forms__tooltip-title">{{ progressLabel }}</div>
     <ul class="intake-forms__list">
-      <li v-for="form in forms" :key="form.key" class="intake-forms__item">
+      <li v-for="form in displayForms" :key="form.key" class="intake-forms__item">
         <AppIcon :name="intakeFormIcon(form.key)" class="intake-forms__item-icon" />
-        <span>{{ formLabel(form.key) }}</span>
+        <span>{{ formLabel(form.key) }}<template v-if="'sections' in form"> · {{ form.sections.done }}/{{ form.sections.total }}</template></span>
         <span class="intake-forms__check" :class="{ 'intake-forms__check--done': form.done }">
           <svg v-if="form.done" viewBox="0 0 12 12" aria-hidden="true">
             <path d="M2.5 6.2l2.3 2.3 4.7-5" />
@@ -46,6 +46,7 @@ import { useI18n } from "vue-i18n";
 import AppIcon from "../AppIcon.vue";
 import { INTAKE_TILES_PER_ROW, intakeFormAbbr, intakeFormIcon, intakeFormLabel } from "../../config/patientIntakeForms";
 import type { PatientIntakeFormStatus } from "../../types/patientIntakeForm";
+import { collapseHistoriaClinica } from "../../config/historiaClinica";
 
 // Order is the API's (assigned templates in DOCUMENT_MANIFEST order, then
 // polysomnography) — never re-sorted here, so the icons and the tooltip
@@ -56,12 +57,14 @@ const { t } = useI18n();
 
 /** NEO-221: the cell is at most 2 rows of 3 tiles; past that the last slot becomes "+N" and the tooltip lists everything. */
 const MAX_TILES = INTAKE_TILES_PER_ROW * 2;
-const shownForms = computed(() => (props.forms.length > MAX_TILES ? props.forms.slice(0, MAX_TILES - 1) : props.forms));
-const hiddenCount = computed(() => props.forms.length - shownForms.value.length);
+/** NEO-231 D2: the Historia clínica sections show as one HC chip. */
+const displayForms = computed(() => (props.kind === "forms" ? collapseHistoriaClinica(props.forms) : props.forms));
+const shownForms = computed(() => (displayForms.value.length > MAX_TILES ? displayForms.value.slice(0, MAX_TILES - 1) : displayForms.value));
+const hiddenCount = computed(() => displayForms.value.length - shownForms.value.length);
 
-const doneCount = computed(() => props.forms.filter((f) => f.done).length);
+const doneCount = computed(() => displayForms.value.filter((f) => f.done).length);
 const progressLabel = computed(() =>
-  t(props.kind === "studies" ? "app.patients.studies.progress" : "app.patients.forms.progress", { done: doneCount.value, total: props.forms.length }),
+  t(props.kind === "studies" ? "app.patients.studies.progress" : "app.patients.forms.progress", { done: doneCount.value, total: displayForms.value.length }),
 );
 
 const formAbbr = (key: string) => intakeFormAbbr(t, key);

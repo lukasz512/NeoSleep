@@ -83,6 +83,13 @@ const ICONS: Record<"info" | "warning" | "error" | "success", string> = {
   line-height: 1.45;
   text-align: start;
 }
+/* NEO-232: on wide screens a full-width alert reads as a banner and its text
+   runs past a comfortable line length; phones keep the full width. */
+@media (min-width: 960px) {
+  .app-inline-alert {
+    max-width: 640px;
+  }
+}
 .app-inline-alert--warning { --alert-tone: var(--v-theme-warning); }
 .app-inline-alert--error { --alert-tone: var(--v-theme-error); }
 .app-inline-alert--success { --alert-tone: var(--v-theme-success); }

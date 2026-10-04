@@ -25,6 +25,13 @@ export default defineConfig({
       // on that being present.
       ORTHOAPNEA_EMAIL: "qa-orthoapnea@neosleepcare.com",
       ORTHOAPNEA_PASSWORD: "test-only-not-a-real-credential",
+      // routes/push.spec.ts (CORE-69) needs isVapidConfigured() true to reach
+      // the subscribe/unsubscribe logic instead of the early 503 — this pair
+      // is generated test-only (`node -e "require('web-push').generateVAPIDKeys()"`,
+      // see push.ts's header comment), never used to send a real push.
+      VAPID_PUBLIC_KEY: "BNwFkU3DOU1qZb6zxFSB--Tqh9QI3yoWY0oVXSOUVpkpeqo8jsPV4WdJhHSl5zQ7Qd0k228ObMh2WMXVRtttBvM",
+      VAPID_PRIVATE_KEY: "19LZOu16XB3FszERxysLy_UX1yX2QF4xAefUG0rYKP4",
+      VAPID_SUBJECT: "mailto:qa-push-test@neosleepcare.com",
     },
     // Integration tests share one remote dev Supabase project across every
     // spec file. Vitest's default file-level parallelism gives each file its

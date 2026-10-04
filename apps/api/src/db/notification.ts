@@ -56,10 +56,47 @@ export async function getIdentityIdForUser(client: PoolClient, userId: string): 
   }
 }
 
+/**
+ * A list row plus who it is about (CORE-4 D1). The subject is joined from the
+ * entity when the list is read and never stored on the notification, so push,
+ * email and the delivery log stay PHI-free while the in-app row can say whose
+ * visit it is.
+ */
+export interface NotificationListRow extends Notification {
+  /** Patient (or, for invite events, the doctor) the entity belongs to. */
+  subject_name: string | null;
+  /** That person's phone, only used to build the Call action. */
+  subject_phone: string | null;
+  /** The appointment's start, for appointment events. */
+  subject_at: Date | null;
+}
+
 export interface GetNotificationsPaginatedResult {
-  rows: Notification[];
+  rows: NotificationListRow[];
   total: number;
 }
+
+/**
+ * Resolves each row's subject identity from its entity: appointment,
+ * treatment plan and questionnaire request → the patient; practitioner → the
+ * doctor. Unknown entity types join nothing.
+ */
+const SUBJECT_JOIN = `
+  LEFT JOIN LATERAL (
+    SELECT CASE n.entity_type
+      WHEN 'Appointment'          THEN (SELECT pa.identity_id FROM appointment a JOIN patient pa ON pa.id = a.patient_id WHERE a.id = n.entity_id)
+      WHEN 'TreatmentPlan'        THEN (SELECT pa.identity_id FROM treatment_plan t JOIN patient pa ON pa.id = t.patient_id WHERE t.id = n.entity_id)
+      WHEN 'QuestionnaireRequest' THEN (SELECT pa.identity_id FROM questionnaire_request q JOIN patient pa ON pa.id = q.patient_id WHERE q.id = n.entity_id)
+      WHEN 'Practitioner'         THEN (SELECT pr.identity_id FROM practitioner pr WHERE pr.id = n.entity_id)
+    END AS identity_id
+  ) subj ON true
+  LEFT JOIN identities si ON si.id = subj.identity_id
+  LEFT JOIN appointment sa ON n.entity_type = 'Appointment' AND sa.id = n.entity_id`;
+
+const SUBJECT_COLS = `
+  NULLIF(concat_ws(' ', si.title, si.first_name, si.last_name), '') AS subject_name,
+  si.phone AS subject_phone,
+  sa.start_at AS subject_at`;
 
 export async function getNotificationsPaginated(
   client: PoolClient,
@@ -69,8 +106,8 @@ export async function getNotificationsPaginated(
   limit: number
 ): Promise<GetNotificationsPaginatedResult> {
   try {
-    const conditions = ["identity_id = $1"];
-    if (filter === "unread") conditions.push("read_at IS NULL");
+    const conditions = ["n.identity_id = $1"];
+    if (filter === "unread") conditions.push("n.read_at IS NULL");
     const where = conditions.join(" AND ");
     const offset = (page - 1) * limit;
 
@@ -78,12 +115,16 @@ export async function getNotificationsPaginated(
     // only ever runs one query at a time per connection — concurrent calls
     // just queue behind each other internally, which pg 9.0 removes. See the
     // same note in queries/auditLog.ts.
-    const { rows } = await client.query<Notification>(
-      `SELECT ${NOTIFICATION_COLS} FROM notification WHERE ${where} ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+    const listCols = NOTIFICATION_COLS.split(", ").map((c) => `n.${c}`).join(", ");
+    const { rows } = await client.query<NotificationListRow>(
+      `SELECT ${listCols}, ${SUBJECT_COLS}
+       FROM notification n ${SUBJECT_JOIN}
+       WHERE ${where}
+       ORDER BY n.created_at DESC LIMIT $2 OFFSET $3`,
       [identityId, limit, offset]
     );
     const { rows: countRows } = await client.query<{ count: string }>(
-      `SELECT COUNT(*) FROM notification WHERE ${where}`,
+      `SELECT COUNT(*) FROM notification n WHERE ${where}`,
       [identityId]
     );
 

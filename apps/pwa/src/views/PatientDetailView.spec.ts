@@ -24,6 +24,7 @@ vi.mock("../composables/useNotifications", () => ({ useNotifications: () => ({ s
 import "../components/FormRenderer.vue";
 import "../components/EventForm.vue";
 import PatientDetailView from "./PatientDetailView.vue";
+import QuestionnaireQrDialog from "../components/questionnaire/QuestionnaireQrDialog.vue";
 
 function jsonResponse(ok: boolean, status: number, body: unknown) {
   return { ok, status, json: async () => body } as Response;
@@ -188,5 +189,92 @@ describe("PatientDetailView — Estudios checklist (NEO-36)", () => {
     await vi.waitFor(() => expect(wrapper.find(".studies__item").exists()).toBe(true));
     expect(apiFetch).toHaveBeenCalledWith("/api/v1/patient/patient-1/checklist", { handleErrors: false });
     await flushPromises();
+  });
+});
+
+describe("PatientDetailView — Next step tab (NEO-235)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("below 1280px the side panel is tab 2, right after Details", async () => {
+    routeApi();
+    const { wrapper } = await mountPatientDetail();
+    await vi.waitFor(() => expect(wrapper.text()).toContain("Jan Kowalski"));
+
+    const tabs = wrapper.findAll('[role="tab"]');
+    expect(tabs.map((t) => t.text()).slice(0, 2)).toEqual(["Details", "Next step"]);
+    await tabs[1]!.trigger("click");
+    await vi.waitFor(() => expect(wrapper.find(".patient-aside--inline").exists()).toBe(true));
+    await flushPromises();
+  });
+
+  it("from 1280px the panel sits beside the record, so there is no Next step tab", async () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query === "(min-width: 1280px)",
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+    }));
+    routeApi();
+    const { wrapper } = await mountPatientDetail();
+    await vi.waitFor(() => expect(wrapper.text()).toContain("Jan Kowalski"));
+    expect(wrapper.findAll('[role="tab"]').map((t) => t.text())).not.toContain("Next step");
+    await flushPromises();
+  });
+});
+
+async function mountWithQrQuery(): Promise<VueWrapper> {
+  setActivePinia(createPinia());
+  useAuthStore().user = { id: "u-1", email: "doc@clinic.test", name: "Test", role: "doctor" } as ReturnType<typeof useAuthStore>["user"];
+  const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
+  const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
+  const router = createRouter({ history: createMemoryHistory(), routes });
+  await router.push("/patients/patient-1?qr=1");
+  await router.isReady();
+  const wrapper = mount(PatientDetailView, { global: { plugins: [i18n, vuetify, router] } });
+  mountedWrappers.push(wrapper);
+  return wrapper;
+}
+
+describe("PatientDetailView — QR opens straight to a loader (NEO-235)", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("?qr=1 shows the QR loader before the record has loaded, then the code in the same dialog", async () => {
+    let releasePatient: () => void = () => {};
+    const patientReady = new Promise<void>((resolve) => (releasePatient = resolve));
+    const created = { id: "qr-1", items: ["informedConsent"], completed_items: [], opened_at: null, expires_at: new Date(Date.now() + 86_400_000).toISOString() };
+    apiFetch.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === "/api/v1/patient/patient-1") {
+        await patientReady;
+        return jsonResponse(true, 200, PATIENT);
+      }
+      if (path.endsWith("/questionnaire-requests") && init?.method === "POST") return jsonResponse(true, 201, { ...created, url: "https://pwa.test/q#abc" });
+      if (path.endsWith("/checklist")) return jsonResponse(true, 200, CHECKLIST);
+      if (path.endsWith("/summary")) return jsonResponse(true, 200, SUMMARY);
+      return jsonResponse(true, 200, { items: [] });
+    });
+    await mountWithQrQuery();
+
+    await vi.waitFor(() => expect(document.body.querySelector(".qr-dialog__loading")).not.toBeNull());
+    expect(document.body.querySelector(".qr-dialog__code")).toBeNull();
+
+    releasePatient();
+    await vi.waitFor(() => expect(document.body.querySelector(".qr-dialog__code")).not.toBeNull());
+    expect(document.body.querySelector(".qr-dialog__loading")).toBeNull();
+    // One dialog from tap to code — the Documentos tab fills the view's dialog, it doesn't open its own.
+    expect(document.body.querySelectorAll(".qr-dialog__body")).toHaveLength(1);
+    await flushPromises();
+  });
+
+  it("closes the loader when the record can't be found", async () => {
+    apiFetch.mockResolvedValue(jsonResponse(false, 404, { error: "not found" }));
+    const wrapper = await mountWithQrQuery();
+    const dialog = wrapper.findComponent(QuestionnaireQrDialog);
+    expect(dialog.props("modelValue")).toBe(true);
+    await flushPromises();
+    await vi.waitFor(() => expect(dialog.props("modelValue")).toBe(false));
   });
 });

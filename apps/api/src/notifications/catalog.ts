@@ -19,7 +19,24 @@ export type NotificationCategory = "security" | "legal" | "operational" | "marke
 export type NotificationPriority = "normal" | "high";
 export type NotificationChannel = "in_app" | "push" | "email" | "sms" | "whatsapp";
 
-/** Ids only — never names or clinical values. Used to build deep links. */
+/**
+ * In-app quick actions (CORE-4 D2). Only events that need someone to act get
+ * them; the bell pins those under "Needs action". Never sent by push or email.
+ *   call       — phone the patient (tel: link, number joined at read time)
+ *   reschedule — open the appointments screen to find a new time
+ */
+export type NotificationActionKind = "call" | "reschedule";
+
+export interface NotificationAction {
+  kind: NotificationActionKind;
+  href: string;
+}
+
+/**
+ * Ids only — never names or clinical values. Used to build deep links.
+ * notify() always passes `entityId` (the event's own record) next to the
+ * producer's own params.
+ */
 export type NotificationLinkParams = Readonly<Record<string, string | null | undefined>>;
 
 export interface NotificationEventDefinition {
@@ -34,10 +51,14 @@ export interface NotificationEventDefinition {
   link: (params: NotificationLinkParams) => string | null;
   /** notification.entity_type written for this event. */
   entityType: string;
+  /** In-app quick actions, in button order (CORE-4). Omit for one-tap rows. */
+  actions?: readonly NotificationActionKind[];
 }
 
 /** CORE-117: Citas merged into the Calendario screen — /appointments still redirects there, but new links point straight at it. */
-const appointmentLink = (): string => "/calendar";
+/** CORE-4: the visit itself — CalendarView opens `?appointment=<id>` in its detail dialog. */
+const appointmentLink = (p: NotificationLinkParams): string =>
+  p.entityId ? `/calendar?appointment=${encodeURIComponent(p.entityId)}` : "/calendar";
 const patientLink = (p: NotificationLinkParams): string | null => (p.patientId ? `/patients/${p.patientId}` : null);
 /** NEO-195: the patient's sleep-study tab, where a submitted questionnaire shows up. */
 const patientStudiesLink = (p: NotificationLinkParams): string | null => (p.patientId ? `/patients/${p.patientId}?tab=studies` : null);
@@ -94,6 +115,7 @@ export const NOTIFICATION_CATALOG: Readonly<Record<NotificationType, Notificatio
     escalateAfterMin: 30,
     link: appointmentLink,
     entityType: "Appointment",
+    actions: ["call", "reschedule"],
   },
   /** CORE-116: the day before the visit the patient still hasn't confirmed (asked again) — the clinic calls or frees the slot. */
   appointment_patient_unconfirmed: {
@@ -103,6 +125,7 @@ export const NOTIFICATION_CATALOG: Readonly<Record<NotificationType, Notificatio
     escalateAfterMin: null,
     link: appointmentLink,
     entityType: "Appointment",
+    actions: ["call", "reschedule"],
   },
   /** Booked, but the patient has no email on file — whoever booked tells them another way (CORE-25). */
   appointment_patient_no_email: {
@@ -149,6 +172,45 @@ export const NOTIFICATION_CATALOG: Readonly<Record<NotificationType, Notificatio
 
 export function getEventDefinition(type: NotificationType): NotificationEventDefinition {
   return NOTIFICATION_CATALOG[type];
+}
+
+function isNotificationType(type: string): type is NotificationType {
+  return (NOTIFICATION_TYPES as readonly string[]).includes(type);
+}
+
+/**
+ * The quick actions an in-app row shows (CORE-4 D2): the catalog's list for
+ * the type, turned into links. Call needs a phone number; without one it is
+ * dropped. Reschedule opens the row's own link.
+ */
+export function resolveNotificationActions(
+  type: string,
+  ctx: { phone: string | null; actionUrl: string | null },
+): NotificationAction[] {
+  if (!isNotificationType(type)) return [];
+  const result: NotificationAction[] = [];
+  for (const kind of NOTIFICATION_CATALOG[type].actions ?? []) {
+    if (kind === "call") {
+      const digits = ctx.phone?.replace(/[^\d+]/g, "") ?? "";
+      if (digits) result.push({ kind, href: `tel:${digits}` });
+    } else if (ctx.actionUrl) {
+      result.push({ kind, href: ctx.actionUrl });
+    }
+  }
+  return result;
+}
+
+/**
+ * The link an in-app row opens, rebuilt when the list is read (CORE-4): an
+ * appointment event links to its own visit, also for rows stored before
+ * deep links existed (their action_url is the bare calendar). Other types
+ * keep the link stored at notify time — it carries params (patientId…) the
+ * row alone can't rebuild.
+ */
+export function resolveNotificationLink(type: string, entityId: string | null, storedUrl: string | null): string | null {
+  if (!isNotificationType(type) || !entityId) return storedUrl;
+  const def = NOTIFICATION_CATALOG[type];
+  return def.entityType === "Appointment" ? def.link({ entityId }) : storedUrl;
 }
 
 /** i18n keys for a type's copy. Grouped rows (group_count > 1) use the shared grouped body. */

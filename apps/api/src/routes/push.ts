@@ -16,7 +16,9 @@ import { Router, type Request, type Response } from "express";
 import webpush from "web-push";
 import { asyncHandler } from "../middleware/errorHandler.js";
 import { getDb } from "../db/connection.js";
-import { getOptionalUser } from "../utils/jwt.js";
+import { requireAuth } from "../middleware/requireAuth.js";
+import { withTenant, tenantSlugFromHost } from "../db.js";
+import { buildContext } from "../context/TenantContext.js";
 
 export const pushRouter: import('express').Router = Router();
 
@@ -41,9 +43,11 @@ if (isVapidConfigured()) {
   }
 }
 
-/** POST /api/push/subscribe */
+/** POST /api/push/subscribe — requires login (CORE-69); the subscription is
+ *  always tied to the calling user, never a client-supplied id. */
 pushRouter.post(
   "/push/subscribe",
+  requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
     if (!isVapidConfigured()) {
       res.status(503).json({ error: "Push notifications not configured" });
@@ -61,36 +65,51 @@ pushRouter.post(
       return;
     }
 
-    const userId   = getOptionalUser(req)?.sub ?? null;
-    const ua       = req.headers["user-agent"]?.slice(0, 300) ?? null;
-    const db       = getDb();
+    const ua   = req.headers["user-agent"]?.slice(0, 300) ?? null;
+    const slug = tenantSlugFromHost(req.hostname);
 
-    if (db) {
-      await db.query(
+    await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      await client.query(
         `INSERT INTO push_subscription (user_id, endpoint, keys, user_agent)
          VALUES ($1, $2, $3::jsonb, $4)
          ON CONFLICT (endpoint) DO UPDATE
            SET user_id = EXCLUDED.user_id,
                keys    = EXCLUDED.keys,
+               user_agent = EXCLUDED.user_agent,
                last_used = NOW()`,
-        [userId, endpoint, JSON.stringify(keys), ua]
+        [ctx.user.id, endpoint, JSON.stringify(keys), ua]
       );
-    }
+    });
 
     res.status(204).end();
   })
 );
 
-/** DELETE /api/push/subscribe */
+/** DELETE /api/push/subscribe — requires login (CORE-69); only removes a
+ *  subscription owned by the calling user. Another user's subscription (or
+ *  one that doesn't exist) is indistinguishable from the caller's side: 404
+ *  either way, never a silent no-op 204. */
 pushRouter.delete(
   "/push/subscribe",
+  requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
     const { endpoint } = req.body as { endpoint?: string };
     if (!endpoint) { res.status(400).json({ error: "endpoint required" }); return; }
 
-    const db = getDb();
-    if (db) {
-      await db.query("DELETE FROM push_subscription WHERE endpoint = $1", [endpoint]);
+    const slug = tenantSlugFromHost(req.hostname);
+    const deletedCount = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      const result = await client.query(
+        "DELETE FROM push_subscription WHERE endpoint = $1 AND user_id = $2",
+        [endpoint, ctx.user.id]
+      );
+      return result.rowCount ?? 0;
+    });
+
+    if (deletedCount === 0) {
+      res.status(404).json({ error: "Subscription not found" });
+      return;
     }
 
     res.status(204).end();

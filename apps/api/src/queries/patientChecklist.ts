@@ -8,9 +8,11 @@ import {
   listMedicalHistoryForPatient,
   listOralExamsForPatient,
   listStopBangForPatient,
+  listTmjExamsForPatient,
   type MedicalHistoryRecord,
   type OralExamRecord,
   type StopBangRecord,
+  type TmjExamRecord,
 } from "../db/clinicalRecords.js";
 import { listConsentsForEntity } from "../db/consent.js";
 import { getFileAttachmentsForEntity, type FileAttachment } from "../db/fileAttachment.js";
@@ -27,7 +29,7 @@ import type { ClinicalRecordKind } from "../commands/clinicalRecordFields.js";
  * (platform.document_template_entity_type, ordered by its sort_order and
  * grouped by fill_mode) + polysomnography, a built-in item that is always
  * last. Each item's status comes from its binding:
- *   - templates with a clinical form (medicalHistory / stopBang / oralExam)
+ *   - templates with a clinical form (medicalHistory / stopBang / oralExam / tmjExam)
  *     → the migration-030 record tables (append-only; latest decides)
  *   - fill_mode "consent" → a non-withdrawn consent row (signed on the phone)
  *   - polysomnography → the patient's sleep studies
@@ -43,6 +45,7 @@ export const FORM_BINDINGS: Record<string, ClinicalRecordKind> = {
   medicalHistory: "medical_history",
   stopBang: "stop_bang",
   oralExam: "oral_exam",
+  tmjExam: "tmj_exam",
 };
 
 /** Which items a patient can complete on their phone from a QR link. */
@@ -80,7 +83,7 @@ export interface ChecklistHistoryEntry {
   /** NEO-173 B2: colleagues (not the viewer) who already opened it, first open each — from the audit trail. */
   opened_by?: { name: string; at: Date }[];
   /** Clinical form record (for view / PDF), when type = "record". */
-  record?: (MedicalHistoryRecord | OralExamRecord | StopBangRecord) & { kind: ClinicalRecordKind };
+  record?: (MedicalHistoryRecord | OralExamRecord | StopBangRecord | TmjExamRecord) & { kind: ClinicalRecordKind };
   /** Stored file (signed consent PDF, uploaded study) — downloadable via the patient documents endpoint. */
   file_attachment_id?: string | null;
   title?: string | null;
@@ -152,6 +155,7 @@ async function loadSources(client: PoolClient, patientId: string) {
   const histories = await listMedicalHistoryForPatient(client, patientId);
   const exams = await listOralExamsForPatient(client, patientId);
   const screenings = await listStopBangForPatient(client, patientId);
+  const tmjExams = await listTmjExamsForPatient(client, patientId);
   const consents = await listConsentsForEntity(client, "patient", patientId);
   const files = await getFileAttachmentsForEntity(client, "patient", patientId);
   const { rows: sleepStudies } = await getSleepStudiesPaginated(client, { patient_id: patientId }, 1, 500, "created_at", "desc");
@@ -161,7 +165,7 @@ async function loadSources(client: PoolClient, patientId: string) {
   for (const study of sleepStudies) {
     for (const file of await getFileAttachmentsForEntity(client, "sleep_study", study.id)) sleepStudyFiles.push({ ...file, sleep_study_id: study.id });
   }
-  return { histories, exams, screenings, consents, files, sleepStudies, pending, expired, sleepStudyFiles };
+  return { histories, exams, screenings, tmjExams, consents, files, sleepStudies, pending, expired, sleepStudyFiles };
 }
 
 export async function GetPatientChecklistQuery(ctx: TenantContext, patientId: string): Promise<PatientChecklist> {
@@ -177,8 +181,12 @@ export async function GetPatientChecklistQuery(ctx: TenantContext, patientId: st
   const signedConsentFile = (fileId: unknown) => src.files.find((f) => f.id === fileId) ?? null;
 
   const recordsFor = (kind: ClinicalRecordKind): ChecklistHistoryEntry[] => {
-    const rows: Array<(MedicalHistoryRecord | OralExamRecord | StopBangRecord)> =
-      kind === "medical_history" ? src.histories : kind === "oral_exam" ? src.exams : src.screenings;
+    const rows: Array<MedicalHistoryRecord | OralExamRecord | StopBangRecord | TmjExamRecord> = {
+      medical_history: src.histories,
+      oral_exam: src.exams,
+      stop_bang: src.screenings,
+      tmj_exam: src.tmjExams,
+    }[kind];
     return rows.map((r) => ({
       id: r.id,
       type: "record" as const,

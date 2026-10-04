@@ -87,30 +87,22 @@
                out of it (same on desktop and phone); see AppAccountMenu. -->
           <AppAccountMenu v-model:open="menuOpen" :mobile="isMobile" :label="t('user.user.menu')">
           <template #trigger="{ open: accountMenuOpen }">
-            <AppButton
-              variant="text"
-              class="layout-user-btn"
-              ignore-global-loading
-              :class="{ 'layout-user-btn--compact': isMobile }"
-              :title="t('user.user.menu')"
-              :aria-label="t('user.user.menu')"
-              aria-haspopup="dialog"
-              :aria-expanded="accountMenuOpen"
-            >
-              <div v-if="!isMobile" class="layout-user-info">
-                <span class="layout-user-name" data-motion="trigger-name">{{ user.displayName }}</span>
-                <span class="layout-user-role" data-motion="trigger-role">{{ user.role }}</span>
-              </div>
-              <VAvatar :size="AVATAR_SIZE" color="primary" data-motion="trigger-avatar">
-                <span class="text-body-small font-weight-bold">{{ user.initials }}</span>
-              </VAvatar>
-            </AppButton>
+            <AppAccountButton
+              :name="user.displayName"
+              :role-label="user.role"
+              :role="user.roleKey"
+              :compact="isMobile"
+              :label="t('user.user.menu')"
+              :expanded="accountMenuOpen"
+              :avatar-size="AVATAR_SIZE"
+            />
           </template>
 
           <AppUserMenuPanel
             :name="user.displayName"
             :email="user.email"
             :role-label="user.role"
+            :role="user.roleKey"
             :initials="user.initials"
             :avatar-size="MENU_AVATAR_SIZE"
             :region="user.region"
@@ -245,12 +237,13 @@ import {
   providePageHeader,
   providePageHeaderRow,
   provideRecordHeaderClaim,
+  isPageHeaderVisible,
   PAGE_HEADER_ACTIONS_ID,
 } from "../composables/usePageHeader";
 import { useGlyphInset } from "../composables/useGlyphInset";
 import { useBarLogoFit } from "../composables/useBarLogoFit";
 import { useThemeColorMeta } from "../composables/useThemeColorMeta";
-import { MENU_AVATAR_SIZE } from "../composables/useAccountMenuMotion";
+import { MENU_AVATAR_SIZE } from "../composables/useGlassPopoverMotion";
 import { useI18n } from "vue-i18n";
 import { AppShell, useAppVersionParts, CHANGE_PASSWORD_FROM_MENU } from "@ui";
 import { useLayoutState } from "../composables/useLayoutState";
@@ -262,6 +255,7 @@ import {
   AppAccountMenu,
   AppOfflineBar,
   AppInstallCard,
+  AppAccountButton,
 } from "./components";
 import AppButton from "../components/AppButton.vue";
 import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
@@ -334,7 +328,9 @@ const recordHeaderClaim = provideRecordHeaderClaim();
 // Hidden while a record header replaces it — NEO-152: on phones too, whose
 // record header is now the desktop one, its "MODULE ›" link above the name
 // being the way back (no separate "← Module" row).
-const pageHeaderVisible = computed(() => !recordHeaderClaim.value);
+const pageHeaderVisible = computed(() =>
+  isPageHeaderVisible({ recordHeaderClaimed: recordHeaderClaim.value, isMobile: isMobile.value, routeMeta: route.meta }),
+);
 
 // NEO-108: logo sizes. The folded O is exactly the avatar's size, so both
 // corners of the phone bar match.
@@ -594,18 +590,9 @@ const moduleIcon = computed(() => {
   margin-inline-end: 0;
 }
 
-/* Account button, top right of the app bar (NEO-55). Static sizing only — no
-   hover/focus size change (two earlier animated attempts both read as broken);
-   feedback comes from Vuetify's own text-button overlay. */
-.layout-user-btn {
-  height: auto !important;
-  min-height: 44px;
-  text-transform: none;
-  letter-spacing: normal;
-  border-radius: 999px;
-}
-
-/* theme.scss gives every non-icon button `padding-inline: 24px !important`
+/* Account button (AppAccountButton, NEO-55): its own look lives in that
+   component; only its fit against the shell is set here.
+   theme.scss gives every non-icon button `padding-inline: 24px !important`
    (pill CTA look) via `.v-btn:not(.v-btn--icon):not(…):not(…)`. Left alone,
    that 24px — not the shell's end token — decides where the avatar lands,
    18px short of the header icons; hence !important and a selector scoped
@@ -618,15 +605,6 @@ const moduleIcon = computed(() => {
 .layout-root .layout-user-btn--compact.v-btn:not(.v-btn--icon) {
   min-width: 0;
   padding-inline: var(--layout-user-btn-pad-end) !important;
-}
-
-.layout-user-info {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 1px;
-  min-width: 0;
-  margin-inline-end: 10px;
 }
 
 /* Account slot wrapper: useBarLogoFit measures where the bar's icons start.
@@ -759,24 +737,6 @@ const moduleIcon = computed(() => {
 .layout-back-icon {
   width: 24px;
   height: 24px;
-}
-
-.layout-user-name {
-  font-size: 0.875rem;
-  font-weight: 500;
-  line-height: 1.2;
-  white-space: nowrap;
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.layout-user-role {
-  font-size: 0.7rem;
-  font-weight: 400;
-  line-height: 1.2;
-  opacity: var(--v-medium-emphasis-opacity);
-  white-space: nowrap;
 }
 
 .layout-main--fading {

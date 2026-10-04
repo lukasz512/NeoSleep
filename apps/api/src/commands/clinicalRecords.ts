@@ -3,18 +3,21 @@ import { insertAuditLog } from "../db.js";
 import {
   insertMedicalHistory,
   insertOralExam,
+  insertTmjExam,
   insertStopBang,
   completeStopBang,
   getStopBangById,
   type MedicalHistoryRecord,
   type OralExamRecord,
   type StopBangRecord,
+  type TmjExamRecord,
 } from "../db/clinicalRecords.js";
-import { GetPatientByIdQuery } from "../queries/patient.js";
+import { GetPatientByIdQuery, type PatientDto } from "../queries/patient.js";
 import { ConflictError, NotFoundError } from "../errors.js";
 import {
   validateMedicalHistory,
   validateOralExam,
+  validateTmjExam,
   validateStop,
   validateBangWithMeasurements,
   type ClinicalRecordKind,
@@ -28,17 +31,30 @@ import {
  * read/PDF paths skipped that check.
  */
 
-export type ClinicalRecord = MedicalHistoryRecord | OralExamRecord | StopBangRecord;
+export type ClinicalRecord = MedicalHistoryRecord | OralExamRecord | StopBangRecord | TmjExamRecord;
 
 const AUDIT_ENTITY: Record<ClinicalRecordKind, string> = {
   medical_history: "MedicalHistoryQuestionnaire",
   oral_exam: "OralExam",
   stop_bang: "StopBangScreening",
+  tmj_exam: "TmjExam",
 };
 
-async function requirePatient(ctx: TenantContext, patientId: string): Promise<void> {
+async function requirePatient(ctx: TenantContext, patientId: string): Promise<PatientDto> {
   const patient = await GetPatientByIdQuery(ctx, patientId);
   if (!patient) throw new NotFoundError("Patient", patientId);
+  return patient;
+}
+
+/**
+ * Height is entered once, on the patient card (NEO-231 D1): a STOP-Bang that
+ * sends only the weight is measured against it. A height sent with the form
+ * (older clients, or a one-off measurement) still wins.
+ */
+function withCardHeight(input: Record<string, unknown>, patient: PatientDto): Record<string, unknown> {
+  const sendsWeight = input.weight_kg !== undefined && input.weight_kg !== null && input.weight_kg !== "";
+  const sendsHeight = input.height_cm !== undefined && input.height_cm !== null && input.height_cm !== "";
+  return sendsWeight && !sendsHeight && patient.height_cm != null ? { ...input, height_cm: patient.height_cm } : input;
 }
 
 export async function RecordClinicalQuestionnaireCommand(
@@ -47,7 +63,7 @@ export async function RecordClinicalQuestionnaireCommand(
   kind: ClinicalRecordKind,
   input: Record<string, unknown>
 ): Promise<ClinicalRecord> {
-  await requirePatient(ctx, patientId);
+  const patient = await requirePatient(ctx, patientId);
   const meta = { patient_id: patientId, source: "staff" as const, recorded_by: ctx.user.id, request_id: null, consent: null };
 
   let record: ClinicalRecord;
@@ -55,8 +71,10 @@ export async function RecordClinicalQuestionnaireCommand(
     record = await insertMedicalHistory(ctx.client, meta, validateMedicalHistory(input, { requireAll: false }));
   } else if (kind === "oral_exam") {
     record = await insertOralExam(ctx.client, meta, validateOralExam(input));
+  } else if (kind === "tmj_exam") {
+    record = await insertTmjExam(ctx.client, meta, validateTmjExam(input));
   } else {
-    const { bang, measurements } = validateBangWithMeasurements(input, { required: false });
+    const { bang, measurements } = validateBangWithMeasurements(withCardHeight(input, patient), { required: false });
     record = await insertStopBang(ctx.client, meta, validateStop(input), bang, measurements);
   }
 
@@ -78,11 +96,11 @@ export async function CompleteStopBangCommand(
   screeningId: string,
   input: Record<string, unknown>
 ): Promise<StopBangRecord> {
-  await requirePatient(ctx, patientId);
+  const patient = await requirePatient(ctx, patientId);
   const existing = await getStopBangById(ctx.client, screeningId);
   if (!existing || existing.patient_id !== patientId) throw new NotFoundError("StopBangScreening", screeningId);
 
-  const { bang, measurements } = validateBangWithMeasurements(input, { required: true });
+  const { bang, measurements } = validateBangWithMeasurements(withCardHeight(input, patient), { required: true });
   const completed = await completeStopBang(ctx.client, screeningId, ctx.user.id, bang, measurements);
   if (!completed) throw new ConflictError("This STOP-Bang screening is already complete");
 

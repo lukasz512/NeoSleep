@@ -184,9 +184,14 @@ defineExpose({ playEnter, playExit });
   align-items: center;
   padding: 2px;
   border-radius: 999px;
-  background: rgba(var(--v-theme-surface), 0.75);
-  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.12);
-  backdrop-filter: blur(6px);
+  /* CORE-119: the app's --glass-* material; fallbacks = the old local glass */
+  background: var(--glass-sheen, none), var(--glass-surface, rgba(var(--v-theme-surface), 0.75));
+  box-shadow:
+    inset 0 1px 0 var(--glass-edge, transparent),
+    var(--glass-rim, 0 0 transparent),
+    0 1px 8px rgba(0, 0, 0, 0.12);
+  -webkit-backdrop-filter: var(--glass-blur, blur(6px));
+  backdrop-filter: var(--glass-blur, blur(6px));
 }
 
 .auth-chrome__settings-card {

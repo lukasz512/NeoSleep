@@ -1,11 +1,12 @@
 /**
- * Placement for the account menu (NEO-154, reworked NEO-161 "Kropla"). The
- * card opens next to the app bar avatar; the avatar itself grows and flies
- * into the card's top-right corner, where it sits with the same inset as the
- * card's content (so the header reads as one designed block, not a button
- * pinned onto a card).
+ * Placement for the glass popover (NEO-154, reworked NEO-161 "Kropla",
+ * shared by the account menu and the notification bell since CORE-4). The
+ * card opens next to its app bar button; the button's anchor (the avatar, the
+ * bell) grows and flies into the card's top-right corner, where it sits with
+ * the same inset as the card's content (so the header reads as one designed
+ * block, not a button pinned onto a card).
  *
- * The motion itself is plain CSS in AppAccountMenu.vue (transform + opacity,
+ * The motion itself is plain CSS in AppGlassPopover.vue (transform + opacity,
  * the same glass material and spring as the phone's bottom menu); this file
  * only measures once, before the card opens, and never per frame.
  */
@@ -16,16 +17,16 @@ export const BAR_AVATAR_SIZE = 32;
 export const MENU_AVATAR_SIZE = 56;
 /** Inset of the header avatar from the card's top and end edge — the card's own content padding. */
 export const MENU_AVATAR_INSET = 16;
-/** Phone: how far the app bar avatar swells under the finger (AppAccountMenu CSS). */
+/** Phone: how far the app bar button swells under the finger (AppGlassPopover CSS). */
 export const PHONE_PRESS_SCALE = 1.12;
-/** The closed card's scale (AppAccountMenu CSS, `.account-menu__card`). */
+/** The closed card's scale (AppGlassPopover CSS, `.glass-popover__card`). */
 export const CARD_CLOSED_SCALE = 0.94;
 
 /** Phone: the card floats this far from the screen's sides and top (as the bottom pill). */
 const PHONE_SIDE = 8;
 /** Desktop: the card reaches this far past the bar avatar's end and top edge. */
 const DESKTOP_OVERHANG = 12;
-/** How long the CSS close transition runs (AppAccountMenu.vue, --menu-dur-out). */
+/** How long the CSS close transition runs (AppGlassPopover.vue, --menu-dur-out). */
 export const CLOSE_DURATION = 180;
 
 /**
@@ -38,22 +39,24 @@ export function motionAllowed(): boolean {
 }
 
 export interface CardPlacement {
-  /** The avatar inside the trigger button. */
+  /** The anchor inside the trigger button (the avatar, the bell). */
   triggerAvatar: Element;
   /** Fixed-position card that wraps the menu panel. */
   card: HTMLElement;
-  /** Phone: the card spans the screen (minus PHONE_SIDE); desktop: 340px card. */
+  /** Phone: the card spans the screen (minus PHONE_SIDE); desktop: the card's own width. */
   phone: boolean;
+  /** Size of the anchor in the card's header (default: the account menu's avatar). */
+  anchorSize?: number;
 }
 
 /**
  * Positions the fixed card by the app bar avatar and sets where the header
- * avatar flies from: `--account-menu-fly` is the transform that puts the
+ * avatar flies from: `--glass-popover-fly` is the transform that puts the
  * header avatar exactly over the bar avatar (at its size) while the card is
  * closed. The card scales around the header avatar's centre, so that point
  * stays put and the flight is a plain translate + scale.
  */
-export function placeCard({ triggerAvatar, card, phone }: CardPlacement): void {
+export function placeCard({ triggerAvatar, card, phone, anchorSize = MENU_AVATAR_SIZE }: CardPlacement): void {
   const a = triggerAvatar.getBoundingClientRect();
   const viewport = document.documentElement.clientWidth;
   let top: number;
@@ -67,18 +70,18 @@ export function placeCard({ triggerAvatar, card, phone }: CardPlacement): void {
     right = Math.max(PHONE_SIDE, viewport - a.right - DESKTOP_OVERHANG);
     Object.assign(card.style, { top: `${top}px`, right: `${right}px`, left: "" });
   }
-  card.style.setProperty("--account-menu-avatar-top", `${MENU_AVATAR_INSET}px`);
-  card.style.setProperty("--account-menu-avatar-end", `${MENU_AVATAR_INSET}px`);
+  card.style.setProperty("--glass-popover-anchor-top", `${MENU_AVATAR_INSET}px`);
+  card.style.setProperty("--glass-popover-anchor-end", `${MENU_AVATAR_INSET}px`);
 
   // Where the header avatar's centre lands (screen), and where the bar avatar's is.
-  const half = MENU_AVATAR_SIZE / 2;
+  const half = anchorSize / 2;
   const ox = viewport - right - MENU_AVATAR_INSET - half;
   const oy = top + MENU_AVATAR_INSET + half;
   const bx = a.left + a.width / 2;
   const by = a.top + a.height / 2;
   // The closed card is scaled around (ox, oy), which scales the flight too.
   const s = CARD_CLOSED_SCALE;
-  const k = a.width / MENU_AVATAR_SIZE / s;
-  card.style.setProperty("--account-menu-origin", `calc(100% - ${MENU_AVATAR_INSET + half}px) ${MENU_AVATAR_INSET + half}px`);
-  card.style.setProperty("--account-menu-fly", `translate(${(bx - ox) / s}px, ${(by - oy) / s}px) scale(${k})`);
+  const k = a.width / anchorSize / s;
+  card.style.setProperty("--glass-popover-origin", `calc(100% - ${MENU_AVATAR_INSET + half}px) ${MENU_AVATAR_INSET + half}px`);
+  card.style.setProperty("--glass-popover-fly", `translate(${(bx - ox) / s}px, ${(by - oy) / s}px) scale(${k})`);
 }

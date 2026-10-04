@@ -66,7 +66,7 @@ export async function notify(client: PoolClient, input: NotifyInput): Promise<No
   const def = getEventDefinition(input.type);
   const recipients = Array.from(new Set(input.recipients)).filter((id) => id && id !== input.actorIdentityId);
   const tenantDefaults = recipients.length > 0 ? await getTenantNotificationDefaults(client) : {};
-  const actionUrl = def.link(input.link ?? {});
+  const actionUrl = def.link({ entityId: input.entityId, ...input.link });
   const metadata = input.meta ?? null;
   const notifications: Notification[] = [];
 
